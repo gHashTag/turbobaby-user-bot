@@ -1,6 +1,6 @@
 FROM rust:1.91-slim AS builder
 WORKDIR /app
-RUN apt-get update && apt-get install -y pkg-config libssl-dev ca-certificates musl-tools && \
+RUN apt-get update && apt-get install -y pkg-config musl-tools ca-certificates && \
     rustup target add x86_64-unknown-linux-musl && \
     rm -rf /var/lib/apt/lists/*
 
