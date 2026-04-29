@@ -140,15 +140,15 @@ async fn get_accessory_sets(State(state): State<AppState>) -> Result<Json<Value>
         let accessories: Vec<String> = r.try_get::<_, Vec<String>>(4)
             .unwrap_or_else(|_| vec![]);
         json!({
-            "id": r.get::<_, String>(0),
-            "name": r.get::<_, String>(1),
-            "description": r.get::<_, String>(2),
-            "icon": r.get::<_, String>(3),
+            "id": r.try_get::<_, String>(0).unwrap_or_default(),
+            "name": r.try_get::<_, String>(1).unwrap_or_default(),
+            "description": r.try_get::<_, String>(2).unwrap_or_default(),
+            "icon": r.try_get::<_, String>(3).unwrap_or_default(),
             "accessories": accessories,
-            "total_price": r.get::<_, f64>(5),
-            "discount_percent": r.get::<_, f64>(6),
-            "is_available": r.get::<_, bool>(7),
-            "is_deal_of_day": r.get::<_, bool>(8),
+            "total_price": r.try_get::<_, f64>(5).unwrap_or(0.0),
+            "discount_percent": r.try_get::<_, f64>(6).unwrap_or(0.0),
+            "is_available": r.try_get::<_, bool>(7).unwrap_or(false),
+            "is_deal_of_day": r.try_get::<_, bool>(8).unwrap_or(false),
         })
     }).collect();
     Ok(Json(json!({ "accessory_sets": items })))
@@ -279,17 +279,17 @@ async fn get_tea_sets(State(state): State<AppState>) -> Result<Json<Value>, Stat
     ).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let items: Vec<Value> = rows.iter().map(|r| {
         // Safe extraction of array column
-        let items: Vec<String> = r.try_get::<_, Vec<String>>(4)
+        let tea_items: Vec<String> = r.try_get::<_, Vec<String>>(4)
             .unwrap_or_else(|_| vec![]);
         json!({
-            "id": r.get::<_, String>(0),
-            "name": r.get::<_, String>(1),
-            "description": r.get::<_, String>(2),
-            "icon": r.get::<_, String>(3),
-            "items": items,
-            "total_price": r.get::<_, f64>(5),
-            "discount_percent": r.get::<_, f64>(6),
-            "is_available": r.get::<_, bool>(7),
+            "id": r.try_get::<_, String>(0).unwrap_or_default(),
+            "name": r.try_get::<_, String>(1).unwrap_or_default(),
+            "description": r.try_get::<_, String>(2).unwrap_or_default(),
+            "icon": r.try_get::<_, String>(3).unwrap_or_default(),
+            "items": tea_items,
+            "total_price": r.try_get::<_, f64>(5).unwrap_or(0.0),
+            "discount_percent": r.try_get::<_, f64>(6).unwrap_or(0.0),
+            "is_available": r.try_get::<_, bool>(7).unwrap_or(false),
         })
     }).collect();
     Ok(Json(json!({ "tea_sets": items })))
@@ -361,16 +361,16 @@ async fn get_sets(State(state): State<AppState>) -> Result<Json<Value>, StatusCo
         let accessories: Vec<String> = r.try_get::<_, Vec<String>>(4)
             .unwrap_or_else(|_| vec![]);
         items.push(json!({
-            "id": r.get::<_, String>(0),
-            "name": r.get::<_, String>(1),
-            "description": r.get::<_, String>(2),
-            "icon": r.get::<_, String>(3),
+            "id": r.try_get::<_, String>(0).unwrap_or_default(),
+            "name": r.try_get::<_, String>(1).unwrap_or_default(),
+            "description": r.try_get::<_, String>(2).unwrap_or_default(),
+            "icon": r.try_get::<_, String>(3).unwrap_or_default(),
             "type": "accessory",
             "items": accessories,
-            "total_price": r.get::<_, f64>(5),
-            "discount_percent": r.get::<_, f64>(6),
-            "is_available": r.get::<_, bool>(7),
-            "is_deal_of_day": r.get::<_, bool>(8),
+            "total_price": r.try_get::<_, f64>(5).unwrap_or(0.0),
+            "discount_percent": r.try_get::<_, f64>(6).unwrap_or(0.0),
+            "is_available": r.try_get::<_, bool>(7).unwrap_or(false),
+            "is_deal_of_day": r.try_get::<_, bool>(8).unwrap_or(false),
         }));
     }
 
@@ -380,15 +380,15 @@ async fn get_sets(State(state): State<AppState>) -> Result<Json<Value>, StatusCo
         let tea_items: Vec<String> = r.try_get::<_, Vec<String>>(4)
             .unwrap_or_else(|_| vec![]);
         items.push(json!({
-            "id": r.get::<_, String>(0),
-            "name": r.get::<_, String>(1),
-            "description": r.get::<_, String>(2),
-            "icon": r.get::<_, String>(3),
+            "id": r.try_get::<_, String>(0).unwrap_or_default(),
+            "name": r.try_get::<_, String>(1).unwrap_or_default(),
+            "description": r.try_get::<_, String>(2).unwrap_or_default(),
+            "icon": r.try_get::<_, String>(3).unwrap_or_default(),
             "type": "tea",
             "items": tea_items,
-            "total_price": r.get::<_, f64>(5),
-            "discount_percent": r.get::<_, f64>(6),
-            "is_available": r.get::<_, bool>(7),
+            "total_price": r.try_get::<_, f64>(5).unwrap_or(0.0),
+            "discount_percent": r.try_get::<_, f64>(6).unwrap_or(0.0),
+            "is_available": r.try_get::<_, bool>(7).unwrap_or(false),
             "is_deal_of_day": false,
         }));
     }
