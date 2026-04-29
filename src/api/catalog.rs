@@ -353,7 +353,7 @@ async fn get_sets(State(state): State<AppState>) -> Result<Json<Value>, StatusCo
         &[],
     ).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    let mut items = Vec::new();
+    let mut items: Vec<serde_json::Value> = Vec::new();
 
     // Add accessory sets
     for r in accessory_sets.iter() {
@@ -377,7 +377,7 @@ async fn get_sets(State(state): State<AppState>) -> Result<Json<Value>, StatusCo
     // Add tea sets
     for r in tea_sets.iter() {
         // Safe extraction of array column
-        let items: Vec<String> = r.try_get::<_, Vec<String>>(4)
+        let tea_items: Vec<String> = r.try_get::<_, Vec<String>>(4)
             .unwrap_or_else(|_| vec![]);
         items.push(json!({
             "id": r.get::<_, String>(0),
@@ -385,7 +385,7 @@ async fn get_sets(State(state): State<AppState>) -> Result<Json<Value>, StatusCo
             "description": r.get::<_, String>(2),
             "icon": r.get::<_, String>(3),
             "type": "tea",
-            "items": items,
+            "items": tea_items,
             "total_price": r.get::<_, f64>(5),
             "discount_percent": r.get::<_, f64>(6),
             "is_available": r.get::<_, bool>(7),
