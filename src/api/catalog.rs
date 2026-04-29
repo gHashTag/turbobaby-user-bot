@@ -313,7 +313,7 @@ async fn delete_tea_set(State(state): State<AppState>, Path(id): Path<String>) -
     Ok(Json(json!({ "success": true })))
 }
 
-// ── Sets ──────────────────────────────────────────────────────
+// ── Sets (combined from accessory_sets and tea_sets) ───────
 
 #[derive(Debug, Deserialize)]
 pub struct SetRequest {
@@ -330,22 +330,53 @@ pub struct SetRequest {
 
 async fn get_sets(State(state): State<AppState>) -> Result<Json<Value>, StatusCode> {
     let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    let rows = client.query(
-        "SELECT id, name, description, icon, strain_ids, accessory_ids, total_price, discount_percent, is_available, is_deal_of_day FROM sets WHERE is_available = true ORDER BY name",
+
+    // Get accessory sets
+    let accessory_sets = client.query(
+        "SELECT id, name, description, icon, accessories, total_price, discount_percent, is_available, is_deal_of_day FROM accessory_sets WHERE is_available = true",
         &[],
     ).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    let items: Vec<Value> = rows.iter().map(|r| json!({
-        "id": r.get::<_, String>(0),
-        "name": r.get::<_, String>(1),
-        "description": r.get::<_, String>(2),
-        "icon": r.get::<_, String>(3),
-        "strain_ids": r.get::<_, Vec<String>>(4),
-        "accessory_ids": r.get::<_, Vec<String>>(5),
-        "total_price": r.get::<_, f64>(6),
-        "discount_percent": r.get::<_, f64>(7),
-        "is_available": r.get::<_, bool>(8),
-        "is_deal_of_day": r.get::<_, bool>(9),
-    })).collect();
+
+    // Get tea sets
+    let tea_sets = client.query(
+        "SELECT id, name, description, icon, items, total_price, discount_percent, is_available FROM tea_sets WHERE is_available = true",
+        &[],
+    ).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let mut items = Vec::new();
+
+    // Add accessory sets
+    for r in accessory_sets.iter() {
+        items.push(json!({
+            "id": r.get::<_, String>(0),
+            "name": r.get::<_, String>(1),
+            "description": r.get::<_, String>(2),
+            "icon": r.get::<_, String>(3),
+            "type": "accessory",
+            "items": r.get::<_, Vec<String>>(4),
+            "total_price": r.get::<_, f64>(5),
+            "discount_percent": r.get::<_, f64>(6),
+            "is_available": r.get::<_, bool>(7),
+            "is_deal_of_day": r.get::<_, bool>(8),
+        }));
+    }
+
+    // Add tea sets
+    for r in tea_sets.iter() {
+        items.push(json!({
+            "id": r.get::<_, String>(0),
+            "name": r.get::<_, String>(1),
+            "description": r.get::<_, String>(2),
+            "icon": r.get::<_, String>(3),
+            "type": "tea",
+            "items": r.get::<_, Vec<String>>(4),
+            "total_price": r.get::<_, f64>(5),
+            "discount_percent": r.get::<_, f64>(6),
+            "is_available": r.get::<_, bool>(7),
+            "is_deal_of_day": false,
+        }));
+    }
+
     Ok(Json(json!({ "sets": items })))
 }
 
@@ -354,9 +385,14 @@ async fn create_set(State(state): State<AppState>, Json(req): Json<SetRequest>) 
     let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let strain_ids = req.strain_ids.unwrap_or_default();
     let accessory_ids = req.accessory_ids.unwrap_or_default();
+
+    // Combine strain_ids and accessory_ids into items
+    let mut items: Vec<String> = strain_ids;
+    items.extend(accessory_ids);
+
     client.execute(
-        "INSERT INTO sets (id, name, description, icon, strain_ids, accessory_ids, total_price, discount_percent, is_deal_of_day) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)",
-        &[&id, &req.name, &req.description.unwrap_or_default(), &req.icon.unwrap_or_default(), &strain_ids, &accessory_ids, &req.total_price, &req.discount_percent.unwrap_or(0.0), &req.is_deal_of_day.unwrap_or(false)],
+        "INSERT INTO accessory_sets (id, name, description, icon, accessories, total_price, discount_percent, is_deal_of_day) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)",
+        &[&id, &req.name, &req.description.unwrap_or_default(), &req.icon.unwrap_or_default(), &items, &req.total_price, &req.discount_percent.unwrap_or(0.0), &req.is_deal_of_day.unwrap_or(false)],
     ).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(Json(json!({ "success": true, "id": id })))
 }
@@ -365,16 +401,20 @@ async fn update_set(State(state): State<AppState>, Path(id): Path<String>, Json(
     let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let strain_ids = req.strain_ids.unwrap_or_default();
     let accessory_ids = req.accessory_ids.unwrap_or_default();
+
+    let mut items: Vec<String> = strain_ids;
+    items.extend(accessory_ids);
+
     client.execute(
-        "UPDATE sets SET name=$1, description=$2, icon=$3, strain_ids=$4, accessory_ids=$5, total_price=$6, discount_percent=$7, is_deal_of_day=$8 WHERE id=$9",
-        &[&req.name, &req.description.unwrap_or_default(), &req.icon.unwrap_or_default(), &strain_ids, &accessory_ids, &req.total_price, &req.discount_percent.unwrap_or(0.0), &req.is_deal_of_day.unwrap_or(false), &id],
+        "UPDATE accessory_sets SET name=$1, description=$2, icon=$3, accessories=$4, total_price=$5, discount_percent=$6, is_deal_of_day=$7 WHERE id=$8",
+        &[&req.name, &req.description.unwrap_or_default(), &req.icon.unwrap_or_default(), &items, &req.total_price, &req.discount_percent.unwrap_or(0.0), &req.is_deal_of_day.unwrap_or(false), &id],
     ).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(Json(json!({ "success": true })))
 }
 
 async fn delete_set(State(state): State<AppState>, Path(id): Path<String>) -> Result<Json<Value>, StatusCode> {
     let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    client.execute("UPDATE sets SET is_available = false WHERE id = $1", &[&id])
+    client.execute("UPDATE accessory_sets SET is_available = false WHERE id = $1", &[&id])
         .await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(Json(json!({ "success": true })))
 }

@@ -14,7 +14,11 @@ use rustls_native_certs::load_native_certs;
 use tokio_postgres_rustls::MakeRustlsConnect;
 use url::Url;
 
-const MIGRATION_SQL: &str = include_str!("../../migrations/001_initial.sql");
+const MIGRATION_SQL: &str = concat!(
+    include_str!("../../migrations/001_initial.sql"),
+    include_str!("../../migrations/002_catalog.sql"),
+    include_str!("../../migrations/003_quest.sql"),
+);
 
 pub struct Database {
     pub pool: Pool,
