@@ -1,14 +1,13 @@
 FROM rust:1.91-slim AS builder
 WORKDIR /app
-RUN apt-get update && apt-get install -y pkg-config libssl-dev && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y pkg-config libssl-dev ca-certificates && rm -rf /var/lib/apt/lists/*
 
+# Cache dependencies layer
 COPY Cargo.toml Cargo.lock ./
 RUN mkdir -p src && echo 'fn main() {}' > src/main.rs && \
     cargo build --release || true && rm -rf src
 
-COPY .sqlx ./.sqlx
-ENV SQLX_OFFLINE=true
-
+# Copy source — build online using DATABASE_URL from Railway env
 COPY src ./src
 COPY migrations ./migrations
 RUN touch src/main.rs && cargo build --release
