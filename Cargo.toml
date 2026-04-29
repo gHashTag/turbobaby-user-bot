@@ -20,11 +20,10 @@ tower-http = { version = "0.5", features = ["cors", "fs", "trace"] }
 # Async runtime
 tokio = { version = "1", features = ["full"] }
 
-# Database — NO sqlx, NO offline cache
+# Database — no sqlx, no offline cache, no cargo sqlx prepare
 tokio-postgres = { version = "0.7", features = ["with-chrono-0_4", "with-serde_json-1", "with-uuid-1"] }
 deadpool-postgres = { version = "0.14", features = ["rt_tokio_1"] }
 postgres-types = { version = "0.2", features = ["with-chrono-0_4", "with-serde_json-1", "with-uuid-1"] }
-refinery = { version = "0.8", features = ["tokio-postgres"] }
 
 # HTTP client
 reqwest = { version = "0.11", features = ["json", "rustls-tls"], default-features = false }

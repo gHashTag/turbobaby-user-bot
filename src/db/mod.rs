@@ -12,6 +12,8 @@ use anyhow::Result;
 use deadpool_postgres::{Config as PgConfig, Pool, Runtime};
 use tokio_postgres::NoTls;
 
+const MIGRATION_SQL: &str = include_str!("../../migrations/001_initial.sql");
+
 pub struct Database {
     pub pool: Pool,
 }
@@ -21,17 +23,13 @@ impl Database {
         let mut cfg = PgConfig::new();
         cfg.url = Some(database_url.to_string());
         let pool = cfg.create_pool(Some(Runtime::Tokio1), NoTls)?;
-        // Test connection
         let _ = pool.get().await?;
         Ok(Self { pool })
     }
 
     pub async fn run_migrations(&self) -> Result<()> {
-        let mut client = self.pool.get().await?;
-        let client = client.as_mut();
-        let migration_report = refinery::embed_migrations!("./migrations");
-        // refinery handles the migration table itself
-        migration_report.run_async(client).await?;
+        let client = self.pool.get().await?;
+        client.batch_execute(MIGRATION_SQL).await?;
         Ok(())
     }
 
@@ -43,8 +41,7 @@ impl Database {
                 &[&telegram_id],
             )
             .await
-            .ok()??
-            ;
+            .ok()??;
         row.try_get("language").ok()
     }
 
