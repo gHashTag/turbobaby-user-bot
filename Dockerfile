@@ -6,6 +6,9 @@ COPY Cargo.toml Cargo.lock ./
 RUN mkdir -p src && echo 'fn main() {}' > src/main.rs && \
     cargo build --release || true && rm -rf src
 
+COPY .sqlx ./.sqlx
+ENV SQLX_OFFLINE=true
+
 COPY src ./src
 COPY migrations ./migrations
 RUN touch src/main.rs && cargo build --release
