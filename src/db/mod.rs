@@ -34,12 +34,12 @@ impl Database {
         cfg.dbname = Some(url.path().trim_start_matches('/').to_string());
         cfg.user = Some(url.username().to_string());
         cfg.password = url.password().map(|s| s.to_string());
-        cfg.ssl_mode = Some(SslMode::Require);
+        cfg.ssl_mode = Some(tokio_postgres_rustls::SslMode::Require);
         cfg.keepalives = Some(true);
         cfg.keepalives_idle = Some(std::time::Duration::from_secs(300));
 
-        let mut mgr_config = ManagerConfig {
-            recycling_method: deadpool_postgres::RecyclingMethod::Fast,
+        let mut mgr_config = tokio_postgres::ManagerConfig {
+            recycling_method: tokio_postgres::RecyclingMethod::Fast,
         };
 
         let mut roots = rustls::RootCertStore::empty();
