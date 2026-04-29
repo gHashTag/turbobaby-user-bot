@@ -53,13 +53,8 @@ pub struct AccessoryRequest {
     pub is_available: Option<bool>,
 }
 
-async fn get_accessories(State(state): State<AppState>) -> Result<Json<Value>, StatusCode> {
-    let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    let rows = client.query(
-        "SELECT id, name, category, description, price, stock, image_url, video_url, is_available FROM accessories WHERE is_available = true ORDER BY name",
-        &[],
-    ).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    let items: Vec<Value> = rows.iter().map(|r| json!({
+fn accessory_row(r: &tokio_postgres::Row) -> Value {
+    json!({
         "id": r.get::<_, String>(0),
         "name": r.get::<_, String>(1),
         "category": r.get::<_, String>(2),
@@ -69,7 +64,16 @@ async fn get_accessories(State(state): State<AppState>) -> Result<Json<Value>, S
         "image_url": r.get::<_, String>(6),
         "video_url": r.get::<_, Option<String>>(7),
         "is_available": r.get::<_, bool>(8),
-    })).collect();
+    })
+}
+
+async fn get_accessories(State(state): State<AppState>) -> Result<Json<Value>, StatusCode> {
+    let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let rows = client.query(
+        "SELECT id, name, category, description, price, stock, image_url, video_url, is_available FROM accessories WHERE is_available = true ORDER BY name",
+        &[],
+    ).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let items: Vec<Value> = rows.iter().map(accessory_row).collect();
     Ok(Json(json!({ "accessories": items })))
 }
 
@@ -80,17 +84,7 @@ async fn get_accessory(State(state): State<AppState>, Path(id): Path<String>) ->
         &[&id],
     ).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     match row {
-        Some(r) => Ok(Json(json!({ "accessory": {
-            "id": r.get::<_, String>(0),
-            "name": r.get::<_, String>(1),
-            "category": r.get::<_, String>(2),
-            "description": r.get::<_, String>(3),
-            "price": r.get::<_, f64>(4),
-            "stock": r.get::<_, i32>(5),
-            "image_url": r.get::<_, String>(6),
-            "video_url": r.get::<_, Option<String>>(7),
-            "is_available": r.get::<_, bool>(8),
-        }}))},
+        Some(r) => Ok(Json(json!({ "accessory": accessory_row(&r) }))),
         None => Err(StatusCode::NOT_FOUND),
     }
 }
@@ -197,13 +191,8 @@ pub struct TeaProductRequest {
     pub is_available: Option<bool>,
 }
 
-async fn get_tea_products(State(state): State<AppState>) -> Result<Json<Value>, StatusCode> {
-    let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    let rows = client.query(
-        "SELECT id, name, subcategory, description, price, stock, image_url, video_url, is_available FROM tea_products WHERE is_available = true ORDER BY name",
-        &[],
-    ).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    let items: Vec<Value> = rows.iter().map(|r| json!({
+fn tea_product_row(r: &tokio_postgres::Row) -> Value {
+    json!({
         "id": r.get::<_, String>(0),
         "name": r.get::<_, String>(1),
         "subcategory": r.get::<_, String>(2),
@@ -213,7 +202,16 @@ async fn get_tea_products(State(state): State<AppState>) -> Result<Json<Value>, 
         "image_url": r.get::<_, String>(6),
         "video_url": r.get::<_, Option<String>>(7),
         "is_available": r.get::<_, bool>(8),
-    })).collect();
+    })
+}
+
+async fn get_tea_products(State(state): State<AppState>) -> Result<Json<Value>, StatusCode> {
+    let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let rows = client.query(
+        "SELECT id, name, subcategory, description, price, stock, image_url, video_url, is_available FROM tea_products WHERE is_available = true ORDER BY name",
+        &[],
+    ).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let items: Vec<Value> = rows.iter().map(tea_product_row).collect();
     Ok(Json(json!({ "tea_products": items })))
 }
 
@@ -224,17 +222,7 @@ async fn get_tea_product(State(state): State<AppState>, Path(id): Path<String>) 
         &[&id],
     ).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     match row {
-        Some(r) => Ok(Json(json!({ "tea_product": {
-            "id": r.get::<_, String>(0),
-            "name": r.get::<_, String>(1),
-            "subcategory": r.get::<_, String>(2),
-            "description": r.get::<_, String>(3),
-            "price": r.get::<_, f64>(4),
-            "stock": r.get::<_, i32>(5),
-            "image_url": r.get::<_, String>(6),
-            "video_url": r.get::<_, Option<String>>(7),
-            "is_available": r.get::<_, bool>(8),
-        }}))},
+        Some(r) => Ok(Json(json!({ "tea_product": tea_product_row(&r) }))),
         None => Err(StatusCode::NOT_FOUND),
     }
 }
