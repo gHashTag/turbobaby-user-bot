@@ -51,6 +51,10 @@ impl Database {
             .with_no_client_auth();
         let tls = MakeRustlsConnect::new(tls_config);
 
+        let mgr_config = ManagerConfig {
+            recycling_method: deadpool_postgres::RecyclingMethod::Verified,
+        };
+
         let pool = cfg.create_pool(Some(Runtime::Tokio1), tls, mgr_config)?;
         let _ = pool.get().await.context("Failed to connect to database")?;
         Ok(Self { pool })
