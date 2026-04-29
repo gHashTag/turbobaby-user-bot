@@ -8,7 +8,7 @@ pub use loyalty::*;
 pub use orders::*;
 
 use anyhow::{Context, Result};
-use deadpool_postgres::{Config as PgConfig, Pool, Runtime, SslMode};
+use deadpool_postgres::{Config as PgConfig, Pool, Runtime, ManagerConfig, Manager};
 use rustls::ClientConfig;
 use rustls_native_certs::load_native_certs;
 use tokio_postgres_rustls::MakeRustlsConnect;
@@ -35,6 +35,12 @@ impl Database {
         cfg.user = Some(url.username().to_string());
         cfg.password = url.password().map(|s| s.to_string());
         cfg.ssl_mode = Some(SslMode::Require);
+        cfg.keepalives = Some(true);
+        cfg.keepalives_idle = Some(std::time::Duration::from_secs(300));
+
+        let mut mgr_config = ManagerConfig {
+            recycling_method: deadpool_postgres::RecyclingMethod::Fast,
+        };
 
         let mut roots = rustls::RootCertStore::empty();
         for cert in load_native_certs().certs {
@@ -45,7 +51,7 @@ impl Database {
             .with_no_client_auth();
         let tls = MakeRustlsConnect::new(tls_config);
 
-        let pool = cfg.create_pool(Some(Runtime::Tokio1), tls)?;
+        let pool = cfg.create_pool(Some(Runtime::Tokio1), tls, mgr_config)?;
         let _ = pool.get().await.context("Failed to connect to database")?;
         Ok(Self { pool })
     }
