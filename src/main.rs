@@ -27,25 +27,21 @@ pub struct AppState {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Init logging
     tracing_subscriber::fmt()
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .init();
 
     info!("🤖 Starting Woody Bot (Rust)...");
 
-    // Load config
     let config = Arc::new(Config::from_env()?);
     info!("Environment: {}", if config.is_production { "Production" } else { "Development" });
     info!("Token present: {}", if !config.bot_token.is_empty() { "YES" } else { "NO" });
     info!("Web App URL: {}", config.web_app_url);
 
-    // Init database
     let db = Arc::new(Database::connect(&config.database_url).await?);
     db.run_migrations().await?;
     info!("✅ Database connected");
 
-    // Init bot
     let bot = Bot::new(&config.bot_token);
 
     let state = AppState {
@@ -54,7 +50,6 @@ async fn main() -> Result<()> {
         config: config.clone(),
     };
 
-    // Build Axum router (HTTP API)
     let cors = CorsLayer::new()
         .allow_origin(Any)
         .allow_methods(Any)
@@ -65,19 +60,16 @@ async fn main() -> Result<()> {
         .nest_service("/uploads", ServeDir::new("/data/uploads"))
         .layer(cors);
 
-    // Start bot dispatcher in background
     let bot_state = state.clone();
     tokio::spawn(async move {
         let handler = bot::create_handler();
         Dispatcher::builder(bot_state.bot.clone(), handler)
             .dependencies(dptree::deps![Arc::clone(&bot_state.db), Arc::clone(&bot_state.config)])
-            .enable_ctrlc_handler()
             .build()
             .dispatch()
             .await;
     });
 
-    // Start HTTP server
     let addr = SocketAddr::from(([0, 0, 0, 0], config.port));
     info!("🚀 HTTP server listening on {}", addr);
     let listener = tokio::net::TcpListener::bind(addr).await?;
