@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE strains SET name=$1, category=$2, thc_percent=$3, cbd_percent=$4, effect=$5,\n         flavor_profile=$6, description=$7, price_per_gram=$8, available_grams=$9, image_url=$10\n         WHERE id=$11",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Varchar",
+        "Float4",
+        "Float4",
+        "Text",
+        "Text",
+        "Text",
+        "Float4",
+        "Float4",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8fa36e38091f40a357af7ba7e8cf740293720e3ee421faffb5f0f02d79006df4"
+}

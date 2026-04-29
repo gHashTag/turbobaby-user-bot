@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO bonus_transactions (id, telegram_id, amount, tx_type, description, related_order_id)\n         VALUES ($1,$2,$3,$4,$5,$6)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Int8",
+        "Float4",
+        "Varchar",
+        "Text",
+        "Varchar"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "268233beff397233a6744e229e44537dfed0c56ecf6e2ea0c32832737e72a96d"
+}

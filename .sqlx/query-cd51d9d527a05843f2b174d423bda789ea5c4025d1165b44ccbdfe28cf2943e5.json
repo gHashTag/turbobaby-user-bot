@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE loyalty_profiles SET is_blocked = false WHERE telegram_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "cd51d9d527a05843f2b174d423bda789ea5c4025d1165b44ccbdfe28cf2943e5"
+}

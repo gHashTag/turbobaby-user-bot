@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE loyalty_profiles SET bonus_balance = bonus_balance + $1 WHERE telegram_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Float4",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "939dd72538294f107959d6a8337d45994d798836b80c03a8d579da1b7abacaf4"
+}

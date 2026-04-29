@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO user_languages (telegram_id, language) VALUES ($1, $2)\n             ON CONFLICT (telegram_id) DO UPDATE SET language = $2, updated_at = NOW()",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Varchar"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "428e29e434a1105883e0c4e0b70f8eef2d6366c0d08bb656ba17430fceecd4e1"
+}

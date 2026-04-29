@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE user_languages SET timezone = $2 WHERE telegram_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Varchar"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "44e9514ed5855ad045a6549583bb8d8f0d43ed2a6444522f7bff9726133d4e27"
+}
