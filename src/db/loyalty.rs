@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
+use tokio_postgres::Row;
 
-#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LoyaltyProfile {
     pub telegram_id: i64,
     pub total_spent: f64,
@@ -11,10 +12,27 @@ pub struct LoyaltyProfile {
     pub referral_count: i32,
     pub first_purchase_at: Option<chrono::DateTime<chrono::Utc>>,
     pub manager_telegram_id: Option<i64>,
-    pub is_blocked: bool,  // Changed from Option<bool> - DB has NOT NULL DEFAULT false
+    pub is_blocked: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+impl LoyaltyProfile {
+    pub fn from_row(row: &Row) -> Self {
+        Self {
+            telegram_id: row.get("telegram_id"),
+            total_spent: row.get("total_spent"),
+            bonus_balance: row.get("bonus_balance"),
+            tier: row.get("tier"),
+            referral_code: row.get("referral_code"),
+            referred_by: row.get("referred_by"),
+            referral_count: row.get("referral_count"),
+            first_purchase_at: row.get("first_purchase_at"),
+            manager_telegram_id: row.get("manager_telegram_id"),
+            is_blocked: row.get("is_blocked"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BonusTransaction {
     pub id: String,
     pub telegram_id: i64,
@@ -52,13 +70,9 @@ pub fn calculate_tier(total_spent: f64, order_count: i64, config: &LoyaltyConfig
     } else {
         ("none", 0.0)
     };
-
     let idx = ((order_count - 1) as usize).min(config.progressive_cashback.len().saturating_sub(1));
     let progressive_pct = if order_count > 0 {
         config.progressive_cashback.get(idx).copied().unwrap_or(0.0)
-    } else {
-        0.0
-    };
-
+    } else { 0.0 };
     (tier, tier_pct.max(progressive_pct))
 }

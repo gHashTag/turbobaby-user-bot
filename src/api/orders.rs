@@ -47,33 +47,23 @@ async fn create_order(
     let items_json = serde_json::to_value(&req.items).unwrap_or(json!([]));
     let bonus_used = req.bonus_used.unwrap_or(0.0);
 
-    let result = sqlx::query!(
+    let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    client.execute(
         "INSERT INTO orders (id, telegram_id, customer_name, customer_phone, customer_telegram, items, subtotal, bonus_used, total, status, shop_id)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending', $10)",
-        id, req.telegram_id, req.customer_name, req.customer_phone, req.customer_telegram,
-        items_json, req.subtotal, bonus_used, req.total, req.shop_id
-    )
-    .execute(&state.db.pool)
-    .await;
+        &[&id, &req.telegram_id, &req.customer_name, &req.customer_phone, &req.customer_telegram,
+          &items_json, &req.subtotal, &bonus_used, &req.total, &req.shop_id],
+    ).await.map_err(|e| { error!("create_order: {}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
 
-    match result {
-        Ok(_) => {
-            // Notify admins via Telegram
-            let db = state.db.clone();
-            let bot = state.bot.clone();
-            let config = state.config.clone();
-            let order_id = id.clone();
-            let items_v = items_json.clone();
-            tokio::spawn(async move {
-                notify_admins(&bot, &config, &order_id, &req.customer_name, &req.customer_telegram, &items_v, req.subtotal, bonus_used, req.total).await;
-            });
-            Ok(Json(json!({ "success": true, "order_id": id })))
-        }
-        Err(e) => {
-            error!("Failed to create order: {}", e);
-            Err(StatusCode::INTERNAL_SERVER_ERROR)
-        }
-    }
+    let bot = state.bot.clone();
+    let config = state.config.clone();
+    let order_id = id.clone();
+    let items_v = items_json.clone();
+    tokio::spawn(async move {
+        notify_admins(&bot, &config, &order_id, &req.customer_name, &req.customer_telegram, &items_v, req.subtotal, bonus_used, req.total).await;
+    });
+
+    Ok(Json(json!({ "success": true, "order_id": id })))
 }
 
 async fn notify_admins(
@@ -101,7 +91,7 @@ async fn notify_admins(
         }).collect::<Vec<_>>().join("\n")
     }).unwrap_or_default();
 
-    let source = customer_telegram.as_ref().map(|s| s.as_str())
+    let source = customer_telegram.as_ref()
         .map(|t| format!("@{}", t))
         .or_else(|| customer_name.clone())
         .unwrap_or_else(|| "Anonymous".into());
@@ -111,12 +101,10 @@ async fn notify_admins(
         source, items_text, subtotal, bonus_used, total, &order_id[order_id.len().saturating_sub(6)..]
     );
 
-    let btns = InlineKeyboardMarkup::new(vec![
-        vec![
-            InlineKeyboardButton::callback("✅ Confirm", format!("confirm_{}", order_id)),
-            InlineKeyboardButton::callback("❌ Reject", format!("reject_{}", order_id)),
-        ]
-    ]);
+    let btns = InlineKeyboardMarkup::new(vec![vec![
+        InlineKeyboardButton::callback("✅ Confirm", format!("confirm_{}", order_id)),
+        InlineKeyboardButton::callback("❌ Reject", format!("reject_{}", order_id)),
+    ]]);
 
     for admin_id in &config.admin_ids {
         let _ = bot.send_message(teloxide::types::ChatId(*admin_id), &text)
@@ -126,32 +114,26 @@ async fn notify_admins(
     }
 }
 
-async fn get_orders(
-    State(state): State<AppState>,
-) -> Result<Json<Value>, StatusCode> {
-    let rows = sqlx::query_as!(Order,
-        "SELECT id, telegram_id, customer_name, customer_phone, customer_telegram, items, subtotal, bonus_used, total, status, shop_id, created_at
-         FROM orders ORDER BY created_at DESC LIMIT 100"
-    )
-        .fetch_all(&state.db.pool)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    Ok(Json(json!({ "orders": rows })))
+async fn get_orders(State(state): State<AppState>) -> Result<Json<Value>, StatusCode> {
+    let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let rows = client.query(
+        "SELECT id, telegram_id, customer_name, customer_phone, customer_telegram, items, subtotal, bonus_used, total, status, shop_id, created_at FROM orders ORDER BY created_at DESC LIMIT 100",
+        &[],
+    ).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let orders: Vec<Order> = rows.iter().map(Order::from_row).collect();
+    Ok(Json(json!({ "orders": orders })))
 }
 
-async fn get_order(
-    State(state): State<AppState>,
-    Path(id): Path<String>,
-) -> Result<Json<Value>, StatusCode> {
-    let row = sqlx::query_as!(Order,
-        "SELECT id, telegram_id, customer_name, customer_phone, customer_telegram, items, subtotal, bonus_used, total, status, shop_id, created_at
-         FROM orders WHERE id = $1", id
-    )
-        .fetch_optional(&state.db.pool)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
-    Ok(Json(json!({ "order": row })))
+async fn get_order(State(state): State<AppState>, Path(id): Path<String>) -> Result<Json<Value>, StatusCode> {
+    let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let row = client.query_opt(
+        "SELECT id, telegram_id, customer_name, customer_phone, customer_telegram, items, subtotal, bonus_used, total, status, shop_id, created_at FROM orders WHERE id = $1",
+        &[&id],
+    ).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    match row {
+        Some(r) => Ok(Json(json!({ "order": Order::from_row(&r) }))),
+        None => Err(StatusCode::NOT_FOUND),
+    }
 }
 
 async fn update_order_status(
@@ -159,23 +141,17 @@ async fn update_order_status(
     Path(id): Path<String>,
     Json(req): Json<UpdateOrderStatusRequest>,
 ) -> Result<Json<Value>, StatusCode> {
-    sqlx::query!("UPDATE orders SET status = $1 WHERE id = $2", req.status, id)
-        .execute(&state.db.pool)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    client.execute("UPDATE orders SET status = $1 WHERE id = $2", &[&req.status, &id])
+        .await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(Json(json!({ "success": true })))
 }
 
-async fn get_user_orders(
-    State(state): State<AppState>,
-    Path(telegram_id): Path<i64>,
-) -> Result<Json<Value>, StatusCode> {
-    let rows = sqlx::query_as!(Order,
+async fn get_user_orders(State(state): State<AppState>, Path(telegram_id): Path<i64>) -> Result<Json<Value>, StatusCode> {
+    let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let rows = client.query(
         "SELECT id, telegram_id, customer_name, customer_phone, customer_telegram, items, subtotal, bonus_used, total, status, shop_id, created_at FROM orders WHERE telegram_id = $1 ORDER BY created_at DESC LIMIT 50",
-        telegram_id
-    )
-    .fetch_all(&state.db.pool)
-    .await
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    Ok(Json(json!({ "orders": rows })))
+        &[&telegram_id],
+    ).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(Json(json!({ "orders": rows.iter().map(Order::from_row).collect::<Vec<_>>() })))
 }
