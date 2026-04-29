@@ -27,6 +27,11 @@ pub struct AppState {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    // Must be called before ANY rustls usage
+    rustls::crypto::ring::default_provider()
+        .install_default()
+        .expect("Failed to install rustls crypto provider");
+
     tracing_subscriber::fmt()
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .init();
