@@ -135,17 +135,22 @@ async fn get_accessory_sets(State(state): State<AppState>) -> Result<Json<Value>
         "SELECT id, name, description, icon, accessories, total_price, discount_percent, is_available, is_deal_of_day FROM accessory_sets WHERE is_available = true ORDER BY name",
         &[],
     ).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    let items: Vec<Value> = rows.iter().map(|r| json!({
-        "id": r.get::<_, String>(0),
-        "name": r.get::<_, String>(1),
-        "description": r.get::<_, String>(2),
-        "icon": r.get::<_, String>(3),
-        "accessories": r.get::<_, Vec<String>>(4),
-        "total_price": r.get::<_, f64>(5),
-        "discount_percent": r.get::<_, f64>(6),
-        "is_available": r.get::<_, bool>(7),
-        "is_deal_of_day": r.get::<_, bool>(8),
-    })).collect();
+    let items: Vec<Value> = rows.iter().map(|r| {
+        // Safe extraction of array column
+        let accessories: Vec<String> = r.try_get::<_, Vec<String>>(4)
+            .unwrap_or_else(|_| vec![]);
+        json!({
+            "id": r.get::<_, String>(0),
+            "name": r.get::<_, String>(1),
+            "description": r.get::<_, String>(2),
+            "icon": r.get::<_, String>(3),
+            "accessories": accessories,
+            "total_price": r.get::<_, f64>(5),
+            "discount_percent": r.get::<_, f64>(6),
+            "is_available": r.get::<_, bool>(7),
+            "is_deal_of_day": r.get::<_, bool>(8),
+        })
+    }).collect();
     Ok(Json(json!({ "accessory_sets": items })))
 }
 
@@ -272,16 +277,21 @@ async fn get_tea_sets(State(state): State<AppState>) -> Result<Json<Value>, Stat
         "SELECT id, name, description, icon, items, total_price, discount_percent, is_available FROM tea_sets WHERE is_available = true ORDER BY name",
         &[],
     ).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    let items: Vec<Value> = rows.iter().map(|r| json!({
-        "id": r.get::<_, String>(0),
-        "name": r.get::<_, String>(1),
-        "description": r.get::<_, String>(2),
-        "icon": r.get::<_, String>(3),
-        "items": r.get::<_, Vec<String>>(4),
-        "total_price": r.get::<_, f64>(5),
-        "discount_percent": r.get::<_, f64>(6),
-        "is_available": r.get::<_, bool>(7),
-    })).collect();
+    let items: Vec<Value> = rows.iter().map(|r| {
+        // Safe extraction of array column
+        let items: Vec<String> = r.try_get::<_, Vec<String>>(4)
+            .unwrap_or_else(|_| vec![]);
+        json!({
+            "id": r.get::<_, String>(0),
+            "name": r.get::<_, String>(1),
+            "description": r.get::<_, String>(2),
+            "icon": r.get::<_, String>(3),
+            "items": items,
+            "total_price": r.get::<_, f64>(5),
+            "discount_percent": r.get::<_, f64>(6),
+            "is_available": r.get::<_, bool>(7),
+        })
+    }).collect();
     Ok(Json(json!({ "tea_sets": items })))
 }
 
@@ -347,13 +357,16 @@ async fn get_sets(State(state): State<AppState>) -> Result<Json<Value>, StatusCo
 
     // Add accessory sets
     for r in accessory_sets.iter() {
+        // Safe extraction of array column
+        let accessories: Vec<String> = r.try_get::<_, Vec<String>>(4)
+            .unwrap_or_else(|_| vec![]);
         items.push(json!({
             "id": r.get::<_, String>(0),
             "name": r.get::<_, String>(1),
             "description": r.get::<_, String>(2),
             "icon": r.get::<_, String>(3),
             "type": "accessory",
-            "items": r.get::<_, Vec<String>>(4),
+            "items": accessories,
             "total_price": r.get::<_, f64>(5),
             "discount_percent": r.get::<_, f64>(6),
             "is_available": r.get::<_, bool>(7),
@@ -363,13 +376,16 @@ async fn get_sets(State(state): State<AppState>) -> Result<Json<Value>, StatusCo
 
     // Add tea sets
     for r in tea_sets.iter() {
+        // Safe extraction of array column
+        let items: Vec<String> = r.try_get::<_, Vec<String>>(4)
+            .unwrap_or_else(|_| vec![]);
         items.push(json!({
             "id": r.get::<_, String>(0),
             "name": r.get::<_, String>(1),
             "description": r.get::<_, String>(2),
             "icon": r.get::<_, String>(3),
             "type": "tea",
-            "items": r.get::<_, Vec<String>>(4),
+            "items": items,
             "total_price": r.get::<_, f64>(5),
             "discount_percent": r.get::<_, f64>(6),
             "is_available": r.get::<_, bool>(7),
