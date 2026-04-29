@@ -6,11 +6,12 @@ pub mod users;
 pub use strains::*;
 pub use loyalty::*;
 pub use orders::*;
-pub use users::*;
 
 use anyhow::Result;
 use deadpool_postgres::{Config as PgConfig, Pool, Runtime};
-use tokio_postgres::NoTls;
+use rustls::ClientConfig;
+use rustls_native_certs::load_native_certs;
+use tokio_postgres_rustls::MakeRustlsConnect;
 
 const MIGRATION_SQL: &str = include_str!("../../migrations/001_initial.sql");
 
@@ -20,9 +21,19 @@ pub struct Database {
 
 impl Database {
     pub async fn connect(database_url: &str) -> Result<Self> {
+        // Build rustls config with native certs (works on Alpine with ca-certificates)
+        let mut roots = rustls::RootCertStore::empty();
+        for cert in load_native_certs().certs {
+            roots.add(cert)?;
+        }
+        let tls_config = ClientConfig::builder()
+            .with_root_certificates(roots)
+            .with_no_client_auth();
+        let tls = MakeRustlsConnect::new(tls_config);
+
         let mut cfg = PgConfig::new();
         cfg.url = Some(database_url.to_string());
-        let pool = cfg.create_pool(Some(Runtime::Tokio1), NoTls)?;
+        let pool = cfg.create_pool(Some(Runtime::Tokio1), tls)?;
         let _ = pool.get().await?;
         Ok(Self { pool })
     }
