@@ -22,20 +22,20 @@ pub struct Strain {
 impl Strain {
     pub fn from_row(row: &Row) -> Self {
         Self {
-            id: row.get("id"),
-            name: row.get("name"),
-            category: row.get("category"),
-            thc_percent: row.get("thc_percent"),
-            cbd_percent: row.get("cbd_percent"),
-            effect: row.get("effect"),
-            flavor_profile: row.get("flavor_profile"),
-            description: row.get("description"),
-            price_per_gram: row.get("price_per_gram"),
-            available_grams: row.get("available_grams"),
-            image_url: row.get("image_url"),
-            is_available: row.get("is_available"),
-            is_strain_of_day: row.get("is_strain_of_day"),
-            strain_of_day_discount: row.get("strain_of_day_discount"),
+            id: row.try_get("id").unwrap_or_default(),
+            name: row.try_get("name").unwrap_or_default(),
+            category: row.try_get("category").ok(),
+            thc_percent: row.try_get("thc_percent").ok(),
+            cbd_percent: row.try_get("cbd_percent").ok(),
+            effect: row.try_get("effect").ok(),
+            flavor_profile: row.try_get("flavor_profile").ok(),
+            description: row.try_get("description").ok(),
+            price_per_gram: row.try_get("price_per_gram").unwrap_or(0.0),
+            available_grams: row.try_get("available_grams").ok(),
+            image_url: row.try_get("image_url").ok(),
+            is_available: row.try_get("is_available").unwrap_or(false),
+            is_strain_of_day: row.try_get("is_strain_of_day").unwrap_or(false),
+            strain_of_day_discount: row.try_get("strain_of_day_discount").unwrap_or(0.0),
         }
     }
 }
@@ -54,13 +54,13 @@ pub struct StrainOfDay {
 impl StrainOfDay {
     pub fn from_row(row: &Row) -> Self {
         Self {
-            id: row.get("id"),
-            name: row.get("name"),
-            category: row.get("category"),
-            thc_percent: row.get("thc_percent"),
-            price_per_gram: row.get("price_per_gram"),
-            strain_of_day_discount: row.get("strain_of_day_discount"),
-            image_url: row.get("image_url"),
+            id: row.try_get("id").unwrap_or_default(),
+            name: row.try_get("name").unwrap_or_default(),
+            category: row.try_get("category").ok(),
+            thc_percent: row.try_get("thc_percent").ok(),
+            price_per_gram: row.try_get("price_per_gram").unwrap_or(0.0),
+            strain_of_day_discount: row.try_get("strain_of_day_discount").unwrap_or(0.0),
+            image_url: row.try_get("image_url").ok(),
         }
     }
 }
