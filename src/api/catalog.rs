@@ -55,15 +55,15 @@ pub struct AccessoryRequest {
 
 fn accessory_row(r: &tokio_postgres::Row) -> Value {
     json!({
-        "id": r.get::<_, String>(0),
-        "name": r.get::<_, String>(1),
-        "category": r.get::<_, String>(2),
-        "description": r.get::<_, String>(3),
-        "price": r.get::<_, f64>(4),
-        "stock": r.get::<_, i32>(5),
-        "image_url": r.get::<_, String>(6),
-        "video_url": r.get::<_, Option<String>>(7),
-        "is_available": r.get::<_, bool>(8),
+        "id": r.try_get::<_, String>(0).unwrap_or_default(),
+        "name": r.try_get::<_, String>(1).unwrap_or_default(),
+        "category": r.try_get::<_, String>(2).unwrap_or_default(),
+        "description": r.try_get::<_, String>(3).unwrap_or_default(),
+        "price": r.try_get::<_, f64>(4).unwrap_or(0.0),
+        "stock": r.try_get::<_, i32>(5).unwrap_or(0),
+        "image_url": r.try_get::<_, String>(6).unwrap_or_default(),
+        "video_url": r.try_get::<_, String>(7).ok(),
+        "is_available": r.try_get::<_, bool>(8).unwrap_or(false),
     })
 }
 
@@ -198,15 +198,15 @@ pub struct TeaProductRequest {
 
 fn tea_product_row(r: &tokio_postgres::Row) -> Value {
     json!({
-        "id": r.get::<_, String>(0),
-        "name": r.get::<_, String>(1),
-        "subcategory": r.get::<_, String>(2),
-        "description": r.get::<_, String>(3),
-        "price": r.get::<_, f64>(4),
-        "stock": r.get::<_, i32>(5),
-        "image_url": r.get::<_, String>(6),
-        "video_url": r.get::<_, Option<String>>(7),
-        "is_available": r.get::<_, bool>(8),
+        "id": r.try_get::<_, String>(0).unwrap_or_default(),
+        "name": r.try_get::<_, String>(1).unwrap_or_default(),
+        "subcategory": r.try_get::<_, String>(2).unwrap_or_default(),
+        "description": r.try_get::<_, String>(3).unwrap_or_default(),
+        "price": r.try_get::<_, f64>(4).unwrap_or(0.0),
+        "stock": r.try_get::<_, i32>(5).unwrap_or(0),
+        "image_url": r.try_get::<_, String>(6).unwrap_or_default(),
+        "video_url": r.try_get::<_, String>(7).ok(),
+        "is_available": r.try_get::<_, bool>(8).unwrap_or(false),
     })
 }
 

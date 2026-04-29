@@ -47,14 +47,14 @@ async fn get_quest_places(State(state): State<AppState>) -> Result<Json<Value>, 
         &[],
     ).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let items: Vec<Value> = rows.iter().map(|r| json!({
-        "id": r.get::<_, String>(0),
-        "name": r.get::<_, String>(1),
-        "category": r.get::<_, String>(2),
-        "lat": r.get::<_, f64>(3),
-        "lon": r.get::<_, f64>(4),
-        "description": r.get::<_, Option<String>>(5),
-        "image_url": r.get::<_, Option<String>>(6),
-        "is_available": r.get::<_, bool>(7),
+        "id": r.try_get::<_, String>(0).unwrap_or_default(),
+        "name": r.try_get::<_, String>(1).unwrap_or_default(),
+        "category": r.try_get::<_, String>(2).unwrap_or_default(),
+        "lat": r.try_get::<_, f64>(3).unwrap_or(0.0),
+        "lon": r.try_get::<_, f64>(4).unwrap_or(0.0),
+        "description": r.try_get::<_, String>(5).ok(),
+        "image_url": r.try_get::<_, String>(6).ok(),
+        "is_available": r.try_get::<_, bool>(7).unwrap_or(false),
     })).collect();
     Ok(Json(json!({ "quest_places": items })))
 }
@@ -110,19 +110,19 @@ async fn get_treasure_hunts(State(state): State<AppState>) -> Result<Json<Value>
         &[],
     ).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let items: Vec<Value> = rows.iter().map(|r| json!({
-        "id": r.get::<_, String>(0),
-        "name": r.get::<_, String>(1),
-        "description": r.get::<_, Option<String>>(2),
-        "image_url": r.get::<_, Option<String>>(3),
-        "black_mark_title": r.get::<_, String>(4),
-        "black_mark_description": r.get::<_, Option<String>>(5),
-        "black_mark_image_url": r.get::<_, Option<String>>(6),
-        "is_active": r.get::<_, bool>(7),
-        "starts_at": r.get::<_, Option<String>>(8),
-        "ends_at": r.get::<_, Option<String>>(9),
-        "start_lat": r.get::<_, f64>(10),
-        "start_lon": r.get::<_, f64>(11),
-        "start_name": r.get::<_, String>(12),
+        "id": r.try_get::<_, String>(0).unwrap_or_default(),
+        "name": r.try_get::<_, String>(1).unwrap_or_default(),
+        "description": r.try_get::<_, String>(2).ok(),
+        "image_url": r.try_get::<_, String>(3).ok(),
+        "black_mark_title": r.try_get::<_, String>(4).unwrap_or_default(),
+        "black_mark_description": r.try_get::<_, String>(5).ok(),
+        "black_mark_image_url": r.try_get::<_, String>(6).ok(),
+        "is_active": r.try_get::<_, bool>(7).unwrap_or(false),
+        "starts_at": r.try_get::<_, String>(8).ok(),
+        "ends_at": r.try_get::<_, String>(9).ok(),
+        "start_lat": r.try_get::<_, f64>(10).unwrap_or(0.0),
+        "start_lon": r.try_get::<_, f64>(11).unwrap_or(0.0),
+        "start_name": r.try_get::<_, String>(12).unwrap_or_default(),
     })).collect();
     Ok(Json(json!({ "treasure_hunts": items })))
 }
