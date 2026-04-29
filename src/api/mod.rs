@@ -3,6 +3,9 @@ pub mod strains;
 pub mod loyalty;
 pub mod admin;
 pub mod upload;
+pub mod catalog;
+pub mod quest;
+pub mod happy_hour;
 
 use axum::{
     Router,
@@ -25,6 +28,9 @@ fn api_routes(state: AppState) -> Router {
         .merge(loyalty::routes())
         .merge(admin::routes())
         .merge(upload::routes())
+        .merge(catalog::routes())
+        .merge(quest::routes())
+        .merge(happy_hour::routes())
         .with_state(state)
 }
 
