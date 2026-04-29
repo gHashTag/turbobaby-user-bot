@@ -9,8 +9,8 @@ name = "woody-weed-bot"
 path = "src/main.rs"
 
 [dependencies]
-# Telegram bot framework
-teloxide = { version = "0.13", features = ["macros", "webhooks-axum"], default-features = false }
+# Telegram bot framework — rustls instead of openssl
+teloxide = { version = "0.13", features = ["macros", "webhooks-axum", "rustls"], default-features = false }
 
 # HTTP server
 axum = { version = "0.7", features = ["multipart"] }
