@@ -19,6 +19,6 @@ WORKDIR /app
 RUN apk add --no-cache ca-certificates curl
 COPY --from=builder /app/target/x86_64-unknown-linux-musl/release/woody-weed-bot ./
 COPY --from=builder /app/migrations ./migrations
-ENV PORT=3000
-EXPOSE 3000
+# Railway automatically sets PORT=8080 - don't override it!
+EXPOSE 8080
 CMD ["./woody-weed-bot"]
