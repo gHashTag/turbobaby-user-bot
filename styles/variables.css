@@ -1,0 +1,57 @@
+/* Pixel Art Design System - CSS Variables */
+:root {
+  /* Background colors */
+  --color-bg: #0f0f1a;
+  --color-bg2: #1a1a2e;
+  --color-card: #16213e;
+  --color-border: #2a2a4a;
+
+  /* Text colors */
+  --color-text: #e8e8e8;
+  --color-text2: #888888;
+
+  /* Neon accent colors */
+  --color-green: #39ff14;
+  --color-cyan: #00e5ff;
+  --color-yellow: #ffe600;
+  --color-purple: #b388ff;
+  --color-red: #ff4757;
+
+  /* Spacing */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+
+  /* Typography */
+  --font-size-base: 15px;
+  --font-size-sm: 13px;
+  --font-size-lg: 18px;
+  --font-size-xl: 24px;
+
+  /* Border radius */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+
+  /* Pixel art shadow */
+  --shadow-pixel: 4px 4px 0 rgba(0, 0, 0, 0.5);
+  --shadow-glow: 0 0 12px var(--color-green);
+
+  /* Transitions */
+  --transition-fast: 0.15s ease;
+  --transition-normal: 0.3s ease;
+}
+
+/* Light theme overrides */
+@media (prefers-color-scheme: light) {
+  :root {
+    --color-bg: #f5f5f5;
+    --color-bg2: #ffffff;
+    --color-card: #ffffff;
+    --color-border: #e0e0e0;
+    --color-text: #1a1a1a;
+    --color-text2: #666666;
+  }
+}

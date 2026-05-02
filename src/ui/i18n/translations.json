@@ -1,0 +1,34 @@
+{
+  "en": {
+    "app_title": "Woody Weed Bot",
+    "home": "Home",
+    "menu": "Menu",
+    "sets": "Sets",
+    "sommelier": "Sommelier",
+    "accessories": "Accessories",
+    "tea": "Tea",
+    "cart": "Cart",
+    "orders": "Orders",
+    "profile": "Profile",
+    "garden": "Garden",
+    "quest": "Quest",
+    "add_to_cart": "Add to Cart",
+    "checkout": "Checkout"
+  },
+  "ru": {
+    "app_title": "Вуди Вед Бот",
+    "home": "Главная",
+    "menu": "Меню",
+    "sets": "Наборы",
+    "sommelier": "Сомелье",
+    "accessories": "Аксессуары",
+    "tea": "Чай",
+    "cart": "Корзина",
+    "orders": "Заказы",
+    "profile": "Профиль",
+    "garden": "Сад",
+    "quest": "Квест",
+    "add_to_cart": "Добавить в корзину",
+    "checkout": "Оформить"
+  }
+}

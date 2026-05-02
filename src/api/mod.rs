@@ -6,6 +6,7 @@ pub mod upload;
 pub mod catalog;
 pub mod quest;
 pub mod happy_hour;
+pub mod garden;
 
 use axum::{
     Router,
@@ -15,7 +16,7 @@ use axum::{
 use serde_json::{json, Value};
 use crate::AppState;
 
-pub fn router(state: AppState) -> Router {
+pub fn router(state: crate::AppState) -> Router {
     Router::new()
         .route("/health", get(health_handler))
         .nest("/api", api_routes(state.clone()))
@@ -31,6 +32,7 @@ fn api_routes(state: AppState) -> Router {
         .merge(catalog::routes())
         .merge(quest::routes())
         .merge(happy_hour::routes())
+        .merge(garden::routes())
         .with_state(state)
 }
 

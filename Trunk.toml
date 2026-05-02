@@ -1,0 +1,24 @@
+[build]
+target = "index.html"
+dist = "dist"
+public_url = "/"
+filehash = true
+release = false
+no_opt = true
+
+[serve]
+addresses = ["127.0.0.1", "0.0.0.0"]
+port = 8080
+open = false
+
+[clean]
+dist = "dist"
+cargo = false
+
+[tools]
+wasm-bindgen = "0.2.95"
+wasm-opt = false
+
+[watch]
+watch = ["src", "assets"]
+ignore = ["dist"]

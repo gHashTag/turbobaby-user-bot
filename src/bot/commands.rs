@@ -4,7 +4,6 @@ use teloxide::{
     types::{InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo},
     utils::command::BotCommands,
 };
-use tracing::error;
 
 use crate::{config::Config, db::Database, locales::*, ai::{AiClient, get_random_joke_prompt, get_random_fact_prompt}};
 
@@ -41,10 +40,6 @@ fn callback_btn(text: &str, data: &str) -> InlineKeyboardButton {
     InlineKeyboardButton::callback(text, data)
 }
 
-fn url_btn(text: &str, url: &str) -> InlineKeyboardButton {
-    InlineKeyboardButton::url(text, url.parse().unwrap())
-}
-
 pub fn build_app_url(base_url: &str, lang: &str, page: Option<&str>) -> String {
     let mut url = format!("{}?lang={}", base_url, lang);
     if let Some(p) = page { url.push_str(&format!("&page={}", p)); }
@@ -58,9 +53,9 @@ pub async fn handle_command(
     db: Arc<Database>,
     config: Arc<Config>,
 ) -> Result<(), teloxide::RequestError> {
-    let user_id = msg.from().map(|u| u.id.0 as i64).unwrap_or(0);
+    let user_id = msg.from.as_ref().map(|u| u.id.0 as i64).unwrap_or(0);
     let lang = db.get_user_lang(user_id).await
-        .unwrap_or_else(|| map_telegram_lang(msg.from().and_then(|u| u.language_code.as_ref().map(|s| s.as_str()))));
+        .unwrap_or_else(|| map_telegram_lang(msg.from.as_ref().and_then(|u| u.language_code.as_ref().map(|s| s.as_str()))));
     let locale = get_locale(&lang);
     let base = &config.web_app_url;
 

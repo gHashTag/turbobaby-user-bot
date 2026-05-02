@@ -1,6 +1,7 @@
 use anyhow::Result;
 use crate::config::Config;
 
+#[allow(dead_code)]
 pub async fn upload_to_s3(config: &Config, filename: &str, data: &[u8]) -> Result<String> {
     use aws_config::Region;
     use aws_sdk_s3::{config::Credentials, Client, primitives::ByteStream};
@@ -35,6 +36,7 @@ pub async fn upload_to_s3(config: &Config, filename: &str, data: &[u8]) -> Resul
     Ok(format!("{}/{}/{}", public_url, bucket, key))
 }
 
+#[allow(dead_code)]
 fn mime_from_filename(filename: &str) -> &'static str {
     match filename.rsplit('.').next().unwrap_or("") {
         "jpg" | "jpeg" => "image/jpeg",

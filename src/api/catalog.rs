@@ -50,6 +50,7 @@ pub struct AccessoryRequest {
     pub stock: Option<i32>,
     pub image_url: Option<String>,
     pub video_url: Option<String>,
+    #[allow(dead_code)]
     pub is_available: Option<bool>,
 }
 
@@ -125,6 +126,7 @@ pub struct AccessorySetRequest {
     pub accessories: Option<Vec<String>>,
     pub total_price: f64,
     pub discount_percent: Option<f64>,
+    #[allow(dead_code)]
     pub is_available: Option<bool>,
     pub is_deal_of_day: Option<bool>,
 }
@@ -193,6 +195,7 @@ pub struct TeaProductRequest {
     pub stock: Option<i32>,
     pub image_url: Option<String>,
     pub video_url: Option<String>,
+    #[allow(dead_code)]
     pub is_available: Option<bool>,
 }
 
@@ -268,6 +271,7 @@ pub struct TeaSetRequest {
     pub items: Option<Vec<String>>,
     pub total_price: f64,
     pub discount_percent: Option<f64>,
+    #[allow(dead_code)]
     pub is_available: Option<bool>,
 }
 
@@ -334,6 +338,7 @@ pub struct SetRequest {
     pub accessory_ids: Option<Vec<String>>,
     pub total_price: f64,
     pub discount_percent: Option<f64>,
+    #[allow(dead_code)]
     pub is_available: Option<bool>,
     pub is_deal_of_day: Option<bool>,
 }

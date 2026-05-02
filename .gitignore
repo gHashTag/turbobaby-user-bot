@@ -1,4 +1,7 @@
 target/
+dist/
 *.bak
 .env
 .DS_Store
+.cargo/
+.claude/

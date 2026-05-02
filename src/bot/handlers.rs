@@ -3,7 +3,6 @@ use teloxide::{
     prelude::*,
     types::{InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo},
 };
-use tracing::error;
 
 use crate::{config::Config, db::Database, locales::*, ai::{AiClient}};
 use crate::bot::commands::build_app_url;
@@ -32,7 +31,7 @@ pub async fn handle_text(
     if text.starts_with(['🎁', '🍷', '😜', '🧠', '🌐', '⚙', '🛒']) { return Ok(()); }
 
     let is_group = matches!(msg.chat.kind, teloxide::types::ChatKind::Public(_));
-    let user_id = msg.from().map(|u| u.id.0 as i64).unwrap_or(0);
+    let user_id = msg.from.as_ref().map(|u| u.id.0 as i64).unwrap_or(0);
 
     let lang = detect_language(&text);
     let locale = get_locale(lang);
@@ -41,7 +40,7 @@ pub async fn handle_text(
     db.mark_user_unblocked(user_id).await.ok();
 
     let ai = AiClient::new(config.grok_api_key.clone(), config.glm_api_key.clone());
-    let user = msg.from();
+    let user = msg.from.as_ref();
     let name = user
         .and_then(|u| if !u.first_name.is_empty() { Some(&u.first_name) } else { u.username.as_ref() })
         .map(|s| s.as_str())
@@ -80,10 +79,10 @@ pub async fn handle_text(
 }
 
 pub async fn handle_web_app_data(
-    bot: Bot,
+    _bot: Bot,
     msg: Message,
-    db: Arc<Database>,
-    config: Arc<Config>,
+    _db: Arc<Database>,
+    _config: Arc<Config>,
 ) -> Result<(), teloxide::RequestError> {
     if let Some(data) = msg.web_app_data() {
         if let Ok(json) = serde_json::from_str::<serde_json::Value>(&data.data) {

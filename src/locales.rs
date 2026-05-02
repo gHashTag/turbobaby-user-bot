@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -82,6 +81,7 @@ pub fn map_telegram_lang(lang: Option<&str>) -> String {
     }
 }
 
+#[allow(dead_code)]
 pub fn lang_to_timezone(lang: &str) -> &'static str {
     match lang {
         "ru" => "Europe/Moscow",

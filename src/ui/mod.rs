@@ -1,0 +1,20 @@
+pub mod app;
+pub mod app_debug;
+pub mod app_minimal;
+pub mod app_simple_test;
+pub mod simple_app;
+pub mod routes;
+pub mod state;
+pub mod telegram;
+pub mod test_minimal;
+
+pub mod api;
+pub mod components;
+pub mod layouts;
+pub mod pages;
+pub mod game;
+pub mod i18n;
+pub mod theme;
+
+// Pure UI Screens — no business logic
+pub mod screens;

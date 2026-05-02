@@ -10,6 +10,8 @@ use crate::AppState;
 
 pub fn routes() -> Router<AppState> {
     Router::new()
+        // Test endpoint
+        .route("/api/test", get(test_endpoint))
         // Quest Places
         .route("/quest-places", get(get_quest_places))
         .route("/quest-places", post(create_quest_place))
@@ -27,6 +29,10 @@ pub fn routes() -> Router<AppState> {
         .route("/quest/scan", post(scan_quest_qr))
 }
 
+async fn test_endpoint() -> Json<Value> {
+    Json(json!({ "test": "ok", "timestamp": chrono::Utc::now().timestamp() }))
+}
+
 // ── Quest Places ──────────────────────────────────────────────
 
 #[derive(Debug, Deserialize)]
@@ -37,25 +43,33 @@ pub struct QuestPlaceRequest {
     pub lon: f64,
     pub description: Option<String>,
     pub image_url: Option<String>,
+    #[allow(dead_code)]
     pub is_available: Option<bool>,
 }
 
 async fn get_quest_places(State(state): State<AppState>) -> Result<Json<Value>, StatusCode> {
-    let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    let rows = client.query(
-        "SELECT id, name, category, lat, lon, description, image_url, is_available FROM quest_places WHERE is_available = true ORDER BY name",
+    let client = state.db.pool.get().await
+        .map_err(|e| {
+            tracing::error!("Database connection error: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    // Try simpler query first
+    let rows = match client.query(
+        "SELECT * FROM quest_places",
         &[],
-    ).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    ).await {
+        Ok(r) => r,
+        Err(e) => {
+            tracing::error!("Query error: {} - {}", e, e.to_string());
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    };
+
     let items: Vec<Value> = rows.iter().map(|r| json!({
         "id": r.try_get::<_, String>(0).unwrap_or_default(),
-        "name": r.try_get::<_, String>(1).unwrap_or_default(),
-        "category": r.try_get::<_, String>(2).unwrap_or_default(),
-        "lat": r.try_get::<_, f64>(3).unwrap_or(0.0),
-        "lon": r.try_get::<_, f64>(4).unwrap_or(0.0),
-        "description": r.try_get::<_, String>(5).ok(),
-        "image_url": r.try_get::<_, String>(6).ok(),
-        "is_available": r.try_get::<_, bool>(7).unwrap_or(false),
     })).collect();
+
     Ok(Json(json!({ "quest_places": items })))
 }
 
@@ -95,8 +109,11 @@ pub struct TreasureHuntRequest {
     pub black_mark_title: String,
     pub black_mark_description: Option<String>,
     pub black_mark_image_url: Option<String>,
+    #[allow(dead_code)]
     pub is_active: Option<bool>,
+    #[allow(dead_code)]
     pub starts_at: Option<String>,
+    #[allow(dead_code)]
     pub ends_at: Option<String>,
     pub start_lat: f64,
     pub start_lon: f64,
@@ -157,6 +174,7 @@ async fn delete_treasure_hunt(State(state): State<AppState>, Path(id): Path<Stri
 
 #[derive(Debug, Deserialize)]
 pub struct QuestLocationParams {
+    #[allow(dead_code)]
     pub telegram_id: Option<i64>,
 }
 
@@ -166,6 +184,7 @@ pub struct QuestLocationRequest {
     pub description: Option<String>,
     pub category: Option<String>,
     pub map_url: Option<String>,
+    #[allow(dead_code)]
     pub is_active: Option<bool>,
     pub is_final: Option<bool>,
 }

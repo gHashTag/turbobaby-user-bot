@@ -3,13 +3,8 @@ pub mod callbacks;
 pub mod handlers;
 
 use teloxide::prelude::*;
-use teloxide::utils::command::BotCommands;
 use teloxide::dispatching::UpdateHandler;
-use dptree::prelude::*;
 
-use crate::db::Database;
-use crate::config::Config;
-use std::sync::Arc;
 
 pub fn create_handler() -> UpdateHandler<teloxide::RequestError> {
     Update::filter_message()

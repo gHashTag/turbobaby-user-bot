@@ -6,36 +6,54 @@ edition = "2021"
 
 [[bin]]
 name = "woody-weed-bot"
+path = "src/web.rs"
+
+[[bin]]
+name = "woody-weed-bot-server"
 path = "src/main.rs"
+required-features = ["backend"]
+
+[lib]
+name = "woody_weed_bot"
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-teloxide = { version = "0.13", features = ["macros", "webhooks-axum", "rustls"], default-features = false }
+# Web UI (WASM compatible) - always included
+dioxus = { version = "0.6", features = ["web", "router"] }
+dioxus-logger = "0.6"
+gloo-timers = { version = "0.3", features = ["futures"] }
+reqwest = { version = "0.12", features = ["json"], default-features = false }
+web-sys = "0.3"
+wasm-bindgen = "0.2"
+console_error_panic_hook = "0.1"
+wasm-bindgen-futures = "0.4"
+js-sys = "0.3"
+getrandom = { version = "0.2", features = ["js"] }
+regex = "1"
 
-axum = { version = "0.7", features = ["multipart"] }
-tower = "0.4"
-tower-http = { version = "0.5", features = ["cors", "fs", "trace"] }
+# Backend only dependencies - all optional
+teloxide = { version = "0.13", features = ["macros", "webhooks-axum", "rustls"], default-features = false, optional = true }
+axum = { version = "0.7", features = ["multipart"], optional = true }
+tower = { version = "0.4", optional = true }
+tower-http = { version = "0.5", features = ["cors", "fs", "trace", "set-header"], optional = true }
+tokio = { version = "1", features = ["full"], optional = true }
+tokio-postgres = { version = "0.7", features = ["with-chrono-0_4", "with-serde_json-1", "with-uuid-1"], optional = true }
+deadpool-postgres = { version = "0.14", features = ["rt_tokio_1"], optional = true }
+postgres-types = { version = "0.2", features = ["with-chrono-0_4", "with-serde_json-1", "with-uuid-1"], optional = true }
+tokio-postgres-rustls = { version = "0.13", optional = true }
+rustls = { version = "0.23", features = ["ring"], optional = true }
+rustls-native-certs = { version = "0.8", optional = true }
+aws-config = { version = "1", default-features = false, features = ["rustls"], optional = true }
+aws-sdk-s3 = { version = "1", default-features = false, features = ["rustls"], optional = true }
+tracing-subscriber = { version = "0.3", features = ["env-filter"], optional = true }
+url = { version = "2", optional = true }
 
-tokio = { version = "1", features = ["full"] }
-
-tokio-postgres = { version = "0.7", features = ["with-chrono-0_4", "with-serde_json-1", "with-uuid-1"] }
-deadpool-postgres = { version = "0.14", features = ["rt_tokio_1"] }
-postgres-types = { version = "0.2", features = ["with-chrono-0_4", "with-serde_json-1", "with-uuid-1"] }
-tokio-postgres-rustls = "0.13"
-rustls = { version = "0.23", features = ["ring"] }
-rustls-native-certs = "0.8"
-url = "2"
-
-reqwest = { version = "0.11", features = ["json", "rustls-tls"], default-features = false }
-
+# Shared dependencies
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-
 dotenvy = "0.15"
-
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-
-uuid = { version = "1", features = ["v4"] }
+uuid = { version = "1", features = ["v4", "js"] }
 chrono = { version = "0.4", features = ["serde"] }
 hmac = "0.12"
 sha2 = "0.10"
@@ -44,14 +62,21 @@ rand = "0.8"
 base64 = "0.21"
 anyhow = "1"
 thiserror = "1"
-
-aws-config = { version = "1", default-features = false, features = ["rustls"] }
-aws-sdk-s3 = { version = "1", default-features = false, features = ["rustls"] }
-
 image = { version = "0.24", default-features = false, features = ["jpeg", "png", "webp"] }
+
+[features]
+default = []
+backend = [
+    "teloxide", "axum", "tower", "tower-http", "tokio",
+    "tokio-postgres", "deadpool-postgres", "postgres-types",
+    "tokio-postgres-rustls", "rustls", "rustls-native-certs",
+    "aws-config", "aws-sdk-s3", "tracing-subscriber", "url"
+]
+web = []
 
 [profile.release]
 opt-level = 3
 lto = true
 codegen-units = 1
 strip = true
+

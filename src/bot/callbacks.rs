@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use teloxide::{
     prelude::*,
-    types::{InlineKeyboardButton, InlineKeyboardMarkup, Message, WebAppInfo, MaybeInaccessibleMessage},
+    types::{InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, MaybeInaccessibleMessage},
 };
 
 use crate::{config::Config, db::Database, locales::*, ai::{AiClient, get_random_joke_prompt, get_random_fact_prompt}};
@@ -159,7 +159,7 @@ pub async fn handle_callback(
         }
 
         d if d.starts_with("reject_") => {
-            let order_id = &d["reject_".len()..];
+            let _order_id = &d["reject_".len()..];
             bot.answer_callback_query(&q.id).text(&format!("❌ {}", locale.order_rejected)).await?;
             // db.update_order_status(order_id, "rejected").await.ok();
             if let Some(msg) = q.message.as_ref().and_then(|m| match m {

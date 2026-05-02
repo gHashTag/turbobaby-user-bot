@@ -4,7 +4,7 @@ use axum::{
     routing::{get, post, put},
     Json, Router,
 };
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_json::{json, Value};
 use tracing::error;
 
@@ -27,6 +27,7 @@ pub struct CreateOrderRequest {
 #[derive(Debug, Deserialize)]
 pub struct UpdateOrderStatusRequest {
     pub status: String,
+    #[allow(dead_code)]
     pub admin_telegram_id: Option<i64>,
 }
 

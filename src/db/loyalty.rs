@@ -33,6 +33,7 @@ impl LoyaltyProfile {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct BonusTransaction {
     pub id: String,
     pub telegram_id: i64,
@@ -44,6 +45,7 @@ pub struct BonusTransaction {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct LoyaltyConfig {
     pub bronze_threshold: f64,
     pub silver_threshold: f64,
@@ -60,6 +62,7 @@ pub struct LoyaltyConfig {
     pub happy_hour_discount: f64,
 }
 
+#[allow(dead_code)]
 pub fn calculate_tier(total_spent: f64, order_count: i64, config: &LoyaltyConfig) -> (&'static str, f64) {
     let (tier, tier_pct) = if total_spent >= config.gold_threshold {
         ("gold", config.gold_cashback_pct)

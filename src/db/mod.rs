@@ -4,8 +4,6 @@ pub mod orders;
 pub mod users;
 
 pub use strains::*;
-pub use loyalty::*;
-pub use orders::*;
 
 use anyhow::{Context, Result};
 use deadpool_postgres::{Config as PgConfig, Pool, Runtime, ManagerConfig};
@@ -18,6 +16,8 @@ const MIGRATION_SQL: &str = concat!(
     include_str!("../../migrations/001_initial.sql"),
     include_str!("../../migrations/002_catalog.sql"),
     include_str!("../../migrations/003_quest.sql"),
+    include_str!("../../migrations/004_garden.sql"),
+    include_str!("../../migrations/005_alter_strains_sotd.sql"),
 );
 
 pub struct Database {

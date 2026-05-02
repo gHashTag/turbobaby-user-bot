@@ -2,7 +2,7 @@ use anyhow::Result;
 use rand::Rng;
 use reqwest::Client;
 use serde_json::{json, Value};
-use tracing::{error, info, warn};
+use tracing::{error, warn};
 
 const JOKE_STYLES: &[&str] = &[
     "a pun about cannabis strain names",
