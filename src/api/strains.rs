@@ -104,10 +104,13 @@ async fn set_strain_of_day(State(state): State<AppState>, Path(id): Path<String>
         (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": format!("pool: {}", e) })))
     })?;
     if enabled {
-        client.execute(
-            "UPDATE strains SET is_strain_of_day = true, strain_of_day_discount = $1, strain_of_day_set_at = NOW() WHERE id = $2",
-            &[&discount, &id],
-        ).await.map_err(|e| {
+        // Embed discount directly in SQL to avoid f64 serialization mismatch
+        // (production DB column may be NUMERIC/REAL instead of FLOAT8)
+        let sql = format!(
+            "UPDATE strains SET is_strain_of_day = true, strain_of_day_discount = {}::numeric, strain_of_day_set_at = NOW() WHERE id = $1",
+            discount
+        );
+        client.execute(&sql, &[&id]).await.map_err(|e| {
             tracing::error!("SOTD update error for id={}: {:?}", id, e);
             (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": format!("update: {}", e), "id": id })))
         })?;
