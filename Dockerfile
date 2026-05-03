@@ -36,7 +36,6 @@ COPY dist ./dist
 
 # Static assets
 COPY styles ./styles
-COPY assets ./assets
 COPY migrations ./migrations
 
 # Railway sets PORT automatically
