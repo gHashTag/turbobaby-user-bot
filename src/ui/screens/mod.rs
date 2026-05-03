@@ -14,6 +14,7 @@ pub mod orders_screen;
 pub mod profile_screen;
 pub mod garden_screen;
 pub mod quest_screen;
+pub mod game_screen;
 
 pub use home_screen::HomeScreen;
 pub use menu_screen::MenuScreen;
@@ -28,3 +29,4 @@ pub use orders_screen::OrdersScreen;
 pub use profile_screen::ProfileScreen;
 pub use garden_screen::GardenScreen;
 pub use quest_screen::QuestScreen;
+pub use game_screen::GameScreen;
