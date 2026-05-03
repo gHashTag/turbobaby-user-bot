@@ -123,6 +123,9 @@ async fn main() -> Result<()> {
         // Serve static assets (styles, images)
         .nest_service("/styles", ServeDir::new("styles"))
         .nest_service("/assets", ServeDir::new("assets"))
+        // Legacy alias: pre-006 seed data referenced /images/* — keep it working
+        // until all DBs are migrated. Same content directory as /assets.
+        .nest_service("/images", ServeDir::new("assets"))
 
         // Serve WASM app from dist/ (SPA fallback to index.html)
         .fallback_service(ServeDir::new("dist").fallback(ServeFile::new("dist/index.html")))
