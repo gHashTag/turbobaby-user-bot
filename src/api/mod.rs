@@ -8,6 +8,7 @@ pub mod quest;
 pub mod happy_hour;
 pub mod garden;
 pub mod referrals;
+pub mod tech_tree;
 
 use axum::{
     Router,
@@ -35,6 +36,7 @@ fn api_routes(state: AppState) -> Router {
         .merge(happy_hour::routes())
         .merge(garden::routes())
         .merge(referrals::routes())
+        .merge(tech_tree::routes())
         .with_state(state)
 }
 

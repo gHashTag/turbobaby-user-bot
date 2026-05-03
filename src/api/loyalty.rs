@@ -20,12 +20,33 @@ pub struct AddBonusRequest {
 
 pub fn routes() -> Router<AppState> {
     Router::new()
+        .route("/loyalty/tiers", get(get_loyalty_tiers))
         .route("/loyalty/:telegram_id", get(get_profile))
         .route("/loyalty/:telegram_id/bonus", post(add_bonus))
         .route("/loyalty/:telegram_id/use-bonus", post(use_bonus))
         .route("/loyalty/leaderboard", get(get_leaderboard))
         .route("/loyalty/config", get(get_loyalty_config))
         .route("/loyalty/config", post(update_loyalty_config))
+}
+
+async fn get_loyalty_tiers(State(state): State<AppState>) -> Result<Json<Value>, StatusCode> {
+    let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let rows = client.query(
+        "SELECT tier, name, min_points, discount_percent, points_multiplier, perks, icon, color \
+         FROM loyalty_tiers ORDER BY min_points ASC",
+        &[],
+    ).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let tiers: Vec<Value> = rows.iter().map(|r| json!({
+        "tier":             r.get::<_, String>("tier"),
+        "name":             r.get::<_, String>("name"),
+        "min_points":       r.get::<_, i32>("min_points"),
+        "discount_percent": r.get::<_, i32>("discount_percent"),
+        "points_multiplier":r.get::<_, f32>("points_multiplier"),
+        "perks":            r.get::<_, Vec<String>>("perks"),
+        "icon":             r.get::<_, String>("icon"),
+        "color":            r.get::<_, String>("color"),
+    })).collect();
+    Ok(Json(json!({ "tiers": tiers })))
 }
 
 async fn get_profile(State(state): State<AppState>, Path(telegram_id): Path<i64>) -> Result<Json<Value>, StatusCode> {
