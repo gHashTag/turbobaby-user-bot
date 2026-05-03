@@ -21,6 +21,7 @@ const MIGRATION_SQL: &str = concat!(
     include_str!("../../migrations/005_alter_strains_sotd.sql"),
     include_str!("../../migrations/006_seed_strain_images.sql"),
     include_str!("../../migrations/007_referral_events.sql"),
+    include_str!("../../migrations/008_strains_full_seed.sql"),
 );
 
 pub struct Database {
