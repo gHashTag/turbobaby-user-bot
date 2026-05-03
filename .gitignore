@@ -1,5 +1,4 @@
 target/
-dist/
 *.bak
 .env
 .DS_Store
