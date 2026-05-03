@@ -1,22 +1,5 @@
-// Card Component with Pixel Art Style
+// Card Component — Pixel Art + Glassmorphism variants
 use dioxus::prelude::*;
-
-#[derive(Props, PartialEq, Clone)]
-pub struct CardProps {
-    #[props(default)]
-    variant: CardVariant,
-    #[props(default = false)]
-    clickable: bool,
-    #[props(default = false)]
-    glow: bool,
-    #[props(default)]
-    onclick: Option<EventHandler<MouseEvent>>,
-    children: Element,
-    #[props(default)]
-    class: Option<String>,
-    #[props(default)]
-    image_url: Option<String>,
-}
 
 #[derive(PartialEq, Clone, Copy, Default)]
 pub enum CardVariant {
@@ -26,32 +9,72 @@ pub enum CardVariant {
     Plant,
     Quest,
     Member,
+    // New variants (feat/design-system)
+    Glass,
+    GlassGreen,
+    GlassPurple,
+    GlassGold,
 }
 
 impl CardVariant {
+    pub fn css_class(&self) -> &'static str {
+        match self {
+            Self::Default     => "card card-default",
+            Self::Product     => "card card-product",
+            Self::Plant       => "card card-plant",
+            Self::Quest       => "card card-quest",
+            Self::Member      => "card card-member",
+            Self::Glass       => "card card-glass",
+            Self::GlassGreen  => "card card-glass card-glass-green",
+            Self::GlassPurple => "card card-glass card-glass-purple",
+            Self::GlassGold   => "card card-glass card-glass-gold",
+        }
+    }
+
+    // Kept for backward compat
     pub fn as_str(&self) -> &'static str {
         match self {
-            Self::Default => "default",
-            Self::Product => "product",
-            Self::Plant => "plant",
-            Self::Quest => "quest",
-            Self::Member => "member",
+            Self::Default     => "default",
+            Self::Product     => "product",
+            Self::Plant       => "plant",
+            Self::Quest       => "quest",
+            Self::Member      => "member",
+            Self::Glass       => "glass",
+            Self::GlassGreen  => "glass-green",
+            Self::GlassPurple => "glass-purple",
+            Self::GlassGold   => "glass-gold",
         }
     }
 }
 
+#[derive(Props, PartialEq, Clone)]
+pub struct CardProps {
+    #[props(default)]
+    pub variant: CardVariant,
+    #[props(default = false)]
+    pub clickable: bool,
+    #[props(default = false)]
+    pub glow: bool,
+    #[props(default)]
+    pub onclick: Option<EventHandler<MouseEvent>>,
+    pub children: Element,
+    #[props(default)]
+    pub class: Option<String>,
+    #[props(default)]
+    pub image_url: Option<String>,
+}
+
 #[component]
 pub fn Card(props: CardProps) -> Element {
-    let base_class = "card";
-    let variant_class = format!("card-{}", props.variant.as_str());
-    let click_class = if props.clickable { "card-clickable" } else { "" };
-    let glow_class = if props.glow { "card-glow" } else { "" };
-    let custom_class = props.class.unwrap_or_default();
+    let variant_class = props.variant.css_class();
+    let click_class = if props.clickable { "clickable" } else { "" };
+    let glow_class = if props.glow { "glow" } else { "" };
+    let custom_class = props.class.as_deref().unwrap_or_default();
     let click_handler = props.onclick;
 
     rsx! {
         div {
-            class: "{base_class} {variant_class} {click_class} {glow_class} {custom_class}",
+            class: "{variant_class} {click_class} {glow_class} {custom_class}",
             onclick: move |e| {
                 if props.clickable {
                     if let Some(handler) = &click_handler {

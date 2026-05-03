@@ -1,47 +1,177 @@
-/* Pixel Art Design System - CSS Variables */
+/* =============================================================================
+   Woody Weed Bot — Design System CSS Variables
+   Extended with neon tokens, gradients, rarity glows, spacing scale
+   ============================================================================= */
 :root {
-  /* Background colors */
+  /* ---------------------------------------------------------------------------
+     Background colors (legacy + new)
+  --------------------------------------------------------------------------- */
   --color-bg: #0f0f1a;
   --color-bg2: #1a1a2e;
   --color-card: #16213e;
   --color-border: #2a2a4a;
 
-  /* Text colors */
-  --color-text: #e8e8e8;
-  --color-text2: #888888;
+  /* New dark-mode backgrounds */
+  --color-bg-dark: #0a0a0a;
+  --color-bg-card: rgba(255, 255, 255, 0.05);
+  --color-bg-surface: rgba(255, 255, 255, 0.08);
+  --color-bg-overlay: rgba(0, 0, 0, 0.75);
 
-  /* Neon accent colors */
+  /* ---------------------------------------------------------------------------
+     Brand / Accent colors
+  --------------------------------------------------------------------------- */
+  /* Primary — weed green */
+  --color-primary: #22c55e;
+  --color-primary-light: #4ade80;
+  --color-primary-dark: #16a34a;
+
+  /* Legacy neon green (kept for back-compat) */
   --color-green: #39ff14;
+
+  /* Accents */
+  --color-accent-purple: #a855f7;
+  --color-accent-purple-light: #c084fc;
+  --color-accent-purple-dark: #7e22ce;
+
+  --color-accent-gold: #fbbf24;
+  --color-accent-gold-light: #fcd34d;
+  --color-accent-gold-dark: #d97706;
+
   --color-cyan: #00e5ff;
   --color-yellow: #ffe600;
-  --color-purple: #b388ff;
   --color-red: #ff4757;
+  --color-red-dark: #dc2626;
 
-  /* Spacing */
+  /* Legacy shorthands */
+  --color-purple: #b388ff;
+
+  /* ---------------------------------------------------------------------------
+     Text colors
+  --------------------------------------------------------------------------- */
+  --color-text: #e8e8e8;
+  --color-text2: #888888;
+  --color-text-muted: #555577;
+  --color-text-inverse: #0a0a0a;
+
+  /* ---------------------------------------------------------------------------
+     Neon glow shadows
+  --------------------------------------------------------------------------- */
+  --neon-green-glow: 0 0 12px rgba(34, 197, 94, 0.6);
+  --neon-green-glow-lg: 0 0 24px rgba(34, 197, 94, 0.7), 0 0 48px rgba(34, 197, 94, 0.3);
+  --neon-green-glow-sm: 0 0 6px rgba(34, 197, 94, 0.5);
+
+  --neon-purple-glow: 0 0 12px rgba(168, 85, 247, 0.6);
+  --neon-purple-glow-lg: 0 0 24px rgba(168, 85, 247, 0.7), 0 0 48px rgba(168, 85, 247, 0.3);
+  --neon-purple-glow-sm: 0 0 6px rgba(168, 85, 247, 0.5);
+
+  --neon-gold-glow: 0 0 12px rgba(251, 191, 36, 0.6);
+  --neon-gold-glow-lg: 0 0 24px rgba(251, 191, 36, 0.7), 0 0 48px rgba(251, 191, 36, 0.3);
+  --neon-gold-glow-sm: 0 0 6px rgba(251, 191, 36, 0.5);
+
+  --neon-red-glow: 0 0 12px rgba(255, 71, 87, 0.6);
+  --neon-cyan-glow: 0 0 12px rgba(0, 229, 255, 0.6);
+
+  /* Legacy pixel shadow */
+  --shadow-pixel: 4px 4px 0 rgba(0, 0, 0, 0.5);
+  --shadow-glow: 0 0 12px var(--color-green);
+  --pixel-shadow: 4px 4px 0 #000;
+
+  /* ---------------------------------------------------------------------------
+     Border radius scale
+  --------------------------------------------------------------------------- */
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-2xl: 24px;
+  --radius-full: 9999px;
+
+  /* ---------------------------------------------------------------------------
+     Spacing scale (4px base)
+  --------------------------------------------------------------------------- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 28px;
+  --space-8: 32px;
+
+  /* Legacy named spacing (kept for back-compat) */
   --space-xs: 4px;
   --space-sm: 8px;
   --space-md: 16px;
   --space-lg: 24px;
   --space-xl: 32px;
 
-  /* Typography */
+  /* ---------------------------------------------------------------------------
+     Typography
+  --------------------------------------------------------------------------- */
+  --font-display: 'Press Start 2P', monospace;
+  --font-body: 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'Courier New', monospace;
+
+  /* Legacy */
   --font-size-base: 15px;
   --font-size-sm: 13px;
   --font-size-lg: 18px;
   --font-size-xl: 24px;
 
-  /* Border radius */
-  --radius-sm: 4px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
+  /* Extended scale */
+  --font-size-xs: 10px;
+  --font-size-2xl: 32px;
+  --line-height-tight: 1.25;
+  --line-height-normal: 1.5;
+  --line-height-relaxed: 1.75;
 
-  /* Pixel art shadow */
-  --shadow-pixel: 4px 4px 0 rgba(0, 0, 0, 0.5);
-  --shadow-glow: 0 0 12px var(--color-green);
+  /* ---------------------------------------------------------------------------
+     Gradients
+  --------------------------------------------------------------------------- */
+  --gradient-green: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
+  --gradient-purple: linear-gradient(135deg, var(--color-accent-purple-light) 0%, var(--color-accent-purple-dark) 100%);
+  --gradient-gold: linear-gradient(135deg, var(--color-accent-gold-light) 0%, var(--color-accent-gold-dark) 100%);
+  --gradient-neon: linear-gradient(135deg, var(--color-primary) 0%, var(--color-accent-purple) 50%, var(--color-accent-gold) 100%);
+  --gradient-dark: linear-gradient(180deg, var(--color-bg-dark) 0%, var(--color-bg2) 100%);
+  --gradient-card: linear-gradient(135deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.02) 100%);
 
-  /* Transitions */
+  /* Rarity gradients */
+  --gradient-common: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
+  --gradient-rare: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+  --gradient-epic: linear-gradient(135deg, var(--color-accent-purple) 0%, var(--color-accent-purple-dark) 100%);
+  --gradient-legendary: linear-gradient(135deg, var(--color-accent-gold-light) 0%, var(--color-accent-gold-dark) 100%);
+
+  /* ---------------------------------------------------------------------------
+     Rarity glow colors
+  --------------------------------------------------------------------------- */
+  --rarity-common-color: #6b7280;
+  --rarity-common-glow: 0 0 10px rgba(107, 114, 128, 0.5);
+  --rarity-rare-color: #3b82f6;
+  --rarity-rare-glow: 0 0 10px rgba(59, 130, 246, 0.6), 0 0 20px rgba(59, 130, 246, 0.3);
+  --rarity-epic-color: #a855f7;
+  --rarity-epic-glow: 0 0 12px rgba(168, 85, 247, 0.7), 0 0 28px rgba(168, 85, 247, 0.3);
+  --rarity-legendary-color: #fbbf24;
+  --rarity-legendary-glow: 0 0 14px rgba(251, 191, 36, 0.8), 0 0 32px rgba(251, 191, 36, 0.4);
+
+  /* ---------------------------------------------------------------------------
+     Transitions
+  --------------------------------------------------------------------------- */
   --transition-fast: 0.15s ease;
   --transition-normal: 0.3s ease;
+  --transition-slow: 0.5s ease;
+  --transition-spring: 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* ---------------------------------------------------------------------------
+     Z-index scale
+  --------------------------------------------------------------------------- */
+  --z-base: 0;
+  --z-raised: 10;
+  --z-dropdown: 100;
+  --z-nav: 1000;
+  --z-modal: 2000;
+  --z-toast: 3000;
+  --z-tooltip: 4000;
 }
 
 /* Light theme overrides */
