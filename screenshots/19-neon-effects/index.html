@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>19 - Neon Effects</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0f0f1a;
+    color: #e0e0e0;
+    font-family: 'Press Start 2P', monospace;
+    padding: 24px;
+  }
+  .section-title {
+    color: #39ff14;
+    font-size: 14px;
+    margin-bottom: 20px;
+    text-shadow: 0 0 8px rgba(57,255,20,0.5);
+    border-bottom: 2px solid #39ff14;
+    padding-bottom: 8px;
+  }
+  .effects-section {
+    max-width: 400px;
+    margin: 0 auto 32px;
+  }
+  .section-label {
+    font-size: 8px;
+    color: #00e5ff;
+    margin-bottom: 16px;
+  }
+
+  /* Neon text */
+  .neon-text {
+    text-align: center;
+    margin-bottom: 16px;
+  }
+  .neon-green {
+    color: #39ff14;
+    text-shadow: 0 0 7px #39ff14, 0 0 10px #39ff14, 0 0 21px #39ff14, 0 0 42px #0fa;
+  }
+  .neon-cyan {
+    color: #00e5ff;
+    text-shadow: 0 0 7px #00e5ff, 0 0 10px #00e5ff, 0 0 21px #00e5ff, 0 0 42px #0cf;
+  }
+  .neon-orange {
+    color: #ff6b35;
+    text-shadow: 0 0 7px #ff6b35, 0 0 10px #ff6b35, 0 0 21px #ff6b35, 0 0 42px #f93;
+  }
+  .neon-pink {
+    color: #ff1493;
+    text-shadow: 0 0 7px #ff1493, 0 0 10px #ff1493, 0 0 21px #ff1493, 0 0 42px #f06;
+  }
+  .neon-gold {
+    color: #ffd700;
+    text-shadow: 0 0 7px #ffd700, 0 0 10px #ffd700, 0 0 21px #ffd700, 0 0 42px #fc0;
+  }
+
+  /* Neon borders */
+  .neon-box {
+    padding: 20px;
+    border-radius: 12px;
+    text-align: center;
+    margin-bottom: 12px;
+    font-size: 10px;
+  }
+  .border-green {
+    border: 2px solid #39ff14;
+    box-shadow: 0 0 10px rgba(57,255,20,0.3), inset 0 0 10px rgba(57,255,20,0.1);
+    color: #39ff14;
+  }
+  .border-cyan {
+    border: 2px solid #00e5ff;
+    box-shadow: 0 0 10px rgba(0,229,255,0.3), inset 0 0 10px rgba(0,229,255,0.1);
+    color: #00e5ff;
+  }
+  .border-orange {
+    border: 2px solid #ff6b35;
+    box-shadow: 0 0 10px rgba(255,107,53,0.3), inset 0 0 10px rgba(255,107,53,0.1);
+    color: #ff6b35;
+  }
+  .border-pink {
+    border: 2px solid #ff1493;
+    box-shadow: 0 0 10px rgba(255,20,147,0.3), inset 0 0 10px rgba(255,20,147,0.1);
+    color: #ff1493;
+  }
+
+  /* Glow buttons */
+  .glow-row {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-bottom: 12px;
+  }
+  .glow-btn {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 9px;
+    padding: 10px 20px;
+    border-radius: 8px;
+    border: 2px solid;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .glow-green {
+    border-color: #39ff14;
+    color: #39ff14;
+    background: rgba(57,255,20,0.1);
+    box-shadow: 0 0 12px rgba(57,255,20,0.3);
+  }
+  .glow-cyan {
+    border-color: #00e5ff;
+    color: #00e5ff;
+    background: rgba(0,229,255,0.1);
+    box-shadow: 0 0 12px rgba(0,229,255,0.3);
+  }
+  .glow-orange {
+    border-color: #ff6b35;
+    color: #ff6b35;
+    background: rgba(255,107,53,0.1);
+    box-shadow: 0 0 12px rgba(255,107,53,0.3);
+  }
+  .glow-pink {
+    border-color: #ff1493;
+    color: #ff1493;
+    background: rgba(255,20,147,0.1);
+    box-shadow: 0 0 12px rgba(255,20,147,0.3);
+  }
+
+  /* Animated neon */
+  .neon-flicker {
+    animation: flicker 3s infinite alternate;
+  }
+  @keyframes flicker {
+    0%, 18%, 22%, 25%, 53%, 57%, 100% { opacity: 1; }
+    20%, 24%, 55% { opacity: 0.6; }
+  }
+  .neon-pulse {
+    animation: neonPulse 2s ease-in-out infinite;
+  }
+  @keyframes neonPulse {
+    0%, 100% { filter: brightness(1); }
+    50% { filter: brightness(1.5); }
+  }
+
+  /* Gradient neon line */
+  .neon-line {
+    height: 4px;
+    border-radius: 2px;
+    margin-bottom: 16px;
+  }
+  .neon-line-rainbow {
+    background: linear-gradient(90deg, #39ff14, #00e5ff, #ff6b35, #ff1493, #ffd700);
+    box-shadow: 0 0 10px rgba(57,255,20,0.5), 0 0 20px rgba(0,229,255,0.3);
+  }
+</style>
+</head>
+<body>
+  <div class="section-title">NEON EFFECTS — Glow System</div>
+
+  <div class="effects-section">
+    <div class="section-label">Neon Text</div>
+    <div class="neon-text neon-green" style="font-size:16px;">NEON GREEN</div>
+    <div class="neon-text neon-cyan" style="font-size:14px;">NEON CYAN</div>
+    <div class="neon-text neon-orange" style="font-size:12px;">NEON ORANGE</div>
+    <div class="neon-text neon-pink" style="font-size:10px;">NEON PINK</div>
+    <div class="neon-text neon-gold" style="font-size:10px;">NEON GOLD</div>
+  </div>
+
+  <div class="effects-section">
+    <div class="section-label">Neon Borders</div>
+    <div class="neon-box border-green">Green Glow Box</div>
+    <div class="neon-box border-cyan">Cyan Glow Box</div>
+    <div class="neon-box border-orange">Orange Glow Box</div>
+    <div class="neon-box border-pink">Pink Glow Box</div>
+  </div>
+
+  <div class="effects-section">
+    <div class="section-label">Glow Buttons</div>
+    <div class="glow-row">
+      <button class="glow-btn glow-green">GREEN</button>
+      <button class="glow-btn glow-cyan">CYAN</button>
+      <button class="glow-btn glow-orange">ORANGE</button>
+      <button class="glow-btn glow-pink">PINK</button>
+    </div>
+  </div>
+
+  <div class="effects-section">
+    <div class="section-label">Animated Effects</div>
+    <div class="neon-text neon-green neon-flicker" style="font-size:12px;">FLICKER EFFECT</div>
+    <div class="neon-text neon-cyan neon-pulse" style="font-size:12px;margin-top:12px;">PULSE EFFECT</div>
+    <div class="neon-line neon-line-rainbow" style="margin-top:16px;"></div>
+  </div>
+</body>
+</html>

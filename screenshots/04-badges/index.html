@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Component: Badges</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0f0f1a; --bg2: #1a1a2e; --card: #16213e; --border: #2a2a4a;
+            --text: #e8e8e8; --text2: #8b8b9e; --green: #39ff14; --cyan: #00e5ff;
+            --yellow: #ffe600; --purple: #b388ff; --red: #ff4757; --orange: #ff9f43;
+            --radius-sm: 4px;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); padding: 24px; }
+        h1 { font-family: 'Press Start 2P', monospace; font-size: 12px; color: var(--cyan); margin-bottom: 24px; text-transform: uppercase; letter-spacing: 2px; }
+        .badge {
+            display: inline-block; font-family: 'Press Start 2P', monospace; font-size: 7px;
+            padding: 4px 10px; border-radius: var(--radius-sm); border: 1px solid; text-transform: uppercase;
+        }
+        .badge-sativa { color: var(--green); border-color: var(--green); background: rgba(57,255,20,0.1); }
+        .badge-indica { color: var(--cyan); border-color: var(--cyan); background: rgba(0,229,255,0.1); }
+        .badge-hybrid { color: var(--yellow); border-color: var(--yellow); background: rgba(255,230,0,0.1); }
+        .badge-premium { color: var(--purple); border-color: var(--purple); background: rgba(179,136,255,0.1); }
+        .badge-hot { color: var(--red); border-color: var(--red); background: rgba(255,71,87,0.1); }
+        .badge-new { color: var(--orange); border-color: var(--orange); background: rgba(255,159,67,0.1); }
+        .badge-sold-out { color: var(--text2); border-color: var(--text2); background: rgba(139,139,158,0.1); }
+        .badge-sod { color: #000; border-color: var(--yellow); background: var(--yellow); }
+        .row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+        .label { font-size: 11px; color: var(--text2); font-family: 'Press Start 2P', monospace; margin-bottom: 8px; }
+    </style>
+</head>
+<body>
+    <h1>04 · Badges</h1>
+    <div class="label">Strain Types</div>
+    <div class="row">
+        <span class="badge badge-sativa">☀️ Sativa</span>
+        <span class="badge badge-indica">🌙 Indica</span>
+        <span class="badge badge-hybrid">⚖️ Hybrid</span>
+    </div>
+    <div class="label">Status</div>
+    <div class="row">
+        <span class="badge badge-premium">⭐ Premium</span>
+        <span class="badge badge-hot">🔥 Hot</span>
+        <span class="badge badge-new">✨ New</span>
+        <span class="badge badge-sod">🌟 SOTD</span>
+    </div>
+    <div class="label">Availability</div>
+    <div class="row">
+        <span class="badge badge-sold-out">Sold Out</span>
+        <span class="badge" style="color:var(--green);border-color:var(--green);background:rgba(57,255,20,0.1);">✓ In Stock</span>
+        <span class="badge" style="color:var(--cyan);border-color:var(--cyan);background:rgba(0,229,255,0.1);">🌿 Organic</span>
+    </div>
+</body>
+</html>

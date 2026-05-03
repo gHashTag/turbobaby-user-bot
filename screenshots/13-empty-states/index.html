@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>13 - Empty States</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0f0f1a;
+    color: #e0e0e0;
+    font-family: 'Press Start 2P', monospace;
+    padding: 24px;
+  }
+  .section-title {
+    color: #39ff14;
+    font-size: 14px;
+    margin-bottom: 20px;
+    text-shadow: 0 0 8px rgba(57,255,20,0.5);
+    border-bottom: 2px solid #39ff14;
+    padding-bottom: 8px;
+  }
+  .empty-card {
+    max-width: 380px;
+    margin: 0 auto 24px;
+    background: #1a1a2e;
+    border: 2px solid rgba(255,255,255,0.1);
+    border-radius: 16px;
+    padding: 40px 24px;
+    text-align: center;
+  }
+  .empty-icon {
+    font-size: 48px;
+    margin-bottom: 16px;
+    opacity: 0.8;
+  }
+  .empty-title {
+    font-size: 12px;
+    color: #e0e0e0;
+    margin-bottom: 8px;
+  }
+  .empty-desc {
+    font-size: 8px;
+    color: #888;
+    margin-bottom: 20px;
+    line-height: 1.8;
+  }
+  .empty-action {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 9px;
+    padding: 10px 24px;
+    border-radius: 8px;
+    border: 2px solid #39ff14;
+    background: rgba(57,255,20,0.1);
+    color: #39ff14;
+    cursor: pointer;
+    text-shadow: 0 0 6px rgba(57,255,20,0.4);
+  }
+  .empty-action:hover {
+    background: rgba(57,255,20,0.2);
+  }
+  .error-card {
+    max-width: 380px;
+    margin: 0 auto 24px;
+    background: #1a1a2e;
+    border: 2px solid rgba(255,68,68,0.3);
+    border-radius: 16px;
+    padding: 40px 24px;
+    text-align: center;
+  }
+  .error-action {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 9px;
+    padding: 10px 24px;
+    border-radius: 8px;
+    border: 2px solid #ff4444;
+    background: rgba(255,68,68,0.1);
+    color: #ff4444;
+    cursor: pointer;
+  }
+</style>
+</head>
+<body>
+  <div class="section-title">EMPTY STATES</div>
+
+  <div class="empty-card">
+    <div class="empty-icon">🛒</div>
+    <div class="empty-title">Cart is Empty</div>
+    <div class="empty-desc">Browse our menu and add some<br>premium strains to your cart</div>
+    <button class="empty-action">Browse Menu</button>
+  </div>
+
+  <div class="empty-card">
+    <div class="empty-icon">📦</div>
+    <div class="empty-title">No Orders Yet</div>
+    <div class="empty-desc">Your order history will appear<br>here after your first purchase</div>
+    <button class="empty-action">Start Shopping</button>
+  </div>
+
+  <div class="empty-card">
+    <div class="empty-icon">🌱</div>
+    <div class="empty-title">Garden is Empty</div>
+    <div class="empty-desc">Plant your first seed and watch<br>it grow through the stages</div>
+    <button class="empty-action">Get Seeds</button>
+  </div>
+
+  <div class="error-card">
+    <div class="empty-icon">⚠️</div>
+    <div class="empty-title" style="color:#ff4444;">Connection Error</div>
+    <div class="empty-desc">Unable to load data.<br>Please check your connection.</div>
+    <button class="error-action">Retry</button>
+  </div>
+</body>
+</html>

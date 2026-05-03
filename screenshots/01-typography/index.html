@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>01 - Typography</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0f0f1a;
+    color: #e0e0e0;
+    font-family: 'Press Start 2P', monospace;
+    padding: 24px;
+  }
+  .section-title {
+    color: #39ff14;
+    font-size: 14px;
+    margin-bottom: 16px;
+    text-shadow: 0 0 8px rgba(57,255,20,0.5);
+    border-bottom: 2px solid #39ff14;
+    padding-bottom: 8px;
+  }
+  .type-row {
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+    margin-bottom: 12px;
+    padding: 8px;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+  }
+  .type-label {
+    color: #666;
+    font-size: 8px;
+    min-width: 120px;
+  }
+  .type-sample { color: #e0e0e0; }
+  .h1 { font-size: 24px; color: #39ff14; text-shadow: 0 0 10px rgba(57,255,20,0.5); }
+  .h2 { font-size: 18px; color: #00e5ff; text-shadow: 0 0 8px rgba(0,229,255,0.4); }
+  .h3 { font-size: 14px; color: #ff6b35; text-shadow: 0 0 6px rgba(255,107,53,0.4); }
+  .h4 { font-size: 12px; color: #e0e0e0; }
+  .body { font-size: 10px; color: #b0b0b0; }
+  .caption { font-size: 8px; color: #888; }
+  .micro { font-size: 6px; color: #666; }
+  .font-section { margin-bottom: 32px; }
+  .font-name {
+    color: #00e5ff;
+    font-size: 10px;
+    margin-bottom: 12px;
+  }
+  .weight-demo { margin-bottom: 8px; font-size: 10px; }
+  .color-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-top: 12px;
+  }
+  .color-swatch {
+    text-align: center;
+    padding: 16px 8px;
+    border: 2px solid rgba(255,255,255,0.1);
+    font-size: 7px;
+  }
+  .color-swatch span { display: block; margin-top: 8px; }
+</style>
+</head>
+<body>
+  <div class="section-title">TYPE SCALE</div>
+  <div class="type-row"><span class="type-label">H1 / 24px</span><span class="type-sample h1">Heading One</span></div>
+  <div class="type-row"><span class="type-label">H2 / 18px</span><span class="type-sample h2">Heading Two</span></div>
+  <div class="type-row"><span class="type-label">H3 / 14px</span><span class="type-sample h3">Heading Three</span></div>
+  <div class="type-row"><span class="type-label">H4 / 12px</span><span class="type-sample h4">Heading Four</span></div>
+  <div class="type-row"><span class="type-label">Body / 10px</span><span class="type-sample body">Body text for paragraphs and descriptions</span></div>
+  <div class="type-row"><span class="type-label">Caption / 8px</span><span class="type-sample caption">Caption text for labels and metadata</span></div>
+  <div class="type-row"><span class="type-label">Micro / 6px</span><span class="type-sample micro">Micro text for badges and tags</span></div>
+
+  <div class="font-section" style="margin-top:32px;">
+    <div class="section-title">FONT FAMILY</div>
+    <div class="font-name">Press Start 2P (Primary)</div>
+    <div class="weight-demo">ABCDEFGHIJKLMNOPQRSTUVWXYZ</div>
+    <div class="weight-demo">abcdefghijklmnopqrstuvwxyz</div>
+    <div class="weight-demo">0123456789 !@#$%^&*()</div>
+  </div>
+
+  <div class="font-section">
+    <div class="section-title">COLOR PALETTE</div>
+    <div class="color-grid">
+      <div class="color-swatch" style="background:#39ff14;"><span style="color:#0f0f1a;">#39ff14<br>Neon Green</span></div>
+      <div class="color-swatch" style="background:#00e5ff;"><span style="color:#0f0f1a;">#00e5ff<br>Cyan</span></div>
+      <div class="color-swatch" style="background:#ff6b35;"><span style="color:#0f0f1a;">#ff6b35<br>Orange</span></div>
+      <div class="color-swatch" style="background:#ff1493;"><span style="color:#fff;">#ff1493<br>Pink</span></div>
+      <div class="color-swatch" style="background:#ffd700;"><span style="color:#0f0f1a;">#ffd700<br>Gold</span></div>
+      <div class="color-swatch" style="background:#c0c0c0;"><span style="color:#0f0f1a;">#c0c0c0<br>Silver</span></div>
+      <div class="color-swatch" style="background:#cd7f32;"><span style="color:#0f0f1a;">#cd7f32<br>Brass</span></div>
+      <div class="color-swatch" style="background:#e0e0e0;"><span style="color:#0f0f1a;">#e0e0e0<br>Light</span></div>
+    </div>
+  </div>
+</body>
+</html>

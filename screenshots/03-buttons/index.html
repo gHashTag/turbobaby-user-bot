@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Component: Buttons</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0f0f1a; --bg2: #1a1a2e; --card: #16213e; --border: #2a2a4a;
+            --text: #e8e8e8; --text2: #8b8b9e; --green: #39ff14; --cyan: #00e5ff;
+            --yellow: #ffe600; --purple: #b388ff; --red: #ff4757; --orange: #ff9f43;
+            --pixel-shadow: 4px 4px 0 rgba(0,0,0,0.5);
+            --radius-sm: 4px; --radius-md: 8px;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); padding: 24px; }
+        h1 { font-family: 'Press Start 2P', monospace; font-size: 12px; color: var(--cyan); margin-bottom: 24px; text-transform: uppercase; letter-spacing: 2px; }
+        .btn {
+            font-family: 'Press Start 2P', monospace; border: 2px solid var(--border);
+            padding: 10px 20px; font-size: 9px; text-transform: uppercase; cursor: pointer;
+            box-shadow: var(--pixel-shadow); border-radius: var(--radius-sm);
+            transition: transform 0.1s, box-shadow 0.1s; display: inline-flex; align-items: center; gap: 6px;
+        }
+        .btn:hover { transform: translate(-2px, -2px); box-shadow: 6px 6px 0 rgba(0,0,0,0.5); }
+        .btn:active { transform: translate(2px, 2px); box-shadow: 2px 2px 0 rgba(0,0,0,0.5); }
+        .btn-primary { background: var(--green); color: #000; border-color: var(--green); }
+        .btn-secondary { background: var(--card); color: var(--text); border-color: var(--border); }
+        .btn-outline { background: transparent; color: var(--green); border-color: var(--green); }
+        .btn-ghost { background: transparent; color: var(--purple); border-color: var(--purple); }
+        .btn-danger { background: var(--red); color: #fff; border-color: var(--red); }
+        .btn-warning { background: var(--yellow); color: #000; border-color: var(--yellow); }
+        .btn-cyan { background: var(--cyan); color: #000; border-color: var(--cyan); }
+        .btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none !important; }
+        .btn-sm { padding: 6px 12px; font-size: 7px; }
+        .btn-lg { padding: 14px 28px; font-size: 11px; }
+        .row { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; align-items: center; }
+        .label { font-size: 11px; color: var(--text2); font-family: 'Press Start 2P', monospace; margin-bottom: 8px; }
+    </style>
+</head>
+<body>
+    <h1>03 · Buttons</h1>
+    <div class="label">Variants</div>
+    <div class="row">
+        <button class="btn btn-primary">Primary</button>
+        <button class="btn btn-secondary">Secondary</button>
+        <button class="btn btn-cyan">Cyan</button>
+        <button class="btn btn-warning">Warning</button>
+        <button class="btn btn-danger">Danger</button>
+    </div>
+    <div class="label">Outline & Ghost</div>
+    <div class="row">
+        <button class="btn btn-outline">Outline</button>
+        <button class="btn btn-ghost">Ghost</button>
+        <button class="btn btn-primary" disabled>Disabled</button>
+    </div>
+    <div class="label">Sizes</div>
+    <div class="row">
+        <button class="btn btn-primary btn-sm">Small</button>
+        <button class="btn btn-primary">Default</button>
+        <button class="btn btn-primary btn-lg">Large</button>
+    </div>
+    <div class="label">With Icons</div>
+    <div class="row">
+        <button class="btn btn-primary">🛒 Add to Cart</button>
+        <button class="btn btn-cyan">📷 Scan QR</button>
+        <button class="btn btn-danger">🗑️ Remove</button>
+        <button class="btn btn-outline">↩ Back</button>
+    </div>
+</body>
+</html>

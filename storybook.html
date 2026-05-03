@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Woody Weed Bot — Design System: Typography</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        /* ===== DESIGN TOKENS ===== */
+        :root {
+            --bg: #0f0f1a;
+            --bg2: #1a1a2e;
+            --card: #16213e;
+            --border: #2a2a4a;
+            --text: #e8e8e8;
+            --text2: #8b8b9e;
+            --green: #39ff14;
+            --cyan: #00e5ff;
+            --yellow: #ffe600;
+            --purple: #b388ff;
+            --red: #ff4757;
+            --font-size-xs: 10px;
+            --font-size-sm: 12px;
+            --font-size-base: 14px;
+            --font-size-lg: 16px;
+            --font-size-xl: 20px;
+            --font-size-2xl: 24px;
+            --font-size-3xl: 32px;
+            --font-size-4xl: 48px;
+            --font-size-5xl: 64px;
+        }
+
+        /* ===== RESET ===== */
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-size: var(--font-size-base);
+            color: var(--text);
+            background-color: var(--bg);
+            line-height: 1.5;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* ===== LAYOUT ===== */
+        .storybook {
+            max-width: 960px;
+            margin: 0 auto;
+            padding: 40px 24px 120px;
+        }
+
+        .storybook-header {
+            text-align: center;
+            margin-bottom: 48px;
+            padding-bottom: 24px;
+            border-bottom: 2px solid var(--border);
+        }
+
+        .storybook-header h1 {
+            font-family: 'Press Start 2P', monospace;
+            font-size: var(--font-size-2xl);
+            color: var(--green);
+            text-shadow: 0 0 20px rgba(57, 255, 20, 0.4);
+            margin-bottom: 12px;
+        }
+
+        .storybook-header p {
+            color: var(--text2);
+            font-size: var(--font-size-lg);
+        }
+
+        /* ===== SECTIONS ===== */
+        .section {
+            margin-bottom: 48px;
+        }
+
+        .section-title {
+            font-family: 'Press Start 2P', monospace;
+            font-size: var(--font-size-sm);
+            color: var(--cyan);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 24px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        /* ===== TYPE SPECIMEN ROW ===== */
+        .specimen {
+            display: flex;
+            align-items: baseline;
+            gap: 24px;
+            padding: 16px 0;
+            border-bottom: 1px solid rgba(42, 42, 74, 0.4);
+        }
+
+        .specimen-label {
+            min-width: 120px;
+            flex-shrink: 0;
+            font-family: 'Press Start 2P', monospace;
+            font-size: 8px;
+            color: var(--text2);
+            text-transform: uppercase;
+        }
+
+        .specimen-value {
+            color: var(--text);
+            word-break: break-word;
+        }
+
+        /* ===== COLOR SWATCH ROW ===== */
+        .color-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            gap: 16px;
+        }
+
+        .color-swatch {
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid var(--border);
+        }
+
+        .color-swatch-preview {
+            height: 80px;
+            display: flex;
+            align-items: flex-end;
+            padding: 8px;
+        }
+
+        .color-swatch-info {
+            background: var(--bg2);
+            padding: 8px 12px;
+        }
+
+        .color-swatch-name {
+            font-size: var(--font-size-sm);
+            font-weight: 600;
+            margin-bottom: 2px;
+        }
+
+        .color-swatch-hex {
+            font-family: 'Press Start 2P', monospace;
+            font-size: 7px;
+            color: var(--text2);
+        }
+
+        /* ===== FONT FAMILY SHOWCASE ===== */
+        .family-block {
+            background: var(--bg2);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 24px;
+            margin-bottom: 16px;
+        }
+
+        .family-name {
+            font-family: 'Press Start 2P', monospace;
+            font-size: 8px;
+            color: var(--purple);
+            margin-bottom: 12px;
+            display: block;
+        }
+
+        .family-sample {
+            margin-bottom: 8px;
+        }
+
+        .family-alphabet {
+            color: var(--text2);
+            font-size: var(--font-size-sm);
+            line-height: 1.8;
+        }
+    </style>
+</head>
+<body>
+    <div class="storybook">
+        <!-- Header -->
+        <div class="storybook-header">
+            <h1>🌿 Woody Weed Bot</h1>
+            <p>Design System — Typography & Colors</p>
+        </div>
+
+        <!-- Section 1: Font Families -->
+        <div class="section">
+            <div class="section-title">01 / Font Families</div>
+
+            <div class="family-block">
+                <span class="family-name">Primary — Inter</span>
+                <div class="family-sample" style="font-family: 'Inter', sans-serif; font-size: 32px; font-weight: 300;">
+                    The quick brown fox jumps over the lazy dog
+                </div>
+                <div class="family-sample" style="font-family: 'Inter', sans-serif; font-size: 32px; font-weight: 400;">
+                    The quick brown fox jumps over the lazy dog
+                </div>
+                <div class="family-sample" style="font-family: 'Inter', sans-serif; font-size: 32px; font-weight: 600;">
+                    The quick brown fox jumps over the lazy dog
+                </div>
+                <div class="family-sample" style="font-family: 'Inter', sans-serif; font-size: 32px; font-weight: 700;">
+                    The quick brown fox jumps over the lazy dog
+                </div>
+                <div class="family-sample" style="font-family: 'Inter', sans-serif; font-size: 32px; font-weight: 900;">
+                    The quick brown fox jumps over the lazy dog
+                </div>
+                <div class="family-alphabet" style="font-family: 'Inter', sans-serif;">
+                    ABCDEFGHIJKLMNOPQRSTUVWXYZ<br>
+                    abcdefghijklmnopqrstuvwxyz<br>
+                    0123456789 !@#$%^&*()
+                </div>
+            </div>
+
+            <div class="family-block">
+                <span class="family-name">Pixel Art — Press Start 2P</span>
+                <div class="family-sample" style="font-family: 'Press Start 2P', monospace; font-size: 20px;">
+                    PIXEL ART STYLE
+                </div>
+                <div class="family-sample" style="font-family: 'Press Start 2P', monospace; font-size: 14px;">
+                    The quick brown fox jumps
+                </div>
+                <div class="family-sample" style="font-family: 'Press Start 2P', monospace; font-size: 10px;">
+                    ABCDEFGHIJKLMNOPQRSTUVWXYZ 0123456789
+                </div>
+                <div class="family-alphabet" style="font-family: 'Press Start 2P', monospace;">
+                    USED FOR: HEADERS · BADGES · PIXEL BUTTONS<br>
+                    NAVIGATION LABELS · GAME UI
+                </div>
+            </div>
+        </div>
+
+        <!-- Section 2: Type Scale -->
+        <div class="section">
+            <div class="section-title">02 / Type Scale</div>
+
+            <div class="specimen">
+                <div class="specimen-label">5xl · 64px</div>
+                <div class="specimen-value" style="font-size: 64px; font-weight: 800;">Display</div>
+            </div>
+            <div class="specimen">
+                <div class="specimen-label">4xl · 48px</div>
+                <div class="specimen-value" style="font-size: 48px; font-weight: 700;">Heading 1</div>
+            </div>
+            <div class="specimen">
+                <div class="specimen-label">3xl · 32px</div>
+                <div class="specimen-value" style="font-size: 32px; font-weight: 700;">Heading 2</div>
+            </div>
+            <div class="specimen">
+                <div class="specimen-label">2xl · 24px</div>
+                <div class="specimen-value" style="font-size: 24px; font-weight: 700;">Heading 3</div>
+            </div>
+            <div class="specimen">
+                <div class="specimen-label">xl · 20px</div>
+                <div class="specimen-value" style="font-size: 20px; font-weight: 600;">Heading 4 — Page Title</div>
+            </div>
+            <div class="specimen">
+                <div class="specimen-label">lg · 16px</div>
+                <div class="specimen-value" style="font-size: 16px; font-weight: 600;">Subheading / Modal Title</div>
+            </div>
+            <div class="specimen">
+                <div class="specimen-label">base · 14px</div>
+                <div class="specimen-value" style="font-size: 14px;">Body text — Default font size for all content. Woody Weed Bot is a cannabis delivery service with gamification.</div>
+            </div>
+            <div class="specimen">
+                <div class="specimen-label">sm · 12px</div>
+                <div class="specimen-value" style="font-size: 12px; color: var(--text2);">Small text — Labels, captions, secondary info, input hints</div>
+            </div>
+            <div class="specimen">
+                <div class="specimen-label">xs · 10px</div>
+                <div class="specimen-value" style="font-size: 10px; color: var(--text2);">Extra small — Nav labels, badges, micro-text</div>
+            </div>
+        </div>
+
+        <!-- Section 3: Font Weights -->
+        <div class="section">
+            <div class="section-title">03 / Font Weights (Inter)</div>
+
+            <div class="specimen">
+                <div class="specimen-label">Light · 300</div>
+                <div class="specimen-value" style="font-weight: 300; font-size: 20px;">Lightweight text for subtle descriptions</div>
+            </div>
+            <div class="specimen">
+                <div class="specimen-label">Regular · 400</div>
+                <div class="specimen-value" style="font-weight: 400; font-size: 20px;">Regular body text for paragraphs and content</div>
+            </div>
+            <div class="specimen">
+                <div class="specimen-label">Medium · 500</div>
+                <div class="specimen-value" style="font-weight: 500; font-size: 20px;">Medium emphasis for slightly important text</div>
+            </div>
+            <div class="specimen">
+                <div class="specimen-label">SemiBold · 600</div>
+                <div class="specimen-value" style="font-weight: 600; font-size: 20px;">SemiBold for subheadings and labels</div>
+            </div>
+            <div class="specimen">
+                <div class="specimen-label">Bold · 700</div>
+                <div class="specimen-value" style="font-weight: 700; font-size: 20px;">Bold for headings and strong emphasis</div>
+            </div>
+            <div class="specimen">
+                <div class="specimen-label">Black · 900</div>
+                <div class="specimen-value" style="font-weight: 900; font-size: 20px;">Black for display and hero text</div>
+            </div>
+        </div>
+
+        <!-- Section 4: Color Palette -->
+        <div class="section">
+            <div class="section-title">04 / Color Palette</div>
+
+            <div class="color-grid">
+                <div class="color-swatch">
+                    <div class="color-swatch-preview" style="background: var(--bg);"></div>
+                    <div class="color-swatch-info">
+                        <div class="color-swatch-name">Background</div>
+                        <div class="color-swatch-hex">#0f0f1a</div>
+                    </div>
+                </div>
+                <div class="color-swatch">
+                    <div class="color-swatch-preview" style="background: var(--bg2);"></div>
+                    <div class="color-swatch-info">
+                        <div class="color-swatch-name">BG Secondary</div>
+                        <div class="color-swatch-hex">#1a1a2e</div>
+                    </div>
+                </div>
+                <div class="color-swatch">
+                    <div class="color-swatch-preview" style="background: var(--card);"></div>
+                    <div class="color-swatch-info">
+                        <div class="color-swatch-name">Card</div>
+                        <div class="color-swatch-hex">#16213e</div>
+                    </div>
+                </div>
+                <div class="color-swatch">
+                    <div class="color-swatch-preview" style="background: var(--border);"></div>
+                    <div class="color-swatch-info">
+                        <div class="color-swatch-name">Border</div>
+                        <div class="color-swatch-hex">#2a2a4a</div>
+                    </div>
+                </div>
+                <div class="color-swatch">
+                    <div class="color-swatch-preview" style="background: var(--text);"></div>
+                    <div class="color-swatch-info">
+                        <div class="color-swatch-name">Text Primary</div>
+                        <div class="color-swatch-hex">#e8e8e8</div>
+                    </div>
+                </div>
+                <div class="color-swatch">
+                    <div class="color-swatch-preview" style="background: var(--text2);"></div>
+                    <div class="color-swatch-info">
+                        <div class="color-swatch-name">Text Secondary</div>
+                        <div class="color-swatch-hex">#8b8b9e</div>
+                    </div>
+                </div>
+                <div class="color-swatch">
+                    <div class="color-swatch-preview" style="background: var(--green);"></div>
+                    <div class="color-swatch-info">
+                        <div class="color-swatch-name" style="color: #000;">Green</div>
+                        <div class="color-swatch-hex">#39ff14</div>
+                    </div>
+                </div>
+                <div class="color-swatch">
+                    <div class="color-swatch-preview" style="background: var(--cyan);"></div>
+                    <div class="color-swatch-info">
+                        <div class="color-swatch-name" style="color: #000;">Cyan</div>
+                        <div class="color-swatch-hex">#00e5ff</div>
+                    </div>
+                </div>
+                <div class="color-swatch">
+                    <div class="color-swatch-preview" style="background: var(--yellow);"></div>
+                    <div class="color-swatch-info">
+                        <div class="color-swatch-name" style="color: #000;">Yellow</div>
+                        <div class="color-swatch-hex">#ffe600</div>
+                    </div>
+                </div>
+                <div class="color-swatch">
+                    <div class="color-swatch-preview" style="background: var(--purple);"></div>
+                    <div class="color-swatch-info">
+                        <div class="color-swatch-name">Purple</div>
+                        <div class="color-swatch-hex">#b388ff</div>
+                    </div>
+                </div>
+                <div class="color-swatch">
+                    <div class="color-swatch-preview" style="background: var(--red);"></div>
+                    <div class="color-swatch-info">
+                        <div class="color-swatch-name" style="color: #fff;">Red</div>
+                        <div class="color-swatch-hex">#ff4757</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Section 5: Text Colors in Context -->
+        <div class="section">
+            <div class="section-title">05 / Text Colors in Context</div>
+
+            <div class="specimen">
+                <div class="specimen-label">Primary</div>
+                <div class="specimen-value" style="font-size: 18px;">Default text color for all readable content</div>
+            </div>
+            <div class="specimen">
+                <div class="specimen-label">Secondary</div>
+                <div class="specimen-value" style="font-size: 18px; color: var(--text2);">Secondary text for descriptions and labels</div>
+            </div>
+            <div class="specimen">
+                <div class="specimen-label">Green</div>
+                <div class="specimen-value" style="font-size: 18px; color: var(--green);">Prices, success messages, active states</div>
+            </div>
+            <div class="specimen">
+                <div class="specimen-label">Cyan</div>
+                <div class="specimen-value" style="font-size: 18px; color: var(--cyan);">Links, info messages, quest highlights</div>
+            </div>
+            <div class="specimen">
+                <div class="specimen-label">Yellow</div>
+                <div class="specimen-value" style="font-size: 18px; color: var(--yellow);">Warnings, special offers, loyalty points</div>
+            </div>
+            <div class="specimen">
+                <div class="specimen-label">Purple</div>
+                <div class="specimen-value" style="font-size: 18px; color: var(--purple);">Premium features, member cards, badges</div>
+            </div>
+            <div class="specimen">
+                <div class="specimen-label">Red</div>
+                <div class="specimen-value" style="font-size: 18px; color: var(--red);">Errors, danger, out of stock, delete</div>
+            </div>
+        </div>
+
+        <!-- Section 6: Pixel Art Typography -->
+        <div class="section">
+            <div class="section-title">06 / Pixel Art Typography</div>
+
+            <div class="family-block" style="border-color: var(--green);">
+                <span class="family-name">Press Start 2P — Usage Examples</span>
+
+                <div style="font-family: 'Press Start 2P', monospace; font-size: 24px; color: var(--green); margin-bottom: 16px; text-shadow: 0 0 20px rgba(57,255,20,0.4);">
+                    🌿 WOODY WEED BOT
+                </div>
+
+                <div style="font-family: 'Press Start 2P', monospace; font-size: 16px; color: var(--cyan); margin-bottom: 16px;">
+                    QUEST COMPLETE!
+                </div>
+
+                <div style="font-family: 'Press Start 2P', monospace; font-size: 12px; color: var(--yellow); margin-bottom: 16px;">
+                    +150 LOYALTY POINTS
+                </div>
+
+                <div style="font-family: 'Press Start 2P', monospace; font-size: 10px; color: var(--purple); margin-bottom: 16px;">
+                    MEMBER CARD: GOLD TIER
+                </div>
+
+                <div style="font-family: 'Press Start 2P', monospace; font-size: 8px; color: var(--text2);">
+                    NAV LABEL · BADGE · MICRO TEXT
+                </div>
+            </div>
+        </div>
+
+    </div>
+</body>
+</html>

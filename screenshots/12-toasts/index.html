@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>12 - Toasts</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0f0f1a;
+    color: #e0e0e0;
+    font-family: 'Press Start 2P', monospace;
+    padding: 24px;
+  }
+  .section-title {
+    color: #39ff14;
+    font-size: 14px;
+    margin-bottom: 20px;
+    text-shadow: 0 0 8px rgba(57,255,20,0.5);
+    border-bottom: 2px solid #39ff14;
+    padding-bottom: 8px;
+  }
+  .toast-container {
+    max-width: 380px;
+    margin: 0 auto;
+  }
+  .toast {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    border-radius: 10px;
+    margin-bottom: 12px;
+    border: 2px solid;
+    animation: slideIn 0.3s ease-out;
+  }
+  @keyframes slideIn {
+    from { transform: translateX(100%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+  }
+  .toast-icon {
+    font-size: 20px;
+    flex-shrink: 0;
+  }
+  .toast-content { flex: 1; }
+  .toast-title {
+    font-size: 9px;
+    margin-bottom: 4px;
+  }
+  .toast-message {
+    font-size: 7px;
+    color: #888;
+  }
+  .toast-close {
+    font-size: 10px;
+    color: #666;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .toast-progress {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    height: 3px;
+    border-radius: 0 0 10px 10px;
+  }
+  .toast { position: relative; overflow: hidden; }
+
+  .toast-success {
+    background: rgba(57,255,20,0.08);
+    border-color: rgba(57,255,20,0.3);
+  }
+  .toast-success .toast-title { color: #39ff14; }
+  .toast-success .toast-progress { background: #39ff14; }
+
+  .toast-error {
+    background: rgba(255,68,68,0.08);
+    border-color: rgba(255,68,68,0.3);
+  }
+  .toast-error .toast-title { color: #ff4444; }
+  .toast-error .toast-progress { background: #ff4444; }
+
+  .toast-warning {
+    background: rgba(255,215,0,0.08);
+    border-color: rgba(255,215,0,0.3);
+  }
+  .toast-warning .toast-title { color: #ffd700; }
+  .toast-warning .toast-progress { background: #ffd700; }
+
+  .toast-info {
+    background: rgba(0,229,255,0.08);
+    border-color: rgba(0,229,255,0.3);
+  }
+  .toast-info .toast-title { color: #00e5ff; }
+  .toast-info .toast-progress { background: #00e5ff; }
+
+  .toast-achievement {
+    background: rgba(255,107,53,0.08);
+    border-color: rgba(255,107,53,0.3);
+  }
+  .toast-achievement .toast-title { color: #ff6b35; }
+  .toast-achievement .toast-progress { background: #ff6b35; }
+</style>
+</head>
+<body>
+  <div class="section-title">TOASTS — Notification Types</div>
+
+  <div class="toast-container">
+    <div class="toast toast-success">
+      <span class="toast-icon">✅</span>
+      <div class="toast-content">
+        <div class="toast-title">Success</div>
+        <div class="toast-message">Added Purple Haze to cart</div>
+      </div>
+      <span class="toast-close">✕</span>
+      <div class="toast-progress" style="width:80%;"></div>
+    </div>
+
+    <div class="toast toast-error">
+      <span class="toast-icon">❌</span>
+      <div class="toast-content">
+        <div class="toast-title">Error</div>
+        <div class="toast-message">Failed to process payment</div>
+      </div>
+      <span class="toast-close">✕</span>
+      <div class="toast-progress" style="width:60%;"></div>
+    </div>
+
+    <div class="toast toast-warning">
+      <span class="toast-icon">⚠️</span>
+      <div class="toast-content">
+        <div class="toast-title">Warning</div>
+        <div class="toast-message">Low stock — only 2 left</div>
+      </div>
+      <span class="toast-close">✕</span>
+      <div class="toast-progress" style="width:45%;"></div>
+    </div>
+
+    <div class="toast toast-info">
+      <span class="toast-icon">ℹ️</span>
+      <div class="toast-content">
+        <div class="toast-title">Info</div>
+        <div class="toast-message">Your order is being prepared</div>
+      </div>
+      <span class="toast-close">✕</span>
+      <div class="toast-progress" style="width:90%;"></div>
+    </div>
+
+    <div class="toast toast-achievement">
+      <span class="toast-icon">🏆</span>
+      <div class="toast-content">
+        <div class="toast-title">Achievement Unlocked!</div>
+        <div class="toast-message">First purchase — +50 XP earned</div>
+      </div>
+      <span class="toast-close">✕</span>
+      <div class="toast-progress" style="width:70%;"></div>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>15 - Inputs</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0f0f1a;
+    color: #e0e0e0;
+    font-family: 'Press Start 2P', monospace;
+    padding: 24px;
+  }
+  .section-title {
+    color: #39ff14;
+    font-size: 14px;
+    margin-bottom: 20px;
+    text-shadow: 0 0 8px rgba(57,255,20,0.5);
+    border-bottom: 2px solid #39ff14;
+    padding-bottom: 8px;
+  }
+  .input-section {
+    max-width: 380px;
+    margin: 0 auto 24px;
+  }
+  .section-label {
+    font-size: 8px;
+    color: #00e5ff;
+    margin-bottom: 12px;
+  }
+  .input-group {
+    margin-bottom: 16px;
+  }
+  .input-label {
+    font-size: 8px;
+    color: #888;
+    margin-bottom: 6px;
+    display: block;
+  }
+  .input-field {
+    width: 100%;
+    padding: 12px 14px;
+    background: #1a1a2e;
+    border: 2px solid rgba(255,255,255,0.1);
+    border-radius: 8px;
+    color: #e0e0e0;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 9px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .input-field:focus {
+    border-color: #39ff14;
+    box-shadow: 0 0 12px rgba(57,255,20,0.2);
+  }
+  .input-field::placeholder {
+    color: #444;
+  }
+  .input-field.error {
+    border-color: #ff4444;
+    box-shadow: 0 0 12px rgba(255,68,68,0.2);
+  }
+  .input-field.success {
+    border-color: #39ff14;
+  }
+  .input-field.disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+  .input-hint {
+    font-size: 7px;
+    margin-top: 4px;
+  }
+  .hint-error { color: #ff4444; }
+  .hint-success { color: #39ff14; }
+  .hint-default { color: #666; }
+
+  .input-with-icon {
+    position: relative;
+  }
+  .input-with-icon .input-field {
+    padding-left: 40px;
+  }
+  .input-icon {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 14px;
+  }
+
+  .textarea-field {
+    width: 100%;
+    padding: 12px 14px;
+    background: #1a1a2e;
+    border: 2px solid rgba(255,255,255,0.1);
+    border-radius: 8px;
+    color: #e0e0e0;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 8px;
+    outline: none;
+    resize: vertical;
+    min-height: 80px;
+  }
+  .textarea-field:focus {
+    border-color: #39ff14;
+    box-shadow: 0 0 12px rgba(57,255,20,0.2);
+  }
+
+  .toggle-group {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+  .toggle {
+    width: 44px;
+    height: 24px;
+    background: #333;
+    border-radius: 12px;
+    position: relative;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .toggle.active {
+    background: #39ff14;
+  }
+  .toggle::after {
+    content: '';
+    position: absolute;
+    width: 18px;
+    height: 18px;
+    background: white;
+    border-radius: 50%;
+    top: 3px;
+    left: 3px;
+    transition: transform 0.2s;
+  }
+  .toggle.active::after {
+    transform: translateX(20px);
+  }
+  .toggle-label {
+    font-size: 8px;
+    color: #b0b0b0;
+  }
+
+  .select-field {
+    width: 100%;
+    padding: 12px 14px;
+    background: #1a1a2e;
+    border: 2px solid rgba(255,255,255,0.1);
+    border-radius: 8px;
+    color: #e0e0e0;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 9px;
+    outline: none;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%23888' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 14px center;
+  }
+  .select-field:focus {
+    border-color: #39ff14;
+  }
+</style>
+</head>
+<body>
+  <div class="section-title">INPUTS — Form Controls</div>
+
+  <div class="input-section">
+    <div class="section-label">Text Inputs</div>
+    <div class="input-group">
+      <label class="input-label">Default Input</label>
+      <input class="input-field" type="text" placeholder="Enter text...">
+    </div>
+    <div class="input-group">
+      <label class="input-label">With Icon</label>
+      <div class="input-with-icon">
+        <span class="input-icon">🔍</span>
+        <input class="input-field" type="text" placeholder="Search strains...">
+      </div>
+    </div>
+    <div class="input-group">
+      <label class="input-label">Error State</label>
+      <input class="input-field error" type="text" value="invalid@email">
+      <div class="input-hint hint-error">⚠ Please enter a valid email</div>
+    </div>
+    <div class="input-group">
+      <label class="input-label">Success State</label>
+      <input class="input-field success" type="text" value="user@woody.com">
+      <div class="input-hint hint-success">✓ Email verified</div>
+    </div>
+    <div class="input-group">
+      <label class="input-label">Disabled</label>
+      <input class="input-field disabled" type="text" value="Cannot edit" disabled>
+    </div>
+  </div>
+
+  <div class="input-section">
+    <div class="section-label">Textarea</div>
+    <div class="input-group">
+      <label class="input-label">Delivery Notes</label>
+      <textarea class="textarea-field" placeholder="Special instructions..."></textarea>
+      <div class="input-hint hint-default">Max 200 characters</div>
+    </div>
+  </div>
+
+  <div class="input-section">
+    <div class="section-label">Select</div>
+    <div class="input-group">
+      <label class="input-label">Strain Type</label>
+      <select class="select-field">
+        <option>All Types</option>
+        <option>Sativa</option>
+        <option>Indica</option>
+        <option>Hybrid</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="input-section">
+    <div class="section-label">Toggles</div>
+    <div class="toggle-group">
+      <div class="toggle active"></div>
+      <span class="toggle-label">Push Notifications</span>
+    </div>
+    <div class="toggle-group">
+      <div class="toggle"></div>
+      <span class="toggle-label">Dark Mode</span>
+    </div>
+    <div class="toggle-group">
+      <div class="toggle active"></div>
+      <span class="toggle-label">Auto-reorder</span>
+    </div>
+  </div>
+</body>
+</html>

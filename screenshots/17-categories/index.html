@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>17 - Categories</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0f0f1a;
+    color: #e0e0e0;
+    font-family: 'Press Start 2P', monospace;
+    padding: 24px;
+  }
+  .section-title {
+    color: #39ff14;
+    font-size: 14px;
+    margin-bottom: 20px;
+    text-shadow: 0 0 8px rgba(57,255,20,0.5);
+    border-bottom: 2px solid #39ff14;
+    padding-bottom: 8px;
+  }
+  .categories-grid {
+    max-width: 400px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+  .category-card {
+    background: #1a1a2e;
+    border: 2px solid rgba(255,255,255,0.1);
+    border-radius: 14px;
+    padding: 20px 12px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .category-card:hover {
+    border-color: rgba(57,255,20,0.3);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+  }
+  .category-emoji {
+    font-size: 36px;
+    margin-bottom: 10px;
+    display: block;
+  }
+  .category-name {
+    font-size: 9px;
+    color: #e0e0e0;
+    margin-bottom: 4px;
+  }
+  .category-count {
+    font-size: 7px;
+    color: #666;
+  }
+  .category-card.featured {
+    grid-column: span 2;
+    background: linear-gradient(135deg, #1a1a2e, #1a2e1a);
+    border-color: rgba(57,255,20,0.3);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    text-align: left;
+    padding: 20px;
+  }
+  .category-card.featured .category-emoji {
+    font-size: 48px;
+    margin-bottom: 0;
+  }
+  .featured-info { flex: 1; }
+  .featured-badge {
+    font-size: 6px;
+    color: #39ff14;
+    background: rgba(57,255,20,0.15);
+    padding: 3px 8px;
+    border-radius: 4px;
+    display: inline-block;
+    margin-bottom: 6px;
+  }
+</style>
+</head>
+<body>
+  <div class="section-title">CATEGORIES — Product Grid</div>
+
+  <div class="categories-grid">
+    <div class="category-card featured">
+      <span class="category-emoji">🌿</span>
+      <div class="featured-info">
+        <span class="featured-badge">🔥 STRAIN OF THE DAY</span>
+        <div class="category-name">Purple Haze</div>
+        <div class="category-count">Sativa • THC 22% • $12/g</div>
+      </div>
+    </div>
+
+    <div class="category-card">
+      <span class="category-emoji">🌱</span>
+      <div class="category-name">Flowers</div>
+      <div class="category-count">24 items</div>
+    </div>
+
+    <div class="category-card">
+      <span class="category-emoji">🧪</span>
+      <div class="category-name">Extracts</div>
+      <div class="category-count">12 items</div>
+    </div>
+
+    <div class="category-card">
+      <span class="category-emoji">🍪</span>
+      <div class="category-name">Edibles</div>
+      <div class="category-count">18 items</div>
+    </div>
+
+    <div class="category-card">
+      <span class="category-emoji">🫖</span>
+      <div class="category-name">Teas</div>
+      <div class="category-count">8 items</div>
+    </div>
+
+    <div class="category-card">
+      <span class="category-emoji">🎮</span>
+      <div class="category-name">Accessories</div>
+      <div class="category-count">15 items</div>
+    </div>
+
+    <div class="category-card">
+      <span class="category-emoji">📦</span>
+      <div class="category-name">Sets</div>
+      <div class="category-count">6 items</div>
+    </div>
+
+    <div class="category-card">
+      <span class="category-emoji">🍷</span>
+      <div class="category-name">Sommelier</div>
+      <div class="category-count">3 picks</div>
+    </div>
+  </div>
+</body>
+</html>

@@ -96,18 +96,27 @@ async fn get_strains_of_day(State(state): State<AppState>) -> Result<Json<Value>
     Ok(Json(json!({ "strains": rows })))
 }
 
-async fn set_strain_of_day(State(state): State<AppState>, Path(id): Path<String>, Json(body): Json<Value>) -> Result<Json<Value>, StatusCode> {
+async fn set_strain_of_day(State(state): State<AppState>, Path(id): Path<String>, Json(body): Json<Value>) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
     let enabled = body["is_strain_of_day"].as_bool().unwrap_or(true);
     let discount = body["discount"].as_f64().unwrap_or(10.0);
-    let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let client = state.db.pool.get().await.map_err(|e| {
+        tracing::error!("SOTD pool error: {:?}", e);
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": format!("pool: {}", e) })))
+    })?;
     if enabled {
         client.execute(
             "UPDATE strains SET is_strain_of_day = true, strain_of_day_discount = $1, strain_of_day_set_at = NOW() WHERE id = $2",
             &[&discount, &id],
-        ).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        ).await.map_err(|e| {
+            tracing::error!("SOTD update error for id={}: {:?}", id, e);
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": format!("update: {}", e), "id": id })))
+        })?;
     } else {
         client.execute("UPDATE strains SET is_strain_of_day = false WHERE id = $1", &[&id])
-            .await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+            .await.map_err(|e| {
+                tracing::error!("SOTD disable error for id={}: {:?}", id, e);
+                (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": format!("disable: {}", e), "id": id })))
+            })?;
     }
-    Ok(Json(json!({ "success": true })))
+    Ok(Json(json!({ "success": true, "id": id })))
 }

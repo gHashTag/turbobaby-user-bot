@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>14 - Loading States</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0f0f1a;
+    color: #e0e0e0;
+    font-family: 'Press Start 2P', monospace;
+    padding: 24px;
+  }
+  .section-title {
+    color: #39ff14;
+    font-size: 14px;
+    margin-bottom: 20px;
+    text-shadow: 0 0 8px rgba(57,255,20,0.5);
+    border-bottom: 2px solid #39ff14;
+    padding-bottom: 8px;
+  }
+  .loading-section {
+    max-width: 380px;
+    margin: 0 auto 32px;
+  }
+  .section-label {
+    font-size: 8px;
+    color: #00e5ff;
+    margin-bottom: 12px;
+  }
+  /* Spinner */
+  .spinner-wrap {
+    display: flex;
+    gap: 24px;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 12px;
+  }
+  .spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid rgba(57,255,20,0.2);
+    border-top-color: #39ff14;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  .spinner.cyan {
+    border-color: rgba(0,229,255,0.2);
+    border-top-color: #00e5ff;
+  }
+  .spinner.orange {
+    border-color: rgba(255,107,53,0.2);
+    border-top-color: #ff6b35;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Pixel spinner */
+  .pixel-spinner {
+    width: 40px;
+    height: 40px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 2px;
+    animation: pixelSpin 1.2s steps(4) infinite;
+  }
+  .pixel-spinner span {
+    background: #39ff14;
+    border-radius: 2px;
+    animation: pixelPulse 1.2s ease-in-out infinite;
+  }
+  .pixel-spinner span:nth-child(2) { animation-delay: 0.1s; }
+  .pixel-spinner span:nth-child(3) { animation-delay: 0.2s; }
+  .pixel-spinner span:nth-child(4) { animation-delay: 0.3s; }
+  .pixel-spinner span:nth-child(5) { animation-delay: 0.4s; background: #00e5ff; }
+  .pixel-spinner span:nth-child(6) { animation-delay: 0.5s; }
+  .pixel-spinner span:nth-child(7) { animation-delay: 0.6s; }
+  .pixel-spinner span:nth-child(8) { animation-delay: 0.7s; }
+  .pixel-spinner span:nth-child(9) { animation-delay: 0.8s; }
+  @keyframes pixelPulse {
+    0%, 100% { opacity: 0.2; }
+    50% { opacity: 1; }
+  }
+
+  /* Skeleton */
+  .skeleton-card {
+    background: #1a1a2e;
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 12px;
+    border: 2px solid rgba(255,255,255,0.05);
+  }
+  .skeleton-line {
+    height: 12px;
+    background: linear-gradient(90deg, #1a1a2e 25%, #252540 50%, #1a1a2e 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+    border-radius: 6px;
+    margin-bottom: 8px;
+  }
+  .skeleton-line:last-child { margin-bottom: 0; }
+  .skeleton-line.w60 { width: 60%; }
+  .skeleton-line.w80 { width: 80%; }
+  .skeleton-line.w40 { width: 40%; }
+  .skeleton-line.h20 { height: 20px; }
+  .skeleton-line.h8 { height: 8px; }
+  @keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+
+  /* Progress bar */
+  .progress-wrap { margin-bottom: 12px; }
+  .progress-label-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 7px;
+    margin-bottom: 6px;
+  }
+  .progress-bar {
+    height: 10px;
+    background: rgba(0,0,0,0.4);
+    border-radius: 5px;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    border-radius: 5px;
+    background: linear-gradient(90deg, #39ff14, #00e5ff);
+    animation: progressAnim 3s ease-in-out infinite;
+  }
+  @keyframes progressAnim {
+    0% { width: 10%; }
+    50% { width: 80%; }
+    100% { width: 10%; }
+  }
+
+  /* Loading text */
+  .loading-text {
+    text-align: center;
+    font-size: 10px;
+    color: #39ff14;
+    animation: pulse 1.5s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 0.4; }
+    50% { opacity: 1; }
+  }
+
+  .loading-dots::after {
+    content: '';
+    animation: dots 1.5s steps(4) infinite;
+  }
+  @keyframes dots {
+    0% { content: ''; }
+    25% { content: '.'; }
+    50% { content: '..'; }
+    75% { content: '...'; }
+  }
+</style>
+</head>
+<body>
+  <div class="section-title">LOADING STATES</div>
+
+  <div class="loading-section">
+    <div class="section-label">Spinners</div>
+    <div class="spinner-wrap">
+      <div class="spinner"></div>
+      <div class="spinner cyan"></div>
+      <div class="spinner orange"></div>
+      <div class="pixel-spinner">
+        <span></span><span></span><span></span>
+        <span></span><span></span><span></span>
+        <span></span><span></span><span></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="loading-section">
+    <div class="section-label">Skeleton Loading</div>
+    <div class="skeleton-card">
+      <div class="skeleton-line h20 w60"></div>
+      <div class="skeleton-line w80"></div>
+      <div class="skeleton-line w40"></div>
+    </div>
+    <div class="skeleton-card">
+      <div class="skeleton-line h20 w60"></div>
+      <div class="skeleton-line w80"></div>
+      <div class="skeleton-line h8 w40"></div>
+    </div>
+  </div>
+
+  <div class="loading-section">
+    <div class="section-label">Progress Bar</div>
+    <div class="progress-wrap">
+      <div class="progress-label-row">
+        <span style="color:#888;">Loading strains...</span>
+        <span style="color:#39ff14;">65%</span>
+      </div>
+      <div class="progress-bar">
+        <div class="progress-fill" style="width:65%;animation:none;"></div>
+      </div>
+    </div>
+    <div class="progress-wrap">
+      <div class="progress-label-row">
+        <span style="color:#888;">Syncing garden...</span>
+        <span style="color:#00e5ff;">30%</span>
+      </div>
+      <div class="progress-bar">
+        <div class="progress-fill" style="width:30%;animation:none;background:linear-gradient(90deg,#00e5ff,#39ff14);"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="loading-section">
+    <div class="section-label">Loading Text</div>
+    <div class="loading-text">Loading<span class="loading-dots"></span></div>
+  </div>
+</body>
+</html>

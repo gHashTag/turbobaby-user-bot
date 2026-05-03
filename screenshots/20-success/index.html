@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>20 - Success State</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0f0f1a;
+    color: #e0e0e0;
+    font-family: 'Press Start 2P', monospace;
+    padding: 24px;
+  }
+  .section-title {
+    color: #39ff14;
+    font-size: 14px;
+    margin-bottom: 20px;
+    text-shadow: 0 0 8px rgba(57,255,20,0.5);
+    border-bottom: 2px solid #39ff14;
+    padding-bottom: 8px;
+  }
+  .success-container {
+    max-width: 380px;
+    margin: 0 auto;
+    text-align: center;
+  }
+  .success-icon {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    background: rgba(57,255,20,0.1);
+    border: 3px solid #39ff14;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 24px;
+    box-shadow: 0 0 30px rgba(57,255,20,0.3), inset 0 0 20px rgba(57,255,20,0.1);
+    animation: successPop 0.5s ease-out;
+  }
+  @keyframes successPop {
+    0% { transform: scale(0); }
+    60% { transform: scale(1.2); }
+    100% { transform: scale(1); }
+  }
+  .success-icon span {
+    font-size: 48px;
+  }
+  .success-title {
+    font-size: 16px;
+    color: #39ff14;
+    text-shadow: 0 0 10px rgba(57,255,20,0.5);
+    margin-bottom: 8px;
+  }
+  .success-subtitle {
+    font-size: 9px;
+    color: #888;
+    margin-bottom: 32px;
+  }
+  .order-details {
+    background: #1a1a2e;
+    border: 2px solid rgba(57,255,20,0.2);
+    border-radius: 14px;
+    padding: 20px;
+    margin-bottom: 24px;
+    text-align: left;
+  }
+  .order-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+    font-size: 8px;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+  }
+  .order-row:last-child { border-bottom: none; }
+  .order-label { color: #888; }
+  .order-value { color: #e0e0e0; }
+  .order-total {
+    margin-top: 8px;
+    padding-top: 12px;
+    border-top: 2px solid rgba(57,255,20,0.2);
+    display: flex;
+    justify-content: space-between;
+    font-size: 10px;
+  }
+  .order-total .order-label { color: #39ff14; }
+  .order-total .order-value { color: #39ff14; text-shadow: 0 0 6px rgba(57,255,20,0.4); }
+
+  .success-actions {
+    display: flex;
+    gap: 12px;
+  }
+  .btn {
+    flex: 1;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 9px;
+    padding: 14px 16px;
+    border-radius: 10px;
+    border: 2px solid;
+    cursor: pointer;
+    text-align: center;
+  }
+  .btn-primary {
+    background: #39ff14;
+    color: #0f0f1a;
+    border-color: #39ff14;
+    box-shadow: 0 0 16px rgba(57,255,20,0.3);
+  }
+  .btn-secondary {
+    background: transparent;
+    color: #00e5ff;
+    border-color: rgba(0,229,255,0.3);
+  }
+  .success-confetti {
+    font-size: 24px;
+    margin-bottom: 16px;
+    animation: confettiFloat 2s ease-in-out infinite;
+  }
+  @keyframes confettiFloat {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-8px); }
+  }
+  .delivery-info {
+    background: rgba(0,229,255,0.05);
+    border: 2px solid rgba(0,229,255,0.2);
+    border-radius: 10px;
+    padding: 14px;
+    margin-bottom: 24px;
+    font-size: 8px;
+    color: #00e5ff;
+  }
+  .delivery-info span { display: block; margin-bottom: 4px; }
+</style>
+</head>
+<body>
+  <div class="section-title">SUCCESS STATE — Order Confirmed</div>
+
+  <div class="success-container">
+    <div class="success-confetti">🎉🎊✨</div>
+    <div class="success-icon"><span>✓</span></div>
+    <div class="success-title">Order Placed!</div>
+    <div class="success-subtitle">Your order #WD-12345 has been confirmed</div>
+
+    <div class="delivery-info">
+      <span>📍 Delivery to: Bangkok, Sukhumvit 42</span>
+      <span>⏰ Estimated: 30-45 minutes</span>
+    </div>
+
+    <div class="order-details">
+      <div class="order-row">
+        <span class="order-label">Purple Haze × 2</span>
+        <span class="order-value">$24.00</span>
+      </div>
+      <div class="order-row">
+        <span class="order-label">Blue Dream × 1</span>
+        <span class="order-value">$15.00</span>
+      </div>
+      <div class="order-row">
+        <span class="order-label">Delivery Fee</span>
+        <span class="order-value">$5.00</span>
+      </div>
+      <div class="order-row">
+        <span class="order-label">Discount (SILVER10)</span>
+        <span class="order-value" style="color:#39ff14;">-$4.40</span>
+      </div>
+      <div class="order-total">
+        <span class="order-label">Total</span>
+        <span class="order-value">$39.60</span>
+      </div>
+    </div>
+
+    <div class="success-actions">
+      <button class="btn btn-secondary">Track Order</button>
+      <button class="btn btn-primary">Continue</button>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>09 - Quest Cards</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0f0f1a;
+    color: #e0e0e0;
+    font-family: 'Press Start 2P', monospace;
+    padding: 24px;
+  }
+  .section-title {
+    color: #39ff14;
+    font-size: 14px;
+    margin-bottom: 20px;
+    text-shadow: 0 0 8px rgba(57,255,20,0.5);
+    border-bottom: 2px solid #39ff14;
+    padding-bottom: 8px;
+  }
+  .scan-area {
+    max-width: 380px;
+    margin: 0 auto 24px;
+    background: rgba(0,229,255,0.05);
+    border: 2px dashed #00e5ff;
+    border-radius: 16px;
+    padding: 32px;
+    text-align: center;
+  }
+  .scan-icon {
+    font-size: 48px;
+    margin-bottom: 12px;
+  }
+  .scan-text {
+    font-size: 10px;
+    color: #00e5ff;
+    text-shadow: 0 0 6px rgba(0,229,255,0.4);
+  }
+  .scan-hint {
+    font-size: 7px;
+    color: #666;
+    margin-top: 8px;
+  }
+  .quest-card {
+    max-width: 380px;
+    margin: 0 auto 16px;
+    background: #1a1a2e;
+    border: 2px solid rgba(255,255,255,0.1);
+    border-radius: 12px;
+    padding: 16px;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+  }
+  .quest-card.completed {
+    border-color: #39ff14;
+    box-shadow: 0 0 12px rgba(57,255,20,0.2);
+  }
+  .quest-card.locked {
+    opacity: 0.5;
+  }
+  .quest-emoji {
+    font-size: 32px;
+    min-width: 48px;
+    text-align: center;
+  }
+  .quest-info { flex: 1; }
+  .quest-name {
+    font-size: 10px;
+    color: #e0e0e0;
+    margin-bottom: 4px;
+  }
+  .quest-desc {
+    font-size: 7px;
+    color: #888;
+    margin-bottom: 6px;
+  }
+  .quest-reward {
+    font-size: 7px;
+    color: #ffd700;
+  }
+  .quest-status {
+    font-size: 7px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    white-space: nowrap;
+  }
+  .status-done { background: rgba(57,255,20,0.2); color: #39ff14; }
+  .status-active { background: rgba(0,229,255,0.2); color: #00e5ff; }
+  .status-locked { background: rgba(255,255,255,0.05); color: #666; }
+  .quest-progress {
+    margin-top: 8px;
+    height: 6px;
+    background: rgba(0,0,0,0.4);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .quest-progress-fill {
+    height: 100%;
+    border-radius: 3px;
+    background: linear-gradient(90deg, #00e5ff, #39ff14);
+  }
+</style>
+</head>
+<body>
+  <div class="section-title">QUEST CARDS — Location Missions</div>
+
+  <div class="scan-area">
+    <div class="scan-icon">📷</div>
+    <div class="scan-text">Scan QR Code</div>
+    <div class="scan-hint">Point camera at location QR to check in</div>
+  </div>
+
+  <div class="quest-card completed">
+    <div class="quest-emoji">🏪</div>
+    <div class="quest-info">
+      <div class="quest-name">Woody Central</div>
+      <div class="quest-desc">Visit the main dispensary</div>
+      <div class="quest-reward">🎁 Reward: 50 XP + Free Seed</div>
+      <div class="quest-progress"><div class="quest-progress-fill" style="width:100%;"></div></div>
+    </div>
+    <span class="quest-status status-done">✓ DONE</span>
+  </div>
+
+  <div class="quest-card">
+    <div class="quest-emoji">🌿</div>
+    <div class="quest-info">
+      <div class="quest-name">Green Lab</div>
+      <div class="quest-desc">Find the hidden grow lab</div>
+      <div class="quest-reward">🎁 Reward: 100 XP + Rare Strain</div>
+      <div class="quest-progress"><div class="quest-progress-fill" style="width:60%;"></div></div>
+    </div>
+    <span class="quest-status status-active">3/5</span>
+  </div>
+
+  <div class="quest-card">
+    <div class="quest-emoji">🏔️</div>
+    <div class="quest-info">
+      <div class="quest-name">Mountain Peak</div>
+      <div class="quest-desc">Reach the summit grow site</div>
+      <div class="quest-reward">🎁 Reward: 200 XP + Legend Badge</div>
+      <div class="quest-progress"><div class="quest-progress-fill" style="width:20%;"></div></div>
+    </div>
+    <span class="quest-status status-active">1/5</span>
+  </div>
+
+  <div class="quest-card locked">
+    <div class="quest-emoji">🔒</div>
+    <div class="quest-info">
+      <div class="quest-name">Secret Garden</div>
+      <div class="quest-desc">Complete 3 quests to unlock</div>
+      <div class="quest-reward">🎁 Reward: ???</div>
+    </div>
+    <span class="quest-status status-locked">LOCKED</span>
+  </div>
+</body>
+</html>

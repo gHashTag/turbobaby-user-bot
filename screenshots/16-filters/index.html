@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>16 - Filter Tabs</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0f0f1a;
+    color: #e0e0e0;
+    font-family: 'Press Start 2P', monospace;
+    padding: 24px;
+  }
+  .section-title {
+    color: #39ff14;
+    font-size: 14px;
+    margin-bottom: 20px;
+    text-shadow: 0 0 8px rgba(57,255,20,0.5);
+    border-bottom: 2px solid #39ff14;
+    padding-bottom: 8px;
+  }
+  .filter-section {
+    max-width: 400px;
+    margin: 0 auto 28px;
+  }
+  .section-label {
+    font-size: 8px;
+    color: #00e5ff;
+    margin-bottom: 12px;
+  }
+
+  /* Tab bar */
+  .tab-bar {
+    display: flex;
+    gap: 4px;
+    background: #1a1a2e;
+    border-radius: 10px;
+    padding: 4px;
+    border: 2px solid rgba(255,255,255,0.05);
+  }
+  .tab-item {
+    flex: 1;
+    padding: 10px 8px;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 7px;
+    color: #888;
+    background: transparent;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.2s;
+  }
+  .tab-item.active {
+    background: #39ff14;
+    color: #0f0f1a;
+    box-shadow: 0 0 12px rgba(57,255,20,0.3);
+  }
+  .tab-item:hover:not(.active) {
+    color: #e0e0e0;
+    background: rgba(255,255,255,0.05);
+  }
+
+  /* Pill filters */
+  .pill-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .pill {
+    padding: 8px 14px;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 7px;
+    border-radius: 20px;
+    border: 2px solid rgba(255,255,255,0.1);
+    background: transparent;
+    color: #888;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .pill.active {
+    border-color: #00e5ff;
+    color: #00e5ff;
+    background: rgba(0,229,255,0.1);
+    box-shadow: 0 0 8px rgba(0,229,255,0.2);
+  }
+  .pill:hover:not(.active) {
+    border-color: rgba(255,255,255,0.3);
+    color: #e0e0e0;
+  }
+
+  /* Chip filters */
+  .chip-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .chip {
+    padding: 6px 12px;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 7px;
+    border-radius: 6px;
+    border: 2px solid;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .chip-sativa {
+    border-color: rgba(57,255,20,0.3);
+    color: #39ff14;
+    background: rgba(57,255,20,0.05);
+  }
+  .chip-sativa.active {
+    background: rgba(57,255,20,0.15);
+    box-shadow: 0 0 8px rgba(57,255,20,0.2);
+  }
+  .chip-indica {
+    border-color: rgba(255,107,53,0.3);
+    color: #ff6b35;
+    background: rgba(255,107,53,0.05);
+  }
+  .chip-indica.active {
+    background: rgba(255,107,53,0.15);
+    box-shadow: 0 0 8px rgba(255,107,53,0.2);
+  }
+  .chip-hybrid {
+    border-color: rgba(0,229,255,0.3);
+    color: #00e5ff;
+    background: rgba(0,229,255,0.05);
+  }
+  .chip-hybrid.active {
+    background: rgba(0,229,255,0.15);
+    box-shadow: 0 0 8px rgba(0,229,255,0.2);
+  }
+
+  /* Sort dropdown */
+  .sort-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .sort-label {
+    font-size: 8px;
+    color: #888;
+  }
+  .sort-select {
+    padding: 8px 12px;
+    background: #1a1a2e;
+    border: 2px solid rgba(255,255,255,0.1);
+    border-radius: 8px;
+    color: #e0e0e0;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 7px;
+  }
+  .sort-count {
+    font-size: 7px;
+    color: #666;
+    margin-left: auto;
+  }
+</style>
+</head>
+<body>
+  <div class="section-title">FILTER TABS — Navigation & Sorting</div>
+
+  <div class="filter-section">
+    <div class="section-label">Tab Bar</div>
+    <div class="tab-bar">
+      <button class="tab-item active">All</button>
+      <button class="tab-item">Sativa</button>
+      <button class="tab-item">Indica</button>
+      <button class="tab-item">Hybrid</button>
+    </div>
+  </div>
+
+  <div class="filter-section">
+    <div class="section-label">Pill Filters</div>
+    <div class="pill-row">
+      <span class="pill active">🔥 Popular</span>
+      <span class="pill">🆕 New</span>
+      <span class="pill">💰 Deals</span>
+      <span class="pill">⭐ Top Rated</span>
+      <span class="pill">🌿 Organic</span>
+    </div>
+  </div>
+
+  <div class="filter-section">
+    <div class="section-label">Strain Type Chips</div>
+    <div class="chip-row">
+      <span class="chip chip-sativa active">🌿 Sativa</span>
+      <span class="chip chip-indica">🍂 Indica</span>
+      <span class="chip chip-hybrid active">🌱 Hybrid</span>
+    </div>
+  </div>
+
+  <div class="filter-section">
+    <div class="section-label">Sort & Count</div>
+    <div class="sort-row">
+      <span class="sort-label">Sort:</span>
+      <select class="sort-select">
+        <option>Popular</option>
+        <option>Price: Low→High</option>
+        <option>Price: High→Low</option>
+        <option>THC: Highest</option>
+        <option>Name: A→Z</option>
+      </select>
+      <span class="sort-count">24 strains</span>
+    </div>
+  </div>
+</body>
+</html>
