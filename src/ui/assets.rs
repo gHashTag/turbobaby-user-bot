@@ -39,6 +39,29 @@ pub mod member_cards {
     pub const BRASS: &str = "/assets/member-cards/brass-member.PNG";
     pub const SILVER: &str = "/assets/member-cards/silver-member.PNG";
     pub const GOLD: &str = "/assets/member-cards/gold-member.PNG";
+    pub const BRONZE_WEBP: &str = "/assets/member-cards/bronze-member.webp";
+    pub const SILVER_WEBP: &str = "/assets/member-cards/silver-member.webp";
+    pub const GOLD_WEBP: &str = "/assets/member-cards/gold-member.webp";
+}
+
+/// Logo and favicon
+pub mod logo {
+    pub const MAIN: &str = "/assets/logo.jpg";
+    pub const FAVICON: &str = "/assets/favicon.svg";
+}
+
+/// UI icons — served from /assets/icons/
+pub mod icons {
+    pub const PLANT: &str = "/assets/icons/plant.svg";
+    pub const CART: &str = "/assets/icons/shopping-cart.svg";
+    pub const USER: &str = "/assets/icons/user.svg";
+}
+
+/// Product pack images — served from /assets/packs/
+pub mod packs {
+    pub const INDICA: &str = "/assets/packs/indica_pack.webp";
+    pub const SATIVA: &str = "/assets/packs/sativa_pack.webp";
+    pub const STARTER: &str = "/assets/packs/starter_pack.webp";
 }
 
 /// Miscellaneous assets
