@@ -1,3 +1,4 @@
+pub mod assets;
 pub mod app;
 pub mod app_debug;
 pub mod app_minimal;

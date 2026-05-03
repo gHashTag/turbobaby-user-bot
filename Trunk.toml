@@ -22,3 +22,6 @@ wasm-opt = false
 [watch]
 watch = ["src", "assets"]
 ignore = ["dist"]
+
+[[copy-dir]]
+path = "assets"
