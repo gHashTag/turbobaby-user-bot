@@ -17,7 +17,7 @@ pub struct NavItem {
     pub route: &'static str,
 }
 
-const NAV_ITEMS: [NavItem; 5] = [
+const NAV_ITEMS: [NavItem; 6] = [
     NavItem {
         id: "home",
         label: "Home",
@@ -41,6 +41,12 @@ const NAV_ITEMS: [NavItem; 5] = [
         label: "Garden",
         icon: "🌱",
         route: "/garden",
+    },
+    NavItem {
+        id: "referrals",
+        label: "Invite",
+        icon: "🎁",
+        route: "/referrals",
     },
     NavItem {
         id: "profile",
@@ -139,9 +145,28 @@ pub fn Nav(props: NavProps) -> Element {
                     }
                 }
             }
-            // Profile
+            // Referrals
             {
                 let item = &NAV_ITEMS[4];
+                let is_active = route == item.route;
+                let active_class = if is_active { "nav-item-active" } else { "" };
+
+                rsx! {
+                    a {
+                        href: "{item.route}",
+                        class: "nav-item {active_class}",
+                        onclick: move |e| {
+                            e.prevent_default();
+                            crate::ui::state::set_route(item.route);
+                        },
+                        span { class: "nav-icon", "{item.icon}" }
+                        span { class: "nav-label", "{item.label}" }
+                    }
+                }
+            }
+            // Profile
+            {
+                let item = &NAV_ITEMS[5];
                 let is_active = route == item.route;
                 let active_class = if is_active { "nav-item-active" } else { "" };
 

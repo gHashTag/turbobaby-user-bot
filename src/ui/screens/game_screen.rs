@@ -46,6 +46,12 @@ pub fn GameScreen() -> Element {
                     div { style: "font-size: 6px; color: #39ff14; margin-top: 2px; text-shadow: 0 0 6px rgba(57,255,20,0.5);", "Game" }
                 }
             }
+            Link { to: Route::Referrals {},
+                div { style: "text-align: center; cursor: pointer;",
+                    div { style: "font-size: 20px;", "🎁" }
+                    div { style: "font-size: 6px; color: #8b8b9e; margin-top: 2px;", "Invite" }
+                }
+            }
             Link { to: Route::Profile {},
                 div { style: "text-align: center; cursor: pointer;",
                     div { style: "font-size: 20px;", "👤" }

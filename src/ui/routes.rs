@@ -18,6 +18,7 @@ use crate::ui::screens::{
     GardenScreen,
     QuestScreen,
     GameScreen,
+    ReferralsScreen,
 };
 
 /// Routes component that renders router
@@ -59,6 +60,8 @@ pub enum Route {
     Quest { id: String },
     #[route("/game")]
     Game {},
+    #[route("/referrals")]
+    Referrals {},
     #[route("/:..route")]
     NotFound { route: Vec<String> },
 }
@@ -132,6 +135,11 @@ fn Quest(id: String) -> Element {
 #[component]
 fn Game() -> Element {
     rsx! { GameScreen {} }
+}
+
+#[component]
+fn Referrals() -> Element {
+    rsx! { ReferralsScreen {} }
 }
 
 #[component]

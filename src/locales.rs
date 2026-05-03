@@ -65,6 +65,16 @@ pub struct Locale {
     pub welcome_feature6: String,
     pub welcome_feature7: String,
     pub lang_instruction: String,
+    // Referral system
+    pub referral_title: String,
+    pub referral_your_code: String,
+    pub referral_invited_count: String,
+    pub referral_confirmed: String,
+    pub referral_pending: String,
+    pub referral_bonus_earned: String,
+    pub referral_share_button: String,
+    pub referral_share_hint: String,
+    pub referral_leaderboard: String,
 }
 
 pub fn get_locale(lang: &str) -> Locale {
@@ -151,6 +161,15 @@ fn ru() -> Locale { Locale {
     welcome_feature6: "Программа лояльности".into(),
     welcome_feature7: "Анекдоты и факты".into(),
     lang_instruction: "Отвечай на русском языке.".into(),
+    referral_title: "Реферальная программа".into(),
+    referral_your_code: "Ваш реф-код".into(),
+    referral_invited_count: "Приглашено".into(),
+    referral_confirmed: "Подтверждено".into(),
+    referral_pending: "Ожидает".into(),
+    referral_bonus_earned: "Заработано бонусов".into(),
+    referral_share_button: "Поделиться".into(),
+    referral_share_hint: "Поделитесь ссылкой и получите бонус за каждого нового друга!".into(),
+    referral_leaderboard: "Таблица лидеров".into(),
 }}
 
 fn en() -> Locale { Locale {
@@ -203,5 +222,14 @@ fn en() -> Locale { Locale {
     welcome_feature6: "Loyalty program".into(),
     welcome_feature7: "Jokes & facts".into(),
     lang_instruction: "Reply in English.".into(),
+    referral_title: "Referral Program".into(),
+    referral_your_code: "Your ref code".into(),
+    referral_invited_count: "Invited".into(),
+    referral_confirmed: "Confirmed".into(),
+    referral_pending: "Pending".into(),
+    referral_bonus_earned: "Bonus earned".into(),
+    referral_share_button: "Share".into(),
+    referral_share_hint: "Share your link and earn a bonus for every new friend!".into(),
+    referral_leaderboard: "Leaderboard".into(),
 }}
 

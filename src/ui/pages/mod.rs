@@ -11,6 +11,7 @@ pub mod orders;
 pub mod profile;
 pub mod garden;
 pub mod quest;
+pub mod referrals;
 
 pub use home::Home;
 pub use menu::Menu;
@@ -25,3 +26,4 @@ pub use orders::Orders;
 pub use profile::Profile;
 pub use garden::Garden;
 pub use quest::Quest;
+pub use referrals::Referrals;

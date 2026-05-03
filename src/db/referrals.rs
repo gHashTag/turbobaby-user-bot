@@ -1,0 +1,342 @@
+use anyhow::{Context, Result};
+use deadpool_postgres::Pool;
+use serde::{Deserialize, Serialize};
+use sha2::{Sha256, Digest};
+use uuid::Uuid;
+use chrono::{DateTime, Utc};
+
+// ──────────────────────────────────────────────────────────────────
+// Domain types
+// ──────────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)]
+pub struct ReferralEvent {
+    pub id: Uuid,
+    pub referrer_id: i64,
+    pub referred_id: i64,
+    pub code: String,
+    pub bonus_paid: f64,
+    pub status: String,
+    pub source: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub confirmed_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReferrerStats {
+    pub total_invited: i64,
+    pub confirmed: i64,
+    pub pending: i64,
+    pub total_bonus_earned: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TopReferrer {
+    pub telegram_id: i64,
+    pub referral_count: i64,
+    pub total_bonus_earned: f64,
+}
+
+// ──────────────────────────────────────────────────────────────────
+// Code generation
+// ──────────────────────────────────────────────────────────────────
+
+/// Salt used when generating referral codes — not a secret, just prevents
+/// trivial enumeration of sequential IDs.
+const CODE_SALT: &str = "woody-ref-v1";
+
+const BASE62_CHARS: &[u8] = b"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+
+/// Generate an 8-character base-62 referral code derived from telegram_id + salt.
+/// The `attempt` parameter is incremented on collision to produce a different code.
+pub fn generate_referral_code(telegram_id: i64, attempt: u32) -> String {
+    let input = format!("{}{}{}", telegram_id, CODE_SALT, attempt);
+    let mut hasher = Sha256::new();
+    hasher.update(input.as_bytes());
+    let hash = hasher.finalize();
+
+    // Take first 8 bytes and map each byte to a base-62 character
+    hash.iter()
+        .take(8)
+        .map(|&b| BASE62_CHARS[(b as usize) % 62] as char)
+        .collect()
+}
+
+/// Get existing referral code for `telegram_id`, or generate and persist a new one.
+/// Retries on collision (up to 10 attempts).
+pub async fn get_or_create_referral_code(pool: &Pool, telegram_id: i64) -> Result<String> {
+    let client = pool.get().await.context("db pool")?;
+
+    // Check existing code first
+    if let Some(row) = client
+        .query_opt(
+            "SELECT referral_code FROM loyalty_profiles WHERE telegram_id = $1 AND referral_code IS NOT NULL",
+            &[&telegram_id],
+        )
+        .await?
+    {
+        let code: String = row.get("referral_code");
+        return Ok(code);
+    }
+
+    // Ensure profile row exists
+    client
+        .execute(
+            "INSERT INTO loyalty_profiles (telegram_id) VALUES ($1) ON CONFLICT (telegram_id) DO NOTHING",
+            &[&telegram_id],
+        )
+        .await?;
+
+    // Try up to 10 times to find a unique code
+    for attempt in 0u32..10 {
+        let code = generate_referral_code(telegram_id, attempt);
+
+        let updated = client
+            .execute(
+                "UPDATE loyalty_profiles SET referral_code = $1
+                 WHERE telegram_id = $2 AND referral_code IS NULL",
+                &[&code, &telegram_id],
+            )
+            .await?;
+
+        if updated > 0 {
+            return Ok(code);
+        }
+
+        // Check if our telegram_id now has a code (another concurrent request may have set it)
+        if let Some(row) = client
+            .query_opt(
+                "SELECT referral_code FROM loyalty_profiles WHERE telegram_id = $1 AND referral_code IS NOT NULL",
+                &[&telegram_id],
+            )
+            .await?
+        {
+            return Ok(row.get("referral_code"));
+        }
+        // Otherwise the code was taken by someone else — try next attempt
+    }
+
+    anyhow::bail!("Failed to generate unique referral code for telegram_id={}", telegram_id)
+}
+
+// ──────────────────────────────────────────────────────────────────
+// Referral lifecycle
+// ──────────────────────────────────────────────────────────────────
+
+/// Find the telegram_id of the owner of `code` (looks in loyalty_profiles.referral_code).
+pub async fn find_referrer_by_code(pool: &Pool, code: &str) -> Result<Option<i64>> {
+    let client = pool.get().await.context("db pool")?;
+    let row = client
+        .query_opt(
+            "SELECT telegram_id FROM loyalty_profiles WHERE referral_code = $1",
+            &[&code],
+        )
+        .await?;
+    Ok(row.map(|r| r.get("telegram_id")))
+}
+
+/// Record a new pending referral event.
+/// Returns the new event UUID.
+pub async fn record_referral(
+    pool: &Pool,
+    referrer_id: i64,
+    referred_id: i64,
+    code: &str,
+    source: Option<&str>,
+) -> Result<Uuid> {
+    let client = pool.get().await.context("db pool")?;
+    let id = Uuid::new_v4();
+
+    // Ensure referred user has a loyalty profile row
+    client
+        .execute(
+            "INSERT INTO loyalty_profiles (telegram_id, referred_by)
+             VALUES ($1, $2)
+             ON CONFLICT (telegram_id) DO UPDATE SET referred_by = COALESCE(loyalty_profiles.referred_by, EXCLUDED.referred_by)",
+            &[&referred_id, &referrer_id],
+        )
+        .await?;
+
+    // Insert event — ignore if the referred_id already has an event (UNIQUE constraint)
+    client
+        .execute(
+            "INSERT INTO referral_events (id, referrer_id, referred_id, code, status, source)
+             VALUES ($1, $2, $3, $4, 'pending', $5)
+             ON CONFLICT (referred_id) DO NOTHING",
+            &[&id, &referrer_id, &referred_id, &code, &source],
+        )
+        .await?;
+
+    Ok(id)
+}
+
+/// Confirm a referral (first purchase of `referred_id`).
+/// - Sets status = 'confirmed' + confirmed_at
+/// - Credits bonus to referrer's balance via bonus_transactions
+/// - Increments referrer's referral_count
+pub async fn confirm_referral(pool: &Pool, referred_id: i64, bonus: f64) -> Result<()> {
+    let client = pool.get().await.context("db pool")?;
+
+    // Find the pending event
+    let row = client
+        .query_opt(
+            "SELECT id, referrer_id FROM referral_events
+             WHERE referred_id = $1 AND status = 'pending'",
+            &[&referred_id],
+        )
+        .await?;
+
+    let (event_id, referrer_id): (Uuid, i64) = match row {
+        Some(r) => (r.get("id"), r.get("referrer_id")),
+        None => return Ok(()), // nothing pending — silently ok
+    };
+
+    // Mark confirmed
+    client
+        .execute(
+            "UPDATE referral_events
+             SET status = 'confirmed', confirmed_at = NOW(), bonus_paid = $1
+             WHERE id = $2",
+            &[&bonus, &event_id],
+        )
+        .await?;
+
+    // Credit bonus to referrer
+    let tx_id = Uuid::new_v4().to_string();
+    client
+        .execute(
+            "INSERT INTO bonus_transactions (id, telegram_id, amount, tx_type, description)
+             VALUES ($1, $2, $3, 'referral_bonus', 'Referral bonus for new user')",
+            &[&tx_id, &referrer_id, &bonus],
+        )
+        .await?;
+
+    client
+        .execute(
+            "UPDATE loyalty_profiles SET bonus_balance = bonus_balance + $1 WHERE telegram_id = $2",
+            &[&bonus, &referrer_id],
+        )
+        .await?;
+
+    // Increment referral_count
+    client
+        .execute(
+            "UPDATE loyalty_profiles SET referral_count = referral_count + 1 WHERE telegram_id = $1",
+            &[&referrer_id],
+        )
+        .await?;
+
+    Ok(())
+}
+
+// ──────────────────────────────────────────────────────────────────
+// Statistics / Leaderboard
+// ──────────────────────────────────────────────────────────────────
+
+/// Return referral statistics for a specific user.
+pub async fn get_referrer_stats(pool: &Pool, telegram_id: i64) -> Result<ReferrerStats> {
+    let client = pool.get().await.context("db pool")?;
+
+    let row = client
+        .query_one(
+            "SELECT
+                COUNT(*)                                    AS total_invited,
+                COUNT(*) FILTER (WHERE status = 'confirmed' OR status = 'paid') AS confirmed,
+                COUNT(*) FILTER (WHERE status = 'pending')  AS pending,
+                COALESCE(SUM(bonus_paid), 0)                AS total_bonus_earned
+             FROM referral_events
+             WHERE referrer_id = $1",
+            &[&telegram_id],
+        )
+        .await?;
+
+    Ok(ReferrerStats {
+        total_invited: row.get::<_, i64>("total_invited"),
+        confirmed: row.get::<_, i64>("confirmed"),
+        pending: row.get::<_, i64>("pending"),
+        total_bonus_earned: row.get::<_, f64>("total_bonus_earned"),
+    })
+}
+
+/// Return top referrers leaderboard.
+/// `period` accepts "weekly" | "monthly" | "all" (anything else → all-time).
+pub async fn get_top_referrers(pool: &Pool, period: &str, limit: i64) -> Result<Vec<TopReferrer>> {
+    let client = pool.get().await.context("db pool")?;
+
+    let period_filter = match period {
+        "weekly" => "AND re.created_at >= NOW() - INTERVAL '7 days'",
+        "monthly" => "AND re.created_at >= NOW() - INTERVAL '30 days'",
+        _ => "",
+    };
+
+    let sql = format!(
+        "SELECT
+            re.referrer_id          AS telegram_id,
+            COUNT(*)                AS referral_count,
+            COALESCE(SUM(re.bonus_paid), 0) AS total_bonus_earned
+         FROM referral_events re
+         WHERE (re.status = 'confirmed' OR re.status = 'paid')
+         {}
+         GROUP BY re.referrer_id
+         ORDER BY referral_count DESC, total_bonus_earned DESC
+         LIMIT $1",
+        period_filter
+    );
+
+    let rows = client.query(&sql, &[&limit]).await?;
+
+    Ok(rows
+        .iter()
+        .map(|r| TopReferrer {
+            telegram_id: r.get("telegram_id"),
+            referral_count: r.get("referral_count"),
+            total_bonus_earned: r.get("total_bonus_earned"),
+        })
+        .collect())
+}
+
+// ──────────────────────────────────────────────────────────────────
+// Unit tests (no DB required)
+// ──────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_generate_referral_code_length() {
+        let code = generate_referral_code(123456789, 0);
+        assert_eq!(code.len(), 8, "code must be exactly 8 chars");
+    }
+
+    #[test]
+    fn test_generate_referral_code_charset() {
+        let code = generate_referral_code(987654321, 0);
+        assert!(
+            code.chars().all(|c| c.is_ascii_alphanumeric()),
+            "code must be alphanumeric base-62"
+        );
+    }
+
+    #[test]
+    fn test_generate_referral_code_deterministic() {
+        let a = generate_referral_code(42, 0);
+        let b = generate_referral_code(42, 0);
+        assert_eq!(a, b, "same inputs → same code");
+    }
+
+    #[test]
+    fn test_generate_referral_code_different_ids() {
+        let a = generate_referral_code(1, 0);
+        let b = generate_referral_code(2, 0);
+        assert_ne!(a, b, "different ids → different codes");
+    }
+
+    #[test]
+    fn test_generate_referral_code_attempt_changes_code() {
+        let a = generate_referral_code(1, 0);
+        let b = generate_referral_code(1, 1);
+        assert_ne!(a, b, "different attempts → different codes");
+    }
+}

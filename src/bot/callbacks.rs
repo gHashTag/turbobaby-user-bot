@@ -6,6 +6,7 @@ use teloxide::{
 
 use crate::{config::Config, db::Database, locales::*, ai::{AiClient, get_random_joke_prompt, get_random_fact_prompt}};
 use crate::bot::commands::build_app_url;
+use crate::db::referrals as ref_db;
 
 fn web_app_btn(text: &str, url: &str) -> InlineKeyboardButton {
     InlineKeyboardButton::web_app(text, WebAppInfo { url: url.parse().unwrap() })
@@ -147,7 +148,58 @@ pub async fn handle_callback(
             let order_id = &d["complete_".len()..];
             bot.answer_callback_query(&q.id).text("📦 Completed!").await?;
             // db.update_order_status(order_id, "completed").await.ok();
-            // process_loyalty_on_complete(order_id, &db, &bot, &config).await.ok();
+
+            // Check if this is the user's first order, and if so confirm pending referral
+            {
+                let pool = &db.pool;
+                let db_client = pool.get().await.ok();
+                if let Some(db_client) = db_client {
+                    // Get the telegram_id for this order
+                    let order_row = db_client.query_opt(
+                        "SELECT telegram_id FROM orders WHERE id = $1",
+                        &[&order_id],
+                    ).await.ok().flatten();
+
+                    if let Some(row) = order_row {
+                        let customer_telegram_id: i64 = row.get("telegram_id");
+                        // Check if this is their first completed order
+                        let order_count = db_client.query_one(
+                            "SELECT COUNT(*) as cnt FROM orders WHERE telegram_id = $1 AND status = 'completed'",
+                            &[&customer_telegram_id],
+                        ).await.ok();
+
+                        // Only trigger on truly first completion (count == 0 before this one)
+                        let is_first = order_count.map(|r| r.get::<_, i64>("cnt") == 0).unwrap_or(false);
+                        if is_first {
+                            // Get referral bonus amount from loyalty_config
+                            let bonus_row = db_client.query_opt(
+                                "SELECT config->>'referral_bonus' AS bonus FROM loyalty_config WHERE id = 1",
+                                &[],
+                            ).await.ok().flatten();
+                            let bonus: f64 = bonus_row
+                                .and_then(|r| r.get::<_, Option<String>>("bonus"))
+                                .and_then(|s| s.parse().ok())
+                                .unwrap_or(200.0);
+
+                            let _ = ref_db::confirm_referral(pool, customer_telegram_id, bonus).await;
+
+                            // Notify referrer if we can find them
+                            let event_row = db_client.query_opt(
+                                "SELECT referrer_id FROM referral_events WHERE referred_id = $1",
+                                &[&customer_telegram_id],
+                            ).await.ok().flatten();
+                            if let Some(ev) = event_row {
+                                let referrer_id: i64 = ev.get("referrer_id");
+                                let _ = bot.send_message(
+                                    teloxide::types::ChatId(referrer_id),
+                                    format!("🎉 {} +{:.0} ฿", locale.referral_bonus, bonus),
+                                ).await;
+                            }
+                        }
+                    }
+                }
+            }
+
             if let Some(msg) = q.message.as_ref().and_then(|m| match m {
     MaybeInaccessibleMessage::Regular(msg) => Some(msg),
     MaybeInaccessibleMessage::Inaccessible(_) => None,

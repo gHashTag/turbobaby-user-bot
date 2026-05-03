@@ -13,7 +13,15 @@
     "garden": "Garden",
     "quest": "Quest",
     "add_to_cart": "Add to Cart",
-    "checkout": "Checkout"
+    "checkout": "Checkout",
+    "referral.title": "Referral Program",
+    "referral.your_code": "Your ref code",
+    "referral.invited_count": "Invited",
+    "referral.bonus_earned": "Bonus earned",
+    "referral.share_button": "Share",
+    "referral.leaderboard": "Leaderboard",
+    "referral.confirmed": "Confirmed",
+    "referral.pending": "Pending"
   },
   "ru": {
     "app_title": "Вуди Вед Бот",
@@ -29,6 +37,14 @@
     "garden": "Сад",
     "quest": "Квест",
     "add_to_cart": "Добавить в корзину",
-    "checkout": "Оформить"
+    "checkout": "Оформить",
+    "referral.title": "Реферальная программа",
+    "referral.your_code": "Ваш реф-код",
+    "referral.invited_count": "Приглашено",
+    "referral.bonus_earned": "Заработано бонусов",
+    "referral.share_button": "Поделиться",
+    "referral.leaderboard": "Таблица лидеров",
+    "referral.confirmed": "Подтверждено",
+    "referral.pending": "Ожидает"
   }
 }

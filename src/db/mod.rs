@@ -2,6 +2,7 @@ pub mod strains;
 pub mod loyalty;
 pub mod orders;
 pub mod users;
+pub mod referrals;
 
 pub use strains::*;
 
@@ -18,6 +19,7 @@ const MIGRATION_SQL: &str = concat!(
     include_str!("../../migrations/003_quest.sql"),
     include_str!("../../migrations/004_garden.sql"),
     include_str!("../../migrations/005_alter_strains_sotd.sql"),
+    include_str!("../../migrations/007_referral_events.sql"),
 );
 
 pub struct Database {

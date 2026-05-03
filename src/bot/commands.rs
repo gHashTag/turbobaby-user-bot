@@ -5,7 +5,7 @@ use teloxide::{
     utils::command::BotCommands,
 };
 
-use crate::{config::Config, db::Database, locales::*, ai::{AiClient, get_random_joke_prompt, get_random_fact_prompt}};
+use crate::{config::Config, db::Database, db::referrals as ref_db, locales::*, ai::{AiClient, get_random_joke_prompt, get_random_fact_prompt}};
 
 #[derive(BotCommands, Clone)]
 #[command(rename_rule = "lowercase", description = "Woody Bot commands:")]
@@ -30,6 +30,10 @@ pub enum Command {
     Engage,
     #[command(description = "Post fact to group (admin)")]
     Factpost,
+    #[command(description = "Get your referral invite link")]
+    Invite,
+    #[command(description = "Show referral statistics")]
+    Refstats,
 }
 
 fn web_app_btn(text: &str, url: &str) -> InlineKeyboardButton {
@@ -61,9 +65,23 @@ pub async fn handle_command(
 
     match cmd {
         Command::Start(args) => {
-            // Handle referral
+            // Handle referral: /start ref_<code>
             if args.starts_with("ref_") {
-                // TODO: process referral
+                let code = args.trim_start_matches("ref_");
+                // Only process if this is NOT the same user who owns the code
+                let referrer = ref_db::find_referrer_by_code(&db.pool, code).await.ok().flatten();
+                if let Some(referrer_id) = referrer {
+                    if referrer_id != user_id {
+                        // Record pending referral event (idempotent)
+                        let _ = ref_db::record_referral(
+                            &db.pool,
+                            referrer_id,
+                            user_id,
+                            code,
+                            Some("telegram_start"),
+                        ).await;
+                    }
+                }
             }
             if args == "channel" {
                 bot.send_message(msg.chat.id,
@@ -214,6 +232,59 @@ pub async fn handle_command(
         Command::Factpost => {
             if !config.admin_ids.contains(&user_id) { return Ok(()); }
             bot.send_message(msg.chat.id, "🌿 Posting fact to group... (TODO)").await?;
+        }
+
+        Command::Invite => {
+            let code = ref_db::get_or_create_referral_code(&db.pool, user_id)
+                .await
+                .unwrap_or_else(|_| "error".into());
+            let invite_link = format!(
+                "https://t.me/{}?start=ref_{}",
+                config.bot_username, code
+            );
+            let text = format!(
+                "🎁 <b>{}</b>\n\n🔗 <code>{}</code>\n\n{}",
+                locale.referral_title,
+                invite_link,
+                locale.referral_share_hint,
+            );
+            // Share button via switch_inline_query so Telegram shows "Share" UX
+            let share_btn = InlineKeyboardButton::switch_inline_query(
+                &format!("📤 {}", locale.referral_share_button),
+                &format!("🪵 Woody Weed — {invite_link}"),
+            );
+            bot.send_message(msg.chat.id, text)
+                .parse_mode(teloxide::types::ParseMode::Html)
+                .reply_markup(InlineKeyboardMarkup::new(vec![vec![share_btn]]))
+                .await?;
+        }
+
+        Command::Refstats => {
+            let stats = ref_db::get_referrer_stats(&db.pool, user_id)
+                .await
+                .unwrap_or(crate::db::referrals::ReferrerStats {
+                    total_invited: 0,
+                    confirmed: 0,
+                    pending: 0,
+                    total_bonus_earned: 0.0,
+                });
+            let text = format!(
+                "📊 <b>{}</b>\n━━━━━━━━━━━━━━━━\n👥 {}: <b>{}</b>\n✅ {}: <b>{}</b>\n⏳ {}: <b>{}</b>\n💰 {}: <b>{:.0} ฿</b>",
+                locale.referral_title,
+                locale.referral_invited_count, stats.total_invited,
+                locale.referral_confirmed,    stats.confirmed,
+                locale.referral_pending,      stats.pending,
+                locale.referral_bonus_earned, stats.total_bonus_earned,
+            );
+            bot.send_message(msg.chat.id, text)
+                .parse_mode(teloxide::types::ParseMode::Html)
+                .reply_markup(InlineKeyboardMarkup::new(vec![
+                    vec![web_app_btn(
+                        &format!("📈 {}", locale.referral_leaderboard),
+                        &build_app_url(base, &lang, Some("referrals")),
+                    )],
+                ]))
+                .await?;
         }
     }
 
