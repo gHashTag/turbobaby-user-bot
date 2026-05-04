@@ -36,12 +36,13 @@ fn api_base_url() -> String {
         .and_then(|w| w.location().origin().ok())
         .map(|origin| {
             if origin.contains(":8080") || origin.contains(":3001") {
-                "http://localhost:3000".to_string()
+                // Local dev: use production API (local backend can't compile on macOS due to mio crate)
+                "https://woody-weed-bot-production.up.railway.app".to_string()
             } else {
                 origin
             }
         })
-        .unwrap_or_else(|| "http://localhost:3000".to_string())
+        .unwrap_or_else(|| "https://woody-weed-bot-production.up.railway.app".to_string())
 }
 
 fn category_emoji(cat: &str) -> &'static str {
