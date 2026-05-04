@@ -7,7 +7,7 @@ use crate::ui::components::Loading;
 #[component]
 pub fn Tea() -> Element {
     let teas = use_resource(|| async move {
-        match ApiClient::new("/api".to_string()).get_tea_products().await {
+        match ApiClient::new(String::new()).get_tea_products().await {
             Ok(t) => t,
             Err(_) => mock_teas(),
         }

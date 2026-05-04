@@ -33,8 +33,19 @@ impl ApiClient {
         }
     }
 
+    /// Build absolute URL: base + path with exactly one '/' between them.
+    /// Works for empty base_url (relative URLs from browser origin).
+    fn build_url(&self, path: &str) -> String {
+        let p = path.trim_start_matches('/');
+        if self.base_url.is_empty() {
+            format!("/{p}")
+        } else {
+            format!("{}/{p}", self.base_url)
+        }
+    }
+
     async fn get<T: for<'de> Deserialize<'de>>(&self, path: &str) -> Result<T> {
-        let url = format!("{}/{}", self.base_url, path);
+        let url = self.build_url(path);
         let response = self
             .client
             .get(&url)
@@ -59,7 +70,7 @@ impl ApiClient {
         path: &str,
         body: &P,
     ) -> Result<T> {
-        let url = format!("{}/{}", self.base_url, path);
+        let url = self.build_url(path);
         let response = self
             .client
             .post(&url)

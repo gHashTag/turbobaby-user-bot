@@ -8,7 +8,7 @@ pub fn Home() -> Element {
 
     // Fetch strain of the day
     let sod = use_resource(|| async move {
-        match crate::ui::api::client::ApiClient::new("/api".to_string()).get_strains().await {
+        match crate::ui::api::client::ApiClient::new(String::new()).get_strains().await {
             Ok(strains) => strains.into_iter().find(|s| s.is_strain_of_day),
             Err(_) => None,
         }

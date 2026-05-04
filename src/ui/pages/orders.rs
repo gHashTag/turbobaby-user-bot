@@ -7,7 +7,7 @@ use crate::ui::telegram::use_telegram_id;
 pub fn Orders() -> Element {
     let telegram_id = use_telegram_id().unwrap_or(123456i64);
     let orders = use_resource(move || async move {
-        ApiClient::new("/api".to_string()).get_user_orders(telegram_id).await
+        ApiClient::new(String::new()).get_user_orders(telegram_id).await
     });
 
     rsx! {

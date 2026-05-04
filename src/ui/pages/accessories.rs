@@ -7,7 +7,7 @@ use crate::ui::components::Loading;
 #[component]
 pub fn Accessories() -> Element {
     let accessories = use_resource(|| async move {
-        match ApiClient::new("/api".to_string()).get_accessories().await {
+        match ApiClient::new(String::new()).get_accessories().await {
             Ok(a) => a,
             Err(_) => mock_accessories(),
         }
