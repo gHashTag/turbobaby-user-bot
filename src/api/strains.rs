@@ -37,11 +37,18 @@ pub fn routes() -> Router<AppState> {
 }
 
 async fn get_strains(State(state): State<AppState>) -> Result<Json<Value>, StatusCode> {
-    let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let client = state.db.pool.get().await.map_err(|e| {
+        tracing::error!("get_strains pool error: {:?}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
     let rows = client.query(
         "SELECT id, name, category, thc_percent, cbd_percent, effect, flavor_profile, description, price_per_gram, available_grams, image_url, is_available, is_strain_of_day, strain_of_day_discount FROM strains WHERE is_available = true ORDER BY name",
         &[],
-    ).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    ).await.map_err(|e| {
+        tracing::error!("get_strains query error: {:?}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+    tracing::info!("get_strains: returned {} rows", rows.len());
     Ok(Json(json!({ "strains": rows.iter().map(Strain::from_row).collect::<Vec<_>>() })))
 }
 
@@ -106,7 +113,10 @@ async fn toggle_availability(State(state): State<AppState>, Path(id): Path<Strin
 }
 
 async fn get_strains_of_day(State(state): State<AppState>) -> Result<Json<Value>, StatusCode> {
-    let rows = state.db.get_strains_of_day().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let rows = state.db.get_strains_of_day().await.map_err(|e| {
+        tracing::error!("get_strains_of_day error: {:?}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
     Ok(Json(json!({ "strains": rows })))
 }
 
