@@ -35,7 +35,7 @@ pub fn StrainCard(props: StrainCardProps) -> Element {
             // Image
             div { class: "strain-image",
                 img {
-                    src: "{props.strain.image_url}",
+                    src: "{props.strain.image_url}?v=2",
                     alt: "{name}",
                     loading: "lazy"
                 }

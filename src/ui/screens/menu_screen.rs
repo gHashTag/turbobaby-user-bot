@@ -340,6 +340,12 @@ fn render_strain_card(strain: ApiStrain, mut cart: Signal<Cart>) -> Element {
     let img_url = strain.image_url.clone().unwrap_or_default();
     let has_image = !img_url.is_empty();
     let alt_name = strain.name.clone();
+    // Cache-bust image URLs to avoid stale HTML cached by trunk dev server
+    let img_url_bust = if img_url.is_empty() {
+        String::new()
+    } else {
+        format!("{}?v=2", img_url)
+    };
 
     rsx! {
         div { key: strain.id.clone(), style: card_style,
@@ -348,7 +354,7 @@ fn render_strain_card(strain: ApiStrain, mut cart: Signal<Cart>) -> Element {
                 {if has_image {
                     rsx! {
                         img {
-                            src: "{img_url}",
+                            src: "{img_url_bust}",
                             alt: "{alt_name}",
                             loading: "lazy",
                             style: "width:100%;height:100%;object-fit:cover;display:block;"

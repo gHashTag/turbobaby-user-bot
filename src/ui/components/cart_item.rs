@@ -16,7 +16,7 @@ pub fn CartItemComponent(props: CartItemProps) -> Element {
             if let Some(image_url) = &item.image_url {
                 img {
                     class: "cart-item-image",
-                    src: "{image_url}",
+                    src: "{image_url}?v=2",
                     alt: "{item.name}"
                 }
             }

@@ -78,7 +78,7 @@ fn TeaCard(tea: TeaProduct) -> Element {
                 if tea.image_url.is_empty() {
                     div { class: "product-placeholder", "leaf" }
                 } else {
-                    img { src: "{tea.image_url}", alt: "{tea.name}" }
+                    img { src: "{tea.image_url}?v=2", alt: "{tea.name}" }
                 }
                 if !available {
                     div { class: "product-badge", "Out of Stock" }

@@ -81,7 +81,7 @@ fn CartItemRow(props: CartItemRowProps) -> Element {
             if let Some(ref image_url) = item.image_url {
                 img {
                     class: "cart-item-image",
-                    src: "{image_url}",
+                    src: "{image_url}?v=2",
                     alt: "{item.name}"
                 }
             }

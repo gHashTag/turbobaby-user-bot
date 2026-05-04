@@ -85,7 +85,7 @@ pub fn Card(props: CardProps) -> Element {
             if let Some(url) = &props.image_url {
                 div { class: "card-image",
                     img {
-                        src: "{url}",
+                        src: "{url}?v=2",
                         alt: "Product image",
                         loading: "lazy"
                     }

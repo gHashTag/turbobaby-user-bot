@@ -79,7 +79,7 @@ fn AccessoryCard(accessory: Accessory) -> Element {
                 if accessory.image_url.is_empty() {
                     div { class: "product-placeholder", "tool" }
                 } else {
-                    img { src: "{accessory.image_url}", alt: "{accessory.name}" }
+                    img { src: "{accessory.image_url}?v=2", alt: "{accessory.name}" }
                 }
                 if !available {
                     div { class: "product-badge", "Out of Stock" }
