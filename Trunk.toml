@@ -3,8 +3,8 @@ target = "index.html"
 dist = "dist"
 public_url = "/"
 filehash = true
-release = false
-no_opt = true
+release = true
+no_opt = false
 
 [serve]
 addresses = ["127.0.0.1", "0.0.0.0"]
@@ -17,7 +17,7 @@ cargo = false
 
 [tools]
 wasm-bindgen = "0.2.95"
-wasm-opt = false
+wasm-opt = "4"
 
 [watch]
 watch = ["src", "assets"]

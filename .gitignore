@@ -4,3 +4,6 @@ target/
 .DS_Store
 .cargo/
 .claude/
+
+# Trunk build output (now built inside Docker)
+dist/
