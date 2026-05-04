@@ -363,7 +363,7 @@ pub fn WoodyCatch() -> Element {
                 for i in 0u32..4u32 {
                     {
                         let mut lane_sig = lane.clone();
-                        let start_game_click = start_game.clone();
+                        let start_game_click = start_game;
                         let is_active_lane = cur_lane == i;
                         let border_style = if i < 3 { "1px solid rgba(255,255,255,0.03)" } else { "none" };
                         let bg_style = if is_active_lane {
@@ -379,11 +379,11 @@ pub fn WoodyCatch() -> Element {
                                     cursor: pointer; border-right: {border_style};
                                     background: {bg_style}; transition: background 0.15s;
                                 ",
-                                onclick: move |_| {
+                                onclick: move |evt| {
                                     if is_playing && !is_over {
                                         *lane_sig.write() = i;
                                     } else {
-                                        start_game_click(());
+                                        start_game_click.call(evt);
                                     }
                                 },
                                 // Tree decoration
