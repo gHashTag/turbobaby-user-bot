@@ -65,9 +65,8 @@ fn copy_to_clipboard(text: &str) {
     #[cfg(target_arch = "wasm32")]
     {
         if let Some(window) = web_sys::window() {
-            if let Some(nav) = window.navigator().clipboard() {
-                let _ = nav.write_text(text);
-            }
+            let clipboard = window.navigator().clipboard();
+            let _ = clipboard.write_text(text);
         }
     }
     #[cfg(not(target_arch = "wasm32"))]
@@ -211,10 +210,10 @@ pub fn Referrals() -> Element {
                     display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;
                 ",
 
-                stat_card("👥", "Invited", &stats.total_invited.to_string()),
-                stat_card("✅", "Confirmed", &stats.confirmed.to_string()),
-                stat_card("⏳", "Pending", &stats.pending.to_string()),
-                stat_card("💰", "Bonus earned", &format!("{:.0} ฿", stats.total_bonus_earned)),
+                {stat_card("👥", "Invited", &stats.total_invited.to_string())}
+                {stat_card("✅", "Confirmed", &stats.confirmed.to_string())}
+                {stat_card("⏳", "Pending", &stats.pending.to_string())}
+                {stat_card("💰", "Bonus earned", &format!("{:.0} ฿", stats.total_bonus_earned))}
             }
 
             // ── Leaderboard ──────────────────────────────────────
@@ -235,7 +234,7 @@ pub fn Referrals() -> Element {
                     div {
                         style: "display: flex; flex-direction: column; gap: 6px;",
                         for (idx, entry) in board.iter().enumerate() {
-                            leaderboard_row(idx + 1, entry.telegram_id, entry.referral_count, entry.total_bonus_earned)
+                            {leaderboard_row(idx + 1, entry.telegram_id, entry.referral_count, entry.total_bonus_earned)}
                         }
                     }
                 }
@@ -296,10 +295,10 @@ fn leaderboard_row(rank: usize, telegram_id: i64, referral_count: i64, bonus: f6
             span { style: "{rank_style}", "#{rank}" }
             div { style: "flex: 1;",
                 div { style: "font-size: 7px; color: #e8e8e8;",
-                    "ID: …{}", (telegram_id % 10000)
+                    {format!("ID: …{}", telegram_id % 10000)}
                 }
                 div { style: "font-size: 6px; color: #555; margin-top: 2px;",
-                    "{referral_count} invited • {bonus:.0} ฿ earned"
+                    {format!("{} invited • {:.0} ฿ earned", referral_count, bonus)}
                 }
             }
         }

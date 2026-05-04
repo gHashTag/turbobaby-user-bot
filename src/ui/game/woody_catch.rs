@@ -249,29 +249,27 @@ pub fn WoodyCatch() -> Element {
         });
     }
 
-    // ── Start / Restart helper ───────────────────────────────────────────────
-    let start_game = {
-        let mut score     = score.clone();
-        let mut lives     = lives.clone();
-        let mut level     = level.clone();
-        let mut combo     = combo.clone();
-        let mut playing   = playing.clone();
-        let mut game_over = game_over.clone();
-        let mut lane      = lane.clone();
-        let mut buds      = buds.clone();
-        let mut spawn_ticks = spawn_ticks.clone();
-        move |_| {
-            *score.write()       = 0;
-            *lives.write()       = 3;
-            *level.write()       = 1;
-            *combo.write()       = 0;
-            *playing.write()     = true;
-            *game_over.write()   = false;
-            *lane.write()        = 1;
-            *spawn_ticks.write() = 0;
-            buds.write().clear();
-        }
-    };
+    // ── Start / Restart helper (Copy via use_callback so it can be reused) ───
+    let start_game = use_callback(move |_: dioxus::prelude::Event<MouseData>| {
+        let mut score       = score;
+        let mut lives       = lives;
+        let mut level       = level;
+        let mut combo       = combo;
+        let mut playing     = playing;
+        let mut game_over   = game_over;
+        let mut lane        = lane;
+        let mut buds        = buds;
+        let mut spawn_ticks = spawn_ticks;
+        *score.write()       = 0;
+        *lives.write()       = 3;
+        *level.write()       = 1;
+        *combo.write()       = 0;
+        *playing.write()     = true;
+        *game_over.write()   = false;
+        *lane.write()        = 1;
+        *spawn_ticks.write() = 0;
+        buds.write().clear();
+    });
 
     // ── Computed values for render ───────────────────────────────────────────
     let cur_score  = *score.read();
@@ -497,7 +495,7 @@ pub fn WoodyCatch() -> Element {
                         background: rgba(0,0,0,0.92); backdrop-filter: blur(8px);
                         display: flex; align-items: center; justify-content: center; z-index: 20;
                     ",
-                        onclick: start_game.clone(),
+                        onclick: move |e| start_game.call(e),
                         div { style: "text-align: center; color: #fff; padding: 24px;",
                             div { style: "font-size: 42px; margin-bottom: 8px;", "🌿🐦" }
                             h1 { style: "
@@ -573,7 +571,7 @@ pub fn WoodyCatch() -> Element {
                                     color: #fff; border-radius: 30px; cursor: pointer;
                                     box-shadow: 0 8px 24px rgba(34,197,94,0.4);
                                 ",
-                                onclick: start_game.clone(),
+                                onclick: move |e| start_game.call(e),
                                 "🔄 ЕЩЁ РАЗ"
                             }
                         }

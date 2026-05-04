@@ -108,11 +108,11 @@ fn cart_item_row(item: CartItem) -> Element {
     let price_str = format_price(item.price);
     let qty = item.quantity;
     let line_total_str = format_price(item.price * item.quantity as f64);
-    let _row_key = item.id.clone();
+    let row_key = item.id.clone();
 
     rsx! {
         div {
-            key: row_key,
+            key: "{row_key}",
             style: "
             display: flex; align-items: center; gap: 10px;
             background: #16213e; border: 2px solid #2a2a4a;
