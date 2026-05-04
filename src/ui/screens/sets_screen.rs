@@ -1,5 +1,6 @@
 use dioxus::prelude::*;
 use crate::ui::routes::Route;
+use crate::ui::assets;
 
 #[component]
 pub fn SetsScreen() -> Element {
@@ -15,6 +16,55 @@ pub fn SetsScreen() -> Element {
             div { style: "padding: 20px 16px 12px; text-align: center;",
                 h1 { style: "font-size: 12px; color: #b388ff; text-shadow: 0 0 8px rgba(179,136,255,0.5);", "📦 Sets" }
                 p { style: "font-size: 7px; color: #8b8b9e; margin-top: 4px;", "Curated collections & bundles" }
+            }
+
+            // Featured Packs — pack images grid
+            div { style: "padding: 0 16px 20px;",
+                h2 { style: "font-size: 9px; color: #b388ff; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 1px;", "Featured Packs" }
+                div { style: "display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;",
+                    div { style: "
+                        background: #16213e;
+                        border: 2px solid #2a2a4a;
+                        border-radius: 12px;
+                        overflow: hidden;
+                        box-shadow: 3px 3px 0 #000;
+                    ",
+                        img {
+                            src: "{assets::packs::INDICA}",
+                            alt: "Indica Pack",
+                            style: "width: 100%; aspect-ratio: 1; object-fit: cover;",
+                        }
+                        div { style: "padding: 6px; text-align: center; color: #e8e8e8; font-size: 6px;", "Indica Pack" }
+                    }
+                    div { style: "
+                        background: #16213e;
+                        border: 2px solid #2a2a4a;
+                        border-radius: 12px;
+                        overflow: hidden;
+                        box-shadow: 3px 3px 0 #000;
+                    ",
+                        img {
+                            src: "{assets::packs::SATIVA}",
+                            alt: "Sativa Pack",
+                            style: "width: 100%; aspect-ratio: 1; object-fit: cover;",
+                        }
+                        div { style: "padding: 6px; text-align: center; color: #e8e8e8; font-size: 6px;", "Sativa Pack" }
+                    }
+                    div { style: "
+                        background: #16213e;
+                        border: 2px solid #2a2a4a;
+                        border-radius: 12px;
+                        overflow: hidden;
+                        box-shadow: 3px 3px 0 #000;
+                    ",
+                        img {
+                            src: "{assets::packs::STARTER}",
+                            alt: "Starter Pack",
+                            style: "width: 100%; aspect-ratio: 1; object-fit: cover;",
+                        }
+                        div { style: "padding: 6px; text-align: center; color: #e8e8e8; font-size: 6px;", "Starter Pack" }
+                    }
+                }
             }
 
             // Sets grid

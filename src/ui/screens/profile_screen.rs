@@ -1,5 +1,6 @@
 use dioxus::prelude::*;
 use crate::ui::routes::Route;
+use crate::ui::assets;
 
 #[component]
 pub fn ProfileScreen() -> Element {
@@ -16,65 +17,48 @@ pub fn ProfileScreen() -> Element {
                 h1 { style: "font-size: 12px; color: #39ff14; text-shadow: 0 0 8px rgba(57,255,20,0.5);", "👤 Profile" }
             }
 
-            // Silver Member Card
-            div { style: "
-                max-width: 380px;
-                margin: 0 auto 20px;
-                border-radius: 16px;
-                padding: 24px;
-                position: relative;
-                overflow: hidden;
-                background: linear-gradient(135deg, #151520, #1f1f2a);
-                border: 2px solid #c0c0c0;
-                box-shadow: 0 0 20px rgba(192,192,192,0.3);
-            ",
-                // Scanline overlay
-                div { style: "
-                    position: absolute; top: 0; left: 0; right: 0; bottom: 0;
-                    opacity: 0.05;
-                    background: repeating-linear-gradient(0deg, transparent, transparent 4px, rgba(255,255,255,0.1) 4px, rgba(255,255,255,0.1) 8px);
-                " }
-                // Card header
-                div { style: "display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; position: relative;",
-                    div { style: "
-                        width: 48px; height: 48px; border-radius: 50%;
-                        display: flex; align-items: center; justify-content: center;
-                        font-size: 20px;
-                        background: rgba(192,192,192,0.2); border: 2px solid #c0c0c0;
-                    ", "🍃" }
-                    span { style: "
-                        font-size: 8px; padding: 4px 12px;
-                        border-radius: 4px; text-transform: uppercase;
-                        background: #c0c0c0; color: #0f0f1a;
-                    ", "Silver" }
-                }
-                // Name & ID
-                div { style: "font-size: 12px; color: #c0c0c0; margin-bottom: 4px; position: relative;", "Silver Grower" }
-                div { style: "font-size: 7px; color: #666; margin-bottom: 16px; position: relative;", "ID: SV-00187 • Member since 2023" }
-                // Stats
-                div { style: "display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 16px; position: relative;",
-                    div { style: "text-align: center; padding: 8px 4px; background: rgba(0,0,0,0.3); border-radius: 8px;",
-                        div { style: "font-size: 12px; color: #c0c0c0; margin-bottom: 4px;", "$750" }
-                        div { style: "font-size: 6px; color: #888;", "SPENT" }
+            // Member Card — tier-based image
+            {
+                // Default tier: silver. In a real app this comes from user context.
+                let tier = "silver";
+                let card_url = match tier {
+                    "gold" | "platinum" | "diamond" | "woody" => assets::member_cards::GOLD_WEBP,
+                    "silver" => assets::member_cards::SILVER_WEBP,
+                    _ => assets::member_cards::BRONZE_WEBP,
+                };
+                rsx! {
+                    div { style: "max-width: 380px; margin: 0 auto 20px; padding: 0 16px;",
+                        img {
+                            src: "{card_url}",
+                            alt: "Member Card",
+                            style: "width: 100%; max-width: 320px; border-radius: 16px; display: block; margin: 0 auto; box-shadow: 0 0 24px rgba(192,192,192,0.25);",
+                        }
+                        // Stats row below the card image
+                        div { style: "display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 12px;",
+                            div { style: "text-align: center; padding: 8px 4px; background: #16213e; border: 2px solid #2a2a4a; border-radius: 8px;",
+                                div { style: "font-size: 12px; color: #c0c0c0; margin-bottom: 4px;", "$750" }
+                                div { style: "font-size: 6px; color: #888;", "SPENT" }
+                            }
+                            div { style: "text-align: center; padding: 8px 4px; background: #16213e; border: 2px solid #2a2a4a; border-radius: 8px;",
+                                div { style: "font-size: 12px; color: #c0c0c0; margin-bottom: 4px;", "24" }
+                                div { style: "font-size: 6px; color: #888;", "ORDERS" }
+                            }
+                            div { style: "text-align: center; padding: 8px 4px; background: #16213e; border: 2px solid #2a2a4a; border-radius: 8px;",
+                                div { style: "font-size: 12px; color: #c0c0c0; margin-bottom: 4px;", "7" }
+                                div { style: "font-size: 6px; color: #888;", "PLANTS" }
+                            }
+                        }
+                        // Progress bar toward next tier
+                        div { style: "margin-top: 10px;",
+                            div { style: "height: 8px; background: rgba(0,0,0,0.4); border-radius: 4px; overflow: hidden;",
+                                div { style: "height: 100%; width: 62%; border-radius: 4px; background: linear-gradient(90deg, #c0c0c0, #d8d8d8);" }
+                            }
+                            div { style: "display: flex; justify-content: space-between; font-size: 7px; margin-top: 6px;",
+                                span { style: "color: #888;", "$750 / $1200" }
+                                span { style: "color: #c0c0c0;", "→ Gold" }
+                            }
+                        }
                     }
-                    div { style: "text-align: center; padding: 8px 4px; background: rgba(0,0,0,0.3); border-radius: 8px;",
-                        div { style: "font-size: 12px; color: #c0c0c0; margin-bottom: 4px;", "24" }
-                        div { style: "font-size: 6px; color: #888;", "ORDERS" }
-                    }
-                    div { style: "text-align: center; padding: 8px 4px; background: rgba(0,0,0,0.3); border-radius: 8px;",
-                        div { style: "font-size: 12px; color: #c0c0c0; margin-bottom: 4px;", "7" }
-                        div { style: "font-size: 6px; color: #888;", "PLANTS" }
-                    }
-                }
-                // Progress bar
-                div { style: "
-                    height: 8px; background: rgba(0,0,0,0.4);
-                    border-radius: 4px; overflow: hidden; position: relative;
-                ",
-                    div { style: "height: 100%; width: 62%; border-radius: 4px; background: linear-gradient(90deg, #c0c0c0, #d8d8d8);" } }
-                div { style: "display: flex; justify-content: space-between; font-size: 7px; margin-top: 6px; position: relative;",
-                    span { style: "color: #888;", "$750 / $1200" }
-                    span { style: "color: #c0c0c0;", "→ Gold" }
                 }
             }
 

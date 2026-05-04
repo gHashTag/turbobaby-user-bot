@@ -3,6 +3,7 @@ use dioxus::prelude::*;
 use serde::Deserialize;
 use crate::ui::routes::Route;
 use crate::ui::state::{Cart, CartItem};
+use crate::ui::assets;
 
 // ── API response types ──────────────────────────────────────────
 
@@ -84,15 +85,15 @@ pub fn HomeScreen() -> Element {
                 text-align: center;
                 padding: 20px 16px 12px;
             ",
-                h1 { style: "
-                    font-size: 14px;
-                    color: #39ff14;
-                    text-shadow: 0 0 8px rgba(57,255,20,0.5);
-                    margin-bottom: 6px;
-                ", "🌿 WOODY WEED BOT" }
+                img {
+                    src: "{assets::logo::MAIN}",
+                    alt: "Woody Weed Bot",
+                    style: "height: 80px; width: auto; display: block; margin: 0 auto;",
+                }
                 p { style: "
                     font-size: 7px;
                     color: #8b8b9e;
+                    margin-top: 6px;
                 ", "Premium Cannabis Delivery in Bangkok" }
             }
 

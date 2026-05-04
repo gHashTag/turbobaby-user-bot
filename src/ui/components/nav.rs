@@ -1,5 +1,6 @@
 // Bottom Navigation Component with Pixel Art Style
 use dioxus::prelude::*;
+use crate::ui::assets;
 
 #[derive(Props, PartialEq, Clone)]
 pub struct NavProps {
@@ -98,7 +99,13 @@ pub fn Nav(props: NavProps) -> Element {
                             e.prevent_default();
                             crate::ui::state::set_route(item.route);
                         },
-                        span { class: "nav-icon", "{item.icon}" }
+                        span { class: "nav-icon",
+                            img {
+                                src: "{assets::icons::PLANT}",
+                                alt: "Menu",
+                                style: "width: 20px; height: 20px;",
+                            }
+                        }
                         span { class: "nav-label", "{item.label}" }
                     }
                 }
@@ -178,7 +185,13 @@ pub fn Nav(props: NavProps) -> Element {
                             e.prevent_default();
                             crate::ui::state::set_route(item.route);
                         },
-                        span { class: "nav-icon", "{item.icon}" }
+                        span { class: "nav-icon",
+                            img {
+                                src: "{assets::icons::USER}",
+                                alt: "Profile",
+                                style: "width: 20px; height: 20px;",
+                            }
+                        }
                         span { class: "nav-label", "{item.label}" }
                     }
                 }
