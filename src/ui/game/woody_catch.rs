@@ -227,7 +227,7 @@ pub fn WoodyCatch() -> Element {
         let mut playing = playing.clone();
         let mut game_over = game_over.clone();
         use_effect(move || {
-            let closure = Closure::<dyn Fn(web_sys::KeyboardEvent)>::new(move |e: web_sys::KeyboardEvent| {
+            let closure = Closure::<dyn FnMut(web_sys::KeyboardEvent)>::new(move |e: web_sys::KeyboardEvent| {
                 if !*playing.read() || *game_over.read() { return; }
                 let key = e.key();
                 if key == "ArrowLeft" || key == "a" || key == "A" {
