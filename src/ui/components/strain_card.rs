@@ -16,6 +16,10 @@ pub fn StrainCard(props: StrainCardProps) -> Element {
     let is_available = props.strain.is_available;
     let is_strain_of_day = props.strain.is_strain_of_day;
     let strain_for_callback = props.strain.clone();
+    let thc_text = props.strain.thc_display();
+    let cbd_text = props.strain.cbd_display();
+    let price_text = props.strain.price_display();
+    let name = props.strain.name.clone();
 
     rsx! {
         div {
@@ -32,30 +36,31 @@ pub fn StrainCard(props: StrainCardProps) -> Element {
             div { class: "strain-image",
                 img {
                     src: "{props.strain.image_url}",
-                    alt: "{props.strain.name}",
+                    alt: "{name}",
                     loading: "lazy"
                 }
             }
 
             // Content
             div { class: "strain-content",
-                h3 { class: "strain-name", "{props.strain.name}" }
+                h3 { class: "strain-name", "{name}" }
                 div { class: "strain-type",
                     span { class: "type-badge {strain_type_class(&props.strain)}",
                         "{strain_type_emoji(&props.strain)} {strain_type_name(&props.strain)}"
                     }
                 }
-                if let Some(thc) = props.strain.thc {
-                    div { class: "strain-thc", "THC: {thc:.1}%" }
+                if let Some(thc) = thc_text {
+                    div { class: "strain-thc", "THC: {thc}" }
                 }
-                if let Some(cbd) = props.strain.cbd {
-                    div { class: "strain-cbd", "CBD: {cbd:.1}%" }
+                if let Some(cbd) = cbd_text {
+                    div { class: "strain-cbd", "CBD: {cbd}" }
                 }
-                if let Some(desc) = &props.strain.description {
-                    p { class: "strain-description", "{desc}" }
+                if let Some(effect) = &props.strain.effect {
+                    p { class: "strain-effect", "✨ {effect}" }
                 }
+                p { class: "strain-description", "{props.strain.description}" }
                 div { class: "strain-price",
-                    span { class: "price", "{props.strain.price} ₽" }
+                    span { class: "price", "{price_text}" }
                 }
             }
 

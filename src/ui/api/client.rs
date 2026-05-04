@@ -82,7 +82,12 @@ impl ApiClient {
 
     // Strain endpoints
     pub async fn get_strains(&self) -> Result<Vec<Strain>> {
-        let resp: GetStrainsResponse = self.get("/api/strains").await?;
+        // API returns {"strains": [...]} wrapper
+        #[derive(Deserialize)]
+        struct StrainsResponse {
+            strains: Vec<Strain>,
+        }
+        let resp: StrainsResponse = self.get("/api/strains").await?;
         Ok(resp.strains)
     }
 

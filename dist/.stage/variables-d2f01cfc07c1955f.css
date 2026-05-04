@@ -110,7 +110,7 @@
      Typography
   --------------------------------------------------------------------------- */
   --font-display: 'Press Start 2P', monospace;
-  --font-body: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-body: 'Inter', 'Segoe UI', system-ui, sans-serif;
   --font-mono: 'Courier New', monospace;
 
   /* Legacy */
