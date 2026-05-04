@@ -36,20 +36,35 @@ pub fn routes() -> Router<AppState> {
         .route("/strains/:id/strain-of-day", put(set_strain_of_day))
 }
 
+const STRAINS_SELECT: &str = "SELECT id, name, category, thc_percent, cbd_percent, effect, flavor_profile, description, price_per_gram, available_grams, image_url, is_available, is_strain_of_day, strain_of_day_discount FROM strains WHERE is_available = true ORDER BY name";
+
 async fn get_strains(State(state): State<AppState>) -> Result<Json<Value>, StatusCode> {
-    let client = state.db.pool.get().await.map_err(|e| {
-        tracing::error!("get_strains pool error: {:?}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-    let rows = client.query(
-        "SELECT id, name, category, thc_percent, cbd_percent, effect, flavor_profile, description, price_per_gram, available_grams, image_url, is_available, is_strain_of_day, strain_of_day_discount FROM strains WHERE is_available = true ORDER BY name",
-        &[],
-    ).await.map_err(|e| {
-        tracing::error!("get_strains query error: {:?}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-    tracing::info!("get_strains: returned {} rows", rows.len());
-    Ok(Json(json!({ "strains": rows.iter().map(Strain::from_row).collect::<Vec<_>>() })))
+    // Retry once on "cached plan must not change result type" (SQLSTATE 0A000)
+    // which can fire after migration 012 ALTER TABLE ... TYPE. Issuing
+    // DISCARD PLANS on the connection forces re-preparation.
+    for attempt in 0..2 {
+        let client = state.db.pool.get().await.map_err(|e| {
+            tracing::error!("get_strains pool error: {:?}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+        match client.query(STRAINS_SELECT, &[]).await {
+            Ok(rows) => {
+                tracing::info!("get_strains: returned {} rows (attempt {})", rows.len(), attempt);
+                return Ok(Json(json!({ "strains": rows.iter().map(Strain::from_row).collect::<Vec<_>>() })));
+            }
+            Err(e) => {
+                let msg = format!("{:?}", e);
+                if attempt == 0 && msg.contains("0A000") {
+                    tracing::warn!("get_strains: stale cached plan, flushing & retry");
+                    let _ = client.batch_execute("DISCARD PLANS").await;
+                    continue;
+                }
+                tracing::error!("get_strains query error: {:?}", e);
+                return Err(StatusCode::INTERNAL_SERVER_ERROR);
+            }
+        }
+    }
+    Err(StatusCode::INTERNAL_SERVER_ERROR)
 }
 
 async fn get_strain(State(state): State<AppState>, Path(id): Path<String>) -> Result<Json<Value>, StatusCode> {

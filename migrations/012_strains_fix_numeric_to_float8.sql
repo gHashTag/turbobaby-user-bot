@@ -1,5 +1,8 @@
 -- Migration 012: Принудительно конвертируем NUMERIC колонки strains в DOUBLE PRECISION
 -- Анкер: φ² + φ⁻² = 3
+
+-- Сбросить любые серверные cached plans перед ALTER TYPE
+DISCARD PLANS;
 --
 -- Причина: продовая БД создавалась вручную с типом NUMERIC для price/thc/cbd колонок.
 -- tokio-postgres `try_get::<f64>` на NUMERIC возвращает Err → from_row даёт 0.0/None.
