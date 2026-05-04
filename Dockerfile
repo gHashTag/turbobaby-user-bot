@@ -27,14 +27,7 @@ COPY assets ./assets
 # Build the WASM frontend (release mode via Trunk.toml)
 RUN trunk build --release
 
-# Strip SRI integrity/crossorigin attributes — causes WASM load failures through CDN (Fastly)
-# Note: trunk uses HTML entities in integrity values and unquoted crossorigin attrs
-RUN sed -i \
-        -e 's/ integrity="[^"]*"//g' \
-        -e 's/ crossorigin="[^"]*"//g' \
-        -e 's/ crossorigin=[a-zA-Z]*//g' \
-        -e 's/ crossorigin//g' \
-        dist/index.html
+# SRI disabled via Trunk.toml no_sri=true — no sed stripping needed
 
 # ============================================================
 # Stage 2: Build backend server (Rust musl static)
