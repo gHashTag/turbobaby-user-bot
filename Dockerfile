@@ -5,13 +5,18 @@ FROM rust:1.91-slim AS frontend
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    pkg-config ca-certificates curl \
+    pkg-config ca-certificates curl xz-utils \
     && rm -rf /var/lib/apt/lists/*
 
-# Install wasm32 target + trunk + wasm-bindgen
-RUN rustup target add wasm32-unknown-unknown \
-    && cargo install --locked trunk@0.21.5 \
-    && cargo install --locked wasm-bindgen-cli@0.2.95
+# Add wasm32 target
+RUN rustup target add wasm32-unknown-unknown
+
+# Install trunk + wasm-bindgen-cli from prebuilt binaries (fast: ~5s instead of 10min cargo install)
+RUN curl -fsSL https://github.com/trunk-rs/trunk/releases/download/v0.21.5/trunk-x86_64-unknown-linux-gnu.tar.gz \
+        | tar -xz -C /usr/local/bin trunk \
+    && curl -fsSL https://github.com/rustwasm/wasm-bindgen/releases/download/0.2.95/wasm-bindgen-0.2.95-x86_64-unknown-linux-musl.tar.gz \
+        | tar -xz --strip-components=1 -C /usr/local/bin wasm-bindgen-0.2.95-x86_64-unknown-linux-musl/wasm-bindgen \
+    && trunk --version && wasm-bindgen --version
 
 # Copy sources required for trunk build
 COPY Cargo.toml Cargo.lock Trunk.toml index.html ./
