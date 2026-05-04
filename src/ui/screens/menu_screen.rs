@@ -83,6 +83,7 @@ fn filter_tab_style(is_active: bool) -> String {
 #[component]
 pub fn MenuScreen() -> Element {
     let mut active_filter = use_signal(|| "All".to_string());
+    let mut active_sort = use_signal(|| "default".to_string());
 
     let cart = use_context::<Signal<Cart>>();
     let cart_count: u32 = cart.read().items.iter().map(|i| i.quantity).sum();
@@ -152,19 +153,65 @@ pub fn MenuScreen() -> Element {
                 }
             }
 
+            // Sort pills
+            div { style: "display:flex;gap:6px;padding:0 16px 12px;overflow-x:auto;",
+                button {
+                    style: filter_tab_style(active_sort() == "default"),
+                    onclick: move |_| active_sort.set("default".to_string()),
+                    "✨ Top"
+                }
+                button {
+                    style: filter_tab_style(active_sort() == "price-asc"),
+                    onclick: move |_| active_sort.set("price-asc".to_string()),
+                    "💰 ↑"
+                }
+                button {
+                    style: filter_tab_style(active_sort() == "price-desc"),
+                    onclick: move |_| active_sort.set("price-desc".to_string()),
+                    "💰 ↓"
+                }
+                button {
+                    style: filter_tab_style(active_sort() == "name"),
+                    onclick: move |_| active_sort.set("name".to_string()),
+                    "A–Z"
+                }
+                button {
+                    style: filter_tab_style(active_sort() == "thc"),
+                    onclick: move |_| active_sort.set("thc".to_string()),
+                    "🔥 THC"
+                }
+            }
+
             // Content area
             {
                 match &*strains_resource.read() {
                     Some(Ok(all_strains)) => {
                         let filter_val = active_filter();
-                        let filtered: Vec<ApiStrain> = if filter_val == "All" {
+                        let sort_val = active_sort();
+                        let mut filtered: Vec<ApiStrain> = if filter_val == "All" {
                             all_strains.clone()
                         } else {
+                            let needle = filter_val.to_lowercase();
                             all_strains.iter()
-                                .filter(|s| s.category.as_deref() == Some(filter_val.as_str()))
+                                .filter(|s| s.category.as_deref().map(|c| c.eq_ignore_ascii_case(&needle)).unwrap_or(false))
                                 .cloned()
                                 .collect()
                         };
+                        // Sort
+                        match sort_val.as_str() {
+                            "price-asc" => filtered.sort_by(|a,b| a.price_per_gram.partial_cmp(&b.price_per_gram).unwrap_or(std::cmp::Ordering::Equal)),
+                            "price-desc" => filtered.sort_by(|a,b| b.price_per_gram.partial_cmp(&a.price_per_gram).unwrap_or(std::cmp::Ordering::Equal)),
+                            "name" => filtered.sort_by(|a,b| a.name.to_lowercase().cmp(&b.name.to_lowercase())),
+                            "thc" => filtered.sort_by(|a,b| b.thc_percent.unwrap_or(0.0).partial_cmp(&a.thc_percent.unwrap_or(0.0)).unwrap_or(std::cmp::Ordering::Equal)),
+                            _ => {
+                                // SOTD first, then bestsellers, then default
+                                filtered.sort_by(|a,b| {
+                                    let a_sod = if a.is_strain_of_day { 0 } else { 1 };
+                                    let b_sod = if b.is_strain_of_day { 0 } else { 1 };
+                                    a_sod.cmp(&b_sod)
+                                });
+                            }
+                        }
 
                         if filtered.is_empty() {
                             let f = filter_val.clone();
@@ -277,55 +324,89 @@ fn render_strain_card(strain: ApiStrain, mut cart: Signal<Cart>) -> Element {
     let original_price = format_price(strain.price_per_gram);
 
     let thc_str = strain.thc_percent
-        .map(|t| format!("THC: {}%", t as i32))
+        .map(|t| format!("THC {:.0}%", t))
         .unwrap_or_default();
-
-    let desc: String = strain.description
-        .as_deref()
-        .unwrap_or("")
-        .chars()
-        .take(32)
-        .collect();
+    let cbd_str = strain.cbd_percent
+        .map(|c| format!("CBD {:.1}%", c))
+        .unwrap_or_default();
+    let effect_str = strain.effect.clone().unwrap_or_default();
+    let flavor_str = strain.flavor_profile.clone().unwrap_or_default();
+    let has_real_price = strain.price_per_gram > 0.0;
 
     let badge_style = category_badge_style(cat);
     let badge_label = format!("{} {}", emoji, cat);
 
+    let img_url = strain.image_url.clone().unwrap_or_default();
+    let has_image = !img_url.is_empty();
+    let alt_name = strain.name.clone();
+
     rsx! {
         div { key: strain.id.clone(), style: card_style,
-            // Image area
-            div { style: "height:80px;background:linear-gradient(135deg,#1a1a2e,#16213e);display:flex;align-items:center;justify-content:center;font-size:36px;position:relative;",
-                "{emoji}"
+            // Image area — фото в полный рост карточки (aspect 2:3, реальная пропорция webp 600x901)
+            div { style: "width:100%;aspect-ratio:2/3;background:linear-gradient(135deg,#1a1a2e,#16213e);display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;",
+                {if has_image {
+                    rsx! {
+                        img {
+                            src: "{img_url}",
+                            alt: "{alt_name}",
+                            loading: "lazy",
+                            style: "width:100%;height:100%;object-fit:cover;display:block;"
+                        }
+                    }
+                } else {
+                    rsx! {
+                        span { style: "font-size:48px;", "{emoji}" }
+                    }
+                }}
                 {is_sotd.then(|| rsx! {
                     span { style: "
                         position:absolute;top:4px;right:4px;
                         font-size:5px;background:#ffe600;color:#000;
                         padding:2px 4px;border-radius:3px;
+                        z-index:2;
                     ", "⭐ SOTD" }
                 })}
             }
-            // Content
-            div { style: "padding:8px;",
-                div { style: "font-size:9px;font-weight:bold;margin-bottom:4px;",
+            // Content — имя, badge, THC/CBD, effect, flavor, цена/г
+            div { style: "padding:10px;font-family:'Inter',system-ui,sans-serif;",
+                div { style: "font-size:14px;font-weight:700;margin-bottom:6px;color:#ffffff;line-height:1.2;letter-spacing:0.2px;",
                     "{strain.name}"
                 }
-                div { style: "display:flex;gap:4px;align-items:center;margin-bottom:4px;",
+                div { style: "display:flex;gap:6px;align-items:center;margin-bottom:6px;flex-wrap:wrap;",
                     span { style: badge_style, "{badge_label}" }
                     {(!thc_str.is_empty()).then(|| rsx! {
-                        span { style: "font-size:7px;color:#8b8b9e;", "{thc_str}" }
+                        span { style: "font-size:11px;color:#39ff14;font-weight:700;", "{thc_str}" }
+                    })}
+                    {(!cbd_str.is_empty()).then(|| rsx! {
+                        span { style: "font-size:11px;color:#00e5ff;font-weight:600;", "{cbd_str}" }
                     })}
                 }
-                {(!desc.is_empty()).then(|| rsx! {
-                    div { style: "font-size:7px;color:#8b8b9e;margin-bottom:6px;",
-                        "{desc}"
+                {(!effect_str.is_empty()).then(|| rsx! {
+                    div { style: "font-size:11px;color:#c9c9d4;margin-bottom:4px;line-height:1.35;",
+                        "{effect_str}"
                     }
                 })}
-                div { style: "display:flex;gap:4px;align-items:center;margin-bottom:6px;",
-                    span { style: "font-size:9px;color:#39ff14;", "{display_price}" }
-                    {has_discount.then(|| rsx! {
-                        span { style: "font-size:7px;color:#8b8b9e;text-decoration:line-through;",
-                            "{original_price}"
+                {(!flavor_str.is_empty()).then(|| rsx! {
+                    div { style: "font-size:10px;color:#8b8b9e;margin-bottom:8px;line-height:1.35;",
+                        "🍃 {flavor_str}"
+                    }
+                })}
+                div { style: "display:flex;gap:6px;align-items:baseline;margin-bottom:6px;",
+                    {if has_real_price {
+                        rsx! {
+                            span { style: "font-size:18px;color:#39ff14;font-weight:700;", "{display_price}" }
+                            span { style: "font-size:11px;color:#8b8b9e;", "/г" }
+                            {has_discount.then(|| rsx! {
+                                span { style: "font-size:11px;color:#8b8b9e;text-decoration:line-through;margin-left:4px;",
+                                    "{original_price}"
+                                }
+                            })}
                         }
-                    })}
+                    } else {
+                        rsx! {
+                            span { style: "font-size:11px;color:#8b8b9e;font-style:italic;", "Цена по запросу" }
+                        }
+                    }}
                 }
             }
             // Action button
@@ -341,10 +422,11 @@ fn render_strain_card(strain: ApiStrain, mut cart: Signal<Cart>) -> Element {
                     rsx! {
                         button {
                             style: "
-                                font-family:'Press Start 2P',monospace;
-                                font-size:6px;width:100%;padding:6px;
+                                font-family:'Inter',system-ui,sans-serif;
+                                font-size:12px;font-weight:700;letter-spacing:0.3px;
+                                width:100%;padding:9px;
                                 background:#39ff14;color:#0f0f1a;
-                                border:none;border-radius:4px;cursor:pointer;
+                                border:none;border-radius:6px;cursor:pointer;
                             ",
                             onclick: move |_| {
                                 cart.write().add_item(CartItem {
@@ -361,10 +443,11 @@ fn render_strain_card(strain: ApiStrain, mut cart: Signal<Cart>) -> Element {
                 } else {
                     rsx! {
                         button { style: "
-                            font-family:'Press Start 2P',monospace;
-                            font-size:6px;width:100%;padding:6px;
+                            font-family:'Inter',system-ui,sans-serif;
+                            font-size:12px;font-weight:600;letter-spacing:0.3px;
+                            width:100%;padding:9px;
                             background:transparent;color:#8b8b9e;
-                            border:2px solid #2a2a4a;border-radius:4px;cursor:not-allowed;
+                            border:2px solid #2a2a4a;border-radius:6px;cursor:not-allowed;
                         ", "Sold Out" }
                     }
                 }}
