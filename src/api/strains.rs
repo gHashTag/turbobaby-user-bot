@@ -68,11 +68,25 @@ async fn create_strain(State(state): State<AppState>, Json(req): Json<CreateStra
 }
 
 async fn update_strain(State(state): State<AppState>, Path(id): Path<String>, Json(req): Json<CreateStrainRequest>) -> Result<Json<Value>, StatusCode> {
-    let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let client = state.db.pool.get().await.map_err(|e| {
+        tracing::error!("update_strain pool error: {:?}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+    // Embed numeric values directly to avoid f64-vs-NUMERIC parameter type mismatch
+    let sql = format!(
+        "UPDATE strains SET name=$1, category=$2, thc_percent={}, cbd_percent={}, effect=$3, flavor_profile=$4, description=$5, price_per_gram={}, available_grams={}, image_url=$6 WHERE id=$7",
+        req.thc_percent.map(|v| v.to_string()).unwrap_or_else(|| "NULL".into()),
+        req.cbd_percent.map(|v| v.to_string()).unwrap_or_else(|| "NULL".into()),
+        req.price_per_gram,
+        req.available_grams.map(|v| v.to_string()).unwrap_or_else(|| "NULL".into()),
+    );
     client.execute(
-        "UPDATE strains SET name=$1, category=$2, thc_percent=$3, cbd_percent=$4, effect=$5, flavor_profile=$6, description=$7, price_per_gram=$8, available_grams=$9, image_url=$10 WHERE id=$11",
-        &[&req.name, &req.category, &req.thc_percent, &req.cbd_percent, &req.effect, &req.flavor_profile, &req.description, &req.price_per_gram, &req.available_grams, &req.image_url, &id],
-    ).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        &sql,
+        &[&req.name, &req.category, &req.effect, &req.flavor_profile, &req.description, &req.image_url, &id],
+    ).await.map_err(|e| {
+        tracing::error!("update_strain SQL error for id={}: {:?}", id, e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
     Ok(Json(json!({ "success": true })))
 }
 
