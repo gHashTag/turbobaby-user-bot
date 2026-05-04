@@ -82,7 +82,8 @@ impl ApiClient {
 
     // Strain endpoints
     pub async fn get_strains(&self) -> Result<Vec<Strain>> {
-        self.get("/api/strains").await
+        let resp: GetStrainsResponse = self.get("/api/strains").await?;
+        Ok(resp.strains)
     }
 
     // Catalog endpoints

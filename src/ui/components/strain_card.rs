@@ -45,13 +45,15 @@ pub fn StrainCard(props: StrainCardProps) -> Element {
                         "{strain_type_emoji(&props.strain)} {strain_type_name(&props.strain)}"
                     }
                 }
-                if let Some(thc) = &props.strain.thc {
-                    div { class: "strain-thc", "THC: {thc}" }
+                if let Some(thc) = props.strain.thc {
+                    div { class: "strain-thc", "THC: {thc:.1}%" }
                 }
-                if let Some(cbd) = &props.strain.cbd {
-                    div { class: "strain-cbd", "CBD: {cbd}" }
+                if let Some(cbd) = props.strain.cbd {
+                    div { class: "strain-cbd", "CBD: {cbd:.1}%" }
                 }
-                p { class: "strain-description", "{props.strain.description}" }
+                if let Some(desc) = &props.strain.description {
+                    p { class: "strain-description", "{desc}" }
+                }
                 div { class: "strain-price",
                     span { class: "price", "{props.strain.price} ₽" }
                 }

@@ -6,14 +6,24 @@ use serde::{Deserialize, Serialize};
 pub struct Strain {
     pub id: String,
     pub name: String,
+    #[serde(rename = "category")]
     pub strain_type: StrainType,
-    pub thc: Option<String>,
-    pub cbd: Option<String>,
-    pub description: String,
-    pub price: f64,
+    #[serde(rename = "thc_percent")]
+    pub thc: Option<f64>,
+    #[serde(rename = "cbd_percent")]
+    pub cbd: Option<f64>,
+    pub description: Option<String>,
+    pub effect: Option<String>,
+    pub flavor_profile: Option<String>,
     pub image_url: String,
+    #[serde(rename = "price_per_gram")]
+    pub price: f64,
+    pub available_grams: Option<f64>,
     pub is_available: bool,
+    #[serde(default)]
     pub is_strain_of_day: bool,
+    #[serde(default)]
+    pub strain_of_day_discount: f64,
 }
 
 impl Default for Strain {
@@ -24,13 +34,23 @@ impl Default for Strain {
             strain_type: StrainType::Hybrid,
             thc: None,
             cbd: None,
-            description: String::new(),
-            price: 0.0,
+            description: None,
+            effect: None,
+            flavor_profile: None,
             image_url: String::new(),
+            price: 0.0,
+            available_grams: None,
             is_available: false,
             is_strain_of_day: false,
+            strain_of_day_discount: 0.0,
         }
     }
+}
+
+/// Wrapper matching the API response `{"strains": [...]}`
+#[derive(Debug, Deserialize)]
+pub struct GetStrainsResponse {
+    pub strains: Vec<Strain>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
