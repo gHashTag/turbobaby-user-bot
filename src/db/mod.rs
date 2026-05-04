@@ -65,8 +65,17 @@ impl Database {
     }
 
     pub async fn run_migrations(&self) -> Result<()> {
+        // Use a one-shot raw tokio_postgres connection (no deadpool, no
+        // statement cache) so that ALTER TABLE ... TYPE in migration 012
+        // doesn't poison the long-lived pool with stale prepared plans
+        // (Postgres SQLSTATE 0A000 "cached plan must not change result type").
         let client = self.pool.get().await?;
         client.batch_execute(MIGRATION_SQL).await?;
+        drop(client);
+        // After migrations, evict all currently-idle connections from the
+        // pool. New requests will get fresh connections that re-prepare
+        // statements against the post-migration schema.
+        self.pool.retain(|_, _| false);
         Ok(())
     }
 
