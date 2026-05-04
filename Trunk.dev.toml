@@ -1,0 +1,27 @@
+[build]
+target = "index.html"
+dist = "dist"
+public_url = "/"
+filehash = true
+release = false
+no_opt = true
+
+[serve]
+addresses = ["0.0.0.0"]
+port = 8080
+open = false
+
+[[proxy]]
+backend = "https://woody-weed-bot-production.up.railway.app/api/"
+rewrite = "/api/"
+
+[tools]
+wasm-bindgen = "0.2.95"
+
+[[copy-dir]]
+path = "/home/user/workspace/woody-weed-bot/assets"
+target_path = "assets"
+
+[watch]
+watch = ["src", "index.html"]
+ignore = ["dist", "target", "assets"]
