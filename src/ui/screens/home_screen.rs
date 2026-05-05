@@ -324,26 +324,87 @@ pub fn HomeScreen() -> Element {
                 }
             }
 
-            // Quest Banner
-            Link { to: Route::Quest { id: "daily".to_string() },
-                div { style: "
-                    margin: 0 16px 16px;
-                    background: linear-gradient(135deg, rgba(0,229,255,0.1), rgba(57,255,20,0.1));
-                    border: 2px solid #00e5ff;
-                    border-radius: 12px;
-                    padding: 14px;
-                    display: flex;
-                    align-items: center;
-                    gap: 12px;
-                    box-shadow: 0 0 12px rgba(0,229,255,0.15), 3px 3px 0 #000;
-                    cursor: pointer;
-                ",
-                    div { style: "font-size: 32px;", "🎯" }
-                    div { style: "flex: 1;",
-                        div { style: "font-size: 9px; color: #00e5ff; margin-bottom: 4px;", "Daily Quest" }
-                        div { style: "font-size: 7px; color: #8b8b9e;", "Scan QR codes to earn rewards!" }
+            // Quest & Adventures Section
+            div { style: "padding: 0 16px 16px;",
+                h2 { style: "font-size: 10px; color: #c850c0; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 1px;", "🎯 Adventures" }
+                div { style: "display: grid; grid-template-columns: 1fr 1fr; gap: 10px;",
+                    // Daily Quest
+                    Link { to: Route::Quest { id: "daily".to_string() },
+                        div { style: "
+                            background: linear-gradient(135deg, rgba(0,229,255,0.1), rgba(57,255,20,0.1));
+                            border: 2px solid #00e5ff; border-radius: 8px;
+                            padding: 12px; text-align: center;
+                            box-shadow: 3px 3px 0 #000; cursor: pointer;
+                        ",
+                            div { style: "font-size: 28px; margin-bottom: 4px;", "🎯" }
+                            div { style: "font-size: 7px; color: #00e5ff;", "Daily Quest" }
+                        }
                     }
-                    div { style: "font-size: 14px; color: #00e5ff;", "→" }
+                    // Treasure Hunt
+                    Link { to: Route::TreasureHunt {},
+                        div { style: "
+                            background: linear-gradient(135deg, rgba(255,230,0,0.1), rgba(255,150,0,0.1));
+                            border: 2px solid #ffe600; border-radius: 8px;
+                            padding: 12px; text-align: center;
+                            box-shadow: 3px 3px 0 #000; cursor: pointer;
+                        ",
+                            div { style: "font-size: 28px; margin-bottom: 4px;", "🏴‍☠️" }
+                            div { style: "font-size: 7px; color: #ffe600;", "Treasure Hunt" }
+                        }
+                    }
+                    // AR Hunt
+                    Link { to: Route::ArHunt {},
+                        div { style: "
+                            background: linear-gradient(135deg, rgba(255,107,157,0.1), rgba(200,80,192,0.1));
+                            border: 2px solid #ff6b9d; border-radius: 8px;
+                            padding: 12px; text-align: center;
+                            box-shadow: 3px 3px 0 #000; cursor: pointer;
+                        ",
+                            div { style: "font-size: 28px; margin-bottom: 4px;", "🔮" }
+                            div { style: "font-size: 7px; color: #ff6b9d;", "AR Hunt" }
+                        }
+                    }
+                    // Location Quest
+                    Link { to: Route::LocationQuest {},
+                        div { style: "
+                            background: linear-gradient(135deg, rgba(0,229,255,0.1), rgba(78,205,196,0.1));
+                            border: 2px solid #4ecdc4; border-radius: 8px;
+                            padding: 12px; text-align: center;
+                            box-shadow: 3px 3px 0 #000; cursor: pointer;
+                        ",
+                            div { style: "font-size: 28px; margin-bottom: 4px;", "📍" }
+                            div { style: "font-size: 7px; color: #4ecdc4;", "Location Quest" }
+                        }
+                    }
+                }
+            }
+
+            // Tech Tree & Admin Section
+            div { style: "padding: 0 16px 16px;",
+                h2 { style: "font-size: 10px; color: #8b8b9e; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 1px;", "🔧 More" }
+                div { style: "display: grid; grid-template-columns: 1fr 1fr; gap: 10px;",
+                    // Tech Tree
+                    Link { to: Route::TechTree {},
+                        div { style: "
+                            background: #16213e; border: 2px solid #2a2a4a;
+                            border-radius: 8px; padding: 12px; text-align: center;
+                            box-shadow: 3px 3px 0 #000; cursor: pointer;
+                        ",
+                            div { style: "font-size: 28px; margin-bottom: 4px;", "🌳" }
+                            div { style: "font-size: 7px; color: #c850c0;", "Tech Tree" }
+                        }
+                    }
+                    // Admin
+                    Link { to: Route::Admin {},
+                        div { style: "
+                            background: #16213e; border: 2px solid #2a2a4a;
+                            border-radius: 8px; padding: 12px; text-align: center;
+                            box-shadow: 3px 3px 0 #000; cursor: pointer;
+                        ",
+                            div { style: "font-size: 28px; margin-bottom: 4px;", "⚙️" }
+                            div { style: "font-size: 7px; color: #ff4757;", "Admin" }
+                        }
+                    }
                 }
             }
 

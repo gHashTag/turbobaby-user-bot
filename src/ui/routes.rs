@@ -19,6 +19,11 @@ use crate::ui::screens::{
     QuestScreen,
     GameScreen,
     ReferralsScreen,
+    TreasureHuntScreen,
+    ARHuntScreen,
+    LocationQuestScreen,
+    TechTreeScreen,
+    AdminScreen,
 };
 
 /// Routes component that renders router
@@ -62,6 +67,16 @@ pub enum Route {
     Game {},
     #[route("/referrals")]
     Referrals {},
+    #[route("/treasure-hunt")]
+    TreasureHunt {},
+    #[route("/ar-hunt")]
+    ArHunt {},
+    #[route("/location-quest")]
+    LocationQuest {},
+    #[route("/tech-tree")]
+    TechTree {},
+    #[route("/admin")]
+    Admin {},
     #[route("/:..route")]
     NotFound { route: Vec<String> },
 }
@@ -140,6 +155,31 @@ fn Game() -> Element {
 #[component]
 fn Referrals() -> Element {
     rsx! { ReferralsScreen {} }
+}
+
+#[component]
+fn TreasureHunt() -> Element {
+    rsx! { TreasureHuntScreen {} }
+}
+
+#[component]
+fn ArHunt() -> Element {
+    rsx! { ARHuntScreen {} }
+}
+
+#[component]
+fn LocationQuest() -> Element {
+    rsx! { LocationQuestScreen {} }
+}
+
+#[component]
+fn TechTree() -> Element {
+    rsx! { TechTreeScreen {} }
+}
+
+#[component]
+fn Admin() -> Element {
+    rsx! { AdminScreen {} }
 }
 
 #[component]
