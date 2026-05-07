@@ -407,13 +407,13 @@ async fn create_set(State(state): State<AppState>, Json(req): Json<SetRequest>) 
     let strain_ids = req.strain_ids.unwrap_or_default();
     let accessory_ids = req.accessory_ids.unwrap_or_default();
 
-    // Combine strain_ids and accessory_ids into items
     let mut items: Vec<String> = strain_ids;
     items.extend(accessory_ids);
+    let items_json = serde_json::to_value(&items).unwrap_or(serde_json::json!([]));
 
     client.execute(
-        "INSERT INTO accessory_sets (id, name, description, icon, accessories, total_price, discount_percent, is_deal_of_day) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)",
-        &[&id, &req.name, &req.description.unwrap_or_default(), &req.icon.unwrap_or_default(), &items, &req.total_price, &req.discount_percent.unwrap_or(0.0), &req.is_deal_of_day.unwrap_or(false)],
+        "INSERT INTO accessory_sets (id, name, description, icon, accessories, total_price, discount_percent, is_deal_of_day) VALUES ($1,$2,$3,$4,$5::jsonb,$6,$7,$8)",
+        &[&id, &req.name, &req.description.unwrap_or_default(), &req.icon.unwrap_or_default(), &items_json, &req.total_price, &req.discount_percent.unwrap_or(0.0), &req.is_deal_of_day.unwrap_or(false)],
     ).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(Json(json!({ "success": true, "id": id })))
 }
