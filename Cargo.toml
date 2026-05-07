@@ -67,6 +67,8 @@ base64 = "0.21"
 anyhow = "1"
 thiserror = "1"
 image = { version = "0.24", default-features = false, features = ["jpeg", "png", "webp"] }
+qrcode = { version = "0.14.1", default-features = false, features = ["svg"] }
+urlencoding = "2.1.3"
 
 [features]
 default = []

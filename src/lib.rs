@@ -1,6 +1,7 @@
 // Library for WASM compilation
 #![cfg(target_arch = "wasm32")]
 
+pub mod trios;
 pub mod ui;
 
 use crate::ui::app::App;

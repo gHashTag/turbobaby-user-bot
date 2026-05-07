@@ -3,6 +3,10 @@ use dioxus::prelude::*;
 use serde::Deserialize;
 use crate::ui::routes::Route;
 use crate::ui::state::{Cart, CartItem};
+use crate::ui::api::context::api_base_url;
+use crate::trios::core::Lang;
+use crate::ui::components::bottom_nav::BottomNav;
+use crate::trios::i18n::{t, T_MENU_TITLE, T_MENU_DESC, T_LOADING, T_ADD_TO_CART};
 
 // ── API response types (matching backend JSON exactly) ─────────
 
@@ -31,20 +35,6 @@ struct StrainsResponse {
 
 // ── Helpers ────────────────────────────────────────────────────
 
-fn api_base_url() -> String {
-    web_sys::window()
-        .and_then(|w| w.location().origin().ok())
-        .map(|origin| {
-            if origin.contains(":8080") || origin.contains(":3001") {
-                // Local dev: use production API (local backend can't compile on macOS due to mio crate)
-                "https://woody-weed-bot-production.up.railway.app".to_string()
-            } else {
-                origin
-            }
-        })
-        .unwrap_or_else(|| "https://woody-weed-bot-production.up.railway.app".to_string())
-}
-
 fn category_emoji(cat: &str) -> &'static str {
     match cat {
         "Sativa" => "☀️",
@@ -62,7 +52,7 @@ fn category_badge_style(cat: &str) -> String {
         _ => ("#8b8b9e", "rgba(139,139,158,0.1)"),
     };
     format!(
-        "font-size:5px;color:{};border:1px solid {};background:{};padding:1px 4px;border-radius:3px;",
+        "font-size:9px;color:{};border:2px solid {};background:{};padding:1px 4px;border-radius:3px;",
         color, color, bg
     )
 }
@@ -73,9 +63,9 @@ fn format_price(price: f64) -> String {
 
 fn filter_tab_style(is_active: bool) -> String {
     if is_active {
-        "font-family:'Press Start 2P',monospace;font-size:6px;padding:6px 10px;background:#39ff14;color:#0f0f1a;border:2px solid #39ff14;border-radius:4px;cursor:pointer;white-space:nowrap;".to_string()
+        "font-family:'Press Start 2P',monospace;font-size:10px;padding:6px 10px;background:#39ff14;color:#0f0f1a;border:2px solid #39ff14;border-radius:4px;cursor:pointer;white-space:nowrap;".to_string()
     } else {
-        "font-family:'Press Start 2P',monospace;font-size:6px;padding:6px 10px;background:transparent;color:#8b8b9e;border:2px solid #2a2a4a;border-radius:4px;cursor:pointer;white-space:nowrap;".to_string()
+        "font-family:'Press Start 2P',monospace;font-size:10px;padding:6px 10px;background:transparent;color:#8b8b9e;border:2px solid #2a2a4a;border-radius:4px;cursor:pointer;white-space:nowrap;".to_string()
     }
 }
 
@@ -88,6 +78,10 @@ pub fn MenuScreen() -> Element {
 
     let cart = use_context::<Signal<Cart>>();
     let cart_count: u32 = cart.read().items.iter().map(|i| i.quantity).sum();
+
+    let menu_title = t(Lang::Russian, T_MENU_TITLE).to_string();
+    let menu_desc = t(Lang::Russian, T_MENU_DESC).to_string();
+    let loading_label = t(Lang::Russian, T_LOADING).to_string();
 
     let strains_resource = use_resource(|| async move {
         let base = api_base_url();
@@ -113,14 +107,14 @@ pub fn MenuScreen() -> Element {
         ",
             // Header with cart counter
             div { style: "padding: 20px 16px 12px; text-align: center; position: relative;",
-                h1 { style: "font-size: 12px; color: #39ff14; text-shadow: 0 0 8px rgba(57,255,20,0.5);", "🌿 Menu" }
-                p { style: "font-size: 7px; color: #8b8b9e; margin-top: 4px;", "Browse our premium selection" }
+                h1 { style: "font-size: 18px; color: #39ff14; text-shadow: 0 0 8px rgba(57,255,20,0.5);", "{menu_title}" }
+                p { style: "font-size: 11px; color: #8b8b9e; margin-top: 4px;", "{menu_desc}" }
                 if cart_count > 0 {
                     Link { to: Route::Cart {},
                         div { style: "
                             position: absolute; top: 20px; right: 16px;
                             background: #39ff14; color: #0f0f1a;
-                            font-size: 7px; padding: 4px 8px;
+                            font-size: 10px; padding: 4px 8px;
                             border-radius: 10px; cursor: pointer;
                             font-family: 'Press Start 2P', monospace;
                         ",
@@ -218,8 +212,8 @@ pub fn MenuScreen() -> Element {
                             let f = filter_val.clone();
                             rsx! {
                                 div { style: "text-align: center; padding: 40px 16px;",
-                                    p { style: "font-size: 20px; margin-bottom: 12px;", "🔍" }
-                                    p { style: "font-size: 8px; color: #8b8b9e;", "No {f} strains found" }
+                                    p { style: "font-size: 10px; margin-bottom: 12px;", "🔍" }
+                                    p { style: "font-size: 12px; color: #8b8b9e;", "No {f} strains found" }
                                 }
                             }
                         } else {
@@ -234,9 +228,9 @@ pub fn MenuScreen() -> Element {
                         let err_msg = e.clone();
                         rsx! {
                             div { style: "text-align: center; padding: 40px 16px;",
-                                p { style: "font-size: 20px; margin-bottom: 12px;", "⚠️" }
-                                p { style: "font-size: 8px; color: #ff4757;", "Error loading strains" }
-                                p { style: "font-size: 6px; color: #8b8b9e; margin-top: 8px; word-break: break-all;", "{err_msg}" }
+                                p { style: "font-size: 10px; margin-bottom: 12px;", "⚠️" }
+                                p { style: "font-size: 12px; color: #ff4757;", "Error loading strains" }
+                                p { style: "font-size: 18px; color: #8b8b9e; margin-top: 8px; word-break: break-all;", "{err_msg}" }
                             }
                         }
                     },
@@ -244,57 +238,14 @@ pub fn MenuScreen() -> Element {
                         rsx! {
                             div { style: "text-align: center; padding: 40px 16px;",
                                 p { style: "font-size: 24px;", "🌿" }
-                                p { style: "font-size: 8px; color: #8b8b9e; margin-top: 12px;", "Loading strains..." }
+                                p { style: "font-size: 12px; color: #8b8b9e; margin-top: 12px;", "{loading_label}" }
                             }
                         }
                     },
                 }
             }
 
-            // Bottom Navigation
-            nav { style: "
-                position: fixed;
-                bottom: 0;
-                left: 0;
-                right: 0;
-                background: #1a1a2e;
-                border-top: 2px solid #2a2a4a;
-                display: flex;
-                justify-content: space-around;
-                padding: 10px 0;
-                z-index: 100;
-            ",
-                Link { to: Route::Home {},
-                    div { style: "text-align: center; cursor: pointer;",
-                        div { style: "font-size: 20px;", "🏠" }
-                        div { style: "font-size: 6px; color: #8b8b9e; margin-top: 2px;", "Home" }
-                    }
-                }
-                Link { to: Route::Menu {},
-                    div { style: "text-align: center; cursor: pointer;",
-                        div { style: "font-size: 20px;", "🌿" }
-                        div { style: "font-size: 6px; color: #39ff14; margin-top: 2px;", "Menu" }
-                    }
-                }
-                Link { to: Route::Cart {},
-                    div { style: "text-align: center; cursor: pointer;",
-                        div { style: "font-size: 20px;", "🛒" }
-                        div { style: "font-size: 6px; color: #8b8b9e; margin-top: 2px;", "Cart" }
-                    }
-                }
-                Link { to: Route::Orders {},
-                    div { style: "text-align: center; cursor: pointer;",
-                        div { style: "font-size: 20px;", "📋" }
-                        div { style: "font-size: 6px; color: #8b8b9e; margin-top: 2px;", "Orders" }
-                    }
-                }
-                Link { to: Route::Profile {},
-                    div { style: "text-align: center; cursor: pointer;",
-                        div { style: "font-size: 20px;", "👤" }
-                        div { style: "font-size: 6px; color: #8b8b9e; margin-top: 2px;", "Profile" }
-                    }
-                }
-            }
+            BottomNav { cart_count }
         }
     }
 }
@@ -302,6 +253,7 @@ pub fn MenuScreen() -> Element {
 // ── Strain Card Renderer ───────────────────────────────────────
 
 fn render_strain_card(strain: ApiStrain, mut cart: Signal<Cart>) -> Element {
+    let add_to_cart_label = t(Lang::Russian, T_ADD_TO_CART).to_string();
     let cat = strain.category.as_deref().unwrap_or("Hybrid");
     let emoji = category_emoji(cat);
     let is_sotd = strain.is_strain_of_day;
@@ -310,7 +262,7 @@ fn render_strain_card(strain: ApiStrain, mut cart: Signal<Cart>) -> Element {
 
     let border_color = if is_sotd { "#ffe600" } else { "#2a2a4a" };
     let card_style = format!(
-        "background:#16213e;border:2px solid {};border-radius:8px;overflow:hidden;box-shadow:4px 4px 0 #000;position:relative;{}",
+        "background:#1a1a2e;border: 2px solid {};border-radius:8px;overflow:hidden;box-shadow:4px 4px 0 #000;position:relative;{}",
         border_color,
         if strain.is_available { "".to_string() } else { "opacity:0.6;".to_string() }
     );
@@ -350,7 +302,7 @@ fn render_strain_card(strain: ApiStrain, mut cart: Signal<Cart>) -> Element {
     rsx! {
         div { key: strain.id.clone(), style: card_style,
             // Image area — фото в полный рост карточки (aspect 2:3, реальная пропорция webp 600x901)
-            div { style: "width:100%;aspect-ratio:2/3;background:linear-gradient(135deg,#1a1a2e,#16213e);display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;",
+            div { style: "width:100%;aspect-ratio:2/3;background:linear-gradient(135deg,#1a1a2e,#1a1a2e);display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;",
                 {if has_image {
                     rsx! {
                         img {
@@ -368,50 +320,50 @@ fn render_strain_card(strain: ApiStrain, mut cart: Signal<Cart>) -> Element {
                 {is_sotd.then(|| rsx! {
                     span { style: "
                         position:absolute;top:4px;right:4px;
-                        font-size:5px;background:#ffe600;color:#000;
+                        font-size:9px;background:#ffe600;color:#000;
                         padding:2px 4px;border-radius:3px;
                         z-index:2;
                     ", "⭐ SOTD" }
                 })}
             }
             // Content — имя, badge, THC/CBD, effect, flavor, цена/г
-            div { style: "padding:10px;font-family:'Inter',system-ui,sans-serif;",
-                div { style: "font-size:14px;font-weight:700;margin-bottom:6px;color:#ffffff;line-height:1.2;letter-spacing:0.2px;",
+            div { style: "padding:10px;font-family:'Press Start 2P',monospace;",
+                div { style: "font-size:11px;font-weight:700;margin-bottom:6px;color:#ffffff;line-height:1.2;letter-spacing:0.2px;",
                     "{strain.name}"
                 }
                 div { style: "display:flex;gap:6px;align-items:center;margin-bottom:6px;flex-wrap:wrap;",
                     span { style: badge_style, "{badge_label}" }
                     {(!thc_str.is_empty()).then(|| rsx! {
-                        span { style: "font-size:11px;color:#39ff14;font-weight:700;", "{thc_str}" }
+                        span { style: "font-size:9px;color:#39ff14;font-weight:700;", "{thc_str}" }
                     })}
                     {(!cbd_str.is_empty()).then(|| rsx! {
-                        span { style: "font-size:11px;color:#00e5ff;font-weight:600;", "{cbd_str}" }
+                        span { style: "font-size:9px;color:#00e5ff;font-weight:600;", "{cbd_str}" }
                     })}
                 }
                 {(!effect_str.is_empty()).then(|| rsx! {
-                    div { style: "font-size:11px;color:#c9c9d4;margin-bottom:4px;line-height:1.35;",
+                    div { style: "font-size:9px;color:#c9c9d4;margin-bottom:4px;line-height:1.35;",
                         "{effect_str}"
                     }
                 })}
                 {(!flavor_str.is_empty()).then(|| rsx! {
-                    div { style: "font-size:10px;color:#8b8b9e;margin-bottom:8px;line-height:1.35;",
+                    div { style: "font-size:16px;color:#8b8b9e;margin-bottom:8px;line-height:1.35;",
                         "🍃 {flavor_str}"
                     }
                 })}
                 div { style: "display:flex;gap:6px;align-items:baseline;margin-bottom:6px;",
                     {if has_real_price {
                         rsx! {
-                            span { style: "font-size:18px;color:#39ff14;font-weight:700;", "{display_price}" }
-                            span { style: "font-size:11px;color:#8b8b9e;", "/г" }
+                            span { style: "font-size:14px;color:#39ff14;font-weight:700;", "{display_price}" }
+                            span { style: "font-size:9px;color:#8b8b9e;", "/г" }
                             {has_discount.then(|| rsx! {
-                                span { style: "font-size:11px;color:#8b8b9e;text-decoration:line-through;margin-left:4px;",
+                                span { style: "font-size:9px;color:#8b8b9e;text-decoration:line-through;margin-left:4px;",
                                     "{original_price}"
                                 }
                             })}
                         }
                     } else {
                         rsx! {
-                            span { style: "font-size:11px;color:#8b8b9e;font-style:italic;", "Цена по запросу" }
+                            span { style: "font-size:9px;color:#8b8b9e;font-style:italic;", "Цена по запросу" }
                         }
                     }}
                 }
@@ -429,8 +381,8 @@ fn render_strain_card(strain: ApiStrain, mut cart: Signal<Cart>) -> Element {
                     rsx! {
                         button {
                             style: "
-                                font-family:'Inter',system-ui,sans-serif;
-                                font-size:12px;font-weight:700;letter-spacing:0.3px;
+                                font-family:'Press Start 2P',monospace;
+                                font-size:10px;font-weight:700;letter-spacing:0.3px;
                                 width:100%;padding:9px;
                                 background:#39ff14;color:#0f0f1a;
                                 border:none;border-radius:6px;cursor:pointer;
@@ -444,17 +396,17 @@ fn render_strain_card(strain: ApiStrain, mut cart: Signal<Cart>) -> Element {
                                     image_url: None,
                                 });
                             },
-                            "Add to Cart 🛒"
+                            "{add_to_cart_label} 🛒"
                         }
                     }
                 } else {
                     rsx! {
                         button { style: "
-                            font-family:'Inter',system-ui,sans-serif;
-                            font-size:12px;font-weight:600;letter-spacing:0.3px;
+                            font-family:'Press Start 2P',monospace;
+                            font-size:10px;font-weight:600;letter-spacing:0.3px;
                             width:100%;padding:9px;
                             background:transparent;color:#8b8b9e;
-                            border:2px solid #2a2a4a;border-radius:6px;cursor:not-allowed;
+                            border: 2px solid #2a2a4a;border-radius:6px;cursor:not-allowed;
                         ", "Sold Out" }
                     }
                 }}

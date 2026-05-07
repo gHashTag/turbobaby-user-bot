@@ -11,7 +11,7 @@ pub fn SimpleTest() -> Element {
                 "🌿 Woody Weed Bot"
             }
             p {
-                style: "font-size: 18px; line-height: 1.6;",
+                style: "font-size: 14px; line-height: 1.6;",
                 "Сайт работает! Это простая тестовая страница."
             }
             div {
@@ -29,7 +29,7 @@ pub fn SimpleTest() -> Element {
                 onclick: move |_| {
                     // Simple click handler
                 },
-                style: "background: #39ff14; color: #000; border: none; padding: 15px 30px; font-size: 16px; border-radius: 8px; cursor: pointer; margin-top: 30px;",
+                style: "background: #39ff14; color: #000; border: none; padding: 15px 30px; font-size: 12px; border-radius: 8px; cursor: pointer; margin-top: 30px;",
                 "Нажми меня!"
             }
         }

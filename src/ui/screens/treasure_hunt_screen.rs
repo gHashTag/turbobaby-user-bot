@@ -27,26 +27,26 @@ fn render_checkpoint(cp: Checkpoint) -> Element {
 
     rsx! {
         div { key: "{cp.id}", style: "
-            background: #16213e; border: 2px solid {border_color};
+            background: #1a1a2e; border: 2px solid {border_color};
             border-radius: 8px; padding: 12px; opacity: {opacity};
             display: flex; align-items: center; gap: 12px;
             box-shadow: 4px 4px 0 #000;
         ",
             span { style: "font-size: 28px;", "{cp.emoji}" }
             div { style: "flex: 1;",
-                div { style: "font-size: 9px; font-weight: 700; color: #ffffff; margin-bottom: 4px;",
+                div { style: "font-size: 14px; font-weight: 700; color: #ffffff; margin-bottom: 4px;",
                     "{cp.name}"
                 }
-                span { style: "font-size: 6px; color: {status_color};",
+                span { style: "font-size: 18px; color: {status_color};",
                     "{status_text}"
                 }
             }
             if !cp.collected {
                 button { style: "
                     font-family: 'Press Start 2P', monospace;
-                    font-size: 6px; padding: 6px 10px;
+                    font-size: 10px; padding: 6px 10px;
                     background: #ffe600; color: #0f0f1a;
-                    border: none; border-radius: 4px; cursor: pointer;
+                    border: none; border-radius: 8px; cursor: pointer;
                 ",
                     "\u{1F4F7} Scan"
                 }
@@ -74,10 +74,10 @@ pub fn TreasureHuntScreen() -> Element {
         ",
             // Header
             div { style: "text-align: center; margin-bottom: 20px;",
-                h1 { style: "font-size: 12px; color: #ffe600; text-shadow: 0 0 8px rgba(255,230,0,0.5);",
+                h1 { style: "font-size: 18px; color: #ffe600; text-shadow: 0 0 8px rgba(255,230,0,0.5);",
                     "\u{1F3F4}\u{200D}\u{2620}\u{FE0F} Treasure Hunt"
                 }
-                p { style: "font-size: 7px; color: #8b8b9e; margin-top: 6px;",
+                p { style: "font-size: 18px; color: #8b8b9e; margin-top: 6px;",
                     "Find checkpoints, scan QR codes, collect rewards!"
                 }
             }
@@ -88,15 +88,15 @@ pub fn TreasureHuntScreen() -> Element {
                 padding: 12px; margin-bottom: 16px; box-shadow: 4px 4px 0 #000;
             ",
                 div { style: "display: flex; justify-content: space-between; margin-bottom: 8px;",
-                    span { style: "font-size: 7px; color: #ffe600;",
+                    span { style: "font-size: 18px; color: #ffe600;",
                         "\u{1F4AF} Progress"
                     }
-                    span { style: "font-size: 7px; color: #39ff14;",
+                    span { style: "font-size: 18px; color: #39ff14;",
                         "{collected}/{total}"
                     }
                 }
-                div { style: "background: #0f0f1a; border-radius: 4px; height: 8px; overflow: hidden;",
-                    div { style: "background: linear-gradient(90deg, #ffe600, #ff9800); height: 100%; width: {progress_pct}%; border-radius: 4px;" }
+                div { style: "background: #0f0f1a; border-radius: 8px; height: 8px; overflow: hidden;",
+                    div { style: "background: linear-gradient(90deg, #ffe600, #ff9800); height: 100%; width: {progress_pct}%; border-radius: 8px;" }
                 }
             }
 
@@ -108,10 +108,10 @@ pub fn TreasureHuntScreen() -> Element {
                         border-radius: 8px; padding: 12px; text-align: center;
                         margin-bottom: 16px; box-shadow: 4px 4px 0 #000;
                     ",
-                        div { style: "font-size: 10px; color: #39ff14; margin-bottom: 4px;",
+                        div { style: "font-size: 14px; color: #39ff14; margin-bottom: 4px;",
                             "\u{1F389} All checkpoints collected!"
                         }
-                        div { style: "font-size: 7px; color: #8b8b9e;",
+                        div { style: "font-size: 18px; color: #8b8b9e;",
                             "Claim your reward at the bar"
                         }
                     }
@@ -123,10 +123,10 @@ pub fn TreasureHuntScreen() -> Element {
                         border-radius: 8px; padding: 12px; text-align: center;
                         margin-bottom: 16px; box-shadow: 4px 4px 0 #000;
                     ",
-                        div { style: "font-size: 7px; color: #ffe600; margin-bottom: 4px;",
+                        div { style: "font-size: 18px; color: #ffe600; margin-bottom: 4px;",
                             "\u{1F4E1} {remaining} checkpoints remaining"
                         }
-                        div { style: "font-size: 6px; color: #8b8b9e;",
+                        div { style: "font-size: 18px; color: #8b8b9e;",
                             "Scan QR codes at each location to check in"
                         }
                     }

@@ -1,32 +1,34 @@
-// Plant Cell Components for Garden Game Module
 use dioxus::prelude::*;
-use crate::ui::game::garden::{Plant, GrowthStage};
+use crate::trios::garden::{Plant, GrowthStage};
 
 #[component]
-pub fn PlantCell(plant: Plant, on_harvest: EventHandler<()>) -> Element {
-    let img_src = format!("/assets/images/game/{}.png", plant.asset_idx);
-    let stage_label = match plant.stage {
-        GrowthStage::Seed => "🌱 Seed",
-        GrowthStage::Sprout => "🌿 Sprout",
-        GrowthStage::Veg => "🌲 Veg",
-        GrowthStage::Flower => "🌸 Flower",
-        GrowthStage::Harvest => "✂️ Ready!",
+pub fn PlantCell(plant: Plant, on_harvest: EventHandler<String>) -> Element {
+    let img_idx = (plant.water_count % 14) + 1;
+    let img_src = format!("/assets/images/game/{}.png", img_idx);
+    let emoji = plant.current_stage.emoji();
+    let name = plant.current_stage.name();
+    let is_ready = plant.is_completed;
+    let pid = plant.id.clone();
+    let color = match plant.current_stage {
+        GrowthStage::Seed => "#8b5a2b",
+        GrowthStage::Sprout | GrowthStage::FirstLeaf => "#39ff14",
+        GrowthStage::YoungBush | GrowthStage::VegStart | GrowthStage::BigVeg => "#00e5ff",
+        GrowthStage::PreFlower | GrowthStage::SmallBuds | GrowthStage::BigBuds => "#ff6b35",
+        GrowthStage::Trimming | GrowthStage::Curing => "#a78bfa",
+        GrowthStage::Lab | GrowthStage::Delivery => "#60a5fa",
+        GrowthStage::Final => "#ffd700",
     };
-    let class_name = if plant.is_harvestable() {
-        "plant-cell harvestable"
-    } else {
-        "plant-cell"
-    };
+    let class = if is_ready { "plant-cell harvestable" } else { "plant-cell" };
 
     rsx! {
-        div { class: "{class_name}",
-            img { src: "{img_src}", class: "plant-sprite", alt: "plant" }
-            span { class: "stage-label", "{stage_label}" }
-            span { class: "ticks", "Ticks: {plant.ticks}" }
-            if plant.is_harvestable() {
+        div { class: "{class}",
+            img { src: "{img_src}", class: "plant-sprite", alt: "plant", loading: "lazy" }
+            span { class: "stage-label", style: "color: {color};", "{emoji} {name}" }
+            span { class: "ticks", "Water: {plant.water_count}" }
+            if is_ready {
                 button {
                     class: "btn btn-green harvest-btn",
-                    onclick: move |_| on_harvest.call(()),
+                    onclick: move |_| on_harvest.call(pid.clone()),
                     "HARVEST"
                 }
             }

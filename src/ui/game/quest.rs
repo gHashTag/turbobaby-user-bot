@@ -1,85 +1,249 @@
 use dioxus::prelude::*;
 use web_sys::window;
 use js_sys::eval;
+use crate::trios::quest::get_checkpoints;
+use crate::trios::core::Lang;
+use crate::trios::i18n::{
+    t, T_TITLE, T_SUBTITLE, T_SCAN_QR, T_SCAN_QR_DESC,
+    T_CHECKIN_SUCCESS, T_QUEST_COMPLETE, T_REWARD_CLAIM, T_REWARD,
+    T_PURCHASE_MIN, T_STATUS_LOCKED, T_STATUS_ACTIVE, T_STATUS_COMPLETED,
+};
+use crate::ui::api::context::api_base_url;
 
-#[derive(Clone, Copy, PartialEq, Debug)]
-pub struct QuestLocation {
-    pub id: &'static str,
-    pub name: &'static str,
-    pub description: &'static str,
-    pub required_level: u8,
-    pub completed: bool,
+#[derive(Debug, Clone, serde::Deserialize)]
+struct QuestStateResponse {
+    telegram_id: i64,
+    current_checkpoint: u8,
+    started_at: Option<i64>,
+    completed_at: Option<i64>,
 }
 
-pub static QUEST_LOCATIONS: &[QuestLocation] = &[
-    QuestLocation { id: "forest_clearing", name: "Forest Clearing", description: "Hidden spot in old forest", required_level: 1, completed: false },
-    QuestLocation { id: "urban_basement", name: "Urban Basement", description: "Underground grow room", required_level: 2, completed: false },
-    QuestLocation { id: "mountain_peak", name: "Mountain Peak", description: "High altitude outdoor plot", required_level: 3, completed: false },
-    QuestLocation { id: "coastal_warehouse", name: "Coastal Warehouse", description: "Industrial grow facility", required_level: 4, completed: false },
-    QuestLocation { id: "desert_oasis", name: "Desert Oasis", description: "Secret garden in sand", required_level: 5, completed: false },
-];
+async fn fetch_quest_state() -> Result<QuestStateResponse, String> {
+    let base = api_base_url();
+    reqwest::get(format!("{}/api/quest/state", base))
+        .await
+        .map_err(|e| e.to_string())?
+        .json::<QuestStateResponse>()
+        .await
+        .map_err(|e| e.to_string())
+}
 
-#[component]
-pub fn Quest() -> Element {
-    let scanned = use_signal(|| false);
-    let current_level = use_signal(|| 1u8);
+async fn checkin_checkpoint(checkpoint_id: u8, qr_data: String) -> Result<(), String> {
+    let base = api_base_url();
+    reqwest::Client::new()
+        .post(format!("{}/api/quest/checkin", base))
+        .json(&serde_json::json!({
+            "checkpoint_id": checkpoint_id,
+            "qr_data": qr_data,
+        }))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
 
-    let scan_qr = move |_| {
-        let mut scanned = scanned.clone();
-        spawn(async move {
-            if let Some(_w) = window() {
-                let _ = eval(r#"if (window.Telegram?.WebApp?.showScanQrPopup) { window.Telegram.WebApp.showScanQrPopup({text: 'Scan location QR'}); }"#);
-                scanned.set(true);
-            }
-        });
-    };
-
-    rsx! {
-        div { class: "page quest-page",
-            div { class: "quest-header",
-                h1 { "Quest" }
-                span { class: "level-badge", "Level {current_level}" }
-            }
-            div { class: "quest-map",
-                for location in QUEST_LOCATIONS.iter() {
-                    QuestLocationCard {
-                        key: "{location.id}",
-                        location: location.clone(),
-                        level: current_level,
-                    }
-                }
-            }
-            button {
-                class: "btn btn-cyan scan-btn",
-                onclick: scan_qr,
-                "Scan QR"
-            }
-            if *scanned.read() {
-                div { class: "scan-success", "QR Code scanned! Location unlocked." }
-            }
-        }
+fn checkpoint_emoji(id: u8) -> &'static str {
+    match id {
+        1 => "🌊",
+        2 => "⚓",
+        3 => "🌴",
+        4 => "🏴‍☠️",
+        5 => "🔺",
+        _ => "📍",
     }
 }
 
 #[component]
-pub fn QuestLocationCard(location: QuestLocation, level: Signal<u8>) -> Element {
-    let is_unlocked = location.required_level <= *level.read();
-    let status_class = if location.completed { "completed" } else if is_unlocked { "available" } else { "locked" };
+pub fn Quest() -> Element {
+    let current_checkpoint = use_signal(|| 0u8);
+    let scanning = use_signal(|| false);
+    let scan_result = use_signal(|| String::new());
+    let loading = use_signal(|| true);
+    let checkpoints = get_checkpoints();
+
+    let mut cp_clone = current_checkpoint.clone();
+    let mut loading_clone = loading.clone();
+    use_future(move || async move {
+        match fetch_quest_state().await {
+            Ok(state) => {
+                cp_clone.set(state.current_checkpoint);
+            }
+            Err(_) => {}
+        }
+        loading_clone.set(false);
+    });
+
+    let scan_qr = move |_| {
+        let mut scanning_c = scanning.clone();
+        let mut scan_result_c = scan_result.clone();
+        let mut current_cp = current_checkpoint.clone();
+        spawn(async move {
+            if let Some(_w) = window() {
+                let _ = eval(r#"
+                    if (window.Telegram?.WebApp?.showScanQrPopup) {
+                        window.Telegram.WebApp.showScanQrPopup({text: 'Scan location QR'});
+                    }
+                "#);
+                scanning_c.set(true);
+                scan_result_c.set("QR scanned!".to_string());
+
+                let next_cp = *current_cp.read() + 1;
+                let _ = checkin_checkpoint(next_cp, "scanned_data".to_string()).await;
+                current_cp.set(next_cp);
+                scanning_c.set(false);
+            }
+        });
+    };
+
+    let cur_cp = *current_checkpoint.read();
+    let is_loading = *loading.read();
+    let is_scanning = *scanning.read();
+    let scan_msg = scan_result.read().clone();
+    let is_complete = cur_cp >= checkpoints.len() as u8;
+
+    let quest_title = t(Lang::Russian, T_TITLE).to_string();
+    let quest_subtitle = t(Lang::Russian, T_SUBTITLE).to_string();
+    let scan_qr_text = t(Lang::Russian, T_SCAN_QR).to_string();
+    let scan_desc = t(Lang::Russian, T_SCAN_QR_DESC).to_string();
+
+    let bg = "#0f0f1a";
+    let bg_card = "#1a1a2e";
+    let cyan = "#00e5ff";
+    let scan_margin = if is_complete { "0".to_string() } else { "20".to_string() };
 
     rsx! {
-        div { class: "quest-location-card {status_class}",
-            div { class: "location-icon",
-                if location.completed { "✅" }
-                else if is_unlocked { "📍" }
-                else { "🔒" }
+        div { style: "min-height: 100vh; background: {bg}; color: #e8e8e8; font-family: 'Press Start 2P', monospace; padding-bottom: 80px;",
+
+            div { style: "padding: 20px 16px 12px; text-align: center;",
+                h1 { style: "font-size: 18px; color: {cyan}; text-shadow: 0 0 8px rgba(0,229,255,0.5);",
+                    "🎯 {quest_title}"
+                }
+                p { style: "font-size: 11px; color: #8b8b9e; margin-top: 4px;",
+                    "{quest_subtitle}"
+                }
             }
-            div { class: "location-info",
-                h3 { "{location.name}" }
-                p { "{location.description}" }
-                span { class: "required-level", "Required Level: {location.required_level}" }
+
+            if is_complete {
+                div { style: "
+                    max-width: 380px; margin: 20px auto;
+                    background: rgba(255,215,0,0.1);
+                    border: 2px solid #ffd700;
+                    border-radius: 16px;
+                    padding: 24px; text-align: center;
+                ",
+                    div { style: "font-size: 48px; margin-bottom: 12px;", "🏆" }
+                    div { style: "font-size: 14px; color: #ffd700; margin-bottom: 8px;",
+                        "{t(Lang::Russian, T_QUEST_COMPLETE)}"
+                    }
+                    div { style: "font-size: 12px; color: #e8e8e8; margin-bottom: 4px;",
+                        "{t(Lang::Russian, T_REWARD_CLAIM)}"
+                    }
+                    div { style: "font-size: 16px; color: #39ff14;",
+                        "{t(Lang::Russian, T_REWARD)}"
+                    }
+                }
             }
-            if is_unlocked && !location.completed {
-                button { class: "btn btn-sm btn-quest", "GO TO LOCATION" }
+
+            if !scan_msg.is_empty() {
+                div { style: "
+                    max-width: 380px; margin: 0 auto 12px;
+                    background: rgba(57,255,20,0.1);
+                    border: 2px solid #39ff14;
+                    border-radius: 8px;
+                    padding: 6px 10px; font-size: 18px; color: #39ff14; text-align: center;
+                ",
+                    "{t(Lang::Russian, T_CHECKIN_SUCCESS)}"
+                }
+            }
+
+            div { style: "
+                max-width: 380px; margin: {scan_margin}px auto;
+                background: rgba(0,229,255,0.05);
+                border: 2px dashed {cyan};
+                border-radius: 16px;
+                padding: 24px; text-align: center;
+            ",
+                div { style: "font-size: 48px; margin-bottom: 12px;", "📷" }
+                div { style: "font-size: 14px; color: {cyan}; margin-bottom: 8px; text-shadow: 0 0 6px rgba(0,229,255,0.4);",
+                    "{scan_qr_text}"
+                }
+                div { style: "font-size: 18px; color: #666;", "{scan_desc}" }
+            }
+
+            if is_loading {
+                div { style: "text-align: center; padding: 40px;",
+                    div { style: "font-size: 36px; animation: pulse-glow 2s infinite;", "🎯" }
+                    p { style: "font-size: 12px; color: #8b8b9e; margin-top: 8px;", "Loading quest..." }
+                }
+            } else {
+                div { style: "max-width: 380px; margin: 0 auto; padding: 0 16px;",
+                    {checkpoints.iter().map(|cp| {
+                        let cp_num = cp.id;
+                        let is_done = cp_num <= cur_cp;
+                        let is_current = cp_num == cur_cp + 1 && !is_complete;
+                        let _is_locked = cp_num > cur_cp + 1;
+
+                        let title = cp.title(Lang::Russian).to_string();
+                        let emoji = checkpoint_emoji(cp.id);
+
+                        let (border_color, status_text, status_color, status_bg, opacity) = if is_done {
+                            ("#39ff14", t(Lang::Russian, T_STATUS_COMPLETED), "#39ff14", "rgba(57,255,20,0.2)", "1")
+                        } else if is_current {
+                            (cyan, t(Lang::Russian, T_STATUS_ACTIVE), cyan, "rgba(0,229,255,0.2)", "1")
+                        } else {
+                            ("rgba(255,255,255,0.1)", t(Lang::Russian, T_STATUS_LOCKED), "#666", "rgba(255,255,255,0.05)", "0.5")
+                        };
+
+                        let progress_pct = if is_done { "100%" } else if is_current { "50%" } else { "0%" };
+                        let bar_bg = if is_done { "linear-gradient(90deg, #00e5ff, #39ff14)" } else if is_current { cyan } else { "#333" };
+
+                        rsx! {
+                            div {
+                                key: "{cp_num}",
+                                style: "
+                                    background: {bg_card}; border: 2px solid {border_color};
+                                    border-radius: 8px; padding: 16px; margin-bottom: 12px;
+                                    display: flex; gap: 12px; align-items: center;
+                                    opacity: {opacity};
+                                ",
+                                div { style: "font-size: 32px; min-width: 48px; text-align: center;", "{emoji}" }
+                                div { style: "flex: 1;",
+                                    div { style: "font-size: 14px; color: #e0e0e0; margin-bottom: 4px;", "{title}" }
+                                    div { style: "font-size: 18px; color: #ffd700; margin-bottom: 6px;",
+                                        "🎁 +{cp.reward_bat} BAT"
+                                    }
+                                    div { style: "height: 6px; background: rgba(0,0,0,0.4); border-radius: 3px; overflow: hidden;",
+                                        div { style: "height: 100%; width: {progress_pct}; border-radius: 3px; background: {bar_bg};" }
+                                    }
+                                }
+                                span { style: "
+                                    font-size: 10px; padding: 4px 8px;
+                                    border-radius: 8px; white-space: nowrap;
+                                    background: {status_bg}; color: {status_color};
+                                ", "{status_text}" }
+                            }
+                        }
+                    })}
+                }
+            }
+
+            if !is_complete && !is_loading {
+                div { style: "max-width: 380px; margin: 16px auto; padding: 0 16px;",
+                    button {
+                        style: "
+                            width: 100%; padding: 12px; border: none; border-radius: 8px;
+                            font-family: 'Press Start 2P', monospace; font-size: 14px;
+                            cursor: pointer; color: #0a0a0a;
+                            background: linear-gradient(135deg, #00e5ff, #39ff14);
+                        ",
+                        disabled: is_scanning,
+                        onclick: scan_qr,
+                        if is_scanning { "⏳ Scanning..." } else { "📷 {scan_qr_text}" }
+                    }
+                    div { style: "font-size: 18px; color: #555; text-align: center; margin-top: 8px;",
+                        "{t(Lang::Russian, T_PURCHASE_MIN)}"
+                    }
+                }
             }
         }
     }

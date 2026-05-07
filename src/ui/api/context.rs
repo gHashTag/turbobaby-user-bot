@@ -8,11 +8,21 @@ pub fn use_api_client() -> Arc<ApiClient> {
     use_context::<Arc<ApiClient>>()
 }
 
-/// Get the API base URL from the browser's current origin (WASM-compatible)
-fn get_base_url() -> String {
+pub fn api_base_url() -> String {
     web_sys::window()
         .and_then(|w| w.location().origin().ok())
-        .unwrap_or_else(|| "http://localhost:3000".to_string())
+        .map(|origin| {
+            if origin.contains(":8080") || origin.contains(":3001") {
+                "https://woody-weed-bot-production.up.railway.app".to_string()
+            } else {
+                origin
+            }
+        })
+        .unwrap_or_else(|| "https://woody-weed-bot-production.up.railway.app".to_string())
+}
+
+fn get_base_url() -> String {
+    api_base_url()
 }
 
 /// Provider component for ApiClient

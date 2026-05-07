@@ -37,7 +37,7 @@ pub fn AppSimple() -> Element {
                 border: none;
                 border-radius: 8px;
                 cursor: pointer;
-                font-size: 16px;
+                font-size: 12px;
             }}
             .btn:hover {{
                 background: #00e5ff;

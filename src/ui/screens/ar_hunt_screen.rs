@@ -33,7 +33,7 @@ fn render_ar_mark(m: ARMark) -> Element {
 
     rsx! {
         div { key: "{m.id}", style: "
-            background: #16213e; border: 2px solid {border_color};
+            background: #1a1a2e; border: 2px solid {border_color};
             border-radius: 8px; padding: 10px;
             display: flex; align-items: center; gap: 10px;
             box-shadow: 4px 4px 0 #000;
@@ -42,36 +42,36 @@ fn render_ar_mark(m: ARMark) -> Element {
                 width: 40px; height: 40px; border-radius: 50%;
                 background: {m.color}22; border: 2px solid {m.color};
                 display: flex; align-items: center; justify-content: center;
-                font-size: 20px; flex-shrink: 0;
+                font-size: 10px; flex-shrink: 0;
             ",
                 "{m.emoji}"
             }
             div { style: "flex: 1;",
-                div { style: "font-size: 9px; font-weight: 700; color: #ffffff; margin-bottom: 3px;",
+                div { style: "font-size: 14px; font-weight: 700; color: #ffffff; margin-bottom: 3px;",
                     "{m.name}"
                 }
                 div { style: "display: flex; gap: 8px; align-items: center;",
-                    span { style: "font-size: 6px; color: {m.color}; text-transform: uppercase;",
+                    span { style: "font-size: 18px; color: {m.color}; text-transform: uppercase;",
                         "{m.category}"
                     }
-                    span { style: "font-size: 6px; color: #8b8b9e;",
+                    span { style: "font-size: 18px; color: #8b8b9e;",
                         "\u{1F4CD} {dist}"
                     }
                 }
             }
             if m.is_collected {
-                span { style: "font-size: 16px;", "\u{2705}" }
+                span { style: "font-size: 10px;", "\u{2705}" }
             } else if m.distance_meters <= 10.0 {
                 button { style: "
                     font-family: 'Press Start 2P', monospace;
-                    font-size: 5px; padding: 5px 8px;
+                    font-size: 9px; padding: 5px 8px;
                     background: #39ff14; color: #0f0f1a;
-                    border: none; border-radius: 4px; cursor: pointer;
+                    border: none; border-radius: 8px; cursor: pointer;
                 ",
                     "\u{1F3AF} Collect"
                 }
             } else {
-                span { style: "font-size: 6px; color: #8b8b9e;",
+                span { style: "font-size: 18px; color: #8b8b9e;",
                     "\u{1F512}"
                 }
             }
@@ -97,10 +97,10 @@ pub fn ARHuntScreen() -> Element {
         ",
             // Header
             div { style: "text-align: center; margin-bottom: 20px;",
-                h1 { style: "font-size: 12px; color: #00bcd4; text-shadow: 0 0 8px rgba(0,188,212,0.5);",
+                h1 { style: "font-size: 18px; color: #00bcd4; text-shadow: 0 0 8px rgba(0,188,212,0.5);",
                     "\u{1F30D} AR Hunt"
                 }
-                p { style: "font-size: 7px; color: #8b8b9e; margin-top: 6px;",
+                p { style: "font-size: 18px; color: #8b8b9e; margin-top: 6px;",
                     "Explore the island, find AR marks, collect rewards!"
                 }
             }
@@ -111,7 +111,7 @@ pub fn ARHuntScreen() -> Element {
                 padding: 10px; margin-bottom: 12px; text-align: center;
                 box-shadow: 4px 4px 0 #000;
             ",
-                span { style: "font-size: 7px; color: #00bcd4;",
+                span { style: "font-size: 18px; color: #00bcd4;",
                     "\u{1F4E1} GPS Active \u{2022} {total} marks nearby"
                 }
             }
@@ -122,24 +122,24 @@ pub fn ARHuntScreen() -> Element {
                 padding: 12px; margin-bottom: 16px; box-shadow: 4px 4px 0 #000;
             ",
                 div { style: "display: flex; justify-content: space-between; margin-bottom: 8px;",
-                    span { style: "font-size: 7px; color: #00bcd4;",
+                    span { style: "font-size: 18px; color: #00bcd4;",
                         "\u{1F3AF} Today's Collection"
                     }
-                    span { style: "font-size: 7px; color: #39ff14;",
+                    span { style: "font-size: 18px; color: #39ff14;",
                         "{collected}/{total}"
                     }
                 }
-                div { style: "background: #0f0f1a; border-radius: 4px; height: 8px; overflow: hidden;",
-                    div { style: "background: linear-gradient(90deg, #00bcd4, #00e5ff); height: 100%; width: {progress_pct}%; border-radius: 4px;" }
+                div { style: "background: #0f0f1a; border-radius: 8px; height: 8px; overflow: hidden;",
+                    div { style: "background: linear-gradient(90deg, #00bcd4, #00e5ff); height: 100%; width: {progress_pct}%; border-radius: 8px;" }
                 }
             }
 
             // Auto-collect hint
             div { style: "
-                background: rgba(57,255,20,0.05); border: 1px solid #39ff1444;
+                background: rgba(57,255,20,0.05); border: 2px solid #39ff1444;
                 border-radius: 6px; padding: 8px; margin-bottom: 12px; text-align: center;
             ",
-                span { style: "font-size: 6px; color: #39ff14;",
+                span { style: "font-size: 18px; color: #39ff14;",
                     "\u{26A1} Marks within 10m are auto-collected"
                 }
             }

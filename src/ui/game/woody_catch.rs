@@ -315,22 +315,22 @@ pub fn WoodyCatch() -> Element {
                         font-size: 28px; font-weight: 800; color: #fff;
                         text-shadow: 0 0 20px rgba(34,197,94,0.5);
                     ", "{cur_score}" }
-                    div { style: "font-size: 10px; color: rgba(255,255,255,0.4); letter-spacing: 2px;", "SCORE" }
+                    div { style: "font-size: 16px; color: rgba(255,255,255,0.4); letter-spacing: 2px;", "SCORE" }
                 }
                 // Level + Combo
                 div { style: "text-align: center;",
                     div { style: "
-                        font-size: 13px; font-weight: 700; color: #a78bfa;
+                        font-size: 12px; font-weight: 700; color: #a78bfa;
                         background: rgba(139,92,246,0.15); padding: 4px 14px;
-                        border-radius: 20px; border: 1px solid rgba(139,92,246,0.3);
+                        border-radius: 20px; border: 2px solid rgba(139,92,246,0.3);
                     ", "LV.{cur_level}" }
                     if cur_combo >= 3 {
                         div { style: "
-                            margin-top: 4px; font-size: 14px; font-weight: 700;
+                            margin-top: 4px; font-size: 11px; font-weight: 700;
                             color: #f59e0b; text-shadow: 0 0 10px rgba(245,158,11,0.5);
                         ",
                             "{cur_combo}x "
-                            span { style: "font-size: 11px; color: #fb923c;",
+                            span { style: "font-size: 9px; color: #fb923c;",
                                 "×{mult:.1}"
                             }
                         }
@@ -342,9 +342,9 @@ pub fn WoodyCatch() -> Element {
                         span {
                             key: "{i}",
                             style: if i < cur_lives {
-                                "font-size: 20px; transition: all 0.2s;"
+                                "font-size: 16px; transition: all 0.2s;"
                             } else {
-                                "font-size: 20px; filter: grayscale(1) opacity(0.3); transition: all 0.2s;"
+                                "font-size: 16px; filter: grayscale(1) opacity(0.3); transition: all 0.2s;"
                             },
                             if i < cur_lives { "❤️" } else { "🖤" }
                         }
@@ -456,8 +456,8 @@ pub fn WoodyCatch() -> Element {
                         button {
                             style: "
                                 font-size: 22px; background: rgba(255,255,255,0.08);
-                                border: 1px solid rgba(255,255,255,0.15);
-                                border-radius: 12px; padding: 6px 18px; cursor: pointer;
+                                border: 2px solid rgba(255,255,255,0.15);
+                                border-radius: 8px; padding: 6px 18px; cursor: pointer;
                                 pointer-events: all; color: white;
                             ",
                             onclick: {
@@ -472,8 +472,8 @@ pub fn WoodyCatch() -> Element {
                         button {
                             style: "
                                 font-size: 22px; background: rgba(255,255,255,0.08);
-                                border: 1px solid rgba(255,255,255,0.15);
-                                border-radius: 12px; padding: 6px 18px; cursor: pointer;
+                                border: 2px solid rgba(255,255,255,0.15);
+                                border-radius: 8px; padding: 6px 18px; cursor: pointer;
                                 pointer-events: all; color: white;
                             ",
                             onclick: {
@@ -504,7 +504,7 @@ pub fn WoodyCatch() -> Element {
                                 -webkit-background-clip: text; -webkit-text-fill-color: transparent;
                                 background-clip: text;
                             ", "WOODY CATCH" }
-                            p { style: "color: rgba(255,255,255,0.5); font-size: 13px; margin-bottom: 16px;",
+                            p { style: "color: rgba(255,255,255,0.5); font-size: 12px; margin-bottom: 16px;",
                                 "Лови падающие шишки!"
                             }
                             // Bud type legend
@@ -512,26 +512,26 @@ pub fn WoodyCatch() -> Element {
                                 for (i, bt) in BUD_TYPES.iter().enumerate() {
                                     div {
                                         key: "{i}",
-                                        style: "display: flex; align-items: center; gap: 4px; font-size: 13px;",
+                                        style: "display: flex; align-items: center; gap: 4px; font-size: 12px;",
                                         span { style: "filter: drop-shadow(0 0 6px {bt.glow});", "{bt.emoji}" }
                                         span { style: "color: {bt.color}; font-weight: 600;", "{bt.pts}" }
                                     }
                                 }
                             }
                             if cur_hs > 0 {
-                                div { style: "color: #fbbf24; font-size: 14px; margin-bottom: 16px;",
+                                div { style: "color: #fbbf24; font-size: 11px; margin-bottom: 16px;",
                                     "🏆 Рекорд: {cur_hs}"
                                 }
                             }
                             button { style: "
                                 background: linear-gradient(135deg, #22c55e, #16a34a); border: none;
-                                padding: 14px 36px; font-size: 16px; font-weight: 700;
+                                padding: 14px 36px; font-size: 12px; font-weight: 700;
                                 color: #fff; border-radius: 30px; cursor: pointer;
                                 box-shadow: 0 8px 24px rgba(34,197,94,0.4);
                             ",
                                 "▶ ИГРАТЬ"
                             }
-                            p { style: "color: rgba(255,255,255,0.3); font-size: 11px; margin-top: 12px;",
+                            p { style: "color: rgba(255,255,255,0.3); font-size: 9px; margin-top: 12px;",
                                 "Тап по дорожке или ← →"
                             }
                         }
@@ -557,17 +557,17 @@ pub fn WoodyCatch() -> Element {
                                 "Уровень {cur_level}"
                             }
                             if cur_score >= cur_hs && cur_score > 0 {
-                                div { style: "color: #fbbf24; font-size: 16px; margin-bottom: 8px;",
+                                div { style: "color: #fbbf24; font-size: 12px; margin-bottom: 8px;",
                                     "🎉 НОВЫЙ РЕКОРД!"
                                 }
                             }
-                            div { style: "color: #fbbf24; font-size: 14px; margin-bottom: 16px;",
+                            div { style: "color: #fbbf24; font-size: 11px; margin-bottom: 16px;",
                                 "🏆 {cur_hs.max(cur_score)}"
                             }
                             button {
                                 style: "
                                     background: linear-gradient(135deg, #22c55e, #16a34a); border: none;
-                                    padding: 14px 36px; font-size: 16px; font-weight: 700;
+                                    padding: 14px 36px; font-size: 12px; font-weight: 700;
                                     color: #fff; border-radius: 30px; cursor: pointer;
                                     box-shadow: 0 8px 24px rgba(34,197,94,0.4);
                                 ",
@@ -582,7 +582,7 @@ pub fn WoodyCatch() -> Element {
             // ── High score footer ────────────────────────────────────────────
             div { style: "
                 margin-top: 12px; text-align: center;
-                font-size: 11px; color: rgba(255,255,255,0.3);
+                font-size: 9px; color: rgba(255,255,255,0.3);
             ",
                 "🏆 Рекорд: {cur_hs}  •  ← → или тап по дорожке"
             }

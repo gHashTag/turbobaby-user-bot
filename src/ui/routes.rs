@@ -196,8 +196,8 @@ fn NotFound(route: Vec<String>) -> Element {
             text-align: center; padding: 24px;
         ",
             div { style: "font-size: 48px; margin-bottom: 16px;", "🔍" }
-            h1 { style: "font-size: 20px; color: #ff4757; margin-bottom: 8px;", "404" }
-            p { style: "font-size: 8px; color: #8b8b9e;", "Page not found: {path}" }
+            h1 { style: "font-size: 18px; color: #ff4757; margin-bottom: 8px;", "404" }
+            p { style: "font-size: 12px; color: #8b8b9e;", "Page not found: {path}" }
         }
     }
 }

@@ -4,6 +4,10 @@ use serde::Deserialize;
 use crate::ui::routes::Route;
 use crate::ui::state::{Cart, CartItem};
 use crate::ui::assets;
+use crate::ui::api::context::api_base_url;
+use crate::trios::core::Lang;
+use crate::ui::components::bottom_nav::BottomNav;
+use crate::trios::i18n::{t, T_HOME_SUBTITLE, T_NAV_MENU, T_NAV_SETS, T_NAV_ACCESSORIES, T_NAV_TEA, T_NAV_GARDEN, T_ADD_TO_CART};
 
 // ── API response types ──────────────────────────────────────────
 
@@ -25,20 +29,6 @@ struct SotdResponse {
 
 // ── Helpers ─────────────────────────────────────────────────────
 
-fn api_base_url() -> String {
-    web_sys::window()
-        .and_then(|w| w.location().origin().ok())
-        .map(|origin| {
-            if origin.contains(":8080") || origin.contains(":3001") {
-                // Local dev: use production API (local backend can't compile on macOS due to mio crate)
-                "https://woody-weed-bot-production.up.railway.app".to_string()
-            } else {
-                origin
-            }
-        })
-        .unwrap_or_else(|| "https://woody-weed-bot-production.up.railway.app".to_string())
-}
-
 fn category_emoji(cat: &str) -> &'static str {
     match cat {
         "Sativa" => "☀️",
@@ -58,6 +48,14 @@ fn format_price(price: f64) -> String {
 pub fn HomeScreen() -> Element {
     let mut cart = use_context::<Signal<Cart>>();
     let cart_count: u32 = cart.read().items.iter().map(|i| i.quantity).sum();
+
+    let home_subtitle = t(Lang::Russian, T_HOME_SUBTITLE).to_string();
+    let nav_menu = t(Lang::Russian, T_NAV_MENU).to_string();
+    let nav_sets = t(Lang::Russian, T_NAV_SETS).to_string();
+    let nav_accessories = t(Lang::Russian, T_NAV_ACCESSORIES).to_string();
+    let nav_tea = t(Lang::Russian, T_NAV_TEA).to_string();
+    let nav_garden = t(Lang::Russian, T_NAV_GARDEN).to_string();
+    let add_to_cart_label = t(Lang::Russian, T_ADD_TO_CART).to_string();
 
     let sotd_resource = use_resource(|| async move {
         let base = api_base_url();
@@ -89,13 +87,13 @@ pub fn HomeScreen() -> Element {
                 img {
                     src: "{assets::logo::MAIN}",
                     alt: "Woody Weed Bot",
-                    style: "height: 80px; width: auto; display: block; margin: 0 auto;",
+                    style: "height: 100px; width: auto; display: block; margin: 0 auto;",
                 }
                 p { style: "
-                    font-size: 7px;
+                    font-size: 11px;
                     color: #8b8b9e;
                     margin-top: 6px;
-                ", "Premium Cannabis Delivery in Bangkok" }
+                ", "{home_subtitle}" }
             }
 
             // Hero — Strain of the Day (from API)
@@ -131,9 +129,9 @@ pub fn HomeScreen() -> Element {
                         rsx! {
                             div { style: "
                                 margin: 0 16px 16px;
-                                background: linear-gradient(135deg, #1a1a2e, #16213e);
+                                background: linear-gradient(135deg, #1a1a2e, #1a1a2e);
                                 border: 2px solid #ffe600;
-                                border-radius: 12px;
+                                border-radius: 8px;
                                 padding: 16px;
                                 box-shadow: 0 0 20px rgba(255,230,0,0.15), 4px 4px 0 #000;
                                 position: relative;
@@ -145,33 +143,33 @@ pub fn HomeScreen() -> Element {
                                     background: repeating-linear-gradient(0deg, transparent, transparent 4px, rgba(255,255,255,0.1) 4px, rgba(255,255,255,0.1) 8px);
                                 " }
                                 div { style: "display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; position: relative;",
-                                    h2 { style: "font-size: 9px; color: #ffe600; text-transform: uppercase; letter-spacing: 1px;", "⭐ Strain of the Day" }
+                                    h2 { style: "font-size: 14px; color: #ffe600; text-transform: uppercase; letter-spacing: 1px;", "⭐ Strain of the Day" }
                                     span { style: "
-                                        font-size: 6px;
+                                        font-size: 10px;
                                         background: #ffe600;
                                         color: #000;
                                         padding: 2px 6px;
-                                        border-radius: 4px;
+                                        border-radius: 8px;
                                     ", "{discount_label}" }
                                 }
-                                div { style: "font-size: 12px; font-weight: bold; margin-bottom: 4px; position: relative;", "{s_name}" }
-                                div { style: "font-size: 8px; color: #8b8b9e; margin-bottom: 8px; position: relative;",
-                                    span { style: "color: #ffe600; border: 1px solid #ffe600; padding: 1px 4px; border-radius: 3px; font-size: 6px; margin-right: 6px;", "{badge_label}" }
+                                div { style: "font-size: 10px; font-weight: bold; margin-bottom: 4px; position: relative;", "{s_name}" }
+                                div { style: "font-size: 12px; color: #8b8b9e; margin-bottom: 8px; position: relative;",
+                                    span { style: "color: #ffe600; border: 2px solid #ffe600; padding: 1px 4px; border-radius: 3px; font-size: 10px; margin-right: 6px;", "{badge_label}" }
                                     span { "{thc_str}" }
                                 }
                                 div { style: "display: flex; justify-content: space-between; align-items: center; position: relative;",
-                                    span { style: "font-size: 11px; color: #39ff14;", "{display_price}" }
+                                    span { style: "font-size: 9px; color: #39ff14;", "{display_price}" }
                                     button {
                                         style: "
                                             font-family: 'Press Start 2P', monospace;
-                                            font-size: 7px;
+                                            font-size: 10px;
                                             background: #39ff14;
                                             color: #0f0f1a;
                                             border: none;
                                             padding: 8px 14px;
                                             border-radius: 6px;
                                             cursor: pointer;
-                                            box-shadow: 2px 2px 0 #000;
+                                            box-shadow: 4px 4px 0 #000;
                                         ",
                                         onclick: move |_| {
                                             let mut c = cart.write();
@@ -183,7 +181,7 @@ pub fn HomeScreen() -> Element {
                                                 image_url: None,
                                             });
                                         },
-                                        "Add to Cart 🛒"
+                                        "{add_to_cart_label} 🛒"
                                     }
                                 }
                             }
@@ -194,15 +192,15 @@ pub fn HomeScreen() -> Element {
                         rsx! {
                             div { style: "
                                 margin: 0 16px 16px;
-                                background: linear-gradient(135deg, #1a1a2e, #16213e);
+                                background: linear-gradient(135deg, #1a1a2e, #1a1a2e);
                                 border: 2px solid #2a2a4a;
-                                border-radius: 12px;
+                                border-radius: 8px;
                                 padding: 20px;
                                 text-align: center;
                                 box-shadow: 4px 4px 0 #000;
                             ",
-                                p { style: "font-size: 20px; margin-bottom: 8px;", "🌟" }
-                                p { style: "font-size: 8px; color: #8b8b9e;", "No strain of the day yet" }
+                                p { style: "font-size: 10px; margin-bottom: 8px;", "🌟" }
+                                p { style: "font-size: 12px; color: #8b8b9e;", "No strain of the day yet" }
                             }
                         }
                     },
@@ -211,15 +209,15 @@ pub fn HomeScreen() -> Element {
                         rsx! {
                             div { style: "
                                 margin: 0 16px 16px;
-                                background: linear-gradient(135deg, #1a1a2e, #16213e);
+                                background: linear-gradient(135deg, #1a1a2e, #1a1a2e);
                                 border: 2px solid #2a2a4a;
-                                border-radius: 12px;
+                                border-radius: 8px;
                                 padding: 16px;
                                 box-shadow: 4px 4px 0 #000;
                                 min-height: 100px;
                             ",
-                                div { style: "font-size: 9px; color: #ffe600; margin-bottom: 10px;", "⭐ Strain of the Day" }
-                                div { style: "font-size: 8px; color: #8b8b9e;", "Loading..." }
+                                div { style: "font-size: 14px; color: #ffe600; margin-bottom: 10px;", "⭐ Strain of the Day" }
+                                div { style: "font-size: 12px; color: #8b8b9e;", "Loading..." }
                             }
                         }
                     },
@@ -228,97 +226,97 @@ pub fn HomeScreen() -> Element {
 
             // Categories
             div { style: "padding: 0 16px 16px;",
-                h2 { style: "font-size: 10px; color: #00e5ff; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 1px;", "Categories" }
+                h2 { style: "font-size: 14px; color: #00e5ff; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 1px;", "Categories" }
                 div { style: "display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;",
                     // Strains
                     Link { to: Route::Menu {},
                         div { style: "
-                            background: #16213e;
+                            background: #1a1a2e;
                             border: 2px solid #2a2a4a;
                             border-radius: 8px;
                             padding: 14px 8px;
                             text-align: center;
-                            box-shadow: 3px 3px 0 #000;
+                            box-shadow: 4px 4px 0 #000;
                             cursor: pointer;
                             transition: border-color 0.2s;
                         ",
                             div { style: "font-size: 28px; margin-bottom: 6px;", "🌿" }
-                            div { style: "font-size: 7px; color: #e8e8e8;", "Strains" }
+                            div { style: "font-size: 18px; color: #e8e8e8;", "{nav_menu}" }
                         }
                     }
                     // Sets
                     Link { to: Route::Sets {},
                         div { style: "
-                            background: #16213e;
+                            background: #1a1a2e;
                             border: 2px solid #2a2a4a;
                             border-radius: 8px;
                             padding: 14px 8px;
                             text-align: center;
-                            box-shadow: 3px 3px 0 #000;
+                            box-shadow: 4px 4px 0 #000;
                             cursor: pointer;
                         ",
                             div { style: "font-size: 28px; margin-bottom: 6px;", "📦" }
-                            div { style: "font-size: 7px; color: #e8e8e8;", "Sets" }
+                            div { style: "font-size: 18px; color: #e8e8e8;", "{nav_sets}" }
                         }
                     }
                     // Sommelier
                     Link { to: Route::Sommelier {},
                         div { style: "
-                            background: #16213e;
+                            background: #1a1a2e;
                             border: 2px solid #2a2a4a;
                             border-radius: 8px;
                             padding: 14px 8px;
                             text-align: center;
-                            box-shadow: 3px 3px 0 #000;
+                            box-shadow: 4px 4px 0 #000;
                             cursor: pointer;
                         ",
                             div { style: "font-size: 28px; margin-bottom: 6px;", "🍷" }
-                            div { style: "font-size: 7px; color: #e8e8e8;", "Sommelier" }
+                            div { style: "font-size: 18px; color: #e8e8e8;", "Sommelier" }
                         }
                     }
                     // Accessories
                     Link { to: Route::Accessories {},
                         div { style: "
-                            background: #16213e;
+                            background: #1a1a2e;
                             border: 2px solid #2a2a4a;
                             border-radius: 8px;
                             padding: 14px 8px;
                             text-align: center;
-                            box-shadow: 3px 3px 0 #000;
+                            box-shadow: 4px 4px 0 #000;
                             cursor: pointer;
                         ",
                             div { style: "font-size: 28px; margin-bottom: 6px;", "💨" }
-                            div { style: "font-size: 7px; color: #e8e8e8;", "Accessories" }
+                            div { style: "font-size: 18px; color: #e8e8e8;", "{nav_accessories}" }
                         }
                     }
                     // Tea
                     Link { to: Route::Tea {},
                         div { style: "
-                            background: #16213e;
+                            background: #1a1a2e;
                             border: 2px solid #2a2a4a;
                             border-radius: 8px;
                             padding: 14px 8px;
                             text-align: center;
-                            box-shadow: 3px 3px 0 #000;
+                            box-shadow: 4px 4px 0 #000;
                             cursor: pointer;
                         ",
                             div { style: "font-size: 28px; margin-bottom: 6px;", "🍵" }
-                            div { style: "font-size: 7px; color: #e8e8e8;", "Tea" }
+                            div { style: "font-size: 18px; color: #e8e8e8;", "{nav_tea}" }
                         }
                     }
                     // Garden
                     Link { to: Route::Garden {},
                         div { style: "
-                            background: #16213e;
+                            background: #1a1a2e;
                             border: 2px solid #2a2a4a;
                             border-radius: 8px;
                             padding: 14px 8px;
                             text-align: center;
-                            box-shadow: 3px 3px 0 #000;
+                            box-shadow: 4px 4px 0 #000;
                             cursor: pointer;
                         ",
                             div { style: "font-size: 28px; margin-bottom: 6px;", "🌱" }
-                            div { style: "font-size: 7px; color: #e8e8e8;", "Garden" }
+                            div { style: "font-size: 18px; color: #e8e8e8;", "{nav_garden}" }
                         }
                     }
                 }
@@ -326,7 +324,7 @@ pub fn HomeScreen() -> Element {
 
             // Quest & Adventures Section
             div { style: "padding: 0 16px 16px;",
-                h2 { style: "font-size: 10px; color: #c850c0; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 1px;", "🎯 Adventures" }
+                h2 { style: "font-size: 14px; color: #c850c0; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 1px;", "🎯 Adventures" }
                 div { style: "display: grid; grid-template-columns: 1fr 1fr; gap: 10px;",
                     // Daily Quest
                     Link { to: Route::Quest { id: "daily".to_string() },
@@ -334,10 +332,10 @@ pub fn HomeScreen() -> Element {
                             background: linear-gradient(135deg, rgba(0,229,255,0.1), rgba(57,255,20,0.1));
                             border: 2px solid #00e5ff; border-radius: 8px;
                             padding: 12px; text-align: center;
-                            box-shadow: 3px 3px 0 #000; cursor: pointer;
+                            box-shadow: 4px 4px 0 #000; cursor: pointer;
                         ",
                             div { style: "font-size: 28px; margin-bottom: 4px;", "🎯" }
-                            div { style: "font-size: 7px; color: #00e5ff;", "Daily Quest" }
+                            div { style: "font-size: 18px; color: #00e5ff;", "Daily Quest" }
                         }
                     }
                     // Treasure Hunt
@@ -346,10 +344,10 @@ pub fn HomeScreen() -> Element {
                             background: linear-gradient(135deg, rgba(255,230,0,0.1), rgba(255,150,0,0.1));
                             border: 2px solid #ffe600; border-radius: 8px;
                             padding: 12px; text-align: center;
-                            box-shadow: 3px 3px 0 #000; cursor: pointer;
+                            box-shadow: 4px 4px 0 #000; cursor: pointer;
                         ",
                             div { style: "font-size: 28px; margin-bottom: 4px;", "🏴‍☠️" }
-                            div { style: "font-size: 7px; color: #ffe600;", "Treasure Hunt" }
+                            div { style: "font-size: 18px; color: #ffe600;", "Treasure Hunt" }
                         }
                     }
                     // AR Hunt
@@ -358,10 +356,10 @@ pub fn HomeScreen() -> Element {
                             background: linear-gradient(135deg, rgba(255,107,157,0.1), rgba(200,80,192,0.1));
                             border: 2px solid #ff6b9d; border-radius: 8px;
                             padding: 12px; text-align: center;
-                            box-shadow: 3px 3px 0 #000; cursor: pointer;
+                            box-shadow: 4px 4px 0 #000; cursor: pointer;
                         ",
                             div { style: "font-size: 28px; margin-bottom: 4px;", "🔮" }
-                            div { style: "font-size: 7px; color: #ff6b9d;", "AR Hunt" }
+                            div { style: "font-size: 18px; color: #ff6b9d;", "AR Hunt" }
                         }
                     }
                     // Location Quest
@@ -370,10 +368,10 @@ pub fn HomeScreen() -> Element {
                             background: linear-gradient(135deg, rgba(0,229,255,0.1), rgba(78,205,196,0.1));
                             border: 2px solid #4ecdc4; border-radius: 8px;
                             padding: 12px; text-align: center;
-                            box-shadow: 3px 3px 0 #000; cursor: pointer;
+                            box-shadow: 4px 4px 0 #000; cursor: pointer;
                         ",
                             div { style: "font-size: 28px; margin-bottom: 4px;", "📍" }
-                            div { style: "font-size: 7px; color: #4ecdc4;", "Location Quest" }
+                            div { style: "font-size: 18px; color: #4ecdc4;", "Location Quest" }
                         }
                     }
                 }
@@ -381,85 +379,34 @@ pub fn HomeScreen() -> Element {
 
             // Tech Tree & Admin Section
             div { style: "padding: 0 16px 16px;",
-                h2 { style: "font-size: 10px; color: #8b8b9e; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 1px;", "🔧 More" }
+                h2 { style: "font-size: 14px; color: #8b8b9e; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 1px;", "🔧 More" }
                 div { style: "display: grid; grid-template-columns: 1fr 1fr; gap: 10px;",
                     // Tech Tree
                     Link { to: Route::TechTree {},
                         div { style: "
-                            background: #16213e; border: 2px solid #2a2a4a;
+                            background: #1a1a2e; border: 2px solid #2a2a4a;
                             border-radius: 8px; padding: 12px; text-align: center;
-                            box-shadow: 3px 3px 0 #000; cursor: pointer;
+                            box-shadow: 4px 4px 0 #000; cursor: pointer;
                         ",
                             div { style: "font-size: 28px; margin-bottom: 4px;", "🌳" }
-                            div { style: "font-size: 7px; color: #c850c0;", "Tech Tree" }
+                            div { style: "font-size: 18px; color: #c850c0;", "Tech Tree" }
                         }
                     }
                     // Admin
                     Link { to: Route::Admin {},
                         div { style: "
-                            background: #16213e; border: 2px solid #2a2a4a;
+                            background: #1a1a2e; border: 2px solid #2a2a4a;
                             border-radius: 8px; padding: 12px; text-align: center;
-                            box-shadow: 3px 3px 0 #000; cursor: pointer;
+                            box-shadow: 4px 4px 0 #000; cursor: pointer;
                         ",
                             div { style: "font-size: 28px; margin-bottom: 4px;", "⚙️" }
-                            div { style: "font-size: 7px; color: #ff4757;", "Admin" }
+                            div { style: "font-size: 18px; color: #ff4757;", "Admin" }
                         }
                     }
                 }
             }
 
-            // Bottom Navigation
-            nav { style: "
-                position: fixed;
-                bottom: 0;
-                left: 0;
-                right: 0;
-                background: #1a1a2e;
-                border-top: 2px solid #2a2a4a;
-                display: flex;
-                justify-content: space-around;
-                padding: 10px 0;
-                z-index: 100;
-            ",
-                Link { to: Route::Home {},
-                    div { style: "text-align: center; cursor: pointer;",
-                        div { style: "font-size: 20px;", "🏠" }
-                        div { style: "font-size: 6px; color: #39ff14; margin-top: 2px;", "Home" }
-                    }
-                }
-                Link { to: Route::Menu {},
-                    div { style: "text-align: center; cursor: pointer;",
-                        div { style: "font-size: 20px;", "🌿" }
-                        div { style: "font-size: 6px; color: #8b8b9e; margin-top: 2px;", "Menu" }
-                    }
-                }
-                Link { to: Route::Cart {},
-                    div { style: "text-align: center; cursor: pointer; position: relative;",
-                        div { style: "font-size: 20px;", "🛒" }
-                        if cart_count > 0 {
-                            div { style: "
-                                position: absolute; top: -4px; right: -8px;
-                                background: #ff4757; color: white;
-                                font-size: 6px; padding: 1px 4px;
-                                border-radius: 8px; min-width: 12px; text-align: center;
-                            ", "{cart_count}" }
-                        }
-                        div { style: "font-size: 6px; color: #8b8b9e; margin-top: 2px;", "Cart" }
-                    }
-                }
-                Link { to: Route::Orders {},
-                    div { style: "text-align: center; cursor: pointer;",
-                        div { style: "font-size: 20px;", "📋" }
-                        div { style: "font-size: 6px; color: #8b8b9e; margin-top: 2px;", "Orders" }
-                    }
-                }
-                Link { to: Route::Profile {},
-                    div { style: "text-align: center; cursor: pointer;",
-                        div { style: "font-size: 20px;", "👤" }
-                        div { style: "font-size: 6px; color: #8b8b9e; margin-top: 2px;", "Profile" }
-                    }
-                }
-            }
+            BottomNav { cart_count }
         }
     }
 }

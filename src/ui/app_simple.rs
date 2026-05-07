@@ -11,7 +11,7 @@ pub fn SimpleApp() -> Element {
                 "🌿 Woody Weed Bot"
             }
             p {
-                style: "font-size: 20px; line-height: 1.8; text-align: center; margin-bottom: 30px;",
+                style: "font-size: 16px; line-height: 1.8; text-align: center; margin-bottom: 30px;",
                 "Сайт работает! Это простая тестовая страница."
             }
             div {
@@ -32,12 +32,12 @@ pub fn SimpleApp() -> Element {
                         onclick: move |_| {
                             web_sys::window().unwrap().alert_with_message("Кнопка работает!").unwrap();
                         },
-                        style: "background: #39ff14; color: #000; border: none; padding: 18px 40px; font-size: 18px; border-radius: 10px; cursor: pointer; font-weight: bold;",
+                        style: "background: #39ff14; color: #000; border: none; padding: 18px 40px; font-size: 14px; border-radius: 10px; cursor: pointer; font-weight: bold;",
                         "🎉 Нажми меня!"
                     }
             }
             p {
-                style: "text-align: center; margin-top: 30px; color: #a0a0b0; font-size: 14px;",
+                style: "text-align: center; margin-top: 30px; color: #a0a0b0; font-size: 11px;",
                 "Если вы это видите - сайт работает!"
             }
         }

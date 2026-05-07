@@ -2,6 +2,9 @@
 use dioxus::prelude::*;
 use crate::ui::routes::Route;
 use crate::ui::state::{Cart, CartItem};
+use crate::trios::core::Lang;
+use crate::ui::components::bottom_nav::BottomNav;
+use crate::trios::i18n::{t, T_CART_TITLE, T_CART_EMPTY, T_CART_EMPTY_DESC};
 
 fn format_price(price: f64) -> String {
     format!("฿{}", price as i32)
@@ -13,6 +16,9 @@ pub fn CartScreen() -> Element {
     let items = cart.read().items.clone();
     let total = cart.read().total;
     let item_count: u32 = items.iter().map(|i| i.quantity).sum();
+    let cart_title = t(Lang::Russian, T_CART_TITLE);
+    let cart_empty = t(Lang::Russian, T_CART_EMPTY);
+    let cart_empty_desc = t(Lang::Russian, T_CART_EMPTY_DESC);
 
     rsx! {
         div { style: "
@@ -24,9 +30,9 @@ pub fn CartScreen() -> Element {
         ",
             // Header
             div { style: "padding: 20px 16px 12px; text-align: center;",
-                h1 { style: "font-size: 12px; color: #39ff14; text-shadow: 0 0 8px rgba(57,255,20,0.5);", "🛒 Cart" }
+                h1 { style: "font-size: 18px; color: #39ff14; text-shadow: 0 0 8px rgba(57,255,20,0.5);", "{cart_title}" }
                 if !items.is_empty() {
-                    p { style: "font-size: 7px; color: #8b8b9e; margin-top: 4px;", "{item_count} items" }
+                    p { style: "font-size: 18px; color: #8b8b9e; margin-top: 4px;", "{item_count} items" }
                 }
             }
 
@@ -37,8 +43,8 @@ pub fn CartScreen() -> Element {
                         rsx! {
                             div { style: "text-align: center; padding: 60px 16px;",
                                 p { style: "font-size: 32px; margin-bottom: 16px;", "🛒" }
-                                p { style: "font-size: 9px; color: #8b8b9e; margin-bottom: 8px;", "Your cart is empty" }
-                                p { style: "font-size: 7px; color: #8b8b9e;", "Browse the menu to add strains" }
+                                p { style: "font-size: 11px; color: #8b8b9e; margin-bottom: 8px;", "{cart_empty}" }
+                                p { style: "font-size: 18px; color: #8b8b9e;", "{cart_empty_desc}" }
                             }
                         }
                     } else {
@@ -51,19 +57,19 @@ pub fn CartScreen() -> Element {
 
                             // Summary
                             div { style: "
-                                background: #16213e; border: 2px solid #2a2a4a;
+                                background: #1a1a2e; border: 2px solid #2a2a4a;
                                 border-radius: 8px; padding: 14px;
                                 box-shadow: 4px 4px 0 #000; margin-top: 8px;
                             ",
-                                div { style: "display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 9px;",
+                                div { style: "display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 16px;",
                                     span { style: "color: #8b8b9e;", "Subtotal:" }
                                     span { "{format_price(total)}" }
                                 }
-                                div { style: "display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 9px;",
+                                div { style: "display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 16px;",
                                     span { style: "color: #8b8b9e;", "Delivery:" }
                                     span { style: "color: #39ff14;", "Free" }
                                 }
-                                div { style: "display: flex; justify-content: space-between; font-size: 10px; font-weight: bold; padding-top: 6px; border-top: 1px solid #2a2a4a; margin-top: 6px;",
+                                div { style: "display: flex; justify-content: space-between; font-size: 16px; font-weight: bold; padding-top: 6px; border-top: 1px solid #2a2a4a; margin-top: 6px;",
                                     span { "Total:" }
                                     span { style: "color: #39ff14;", "{format_price(total)}" }
                                 }
@@ -74,7 +80,7 @@ pub fn CartScreen() -> Element {
                                 Link { to: Route::Menu {},
                                     button { style: "
                                         font-family: 'Press Start 2P', monospace;
-                                        font-size: 7px; flex: 1; padding: 10px;
+                                        font-size: 10px; flex: 1; padding: 10px;
                                         background: transparent; color: #e8e8e8;
                                         border: 2px solid #2a2a4a; border-radius: 6px;
                                         cursor: pointer;
@@ -83,7 +89,7 @@ pub fn CartScreen() -> Element {
                                 Link { to: Route::Checkout {},
                                     button { style: "
                                         font-family: 'Press Start 2P', monospace;
-                                        font-size: 7px; flex: 2; padding: 10px;
+                                        font-size: 10px; flex: 2; padding: 10px;
                                         background: #39ff14; color: #0f0f1a;
                                         border: none; border-radius: 6px;
                                         cursor: pointer; font-weight: bold;
@@ -95,8 +101,7 @@ pub fn CartScreen() -> Element {
                 }
             }
 
-            // Bottom Navigation
-            {bottom_nav()}
+            BottomNav {}
         }
     }
 }
@@ -115,26 +120,26 @@ fn cart_item_row(item: CartItem) -> Element {
             key: "{row_key}",
             style: "
             display: flex; align-items: center; gap: 10px;
-            background: #16213e; border: 2px solid #2a2a4a;
+            background: #1a1a2e; border: 2px solid #2a2a4a;
             border-radius: 8px; padding: 10px; margin-bottom: 8px;
             box-shadow: 4px 4px 0 #000;
         ",
             div { style: "
                 width: 44px; height: 44px; background: #1a1a2e;
-                border-radius: 4px; display: flex; align-items: center;
+                border-radius: 8px; display: flex; align-items: center;
                 justify-content: center; font-size: 22px; flex-shrink: 0;
             ", "🌿" }
             div { style: "flex: 1;",
-                div { style: "font-size: 9px; font-weight: bold; margin-bottom: 2px;", "{item.name}" }
-                div { style: "font-size: 7px; color: #8b8b9e;", "{price_str} each · {line_total_str}" }
+                div { style: "font-size: 16px; font-weight: bold; margin-bottom: 2px;", "{item.name}" }
+                div { style: "font-size: 18px; color: #8b8b9e;", "{price_str} each · {line_total_str}" }
             }
             div { style: "display: flex; align-items: center; gap: 6px;",
                 button {
                     style: "
                         width: 26px; height: 26px;
                         border: 2px solid #2a2a4a; background: #1a1a2e;
-                        color: #e8e8e8; border-radius: 4px; cursor: pointer;
-                        font-size: 14px; display: flex; align-items: center; justify-content: center;
+                        color: #e8e8e8; border-radius: 8px; cursor: pointer;
+                        font-size: 16px; display: flex; align-items: center; justify-content: center;
                         font-family: 'Press Start 2P', monospace;
                     ",
                     onclick: move |_| {
@@ -153,13 +158,13 @@ fn cart_item_row(item: CartItem) -> Element {
                     },
                     "−"
                 }
-                span { style: "font-size: 9px; min-width: 18px; text-align: center;", "{qty}" }
+                span { style: "font-size: 16px; min-width: 18px; text-align: center;", "{qty}" }
                 button {
                     style: "
                         width: 26px; height: 26px;
                         border: 2px solid #2a2a4a; background: #1a1a2e;
-                        color: #e8e8e8; border-radius: 4px; cursor: pointer;
-                        font-size: 14px; display: flex; align-items: center; justify-content: center;
+                        color: #e8e8e8; border-radius: 8px; cursor: pointer;
+                        font-size: 16px; display: flex; align-items: center; justify-content: center;
                         font-family: 'Press Start 2P', monospace;
                     ",
                     onclick: move |_| {
@@ -172,48 +177,6 @@ fn cart_item_row(item: CartItem) -> Element {
                         });
                     },
                     "+"
-                }
-            }
-        }
-    }
-}
-
-fn bottom_nav() -> Element {
-    rsx! {
-        nav { style: "
-            position: fixed; bottom: 0; left: 0; right: 0;
-            background: #1a1a2e; border-top: 2px solid #2a2a4a;
-            display: flex; justify-content: space-around;
-            padding: 10px 0; z-index: 100;
-        ",
-            Link { to: Route::Home {},
-                div { style: "text-align: center; cursor: pointer;",
-                    div { style: "font-size: 20px;", "🏠" }
-                    div { style: "font-size: 6px; color: #8b8b9e; margin-top: 2px;", "Home" }
-                }
-            }
-            Link { to: Route::Menu {},
-                div { style: "text-align: center; cursor: pointer;",
-                    div { style: "font-size: 20px;", "🌿" }
-                    div { style: "font-size: 6px; color: #8b8b9e; margin-top: 2px;", "Menu" }
-                }
-            }
-            Link { to: Route::Cart {},
-                div { style: "text-align: center; cursor: pointer;",
-                    div { style: "font-size: 20px;", "🛒" }
-                    div { style: "font-size: 6px; color: #39ff14; margin-top: 2px;", "Cart" }
-                }
-            }
-            Link { to: Route::Orders {},
-                div { style: "text-align: center; cursor: pointer;",
-                    div { style: "font-size: 20px;", "📋" }
-                    div { style: "font-size: 6px; color: #8b8b9e; margin-top: 2px;", "Orders" }
-                }
-            }
-            Link { to: Route::Profile {},
-                div { style: "text-align: center; cursor: pointer;",
-                    div { style: "font-size: 20px;", "👤" }
-                    div { style: "font-size: 6px; color: #8b8b9e; margin-top: 2px;", "Profile" }
                 }
             }
         }

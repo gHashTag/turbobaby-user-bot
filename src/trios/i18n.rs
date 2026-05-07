@@ -77,6 +77,41 @@ pub const T_POINT_3: Key = "point_3";
 pub const T_POINT_4: Key = "point_4";
 pub const T_POINT_5: Key = "point_5";
 
+/// Screen title translations
+pub const T_HOME_TITLE: Key = "home.title";
+pub const T_HOME_SUBTITLE: Key = "home.subtitle";
+pub const T_MENU_TITLE: Key = "menu.title";
+pub const T_MENU_DESC: Key = "menu.description";
+pub const T_SETS_TITLE: Key = "sets.title";
+pub const T_SETS_DESC: Key = "sets.description";
+pub const T_ACC_TITLE: Key = "acc.title";
+pub const T_ACC_DESC: Key = "acc.description";
+pub const T_TEA_TITLE: Key = "tea.title";
+pub const T_TEA_DESC: Key = "tea.description";
+pub const T_SOMM_TITLE: Key = "somm.title";
+pub const T_SOMM_DESC: Key = "somm.description";
+pub const T_CART_TITLE: Key = "cart.title";
+pub const T_CART_EMPTY: Key = "cart.empty";
+pub const T_CART_EMPTY_DESC: Key = "cart.empty_desc";
+pub const T_CHECKOUT_TITLE: Key = "checkout.title";
+pub const T_ORDERS_TITLE: Key = "orders.title";
+pub const T_PROFILE_TITLE: Key = "profile.title";
+pub const T_YOUR_ORDER: Key = "checkout.your_order";
+pub const T_YOUR_INFO: Key = "checkout.your_info";
+pub const T_PICKUP_LOCATION: Key = "checkout.pickup_location";
+pub const T_DELIVERY: Key = "checkout.delivery";
+pub const T_PAYMENT: Key = "checkout.payment";
+pub const T_PLACE_ORDER: Key = "checkout.place_order";
+pub const T_BACK: Key = "btn.back";
+pub const T_TOTAL: Key = "label.total";
+pub const T_ADD_TO_CART: Key = "btn.add_to_cart";
+pub const T_LOADING: Key = "label.loading";
+pub const T_FILTER_ALL: Key = "filter.all";
+pub const T_SOMM_MOOD: Key = "somm.mood";
+pub const T_SOMM_TIME: Key = "somm.time";
+pub const T_SOMM_EXP: Key = "somm.experience";
+pub const T_SOMM_RESULT: Key = "somm.result";
+
 /// Get translation for a key and language
 pub fn t(lang: Lang, key: Key) -> Value {
     match lang {
@@ -154,6 +189,40 @@ fn get_ru_translation(key: Key) -> Value {
         T_POINT_3 => "Точка 3: Джунгли хилл",
         T_POINT_4 => "Точка 4: Пиратская бухта",
         T_POINT_5 => "Точка 5: Триада",
+        // Screen titles
+        T_HOME_TITLE => "Главная",
+        T_HOME_SUBTITLE => "Премиум каннабис с доставкой в Бангкоке",
+        T_MENU_TITLE => "🌿 Меню",
+        T_MENU_DESC => "Наши премиальные сорта",
+        T_SETS_TITLE => "🎁 Наборы",
+        T_SETS_DESC => "Подобранные наборы по настроению",
+        T_ACC_TITLE => "🛠️ Аксессуары",
+        T_ACC_DESC => "Всё для курения и вейпинга",
+        T_TEA_TITLE => "🍵 Чай",
+        T_TEA_DESC => "Чайные напитки и десерты",
+        T_SOMM_TITLE => "🍷 Сомелье",
+        T_SOMM_DESC => "Подберём сорт под настроение",
+        T_CART_TITLE => "🛒 Корзина",
+        T_CART_EMPTY => "Корзина пуста",
+        T_CART_EMPTY_DESC => "Добавьте товары из каталога",
+        T_CHECKOUT_TITLE => "🛍️ Оформление",
+        T_ORDERS_TITLE => "📋 Заказы",
+        T_PROFILE_TITLE => "👤 Профиль",
+        T_YOUR_ORDER => "Ваш заказ",
+        T_YOUR_INFO => "Ваши данные",
+        T_PICKUP_LOCATION => "📍 Точка самовывоза",
+        T_DELIVERY => "Доставка",
+        T_PAYMENT => "Оплата",
+        T_PLACE_ORDER => "Оформить заказ ✓",
+        T_BACK => "← Назад",
+        T_TOTAL => "Итого:",
+        T_ADD_TO_CART => "В корзину",
+        T_LOADING => "Загрузка...",
+        T_FILTER_ALL => "Все",
+        T_SOMM_MOOD => "Настроение",
+        T_SOMM_TIME => "Время суток",
+        T_SOMM_EXP => "Опыт",
+        T_SOMM_RESULT => "Рекомендации",
         _ => key,
     }
 }
@@ -221,6 +290,40 @@ fn get_en_translation(key: Key) -> Value {
         T_POINT_3 => "Point 3: Jungle Hill",
         T_POINT_4 => "Point 4: Pirate Bay",
         T_POINT_5 => "Point 5: Triad",
+        // Screen titles
+        T_HOME_TITLE => "Home",
+        T_HOME_SUBTITLE => "Premium Cannabis Delivery in Bangkok",
+        T_MENU_TITLE => "🌿 Menu",
+        T_MENU_DESC => "Our premium selection",
+        T_SETS_TITLE => "🎁 Sets",
+        T_SETS_DESC => "Curated sets by mood",
+        T_ACC_TITLE => "🛠️ Accessories",
+        T_ACC_DESC => "Smoking and vaping gear",
+        T_TEA_TITLE => "🍵 Tea",
+        T_TEA_DESC => "Tea drinks and desserts",
+        T_SOMM_TITLE => "🍷 Sommelier",
+        T_SOMM_DESC => "Find your perfect strain",
+        T_CART_TITLE => "🛒 Cart",
+        T_CART_EMPTY => "Your cart is empty",
+        T_CART_EMPTY_DESC => "Browse the menu to add items",
+        T_CHECKOUT_TITLE => "🛍️ Checkout",
+        T_ORDERS_TITLE => "📋 Orders",
+        T_PROFILE_TITLE => "👤 Profile",
+        T_YOUR_ORDER => "Your Order",
+        T_YOUR_INFO => "Your Info",
+        T_PICKUP_LOCATION => "Pickup Location",
+        T_DELIVERY => "Delivery",
+        T_PAYMENT => "Payment",
+        T_PLACE_ORDER => "Place Order ✓",
+        T_BACK => "← Back",
+        T_TOTAL => "Total:",
+        T_ADD_TO_CART => "Add to Cart",
+        T_LOADING => "Loading...",
+        T_FILTER_ALL => "All",
+        T_SOMM_MOOD => "Mood",
+        T_SOMM_TIME => "Time of Day",
+        T_SOMM_EXP => "Experience",
+        T_SOMM_RESULT => "Recommendations",
         _ => key,
     }
 }
@@ -300,6 +403,22 @@ pub fn get_translations(lang: Lang) -> Translations {
         T_ERROR_INVALID_QR,
         T_ERROR_ALREADY_CHECKED,
         T_ERROR_CHECKIN_FAILED,
+        // Screen titles
+        T_HOME_TITLE, T_HOME_SUBTITLE,
+        T_MENU_TITLE, T_MENU_DESC,
+        T_SETS_TITLE, T_SETS_DESC,
+        T_ACC_TITLE, T_ACC_DESC,
+        T_TEA_TITLE, T_TEA_DESC,
+        T_SOMM_TITLE, T_SOMM_DESC,
+        T_CART_TITLE, T_CART_EMPTY, T_CART_EMPTY_DESC,
+        T_CHECKOUT_TITLE,
+        T_ORDERS_TITLE,
+        T_PROFILE_TITLE,
+        T_YOUR_ORDER, T_YOUR_INFO,
+        T_PICKUP_LOCATION, T_DELIVERY, T_PAYMENT,
+        T_PLACE_ORDER, T_BACK, T_TOTAL,
+        T_ADD_TO_CART, T_LOADING, T_FILTER_ALL,
+        T_SOMM_MOOD, T_SOMM_TIME, T_SOMM_EXP, T_SOMM_RESULT,
     ];
 
     for key in keys {

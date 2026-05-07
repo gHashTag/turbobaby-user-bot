@@ -25,7 +25,7 @@ pub fn SuccessScreen(id: String) -> Element {
 
             // Title
             h1 { style: "
-                font-size: 16px;
+                font-size: 10px;
                 color: #39ff14;
                 text-shadow: 0 0 12px rgba(57,255,20,0.5);
                 margin-bottom: 12px;
@@ -33,38 +33,38 @@ pub fn SuccessScreen(id: String) -> Element {
 
             // Order ID
             p { style: "
-                font-size: 8px;
+                font-size: 12px;
                 color: #8b8b9e;
                 margin-bottom: 6px;
             ", "Your order #{id} has been received" }
 
             p { style: "
-                font-size: 7px;
+                font-size: 10px;
                 color: #8b8b9e;
                 margin-bottom: 32px;
             ", "We'll contact you shortly" }
 
             // Delivery estimate card
             div { style: "
-                background: #16213e;
+                background: #1a1a2e;
                 border: 2px solid #2a2a4a;
-                border-radius: 12px;
+                border-radius: 8px;
                 padding: 16px;
                 width: 100%;
                 max-width: 320px;
                 margin-bottom: 24px;
                 box-shadow: 4px 4px 0 #000;
             ",
-                div { style: "font-size: 8px; color: #00e5ff; margin-bottom: 10px;", "📦 Delivery Estimate" }
-                div { style: "display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 7px;",
+                div { style: "font-size: 12px; color: #00e5ff; margin-bottom: 10px;", "📦 Delivery Estimate" }
+                div { style: "display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 10px;",
                     span { style: "color: #8b8b9e;", "Status:" }
                     span { style: "color: #39ff14;", "Confirmed" }
                 }
-                div { style: "display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 7px;",
+                div { style: "display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 10px;",
                     span { style: "color: #8b8b9e;", "ETA:" }
                     span { "30-45 min" }
                 }
-                div { style: "display: flex; justify-content: space-between; font-size: 7px;",
+                div { style: "display: flex; justify-content: space-between; font-size: 10px;",
                     span { style: "color: #8b8b9e;", "Payment:" }
                     span { "Cash on delivery" }
                 }
@@ -75,7 +75,7 @@ pub fn SuccessScreen(id: String) -> Element {
                 Link { to: Route::Menu {},
                     button { style: "
                         font-family: 'Press Start 2P', monospace;
-                        font-size: 7px; flex: 1; padding: 12px;
+                        font-size: 10px; flex: 1; padding: 12px;
                         background: #39ff14; color: #0f0f1a;
                         border: none; border-radius: 6px;
                         cursor: pointer; font-weight: bold;
@@ -84,7 +84,7 @@ pub fn SuccessScreen(id: String) -> Element {
                 Link { to: Route::Orders {},
                     button { style: "
                         font-family: 'Press Start 2P', monospace;
-                        font-size: 7px; flex: 1; padding: 12px;
+                        font-size: 10px; flex: 1; padding: 12px;
                         background: transparent; color: #e8e8e8;
                         border: 2px solid #2a2a4a; border-radius: 6px;
                         cursor: pointer;

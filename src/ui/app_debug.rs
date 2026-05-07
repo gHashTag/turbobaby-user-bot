@@ -17,7 +17,7 @@ pub fn AppDebug() -> Element {
             p { "Dioxus Debug Version" },
             p { "If you see this, the app is working!" },
             button {
-                style: "padding: 12px 24px; background: #39ff14; color: #000; border: none; border-radius: 8px; cursor: pointer; font-size: 16px;",
+                style: "padding: 12px 24px; background: #39ff14; color: #000; border: none; border-radius: 8px; cursor: pointer; font-size: 12px;",
                 onclick: move |_| {
                     println!("Button clicked!");
                 },

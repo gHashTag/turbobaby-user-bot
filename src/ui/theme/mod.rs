@@ -7,10 +7,10 @@ pub const CSS_VARS: &str = r#"
 :root {
     --bg-primary: #0f0f1a;
     --bg-secondary: #1a1a2e;
-    --bg-tertiary: #16213e;
+    --bg-tertiary: #1a1a2e;
     --border: #2a2a4a;
-    --text-primary: #e8e8e8;
-    --text-secondary: #a0a0b0;
+    --text-primary: #E8E8E8;
+    --text-secondary: #8b8b9e;
     --green: #39ff14;
     --cyan: #00e5ff;
     --yellow: #ffe600;
@@ -22,17 +22,17 @@ pub const CSS_VARS: &str = r#"
 
 /* Pixel art fonts */
 @font-face {
-    font-family: 'Press Start 2P';
+    font-family: 'Inter';
     src: url('/assets/fonts/PressStart2P.woff2') format('woff2');
     font-display: swap;
 }
 
 /* Button styles */
 .btn {
-    font-family: 'Press Start 2P', monospace;
+    font-family: 'Inter', monospace;
     border: var(--pixel-border);
     padding: 8px 16px;
-    font-size: 14px;
+    font-size: 11px;
     text-transform: uppercase;
     cursor: pointer;
     box-shadow: var(--pixel-shadow);

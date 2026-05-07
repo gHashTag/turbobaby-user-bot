@@ -116,11 +116,11 @@ pub fn Referrals() -> Element {
             div {
                 style: "padding: 20px 16px 12px; text-align: center;",
                 h1 {
-                    style: "font-size: 12px; color: #39ff14; text-shadow: 0 0 8px rgba(57,255,20,0.5);",
+                    style: "font-size: 18px; color: #39ff14; text-shadow: 0 0 8px rgba(57,255,20,0.5);",
                     "🎁 Referral Program"
                 }
                 p {
-                    style: "font-size: 7px; color: #888; margin-top: 6px;",
+                    style: "font-size: 18px; color: #888; margin-top: 6px;",
                     "Invite friends — earn bonuses"
                 }
             }
@@ -135,16 +135,16 @@ pub fn Referrals() -> Element {
                     box-shadow: 0 0 20px rgba(57,255,20,0.2);
                 ",
                 p {
-                    style: "font-size: 7px; color: #888; margin-bottom: 8px;",
+                    style: "font-size: 18px; color: #888; margin-bottom: 8px;",
                     "YOUR REFERRAL LINK"
                 }
                 div {
                     style: "
                         background: rgba(0,0,0,0.4);
-                        border: 1px solid #333;
+                        border: 2px solid #333;
                         border-radius: 8px;
                         padding: 10px 12px;
-                        font-size: 7px;
+                        font-size: 10px;
                         color: #39ff14;
                         word-break: break-all;
                         margin-bottom: 12px;
@@ -159,11 +159,11 @@ pub fn Referrals() -> Element {
                         style: "
                             flex: 1;
                             background: rgba(57,255,20,0.15);
-                            border: 1px solid #39ff14;
+                            border: 2px solid #39ff14;
                             border-radius: 8px;
                             color: #39ff14;
                             font-family: inherit;
-                            font-size: 7px;
+                            font-size: 10px;
                             padding: 10px 8px;
                             cursor: pointer;
                         ",
@@ -185,11 +185,11 @@ pub fn Referrals() -> Element {
                                 style: "
                                     flex: 1;
                                     background: rgba(57,255,20,0.15);
-                                    border: 1px solid #39ff14;
+                                    border: 2px solid #39ff14;
                                     border-radius: 8px;
                                     color: #39ff14;
                                     font-family: inherit;
-                                    font-size: 7px;
+                                    font-size: 10px;
                                     padding: 10px 8px;
                                     cursor: pointer;
                                 ",
@@ -221,13 +221,13 @@ pub fn Referrals() -> Element {
                 style: "max-width: 380px; margin: 0 auto; padding: 0 16px;",
 
                 h2 {
-                    style: "font-size: 9px; color: #ffd700; margin-bottom: 12px; text-align: center;",
+                    style: "font-size: 14px; color: #ffd700; margin-bottom: 12px; text-align: center;",
                     "🏆 Top Referrers"
                 }
 
                 if board.is_empty() {
                     div {
-                        style: "text-align: center; color: #555; font-size: 7px; padding: 20px;",
+                        style: "text-align: center; color: #555; font-size: 10px; padding: 20px;",
                         "No data yet — be the first!"
                     }
                 } else {
@@ -255,14 +255,14 @@ fn stat_card(icon: &str, label: &str, value: &str) -> Element {
         div {
             style: "
                 background: linear-gradient(135deg, #151520, #1a1a25);
-                border: 1px solid #2a2a3a;
-                border-radius: 12px;
+                border: 2px solid #2a2a3a;
+                border-radius: 8px;
                 padding: 14px 12px;
                 text-align: center;
             ",
-            div { style: "font-size: 18px; margin-bottom: 6px;", "{icon}" }
-            div { style: "font-size: 11px; color: #39ff14; margin-bottom: 4px;", "{value}" }
-            div { style: "font-size: 6px; color: #666;", "{label}" }
+            div { style: "font-size: 14px; margin-bottom: 6px;", "{icon}" }
+            div { style: "font-size: 9px; color: #39ff14; margin-bottom: 4px;", "{value}" }
+            div { style: "font-size: 18px; color: #666;", "{label}" }
         }
     }
 }
@@ -281,23 +281,23 @@ fn leaderboard_row(rank: usize, telegram_id: i64, referral_count: i64, bonus: f6
         _ => "#555",
     };
     let medal = medal.to_string();
-    let rank_style = format!("font-size: 7px; color: {};", rank_color);
+    let rank_style = format!("font-size: 18px; color: {};", rank_color);
     rsx! {
         div {
             style: "
                 display: flex; align-items: center; gap: 10px;
                 background: rgba(255,255,255,0.03);
-                border: 1px solid #2a2a3a;
+                border: 2px solid #2a2a3a;
                 border-radius: 8px;
                 padding: 10px 12px;
             ",
             span { style: "font-size: 14px; width: 20px; flex-shrink: 0;", "{medal}" }
             span { style: "{rank_style}", "#{rank}" }
             div { style: "flex: 1;",
-                div { style: "font-size: 7px; color: #e8e8e8;",
+                div { style: "font-size: 18px; color: #e8e8e8;",
                     {format!("ID: …{}", telegram_id % 10000)}
                 }
-                div { style: "font-size: 6px; color: #555; margin-top: 2px;",
+                div { style: "font-size: 18px; color: #555; margin-top: 2px;",
                     {format!("{} invited • {:.0} ฿ earned", referral_count, bonus)}
                 }
             }
