@@ -85,14 +85,14 @@ async fn main() -> Result<()> {
     info!("✅ Database connected");
 
     let bot = Bot::new(&config.bot_token);
-
     let bot_arc = Arc::new(bot.clone());
     let bot_arc_for_state = bot_arc.clone();
     let db_for_bot = db.clone();
+    let config_for_bot = config.clone();
     tokio::spawn(async move {
         let handler = bot::create_handler();
-        Dispatcher::builder(bot_arc.clone(), handler)
-            .dependencies(dptree::deps![Arc::clone(&db_for_bot)])
+        Dispatcher::builder(bot.clone(), handler)
+            .dependencies(dptree::deps![Arc::clone(&db_for_bot), Arc::clone(&config_for_bot)])
             .build()
             .dispatch()
             .await;
