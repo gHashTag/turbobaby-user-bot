@@ -9,16 +9,20 @@ pub fn use_api_client() -> Arc<ApiClient> {
 }
 
 pub fn api_base_url() -> String {
-    web_sys::window()
-        .and_then(|w| w.location().origin().ok())
-        .map(|origin| {
-            if origin.contains(":8080") || origin.contains(":3001") {
-                "https://woody-weed-bot-production.up.railway.app".to_string()
-            } else {
-                origin
-            }
-        })
-        .unwrap_or_else(|| "https://woody-weed-bot-production.up.railway.app".to_string())
+    // Detect if running through MCP proxy (port 9002)
+    let href = web_sys::window()
+        .and_then(|w| w.location().href().ok())
+        .unwrap_or_default();
+
+    // For local development, use backend via same-origin (handled by proxy)
+    // The backend is served via Axum which proxies API requests
+    if href.contains("127.0.0.1:8080") || href.contains("localhost:8080") {
+        // Use same-origin - backend serves both API and frontend via Axum
+        return "".to_string();
+    }
+
+    // Otherwise use same-origin (production or other setups)
+    "".to_string()
 }
 
 fn get_base_url() -> String {

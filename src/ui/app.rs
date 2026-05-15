@@ -4,7 +4,8 @@
 
 use dioxus::prelude::*;
 use crate::ui::routes::Routes;
-use crate::ui::state::Cart;
+use crate::ui::state::{Cart, LanguageProvider};
+use crate::ui::api::context::ApiClientProvider;
 
 #[component]
 pub fn App() -> Element {
@@ -12,6 +13,10 @@ pub fn App() -> Element {
     use_context_provider(|| Signal::new(Cart::new()));
 
     rsx! {
-        Routes {}
+        ApiClientProvider {
+            LanguageProvider {
+                Routes {}
+            }
+        }
     }
 }

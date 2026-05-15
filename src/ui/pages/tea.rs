@@ -16,6 +16,7 @@ pub fn Tea() -> Element {
     rsx! {
         div { class: "page tea-page",
             div { class: "page-header",
+                div { class: "page-icon", "🍵" }
                 h1 { class: "page-title", "Tea" }
                 p { class: "page-description", "Premium tea for relaxation" }
             }
@@ -49,7 +50,7 @@ pub fn Tea() -> Element {
 fn EmptyState() -> Element {
     rsx! {
         div { class: "empty-state",
-            div { class: "empty-icon", "cup" }
+            div { class: "empty-icon", "🍵" }
             h3 { "No tea available" }
             p { "Check back later for new varieties" }
         }
@@ -76,9 +77,9 @@ fn TeaCard(tea: TeaProduct) -> Element {
         div { class: "product-card",
             div { class: "product-image",
                 if tea.image_url.is_empty() {
-                    div { class: "product-placeholder", "leaf" }
+                    div { class: "product-placeholder", "🍵" }
                 } else {
-                    img { src: "{tea.image_url}?v=2", alt: "{tea.name}" }
+                    img { src: "{tea.image_url}?v=2", alt: "{tea.name}", loading: "lazy" }
                 }
                 if !available {
                     div { class: "product-badge", "Out of Stock" }
@@ -86,8 +87,8 @@ fn TeaCard(tea: TeaProduct) -> Element {
             }
 
             div { class: "product-info",
-                p { class: "product-description", "{tea.description}" }
                 h3 { class: "product-name", "{tea.name}" }
+                p { class: "product-description", "{tea.description}" }
                 div { class: "product-price", "{price} THB" }
 
                 button {

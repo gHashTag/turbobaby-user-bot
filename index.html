@@ -8,12 +8,43 @@
     <link rel="icon" href="/assets/favicon.svg">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link data-trunk rel="css" href="styles/variables.css"/>
     <link data-trunk rel="css" href="styles/main.css"/>
-    <link data-trunk rel="css" href="styles/components.css"/>
     <link data-trunk rel="copy-dir" href="assets" data-target-path="assets"/>
     <link data-trunk rel="rust" data-target-name="woody_weed_bot" data-wasm-opt="0" />
+    <script>
+    // 3D Comet Card tilt effect (matching old React bot exactly)
+    document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('mousemove', function(e) {
+            if (!e || !e.target) { return; }
+            var target = e.target;
+            // Find closest element with .comet-card class
+            while (target && target !== document) {
+                if (target.classList && target.classList.contains('comet-card')) {
+                    var card = target;
+                    var rect = card.getBoundingClientRect();
+                    var x = (e.clientX - rect.left) / rect.width - 0.5;
+                    var y = (e.clientY - rect.top) / rect.height - 0.5;
+                    card.style.transform = 'perspective(800px) rotateY(' + (x * 12) + 'deg) rotateX(' + (-y * 12) + 'deg) scale3d(1.02, 1.02, 1.02)';
+                    return;
+                }
+                target = target.parentNode;
+            }
+        });
+        document.addEventListener('mouseleave', function(e) {
+            if (!e || !e.target) { return; }
+            var target = e.target;
+            while (target && target !== document) {
+                if (target.classList && target.classList.contains('comet-card')) {
+                    target.style.transform = '';
+                    return;
+                }
+                target = target.parentNode;
+            }
+        }, true);
+    });
+    </script>
 </head>
 <body>
     <div id="main"></div>

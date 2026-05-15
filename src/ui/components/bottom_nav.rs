@@ -1,95 +1,78 @@
-// Shared 9-tab Bottom Navigation — matching old TS project NavTabs
 use dioxus::prelude::*;
 use crate::ui::routes::Route;
 
-/// 9-tab bottom navigation matching old woody-woodpecker NavTabs.tsx:
-/// 🪵 Home · 🌿 Menu · 🎁 Sets · 🛠️ Gear · 🍵 Tea · 🌱 Garden · 🗺️ Quest · 🛒 Cart · 👤 Profile
 #[component]
 pub fn BottomNav(#[props(default)] cart_count: u32) -> Element {
+    let route = use_route::<Route>();
+    let is_home = matches!(route, Route::Home {});
+    let is_menu = matches!(route, Route::Menu {});
+    let is_sets = matches!(route, Route::Sets {});
+    let is_accessories = matches!(route, Route::Accessories {});
+    let is_tea = matches!(route, Route::Tea {});
+    let is_garden = matches!(route, Route::Garden {});
+    let is_cart = matches!(route, Route::Cart {});
+    let is_profile = matches!(route, Route::Profile {});
+    let is_quest = matches!(route, Route::Quest { .. });
+
     rsx! {
-        nav { style: "
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            background: #1a1a2e;
-            border-top: 1px solid #2a2a4a;
-            display: flex;
-            justify-content: space-around;
-            overflow-x: auto;
-            padding: 8px 0 6px;
-            z-index: 100;
-            -webkit-overflow-scrolling: touch;
-        ",
-            // 🪵 Home
+        nav { class: "bottom-nav",
             Link { to: Route::Home {},
-                div { style: "text-align: center; cursor: pointer; min-width: 36px;",
-                    div { style: "font-size: 14px;", "🪵" }
-                    div { style: "font-size: 9px; color: #8b8b9e; margin-top: 2px;", "Home" }
+                div { class: if is_home { "nav-item active" } else { "nav-item" },
+                    span { class: "nav-icon", "🪵" }
+                    span { class: "nav-label", "Home" }
                 }
             }
-            // 🌿 Menu
             Link { to: Route::Menu {},
-                div { style: "text-align: center; cursor: pointer; min-width: 36px;",
-                    div { style: "font-size: 14px;", "🌿" }
-                    div { style: "font-size: 9px; color: #8b8b9e; margin-top: 2px;", "Menu" }
+                div { class: if is_menu { "nav-item active" } else { "nav-item" },
+                    span { class: "nav-icon", "🌿" }
+                    span { class: "nav-label", "Menu" }
                 }
             }
-            // 🎁 Sets
             Link { to: Route::Sets {},
-                div { style: "text-align: center; cursor: pointer; min-width: 36px;",
-                    div { style: "font-size: 14px;", "🎁" }
-                    div { style: "font-size: 9px; color: #8b8b9e; margin-top: 2px;", "Sets" }
+                div { class: if is_sets { "nav-item active" } else { "nav-item" },
+                    span { class: "nav-icon", "🎁" }
+                    span { class: "nav-label", "Sets" }
                 }
             }
-            // 🛠️ Gear
             Link { to: Route::Accessories {},
-                div { style: "text-align: center; cursor: pointer; min-width: 36px;",
-                    div { style: "font-size: 14px;", "🛠️" }
-                    div { style: "font-size: 9px; color: #8b8b9e; margin-top: 2px;", "Gear" }
+                div { class: if is_accessories { "nav-item active" } else { "nav-item" },
+                    span { class: "nav-icon", "🛠️" }
+                    span { class: "nav-label", "Gear" }
                 }
             }
-            // 🍵 Tea
             Link { to: Route::Tea {},
-                div { style: "text-align: center; cursor: pointer; min-width: 36px;",
-                    div { style: "font-size: 14px;", "🍵" }
-                    div { style: "font-size: 9px; color: #8b8b9e; margin-top: 2px;", "Tea" }
+                div { class: if is_tea { "nav-item active" } else { "nav-item" },
+                    span { class: "nav-icon", "🍵" }
+                    span { class: "nav-label", "Tea" }
                 }
             }
-            // 🌱 Garden
             Link { to: Route::Garden {},
-                div { style: "text-align: center; cursor: pointer; min-width: 36px;",
-                    div { style: "font-size: 14px;", "🌱" }
-                    div { style: "font-size: 9px; color: #8b8b9e; margin-top: 2px;", "Garden" }
+                div { class: if is_garden { "nav-item active" } else { "nav-item" },
+                    span { class: "nav-icon", "🌱" }
+                    span { class: "nav-label", "Garden" }
                 }
             }
-            // 🗺️ Quest
             Link { to: Route::Quest { id: "daily".to_string() },
-                div { style: "text-align: center; cursor: pointer; min-width: 36px;",
-                    div { style: "font-size: 14px;", "🗺️" }
-                    div { style: "font-size: 9px; color: #8b8b9e; margin-top: 2px;", "Quest" }
+                div { class: if is_quest { "nav-item active" } else { "nav-item" },
+                    span { class: "nav-icon", "🗺️" }
+                    span { class: "nav-label", "Quest" }
                 }
             }
-            // 🛒 Cart
             Link { to: Route::Cart {},
-                div { style: "text-align: center; cursor: pointer; position: relative; min-width: 36px;",
-                    div { style: "font-size: 14px;", "🛒" }
+                div { class: if is_cart { "nav-item active" } else { "nav-item" }, style: "position: relative;",
+                    span { class: "nav-icon", "🛒" }
                     if cart_count > 0 {
-                        div { style: "
-                            position: absolute; top: -4px; right: -6px;
-                            background: #ff4757; color: white;
-                            font-size: 9px; padding: 1px 5px;
-                            border-radius: 8px; min-width: 14px; text-align: center;
-                        ", "{cart_count}" }
+                        span { class: "cart-badge",
+                            if cart_count > 9 { "9+" } else { "{cart_count}" }
+                        }
                     }
-                    div { style: "font-size: 9px; color: #8b8b9e; margin-top: 2px;", "Cart" }
+                    span { class: "nav-label", "Cart" }
                 }
             }
-            // 👤 Profile
             Link { to: Route::Profile {},
-                div { style: "text-align: center; cursor: pointer; min-width: 36px;",
-                    div { style: "font-size: 14px;", "👤" }
-                    div { style: "font-size: 9px; color: #8b8b9e; margin-top: 2px;", "Profile" }
+                div { class: if is_profile { "nav-item active" } else { "nav-item" },
+                    span { class: "nav-icon", "👤" }
+                    span { class: "nav-label", "Profile" }
                 }
             }
         }

@@ -25,14 +25,13 @@ pub fn CartScreen() -> Element {
             min-height: 100vh;
             background: #0f0f1a;
             color: #e8e8e8;
-            font-family: 'Press Start 2P', monospace;
             padding-bottom: 80px;
         ",
             // Header
-            div { style: "padding: 20px 16px 12px; text-align: center;",
-                h1 { style: "font-size: 18px; color: #39ff14; text-shadow: 0 0 8px rgba(57,255,20,0.5);", "{cart_title}" }
+            div { style: "padding: 20px 16px 16px; text-align: center;",
+                h1 { style: "font-size: 24px; font-weight: 800; color: #39ff14; text-shadow: 3px 3px 0 #000, 0 0 10px rgba(57,255,20,0.5); letter-spacing: 2px;", "{cart_title}" }
                 if !items.is_empty() {
-                    p { style: "font-size: 18px; color: #8b8b9e; margin-top: 4px;", "{item_count} items" }
+                    p { style: "font-size: 15px; color: #8b8b9e; margin-top: 4px;", "{item_count} items" }
                 }
             }
 
@@ -42,9 +41,9 @@ pub fn CartScreen() -> Element {
                     if items.is_empty() {
                         rsx! {
                             div { style: "text-align: center; padding: 60px 16px;",
-                                p { style: "font-size: 32px; margin-bottom: 16px;", "🛒" }
-                                p { style: "font-size: 11px; color: #8b8b9e; margin-bottom: 8px;", "{cart_empty}" }
-                                p { style: "font-size: 18px; color: #8b8b9e;", "{cart_empty_desc}" }
+                                p { style: "font-size: 70px; margin-bottom: 16px;", "🛒" }
+                                p { style: "font-size: 13px; color: #8b8b9e; margin-bottom: 8px;", "{cart_empty}" }
+                                p { style: "font-size: 15px; color: #8b8b9e;", "{cart_empty_desc}" }
                             }
                         }
                     } else {
@@ -57,21 +56,21 @@ pub fn CartScreen() -> Element {
 
                             // Summary
                             div { style: "
-                                background: #1a1a2e; border: 2px solid #2a2a4a;
-                                border-radius: 8px; padding: 14px;
+                                background: #16213e; border: 4px solid #2a2a4a;
+                                border-radius: 0; padding: 14px;
                                 box-shadow: 4px 4px 0 #000; margin-top: 8px;
                             ",
-                                div { style: "display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 16px;",
+                                div { style: "display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 15px;",
                                     span { style: "color: #8b8b9e;", "Subtotal:" }
                                     span { "{format_price(total)}" }
                                 }
-                                div { style: "display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 16px;",
+                                div { style: "display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 15px;",
                                     span { style: "color: #8b8b9e;", "Delivery:" }
                                     span { style: "color: #39ff14;", "Free" }
                                 }
-                                div { style: "display: flex; justify-content: space-between; font-size: 16px; font-weight: bold; padding-top: 6px; border-top: 1px solid #2a2a4a; margin-top: 6px;",
+                                div { style: "display: flex; justify-content: space-between; font-size: 15px; font-weight: 800; padding-top: 6px; border-top: 1px solid #2a2a4a; margin-top: 6px;",
                                     span { "Total:" }
-                                    span { style: "color: #39ff14;", "{format_price(total)}" }
+                                    span { style: "font-size: 20px; font-weight: 800; color: #ffe600; text-shadow: 2px 2px 0 #000;", "{format_price(total)}" }
                                 }
                             }
 
@@ -79,20 +78,20 @@ pub fn CartScreen() -> Element {
                             div { style: "display: flex; gap: 10px; margin-top: 16px;",
                                 Link { to: Route::Menu {},
                                     button { style: "
-                                        font-family: 'Press Start 2P', monospace;
-                                        font-size: 10px; flex: 1; padding: 10px;
+                                        font-size: 14px; font-weight: 700; flex: 1; padding: 12px 20px;
                                         background: transparent; color: #e8e8e8;
-                                        border: 2px solid #2a2a4a; border-radius: 6px;
-                                        cursor: pointer;
+                                        border: 4px solid #2a2a4a; border-radius: 0;
+                                        cursor: pointer; box-shadow: 3px 3px 0 #000;
+                                        transition: transform 0.1s, box-shadow 0.1s;
                                     ", "← Menu" }
                                 }
                                 Link { to: Route::Checkout {},
                                     button { style: "
-                                        font-family: 'Press Start 2P', monospace;
-                                        font-size: 10px; flex: 2; padding: 10px;
-                                        background: #39ff14; color: #0f0f1a;
-                                        border: none; border-radius: 6px;
-                                        cursor: pointer; font-weight: bold;
+                                        font-size: 14px; font-weight: 700; flex: 2; padding: 12px 20px;
+                                        background: #39ff14; color: #000;
+                                        border: 4px solid #2d9e0f; border-radius: 0;
+                                        cursor: pointer; box-shadow: 3px 3px 0 #000;
+                                        transition: transform 0.1s, box-shadow 0.1s;
                                     ", "Checkout →" }
                                 }
                             }
@@ -120,27 +119,28 @@ fn cart_item_row(item: CartItem) -> Element {
             key: "{row_key}",
             style: "
             display: flex; align-items: center; gap: 10px;
-            background: #1a1a2e; border: 2px solid #2a2a4a;
-            border-radius: 8px; padding: 10px; margin-bottom: 8px;
+            background: #16213e; border: 4px solid #2a2a4a;
+            border-radius: 0; padding: 10px; margin-bottom: 8px;
             box-shadow: 4px 4px 0 #000;
         ",
             div { style: "
-                width: 44px; height: 44px; background: #1a1a2e;
-                border-radius: 8px; display: flex; align-items: center;
+                width: 44px; height: 44px; background: #16213e;
+                border-radius: 0; display: flex; align-items: center;
                 justify-content: center; font-size: 22px; flex-shrink: 0;
             ", "🌿" }
             div { style: "flex: 1;",
-                div { style: "font-size: 16px; font-weight: bold; margin-bottom: 2px;", "{item.name}" }
-                div { style: "font-size: 18px; color: #8b8b9e;", "{price_str} each · {line_total_str}" }
+                div { style: "font-size: 17px; font-weight: 700; margin-bottom: 2px;", "{item.name}" }
+                div { style: "font-size: 15px; color: #8b8b9e;", "{price_str} each · {line_total_str}" }
             }
             div { style: "display: flex; align-items: center; gap: 6px;",
                 button {
                     style: "
-                        width: 26px; height: 26px;
-                        border: 2px solid #2a2a4a; background: #1a1a2e;
-                        color: #e8e8e8; border-radius: 8px; cursor: pointer;
+                        width: 30px; height: 30px;
+                        border: 4px solid #2a2a4a; background: #16213e;
+                        color: #e8e8e8; border-radius: 0; cursor: pointer;
                         font-size: 16px; display: flex; align-items: center; justify-content: center;
-                        font-family: 'Press Start 2P', monospace;
+                        box-shadow: 3px 3px 0 #000;
+                        transition: transform 0.1s, box-shadow 0.1s;
                     ",
                     onclick: move |_| {
                         let mut c = cart.write();
@@ -158,14 +158,15 @@ fn cart_item_row(item: CartItem) -> Element {
                     },
                     "−"
                 }
-                span { style: "font-size: 16px; min-width: 18px; text-align: center;", "{qty}" }
+                span { style: "font-size: 15px; min-width: 18px; text-align: center;", "{qty}" }
                 button {
                     style: "
-                        width: 26px; height: 26px;
-                        border: 2px solid #2a2a4a; background: #1a1a2e;
-                        color: #e8e8e8; border-radius: 8px; cursor: pointer;
+                        width: 30px; height: 30px;
+                        border: 4px solid #2a2a4a; background: #16213e;
+                        color: #e8e8e8; border-radius: 0; cursor: pointer;
                         font-size: 16px; display: flex; align-items: center; justify-content: center;
-                        font-family: 'Press Start 2P', monospace;
+                        box-shadow: 3px 3px 0 #000;
+                        transition: transform 0.1s, box-shadow 0.1s;
                     ",
                     onclick: move |_| {
                         cart.write().add_item(CartItem {

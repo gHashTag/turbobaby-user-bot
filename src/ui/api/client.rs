@@ -3,6 +3,7 @@ use super::types::*;
 use reqwest::Client;
 use std::sync::Arc;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -91,6 +92,27 @@ impl ApiClient {
         }
     }
 
+    async fn delete<T: for<'de> Deserialize<'de>>(&self, path: &str) -> Result<T> {
+        let url = self.build_url(path);
+        let response = self
+            .client
+            .delete(&url)
+            .send()
+            .await
+            .map_err(|e| ApiError::Network(e.to_string()))?;
+
+        if response.status().is_success() {
+            response
+                .json()
+                .await
+                .map_err(|e| ApiError::Parse(e.to_string()))
+        } else {
+            let status = response.status().as_u16();
+            let text = response.text().await.unwrap_or_default();
+            Err(ApiError::Api { status, message: text })
+        }
+    }
+
     // Strain endpoints
     pub async fn get_strains(&self) -> Result<Vec<Strain>> {
         // API returns {"strains": [...]} wrapper
@@ -104,7 +126,20 @@ impl ApiClient {
 
     // Catalog endpoints
     pub async fn get_accessories(&self) -> Result<Vec<Accessory>> {
-        self.get("/api/accessories").await
+        #[derive(Deserialize)]
+        struct AccessoriesResponse {
+            accessories: Vec<Accessory>,
+        }
+        let resp: AccessoriesResponse = self.get("/api/accessories").await?;
+        Ok(resp.accessories)
+    }
+
+    pub async fn delete_accessory(&self, id: &str) -> Result<Value> {
+        self.delete(&format!("/api/accessories/{}", id)).await
+    }
+
+    pub async fn create_accessory(&self, req: &AccessoryRequest) -> Result<Value> {
+        self.post("/api/accessories", req).await
     }
 
     pub async fn get_sets(&self) -> Result<Vec<Set>> {

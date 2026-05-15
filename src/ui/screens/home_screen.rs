@@ -1,4 +1,3 @@
-// Home Screen — Connected to real Strain of the Day API
 use dioxus::prelude::*;
 use serde::Deserialize;
 use crate::ui::routes::Route;
@@ -8,8 +7,6 @@ use crate::ui::api::context::api_base_url;
 use crate::trios::core::Lang;
 use crate::ui::components::bottom_nav::BottomNav;
 use crate::trios::i18n::{t, T_HOME_SUBTITLE, T_NAV_MENU, T_NAV_SETS, T_NAV_ACCESSORIES, T_NAV_TEA, T_NAV_GARDEN, T_ADD_TO_CART};
-
-// ── API response types ──────────────────────────────────────────
 
 #[derive(Debug, Clone, Deserialize, PartialEq)]
 struct SotdStrain {
@@ -27,8 +24,6 @@ struct SotdResponse {
     strains: Vec<SotdStrain>,
 }
 
-// ── Helpers ─────────────────────────────────────────────────────
-
 fn category_emoji(cat: &str) -> &'static str {
     match cat {
         "Sativa" => "☀️",
@@ -42,12 +37,14 @@ fn format_price(price: f64) -> String {
     format!("฿{}", price as i32)
 }
 
-// ── Home Screen Component ───────────────────────────────────────
-
 #[component]
 pub fn HomeScreen() -> Element {
     let mut cart = use_context::<Signal<Cart>>();
     let cart_count: u32 = cart.read().items.iter().map(|i| i.quantity).sum();
+    let nav = navigator();
+
+    // Secret admin access: 5 clicks on logo - navigate to admin URL directly
+    let mut logo_clicks = use_signal(|| 0u32);
 
     let home_subtitle = t(Lang::Russian, T_HOME_SUBTITLE).to_string();
     let nav_menu = t(Lang::Russian, T_NAV_MENU).to_string();
@@ -67,36 +64,36 @@ pub fn HomeScreen() -> Element {
             .map_err(|e| e.to_string())?
             .json::<SotdResponse>()
             .await
-            .map(|r| r.strains.into_iter().next()) // Take first strain
+            .map(|r| r.strains.into_iter().next())
             .map_err(|e| e.to_string())
     });
 
     rsx! {
-        div { style: "
-            min-height: 100vh;
-            background: #0f0f1a;
-            color: #e8e8e8;
-            font-family: 'Press Start 2P', monospace;
-            padding-bottom: 80px;
-        ",
-            // Header
-            div { style: "
-                text-align: center;
-                padding: 20px 16px 12px;
-            ",
+        div { style: "min-height:100vh;background:#0f0f1a;color:#e8e8e8;padding-bottom:80px;",
+
+            div { style: "text-align:center;padding:20px 16px 16px;",
                 img {
                     src: "{assets::logo::MAIN}",
                     alt: "Woody Weed Bot",
-                    style: "height: 100px; width: auto; display: block; margin: 0 auto;",
+                    style: "height:120px;width:auto;display:block;margin:0 auto;box-shadow:0 0 20px rgba(57,255,20,0.3);cursor:pointer;user-select:none;transition:transform 0.1s;",
+                    onclick: move |_| {
+                        *logo_clicks.write() += 1;
+                        let clicks = *logo_clicks.read();
+                        web_sys::console::log_1(&format!("Logo clicks: {}", clicks).into());
+                        if clicks >= 5 {
+                            web_sys::console::log_1(&"Secret admin access!".into());
+                            // Navigate to admin via Dioxus router
+                            nav.push(Route::Admin {});
+                            *logo_clicks.write() = 0;
+                        }
+                    }
                 }
-                p { style: "
-                    font-size: 11px;
-                    color: #8b8b9e;
-                    margin-top: 6px;
-                ", "{home_subtitle}" }
+                h1 { style: "font-size:24px;font-weight:800;color:#39ff14;text-shadow:3px 3px 0 #000,0 0 10px rgba(57,255,20,0.5);letter-spacing:2px;margin-top:12px;",
+                    "WOODY WEEDPECKER"
+                }
+                p { style: "font-size:13px;color:#888;margin-top:6px;", "{home_subtitle}" }
             }
 
-            // Hero — Strain of the Day (from API)
             {
                 match &*sotd_resource.read() {
                     Some(Ok(Some(strain))) => {
@@ -105,7 +102,7 @@ pub fn HomeScreen() -> Element {
                         let emoji = category_emoji(cat);
                         let has_discount = s.strain_of_day_discount > 0.0;
                         let discount_label = if has_discount {
-                            format!("{}% OFF", s.strain_of_day_discount as i32)
+                            format!("🔥 {}% OFF", s.strain_of_day_discount as i32)
                         } else {
                             "⭐ SOTD".to_string()
                         };
@@ -115,7 +112,7 @@ pub fn HomeScreen() -> Element {
                             format_price(s.price_per_gram)
                         };
                         let thc_str = s.thc_percent
-                            .map(|t| format!("{}% THC", t as i32))
+                            .map(|t| format!("THC {}%", t as i32))
                             .unwrap_or_default();
                         let badge_label = format!("{} {}", emoji, cat);
                         let s_name = s.name.clone();
@@ -128,48 +125,38 @@ pub fn HomeScreen() -> Element {
 
                         rsx! {
                             div { style: "
-                                margin: 0 16px 16px;
-                                background: linear-gradient(135deg, #1a1a2e, #1a1a2e);
-                                border: 2px solid #ffe600;
-                                border-radius: 8px;
-                                padding: 16px;
-                                box-shadow: 0 0 20px rgba(255,230,0,0.15), 4px 4px 0 #000;
-                                position: relative;
-                                overflow: hidden;
+                                margin:0 16px 16px;
+                                background:linear-gradient(135deg,#ff6b35,#f7931e);
+                                border:4px solid #ff6b35;
+                                box-shadow:0 4px 15px rgba(255,107,53,0.4),4px 4px 0 #000;
+                                padding:16px;position:relative;overflow:hidden;cursor:pointer;
                             ",
-                                div { style: "
-                                    position: absolute; top: 0; left: 0; right: 0; bottom: 0;
-                                    opacity: 0.03;
-                                    background: repeating-linear-gradient(0deg, transparent, transparent 4px, rgba(255,255,255,0.1) 4px, rgba(255,255,255,0.1) 8px);
-                                " }
-                                div { style: "display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; position: relative;",
-                                    h2 { style: "font-size: 14px; color: #ffe600; text-transform: uppercase; letter-spacing: 1px;", "⭐ Strain of the Day" }
+                                div { style: "display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;position:relative;",
+                                    h2 { style: "font-size:13px;font-weight:700;color:#fff;text-transform:uppercase;letter-spacing:1px;text-shadow:2px 2px 0 #000;",
+                                        "⭐ Strain of the Day"
+                                    }
                                     span { style: "
-                                        font-size: 10px;
-                                        background: #ffe600;
-                                        color: #000;
-                                        padding: 2px 6px;
-                                        border-radius: 8px;
+                                        font-size:13px;font-weight:700;
+                                        background:#ffe600;color:#000;
+                                        padding:4px 8px;
+                                        box-shadow:2px 2px 0 #000;
                                     ", "{discount_label}" }
                                 }
-                                div { style: "font-size: 10px; font-weight: bold; margin-bottom: 4px; position: relative;", "{s_name}" }
-                                div { style: "font-size: 12px; color: #8b8b9e; margin-bottom: 8px; position: relative;",
-                                    span { style: "color: #ffe600; border: 2px solid #ffe600; padding: 1px 4px; border-radius: 3px; font-size: 10px; margin-right: 6px;", "{badge_label}" }
+                                div { style: "font-size:17px;font-weight:700;margin-bottom:4px;position:relative;text-shadow:2px 2px 0 #000;", "{s_name}" }
+                                div { style: "font-size:13px;color:#fff;margin-bottom:8px;position:relative;",
+                                    span { style: "color:#fff;border:2px solid #fff;padding:2px 8px;font-size:13px;margin-right:8px;", "{badge_label}" }
                                     span { "{thc_str}" }
                                 }
-                                div { style: "display: flex; justify-content: space-between; align-items: center; position: relative;",
-                                    span { style: "font-size: 9px; color: #39ff14;", "{display_price}" }
+                                div { style: "display:flex;justify-content:space-between;align-items:center;position:relative;",
+                                    span { style: "font-size:22px;font-weight:800;color:#fff;text-shadow:2px 2px 0 #000;", "{display_price}" }
                                     button {
                                         style: "
-                                            font-family: 'Press Start 2P', monospace;
-                                            font-size: 10px;
-                                            background: #39ff14;
-                                            color: #0f0f1a;
-                                            border: none;
-                                            padding: 8px 14px;
-                                            border-radius: 6px;
-                                            cursor: pointer;
-                                            box-shadow: 4px 4px 0 #000;
+                                            font-size:14px;font-weight:700;
+                                            background:#39ff14;color:#000;
+                                            border:4px solid #2d9e0f;
+                                            padding:12px 20px;
+                                            box-shadow:3px 3px 0 #000;
+                                            cursor:pointer;
                                         ",
                                         onclick: move |_| {
                                             let mut c = cart.write();
@@ -188,219 +175,167 @@ pub fn HomeScreen() -> Element {
                         }
                     },
                     Some(Ok(None)) => {
-                        // No strain of the day — show placeholder
                         rsx! {
                             div { style: "
-                                margin: 0 16px 16px;
-                                background: linear-gradient(135deg, #1a1a2e, #1a1a2e);
-                                border: 2px solid #2a2a4a;
-                                border-radius: 8px;
-                                padding: 20px;
-                                text-align: center;
-                                box-shadow: 4px 4px 0 #000;
+                                margin:0 16px 16px;
+                                background:#16213e;border:4px solid #2a2a4a;
+                                box-shadow:4px 4px 0 #000;
+                                padding:20px;text-align:center;
                             ",
-                                p { style: "font-size: 10px; margin-bottom: 8px;", "🌟" }
-                                p { style: "font-size: 12px; color: #8b8b9e;", "No strain of the day yet" }
+                                p { style: "font-size:20px;margin-bottom:8px;", "🌟" }
+                                p { style: "font-size:15px;color:#888;", "No strain of the day yet" }
                             }
                         }
                     },
                     Some(Err(_)) | None => {
-                        // Loading or error — show skeleton
                         rsx! {
                             div { style: "
-                                margin: 0 16px 16px;
-                                background: linear-gradient(135deg, #1a1a2e, #1a1a2e);
-                                border: 2px solid #2a2a4a;
-                                border-radius: 8px;
-                                padding: 16px;
-                                box-shadow: 4px 4px 0 #000;
-                                min-height: 100px;
+                                margin:0 16px 16px;
+                                background:#16213e;border:4px solid #2a2a4a;
+                                box-shadow:4px 4px 0 #000;
+                                padding:16px;min-height:100px;
                             ",
-                                div { style: "font-size: 14px; color: #ffe600; margin-bottom: 10px;", "⭐ Strain of the Day" }
-                                div { style: "font-size: 12px; color: #8b8b9e;", "Loading..." }
+                                div { style: "font-size:13px;font-weight:700;color:#ffe600;text-shadow:2px 2px 0 #000;margin-bottom:10px;", "⭐ Strain of the Day" }
+                                div { style: "font-size:15px;color:#888;", "Loading..." }
                             }
                         }
                     },
                 }
             }
 
-            // Categories
-            div { style: "padding: 0 16px 16px;",
-                h2 { style: "font-size: 14px; color: #00e5ff; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 1px;", "Categories" }
-                div { style: "display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;",
-                    // Strains
+            div { style: "padding:0 16px 16px;",
+                h2 { style: "font-size:13px;font-weight:700;color:#00e5ff;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;text-shadow:2px 2px 0 #000;",
+                    "Categories"
+                }
+                div { style: "display:grid;grid-template-columns:repeat(3,1fr);gap:12px;",
                     Link { to: Route::Menu {},
                         div { style: "
-                            background: #1a1a2e;
-                            border: 2px solid #2a2a4a;
-                            border-radius: 8px;
-                            padding: 14px 8px;
-                            text-align: center;
-                            box-shadow: 4px 4px 0 #000;
-                            cursor: pointer;
-                            transition: border-color 0.2s;
+                            background:#16213e;border:4px solid #2a2a4a;
+                            box-shadow:4px 4px 0 #000;
+                            padding:14px 8px;text-align:center;cursor:pointer;
                         ",
-                            div { style: "font-size: 28px; margin-bottom: 6px;", "🌿" }
-                            div { style: "font-size: 18px; color: #e8e8e8;", "{nav_menu}" }
+                            div { style: "font-size:28px;margin-bottom:6px;", "🌿" }
+                            div { style: "font-size:13px;font-weight:700;color:#e8e8e8;", "{nav_menu}" }
                         }
                     }
-                    // Sets
                     Link { to: Route::Sets {},
                         div { style: "
-                            background: #1a1a2e;
-                            border: 2px solid #2a2a4a;
-                            border-radius: 8px;
-                            padding: 14px 8px;
-                            text-align: center;
-                            box-shadow: 4px 4px 0 #000;
-                            cursor: pointer;
+                            background:#16213e;border:4px solid #2a2a4a;
+                            box-shadow:4px 4px 0 #000;
+                            padding:14px 8px;text-align:center;cursor:pointer;
                         ",
-                            div { style: "font-size: 28px; margin-bottom: 6px;", "📦" }
-                            div { style: "font-size: 18px; color: #e8e8e8;", "{nav_sets}" }
+                            div { style: "font-size:28px;margin-bottom:6px;", "📦" }
+                            div { style: "font-size:13px;font-weight:700;color:#e8e8e8;", "{nav_sets}" }
                         }
                     }
-                    // Sommelier
                     Link { to: Route::Sommelier {},
                         div { style: "
-                            background: #1a1a2e;
-                            border: 2px solid #2a2a4a;
-                            border-radius: 8px;
-                            padding: 14px 8px;
-                            text-align: center;
-                            box-shadow: 4px 4px 0 #000;
-                            cursor: pointer;
+                            background:#16213e;border:4px solid #2a2a4a;
+                            box-shadow:4px 4px 0 #000;
+                            padding:14px 8px;text-align:center;cursor:pointer;
                         ",
-                            div { style: "font-size: 28px; margin-bottom: 6px;", "🍷" }
-                            div { style: "font-size: 18px; color: #e8e8e8;", "Sommelier" }
+                            div { style: "font-size:28px;margin-bottom:6px;", "🍷" }
+                            div { style: "font-size:13px;font-weight:700;color:#e8e8e8;", "Sommelier" }
                         }
                     }
-                    // Accessories
                     Link { to: Route::Accessories {},
                         div { style: "
-                            background: #1a1a2e;
-                            border: 2px solid #2a2a4a;
-                            border-radius: 8px;
-                            padding: 14px 8px;
-                            text-align: center;
-                            box-shadow: 4px 4px 0 #000;
-                            cursor: pointer;
+                            background:#16213e;border:4px solid #2a2a4a;
+                            box-shadow:4px 4px 0 #000;
+                            padding:14px 8px;text-align:center;cursor:pointer;
                         ",
-                            div { style: "font-size: 28px; margin-bottom: 6px;", "💨" }
-                            div { style: "font-size: 18px; color: #e8e8e8;", "{nav_accessories}" }
+                            div { style: "font-size:28px;margin-bottom:6px;", "💨" }
+                            div { style: "font-size:13px;font-weight:700;color:#e8e8e8;", "{nav_accessories}" }
                         }
                     }
-                    // Tea
                     Link { to: Route::Tea {},
                         div { style: "
-                            background: #1a1a2e;
-                            border: 2px solid #2a2a4a;
-                            border-radius: 8px;
-                            padding: 14px 8px;
-                            text-align: center;
-                            box-shadow: 4px 4px 0 #000;
-                            cursor: pointer;
+                            background:#16213e;border:4px solid #2a2a4a;
+                            box-shadow:4px 4px 0 #000;
+                            padding:14px 8px;text-align:center;cursor:pointer;
                         ",
-                            div { style: "font-size: 28px; margin-bottom: 6px;", "🍵" }
-                            div { style: "font-size: 18px; color: #e8e8e8;", "{nav_tea}" }
+                            div { style: "font-size:28px;margin-bottom:6px;", "🍵" }
+                            div { style: "font-size:13px;font-weight:700;color:#e8e8e8;", "{nav_tea}" }
                         }
                     }
-                    // Garden
                     Link { to: Route::Garden {},
                         div { style: "
-                            background: #1a1a2e;
-                            border: 2px solid #2a2a4a;
-                            border-radius: 8px;
-                            padding: 14px 8px;
-                            text-align: center;
-                            box-shadow: 4px 4px 0 #000;
-                            cursor: pointer;
+                            background:#16213e;border:4px solid #2a2a4a;
+                            box-shadow:4px 4px 0 #000;
+                            padding:14px 8px;text-align:center;cursor:pointer;
                         ",
-                            div { style: "font-size: 28px; margin-bottom: 6px;", "🌱" }
-                            div { style: "font-size: 18px; color: #e8e8e8;", "{nav_garden}" }
+                            div { style: "font-size:28px;margin-bottom:6px;", "🌱" }
+                            div { style: "font-size:13px;font-weight:700;color:#e8e8e8;", "{nav_garden}" }
                         }
                     }
                 }
             }
 
-            // Quest & Adventures Section
-            div { style: "padding: 0 16px 16px;",
-                h2 { style: "font-size: 14px; color: #c850c0; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 1px;", "🎯 Adventures" }
-                div { style: "display: grid; grid-template-columns: 1fr 1fr; gap: 10px;",
-                    // Daily Quest
+            div { style: "padding:0 16px 16px;",
+                h2 { style: "font-size:13px;font-weight:700;color:#b388ff;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;text-shadow:2px 2px 0 #000;",
+                    "🎯 Adventures"
+                }
+                div { style: "display:grid;grid-template-columns:1fr 1fr;gap:12px;",
                     Link { to: Route::Quest { id: "daily".to_string() },
                         div { style: "
-                            background: linear-gradient(135deg, rgba(0,229,255,0.1), rgba(57,255,20,0.1));
-                            border: 2px solid #00e5ff; border-radius: 8px;
-                            padding: 12px; text-align: center;
-                            box-shadow: 4px 4px 0 #000; cursor: pointer;
+                            background:linear-gradient(135deg,rgba(0,229,255,0.1),rgba(57,255,20,0.1));
+                            border:4px solid #00e5ff;
+                            box-shadow:4px 4px 0 #000;
+                            padding:12px;text-align:center;cursor:pointer;
                         ",
-                            div { style: "font-size: 28px; margin-bottom: 4px;", "🎯" }
-                            div { style: "font-size: 18px; color: #00e5ff;", "Daily Quest" }
+                            div { style: "font-size:28px;margin-bottom:4px;", "🎯" }
+                            div { style: "font-size:13px;font-weight:700;color:#00e5ff;", "Daily Quest" }
                         }
                     }
-                    // Treasure Hunt
                     Link { to: Route::TreasureHunt {},
                         div { style: "
-                            background: linear-gradient(135deg, rgba(255,230,0,0.1), rgba(255,150,0,0.1));
-                            border: 2px solid #ffe600; border-radius: 8px;
-                            padding: 12px; text-align: center;
-                            box-shadow: 4px 4px 0 #000; cursor: pointer;
+                            background:linear-gradient(135deg,rgba(255,230,0,0.1),rgba(255,150,0,0.1));
+                            border:4px solid #ffe600;
+                            box-shadow:4px 4px 0 #000;
+                            padding:12px;text-align:center;cursor:pointer;
                         ",
-                            div { style: "font-size: 28px; margin-bottom: 4px;", "🏴‍☠️" }
-                            div { style: "font-size: 18px; color: #ffe600;", "Treasure Hunt" }
+                            div { style: "font-size:28px;margin-bottom:4px;", "🏴‍☠️" }
+                            div { style: "font-size:13px;font-weight:700;color:#ffe600;", "Treasure Hunt" }
                         }
                     }
-                    // AR Hunt
                     Link { to: Route::ArHunt {},
                         div { style: "
-                            background: linear-gradient(135deg, rgba(255,107,157,0.1), rgba(200,80,192,0.1));
-                            border: 2px solid #ff6b9d; border-radius: 8px;
-                            padding: 12px; text-align: center;
-                            box-shadow: 4px 4px 0 #000; cursor: pointer;
+                            background:linear-gradient(135deg,rgba(255,107,157,0.1),rgba(200,80,192,0.1));
+                            border:4px solid #ff6b9d;
+                            box-shadow:4px 4px 0 #000;
+                            padding:12px;text-align:center;cursor:pointer;
                         ",
-                            div { style: "font-size: 28px; margin-bottom: 4px;", "🔮" }
-                            div { style: "font-size: 18px; color: #ff6b9d;", "AR Hunt" }
+                            div { style: "font-size:28px;margin-bottom:4px;", "🔮" }
+                            div { style: "font-size:13px;font-weight:700;color:#ff6b9d;", "AR Hunt" }
                         }
                     }
-                    // Location Quest
                     Link { to: Route::LocationQuest {},
                         div { style: "
-                            background: linear-gradient(135deg, rgba(0,229,255,0.1), rgba(78,205,196,0.1));
-                            border: 2px solid #4ecdc4; border-radius: 8px;
-                            padding: 12px; text-align: center;
-                            box-shadow: 4px 4px 0 #000; cursor: pointer;
+                            background:linear-gradient(135deg,rgba(0,229,255,0.1),rgba(78,205,196,0.1));
+                            border:4px solid #4ecdc4;
+                            box-shadow:4px 4px 0 #000;
+                            padding:12px;text-align:center;cursor:pointer;
                         ",
-                            div { style: "font-size: 28px; margin-bottom: 4px;", "📍" }
-                            div { style: "font-size: 18px; color: #4ecdc4;", "Location Quest" }
+                            div { style: "font-size:28px;margin-bottom:4px;", "📍" }
+                            div { style: "font-size:13px;font-weight:700;color:#4ecdc4;", "Location Quest" }
                         }
                     }
                 }
             }
 
-            // Tech Tree & Admin Section
-            div { style: "padding: 0 16px 16px;",
-                h2 { style: "font-size: 14px; color: #8b8b9e; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 1px;", "🔧 More" }
-                div { style: "display: grid; grid-template-columns: 1fr 1fr; gap: 10px;",
-                    // Tech Tree
+            div { style: "padding:0 16px 16px;",
+                h2 { style: "font-size:13px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;text-shadow:2px 2px 0 #000;",
+                    "🔧 More"
+                }
+                div { style: "display:grid;grid-template-columns:1fr;gap:12px;",
                     Link { to: Route::TechTree {},
                         div { style: "
-                            background: #1a1a2e; border: 2px solid #2a2a4a;
-                            border-radius: 8px; padding: 12px; text-align: center;
-                            box-shadow: 4px 4px 0 #000; cursor: pointer;
+                            background:#16213e;border:4px solid #2a2a4a;
+                            box-shadow:4px 4px 0 #000;
+                            padding:12px;text-align:center;cursor:pointer;
                         ",
-                            div { style: "font-size: 28px; margin-bottom: 4px;", "🌳" }
-                            div { style: "font-size: 18px; color: #c850c0;", "Tech Tree" }
-                        }
-                    }
-                    // Admin
-                    Link { to: Route::Admin {},
-                        div { style: "
-                            background: #1a1a2e; border: 2px solid #2a2a4a;
-                            border-radius: 8px; padding: 12px; text-align: center;
-                            box-shadow: 4px 4px 0 #000; cursor: pointer;
-                        ",
-                            div { style: "font-size: 28px; margin-bottom: 4px;", "⚙️" }
-                            div { style: "font-size: 18px; color: #ff4757;", "Admin" }
+                            div { style: "font-size:28px;margin-bottom:4px;", "🌳" }
+                            div { style: "font-size:13px;font-weight:700;color:#b388ff;", "Tech Tree" }
                         }
                     }
                 }

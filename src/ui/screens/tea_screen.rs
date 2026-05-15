@@ -7,6 +7,7 @@ use crate::trios::core::Lang;
 use crate::trios::i18n::{t, T_TEA_TITLE, T_TEA_DESC, T_FILTER_ALL, T_ADD_TO_CART};
 
 #[derive(Debug, Clone, Deserialize)]
+#[allow(dead_code)]
 struct ApiTea {
     id: String,
     name: String,
@@ -81,31 +82,29 @@ pub fn TeaScreen() -> Element {
             min-height: 100vh;
             background: #0f0f1a;
             color: #e8e8e8;
-            font-family: 'Press Start 2P', monospace;
             padding-bottom: 80px;
         ",
-            div { style: "padding: 20px 16px 12px; text-align: center;",
-                h1 { style: "font-size: 18px; color: #39ff14; text-shadow: 0 0 8px rgba(57,255,20,0.5);", "{tea_title}" }
-                p { style: "font-size: 11px; color: #8b8b9e; margin-top: 4px;", "{tea_desc}" }
+            div { style: "padding: 20px 16px 16px; text-align: center;",
+                h1 { style: "font-size: 24px; font-weight: 800; color: #39ff14; text-shadow: 3px 3px 0 #000, 0 0 10px rgba(57,255,20,0.5); letter-spacing: 2px;", "{tea_title}" }
+                p { style: "font-size: 13px; color: #8b8b9e; margin-top: 4px;", "{tea_desc}" }
             }
 
-            // Subcategory filter tabs
+            // Subcategory filter tabs (pill chips)
             div { style: "display: flex; gap: 6px; padding: 0 16px 12px; overflow-x: auto;",
                 for sub in SUBCATEGORIES.iter() {
                     {
                         let is_active = active_sub() == *sub;
                         let bg = if is_active { "#39ff14" } else { "transparent" };
-                        let color = if is_active { "#0f0f1a" } else { "#8b8b9e" };
+                        let color = if is_active { "#000" } else { "#8b8b9e" };
                         let border = if is_active { "#39ff14" } else { "#2a2a4a" };
                         let label = if *sub == "All" { filter_all.to_string() } else { sub.to_string() };
                         let sub_val = sub.to_string();
                         rsx! {
                             button {
                                 style: "
-                                    font-family: 'Press Start 2P', monospace;
-                                    font-size: 10px; padding: 6px 10px;
+                                    font-size: 13px; padding: 6px 10px;
                                     background: {bg}; color: {color};
-                                    border: 2px solid {border}; border-radius: 8px;
+                                    border: 4px solid {border}; border-radius: 20px;
                                     cursor: pointer; white-space: nowrap;
                                 ",
                                 onclick: move |_| active_sub.set(sub_val.clone()),
@@ -121,8 +120,8 @@ pub fn TeaScreen() -> Element {
                 match &*tea_resource.read() {
                     Some(Ok(teas)) if teas.is_empty() => rsx! {
                         div { style: "text-align: center; padding: 40px 16px;",
-                            div { style: "font-size: 36px; margin-bottom: 12px;", "🍵" }
-                            p { style: "font-size: 12px; color: #8b8b9e;", "No tea products available yet" }
+                            div { style: "font-size: 70px; margin-bottom: 12px;", "🍵" }
+                            p { style: "font-size: 13px; color: #8b8b9e;", "No tea products available yet" }
                         }
                     },
                     Some(Ok(_)) => rsx! {
@@ -145,13 +144,13 @@ pub fn TeaScreen() -> Element {
 
                                     rsx! {
                                         div { style: "
-                                            background: #1a1a2e; border: 2px solid #2a2a4a;
-                                            border-radius: 8px; overflow: hidden; box-shadow: 4px 4px 0 #000;
+                                            background: #16213e; border: 4px solid #2a2a4a;
+                                            border-radius: 0; overflow: hidden; box-shadow: 4px 4px 0 #000;
                                             opacity: {opacity};
                                         ",
                                             div { style: "
                                                 height: 100px;
-                                                background: linear-gradient(135deg, #1a1a2e, #1a1a2e);
+                                                background: linear-gradient(135deg, #16213e, #16213e);
                                                 display: flex; align-items: center; justify-content: center;
                                                 font-size: 36px; position: relative;
                                             ",
@@ -164,37 +163,37 @@ pub fn TeaScreen() -> Element {
                                                     span { style: "
                                                         position: absolute; bottom: 4px; left: 50%;
                                                         transform: translateX(-50%);
-                                                        font-size: 9px; background: #ff4757; color: white;
-                                                        padding: 1px 6px; border-radius: 3px;
+                                                        font-size: 13px; background: #ff4757; color: white;
+                                                        padding: 1px 6px; border-radius: 0;
                                                     ", "SOLD OUT" }
                                                 }
                                             }
                                             div { style: "padding: 8px;",
-                                                div { style: "font-size: 18px; color: #b388ff; margin-bottom: 2px; text-transform: uppercase;", "{sub}" }
-                                                div { style: "font-size: 14px; font-weight: bold; margin-bottom: 2px;", "{t_name}" }
+                                                div { style: "font-size: 13px; font-weight: 700; color: #b388ff; margin-bottom: 2px; text-transform: uppercase;", "{sub}" }
+                                                div { style: "font-size: 17px; font-weight: 700; margin-bottom: 2px;", "{t_name}" }
                                                 if !desc.is_empty() {
-                                                    div { style: "font-size: 18px; color: #8b8b9e; margin-bottom: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;", "{desc}" }
+                                                    div { style: "font-size: 13px; color: #8b8b9e; margin-bottom: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;", "{desc}" }
                                                 }
                                                 if show_low_stock && !show_out_of_stock {
-                                                    div { style: "font-size: 9px; color: #ffe600; margin-bottom: 4px;", "⚠ Only {stock} left" }
+                                                    div { style: "font-size: 13px; color: #ffe600; margin-bottom: 4px;", "⚠ Only {stock} left" }
                                                 }
-                                                div { style: "font-size: 16px; color: #39ff14; margin-bottom: 6px;", "{price_str}" }
+                                                div { style: "font-size: 20px; font-weight: 800; color: #ffe600; text-shadow: 2px 2px 0 #000; margin-bottom: 6px;", "{price_str}" }
                                             }
                                             div { style: "padding: 0 8px 8px;",
                                                 if show_out_of_stock {
                                                     button { style: "
-                                                        font-family: 'Press Start 2P', monospace;
-                                                        font-size: 10px; width: 100%; padding: 6px;
+                                                        font-size: 13px; width: 100%; padding: 8px;
                                                         background: transparent; color: #8b8b9e;
-                                                        border: 2px solid #2a2a4a; border-radius: 8px; cursor: not-allowed;
+                                                        border: 4px solid #2a2a4a; border-radius: 0; cursor: not-allowed;
                                                     ", "Sold Out" }
                                                 } else {
                                                     button {
                                                         style: "
-                                                            font-family: 'Press Start 2P', monospace;
-                                                            font-size: 10px; width: 100%; padding: 6px;
-                                                            background: #39ff14; color: #0f0f1a;
-                                                            border: none; border-radius: 8px; cursor: pointer;
+                                                            font-size: 14px; font-weight: 700; width: 100%; padding: 8px;
+                                                            background: #39ff14; color: #000;
+                                                            border: 4px solid #2d9e0f; border-radius: 0; cursor: pointer;
+                                                            box-shadow: 3px 3px 0 #000;
+                                                            transition: transform 0.1s, box-shadow 0.1s;
                                                         ",
                                                         onclick: move |_| {
                                                             let mut c = cart.write();
@@ -218,19 +217,19 @@ pub fn TeaScreen() -> Element {
                     },
                     Some(Err(e)) => rsx! {
                         div { style: "text-align: center; padding: 40px 16px;",
-                            div { style: "font-size: 36px; margin-bottom: 12px;", "⚠️" }
-                            p { style: "font-size: 12px; color: #ff4757;", "Error: {e}" }
+                            div { style: "font-size: 70px; margin-bottom: 12px;", "⚠️" }
+                            p { style: "font-size: 13px; color: #ff4757;", "Error: {e}" }
                         }
                     },
                     None => rsx! {
                         div { style: "display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 0 16px;",
                             for _ in 0..4 {
                                 div { style: "
-                                    background: #1a1a2e; border: 2px solid #2a2a4a;
-                                    border-radius: 8px; padding: 20px; text-align: center;
+                                    background: #16213e; border: 4px solid #2a2a4a;
+                                    border-radius: 0; padding: 20px; text-align: center;
                                     box-shadow: 4px 4px 0 #000; min-height: 140px;
                                 ",
-                                    div { style: "font-size: 12px; color: #8b8b9e;", "Loading..." }
+                                    div { style: "font-size: 13px; color: #8b8b9e;", "Loading..." }
                                 }
                             }
                         }

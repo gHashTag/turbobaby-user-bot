@@ -7,3 +7,5 @@ target/
 
 # Trunk build output (now built inside Docker)
 dist/
+logs/
+*.log

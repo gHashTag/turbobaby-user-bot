@@ -1,141 +1,197 @@
-// Treasure Hunt Screen — QR-code checkpoint quest with GPS verification
 use dioxus::prelude::*;
+use serde::Deserialize;
+use crate::ui::api::context::api_base_url;
 
-#[derive(Clone, Debug, PartialEq)]
-struct Checkpoint {
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct Hunt {
     id: String,
     name: String,
-    emoji: String,
-    collected: bool,
+    #[allow(dead_code)]
+    description: Option<String>,
+    #[allow(dead_code)]
+    image_url: Option<String>,
+    is_active: bool,
+    start_name: String,
 }
 
-fn mock_checkpoints() -> Vec<Checkpoint> {
-    vec![
-        Checkpoint { id: "cp1".into(), name: "Beach Bar".into(), emoji: "\u{1F3D6}\u{FE0F}".into(), collected: true },
-        Checkpoint { id: "cp2".into(), name: "Viewpoint".into(), emoji: "\u{1F304}".into(), collected: true },
-        Checkpoint { id: "cp3".into(), name: "Temple".into(), emoji: "\u{26E9}\u{FE0F}".into(), collected: false },
-        Checkpoint { id: "cp4".into(), name: "Night Market".into(), emoji: "\u{1F6CD}\u{FE0F}".into(), collected: false },
-        Checkpoint { id: "cp5".into(), name: "Secret Beach".into(), emoji: "\u{1F30A}".into(), collected: false },
-    ]
-}
-
-fn render_checkpoint(cp: Checkpoint) -> Element {
-    let border_color = if cp.collected { "#39ff14" } else { "#2a2a4a" };
-    let opacity = if cp.collected { "0.7" } else { "1.0" };
-    let status_text = if cp.collected { "\u{2705} Collected" } else { "\u{1F4CD} Not found" };
-    let status_color = if cp.collected { "#39ff14" } else { "#8b8b9e" };
-
-    rsx! {
-        div { key: "{cp.id}", style: "
-            background: #1a1a2e; border: 2px solid {border_color};
-            border-radius: 8px; padding: 12px; opacity: {opacity};
-            display: flex; align-items: center; gap: 12px;
-            box-shadow: 4px 4px 0 #000;
-        ",
-            span { style: "font-size: 28px;", "{cp.emoji}" }
-            div { style: "flex: 1;",
-                div { style: "font-size: 14px; font-weight: 700; color: #ffffff; margin-bottom: 4px;",
-                    "{cp.name}"
-                }
-                span { style: "font-size: 18px; color: {status_color};",
-                    "{status_text}"
-                }
-            }
-            if !cp.collected {
-                button { style: "
-                    font-family: 'Press Start 2P', monospace;
-                    font-size: 10px; padding: 6px 10px;
-                    background: #ffe600; color: #0f0f1a;
-                    border: none; border-radius: 8px; cursor: pointer;
-                ",
-                    "\u{1F4F7} Scan"
-                }
-            }
-        }
-    }
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct Place {
+    id: String,
+    name: String,
+    category: String,
+    lat: f64,
+    lon: f64,
+    description: Option<String>,
+    image_url: Option<String>,
 }
 
 #[component]
 pub fn TreasureHuntScreen() -> Element {
-    let checkpoints = use_signal(|| mock_checkpoints());
-    let total = checkpoints.read().len();
-    let collected = checkpoints.read().iter().filter(|c| c.collected).count();
-    let progress_pct = if total > 0 { (collected as f64 / total as f64) * 100.0 } else { 0.0 };
-    let remaining = total - collected;
+    let hunts = use_signal(Vec::<Hunt>::new);
+    let places = use_signal(Vec::<Place>::new);
+    let loading = use_signal(|| true);
+
+    {
+        let mut hunts_c = hunts;
+        let mut places_c = places;
+        let mut loading_c = loading;
+        use_hook(move || {
+            spawn(async move {
+                let base = api_base_url();
+                let client = reqwest::Client::new();
+
+                if let Ok(resp) = client.get(format!("{}/api/treasure-hunts", base)).send().await {
+                    if let Ok(text) = resp.text().await {
+                        if let Ok(val) = serde_json::from_str::<serde_json::Value>(&text) {
+                            if let Some(arr) = val.get("treasure_hunts").and_then(|v| v.as_array()) {
+                                let items: Vec<Hunt> = arr
+                                    .iter()
+                                    .filter_map(|v| serde_json::from_value(v.clone()).ok())
+                                    .collect();
+                                hunts_c.set(items);
+                            }
+                        }
+                    }
+                }
+
+                if let Ok(resp) = client.get(format!("{}/api/quest-places", base)).send().await {
+                    if let Ok(text) = resp.text().await {
+                        if let Ok(val) = serde_json::from_str::<serde_json::Value>(&text) {
+                            if let Some(arr) = val.get("quest_places").and_then(|v| v.as_array()) {
+                                let items: Vec<Place> = arr
+                                    .iter()
+                                    .filter_map(|v| serde_json::from_value(v.clone()).ok())
+                                    .collect();
+                                places_c.set(items);
+                            }
+                        }
+                    }
+                }
+
+                loading_c.set(false);
+            });
+        });
+    }
+
+    let hunt_count = hunts.read().len();
+    let place_count = places.read().len();
 
     rsx! {
         div { style: "
             min-height: 100vh;
             background: #0f0f1a;
             color: #e8e8e8;
-            font-family: 'Press Start 2P', monospace;
             padding: 20px 16px;
             padding-bottom: 80px;
         ",
-            // Header
-            div { style: "text-align: center; margin-bottom: 20px;",
-                h1 { style: "font-size: 18px; color: #ffe600; text-shadow: 0 0 8px rgba(255,230,0,0.5);",
+            div { style: "padding: 20px 16px 16px; text-align: center; margin-bottom: 20px;",
+                h1 { style: "font-size: 24px; font-weight: 800; color: #ffe600; text-shadow: 3px 3px 0 #000, 0 0 10px rgba(255,230,0,0.5); letter-spacing: 2px;",
                     "\u{1F3F4}\u{200D}\u{2620}\u{FE0F} Treasure Hunt"
                 }
-                p { style: "font-size: 18px; color: #8b8b9e; margin-top: 6px;",
+                p { style: "font-size: 13px; color: #8b8b9e; margin-top: 6px;",
                     "Find checkpoints, scan QR codes, collect rewards!"
                 }
             }
 
-            // Progress bar
-            div { style: "
-                background: #1a1a2e; border: 2px solid #2a2a4a; border-radius: 8px;
-                padding: 12px; margin-bottom: 16px; box-shadow: 4px 4px 0 #000;
-            ",
-                div { style: "display: flex; justify-content: space-between; margin-bottom: 8px;",
-                    span { style: "font-size: 18px; color: #ffe600;",
-                        "\u{1F4AF} Progress"
-                    }
-                    span { style: "font-size: 18px; color: #39ff14;",
-                        "{collected}/{total}"
+            if *loading.read() {
+                div { style: "text-align: center; padding: 40px;",
+                    div { style: "font-size: 13px; color: #ffe600;",
+                        "Loading..."
                     }
                 }
-                div { style: "background: #0f0f1a; border-radius: 8px; height: 8px; overflow: hidden;",
-                    div { style: "background: linear-gradient(90deg, #ffe600, #ff9800); height: 100%; width: {progress_pct}%; border-radius: 8px;" }
-                }
-            }
-
-            // Status banner
-            {if collected == total && total > 0 {
-                rsx! {
-                    div { style: "
-                        background: rgba(57,255,20,0.1); border: 2px solid #39ff14;
-                        border-radius: 8px; padding: 12px; text-align: center;
-                        margin-bottom: 16px; box-shadow: 4px 4px 0 #000;
-                    ",
-                        div { style: "font-size: 14px; color: #39ff14; margin-bottom: 4px;",
-                            "\u{1F389} All checkpoints collected!"
-                        }
-                        div { style: "font-size: 18px; color: #8b8b9e;",
-                            "Claim your reward at the bar"
-                        }
+            } else if hunt_count == 0 && place_count == 0 {
+                div { style: "
+                    background: #16213e; border: 4px solid #2a2a4a; border-radius: 0;
+                    padding: 24px; text-align: center; box-shadow: 4px 4px 0 #000;
+                ",
+                    div { style: "font-size: 70px; margin-bottom: 12px;", "\u{1F5FA}\u{FE0F}" }
+                    div { style: "font-size: 15px; color: #ffe600; margin-bottom: 6px;",
+                        "No hunts available yet"
+                    }
+                    div { style: "font-size: 13px; color: #8b8b9e;",
+                        "Check back soon for new treasure hunts!"
                     }
                 }
             } else {
-                rsx! {
-                    div { style: "
-                        background: rgba(255,230,0,0.05); border: 2px solid #ffe600;
-                        border-radius: 8px; padding: 12px; text-align: center;
-                        margin-bottom: 16px; box-shadow: 4px 4px 0 #000;
-                    ",
-                        div { style: "font-size: 18px; color: #ffe600; margin-bottom: 4px;",
-                            "\u{1F4E1} {remaining} checkpoints remaining"
+                // Active Hunts
+                if hunt_count > 0 {
+                    div { style: "margin-bottom: 16px;",
+                        div { style: "font-size: 13px; font-weight: 700; color: #ffe600; text-transform: uppercase; letter-spacing: 1px; text-shadow: 2px 2px 0 #000; margin-bottom: 8px;",
+                            "\u{1F3AF} Active Hunts ({hunt_count})"
                         }
-                        div { style: "font-size: 18px; color: #8b8b9e;",
-                            "Scan QR codes at each location to check in"
-                        }
+                        {hunts.read().iter().map(|h| rsx! {
+                            div { key: "{h.id}", style: "
+                                background: #16213e; border: 4px solid #ffe600;
+                                border-radius: 0; padding: 12px; margin-bottom: 8px;
+                                box-shadow: 4px 4px 0 #000;
+                            ",
+                                div { style: "font-size: 17px; font-weight: 700; color: #fff; margin-bottom: 4px;",
+                                    "{h.name}"
+                                }
+                                if !h.start_name.is_empty() {
+                                    div { style: "font-size: 13px; color: #8b8b9e;",
+                                        "\u{1F4CD} Start: {h.start_name}"
+                                    }
+                                }
+                                button { style: "
+                                    font-size: 14px; font-weight: 700; padding: 8px 16px; margin-top: 8px;
+                                    background: #ffe600; color: #000;
+                                    border: 4px solid #cca300; border-radius: 0; cursor: pointer;
+                                    box-shadow: 3px 3px 0 #000;
+                                ",
+                                    "\u{1F6B6} Start Hunt"
+                                }
+                            }
+                        })}
                     }
                 }
-            }}
 
-            // Checkpoint list
-            div { style: "display: flex; flex-direction: column; gap: 8px;",
-                {checkpoints.read().clone().into_iter().map(|cp| render_checkpoint(cp))}
+                // Quest Places / Checkpoints
+                if place_count > 0 {
+                    div { style: "margin-bottom: 16px;",
+                        div { style: "font-size: 13px; font-weight: 700; color: #00e5ff; text-transform: uppercase; letter-spacing: 1px; text-shadow: 2px 2px 0 #000; margin-bottom: 8px;",
+                            "\u{1F4CD} Quest Locations ({place_count})"
+                        }
+                        {places.read().iter().map(|p| rsx! {
+                            div { key: "{p.id}", style: "
+                                background: #16213e; border: 4px solid #2a2a4a;
+                                border-radius: 0; padding: 10px; margin-bottom: 6px;
+                                display: flex; align-items: center; gap: 10px;
+                                box-shadow: 4px 4px 0 #000;
+                            ",
+                                div { style: "
+                                    width: 36px; height: 36px; border-radius: 0;
+                                    background: #00e5ff15; border: 4px solid #00e5ff44;
+                                    display: flex; align-items: center; justify-content: center;
+                                    font-size: 14px; flex-shrink: 0;
+                                ",
+                                    "\u{1F4CD}"
+                                }
+                                div { style: "flex: 1;",
+                                    div { style: "font-size: 17px; font-weight: 700; color: #fff; margin-bottom: 3px;",
+                                        "{p.name}"
+                                    }
+                                    div { style: "font-size: 13px; color: #00e5ff; text-transform: uppercase; margin-bottom: 2px;",
+                                        "{p.category}"
+                                    }
+                                    if let Some(desc) = &p.description {
+                                        div { style: "font-size: 13px; color: #8b8b9e;",
+                                            "{desc}"
+                                        }
+                                    }
+                                }
+                                button { style: "
+                                    font-size: 13px; font-weight: 700; padding: 5px 8px;
+                                    background: #16213e; color: #ffe600;
+                                    border: 4px solid #ffe600; border-radius: 0; cursor: pointer;
+                                    box-shadow: 3px 3px 0 #000;
+                                ",
+                                    "\u{1F4F7} Scan"
+                                }
+                            }
+                        })}
+                    }
+                }
             }
         }
     }

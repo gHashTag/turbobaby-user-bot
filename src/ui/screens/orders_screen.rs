@@ -108,30 +108,28 @@ pub fn OrdersScreen() -> Element {
             min-height: 100vh;
             background: #0f0f1a;
             color: #e8e8e8;
-            font-family: 'Press Start 2P', monospace;
             padding-bottom: 80px;
         ",
-            div { style: "padding: 20px 16px 12px; text-align: center;",
-                h1 { style: "font-size: 18px; color: #39ff14; text-shadow: 0 0 8px rgba(57,255,20,0.5);", "{orders_title}" }
-                p { style: "font-size: 18px; color: #8b8b9e; margin-top: 4px;", "Your order history" }
+            div { style: "padding: 20px 16px 16px; text-align: center;",
+                h1 { style: "font-size: 24px; font-weight: 800; color: #39ff14; text-shadow: 3px 3px 0 #000, 0 0 10px rgba(57,255,20,0.5); letter-spacing: 2px;", "{orders_title}" }
+                p { style: "font-size: 15px; color: #8b8b9e; margin-top: 4px;", "Your order history" }
             }
 
-            // Status filters
+            // Status filters (pill chips)
             div { style: "display: flex; gap: 6px; padding: 0 16px 12px; overflow-x: auto;",
                 for filter in [StatusFilter::All, StatusFilter::Pending, StatusFilter::Confirmed, StatusFilter::Ready, StatusFilter::Completed] {
                     {
                         let is_active = active_filter() == filter;
                         let bg = if is_active { "#39ff14" } else { "transparent" };
-                        let color = if is_active { "#0f0f1a" } else { "#8b8b9e" };
+                        let color = if is_active { "#000" } else { "#8b8b9e" };
                         let border = if is_active { "#39ff14" } else { "#2a2a4a" };
                         let label = filter.label();
                         rsx! {
                             button {
                                 style: "
-                                    font-family: 'Press Start 2P', monospace;
-                                    font-size: 10px; padding: 6px 10px;
+                                    font-size: 13px; padding: 6px 10px;
                                     background: {bg}; color: {color};
-                                    border: 2px solid {border}; border-radius: 8px;
+                                    border: 4px solid {border}; border-radius: 20px;
                                     cursor: pointer; white-space: nowrap;
                                 ",
                                 onclick: move |_| active_filter.set(filter),
@@ -147,14 +145,14 @@ pub fn OrdersScreen() -> Element {
                     match &*orders_resource.read() {
                         Some(Ok(orders)) if orders.is_empty() => rsx! {
                             div { style: "text-align: center; padding: 40px 16px;",
-                                div { style: "font-size: 36px; margin-bottom: 12px;", "📦" }
-                                p { style: "font-size: 12px; color: #8b8b9e; margin-bottom: 16px;", "No orders yet" }
+                                div { style: "font-size: 70px; margin-bottom: 12px;", "📦" }
+                                p { style: "font-size: 13px; color: #8b8b9e; margin-bottom: 16px;", "No orders yet" }
                                 Link { to: Route::Sets {},
                                     button { style: "
-                                        font-family: 'Press Start 2P', monospace;
-                                        font-size: 10px; padding: 10px 20px;
-                                        background: #39ff14; color: #0f0f1a;
-                                        border: none; border-radius: 6px; cursor: pointer;
+                                        font-size: 14px; font-weight: 700; padding: 12px 20px;
+                                        background: #39ff14; color: #000;
+                                        border: 4px solid #2d9e0f; border-radius: 0; cursor: pointer;
+                                        box-shadow: 3px 3px 0 #000;
                                     ", "Browse Sets 🎁" }
                                 }
                             }
@@ -177,30 +175,30 @@ pub fn OrdersScreen() -> Element {
 
                                         rsx! {
                                             div { style: "
-                                                background: #1a1a2e; border: 2px solid {border_color};
-                                                border-radius: 8px; padding: 14px;
+                                                background: #16213e; border: 4px solid {border_color};
+                                                border-radius: 0; padding: 14px;
                                                 box-shadow: {shadow};
                                                 opacity: {opacity};
                                             ",
                                                 div { style: "display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;",
-                                                    span { style: "font-size: 12px; color: #e8e8e8;", "Order #{short_id}" }
+                                                    span { style: "font-size: 15px; color: #e8e8e8;", "Order #{short_id}" }
                                                     span { style: "
-                                                        font-size: 10px; padding: 3px 8px;
-                                                        border-radius: 8px;
+                                                        font-size: 13px; padding: 3px 8px;
+                                                        border-radius: 0;
                                                         background: {status_color}22; color: {status_color};
                                                     ", "{status_label}" }
                                                 }
                                                 div { style: "margin-bottom: 8px;",
                                                     for item in o.items.iter() {
-                                                        div { style: "display: flex; justify-content: space-between; font-size: 10px; margin-bottom: 3px;",
+                                                        div { style: "display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 3px;",
                                                             span { style: "color: #8b8b9e;", "{item.name} x{item.quantity}" }
                                                             span { "฿{(item.price * item.quantity as f64) as i32}" }
                                                         }
                                                     }
                                                 }
-                                                div { style: "display: flex; justify-content: space-between; padding-top: 8px; border-top: 1px solid #2a2a4a; font-size: 10px;",
+                                                div { style: "display: flex; justify-content: space-between; padding-top: 8px; border-top: 1px solid #2a2a4a; font-size: 13px;",
                                                     span { style: "color: #8b8b9e;", "📍 {shop} · {date_str}" }
-                                                    span { style: "color: {status_color}; font-weight: bold;", "{total_str}" }
+                                                    span { style: "font-size: 20px; font-weight: 800; color: #ffe600; text-shadow: 2px 2px 0 #000;", "{total_str}" }
                                                 }
                                             }
                                         }
@@ -210,19 +208,19 @@ pub fn OrdersScreen() -> Element {
                         },
                         Some(Err(e)) => rsx! {
                             div { style: "text-align: center; padding: 40px 16px;",
-                                div { style: "font-size: 36px; margin-bottom: 12px;", "⚠️" }
-                                p { style: "font-size: 12px; color: #ff4757;", "Error: {e}" }
+                                div { style: "font-size: 70px; margin-bottom: 12px;", "⚠️" }
+                                p { style: "font-size: 13px; color: #ff4757;", "Error: {e}" }
                             }
                         },
                         None => rsx! {
                             div { style: "display: flex; flex-direction: column; gap: 10px;",
                                 for _ in 0..3 {
                                     div { style: "
-                                        background: #1a1a2e; border: 2px solid #2a2a4a;
-                                        border-radius: 8px; padding: 20px;
+                                        background: #16213e; border: 4px solid #2a2a4a;
+                                        border-radius: 0; padding: 20px;
                                         box-shadow: 4px 4px 0 #000;
                                     ",
-                                        div { style: "font-size: 12px; color: #8b8b9e;", "{loading_text}" }
+                                        div { style: "font-size: 13px; color: #8b8b9e;", "{loading_text}" }
                                     }
                                 }
                             }

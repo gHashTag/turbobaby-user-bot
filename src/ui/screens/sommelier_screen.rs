@@ -88,6 +88,7 @@ impl Experience {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[allow(dead_code)]
 struct RecommendedStrain {
     id: Option<String>,
     name: String,
@@ -102,6 +103,7 @@ struct RecommendedStrain {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[allow(dead_code)]
 struct RecommendedSet {
     id: Option<String>,
     name: String,
@@ -162,12 +164,11 @@ pub fn SommelierScreen() -> Element {
             min-height: 100vh;
             background: #0f0f1a;
             color: #e8e8e8;
-            font-family: 'Press Start 2P', monospace;
             padding-bottom: 80px;
         ",
-            div { style: "padding: 20px 16px 12px; text-align: center;",
-                h1 { style: "font-size: 18px; color: #00e5ff; text-shadow: 0 0 8px rgba(0,229,255,0.5);", "{somm_title}" }
-                p { style: "font-size: 11px; color: #8b8b9e; margin-top: 4px;", "{somm_desc}" }
+            div { style: "padding: 20px 16px 16px; text-align: center;",
+                h1 { style: "font-size: 24px; font-weight: 800; color: #00e5ff; text-shadow: 3px 3px 0 #000, 0 0 10px rgba(0,229,255,0.5); letter-spacing: 2px;", "{somm_title}" }
+                p { style: "font-size: 13px; color: #8b8b9e; margin-top: 4px;", "{somm_desc}" }
             }
 
             if !show_results() {
@@ -175,26 +176,25 @@ pub fn SommelierScreen() -> Element {
                 div { style: "
                     margin: 0 16px 16px;
                     background: linear-gradient(135deg, rgba(0,229,255,0.08), rgba(57,255,20,0.08));
-                    border: 2px solid #00e5ff;
-                    border-radius: 8px;
+                    border: 4px solid #00e5ff;
+                    border-radius: 0;
                     padding: 16px;
                     box-shadow: 0 0 16px rgba(0,229,255,0.1), 4px 4px 0 #000;
                 ",
-                    div { style: "font-size: 12px; color: #00e5ff; margin-bottom: 12px;", "{somm_mood_label}" }
+                    div { style: "font-size: 13px; font-weight: 700; color: #00e5ff; text-transform: uppercase; letter-spacing: 1px; text-shadow: 2px 2px 0 #000; margin-bottom: 12px;", "{somm_mood_label}" }
                     div { style: "display: grid; grid-template-columns: 1fr 1fr; gap: 8px;",
                         for mood in [Mood::Relax, Mood::Energy, Mood::Creative, Mood::Sleep, Mood::Strong, Mood::Taste] {
                             {
                                 let is_selected = selected_mood() == Some(mood);
                                 let border = if is_selected { "#00e5ff" } else { "#2a2a4a" };
-                                let bg = if is_selected { "rgba(0,229,255,0.15)" } else { "#1a1a2e" };
+                                let bg = if is_selected { "rgba(0,229,255,0.15)" } else { "#16213e" };
                                 let label = mood.label();
                                 rsx! {
                                     button {
                                         style: "
-                                            font-family: 'Press Start 2P', monospace;
-                                            font-size: 10px; padding: 10px 8px;
+                                            font-size: 13px; padding: 10px 8px;
                                             background: {bg}; color: #e8e8e8;
-                                            border: 2px solid {border}; border-radius: 6px;
+                                            border: 4px solid {border}; border-radius: 20px;
                                             cursor: pointer; text-align: center;
                                         ",
                                         onclick: move |_| selected_mood.set(Some(mood)),
@@ -205,21 +205,20 @@ pub fn SommelierScreen() -> Element {
                         }
                     }
 
-                    div { style: "font-size: 12px; color: #ffe600; margin: 14px 0 10px;", "{somm_time_label}" }
+                    div { style: "font-size: 13px; font-weight: 700; color: #ffe600; text-transform: uppercase; letter-spacing: 1px; text-shadow: 2px 2px 0 #000; margin: 14px 0 10px;", "{somm_time_label}" }
                     div { style: "display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px;",
                         for time in [TimeOfDay::Day, TimeOfDay::Evening, TimeOfDay::Any] {
                             {
                                 let is_selected = selected_time() == time;
                                 let border = if is_selected { "#ffe600" } else { "#2a2a4a" };
-                                let bg = if is_selected { "rgba(255,230,0,0.15)" } else { "#1a1a2e" };
+                                let bg = if is_selected { "rgba(255,230,0,0.15)" } else { "#16213e" };
                                 let label = time.label();
                                 rsx! {
                                     button {
                                         style: "
-                                            font-family: 'Press Start 2P', monospace;
-                                            font-size: 10px; padding: 8px;
+                                            font-size: 13px; padding: 8px;
                                             background: {bg}; color: #e8e8e8;
-                                            border: 2px solid {border}; border-radius: 6px;
+                                            border: 4px solid {border}; border-radius: 20px;
                                             cursor: pointer; text-align: center;
                                         ",
                                         onclick: move |_| selected_time.set(time),
@@ -230,21 +229,20 @@ pub fn SommelierScreen() -> Element {
                         }
                     }
 
-                    div { style: "font-size: 12px; color: #b388ff; margin: 14px 0 10px;", "{somm_exp_label}" }
+                    div { style: "font-size: 13px; font-weight: 700; color: #b388ff; text-transform: uppercase; letter-spacing: 1px; text-shadow: 2px 2px 0 #000; margin: 14px 0 10px;", "{somm_exp_label}" }
                     div { style: "display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px;",
                         for exp in [Experience::Beginner, Experience::Medium, Experience::Expert] {
                             {
                                 let is_selected = selected_exp() == exp;
                                 let border = if is_selected { "#b388ff" } else { "#2a2a4a" };
-                                let bg = if is_selected { "rgba(179,136,255,0.15)" } else { "#1a1a2e" };
+                                let bg = if is_selected { "rgba(179,136,255,0.15)" } else { "#16213e" };
                                 let label = exp.label();
                                 rsx! {
                                     button {
                                         style: "
-                                            font-family: 'Press Start 2P', monospace;
-                                            font-size: 10px; padding: 8px;
+                                            font-size: 13px; padding: 8px;
                                             background: {bg}; color: #e8e8e8;
-                                            border: 2px solid {border}; border-radius: 6px;
+                                            border: 4px solid {border}; border-radius: 20px;
                                             cursor: pointer; text-align: center;
                                         ",
                                         onclick: move |_| selected_exp.set(exp),
@@ -258,12 +256,12 @@ pub fn SommelierScreen() -> Element {
                     div { style: "margin-top: 16px;",
                         button {
                             style: "
-                                font-family: 'Press Start 2P', monospace;
-                                font-size: 12px; width: 100%; padding: 12px;
-                                background: linear-gradient(135deg, #00e5ff, #39ff14);
-                                color: #0f0f1a; border: none; border-radius: 8px;
-                                cursor: pointer; font-weight: bold;
-                                box-shadow: 0 0 16px rgba(0,229,255,0.3);
+                                font-size: 14px; font-weight: 700; width: 100%; padding: 12px 20px;
+                                background: #39ff14; color: #000;
+                                border: 4px solid #2d9e0f; border-radius: 0;
+                                cursor: pointer;
+                                box-shadow: 3px 3px 0 #000;
+                                transition: transform 0.1s, box-shadow 0.1s;
                             ",
                             onclick: move |_| show_results.set(true),
                             "🔮 Get Recommendations"
@@ -273,13 +271,13 @@ pub fn SommelierScreen() -> Element {
             } else {
                 // Results mode
                 div { style: "display: flex; justify-content: space-between; align-items: center; padding: 0 16px 12px;",
-                    div { style: "font-size: 12px; color: #39ff14; text-transform: uppercase;", "✨ Recommended for you" }
+                    div { style: "font-size: 13px; font-weight: 700; color: #39ff14; text-transform: uppercase; letter-spacing: 1px; text-shadow: 2px 2px 0 #000;", "✨ Recommended for you" }
                     button {
                         style: "
-                            font-family: 'Press Start 2P', monospace;
-                            font-size: 10px; padding: 4px 8px;
+                            font-size: 13px; padding: 4px 8px;
                             background: transparent; color: #ff4757;
-                            border: 2px solid #ff4757; border-radius: 8px; cursor: pointer;
+                            border: 4px solid #ff4757; border-radius: 0; cursor: pointer;
+                            box-shadow: 3px 3px 0 #000;
                         ",
                         onclick: move |_| {
                             show_results.set(false);
@@ -296,7 +294,7 @@ pub fn SommelierScreen() -> Element {
                             if let Some(sets) = &resp.recommended_sets {
                                 if !sets.is_empty() {
                                     elements.push(rsx! {
-                                        div { style: "font-size: 12px; color: #b388ff; padding: 0 16px 8px; text-transform: uppercase;", "📦 Recommended Sets" }
+                                        div { style: "font-size: 13px; font-weight: 700; color: #b388ff; padding: 0 16px 8px; text-transform: uppercase; letter-spacing: 1px; text-shadow: 2px 2px 0 #000;", "📦 Recommended Sets" }
                                     });
                                     for set in sets {
                                         let name = set.name.clone();
@@ -309,16 +307,16 @@ pub fn SommelierScreen() -> Element {
 
                                         elements.push(rsx! {
                                             div { style: "
-                                                background: #1a1a2e; border: 2px solid #b388ff33;
-                                                border-radius: 10px; padding: 12px; margin: 0 16px 8px;
+                                                background: #16213e; border: 4px solid #b388ff33;
+                                                border-radius: 0; padding: 12px; margin: 0 16px 8px;
                                                 display: flex; gap: 12px; align-items: center;
                                                 box-shadow: 4px 4px 0 #000;
                                             ",
                                                 div { style: "font-size: 28px; min-width: 40px; text-align: center;", "{icon}" }
                                                 div { style: "flex: 1;",
-                                                    div { style: "font-size: 14px; font-weight: bold; margin-bottom: 4px;", "{name}" }
-                                                    div { style: "font-size: 18px; color: #b388ff; margin-bottom: 6px;", "{mood}" }
-                                                    span { style: "font-size: 16px; color: #39ff14;", "{price_str}" }
+                                                    div { style: "font-size: 17px; font-weight: 700; margin-bottom: 4px;", "{name}" }
+                                                    div { style: "font-size: 13px; color: #b388ff; margin-bottom: 6px;", "{mood}" }
+                                                    span { style: "font-size: 20px; font-weight: 800; color: #ffe600; text-shadow: 2px 2px 0 #000;", "{price_str}" }
                                                 }
                                             }
                                         });
@@ -329,7 +327,7 @@ pub fn SommelierScreen() -> Element {
                             if let Some(strains) = &resp.recommended_strains {
                                 if !strains.is_empty() {
                                     elements.push(rsx! {
-                                        div { style: "font-size: 12px; color: #39ff14; padding: 6px 10px 8px; text-transform: uppercase;", "🌿 Recommended Strains" }
+                                        div { style: "font-size: 13px; font-weight: 700; color: #39ff14; padding: 6px 10px 8px; text-transform: uppercase; letter-spacing: 1px; text-shadow: 2px 2px 0 #000;", "🌿 Recommended Strains" }
                                     });
                                     for strain in strains {
                                         let s = strain.clone();
@@ -347,30 +345,30 @@ pub fn SommelierScreen() -> Element {
 
                                         elements.push(rsx! {
                                             div { style: "
-                                                background: #1a1a2e; border: 2px solid #2a2a4a;
-                                                border-radius: 10px; padding: 12px; margin: 0 16px 8px;
+                                                background: #16213e; border: 4px solid #2a2a4a;
+                                                border-radius: 0; padding: 12px; margin: 0 16px 8px;
                                                 display: flex; gap: 12px; align-items: center;
                                                 box-shadow: 4px 4px 0 #000;
                                             ",
                                                 div { style: "font-size: 28px; min-width: 40px; text-align: center;", "{emoji}" }
                                                 div { style: "flex: 1;",
-                                                    div { style: "font-size: 14px; font-weight: bold; margin-bottom: 4px;", "{s_name}" }
-                                                    div { style: "font-size: 18px; color: #00e5ff; margin-bottom: 2px;", "{cat} • {thc_str}" }
+                                                    div { style: "font-size: 17px; font-weight: 700; margin-bottom: 4px;", "{s_name}" }
+                                                    div { style: "font-size: 13px; color: #00e5ff; margin-bottom: 2px;", "{cat} • {thc_str}" }
                                                     if !reason.is_empty() {
-                                                        div { style: "font-size: 18px; color: #8b8b9e; margin-bottom: 6px;", "{reason}" }
+                                                        div { style: "font-size: 13px; color: #8b8b9e; margin-bottom: 6px;", "{reason}" }
                                                     }
                                                     div { style: "display: flex; justify-content: space-between; align-items: center;",
-                                                        span { style: "font-size: 16px; color: #39ff14;", "{price_str}" }
-                                                        span { style: "font-size: 18px; color: {match_color}; background: {match_color}22; padding: 2px 6px; border-radius: 3px;", "{match_pct}% Match" }
+                                                        span { style: "font-size: 20px; font-weight: 800; color: #ffe600; text-shadow: 2px 2px 0 #000;", "{price_str}" }
+                                                        span { style: "font-size: 13px; color: {match_color}; background: {match_color}22; padding: 2px 6px; border-radius: 0;", "{match_pct}% Match" }
                                                     }
                                                 }
                                                 if !s_id.is_empty() && s_price > 0.0 {
                                                     button {
                                                         style: "
-                                                            font-family: 'Press Start 2P', monospace;
-                                                            font-size: 10px; padding: 6px 8px;
-                                                            background: #39ff14; color: #0f0f1a;
-                                                            border: none; border-radius: 8px; cursor: pointer;
+                                                            font-size: 14px; font-weight: 700; padding: 6px 8px;
+                                                            background: #39ff14; color: #000;
+                                                            border: 4px solid #2d9e0f; border-radius: 0; cursor: pointer;
+                                                            box-shadow: 3px 3px 0 #000;
                                                         ",
                                                         onclick: move |_| {
                                                             let mut c = cart.write();
@@ -394,8 +392,8 @@ pub fn SommelierScreen() -> Element {
                             if elements.is_empty() {
                                 rsx! {
                                     div { style: "text-align: center; padding: 40px 16px;",
-                                        div { style: "font-size: 36px; margin-bottom: 12px;", "🍷" }
-                                        p { style: "font-size: 12px; color: #8b8b9e;", "No recommendations found. Try different preferences!" }
+                                        div { style: "font-size: 70px; margin-bottom: 12px;", "🍷" }
+                                        p { style: "font-size: 13px; color: #8b8b9e;", "No recommendations found. Try different preferences!" }
                                     }
                                 }
                             } else {
@@ -404,14 +402,14 @@ pub fn SommelierScreen() -> Element {
                         },
                         Some(Err(e)) => rsx! {
                             div { style: "text-align: center; padding: 40px 16px;",
-                                div { style: "font-size: 36px; margin-bottom: 12px;", "⚠️" }
-                                p { style: "font-size: 12px; color: #ff4757;", "Error: {e}" }
+                                div { style: "font-size: 70px; margin-bottom: 12px;", "⚠️" }
+                                p { style: "font-size: 13px; color: #ff4757;", "Error: {e}" }
                             }
                         },
                         None => rsx! {
                             div { style: "text-align: center; padding: 40px 16px;",
-                                div { style: "font-size: 10px; margin-bottom: 8px;", "🔮" }
-                                p { style: "font-size: 12px; color: #8b8b9e;", "Consulting the sommelier..." }
+                                div { style: "font-size: 70px; margin-bottom: 8px;", "🔮" }
+                                p { style: "font-size: 13px; color: #8b8b9e;", "Consulting the sommelier..." }
                             }
                         },
                     }

@@ -11,6 +11,7 @@ use crate::trios::i18n::{
 use crate::ui::api::context::api_base_url;
 
 #[derive(Debug, Clone, serde::Deserialize)]
+#[allow(dead_code)]
 struct QuestStateResponse {
     telegram_id: i64,
     current_checkpoint: u8,

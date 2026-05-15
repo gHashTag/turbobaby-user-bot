@@ -107,8 +107,9 @@ async fn main() -> Result<()> {
     // CORS configuration
     let cors = CorsLayer::new()
         .allow_origin(Any)
-        .allow_methods(Any)
-        .allow_headers(Any);
+        .allow_methods([axum::http::Method::GET, axum::http::Method::POST, axum::http::Method::PUT, axum::http::Method::DELETE])
+        .allow_headers(Any)
+        .expose_headers(Any);
 
     // Bypass ngrok interstitial page on free tier
     let ngrok_bypass = SetResponseHeaderLayer::overriding(
@@ -117,6 +118,9 @@ async fn main() -> Result<()> {
     );
 
     let app = Router::new()
+        // CORS layer MUST be first!
+        .layer(cors)
+        .layer(ngrok_bypass)
         // Backend API routes
         .merge(api::router(app_state))
 
@@ -128,10 +132,7 @@ async fn main() -> Result<()> {
         .nest_service("/images", ServeDir::new("assets"))
 
         // Serve WASM app from dist/ (SPA fallback to index.html)
-        .fallback_service(ServeDir::new("dist").fallback(ServeFile::new("dist/index.html")))
-
-        .layer(ngrok_bypass)
-        .layer(cors);
+        .fallback_service(ServeDir::new("dist").fallback(ServeFile::new("dist/index.html")));
 
     let addr = SocketAddr::from(([0, 0, 0, 0], config.port));
     info!("🚀 HTTP server listening on {}", addr);

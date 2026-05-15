@@ -34,14 +34,16 @@ pub fn Home() -> Element {
                 div { class: "sod-card",
                     div { class: "sod-badge", "⭐ {discount}" }
                     div { class: "sod-image",
-                        img { src: "{img}", alt: "{name}", loading: "lazy" }
+                        img { src: "{img}?v=2", alt: "{name}", loading: "lazy" }
                     }
-                    div { class: "sod-name", "{name}" }
-                    div { class: "sod-type", "{type_label} • THC {thc_line}" }
-                    button {
-                        class: "btn btn-primary",
-                        onclick: move |_| { cart_count += 1; },
-                        "Add to Cart — {price}"
+                    div { class: "sod-content",
+                        div { class: "sod-name", "{name}" }
+                        div { class: "sod-type", "{type_label} • THC {thc_line}" }
+                        button {
+                            class: "btn btn-primary btn-sm",
+                            onclick: move |_| { cart_count += 1; },
+                            "Add to Cart — {price}"
+                        }
                     }
                 }
             }

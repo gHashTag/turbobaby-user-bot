@@ -26,11 +26,8 @@ pub struct CreateStrainRequest {
 
 pub fn routes() -> Router<AppState> {
     Router::new()
-        .route("/strains", get(get_strains))
-        .route("/strains", post(create_strain))
-        .route("/strains/:id", get(get_strain))
-        .route("/strains/:id", put(update_strain))
-        .route("/strains/:id", delete(delete_strain))
+        .route("/strains", get(get_strains).post(create_strain))
+        .route("/strains/:id", get(get_strain).put(update_strain).delete(delete_strain))
         .route("/strains/:id/availability", put(toggle_availability))
         .route("/strains/strain-of-day", get(get_strains_of_day))
         .route("/strains/:id/strain-of-day", put(set_strain_of_day))

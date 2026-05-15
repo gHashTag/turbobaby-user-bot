@@ -39,53 +39,51 @@ pub fn CheckoutScreen() -> Element {
             min-height: 100vh;
             background: #0f0f1a;
             color: #e8e8e8;
-            font-family: 'Press Start 2P', monospace;
-            padding-bottom: 40px;
+            padding-bottom: 80px;
         ",
-            div { style: "padding: 20px 16px 12px; text-align: center;",
-                h1 { style: "font-size: 18px; color: #39ff14; text-shadow: 0 0 8px rgba(57,255,20,0.5);", "{checkout_title}" }
+            div { style: "padding: 20px 16px 16px; text-align: center;",
+                h1 { style: "font-size: 24px; font-weight: 800; color: #39ff14; text-shadow: 3px 3px 0 #000, 0 0 10px rgba(57,255,20,0.5); letter-spacing: 2px;", "{checkout_title}" }
             }
 
             div { style: "padding: 0 16px;",
                 // Order summary from cart
                 div { style: "
-                    background: #1a1a2e; border: 2px solid #2a2a4a;
-                    border-radius: 8px; padding: 14px; margin-bottom: 12px;
+                    background: #16213e; border: 4px solid #2a2a4a;
+                    border-radius: 0; padding: 14px; margin-bottom: 12px;
                     box-shadow: 4px 4px 0 #000;
                 ",
-                    h2 { style: "font-size: 14px; color: #00e5ff; margin-bottom: 10px;", "{your_order}" }
+                    h2 { style: "font-size: 13px; font-weight: 700; color: #00e5ff; text-transform: uppercase; letter-spacing: 1px; text-shadow: 2px 2px 0 #000; margin-bottom: 10px;", "{your_order}" }
                     if cart_items.is_empty() {
-                        p { style: "font-size: 18px; color: #8b8b9e; text-align: center; padding: 10px;", "Cart is empty" }
+                        p { style: "font-size: 15px; color: #8b8b9e; text-align: center; padding: 10px;", "Cart is empty" }
                     } else {
                         for item in cart_items.iter() {
-                            div { style: "display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 12px;",
+                            div { style: "display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 13px;",
                                 span { "{item.name}" }
                                 span { style: "color: #8b8b9e;", "x{item.quantity}" }
                                 span { "฿{(item.price * item.quantity as f64) as i32}" }
                             }
                         }
-                        div { style: "display: flex; justify-content: space-between; font-size: 16px; font-weight: bold; padding-top: 8px; border-top: 1px solid #2a2a4a; margin-top: 8px;",
+                        div { style: "display: flex; justify-content: space-between; font-size: 15px; font-weight: 800; padding-top: 8px; border-top: 1px solid #2a2a4a; margin-top: 8px;",
                             span { "{total_label}" }
-                            span { style: "color: #39ff14;", "฿{cart_total as i32}" }
+                            span { style: "font-size: 20px; font-weight: 800; color: #ffe600; text-shadow: 2px 2px 0 #000;", "฿{cart_total as i32}" }
                         }
                     }
                 }
 
                 // Customer info
                 div { style: "
-                    background: #1a1a2e; border: 2px solid #2a2a4a;
-                    border-radius: 8px; padding: 14px; margin-bottom: 12px;
+                    background: #16213e; border: 4px solid #2a2a4a;
+                    border-radius: 0; padding: 14px; margin-bottom: 12px;
                     box-shadow: 4px 4px 0 #000;
                 ",
-                    h2 { style: "font-size: 14px; color: #00e5ff; margin-bottom: 10px;", "{your_info}" }
+                    h2 { style: "font-size: 13px; font-weight: 700; color: #00e5ff; text-transform: uppercase; letter-spacing: 1px; text-shadow: 2px 2px 0 #000; margin-bottom: 10px;", "{your_info}" }
                     div { style: "margin-bottom: 8px;",
-                        label { style: "font-size: 18px; color: #8b8b9e; display: block; margin-bottom: 4px;", "Name *" }
+                        label { style: "font-size: 13px; color: #8b8b9e; display: block; margin-bottom: 4px;", "Name *" }
                         input {
                             style: "
-                                font-family: 'Press Start 2P', monospace;
-                                font-size: 12px; width: 100%; padding: 8px 10px;
+                                font-size: 15px; width: 100%; padding: 10px 12px;
                                 background: #0f0f1a; color: #e8e8e8;
-                                border: 2px solid #2a2a4a; border-radius: 8px;
+                                border: 4px solid #2a2a4a; border-radius: 0;
                                 box-sizing: border-box;
                             ",
                             r#type: "text",
@@ -95,13 +93,12 @@ pub fn CheckoutScreen() -> Element {
                         }
                     }
                     div { style: "margin-bottom: 8px;",
-                        label { style: "font-size: 18px; color: #8b8b9e; display: block; margin-bottom: 4px;", "Phone *" }
+                        label { style: "font-size: 13px; color: #8b8b9e; display: block; margin-bottom: 4px;", "Phone *" }
                         input {
                             style: "
-                                font-family: 'Press Start 2P', monospace;
-                                font-size: 12px; width: 100%; padding: 8px 10px;
+                                font-size: 15px; width: 100%; padding: 10px 12px;
                                 background: #0f0f1a; color: #e8e8e8;
-                                border: 2px solid #2a2a4a; border-radius: 8px;
+                                border: 4px solid #2a2a4a; border-radius: 0;
                                 box-sizing: border-box;
                             ",
                             r#type: "tel",
@@ -114,11 +111,11 @@ pub fn CheckoutScreen() -> Element {
 
                 // Shop selection
                 div { style: "
-                    background: #1a1a2e; border: 2px solid #2a2a4a;
-                    border-radius: 8px; padding: 14px; margin-bottom: 12px;
+                    background: #16213e; border: 4px solid #2a2a4a;
+                    border-radius: 0; padding: 14px; margin-bottom: 12px;
                     box-shadow: 4px 4px 0 #000;
                 ",
-                    h2 { style: "font-size: 14px; color: #00e5ff; margin-bottom: 10px;", "{pickup_location}" }
+                    h2 { style: "font-size: 13px; font-weight: 700; color: #00e5ff; text-transform: uppercase; letter-spacing: 1px; text-shadow: 2px 2px 0 #000; margin-bottom: 10px;", "{pickup_location}" }
                     for (idx, (name, address)) in shops.iter().enumerate() {
                         {
                             let is_selected = shop_selected() == idx;
@@ -130,13 +127,13 @@ pub fn CheckoutScreen() -> Element {
                             rsx! {
                                 div {
                                     style: "
-                                        background: {bg}; border: 2px solid {border};
-                                        border-radius: 6px; padding: 10px; margin-bottom: 6px;
+                                        background: {bg}; border: 4px solid {border};
+                                        border-radius: 0; padding: 10px; margin-bottom: 6px;
                                         cursor: pointer;
                                     ",
                                     onclick: move |_| shop_selected.set(idx_val),
-                                    div { style: "font-size: 12px; margin-bottom: 2px;", "{shop_name}" }
-                                    div { style: "font-size: 18px; color: #8b8b9e;", "{shop_addr}" }
+                                    div { style: "font-size: 15px; margin-bottom: 2px;", "{shop_name}" }
+                                    div { style: "font-size: 13px; color: #8b8b9e;", "{shop_addr}" }
                                 }
                             }
                         }
@@ -145,37 +142,37 @@ pub fn CheckoutScreen() -> Element {
 
                 // Delivery info
                 div { style: "
-                    background: #1a1a2e; border: 2px solid #2a2a4a;
-                    border-radius: 8px; padding: 14px; margin-bottom: 12px;
+                    background: #16213e; border: 4px solid #2a2a4a;
+                    border-radius: 0; padding: 14px; margin-bottom: 12px;
                     box-shadow: 4px 4px 0 #000;
                 ",
-                    h2 { style: "font-size: 14px; color: #00e5ff; margin-bottom: 10px;", "{delivery}" }
+                    h2 { style: "font-size: 13px; font-weight: 700; color: #00e5ff; text-transform: uppercase; letter-spacing: 1px; text-shadow: 2px 2px 0 #000; margin-bottom: 10px;", "{delivery}" }
                     div { style: "
                         background: rgba(0,229,255,0.05);
-                        border: 2px solid rgba(0,229,255,0.2);
-                        border-radius: 6px; padding: 10px;
+                        border: 4px solid rgba(0,229,255,0.2);
+                        border-radius: 0; padding: 10px;
                     ",
-                        div { style: "font-size: 10px; margin-bottom: 6px;", "⏰ 30-45 min pickup" }
-                        div { style: "font-size: 18px; color: #39ff14;", "💰 Free delivery over ฿1,000" }
+                        div { style: "font-size: 13px; margin-bottom: 6px;", "⏰ 30-45 min pickup" }
+                        div { style: "font-size: 15px; color: #39ff14;", "💰 Free delivery over ฿1,000" }
                     }
                 }
 
                 // Payment method
                 div { style: "
-                    background: #1a1a2e; border: 2px solid #2a2a4a;
-                    border-radius: 8px; padding: 14px; margin-bottom: 16px;
+                    background: #16213e; border: 4px solid #2a2a4a;
+                    border-radius: 0; padding: 14px; margin-bottom: 16px;
                     box-shadow: 4px 4px 0 #000;
                 ",
-                    h2 { style: "font-size: 14px; color: #00e5ff; margin-bottom: 10px;", "{payment}" }
+                    h2 { style: "font-size: 13px; font-weight: 700; color: #00e5ff; text-transform: uppercase; letter-spacing: 1px; text-shadow: 2px 2px 0 #000; margin-bottom: 10px;", "{payment}" }
                     div { style: "
                         display: flex; align-items: center; gap: 8px;
                         background: rgba(57,255,20,0.05);
-                        border: 2px solid #39ff14; border-radius: 6px; padding: 10px;
+                        border: 4px solid #39ff14; border-radius: 0; padding: 10px;
                     ",
-                        div { style: "font-size: 10px;", "💳" }
+                        div { style: "font-size: 13px;", "💳" }
                         div { style: "flex: 1;",
-                            div { style: "font-size: 12px; color: #39ff14;", "Cash on Delivery" }
-                            div { style: "font-size: 18px; color: #8b8b9e; margin-top: 2px;", "Pay when you receive" }
+                            div { style: "font-size: 15px; color: #39ff14;", "Cash on Delivery" }
+                            div { style: "font-size: 13px; color: #8b8b9e; margin-top: 2px;", "Pay when you receive" }
                         }
                     }
                 }
@@ -183,22 +180,22 @@ pub fn CheckoutScreen() -> Element {
                 // Legal disclaimer
                 div { style: "
                     background: rgba(255,71,87,0.05);
-                    border: 2px solid rgba(255,71,87,0.2);
-                    border-radius: 6px; padding: 10px; margin-bottom: 16px;
+                    border: 4px solid rgba(255,71,87,0.2);
+                    border-radius: 0; padding: 10px; margin-bottom: 16px;
                 ",
-                    div { style: "font-size: 18px; color: #ff4757; margin-bottom: 4px;", "⚠️ Disclaimer" }
-                    div { style: "font-size: 9px; color: #8b8b9e;", "By placing this order you confirm you are 20+ years old and aware of local regulations." }
+                    div { style: "font-size: 15px; color: #ff4757; margin-bottom: 4px;", "⚠️ Disclaimer" }
+                    div { style: "font-size: 13px; color: #8b8b9e;", "By placing this order you confirm you are 20+ years old and aware of local regulations." }
                 }
 
                 // Actions
                 div { style: "display: flex; gap: 10px;",
                     Link { to: Route::Cart {},
                         button { style: "
-                            font-family: 'Press Start 2P', monospace;
-                            font-size: 10px; flex: 1; padding: 12px;
+                            font-size: 14px; font-weight: 700; flex: 1; padding: 12px 20px;
                             background: transparent; color: #e8e8e8;
-                            border: 2px solid #2a2a4a; border-radius: 6px;
-                            cursor: pointer;
+                            border: 4px solid #2a2a4a; border-radius: 0;
+                            cursor: pointer; box-shadow: 3px 3px 0 #000;
+                            transition: transform 0.1s, box-shadow 0.1s;
                         ", "{back}" }
                     }
                     Link { to: Route::Success { id: "ORD-DEMO-001".to_string() },
@@ -206,18 +203,18 @@ pub fn CheckoutScreen() -> Element {
                             let trios_items = to_trios_items(&cart_items);
                             let can_order = validate_checkout(&customer_name(), &customer_phone(), &trios_items).is_ok();
                             let btn_bg = if can_order { "#39ff14" } else { "#2a2a4a" };
-                            let btn_color = if can_order { "#0f0f1a" } else { "#8b8b9e" };
+                            let btn_color = if can_order { "#000" } else { "#8b8b9e" };
                             let btn_cursor = if can_order { "pointer" } else { "not-allowed" };
                             rsx! {
                                 button {
                                     style: "
-                                        font-family: 'Press Start 2P', monospace;
-                                        font-size: 10px; flex: 2; padding: 12px;
+                                        font-size: 14px; font-weight: 700; flex: 2; padding: 12px 20px;
                                         background: {btn_bg};
                                         color: {btn_color};
-                                        border: none; border-radius: 6px;
+                                        border: 4px solid #2d9e0f; border-radius: 0;
                                         cursor: {btn_cursor};
-                                        font-weight: bold;
+                                        box-shadow: 3px 3px 0 #000;
+                                        transition: transform 0.1s, box-shadow 0.1s;
                                     ",
                                     onclick: move |_| {
                                         let trios_items = to_trios_items(&cart_items);

@@ -144,7 +144,7 @@ pub fn use_current_route() -> Signal<String> {
 /// Provider component for language state
 #[component]
 pub fn LanguageProvider(children: Element) -> Element {
-    let lang = use_memo(Language::default);
+    let lang = use_signal(Language::default);
     provide_context(lang);
     rsx! {
         { children }

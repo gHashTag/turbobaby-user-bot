@@ -90,19 +90,19 @@ fn haptic_impact() {
 #[component]
 pub fn WoodyCatch() -> Element {
     // ── State signals ────────────────────────────────────────────────────────
-    let mut score     = use_signal(|| 0u32);
-    let mut lives     = use_signal(|| 3u32);
-    let mut level     = use_signal(|| 1u32);
-    let mut combo     = use_signal(|| 0u32);
-    let mut playing   = use_signal(|| false);
-    let mut game_over = use_signal(|| false);
-    let mut lane      = use_signal(|| 1u32);  // 0-3
-    let mut buds      = use_signal(|| Vec::<Bud>::new());
-    let mut next_id   = use_signal(|| 0u32);
+    let score     = use_signal(|| 0u32);
+    let lives     = use_signal(|| 3u32);
+    let level     = use_signal(|| 1u32);
+    let combo     = use_signal(|| 0u32);
+    let playing   = use_signal(|| false);
+    let game_over = use_signal(|| false);
+    let lane      = use_signal(|| 1u32);  // 0-3
+    let buds      = use_signal(|| Vec::<Bud>::new());
+    let next_id   = use_signal(|| 0u32);
     let high_score    = use_signal(get_high_score);
 
     // Timing: track spawn countdown in ticks (each tick ~16ms)
-    let mut spawn_ticks = use_signal(|| 0u32);
+    let spawn_ticks = use_signal(|| 0u32);
 
     // ── Game loop via use_future ─────────────────────────────────────────────
     {
@@ -112,7 +112,7 @@ pub fn WoodyCatch() -> Element {
         let mut combo     = combo.clone();
         let mut playing   = playing.clone();
         let mut game_over = game_over.clone();
-        let mut lane      = lane.clone();
+        let lane      = lane.clone();
         let mut buds      = buds.clone();
         let mut next_id   = next_id.clone();
         let mut high_score = high_score.clone();
@@ -224,8 +224,8 @@ pub fn WoodyCatch() -> Element {
     // ── Keyboard handler ─────────────────────────────────────────────────────
     {
         let mut lane = lane.clone();
-        let mut playing = playing.clone();
-        let mut game_over = game_over.clone();
+        let playing = playing.clone();
+        let game_over = game_over.clone();
         use_effect(move || {
             let closure = Closure::<dyn FnMut(web_sys::KeyboardEvent)>::new(move |e: web_sys::KeyboardEvent| {
                 if !*playing.read() || *game_over.read() { return; }

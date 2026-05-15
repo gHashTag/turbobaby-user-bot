@@ -7,11 +7,17 @@ pub mod referrals;
 pub use strains::*;
 
 use anyhow::{Context, Result};
-use deadpool_postgres::{Config as PgConfig, Pool, Runtime, ManagerConfig};
+use deadpool_postgres::{
+    Config as PgConfig, Connect, Manager, ManagerConfig, Pool, Runtime, tokio_postgres,
+};
 use rustls::ClientConfig;
 use rustls_native_certs::load_native_certs;
 use tokio_postgres_rustls::MakeRustlsConnect;
 use url::Url;
+
+use std::future::Future;
+use std::pin::Pin;
+use tokio::task::JoinHandle;
 
 const MIGRATION_SQL: &str = concat!(
     include_str!("../../migrations/001_initial.sql"),
@@ -28,6 +34,53 @@ const MIGRATION_SQL: &str = concat!(
     include_str!("../../migrations/012_strains_fix_numeric_to_float8.sql"),
 );
 
+type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
+
+struct NoTlsConnect;
+
+impl Connect for NoTlsConnect {
+    fn connect(
+        &self,
+        pg_config: &tokio_postgres::Config,
+    ) -> BoxFuture<'_, Result<(tokio_postgres::Client, JoinHandle<()>), tokio_postgres::Error>>
+    {
+        let pg_config = pg_config.clone();
+        Box::pin(async move {
+            let (client, connection) = pg_config.connect(tokio_postgres::NoTls).await?;
+            let conn_task = tokio::spawn(async move {
+                if let Err(e) = connection.await {
+                    tracing::warn!("Connection error: {}", e);
+                }
+            });
+            Ok((client, conn_task))
+        })
+    }
+}
+
+struct RustlsConnect {
+    tls: MakeRustlsConnect,
+}
+
+impl Connect for RustlsConnect {
+    fn connect(
+        &self,
+        pg_config: &tokio_postgres::Config,
+    ) -> BoxFuture<'_, Result<(tokio_postgres::Client, JoinHandle<()>), tokio_postgres::Error>>
+    {
+        let tls = self.tls.clone();
+        let pg_config = pg_config.clone();
+        Box::pin(async move {
+            let (client, connection) = pg_config.connect(tls).await?;
+            let conn_task = tokio::spawn(async move {
+                if let Err(e) = connection.await {
+                    tracing::warn!("Connection error: {}", e);
+                }
+            });
+            Ok((client, conn_task))
+        })
+    }
+}
+
 pub struct Database {
     pub pool: Pool,
 }
@@ -36,30 +89,55 @@ impl Database {
     pub async fn connect(database_url: &str) -> Result<Self> {
         let url = Url::parse(database_url).context("Invalid DATABASE_URL")?;
 
+        let ssl_mode = url
+            .query_pairs()
+            .find(|(k, _)| k == "sslmode")
+            .map(|(_, v)| v.to_string())
+            .unwrap_or_else(|| "disable".to_string());
+
         let mut cfg = PgConfig::new();
         cfg.host = url.host_str().map(|s| s.to_string());
         cfg.port = url.port();
         cfg.dbname = Some(url.path().trim_start_matches('/').to_string());
         cfg.user = Some(url.username().to_string());
         cfg.password = url.password().map(|s| s.to_string());
-        cfg.ssl_mode = Some(deadpool_postgres::SslMode::Require);
+        cfg.ssl_mode = Some(if ssl_mode == "disable" {
+            deadpool_postgres::SslMode::Disable
+        } else {
+            deadpool_postgres::SslMode::Require
+        });
         cfg.keepalives = Some(true);
         cfg.keepalives_idle = Some(std::time::Duration::from_secs(300));
 
-        let mut roots = rustls::RootCertStore::empty();
-        for cert in load_native_certs().certs {
-            roots.add(cert)?;
-        }
-        let tls_config = ClientConfig::builder()
-            .with_root_certificates(roots)
-            .with_no_client_auth();
-        let tls = MakeRustlsConnect::new(tls_config);
-
-        cfg.manager = Some(ManagerConfig {
+        let manager_cfg = ManagerConfig {
             recycling_method: deadpool_postgres::RecyclingMethod::Verified,
-        });
+        };
 
-        let pool = cfg.create_pool(Some(Runtime::Tokio1), tls)?;
+        let pg_config = cfg
+            .get_pg_config()
+            .map_err(|e| anyhow::anyhow!("Invalid pg config: {}", e))?;
+
+        let manager = if ssl_mode == "disable" {
+            Manager::from_connect(pg_config, NoTlsConnect, manager_cfg)
+        } else {
+            let mut roots = rustls::RootCertStore::empty();
+            for cert in load_native_certs().certs {
+                roots.add(cert)?;
+            }
+            let tls_config = ClientConfig::builder()
+                .with_root_certificates(roots)
+                .with_no_client_auth();
+            let tls = MakeRustlsConnect::new(tls_config);
+            Manager::from_connect(pg_config, RustlsConnect { tls }, manager_cfg)
+        };
+
+        let pool_config = cfg.get_pool_config();
+        let pool = Pool::builder(manager)
+            .config(pool_config)
+            .runtime(Runtime::Tokio1)
+            .build()
+            .map_err(|e| anyhow::anyhow!("Failed to build pool: {}", e))?;
+
         let _ = pool.get().await.context("Failed to connect to database")?;
         Ok(Self { pool })
     }

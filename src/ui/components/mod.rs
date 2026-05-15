@@ -8,7 +8,7 @@ pub mod bottom_nav;
 pub mod button;
 pub mod card;
 pub mod modal;
-pub mod nav;
+
 pub mod input;
 pub mod loading;
 pub mod strain_card;
@@ -33,7 +33,6 @@ pub mod rarity_glow;
 pub use button::{Button, ButtonProps, ButtonVariant, ButtonSize};
 pub use card::{Card, CardProps, CardVariant};
 pub use modal::{Modal, ModalProps, ModalSize};
-pub use nav::{Nav, NavProps, NavItem};
 pub use input::{Input, InputProps, InputType};
 pub use loading::{Loading, LoadingOverlay, LoadingProps, LoadingSize};
 pub use strain_card::{StrainCard, StrainCardProps};

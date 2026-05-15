@@ -2,7 +2,7 @@ use dioxus::prelude::*;
 use qrcode::QrCode;
 use serde::Deserialize;
 use crate::ui::routes::Route;
-use crate::ui::state::Cart;
+use crate::ui::state::{Cart, use_language, Language};
 use crate::ui::assets;
 use crate::ui::api::context::api_base_url;
 use crate::trios::core::Lang;
@@ -11,26 +11,19 @@ use crate::ui::components::bottom_nav::BottomNav;
 
 #[derive(Debug, Clone, Deserialize)]
 struct LoyaltyResponse {
-    tier: Option<String>,
-    bonus_balance: Option<f64>,
-    total_spent: Option<f64>,
-    cashback_pct: Option<f64>,
-    referral_code: Option<String>,
-    referral_count: Option<i32>,
-    orders_count: Option<i32>,
-}
-
-#[derive(Debug, Deserialize)]
-struct BonusHistoryResponse {
-    transactions: Vec<BonusTx>,
+    profile: Option<LoyaltyProfileData>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
-struct BonusTx {
-    amount: f64,
-    description: Option<String>,
-    created_at: Option<String>,
+struct LoyaltyProfileData {
+    total_spent: Option<f64>,
+    tier: Option<String>,
+    bonus_balance: Option<f64>,
+    referral_code: Option<String>,
+    referral_count: Option<i32>,
 }
+
+
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum Tier {
@@ -65,10 +58,16 @@ impl Tier {
             Self::Gold => "🥇",
         }
     }
-    fn card_image(&self) -> &'static str {
+    fn full_card_image(&self) -> &'static str {
         match self {
-            Self::Starter => assets::member_cards::BRONZE_WEBP,
-            Self::Bronze => assets::member_cards::BRONZE_WEBP,
+            Self::Starter | Self::Bronze => assets::member_cards::BRASS,
+            Self::Silver => assets::member_cards::SILVER,
+            Self::Gold => assets::member_cards::GOLD,
+        }
+    }
+    fn bud_image(&self) -> &'static str {
+        match self {
+            Self::Starter | Self::Bronze => assets::member_cards::BRONZE_WEBP,
             Self::Silver => assets::member_cards::SILVER_WEBP,
             Self::Gold => assets::member_cards::GOLD_WEBP,
         }
@@ -112,12 +111,15 @@ impl Tier {
 
 #[component]
 pub fn ProfileScreen() -> Element {
-    let mut cart = use_context::<Signal<Cart>>();
+    let cart = use_context::<Signal<Cart>>();
     let cart_count: u32 = cart.read().items.iter().map(|i| i.quantity).sum();
 
-    let loyalty_resource = use_resource(|| async move {
+    // Mock telegram_id for development (in real app, get from Telegram WebApp)
+    let telegram_id = 123456i64;
+
+    let loyalty_resource = use_resource(move || async move {
         let base = api_base_url();
-        let url = format!("{}/api/loyalty/me", base);
+        let url = format!("{}/api/loyalty/{}", base, telegram_id);
         let client = reqwest::Client::new();
         let resp = client.get(&url).send().await;
         match resp {
@@ -126,7 +128,7 @@ pub fn ProfileScreen() -> Element {
         }
     });
 
-    let loyalty_data = loyalty_resource.read().clone().flatten();
+    let loyalty_data = loyalty_resource.read().clone().flatten().and_then(|r| r.profile.clone());
 
     let current_tier = loyalty_data.as_ref()
         .and_then(|d| d.tier.as_deref())
@@ -141,9 +143,8 @@ pub fn ProfileScreen() -> Element {
         .and_then(|d| d.bonus_balance)
         .unwrap_or(150.0);
 
-    let cashback_pct = loyalty_data.as_ref()
-        .and_then(|d| d.cashback_pct)
-        .unwrap_or_else(|| current_tier.cashback());
+    // Cashback is calculated from tier
+    let cashback_pct = current_tier.cashback();
 
     let referral_code = loyalty_data.as_ref()
         .and_then(|d| d.referral_code.clone())
@@ -153,9 +154,9 @@ pub fn ProfileScreen() -> Element {
         .and_then(|d| d.referral_count)
         .unwrap_or(3);
 
-    let orders_count = loyalty_data.as_ref()
-        .and_then(|d| d.orders_count)
-        .unwrap_or(24);
+    // Orders count would need to come from orders API endpoint
+    // For now, using a default value
+    let orders_count = 24;
 
     let next_tier = current_tier.next();
     let progress_pct = if let Some(next) = next_tier {
@@ -174,12 +175,11 @@ pub fn ProfileScreen() -> Element {
             min-height: 100vh;
             background: #0f0f1a;
             color: #e8e8e8;
-            font-family: 'Press Start 2P', monospace;
             padding-bottom: 80px;
         ",
-            div { style: "padding: 20px 16px 12px; text-align: center;",
-                h1 { style: "font-size: 18px; color: #39ff14; text-shadow: 0 0 8px rgba(57,255,20,0.5);", "{profile_title}" }
-                p { style: "font-size: 11px; color: #8b8b9e; margin-top: 4px;", "Your membership status" }
+            div { style: "padding: 20px 16px 16px; text-align: center;",
+                h1 { style: "font-size: 24px; font-weight: 800; color: #39ff14; text-shadow: 3px 3px 0 #000, 0 0 10px rgba(57,255,20,0.5); letter-spacing: 2px;", "{profile_title}" }
+                p { style: "font-size: 13px; color: #8b8b9e; margin-top: 4px;", "Your membership status" }
             }
 
             // Tier strip — all 4 tiers
@@ -191,7 +191,7 @@ pub fn ProfileScreen() -> Element {
                         let border = if is_current { tier.color() } else { "#2a2a4a" };
                         let opacity = if is_unlocked { "1.0" } else { "0.4" };
                         let label = tier.label();
-                        let emoji = tier.emoji();
+                        let _emoji = tier.emoji();
                         let cb = tier.cashback();
                         let thresh = tier.threshold();
                         let shadow_val = if is_current {
@@ -202,18 +202,25 @@ pub fn ProfileScreen() -> Element {
 
                         rsx! {
                             div { style: "
-                                background: #1a1a2e; border: 2px solid {border};
-                                border-radius: 8px; padding: 10px 8px; min-width: 80px;
+                                background: #16213e; border: 4px solid {border};
+                                border-radius: 0; padding: 10px 8px; min-width: 80px;
                                 text-align: center; opacity: {opacity};
                                 box-shadow: {shadow_val};
                             ",
-                                div { style: "font-size: 10px; margin-bottom: 4px;",
-                                    if is_unlocked { "{emoji}" } else { "🔒" }
+                                div { style: "display: flex; justify-content: center; margin-bottom: 6px; height: 32px; align-items: center;",
+                                    if is_unlocked {
+                                        img {
+                                            src: "{tier.bud_image()}",
+                                            style: "max-width: 100%; max-height: 100%; object-fit: contain; filter: drop-shadow(0 0 4px {tier.color()}80);"
+                                        }
+                                    } else {
+                                        div { style: "font-size: 20px;", "🔒" }
+                                    }
                                 }
-                                div { style: "font-size: 18px; color: {tier.color()}; margin-bottom: 2px;", "{label}" }
-                                div { style: "font-size: 9px; color: #8b8b9e;", "{cb}% cashback" }
+                                div { style: "font-size: 15px; color: {tier.color()}; margin-bottom: 2px;", "{label}" }
+                                div { style: "font-size: 13px; color: #8b8b9e;", "{cb}% cashback" }
                                 if !is_unlocked {
-                                    div { style: "font-size: 16px; color: #ff4757; margin-top: 2px;", "฿{thresh}" }
+                                    div { style: "font-size: 15px; color: #ff4757; margin-top: 2px;", "฿{thresh}" }
                                 }
                             }
                         }
@@ -222,15 +229,16 @@ pub fn ProfileScreen() -> Element {
             }
 
             // Member card image
-            div { style: "max-width: 380px; margin: 0 auto 16px; padding: 0 16px;",
+            div { style: "max-width: 380px; margin: 0 auto 16px; padding: 0 16px; perspective: 800px;",
                 img {
-                    src: "{current_tier.card_image()}",
+                    class: "comet-card",
+                    src: "{current_tier.full_card_image()}",
                     alt: "Member Card",
-                    style: "width: 100%; max-width: 320px; border-radius: 16px; display: block; margin: 0 auto; box-shadow: 0 0 24px {current_tier.color()}40;",
+                    style: "width: 100%; max-width: 320px; border-radius: 12px; display: block; margin: 0 auto; box-shadow: 4px 4px 0 #000, 0 0 24px {current_tier.color()}40; transition: transform 0.1s;",
                 }
             }
 
-            // QR Code Card — matching old repo ProfilePage
+            // QR Code Card
             {
                 let qr_value = format!("https://t.me/WoodyWeedBot?start=ref_{}", referral_code);
                 let qr_svg = QrCode::new(qr_value.as_bytes())
@@ -246,22 +254,22 @@ pub fn ProfileScreen() -> Element {
                         svg_str
                     })
                     .unwrap_or_default();
-                let qr_title = t(Lang::Russian, T_PROFILE_TITLE);
+                let _qr_title = t(Lang::Russian, T_PROFILE_TITLE);
                 let ref_link = format!("https://t.me/WoodyWeedBot?start={}", referral_code);
                 let ref_link_copy = ref_link.clone();
                 let ref_link_share = ref_link.clone();
                 rsx! {
                     div { style: "
                         margin: 0 16px 16px;
-                        background: #1a1a2e; border: 4px solid #39ff14;
+                        background: #16213e; border: 4px solid #39ff14;
                         box-shadow: 4px 4px 0 #000, 0 0 20px rgba(57,255,20,0.1);
                         padding: 28px 16px 24px; text-align: center;
                     ",
                         // QR code with glow border
                         div { style: "
                             display: inline-block;
-                            background: #0f0f1a; border: 3px solid #39ff14;
-                            border-radius: 8px; padding: 20px;
+                            background: #0f0f1a; border: 4px solid #39ff14;
+                            border-radius: 0; padding: 20px;
                             box-shadow: inset 0 0 20px rgba(57,255,20,0.05), 0 0 16px rgba(57,255,20,0.15);
                             line-height: 0;
                         ",
@@ -277,11 +285,10 @@ pub fn ProfileScreen() -> Element {
                             button {
                                 style: "
                                     flex: 1; padding: 12px 8px;
-                                    background: #1a1a2e; color: #39ff14;
-                                    border: 3px solid #39ff14;
+                                    background: #16213e; color: #39ff14;
+                                    border: 4px solid #39ff14;
                                     box-shadow: 3px 3px 0 #000;
-                                    font-family: 'Press Start 2P', monospace;
-                                    font-weight: 700; font-size: 11px;
+                                    font-weight: 700; font-size: 14px;
                                     cursor: pointer; transition: transform 0.1s, box-shadow 0.1s;
                                 ",
                                 onclick: move |_| {
@@ -296,14 +303,13 @@ pub fn ProfileScreen() -> Element {
                                 style: "
                                     flex: 1; padding: 12px 8px;
                                     background: #39ff14; color: #000;
-                                    border: 3px solid #2d9e0f;
+                                    border: 4px solid #2d9e0f;
                                     box-shadow: 3px 3px 0 #000;
-                                    font-family: 'Press Start 2P', monospace;
-                                    font-weight: 700; font-size: 11px;
+                                    font-weight: 700; font-size: 14px;
                                     cursor: pointer; transition: transform 0.1s, box-shadow 0.1s;
                                 ",
                                 onclick: move |_| {
-                                    let _ = web_sys::window().map(|w| {
+                                    let _ = web_sys::window().map(|_w| {
                                         let share_url = format!(
                                             "https://t.me/share/url?url={}&text={}",
                                             urlencoding::encode(&ref_link_share),
@@ -318,7 +324,7 @@ pub fn ProfileScreen() -> Element {
                             }
                         }
                         div { style: "
-                            font-size: 11px; color: #8b8b9e; margin-top: 14px;
+                            font-size: 13px; color: #8b8b9e; margin-top: 14px;
                         ", "👥 {referral_count} friends invited" }
                     }
                 }
@@ -326,17 +332,17 @@ pub fn ProfileScreen() -> Element {
 
             // Stats row
             div { style: "display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 0 16px 16px;",
-                div { style: "text-align: center; padding: 10px 4px; background: #1a1a2e; border: 2px solid #2a2a4a; border-radius: 8px;",
-                    div { style: "font-size: 18px; color: {current_tier.color()}; margin-bottom: 4px;", "฿{total_spent as i32}" }
-                    div { style: "font-size: 18px; color: #8b8b9e;", "SPENT" }
+                div { style: "text-align: center; padding: 10px 4px; background: #16213e; border: 4px solid #2a2a4a; border-radius: 0; box-shadow: 4px 4px 0 #000;",
+                    div { style: "font-size: 20px; font-weight: 800; color: {current_tier.color()}; text-shadow: 2px 2px 0 #000; margin-bottom: 4px;", "฿{total_spent as i32}" }
+                    div { style: "font-size: 13px; color: #8b8b9e;", "SPENT" }
                 }
-                div { style: "text-align: center; padding: 10px 4px; background: #1a1a2e; border: 2px solid #2a2a4a; border-radius: 8px;",
-                    div { style: "font-size: 18px; color: #39ff14; margin-bottom: 4px;", "B{bonus_balance as i32}" }
-                    div { style: "font-size: 18px; color: #8b8b9e;", "BONUS" }
+                div { style: "text-align: center; padding: 10px 4px; background: #16213e; border: 4px solid #2a2a4a; border-radius: 0; box-shadow: 4px 4px 0 #000;",
+                    div { style: "font-size: 20px; font-weight: 800; color: #39ff14; text-shadow: 2px 2px 0 #000; margin-bottom: 4px;", "B{bonus_balance as i32}" }
+                    div { style: "font-size: 13px; color: #8b8b9e;", "BONUS" }
                 }
-                div { style: "text-align: center; padding: 10px 4px; background: #1a1a2e; border: 2px solid #2a2a4a; border-radius: 8px;",
-                    div { style: "font-size: 18px; color: #ffe600; margin-bottom: 4px;", "{cashback_pct as i32}%" }
-                    div { style: "font-size: 18px; color: #8b8b9e;", "CASHBACK" }
+                div { style: "text-align: center; padding: 10px 4px; background: #16213e; border: 4px solid #2a2a4a; border-radius: 0; box-shadow: 4px 4px 0 #000;",
+                    div { style: "font-size: 20px; font-weight: 800; color: #ffe600; text-shadow: 2px 2px 0 #000; margin-bottom: 4px;", "{cashback_pct as i32}%" }
+                    div { style: "font-size: 13px; color: #8b8b9e;", "CASHBACK" }
                 }
             }
 
@@ -344,18 +350,19 @@ pub fn ProfileScreen() -> Element {
             if let Some(next) = next_tier {
                 div { style: "padding: 0 16px 16px;",
                     div { style: "
-                        background: #1a1a2e; border: 2px solid {next.color()}33;
-                        border-radius: 8px; padding: 12px;
+                        background: #16213e; border: 4px solid {next.color()}33;
+                        border-radius: 0; padding: 12px;
+                        box-shadow: 4px 4px 0 #000;
                     ",
-                        div { style: "display: flex; justify-content: space-between; font-size: 10px; margin-bottom: 6px;",
+                        div { style: "display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 6px;",
                             span { style: "color: #8b8b9e;", "Progress to {next.label()}" }
                             span { style: "color: {next.color()};", "{progress_pct}%" }
                         }
-                        div { style: "height: 8px; background: rgba(0,0,0,0.4); border-radius: 8px; overflow: hidden;",
-                            div { style: "height: 100%; width: {progress_pct}%; border-radius: 8px; background: linear-gradient(90deg, {current_tier.color()}, {next.color()}); transition: width 0.3s;" }
+                        div { style: "height: 8px; background: rgba(0,0,0,0.4); border-radius: 0; overflow: hidden;",
+                            div { style: "height: 100%; width: {progress_pct}%; border-radius: 0; background: linear-gradient(90deg, {current_tier.color()}, {next.color()}); transition: width 0.3s;" }
                         }
                         if let Some(rem) = remaining {
-                            div { style: "font-size: 18px; color: #8b8b9e; margin-top: 6px; text-align: center;",
+                            div { style: "font-size: 13px; color: #8b8b9e; margin-top: 6px; text-align: center;",
                                 "฿{rem as i32} more to unlock {next.label()}"
                             }
                         }
@@ -366,23 +373,23 @@ pub fn ProfileScreen() -> Element {
             // Referral section
             div { style: "
                 margin: 0 16px 16px;
-                background: #1a1a2e; border: 2px solid #2a2a4a;
-                border-radius: 8px; padding: 12px;
+                background: #16213e; border: 4px solid #2a2a4a;
+                border-radius: 0; padding: 12px;
                 box-shadow: 4px 4px 0 #000;
             ",
-                div { style: "font-size: 12px; color: #00e5ff; margin-bottom: 8px;", "🔗 Referral Link" }
+                div { style: "font-size: 13px; font-weight: 700; color: #00e5ff; text-transform: uppercase; letter-spacing: 1px; text-shadow: 2px 2px 0 #000; margin-bottom: 8px;", "🔗 Referral Link" }
                 div { style: "
                     display: flex; gap: 6px; align-items: center;
-                    background: #0f0f1a; border: 2px solid #2a2a4a;
-                    border-radius: 8px; padding: 6px 8px; margin-bottom: 8px;
+                    background: #0f0f1a; border: 4px solid #2a2a4a;
+                    border-radius: 0; padding: 6px 8px; margin-bottom: 8px;
                 ",
-                    span { style: "font-size: 18px; color: #39ff14; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;", "t.me/WoodyWeedBot?start={referral_code}" }
+                    span { style: "font-size: 15px; color: #39ff14; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;", "t.me/WoodyWeedBot?start={referral_code}" }
                     button {
                         style: "
-                            font-family: 'Press Start 2P', monospace;
-                            font-size: 10px; padding: 4px 8px;
-                            background: #00e5ff; color: #0f0f1a;
-                            border: none; border-radius: 3px; cursor: pointer;
+                            font-size: 13px; padding: 4px 8px;
+                            background: #00e5ff; color: #000;
+                            border: 4px solid #00b8d4; border-radius: 0; cursor: pointer;
+                            box-shadow: 3px 3px 0 #000;
                         ",
                         onclick: move |_| {
                             let _ = web_sys::window().map(|w| {
@@ -393,7 +400,7 @@ pub fn ProfileScreen() -> Element {
                         "Copy"
                     }
                 }
-                div { style: "display: flex; gap: 12px; font-size: 10px;",
+                div { style: "display: flex; gap: 12px; font-size: 13px;",
                     span { style: "color: #8b8b9e;", "👥 {referral_count} invited" }
                     span { style: "color: #39ff14;", "Earn ฿100 per referral" }
                 }
@@ -401,69 +408,69 @@ pub fn ProfileScreen() -> Element {
 
             // Quick actions
             div { style: "padding: 0 16px;",
-                div { style: "font-size: 12px; color: #00e5ff; margin-bottom: 10px; text-transform: uppercase;", "Quick Actions" }
+                div { style: "font-size: 13px; font-weight: 700; color: #00e5ff; text-transform: uppercase; letter-spacing: 1px; text-shadow: 2px 2px 0 #000; margin-bottom: 10px;", "Quick Actions" }
                 Link { to: Route::Orders {},
                     div { style: "
-                        background: #1a1a2e; border: 2px solid #2a2a4a;
-                        border-radius: 8px; padding: 12px 14px; margin-bottom: 8px;
+                        background: #16213e; border: 4px solid #2a2a4a;
+                        border-radius: 0; padding: 12px 14px; margin-bottom: 8px;
                         display: flex; justify-content: space-between; align-items: center;
                         box-shadow: 4px 4px 0 #000; cursor: pointer;
                     ",
                         div { style: "display: flex; align-items: center; gap: 10px;",
                             span { style: "font-size: 14px;", "📋" }
-                            span { style: "font-size: 12px;", "My Orders" }
-                            span { style: "font-size: 18px; color: #8b8b9e;", "({orders_count})" }
+                            span { style: "font-size: 15px;", "My Orders" }
+                            span { style: "font-size: 13px; color: #8b8b9e;", "({orders_count})" }
                         }
-                        span { style: "font-size: 18px; color: #8b8b9e;", "→" }
+                        span { style: "font-size: 15px; color: #8b8b9e;", "→" }
                     }
                 }
                 Link { to: Route::Garden {},
                     div { style: "
-                        background: #1a1a2e; border: 2px solid #2a2a4a;
-                        border-radius: 8px; padding: 12px 14px; margin-bottom: 8px;
+                        background: #16213e; border: 4px solid #2a2a4a;
+                        border-radius: 0; padding: 12px 14px; margin-bottom: 8px;
                         display: flex; justify-content: space-between; align-items: center;
                         box-shadow: 4px 4px 0 #000; cursor: pointer;
                     ",
                         div { style: "display: flex; align-items: center; gap: 10px;",
                             span { style: "font-size: 14px;", "🌱" }
-                            span { style: "font-size: 12px;", "My Garden" }
+                            span { style: "font-size: 15px;", "My Garden" }
                         }
-                        span { style: "font-size: 18px; color: #8b8b9e;", "→" }
+                        span { style: "font-size: 15px; color: #8b8b9e;", "→" }
                     }
                 }
                 Link { to: Route::Quest { id: "daily".to_string() },
                     div { style: "
-                        background: #1a1a2e; border: 2px solid #2a2a4a;
-                        border-radius: 8px; padding: 12px 14px; margin-bottom: 8px;
+                        background: #16213e; border: 4px solid #2a2a4a;
+                        border-radius: 0; padding: 12px 14px; margin-bottom: 8px;
                         display: flex; justify-content: space-between; align-items: center;
                         box-shadow: 4px 4px 0 #000; cursor: pointer;
                     ",
                         div { style: "display: flex; align-items: center; gap: 10px;",
                             span { style: "font-size: 14px;", "🎯" }
-                            span { style: "font-size: 12px;", "Quests" }
+                            span { style: "font-size: 15px;", "Quests" }
                         }
-                        span { style: "font-size: 18px; color: #8b8b9e;", "→" }
+                        span { style: "font-size: 15px; color: #8b8b9e;", "→" }
                     }
                 }
                 Link { to: Route::Referrals {},
                     div { style: "
-                        background: #1a1a2e; border: 2px solid #2a2a4a;
-                        border-radius: 8px; padding: 12px 14px; margin-bottom: 8px;
+                        background: #16213e; border: 4px solid #2a2a4a;
+                        border-radius: 0; padding: 12px 14px; margin-bottom: 8px;
                         display: flex; justify-content: space-between; align-items: center;
                         box-shadow: 4px 4px 0 #000; cursor: pointer;
                     ",
                         div { style: "display: flex; align-items: center; gap: 10px;",
                             span { style: "font-size: 14px;", "🔗" }
-                            span { style: "font-size: 12px;", "Referral Program" }
+                            span { style: "font-size: 15px;", "Referral Program" }
                         }
-                        span { style: "font-size: 18px; color: #8b8b9e;", "→" }
+                        span { style: "font-size: 15px; color: #8b8b9e;", "→" }
                     }
                 }
             }
 
             // Tier benefits grid
             div { style: "padding: 16px;",
-                div { style: "font-size: 12px; color: #ffe600; margin-bottom: 10px; text-transform: uppercase;", "💎 Tier Benefits" }
+                div { style: "font-size: 13px; font-weight: 700; color: #ffe600; text-transform: uppercase; letter-spacing: 1px; text-shadow: 2px 2px 0 #000; margin-bottom: 10px;", "💎 Tier Benefits" }
                 div { style: "display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;",
                     for tier in [Tier::Bronze, Tier::Silver, Tier::Gold] {
                         {
@@ -471,14 +478,72 @@ pub fn ProfileScreen() -> Element {
                             let opacity = if is_unlocked { "1" } else { "0.5" };
                             rsx! {
                                 div { style: "
-                                    background: #1a1a2e; border: 2px solid {tier.color()}33;
-                                    border-radius: 8px; padding: 10px 8px; text-align: center;
-                                    opacity: {opacity};
+                                    background: #16213e; border: 4px solid {tier.color()}33;
+                                    border-radius: 0; padding: 10px 8px; text-align: center;
+                                    opacity: {opacity}; box-shadow: 4px 4px 0 #000;
                                 ",
-                                    div { style: "font-size: 12px; margin-bottom: 4px;", "{tier.emoji()}" }
-                                    div { style: "font-size: 18px; color: {tier.color()}; margin-bottom: 4px;", "{tier.label()}" }
-                                    div { style: "font-size: 9px; color: #8b8b9e; margin-bottom: 2px;", "{tier.cashback()}% cashback" }
-                                    div { style: "font-size: 16px; color: #8b8b9e;", "฿{tier.threshold() as i32}+" }
+                                    div { style: "display: flex; justify-content: center; margin-bottom: 6px; height: 32px; align-items: center;",
+                                        img {
+                                            src: "{tier.bud_image()}",
+                                            style: "max-width: 100%; max-height: 100%; object-fit: contain; filter: drop-shadow(0 0 4px {tier.color()}80);"
+                                        }
+                                    }
+                                    div { style: "font-size: 15px; color: {tier.color()}; margin-bottom: 4px;", "{tier.label()}" }
+                                    div { style: "font-size: 13px; color: #8b8b9e; margin-bottom: 2px;", "{tier.cashback()}% cashback" }
+                                    div { style: "font-size: 15px; color: #8b8b9e;", "฿{tier.threshold() as i32}+" }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            div { style: "
+                margin: 16px 16px 0; padding: 14px;
+                background: #16213e; border: 4px solid #2a2a4a;
+                border-radius: 0; box-shadow: 4px 4px 0 #000;
+            ",
+                div { style: "font-size: 13px; color: #8b8b9e; margin-bottom: 10px;",
+                    "\u{1F310} Language / \u{042F}\u{0437}\u{044B}\u{043A}"
+                },
+                { let mut lang = use_language();
+                    let current = *lang.read();
+                    let langs = vec![
+                        (Language::Russian, "\u{1F1F7}\u{1F1FA}", "RU"),
+                        (Language::English, "\u{1F1EC}\u{1F1E7}", "EN"),
+                    ];
+                    rsx! {
+                        div { style: "display: flex; gap: 8px;",
+                            for (l, flag, code) in langs {
+                                {
+                                    let is_active = current == l;
+                                    let bg = if is_active { "#39ff1415" } else { "#2a2a4a" };
+                                    let color = if is_active { "#39ff14" } else { "#8b8b9e" };
+                                    let border = if is_active { "#39ff14" } else { "#2a2a4a" };
+                                    let l_c = l;
+                                    rsx! {
+                                        button {
+                                            key: "{code}",
+                                            style: "
+                                                flex: 1; font-size: 13px; padding: 8px;
+                                                background: {bg}; color: {color};
+                                                border: 4px solid {border}; border-radius: 20px; cursor: pointer;
+                                            ",
+                                            onclick: move |_| {
+                                                lang.set(l_c);
+                                                #[cfg(target_arch = "wasm32")]
+                                                {
+                                                    if let Some(window) = web_sys::window() {
+                                                        let _ = window.local_storage()
+                                                            .ok()
+                                                            .flatten()
+                                                            .map(|s| s.set_item("wwb_lang", code));
+                                                    }
+                                                }
+                                            },
+                                            "{flag} {code}"
+                                        }
+                                    }
                                 }
                             }
                         }

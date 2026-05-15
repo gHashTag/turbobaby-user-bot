@@ -8,6 +8,7 @@ use crate::trios::core::Lang;
 use crate::trios::i18n::{t, T_SETS_TITLE, T_SETS_DESC, T_FILTER_ALL, T_ADD_TO_CART};
 
 #[derive(Debug, Clone, Deserialize)]
+#[allow(dead_code)]
 struct ApiSet {
     id: String,
     name: String,
@@ -47,7 +48,7 @@ fn mood_color(mood: &str) -> &'static str {
         "heavy" => "#b388ff",
         "beginner" => "#39ff14",
         "relax" | "relaxation" => "#00e5ff",
-        _ => "#8b8b9e",
+        _ => "#888",
     }
 }
 
@@ -119,35 +120,30 @@ pub fn SetsScreen() -> Element {
     };
 
     rsx! {
-        div { style: "
-            min-height: 100vh;
-            background: #0f0f1a;
-            color: #e8e8e8;
-            font-family: 'Press Start 2P', monospace;
-            padding-bottom: 80px;
-        ",
-            div { style: "padding: 20px 16px 12px; text-align: center;",
-                h1 { style: "font-size: 18px; color: #b388ff; text-shadow: 0 0 8px rgba(179,136,255,0.5);", "{sets_title}" }
-                p { style: "font-size: 11px; color: #8b8b9e; margin-top: 4px;", "{sets_desc}" }
+        div { style: "min-height:100vh;background:#0f0f1a;color:#e8e8e8;padding-bottom:80px;",
+
+            div { style: "padding:20px 16px 16px;text-align:center;",
+                h1 { style: "font-size:24px;font-weight:800;color:#b388ff;text-shadow:3px 3px 0 #000,0 0 10px rgba(179,136,255,0.5);letter-spacing:2px;",
+                    "{sets_title}"
+                }
+                p { style: "font-size:13px;color:#888;margin-top:4px;", "{sets_desc}" }
             }
 
-            // Mood filters
-            div { style: "display: flex; gap: 6px; padding: 0 16px 12px; overflow-x: auto;",
+            div { style: "display:flex;gap:6px;padding:0 16px 12px;overflow-x:auto;",
                 for filter in [MoodFilter::All, MoodFilter::Energy, MoodFilter::Party, MoodFilter::Heavy, MoodFilter::Beginner] {
                     {
                         let is_active = mood_filter() == filter;
-                        let bg = if is_active { "#b388ff" } else { "transparent" };
-                        let color = if is_active { "#0f0f1a" } else { "#8b8b9e" };
+                        let bg = if is_active { "rgba(179,136,255,0.15)" } else { "transparent" };
+                        let color = if is_active { "#b388ff" } else { "#888" };
                         let border = if is_active { "#b388ff" } else { "#2a2a4a" };
                         let label = filter.label();
                         rsx! {
                             button {
                                 style: "
-                                    font-family: 'Press Start 2P', monospace;
-                                    font-size: 10px; padding: 6px 10px;
-                                    background: {bg}; color: {color};
-                                    border: 2px solid {border}; border-radius: 8px;
-                                    cursor: pointer; white-space: nowrap;
+                                    font-size:12px;font-weight:600;padding:8px 16px;
+                                    background:{bg};color:{color};
+                                    border:3px solid {border};border-radius:20px;
+                                    cursor:pointer;white-space:nowrap;
                                 ",
                                 onclick: move |_| mood_filter.set(filter),
                                 "{label}"
@@ -157,50 +153,50 @@ pub fn SetsScreen() -> Element {
                 }
             }
 
-            // Featured Packs
-            div { style: "padding: 0 16px 16px;",
-                h2 { style: "font-size: 14px; color: #b388ff; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 1px;", "Featured Packs" }
-                div { style: "display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;",
+            div { style: "padding:0 16px 16px;",
+                h2 { style: "font-size:13px;font-weight:700;color:#b388ff;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;text-shadow:2px 2px 0 #000;",
+                    "Featured Packs"
+                }
+                div { style: "display:grid;grid-template-columns:repeat(3,1fr);gap:12px;",
                     div { style: "
-                        background: #1a1a2e; border: 2px solid #2a2a4a;
-                        border-radius: 8px; overflow: hidden; box-shadow: 4px 4px 0 #000;
+                        background:#16213e;border:4px solid #2a2a4a;
+                        box-shadow:4px 4px 0 #000;overflow:hidden;
                     ",
-                        img { src: "{assets::packs::INDICA}", alt: "Indica Pack", style: "width: 100%; aspect-ratio: 1; object-fit: cover;" }
-                        div { style: "padding: 6px; text-align: center; color: #e8e8e8; font-size: 10px;", "Indica Pack" }
+                        img { src: "{assets::packs::INDICA}", alt: "Indica Pack", style: "width:100%;aspect-ratio:1;object-fit:cover;" }
+                        div { style: "padding:8px;text-align:center;color:#e8e8e8;font-size:13px;font-weight:600;", "Indica Pack" }
                     }
                     div { style: "
-                        background: #1a1a2e; border: 2px solid #2a2a4a;
-                        border-radius: 8px; overflow: hidden; box-shadow: 4px 4px 0 #000;
+                        background:#16213e;border:4px solid #2a2a4a;
+                        box-shadow:4px 4px 0 #000;overflow:hidden;
                     ",
-                        img { src: "{assets::packs::SATIVA}", alt: "Sativa Pack", style: "width: 100%; aspect-ratio: 1; object-fit: cover;" }
-                        div { style: "padding: 6px; text-align: center; color: #e8e8e8; font-size: 10px;", "Sativa Pack" }
+                        img { src: "{assets::packs::SATIVA}", alt: "Sativa Pack", style: "width:100%;aspect-ratio:1;object-fit:cover;" }
+                        div { style: "padding:8px;text-align:center;color:#e8e8e8;font-size:13px;font-weight:600;", "Sativa Pack" }
                     }
                     div { style: "
-                        background: #1a1a2e; border: 2px solid #2a2a4a;
-                        border-radius: 8px; overflow: hidden; box-shadow: 4px 4px 0 #000;
+                        background:#16213e;border:4px solid #2a2a4a;
+                        box-shadow:4px 4px 0 #000;overflow:hidden;
                     ",
-                        img { src: "{assets::packs::STARTER}", alt: "Starter Pack", style: "width: 100%; aspect-ratio: 1; object-fit: cover;" }
-                        div { style: "padding: 6px; text-align: center; color: #e8e8e8; font-size: 10px;", "Starter Pack" }
+                        img { src: "{assets::packs::STARTER}", alt: "Starter Pack", style: "width:100%;aspect-ratio:1;object-fit:cover;" }
+                        div { style: "padding:8px;text-align:center;color:#e8e8e8;font-size:13px;font-weight:600;", "Starter Pack" }
                     }
                 }
             }
 
-            // Sets from API
             {
                 match &*sets_resource.read() {
                     Some(Ok(sets)) if sets.is_empty() => rsx! {
-                        div { style: "text-align: center; padding: 40px 16px;",
-                            div { style: "font-size: 36px; margin-bottom: 12px;", "📦" }
-                            p { style: "font-size: 12px; color: #8b8b9e;", "No sets available yet" }
+                        div { style: "text-align:center;padding:48px 16px;",
+                            div { style: "font-size:36px;margin-bottom:12px;", "📦" }
+                            p { style: "font-size:15px;color:#888;", "No sets available yet" }
                         }
                     },
                     Some(Ok(_)) => rsx! {
-                        div { style: "padding: 0 16px 8px;",
-                            h2 { style: "font-size: 14px; color: #b388ff; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 1px;",
+                        div { style: "padding:0 16px 8px;",
+                            h2 { style: "font-size:13px;font-weight:700;color:#b388ff;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;text-shadow:2px 2px 0 #000;",
                                 "All Sets ({filtered_sets.len()})"
                             }
                         }
-                        div { style: "display: flex; flex-direction: column; gap: 12px; padding: 0 16px;",
+                        div { style: "display:flex;flex-direction:column;gap:12px;padding:0 16px;",
                             for set in filtered_sets.iter() {
                                 {
                                     let s = set.clone();
@@ -230,61 +226,61 @@ pub fn SetsScreen() -> Element {
 
                                     rsx! {
                                         div { style: "
-                                            background: #1a1a2e;
-                                            border: 2px solid {m_color}33;
-                                            border-radius: 8px;
-                                            overflow: hidden;
-                                            box-shadow: 4px 4px 0 #000;
+                                            background:#16213e;
+                                            border:4px solid {m_color}33;
+                                            box-shadow:4px 4px 0 #000;
+                                            overflow:hidden;
                                         ",
                                             div { style: "
-                                                height: 100px;
-                                                background: linear-gradient(135deg, #1a1a2e, #1a1a2e);
-                                                display: flex; align-items: center; justify-content: center;
-                                                font-size: 40px; position: relative;
+                                                height:100px;
+                                                background:linear-gradient(135deg,#1a1a2e,#16213e);
+                                                display:flex;align-items:center;justify-content:center;
+                                                font-size:40px;position:relative;
                                             ",
                                                 "{icon}"
                                                 if has_discount {
                                                     span { style: "
-                                                        position: absolute; top: 6px; right: 6px;
-                                                        font-size: 9px; background: {m_color}; color: #0f0f1a;
-                                                        padding: 2px 6px; border-radius: 3px;
+                                                        position:absolute;top:8px;right:8px;
+                                                        font-size:13px;font-weight:700;background:{m_color};color:#000;
+                                                        padding:4px 8px;box-shadow:2px 2px 0 #000;
                                                     ", "{discount_badge}" }
                                                 }
                                             }
-                                            div { style: "padding: 12px;",
-                                                div { style: "display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;",
-                                                    span { style: "font-size: 14px; font-weight: bold;", "{set_name}" }
-                                                    span { style: "font-size: 18px; color: {m_color};", "{emoji} {mood}" }
+                                            div { style: "padding:14px;",
+                                                div { style: "display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;",
+                                                    span { style: "font-size:16px;font-weight:700;text-shadow:2px 2px 0 #000;", "{set_name}" }
+                                                    span { style: "font-size:13px;color:{m_color};", "{emoji} {mood}" }
                                                 }
                                                 if !desc.is_empty() {
-                                                    div { style: "font-size: 18px; color: #8b8b9e; margin-bottom: 6px;", "{desc}" }
+                                                    div { style: "font-size:13px;color:#888;margin-bottom:6px;", "{desc}" }
                                                 }
                                                 if !strains_label.is_empty() || !time_str.is_empty() {
-                                                    div { style: "font-size: 18px; color: #8b8b9e; margin-bottom: 8px;",
+                                                    div { style: "font-size:13px;color:#888;margin-bottom:8px;",
                                                         if !strains_label.is_empty() {
-                                                            span { style: "border: 2px solid #2a2a4a; padding: 1px 4px; border-radius: 3px; margin-right: 4px;", "{strains_label}" }
+                                                            span { style: "border:2px solid #2a2a4a;padding:2px 8px;margin-right:4px;", "{strains_label}" }
                                                         }
                                                         if !time_str.is_empty() {
-                                                            span { style: "border: 2px solid #2a2a4a; padding: 1px 4px; border-radius: 3px;", "🕐 {time_str}" }
+                                                            span { style: "border:2px solid #2a2a4a;padding:2px 8px;", "🕐 {time_str}" }
                                                         }
                                                     }
                                                 }
-                                                div { style: "display: flex; justify-content: space-between; align-items: center;",
+                                                div { style: "display:flex;justify-content:space-between;align-items:center;",
                                                     div {
                                                         if has_discount {
-                                                            span { style: "font-size: 12px; color: #8b8b9e; text-decoration: line-through; margin-right: 6px;", "{original_price_str}" }
+                                                            span { style: "font-size:13px;color:#888;text-decoration:line-through;margin-right:6px;", "{original_price_str}" }
                                                         }
-                                                        span { style: "font-size: 18px; color: #39ff14;", "{price_str}" }
+                                                        span { style: "font-size:22px;font-weight:800;color:#ffe600;text-shadow:2px 2px 0 #000;", "{price_str}" }
                                                     }
                                                 }
                                             }
-                                            div { style: "padding: 0 12px 12px;",
+                                            div { style: "padding:0 14px 14px;",
                                                 button {
                                                     style: "
-                                                        font-family: 'Press Start 2P', monospace;
-                                                        font-size: 10px; width: 100%; padding: 8px;
-                                                        background: #39ff14; color: #0f0f1a;
-                                                        border: none; border-radius: 8px; cursor: pointer;
+                                                        font-size:14px;font-weight:700;width:100%;padding:12px 20px;
+                                                        background:#39ff14;color:#000;
+                                                        border:4px solid #2d9e0f;
+                                                        box-shadow:3px 3px 0 #000;
+                                                        cursor:pointer;
                                                     ",
                                                     onclick: move |_| {
                                                         let mut c = cart.write();
@@ -306,25 +302,19 @@ pub fn SetsScreen() -> Element {
                         }
                     },
                     Some(Err(e)) => rsx! {
-                        div { style: "text-align: center; padding: 40px 16px;",
-                            div { style: "font-size: 36px; margin-bottom: 12px;", "⚠️" }
-                            p { style: "font-size: 12px; color: #ff4757;", "Error: {e}" }
-                            p { style: "font-size: 18px; color: #8b8b9e; margin-top: 8px;", "Showing offline sets..." }
-                        }
-                        div { style: "display: flex; flex-direction: column; gap: 12px; padding: 0 16px;",
-                            {offline_sets_card("Starter Pack", "3 strains + grinder + papers", 4200.0, 3200.0, &mut cart)}
-                            {offline_sets_card("Connoisseur Collection", "5 premium strains + vaporizer + case", 12000.0, 8500.0, &mut cart)}
-                            {offline_sets_card("Party Pack", "10 pre-rolls + rolling kit + lighter", 0.0, 2800.0, &mut cart)}
+                        div { style: "text-align:center;padding:48px 16px;",
+                            div { style: "font-size:36px;margin-bottom:12px;", "⚠️" }
+                            p { style: "font-size:15px;color:#ff4757;", "Error: {e}" }
                         }
                     },
                     None => rsx! {
-                        div { style: "display: flex; flex-direction: column; gap: 12px; padding: 0 16px;",
+                        div { style: "display:flex;flex-direction:column;gap:12px;padding:0 16px;",
                             div { style: "
-                                background: #1a1a2e; border: 2px solid #2a2a4a;
-                                border-radius: 8px; padding: 20px; text-align: center;
-                                box-shadow: 4px 4px 0 #000; min-height: 120px;
+                                background:#16213e;border:4px solid #2a2a4a;
+                                box-shadow:4px 4px 0 #000;
+                                padding:20px;text-align:center;min-height:120px;
                             ",
-                                div { style: "font-size: 12px; color: #b388ff; margin-bottom: 8px;", "Loading sets..." }
+                                div { style: "font-size:15px;color:#b388ff;margin-bottom:8px;", "Loading sets..." }
                             }
                         }
                     },
@@ -332,58 +322,6 @@ pub fn SetsScreen() -> Element {
             }
 
             BottomNav {}
-        }
-    }
-}
-
-fn offline_sets_card(name: &str, desc: &str, original: f64, price: f64, cart: &mut Signal<Cart>) -> Element {
-    let add_to_cart = t(Lang::Russian, T_ADD_TO_CART);
-    let has_discount = original > 0.0 && original != price;
-    let n = name.to_string();
-    let p = price;
-    let set_id = format!("set-{}", name.to_lowercase().replace(' ', "-"));
-    let original_str = format!("฿{}", original as i32);
-    let price_str = format!("฿{}", price as i32);
-    let mut c = cart.clone();
-
-    rsx! {
-        div { style: "
-            background: #1a1a2e; border: 2px solid #2a2a4a;
-            border-radius: 8px; overflow: hidden; box-shadow: 4px 4px 0 #000;
-        ",
-            div { style: "padding: 12px;",
-                div { style: "font-size: 14px; font-weight: bold; margin-bottom: 4px;", "{n}" }
-                div { style: "font-size: 18px; color: #8b8b9e; margin-bottom: 8px;", "{desc}" }
-                div { style: "display: flex; justify-content: space-between; align-items: center;",
-                    div {
-                        if has_discount {
-                            span { style: "font-size: 12px; color: #8b8b9e; text-decoration: line-through; margin-right: 6px;", "{original_str}" }
-                        }
-                        span { style: "font-size: 18px; color: #39ff14;", "{price_str}" }
-                    }
-                }
-            }
-            div { style: "padding: 0 12px 12px;",
-                button {
-                    style: "
-                        font-family: 'Press Start 2P', monospace;
-                        font-size: 10px; width: 100%; padding: 8px;
-                        background: #39ff14; color: #0f0f1a;
-                        border: none; border-radius: 8px; cursor: pointer;
-                    ",
-                    onclick: move |_| {
-                        let mut w = c.write();
-                        w.add_item(CartItem {
-                            id: set_id.clone(),
-                            name: n.clone(),
-                            price: p,
-                            quantity: 1,
-                            image_url: None,
-                        });
-                    },
-                    "{add_to_cart}"
-                }
-            }
         }
     }
 }

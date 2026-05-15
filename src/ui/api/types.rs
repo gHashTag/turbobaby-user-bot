@@ -88,16 +88,25 @@ pub struct Accessory {
     pub is_available: bool,
 }
 
-/// Set (bundle of products)
+/// Set (bundle of products) - matches backend /api/sets response
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Set {
     pub id: String,
     pub name: String,
     pub description: String,
+    #[serde(default)]
+    pub icon: String,
+    #[serde(rename = "type", default)]
+    pub set_type: String,
+    #[serde(default)]
+    pub items: Vec<String>,
+    #[serde(rename = "total_price")]
     pub price: f64,
+    #[serde(rename = "discount_percent")]
     pub discount: f64,
-    pub image_url: String,
     pub is_available: bool,
+    #[serde(rename = "is_deal_of_day", default)]
+    pub is_deal_of_day: bool,
 }
 
 /// Tea product
@@ -200,6 +209,57 @@ pub struct LoyaltyProfile {
     pub tier: LoyaltyTier,
     pub bonuses_used: u32,
     pub total_spent: f64,
+}
+
+// ── Admin Request Types ─────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct AccessoryRequest {
+    pub name: String,
+    pub category: Option<String>,
+    pub description: Option<String>,
+    pub price: f64,
+    pub stock: Option<i32>,
+    pub image_url: Option<String>,
+    pub video_url: Option<String>,
+    pub is_available: Option<bool>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct TeaProductRequest {
+    pub name: String,
+    pub subcategory: Option<String>,
+    pub description: Option<String>,
+    pub price: f64,
+    pub stock: Option<i32>,
+    pub image_url: Option<String>,
+    pub video_url: Option<String>,
+    pub is_available: Option<bool>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct SetRequest {
+    pub name: String,
+    pub description: Option<String>,
+    pub icon: Option<String>,
+    pub strain_ids: Option<Vec<String>>,
+    pub accessory_ids: Option<Vec<String>>,
+    pub total_price: f64,
+    pub discount_percent: Option<f64>,
+    pub is_available: Option<bool>,
+    pub is_deal_of_day: Option<bool>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct AccessorySetRequest {
+    pub name: String,
+    pub description: Option<String>,
+    pub icon: Option<String>,
+    pub accessories: Option<Vec<String>>,
+    pub total_price: f64,
+    pub discount_percent: Option<f64>,
+    pub is_available: Option<bool>,
+    pub is_deal_of_day: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
