@@ -70,6 +70,5 @@ COPY styles ./styles
 COPY assets ./assets
 COPY migrations ./migrations
 
-# Railway sets PORT automatically
-EXPOSE 8080
+# Railway sets PORT automatically - no EXPOSE needed
 CMD ["./woody-weed-bot-server"]
