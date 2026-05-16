@@ -35,9 +35,22 @@ impl Config {
             .filter_map(|s| s.trim().parse::<i64>().ok())
             .collect();
 
+        // The backend service serves BOTH the API and the WASM frontend on the same origin.
+        // If WEB_APP_URL is empty or points to the broken legacy TMA service, fall back to the
+        // canonical backend URL so the Telegram WebApp button always opens a working page.
+        let raw_web_app_url = std::env::var("WEB_APP_URL").unwrap_or_default();
+        let canonical_web_app_url = "https://woody-weed-bot-production.up.railway.app/".to_string();
+        let web_app_url = if raw_web_app_url.trim().is_empty()
+            || raw_web_app_url.contains("woody-woodpecker-tma-production")
+        {
+            canonical_web_app_url
+        } else {
+            raw_web_app_url
+        };
+
         Ok(Self {
             bot_token,
-            web_app_url: std::env::var("WEB_APP_URL").unwrap_or_default(),
+            web_app_url,
             port: std::env::var("PORT").unwrap_or("3000".into()).parse().unwrap_or(3000),
             webhook_path: std::env::var("WEBHOOK_PATH").unwrap_or("/webhook".into()),
             app_url: std::env::var("APP_URL").unwrap_or_default(),
