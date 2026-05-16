@@ -118,26 +118,38 @@ impl TelegramApp {
         ));
     }
 
-    /// Get Telegram user ID from WebApp
-    /// Note: This is a simplified version. In production, use async JS interop.
+    /// Get Telegram user ID from WebApp.
+    /// Reads `window.Telegram.WebApp.initDataUnsafe.user.id` synchronously via
+    /// `js_sys::eval`. Returns `None` if SDK is missing or user is not present
+    /// (e.g. page opened in a regular browser).
     pub fn get_user_id(&self) -> Option<i64> {
-        // TODO: Implement proper JS interop for getting user ID
-        // For now, return None and rely on server to identify user from init data
-        None
+        let js = r#"(function(){try{
+            if(window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initDataUnsafe && window.Telegram.WebApp.initDataUnsafe.user){
+                return window.Telegram.WebApp.initDataUnsafe.user.id || 0;
+            }
+            return 0;
+        }catch(e){return 0;}})()"#;
+        let val = js_sys::eval(js).ok()?;
+        let n = val.as_f64()?;
+        let id = n as i64;
+        if id == 0 { None } else { Some(id) }
     }
 
     /// Get Telegram user data
     /// Note: This is a simplified version. In production, use async JS interop.
     pub fn get_user_data(&self) -> Option<Value> {
-        // TODO: Implement proper JS interop for getting user data
         None
     }
 
     /// Get Telegram initData string (for server-side validation)
-    /// Note: This is a simplified version. In production, use async JS interop.
     pub fn get_init_data(&self) -> String {
-        // TODO: Implement proper JS interop for getting init data
-        String::new()
+        let js = r#"(function(){try{
+            if(window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData){
+                return window.Telegram.WebApp.initData || "";
+            }
+            return "";
+        }catch(e){return "";}})()"#;
+        js_sys::eval(js).ok().and_then(|v| v.as_string()).unwrap_or_default()
     }
 }
 
