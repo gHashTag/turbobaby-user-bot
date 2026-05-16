@@ -121,7 +121,14 @@ async fn main() -> Result<()> {
 
     // ── Performance layers ────────────────────────────────────────────
     // Brotli / Gzip / Zstd compression for everything (WASM 2 MB → ~600 KB).
-    let compression = CompressionLayer::new().br(true).gzip(true).zstd(true);
+    // Default predicate skips application/wasm, so use a permissive
+    // size-only predicate (anything > 1 KB gets compressed).
+    use tower_http::compression::predicate::SizeAbove;
+    let compression = CompressionLayer::new()
+        .br(true)
+        .gzip(true)
+        .zstd(true)
+        .compress_when(SizeAbove::new(1024));
 
     // Long-lived cache for hashed/static assets (Trunk emits file hashes,
     // so `*_bg.wasm`, `*.js`, `*.css` are content-addressed and safe to cache
