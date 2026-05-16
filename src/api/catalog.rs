@@ -69,12 +69,13 @@ fn accessory_row(r: &tokio_postgres::Row) -> Value {
     })
 }
 
-async fn get_accessories(State(state): State<AppState>) -> Result<Json<Value>, (StatusCode, String)> {
-    let client = state.db.pool.get().await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("pool: {e}")))?;
+async fn get_accessories(State(state): State<AppState>) -> Result<Json<Value>, StatusCode> {
+    let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    // NOTE: small cosmetic change forces fresh prepared statement after schema alter
     let rows = client.query(
-        "SELECT id, name, category, description, price, stock, image_url, video_url, is_available FROM accessories WHERE is_available = true ORDER BY name",
+        "SELECT id, name, category, description, price, stock, image_url, video_url, is_available FROM accessories WHERE is_available = TRUE ORDER BY name",
         &[],
-    ).await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("query: {e:?}")))?;
+    ).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let items: Vec<Value> = rows.iter().map(accessory_row).collect();
     Ok(Json(json!({ "accessories": items })))
 }
@@ -359,15 +360,16 @@ pub struct SetRequest {
 async fn get_sets(State(state): State<AppState>) -> Result<Json<Value>, StatusCode> {
     let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    // Get accessory sets
+    // Get accessory sets — uppercase TRUE forces a new prepared statement
+    // identity after schema ALTER TYPE invalidated the previous one.
     let accessory_sets = client.query(
-        "SELECT id, name, description, icon, accessories, total_price, discount_percent, is_available, is_deal_of_day FROM accessory_sets WHERE is_available = true",
+        "SELECT id, name, description, icon, accessories, total_price, discount_percent, is_available, is_deal_of_day FROM accessory_sets WHERE is_available = TRUE",
         &[],
     ).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // Get tea sets
     let tea_sets = client.query(
-        "SELECT id, name, description, icon, items, total_price, discount_percent, is_available FROM tea_sets WHERE is_available = true",
+        "SELECT id, name, description, icon, items, total_price, discount_percent, is_available FROM tea_sets WHERE is_available = TRUE",
         &[],
     ).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 

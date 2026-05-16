@@ -112,8 +112,12 @@ impl Database {
         cfg.keepalives = Some(true);
         cfg.keepalives_idle = Some(std::time::Duration::from_secs(300));
 
+        // Clean recycling runs DISCARD ALL on each returned connection,
+        // dropping all cached prepared statements. This is required so that
+        // ALTER TYPE migrations don't leave stale plans (Postgres error
+        // SQLSTATE 0A000 "cached plan must not change result type").
         let manager_cfg = ManagerConfig {
-            recycling_method: deadpool_postgres::RecyclingMethod::Verified,
+            recycling_method: deadpool_postgres::RecyclingMethod::Clean,
         };
 
         let pg_config = cfg
