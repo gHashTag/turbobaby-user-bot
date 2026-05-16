@@ -19,12 +19,15 @@ RUN curl -fsSL https://github.com/trunk-rs/trunk/releases/download/v0.21.5/trunk
     && trunk --version && wasm-bindgen --version
 
 # Copy sources required for trunk build
-COPY Cargo.toml Cargo.lock Trunk.toml index.html ./
+COPY Cargo.toml Cargo.lock Trunk.toml index.html build.rs ./
 COPY src ./src
 COPY styles ./styles
 COPY assets ./assets
 
 # Build the WASM frontend (release mode via Trunk.toml)
+# BUILD_VERSION arg lets CI inject a deterministic version when .git is absent.
+ARG BUILD_VERSION=docker
+ENV BUILD_VERSION_OVERRIDE=$BUILD_VERSION
 RUN trunk build --release
 
 # SRI disabled via Trunk.toml no_sri=true — no sed stripping needed
@@ -40,13 +43,15 @@ RUN apt-get update && apt-get install -y pkg-config musl-tools ca-certificates &
     rm -rf /var/lib/apt/lists/*
 
 # Cache dependencies
-COPY Cargo.toml Cargo.lock ./
+COPY Cargo.toml Cargo.lock build.rs ./
 RUN mkdir -p src && echo 'fn main() {}' > src/main.rs && \
     echo 'pub fn run() {}' > src/lib.rs && \
     cargo build --release --target x86_64-unknown-linux-musl --features backend --bin woody-weed-bot-server || true && \
     rm -rf src
 
 # Build server
+ARG BUILD_VERSION=docker
+ENV BUILD_VERSION_OVERRIDE=$BUILD_VERSION
 COPY src ./src
 COPY migrations ./migrations
 RUN touch src/main.rs && \
