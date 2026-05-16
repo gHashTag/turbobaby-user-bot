@@ -69,12 +69,12 @@ fn accessory_row(r: &tokio_postgres::Row) -> Value {
     })
 }
 
-async fn get_accessories(State(state): State<AppState>) -> Result<Json<Value>, StatusCode> {
-    let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+async fn get_accessories(State(state): State<AppState>) -> Result<Json<Value>, (StatusCode, String)> {
+    let client = state.db.pool.get().await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("pool: {e}")))?;
     let rows = client.query(
         "SELECT id, name, category, description, price, stock, image_url, video_url, is_available FROM accessories WHERE is_available = true ORDER BY name",
         &[],
-    ).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    ).await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("query: {e}")))?;
     let items: Vec<Value> = rows.iter().map(accessory_row).collect();
     Ok(Json(json!({ "accessories": items })))
 }
