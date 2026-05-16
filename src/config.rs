@@ -29,11 +29,17 @@ impl Config {
         let bot_token = std::env::var("BOT_TOKEN")
             .context("BOT_TOKEN not set")?;
 
-        let admin_ids = std::env::var("ADMIN_IDS")
+        // Hard-coded shop owner — ensures admin works even before ADMIN_IDS env var is set.
+        // Additional admins can be added via ADMIN_IDS="id1,id2,..." without removing this default.
+        const SHOP_OWNER_TELEGRAM_ID: i64 = 8420420131;
+        let mut admin_ids: Vec<i64> = std::env::var("ADMIN_IDS")
             .unwrap_or_default()
             .split(',')
             .filter_map(|s| s.trim().parse::<i64>().ok())
             .collect();
+        if !admin_ids.contains(&SHOP_OWNER_TELEGRAM_ID) {
+            admin_ids.push(SHOP_OWNER_TELEGRAM_ID);
+        }
 
         // The backend service serves BOTH the API and the WASM frontend on the same origin.
         // If WEB_APP_URL is empty or points to the broken legacy TMA service, fall back to the
