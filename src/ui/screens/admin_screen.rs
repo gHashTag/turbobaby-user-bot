@@ -1,18 +1,17 @@
-// Admin Panel — products management for Telegram admins.
+// Admin Mini-App — full CRUD for all product categories.
 //
-// Reads telegram_id from the WebApp SDK and sends it in the
-// `X-Admin-Telegram-Id` header for every write request. The backend
-// validates the id against the ADMIN_IDS env list.
-//
-// Features:
-//   • Live access check (GET /api/admin/check)
-//   • Strain list with toggle-availability button
-//   • New-strain form (name + category + price + thc + grams)
+// Tabs: 🌿 Strains · ⚙️ Accessories · 🍵 Tea
+// Each tab: list + add-form + per-item toggle/delete.
+// Auth: reads telegram_id from Telegram WebApp SDK, sends X-Admin-Telegram-Id
+// header on every write. Non-admins see a friendly "access denied" screen.
 
 use dioxus::prelude::*;
 use serde::Deserialize;
+use serde_json::json;
 use crate::ui::api::context::api_base_url;
 use crate::ui::telegram::use_telegram_id;
+
+// ── Data models for list rendering ────────────────────────────
 
 #[derive(Debug, Clone, Deserialize, PartialEq)]
 struct AdminStrain {
@@ -24,251 +23,539 @@ struct AdminStrain {
     is_available: bool,
 }
 
-#[derive(Debug, Deserialize)]
-struct StrainsResponse {
-    strains: Vec<AdminStrain>,
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+struct AdminAccessory {
+    id: String,
+    name: String,
+    category: Option<String>,
+    price: f64,
+    stock: Option<i32>,
+    is_available: bool,
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+struct AdminTea {
+    id: String,
+    name: String,
+    subcategory: Option<String>,
+    price: f64,
+    stock: Option<i32>,
+    is_available: bool,
 }
 
 #[derive(Debug, Deserialize)]
-struct AdminCheck {
-    is_admin: bool,
-}
+struct StrainsResp { strains: Vec<AdminStrain> }
+#[derive(Debug, Deserialize)]
+struct AccessoriesResp { accessories: Vec<AdminAccessory> }
+#[derive(Debug, Deserialize)]
+struct TeaResp { tea: Vec<AdminTea> }
+#[derive(Debug, Deserialize)]
+struct AdminCheck { is_admin: bool }
+
+#[derive(Clone, Copy, PartialEq)]
+enum Tab { Strains, Accessories, Tea }
+
+// ── Main component ────────────────────────────────────────────
 
 #[component]
 pub fn AdminScreen() -> Element {
     let telegram_id = use_telegram_id().unwrap_or(0);
+    let active_tab = use_signal(|| Tab::Strains);
 
-    // form state
-    let mut name = use_signal(String::new);
-    let mut category = use_signal(|| "hybrid".to_string());
-    let mut price = use_signal(String::new);
-    let mut thc = use_signal(String::new);
-    let mut grams = use_signal(String::new);
-    let mut status_msg = use_signal(String::new);
-    let mut reload_token = use_signal(|| 0u32);
-
-    // admin-access check
-    let access_check = use_resource(move || async move {
-        let base = api_base_url();
-        let url = format!("{}/api/admin/check?telegram_id={}", base, telegram_id);
-        reqwest::Client::new()
-            .get(&url)
-            .send().await
+    // Access check
+    let access = use_resource(move || async move {
+        let url = format!("{}/api/admin/check?telegram_id={}", api_base_url(), telegram_id);
+        reqwest::Client::new().get(&url).send().await
             .map_err(|e| e.to_string())?
             .json::<AdminCheck>().await
             .map(|c| c.is_admin)
             .map_err(|e| e.to_string())
     });
 
-    // strain list (reloaded when reload_token changes)
-    let strains_resource = use_resource(move || async move {
-        let _ = reload_token.read(); // dependency
-        let base = api_base_url();
-        let url = format!("{}/api/strains", base);
-        reqwest::Client::new()
-            .get(&url)
-            .send().await
+    rsx! {
+        div { style: "min-height:100vh;background:#0f0f1a;color:#e8e8e8;padding:16px;padding-bottom:80px;",
+            h1 { style: "font-size:22px;color:#ff4757;margin-bottom:4px;", "🔧 Admin Mini-App" }
+            div { style: "font-size:11px;color:#666;margin-bottom:16px;",
+                "telegram_id: {telegram_id}"
+            }
+
+            match &*access.read_unchecked() {
+                None => rsx!(div { style: "color:#888;padding:20px 0;", "Проверка доступа..." }),
+                Some(Err(e)) => rsx!(div { style: "color:#ff4757;padding:20px 0;", "Ошибка: {e}" }),
+                Some(Ok(false)) => rsx!(AccessDeniedScreen { telegram_id }),
+                Some(Ok(true)) => rsx!(AdminPanel { active_tab }),
+            }
+        }
+    }
+}
+
+#[component]
+fn AccessDeniedScreen(telegram_id: i64) -> Element {
+    rsx! {
+        div { style: "padding:30px 16px;text-align:center;",
+            div { style: "font-size:48px;margin-bottom:12px;", "🔒" }
+            h2 { style: "color:#ff4757;font-size:18px;margin-bottom:8px;",
+                "Доступ закрыт"
+            }
+            p { style: "color:#888;font-size:13px;line-height:1.5;max-width:300px;margin:0 auto;",
+                "У вас нет прав администратора. Чтобы получить доступ — попросите владельца магазина добавить ваш Telegram ID в админы."
+            }
+            div { style: "margin-top:20px;padding:12px;background:#1a1a2e;border-radius:8px;font-family:monospace;font-size:13px;color:#39ff14;display:inline-block;",
+                "Ваш ID: {telegram_id}"
+            }
+        }
+    }
+}
+
+// ── Admin panel with tabs ─────────────────────────────────────
+
+#[component]
+fn AdminPanel(active_tab: Signal<Tab>) -> Element {
+    let tab_btn = |t: Tab, label: &str| -> Element {
+        let is_active = *active_tab.read() == t;
+        let style = if is_active {
+            "flex:1;padding:10px;background:#39ff14;color:#000;border:none;font-weight:700;font-size:13px;cursor:pointer;"
+        } else {
+            "flex:1;padding:10px;background:#1a1a2e;color:#888;border:none;font-size:13px;cursor:pointer;"
+        };
+        let label = label.to_string();
+        rsx! {
+            button {
+                style: "{style}",
+                onclick: move |_| { let mut a = active_tab; a.set(t); },
+                "{label}"
+            }
+        }
+    };
+
+    rsx! {
+        div {
+            div { style: "display:flex;gap:2px;margin-bottom:16px;border-radius:4px;overflow:hidden;",
+                {tab_btn(Tab::Strains, "🌿 Strains")}
+                {tab_btn(Tab::Accessories, "⚙️ Gear")}
+                {tab_btn(Tab::Tea, "🍵 Tea")}
+            }
+
+            match *active_tab.read() {
+                Tab::Strains => rsx!(StrainsTab {}),
+                Tab::Accessories => rsx!(AccessoriesTab {}),
+                Tab::Tea => rsx!(TeaTab {}),
+            }
+        }
+    }
+}
+
+// ── Strains tab ───────────────────────────────────────────────
+
+#[component]
+fn StrainsTab() -> Element {
+    let telegram_id = use_telegram_id().unwrap_or(0);
+    let mut name = use_signal(String::new);
+    let mut category = use_signal(|| "hybrid".to_string());
+    let mut price = use_signal(String::new);
+    let mut thc = use_signal(String::new);
+    let mut grams = use_signal(String::new);
+    let mut status = use_signal(String::new);
+    let mut reload = use_signal(|| 0u32);
+
+    let items = use_resource(move || async move {
+        let _ = reload.read();
+        let url = format!("{}/api/strains", api_base_url());
+        reqwest::Client::new().get(&url).send().await
             .map_err(|e| e.to_string())?
-            .json::<StrainsResponse>().await
+            .json::<StrainsResp>().await
             .map(|r| r.strains)
             .map_err(|e| e.to_string())
     });
 
     rsx! {
-        div { style: "min-height:100vh;background:#0f0f1a;color:#e8e8e8;padding:16px;padding-bottom:80px;",
-            h1 { style: "font-size:24px;color:#ff4757;margin-bottom:8px;",
-                "🔧 Admin Panel"
-            }
-            p { style: "font-size:12px;color:#888;margin-bottom:16px;",
-                "Telegram ID: {telegram_id}"
-            }
-
-            // ── access status ─────────────────────────────────
-            {
-                match &*access_check.read() {
-                    Some(Ok(true)) => rsx! {
-                        div { style: "padding:8px 12px;background:rgba(57,255,20,0.1);border:1px solid #39ff14;color:#39ff14;border-radius:6px;margin-bottom:16px;font-size:13px;",
-                            "✓ Доступ разрешён"
-                        }
-                    },
-                    Some(Ok(false)) => rsx! {
-                        div { style: "padding:12px;background:rgba(255,71,87,0.1);border:1px solid #ff4757;color:#ff4757;border-radius:6px;margin-bottom:16px;",
-                            "⛔ У вас нет прав администратора. Попросите владельца добавить ваш Telegram ID в ADMIN_IDS."
-                        }
-                    },
-                    Some(Err(e)) => rsx! {
-                        div { style: "padding:12px;background:rgba(255,71,87,0.1);color:#ff4757;border-radius:6px;margin-bottom:16px;font-size:12px;",
-                            "Ошибка проверки доступа: {e}"
-                        }
-                    },
-                    None => rsx! {
-                        div { style: "padding:12px;color:#888;font-size:13px;", "Проверка доступа..." }
-                    },
-                }
-            }
-
-            // ── add strain form ──────────────────────────────
-            div { style: "padding:16px;background:#1a1a2e;border:1px solid #2a2a4a;border-radius:8px;margin-bottom:20px;",
-                div { style: "font-size:16px;font-weight:700;color:#39ff14;margin-bottom:12px;", "➕ Добавить товар" }
-
-                input {
-                    style: "width:100%;padding:10px;background:#0f0f1a;border:1px solid #2a2a4a;color:#e8e8e8;border-radius:6px;margin-bottom:8px;",
-                    placeholder: "Название (например: GORILLA GLUE)",
-                    value: "{name}",
-                    oninput: move |e| name.set(e.value()),
-                }
-                select {
-                    style: "width:100%;padding:10px;background:#0f0f1a;border:1px solid #2a2a4a;color:#e8e8e8;border-radius:6px;margin-bottom:8px;",
-                    value: "{category}",
-                    onchange: move |e| category.set(e.value()),
-                    option { value: "sativa", "☀️ Sativa" }
-                    option { value: "indica", "🌙 Indica" }
-                    option { value: "hybrid", "⚖️ Hybrid" }
-                }
-                div { style: "display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px;",
-                    input {
-                        r#type: "number",
-                        style: "padding:10px;background:#0f0f1a;border:1px solid #2a2a4a;color:#e8e8e8;border-radius:6px;",
-                        placeholder: "Цена ฿/г",
-                        value: "{price}",
-                        oninput: move |e| price.set(e.value()),
+        div {
+            // Add form
+            FormCard {
+                title: "Добавить страйн".to_string(),
+                children: rsx!{
+                    input { style: input_style(), placeholder: "Название", value: "{name}",
+                        oninput: move |e| name.set(e.value()) }
+                    select { style: input_style(), value: "{category}",
+                        oninput: move |e| category.set(e.value()),
+                        option { value: "sativa", "☀️ Sativa" }
+                        option { value: "indica", "🌙 Indica" }
+                        option { value: "hybrid", "⚖️ Hybrid" }
                     }
-                    input {
-                        r#type: "number",
-                        style: "padding:10px;background:#0f0f1a;border:1px solid #2a2a4a;color:#e8e8e8;border-radius:6px;",
-                        placeholder: "THC %",
-                        value: "{thc}",
-                        oninput: move |e| thc.set(e.value()),
-                    }
-                    input {
-                        r#type: "number",
-                        style: "padding:10px;background:#0f0f1a;border:1px solid #2a2a4a;color:#e8e8e8;border-radius:6px;",
-                        placeholder: "Граммов",
-                        value: "{grams}",
-                        oninput: move |e| grams.set(e.value()),
-                    }
-                }
-
-                button {
-                    style: "width:100%;padding:12px;background:#39ff14;color:#000;font-weight:700;border:none;border-radius:6px;cursor:pointer;",
-                    onclick: move |_| {
-                        let name_val = name.read().clone();
-                        let cat_val = category.read().clone();
-                        let price_val: f64 = price.read().parse().unwrap_or(0.0);
-                        let thc_val: Option<f64> = thc.read().parse().ok();
-                        let grams_val: Option<f64> = grams.read().parse().ok();
-                        let mut status = status_msg.clone();
-                        let mut reload = reload_token.clone();
-                        let mut nm = name.clone();
-                        let mut pr = price.clone();
-                        let mut th = thc.clone();
-                        let mut gr = grams.clone();
-                        if name_val.trim().is_empty() || price_val <= 0.0 {
-                            status.set("⚠️ Заполните название и цену".into());
-                            return;
-                        }
-                        spawn(async move {
-                            let base = api_base_url();
-                            let url = format!("{}/api/strains", base);
-                            let body = serde_json::json!({
-                                "name": name_val,
-                                "category": cat_val,
-                                "price_per_gram": price_val,
-                                "thc_percent": thc_val,
-                                "available_grams": grams_val,
-                            });
-                            let res = reqwest::Client::new()
-                                .post(&url)
-                                .header("X-Admin-Telegram-Id", telegram_id.to_string())
-                                .json(&body)
-                                .send().await;
-                            match res {
-                                Ok(r) if r.status().is_success() => {
-                                    status.set("✅ Товар добавлен".into());
-                                    nm.set(String::new());
-                                    pr.set(String::new());
-                                    th.set(String::new());
-                                    gr.set(String::new());
-                                    let next = reload.read().wrapping_add(1);
-                                    reload.set(next);
+                    input { style: input_style(), placeholder: "Цена ฿/г", value: "{price}", r#type: "number",
+                        oninput: move |e| price.set(e.value()) }
+                    input { style: input_style(), placeholder: "THC %", value: "{thc}", r#type: "number",
+                        oninput: move |e| thc.set(e.value()) }
+                    input { style: input_style(), placeholder: "Граммы в наличии", value: "{grams}", r#type: "number",
+                        oninput: move |e| grams.set(e.value()) }
+                    button { style: submit_btn_style(),
+                        onclick: move |_| {
+                            let n = name(); let c = category(); let p = price.read().parse::<f64>().unwrap_or(0.0);
+                            let t = thc.read().parse::<f64>().ok(); let g = grams.read().parse::<f64>().unwrap_or(0.0);
+                            if n.trim().is_empty() || p <= 0.0 { status.set("❌ Заполните название и цену".into()); return; }
+                            spawn(async move {
+                                let body = json!({
+                                    "name": n, "category": c, "price_per_gram": p,
+                                    "thc_percent": t, "available_grams": g, "is_available": true,
+                                });
+                                let url = format!("{}/api/strains", api_base_url());
+                                let res = reqwest::Client::new().post(&url)
+                                    .header("X-Admin-Telegram-Id", telegram_id.to_string())
+                                    .json(&body).send().await;
+                                match res {
+                                    Ok(r) if r.status().is_success() => {
+                                        status.set("✓ Страйн добавлен".into());
+                                        name.set(String::new()); price.set(String::new());
+                                        thc.set(String::new()); grams.set(String::new());
+                                        let next = reload.read().wrapping_add(1); reload.set(next);
+                                    }
+                                    Ok(r) => status.set(format!("❌ HTTP {}", r.status().as_u16())),
+                                    Err(e) => status.set(format!("❌ {}", e)),
                                 }
-                                Ok(r) => status.set(format!("❌ HTTP {}", r.status().as_u16())),
-                                Err(e) => status.set(format!("❌ {}", e)),
-                            }
-                        });
-                    },
-                    "Сохранить"
-                }
-
-                if !status_msg.read().is_empty() {
-                    div { style: "margin-top:8px;font-size:13px;color:#888;", "{status_msg}" }
+                            });
+                        },
+                        "Добавить"
+                    }
+                    if !status.read().is_empty() { div { style: "padding:8px;color:#39ff14;font-size:13px;", "{status}" } }
                 }
             }
 
-            // ── strains list ─────────────────────────────────
-            div { style: "font-size:16px;font-weight:700;margin-bottom:8px;color:#39ff14;",
-                "🌿 Товары"
-            }
-            {
-                match &*strains_resource.read() {
-                    Some(Ok(strains)) => rsx! {
-                        for s in strains.iter().cloned() {
-                            div {
+            // List
+            h3 { style: list_title_style(), "Все страйны" }
+            match &*items.read_unchecked() {
+                None => rsx!(div { style: "color:#888;", "Загрузка..." }),
+                Some(Err(e)) => rsx!(div { style: "color:#ff4757;", "Ошибка: {e}" }),
+                Some(Ok(list)) => rsx!{
+                    div { style: "display:flex;flex-direction:column;gap:8px;",
+                        for s in list.clone() {
+                            ItemRow {
                                 key: "{s.id}",
-                                style: "display:flex;align-items:center;gap:10px;padding:10px;background:#1a1a2e;border-radius:6px;margin-bottom:6px;",
-                                div { style: "flex:1;",
-                                    div { style: "font-weight:600;font-size:14px;", "{s.name}" }
-                                    div { style: "font-size:11px;color:#888;",
-                                        "{s.category.clone().unwrap_or_default()} • {s.price_per_gram as i32}฿/г • {s.available_grams.unwrap_or(0.0) as i32}г"
+                                name: s.name.clone(),
+                                sub: format!("{} • {}฿/г • {}г", s.category.clone().unwrap_or_default(), s.price_per_gram, s.available_grams.unwrap_or(0.0)),
+                                is_available: s.is_available,
+                                on_toggle: {
+                                    let id = s.id.clone();
+                                    move |_| {
+                                        let id = id.clone();
+                                        spawn(async move {
+                                            let url = format!("{}/api/strains/{}/toggle-availability", api_base_url(), id);
+                                            let _ = reqwest::Client::new().post(&url)
+                                                .header("X-Admin-Telegram-Id", telegram_id.to_string())
+                                                .send().await;
+                                            let next = reload.read().wrapping_add(1); reload.set(next);
+                                        });
+                                    }
+                                },
+                                on_delete: {
+                                    let id = s.id.clone();
+                                    move |_| {
+                                        let id = id.clone();
+                                        spawn(async move {
+                                            let url = format!("{}/api/strains/{}", api_base_url(), id);
+                                            let _ = reqwest::Client::new().delete(&url)
+                                                .header("X-Admin-Telegram-Id", telegram_id.to_string())
+                                                .send().await;
+                                            let next = reload.read().wrapping_add(1); reload.set(next);
+                                        });
                                     }
                                 }
-                                button {
-                                    style: if s.is_available {
-                                        "padding:6px 10px;background:#39ff14;color:#000;border:none;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer;"
-                                    } else {
-                                        "padding:6px 10px;background:#444;color:#fff;border:none;border-radius:4px;font-size:11px;cursor:pointer;"
-                                    },
-                                    onclick: {
-                                        let sid = s.id.clone();
-                                        let new_val = !s.is_available;
-                                        let mut status = status_msg.clone();
-                                        let mut reload = reload_token.clone();
-                                        move |_| {
-                                            let sid = sid.clone();
-                                            let mut status = status.clone();
-                                            let mut reload = reload.clone();
-                                            spawn(async move {
-                                                let base = api_base_url();
-                                                let url = format!("{}/api/strains/{}/availability", base, sid);
-                                                let body = serde_json::json!({ "is_available": new_val });
-                                                let res = reqwest::Client::new()
-                                                    .put(&url)
-                                                    .header("X-Admin-Telegram-Id", telegram_id.to_string())
-                                                    .json(&body)
-                                                    .send().await;
-                                                match res {
-                                                    Ok(r) if r.status().is_success() => {
-                                                        status.set(format!("✓ {} обновлён", sid));
-                                                        let next = reload.read().wrapping_add(1);
-                                                        reload.set(next);
-                                                    }
-                                                    Ok(r) => status.set(format!("❌ HTTP {}", r.status().as_u16())),
-                                                    Err(e) => status.set(format!("❌ {}", e)),
-                                                }
-                                            });
-                                        }
-                                    },
-                                    if s.is_available { "вкл" } else { "выкл" }
-                                }
                             }
                         }
-                    },
-                    Some(Err(e)) => rsx! {
-                        div { style: "padding:12px;color:#ff4757;", "Ошибка: {e}" }
-                    },
-                    None => rsx! { div { style:"color:#888;padding:12px;", "Загрузка..." } },
+                    }
                 }
             }
         }
     }
+}
+
+// ── Accessories tab ───────────────────────────────────────────
+
+#[component]
+fn AccessoriesTab() -> Element {
+    let telegram_id = use_telegram_id().unwrap_or(0);
+    let mut name = use_signal(String::new);
+    let mut category = use_signal(|| "other".to_string());
+    let mut price = use_signal(String::new);
+    let mut stock = use_signal(String::new);
+    let mut image_url = use_signal(String::new);
+    let mut status = use_signal(String::new);
+    let mut reload = use_signal(|| 0u32);
+
+    let items = use_resource(move || async move {
+        let _ = reload.read();
+        let url = format!("{}/api/accessories", api_base_url());
+        reqwest::Client::new().get(&url).send().await
+            .map_err(|e| e.to_string())?
+            .json::<AccessoriesResp>().await
+            .map(|r| r.accessories)
+            .map_err(|e| e.to_string())
+    });
+
+    rsx! {
+        div {
+            FormCard {
+                title: "Добавить аксессуар".to_string(),
+                children: rsx!{
+                    input { style: input_style(), placeholder: "Название", value: "{name}",
+                        oninput: move |e| name.set(e.value()) }
+                    select { style: input_style(), value: "{category}",
+                        oninput: move |e| category.set(e.value()),
+                        option { value: "grinder", "🌀 Grinder" }
+                        option { value: "papers", "📄 Papers" }
+                        option { value: "lighter", "🔥 Lighter" }
+                        option { value: "pipe", "🚬 Pipe" }
+                        option { value: "bong", "💨 Bong" }
+                        option { value: "storage", "📦 Storage" }
+                        option { value: "clothing", "👕 Clothing" }
+                        option { value: "other", "🔧 Other" }
+                    }
+                    input { style: input_style(), placeholder: "Цена ฿", value: "{price}", r#type: "number",
+                        oninput: move |e| price.set(e.value()) }
+                    input { style: input_style(), placeholder: "Количество", value: "{stock}", r#type: "number",
+                        oninput: move |e| stock.set(e.value()) }
+                    input { style: input_style(), placeholder: "URL картинки (опц.)", value: "{image_url}",
+                        oninput: move |e| image_url.set(e.value()) }
+                    button { style: submit_btn_style(),
+                        onclick: move |_| {
+                            let n = name(); let c = category(); let p = price.read().parse::<f64>().unwrap_or(0.0);
+                            let s = stock.read().parse::<i32>().unwrap_or(0);
+                            let img = image_url();
+                            if n.trim().is_empty() || p <= 0.0 { status.set("❌ Заполните название и цену".into()); return; }
+                            spawn(async move {
+                                let body = json!({
+                                    "name": n, "category": c, "price": p, "stock": s,
+                                    "image_url": if img.is_empty() { None } else { Some(img) },
+                                });
+                                let url = format!("{}/api/accessories", api_base_url());
+                                let res = reqwest::Client::new().post(&url)
+                                    .header("X-Admin-Telegram-Id", telegram_id.to_string())
+                                    .json(&body).send().await;
+                                match res {
+                                    Ok(r) if r.status().is_success() => {
+                                        status.set("✓ Аксессуар добавлен".into());
+                                        name.set(String::new()); price.set(String::new());
+                                        stock.set(String::new()); image_url.set(String::new());
+                                        let next = reload.read().wrapping_add(1); reload.set(next);
+                                    }
+                                    Ok(r) => status.set(format!("❌ HTTP {}", r.status().as_u16())),
+                                    Err(e) => status.set(format!("❌ {}", e)),
+                                }
+                            });
+                        },
+                        "Добавить"
+                    }
+                    if !status.read().is_empty() { div { style: "padding:8px;color:#39ff14;font-size:13px;", "{status}" } }
+                }
+            }
+
+            h3 { style: list_title_style(), "Все аксессуары" }
+            match &*items.read_unchecked() {
+                None => rsx!(div { style: "color:#888;", "Загрузка..." }),
+                Some(Err(e)) => rsx!(div { style: "color:#ff4757;", "Ошибка: {e}" }),
+                Some(Ok(list)) => rsx!{
+                    div { style: "display:flex;flex-direction:column;gap:8px;",
+                        for a in list.clone() {
+                            ItemRow {
+                                key: "{a.id}",
+                                name: a.name.clone(),
+                                sub: format!("{} • {}฿ • {} шт.", a.category.clone().unwrap_or_default(), a.price, a.stock.unwrap_or(0)),
+                                is_available: a.is_available,
+                                on_toggle: {
+                                    let id = a.id.clone();
+                                    move |_| {
+                                        let id = id.clone();
+                                        spawn(async move {
+                                            // No toggle endpoint for accessories — use DELETE which sets is_available=false.
+                                            let url = format!("{}/api/accessories/{}", api_base_url(), id);
+                                            let _ = reqwest::Client::new().delete(&url)
+                                                .header("X-Admin-Telegram-Id", telegram_id.to_string())
+                                                .send().await;
+                                            let next = reload.read().wrapping_add(1); reload.set(next);
+                                        });
+                                    }
+                                },
+                                on_delete: {
+                                    let id = a.id.clone();
+                                    move |_| {
+                                        let id = id.clone();
+                                        spawn(async move {
+                                            let url = format!("{}/api/accessories/{}", api_base_url(), id);
+                                            let _ = reqwest::Client::new().delete(&url)
+                                                .header("X-Admin-Telegram-Id", telegram_id.to_string())
+                                                .send().await;
+                                            let next = reload.read().wrapping_add(1); reload.set(next);
+                                        });
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ── Tea tab ───────────────────────────────────────────────────
+
+#[component]
+fn TeaTab() -> Element {
+    let telegram_id = use_telegram_id().unwrap_or(0);
+    let mut name = use_signal(String::new);
+    let mut subcategory = use_signal(|| "green".to_string());
+    let mut price = use_signal(String::new);
+    let mut stock = use_signal(String::new);
+    let mut status = use_signal(String::new);
+    let mut reload = use_signal(|| 0u32);
+
+    let items = use_resource(move || async move {
+        let _ = reload.read();
+        let url = format!("{}/api/tea", api_base_url());
+        reqwest::Client::new().get(&url).send().await
+            .map_err(|e| e.to_string())?
+            .json::<TeaResp>().await
+            .map(|r| r.tea)
+            .map_err(|e| e.to_string())
+    });
+
+    rsx! {
+        div {
+            FormCard {
+                title: "Добавить чай".to_string(),
+                children: rsx!{
+                    input { style: input_style(), placeholder: "Название", value: "{name}",
+                        oninput: move |e| name.set(e.value()) }
+                    select { style: input_style(), value: "{subcategory}",
+                        oninput: move |e| subcategory.set(e.value()),
+                        option { value: "green", "🍃 Green" }
+                        option { value: "black", "🖤 Black" }
+                        option { value: "herbal", "🌿 Herbal" }
+                        option { value: "oolong", "🍂 Oolong" }
+                        option { value: "puer", "🟫 Pu-er" }
+                        option { value: "other", "🍵 Other" }
+                    }
+                    input { style: input_style(), placeholder: "Цена ฿", value: "{price}", r#type: "number",
+                        oninput: move |e| price.set(e.value()) }
+                    input { style: input_style(), placeholder: "Количество", value: "{stock}", r#type: "number",
+                        oninput: move |e| stock.set(e.value()) }
+                    button { style: submit_btn_style(),
+                        onclick: move |_| {
+                            let n = name(); let sc = subcategory(); let p = price.read().parse::<f64>().unwrap_or(0.0);
+                            let s = stock.read().parse::<i32>().unwrap_or(0);
+                            if n.trim().is_empty() || p <= 0.0 { status.set("❌ Заполните название и цену".into()); return; }
+                            spawn(async move {
+                                let body = json!({"name": n, "subcategory": sc, "price": p, "stock": s});
+                                let url = format!("{}/api/tea-products", api_base_url());
+                                let res = reqwest::Client::new().post(&url)
+                                    .header("X-Admin-Telegram-Id", telegram_id.to_string())
+                                    .json(&body).send().await;
+                                match res {
+                                    Ok(r) if r.status().is_success() => {
+                                        status.set("✓ Чай добавлен".into());
+                                        name.set(String::new()); price.set(String::new()); stock.set(String::new());
+                                        let next = reload.read().wrapping_add(1); reload.set(next);
+                                    }
+                                    Ok(r) => status.set(format!("❌ HTTP {}", r.status().as_u16())),
+                                    Err(e) => status.set(format!("❌ {}", e)),
+                                }
+                            });
+                        },
+                        "Добавить"
+                    }
+                    if !status.read().is_empty() { div { style: "padding:8px;color:#39ff14;font-size:13px;", "{status}" } }
+                }
+            }
+
+            h3 { style: list_title_style(), "Весь чай" }
+            match &*items.read_unchecked() {
+                None => rsx!(div { style: "color:#888;", "Загрузка..." }),
+                Some(Err(e)) => rsx!(div { style: "color:#ff4757;", "Ошибка: {e}" }),
+                Some(Ok(list)) => rsx!{
+                    div { style: "display:flex;flex-direction:column;gap:8px;",
+                        for t in list.clone() {
+                            ItemRow {
+                                key: "{t.id}",
+                                name: t.name.clone(),
+                                sub: format!("{} • {}฿ • {} шт.", t.subcategory.clone().unwrap_or_default(), t.price, t.stock.unwrap_or(0)),
+                                is_available: t.is_available,
+                                on_toggle: {
+                                    let id = t.id.clone();
+                                    move |_| {
+                                        let id = id.clone();
+                                        spawn(async move {
+                                            let url = format!("{}/api/tea-products/{}", api_base_url(), id);
+                                            let _ = reqwest::Client::new().delete(&url)
+                                                .header("X-Admin-Telegram-Id", telegram_id.to_string())
+                                                .send().await;
+                                            let next = reload.read().wrapping_add(1); reload.set(next);
+                                        });
+                                    }
+                                },
+                                on_delete: {
+                                    let id = t.id.clone();
+                                    move |_| {
+                                        let id = id.clone();
+                                        spawn(async move {
+                                            let url = format!("{}/api/tea-products/{}", api_base_url(), id);
+                                            let _ = reqwest::Client::new().delete(&url)
+                                                .header("X-Admin-Telegram-Id", telegram_id.to_string())
+                                                .send().await;
+                                            let next = reload.read().wrapping_add(1); reload.set(next);
+                                        });
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ── Shared UI components ──────────────────────────────────────
+
+#[component]
+fn FormCard(title: String, children: Element) -> Element {
+    rsx! {
+        div { style: "background:#1a1a2e;padding:16px;border-radius:8px;margin-bottom:20px;border:1px solid #2a2a4a;",
+            h3 { style: "color:#39ff14;font-size:15px;margin-bottom:12px;", "{title}" }
+            div { style: "display:flex;flex-direction:column;gap:8px;",
+                {children}
+            }
+        }
+    }
+}
+
+#[component]
+fn ItemRow(
+    name: String, sub: String, is_available: bool,
+    on_toggle: EventHandler<()>, on_delete: EventHandler<()>,
+) -> Element {
+    let badge = if is_available { ("#39ff14", "ВКЛ") } else { ("#666", "ВЫКЛ") };
+    rsx! {
+        div { style: "background:#1a1a2e;padding:10px 12px;border-radius:6px;display:flex;align-items:center;gap:8px;",
+            div { style: "flex:1;min-width:0;",
+                div { style: "font-weight:600;font-size:14px;color:#e8e8e8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;", "{name}" }
+                div { style: "font-size:11px;color:#888;margin-top:2px;", "{sub}" }
+            }
+            span { style: "font-size:10px;padding:2px 6px;background:{badge.0}20;color:{badge.0};border-radius:10px;font-weight:600;",
+                "{badge.1}"
+            }
+            button { style: "padding:6px 10px;background:#2a2a4a;color:#e8e8e8;border:none;border-radius:4px;font-size:11px;cursor:pointer;",
+                onclick: move |_| on_toggle.call(()),
+                "Скрыть"
+            }
+        }
+    }
+}
+
+fn input_style() -> &'static str {
+    "padding:10px 12px;background:#0f0f1a;color:#e8e8e8;border:1px solid #2a2a4a;border-radius:4px;font-size:14px;"
+}
+fn submit_btn_style() -> &'static str {
+    "padding:12px;background:#39ff14;color:#000;border:none;border-radius:4px;font-weight:700;font-size:14px;cursor:pointer;margin-top:4px;"
+}
+fn list_title_style() -> &'static str {
+    "color:#888;font-size:13px;margin:16px 0 8px;text-transform:uppercase;letter-spacing:1px;"
 }
