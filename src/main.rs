@@ -141,6 +141,13 @@ async fn main() -> Result<()> {
         axum::http::header::CACHE_CONTROL,
         HeaderValue::from_static("public, max-age=86400"),
     );
+    // HTML must NEVER be cached — Telegram WebApp aggressively keeps the
+    // index.html in cache, which breaks deploys (new WASM hash never
+    // fetched). `no-store` forces a re-validate on every load.
+    let html_no_cache_layer = || SetResponseHeaderLayer::overriding(
+        axum::http::header::CACHE_CONTROL,
+        HeaderValue::from_static("no-store, no-cache, must-revalidate, max-age=0"),
+    );
 
     // /assets, /styles, /images — stable URLs, day-long browser cache.
     let static_assets = Router::new()
@@ -150,14 +157,17 @@ async fn main() -> Result<()> {
         .layer(assets_cache_layer());
 
     // /dist (Trunk output) — file names contain content hashes → immutable.
-    // index.html itself is non-hashed; the fallback ServeFile returns it.
-    // We rely on cache-busting via hashed asset URLs inside index.html.
-    let wasm_app = Router::new()
-        .fallback_service(
-            ServeDir::new("dist")
-                .fallback(ServeFile::new("dist/index.html")),
-        )
+    // ServeDir serves the hashed bundles; if the request path doesn't match
+    // a file, we fall through to the SPA index.html handler below.
+    let dist_static = Router::new()
+        .fallback_service(ServeDir::new("dist"))
         .layer(immutable_cache_layer());
+
+    // SPA fallback: any non-asset path returns dist/index.html.
+    // index.html is NOT hashed, so we strip caching to make deploys land.
+    let spa_fallback = Router::new()
+        .fallback_service(ServeFile::new("dist/index.html"))
+        .layer(html_no_cache_layer());
 
     let app = Router::new()
         // CORS layer MUST be first!
@@ -166,8 +176,11 @@ async fn main() -> Result<()> {
         // Backend API routes
         .merge(api::router(app_state))
         .merge(static_assets)
-        // Serve WASM app from dist/ (SPA fallback to index.html).
-        .merge(wasm_app)
+        // Serve hashed WASM/JS/CSS bundles from dist/ (immutable for 1y).
+        .merge(dist_static)
+        // Any other path serves index.html with no-store cache (so new
+        // deploys propagate to Telegram WebApp cache immediately).
+        .merge(spa_fallback)
         // Compression applies to *all* responses (API JSON, WASM, HTML, CSS).
         .layer(compression);
 
