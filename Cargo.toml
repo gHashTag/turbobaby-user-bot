@@ -24,7 +24,7 @@ dioxus-logger = "0.6"
 gloo-timers = { version = "0.3", features = ["futures"] }
 reqwest = { version = "0.11", features = ["json"], default-features = false }
 web-sys = { version = "0.3", features = [
-    "Window", "Storage", "Navigator", "Clipboard",
+    "Window", "Storage", "Navigator", "Clipboard", "Location",
     "Document", "Element", "HtmlElement", "Event", "EventTarget",
     "KeyboardEvent", "MouseEvent", "console"
 ] }
