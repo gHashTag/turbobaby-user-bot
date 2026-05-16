@@ -189,7 +189,8 @@ pub fn AdminScreen() -> Element {
                                     pr.set(String::new());
                                     th.set(String::new());
                                     gr.set(String::new());
-                                    reload.set(reload.read().wrapping_add(1));
+                                    let next = reload.read().wrapping_add(1);
+                                    reload.set(next);
                                 }
                                 Ok(r) => status.set(format!("❌ HTTP {}", r.status().as_u16())),
                                 Err(e) => status.set(format!("❌ {}", e)),
@@ -248,7 +249,8 @@ pub fn AdminScreen() -> Element {
                                                 match res {
                                                     Ok(r) if r.status().is_success() => {
                                                         status.set(format!("✓ {} обновлён", sid));
-                                                        reload.set(reload.read().wrapping_add(1));
+                                                        let next = reload.read().wrapping_add(1);
+                                                        reload.set(next);
                                                     }
                                                     Ok(r) => status.set(format!("❌ HTTP {}", r.status().as_u16())),
                                                     Err(e) => status.set(format!("❌ {}", e)),
