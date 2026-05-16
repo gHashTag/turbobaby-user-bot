@@ -17,6 +17,12 @@ pub struct Strain {
     pub is_available: bool,
     pub is_strain_of_day: bool,
     pub strain_of_day_discount: f64,
+    // Bilingual EN fields (nullable, migration 016)
+    pub name_en: Option<String>,
+    pub description_en: Option<String>,
+    pub effect_en: Option<String>,
+    pub flavor_profile_en: Option<String>,
+    pub strain_type_en: Option<String>,
 }
 
 impl Strain {
@@ -36,6 +42,12 @@ impl Strain {
             is_available: row.try_get("is_available").unwrap_or(false),
             is_strain_of_day: row.try_get("is_strain_of_day").unwrap_or(false),
             strain_of_day_discount: row.try_get("strain_of_day_discount").unwrap_or(0.0),
+            // Bilingual EN fields (migration 016, nullable)
+            name_en: row.try_get::<_, Option<String>>("name_en").ok().flatten(),
+            description_en: row.try_get::<_, Option<String>>("description_en").ok().flatten(),
+            effect_en: row.try_get::<_, Option<String>>("effect_en").ok().flatten(),
+            flavor_profile_en: row.try_get::<_, Option<String>>("flavor_profile_en").ok().flatten(),
+            strain_type_en: row.try_get::<_, Option<String>>("strain_type_en").ok().flatten(),
         }
     }
 }

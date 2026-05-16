@@ -21,6 +21,12 @@ struct AdminStrain {
     price_per_gram: f64,
     available_grams: Option<f64>,
     is_available: bool,
+    // EN fields (migration 016)
+    name_en: Option<String>,
+    description_en: Option<String>,
+    effect_en: Option<String>,
+    flavor_profile_en: Option<String>,
+    strain_type_en: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, PartialEq)]
@@ -31,6 +37,10 @@ struct AdminAccessory {
     price: f64,
     stock: Option<i32>,
     is_available: bool,
+    // EN fields (migration 016)
+    name_en: Option<String>,
+    description_en: Option<String>,
+    category_en: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, PartialEq)]
@@ -41,6 +51,10 @@ struct AdminTea {
     price: f64,
     stock: Option<i32>,
     is_available: bool,
+    // EN fields (migration 016)
+    name_en: Option<String>,
+    description_en: Option<String>,
+    subcategory_en: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -48,7 +62,7 @@ struct StrainsResp { strains: Vec<AdminStrain> }
 #[derive(Debug, Deserialize)]
 struct AccessoriesResp { accessories: Vec<AdminAccessory> }
 #[derive(Debug, Deserialize)]
-struct TeaResp { tea: Vec<AdminTea> }
+struct TeaResp { tea_products: Vec<AdminTea> }
 #[derive(Debug, Deserialize)]
 struct AdminCheck { is_admin: bool }
 
@@ -173,6 +187,12 @@ fn StrainsTab() -> Element {
     let mut price = use_signal(String::new);
     let mut thc = use_signal(String::new);
     let mut grams = use_signal(String::new);
+    // EN fields
+    let mut name_en = use_signal(String::new);
+    let mut description_en = use_signal(String::new);
+    let mut effect_en = use_signal(String::new);
+    let mut flavor_profile_en = use_signal(String::new);
+    let mut strain_type_en = use_signal(String::new);
     let mut status = use_signal(String::new);
     let mut reload = use_signal(|| 0u32);
 
@@ -192,7 +212,7 @@ fn StrainsTab() -> Element {
             FormCard {
                 title: "Добавить страйн".to_string(),
                 children: rsx!{
-                    input { style: input_style(), placeholder: "Название", value: "{name}",
+                    input { style: input_style(), placeholder: "Название (RU)", value: "{name}",
                         oninput: move |e| name.set(e.value()) }
                     select { style: input_style(), value: "{category}",
                         oninput: move |e| category.set(e.value()),
@@ -206,15 +226,36 @@ fn StrainsTab() -> Element {
                         oninput: move |e| thc.set(e.value()) }
                     input { style: input_style(), placeholder: "Граммы в наличии", value: "{grams}", r#type: "number",
                         oninput: move |e| grams.set(e.value()) }
+
+                    // ── EN section ──
+                    div { style: en_section_style(), "🇬🇧 English (optional)" }
+                    input { style: input_style(), placeholder: "Name (EN)", value: "{name_en}",
+                        oninput: move |e| name_en.set(e.value()) }
+                    input { style: input_style(), placeholder: "Description (EN)", value: "{description_en}",
+                        oninput: move |e| description_en.set(e.value()) }
+                    input { style: input_style(), placeholder: "Effect (EN)", value: "{effect_en}",
+                        oninput: move |e| effect_en.set(e.value()) }
+                    input { style: input_style(), placeholder: "Flavor profile (EN)", value: "{flavor_profile_en}",
+                        oninput: move |e| flavor_profile_en.set(e.value()) }
+                    input { style: input_style(), placeholder: "Strain type (EN, e.g. Hybrid)", value: "{strain_type_en}",
+                        oninput: move |e| strain_type_en.set(e.value()) }
+
                     button { style: submit_btn_style(),
                         onclick: move |_| {
                             let n = name(); let c = category(); let p = price.read().parse::<f64>().unwrap_or(0.0);
                             let t = thc.read().parse::<f64>().ok(); let g = grams.read().parse::<f64>().unwrap_or(0.0);
+                            let ne = name_en(); let de = description_en(); let ee = effect_en();
+                            let fpe = flavor_profile_en(); let ste = strain_type_en();
                             if n.trim().is_empty() || p <= 0.0 { status.set("❌ Заполните название и цену".into()); return; }
                             spawn(async move {
                                 let body = json!({
                                     "name": n, "category": c, "price_per_gram": p,
                                     "thc_percent": t, "available_grams": g, "is_available": true,
+                                    "name_en": if ne.is_empty() { serde_json::Value::Null } else { ne.into() },
+                                    "description_en": if de.is_empty() { serde_json::Value::Null } else { de.into() },
+                                    "effect_en": if ee.is_empty() { serde_json::Value::Null } else { ee.into() },
+                                    "flavor_profile_en": if fpe.is_empty() { serde_json::Value::Null } else { fpe.into() },
+                                    "strain_type_en": if ste.is_empty() { serde_json::Value::Null } else { ste.into() },
                                 });
                                 let url = format!("{}/api/strains", api_base_url());
                                 let res = reqwest::Client::new().post(&url)
@@ -225,6 +266,9 @@ fn StrainsTab() -> Element {
                                         status.set("✓ Страйн добавлен".into());
                                         name.set(String::new()); price.set(String::new());
                                         thc.set(String::new()); grams.set(String::new());
+                                        name_en.set(String::new()); description_en.set(String::new());
+                                        effect_en.set(String::new()); flavor_profile_en.set(String::new());
+                                        strain_type_en.set(String::new());
                                         let next = reload.read().wrapping_add(1); reload.set(next);
                                     }
                                     Ok(r) => status.set(format!("❌ HTTP {}", r.status().as_u16())),
@@ -296,6 +340,10 @@ fn AccessoriesTab() -> Element {
     let mut price = use_signal(String::new);
     let mut stock = use_signal(String::new);
     let mut image_url = use_signal(String::new);
+    // EN fields
+    let mut name_en = use_signal(String::new);
+    let mut description_en = use_signal(String::new);
+    let mut category_en = use_signal(String::new);
     let mut status = use_signal(String::new);
     let mut reload = use_signal(|| 0u32);
 
@@ -314,7 +362,7 @@ fn AccessoriesTab() -> Element {
             FormCard {
                 title: "Добавить аксессуар".to_string(),
                 children: rsx!{
-                    input { style: input_style(), placeholder: "Название", value: "{name}",
+                    input { style: input_style(), placeholder: "Название (RU)", value: "{name}",
                         oninput: move |e| name.set(e.value()) }
                     select { style: input_style(), value: "{category}",
                         oninput: move |e| category.set(e.value()),
@@ -333,16 +381,30 @@ fn AccessoriesTab() -> Element {
                         oninput: move |e| stock.set(e.value()) }
                     input { style: input_style(), placeholder: "URL картинки (опц.)", value: "{image_url}",
                         oninput: move |e| image_url.set(e.value()) }
+
+                    // ── EN section ──
+                    div { style: en_section_style(), "🇬🇧 English (optional)" }
+                    input { style: input_style(), placeholder: "Name (EN)", value: "{name_en}",
+                        oninput: move |e| name_en.set(e.value()) }
+                    input { style: input_style(), placeholder: "Description (EN)", value: "{description_en}",
+                        oninput: move |e| description_en.set(e.value()) }
+                    input { style: input_style(), placeholder: "Category (EN)", value: "{category_en}",
+                        oninput: move |e| category_en.set(e.value()) }
+
                     button { style: submit_btn_style(),
                         onclick: move |_| {
                             let n = name(); let c = category(); let p = price.read().parse::<f64>().unwrap_or(0.0);
                             let s = stock.read().parse::<i32>().unwrap_or(0);
                             let img = image_url();
+                            let ne = name_en(); let de = description_en(); let ce = category_en();
                             if n.trim().is_empty() || p <= 0.0 { status.set("❌ Заполните название и цену".into()); return; }
                             spawn(async move {
                                 let body = json!({
                                     "name": n, "category": c, "price": p, "stock": s,
                                     "image_url": if img.is_empty() { None } else { Some(img) },
+                                    "name_en": if ne.is_empty() { serde_json::Value::Null } else { ne.into() },
+                                    "description_en": if de.is_empty() { serde_json::Value::Null } else { de.into() },
+                                    "category_en": if ce.is_empty() { serde_json::Value::Null } else { ce.into() },
                                 });
                                 let url = format!("{}/api/accessories", api_base_url());
                                 let res = reqwest::Client::new().post(&url)
@@ -353,6 +415,8 @@ fn AccessoriesTab() -> Element {
                                         status.set("✓ Аксессуар добавлен".into());
                                         name.set(String::new()); price.set(String::new());
                                         stock.set(String::new()); image_url.set(String::new());
+                                        name_en.set(String::new()); description_en.set(String::new());
+                                        category_en.set(String::new());
                                         let next = reload.read().wrapping_add(1); reload.set(next);
                                     }
                                     Ok(r) => status.set(format!("❌ HTTP {}", r.status().as_u16())),
@@ -423,16 +487,20 @@ fn TeaTab() -> Element {
     let mut subcategory = use_signal(|| "green".to_string());
     let mut price = use_signal(String::new);
     let mut stock = use_signal(String::new);
+    // EN fields
+    let mut name_en = use_signal(String::new);
+    let mut description_en = use_signal(String::new);
+    let mut subcategory_en = use_signal(String::new);
     let mut status = use_signal(String::new);
     let mut reload = use_signal(|| 0u32);
 
     let items = use_resource(move || async move {
         let _ = reload.read();
-        let url = format!("{}/api/tea", api_base_url());
+        let url = format!("{}/api/tea-products", api_base_url());
         reqwest::Client::new().get(&url).send().await
             .map_err(|e| e.to_string())?
             .json::<TeaResp>().await
-            .map(|r| r.tea)
+            .map(|r| r.tea_products)
             .map_err(|e| e.to_string())
     });
 
@@ -441,7 +509,7 @@ fn TeaTab() -> Element {
             FormCard {
                 title: "Добавить чай".to_string(),
                 children: rsx!{
-                    input { style: input_style(), placeholder: "Название", value: "{name}",
+                    input { style: input_style(), placeholder: "Название (RU)", value: "{name}",
                         oninput: move |e| name.set(e.value()) }
                     select { style: input_style(), value: "{subcategory}",
                         oninput: move |e| subcategory.set(e.value()),
@@ -456,13 +524,29 @@ fn TeaTab() -> Element {
                         oninput: move |e| price.set(e.value()) }
                     input { style: input_style(), placeholder: "Количество", value: "{stock}", r#type: "number",
                         oninput: move |e| stock.set(e.value()) }
+
+                    // ── EN section ──
+                    div { style: en_section_style(), "🇬🇧 English (optional)" }
+                    input { style: input_style(), placeholder: "Name (EN)", value: "{name_en}",
+                        oninput: move |e| name_en.set(e.value()) }
+                    input { style: input_style(), placeholder: "Description (EN)", value: "{description_en}",
+                        oninput: move |e| description_en.set(e.value()) }
+                    input { style: input_style(), placeholder: "Subcategory (EN, e.g. Green Tea)", value: "{subcategory_en}",
+                        oninput: move |e| subcategory_en.set(e.value()) }
+
                     button { style: submit_btn_style(),
                         onclick: move |_| {
                             let n = name(); let sc = subcategory(); let p = price.read().parse::<f64>().unwrap_or(0.0);
                             let s = stock.read().parse::<i32>().unwrap_or(0);
+                            let ne = name_en(); let de = description_en(); let sce = subcategory_en();
                             if n.trim().is_empty() || p <= 0.0 { status.set("❌ Заполните название и цену".into()); return; }
                             spawn(async move {
-                                let body = json!({"name": n, "subcategory": sc, "price": p, "stock": s});
+                                let body = json!({
+                                    "name": n, "subcategory": sc, "price": p, "stock": s,
+                                    "name_en": if ne.is_empty() { serde_json::Value::Null } else { ne.into() },
+                                    "description_en": if de.is_empty() { serde_json::Value::Null } else { de.into() },
+                                    "subcategory_en": if sce.is_empty() { serde_json::Value::Null } else { sce.into() },
+                                });
                                 let url = format!("{}/api/tea-products", api_base_url());
                                 let res = reqwest::Client::new().post(&url)
                                     .header("X-Admin-Telegram-Id", telegram_id.to_string())
@@ -471,6 +555,8 @@ fn TeaTab() -> Element {
                                     Ok(r) if r.status().is_success() => {
                                         status.set("✓ Чай добавлен".into());
                                         name.set(String::new()); price.set(String::new()); stock.set(String::new());
+                                        name_en.set(String::new()); description_en.set(String::new());
+                                        subcategory_en.set(String::new());
                                         let next = reload.read().wrapping_add(1); reload.set(next);
                                     }
                                     Ok(r) => status.set(format!("❌ HTTP {}", r.status().as_u16())),
@@ -576,4 +662,7 @@ fn submit_btn_style() -> &'static str {
 }
 fn list_title_style() -> &'static str {
     "color:#888;font-size:13px;margin:16px 0 8px;text-transform:uppercase;letter-spacing:1px;"
+}
+fn en_section_style() -> &'static str {
+    "padding:6px 0 2px;color:#6699ff;font-size:12px;font-weight:600;border-top:1px solid #2a2a4a;margin-top:4px;"
 }
