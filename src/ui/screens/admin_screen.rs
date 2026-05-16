@@ -61,22 +61,33 @@ enum Tab { Strains, Accessories, Tea }
 pub fn AdminScreen() -> Element {
     let telegram_id = use_telegram_id().unwrap_or(0);
     let active_tab = use_signal(|| Tab::Strains);
+    let build_version: &'static str = env!("BUILD_VERSION");
 
-    // Access check
+    // Access check. reqwest 0.11 WASM ignores .timeout(), so the browser's
+    // own fetch timeout (~30s) applies. We surface detailed error stages
+    // to make hangs/failures diagnosable from the UI itself.
     let access = use_resource(move || async move {
-        let url = format!("{}/api/admin/check?telegram_id={}", api_base_url(), telegram_id);
-        reqwest::Client::new().get(&url).send().await
-            .map_err(|e| e.to_string())?
-            .json::<AdminCheck>().await
+        let base = api_base_url();
+        let url = format!("{}/api/admin/check?telegram_id={}", base, telegram_id);
+        let resp = reqwest::Client::new().get(&url).send().await
+            .map_err(|e| format!("send to {url}: {e}"))?;
+        let status = resp.status();
+        if !status.is_success() {
+            return Err(format!("http {} from {url}", status.as_u16()));
+        }
+        resp.json::<AdminCheck>().await
             .map(|c| c.is_admin)
-            .map_err(|e| e.to_string())
+            .map_err(|e| format!("json: {e}"))
     });
 
     rsx! {
         div { style: "min-height:100vh;background:#0f0f1a;color:#e8e8e8;padding:16px;padding-bottom:80px;",
             h1 { style: "font-size:22px;color:#ff4757;margin-bottom:4px;", "🔧 Admin Mini-App" }
-            div { style: "font-size:11px;color:#666;margin-bottom:16px;",
+            div { style: "font-size:11px;color:#666;margin-bottom:4px;",
                 "telegram_id: {telegram_id}"
+            }
+            div { style: "font-size:10px;color:#444;margin-bottom:16px;font-family:monospace;",
+                "build: {build_version}"
             }
 
             match &*access.read_unchecked() {
