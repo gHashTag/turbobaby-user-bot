@@ -34,6 +34,8 @@ pub enum Command {
     Invite,
     #[command(description = "Show referral statistics")]
     Refstats,
+    #[command(description = "Admin panel (owners only)")]
+    Admin,
 }
 
 fn web_app_btn(text: &str, url: &str) -> InlineKeyboardButton {
@@ -48,6 +50,13 @@ pub fn build_app_url(base_url: &str, lang: &str, page: Option<&str>) -> String {
     let mut url = format!("{}?lang={}", base_url, lang);
     if let Some(p) = page { url.push_str(&format!("&page={}", p)); }
     url
+}
+
+fn build_admin_url(base_url: &str) -> String {
+    // Strip any trailing slash, then append /admin so the Telegram WebApp
+    // opens directly on the admin route.
+    let trimmed = base_url.trim_end_matches('/');
+    format!("{}/admin", trimmed)
 }
 
 pub async fn handle_command(
@@ -285,6 +294,31 @@ pub async fn handle_command(
                     )],
                 ]))
                 .await?;
+        }
+
+        Command::Admin => {
+            if config.admin_ids.contains(&user_id) {
+                bot.send_message(
+                    msg.chat.id,
+                    "🔧 <b>Admin Panel</b>\n━━━━━━━━━━━━━━━━\nУправление товарами: Strains / Gear / Tea",
+                )
+                .parse_mode(teloxide::types::ParseMode::Html)
+                .reply_markup(InlineKeyboardMarkup::new(vec![vec![web_app_btn(
+                    "🔧 Открыть админку",
+                    &build_admin_url(base),
+                )]]))
+                .await?;
+            } else {
+                bot.send_message(
+                    msg.chat.id,
+                    format!(
+                        "🔒 Доступ закрыт\n\nВаш Telegram ID: <code>{}</code>\nПередайте его владельцу шопа, чтобы получить доступ.",
+                        user_id
+                    ),
+                )
+                .parse_mode(teloxide::types::ParseMode::Html)
+                .await?;
+            }
         }
     }
 
