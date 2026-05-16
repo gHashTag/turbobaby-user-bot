@@ -1,6 +1,6 @@
 use axum::{
     extract::{Path, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     routing::{delete, get, post, put},
     Json, Router,
 };
@@ -8,6 +8,7 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 
 use crate::AppState;
+use crate::api::auth::check_admin;
 use crate::db::strains::Strain;
 
 #[derive(Debug, Deserialize)]
@@ -70,7 +71,8 @@ async fn get_strain(State(state): State<AppState>, Path(id): Path<String>) -> Re
     }
 }
 
-async fn create_strain(State(state): State<AppState>, Json(req): Json<CreateStrainRequest>) -> Result<Json<Value>, StatusCode> {
+async fn create_strain(State(state): State<AppState>, headers: HeaderMap, Json(req): Json<CreateStrainRequest>) -> Result<Json<Value>, StatusCode> {
+    check_admin(&headers, &state)?;
     let id = uuid::Uuid::new_v4().to_string();
     let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     client.execute(
@@ -80,7 +82,8 @@ async fn create_strain(State(state): State<AppState>, Json(req): Json<CreateStra
     Ok(Json(json!({ "success": true, "id": id })))
 }
 
-async fn update_strain(State(state): State<AppState>, Path(id): Path<String>, Json(req): Json<CreateStrainRequest>) -> Result<Json<Value>, StatusCode> {
+async fn update_strain(State(state): State<AppState>, headers: HeaderMap, Path(id): Path<String>, Json(req): Json<CreateStrainRequest>) -> Result<Json<Value>, StatusCode> {
+    check_admin(&headers, &state)?;
     let client = state.db.pool.get().await.map_err(|e| {
         tracing::error!("update_strain pool error: {:?}", e);
         StatusCode::INTERNAL_SERVER_ERROR
@@ -103,14 +106,16 @@ async fn update_strain(State(state): State<AppState>, Path(id): Path<String>, Js
     Ok(Json(json!({ "success": true })))
 }
 
-async fn delete_strain(State(state): State<AppState>, Path(id): Path<String>) -> Result<Json<Value>, StatusCode> {
+async fn delete_strain(State(state): State<AppState>, headers: HeaderMap, Path(id): Path<String>) -> Result<Json<Value>, StatusCode> {
+    check_admin(&headers, &state)?;
     let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     client.execute("UPDATE strains SET is_available = false WHERE id = $1", &[&id])
         .await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(Json(json!({ "success": true })))
 }
 
-async fn toggle_availability(State(state): State<AppState>, Path(id): Path<String>, Json(body): Json<Value>) -> Result<Json<Value>, StatusCode> {
+async fn toggle_availability(State(state): State<AppState>, headers: HeaderMap, Path(id): Path<String>, Json(body): Json<Value>) -> Result<Json<Value>, StatusCode> {
+    check_admin(&headers, &state)?;
     let available = body["is_available"].as_bool().unwrap_or(true);
     let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     client.execute("UPDATE strains SET is_available = $1 WHERE id = $2", &[&available, &id])
@@ -126,7 +131,10 @@ async fn get_strains_of_day(State(state): State<AppState>) -> Result<Json<Value>
     Ok(Json(json!({ "strains": rows })))
 }
 
-async fn set_strain_of_day(State(state): State<AppState>, Path(id): Path<String>, Json(body): Json<Value>) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+async fn set_strain_of_day(State(state): State<AppState>, headers: HeaderMap, Path(id): Path<String>, Json(body): Json<Value>) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    if let Err(code) = check_admin(&headers, &state) {
+        return Err((code, Json(json!({ "error": "unauthorized" }))));
+    }
     let enabled = body["is_strain_of_day"].as_bool().unwrap_or(true);
     let discount = body["discount"].as_f64().unwrap_or(10.0);
     let client = state.db.pool.get().await.map_err(|e| {

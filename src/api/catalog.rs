@@ -1,12 +1,13 @@
 use axum::{
     extract::{Path, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     routing::{delete, get, post, put},
     Json, Router,
 };
 use serde::Deserialize;
 use serde_json::{json, Value};
 use crate::AppState;
+use crate::api::auth::check_admin;
 
 pub fn routes() -> Router<AppState> {
     Router::new()
@@ -90,7 +91,8 @@ async fn get_accessory(State(state): State<AppState>, Path(id): Path<String>) ->
     }
 }
 
-async fn create_accessory(State(state): State<AppState>, Json(req): Json<AccessoryRequest>) -> Result<Json<Value>, StatusCode> {
+async fn create_accessory(State(state): State<AppState>, headers: HeaderMap, Json(req): Json<AccessoryRequest>) -> Result<Json<Value>, StatusCode> {
+    check_admin(&headers, &state)?;
     let id = uuid::Uuid::new_v4().to_string();
     let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     client.execute(
@@ -100,7 +102,8 @@ async fn create_accessory(State(state): State<AppState>, Json(req): Json<Accesso
     Ok(Json(json!({ "success": true, "id": id })))
 }
 
-async fn update_accessory(State(state): State<AppState>, Path(id): Path<String>, Json(req): Json<AccessoryRequest>) -> Result<Json<Value>, StatusCode> {
+async fn update_accessory(State(state): State<AppState>, headers: HeaderMap, Path(id): Path<String>, Json(req): Json<AccessoryRequest>) -> Result<Json<Value>, StatusCode> {
+    check_admin(&headers, &state)?;
     let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     client.execute(
         "UPDATE accessories SET name=$1, category=$2, description=$3, price=$4, stock=$5, image_url=$6, video_url=$7 WHERE id=$8",
@@ -109,7 +112,8 @@ async fn update_accessory(State(state): State<AppState>, Path(id): Path<String>,
     Ok(Json(json!({ "success": true })))
 }
 
-async fn delete_accessory(State(state): State<AppState>, Path(id): Path<String>) -> Result<Json<Value>, StatusCode> {
+async fn delete_accessory(State(state): State<AppState>, headers: HeaderMap, Path(id): Path<String>) -> Result<Json<Value>, StatusCode> {
+    check_admin(&headers, &state)?;
     let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     client.execute("UPDATE accessories SET is_available = false WHERE id = $1", &[&id])
         .await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -156,7 +160,8 @@ async fn get_accessory_sets(State(state): State<AppState>) -> Result<Json<Value>
     Ok(Json(json!({ "accessory_sets": items })))
 }
 
-async fn create_accessory_set(State(state): State<AppState>, Json(req): Json<AccessorySetRequest>) -> Result<Json<Value>, StatusCode> {
+async fn create_accessory_set(State(state): State<AppState>, headers: HeaderMap, Json(req): Json<AccessorySetRequest>) -> Result<Json<Value>, StatusCode> {
+    check_admin(&headers, &state)?;
     let id = uuid::Uuid::new_v4().to_string();
     let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let accessories = req.accessories.unwrap_or_default();
@@ -167,7 +172,8 @@ async fn create_accessory_set(State(state): State<AppState>, Json(req): Json<Acc
     Ok(Json(json!({ "success": true, "id": id })))
 }
 
-async fn update_accessory_set(State(state): State<AppState>, Path(id): Path<String>, Json(req): Json<AccessorySetRequest>) -> Result<Json<Value>, StatusCode> {
+async fn update_accessory_set(State(state): State<AppState>, headers: HeaderMap, Path(id): Path<String>, Json(req): Json<AccessorySetRequest>) -> Result<Json<Value>, StatusCode> {
+    check_admin(&headers, &state)?;
     let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let accessories = req.accessories.unwrap_or_default();
     client.execute(
@@ -177,7 +183,8 @@ async fn update_accessory_set(State(state): State<AppState>, Path(id): Path<Stri
     Ok(Json(json!({ "success": true })))
 }
 
-async fn delete_accessory_set(State(state): State<AppState>, Path(id): Path<String>) -> Result<Json<Value>, StatusCode> {
+async fn delete_accessory_set(State(state): State<AppState>, headers: HeaderMap, Path(id): Path<String>) -> Result<Json<Value>, StatusCode> {
+    check_admin(&headers, &state)?;
     let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     client.execute("UPDATE accessory_sets SET is_available = false WHERE id = $1", &[&id])
         .await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -235,7 +242,8 @@ async fn get_tea_product(State(state): State<AppState>, Path(id): Path<String>) 
     }
 }
 
-async fn create_tea_product(State(state): State<AppState>, Json(req): Json<TeaProductRequest>) -> Result<Json<Value>, StatusCode> {
+async fn create_tea_product(State(state): State<AppState>, headers: HeaderMap, Json(req): Json<TeaProductRequest>) -> Result<Json<Value>, StatusCode> {
+    check_admin(&headers, &state)?;
     let id = uuid::Uuid::new_v4().to_string();
     let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     client.execute(
@@ -245,7 +253,8 @@ async fn create_tea_product(State(state): State<AppState>, Json(req): Json<TeaPr
     Ok(Json(json!({ "success": true, "id": id })))
 }
 
-async fn update_tea_product(State(state): State<AppState>, Path(id): Path<String>, Json(req): Json<TeaProductRequest>) -> Result<Json<Value>, StatusCode> {
+async fn update_tea_product(State(state): State<AppState>, headers: HeaderMap, Path(id): Path<String>, Json(req): Json<TeaProductRequest>) -> Result<Json<Value>, StatusCode> {
+    check_admin(&headers, &state)?;
     let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     client.execute(
         "UPDATE tea_products SET name=$1, subcategory=$2, description=$3, price=$4, stock=$5, image_url=$6, video_url=$7 WHERE id=$8",
@@ -254,7 +263,8 @@ async fn update_tea_product(State(state): State<AppState>, Path(id): Path<String
     Ok(Json(json!({ "success": true })))
 }
 
-async fn delete_tea_product(State(state): State<AppState>, Path(id): Path<String>) -> Result<Json<Value>, StatusCode> {
+async fn delete_tea_product(State(state): State<AppState>, headers: HeaderMap, Path(id): Path<String>) -> Result<Json<Value>, StatusCode> {
+    check_admin(&headers, &state)?;
     let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     client.execute("UPDATE tea_products SET is_available = false WHERE id = $1", &[&id])
         .await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -299,7 +309,8 @@ async fn get_tea_sets(State(state): State<AppState>) -> Result<Json<Value>, Stat
     Ok(Json(json!({ "tea_sets": items })))
 }
 
-async fn create_tea_set(State(state): State<AppState>, Json(req): Json<TeaSetRequest>) -> Result<Json<Value>, StatusCode> {
+async fn create_tea_set(State(state): State<AppState>, headers: HeaderMap, Json(req): Json<TeaSetRequest>) -> Result<Json<Value>, StatusCode> {
+    check_admin(&headers, &state)?;
     let id = uuid::Uuid::new_v4().to_string();
     let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let tea_items = req.items.unwrap_or_default();
@@ -310,7 +321,8 @@ async fn create_tea_set(State(state): State<AppState>, Json(req): Json<TeaSetReq
     Ok(Json(json!({ "success": true, "id": id })))
 }
 
-async fn update_tea_set(State(state): State<AppState>, Path(id): Path<String>, Json(req): Json<TeaSetRequest>) -> Result<Json<Value>, StatusCode> {
+async fn update_tea_set(State(state): State<AppState>, headers: HeaderMap, Path(id): Path<String>, Json(req): Json<TeaSetRequest>) -> Result<Json<Value>, StatusCode> {
+    check_admin(&headers, &state)?;
     let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let tea_items = req.items.unwrap_or_default();
     client.execute(
@@ -320,7 +332,8 @@ async fn update_tea_set(State(state): State<AppState>, Path(id): Path<String>, J
     Ok(Json(json!({ "success": true })))
 }
 
-async fn delete_tea_set(State(state): State<AppState>, Path(id): Path<String>) -> Result<Json<Value>, StatusCode> {
+async fn delete_tea_set(State(state): State<AppState>, headers: HeaderMap, Path(id): Path<String>) -> Result<Json<Value>, StatusCode> {
+    check_admin(&headers, &state)?;
     let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     client.execute("UPDATE tea_sets SET is_available = false WHERE id = $1", &[&id])
         .await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -401,7 +414,8 @@ async fn get_sets(State(state): State<AppState>) -> Result<Json<Value>, StatusCo
     Ok(Json(json!({ "sets": items })))
 }
 
-async fn create_set(State(state): State<AppState>, Json(req): Json<SetRequest>) -> Result<Json<Value>, StatusCode> {
+async fn create_set(State(state): State<AppState>, headers: HeaderMap, Json(req): Json<SetRequest>) -> Result<Json<Value>, StatusCode> {
+    check_admin(&headers, &state)?;
     let id = uuid::Uuid::new_v4().to_string();
     let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let strain_ids = req.strain_ids.unwrap_or_default();
@@ -417,7 +431,8 @@ async fn create_set(State(state): State<AppState>, Json(req): Json<SetRequest>) 
     Ok(Json(json!({ "success": true, "id": id })))
 }
 
-async fn update_set(State(state): State<AppState>, Path(id): Path<String>, Json(req): Json<SetRequest>) -> Result<Json<Value>, StatusCode> {
+async fn update_set(State(state): State<AppState>, headers: HeaderMap, Path(id): Path<String>, Json(req): Json<SetRequest>) -> Result<Json<Value>, StatusCode> {
+    check_admin(&headers, &state)?;
     let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let strain_ids = req.strain_ids.unwrap_or_default();
     let accessory_ids = req.accessory_ids.unwrap_or_default();
@@ -432,7 +447,8 @@ async fn update_set(State(state): State<AppState>, Path(id): Path<String>, Json(
     Ok(Json(json!({ "success": true })))
 }
 
-async fn delete_set(State(state): State<AppState>, Path(id): Path<String>) -> Result<Json<Value>, StatusCode> {
+async fn delete_set(State(state): State<AppState>, headers: HeaderMap, Path(id): Path<String>) -> Result<Json<Value>, StatusCode> {
+    check_admin(&headers, &state)?;
     let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     client.execute("UPDATE accessory_sets SET is_available = false WHERE id = $1", &[&id])
         .await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;

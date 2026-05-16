@@ -37,6 +37,8 @@ use tower_http::services::{ServeDir, ServeFile};
 #[cfg(not(target_arch = "wasm32"))]
 use tower_http::set_header::SetResponseHeaderLayer;
 #[cfg(not(target_arch = "wasm32"))]
+use tower_http::compression::CompressionLayer;
+#[cfg(not(target_arch = "wasm32"))]
 use axum::http::{HeaderName, HeaderValue};
 #[cfg(not(target_arch = "wasm32"))]
 use tracing::info;
@@ -117,22 +119,50 @@ async fn main() -> Result<()> {
         HeaderValue::from_static("true"),
     );
 
+    // ── Performance layers ────────────────────────────────────────────
+    // Brotli / Gzip / Zstd compression for everything (WASM 2 MB → ~600 KB).
+    let compression = CompressionLayer::new().br(true).gzip(true).zstd(true);
+
+    // Long-lived cache for hashed/static assets (Trunk emits file hashes,
+    // so `*_bg.wasm`, `*.js`, `*.css` are content-addressed and safe to cache
+    // for a year). For `/assets/*` images the URL is stable so 1 day is enough.
+    let immutable_cache_layer = || SetResponseHeaderLayer::if_not_present(
+        axum::http::header::CACHE_CONTROL,
+        HeaderValue::from_static("public, max-age=31536000, immutable"),
+    );
+    let assets_cache_layer = || SetResponseHeaderLayer::if_not_present(
+        axum::http::header::CACHE_CONTROL,
+        HeaderValue::from_static("public, max-age=86400"),
+    );
+
+    // /assets, /styles, /images — stable URLs, day-long browser cache.
+    let static_assets = Router::new()
+        .nest_service("/styles", ServeDir::new("styles"))
+        .nest_service("/assets", ServeDir::new("assets"))
+        .nest_service("/images", ServeDir::new("assets"))
+        .layer(assets_cache_layer());
+
+    // /dist (Trunk output) — file names contain content hashes → immutable.
+    // index.html itself is non-hashed; the fallback ServeFile returns it.
+    // We rely on cache-busting via hashed asset URLs inside index.html.
+    let wasm_app = Router::new()
+        .fallback_service(
+            ServeDir::new("dist")
+                .fallback(ServeFile::new("dist/index.html")),
+        )
+        .layer(immutable_cache_layer());
+
     let app = Router::new()
         // CORS layer MUST be first!
         .layer(cors)
         .layer(ngrok_bypass)
         // Backend API routes
         .merge(api::router(app_state))
-
-        // Serve static assets (styles, images)
-        .nest_service("/styles", ServeDir::new("styles"))
-        .nest_service("/assets", ServeDir::new("assets"))
-        // Legacy alias: pre-006 seed data referenced /images/* — keep it working
-        // until all DBs are migrated. Same content directory as /assets.
-        .nest_service("/images", ServeDir::new("assets"))
-
-        // Serve WASM app from dist/ (SPA fallback to index.html)
-        .fallback_service(ServeDir::new("dist").fallback(ServeFile::new("dist/index.html")));
+        .merge(static_assets)
+        // Serve WASM app from dist/ (SPA fallback to index.html).
+        .merge(wasm_app)
+        // Compression applies to *all* responses (API JSON, WASM, HTML, CSS).
+        .layer(compression);
 
     let addr = SocketAddr::from(([0, 0, 0, 0], config.port));
     info!("🚀 HTTP server listening on {}", addr);

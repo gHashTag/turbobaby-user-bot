@@ -1,3 +1,4 @@
+pub mod auth;
 pub mod orders;
 pub mod strains;
 pub mod loyalty;

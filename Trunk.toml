@@ -5,7 +5,8 @@ public_url = "/"
 filehash = true
 release = true
 # Skip wasm-opt: prebuilt v116 doesn't allow bulk-memory/nontrapping-fptoint
-# features that modern rustc emits. cargo --release already optimizes well.
+# features that modern rustc emits. cargo --release already optimizes well,
+# and the Axum CompressionLayer (br + gzip + zstd) cuts the wire size by ~70%.
 no_opt = true
 # Disable SRI — CDN (Fastly) modifies responses causing integrity check failures
 no_sri = true

@@ -32,6 +32,7 @@ const MIGRATION_SQL: &str = concat!(
     include_str!("../../migrations/010_tech_tree_seed.sql"),
     include_str!("../../migrations/011_strains_force_prices.sql"),
     include_str!("../../migrations/012_strains_fix_numeric_to_float8.sql"),
+    include_str!("../../migrations/013_catalog_full_seed.sql"),
 );
 
 type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
