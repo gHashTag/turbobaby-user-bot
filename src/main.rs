@@ -130,13 +130,9 @@ async fn main() -> Result<()> {
         .zstd(true)
         .compress_when(SizeAbove::new(1024));
 
-    // Long-lived cache for hashed/static assets (Trunk emits file hashes,
-    // so `*_bg.wasm`, `*.js`, `*.css` are content-addressed and safe to cache
-    // for a year). For `/assets/*` images the URL is stable so 1 day is enough.
-    let immutable_cache_layer = || SetResponseHeaderLayer::if_not_present(
-        axum::http::header::CACHE_CONTROL,
-        HeaderValue::from_static("public, max-age=31536000, immutable"),
-    );
+    // For `/assets/*` images the URL is stable so 1 day is enough.
+    // (Hashed Trunk bundles are served via the SPA fallback with no-store
+    // because Telegram WebApp cache-busting takes priority over CDN caching.)
     let assets_cache_layer = || SetResponseHeaderLayer::if_not_present(
         axum::http::header::CACHE_CONTROL,
         HeaderValue::from_static("public, max-age=86400"),
@@ -156,18 +152,15 @@ async fn main() -> Result<()> {
         .nest_service("/images", ServeDir::new("assets"))
         .layer(assets_cache_layer());
 
-    // /dist (Trunk output) — file names contain content hashes → immutable.
-    // ServeDir serves the hashed bundles; if the request path doesn't match
-    // a file, we fall through to the SPA index.html handler below.
-    let dist_static = Router::new()
-        .fallback_service(ServeDir::new("dist"))
-        .layer(immutable_cache_layer());
-
-    // SPA fallback: any non-asset path returns dist/index.html.
-    // index.html is NOT hashed, so we strip caching to make deploys land.
-    let spa_fallback = Router::new()
-        .fallback_service(ServeFile::new("dist/index.html"))
-        .layer(html_no_cache_layer());
+    // Trunk emits hashed JS/WASM/CSS at the root of dist/ with absolute paths
+    // (e.g. /woody-weed-bot-<hash>.js). We serve dist/ as the root static dir;
+    // when a request doesn't match a file, ServeDir falls back to index.html
+    // (which is NOT hashed, so we need to override caching for it separately).
+    //
+    // Single fallback strategy: one Router with one fallback_service on dist/
+    // that itself falls back to index.html via ServeDir::not_found_service.
+    let spa_index = ServeFile::new("dist/index.html");
+    let dist_service = ServeDir::new("dist").not_found_service(spa_index);
 
     let app = Router::new()
         // CORS layer MUST be first!
@@ -176,11 +169,16 @@ async fn main() -> Result<()> {
         // Backend API routes
         .merge(api::router(app_state))
         .merge(static_assets)
-        // Serve hashed WASM/JS/CSS bundles from dist/ (immutable for 1y).
-        .merge(dist_static)
-        // Any other path serves index.html with no-store cache (so new
-        // deploys propagate to Telegram WebApp cache immediately).
-        .merge(spa_fallback)
+        // Single top-level fallback: serve hashed bundles from dist/, fall
+        // back to SPA index.html if path not found. We apply no-store cache
+        // headers globally on the fallback; immutable cache for hashed
+        // assets would be ideal but requires per-file logic. Telegram WebApp
+        // cache busting is the priority — no-store keeps deploys landing.
+        .fallback_service(
+            tower::ServiceBuilder::new()
+                .layer(html_no_cache_layer())
+                .service(dist_service),
+        )
         // Compression applies to *all* responses (API JSON, WASM, HTML, CSS).
         .layer(compression);
 
