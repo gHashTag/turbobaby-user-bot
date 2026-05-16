@@ -9,7 +9,7 @@ use dioxus::prelude::*;
 use serde::Deserialize;
 use serde_json::json;
 use crate::ui::api::context::api_base_url;
-use crate::ui::telegram::use_telegram_id;
+use crate::ui::telegram::{use_telegram_id, TelegramApp};
 
 // ── Data models for list rendering ────────────────────────────
 
@@ -91,6 +91,7 @@ pub fn AdminScreen() -> Element {
 
 #[component]
 fn AccessDeniedScreen(telegram_id: i64) -> Element {
+    let debug = TelegramApp::init().debug_dump();
     rsx! {
         div { style: "padding:30px 16px;text-align:center;",
             div { style: "font-size:48px;margin-bottom:12px;", "🔒" }
@@ -102,6 +103,12 @@ fn AccessDeniedScreen(telegram_id: i64) -> Element {
             }
             div { style: "margin-top:20px;padding:12px;background:#1a1a2e;border-radius:8px;font-family:monospace;font-size:13px;color:#39ff14;display:inline-block;",
                 "Ваш ID: {telegram_id}"
+            }
+            details { style: "margin-top:16px;text-align:left;max-width:340px;margin-left:auto;margin-right:auto;",
+                summary { style: "color:#666;font-size:11px;cursor:pointer;", "debug" }
+                pre { style: "font-size:10px;color:#888;background:#1a1a2e;padding:8px;border-radius:6px;white-space:pre-wrap;word-break:break-all;",
+                    "{debug}"
+                }
             }
         }
     }

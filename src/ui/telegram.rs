@@ -119,20 +119,69 @@ impl TelegramApp {
     }
 
     /// Get Telegram user ID from WebApp.
-    /// Reads `window.Telegram.WebApp.initDataUnsafe.user.id` synchronously via
-    /// `js_sys::eval`. Returns `None` if SDK is missing or user is not present
-    /// (e.g. page opened in a regular browser).
+    /// Tries three sources in order:
+    ///   1. `window.Telegram.WebApp.initDataUnsafe.user.id`
+    ///   2. parse user from `window.Telegram.WebApp.initData` (URL-encoded)
+    ///   3. `?tgid=<id>` query parameter (manual fallback)
+    /// Returns `None` only if all three fail (e.g. plain browser).
     pub fn get_user_id(&self) -> Option<i64> {
+        // Returns the id as a STRING (so we don't lose precision on big ints)
+        // or empty string if not found.
         let js = r#"(function(){try{
-            if(window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initDataUnsafe && window.Telegram.WebApp.initDataUnsafe.user){
-                return window.Telegram.WebApp.initDataUnsafe.user.id || 0;
+            // 1) initDataUnsafe.user.id
+            if(window.Telegram && window.Telegram.WebApp){
+                var w = window.Telegram.WebApp;
+                if(w.initDataUnsafe && w.initDataUnsafe.user && w.initDataUnsafe.user.id){
+                    return String(w.initDataUnsafe.user.id);
+                }
+                // 2) parse initData query string
+                if(w.initData){
+                    try{
+                        var params = new URLSearchParams(w.initData);
+                        var userStr = params.get('user');
+                        if(userStr){
+                            var u = JSON.parse(userStr);
+                            if(u && u.id) return String(u.id);
+                        }
+                    }catch(e){}
+                }
             }
-            return 0;
-        }catch(e){return 0;}})()"#;
+            // 3) ?tgid= manual override
+            try{
+                var qp = new URLSearchParams(window.location.search);
+                var manual = qp.get('tgid');
+                if(manual) return manual;
+            }catch(e){}
+            return '';
+        }catch(e){return '';}})()"#;
         let val = js_sys::eval(js).ok()?;
-        let n = val.as_f64()?;
-        let id = n as i64;
-        if id == 0 { None } else { Some(id) }
+        let s = val.as_string()?;
+        if s.is_empty() { return None; }
+        s.parse::<i64>().ok().filter(|id| *id != 0)
+    }
+
+    /// Diagnostic dump of what is actually available in Telegram.WebApp.
+    /// Used by the admin screen to show why authentication failed.
+    pub fn debug_dump(&self) -> String {
+        let js = r#"(function(){try{
+            var out = {};
+            out.hasTelegram = !!window.Telegram;
+            out.hasWebApp = !!(window.Telegram && window.Telegram.WebApp);
+            if(window.Telegram && window.Telegram.WebApp){
+                var w = window.Telegram.WebApp;
+                out.version = w.version || null;
+                out.platform = w.platform || null;
+                out.initDataLen = (w.initData || '').length;
+                out.hasInitDataUnsafe = !!w.initDataUnsafe;
+                out.hasUser = !!(w.initDataUnsafe && w.initDataUnsafe.user);
+                if(w.initDataUnsafe && w.initDataUnsafe.user){
+                    out.userId = String(w.initDataUnsafe.user.id || '');
+                    out.username = w.initDataUnsafe.user.username || null;
+                }
+            }
+            return JSON.stringify(out);
+        }catch(e){return 'err:'+String(e);}})()"#;
+        js_sys::eval(js).ok().and_then(|v| v.as_string()).unwrap_or_else(|| "eval_failed".to_string())
     }
 
     /// Get Telegram user data
