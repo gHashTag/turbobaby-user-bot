@@ -17,14 +17,9 @@ struct AdminCheckQuery {
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/admin/users", get(get_all_users))
-        .route("/admin/statistics", get(get_stats))
-        .route("/admin/stats-test", get(get_stats_test))
+        .route("/admin/stats", get(get_stats))
         .route("/admin/managers", get(get_managers))
         .route("/admin/check", get(check_admin_access))
-}
-
-async fn get_stats_test(_state: State<AppState>) -> Result<Json<Value>, StatusCode> {
-    Ok(Json(json!({"test": "ok"})))
 }
 
 async fn get_all_users(State(state): State<AppState>) -> Result<Json<Value>, StatusCode> {
@@ -56,14 +51,77 @@ async fn get_all_users(State(state): State<AppState>) -> Result<Json<Value>, Sta
     Ok(Json(json!({ "users": users })))
 }
 
-async fn get_stats(_state: State<AppState>) -> Result<Json<Value>, StatusCode> {
-    tracing::info!("admin stats: called");
+async fn get_stats(State(state): State<AppState>) -> Result<Json<Value>, StatusCode> {
+    tracing::info!("admin stats: starting");
+
+    let client = state.db.pool.get().await.map_err(|e| {
+        tracing::error!("admin stats: pool.get() failed: {:?}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    tracing::info!("admin stats: got connection, running queries");
+
+    // Run all queries in parallel
+    let (total_users, total_orders, total_revenue, active_strains) = tokio::try_join!(
+        async {
+            client
+                .query_one("SELECT COUNT(*)::bigint FROM user_languages", &[])
+                .await
+                .map(|r| r.get::<_, i64>(0))
+                .map_err(|e| {
+                    tracing::error!("admin stats: users query failed: {:?}", e);
+                    StatusCode::INTERNAL_SERVER_ERROR
+                })
+        },
+        async {
+            client
+                .query_one("SELECT COUNT(*)::bigint FROM orders", &[])
+                .await
+                .map(|r| r.get::<_, i64>(0))
+                .map_err(|e| {
+                    tracing::error!("admin stats: orders query failed: {:?}", e);
+                    StatusCode::INTERNAL_SERVER_ERROR
+                })
+        },
+        async {
+            client
+                .query_one("SELECT SUM(total) FROM orders WHERE status = 'completed'", &[])
+                .await
+                .map_err(|e| {
+                    tracing::error!("admin stats: revenue query failed: {:?}", e);
+                    StatusCode::INTERNAL_SERVER_ERROR
+                })
+                .and_then(|row| {
+                    row.get::<_, Option<f64>>(0)
+                        .ok_or_else(|| {
+                            tracing::error!("admin stats: revenue is NULL");
+                            StatusCode::INTERNAL_SERVER_ERROR
+                        })
+                })
+        },
+        async {
+            client
+                .query_one("SELECT COUNT(*)::bigint FROM strains WHERE is_available = true", &[])
+                .await
+                .map(|r| r.get::<_, i64>(0))
+                .map_err(|e| {
+                    tracing::error!("admin stats: strains query failed: {:?}", e);
+                    StatusCode::INTERNAL_SERVER_ERROR
+                })
+        }
+    )
+    .map_err(|e| {
+        tracing::error!("admin stats: join failed: {:?}", e);
+        e
+    })?;
+
+    tracing::info!("admin stats: success");
 
     Ok(Json(json!({
-        "total_users": 0,
-        "total_orders": 0,
-        "total_revenue": null,
-        "active_strains": 12,
+        "total_users": total_users,
+        "total_orders": total_orders,
+        "total_revenue": total_revenue,
+        "active_strains": active_strains,
     })))
 }
 
