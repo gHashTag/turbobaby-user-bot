@@ -51,7 +51,7 @@ async fn get_all_users(State(state): State<AppState>) -> Result<Json<Value>, Sta
     Ok(Json(json!({ "users": users })))
 }
 
-async fn get_stats(_state: AppState) -> Result<Json<Value>, StatusCode> {
+async fn get_stats(_state: State<AppState>) -> Result<Json<Value>, StatusCode> {
     tracing::info!("admin stats: called");
 
     Ok(Json(json!({
