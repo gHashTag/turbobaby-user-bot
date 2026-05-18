@@ -17,9 +17,14 @@ struct AdminCheckQuery {
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/admin/users", get(get_all_users))
-        .route("/admin/stats", get(get_stats))
+        .route("/admin/statistics", get(get_stats))
+        .route("/admin/stats-test", get(get_stats_test))
         .route("/admin/managers", get(get_managers))
         .route("/admin/check", get(check_admin_access))
+}
+
+async fn get_stats_test(_state: State<AppState>) -> Result<Json<Value>, StatusCode> {
+    Ok(Json(json!({"test": "ok"})))
 }
 
 async fn get_all_users(State(state): State<AppState>) -> Result<Json<Value>, StatusCode> {
