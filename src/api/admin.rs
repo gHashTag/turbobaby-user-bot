@@ -20,6 +20,7 @@ pub fn routes() -> Router<AppState> {
         .route("/admin/data", get(get_stats))
         .route("/admin/managers", get(get_managers))
         .route("/admin/check", get(check_admin_access))
+        .route("/admin/ping", get(ping))
 }
 
 async fn get_stats(_state: State<AppState>) -> Result<Json<Value>, StatusCode> {
@@ -87,4 +88,8 @@ async fn check_admin_access(
 ) -> Result<Json<Value>, StatusCode> {
     let is_admin = state.config.admin_ids.contains(&query.telegram_id);
     Ok(Json(json!({ "is_admin": is_admin })))
+}
+
+async fn ping() -> Result<Json<Value>, StatusCode> {
+    Ok(Json(json!({"status": "pong"})))
 }
