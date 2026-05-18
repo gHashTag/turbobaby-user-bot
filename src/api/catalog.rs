@@ -1,9 +1,10 @@
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::{HeaderMap, StatusCode},
     routing::{delete, get, post, put},
     Json, Router,
 };
+use std::collections::HashMap;
 use serde::Deserialize;
 use serde_json::{json, Value};
 use crate::AppState;
@@ -17,6 +18,7 @@ pub fn routes() -> Router<AppState> {
         .route("/accessories/:id", get(get_accessory))
         .route("/accessories/:id", put(update_accessory))
         .route("/accessories/:id", delete(delete_accessory))
+        .route("/accessories/:id/availability", put(toggle_accessory_availability))
         // Accessory Sets
         .route("/accessory-sets", get(get_accessory_sets))
         .route("/accessory-sets", post(create_accessory_set))
@@ -28,6 +30,7 @@ pub fn routes() -> Router<AppState> {
         .route("/tea-products/:id", get(get_tea_product))
         .route("/tea-products/:id", put(update_tea_product))
         .route("/tea-products/:id", delete(delete_tea_product))
+        .route("/tea-products/:id/availability", put(toggle_tea_availability))
         // Tea Sets
         .route("/tea-sets", get(get_tea_sets))
         .route("/tea-sets", post(create_tea_set))
@@ -76,15 +79,26 @@ fn accessory_row(r: &tokio_postgres::Row) -> Value {
     })
 }
 
-async fn get_accessories(State(state): State<AppState>) -> Result<Json<Value>, StatusCode> {
+async fn get_accessories(State(state): State<AppState>, Query(q): Query<HashMap<String, String>>) -> Result<Json<Value>, StatusCode> {
     let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    // NOTE: small cosmetic change forces fresh prepared statement after schema alter
-    let rows = client.query(
-        "SELECT id, name, category, description, price, stock, image_url, video_url, is_available, name_en, description_en, category_en FROM accessories WHERE is_available = TRUE ORDER BY name",
-        &[],
-    ).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let include_hidden = q.get("include_hidden").map(|v| v == "1" || v == "true").unwrap_or(false);
+    let sql = if include_hidden {
+        "SELECT id, name, category, description, price, stock, image_url, video_url, is_available, name_en, description_en, category_en FROM accessories ORDER BY name"
+    } else {
+        "SELECT id, name, category, description, price, stock, image_url, video_url, is_available, name_en, description_en, category_en FROM accessories WHERE is_available = TRUE ORDER BY name"
+    };
+    let rows = client.query(sql, &[]).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let items: Vec<Value> = rows.iter().map(accessory_row).collect();
     Ok(Json(json!({ "accessories": items })))
+}
+
+async fn toggle_accessory_availability(State(state): State<AppState>, headers: HeaderMap, Path(id): Path<String>, Json(body): Json<Value>) -> Result<Json<Value>, StatusCode> {
+    check_admin(&headers, &state)?;
+    let available = body["is_available"].as_bool().unwrap_or(true);
+    let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    client.execute("UPDATE accessories SET is_available = $1 WHERE id = $2", &[&available, &id])
+        .await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(Json(json!({ "success": true })))
 }
 
 async fn get_accessory(State(state): State<AppState>, Path(id): Path<String>) -> Result<Json<Value>, StatusCode> {
@@ -241,14 +255,27 @@ fn tea_product_row(r: &tokio_postgres::Row) -> Value {
     })
 }
 
-async fn get_tea_products(State(state): State<AppState>) -> Result<Json<Value>, StatusCode> {
+async fn get_tea_products(State(state): State<AppState>, Query(q): Query<HashMap<String, String>>) -> Result<Json<Value>, StatusCode> {
     let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    let rows = client.query(
-        "SELECT id, name, subcategory, description, price, stock, image_url, video_url, is_available, name_en, description_en, subcategory_en FROM tea_products WHERE is_available = TRUE ORDER BY name",
-        &[],
-    ).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let include_hidden = q.get("include_hidden").map(|v| v == "1" || v == "true").unwrap_or(false);
+    let sql = if include_hidden {
+        "SELECT id, name, subcategory, description, price, stock, image_url, video_url, is_available, name_en, description_en, subcategory_en FROM tea_products ORDER BY name"
+    } else {
+        "SELECT id, name, subcategory, description, price, stock, image_url, video_url, is_available, name_en, description_en, subcategory_en FROM tea_products WHERE is_available = TRUE ORDER BY name"
+    };
+    let rows = client.query(sql, &[]).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let items: Vec<Value> = rows.iter().map(tea_product_row).collect();
-    Ok(Json(json!({ "tea_products": items })))
+    // Return both keys for backwards-compat: admin expects `tea_products`, /tea page expects `products`.
+    Ok(Json(json!({ "tea_products": items.clone(), "products": items })))
+}
+
+async fn toggle_tea_availability(State(state): State<AppState>, headers: HeaderMap, Path(id): Path<String>, Json(body): Json<Value>) -> Result<Json<Value>, StatusCode> {
+    check_admin(&headers, &state)?;
+    let available = body["is_available"].as_bool().unwrap_or(true);
+    let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    client.execute("UPDATE tea_products SET is_available = $1 WHERE id = $2", &[&available, &id])
+        .await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(Json(json!({ "success": true })))
 }
 
 async fn get_tea_product(State(state): State<AppState>, Path(id): Path<String>) -> Result<Json<Value>, StatusCode> {

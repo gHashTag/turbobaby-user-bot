@@ -40,7 +40,7 @@ pub fn routes() -> Router<AppState> {
         .route("/strains/:id/strain-of-day", put(set_strain_of_day))
 }
 
-async fn get_strains(State(state): State<AppState>) -> Result<Json<Value>, StatusCode> {
+async fn get_strains(State(state): State<AppState>, axum::extract::Query(q): axum::extract::Query<std::collections::HashMap<String, String>>) -> Result<Json<Value>, StatusCode> {
     // Use a fresh prepare() with a unique statement marker each call to
     // sidestep tokio-postgres' client-side prepared-statement cache, which
     // would otherwise keep returning SQLSTATE 0A000 "cached plan must not
@@ -49,9 +49,11 @@ async fn get_strains(State(state): State<AppState>) -> Result<Json<Value>, Statu
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_nanos())
         .unwrap_or(0);
+    let include_hidden = q.get("include_hidden").map(|v| v == "1" || v == "true").unwrap_or(false);
+    let where_clause = if include_hidden { "" } else { "WHERE is_available = TRUE" };
     let sql = format!(
-        "SELECT id, name, category, thc_percent, cbd_percent, effect, flavor_profile, description, price_per_gram, available_grams, image_url, is_available, is_strain_of_day, strain_of_day_discount, name_en, description_en, effect_en, flavor_profile_en, strain_type_en FROM strains WHERE is_available = TRUE ORDER BY name -- nonce={}",
-        nonce
+        "SELECT id, name, category, thc_percent, cbd_percent, effect, flavor_profile, description, price_per_gram, available_grams, image_url, is_available, is_strain_of_day, strain_of_day_discount, name_en, description_en, effect_en, flavor_profile_en, strain_type_en FROM strains {} ORDER BY name -- nonce={}",
+        where_clause, nonce
     );
     let client = state.db.pool.get().await.map_err(|e| {
         tracing::error!("get_strains pool error: {:?}", e);

@@ -37,6 +37,8 @@ struct AdminAccessory {
     price: f64,
     stock: Option<i32>,
     is_available: bool,
+    #[serde(default)]
+    image_url: Option<String>,
     // EN fields (migration 016)
     name_en: Option<String>,
     description_en: Option<String>,
@@ -199,7 +201,7 @@ fn StrainsTab() -> Element {
 
     let items = use_resource(move || async move {
         let _ = reload.read();
-        let url = format!("{}/api/strains", api_base_url());
+        let url = format!("{}/api/strains?include_hidden=1", api_base_url());
         reqwest::Client::new().get(&url).send().await
             .map_err(|e| e.to_string())?
             .json::<StrainsResp>().await
@@ -310,12 +312,14 @@ fn StrainsTab() -> Element {
                                     },
                                     on_toggle: {
                                         let id = s.id.clone();
+                                        let next_avail = !s.is_available;
                                         move |_| {
                                             let id = id.clone();
                                             spawn(async move {
-                                                let url = format!("{}/api/strains/{}/toggle-availability", api_base_url(), id);
-                                                let _ = reqwest::Client::new().post(&url)
+                                                let url = format!("{}/api/strains/{}/availability", api_base_url(), id);
+                                                let _ = reqwest::Client::new().put(&url)
                                                     .header("X-Admin-Telegram-Id", telegram_id.to_string())
+                                                    .json(&json!({ "is_available": next_avail }))
                                                     .send().await;
                                                 let next = reload.read().wrapping_add(1); reload.set(next);
                                             });
@@ -364,7 +368,7 @@ fn AccessoriesTab() -> Element {
 
     let items = use_resource(move || async move {
         let _ = reload.read();
-        let url = format!("{}/api/accessories", api_base_url());
+        let url = format!("{}/api/accessories?include_hidden=1", api_base_url());
         reqwest::Client::new().get(&url).send().await
             .map_err(|e| e.to_string())?
             .json::<AccessoriesResp>().await
@@ -471,13 +475,14 @@ fn AccessoriesTab() -> Element {
                                     },
                                     on_toggle: {
                                         let id = a.id.clone();
+                                        let next_avail = !a.is_available;
                                         move |_| {
                                             let id = id.clone();
                                             spawn(async move {
-                                                // No toggle endpoint for accessories — use DELETE which sets is_available=false.
-                                                let url = format!("{}/api/accessories/{}", api_base_url(), id);
-                                                let _ = reqwest::Client::new().delete(&url)
+                                                let url = format!("{}/api/accessories/{}/availability", api_base_url(), id);
+                                                let _ = reqwest::Client::new().put(&url)
                                                     .header("X-Admin-Telegram-Id", telegram_id.to_string())
+                                                    .json(&json!({ "is_available": next_avail }))
                                                     .send().await;
                                                 let next = reload.read().wrapping_add(1); reload.set(next);
                                             });
@@ -525,7 +530,7 @@ fn TeaTab() -> Element {
 
     let items = use_resource(move || async move {
         let _ = reload.read();
-        let url = format!("{}/api/tea-products", api_base_url());
+        let url = format!("{}/api/tea-products?include_hidden=1", api_base_url());
         reqwest::Client::new().get(&url).send().await
             .map_err(|e| e.to_string())?
             .json::<TeaResp>().await
@@ -625,12 +630,14 @@ fn TeaTab() -> Element {
                                     },
                                     on_toggle: {
                                         let id = t.id.clone();
+                                        let next_avail = !t.is_available;
                                         move |_| {
                                             let id = id.clone();
                                             spawn(async move {
-                                                let url = format!("{}/api/tea-products/{}", api_base_url(), id);
-                                                let _ = reqwest::Client::new().delete(&url)
+                                                let url = format!("{}/api/tea-products/{}/availability", api_base_url(), id);
+                                                let _ = reqwest::Client::new().put(&url)
                                                     .header("X-Admin-Telegram-Id", telegram_id.to_string())
+                                                    .json(&json!({ "is_available": next_avail }))
                                                     .send().await;
                                                 let next = reload.read().wrapping_add(1); reload.set(next);
                                             });
@@ -816,6 +823,7 @@ fn EditAccessoryCard(
     let mut category = use_signal(|| item.category.clone().unwrap_or_else(|| "other".to_string()));
     let mut price = use_signal(|| item.price.to_string());
     let mut stock = use_signal(|| item.stock.map(|s| s.to_string()).unwrap_or_default());
+    let mut image_url = use_signal(|| item.image_url.clone().unwrap_or_default());
     let mut name_en = use_signal(|| item.name_en.clone().unwrap_or_default());
     let mut description_en = use_signal(|| item.description_en.clone().unwrap_or_default());
     let mut category_en = use_signal(|| item.category_en.clone().unwrap_or_default());
@@ -842,6 +850,8 @@ fn EditAccessoryCard(
                 oninput: move |e| price.set(e.value()) }
             input { style: input_style(), placeholder: "Количество", value: "{stock}", r#type: "number",
                 oninput: move |e| stock.set(e.value()) }
+            input { style: input_style(), placeholder: "URL картинки (напр. /assets/accessories/grinder-4p.webp)", value: "{image_url}",
+                oninput: move |e| image_url.set(e.value()) }
             div { style: en_section_style(), "🇬🇧 English (optional)" }
             input { style: input_style(), placeholder: "Name (EN)", value: "{name_en}",
                 oninput: move |e| name_en.set(e.value()) }
@@ -855,12 +865,14 @@ fn EditAccessoryCard(
                         let n = name(); let c = category(); let p = price.read().parse::<f64>().unwrap_or(0.0);
                         let s_str = stock();
                         let s_val: serde_json::Value = if s_str.is_empty() { serde_json::Value::Null } else { s_str.parse::<i32>().unwrap_or(0).into() };
+                        let img = image_url();
                         let ne = name_en(); let de = description_en(); let ce = category_en();
                         let id = item_id.clone();
                         spawn(async move {
                             let body = json!({
                                 "name": n, "category": c, "price": p, "stock": s_val,
                                 "is_available": item_is_available,
+                                "image_url": if img.is_empty() { serde_json::Value::Null } else { img.into() },
                                 "name_en": if ne.is_empty() { serde_json::Value::Null } else { ne.into() },
                                 "description_en": if de.is_empty() { serde_json::Value::Null } else { de.into() },
                                 "category_en": if ce.is_empty() { serde_json::Value::Null } else { ce.into() },

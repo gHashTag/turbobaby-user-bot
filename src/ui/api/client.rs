@@ -147,7 +147,16 @@ impl ApiClient {
     }
 
     pub async fn get_tea_products(&self) -> Result<Vec<TeaProduct>> {
-        self.get("/api/tea-products").await
+        // API returns {"tea_products": [...], "products": [...]} — use `products` key.
+        #[derive(Deserialize)]
+        struct TeaResponse {
+            #[serde(default)]
+            products: Vec<TeaProduct>,
+            #[serde(default)]
+            tea_products: Vec<TeaProduct>,
+        }
+        let resp: TeaResponse = self.get("/api/tea-products").await?;
+        Ok(if !resp.products.is_empty() { resp.products } else { resp.tea_products })
     }
 
     // Order endpoints
