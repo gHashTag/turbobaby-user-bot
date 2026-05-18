@@ -38,7 +38,6 @@ pub fn routes() -> Router<AppState> {
         .route("/strains/:id/availability", put(toggle_availability))
         .route("/strains/strain-of-day", get(get_strains_of_day))
         .route("/strains/:id/strain-of-day", put(set_strain_of_day))
-        .route("/stats", get(get_app_stats))
 }
 
 async fn get_strains(State(state): State<AppState>, axum::extract::Query(q): axum::extract::Query<std::collections::HashMap<String, String>>) -> Result<Json<Value>, StatusCode> {
@@ -171,33 +170,3 @@ async fn set_strain_of_day(State(state): State<AppState>, headers: HeaderMap, Pa
     Ok(Json(json!({ "success": true, "id": id })))
 }
 
-async fn get_app_stats(State(state): State<AppState>) -> Result<Json<Value>, StatusCode> {
-    let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
-    let total_users: i64 = client
-        .query_one("SELECT COUNT(*)::bigint FROM user_languages", &[])
-        .await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .get(0);
-
-    let total_orders: i64 = client
-        .query_one("SELECT COUNT(*)::bigint FROM orders", &[])
-        .await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .get(0);
-
-    let total_revenue: Option<f64> = client
-        .query_one("SELECT SUM(total) FROM orders WHERE status = 'completed'", &[])
-        .await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .get(0);
-
-    let active_strains: i64 = client
-        .query_one("SELECT COUNT(*)::bigint FROM strains WHERE is_available = true", &[])
-        .await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .get(0);
-
-    Ok(Json(json!({
-        "total_users": total_users,
-        "total_orders": total_orders,
-        "total_revenue": total_revenue,
-        "active_strains": active_strains,
-    })))
-}
