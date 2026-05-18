@@ -18,6 +18,7 @@ pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/admin/users", get(get_all_users))
         .route("/admin/stats", get(get_stats))
+        .route("/admin/stats-simple", get(get_stats_simple))
         .route("/admin/managers", get(get_managers))
         .route("/admin/check", get(check_admin_access))
 }
@@ -128,4 +129,29 @@ async fn check_admin_access(
 ) -> Result<Json<Value>, StatusCode> {
     let is_admin = state.config.admin_ids.contains(&query.telegram_id);
     Ok(Json(json!({ "is_admin": is_admin })))
+}
+
+async fn get_stats_simple(State(state): State<AppState>) -> Result<Json<Value>, StatusCode> {
+    // Simplified stats endpoint to debug which query causes timeout
+    let client = state.db.pool.get().await.map_err(|e| {
+        tracing::error!("admin stats-simple: pool.get() failed: {:?}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    tracing::info!("admin stats-simple: got connection");
+
+    let active_strains: i64 = client
+        .query_one("SELECT COUNT(*)::bigint FROM strains WHERE is_available = true", &[])
+        .await
+        .map_err(|e| {
+            tracing::error!("admin stats-simple: active_strains query failed: {:?}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?
+        .get(0);
+
+    tracing::info!("admin stats-simple: active_strains = {}", active_strains);
+
+    Ok(Json(json!({
+        "active_strains": active_strains,
+    })))
 }
