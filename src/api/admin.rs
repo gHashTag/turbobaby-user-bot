@@ -88,7 +88,7 @@ async fn get_stats(State(state): State<AppState>) -> Result<Json<Value>, StatusC
             StatusCode::INTERNAL_SERVER_ERROR
         })?
         .first()
-        .and_then(|r| r.get(0).ok());
+        .and_then(|r| r.get::<_, Option<f64>>(0));
 
     let active_strains: i64 = client
         .query("SELECT COUNT(*)::bigint FROM strains WHERE is_available = true", &[])
