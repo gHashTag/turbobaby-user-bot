@@ -61,7 +61,7 @@ async fn get_stats(State(state): State<AppState>) -> Result<Json<Value>, StatusC
     let total_revenue: Option<f64> = client
         .query_one("SELECT SUM(total) FROM orders WHERE status = 'completed'", &[])
         .await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .get(0);
+        .and_then(|row| row.get(0).ok());
 
     let active_strains: i64 = client
         .query_one("SELECT COUNT(*)::bigint FROM strains WHERE is_available = true", &[])
