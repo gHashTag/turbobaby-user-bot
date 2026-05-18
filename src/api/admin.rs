@@ -52,61 +52,70 @@ async fn get_all_users(State(state): State<AppState>) -> Result<Json<Value>, Sta
 }
 
 async fn get_stats(State(state): State<AppState>) -> Result<Json<Value>, StatusCode> {
+    tracing::info!("admin stats: starting");
+
     let client = state.db.pool.get().await.map_err(|e| {
         tracing::error!("admin stats: pool.get() failed: {:?}", e);
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
-    // Use query() instead of query_one() to work around potential Railway issue
-    let total_users: i64 = client
-        .query("SELECT COUNT(*)::bigint FROM user_languages", &[])
-        .await
-        .map_err(|e| {
-            tracing::error!("admin stats: total_users query failed: {:?}", e);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?
-        .first()
-        .map(|r| r.get(0))
-        .unwrap_or(0);
+    tracing::info!("admin stats: got connection");
 
-    let total_orders: i64 = client
-        .query("SELECT COUNT(*)::bigint FROM orders", &[])
-        .await
-        .map_err(|e| {
-            tracing::error!("admin stats: total_orders query failed: {:?}", e);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?
-        .first()
-        .map(|r| r.get(0))
-        .unwrap_or(0);
+    let result = tokio::try_join!(
+        async {
+            client
+                .query_one("SELECT COUNT(*)::bigint FROM user_languages", &[])
+                .await
+                .map(|r| r.get::<_, i64>(0))
+                .map_err(|e| {
+                    tracing::error!("admin stats: total_users query failed: {:?}", e);
+                    StatusCode::INTERNAL_SERVER_ERROR
+                })
+        },
+        async {
+            client
+                .query_one("SELECT COUNT(*)::bigint FROM orders", &[])
+                .await
+                .map(|r| r.get::<_, i64>(0))
+                .map_err(|e| {
+                    tracing::error!("admin stats: total_orders query failed: {:?}", e);
+                    StatusCode::INTERNAL_SERVER_ERROR
+                })
+        },
+        async {
+            client
+                .query_one("SELECT SUM(total) FROM orders WHERE status = 'completed'", &[])
+                .await
+                .map(|row| row.get::<_, Option<f64>>(0))
+                .map_err(|e| {
+                    tracing::error!("admin stats: total_revenue query failed: {:?}", e);
+                    StatusCode::INTERNAL_SERVER_ERROR
+                })
+        },
+        async {
+            client
+                .query_one("SELECT COUNT(*)::bigint FROM strains WHERE is_available = true", &[])
+                .await
+                .map(|r| r.get::<_, i64>(0))
+                .map_err(|e| {
+                    tracing::error!("admin stats: active_strains query failed: {:?}", e);
+                    StatusCode::INTERNAL_SERVER_ERROR
+                })
+        }
+    );
 
-    let total_revenue: Option<f64> = client
-        .query("SELECT SUM(total) FROM orders WHERE status = 'completed'", &[])
-        .await
-        .map_err(|e| {
-            tracing::error!("admin stats: total_revenue query failed: {:?}", e);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?
-        .first()
-        .and_then(|r| r.get::<_, Option<f64>>(0));
-
-    let active_strains: i64 = client
-        .query("SELECT COUNT(*)::bigint FROM strains WHERE is_available = true", &[])
-        .await
-        .map_err(|e| {
-            tracing::error!("admin stats: active_strains query failed: {:?}", e);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?
-        .first()
-        .map(|r| r.get(0))
-        .unwrap_or(0);
-
-    Ok(Json(json!({
-        "total_users": total_users,
-        "total_orders": total_orders,
-        "total_revenue": total_revenue,
-        "active_strains": active_strains,
-    })))
+    match result {
+        Ok((total_users, total_orders, total_revenue, active_strains)) => {
+            tracing::info!("admin stats: success");
+            Ok(Json(json!({
+                "total_users": total_users,
+                "total_orders": total_orders,
+                "total_revenue": total_revenue,
+                "active_strains": active_strains,
+            })))
+        }
+        Err(e) => Err(e)
+    }
 }
 
 async fn get_managers(State(state): State<AppState>) -> Result<Json<Value>, StatusCode> {
