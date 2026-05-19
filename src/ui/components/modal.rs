@@ -54,6 +54,7 @@ pub fn Modal(props: ModalProps) -> Element {
             },
             div {
                 class: "modal {size_class}",
+                onclick: move |e| { e.stop_propagation(); },
                 if props.show_close || props.title.is_some() {
                     div {
                         class: "modal-header",
