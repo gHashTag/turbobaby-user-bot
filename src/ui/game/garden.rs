@@ -110,6 +110,13 @@ fn mock_plants() -> Vec<Plant> {
     ]
 }
 
+/// Returns the plant growth stage image URL based on stage index (0-13).
+/// Images are at /assets/images/game/{1..14}.png
+fn stage_image_url(stage_index: usize) -> String {
+    let n = (stage_index + 1).clamp(1, 14);
+    format!("/assets/images/game/{}.png", n)
+}
+
 fn stage_color(stage: &GrowthStage) -> &'static str {
     match stage {
         GrowthStage::Seed => "#8b5a2b",
@@ -223,6 +230,7 @@ pub fn Garden() -> Element {
                         let gradient = progress_bar_gradient(&progress.stage).to_string();
                         let stage_name = progress.stage_name.clone();
                         let emoji = progress.stage_emoji.clone();
+                        let img_url = stage_image_url(progress.stage_index);
                         let total_pct = progress.total_progress;
                         let pct_str = format!("{}%", total_pct);
                         let is_active = progress.stage_index > 0 && !progress.is_ready_to_harvest;
@@ -280,66 +288,84 @@ pub fn Garden() -> Element {
                         rsx! {
                             div {
                                 key: "{pid}",
-                                style: "background: {bg_card}; border-radius: 8px; padding: 16px; margin-bottom: 16px; border: {border}; {shadow}",
+                                style: "background: {bg_card}; border-radius: 12px; margin-bottom: 16px; border: {border}; overflow: hidden; {shadow}",
 
-                                div { style: "display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;",
-                                    div { style: "font-size: 14px; color: #e0e0e0;", "{sname}" }
+                                // ── Hero image ──────────────────────────
+                                div { style: "position: relative; width: 100%; aspect-ratio: 1/1; overflow: hidden; background: #111;",
+                                    img {
+                                        src: "{img_url}",
+                                        style: "width: 100%; height: 100%; object-fit: cover;",
+                                    }
+                                    // Gradient overlay at bottom
+                                    div { style: "position: absolute; bottom: 0; left: 0; right: 0; height: 50%; background: linear-gradient(transparent, rgba(15,15,26,0.95));" }
+
+                                    // Plant name overlay
+                                    div { style: "position: absolute; bottom: 12px; left: 16px; right: 16px;",
+                                        div { style: "font-size: 16px; font-weight: 700; color: #fff; text-shadow: 0 1px 4px rgba(0,0,0,0.8);", "{sname}" }
+                                        div { style: "display: flex; align-items: center; gap: 6px; margin-top: 4px;",
+                                            span { style: "font-size: 14px;", "{emoji}" }
+                                            span { style: "font-size: 12px; color: {color}; font-weight: 600;", "{stage_name}" }
+                                        }
+                                    }
+
+                                    // Ready badge
                                     if is_ready {
-                                        span { style: "font-size: 10px; padding: 2px 8px; border-radius: 8px; background: rgba(255,215,0,0.2); color: #ffd700;",
-                                            "READY TO HARVEST"
+                                        div { style: "position: absolute; top: 12px; right: 12px; font-size: 10px; padding: 4px 10px; border-radius: 12px; background: rgba(255,215,0,0.9); color: #000; font-weight: 700;",
+                                            "🏆 READY"
                                         }
                                     }
                                 }
 
-                                div { style: "display: flex; align-items: center; gap: 12px; margin-bottom: 12px;",
-                                    div { style: "
-                                        width: 48px; height: 48px; border-radius: 50%;
-                                        display: flex; align-items: center; justify-content: center;
-                                        font-size: 24px; flex-shrink: 0;
-                                        background: {color}15; border: 2px solid {color};
-                                    ", "{emoji}" }
-                                    div { style: "flex: 1;",
-                                        div { style: "font-size: 14px; color: {color}; margin-bottom: 2px;", "{stage_name}" }
-                                        div { style: "font-size: 18px; color: #666; margin-bottom: 6px;",
-                                            "Water: {wc}/{total_stages}"
-                                        }
-                                        div { style: "height: 8px; background: rgba(0,0,0,0.4); border-radius: 8px; overflow: hidden;",
-                                            div { style: "height: 100%; width: {pct_str}; border-radius: 8px; background: {gradient};" }
-                                        }
-                                        div { style: "font-size: 18px; color: #555; margin-top: 2px; text-align: right;", "{pct_str}" }
-                                    }
-                                }
+                                // ── Progress + controls ─────────────────
+                                div { style: "padding: 12px 16px 16px;",
 
-                                div { style: "display: flex; gap: 8px;",
-                                    if is_ready {
-                                        button {
-                                            style: "
-                                                flex: 1; padding: 8px; border: none; border-radius: 8px;
-                                                font-family: 'Press Start 2P', monospace; font-size: 12px;
-                                                cursor: pointer; color: #0a0a0a;
-                                                background: linear-gradient(135deg, #ffd700, #ff9500);
-                                            ",
-                                            onclick: harvest_click,
-                                            "🏆 HARVEST"
+                                    // Water count + progress bar
+                                    div { style: "margin-bottom: 10px;",
+                                        div { style: "display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;",
+                                            span { style: "font-size: 11px; color: #8b8b9e;",
+                                                "💧 {wc}/{total_stages}"
+                                            }
+                                            span { style: "font-size: 11px; color: #8b8b9e;",
+                                                "{pct_str}"
+                                            }
                                         }
-                                    } else if can_w {
-                                        button {
-                                            style: "
-                                                flex: 1; padding: 8px; border: none; border-radius: 8px;
-                                                font-family: 'Press Start 2P', monospace; font-size: 12px;
-                                                cursor: pointer; color: #0a0a0a;
-                                                background: linear-gradient(135deg, #39ff14, #22c55e);
-                                            ",
-                                            onclick: water_click,
-                                            "💧 {wt}"
+                                        div { style: "height: 6px; background: rgba(255,255,255,0.08); border-radius: 6px; overflow: hidden;",
+                                            div { style: "height: 100%; width: {pct_str}; border-radius: 6px; background: {gradient}; transition: width 0.3s ease;" }
                                         }
-                                    } else {
-                                        div { style: "
-                                            flex: 1; padding: 8px; border-radius: 8px; text-align: center;
-                                            font-size: 18px; color: #555;
-                                            background: rgba(255,255,255,0.03);
-                                        ",
-                                            "⏳ Cooldown..."
+                                    }
+
+                                    // Action buttons
+                                    div { style: "display: flex; gap: 8px;",
+                                        if is_ready {
+                                            button {
+                                                style: "
+                                                    flex: 1; padding: 10px; border: none; border-radius: 8px;
+                                                    font-family: 'Inter', sans-serif; font-size: 14px;
+                                                    font-weight: 700; cursor: pointer; color: #0a0a0a;
+                                                    background: linear-gradient(135deg, #ffd700, #ff9500);
+                                                ",
+                                                onclick: harvest_click,
+                                                "🏆 HARVEST"
+                                            }
+                                        } else if can_w {
+                                            button {
+                                                style: "
+                                                    flex: 1; padding: 10px; border: none; border-radius: 8px;
+                                                    font-family: 'Inter', sans-serif; font-size: 14px;
+                                                    font-weight: 700; cursor: pointer; color: #0a0a0a;
+                                                    background: linear-gradient(135deg, #39ff14, #22c55e);
+                                                ",
+                                                onclick: water_click,
+                                                "💧 {wt}"
+                                            }
+                                        } else {
+                                            div { style: "
+                                                flex: 1; padding: 10px; border-radius: 8px; text-align: center;
+                                                font-size: 13px; color: #555;
+                                                background: rgba(255,255,255,0.03);
+                                            ",
+                                                "⏳ Cooldown..."
+                                            }
                                         }
                                     }
                                 }
