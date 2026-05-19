@@ -155,7 +155,11 @@ pub fn TeaScreen() -> Element {
                                                 font-size: 36px; position: relative;
                                             ",
                                                 if let Some(ref img) = t.image_url {
-                                                    img { src: "{img}", alt: "{t_name}", style: "width: 100%; height: 100%; object-fit: cover;" }
+                                                    if !img.is_empty() {
+                                                        img { src: "{img}", alt: "{t_name}", style: "width: 100%; height: 100%; object-fit: cover;" }
+                                                    } else {
+                                                        "{emoji}"
+                                                    }
                                                 } else {
                                                     "{emoji}"
                                                 }
