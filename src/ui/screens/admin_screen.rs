@@ -22,6 +22,11 @@ struct AdminStrain {
     id: String,
     name: String,
     category: Option<String>,
+    thc_percent: Option<f64>,
+    cbd_percent: Option<f64>,
+    effect: Option<String>,
+    flavor_profile: Option<String>,
+    description: Option<String>,
     price_per_gram: f64,
     available_grams: Option<f64>,
     is_available: bool,
@@ -38,11 +43,14 @@ struct AdminAccessory {
     id: String,
     name: String,
     category: Option<String>,
+    description: Option<String>,
     price: f64,
     stock: Option<i32>,
     is_available: bool,
     #[serde(default)]
     image_url: Option<String>,
+    #[serde(default)]
+    video_url: Option<String>,
     name_en: Option<String>,
     description_en: Option<String>,
     category_en: Option<String>,
@@ -53,10 +61,13 @@ struct AdminTea {
     id: String,
     name: String,
     subcategory: Option<String>,
+    description: Option<String>,
     price: f64,
     stock: Option<i32>,
     is_available: bool,
     image_url: Option<String>,
+    #[serde(default)]
+    video_url: Option<String>,
     name_en: Option<String>,
     description_en: Option<String>,
     subcategory_en: Option<String>,
@@ -207,7 +218,11 @@ fn StrainsTab() -> Element {
     let mut category = use_signal(|| "hybrid".to_string());
     let mut price = use_signal(String::new);
     let mut thc = use_signal(String::new);
+    let mut cbd = use_signal(String::new);
     let mut grams = use_signal(String::new);
+    let mut description = use_signal(String::new);
+    let mut effect = use_signal(String::new);
+    let mut flavor_profile = use_signal(String::new);
     let mut image_url = use_signal(String::new);
     let mut name_en = use_signal(String::new);
     let mut description_en = use_signal(String::new);
@@ -258,8 +273,16 @@ fn StrainsTab() -> Element {
                         oninput: move |e| price.set(e.value()) }
                     input { style: input_style(), placeholder: "THC %", value: "{thc}", r#type: "number",
                         oninput: move |e| thc.set(e.value()) }
+                    input { style: input_style(), placeholder: "CBD %", value: "{cbd}", r#type: "number",
+                        oninput: move |e| cbd.set(e.value()) }
                     input { style: input_style(), placeholder: "Граммы", value: "{grams}", r#type: "number",
                         oninput: move |e| grams.set(e.value()) }
+                    input { style: input_style(), placeholder: "Описание (RU)", value: "{description}",
+                        oninput: move |e| description.set(e.value()) }
+                    input { style: input_style(), placeholder: "Эффект (RU)", value: "{effect}",
+                        oninput: move |e| effect.set(e.value()) }
+                    input { style: input_style(), placeholder: "Вкусовой профиль (RU)", value: "{flavor_profile}",
+                        oninput: move |e| flavor_profile.set(e.value()) }
                     {render_image_upload(image_url)}
                     div { style: en_section_style(), "🇬🇧 English" }
                     input { style: input_style(), placeholder: "Name (EN)", value: "{name_en}",
@@ -277,7 +300,9 @@ fn StrainsTab() -> Element {
                         disabled: *submitting.read(),
                         onclick: move |_| {
                             let n = name(); let c = category(); let p = price.read().parse::<f64>().unwrap_or(0.0);
-                            let t = thc.read().parse::<f64>().ok(); let g = grams.read().parse::<f64>().unwrap_or(0.0);
+                            let t = thc.read().parse::<f64>().ok(); let cb = cbd.read().parse::<f64>().ok();
+                            let g = grams.read().parse::<f64>().unwrap_or(0.0);
+                            let d = description(); let ef = effect(); let fp = flavor_profile();
                             let img = image_url();
                             let ne = name_en(); let de = description_en(); let ee = effect_en();
                             let fpe = flavor_profile_en(); let ste = strain_type_en();
@@ -287,6 +312,10 @@ fn StrainsTab() -> Element {
                             let temp_id = format!("temp-{}", uuid::Uuid::new_v4());
                             cache.write().insert(0, AdminStrain {
                                 id: temp_id.clone(), name: n.clone(), category: Some(c.clone()),
+                                thc_percent: t, cbd_percent: cb,
+                                effect: if ef.is_empty() { None } else { Some(ef.clone()) },
+                                flavor_profile: if fp.is_empty() { None } else { Some(fp.clone()) },
+                                description: if d.is_empty() { None } else { Some(d.clone()) },
                                 price_per_gram: p, available_grams: Some(g), is_available: true,
                                 image_url: if img.is_empty() { None } else { Some(img.clone()) },
                                 name_en: if ne.is_empty() { None } else { Some(ne.clone()) },
@@ -297,7 +326,9 @@ fn StrainsTab() -> Element {
                             });
                             status.set("✅ Добавлен!".into());
                             name.set(String::new()); price.set(String::new());
-                            thc.set(String::new()); grams.set(String::new()); image_url.set(String::new());
+                            thc.set(String::new()); cbd.set(String::new()); grams.set(String::new());
+                            description.set(String::new()); effect.set(String::new()); flavor_profile.set(String::new());
+                            image_url.set(String::new());
                             name_en.set(String::new()); description_en.set(String::new());
                             effect_en.set(String::new()); flavor_profile_en.set(String::new());
                             strain_type_en.set(String::new());
@@ -305,7 +336,10 @@ fn StrainsTab() -> Element {
                             spawn(async move {
                                 let body = json!({
                                     "name": n, "category": c, "price_per_gram": p,
-                                    "thc_percent": t, "available_grams": g, "is_available": true,
+                                    "thc_percent": t, "cbd_percent": cb, "available_grams": g, "is_available": true,
+                                    "effect": if ef.is_empty() { serde_json::Value::Null } else { ef.into() },
+                                    "flavor_profile": if fp.is_empty() { serde_json::Value::Null } else { fp.into() },
+                                    "description": if d.is_empty() { serde_json::Value::Null } else { d.into() },
                                     "image_url": if img.is_empty() { serde_json::Value::Null } else { img.into() },
                                     "name_en": if ne.is_empty() { serde_json::Value::Null } else { ne.into() },
                                     "description_en": if de.is_empty() { serde_json::Value::Null } else { de.into() },
@@ -416,7 +450,9 @@ fn AccessoriesTab() -> Element {
     let mut category = use_signal(|| "other".to_string());
     let mut price = use_signal(String::new);
     let mut stock = use_signal(String::new);
+    let mut description = use_signal(String::new);
     let mut image_url = use_signal(String::new);
+    let mut video_url = use_signal(String::new);
     let mut name_en = use_signal(String::new);
     let mut description_en = use_signal(String::new);
     let mut category_en = use_signal(String::new);
@@ -468,7 +504,11 @@ fn AccessoriesTab() -> Element {
                         oninput: move |e| price.set(e.value()) }
                     input { style: input_style(), placeholder: "Кол-во", value: "{stock}", r#type: "number",
                         oninput: move |e| stock.set(e.value()) }
+                    input { style: input_style(), placeholder: "Описание (RU)", value: "{description}",
+                        oninput: move |e| description.set(e.value()) }
                     {render_image_upload(image_url)}
+                    input { style: input_style(), placeholder: "Видео URL", value: "{video_url}",
+                        oninput: move |e| video_url.set(e.value()) }
                     div { style: en_section_style(), "🇬🇧 English" }
                     input { style: input_style(), placeholder: "Name (EN)", value: "{name_en}",
                         oninput: move |e| name_en.set(e.value()) }
@@ -482,28 +522,32 @@ fn AccessoriesTab() -> Element {
                         onclick: move |_| {
                             let n = name(); let c = category(); let p = price.read().parse::<f64>().unwrap_or(0.0);
                             let s_val = stock.read().parse::<i32>().unwrap_or(0);
-                            let img = image_url();
+                            let d = description(); let img = image_url(); let vid = video_url();
                             let ne = name_en(); let de = description_en(); let ce = category_en();
                             if n.trim().is_empty() || p <= 0.0 { status.set("❌ Name + price".into()); return; }
                             submitting.set(true);
                             let temp_id = format!("temp-{}", uuid::Uuid::new_v4());
                             cache.write().insert(0, AdminAccessory {
                                 id: temp_id.clone(), name: n.clone(), category: Some(c.clone()),
+                                description: if d.is_empty() { None } else { Some(d.clone()) },
                                 price: p, stock: Some(s_val), is_available: true,
                                 image_url: if img.is_empty() { None } else { Some(img.clone()) },
+                                video_url: if vid.is_empty() { None } else { Some(vid.clone()) },
                                 name_en: if ne.is_empty() { None } else { Some(ne.clone()) },
                                 description_en: if de.is_empty() { None } else { Some(de.clone()) },
                                 category_en: if ce.is_empty() { None } else { Some(ce.clone()) },
                             });
                             status.set("✅ Добавлен!".into());
                             name.set(String::new()); price.set(String::new()); stock.set(String::new());
-                            image_url.set(String::new()); name_en.set(String::new());
-                            description_en.set(String::new()); category_en.set(String::new());
+                            description.set(String::new()); image_url.set(String::new()); video_url.set(String::new());
+                            name_en.set(String::new()); description_en.set(String::new()); category_en.set(String::new());
                             auto_scroll_to_list();
                             spawn(async move {
                                 let body = json!({
                                     "name": n, "category": c, "price": p, "stock": s_val,
-                                    "image_url": if img.is_empty() { None } else { Some(img.clone()) },
+                                    "description": if d.is_empty() { serde_json::Value::Null } else { d.into() },
+                                    "image_url": if img.is_empty() { serde_json::Value::Null } else { img.into() },
+                                    "video_url": if vid.is_empty() { serde_json::Value::Null } else { vid.into() },
                                     "name_en": if ne.is_empty() { serde_json::Value::Null } else { ne.into() },
                                     "description_en": if de.is_empty() { serde_json::Value::Null } else { de.into() },
                                     "category_en": if ce.is_empty() { serde_json::Value::Null } else { ce.into() },
@@ -598,7 +642,9 @@ fn TeaTab() -> Element {
     let mut subcategory = use_signal(|| "green".to_string());
     let mut price = use_signal(String::new);
     let mut stock = use_signal(String::new);
+    let mut description = use_signal(String::new);
     let mut image_url = use_signal(String::new);
+    let mut video_url = use_signal(String::new);
     let mut name_en = use_signal(String::new);
     let mut description_en = use_signal(String::new);
     let mut subcategory_en = use_signal(String::new);
@@ -648,7 +694,11 @@ fn TeaTab() -> Element {
                         oninput: move |e| price.set(e.value()) }
                     input { style: input_style(), placeholder: "Кол-во", value: "{stock}", r#type: "number",
                         oninput: move |e| stock.set(e.value()) }
+                    input { style: input_style(), placeholder: "Описание (RU)", value: "{description}",
+                        oninput: move |e| description.set(e.value()) }
                     {render_image_upload(image_url)}
+                    input { style: input_style(), placeholder: "Видео URL", value: "{video_url}",
+                        oninput: move |e| video_url.set(e.value()) }
                     div { style: en_section_style(), "🇬🇧 English" }
                     input { style: input_style(), placeholder: "Name (EN)", value: "{name_en}",
                         oninput: move |e| name_en.set(e.value()) }
@@ -662,28 +712,32 @@ fn TeaTab() -> Element {
                         onclick: move |_| {
                             let n = name(); let sc = subcategory(); let p = price.read().parse::<f64>().unwrap_or(0.0);
                             let s_val = stock.read().parse::<i32>().unwrap_or(0);
-                            let img = image_url();
+                            let d = description(); let img = image_url(); let vid = video_url();
                             let ne = name_en(); let de = description_en(); let sce = subcategory_en();
                             if n.trim().is_empty() || p <= 0.0 { status.set("❌ Name + price".into()); return; }
                             submitting.set(true);
                             let temp_id = format!("temp-{}", uuid::Uuid::new_v4());
                             cache.write().insert(0, AdminTea {
                                 id: temp_id.clone(), name: n.clone(), subcategory: Some(sc.clone()),
+                                description: if d.is_empty() { None } else { Some(d.clone()) },
                                 price: p, stock: Some(s_val), is_available: true,
                                 image_url: if img.is_empty() { None } else { Some(img.clone()) },
+                                video_url: if vid.is_empty() { None } else { Some(vid.clone()) },
                                 name_en: if ne.is_empty() { None } else { Some(ne.clone()) },
                                 description_en: if de.is_empty() { None } else { Some(de.clone()) },
                                 subcategory_en: if sce.is_empty() { None } else { Some(sce.clone()) },
                             });
                             status.set("✅ Добавлен!".into());
                             name.set(String::new()); price.set(String::new()); stock.set(String::new());
-                            image_url.set(String::new()); name_en.set(String::new());
-                            description_en.set(String::new()); subcategory_en.set(String::new());
+                            description.set(String::new()); image_url.set(String::new()); video_url.set(String::new());
+                            name_en.set(String::new()); description_en.set(String::new()); subcategory_en.set(String::new());
                             auto_scroll_to_list();
                             spawn(async move {
                                 let body = json!({
                                     "name": n, "subcategory": sc, "price": p, "stock": s_val,
+                                    "description": if d.is_empty() { serde_json::Value::Null } else { d.into() },
                                     "image_url": if img.is_empty() { serde_json::Value::Null } else { img.into() },
+                                    "video_url": if vid.is_empty() { serde_json::Value::Null } else { vid.into() },
                                     "name_en": if ne.is_empty() { serde_json::Value::Null } else { ne.into() },
                                     "description_en": if de.is_empty() { serde_json::Value::Null } else { de.into() },
                                     "subcategory_en": if sce.is_empty() { serde_json::Value::Null } else { sce.into() },
@@ -886,7 +940,12 @@ fn EditStrainCard(
     let mut name = use_signal(|| item.name.clone());
     let mut category = use_signal(|| item.category.clone().unwrap_or_else(|| "hybrid".to_string()));
     let mut price = use_signal(|| item.price_per_gram.to_string());
+    let mut thc = use_signal(|| item.thc_percent.map(|v| v.to_string()).unwrap_or_default());
+    let mut cbd = use_signal(|| item.cbd_percent.map(|v| v.to_string()).unwrap_or_default());
     let mut grams = use_signal(|| item.available_grams.unwrap_or(0.0).to_string());
+    let mut description = use_signal(|| item.description.clone().unwrap_or_default());
+    let mut effect = use_signal(|| item.effect.clone().unwrap_or_default());
+    let mut flavor_profile = use_signal(|| item.flavor_profile.clone().unwrap_or_default());
     let image_url = use_signal(|| item.image_url.clone().unwrap_or_default());
     let mut name_en = use_signal(|| item.name_en.clone().unwrap_or_default());
     let mut description_en = use_signal(|| item.description_en.clone().unwrap_or_default());
@@ -902,7 +961,12 @@ fn EditStrainCard(
             select { style: input_style(), value: "{category}", oninput: move |e| category.set(e.value()),
                 option { value: "sativa", "☀️ Sativa" } option { value: "indica", "🌙 Indica" } option { value: "hybrid", "⚖️ Hybrid" } }
             input { style: input_style(), placeholder: "Цена ฿/г", value: "{price}", r#type: "number", oninput: move |e| price.set(e.value()) }
+            input { style: input_style(), placeholder: "THC %", value: "{thc}", r#type: "number", oninput: move |e| thc.set(e.value()) }
+            input { style: input_style(), placeholder: "CBD %", value: "{cbd}", r#type: "number", oninput: move |e| cbd.set(e.value()) }
             input { style: input_style(), placeholder: "Граммы", value: "{grams}", r#type: "number", oninput: move |e| grams.set(e.value()) }
+            input { style: input_style(), placeholder: "Описание (RU)", value: "{description}", oninput: move |e| description.set(e.value()) }
+            input { style: input_style(), placeholder: "Эффект (RU)", value: "{effect}", oninput: move |e| effect.set(e.value()) }
+            input { style: input_style(), placeholder: "Вкусовой профиль (RU)", value: "{flavor_profile}", oninput: move |e| flavor_profile.set(e.value()) }
             {render_image_upload(image_url)}
             div { style: en_section_style(), "🇬🇧 English" }
             input { style: input_style(), placeholder: "Name (EN)", value: "{name_en}", oninput: move |e| name_en.set(e.value()) }
@@ -914,13 +978,20 @@ fn EditStrainCard(
                 button { style: submit_btn_style(),
                     onclick: move |_| {
                         let n = name(); let c = category(); let p = price.read().parse::<f64>().unwrap_or(0.0);
-                        let g = grams.read().parse::<f64>().unwrap_or(0.0); let img = image_url();
+                        let t = thc.read().parse::<f64>().ok(); let cb = cbd.read().parse::<f64>().ok();
+                        let g = grams.read().parse::<f64>().unwrap_or(0.0);
+                        let d = description(); let ef = effect(); let fp = flavor_profile(); let img = image_url();
                         let ne = name_en(); let de = description_en(); let ee = effect_en();
                         let fpe = flavor_profile_en(); let ste = strain_type_en();
                         let id = item_id.clone();
+                        let original = cache.read().iter().find(|s| s.id == id).cloned();
                         // Optimistic update in cache
                         cache.write().iter_mut().find(|s| s.id == id).map(|s| {
                             s.name = n.clone(); s.category = Some(c.clone()); s.price_per_gram = p;
+                            s.thc_percent = t; s.cbd_percent = cb;
+                            s.description = if d.is_empty() { None } else { Some(d.clone()) };
+                            s.effect = if ef.is_empty() { None } else { Some(ef.clone()) };
+                            s.flavor_profile = if fp.is_empty() { None } else { Some(fp.clone()) };
                             s.available_grams = Some(g);
                             s.image_url = if img.is_empty() { None } else { Some(img.clone()) };
                             s.name_en = if ne.is_empty() { None } else { Some(ne.clone()) };
@@ -933,6 +1004,10 @@ fn EditStrainCard(
                         spawn(async move {
                             let body = json!({
                                 "name": n, "category": c, "price_per_gram": p, "available_grams": g,
+                                "thc_percent": t, "cbd_percent": cb,
+                                "description": if d.is_empty() { serde_json::Value::Null } else { d.into() },
+                                "effect": if ef.is_empty() { serde_json::Value::Null } else { ef.into() },
+                                "flavor_profile": if fp.is_empty() { serde_json::Value::Null } else { fp.into() },
                                 "is_available": true,
                                 "image_url": if img.is_empty() { serde_json::Value::Null } else { img.into() },
                                 "name_en": if ne.is_empty() { serde_json::Value::Null } else { ne.into() },
@@ -942,9 +1017,18 @@ fn EditStrainCard(
                                 "strain_type_en": if ste.is_empty() { serde_json::Value::Null } else { ste.into() },
                             });
                             let url = format!("{}/api/strains/{}", api_base_url(), id);
-                            let _ = reqwest::Client::new().put(&url)
+                            let res = reqwest::Client::new().put(&url)
                                 .header("X-Admin-Telegram-Id", telegram_id.to_string())
                                 .json(&body).send().await;
+                            let success = match res {
+                                Ok(r) => r.status().is_success(),
+                                Err(_) => false,
+                            };
+                            if !success {
+                                if let Some(orig) = original {
+                                    cache.write().iter_mut().find(|s| s.id == id).map(|s| *s = orig);
+                                }
+                            }
                         });
                     },
                     "💾 Сохранить"
@@ -968,7 +1052,9 @@ fn EditAccessoryCard(
     let mut category = use_signal(|| item.category.clone().unwrap_or_else(|| "other".to_string()));
     let mut price = use_signal(|| item.price.to_string());
     let mut stock = use_signal(|| item.stock.map(|s| s.to_string()).unwrap_or_default());
+    let mut description = use_signal(|| item.description.clone().unwrap_or_default());
     let image_url = use_signal(|| item.image_url.clone().unwrap_or_default());
+    let mut video_url = use_signal(|| item.video_url.clone().unwrap_or_default());
     let mut name_en = use_signal(|| item.name_en.clone().unwrap_or_default());
     let mut description_en = use_signal(|| item.description_en.clone().unwrap_or_default());
     let mut category_en = use_signal(|| item.category_en.clone().unwrap_or_default());
@@ -985,7 +1071,9 @@ fn EditAccessoryCard(
                 option { value: "clothing", "👕 Clothing" } option { value: "other", "🔧 Other" } }
             input { style: input_style(), placeholder: "Цена ฿", value: "{price}", r#type: "number", oninput: move |e| price.set(e.value()) }
             input { style: input_style(), placeholder: "Кол-во", value: "{stock}", r#type: "number", oninput: move |e| stock.set(e.value()) }
+            input { style: input_style(), placeholder: "Описание (RU)", value: "{description}", oninput: move |e| description.set(e.value()) }
             {render_image_upload(image_url)}
+            input { style: input_style(), placeholder: "Видео URL", value: "{video_url}", oninput: move |e| video_url.set(e.value()) }
             div { style: en_section_style(), "🇬🇧 English" }
             input { style: input_style(), placeholder: "Name (EN)", value: "{name_en}", oninput: move |e| name_en.set(e.value()) }
             input { style: input_style(), placeholder: "Description (EN)", value: "{description_en}", oninput: move |e| description_en.set(e.value()) }
@@ -995,12 +1083,15 @@ fn EditAccessoryCard(
                     onclick: move |_| {
                         let n = name(); let c = category(); let p = price.read().parse::<f64>().unwrap_or(0.0);
                         let s_str = stock(); let s_val: i32 = s_str.parse().unwrap_or(0);
-                        let img = image_url();
+                        let d = description(); let img = image_url(); let vid = video_url();
                         let ne = name_en(); let de = description_en(); let ce = category_en();
                         let id = item_id.clone();
+                        let original = cache.read().iter().find(|a| a.id == id).cloned();
                         cache.write().iter_mut().find(|a| a.id == id).map(|a| {
                             a.name = n.clone(); a.category = Some(c.clone()); a.price = p; a.stock = Some(s_val);
+                            a.description = if d.is_empty() { None } else { Some(d.clone()) };
                             a.image_url = if img.is_empty() { None } else { Some(img.clone()) };
+                            a.video_url = if vid.is_empty() { None } else { Some(vid.clone()) };
                             a.name_en = if ne.is_empty() { None } else { Some(ne.clone()) };
                             a.description_en = if de.is_empty() { None } else { Some(de.clone()) };
                             a.category_en = if ce.is_empty() { None } else { Some(ce.clone()) };
@@ -1009,15 +1100,26 @@ fn EditAccessoryCard(
                         spawn(async move {
                             let body = json!({
                                 "name": n, "category": c, "price": p, "stock": s_val, "is_available": true,
+                                "description": if d.is_empty() { serde_json::Value::Null } else { d.into() },
                                 "image_url": if img.is_empty() { serde_json::Value::Null } else { img.into() },
+                                "video_url": if vid.is_empty() { serde_json::Value::Null } else { vid.into() },
                                 "name_en": if ne.is_empty() { serde_json::Value::Null } else { ne.into() },
                                 "description_en": if de.is_empty() { serde_json::Value::Null } else { de.into() },
                                 "category_en": if ce.is_empty() { serde_json::Value::Null } else { ce.into() },
                             });
                             let url = format!("{}/api/accessories/{}", api_base_url(), id);
-                            let _ = reqwest::Client::new().put(&url)
+                            let res = reqwest::Client::new().put(&url)
                                 .header("X-Admin-Telegram-Id", telegram_id.to_string())
                                 .json(&body).send().await;
+                            let success = match res {
+                                Ok(r) => r.status().is_success(),
+                                Err(_) => false,
+                            };
+                            if !success {
+                                if let Some(orig) = original {
+                                    cache.write().iter_mut().find(|a| a.id == id).map(|a| *a = orig);
+                                }
+                            }
                         });
                     },
                     "💾 Сохранить"
@@ -1041,7 +1143,9 @@ fn EditTeaCard(
     let mut subcategory = use_signal(|| item.subcategory.clone().unwrap_or_else(|| "green".to_string()));
     let mut price = use_signal(|| item.price.to_string());
     let mut stock = use_signal(|| item.stock.map(|s| s.to_string()).unwrap_or_default());
+    let mut description = use_signal(|| item.description.clone().unwrap_or_default());
     let image_url = use_signal(|| item.image_url.clone().unwrap_or_default());
+    let mut video_url = use_signal(|| item.video_url.clone().unwrap_or_default());
     let mut name_en = use_signal(|| item.name_en.clone().unwrap_or_default());
     let mut description_en = use_signal(|| item.description_en.clone().unwrap_or_default());
     let mut subcategory_en = use_signal(|| item.subcategory_en.clone().unwrap_or_default());
@@ -1057,7 +1161,9 @@ fn EditTeaCard(
                 option { value: "puer", "🟫 Pu-er" } option { value: "other", "🍵 Other" } }
             input { style: input_style(), placeholder: "Цена ฿", value: "{price}", r#type: "number", oninput: move |e| price.set(e.value()) }
             input { style: input_style(), placeholder: "Кол-во", value: "{stock}", r#type: "number", oninput: move |e| stock.set(e.value()) }
+            input { style: input_style(), placeholder: "Описание (RU)", value: "{description}", oninput: move |e| description.set(e.value()) }
             {render_image_upload(image_url)}
+            input { style: input_style(), placeholder: "Видео URL", value: "{video_url}", oninput: move |e| video_url.set(e.value()) }
             div { style: en_section_style(), "🇬🇧 English" }
             input { style: input_style(), placeholder: "Name (EN)", value: "{name_en}", oninput: move |e| name_en.set(e.value()) }
             input { style: input_style(), placeholder: "Description (EN)", value: "{description_en}", oninput: move |e| description_en.set(e.value()) }
@@ -1067,12 +1173,15 @@ fn EditTeaCard(
                     onclick: move |_| {
                         let n = name(); let sc = subcategory(); let p = price.read().parse::<f64>().unwrap_or(0.0);
                         let s_str = stock(); let s_val: i32 = s_str.parse().unwrap_or(0);
-                        let img = image_url();
+                        let d = description(); let img = image_url(); let vid = video_url();
                         let ne = name_en(); let de = description_en(); let sce = subcategory_en();
                         let id = item_id.clone();
+                        let original = cache.read().iter().find(|t| t.id == id).cloned();
                         cache.write().iter_mut().find(|t| t.id == id).map(|t| {
                             t.name = n.clone(); t.subcategory = Some(sc.clone()); t.price = p; t.stock = Some(s_val);
+                            t.description = if d.is_empty() { None } else { Some(d.clone()) };
                             t.image_url = if img.is_empty() { None } else { Some(img.clone()) };
+                            t.video_url = if vid.is_empty() { None } else { Some(vid.clone()) };
                             t.name_en = if ne.is_empty() { None } else { Some(ne.clone()) };
                             t.description_en = if de.is_empty() { None } else { Some(de.clone()) };
                             t.subcategory_en = if sce.is_empty() { None } else { Some(sce.clone()) };
@@ -1081,15 +1190,26 @@ fn EditTeaCard(
                         spawn(async move {
                             let body = json!({
                                 "name": n, "subcategory": sc, "price": p, "stock": s_val, "is_available": true,
+                                "description": if d.is_empty() { serde_json::Value::Null } else { d.into() },
                                 "image_url": if img.is_empty() { serde_json::Value::Null } else { img.into() },
+                                "video_url": if vid.is_empty() { serde_json::Value::Null } else { vid.into() },
                                 "name_en": if ne.is_empty() { serde_json::Value::Null } else { ne.into() },
                                 "description_en": if de.is_empty() { serde_json::Value::Null } else { de.into() },
                                 "subcategory_en": if sce.is_empty() { serde_json::Value::Null } else { sce.into() },
                             });
                             let url = format!("{}/api/tea-products/{}", api_base_url(), id);
-                            let _ = reqwest::Client::new().put(&url)
+                            let res = reqwest::Client::new().put(&url)
                                 .header("X-Admin-Telegram-Id", telegram_id.to_string())
                                 .json(&body).send().await;
+                            let success = match res {
+                                Ok(r) => r.status().is_success(),
+                                Err(_) => false,
+                            };
+                            if !success {
+                                if let Some(orig) = original {
+                                    cache.write().iter_mut().find(|t| t.id == id).map(|t| *t = orig);
+                                }
+                            }
                         });
                     },
                     "💾 Сохранить"

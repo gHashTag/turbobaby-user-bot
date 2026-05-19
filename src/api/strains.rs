@@ -114,9 +114,9 @@ async fn create_strain(State(state): State<AppState>, headers: HeaderMap, Json(r
     let id = uuid::Uuid::new_v4().to_string();
     let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     client.execute(
-        "INSERT INTO strains (id, name, category, thc_percent, cbd_percent, effect, flavor_profile, description, price_per_gram, available_grams, image_url, name_en, description_en, effect_en, flavor_profile_en, strain_type_en) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)",
-        &[&id, &req.name, &req.category, &req.thc_percent, &req.cbd_percent, &req.effect, &req.flavor_profile, &req.description, &req.price_per_gram, &req.available_grams, &req.image_url, &req.name_en, &req.description_en, &req.effect_en, &req.flavor_profile_en, &req.strain_type_en],
-    ).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        "INSERT INTO strains (id, name, category, thc_percent, cbd_percent, effect, flavor_profile, description, price_per_gram, available_grams, image_url, is_available, name_en, description_en, effect_en, flavor_profile_en, strain_type_en) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)",
+        &[&id, &req.name, &req.category, &req.thc_percent, &req.cbd_percent, &req.effect, &req.flavor_profile, &req.description, &req.price_per_gram, &req.available_grams, &req.image_url, &true, &req.name_en, &req.description_en, &req.effect_en, &req.flavor_profile_en, &req.strain_type_en],
+    ).await.map_err(|e| { tracing::error!("create_strain error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     invalidate_strains(&state.cache).await;
     Ok(Json(json!({ "success": true, "id": id })))
 }
@@ -148,9 +148,9 @@ async fn update_strain(State(state): State<AppState>, headers: HeaderMap, Path(i
 
 async fn delete_strain(State(state): State<AppState>, headers: HeaderMap, Path(id): Path<String>) -> Result<Json<Value>, StatusCode> {
     check_admin(&headers, &state)?;
-    let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    client.execute("UPDATE strains SET is_available = false WHERE id = $1", &[&id])
-        .await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let client = state.db.pool.get().await.map_err(|e| { tracing::error!("delete_strain pool error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
+    client.execute("DELETE FROM strains WHERE id = $1", &[&id])
+        .await.map_err(|e| { tracing::error!("delete_strain error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     invalidate_strains(&state.cache).await;
     Ok(Json(json!({ "success": true })))
 }
