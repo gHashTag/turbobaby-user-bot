@@ -1,7 +1,7 @@
 // Simplified frontend caching with localStorage
 use serde::{Deserialize, Serialize};
 use gloo_storage::{LocalStorage, Storage};
-use std::time::{Duration, SystemTime};
+use std::time::SystemTime;
 
 const CACHE_VERSION: &str = "v1";
 const CACHE_TTL_MS: u64 = 5 * 60 * 1000; // 5 минут
@@ -28,22 +28,34 @@ impl CacheManager {
     where
         crate::ui::screens::menu_screen::ApiStrain: serde::de::DeserializeOwned,
     {
-        let storage_key: String = "cache_strains".into();
-        if let Ok(data_str) = LocalStorage::get::<String>(storage_key) {
-            if let Ok(cached) = serde_json::from_str::<CachedData<Vec<crate::ui::screens::menu_screen::ApiStrain>>>(&data_str) {
-                if cached.version == CACHE_VERSION {
-                    let now = SystemTime::now()
-                        .duration_since(SystemTime::UNIX_EPOCH)
-                        .unwrap_or_default()
-                        .as_millis() as u64;
+        use gloo_storage::errors::StorageError;
 
-                    if now - cached.timestamp_ms < CACHE_TTL_MS {
-                        return Some(cached.data);
-                    }
-                }
-            }
+        let storage_key = "cache_strains";
+        let data_str = match LocalStorage::get::<String>(storage_key) {
+            Ok(s) => s,
+            Err(StorageError::KeyNotFound(_)) => return None,
+            Err(_) => return None, // Any storage error, skip cache
+        };
+
+        let cached = match serde_json::from_str::<CachedData<Vec<crate::ui::screens::menu_screen::ApiStrain>>>(&data_str) {
+            Ok(c) => c,
+            Err(_) => return None, // JSON parse error, skip cache
+        };
+
+        if cached.version != CACHE_VERSION {
+            return None; // Version mismatch, skip cache
         }
-        None
+
+        let now = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as u64;
+
+        if now - cached.timestamp_ms < CACHE_TTL_MS {
+            Some(cached.data)
+        } else {
+            None // Expired
+        }
     }
 
     /// Store strains in cache
@@ -62,8 +74,7 @@ impl CacheManager {
         };
 
         if let Ok(data_str) = serde_json::to_string(&cached) {
-            let storage_key: String = "cache_strains".into();
-            let _ = LocalStorage::set(storage_key, data_str);
+            let _ = LocalStorage::set("cache_strains", data_str);
         }
     }
 }
