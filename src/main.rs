@@ -160,6 +160,7 @@ async fn main() -> Result<()> {
         .nest_service("/styles", ServeDir::new("styles"))
         .nest_service("/assets", ServeDir::new("assets"))
         .nest_service("/images", ServeDir::new("assets"))
+        .nest_service("/uploads", ServeDir::new("/data/uploads"))
         .layer(assets_cache_layer());
 
     // Trunk emits hashed JS/WASM/CSS at the root of dist/ with absolute paths
