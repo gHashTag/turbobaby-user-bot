@@ -1,6 +1,6 @@
 use axum::{
     extract::{Query, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     routing::get,
     Json, Router,
 };
@@ -8,6 +8,7 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 
 // Admin API routes
+use crate::api::auth::validate_init_data;
 use crate::AppState;
 
 #[derive(Deserialize)]
@@ -85,11 +86,30 @@ async fn get_managers(State(state): State<AppState>) -> Result<Json<Value>, Stat
 }
 
 async fn check_admin_access(
+    headers: HeaderMap,
     Query(query): Query<AdminCheckQuery>,
     State(state): State<AppState>,
 ) -> Result<Json<Value>, StatusCode> {
-    let is_admin = state.config.admin_ids.contains(&query.telegram_id);
-    Ok(Json(json!({ "is_admin": is_admin })))
+    // 1. Try Telegram initData HMAC validation
+    if let Some(init_data) = headers
+        .get("X-Telegram-Init-Data")
+        .and_then(|v| v.to_str().ok())
+    {
+        if let Some(user) = validate_init_data(init_data, &state.config.bot_token) {
+            let is_admin = state.config.admin_ids.contains(&user.id);
+            return Ok(Json(json!({ "is_admin": is_admin, "telegram_id": user.id })));
+        }
+    }
+
+    // 2. Fallback to header / query param (local dev)
+    let id = headers
+        .get("X-Admin-Telegram-Id")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| s.parse::<i64>().ok())
+        .unwrap_or(query.telegram_id);
+
+    let is_admin = state.config.admin_ids.contains(&id);
+    Ok(Json(json!({ "is_admin": is_admin, "telegram_id": id })))
 }
 
 async fn ping() -> Result<Json<Value>, StatusCode> {

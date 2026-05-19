@@ -212,6 +212,11 @@ pub fn use_telegram_id() -> Option<i64> {
     use_telegram().get_user_id()
 }
 
+/// Hook to get raw initData string for server validation
+pub fn use_telegram_init_data() -> String {
+    use_telegram().get_init_data()
+}
+
 /// Component that initializes Telegram WebApp on mount
 #[component]
 pub fn TelegramProvider(children: Element) -> Element {
