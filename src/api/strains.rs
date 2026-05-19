@@ -1,6 +1,6 @@
 use axum::{
     extract::{Path, State},
-    http::{HeaderMap, StatusCode},
+    http::{HeaderMap, HeaderValue, StatusCode},
     routing::{delete, get, post, put},
     Json, Router,
 };
@@ -9,6 +9,7 @@ use serde_json::{json, Value};
 
 use crate::AppState;
 use crate::api::auth::check_admin;
+use crate::api::cache::{ETagCache, invalidate_strains, make_etag_header};
 use crate::db::strains::Strain;
 
 #[derive(Debug, Deserialize)]
@@ -40,7 +41,11 @@ pub fn routes() -> Router<AppState> {
         .route("/strains/:id/strain-of-day", put(set_strain_of_day))
 }
 
-async fn get_strains(State(state): State<AppState>, axum::extract::Query(q): axum::extract::Query<std::collections::HashMap<String, String>>) -> Result<Json<Value>, StatusCode> {
+async fn get_strains(
+    State(state): State<AppState>,
+    axum::extract::Query(q): axum::extract::Query<std::collections::HashMap<String, String>>,
+    headers: HeaderMap,
+) -> Result<axum::response::Response, StatusCode> {
     // Use a fresh prepare() with a unique statement marker each call to
     // sidestep tokio-postgres' client-side prepared-statement cache, which
     // would otherwise keep returning SQLSTATE 0A000 "cached plan must not
@@ -64,7 +69,32 @@ async fn get_strains(State(state): State<AppState>, axum::extract::Query(q): axu
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
     tracing::info!("get_strains: returned {} rows", rows.len());
-    Ok(Json(json!({ "strains": rows.iter().map(Strain::from_row).collect::<Vec<_>>() })))
+
+    let strains: Vec<Strain> = rows.iter().map(Strain::from_row).collect();
+    let response_data = json!({ "strains": strains });
+    let data_json = response_data.to_string();
+
+    // Compute ETag and check conditional request
+    let (changed, etag) = state.cache.has_changed("strains", &data_json).await;
+
+    if !changed {
+        if let Some(if_none_match) = headers.get("if-none-match") {
+            if let Ok(if_none_match_str) = if_none_match.to_str() {
+                if if_none_match_str == etag || if_none_match_str == format!("\"{}\"", etag) {
+                    let mut response = axum::response::Response::new(axum::body::Body::empty());
+                    *response.status_mut() = StatusCode::NOT_MODIFIED;
+                    return Ok(response);
+                }
+            }
+        }
+    }
+
+    let mut response = axum::response::Response::new(axum::body::Body::from(data_json));
+    response.headers_mut().insert("etag", make_etag_header(&etag));
+    response.headers_mut().insert("cache-control", HeaderValue::from_static("public, max-age=60"));
+    response.headers_mut().insert("content-type", HeaderValue::from_static("application/json"));
+    *response.status_mut() = StatusCode::OK;
+    Ok(response)
 }
 
 async fn get_strain(State(state): State<AppState>, Path(id): Path<String>) -> Result<Json<Value>, StatusCode> {
@@ -87,6 +117,7 @@ async fn create_strain(State(state): State<AppState>, headers: HeaderMap, Json(r
         "INSERT INTO strains (id, name, category, thc_percent, cbd_percent, effect, flavor_profile, description, price_per_gram, available_grams, image_url, name_en, description_en, effect_en, flavor_profile_en, strain_type_en) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)",
         &[&id, &req.name, &req.category, &req.thc_percent, &req.cbd_percent, &req.effect, &req.flavor_profile, &req.description, &req.price_per_gram, &req.available_grams, &req.image_url, &req.name_en, &req.description_en, &req.effect_en, &req.flavor_profile_en, &req.strain_type_en],
     ).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    invalidate_strains(&state.cache).await;
     Ok(Json(json!({ "success": true, "id": id })))
 }
 
@@ -111,6 +142,7 @@ async fn update_strain(State(state): State<AppState>, headers: HeaderMap, Path(i
         tracing::error!("update_strain SQL error for id={}: {:?}", id, e);
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
+    invalidate_strains(&state.cache).await;
     Ok(Json(json!({ "success": true })))
 }
 
@@ -119,6 +151,7 @@ async fn delete_strain(State(state): State<AppState>, headers: HeaderMap, Path(i
     let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     client.execute("UPDATE strains SET is_available = false WHERE id = $1", &[&id])
         .await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    invalidate_strains(&state.cache).await;
     Ok(Json(json!({ "success": true })))
 }
 
@@ -128,6 +161,7 @@ async fn toggle_availability(State(state): State<AppState>, headers: HeaderMap, 
     let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     client.execute("UPDATE strains SET is_available = $1 WHERE id = $2", &[&available, &id])
         .await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    invalidate_strains(&state.cache).await;
     Ok(Json(json!({ "success": true })))
 }
 
@@ -167,6 +201,7 @@ async fn set_strain_of_day(State(state): State<AppState>, headers: HeaderMap, Pa
                 (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": format!("disable: {}", e), "id": id })))
             })?;
     }
+    invalidate_strains(&state.cache).await;
     Ok(Json(json!({ "success": true, "id": id })))
 }
 

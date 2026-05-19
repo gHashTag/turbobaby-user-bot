@@ -1871,6 +1871,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "gloo-storage"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fbc8031e8c92758af912f9bc08fbbadd3c6f3cfcbf6b64cdf3d6a81f0139277a"
+dependencies = [
+ "gloo-utils",
+ "js-sys",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "wasm-bindgen",
+ "web-sys",
+]
+
+[[package]]
 name = "gloo-timers"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2586,6 +2601,12 @@ dependencies = [
  "cfg-if",
  "digest 0.11.3",
 ]
+
+[[package]]
+name = "md5"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "490cc448043f947bae3cbee9c203358d62dbee0db12107a74be5c30ccfd09771"
 
 [[package]]
 name = "memchr"
@@ -4837,11 +4858,13 @@ dependencies = [
  "dioxus-logger",
  "dotenvy",
  "getrandom 0.2.17",
+ "gloo-storage",
  "gloo-timers",
  "hex",
  "hmac 0.12.1",
  "image",
  "js-sys",
+ "md5",
  "postgres-types",
  "qrcode",
  "rand 0.8.6",

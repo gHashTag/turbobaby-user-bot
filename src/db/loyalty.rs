@@ -4,7 +4,7 @@ use tokio_postgres::Row;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LoyaltyProfile {
     pub telegram_id: i64,
-    pub total_spent: f64,
+    pub total_spent: Option<f64>,
     pub bonus_balance: f64,
     pub tier: String,
     pub referral_code: Option<String>,

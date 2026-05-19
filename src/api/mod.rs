@@ -11,6 +11,7 @@ pub mod garden;
 pub mod referrals;
 pub mod tech_tree;
 pub mod cart;
+pub mod cache;
 
 use axum::{
     Router,

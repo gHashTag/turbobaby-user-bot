@@ -52,6 +52,8 @@ use crate::config::Config;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::db::Database;
 #[cfg(not(target_arch = "wasm32"))]
+use crate::api::cache::ETagCache;
+#[cfg(not(target_arch = "wasm32"))]
 use teloxide::Bot;
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -61,6 +63,7 @@ pub struct AppState {
     pub db: Arc<Database>,
     pub config: Arc<Config>,
     pub bot: Arc<Bot>,
+    pub cache: Arc<ETagCache>,
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -110,6 +113,7 @@ async fn main() -> Result<()> {
         db: db.clone(),
         config: config.clone(),
         bot: bot_arc_for_state,
+        cache: Arc::new(ETagCache::new()),
     };
 
     // CORS configuration

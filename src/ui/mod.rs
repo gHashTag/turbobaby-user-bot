@@ -8,6 +8,7 @@ pub mod routes;
 pub mod state;
 pub mod telegram;
 pub mod test_minimal;
+pub mod cache;
 
 pub mod api;
 pub mod components;

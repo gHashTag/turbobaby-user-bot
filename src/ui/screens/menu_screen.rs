@@ -1,14 +1,15 @@
 use dioxus::prelude::*;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use crate::ui::routes::Route;
 use crate::ui::state::{Cart, CartItem};
 use crate::ui::api::context::api_base_url;
+use crate::ui::cache::CacheManager;
 use crate::trios::core::Lang;
 use crate::ui::components::bottom_nav::BottomNav;
 use crate::trios::i18n::{t, T_MENU_TITLE, T_MENU_DESC, T_LOADING, T_ADD_TO_CART};
 
-#[derive(Debug, Clone, Deserialize, PartialEq)]
-struct ApiStrain {
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+pub struct ApiStrain {
     id: String,
     name: String,
     category: Option<String>,
@@ -76,18 +77,42 @@ pub fn MenuScreen() -> Element {
     let menu_desc = t(Lang::Russian, T_MENU_DESC).to_string();
     let loading_label = t(Lang::Russian, T_LOADING).to_string();
 
-    let strains_resource = use_resource(|| async move {
-        let base = api_base_url();
-        let url = format!("{}/api/strains", base);
-        reqwest::Client::new()
-            .get(&url)
-            .send()
-            .await
-            .map_err(|e| e.to_string())?
-            .json::<StrainsResponse>()
-            .await
-            .map(|r| r.strains)
-            .map_err(|e| e.to_string())
+    // Cache manager
+    let cache = CacheManager::default();
+
+    let strains_resource: Resource<Result<Vec<ApiStrain>, String>> = use_resource(move || {
+        let cache = cache.clone();
+        async move {
+            // Try cache first
+            if let Some(cached_strains) = cache.get_strains() {
+                return Ok(cached_strains);
+            }
+
+            // Fetch from API
+            let base = api_base_url();
+            let url = format!("{}/api/strains", base);
+            let response = reqwest::Client::new()
+                .get(&url)
+                .send()
+                .await
+                .map_err(|e| e.to_string())?;
+
+            // Check ETag
+            let etag = response.headers().get("etag")
+                .and_then(|v| v.to_str().ok())
+                .map(|s| s.trim_matches('"').to_string());
+
+            let strains = response
+                .json::<StrainsResponse>()
+                .await
+                .map_err(|e| e.to_string())?
+                .strains;
+
+            // Cache the result
+            cache.set_strains(strains.clone(), etag);
+
+            Ok(strains)
+        }
     });
 
     rsx! {
