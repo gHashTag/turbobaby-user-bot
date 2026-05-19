@@ -125,22 +125,27 @@ new Promise((resolve) => {
 #[component]
 pub fn AdminScreen() -> Element {
     let telegram_id = use_telegram_id().unwrap_or(0);
-    let init_data = use_telegram_init_data();
     let active_tab = use_signal(|| Tab::Strains);
     let build_version: &'static str = env!("BUILD_VERSION");
+    let init_data = use_telegram_init_data();
 
-    let access = use_resource(move || async move {
-        let base = api_base_url();
-        let url = format!("{}/api/admin/check?telegram_id={}", base, telegram_id);
-        let resp = reqwest::Client::new().get(&url).send().await
-            .map_err(|e| format!("send to {url}: {e}"))?;
+    let access = use_resource(move || {
+        let init_data = init_data.clone();
+        async move {
+            let base = api_base_url();
+            let url = format!("{}/api/admin/check?telegram_id={}", base, telegram_id);
+            let resp = reqwest::Client::new().get(&url)
+                .header("X-Telegram-Init-Data", init_data.clone())
+                .send().await
+                .map_err(|e| format!("send to {url}: {e}"))?;
         let status = resp.status();
         if !status.is_success() {
             return Err(format!("http {} from {url}", status.as_u16()));
         }
-        resp.json::<AdminCheck>().await
-            .map(|c| c.is_admin)
-            .map_err(|e| format!("json: {e}"))
+            resp.json::<AdminCheck>().await
+                .map(|c| c.is_admin)
+                .map_err(|e| format!("json: {e}"))
+        }
     });
 
     rsx! {
@@ -213,7 +218,7 @@ fn AdminPanel(active_tab: Signal<Tab>) -> Element {
 #[component]
 fn StrainsTab() -> Element {
     let telegram_id = use_telegram_id().unwrap_or(0);
-    let init_data = use_telegram_init_data();
+    let init_data = use_signal(use_telegram_init_data);
     let mut cache: Signal<Vec<AdminStrain>> = use_signal(Vec::new);
     let mut loading = use_signal(|| true);
     let mut name = use_signal(String::new);
@@ -351,8 +356,8 @@ fn StrainsTab() -> Element {
                                 });
                                 let url = format!("{}/api/strains", api_base_url());
                                 let res = reqwest::Client::new().post(&url)
-                                    .header("X-Telegram-Init-Data", init_data.clone())
-                                    .header("X-Telegram-Init-Data", init_data.clone())
+                                    .header("X-Telegram-Init-Data", init_data.read().clone())
+                                    .header("X-Telegram-Init-Data", init_data.read().clone())
  .header("X-Admin-Telegram-Id", telegram_id.to_string())
                                     .json(&body).send().await;
                                 submitting.set(false);
@@ -414,8 +419,8 @@ fn StrainsTab() -> Element {
                                         spawn(async move {
                                             let url = format!("{}/api/strains/{}/availability", api_base_url(), id);
                                             let _ = reqwest::Client::new().put(&url)
-                                                .header("X-Telegram-Init-Data", init_data.clone())
-                                    .header("X-Telegram-Init-Data", init_data.clone())
+                                                .header("X-Telegram-Init-Data", init_data.read().clone())
+                                    .header("X-Telegram-Init-Data", init_data.read().clone())
  .header("X-Admin-Telegram-Id", telegram_id.to_string())
                                                 .json(&json!({ "is_available": next_avail }))
                                                 .send().await;
@@ -431,8 +436,8 @@ fn StrainsTab() -> Element {
                                         spawn(async move {
                                             let url = format!("{}/api/strains/{}", api_base_url(), id);
                                             let _ = reqwest::Client::new().delete(&url)
-                                                .header("X-Telegram-Init-Data", init_data.clone())
-                                    .header("X-Telegram-Init-Data", init_data.clone())
+                                                .header("X-Telegram-Init-Data", init_data.read().clone())
+                                    .header("X-Telegram-Init-Data", init_data.read().clone())
  .header("X-Admin-Telegram-Id", telegram_id.to_string())
                                                 .send().await;
                                         });
@@ -452,7 +457,7 @@ fn StrainsTab() -> Element {
 #[component]
 fn AccessoriesTab() -> Element {
     let telegram_id = use_telegram_id().unwrap_or(0);
-    let init_data = use_telegram_init_data();
+    let init_data = use_signal(use_telegram_init_data);
     let mut cache: Signal<Vec<AdminAccessory>> = use_signal(Vec::new);
     let mut loading = use_signal(|| true);
     let mut name = use_signal(String::new);
@@ -563,8 +568,8 @@ fn AccessoriesTab() -> Element {
                                 });
                                 let url = format!("{}/api/accessories", api_base_url());
                                 let res = reqwest::Client::new().post(&url)
-                                    .header("X-Telegram-Init-Data", init_data.clone())
-                                    .header("X-Telegram-Init-Data", init_data.clone())
+                                    .header("X-Telegram-Init-Data", init_data.read().clone())
+                                    .header("X-Telegram-Init-Data", init_data.read().clone())
  .header("X-Admin-Telegram-Id", telegram_id.to_string())
                                     .json(&body).send().await;
                                 submitting.set(false);
@@ -616,8 +621,8 @@ fn AccessoriesTab() -> Element {
                                         spawn(async move {
                                             let url = format!("{}/api/accessories/{}/availability", api_base_url(), id);
                                             let _ = reqwest::Client::new().put(&url)
-                                                .header("X-Telegram-Init-Data", init_data.clone())
-                                    .header("X-Telegram-Init-Data", init_data.clone())
+                                                .header("X-Telegram-Init-Data", init_data.read().clone())
+                                    .header("X-Telegram-Init-Data", init_data.read().clone())
  .header("X-Admin-Telegram-Id", telegram_id.to_string())
                                                 .json(&json!({ "is_available": next })).send().await;
                                         });
@@ -631,8 +636,8 @@ fn AccessoriesTab() -> Element {
                                         spawn(async move {
                                             let url = format!("{}/api/accessories/{}", api_base_url(), id);
                                             let _ = reqwest::Client::new().delete(&url)
-                                                .header("X-Telegram-Init-Data", init_data.clone())
-                                    .header("X-Telegram-Init-Data", init_data.clone())
+                                                .header("X-Telegram-Init-Data", init_data.read().clone())
+                                    .header("X-Telegram-Init-Data", init_data.read().clone())
  .header("X-Admin-Telegram-Id", telegram_id.to_string()).send().await;
                                         });
                                     }
@@ -651,7 +656,7 @@ fn AccessoriesTab() -> Element {
 #[component]
 fn TeaTab() -> Element {
     let telegram_id = use_telegram_id().unwrap_or(0);
-    let init_data = use_telegram_init_data();
+    let init_data = use_signal(use_telegram_init_data);
     let mut cache: Signal<Vec<AdminTea>> = use_signal(Vec::new);
     let mut loading = use_signal(|| true);
     let mut name = use_signal(String::new);
@@ -760,8 +765,8 @@ fn TeaTab() -> Element {
                                 });
                                 let url = format!("{}/api/tea-products", api_base_url());
                                 let res = reqwest::Client::new().post(&url)
-                                    .header("X-Telegram-Init-Data", init_data.clone())
-                                    .header("X-Telegram-Init-Data", init_data.clone())
+                                    .header("X-Telegram-Init-Data", init_data.read().clone())
+                                    .header("X-Telegram-Init-Data", init_data.read().clone())
  .header("X-Admin-Telegram-Id", telegram_id.to_string())
                                     .json(&body).send().await;
                                 submitting.set(false);
@@ -813,8 +818,8 @@ fn TeaTab() -> Element {
                                         spawn(async move {
                                             let url = format!("{}/api/tea-products/{}/availability", api_base_url(), id);
                                             let _ = reqwest::Client::new().put(&url)
-                                                .header("X-Telegram-Init-Data", init_data.clone())
-                                    .header("X-Telegram-Init-Data", init_data.clone())
+                                                .header("X-Telegram-Init-Data", init_data.read().clone())
+                                    .header("X-Telegram-Init-Data", init_data.read().clone())
  .header("X-Admin-Telegram-Id", telegram_id.to_string())
                                                 .json(&json!({ "is_available": next })).send().await;
                                         });
@@ -828,8 +833,8 @@ fn TeaTab() -> Element {
                                         spawn(async move {
                                             let url = format!("{}/api/tea-products/{}", api_base_url(), id);
                                             let _ = reqwest::Client::new().delete(&url)
-                                                .header("X-Telegram-Init-Data", init_data.clone())
-                                    .header("X-Telegram-Init-Data", init_data.clone())
+                                                .header("X-Telegram-Init-Data", init_data.read().clone())
+                                    .header("X-Telegram-Init-Data", init_data.read().clone())
  .header("X-Admin-Telegram-Id", telegram_id.to_string()).send().await;
                                         });
                                     }
@@ -959,7 +964,7 @@ fn EditStrainCard(
     on_cancel: EventHandler<()>,
 ) -> Element {
     let telegram_id = use_telegram_id().unwrap_or(0);
-    let init_data = use_telegram_init_data();
+    let init_data = use_signal(use_telegram_init_data);
     let mut name = use_signal(|| item.name.clone());
     let mut category = use_signal(|| item.category.clone().unwrap_or_else(|| "hybrid".to_string()));
     let mut price = use_signal(|| item.price_per_gram.to_string());
@@ -1041,7 +1046,7 @@ fn EditStrainCard(
                             });
                             let url = format!("{}/api/strains/{}", api_base_url(), id);
                             let res = reqwest::Client::new().put(&url)
-                                .header("X-Telegram-Init-Data", init_data.clone())
+                                .header("X-Telegram-Init-Data", init_data.read().clone())
  .header("X-Admin-Telegram-Id", telegram_id.to_string())
                                 .json(&body).send().await;
                             let success = match res {
@@ -1072,7 +1077,7 @@ fn EditAccessoryCard(
     on_cancel: EventHandler<()>,
 ) -> Element {
     let telegram_id = use_telegram_id().unwrap_or(0);
-    let init_data = use_telegram_init_data();
+    let init_data = use_signal(use_telegram_init_data);
     let mut name = use_signal(|| item.name.clone());
     let mut category = use_signal(|| item.category.clone().unwrap_or_else(|| "other".to_string()));
     let mut price = use_signal(|| item.price.to_string());
@@ -1134,7 +1139,7 @@ fn EditAccessoryCard(
                             });
                             let url = format!("{}/api/accessories/{}", api_base_url(), id);
                             let res = reqwest::Client::new().put(&url)
-                                .header("X-Telegram-Init-Data", init_data.clone())
+                                .header("X-Telegram-Init-Data", init_data.read().clone())
  .header("X-Admin-Telegram-Id", telegram_id.to_string())
                                 .json(&body).send().await;
                             let success = match res {
@@ -1165,7 +1170,7 @@ fn EditTeaCard(
     on_cancel: EventHandler<()>,
 ) -> Element {
     let telegram_id = use_telegram_id().unwrap_or(0);
-    let init_data = use_telegram_init_data();
+    let init_data = use_signal(use_telegram_init_data);
     let mut name = use_signal(|| item.name.clone());
     let mut subcategory = use_signal(|| item.subcategory.clone().unwrap_or_else(|| "green".to_string()));
     let mut price = use_signal(|| item.price.to_string());
@@ -1226,7 +1231,7 @@ fn EditTeaCard(
                             });
                             let url = format!("{}/api/tea-products/{}", api_base_url(), id);
                             let res = reqwest::Client::new().put(&url)
-                                .header("X-Telegram-Init-Data", init_data.clone())
+                                .header("X-Telegram-Init-Data", init_data.read().clone())
  .header("X-Admin-Telegram-Id", telegram_id.to_string())
                                 .json(&body).send().await;
                             let success = match res {
