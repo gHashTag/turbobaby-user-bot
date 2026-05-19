@@ -95,9 +95,14 @@ async fn check_admin_access(
         .get("X-Telegram-Init-Data")
         .and_then(|v| v.to_str().ok())
     {
-        if let Some(user) = validate_init_data(init_data, &state.config.bot_token) {
-            let is_admin = state.config.admin_ids.contains(&user.id);
-            return Ok(Json(json!({ "is_admin": is_admin, "telegram_id": user.id })));
+        if !init_data.is_empty() {
+            if let Some(user) = validate_init_data(init_data, &state.config.bot_token) {
+                let is_admin = state.config.admin_ids.contains(&user.id);
+                return Ok(Json(json!({ "is_admin": is_admin, "telegram_id": user.id })));
+            } else {
+                tracing::warn!("admin/check: invalid initData signature");
+                return Err(StatusCode::UNAUTHORIZED);
+            }
         }
     }
 

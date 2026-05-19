@@ -167,24 +167,26 @@ pub fn check_admin(headers: &HeaderMap, state: &AppState) -> Result<i64, StatusC
         .get("X-Telegram-Init-Data")
         .and_then(|v| v.to_str().ok())
     {
-        if let Some(user) = validate_init_data(init_data, &state.config.bot_token) {
-            if state.config.admin_ids.contains(&user.id) {
-                tracing::info!(
-                    "admin authenticated via initData telegram_id={} username={:?}",
-                    user.id,
-                    user.username
-                );
-                return Ok(user.id);
+        if !init_data.is_empty() {
+            if let Some(user) = validate_init_data(init_data, &state.config.bot_token) {
+                if state.config.admin_ids.contains(&user.id) {
+                    tracing::info!(
+                        "admin authenticated via initData telegram_id={} username={:?}",
+                        user.id,
+                        user.username
+                    );
+                    return Ok(user.id);
+                } else {
+                    tracing::warn!(
+                        "initData valid but user not admin telegram_id={}",
+                        user.id
+                    );
+                    return Err(StatusCode::FORBIDDEN);
+                }
             } else {
-                tracing::warn!(
-                    "initData valid but user not admin telegram_id={}",
-                    user.id
-                );
-                return Err(StatusCode::FORBIDDEN);
+                tracing::warn!("invalid initData signature");
+                return Err(StatusCode::UNAUTHORIZED);
             }
-        } else {
-            tracing::warn!("invalid initData signature");
-            return Err(StatusCode::UNAUTHORIZED);
         }
     }
 
