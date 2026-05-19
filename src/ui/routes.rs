@@ -1,8 +1,10 @@
 // Dioxus router configuration
 //
 // Routes wired to pure UI screens (no business logic)
+// All screens are wrapped in LazyScreen for deferred rendering.
 
 use dioxus::prelude::*;
+use crate::ui::components::lazy_screen::LazyScreen;
 use crate::ui::screens::{
     HomeScreen,
     MenuScreen,
@@ -81,105 +83,187 @@ pub enum Route {
     NotFound { route: Vec<String> },
 }
 
-// Route handlers using screen components
+// Route handlers using screen components — each wrapped in LazyScreen
+// so the browser paints a skeleton before the heavy screen mounts.
+
 #[component]
 fn Home() -> Element {
-    rsx! { HomeScreen {} }
+    rsx! {
+        LazyScreen {
+            HomeScreen {}
+        }
+    }
 }
 
 #[component]
 fn Menu() -> Element {
-    rsx! { MenuScreen {} }
+    rsx! {
+        LazyScreen {
+            MenuScreen {}
+        }
+    }
 }
 
 #[component]
 fn Sets() -> Element {
-    rsx! { SetsScreen {} }
+    rsx! {
+        LazyScreen {
+            SetsScreen {}
+        }
+    }
 }
 
 #[component]
 fn Sommelier() -> Element {
-    rsx! { SommelierScreen {} }
+    rsx! {
+        LazyScreen {
+            SommelierScreen {}
+        }
+    }
 }
 
 #[component]
 fn Accessories() -> Element {
-    rsx! { AccessoriesScreen {} }
+    rsx! {
+        LazyScreen {
+            AccessoriesScreen {}
+        }
+    }
 }
 
 #[component]
 fn Tea() -> Element {
-    rsx! { TeaScreen {} }
+    rsx! {
+        LazyScreen {
+            TeaScreen {}
+        }
+    }
 }
 
 #[component]
 fn Cart() -> Element {
-    rsx! { CartScreen {} }
+    rsx! {
+        LazyScreen {
+            CartScreen {}
+        }
+    }
 }
 
 #[component]
 fn Checkout() -> Element {
-    rsx! { CheckoutScreen {} }
+    rsx! {
+        LazyScreen {
+            CheckoutScreen {}
+        }
+    }
 }
 
 #[component]
 fn Success(id: String) -> Element {
-    rsx! { SuccessScreen { id } }
+    rsx! {
+        LazyScreen {
+            SuccessScreen { id }
+        }
+    }
 }
 
 #[component]
 fn Orders() -> Element {
-    rsx! { OrdersScreen {} }
+    rsx! {
+        LazyScreen {
+            OrdersScreen {}
+        }
+    }
 }
 
 #[component]
 fn Profile() -> Element {
-    rsx! { ProfileScreen {} }
+    rsx! {
+        LazyScreen {
+            ProfileScreen {}
+        }
+    }
 }
 
 #[component]
 fn Garden() -> Element {
-    rsx! { GardenScreen {} }
+    rsx! {
+        LazyScreen {
+            GardenScreen {}
+        }
+    }
 }
 
 #[component]
 fn Quest(id: String) -> Element {
-    rsx! { QuestScreen { id } }
+    rsx! {
+        LazyScreen {
+            QuestScreen { id }
+        }
+    }
 }
 
 #[component]
 fn Game() -> Element {
-    rsx! { GameScreen {} }
+    rsx! {
+        LazyScreen {
+            GameScreen {}
+        }
+    }
 }
 
 #[component]
 fn Referrals() -> Element {
-    rsx! { ReferralsScreen {} }
+    rsx! {
+        LazyScreen {
+            ReferralsScreen {}
+        }
+    }
 }
 
 #[component]
 fn TreasureHunt() -> Element {
-    rsx! { TreasureHuntScreen {} }
+    rsx! {
+        LazyScreen {
+            TreasureHuntScreen {}
+        }
+    }
 }
 
 #[component]
 fn ArHunt() -> Element {
-    rsx! { ARHuntScreen {} }
+    rsx! {
+        LazyScreen {
+            ARHuntScreen {}
+        }
+    }
 }
 
 #[component]
 fn LocationQuest() -> Element {
-    rsx! { LocationQuestScreen {} }
+    rsx! {
+        LazyScreen {
+            LocationQuestScreen {}
+        }
+    }
 }
 
 #[component]
 fn TechTree() -> Element {
-    rsx! { TechTreeScreen {} }
+    rsx! {
+        LazyScreen {
+            TechTreeScreen {}
+        }
+    }
 }
 
 #[component]
 fn Admin() -> Element {
-    rsx! { AdminScreen {} }
+    rsx! {
+        LazyScreen {
+            AdminScreen {}
+        }
+    }
 }
 
 #[component]

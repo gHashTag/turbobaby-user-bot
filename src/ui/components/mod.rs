@@ -26,6 +26,7 @@ pub mod skeleton;
 pub mod progress_bar;
 pub mod chip;
 pub mod rarity_glow;
+pub mod lazy_screen;
 
 // ---------------------------------------------------------------------------
 // Re-exports — original
@@ -50,6 +51,7 @@ pub use skeleton::{Skeleton, SkeletonProps, SkeletonShape, SkeletonRow, Skeleton
 pub use progress_bar::{ProgressBar, ProgressBarProps, ProgressColor, ProgressSize};
 pub use chip::{Chip, ChipProps, ChipColor, ChipGroup, ChipGroupProps};
 pub use rarity_glow::{RarityGlow, RarityGlowProps, Rarity};
+pub use lazy_screen::LazyScreen;
 
 // Re-export types from state for convenience
 pub use crate::ui::state::CartItem as CartItemType;

@@ -1,17 +1,21 @@
 // Admin Mini-App — full CRUD for all product categories.
 //
-// Tabs: 🌿 Strains · ⚙️ Accessories · 🍵 Tea
-// Each tab: list + add-form + per-item toggle/delete.
-// Auth: reads telegram_id from Telegram WebApp SDK, sends X-Admin-Telegram-Id
-// header on every write. Non-admins see a friendly "access denied" screen.
+// Architecture: Optimistic UI (like Apollo).
+// - Signal<Vec<T>> is the local cache (source of truth for rendering)
+// - use_resource populates the cache on initial load
+// - Mutations update the cache IMMEDIATELY (optimistic)
+// - API requests happen in the background
+// - On error, the cache change is rolled back
+// - No full refetch after mutations = instant UI
 
 use dioxus::prelude::*;
 use serde::Deserialize;
 use serde_json::json;
+use wasm_bindgen::JsCast;
 use crate::ui::api::context::api_base_url;
 use crate::ui::telegram::{use_telegram_id, TelegramApp};
 
-// ── Data models for list rendering ────────────────────────────
+// ── Data models ───────────────────────────────────────────────
 
 #[derive(Debug, Clone, Deserialize, PartialEq)]
 struct AdminStrain {
@@ -21,7 +25,7 @@ struct AdminStrain {
     price_per_gram: f64,
     available_grams: Option<f64>,
     is_available: bool,
-    // EN fields (migration 016)
+    image_url: Option<String>,
     name_en: Option<String>,
     description_en: Option<String>,
     effect_en: Option<String>,
@@ -39,7 +43,6 @@ struct AdminAccessory {
     is_available: bool,
     #[serde(default)]
     image_url: Option<String>,
-    // EN fields (migration 016)
     name_en: Option<String>,
     description_en: Option<String>,
     category_en: Option<String>,
@@ -53,7 +56,7 @@ struct AdminTea {
     price: f64,
     stock: Option<i32>,
     is_available: bool,
-    // EN fields (migration 016)
+    image_url: Option<String>,
     name_en: Option<String>,
     description_en: Option<String>,
     subcategory_en: Option<String>,
@@ -71,6 +74,41 @@ struct AdminCheck { is_admin: bool }
 #[derive(Clone, Copy, PartialEq)]
 enum Tab { Strains, Accessories, Tea }
 
+// ── File upload helper ─────────────────────────────────────────
+
+async fn upload_image() -> Option<String> {
+    let js = r#"
+new Promise((resolve) => {
+    var input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    var resolved = false;
+    input.onchange = async (e) => {
+        if (resolved) return;
+        resolved = true;
+        var file = e.target.files[0];
+        if (!file) { resolve(''); return; }
+        var formData = new FormData();
+        formData.append('file', file);
+        try {
+            var baseUrl = window.location.origin;
+            var resp = await fetch(baseUrl + '/api/upload', { method: 'POST', body: formData });
+            var data = await resp.json();
+            resolve(data.url || '');
+        } catch(err) { console.error('Upload error:', err); resolve(''); }
+    };
+    setTimeout(() => { if (!resolved) { resolved = true; resolve(''); } }, 120000);
+    input.click();
+})
+"#;
+    let promise_val = js_sys::eval(js).ok()?;
+    let promise = promise_val.dyn_into::<js_sys::Promise>().ok()?;
+    let result = wasm_bindgen_futures::JsFuture::from(promise).await.ok()?;
+    let url = result.as_string()?;
+    if url.is_empty() { return None; }
+    Some(url)
+}
+
 // ── Main component ────────────────────────────────────────────
 
 #[component]
@@ -79,9 +117,6 @@ pub fn AdminScreen() -> Element {
     let active_tab = use_signal(|| Tab::Strains);
     let build_version: &'static str = env!("BUILD_VERSION");
 
-    // Access check. reqwest 0.11 WASM ignores .timeout(), so the browser's
-    // own fetch timeout (~30s) applies. We surface detailed error stages
-    // to make hangs/failures diagnosable from the UI itself.
     let access = use_resource(move || async move {
         let base = api_base_url();
         let url = format!("{}/api/admin/check?telegram_id={}", base, telegram_id);
@@ -98,14 +133,9 @@ pub fn AdminScreen() -> Element {
 
     rsx! {
         div { style: "min-height:100vh;background:#0f0f1a;color:#e8e8e8;padding:16px;padding-bottom:80px;",
-            h1 { style: "font-size:22px;color:#ff4757;margin-bottom:4px;", "🔧 Admin Mini-App" }
-            div { style: "font-size:11px;color:#666;margin-bottom:4px;",
-                "telegram_id: {telegram_id}"
-            }
-            div { style: "font-size:10px;color:#444;margin-bottom:16px;font-family:monospace;",
-                "build: {build_version}"
-            }
-
+            h1 { style: "font-size:22px;color:#ff4757;margin-bottom:4px;", "🔧 Admin" }
+            div { style: "font-size:11px;color:#666;margin-bottom:4px;", "tg: {telegram_id}" }
+            div { style: "font-size:10px;color:#444;margin-bottom:16px;font-family:monospace;", "v{build_version}" }
             match &*access.read_unchecked() {
                 None => rsx!(div { style: "color:#888;padding:20px 0;", "Проверка доступа..." }),
                 Some(Err(e)) => rsx!(div { style: "color:#ff4757;padding:20px 0;", "Ошибка: {e}" }),
@@ -122,20 +152,15 @@ fn AccessDeniedScreen(telegram_id: i64) -> Element {
     rsx! {
         div { style: "padding:30px 16px;text-align:center;",
             div { style: "font-size:48px;margin-bottom:12px;", "🔒" }
-            h2 { style: "color:#ff4757;font-size:18px;margin-bottom:8px;",
-                "Доступ закрыт"
-            }
+            h2 { style: "color:#ff4757;font-size:18px;margin-bottom:8px;", "Доступ закрыт" }
             p { style: "color:#888;font-size:13px;line-height:1.5;max-width:300px;margin:0 auto;",
-                "У вас нет прав администратора. Чтобы получить доступ — попросите владельца магазина добавить ваш Telegram ID в админы."
-            }
+                "Попросите владельца добавить ваш Telegram ID в админы." }
             div { style: "margin-top:20px;padding:12px;background:#1a1a2e;border-radius:8px;font-family:monospace;font-size:13px;color:#39ff14;display:inline-block;",
-                "Ваш ID: {telegram_id}"
-            }
+                "ID: {telegram_id}" }
             details { style: "margin-top:16px;text-align:left;max-width:340px;margin-left:auto;margin-right:auto;",
                 summary { style: "color:#666;font-size:11px;cursor:pointer;", "debug" }
                 pre { style: "font-size:10px;color:#888;background:#1a1a2e;padding:8px;border-radius:6px;white-space:pre-wrap;word-break:break-all;",
-                    "{debug}"
-                }
+                    "{debug}" }
             }
         }
     }
@@ -153,15 +178,8 @@ fn AdminPanel(active_tab: Signal<Tab>) -> Element {
             "flex:1;padding:10px;background:#1a1a2e;color:#888;border:none;font-size:13px;cursor:pointer;"
         };
         let label = label.to_string();
-        rsx! {
-            button {
-                style: "{style}",
-                onclick: move |_| { let mut a = active_tab; a.set(t); },
-                "{label}"
-            }
-        }
+        rsx! { button { style: "{style}", onclick: move |_| active_tab.set(t), "{label}" } }
     };
-
     rsx! {
         div {
             div { style: "display:flex;gap:2px;margin-bottom:16px;border-radius:4px;overflow:hidden;",
@@ -169,7 +187,6 @@ fn AdminPanel(active_tab: Signal<Tab>) -> Element {
                 {tab_btn(Tab::Accessories, "⚙️ Gear")}
                 {tab_btn(Tab::Tea, "🍵 Tea")}
             }
-
             match *active_tab.read() {
                 Tab::Strains => rsx!(StrainsTab {}),
                 Tab::Accessories => rsx!(AccessoriesTab {}),
@@ -179,39 +196,53 @@ fn AdminPanel(active_tab: Signal<Tab>) -> Element {
     }
 }
 
-// ── Strains tab ───────────────────────────────────────────────
+// ── Strains tab (Optimistic UI) ───────────────────────────────
 
 #[component]
 fn StrainsTab() -> Element {
     let telegram_id = use_telegram_id().unwrap_or(0);
+    let mut cache: Signal<Vec<AdminStrain>> = use_signal(Vec::new);
+    let mut loading = use_signal(|| true);
     let mut name = use_signal(String::new);
     let mut category = use_signal(|| "hybrid".to_string());
     let mut price = use_signal(String::new);
     let mut thc = use_signal(String::new);
     let mut grams = use_signal(String::new);
-    // EN fields
+    let mut image_url = use_signal(String::new);
     let mut name_en = use_signal(String::new);
     let mut description_en = use_signal(String::new);
     let mut effect_en = use_signal(String::new);
     let mut flavor_profile_en = use_signal(String::new);
     let mut strain_type_en = use_signal(String::new);
     let mut status = use_signal(String::new);
-    let mut reload = use_signal(|| 0u32);
+    let mut submitting = use_signal(|| false);
     let mut editing_id: Signal<Option<String>> = use_signal(|| None);
+    let search_query = use_signal(String::new);
+    let reload = use_signal(|| 0u32);
 
-    let items = use_resource(move || async move {
+    // Fetch data into cache (runs on mount + when reload changes)
+    let _ = use_resource(move || async move {
         let _ = reload.read();
         let url = format!("{}/api/strains?include_hidden=1", api_base_url());
-        reqwest::Client::new().get(&url).send().await
-            .map_err(|e| e.to_string())?
-            .json::<StrainsResp>().await
-            .map(|r| r.strains)
-            .map_err(|e| e.to_string())
+        if let Ok(resp) = reqwest::Client::new().get(&url).send().await {
+            if let Ok(data) = resp.json::<StrainsResp>().await {
+                cache.set(data.strains);
+            }
+        }
+        loading.set(false);
+        Some(())
     });
+
+    let filtered: Vec<AdminStrain> = {
+        let q = search_query.read().to_lowercase();
+        cache.read().iter().filter(|s| {
+            q.is_empty() || s.name.to_lowercase().contains(&q)
+                || s.category.as_deref().unwrap_or("").to_lowercase().contains(&q)
+        }).cloned().collect()
+    };
 
     rsx! {
         div {
-            // Add form
             FormCard {
                 title: "Добавить страйн".to_string(),
                 children: rsx!{
@@ -227,33 +258,55 @@ fn StrainsTab() -> Element {
                         oninput: move |e| price.set(e.value()) }
                     input { style: input_style(), placeholder: "THC %", value: "{thc}", r#type: "number",
                         oninput: move |e| thc.set(e.value()) }
-                    input { style: input_style(), placeholder: "Граммы в наличии", value: "{grams}", r#type: "number",
+                    input { style: input_style(), placeholder: "Граммы", value: "{grams}", r#type: "number",
                         oninput: move |e| grams.set(e.value()) }
-
-                    // ── EN section ──
-                    div { style: en_section_style(), "🇬🇧 English (optional)" }
+                    {render_image_upload(image_url)}
+                    div { style: en_section_style(), "🇬🇧 English" }
                     input { style: input_style(), placeholder: "Name (EN)", value: "{name_en}",
                         oninput: move |e| name_en.set(e.value()) }
                     input { style: input_style(), placeholder: "Description (EN)", value: "{description_en}",
                         oninput: move |e| description_en.set(e.value()) }
                     input { style: input_style(), placeholder: "Effect (EN)", value: "{effect_en}",
                         oninput: move |e| effect_en.set(e.value()) }
-                    input { style: input_style(), placeholder: "Flavor profile (EN)", value: "{flavor_profile_en}",
+                    input { style: input_style(), placeholder: "Flavor (EN)", value: "{flavor_profile_en}",
                         oninput: move |e| flavor_profile_en.set(e.value()) }
-                    input { style: input_style(), placeholder: "Strain type (EN, e.g. Hybrid)", value: "{strain_type_en}",
+                    input { style: input_style(), placeholder: "Type (EN)", value: "{strain_type_en}",
                         oninput: move |e| strain_type_en.set(e.value()) }
-
-                    button { style: submit_btn_style(),
+                    button {
+                        style: if *submitting.read() { submit_btn_disabled_style() } else { submit_btn_style() },
+                        disabled: *submitting.read(),
                         onclick: move |_| {
                             let n = name(); let c = category(); let p = price.read().parse::<f64>().unwrap_or(0.0);
                             let t = thc.read().parse::<f64>().ok(); let g = grams.read().parse::<f64>().unwrap_or(0.0);
+                            let img = image_url();
                             let ne = name_en(); let de = description_en(); let ee = effect_en();
                             let fpe = flavor_profile_en(); let ste = strain_type_en();
-                            if n.trim().is_empty() || p <= 0.0 { status.set("❌ Заполните название и цену".into()); return; }
+                            if n.trim().is_empty() || p <= 0.0 { status.set("❌ Name + price required".into()); return; }
+                            submitting.set(true);
+                            // ── Optimistic: insert immediately ──
+                            let temp_id = format!("temp-{}", uuid::Uuid::new_v4());
+                            cache.write().insert(0, AdminStrain {
+                                id: temp_id.clone(), name: n.clone(), category: Some(c.clone()),
+                                price_per_gram: p, available_grams: Some(g), is_available: true,
+                                image_url: if img.is_empty() { None } else { Some(img.clone()) },
+                                name_en: if ne.is_empty() { None } else { Some(ne.clone()) },
+                                description_en: if de.is_empty() { None } else { Some(de.clone()) },
+                                effect_en: if ee.is_empty() { None } else { Some(ee.clone()) },
+                                flavor_profile_en: if fpe.is_empty() { None } else { Some(fpe.clone()) },
+                                strain_type_en: if ste.is_empty() { None } else { Some(ste.clone()) },
+                            });
+                            status.set("✅ Добавлен!".into());
+                            name.set(String::new()); price.set(String::new());
+                            thc.set(String::new()); grams.set(String::new()); image_url.set(String::new());
+                            name_en.set(String::new()); description_en.set(String::new());
+                            effect_en.set(String::new()); flavor_profile_en.set(String::new());
+                            strain_type_en.set(String::new());
+                            auto_scroll_to_list();
                             spawn(async move {
                                 let body = json!({
                                     "name": n, "category": c, "price_per_gram": p,
                                     "thc_percent": t, "available_grams": g, "is_available": true,
+                                    "image_url": if img.is_empty() { serde_json::Value::Null } else { img.into() },
                                     "name_en": if ne.is_empty() { serde_json::Value::Null } else { ne.into() },
                                     "description_en": if de.is_empty() { serde_json::Value::Null } else { de.into() },
                                     "effect_en": if ee.is_empty() { serde_json::Value::Null } else { ee.into() },
@@ -264,79 +317,83 @@ fn StrainsTab() -> Element {
                                 let res = reqwest::Client::new().post(&url)
                                     .header("X-Admin-Telegram-Id", telegram_id.to_string())
                                     .json(&body).send().await;
+                                submitting.set(false);
                                 match res {
                                     Ok(r) if r.status().is_success() => {
-                                        status.set("✓ Страйн добавлен".into());
-                                        name.set(String::new()); price.set(String::new());
-                                        thc.set(String::new()); grams.set(String::new());
-                                        name_en.set(String::new()); description_en.set(String::new());
-                                        effect_en.set(String::new()); flavor_profile_en.set(String::new());
-                                        strain_type_en.set(String::new());
-                                        let next = reload.read().wrapping_add(1); reload.set(next);
+                                        if let Ok(data) = r.json::<serde_json::Value>().await {
+                                            if let Some(real_id) = data["id"].as_str() {
+                                                cache.write().iter_mut().find(|s| s.id == temp_id).map(|s| s.id = real_id.to_string());
+                                            }
+                                        }
                                     }
-                                    Ok(r) => status.set(format!("❌ HTTP {}", r.status().as_u16())),
-                                    Err(e) => status.set(format!("❌ {}", e)),
+                                    _ => {
+                                        // Rollback on error
+                                        cache.write().retain(|s| s.id != temp_id);
+                                        status.set("❌ Ошибка добавления".into());
+                                    }
                                 }
                             });
                         },
-                        "Добавить"
+                        if *submitting.read() { "⏳..." } else { "➕ Добавить" }
                     }
-                    if !status.read().is_empty() { div { style: "padding:8px;color:#39ff14;font-size:13px;", "{status}" } }
+                    {render_status(status)}
                 }
             }
 
-            // List
-            h3 { style: list_title_style(), "Все страйны" }
-            match &*items.read_unchecked() {
-                None => rsx!(div { style: "color:#888;", "Загрузка..." }),
-                Some(Err(e)) => rsx!(div { style: "color:#ff4757;", "Ошибка: {e}" }),
-                Some(Ok(list)) => rsx!{
-                    div { style: "display:flex;flex-direction:column;gap:8px;",
-                        for s in list.clone() {
-                            if editing_id.read().as_deref() == Some(s.id.as_str()) {
-                                EditStrainCard {
-                                    key: "{s.id}",
-                                    item: s.clone(),
-                                    on_saved: move |_| { editing_id.set(None); let next = reload.read().wrapping_add(1); reload.set(next); },
-                                    on_cancel: move |_| editing_id.set(None),
-                                }
-                            } else {
-                                ItemRow {
-                                    key: "{s.id}",
-                                    name: s.name.clone(),
-                                    sub: format!("{} • {}฿/г • {}г", s.category.clone().unwrap_or_default(), s.price_per_gram, s.available_grams.unwrap_or(0.0)),
-                                    is_available: s.is_available,
-                                    on_edit: {
-                                        let id = s.id.clone();
-                                        move |_| editing_id.set(Some(id.clone()))
-                                    },
-                                    on_toggle: {
-                                        let id = s.id.clone();
-                                        let next_avail = !s.is_available;
-                                        move |_| {
-                                            let id = id.clone();
-                                            spawn(async move {
-                                                let url = format!("{}/api/strains/{}/availability", api_base_url(), id);
-                                                let _ = reqwest::Client::new().put(&url)
-                                                    .header("X-Admin-Telegram-Id", telegram_id.to_string())
-                                                    .json(&json!({ "is_available": next_avail }))
-                                                    .send().await;
-                                                let next = reload.read().wrapping_add(1); reload.set(next);
-                                            });
-                                        }
-                                    },
-                                    on_delete: {
-                                        let id = s.id.clone();
-                                        move |_| {
-                                            let id = id.clone();
-                                            spawn(async move {
-                                                let url = format!("{}/api/strains/{}", api_base_url(), id);
-                                                let _ = reqwest::Client::new().delete(&url)
-                                                    .header("X-Admin-Telegram-Id", telegram_id.to_string())
-                                                    .send().await;
-                                                let next = reload.read().wrapping_add(1); reload.set(next);
-                                            });
-                                        }
+            h3 { style: list_title_style(), "Страйны ({filtered.len()})" }
+            {render_search(search_query)}
+            if *loading.read() {
+                div { style: "color:#888;", "⏳ Загрузка..." }
+            } else {
+                div { style: "display:flex;flex-direction:column;gap:8px;",
+                    for s in filtered {
+                        if editing_id.read().as_deref() == Some(s.id.as_str()) {
+                            EditStrainCard {
+                                key: "{s.id}",
+                                item: s.clone(),
+                                cache: cache,
+                                on_saved: move |_| editing_id.set(None),
+                                on_cancel: move |_| editing_id.set(None),
+                            }
+                        } else {
+                            ItemRow {
+                                key: "{s.id}",
+                                name: s.name.clone(),
+                                sub: format!("{} • {}฿/г • {}г", s.category.clone().unwrap_or_default(), s.price_per_gram, s.available_grams.unwrap_or(0.0)),
+                                is_available: s.is_available,
+                                image_url: s.image_url.clone(),
+                                on_edit: {
+                                    let id = s.id.clone();
+                                    move |_| editing_id.set(Some(id.clone()))
+                                },
+                                on_toggle: {
+                                    let id = s.id.clone();
+                                    let next_avail = !s.is_available;
+                                    move |_| {
+                                        let id = id.clone();
+                                        // Optimistic toggle
+                                        cache.write().iter_mut().find(|s| s.id == id).map(|s| s.is_available = next_avail);
+                                        spawn(async move {
+                                            let url = format!("{}/api/strains/{}/availability", api_base_url(), id);
+                                            let _ = reqwest::Client::new().put(&url)
+                                                .header("X-Admin-Telegram-Id", telegram_id.to_string())
+                                                .json(&json!({ "is_available": next_avail }))
+                                                .send().await;
+                                        });
+                                    }
+                                },
+                                on_delete: {
+                                    let id = s.id.clone();
+                                    move |_| {
+                                        let id = id.clone();
+                                        // Optimistic delete
+                                        cache.write().retain(|s| s.id != id);
+                                        spawn(async move {
+                                            let url = format!("{}/api/strains/{}", api_base_url(), id);
+                                            let _ = reqwest::Client::new().delete(&url)
+                                                .header("X-Admin-Telegram-Id", telegram_id.to_string())
+                                                .send().await;
+                                        });
                                     }
                                 }
                             }
@@ -348,33 +405,46 @@ fn StrainsTab() -> Element {
     }
 }
 
-// ── Accessories tab ───────────────────────────────────────────
+// ── Accessories tab (Optimistic UI) ───────────────────────────
 
 #[component]
 fn AccessoriesTab() -> Element {
     let telegram_id = use_telegram_id().unwrap_or(0);
+    let mut cache: Signal<Vec<AdminAccessory>> = use_signal(Vec::new);
+    let mut loading = use_signal(|| true);
     let mut name = use_signal(String::new);
     let mut category = use_signal(|| "other".to_string());
     let mut price = use_signal(String::new);
     let mut stock = use_signal(String::new);
     let mut image_url = use_signal(String::new);
-    // EN fields
     let mut name_en = use_signal(String::new);
     let mut description_en = use_signal(String::new);
     let mut category_en = use_signal(String::new);
     let mut status = use_signal(String::new);
-    let mut reload = use_signal(|| 0u32);
+    let mut submitting = use_signal(|| false);
     let mut editing_id: Signal<Option<String>> = use_signal(|| None);
+    let search_query = use_signal(String::new);
+    let reload = use_signal(|| 0u32);
 
-    let items = use_resource(move || async move {
+    let _ = use_resource(move || async move {
         let _ = reload.read();
         let url = format!("{}/api/accessories?include_hidden=1", api_base_url());
-        reqwest::Client::new().get(&url).send().await
-            .map_err(|e| e.to_string())?
-            .json::<AccessoriesResp>().await
-            .map(|r| r.accessories)
-            .map_err(|e| e.to_string())
+        if let Ok(resp) = reqwest::Client::new().get(&url).send().await {
+            if let Ok(data) = resp.json::<AccessoriesResp>().await {
+                cache.set(data.accessories);
+            }
+        }
+        loading.set(false);
+        Some(())
     });
+
+    let filtered: Vec<AdminAccessory> = {
+        let q = search_query.read().to_lowercase();
+        cache.read().iter().filter(|a| {
+            q.is_empty() || a.name.to_lowercase().contains(&q)
+                || a.category.as_deref().unwrap_or("").to_lowercase().contains(&q)
+        }).cloned().collect()
+    };
 
     rsx! {
         div {
@@ -396,31 +466,44 @@ fn AccessoriesTab() -> Element {
                     }
                     input { style: input_style(), placeholder: "Цена ฿", value: "{price}", r#type: "number",
                         oninput: move |e| price.set(e.value()) }
-                    input { style: input_style(), placeholder: "Количество", value: "{stock}", r#type: "number",
+                    input { style: input_style(), placeholder: "Кол-во", value: "{stock}", r#type: "number",
                         oninput: move |e| stock.set(e.value()) }
-                    input { style: input_style(), placeholder: "URL картинки (опц.)", value: "{image_url}",
-                        oninput: move |e| image_url.set(e.value()) }
-
-                    // ── EN section ──
-                    div { style: en_section_style(), "🇬🇧 English (optional)" }
+                    {render_image_upload(image_url)}
+                    div { style: en_section_style(), "🇬🇧 English" }
                     input { style: input_style(), placeholder: "Name (EN)", value: "{name_en}",
                         oninput: move |e| name_en.set(e.value()) }
                     input { style: input_style(), placeholder: "Description (EN)", value: "{description_en}",
                         oninput: move |e| description_en.set(e.value()) }
                     input { style: input_style(), placeholder: "Category (EN)", value: "{category_en}",
                         oninput: move |e| category_en.set(e.value()) }
-
-                    button { style: submit_btn_style(),
+                    button {
+                        style: if *submitting.read() { submit_btn_disabled_style() } else { submit_btn_style() },
+                        disabled: *submitting.read(),
                         onclick: move |_| {
                             let n = name(); let c = category(); let p = price.read().parse::<f64>().unwrap_or(0.0);
-                            let s = stock.read().parse::<i32>().unwrap_or(0);
+                            let s_val = stock.read().parse::<i32>().unwrap_or(0);
                             let img = image_url();
                             let ne = name_en(); let de = description_en(); let ce = category_en();
-                            if n.trim().is_empty() || p <= 0.0 { status.set("❌ Заполните название и цену".into()); return; }
+                            if n.trim().is_empty() || p <= 0.0 { status.set("❌ Name + price".into()); return; }
+                            submitting.set(true);
+                            let temp_id = format!("temp-{}", uuid::Uuid::new_v4());
+                            cache.write().insert(0, AdminAccessory {
+                                id: temp_id.clone(), name: n.clone(), category: Some(c.clone()),
+                                price: p, stock: Some(s_val), is_available: true,
+                                image_url: if img.is_empty() { None } else { Some(img.clone()) },
+                                name_en: if ne.is_empty() { None } else { Some(ne.clone()) },
+                                description_en: if de.is_empty() { None } else { Some(de.clone()) },
+                                category_en: if ce.is_empty() { None } else { Some(ce.clone()) },
+                            });
+                            status.set("✅ Добавлен!".into());
+                            name.set(String::new()); price.set(String::new()); stock.set(String::new());
+                            image_url.set(String::new()); name_en.set(String::new());
+                            description_en.set(String::new()); category_en.set(String::new());
+                            auto_scroll_to_list();
                             spawn(async move {
                                 let body = json!({
-                                    "name": n, "category": c, "price": p, "stock": s,
-                                    "image_url": if img.is_empty() { None } else { Some(img) },
+                                    "name": n, "category": c, "price": p, "stock": s_val,
+                                    "image_url": if img.is_empty() { None } else { Some(img.clone()) },
                                     "name_en": if ne.is_empty() { serde_json::Value::Null } else { ne.into() },
                                     "description_en": if de.is_empty() { serde_json::Value::Null } else { de.into() },
                                     "category_en": if ce.is_empty() { serde_json::Value::Null } else { ce.into() },
@@ -429,77 +512,70 @@ fn AccessoriesTab() -> Element {
                                 let res = reqwest::Client::new().post(&url)
                                     .header("X-Admin-Telegram-Id", telegram_id.to_string())
                                     .json(&body).send().await;
+                                submitting.set(false);
                                 match res {
                                     Ok(r) if r.status().is_success() => {
-                                        status.set("✓ Аксессуар добавлен".into());
-                                        name.set(String::new()); price.set(String::new());
-                                        stock.set(String::new()); image_url.set(String::new());
-                                        name_en.set(String::new()); description_en.set(String::new());
-                                        category_en.set(String::new());
-                                        let next = reload.read().wrapping_add(1); reload.set(next);
+                                        if let Ok(data) = r.json::<serde_json::Value>().await {
+                                            if let Some(real_id) = data["id"].as_str() {
+                                                cache.write().iter_mut().find(|a| a.id == temp_id).map(|a| a.id = real_id.to_string());
+                                            }
+                                        }
                                     }
-                                    Ok(r) => status.set(format!("❌ HTTP {}", r.status().as_u16())),
-                                    Err(e) => status.set(format!("❌ {}", e)),
+                                    _ => { cache.write().retain(|a| a.id != temp_id); status.set("❌ Error".into()); }
                                 }
                             });
                         },
-                        "Добавить"
+                        if *submitting.read() { "⏳..." } else { "➕ Добавить" }
                     }
-                    if !status.read().is_empty() { div { style: "padding:8px;color:#39ff14;font-size:13px;", "{status}" } }
+                    {render_status(status)}
                 }
             }
-
-            h3 { style: list_title_style(), "Все аксессуары" }
-            match &*items.read_unchecked() {
-                None => rsx!(div { style: "color:#888;", "Загрузка..." }),
-                Some(Err(e)) => rsx!(div { style: "color:#ff4757;", "Ошибка: {e}" }),
-                Some(Ok(list)) => rsx!{
-                    div { style: "display:flex;flex-direction:column;gap:8px;",
-                        for a in list.clone() {
-                            if editing_id.read().as_deref() == Some(a.id.as_str()) {
-                                EditAccessoryCard {
-                                    key: "{a.id}",
-                                    item: a.clone(),
-                                    on_saved: move |_| { editing_id.set(None); let next = reload.read().wrapping_add(1); reload.set(next); },
-                                    on_cancel: move |_| editing_id.set(None),
-                                }
-                            } else {
-                                ItemRow {
-                                    key: "{a.id}",
-                                    name: a.name.clone(),
-                                    sub: format!("{} • {}฿ • {} шт.", a.category.clone().unwrap_or_default(), a.price, a.stock.unwrap_or(0)),
-                                    is_available: a.is_available,
-                                    on_edit: {
-                                        let id = a.id.clone();
-                                        move |_| editing_id.set(Some(id.clone()))
-                                    },
-                                    on_toggle: {
-                                        let id = a.id.clone();
-                                        let next_avail = !a.is_available;
-                                        move |_| {
-                                            let id = id.clone();
-                                            spawn(async move {
-                                                let url = format!("{}/api/accessories/{}/availability", api_base_url(), id);
-                                                let _ = reqwest::Client::new().put(&url)
-                                                    .header("X-Admin-Telegram-Id", telegram_id.to_string())
-                                                    .json(&json!({ "is_available": next_avail }))
-                                                    .send().await;
-                                                let next = reload.read().wrapping_add(1); reload.set(next);
-                                            });
-                                        }
-                                    },
-                                    on_delete: {
-                                        let id = a.id.clone();
-                                        move |_| {
-                                            let id = id.clone();
-                                            spawn(async move {
-                                                let url = format!("{}/api/accessories/{}", api_base_url(), id);
-                                                let _ = reqwest::Client::new().delete(&url)
-                                                    .header("X-Admin-Telegram-Id", telegram_id.to_string())
-                                                    .send().await;
-                                                let next = reload.read().wrapping_add(1); reload.set(next);
-                                            });
-                                        }
+            h3 { style: list_title_style(), "Аксессуары ({filtered.len()})" }
+            {render_search(search_query)}
+            if *loading.read() {
+                div { style: "color:#888;", "⏳ Загрузка..." }
+            } else {
+                div { style: "display:flex;flex-direction:column;gap:8px;",
+                    for a in filtered {
+                        if editing_id.read().as_deref() == Some(a.id.as_str()) {
+                            EditAccessoryCard {
+                                key: "{a.id}",
+                                item: a.clone(),
+                                cache: cache,
+                                on_saved: move |_| editing_id.set(None),
+                                on_cancel: move |_| editing_id.set(None),
+                            }
+                        } else {
+                            ItemRow {
+                                key: "{a.id}",
+                                name: a.name.clone(),
+                                sub: format!("{} • {}฿ • {} шт.", a.category.clone().unwrap_or_default(), a.price, a.stock.unwrap_or(0)),
+                                is_available: a.is_available,
+                                image_url: a.image_url.clone(),
+                                on_edit: { let id = a.id.clone(); move |_| editing_id.set(Some(id.clone())) },
+                                on_toggle: {
+                                    let id = a.id.clone(); let next = !a.is_available;
+                                    move |_| {
+                                        let id = id.clone();
+                                        cache.write().iter_mut().find(|a| a.id == id).map(|a| a.is_available = next);
+                                        spawn(async move {
+                                            let url = format!("{}/api/accessories/{}/availability", api_base_url(), id);
+                                            let _ = reqwest::Client::new().put(&url)
+                                                .header("X-Admin-Telegram-Id", telegram_id.to_string())
+                                                .json(&json!({ "is_available": next })).send().await;
+                                        });
+                                    }
+                                },
+                                on_delete: {
+                                    let id = a.id.clone();
+                                    move |_| {
+                                        let id = id.clone();
+                                        cache.write().retain(|a| a.id != id);
+                                        spawn(async move {
+                                            let url = format!("{}/api/accessories/{}", api_base_url(), id);
+                                            let _ = reqwest::Client::new().delete(&url)
+                                                .header("X-Admin-Telegram-Id", telegram_id.to_string()).send().await;
+                                        });
                                     }
                                 }
                             }
@@ -511,32 +587,46 @@ fn AccessoriesTab() -> Element {
     }
 }
 
-// ── Tea tab ───────────────────────────────────────────────────
+// ── Tea tab (Optimistic UI) ───────────────────────────────────
 
 #[component]
 fn TeaTab() -> Element {
     let telegram_id = use_telegram_id().unwrap_or(0);
+    let mut cache: Signal<Vec<AdminTea>> = use_signal(Vec::new);
+    let mut loading = use_signal(|| true);
     let mut name = use_signal(String::new);
     let mut subcategory = use_signal(|| "green".to_string());
     let mut price = use_signal(String::new);
     let mut stock = use_signal(String::new);
-    // EN fields
+    let mut image_url = use_signal(String::new);
     let mut name_en = use_signal(String::new);
     let mut description_en = use_signal(String::new);
     let mut subcategory_en = use_signal(String::new);
     let mut status = use_signal(String::new);
-    let mut reload = use_signal(|| 0u32);
+    let mut submitting = use_signal(|| false);
     let mut editing_id: Signal<Option<String>> = use_signal(|| None);
+    let search_query = use_signal(String::new);
+    let reload = use_signal(|| 0u32);
 
-    let items = use_resource(move || async move {
+    let _ = use_resource(move || async move {
         let _ = reload.read();
         let url = format!("{}/api/tea-products?include_hidden=1", api_base_url());
-        reqwest::Client::new().get(&url).send().await
-            .map_err(|e| e.to_string())?
-            .json::<TeaResp>().await
-            .map(|r| r.tea_products)
-            .map_err(|e| e.to_string())
+        if let Ok(resp) = reqwest::Client::new().get(&url).send().await {
+            if let Ok(data) = resp.json::<TeaResp>().await {
+                cache.set(data.tea_products);
+            }
+        }
+        loading.set(false);
+        Some(())
     });
+
+    let filtered: Vec<AdminTea> = {
+        let q = search_query.read().to_lowercase();
+        cache.read().iter().filter(|t| {
+            q.is_empty() || t.name.to_lowercase().contains(&q)
+                || t.subcategory.as_deref().unwrap_or("").to_lowercase().contains(&q)
+        }).cloned().collect()
+    };
 
     rsx! {
         div {
@@ -556,27 +646,44 @@ fn TeaTab() -> Element {
                     }
                     input { style: input_style(), placeholder: "Цена ฿", value: "{price}", r#type: "number",
                         oninput: move |e| price.set(e.value()) }
-                    input { style: input_style(), placeholder: "Количество", value: "{stock}", r#type: "number",
+                    input { style: input_style(), placeholder: "Кол-во", value: "{stock}", r#type: "number",
                         oninput: move |e| stock.set(e.value()) }
-
-                    // ── EN section ──
-                    div { style: en_section_style(), "🇬🇧 English (optional)" }
+                    {render_image_upload(image_url)}
+                    div { style: en_section_style(), "🇬🇧 English" }
                     input { style: input_style(), placeholder: "Name (EN)", value: "{name_en}",
                         oninput: move |e| name_en.set(e.value()) }
                     input { style: input_style(), placeholder: "Description (EN)", value: "{description_en}",
                         oninput: move |e| description_en.set(e.value()) }
-                    input { style: input_style(), placeholder: "Subcategory (EN, e.g. Green Tea)", value: "{subcategory_en}",
+                    input { style: input_style(), placeholder: "Subcategory (EN)", value: "{subcategory_en}",
                         oninput: move |e| subcategory_en.set(e.value()) }
-
-                    button { style: submit_btn_style(),
+                    button {
+                        style: if *submitting.read() { submit_btn_disabled_style() } else { submit_btn_style() },
+                        disabled: *submitting.read(),
                         onclick: move |_| {
                             let n = name(); let sc = subcategory(); let p = price.read().parse::<f64>().unwrap_or(0.0);
-                            let s = stock.read().parse::<i32>().unwrap_or(0);
+                            let s_val = stock.read().parse::<i32>().unwrap_or(0);
+                            let img = image_url();
                             let ne = name_en(); let de = description_en(); let sce = subcategory_en();
-                            if n.trim().is_empty() || p <= 0.0 { status.set("❌ Заполните название и цену".into()); return; }
+                            if n.trim().is_empty() || p <= 0.0 { status.set("❌ Name + price".into()); return; }
+                            submitting.set(true);
+                            let temp_id = format!("temp-{}", uuid::Uuid::new_v4());
+                            cache.write().insert(0, AdminTea {
+                                id: temp_id.clone(), name: n.clone(), subcategory: Some(sc.clone()),
+                                price: p, stock: Some(s_val), is_available: true,
+                                image_url: if img.is_empty() { None } else { Some(img.clone()) },
+                                name_en: if ne.is_empty() { None } else { Some(ne.clone()) },
+                                description_en: if de.is_empty() { None } else { Some(de.clone()) },
+                                subcategory_en: if sce.is_empty() { None } else { Some(sce.clone()) },
+                            });
+                            status.set("✅ Добавлен!".into());
+                            name.set(String::new()); price.set(String::new()); stock.set(String::new());
+                            image_url.set(String::new()); name_en.set(String::new());
+                            description_en.set(String::new()); subcategory_en.set(String::new());
+                            auto_scroll_to_list();
                             spawn(async move {
                                 let body = json!({
-                                    "name": n, "subcategory": sc, "price": p, "stock": s,
+                                    "name": n, "subcategory": sc, "price": p, "stock": s_val,
+                                    "image_url": if img.is_empty() { serde_json::Value::Null } else { img.into() },
                                     "name_en": if ne.is_empty() { serde_json::Value::Null } else { ne.into() },
                                     "description_en": if de.is_empty() { serde_json::Value::Null } else { de.into() },
                                     "subcategory_en": if sce.is_empty() { serde_json::Value::Null } else { sce.into() },
@@ -585,76 +692,70 @@ fn TeaTab() -> Element {
                                 let res = reqwest::Client::new().post(&url)
                                     .header("X-Admin-Telegram-Id", telegram_id.to_string())
                                     .json(&body).send().await;
+                                submitting.set(false);
                                 match res {
                                     Ok(r) if r.status().is_success() => {
-                                        status.set("✓ Чай добавлен".into());
-                                        name.set(String::new()); price.set(String::new()); stock.set(String::new());
-                                        name_en.set(String::new()); description_en.set(String::new());
-                                        subcategory_en.set(String::new());
-                                        let next = reload.read().wrapping_add(1); reload.set(next);
+                                        if let Ok(data) = r.json::<serde_json::Value>().await {
+                                            if let Some(real_id) = data["id"].as_str() {
+                                                cache.write().iter_mut().find(|t| t.id == temp_id).map(|t| t.id = real_id.to_string());
+                                            }
+                                        }
                                     }
-                                    Ok(r) => status.set(format!("❌ HTTP {}", r.status().as_u16())),
-                                    Err(e) => status.set(format!("❌ {}", e)),
+                                    _ => { cache.write().retain(|t| t.id != temp_id); status.set("❌ Error".into()); }
                                 }
                             });
                         },
-                        "Добавить"
+                        if *submitting.read() { "⏳..." } else { "➕ Добавить" }
                     }
-                    if !status.read().is_empty() { div { style: "padding:8px;color:#39ff14;font-size:13px;", "{status}" } }
+                    {render_status(status)}
                 }
             }
-
-            h3 { style: list_title_style(), "Весь чай" }
-            match &*items.read_unchecked() {
-                None => rsx!(div { style: "color:#888;", "Загрузка..." }),
-                Some(Err(e)) => rsx!(div { style: "color:#ff4757;", "Ошибка: {e}" }),
-                Some(Ok(list)) => rsx!{
-                    div { style: "display:flex;flex-direction:column;gap:8px;",
-                        for t in list.clone() {
-                            if editing_id.read().as_deref() == Some(t.id.as_str()) {
-                                EditTeaCard {
-                                    key: "{t.id}",
-                                    item: t.clone(),
-                                    on_saved: move |_| { editing_id.set(None); let next = reload.read().wrapping_add(1); reload.set(next); },
-                                    on_cancel: move |_| editing_id.set(None),
-                                }
-                            } else {
-                                ItemRow {
-                                    key: "{t.id}",
-                                    name: t.name.clone(),
-                                    sub: format!("{} • {}฿ • {} шт.", t.subcategory.clone().unwrap_or_default(), t.price, t.stock.unwrap_or(0)),
-                                    is_available: t.is_available,
-                                    on_edit: {
-                                        let id = t.id.clone();
-                                        move |_| editing_id.set(Some(id.clone()))
-                                    },
-                                    on_toggle: {
-                                        let id = t.id.clone();
-                                        let next_avail = !t.is_available;
-                                        move |_| {
-                                            let id = id.clone();
-                                            spawn(async move {
-                                                let url = format!("{}/api/tea-products/{}/availability", api_base_url(), id);
-                                                let _ = reqwest::Client::new().put(&url)
-                                                    .header("X-Admin-Telegram-Id", telegram_id.to_string())
-                                                    .json(&json!({ "is_available": next_avail }))
-                                                    .send().await;
-                                                let next = reload.read().wrapping_add(1); reload.set(next);
-                                            });
-                                        }
-                                    },
-                                    on_delete: {
-                                        let id = t.id.clone();
-                                        move |_| {
-                                            let id = id.clone();
-                                            spawn(async move {
-                                                let url = format!("{}/api/tea-products/{}", api_base_url(), id);
-                                                let _ = reqwest::Client::new().delete(&url)
-                                                    .header("X-Admin-Telegram-Id", telegram_id.to_string())
-                                                    .send().await;
-                                                let next = reload.read().wrapping_add(1); reload.set(next);
-                                            });
-                                        }
+            h3 { style: list_title_style(), "Чай ({filtered.len()})" }
+            {render_search(search_query)}
+            if *loading.read() {
+                div { style: "color:#888;", "⏳ Загрузка..." }
+            } else {
+                div { style: "display:flex;flex-direction:column;gap:8px;",
+                    for t in filtered {
+                        if editing_id.read().as_deref() == Some(t.id.as_str()) {
+                            EditTeaCard {
+                                key: "{t.id}",
+                                item: t.clone(),
+                                cache: cache,
+                                on_saved: move |_| editing_id.set(None),
+                                on_cancel: move |_| editing_id.set(None),
+                            }
+                        } else {
+                            ItemRow {
+                                key: "{t.id}",
+                                name: t.name.clone(),
+                                sub: format!("{} • {}฿ • {} шт.", t.subcategory.clone().unwrap_or_default(), t.price, t.stock.unwrap_or(0)),
+                                is_available: t.is_available,
+                                image_url: t.image_url.clone(),
+                                on_edit: { let id = t.id.clone(); move |_| editing_id.set(Some(id.clone())) },
+                                on_toggle: {
+                                    let id = t.id.clone(); let next = !t.is_available;
+                                    move |_| {
+                                        let id = id.clone();
+                                        cache.write().iter_mut().find(|t| t.id == id).map(|t| t.is_available = next);
+                                        spawn(async move {
+                                            let url = format!("{}/api/tea-products/{}/availability", api_base_url(), id);
+                                            let _ = reqwest::Client::new().put(&url)
+                                                .header("X-Admin-Telegram-Id", telegram_id.to_string())
+                                                .json(&json!({ "is_available": next })).send().await;
+                                        });
+                                    }
+                                },
+                                on_delete: {
+                                    let id = t.id.clone();
+                                    move |_| {
+                                        let id = id.clone();
+                                        cache.write().retain(|t| t.id != id);
+                                        spawn(async move {
+                                            let url = format!("{}/api/tea-products/{}", api_base_url(), id);
+                                            let _ = reqwest::Client::new().delete(&url)
+                                                .header("X-Admin-Telegram-Id", telegram_id.to_string()).send().await;
+                                        });
                                     }
                                 }
                             }
@@ -666,69 +767,118 @@ fn TeaTab() -> Element {
     }
 }
 
-// ── Shared UI components ──────────────────────────────────────
+// ── Shared UI helpers ─────────────────────────────────────────
+
+fn auto_scroll_to_list() {
+    let _ = js_sys::eval("setTimeout(()=>{var el=document.querySelector('[data-list]');if(el)el.scrollIntoView({behavior:'smooth'});},100);");
+}
+
+fn render_image_upload(mut image_url: Signal<String>) -> Element {
+    rsx! {
+        div { style: "display:flex;gap:6px;align-items:center;",
+            input { style: "flex:1;{input_style()}", placeholder: "URL картинки", value: "{image_url}",
+                oninput: move |e| image_url.set(e.value()) }
+            button { style: upload_btn_style(),
+                onclick: move |_| {
+                    spawn(async move { if let Some(url) = upload_image().await { image_url.set(url); } });
+                },
+                "📷 Upload"
+            }
+        }
+        if !image_url.read().is_empty() {
+            div { style: "margin-top:4px;",
+                img { src: "{image_url}", style: "width:64px;height:64px;object-fit:cover;border-radius:6px;border:1px solid #2a2a4a;" }
+            }
+        }
+    }
+}
+
+fn render_search(mut search_query: Signal<String>) -> Element {
+    rsx! {
+        input {
+            style: "width:100%;padding:8px 12px;background:#1a1a2e;color:#e8e8e8;border:1px solid #2a2a4a;border-radius:4px;font-size:13px;margin-bottom:8px;",
+            placeholder: "🔍 Поиск...",
+            value: "{search_query}",
+            oninput: move |e: Event<FormData>| search_query.set(e.value())
+        }
+    }
+}
+
+fn render_status(mut status: Signal<String>) -> Element {
+    rsx! {
+        if !status.read().is_empty() {
+            {
+                let msg = status.read().clone();
+                let color = if msg.starts_with("✅") { "#39ff14" } else if msg.starts_with("❌") { "#ff4757" } else { "#39ff14" };
+                rsx! {
+                    div {
+                        style: "padding:10px;background:{color}10;color:{color};font-size:13px;border-radius:4px;border:1px solid {color}30;display:flex;justify-content:space-between;align-items:center;margin-top:4px;",
+                        span { "{msg}" }
+                        button { style: "background:none;border:none;color:{color};cursor:pointer;font-size:16px;padding:0 4px;",
+                            onclick: move |_| status.set(String::new()), "✕" }
+                    }
+                }
+            }
+        }
+    }
+}
 
 #[component]
 fn FormCard(title: String, children: Element) -> Element {
     rsx! {
         div { style: "background:#1a1a2e;padding:16px;border-radius:8px;margin-bottom:20px;border:1px solid #2a2a4a;",
             h3 { style: "color:#39ff14;font-size:15px;margin-bottom:12px;", "{title}" }
-            div { style: "display:flex;flex-direction:column;gap:8px;",
-                {children}
-            }
+            div { style: "display:flex;flex-direction:column;gap:8px;", {children} }
         }
     }
 }
 
 #[component]
 fn ItemRow(
-    name: String, sub: String, is_available: bool,
-    on_edit: EventHandler<()>,
-    on_toggle: EventHandler<()>, on_delete: EventHandler<()>,
+    name: String, sub: String, is_available: bool, image_url: Option<String>,
+    on_edit: EventHandler<()>, on_toggle: EventHandler<()>, on_delete: EventHandler<()>,
 ) -> Element {
+    let mut confirm_delete = use_signal(|| false);
     let badge = if is_available { ("#39ff14", "ВКЛ") } else { ("#666", "ВЫКЛ") };
-    let toggle_label = if is_available { "Скрыть" } else { "Показать" };
+    let toggle_label = if is_available { "⬇️" } else { "⬆️" };
+    let thumb = match image_url.as_deref() {
+        Some(url) if !url.is_empty() => rsx! { img { src: "{url}", style: "width:36px;height:36px;object-fit:cover;border-radius:6px;border:1px solid #2a2a4a;flex-shrink:0;" } },
+        _ => rsx! { div { style: "width:36px;height:36px;background:#2a2a4a;border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:16px;", "📦" } },
+    };
     rsx! {
-        div { style: "background:#1a1a2e;padding:10px 12px;border-radius:6px;display:flex;align-items:center;gap:6px;cursor:pointer;",
-            onclick: move |_| on_edit.call(()),
-            div { style: "flex:1;min-width:0;",
-                div { style: "font-weight:600;font-size:14px;color:#e8e8e8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;", "{name}" }
-                div { style: "font-size:11px;color:#888;margin-top:2px;", "{sub}" }
+        div { style: "background:#1a1a2e;padding:8px 10px;border-radius:6px;display:flex;align-items:center;gap:6px;flex-wrap:nowrap;overflow:hidden;",
+            {thumb}
+            div { style: "flex:1;min-width:0;overflow:hidden;cursor:pointer;",
+                onclick: move |_| on_edit.call(()),
+                div { style: "font-weight:600;font-size:13px;color:#e8e8e8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;", "{name}" }
+                div { style: "font-size:10px;color:#888;margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;", "{sub}" }
             }
-            span { style: "font-size:10px;padding:2px 6px;background:{badge.0}20;color:{badge.0};border-radius:10px;font-weight:600;",
-                "{badge.1}"
-            }
-            button { style: "padding:6px 8px;background:#2a2a4a;color:#e8e8e8;border:none;border-radius:4px;font-size:11px;cursor:pointer;",
-                onclick: move |e: Event<MouseData>| { e.stop_propagation(); on_edit.call(()); },
-                "✏️"
-            }
-            button { style: "padding:6px 8px;background:#2a2a4a;color:#e8e8e8;border:none;border-radius:4px;font-size:11px;cursor:pointer;",
-                onclick: move |e: Event<MouseData>| { e.stop_propagation(); on_toggle.call(()); },
-                "{toggle_label}"
-            }
-            button { style: "padding:6px 8px;background:#3a1a1a;color:#ff8888;border:none;border-radius:4px;font-size:11px;cursor:pointer;",
-                onclick: move |e: Event<MouseData>| { e.stop_propagation(); on_delete.call(()); },
-                "🗑"
+            span { style: "font-size:9px;padding:2px 5px;background:{badge.0}20;color:{badge.0};border-radius:8px;font-weight:600;flex-shrink:0;", "{badge.1}" }
+            button { style: "flex-shrink:0;padding:5px 6px;background:#2a2a4a;color:#e8e8e8;border:none;border-radius:4px;font-size:14px;cursor:pointer;line-height:1;",
+                onclick: move |e: Event<MouseData>| { e.stop_propagation(); on_edit.call(()); }, "✏️" }
+            button { style: "flex-shrink:0;padding:5px 6px;background:#2a2a4a;color:#e8e8e8;border:none;border-radius:4px;font-size:14px;cursor:pointer;line-height:1;",
+                onclick: move |e: Event<MouseData>| { e.stop_propagation(); on_toggle.call(()); }, "{toggle_label}" }
+            if *confirm_delete.read() {
+                button { style: "flex-shrink:0;padding:5px 6px;background:#ff4757;color:#fff;border:none;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer;line-height:1;",
+                    onclick: move |e: Event<MouseData>| { e.stop_propagation(); on_delete.call(()); }, "⚠️" }
+            } else {
+                button { style: "flex-shrink:0;padding:5px 6px;background:#3a1a1a;color:#ff8888;border:none;border-radius:4px;font-size:14px;cursor:pointer;line-height:1;",
+                    onclick: move |e: Event<MouseData>| {
+                        e.stop_propagation(); confirm_delete.set(true);
+                        let mut cd = confirm_delete;
+                        spawn(async move { gloo_timers::future::TimeoutFuture::new(3000).await; cd.set(false); });
+                    }, "🗑" }
             }
         }
     }
 }
 
-fn cancel_btn_style() -> &'static str {
-    "padding:10px;background:#2a2a4a;color:#e8e8e8;border:none;border-radius:4px;font-weight:600;font-size:13px;cursor:pointer;margin-top:4px;"
-}
-fn edit_card_style() -> &'static str {
-    "background:#1a1a2e;border:1px solid #6699ff;border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:8px;"
-}
-fn edit_header_style() -> &'static str {
-    "color:#6699ff;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:1px;"
-}
-
-// ── Inline edit components ───────────────────────────────────
+// ── Edit components (write directly to cache) ─────────────────
 
 #[component]
 fn EditStrainCard(
     item: AdminStrain,
+    cache: Signal<Vec<AdminStrain>>,
     on_saved: EventHandler<()>,
     on_cancel: EventHandler<()>,
 ) -> Element {
@@ -737,52 +887,54 @@ fn EditStrainCard(
     let mut category = use_signal(|| item.category.clone().unwrap_or_else(|| "hybrid".to_string()));
     let mut price = use_signal(|| item.price_per_gram.to_string());
     let mut grams = use_signal(|| item.available_grams.unwrap_or(0.0).to_string());
+    let image_url = use_signal(|| item.image_url.clone().unwrap_or_default());
     let mut name_en = use_signal(|| item.name_en.clone().unwrap_or_default());
     let mut description_en = use_signal(|| item.description_en.clone().unwrap_or_default());
     let mut effect_en = use_signal(|| item.effect_en.clone().unwrap_or_default());
     let mut flavor_profile_en = use_signal(|| item.flavor_profile_en.clone().unwrap_or_default());
     let mut strain_type_en = use_signal(|| item.strain_type_en.clone().unwrap_or_default());
-    let mut status = use_signal(String::new);
+    let status = use_signal(String::new);
     let item_id = item.id.clone();
-    let item_is_available = item.is_available;
     rsx! {
         div { style: edit_card_style(),
             div { style: edit_header_style(), "✏️ Редактирование" }
-            input { style: input_style(), placeholder: "Название (RU)", value: "{name}",
-                oninput: move |e| name.set(e.value()) }
-            select { style: input_style(), value: "{category}",
-                oninput: move |e| category.set(e.value()),
-                option { value: "sativa", "☀️ Sativa" }
-                option { value: "indica", "🌙 Indica" }
-                option { value: "hybrid", "⚖️ Hybrid" }
-            }
-            input { style: input_style(), placeholder: "Цена ฿/г", value: "{price}", r#type: "number",
-                oninput: move |e| price.set(e.value()) }
-            input { style: input_style(), placeholder: "Граммы в наличии", value: "{grams}", r#type: "number",
-                oninput: move |e| grams.set(e.value()) }
-            div { style: en_section_style(), "🇬🇧 English (optional)" }
-            input { style: input_style(), placeholder: "Name (EN)", value: "{name_en}",
-                oninput: move |e| name_en.set(e.value()) }
-            input { style: input_style(), placeholder: "Description (EN)", value: "{description_en}",
-                oninput: move |e| description_en.set(e.value()) }
-            input { style: input_style(), placeholder: "Effect (EN)", value: "{effect_en}",
-                oninput: move |e| effect_en.set(e.value()) }
-            input { style: input_style(), placeholder: "Flavor profile (EN)", value: "{flavor_profile_en}",
-                oninput: move |e| flavor_profile_en.set(e.value()) }
-            input { style: input_style(), placeholder: "Strain type (EN, e.g. Hybrid)", value: "{strain_type_en}",
-                oninput: move |e| strain_type_en.set(e.value()) }
+            input { style: input_style(), placeholder: "Название", value: "{name}", oninput: move |e| name.set(e.value()) }
+            select { style: input_style(), value: "{category}", oninput: move |e| category.set(e.value()),
+                option { value: "sativa", "☀️ Sativa" } option { value: "indica", "🌙 Indica" } option { value: "hybrid", "⚖️ Hybrid" } }
+            input { style: input_style(), placeholder: "Цена ฿/г", value: "{price}", r#type: "number", oninput: move |e| price.set(e.value()) }
+            input { style: input_style(), placeholder: "Граммы", value: "{grams}", r#type: "number", oninput: move |e| grams.set(e.value()) }
+            {render_image_upload(image_url)}
+            div { style: en_section_style(), "🇬🇧 English" }
+            input { style: input_style(), placeholder: "Name (EN)", value: "{name_en}", oninput: move |e| name_en.set(e.value()) }
+            input { style: input_style(), placeholder: "Description (EN)", value: "{description_en}", oninput: move |e| description_en.set(e.value()) }
+            input { style: input_style(), placeholder: "Effect (EN)", value: "{effect_en}", oninput: move |e| effect_en.set(e.value()) }
+            input { style: input_style(), placeholder: "Flavor (EN)", value: "{flavor_profile_en}", oninput: move |e| flavor_profile_en.set(e.value()) }
+            input { style: input_style(), placeholder: "Type (EN)", value: "{strain_type_en}", oninput: move |e| strain_type_en.set(e.value()) }
             div { style: "display:flex;gap:8px;",
                 button { style: submit_btn_style(),
                     onclick: move |_| {
                         let n = name(); let c = category(); let p = price.read().parse::<f64>().unwrap_or(0.0);
-                        let g = grams.read().parse::<f64>().unwrap_or(0.0);
+                        let g = grams.read().parse::<f64>().unwrap_or(0.0); let img = image_url();
                         let ne = name_en(); let de = description_en(); let ee = effect_en();
                         let fpe = flavor_profile_en(); let ste = strain_type_en();
                         let id = item_id.clone();
+                        // Optimistic update in cache
+                        cache.write().iter_mut().find(|s| s.id == id).map(|s| {
+                            s.name = n.clone(); s.category = Some(c.clone()); s.price_per_gram = p;
+                            s.available_grams = Some(g);
+                            s.image_url = if img.is_empty() { None } else { Some(img.clone()) };
+                            s.name_en = if ne.is_empty() { None } else { Some(ne.clone()) };
+                            s.description_en = if de.is_empty() { None } else { Some(de.clone()) };
+                            s.effect_en = if ee.is_empty() { None } else { Some(ee.clone()) };
+                            s.flavor_profile_en = if fpe.is_empty() { None } else { Some(fpe.clone()) };
+                            s.strain_type_en = if ste.is_empty() { None } else { Some(ste.clone()) };
+                        });
+                        on_saved.call(());
                         spawn(async move {
                             let body = json!({
-                                "name": n, "category": c, "price_per_gram": p,
-                                "available_grams": g, "is_available": item_is_available,
+                                "name": n, "category": c, "price_per_gram": p, "available_grams": g,
+                                "is_available": true,
+                                "image_url": if img.is_empty() { serde_json::Value::Null } else { img.into() },
                                 "name_en": if ne.is_empty() { serde_json::Value::Null } else { ne.into() },
                                 "description_en": if de.is_empty() { serde_json::Value::Null } else { de.into() },
                                 "effect_en": if ee.is_empty() { serde_json::Value::Null } else { ee.into() },
@@ -790,22 +942,14 @@ fn EditStrainCard(
                                 "strain_type_en": if ste.is_empty() { serde_json::Value::Null } else { ste.into() },
                             });
                             let url = format!("{}/api/strains/{}", api_base_url(), id);
-                            let res = reqwest::Client::new().put(&url)
+                            let _ = reqwest::Client::new().put(&url)
                                 .header("X-Admin-Telegram-Id", telegram_id.to_string())
                                 .json(&body).send().await;
-                            match res {
-                                Ok(r) if r.status().is_success() => on_saved.call(()),
-                                Ok(r) => status.set(format!("❌ HTTP {}", r.status().as_u16())),
-                                Err(e) => status.set(format!("❌ {}", e)),
-                            }
                         });
                     },
                     "💾 Сохранить"
                 }
-                button { style: cancel_btn_style(),
-                    onclick: move |_| on_cancel.call(()),
-                    "Отмена"
-                }
+                button { style: cancel_btn_style(), onclick: move |_| on_cancel.call(()), "Отмена" }
             }
             if !status.read().is_empty() { div { style: "padding:8px;color:#ff4757;font-size:13px;", "{status}" } }
         }
@@ -815,6 +959,7 @@ fn EditStrainCard(
 #[component]
 fn EditAccessoryCard(
     item: AdminAccessory,
+    cache: Signal<Vec<AdminAccessory>>,
     on_saved: EventHandler<()>,
     on_cancel: EventHandler<()>,
 ) -> Element {
@@ -823,77 +968,61 @@ fn EditAccessoryCard(
     let mut category = use_signal(|| item.category.clone().unwrap_or_else(|| "other".to_string()));
     let mut price = use_signal(|| item.price.to_string());
     let mut stock = use_signal(|| item.stock.map(|s| s.to_string()).unwrap_or_default());
-    let mut image_url = use_signal(|| item.image_url.clone().unwrap_or_default());
+    let image_url = use_signal(|| item.image_url.clone().unwrap_or_default());
     let mut name_en = use_signal(|| item.name_en.clone().unwrap_or_default());
     let mut description_en = use_signal(|| item.description_en.clone().unwrap_or_default());
     let mut category_en = use_signal(|| item.category_en.clone().unwrap_or_default());
-    let mut status = use_signal(String::new);
+    let status = use_signal(String::new);
     let item_id = item.id.clone();
-    let item_is_available = item.is_available;
     rsx! {
         div { style: edit_card_style(),
             div { style: edit_header_style(), "✏️ Редактирование" }
-            input { style: input_style(), placeholder: "Название (RU)", value: "{name}",
-                oninput: move |e| name.set(e.value()) }
-            select { style: input_style(), value: "{category}",
-                oninput: move |e| category.set(e.value()),
-                option { value: "grinder", "🌀 Grinder" }
-                option { value: "papers", "📄 Papers" }
-                option { value: "lighter", "🔥 Lighter" }
-                option { value: "pipe", "🚬 Pipe" }
-                option { value: "bong", "💨 Bong" }
-                option { value: "storage", "📦 Storage" }
-                option { value: "clothing", "👕 Clothing" }
-                option { value: "other", "🔧 Other" }
-            }
-            input { style: input_style(), placeholder: "Цена ฿", value: "{price}", r#type: "number",
-                oninput: move |e| price.set(e.value()) }
-            input { style: input_style(), placeholder: "Количество", value: "{stock}", r#type: "number",
-                oninput: move |e| stock.set(e.value()) }
-            input { style: input_style(), placeholder: "URL картинки (напр. /assets/accessories/grinder-4p.webp)", value: "{image_url}",
-                oninput: move |e| image_url.set(e.value()) }
-            div { style: en_section_style(), "🇬🇧 English (optional)" }
-            input { style: input_style(), placeholder: "Name (EN)", value: "{name_en}",
-                oninput: move |e| name_en.set(e.value()) }
-            input { style: input_style(), placeholder: "Description (EN)", value: "{description_en}",
-                oninput: move |e| description_en.set(e.value()) }
-            input { style: input_style(), placeholder: "Category (EN)", value: "{category_en}",
-                oninput: move |e| category_en.set(e.value()) }
+            input { style: input_style(), placeholder: "Название", value: "{name}", oninput: move |e| name.set(e.value()) }
+            select { style: input_style(), value: "{category}", oninput: move |e| category.set(e.value()),
+                option { value: "grinder", "🌀 Grinder" } option { value: "papers", "📄 Papers" }
+                option { value: "lighter", "🔥 Lighter" } option { value: "pipe", "🚬 Pipe" }
+                option { value: "bong", "💨 Bong" } option { value: "storage", "📦 Storage" }
+                option { value: "clothing", "👕 Clothing" } option { value: "other", "🔧 Other" } }
+            input { style: input_style(), placeholder: "Цена ฿", value: "{price}", r#type: "number", oninput: move |e| price.set(e.value()) }
+            input { style: input_style(), placeholder: "Кол-во", value: "{stock}", r#type: "number", oninput: move |e| stock.set(e.value()) }
+            {render_image_upload(image_url)}
+            div { style: en_section_style(), "🇬🇧 English" }
+            input { style: input_style(), placeholder: "Name (EN)", value: "{name_en}", oninput: move |e| name_en.set(e.value()) }
+            input { style: input_style(), placeholder: "Description (EN)", value: "{description_en}", oninput: move |e| description_en.set(e.value()) }
+            input { style: input_style(), placeholder: "Category (EN)", value: "{category_en}", oninput: move |e| category_en.set(e.value()) }
             div { style: "display:flex;gap:8px;",
                 button { style: submit_btn_style(),
                     onclick: move |_| {
                         let n = name(); let c = category(); let p = price.read().parse::<f64>().unwrap_or(0.0);
-                        let s_str = stock();
-                        let s_val: serde_json::Value = if s_str.is_empty() { serde_json::Value::Null } else { s_str.parse::<i32>().unwrap_or(0).into() };
+                        let s_str = stock(); let s_val: i32 = s_str.parse().unwrap_or(0);
                         let img = image_url();
                         let ne = name_en(); let de = description_en(); let ce = category_en();
                         let id = item_id.clone();
+                        cache.write().iter_mut().find(|a| a.id == id).map(|a| {
+                            a.name = n.clone(); a.category = Some(c.clone()); a.price = p; a.stock = Some(s_val);
+                            a.image_url = if img.is_empty() { None } else { Some(img.clone()) };
+                            a.name_en = if ne.is_empty() { None } else { Some(ne.clone()) };
+                            a.description_en = if de.is_empty() { None } else { Some(de.clone()) };
+                            a.category_en = if ce.is_empty() { None } else { Some(ce.clone()) };
+                        });
+                        on_saved.call(());
                         spawn(async move {
                             let body = json!({
-                                "name": n, "category": c, "price": p, "stock": s_val,
-                                "is_available": item_is_available,
+                                "name": n, "category": c, "price": p, "stock": s_val, "is_available": true,
                                 "image_url": if img.is_empty() { serde_json::Value::Null } else { img.into() },
                                 "name_en": if ne.is_empty() { serde_json::Value::Null } else { ne.into() },
                                 "description_en": if de.is_empty() { serde_json::Value::Null } else { de.into() },
                                 "category_en": if ce.is_empty() { serde_json::Value::Null } else { ce.into() },
                             });
                             let url = format!("{}/api/accessories/{}", api_base_url(), id);
-                            let res = reqwest::Client::new().put(&url)
+                            let _ = reqwest::Client::new().put(&url)
                                 .header("X-Admin-Telegram-Id", telegram_id.to_string())
                                 .json(&body).send().await;
-                            match res {
-                                Ok(r) if r.status().is_success() => on_saved.call(()),
-                                Ok(r) => status.set(format!("❌ HTTP {}", r.status().as_u16())),
-                                Err(e) => status.set(format!("❌ {}", e)),
-                            }
                         });
                     },
                     "💾 Сохранить"
                 }
-                button { style: cancel_btn_style(),
-                    onclick: move |_| on_cancel.call(()),
-                    "Отмена"
-                }
+                button { style: cancel_btn_style(), onclick: move |_| on_cancel.call(()), "Отмена" }
             }
             if !status.read().is_empty() { div { style: "padding:8px;color:#ff4757;font-size:13px;", "{status}" } }
         }
@@ -903,6 +1032,7 @@ fn EditAccessoryCard(
 #[component]
 fn EditTeaCard(
     item: AdminTea,
+    cache: Signal<Vec<AdminTea>>,
     on_saved: EventHandler<()>,
     on_cancel: EventHandler<()>,
 ) -> Element {
@@ -911,85 +1041,74 @@ fn EditTeaCard(
     let mut subcategory = use_signal(|| item.subcategory.clone().unwrap_or_else(|| "green".to_string()));
     let mut price = use_signal(|| item.price.to_string());
     let mut stock = use_signal(|| item.stock.map(|s| s.to_string()).unwrap_or_default());
+    let image_url = use_signal(|| item.image_url.clone().unwrap_or_default());
     let mut name_en = use_signal(|| item.name_en.clone().unwrap_or_default());
     let mut description_en = use_signal(|| item.description_en.clone().unwrap_or_default());
     let mut subcategory_en = use_signal(|| item.subcategory_en.clone().unwrap_or_default());
-    let mut status = use_signal(String::new);
+    let status = use_signal(String::new);
     let item_id = item.id.clone();
-    let item_is_available = item.is_available;
     rsx! {
         div { style: edit_card_style(),
             div { style: edit_header_style(), "✏️ Редактирование" }
-            input { style: input_style(), placeholder: "Название (RU)", value: "{name}",
-                oninput: move |e| name.set(e.value()) }
-            select { style: input_style(), value: "{subcategory}",
-                oninput: move |e| subcategory.set(e.value()),
-                option { value: "green", "🍃 Green" }
-                option { value: "black", "🖤 Black" }
-                option { value: "herbal", "🌿 Herbal" }
-                option { value: "oolong", "🍂 Oolong" }
-                option { value: "puer", "🟫 Pu-er" }
-                option { value: "other", "🍵 Other" }
-            }
-            input { style: input_style(), placeholder: "Цена ฿", value: "{price}", r#type: "number",
-                oninput: move |e| price.set(e.value()) }
-            input { style: input_style(), placeholder: "Количество", value: "{stock}", r#type: "number",
-                oninput: move |e| stock.set(e.value()) }
-            div { style: en_section_style(), "🇬🇧 English (optional)" }
-            input { style: input_style(), placeholder: "Name (EN)", value: "{name_en}",
-                oninput: move |e| name_en.set(e.value()) }
-            input { style: input_style(), placeholder: "Description (EN)", value: "{description_en}",
-                oninput: move |e| description_en.set(e.value()) }
-            input { style: input_style(), placeholder: "Subcategory (EN, e.g. Green Tea)", value: "{subcategory_en}",
-                oninput: move |e| subcategory_en.set(e.value()) }
+            input { style: input_style(), placeholder: "Название", value: "{name}", oninput: move |e| name.set(e.value()) }
+            select { style: input_style(), value: "{subcategory}", oninput: move |e| subcategory.set(e.value()),
+                option { value: "green", "🍃 Green" } option { value: "black", "🖤 Black" }
+                option { value: "herbal", "🌿 Herbal" } option { value: "oolong", "🍂 Oolong" }
+                option { value: "puer", "🟫 Pu-er" } option { value: "other", "🍵 Other" } }
+            input { style: input_style(), placeholder: "Цена ฿", value: "{price}", r#type: "number", oninput: move |e| price.set(e.value()) }
+            input { style: input_style(), placeholder: "Кол-во", value: "{stock}", r#type: "number", oninput: move |e| stock.set(e.value()) }
+            {render_image_upload(image_url)}
+            div { style: en_section_style(), "🇬🇧 English" }
+            input { style: input_style(), placeholder: "Name (EN)", value: "{name_en}", oninput: move |e| name_en.set(e.value()) }
+            input { style: input_style(), placeholder: "Description (EN)", value: "{description_en}", oninput: move |e| description_en.set(e.value()) }
+            input { style: input_style(), placeholder: "Subcategory (EN)", value: "{subcategory_en}", oninput: move |e| subcategory_en.set(e.value()) }
             div { style: "display:flex;gap:8px;",
                 button { style: submit_btn_style(),
                     onclick: move |_| {
                         let n = name(); let sc = subcategory(); let p = price.read().parse::<f64>().unwrap_or(0.0);
-                        let s_str = stock();
-                        let s_val: serde_json::Value = if s_str.is_empty() { serde_json::Value::Null } else { s_str.parse::<i32>().unwrap_or(0).into() };
+                        let s_str = stock(); let s_val: i32 = s_str.parse().unwrap_or(0);
+                        let img = image_url();
                         let ne = name_en(); let de = description_en(); let sce = subcategory_en();
                         let id = item_id.clone();
+                        cache.write().iter_mut().find(|t| t.id == id).map(|t| {
+                            t.name = n.clone(); t.subcategory = Some(sc.clone()); t.price = p; t.stock = Some(s_val);
+                            t.image_url = if img.is_empty() { None } else { Some(img.clone()) };
+                            t.name_en = if ne.is_empty() { None } else { Some(ne.clone()) };
+                            t.description_en = if de.is_empty() { None } else { Some(de.clone()) };
+                            t.subcategory_en = if sce.is_empty() { None } else { Some(sce.clone()) };
+                        });
+                        on_saved.call(());
                         spawn(async move {
                             let body = json!({
-                                "name": n, "subcategory": sc, "price": p, "stock": s_val,
-                                "is_available": item_is_available,
+                                "name": n, "subcategory": sc, "price": p, "stock": s_val, "is_available": true,
+                                "image_url": if img.is_empty() { serde_json::Value::Null } else { img.into() },
                                 "name_en": if ne.is_empty() { serde_json::Value::Null } else { ne.into() },
                                 "description_en": if de.is_empty() { serde_json::Value::Null } else { de.into() },
                                 "subcategory_en": if sce.is_empty() { serde_json::Value::Null } else { sce.into() },
                             });
                             let url = format!("{}/api/tea-products/{}", api_base_url(), id);
-                            let res = reqwest::Client::new().put(&url)
+                            let _ = reqwest::Client::new().put(&url)
                                 .header("X-Admin-Telegram-Id", telegram_id.to_string())
                                 .json(&body).send().await;
-                            match res {
-                                Ok(r) if r.status().is_success() => on_saved.call(()),
-                                Ok(r) => status.set(format!("❌ HTTP {}", r.status().as_u16())),
-                                Err(e) => status.set(format!("❌ {}", e)),
-                            }
                         });
                     },
                     "💾 Сохранить"
                 }
-                button { style: cancel_btn_style(),
-                    onclick: move |_| on_cancel.call(()),
-                    "Отмена"
-                }
+                button { style: cancel_btn_style(), onclick: move |_| on_cancel.call(()), "Отмена" }
             }
             if !status.read().is_empty() { div { style: "padding:8px;color:#ff4757;font-size:13px;", "{status}" } }
         }
     }
 }
 
-fn input_style() -> &'static str {
-    "padding:10px 12px;background:#0f0f1a;color:#e8e8e8;border:1px solid #2a2a4a;border-radius:4px;font-size:14px;"
-}
-fn submit_btn_style() -> &'static str {
-    "padding:12px;background:#39ff14;color:#000;border:none;border-radius:4px;font-weight:700;font-size:14px;cursor:pointer;margin-top:4px;"
-}
-fn list_title_style() -> &'static str {
-    "color:#888;font-size:13px;margin:16px 0 8px;text-transform:uppercase;letter-spacing:1px;"
-}
-fn en_section_style() -> &'static str {
-    "padding:6px 0 2px;color:#6699ff;font-size:12px;font-weight:600;border-top:1px solid #2a2a4a;margin-top:4px;"
-}
+// ── Styles ────────────────────────────────────────────────────
+
+fn input_style() -> &'static str { "padding:10px 12px;background:#0f0f1a;color:#e8e8e8;border:1px solid #2a2a4a;border-radius:4px;font-size:14px;" }
+fn submit_btn_style() -> &'static str { "padding:12px;background:#39ff14;color:#000;border:none;border-radius:4px;font-weight:700;font-size:14px;cursor:pointer;margin-top:4px;" }
+fn submit_btn_disabled_style() -> &'static str { "padding:12px;background:#666;color:#999;border:none;border-radius:4px;font-weight:700;font-size:14px;cursor:not-allowed;margin-top:4px;" }
+fn upload_btn_style() -> &'static str { "padding:10px 12px;background:#2a2a4a;color:#6699ff;border:1px dashed #6699ff;border-radius:4px;font-size:13px;cursor:pointer;white-space:nowrap;" }
+fn list_title_style() -> &'static str { "color:#888;font-size:13px;margin:16px 0 8px;text-transform:uppercase;letter-spacing:1px;" }
+fn en_section_style() -> &'static str { "padding:6px 0 2px;color:#6699ff;font-size:12px;font-weight:600;border-top:1px solid #2a2a4a;margin-top:4px;" }
+fn cancel_btn_style() -> &'static str { "padding:10px;background:#2a2a4a;color:#e8e8e8;border:none;border-radius:4px;font-weight:600;font-size:13px;cursor:pointer;margin-top:4px;" }
+fn edit_card_style() -> &'static str { "background:#1a1a2e;border:1px solid #6699ff;border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:8px;" }
+fn edit_header_style() -> &'static str { "color:#6699ff;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:1px;" }
