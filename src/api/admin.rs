@@ -18,6 +18,7 @@ struct AdminCheckQuery {
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/admin/users", get(get_all_users))
+        .route("/admin/stats", get(get_stats))
         .route("/admin/data", get(get_stats))
         .route("/admin/managers", get(get_managers))
         .route("/admin/check", get(check_admin_access))

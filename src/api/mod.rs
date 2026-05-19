@@ -10,6 +10,7 @@ pub mod happy_hour;
 pub mod garden;
 pub mod referrals;
 pub mod tech_tree;
+pub mod cart;
 
 use axum::{
     Router,
@@ -27,6 +28,7 @@ pub fn router(state: crate::AppState) -> Router {
 
 fn api_routes(state: AppState) -> Router {
     Router::new()
+        .route("/ping", get(ping_handler))
         .merge(orders::routes())
         .merge(strains::routes())
         .merge(loyalty::routes())
@@ -38,7 +40,12 @@ fn api_routes(state: AppState) -> Router {
         .merge(garden::routes())
         .merge(referrals::routes())
         .merge(tech_tree::routes())
+        .merge(cart::routes())
         .with_state(state)
+}
+
+async fn ping_handler() -> Json<Value> {
+    Json(json!({"status": "ok", "service": "woody-weed-bot"}))
 }
 
 async fn health_handler() -> Json<Value> {

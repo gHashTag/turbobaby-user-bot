@@ -25,7 +25,7 @@ pub mod ui;
 #[cfg(not(target_arch = "wasm32"))]
 use anyhow::Result;
 #[cfg(not(target_arch = "wasm32"))]
-use axum::Router;
+use axum::{Router, routing::get};
 #[cfg(not(target_arch = "wasm32"))]
 use std::net::SocketAddr;
 #[cfg(not(target_arch = "wasm32"))]
@@ -61,6 +61,12 @@ pub struct AppState {
     pub db: Arc<Database>,
     pub config: Arc<Config>,
     pub bot: Arc<Bot>,
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+async fn spa_handler() -> impl axum::response::IntoResponse {
+    let html = tokio::fs::read_to_string("dist/index.html").await.unwrap_or_else(|_| "<h1>App not found</h1>".to_string());
+    axum::response::Html(html)
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -162,12 +168,38 @@ async fn main() -> Result<()> {
     let spa_index = ServeFile::new("dist/index.html");
     let dist_service = ServeDir::new("dist").not_found_service(spa_index);
 
+    // SPA routes that should return index.html for client-side routing
+    let spa_routes = Router::new()
+        .route("/menu", get(spa_handler))
+        .route("/sets", get(spa_handler))
+        .route("/sommelier", get(spa_handler))
+        .route("/accessories", get(spa_handler))
+        .route("/tea", get(spa_handler))
+        .route("/cart", get(spa_handler))
+        .route("/checkout", get(spa_handler))
+        .route("/success", get(spa_handler))
+        .route("/orders", get(spa_handler))
+        .route("/profile", get(spa_handler))
+        .route("/garden", get(spa_handler))
+        .route("/quest", get(spa_handler))
+        .route("/game", get(spa_handler))
+        .route("/referrals", get(spa_handler))
+        .route("/treasure-hunt", get(spa_handler))
+        .route("/ar-hunt", get(spa_handler))
+        .route("/location-quest", get(spa_handler))
+        .route("/tech-tree", get(spa_handler))
+        .route("/admin", get(spa_handler))
+        .layer(html_no_cache_layer());
+
     let app = Router::new()
         // CORS layer MUST be first!
         .layer(cors)
         .layer(ngrok_bypass)
-        // Backend API routes
+        // Backend API routes (must be before static to avoid conflicts)
         .merge(api::router(app_state))
+        // SPA routes - serve index.html for client-side routing
+        .merge(spa_routes)
+        // SPA routes - these should be served by the fallback
         .merge(static_assets)
         // Single top-level fallback: serve hashed bundles from dist/, fall
         // back to SPA index.html if path not found. We apply no-store cache
