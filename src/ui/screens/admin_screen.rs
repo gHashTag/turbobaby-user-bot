@@ -310,9 +310,15 @@ fn StrainsTab() -> Element {
     // Fetch data into cache (runs on mount + when reload changes)
     let _ = use_resource(move || {
         let _ = reload.read();
+        let init_data = init_data.read().clone();
         async move {
         let url = format!("{}/api/strains?include_hidden=1", api_base_url());
-        if let Ok(resp) = reqwest::Client::new().get(&url).send().await {
+        if let Ok(resp) = reqwest::Client::new()
+            .get(&url)
+            .header("X-Telegram-Init-Data", init_data.clone())
+            .header("X-Admin-Telegram-Id", telegram_id.to_string())
+            .send().await
+        {
             if let Ok(data) = resp.json::<StrainsResp>().await {
                 cache.set(data.strains);
             }
@@ -629,9 +635,15 @@ fn AccessoriesTab() -> Element {
 
     let _ = use_resource(move || {
         let _ = reload.read();
+        let init_data = init_data.read().clone();
         async move {
         let url = format!("{}/api/accessories?include_hidden=1", api_base_url());
-        if let Ok(resp) = reqwest::Client::new().get(&url).send().await {
+        if let Ok(resp) = reqwest::Client::new()
+            .get(&url)
+            .header("X-Telegram-Init-Data", init_data.clone())
+            .header("X-Admin-Telegram-Id", telegram_id.to_string())
+            .send().await
+        {
             if let Ok(data) = resp.json::<AccessoriesResp>().await {
                 cache.set(data.accessories);
             }
@@ -908,9 +920,15 @@ fn TeaTab() -> Element {
 
     let _ = use_resource(move || {
         let _ = reload.read();
+        let init_data = init_data.read().clone();
         async move {
         let url = format!("{}/api/tea-products?include_hidden=1", api_base_url());
-        if let Ok(resp) = reqwest::Client::new().get(&url).send().await {
+        if let Ok(resp) = reqwest::Client::new()
+            .get(&url)
+            .header("X-Telegram-Init-Data", init_data.clone())
+            .header("X-Admin-Telegram-Id", telegram_id.to_string())
+            .send().await
+        {
             if let Ok(data) = resp.json::<TeaResp>().await {
                 cache.set(data.tea_products);
             }
