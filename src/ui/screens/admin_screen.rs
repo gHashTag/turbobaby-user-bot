@@ -9,7 +9,7 @@
 // - No full refetch after mutations = instant UI
 
 use dioxus::prelude::*;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use wasm_bindgen::JsCast;
 use crate::ui::api::context::api_base_url;
@@ -47,7 +47,7 @@ fn render_toasts(mut toasts: Signal<Vec<ToastItem>>) -> Element {
 
 // ── Data models ───────────────────────────────────────────────
 
-#[derive(Debug, Clone, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 struct AdminStrain {
     id: String,
     name: String,
@@ -68,7 +68,7 @@ struct AdminStrain {
     strain_type_en: Option<String>,
 }
 
-#[derive(Debug, Clone, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 struct AdminAccessory {
     id: String,
     name: String,
@@ -86,7 +86,7 @@ struct AdminAccessory {
     category_en: Option<String>,
 }
 
-#[derive(Debug, Clone, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 struct AdminTea {
     id: String,
     name: String,
@@ -183,7 +183,7 @@ pub fn AdminScreen() -> Element {
             h1 { style: "font-size:22px;color:#ff4757;margin-bottom:4px;", "🔧 Admin" }
             div { style: "font-size:11px;color:#666;margin-bottom:4px;", "tg: {telegram_id}" }
             div { style: "font-size:10px;color:#444;margin-bottom:16px;font-family:monospace;", "v{build_version}" }
-            match &*access.read_unchecked() {
+            match &*access.read() {
                 None => rsx!(div { style: "color:#888;padding:20px 0;", "Проверка доступа..." }),
                 Some(Err(e)) => rsx!(div { style: "color:#ff4757;padding:20px 0;", "Ошибка: {e}" }),
                 Some(Ok(false)) => rsx!(AccessDeniedScreen { telegram_id }),
@@ -308,8 +308,9 @@ fn StrainsTab() -> Element {
     });
 
     // Fetch data into cache (runs on mount + when reload changes)
-    let _ = use_resource(move || async move {
+    let _ = use_resource(move || {
         let _ = reload.read();
+        async move {
         let url = format!("{}/api/strains?include_hidden=1", api_base_url());
         if let Ok(resp) = reqwest::Client::new().get(&url).send().await {
             if let Ok(data) = resp.json::<StrainsResp>().await {
@@ -318,7 +319,7 @@ fn StrainsTab() -> Element {
         }
         loading.set(false);
         Some(())
-    });
+    }});
 
     let filtered: Vec<AdminStrain> = {
         let q = search_query.read().to_lowercase();
@@ -626,8 +627,9 @@ fn AccessoriesTab() -> Element {
         }
     });
 
-    let _ = use_resource(move || async move {
+    let _ = use_resource(move || {
         let _ = reload.read();
+        async move {
         let url = format!("{}/api/accessories?include_hidden=1", api_base_url());
         if let Ok(resp) = reqwest::Client::new().get(&url).send().await {
             if let Ok(data) = resp.json::<AccessoriesResp>().await {
@@ -636,7 +638,7 @@ fn AccessoriesTab() -> Element {
         }
         loading.set(false);
         Some(())
-    });
+    }});
 
     let filtered: Vec<AdminAccessory> = {
         let q = search_query.read().to_lowercase();
@@ -904,8 +906,9 @@ fn TeaTab() -> Element {
         }
     });
 
-    let _ = use_resource(move || async move {
+    let _ = use_resource(move || {
         let _ = reload.read();
+        async move {
         let url = format!("{}/api/tea-products?include_hidden=1", api_base_url());
         if let Ok(resp) = reqwest::Client::new().get(&url).send().await {
             if let Ok(data) = resp.json::<TeaResp>().await {
@@ -914,7 +917,7 @@ fn TeaTab() -> Element {
         }
         loading.set(false);
         Some(())
-    });
+    }});
 
     let filtered: Vec<AdminTea> = {
         let q = search_query.read().to_lowercase();
