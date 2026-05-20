@@ -8,7 +8,7 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 
 // Admin API routes
-use crate::api::auth::validate_init_data;
+use crate::api::auth::{check_admin, validate_init_data};
 use crate::AppState;
 
 #[derive(Deserialize)]
@@ -35,7 +35,11 @@ async fn get_stats(_state: State<AppState>) -> Result<Json<Value>, StatusCode> {
     })))
 }
 
-async fn get_all_users(State(state): State<AppState>) -> Result<Json<Value>, StatusCode> {
+async fn get_all_users(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+) -> Result<Json<Value>, StatusCode> {
+    check_admin(&headers, &state)?;
     let client = state.db.pool.get().await.map_err(|e| {
         tracing::error!("admin users: pool.get() failed: {:?}", e);
         StatusCode::INTERNAL_SERVER_ERROR
@@ -64,7 +68,11 @@ async fn get_all_users(State(state): State<AppState>) -> Result<Json<Value>, Sta
     Ok(Json(json!({ "users": users })))
 }
 
-async fn get_managers(State(state): State<AppState>) -> Result<Json<Value>, StatusCode> {
+async fn get_managers(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+) -> Result<Json<Value>, StatusCode> {
+    check_admin(&headers, &state)?;
     let client = state.db.pool.get().await.map_err(|e| {
         tracing::error!("admin managers: pool.get() failed: {:?}", e);
         StatusCode::INTERNAL_SERVER_ERROR
@@ -106,15 +114,23 @@ async fn check_admin_access(
         }
     }
 
-    // 2. Fallback to header / query param (local dev)
-    let id = headers
-        .get("X-Admin-Telegram-Id")
-        .and_then(|v| v.to_str().ok())
-        .and_then(|s| s.parse::<i64>().ok())
-        .unwrap_or(query.telegram_id);
+    // 2. Fallback to header / query param (local dev, debug builds only)
+    #[cfg(debug_assertions)]
+    {
+        let id = headers
+            .get("X-Admin-Telegram-Id")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|s| s.parse::<i64>().ok())
+            .unwrap_or(query.telegram_id);
 
-    let is_admin = state.config.admin_ids.contains(&id);
-    Ok(Json(json!({ "is_admin": is_admin, "telegram_id": id })))
+        let is_admin = state.config.admin_ids.contains(&id);
+        Ok(Json(json!({ "is_admin": is_admin, "telegram_id": id })))
+    }
+    #[cfg(not(debug_assertions))]
+    {
+        tracing::warn!("admin/check: invalid initData, fallback disabled in release");
+        Err(StatusCode::UNAUTHORIZED)
+    }
 }
 
 async fn ping() -> Result<Json<Value>, StatusCode> {

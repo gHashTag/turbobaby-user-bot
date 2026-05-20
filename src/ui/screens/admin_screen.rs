@@ -1071,8 +1071,8 @@ fn render_image_upload(mut image_url: Signal<String>) -> Element {
         if !image_url.read().is_empty() {
             div { style: "margin-top:4px;",
                 img { src: "{image_url}", style: "width:64px;height:64px;object-fit:cover;border-radius:6px;border:1px solid #2a2a4a;cursor:pointer;", onclick: move |_| {
-                    let js = format!("window.open('{}','_blank')", image_url.read());
-                    let _ = js_sys::eval(&js);
+                    let url = image_url.read().clone();
+                    let _ = web_sys::window().and_then(|w| w.open_with_url_and_target(&url, "_blank").ok());
                 } }
             }
         }

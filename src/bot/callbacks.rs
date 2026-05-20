@@ -132,7 +132,9 @@ pub async fn handle_callback(
         d if d.starts_with("confirm_") => {
             let order_id = &d["confirm_".len()..];
             bot.answer_callback_query(&q.id).text(&format!("✅ {}", locale.order_confirmed)).await?;
-            // db.update_order_status(order_id, "confirmed").await.ok();
+            if let Ok(client) = db.pool.get().await {
+                let _ = client.execute("UPDATE orders SET status = 'confirmed' WHERE id = $1", &[&order_id]).await;
+            }
             if let Some(msg) = q.message.as_ref().and_then(|m| match m {
     MaybeInaccessibleMessage::Regular(msg) => Some(msg),
     MaybeInaccessibleMessage::Inaccessible(_) => None,
@@ -147,7 +149,9 @@ pub async fn handle_callback(
         d if d.starts_with("complete_") => {
             let order_id = &d["complete_".len()..];
             bot.answer_callback_query(&q.id).text("📦 Completed!").await?;
-            // db.update_order_status(order_id, "completed").await.ok();
+            if let Ok(client) = db.pool.get().await {
+                let _ = client.execute("UPDATE orders SET status = 'completed' WHERE id = $1", &[&order_id]).await;
+            }
 
             // Check if this is the user's first order, and if so confirm pending referral
             {
@@ -213,7 +217,9 @@ pub async fn handle_callback(
         d if d.starts_with("reject_") => {
             let _order_id = &d["reject_".len()..];
             bot.answer_callback_query(&q.id).text(&format!("❌ {}", locale.order_rejected)).await?;
-            // db.update_order_status(order_id, "rejected").await.ok();
+            if let Ok(client) = db.pool.get().await {
+                let _ = client.execute("UPDATE orders SET status = 'rejected' WHERE id = $1", &[&_order_id]).await;
+            }
             if let Some(msg) = q.message.as_ref().and_then(|m| match m {
     MaybeInaccessibleMessage::Regular(msg) => Some(msg),
     MaybeInaccessibleMessage::Inaccessible(_) => None,

@@ -1,11 +1,12 @@
 use axum::{
     extract::{Path, Query, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     routing::{delete, get, post, put},
     Json, Router,
 };
 use serde::Deserialize;
 use serde_json::{json, Value};
+use crate::api::auth::check_admin;
 use crate::AppState;
 
 pub fn routes() -> Router<AppState> {
@@ -73,7 +74,12 @@ async fn get_quest_places(State(state): State<AppState>) -> Result<Json<Value>, 
     Ok(Json(json!({ "quest_places": items })))
 }
 
-async fn create_quest_place(State(state): State<AppState>, Json(req): Json<QuestPlaceRequest>) -> Result<Json<Value>, StatusCode> {
+async fn create_quest_place(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    Json(req): Json<QuestPlaceRequest>,
+) -> Result<Json<Value>, StatusCode> {
+    check_admin(&headers, &state)?;
     let id = uuid::Uuid::new_v4().to_string();
     let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     client.execute(
@@ -83,7 +89,13 @@ async fn create_quest_place(State(state): State<AppState>, Json(req): Json<Quest
     Ok(Json(json!({ "success": true, "id": id })))
 }
 
-async fn update_quest_place(State(state): State<AppState>, Path(id): Path<String>, Json(req): Json<QuestPlaceRequest>) -> Result<Json<Value>, StatusCode> {
+async fn update_quest_place(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(req): Json<QuestPlaceRequest>,
+) -> Result<Json<Value>, StatusCode> {
+    check_admin(&headers, &state)?;
     let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     client.execute(
         "UPDATE quest_places SET name=$1, category=$2, lat=$3, lon=$4, description=$5, image_url=$6 WHERE id=$7",
@@ -92,7 +104,12 @@ async fn update_quest_place(State(state): State<AppState>, Path(id): Path<String
     Ok(Json(json!({ "success": true })))
 }
 
-async fn delete_quest_place(State(state): State<AppState>, Path(id): Path<String>) -> Result<Json<Value>, StatusCode> {
+async fn delete_quest_place(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<Value>, StatusCode> {
+    check_admin(&headers, &state)?;
     let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     client.execute("UPDATE quest_places SET is_available = false WHERE id = $1", &[&id])
         .await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -144,7 +161,12 @@ async fn get_treasure_hunts(State(state): State<AppState>) -> Result<Json<Value>
     Ok(Json(json!({ "treasure_hunts": items })))
 }
 
-async fn create_treasure_hunt(State(state): State<AppState>, Json(req): Json<TreasureHuntRequest>) -> Result<Json<Value>, StatusCode> {
+async fn create_treasure_hunt(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    Json(req): Json<TreasureHuntRequest>,
+) -> Result<Json<Value>, StatusCode> {
+    check_admin(&headers, &state)?;
     let id = uuid::Uuid::new_v4().to_string();
     let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     client.execute(
@@ -154,7 +176,13 @@ async fn create_treasure_hunt(State(state): State<AppState>, Json(req): Json<Tre
     Ok(Json(json!({ "success": true, "id": id })))
 }
 
-async fn update_treasure_hunt(State(state): State<AppState>, Path(id): Path<String>, Json(req): Json<TreasureHuntRequest>) -> Result<Json<Value>, StatusCode> {
+async fn update_treasure_hunt(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(req): Json<TreasureHuntRequest>,
+) -> Result<Json<Value>, StatusCode> {
+    check_admin(&headers, &state)?;
     let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     client.execute(
         "UPDATE treasure_hunts SET name=$1, description=$2, image_url=$3, black_mark_title=$4, black_mark_description=$5, black_mark_image_url=$6, start_lat=$7, start_lon=$8, start_name=$9 WHERE id=$10",
@@ -163,7 +191,12 @@ async fn update_treasure_hunt(State(state): State<AppState>, Path(id): Path<Stri
     Ok(Json(json!({ "success": true })))
 }
 
-async fn delete_treasure_hunt(State(state): State<AppState>, Path(id): Path<String>) -> Result<Json<Value>, StatusCode> {
+async fn delete_treasure_hunt(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<Value>, StatusCode> {
+    check_admin(&headers, &state)?;
     let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     client.execute("UPDATE treasure_hunts SET is_active = false WHERE id = $1", &[&id])
         .await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -211,7 +244,12 @@ async fn get_quest_locations(
     Ok(Json(json!({ "locations": items })))
 }
 
-async fn create_quest_location(State(state): State<AppState>, Json(req): Json<QuestLocationRequest>) -> Result<Json<Value>, StatusCode> {
+async fn create_quest_location(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    Json(req): Json<QuestLocationRequest>,
+) -> Result<Json<Value>, StatusCode> {
+    check_admin(&headers, &state)?;
     let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let row = client.query_one(
         "INSERT INTO location_quest_locations (name, description, category, map_url, is_final) VALUES ($1,$2,$3,$4,$5) RETURNING id",
@@ -220,7 +258,13 @@ async fn create_quest_location(State(state): State<AppState>, Json(req): Json<Qu
     Ok(Json(json!({ "success": true, "id": row.get::<_, i32>(0) })))
 }
 
-async fn update_quest_location(State(state): State<AppState>, Path(id): Path<i32>, Json(req): Json<QuestLocationRequest>) -> Result<Json<Value>, StatusCode> {
+async fn update_quest_location(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    Path(id): Path<i32>,
+    Json(req): Json<QuestLocationRequest>,
+) -> Result<Json<Value>, StatusCode> {
+    check_admin(&headers, &state)?;
     let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     client.execute(
         "UPDATE location_quest_locations SET name=$1, description=$2, category=$3, map_url=$4, is_final=$5 WHERE id=$6",

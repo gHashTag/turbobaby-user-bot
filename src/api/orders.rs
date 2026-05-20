@@ -1,6 +1,6 @@
 use axum::{
     extract::{Path, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     routing::{get, post, put},
     Json, Router,
 };
@@ -8,6 +8,7 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 use tracing::error;
 
+use crate::api::auth::check_admin;
 use crate::AppState;
 use crate::db::orders::{Order, OrderItem};
 
@@ -115,7 +116,11 @@ async fn notify_admins(
     }
 }
 
-async fn get_orders(State(state): State<AppState>) -> Result<Json<Value>, StatusCode> {
+async fn get_orders(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+) -> Result<Json<Value>, StatusCode> {
+    check_admin(&headers, &state)?;
     let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let rows = client.query(
         "SELECT id, telegram_id, customer_name, customer_phone, customer_telegram, items, subtotal, bonus_used, total, status, shop_id, created_at FROM orders ORDER BY created_at DESC LIMIT 100",
@@ -125,7 +130,12 @@ async fn get_orders(State(state): State<AppState>) -> Result<Json<Value>, Status
     Ok(Json(json!({ "orders": orders })))
 }
 
-async fn get_order(State(state): State<AppState>, Path(id): Path<String>) -> Result<Json<Value>, StatusCode> {
+async fn get_order(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<Value>, StatusCode> {
+    check_admin(&headers, &state)?;
     let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let row = client.query_opt(
         "SELECT id, telegram_id, customer_name, customer_phone, customer_telegram, items, subtotal, bonus_used, total, status, shop_id, created_at FROM orders WHERE id = $1",

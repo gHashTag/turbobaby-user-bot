@@ -1,11 +1,12 @@
 use axum::{
     extract::{Multipart, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     routing::post,
     Json, Router,
 };
 use serde_json::{json, Value};
 
+use crate::api::auth::check_admin;
 use crate::AppState;
 
 pub fn routes() -> Router<AppState> {
@@ -14,9 +15,11 @@ pub fn routes() -> Router<AppState> {
 }
 
 async fn upload_file(
-    State(_): State<AppState>,
+    headers: HeaderMap,
+    State(state): State<AppState>,
     mut multipart: Multipart,
 ) -> Result<Json<Value>, StatusCode> {
+    check_admin(&headers, &state)?;
     while let Some(field) = multipart.next_field().await.map_err(|_| StatusCode::BAD_REQUEST)? {
         let filename = field.file_name().unwrap_or("upload").to_string();
         let data = field.bytes().await.map_err(|_| StatusCode::BAD_REQUEST)?;

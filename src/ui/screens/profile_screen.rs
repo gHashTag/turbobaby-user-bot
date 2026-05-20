@@ -309,16 +309,12 @@ pub fn ProfileScreen() -> Element {
                                     cursor: pointer; transition: transform 0.1s, box-shadow 0.1s;
                                 ",
                                 onclick: move |_| {
-                                    let _ = web_sys::window().map(|_w| {
-                                        let share_url = format!(
-                                            "https://t.me/share/url?url={}&text={}",
-                                            urlencoding::encode(&ref_link_share),
-                                            urlencoding::encode("🎁 Get bonus at Woody Weed!")
-                                        );
-                                        let _ = js_sys::eval(&format!(
-                                            "window.open('{}', '_blank')", share_url
-                                        ));
-                                    });
+                                    let share_url = format!(
+                                        "https://t.me/share/url?url={}&text={}",
+                                        urlencoding::encode(&ref_link_share),
+                                        urlencoding::encode("🎁 Get bonus at Woody Weed!")
+                                    );
+                                    let _ = web_sys::window().and_then(|w| w.open_with_url_and_target(&share_url, "_blank").ok());
                                 },
                                 "Share"
                             }

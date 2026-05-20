@@ -42,32 +42,22 @@ pub fn TechTreeScreen() -> Element {
     let nodes = use_signal(Vec::<TechNode>::new);
     let loading = use_signal(|| true);
 
-    {
-        let mut nodes_c = nodes;
-        let mut loading_c = loading;
-        use_hook(move || {
-            spawn(async move {
-                let base = api_base_url();
-                let client = reqwest::Client::new();
-
-                if let Ok(resp) = client.get(format!("{}/api/tech-tree/nodes", base)).send().await {
-                    if let Ok(text) = resp.text().await {
-                        if let Ok(val) = serde_json::from_str::<serde_json::Value>(&text) {
-                            if let Some(arr) = val.get("nodes").and_then(|v| v.as_array()) {
-                                let items: Vec<TechNode> = arr
-                                    .iter()
-                                    .filter_map(|v| serde_json::from_value(v.clone()).ok())
-                                    .collect();
-                                nodes_c.set(items);
-                            }
-                        }
+    let _ = use_resource(move || async move {
+        let base = api_base_url();
+        let client = reqwest::Client::new();
+        if let Ok(resp) = client.get(format!("{}/api/tech-tree/nodes", base)).send().await {
+            if let Ok(text) = resp.text().await {
+                if let Ok(val) = serde_json::from_str::<serde_json::Value>(&text) {
+                    if let Some(arr) = val.get("nodes").and_then(|v| v.as_array()) {
+                        let items: Vec<TechNode> = arr.iter().filter_map(|v| serde_json::from_value(v.clone()).ok()).collect();
+                        nodes.set(items);
                     }
                 }
-
-                loading_c.set(false);
-            });
-        });
-    }
+            }
+        }
+        loading.set(false);
+        Some(())
+    });
 
     let total = nodes.read().len();
     let completed = nodes.read().iter().filter(|n| n.status == "completed").count();

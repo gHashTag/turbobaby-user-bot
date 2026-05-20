@@ -2,12 +2,13 @@
 
 use axum::{
     extract::{Path, Query, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     routing::{get, post, put},
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use crate::api::auth::check_admin;
 use crate::AppState;
 use crate::trios::garden;
 
@@ -489,8 +490,8 @@ async fn get_user_rewards(
     })?;
 
     let rewards: Vec<RewardResponse> = rows.iter().map(|r| {
-        let expires_at: i64 = r.get(4);
-        let is_used: bool = r.get(5);
+        let expires_at: i64 = r.get(5);
+        let is_used: bool = r.get(6);
         RewardResponse {
             id: r.get(0),
             plant_id: r.get(1),
@@ -608,9 +609,11 @@ async fn get_config(State(state): State<AppState>) -> Result<Json<Value>, Status
 }
 
 async fn update_config(
+    headers: HeaderMap,
     State(state): State<AppState>,
     Json(req): Json<ConfigUpdateRequest>,
 ) -> Result<Json<Value>, StatusCode> {
+    check_admin(&headers, &state)?;
     let client = state.db.pool.get().await
         .map_err(|e| {
             tracing::error!("Database connection error: {}", e);

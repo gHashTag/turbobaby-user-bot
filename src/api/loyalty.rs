@@ -1,12 +1,13 @@
 use axum::{
     extract::{Path, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     routing::{get, post},
     Json, Router,
 };
 use serde::Deserialize;
 use serde_json::{json, Value};
 
+use crate::api::auth::check_admin;
 use crate::AppState;
 use crate::db::loyalty::LoyaltyProfile;
 
@@ -61,7 +62,13 @@ async fn get_profile(State(state): State<AppState>, Path(telegram_id): Path<i64>
     }
 }
 
-async fn add_bonus(State(state): State<AppState>, Path(telegram_id): Path<i64>, Json(req): Json<AddBonusRequest>) -> Result<Json<Value>, StatusCode> {
+async fn add_bonus(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    Path(telegram_id): Path<i64>,
+    Json(req): Json<AddBonusRequest>,
+) -> Result<Json<Value>, StatusCode> {
+    check_admin(&headers, &state)?;
     let tx_id = uuid::Uuid::new_v4().to_string();
     let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     client.execute(
@@ -75,7 +82,13 @@ async fn add_bonus(State(state): State<AppState>, Path(telegram_id): Path<i64>, 
     Ok(Json(json!({ "success": true, "tx_id": tx_id })))
 }
 
-async fn use_bonus(State(state): State<AppState>, Path(telegram_id): Path<i64>, Json(body): Json<Value>) -> Result<Json<Value>, StatusCode> {
+async fn use_bonus(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    Path(telegram_id): Path<i64>,
+    Json(body): Json<Value>,
+) -> Result<Json<Value>, StatusCode> {
+    check_admin(&headers, &state)?;
     let amount = body["amount"].as_f64().unwrap_or(0.0);
     let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let result = client.execute(
@@ -110,7 +123,12 @@ async fn get_loyalty_config(State(state): State<AppState>) -> Result<Json<Value>
     }
 }
 
-async fn update_loyalty_config(State(state): State<AppState>, Json(body): Json<Value>) -> Result<Json<Value>, StatusCode> {
+async fn update_loyalty_config(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    Json(body): Json<Value>,
+) -> Result<Json<Value>, StatusCode> {
+    check_admin(&headers, &state)?;
     let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     client.execute(
         "INSERT INTO loyalty_config (id, config) VALUES (1, $1) ON CONFLICT (id) DO UPDATE SET config = $1",

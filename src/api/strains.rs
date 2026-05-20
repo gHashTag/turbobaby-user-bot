@@ -55,6 +55,9 @@ async fn get_strains(
         .map(|d| d.as_nanos())
         .unwrap_or(0);
     let include_hidden = q.get("include_hidden").map(|v| v == "1" || v == "true").unwrap_or(false);
+    if include_hidden {
+        check_admin(&headers, &state)?;
+    }
     let where_clause = if include_hidden { "" } else { "WHERE is_available = TRUE" };
     let sql = format!(
         "SELECT id, name, category, thc_percent, cbd_percent, effect, flavor_profile, description, price_per_gram, available_grams, image_url, is_available, is_strain_of_day, strain_of_day_discount, name_en, description_en, effect_en, flavor_profile_en, strain_type_en FROM strains {} ORDER BY name -- nonce={}",
@@ -127,17 +130,9 @@ async fn update_strain(State(state): State<AppState>, headers: HeaderMap, Path(i
         tracing::error!("update_strain pool error: {:?}", e);
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
-    // Embed numeric values directly to avoid f64-vs-NUMERIC parameter type mismatch
-    let sql = format!(
-        "UPDATE strains SET name=$1, category=$2, thc_percent={}, cbd_percent={}, effect=$3, flavor_profile=$4, description=$5, price_per_gram={}, available_grams={}, image_url=$6, name_en=$7, description_en=$8, effect_en=$9, flavor_profile_en=$10, strain_type_en=$11 WHERE id=$12",
-        req.thc_percent.map(|v| v.to_string()).unwrap_or_else(|| "NULL".into()),
-        req.cbd_percent.map(|v| v.to_string()).unwrap_or_else(|| "NULL".into()),
-        req.price_per_gram,
-        req.available_grams.map(|v| v.to_string()).unwrap_or_else(|| "NULL".into()),
-    );
     client.execute(
-        &sql,
-        &[&req.name, &req.category, &req.effect, &req.flavor_profile, &req.description, &req.image_url, &req.name_en, &req.description_en, &req.effect_en, &req.flavor_profile_en, &req.strain_type_en, &id],
+        "UPDATE strains SET name=$1, category=$2, thc_percent=$3, cbd_percent=$4, effect=$5, flavor_profile=$6, description=$7, price_per_gram=$8, available_grams=$9, image_url=$10, name_en=$11, description_en=$12, effect_en=$13, flavor_profile_en=$14, strain_type_en=$15 WHERE id=$16",
+        &[&req.name, &req.category, &req.thc_percent, &req.cbd_percent, &req.effect, &req.flavor_profile, &req.description, &req.price_per_gram, &req.available_grams, &req.image_url, &req.name_en, &req.description_en, &req.effect_en, &req.flavor_profile_en, &req.strain_type_en, &id],
     ).await.map_err(|e| {
         tracing::error!("update_strain SQL error for id={}: {:?}", id, e);
         StatusCode::INTERNAL_SERVER_ERROR
@@ -184,13 +179,7 @@ async fn set_strain_of_day(State(state): State<AppState>, headers: HeaderMap, Pa
         (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": format!("pool: {}", e) })))
     })?;
     if enabled {
-        // Embed discount directly in SQL to avoid f64 serialization mismatch
-        // (production DB column may be NUMERIC/REAL instead of FLOAT8)
-        let sql = format!(
-            "UPDATE strains SET is_strain_of_day = true, strain_of_day_discount = {}, strain_of_day_set_at = NOW() WHERE id = $1",
-            discount
-        );
-        client.execute(&sql, &[&id]).await.map_err(|e| {
+        client.execute("UPDATE strains SET is_strain_of_day = true, strain_of_day_discount = $1, strain_of_day_set_at = NOW() WHERE id = $2", &[&discount, &id]).await.map_err(|e| {
             tracing::error!("SOTD update error for id={}: {:?}", id, e);
             (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": format!("update: {}", e), "id": id })))
         })?;

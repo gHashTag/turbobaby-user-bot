@@ -176,10 +176,11 @@ pub async fn record_referral(
 /// - Credits bonus to referrer's balance via bonus_transactions
 /// - Increments referrer's referral_count
 pub async fn confirm_referral(pool: &Pool, referred_id: i64, bonus: f64) -> Result<()> {
-    let client = pool.get().await.context("db pool")?;
+    let mut client = pool.get().await.context("db pool")?;
+    let tx = client.transaction().await.context("start tx")?;
 
     // Find the pending event
-    let row = client
+    let row = tx
         .query_opt(
             "SELECT id, referrer_id FROM referral_events
              WHERE referred_id = $1 AND status = 'pending'",
@@ -189,44 +190,40 @@ pub async fn confirm_referral(pool: &Pool, referred_id: i64, bonus: f64) -> Resu
 
     let (event_id, referrer_id): (Uuid, i64) = match row {
         Some(r) => (r.get("id"), r.get("referrer_id")),
-        None => return Ok(()), // nothing pending — silently ok
+        None => {
+            tx.commit().await.ok();
+            return Ok(()); // nothing pending — silently ok
+        }
     };
 
     // Mark confirmed
-    client
-        .execute(
-            "UPDATE referral_events
-             SET status = 'confirmed', confirmed_at = NOW(), bonus_paid = $1
-             WHERE id = $2",
-            &[&bonus, &event_id],
-        )
-        .await?;
+    tx.execute(
+        "UPDATE referral_events
+         SET status = 'confirmed', confirmed_at = NOW(), bonus_paid = $1
+         WHERE id = $2",
+        &[&bonus, &event_id],
+    ).await?;
 
     // Credit bonus to referrer
     let tx_id = Uuid::new_v4().to_string();
-    client
-        .execute(
-            "INSERT INTO bonus_transactions (id, telegram_id, amount, tx_type, description)
-             VALUES ($1, $2, $3, 'referral_bonus', 'Referral bonus for new user')",
-            &[&tx_id, &referrer_id, &bonus],
-        )
-        .await?;
+    tx.execute(
+        "INSERT INTO bonus_transactions (id, telegram_id, amount, tx_type, description)
+         VALUES ($1, $2, $3, 'referral_bonus', 'Referral bonus for new user')",
+        &[&tx_id, &referrer_id, &bonus],
+    ).await?;
 
-    client
-        .execute(
-            "UPDATE loyalty_profiles SET bonus_balance = bonus_balance + $1 WHERE telegram_id = $2",
-            &[&bonus, &referrer_id],
-        )
-        .await?;
+    tx.execute(
+        "UPDATE loyalty_profiles SET bonus_balance = bonus_balance + $1 WHERE telegram_id = $2",
+        &[&bonus, &referrer_id],
+    ).await?;
 
     // Increment referral_count
-    client
-        .execute(
-            "UPDATE loyalty_profiles SET referral_count = referral_count + 1 WHERE telegram_id = $1",
-            &[&referrer_id],
-        )
-        .await?;
+    tx.execute(
+        "UPDATE loyalty_profiles SET referral_count = referral_count + 1 WHERE telegram_id = $1",
+        &[&referrer_id],
+    ).await?;
 
+    tx.commit().await.context("commit referral tx")?;
     Ok(())
 }
 

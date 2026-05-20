@@ -31,47 +31,32 @@ pub fn TreasureHuntScreen() -> Element {
     let places = use_signal(Vec::<Place>::new);
     let loading = use_signal(|| true);
 
-    {
-        let mut hunts_c = hunts;
-        let mut places_c = places;
-        let mut loading_c = loading;
-        use_hook(move || {
-            spawn(async move {
-                let base = api_base_url();
-                let client = reqwest::Client::new();
-
-                if let Ok(resp) = client.get(format!("{}/api/treasure-hunts", base)).send().await {
-                    if let Ok(text) = resp.text().await {
-                        if let Ok(val) = serde_json::from_str::<serde_json::Value>(&text) {
-                            if let Some(arr) = val.get("treasure_hunts").and_then(|v| v.as_array()) {
-                                let items: Vec<Hunt> = arr
-                                    .iter()
-                                    .filter_map(|v| serde_json::from_value(v.clone()).ok())
-                                    .collect();
-                                hunts_c.set(items);
-                            }
-                        }
+    let _ = use_resource(move || async move {
+        let base = api_base_url();
+        let client = reqwest::Client::new();
+        if let Ok(resp) = client.get(format!("{}/api/treasure-hunts", base)).send().await {
+            if let Ok(text) = resp.text().await {
+                if let Ok(val) = serde_json::from_str::<serde_json::Value>(&text) {
+                    if let Some(arr) = val.get("treasure_hunts").and_then(|v| v.as_array()) {
+                        let items: Vec<Hunt> = arr.iter().filter_map(|v| serde_json::from_value(v.clone()).ok()).collect();
+                        hunts.set(items);
                     }
                 }
-
-                if let Ok(resp) = client.get(format!("{}/api/quest-places", base)).send().await {
-                    if let Ok(text) = resp.text().await {
-                        if let Ok(val) = serde_json::from_str::<serde_json::Value>(&text) {
-                            if let Some(arr) = val.get("quest_places").and_then(|v| v.as_array()) {
-                                let items: Vec<Place> = arr
-                                    .iter()
-                                    .filter_map(|v| serde_json::from_value(v.clone()).ok())
-                                    .collect();
-                                places_c.set(items);
-                            }
-                        }
+            }
+        }
+        if let Ok(resp) = client.get(format!("{}/api/quest-places", base)).send().await {
+            if let Ok(text) = resp.text().await {
+                if let Ok(val) = serde_json::from_str::<serde_json::Value>(&text) {
+                    if let Some(arr) = val.get("quest_places").and_then(|v| v.as_array()) {
+                        let items: Vec<Place> = arr.iter().filter_map(|v| serde_json::from_value(v.clone()).ok()).collect();
+                        places.set(items);
                     }
                 }
-
-                loading_c.set(false);
-            });
-        });
-    }
+            }
+        }
+        loading.set(false);
+        Some(())
+    });
 
     let hunt_count = hunts.read().len();
     let place_count = places.read().len();

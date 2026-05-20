@@ -190,21 +190,29 @@ pub fn check_admin(headers: &HeaderMap, state: &AppState) -> Result<i64, StatusC
         }
     }
 
-    // 2. Fallback for local development: trust X-Admin-Telegram-Id header
-    //    (only useful when NOT running inside Telegram, e.g. browser dev)
-    let id = headers
-        .get("X-Admin-Telegram-Id")
-        .and_then(|v| v.to_str().ok())
-        .and_then(|s| s.parse::<i64>().ok())
-        .ok_or_else(|| {
-            tracing::warn!("admin request without X-Telegram-Init-Data or X-Admin-Telegram-Id");
-            StatusCode::UNAUTHORIZED
-        })?;
+    // 2. Fallback for local development (debug builds only): trust X-Admin-Telegram-Id header
+    //    NEVER allow this in production — it is a full auth bypass vector.
+    #[cfg(debug_assertions)]
+    {
+        let id = headers
+            .get("X-Admin-Telegram-Id")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|s| s.parse::<i64>().ok())
+            .ok_or_else(|| {
+                tracing::warn!("admin request without X-Telegram-Init-Data or X-Admin-Telegram-Id");
+                StatusCode::UNAUTHORIZED
+            })?;
 
-    if !state.config.admin_ids.contains(&id) {
-        tracing::warn!("admin request from non-admin telegram_id={}", id);
-        return Err(StatusCode::FORBIDDEN);
+        if !state.config.admin_ids.contains(&id) {
+            tracing::warn!("admin request from non-admin telegram_id={}", id);
+            return Err(StatusCode::FORBIDDEN);
+        }
+        tracing::info!("admin authenticated via fallback header telegram_id={}", id);
+        Ok(id)
     }
-    tracing::info!("admin authenticated via fallback header telegram_id={}", id);
-    Ok(id)
+    #[cfg(not(debug_assertions))]
+    {
+        tracing::warn!("admin request without valid X-Telegram-Init-Data (fallback disabled in release builds)");
+        Err(StatusCode::UNAUTHORIZED)
+    }
 }

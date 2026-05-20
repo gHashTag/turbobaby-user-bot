@@ -31,10 +31,8 @@ pub fn Quest(id: String) -> Element {
                 }"#
             );
             last_scan_result.set("Scan initiated! Check Telegram app...".to_string());
-            gloo_timers::callback::Timeout::new(2000, move || {
-                scanned.set(false);
-            })
-            .forget();
+            gloo_timers::future::TimeoutFuture::new(2000).await;
+            scanned.set(false);
         });
     };
 

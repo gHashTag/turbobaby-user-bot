@@ -38,6 +38,7 @@ const MIGRATION_SQL: &str = concat!(
     include_str!("../../migrations/016_bilingual_fields.sql"),
     include_str!("../../migrations/017_restore_old_prices_and_discounts.sql"),
     include_str!("../../migrations/018_seed_tea_products.sql"),
+    include_str!("../../migrations/019_add_default_images.sql"),
 );
 
 type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
