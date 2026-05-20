@@ -241,7 +241,7 @@ pub fn ProfileScreen() -> Element {
 
             // QR Code Card
             {
-                let qr_value = format!("https://t.me/WoodyWeedBot?start=ref_{}", referral_code);
+                let qr_value = format!("https://t.me/Woody_WeedPecker_bot?start=ref_{}", referral_code);
                 let qr_svg = QrCode::new(qr_value.as_bytes())
                     .ok()
                     .map(|code| {
@@ -256,7 +256,7 @@ pub fn ProfileScreen() -> Element {
                     })
                     .unwrap_or_default();
                 let _qr_title = t(Lang::Russian, T_PROFILE_TITLE);
-                let ref_link = format!("https://t.me/WoodyWeedBot?start={}", referral_code);
+                let ref_link = format!("https://t.me/Woody_WeedPecker_bot?start=ref_{}", referral_code);
                 let ref_link_copy = ref_link.clone();
                 let ref_link_share = ref_link.clone();
                 rsx! {
@@ -380,7 +380,7 @@ pub fn ProfileScreen() -> Element {
                     background: #0f0f1a; border: 4px solid #2a2a4a;
                     border-radius: 0; padding: 6px 8px; margin-bottom: 8px;
                 ",
-                    span { style: "font-size: 15px; color: #39ff14; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;", "t.me/WoodyWeedBot?start={referral_code}" }
+                    span { style: "font-size: 15px; color: #39ff14; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;", "t.me/Woody_WeedPecker_bot?start=ref_{referral_code}" }
                     button {
                         style: "
                             font-size: 13px; padding: 4px 8px;
@@ -391,7 +391,7 @@ pub fn ProfileScreen() -> Element {
                         onclick: move |_| {
                             let _ = web_sys::window().map(|w| {
                                 let _ = w.navigator().clipboard()
-                                    .write_text(&format!("https://t.me/WoodyWeedBot?start={}", referral_code));
+                                    .write_text(&format!("https://t.me/Woody_WeedPecker_bot?start=ref_{}", referral_code));
                             });
                         },
                         "Copy"
