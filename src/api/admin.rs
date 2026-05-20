@@ -1,19 +1,35 @@
 use axum::{
     extract::{Query, State},
     http::{HeaderMap, StatusCode},
-    routing::get,
+    routing::{get, post},
     Json, Router,
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 // Admin API routes
-use crate::api::auth::{check_admin, validate_init_data};
+use crate::api::auth::{check_admin, validate_init_data, validate_init_data_debug};
 use crate::AppState;
 
 #[derive(Deserialize)]
 struct AdminCheckQuery {
     telegram_id: i64,
+}
+
+#[derive(Deserialize)]
+struct ValidateInitDataRequest {
+    init_data: String,
+}
+
+#[derive(Serialize)]
+struct ValidateInitDataResponse {
+    ok: bool,
+    data_check_string: String,
+    received_hash: String,
+    expected_hash: String,
+    token_preview: String,
+    user: Option<Value>,
+    error: Option<String>,
 }
 
 pub fn routes() -> Router<AppState> {
@@ -24,6 +40,7 @@ pub fn routes() -> Router<AppState> {
         .route("/admin/managers", get(get_managers))
         .route("/admin/check", get(check_admin_access))
         .route("/admin/ping", get(ping))
+        .route("/debug/validate-initdata", post(debug_validate_init_data))
 }
 
 async fn get_stats(_state: State<AppState>) -> Result<Json<Value>, StatusCode> {
@@ -137,4 +154,21 @@ async fn check_admin_access(
 
 async fn ping() -> Result<Json<Value>, StatusCode> {
     Ok(Json(json!({"status": "pong"})))
+}
+
+async fn debug_validate_init_data(
+    State(state): State<AppState>,
+    Json(req): Json<ValidateInitDataRequest>,
+) -> Json<ValidateInitDataResponse> {
+    let (ok, data_check_string, received_hash, expected_hash, user, error) =
+        crate::api::auth::validate_init_data_debug(&req.init_data, &state.config.bot_token);
+    Json(ValidateInitDataResponse {
+        ok,
+        data_check_string,
+        received_hash,
+        expected_hash,
+        token_preview: format!("{}...{}", &state.config.bot_token[..state.config.bot_token.len().min(4)], &state.config.bot_token[state.config.bot_token.len().saturating_sub(4)..]),
+        user: user.map(|u| json!({"id": u.id, "first_name": u.first_name, "username": u.username})),
+        error,
+    })
 }

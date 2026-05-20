@@ -94,6 +94,61 @@ pub fn validate_init_data(init_data: &str, bot_token: &str) -> Option<TelegramUs
     Some(TelegramUser { id, first_name, username })
 }
 
+/// Debug version that returns detailed validation info instead of just Option.
+pub fn validate_init_data_debug(init_data: &str, bot_token: &str) -> (bool, String, String, String, Option<TelegramUser>, Option<String>) {
+    let mut pairs: Vec<(String, String)> = Vec::new();
+    for pair in init_data.split('&') {
+        let mut parts = pair.splitn(2, '=');
+        let key = match parts.next() {
+            Some(k) => k,
+            None => return (false, String::new(), String::new(), String::new(), None, Some("empty pair".to_string())),
+        };
+        let value = parts.next().unwrap_or("");
+        pairs.push((key.to_string(), value.to_string()));
+    }
+
+    let hash = match pairs.iter().find(|(k, _)| k == "hash").map(|(_, v)| v.clone()) {
+        Some(h) => h,
+        None => return (false, String::new(), String::new(), String::new(), None, Some("missing hash".to_string())),
+    };
+
+    let mut data_pairs: Vec<_> = pairs.into_iter().filter(|(k, _)| k != "hash").collect();
+    data_pairs.sort_by(|a, b| a.0.cmp(&b.0));
+
+    let data_check_string = data_pairs
+        .iter()
+        .map(|(k, v)| format!("{}={}", k, v))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    let mut secret_mac = match HmacSha256::new_from_slice(b"WebAppData") {
+        Ok(m) => m,
+        Err(_) => return (false, data_check_string.clone(), hash.clone(), String::new(), None, Some("HMAC init failed".to_string())),
+    };
+    secret_mac.update(bot_token.as_bytes());
+    let secret_key = secret_mac.finalize().into_bytes();
+
+    let mut mac = match HmacSha256::new_from_slice(&secret_key) {
+        Ok(m) => m,
+        Err(_) => return (false, data_check_string.clone(), hash.clone(), String::new(), None, Some("HMAC init failed".to_string())),
+    };
+    mac.update(data_check_string.as_bytes());
+    let result = mac.finalize().into_bytes();
+    let expected_hash = hex::encode(result);
+
+    let user = data_pairs.iter().find(|(k, _)| k == "user").and_then(|(_, v)| {
+        let decoded = urlencoding::decode(v).ok()?;
+        let user: serde_json::Value = serde_json::from_str(&decoded).ok()?;
+        let id = user.get("id")?.as_i64()?;
+        let first_name = user.get("first_name").and_then(|v| v.as_str()).map(|s| s.to_string());
+        let username = user.get("username").and_then(|v| v.as_str()).map(|s| s.to_string());
+        Some(TelegramUser { id, first_name, username })
+    });
+
+    let ok = constant_time_eq::constant_time_eq(expected_hash.as_bytes(), hash.as_bytes());
+    (ok, data_check_string, hash, expected_hash, user, None)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
