@@ -1,9 +1,38 @@
 name: CI
 on: [push, pull_request]
+
+env:
+  CARGO_TERM_COLOR: always
+
 jobs:
   check:
+    name: Check + Test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo check
+      - run: cargo test
+
+  build-wasm:
+    name: Build WASM (Release)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - run: cargo build --target=wasm32-unknown-unknown --release
+
+  build-backend:
+    name: Build Backend (Release)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-musl
+      - run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config musl-tools
+      - run: cargo build --release --target x86_64-unknown-linux-musl --features backend --bin woody-weed-bot-server

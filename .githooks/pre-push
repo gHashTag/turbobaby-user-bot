@@ -1,0 +1,15 @@
+#!/bin/bash
+set -e
+
+echo "🔍 Running pre-push checks..."
+
+echo "→ cargo check"
+cargo check
+
+echo "→ cargo test"
+cargo test
+
+echo "→ cargo build --target=wasm32-unknown-unknown --release"
+cargo build --target=wasm32-unknown-unknown --release
+
+echo "✅ All checks passed. Pushing..."
