@@ -149,11 +149,10 @@ pub async fn handle_callback(
         d if d.starts_with("complete_") => {
             let order_id = &d["complete_".len()..];
             bot.answer_callback_query(&q.id).text("📦 Completed!").await?;
-            if let Ok(client) = db.pool.get().await {
-                let _ = client.execute("UPDATE orders SET status = 'completed' WHERE id = $1", &[&order_id]).await;
-            }
 
-            // Check if this is the user's first order, and if so confirm pending referral
+            // Check if this is the user's first order BEFORE updating status
+            let mut is_first = false;
+            let mut customer_telegram_id: Option<i64> = None;
             {
                 let pool = &db.pool;
                 let db_client = pool.get().await.ok();
@@ -165,40 +164,53 @@ pub async fn handle_callback(
                     ).await.ok().flatten();
 
                     if let Some(row) = order_row {
-                        let customer_telegram_id: i64 = row.get("telegram_id");
-                        // Check if this is their first completed order
+                        let cid: i64 = row.get("telegram_id");
+                        customer_telegram_id = Some(cid);
+                        // Check completed order count BEFORE this update
                         let order_count = db_client.query_one(
-                            "SELECT COUNT(*) as cnt FROM orders WHERE telegram_id = $1 AND status = 'completed'",
-                            &[&customer_telegram_id],
+                            "SELECT COUNT(*) as cnt FROM orders WHERE telegram_id = $1 AND status = 'completed' AND id != $2",
+                            &[&cid, &order_id],
                         ).await.ok();
 
-                        // Only trigger on truly first completion (count == 0 before this one)
-                        let is_first = order_count.map(|r| r.get::<_, i64>("cnt") == 0).unwrap_or(false);
-                        if is_first {
-                            // Get referral bonus amount from loyalty_config
-                            let bonus_row = db_client.query_opt(
-                                "SELECT config->>'referral_bonus' AS bonus FROM loyalty_config WHERE id = 1",
-                                &[],
-                            ).await.ok().flatten();
-                            let bonus: f64 = bonus_row
-                                .and_then(|r| r.get::<_, Option<String>>("bonus"))
-                                .and_then(|s| s.parse().ok())
-                                .unwrap_or(200.0);
+                        is_first = order_count.map(|r| r.get::<_, i64>("cnt") == 0).unwrap_or(false);
+                    }
+                }
+            }
 
-                            let _ = ref_db::confirm_referral(pool, customer_telegram_id, bonus).await;
+            // Now update the order status
+            if let Ok(client) = db.pool.get().await {
+                let _ = client.execute("UPDATE orders SET status = 'completed' WHERE id = $1", &[&order_id]).await;
+            }
 
-                            // Notify referrer if we can find them
-                            let event_row = db_client.query_opt(
-                                "SELECT referrer_id FROM referral_events WHERE referred_id = $1",
-                                &[&customer_telegram_id],
-                            ).await.ok().flatten();
-                            if let Some(ev) = event_row {
-                                let referrer_id: i64 = ev.get("referrer_id");
-                                let _ = bot.send_message(
-                                    teloxide::types::ChatId(referrer_id),
-                                    format!("🎉 {} +{:.0} ฿", locale.referral_bonus, bonus),
-                                ).await;
-                            }
+            // If first order, confirm referral and notify referrer
+            if is_first {
+                if let Some(cid) = customer_telegram_id {
+                    let pool = &db.pool;
+                    let db_client = pool.get().await.ok();
+                    if let Some(db_client) = db_client {
+                        // Get referral bonus amount from loyalty_config
+                        let bonus_row = db_client.query_opt(
+                            "SELECT config->>'referral_bonus' AS bonus FROM loyalty_config WHERE id = 1",
+                            &[],
+                        ).await.ok().flatten();
+                        let bonus: f64 = bonus_row
+                            .and_then(|r| r.get::<_, Option<String>>("bonus"))
+                            .and_then(|s| s.parse().ok())
+                            .unwrap_or(200.0);
+
+                        let _ = ref_db::confirm_referral(pool, cid, bonus).await;
+
+                        // Notify referrer if we can find them
+                        let event_row = db_client.query_opt(
+                            "SELECT referrer_id FROM referral_events WHERE referred_id = $1",
+                            &[&cid],
+                        ).await.ok().flatten();
+                        if let Some(ev) = event_row {
+                            let referrer_id: i64 = ev.get("referrer_id");
+                            let _ = bot.send_message(
+                                teloxide::types::ChatId(referrer_id),
+                                format!("🎉 {} +{:.0} ฿", locale.referral_bonus, bonus),
+                            ).await;
                         }
                     }
                 }

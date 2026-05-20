@@ -175,7 +175,9 @@ fn cart_item_row(item: CartItem) -> Element {
                             price: item.price,
                             quantity: 1,
                             image_url: None,
+                            item_type: item.item_type.clone(),
                         });
+                        crate::ui::telegram::TelegramApp::init().haptic_notification(crate::ui::telegram::HapticNotification::Success);
                     },
                     "+"
                 }

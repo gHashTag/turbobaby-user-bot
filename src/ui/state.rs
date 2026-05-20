@@ -2,6 +2,14 @@
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum CartItemType {
+    Strain,
+    Accessory,
+    Tea,
+    Set,
+}
+
 /// Shopping cart item
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CartItem {
@@ -10,6 +18,7 @@ pub struct CartItem {
     pub price: f64,
     pub quantity: u32,
     pub image_url: Option<String>,
+    pub item_type: CartItemType,
 }
 
 /// Shopping cart

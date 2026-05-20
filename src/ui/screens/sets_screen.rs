@@ -290,7 +290,9 @@ pub fn SetsScreen() -> Element {
                                                             price: discounted_price,
                                                             quantity: 1,
                                                             image_url: None,
+                                                            item_type: CartItemType::Set,
                                                         });
+                                                        crate::ui::telegram::TelegramApp::init().haptic_notification(crate::ui::telegram::HapticNotification::Success);
                                                     },
                                                     "{add_to_cart}"
                                                 }

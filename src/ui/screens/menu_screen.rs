@@ -374,7 +374,9 @@ fn render_strain_card(strain: ApiStrain, mut cart: Signal<Cart>) -> Element {
                                     price: unit_price,
                                     quantity: 1,
                                     image_url: None,
+                                    item_type: CartItemType::Strain,
                                 });
+                                crate::ui::telegram::TelegramApp::init().haptic_notification(crate::ui::telegram::HapticNotification::Success);
                             },
                             "{add_to_cart_label} 🛒"
                         }
