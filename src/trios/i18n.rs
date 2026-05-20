@@ -191,7 +191,7 @@ fn get_ru_translation(key: Key) -> Value {
         T_POINT_5 => "Точка 5: Триада",
         // Screen titles
         T_HOME_TITLE => "Главная",
-        T_HOME_SUBTITLE => "Премиум каннабис с доставкой в Бангкоке",
+        T_HOME_SUBTITLE => "Премиум каннабис на острове Панган",
         T_MENU_TITLE => "🌿 Меню",
         T_MENU_DESC => "Наши премиальные сорта",
         T_SETS_TITLE => "🎁 Наборы",
@@ -292,7 +292,7 @@ fn get_en_translation(key: Key) -> Value {
         T_POINT_5 => "Point 5: Triad",
         // Screen titles
         T_HOME_TITLE => "Home",
-        T_HOME_SUBTITLE => "Premium Cannabis Delivery in Bangkok",
+        T_HOME_SUBTITLE => "Premium Cannabis on Koh Phangan",
         T_MENU_TITLE => "🌿 Menu",
         T_MENU_DESC => "Our premium selection",
         T_SETS_TITLE => "🎁 Sets",

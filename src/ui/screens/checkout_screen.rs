@@ -29,9 +29,9 @@ pub fn CheckoutScreen() -> Element {
     let total_label = t(Lang::Russian, T_TOTAL);
 
     let shops = [
-        ("🏠 Woody Sukhumvit", "Sukhumvit Soi 23, Bangkok"),
-        ("🏠 Woody Thonglor", "Thonglor Soi 5, Bangkok"),
-        ("🏠 Woody Silom", "Silom Road Soi 12, Bangkok"),
+        ("🏠 Woody Phangan", "Koh Phangan, Thailand"),
+        ("🏠 Woody Haad Rin", "Haad Rin, Koh Phangan"),
+        ("🏠 Woody Srithanu", "Srithanu, Koh Phangan"),
     ];
 
     rsx! {

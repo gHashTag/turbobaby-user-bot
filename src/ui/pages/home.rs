@@ -67,7 +67,7 @@ pub fn Home() -> Element {
                     src: assets::logo::MAIN,
                     alt: "Woody Weed Bot"
                 }
-                p { class: "subtitle", "Premium Cannabis Delivery in Bangkok" }
+                p { class: "subtitle", "Premium Cannabis on Koh Phangan" }
             }
 
             // Hero section — Strain of the Day from API
