@@ -1,7 +1,6 @@
 use dioxus::prelude::*;
 use crate::ui::routes::Route;
 use crate::ui::assets;
-use web_sys;
 
 #[component]
 pub fn Home() -> Element {

@@ -43,9 +43,10 @@ pub fn CheckoutScreen() -> Element {
         ("🏠 Woody Srithanu", "Srithanu, Koh Phangan"),
     ];
 
+    let submit_cart_items = cart_items.clone();
     let submit_order = move |_| {
         if is_processing() { return; }
-        let trios_items = to_trios_items(&cart_items);
+        let trios_items = to_trios_items(&submit_cart_items);
         if let Err(_) = validate_checkout(&customer_name(), &customer_phone(), &trios_items) {
             return;
         }
@@ -56,7 +57,7 @@ pub fn CheckoutScreen() -> Element {
         let client = reqwest::Client::new();
         let url = format!("{}/api/orders", base);
 
-        let items_json: Vec<serde_json::Value> = cart_items.iter().map(|item| {
+        let items_json: Vec<serde_json::Value> = submit_cart_items.iter().map(|item| {
             match item.item_type {
                 CartItemType::Strain => json!({
                     "strain_id": item.id,
@@ -302,6 +303,7 @@ pub fn CheckoutScreen() -> Element {
                         let btn_color = if can_order { "#000" } else { "#8b8b9e" };
                         let btn_cursor = if can_order { "pointer" } else { "not-allowed" };
                         let processing = is_processing();
+                        let opacity = if processing { "0.7" } else { "1.0" };
                         rsx! {
                             button {
                                 style: "
@@ -312,7 +314,7 @@ pub fn CheckoutScreen() -> Element {
                                     cursor: {btn_cursor};
                                     box-shadow: 3px 3px 0 #000;
                                     transition: transform 0.1s, box-shadow 0.1s;
-                                    opacity: if processing { "0.7" } else { "1.0" };
+                                    opacity: {opacity};
                                 ",
                                 disabled: !can_order,
                                 onclick: submit_order,

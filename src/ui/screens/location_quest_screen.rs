@@ -39,8 +39,8 @@ fn category_accent(cat: &str) -> &'static str {
 
 #[component]
 pub fn LocationQuestScreen() -> Element {
-    let places = use_signal(Vec::<QuestPlace>::new);
-    let loading = use_signal(|| true);
+    let mut places = use_signal(Vec::<QuestPlace>::new);
+    let mut loading = use_signal(|| true);
 
     let _ = use_resource(move || async move {
         let base = api_base_url();

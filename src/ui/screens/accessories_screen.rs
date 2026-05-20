@@ -1,6 +1,6 @@
 use dioxus::prelude::*;
 use serde::Deserialize;
-use crate::ui::state::{Cart, CartItem};
+use crate::ui::state::{Cart, CartItem, CartItemType};
 use crate::ui::components::bottom_nav::BottomNav;
 use crate::ui::api::context::api_base_url;
 use crate::trios::core::Lang;

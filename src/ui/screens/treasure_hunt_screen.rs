@@ -27,9 +27,9 @@ struct Place {
 
 #[component]
 pub fn TreasureHuntScreen() -> Element {
-    let hunts = use_signal(Vec::<Hunt>::new);
-    let places = use_signal(Vec::<Place>::new);
-    let loading = use_signal(|| true);
+    let mut hunts = use_signal(Vec::<Hunt>::new);
+    let mut places = use_signal(Vec::<Place>::new);
+    let mut loading = use_signal(|| true);
 
     let _ = use_resource(move || async move {
         let base = api_base_url();

@@ -48,14 +48,8 @@ pub fn Modal(props: ModalProps) -> Element {
         div {
             class: "modal-overlay",
             onclick: move |e| {
-                // Only close when clicking the overlay itself, not modal content
-                let target = e.target();
-                let current = e.current_target();
-                if let (Some(t), Some(c)) = (target, current) {
-                    if t == c {
-                        props.on_close.call(e);
-                    }
-                }
+                // Close on overlay click (content has stop_propagation)
+                props.on_close.call(e);
             },
             div {
                 class: "modal {size_class}",

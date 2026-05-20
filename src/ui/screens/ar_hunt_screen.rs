@@ -41,8 +41,8 @@ fn category_color(cat: &str) -> &'static str {
 
 #[component]
 pub fn ARHuntScreen() -> Element {
-    let places = use_signal(Vec::<Place>::new);
-    let loading = use_signal(|| true);
+    let mut places = use_signal(Vec::<Place>::new);
+    let mut loading = use_signal(|| true);
 
     let _ = use_resource(move || async move {
         let base = api_base_url();

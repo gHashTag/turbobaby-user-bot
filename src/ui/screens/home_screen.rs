@@ -2,7 +2,7 @@ use dioxus::prelude::*;
 use serde::Deserialize;
 use web_sys;
 use crate::ui::routes::Route;
-use crate::ui::state::{Cart, CartItem};
+use crate::ui::state::{Cart, CartItem, CartItemType};
 use crate::ui::assets;
 use crate::ui::api::context::api_base_url;
 use crate::trios::core::Lang;
