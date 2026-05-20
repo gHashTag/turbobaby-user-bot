@@ -1,4 +1,5 @@
 use dioxus::prelude::*;
+use web_sys;
 use qrcode::QrCode;
 use serde::Deserialize;
 use crate::ui::routes::Route;
@@ -544,6 +545,25 @@ pub fn ProfileScreen() -> Element {
                             }
                         }
                     }
+                }
+            }
+
+            // Contact / Shop info
+            div { style: "
+                margin: 0 16px 16px;
+                background: #16213e; border: 4px solid #2a2a4a;
+                border-radius: 0; padding: 14px;
+                box-shadow: 4px 4px 0 #000;
+            ",
+                div { style: "font-size: 13px; font-weight: 700; color: #00e5ff; text-transform: uppercase; letter-spacing: 1px; text-shadow: 2px 2px 0 #000; margin-bottom: 10px;", "📍 Контакты" }
+                div { style: "font-size: 15px; margin-bottom: 2px;", "Woody Weed Pecker" }
+                div { style: "font-size: 13px; color: #8b8b9e; margin-bottom: 8px;", "Koh Phangan, Thailand" }
+                div {
+                    style: "cursor: pointer; font-size: 13px; color: #00e5ff; text-decoration: underline;",
+                    onclick: move |_| {
+                        let _ = web_sys::window().and_then(|w| w.open_with_url_and_target("https://www.google.com/maps/place/Woody+Weed+Pecker/@9.7124562,99.9877309,17z/data=!3m1!4b1!4m6!3m5!1s0x3054ffe9f6df4edf:0xf8735a84f5193e1a!8m2!3d9.7124562!4d99.9877309!16s%2Fg%2F11x314fym6!18m1!1e1?entry=ttu&g_ep=EgoyMDI2MDUxMy4wIKXMDSoASAFQAw%3D%3D", "_blank").ok());
+                    },
+                    "Открыть на карте"
                 }
             }
 
