@@ -27,7 +27,8 @@ impl Config {
         dotenvy::dotenv().ok();
 
         let bot_token = std::env::var("BOT_TOKEN")
-            .context("BOT_TOKEN not set")?;
+            .context("BOT_TOKEN not set")?
+            .trim().to_string();
 
         // Hard-coded admins — ensures admin works even before ADMIN_IDS env var is set.
         // Additional admins can be added via ADMIN_IDS="id1,id2,..." without removing these defaults.
