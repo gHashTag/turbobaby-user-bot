@@ -249,7 +249,21 @@ fn AdminPanel(active_tab: Signal<Tab>) -> Element {
 fn StrainsTab() -> Element {
     let telegram_id = use_telegram_id().unwrap_or(0);
     let init_data = use_signal(use_telegram_init_data);
-    let mut cache: Signal<Vec<AdminStrain>> = use_signal(Vec::new);
+    let mut cache: Signal<Vec<AdminStrain>> = use_signal(|| {
+        #[cfg(target_arch = "wasm32")]
+        {
+            if let Some(window) = web_sys::window() {
+                if let Ok(Some(storage)) = window.local_storage() {
+                    if let Ok(Some(json)) = storage.get_item("wwb_admin_strains") {
+                        if let Ok(data) = serde_json::from_str::<Vec<AdminStrain>>(&json) {
+                            return data;
+                        }
+                    }
+                }
+            }
+        }
+        Vec::new()
+    });
     let mut loading = use_signal(|| true);
     let mut name = use_signal(String::new);
     let mut category = use_signal(|| "hybrid".to_string());
@@ -277,6 +291,19 @@ fn StrainsTab() -> Element {
     use_effect(move || {
         if editing_id.read().is_some() {
             let _ = js_sys::eval("setTimeout(()=>{var el=document.querySelector('[data-editing]');if(el)el.scrollIntoView({behavior:'smooth',block:'center'});},100);");
+        }
+    });
+
+    // Persist cache to localStorage
+    use_effect(move || {
+        let data = cache.read().clone();
+        #[cfg(target_arch = "wasm32")]
+        {
+            if let Some(window) = web_sys::window() {
+                if let Ok(Some(storage)) = window.local_storage() {
+                    let _ = storage.set_item("wwb_admin_strains", &serde_json::to_string(&data).unwrap_or_default());
+                }
+            }
         }
     });
 
@@ -546,7 +573,21 @@ fn StrainsTab() -> Element {
 fn AccessoriesTab() -> Element {
     let telegram_id = use_telegram_id().unwrap_or(0);
     let init_data = use_signal(use_telegram_init_data);
-    let mut cache: Signal<Vec<AdminAccessory>> = use_signal(Vec::new);
+    let mut cache: Signal<Vec<AdminAccessory>> = use_signal(|| {
+        #[cfg(target_arch = "wasm32")]
+        {
+            if let Some(window) = web_sys::window() {
+                if let Ok(Some(storage)) = window.local_storage() {
+                    if let Ok(Some(json)) = storage.get_item("wwb_admin_accessories") {
+                        if let Ok(data) = serde_json::from_str::<Vec<AdminAccessory>>(&json) {
+                            return data;
+                        }
+                    }
+                }
+            }
+        }
+        Vec::new()
+    });
     let mut loading = use_signal(|| true);
     let mut name = use_signal(String::new);
     let mut category = use_signal(|| "other".to_string());
@@ -569,6 +610,19 @@ fn AccessoriesTab() -> Element {
     use_effect(move || {
         if editing_id.read().is_some() {
             let _ = js_sys::eval("setTimeout(()=>{var el=document.querySelector('[data-editing]');if(el)el.scrollIntoView({behavior:'smooth',block:'center'});},100);");
+        }
+    });
+
+    // Persist cache to localStorage
+    use_effect(move || {
+        let data = cache.read().clone();
+        #[cfg(target_arch = "wasm32")]
+        {
+            if let Some(window) = web_sys::window() {
+                if let Ok(Some(storage)) = window.local_storage() {
+                    let _ = storage.set_item("wwb_admin_accessories", &serde_json::to_string(&data).unwrap_or_default());
+                }
+            }
         }
     });
 
@@ -797,7 +851,21 @@ fn AccessoriesTab() -> Element {
 fn TeaTab() -> Element {
     let telegram_id = use_telegram_id().unwrap_or(0);
     let init_data = use_signal(use_telegram_init_data);
-    let mut cache: Signal<Vec<AdminTea>> = use_signal(Vec::new);
+    let mut cache: Signal<Vec<AdminTea>> = use_signal(|| {
+        #[cfg(target_arch = "wasm32")]
+        {
+            if let Some(window) = web_sys::window() {
+                if let Ok(Some(storage)) = window.local_storage() {
+                    if let Ok(Some(json)) = storage.get_item("wwb_admin_tea") {
+                        if let Ok(data) = serde_json::from_str::<Vec<AdminTea>>(&json) {
+                            return data;
+                        }
+                    }
+                }
+            }
+        }
+        Vec::new()
+    });
     let mut loading = use_signal(|| true);
     let mut name = use_signal(String::new);
     let mut subcategory = use_signal(|| "green".to_string());
@@ -820,6 +888,19 @@ fn TeaTab() -> Element {
     use_effect(move || {
         if editing_id.read().is_some() {
             let _ = js_sys::eval("setTimeout(()=>{var el=document.querySelector('[data-editing]');if(el)el.scrollIntoView({behavior:'smooth',block:'center'});},100);");
+        }
+    });
+
+    // Persist cache to localStorage
+    use_effect(move || {
+        let data = cache.read().clone();
+        #[cfg(target_arch = "wasm32")]
+        {
+            if let Some(window) = web_sys::window() {
+                if let Ok(Some(storage)) = window.local_storage() {
+                    let _ = storage.set_item("wwb_admin_tea", &serde_json::to_string(&data).unwrap_or_default());
+                }
+            }
         }
     });
 
