@@ -7,6 +7,7 @@ use web_sys;
 use crate::ui::routes::Routes;
 use crate::ui::state::{Cart, LanguageProvider};
 use crate::ui::api::context::ApiClientProvider;
+use crate::ui::telegram::TelegramProvider;
 
 const CART_STORAGE_KEY: &str = "wwb_cart";
 
@@ -48,9 +49,11 @@ pub fn App() -> Element {
     });
 
     rsx! {
-        ApiClientProvider {
-            LanguageProvider {
-                Routes {}
+        TelegramProvider {
+            ApiClientProvider {
+                LanguageProvider {
+                    Routes {}
+                }
             }
         }
     }

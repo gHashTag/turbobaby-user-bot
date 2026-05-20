@@ -159,6 +159,11 @@ pub fn AdminScreen() -> Element {
     let build_version: &'static str = env!("BUILD_VERSION");
     let init_data = use_telegram_init_data();
 
+    #[cfg(target_arch = "wasm32")]
+    {
+        web_sys::console::log_1(&format!("[WWB Admin] telegram_id={}, init_data_len={}, init_data_preview={}", telegram_id, init_data.len(), &init_data[..init_data.len().min(80)]).into());
+    }
+
     let access = use_resource(move || {
         let init_data = init_data.clone();
         async move {

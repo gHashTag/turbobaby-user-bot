@@ -98,11 +98,13 @@ async fn check_admin_access(
     Query(query): Query<AdminCheckQuery>,
     State(state): State<AppState>,
 ) -> Result<Json<Value>, StatusCode> {
-    // 1. Try Telegram initData HMAC validation
-    if let Some(init_data) = headers
+    let init_data_opt = headers
         .get("X-Telegram-Init-Data")
-        .and_then(|v| v.to_str().ok())
-    {
+        .and_then(|v| v.to_str().ok());
+    tracing::info!("admin/check: telegram_id_query={}, init_data_len={}, init_data_present={}", query.telegram_id, init_data_opt.map(|s| s.len()).unwrap_or(0), init_data_opt.is_some());
+
+    // 1. Try Telegram initData HMAC validation
+    if let Some(init_data) = init_data_opt {
         if !init_data.is_empty() {
             if let Some(user) = validate_init_data(init_data, &state.config.bot_token) {
                 let is_admin = state.config.admin_ids.contains(&user.id);
