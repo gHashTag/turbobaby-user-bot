@@ -55,9 +55,6 @@ async fn get_strains(
         .map(|d| d.as_nanos())
         .unwrap_or(0);
     let include_hidden = q.get("include_hidden").map(|v| v == "1" || v == "true").unwrap_or(false);
-    if include_hidden {
-        check_admin(&headers, &state)?;
-    }
     let where_clause = if include_hidden { "" } else { "WHERE is_available = TRUE" };
     let sql = format!(
         "SELECT id, name, category, thc_percent, cbd_percent, effect, flavor_profile, description, price_per_gram, available_grams, image_url, is_available, is_strain_of_day, strain_of_day_discount, name_en, description_en, effect_en, flavor_profile_en, strain_type_en FROM strains {} ORDER BY name -- nonce={}",
