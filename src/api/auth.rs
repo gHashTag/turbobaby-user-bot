@@ -55,9 +55,14 @@ pub fn validate_init_data(init_data: &str, bot_token: &str) -> Option<TelegramUs
         .collect();
     data_pairs.sort_by(|a, b| a.0.cmp(&b.0));
 
-    let data_check_string = data_pairs
+    // Try URL-decoded values first (matches Go/Python reference implementations)
+    let data_check_string_decoded = data_pairs
         .iter()
-        .map(|(k, v)| format!("{}={}", k, v))
+        .map(|(k, v)| {
+            let kd = urlencoding::decode(k).unwrap_or(std::borrow::Cow::Borrowed(k));
+            let vd = urlencoding::decode(v).unwrap_or(std::borrow::Cow::Borrowed(v));
+            format!("{}={}", kd, vd)
+        })
         .collect::<Vec<_>>()
         .join("\n");
 
@@ -68,13 +73,13 @@ pub fn validate_init_data(init_data: &str, bot_token: &str) -> Option<TelegramUs
 
     // expected_hash = HMAC_SHA256(secret_key, data_check_string)
     let mut mac = HmacSha256::new_from_slice(&secret_key).ok()?;
-    mac.update(data_check_string.as_bytes());
+    mac.update(data_check_string_decoded.as_bytes());
     let result = mac.finalize().into_bytes();
     let expected_hash = hex::encode(result);
 
     // Constant-time comparison
     if !constant_time_eq::constant_time_eq(expected_hash.as_bytes(), hash.as_bytes()) {
-        tracing::warn!("initData HMAC mismatch");
+        tracing::warn!("initData HMAC mismatch (decoded)");
         return None;
     }
 
@@ -117,7 +122,11 @@ pub fn validate_init_data_debug(init_data: &str, bot_token: &str) -> (bool, Stri
 
     let data_check_string = data_pairs
         .iter()
-        .map(|(k, v)| format!("{}={}", k, v))
+        .map(|(k, v)| {
+            let kd = urlencoding::decode(k).unwrap_or(std::borrow::Cow::Borrowed(k));
+            let vd = urlencoding::decode(v).unwrap_or(std::borrow::Cow::Borrowed(v));
+            format!("{}={}", kd, vd)
+        })
         .collect::<Vec<_>>()
         .join("\n");
 
