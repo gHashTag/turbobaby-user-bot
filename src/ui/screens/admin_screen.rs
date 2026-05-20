@@ -13,8 +13,37 @@ use serde::Deserialize;
 use serde_json::json;
 use wasm_bindgen::JsCast;
 use crate::ui::api::context::api_base_url;
-use crate::ui::components::{EmptyState, Modal};
-use crate::ui::telegram::{use_telegram_id, use_telegram_init_data, TelegramApp};
+use crate::ui::components::{EmptyState, Modal, Toast, ToastKind, ToastContainer, Skeleton, SkeletonShape};
+use crate::ui::telegram::{use_telegram_id, use_telegram_init_data, TelegramApp, HapticNotification};
+
+#[derive(Clone)]
+struct ToastItem { id: u64, message: String, kind: ToastKind }
+
+fn push_toast(mut toasts: Signal<Vec<ToastItem>>, message: String, kind: ToastKind) {
+    let id = js_sys::Date::now() as u64;
+    toasts.write().push(ToastItem { id, message, kind });
+    spawn(async move {
+        gloo_timers::future::TimeoutFuture::new(4000).await;
+        toasts.write().retain(|t| t.id != id);
+    });
+}
+
+fn render_toasts(mut toasts: Signal<Vec<ToastItem>>) -> Element {
+    let items = toasts.read().clone();
+    if items.is_empty() { return rsx! {}; }
+    rsx! {
+        ToastContainer {
+            for toast in items {
+                Toast {
+                    key: "{toast.id}",
+                    kind: toast.kind,
+                    message: toast.message.clone(),
+                    on_close: move |_| { toasts.write().retain(|t| t.id != toast.id); }
+                }
+            }
+        }
+    }
+}
 
 // ── Data models ───────────────────────────────────────────────
 
@@ -243,6 +272,13 @@ fn StrainsTab() -> Element {
     let mut delete_target_id: Signal<Option<String>> = use_signal(|| None);
     let mut search_query = use_signal(String::new);
     let reload = use_signal(|| 0u32);
+    let toasts: Signal<Vec<ToastItem>> = use_signal(Vec::new);
+
+    use_effect(move || {
+        if editing_id.read().is_some() {
+            let _ = js_sys::eval("setTimeout(()=>{var el=document.querySelector('[data-editing]');if(el)el.scrollIntoView({behavior:'smooth',block:'center'});},100);");
+        }
+    });
 
     // Fetch data into cache (runs on mount + when reload changes)
     let _ = use_resource(move || async move {
@@ -378,11 +414,12 @@ fn StrainsTab() -> Element {
                                                 cache.write().iter_mut().find(|s| s.id == temp_id).map(|s| s.id = real_id.to_string());
                                             }
                                         }
+                                        TelegramApp::init().haptic_notification(HapticNotification::Success);
                                     }
                                     _ => {
-                                        // Rollback on error
                                         cache.write().retain(|s| s.id != temp_id);
                                         status.set("❌ Ошибка добавления".into());
+                                        TelegramApp::init().haptic_notification(HapticNotification::Error);
                                     }
                                 }
                             });
@@ -396,7 +433,17 @@ fn StrainsTab() -> Element {
             h3 { style: list_title_style(), "Страйны ({filtered.len()})" }
             {render_search(search_query)}
             if *loading.read() {
-                div { style: "color:#888;", "⏳ Загрузка..." }
+                div { style: "display:flex;flex-direction:column;gap:8px;",
+                    for _ in 0..4 {
+                        div { style: "background:#1a1a2e;padding:8px 10px;border-radius:6px;display:flex;align-items:center;gap:6px;",
+                            Skeleton { shape: SkeletonShape::Avatar }
+                            div { style: "flex:1;display:flex;flex-direction:column;gap:4px;",
+                                Skeleton { shape: SkeletonShape::Text, width: Some("60%".into()) }
+                                Skeleton { shape: SkeletonShape::TextSm, width: Some("40%".into()) }
+                            }
+                        }
+                    }
+                }
             } else if filtered.is_empty() {
                 EmptyState {
                     icon: "🔍",
@@ -437,15 +484,22 @@ fn StrainsTab() -> Element {
                                     let next_avail = !s.is_available;
                                     move |_| {
                                         let id = id.clone();
-                                        // Optimistic toggle
                                         cache.write().iter_mut().find(|s| s.id == id).map(|s| s.is_available = next_avail);
                                         spawn(async move {
                                             let url = format!("{}/api/strains/{}/availability", api_base_url(), id);
-                                            let _ = reqwest::Client::new().put(&url)
+                                            let res = reqwest::Client::new().put(&url)
                                                 .header("X-Telegram-Init-Data", init_data.read().clone())
- .header("X-Admin-Telegram-Id", telegram_id.to_string())
+                                                .header("X-Admin-Telegram-Id", telegram_id.to_string())
                                                 .json(&json!({ "is_available": next_avail }))
                                                 .send().await;
+                                            match res {
+                                                Ok(r) if r.status().is_success() => { TelegramApp::init().haptic_notification(HapticNotification::Success); }
+                                                _ => {
+                                                    cache.write().iter_mut().find(|s| s.id == id).map(|s| s.is_available = !next_avail);
+                                                    push_toast(toasts, "Не удалось изменить статус страйна".into(), ToastKind::Error);
+                                                    TelegramApp::init().haptic_notification(HapticNotification::Error);
+                                                }
+                                            }
                                         });
                                     }
                                 },
@@ -462,16 +516,26 @@ fn StrainsTab() -> Element {
                 target: delete_target_id,
                 item_name: "страйн".to_string(),
                 on_confirm: move |id: String| {
+                    let deleted = cache.read().iter().find(|s| s.id == id).cloned();
                     cache.write().retain(|s| s.id != id);
                     spawn(async move {
                         let url = format!("{}/api/strains/{}", api_base_url(), id);
-                        let _ = reqwest::Client::new().delete(&url)
+                        let res = reqwest::Client::new().delete(&url)
                             .header("X-Telegram-Init-Data", init_data.read().clone())
                             .header("X-Admin-Telegram-Id", telegram_id.to_string())
                             .send().await;
+                        match res {
+                            Ok(r) if r.status().is_success() => { push_toast(toasts, "Страйн удалён".into(), ToastKind::Success); TelegramApp::init().haptic_notification(HapticNotification::Success); }
+                            _ => {
+                                if let Some(item) = deleted { cache.write().push(item); }
+                                push_toast(toasts, "Не удалось удалить страйн".into(), ToastKind::Error);
+                                TelegramApp::init().haptic_notification(HapticNotification::Error);
+                            }
+                        }
                     });
                 }
             }
+            {render_toasts(toasts)}
         }
     }
 }
@@ -500,6 +564,13 @@ fn AccessoriesTab() -> Element {
     let mut delete_target_id: Signal<Option<String>> = use_signal(|| None);
     let mut search_query = use_signal(String::new);
     let reload = use_signal(|| 0u32);
+    let toasts: Signal<Vec<ToastItem>> = use_signal(Vec::new);
+
+    use_effect(move || {
+        if editing_id.read().is_some() {
+            let _ = js_sys::eval("setTimeout(()=>{var el=document.querySelector('[data-editing]');if(el)el.scrollIntoView({behavior:'smooth',block:'center'});},100);");
+        }
+    });
 
     let _ = use_resource(move || async move {
         let _ = reload.read();
@@ -604,8 +675,9 @@ fn AccessoriesTab() -> Element {
                                                 cache.write().iter_mut().find(|a| a.id == temp_id).map(|a| a.id = real_id.to_string());
                                             }
                                         }
+                                        TelegramApp::init().haptic_notification(HapticNotification::Success);
                                     }
-                                    _ => { cache.write().retain(|a| a.id != temp_id); status.set("❌ Error".into()); }
+                                    _ => { cache.write().retain(|a| a.id != temp_id); status.set("❌ Error".into()); TelegramApp::init().haptic_notification(HapticNotification::Error); }
                                 }
                             });
                         },
@@ -617,7 +689,17 @@ fn AccessoriesTab() -> Element {
             h3 { style: list_title_style(), "Аксессуары ({filtered.len()})" }
             {render_search(search_query)}
             if *loading.read() {
-                div { style: "color:#888;", "⏳ Загрузка..." }
+                div { style: "display:flex;flex-direction:column;gap:8px;",
+                    for _ in 0..4 {
+                        div { style: "background:#1a1a2e;padding:8px 10px;border-radius:6px;display:flex;align-items:center;gap:6px;",
+                            Skeleton { shape: SkeletonShape::Avatar }
+                            div { style: "flex:1;display:flex;flex-direction:column;gap:4px;",
+                                Skeleton { shape: SkeletonShape::Text, width: Some("60%".into()) }
+                                Skeleton { shape: SkeletonShape::TextSm, width: Some("40%".into()) }
+                            }
+                        }
+                    }
+                }
             } else if filtered.is_empty() {
                 EmptyState {
                     icon: "🔍",
@@ -657,10 +739,18 @@ fn AccessoriesTab() -> Element {
                                         cache.write().iter_mut().find(|a| a.id == id).map(|a| a.is_available = next);
                                         spawn(async move {
                                             let url = format!("{}/api/accessories/{}/availability", api_base_url(), id);
-                                            let _ = reqwest::Client::new().put(&url)
+                                            let res = reqwest::Client::new().put(&url)
                                                 .header("X-Telegram-Init-Data", init_data.read().clone())
- .header("X-Admin-Telegram-Id", telegram_id.to_string())
+                                                .header("X-Admin-Telegram-Id", telegram_id.to_string())
                                                 .json(&json!({ "is_available": next })).send().await;
+                                            match res {
+                                                Ok(r) if r.status().is_success() => { TelegramApp::init().haptic_notification(HapticNotification::Success); }
+                                                _ => {
+                                                    cache.write().iter_mut().find(|a| a.id == id).map(|a| a.is_available = !next);
+                                                    push_toast(toasts, "Не удалось изменить статус аксессуара".into(), ToastKind::Error);
+                                                    TelegramApp::init().haptic_notification(HapticNotification::Error);
+                                                }
+                                            }
                                         });
                                     }
                                 },
@@ -677,16 +767,26 @@ fn AccessoriesTab() -> Element {
                 target: delete_target_id,
                 item_name: "аксессуар".to_string(),
                 on_confirm: move |id: String| {
+                    let deleted = cache.read().iter().find(|a| a.id == id).cloned();
                     cache.write().retain(|a| a.id != id);
                     spawn(async move {
                         let url = format!("{}/api/accessories/{}", api_base_url(), id);
-                        let _ = reqwest::Client::new().delete(&url)
+                        let res = reqwest::Client::new().delete(&url)
                             .header("X-Telegram-Init-Data", init_data.read().clone())
                             .header("X-Admin-Telegram-Id", telegram_id.to_string())
                             .send().await;
+                        match res {
+                            Ok(r) if r.status().is_success() => { push_toast(toasts, "Аксессуар удалён".into(), ToastKind::Success); TelegramApp::init().haptic_notification(HapticNotification::Success); }
+                            _ => {
+                                if let Some(item) = deleted { cache.write().push(item); }
+                                push_toast(toasts, "Не удалось удалить аксессуар".into(), ToastKind::Error);
+                                TelegramApp::init().haptic_notification(HapticNotification::Error);
+                            }
+                        }
                     });
                 }
             }
+            {render_toasts(toasts)}
         }
     }
 }
@@ -715,6 +815,13 @@ fn TeaTab() -> Element {
     let mut delete_target_id: Signal<Option<String>> = use_signal(|| None);
     let mut search_query = use_signal(String::new);
     let reload = use_signal(|| 0u32);
+    let toasts: Signal<Vec<ToastItem>> = use_signal(Vec::new);
+
+    use_effect(move || {
+        if editing_id.read().is_some() {
+            let _ = js_sys::eval("setTimeout(()=>{var el=document.querySelector('[data-editing]');if(el)el.scrollIntoView({behavior:'smooth',block:'center'});},100);");
+        }
+    });
 
     let _ = use_resource(move || async move {
         let _ = reload.read();
@@ -817,8 +924,9 @@ fn TeaTab() -> Element {
                                                 cache.write().iter_mut().find(|t| t.id == temp_id).map(|t| t.id = real_id.to_string());
                                             }
                                         }
+                                        TelegramApp::init().haptic_notification(HapticNotification::Success);
                                     }
-                                    _ => { cache.write().retain(|t| t.id != temp_id); status.set("❌ Error".into()); }
+                                    _ => { cache.write().retain(|t| t.id != temp_id); status.set("❌ Error".into()); TelegramApp::init().haptic_notification(HapticNotification::Error); }
                                 }
                             });
                         },
@@ -830,7 +938,17 @@ fn TeaTab() -> Element {
             h3 { style: list_title_style(), "Чай ({filtered.len()})" }
             {render_search(search_query)}
             if *loading.read() {
-                div { style: "color:#888;", "⏳ Загрузка..." }
+                div { style: "display:flex;flex-direction:column;gap:8px;",
+                    for _ in 0..4 {
+                        div { style: "background:#1a1a2e;padding:8px 10px;border-radius:6px;display:flex;align-items:center;gap:6px;",
+                            Skeleton { shape: SkeletonShape::Avatar }
+                            div { style: "flex:1;display:flex;flex-direction:column;gap:4px;",
+                                Skeleton { shape: SkeletonShape::Text, width: Some("60%".into()) }
+                                Skeleton { shape: SkeletonShape::TextSm, width: Some("40%".into()) }
+                            }
+                        }
+                    }
+                }
             } else if filtered.is_empty() {
                 EmptyState {
                     icon: "🔍",
@@ -870,10 +988,18 @@ fn TeaTab() -> Element {
                                         cache.write().iter_mut().find(|t| t.id == id).map(|t| t.is_available = next);
                                         spawn(async move {
                                             let url = format!("{}/api/tea-products/{}/availability", api_base_url(), id);
-                                            let _ = reqwest::Client::new().put(&url)
+                                            let res = reqwest::Client::new().put(&url)
                                                 .header("X-Telegram-Init-Data", init_data.read().clone())
- .header("X-Admin-Telegram-Id", telegram_id.to_string())
+                                                .header("X-Admin-Telegram-Id", telegram_id.to_string())
                                                 .json(&json!({ "is_available": next })).send().await;
+                                            match res {
+                                                Ok(r) if r.status().is_success() => { TelegramApp::init().haptic_notification(HapticNotification::Success); }
+                                                _ => {
+                                                    cache.write().iter_mut().find(|t| t.id == id).map(|t| t.is_available = !next);
+                                                    push_toast(toasts, "Не удалось изменить статус чая".into(), ToastKind::Error);
+                                                    TelegramApp::init().haptic_notification(HapticNotification::Error);
+                                                }
+                                            }
                                         });
                                     }
                                 },
@@ -890,16 +1016,26 @@ fn TeaTab() -> Element {
                 target: delete_target_id,
                 item_name: "чай".to_string(),
                 on_confirm: move |id: String| {
+                    let deleted = cache.read().iter().find(|t| t.id == id).cloned();
                     cache.write().retain(|t| t.id != id);
                     spawn(async move {
                         let url = format!("{}/api/tea-products/{}", api_base_url(), id);
-                        let _ = reqwest::Client::new().delete(&url)
+                        let res = reqwest::Client::new().delete(&url)
                             .header("X-Telegram-Init-Data", init_data.read().clone())
                             .header("X-Admin-Telegram-Id", telegram_id.to_string())
                             .send().await;
+                        match res {
+                            Ok(r) if r.status().is_success() => { push_toast(toasts, "Чай удалён".into(), ToastKind::Success); TelegramApp::init().haptic_notification(HapticNotification::Success); }
+                            _ => {
+                                if let Some(item) = deleted { cache.write().push(item); }
+                                push_toast(toasts, "Не удалось удалить чай".into(), ToastKind::Error);
+                                TelegramApp::init().haptic_notification(HapticNotification::Error);
+                            }
+                        }
                     });
                 }
             }
+            {render_toasts(toasts)}
         }
     }
 }
@@ -935,7 +1071,8 @@ fn render_image_upload(mut image_url: Signal<String>) -> Element {
         if !image_url.read().is_empty() {
             div { style: "margin-top:4px;",
                 img { src: "{image_url}", style: "width:64px;height:64px;object-fit:cover;border-radius:6px;border:1px solid #2a2a4a;cursor:pointer;", onclick: move |_| {
-                    let _ = js_sys::eval("window.open('"); // placeholder for expand
+                    let js = format!("window.open('{}','_blank')", image_url.read());
+                    let _ = js_sys::eval(&js);
                 } }
             }
         }
@@ -1025,7 +1162,7 @@ fn ItemRow(
     on_edit: EventHandler<()>, on_toggle: EventHandler<()>, on_delete: EventHandler<()>,
 ) -> Element {
     let badge = if is_available { ("#39ff14", "ВКЛ") } else { ("#666", "ВЫКЛ") };
-    let toggle_label = if is_available { "⬇️" } else { "⬆️" };
+    let toggle_label = if is_available { "👁️" } else { "🚫" };
     let thumb = match image_url.as_deref() {
         Some(url) if !url.is_empty() => rsx! { img { src: "{url}", style: "width:36px;height:36px;object-fit:cover;border-radius:6px;border:1px solid #2a2a4a;flex-shrink:0;" } },
         _ => rsx! { div { style: "width:36px;height:36px;background:#2a2a4a;border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:16px;", "📦" } },
@@ -1039,11 +1176,11 @@ fn ItemRow(
                 div { style: "font-size:10px;color:#888;margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;", "{sub}" }
             }
             span { style: "font-size:9px;padding:2px 5px;background:{badge.0}20;color:{badge.0};border-radius:8px;font-weight:600;flex-shrink:0;", "{badge.1}" }
-            button { style: "flex-shrink:0;padding:5px 6px;background:#2a2a4a;color:#e8e8e8;border:none;border-radius:4px;font-size:14px;cursor:pointer;line-height:1;",
+            button { style: "flex-shrink:0;min-width:44px;min-height:44px;padding:8px 10px;background:#2a2a4a;color:#e8e8e8;border:none;border-radius:4px;font-size:16px;cursor:pointer;line-height:1;display:flex;align-items:center;justify-content:center;",
                 onclick: move |e: Event<MouseData>| { e.stop_propagation(); on_edit.call(()); }, "✏️" }
-            button { style: "flex-shrink:0;padding:5px 6px;background:#2a2a4a;color:#e8e8e8;border:none;border-radius:4px;font-size:14px;cursor:pointer;line-height:1;",
+            button { style: "flex-shrink:0;min-width:44px;min-height:44px;padding:8px 10px;background:#2a2a4a;color:#e8e8e8;border:none;border-radius:4px;font-size:16px;cursor:pointer;line-height:1;display:flex;align-items:center;justify-content:center;",
                 onclick: move |e: Event<MouseData>| { e.stop_propagation(); on_toggle.call(()); }, "{toggle_label}" }
-            button { style: "flex-shrink:0;padding:5px 6px;background:#3a1a1a;color:#ff8888;border:none;border-radius:4px;font-size:14px;cursor:pointer;line-height:1;",
+            button { style: "flex-shrink:0;min-width:44px;min-height:44px;padding:8px 10px;background:#3a1a1a;color:#ff8888;border:none;border-radius:4px;font-size:16px;cursor:pointer;line-height:1;display:flex;align-items:center;justify-content:center;",
                 onclick: move |e: Event<MouseData>| { e.stop_propagation(); on_delete.call(()); }, "🗑" }
         }
     }
@@ -1075,10 +1212,10 @@ fn EditStrainCard(
     let mut effect_en = use_signal(|| item.effect_en.clone().unwrap_or_default());
     let mut flavor_profile_en = use_signal(|| item.flavor_profile_en.clone().unwrap_or_default());
     let mut strain_type_en = use_signal(|| item.strain_type_en.clone().unwrap_or_default());
-    let status = use_signal(String::new);
+    let mut status = use_signal(String::new);
     let item_id = item.id.clone();
     rsx! {
-        div { style: edit_card_style(),
+        div { "data-editing": "true", style: edit_card_style(),
             div { style: edit_header_style(), "✏️ Редактирование" }
             input { style: input_style(), placeholder: "Название", value: "{name}", oninput: move |e| name.set(e.value()) }
             select { style: input_style(), value: "{category}", oninput: move |e| category.set(e.value()),
@@ -1100,9 +1237,19 @@ fn EditStrainCard(
             div { style: "display:flex;gap:8px;",
                 button { style: submit_btn_style(),
                     onclick: move |_| {
-                        let n = name(); let c = category(); let p = price.read().parse::<f64>().unwrap_or(0.0);
-                        let t = thc.read().parse::<f64>().ok(); let cb = cbd.read().parse::<f64>().ok();
-                        let g = grams.read().parse::<f64>().unwrap_or(0.0);
+                        let n = name().trim().to_string();
+                        let c = category();
+                        let p = match price.read().trim().parse::<f64>() {
+                            Ok(v) if v > 0.0 => v,
+                            _ => { status.set("❌ Цена должна быть числом больше 0".into()); return; }
+                        };
+                        let t = thc.read().trim().parse::<f64>().ok();
+                        let cb = cbd.read().trim().parse::<f64>().ok();
+                        let g = match grams.read().trim().parse::<f64>() {
+                            Ok(v) if v >= 0.0 => v,
+                            _ => { status.set("❌ Граммы должны быть числом ≥ 0".into()); return; }
+                        };
+                        if n.is_empty() { status.set("❌ Название обязательно".into()); return; }
                         let d = description(); let ef = effect(); let fp = flavor_profile(); let img = image_url();
                         let ne = name_en(); let de = description_en(); let ee = effect_en();
                         let fpe = flavor_profile_en(); let ste = strain_type_en();
@@ -1131,7 +1278,7 @@ fn EditStrainCard(
                                 "description": if d.is_empty() { serde_json::Value::Null } else { d.into() },
                                 "effect": if ef.is_empty() { serde_json::Value::Null } else { ef.into() },
                                 "flavor_profile": if fp.is_empty() { serde_json::Value::Null } else { fp.into() },
-                                "is_available": true,
+                                "is_available": item.is_available,
                                 "image_url": if img.is_empty() { serde_json::Value::Null } else { img.into() },
                                 "name_en": if ne.is_empty() { serde_json::Value::Null } else { ne.into() },
                                 "description_en": if de.is_empty() { serde_json::Value::Null } else { de.into() },
@@ -1148,10 +1295,14 @@ fn EditStrainCard(
                                 Ok(r) => r.status().is_success(),
                                 Err(_) => false,
                             };
-                            if !success {
+                            if success {
+                                TelegramApp::init().haptic_notification(HapticNotification::Success);
+                            } else {
+                                TelegramApp::init().haptic_notification(HapticNotification::Error);
                                 if let Some(orig) = original {
                                     cache.write().iter_mut().find(|s| s.id == id).map(|s| *s = orig);
                                 }
+                                status.set("❌ Не сохранено. Попробуйте снова".into());
                             }
                         });
                     },
@@ -1159,7 +1310,7 @@ fn EditStrainCard(
                 }
                 button { style: cancel_btn_style(), onclick: move |_| on_cancel.call(()), "Отмена" }
             }
-            if !status.read().is_empty() { div { style: "padding:8px;color:#ff4757;font-size:13px;", "{status}" } }
+            {render_status(status)}
         }
     }
 }
@@ -1183,10 +1334,10 @@ fn EditAccessoryCard(
     let mut name_en = use_signal(|| item.name_en.clone().unwrap_or_default());
     let mut description_en = use_signal(|| item.description_en.clone().unwrap_or_default());
     let mut category_en = use_signal(|| item.category_en.clone().unwrap_or_default());
-    let status = use_signal(String::new);
+    let mut status = use_signal(String::new);
     let item_id = item.id.clone();
     rsx! {
-        div { style: edit_card_style(),
+        div { "data-editing": "true", style: edit_card_style(),
             div { style: edit_header_style(), "✏️ Редактирование" }
             input { style: input_style(), placeholder: "Название", value: "{name}", oninput: move |e| name.set(e.value()) }
             select { style: input_style(), value: "{category}", oninput: move |e| category.set(e.value()),
@@ -1206,8 +1357,18 @@ fn EditAccessoryCard(
             div { style: "display:flex;gap:8px;",
                 button { style: submit_btn_style(),
                     onclick: move |_| {
-                        let n = name(); let c = category(); let p = price.read().parse::<f64>().unwrap_or(0.0);
-                        let s_str = stock(); let s_val: i32 = s_str.parse().unwrap_or(0);
+                        let n = name().trim().to_string();
+                        let c = category();
+                        let p = match price.read().trim().parse::<f64>() {
+                            Ok(v) if v > 0.0 => v,
+                            _ => { status.set("❌ Цена должна быть числом больше 0".into()); return; }
+                        };
+                        let s_str = stock();
+                        let s_val: i32 = match s_str.trim().parse() {
+                            Ok(v) if v >= 0 => v,
+                            _ => { status.set("❌ Количество должно быть числом ≥ 0".into()); return; }
+                        };
+                        if n.is_empty() { status.set("❌ Название обязательно".into()); return; }
                         let d = description(); let img = image_url(); let vid = video_url();
                         let ne = name_en(); let de = description_en(); let ce = category_en();
                         let id = item_id.clone();
@@ -1224,7 +1385,7 @@ fn EditAccessoryCard(
                         on_saved.call(());
                         spawn(async move {
                             let body = json!({
-                                "name": n, "category": c, "price": p, "stock": s_val, "is_available": true,
+                                "name": n, "category": c, "price": p, "stock": s_val, "is_available": item.is_available,
                                 "description": if d.is_empty() { serde_json::Value::Null } else { d.into() },
                                 "image_url": if img.is_empty() { serde_json::Value::Null } else { img.into() },
                                 "video_url": if vid.is_empty() { serde_json::Value::Null } else { vid.into() },
@@ -1241,10 +1402,14 @@ fn EditAccessoryCard(
                                 Ok(r) => r.status().is_success(),
                                 Err(_) => false,
                             };
-                            if !success {
+                            if success {
+                                TelegramApp::init().haptic_notification(HapticNotification::Success);
+                            } else {
+                                TelegramApp::init().haptic_notification(HapticNotification::Error);
                                 if let Some(orig) = original {
                                     cache.write().iter_mut().find(|a| a.id == id).map(|a| *a = orig);
                                 }
+                                status.set("❌ Не сохранено. Попробуйте снова".into());
                             }
                         });
                     },
@@ -1252,7 +1417,7 @@ fn EditAccessoryCard(
                 }
                 button { style: cancel_btn_style(), onclick: move |_| on_cancel.call(()), "Отмена" }
             }
-            if !status.read().is_empty() { div { style: "padding:8px;color:#ff4757;font-size:13px;", "{status}" } }
+            {render_status(status)}
         }
     }
 }
@@ -1276,10 +1441,10 @@ fn EditTeaCard(
     let mut name_en = use_signal(|| item.name_en.clone().unwrap_or_default());
     let mut description_en = use_signal(|| item.description_en.clone().unwrap_or_default());
     let mut subcategory_en = use_signal(|| item.subcategory_en.clone().unwrap_or_default());
-    let status = use_signal(String::new);
+    let mut status = use_signal(String::new);
     let item_id = item.id.clone();
     rsx! {
-        div { style: edit_card_style(),
+        div { "data-editing": "true", style: edit_card_style(),
             div { style: edit_header_style(), "✏️ Редактирование" }
             input { style: input_style(), placeholder: "Название", value: "{name}", oninput: move |e| name.set(e.value()) }
             select { style: input_style(), value: "{subcategory}", oninput: move |e| subcategory.set(e.value()),
@@ -1298,8 +1463,18 @@ fn EditTeaCard(
             div { style: "display:flex;gap:8px;",
                 button { style: submit_btn_style(),
                     onclick: move |_| {
-                        let n = name(); let sc = subcategory(); let p = price.read().parse::<f64>().unwrap_or(0.0);
-                        let s_str = stock(); let s_val: i32 = s_str.parse().unwrap_or(0);
+                        let n = name().trim().to_string();
+                        let sc = subcategory();
+                        let p = match price.read().trim().parse::<f64>() {
+                            Ok(v) if v > 0.0 => v,
+                            _ => { status.set("❌ Цена должна быть числом больше 0".into()); return; }
+                        };
+                        let s_str = stock();
+                        let s_val: i32 = match s_str.trim().parse() {
+                            Ok(v) if v >= 0 => v,
+                            _ => { status.set("❌ Количество должно быть числом ≥ 0".into()); return; }
+                        };
+                        if n.is_empty() { status.set("❌ Название обязательно".into()); return; }
                         let d = description(); let img = image_url(); let vid = video_url();
                         let ne = name_en(); let de = description_en(); let sce = subcategory_en();
                         let id = item_id.clone();
@@ -1316,7 +1491,7 @@ fn EditTeaCard(
                         on_saved.call(());
                         spawn(async move {
                             let body = json!({
-                                "name": n, "subcategory": sc, "price": p, "stock": s_val, "is_available": true,
+                                "name": n, "subcategory": sc, "price": p, "stock": s_val, "is_available": item.is_available,
                                 "description": if d.is_empty() { serde_json::Value::Null } else { d.into() },
                                 "image_url": if img.is_empty() { serde_json::Value::Null } else { img.into() },
                                 "video_url": if vid.is_empty() { serde_json::Value::Null } else { vid.into() },
@@ -1333,10 +1508,14 @@ fn EditTeaCard(
                                 Ok(r) => r.status().is_success(),
                                 Err(_) => false,
                             };
-                            if !success {
+                            if success {
+                                TelegramApp::init().haptic_notification(HapticNotification::Success);
+                            } else {
+                                TelegramApp::init().haptic_notification(HapticNotification::Error);
                                 if let Some(orig) = original {
                                     cache.write().iter_mut().find(|t| t.id == id).map(|t| *t = orig);
                                 }
+                                status.set("❌ Не сохранено. Попробуйте снова".into());
                             }
                         });
                     },
@@ -1344,7 +1523,7 @@ fn EditTeaCard(
                 }
                 button { style: cancel_btn_style(), onclick: move |_| on_cancel.call(()), "Отмена" }
             }
-            if !status.read().is_empty() { div { style: "padding:8px;color:#ff4757;font-size:13px;", "{status}" } }
+            {render_status(status)}
         }
     }
 }
