@@ -103,6 +103,64 @@ struct AdminTea {
     subcategory_en: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+struct AdminSet {
+    id: String,
+    name: String,
+    #[serde(default)]
+    description: Option<String>,
+    #[serde(default)]
+    icon: Option<String>,
+    #[serde(default)]
+    strain_ids: Vec<String>,
+    #[serde(default)]
+    accessory_ids: Vec<String>,
+    total_price: f64,
+    #[serde(default)]
+    discount_percent: f64,
+    is_available: bool,
+    #[serde(default)]
+    is_deal_of_day: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+struct AdminAccessorySet {
+    id: String,
+    name: String,
+    #[serde(default)]
+    description: Option<String>,
+    #[serde(default)]
+    icon: Option<String>,
+    #[serde(default)]
+    accessories: Vec<String>,
+    total_price: f64,
+    #[serde(default)]
+    discount_percent: f64,
+    is_available: bool,
+    #[serde(default)]
+    is_deal_of_day: bool,
+    name_en: Option<String>,
+    description_en: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+struct AdminTeaSet {
+    id: String,
+    name: String,
+    #[serde(default)]
+    description: Option<String>,
+    #[serde(default)]
+    icon: Option<String>,
+    #[serde(default)]
+    items: Vec<String>,
+    total_price: f64,
+    #[serde(default)]
+    discount_percent: f64,
+    is_available: bool,
+    name_en: Option<String>,
+    description_en: Option<String>,
+}
+
 #[derive(Debug, Deserialize)]
 struct StrainsResp { strains: Vec<AdminStrain> }
 #[derive(Debug, Deserialize)]
@@ -110,10 +168,16 @@ struct AccessoriesResp { accessories: Vec<AdminAccessory> }
 #[derive(Debug, Deserialize)]
 struct TeaResp { tea_products: Vec<AdminTea> }
 #[derive(Debug, Deserialize)]
+struct SetsResp { sets: Vec<AdminSet> }
+#[derive(Debug, Deserialize)]
+struct AccessorySetsResp { accessory_sets: Vec<AdminAccessorySet> }
+#[derive(Debug, Deserialize)]
+struct TeaSetsResp { tea_sets: Vec<AdminTeaSet> }
+#[derive(Debug, Deserialize)]
 struct AdminCheck { is_admin: bool }
 
 #[derive(Clone, Copy, PartialEq)]
-enum Tab { Strains, Accessories, Tea }
+enum Tab { Strains, Accessories, Tea, Sets, AccessorySets, TeaSets }
 
 // ── File upload helper ─────────────────────────────────────────
 
@@ -234,15 +298,21 @@ fn AdminPanel(active_tab: Signal<Tab>) -> Element {
     };
     rsx! {
         div {
-            div { style: "display:flex;gap:2px;margin-bottom:16px;border-radius:4px;overflow:hidden;",
+            div { style: "display:flex;gap:2px;margin-bottom:16px;border-radius:4px;overflow:hidden;flex-wrap:wrap;",
                 {tab_btn(Tab::Strains, "🌿 Strains")}
                 {tab_btn(Tab::Accessories, "⚙️ Gear")}
                 {tab_btn(Tab::Tea, "🍵 Tea")}
+                {tab_btn(Tab::Sets, "📦 Sets")}
+                {tab_btn(Tab::AccessorySets, "🔧 Acc.Sets")}
+                {tab_btn(Tab::TeaSets, "🫖 Tea Sets")}
             }
             match *active_tab.read() {
                 Tab::Strains => rsx!(StrainsTab {}),
                 Tab::Accessories => rsx!(AccessoriesTab {}),
                 Tab::Tea => rsx!(TeaTab {}),
+                Tab::Sets => rsx!(SetsTab {}),
+                Tab::AccessorySets => rsx!(AccessorySetsTab {}),
+                Tab::TeaSets => rsx!(TeaSetsTab {}),
             }
         }
     }
@@ -1147,6 +1217,1129 @@ fn TeaTab() -> Element {
     }
 }
 
+// ── Sets tab (Optimistic UI) ──────────────────────────────────
+
+#[component]
+fn SetsTab() -> Element {
+    let telegram_id = use_telegram_id().unwrap_or(0);
+    let init_data = use_signal(use_telegram_init_data);
+    let mut cache: Signal<Vec<AdminSet>> = use_signal(|| {
+        #[cfg(target_arch = "wasm32")]
+        {
+            if let Some(window) = web_sys::window() {
+                if let Ok(Some(storage)) = window.local_storage() {
+                    if let Ok(Some(json)) = storage.get_item("wwb_admin_sets") {
+                        if let Ok(data) = serde_json::from_str::<Vec<AdminSet>>(&json) {
+                            return data;
+                        }
+                    }
+                }
+            }
+        }
+        Vec::new()
+    });
+    let mut loading = use_signal(|| true);
+    let mut name = use_signal(String::new);
+    let mut description = use_signal(String::new);
+    let mut icon = use_signal(String::new);
+    let mut strain_ids = use_signal(String::new);
+    let mut accessory_ids = use_signal(String::new);
+    let mut total_price = use_signal(String::new);
+    let mut discount_percent = use_signal(String::new);
+    let mut is_deal_of_day = use_signal(|| false);
+    let mut status = use_signal(String::new);
+    let mut submitting = use_signal(|| false);
+    let mut editing_id: Signal<Option<String>> = use_signal(|| None);
+    let mut delete_target_id: Signal<Option<String>> = use_signal(|| None);
+    let mut search_query = use_signal(String::new);
+    let reload = use_signal(|| 0u32);
+    let toasts: Signal<Vec<ToastItem>> = use_signal(Vec::new);
+
+    use_effect(move || {
+        if editing_id.read().is_some() {
+            let _ = js_sys::eval("setTimeout(()=>{var el=document.querySelector('[data-editing]');if(el)el.scrollIntoView({behavior:'smooth',block:'center'});},100);");
+        }
+    });
+
+    use_effect(move || {
+        let data = cache.read().clone();
+        #[cfg(target_arch = "wasm32")]
+        {
+            if let Some(window) = web_sys::window() {
+                if let Ok(Some(storage)) = window.local_storage() {
+                    let _ = storage.set_item("wwb_admin_sets", &serde_json::to_string(&data).unwrap_or_default());
+                }
+            }
+        }
+    });
+
+    let _ = use_resource(move || {
+        let _ = reload.read();
+        let init_data = init_data.read().clone();
+        async move {
+            let url = format!("{}/api/sets?include_hidden=1", api_base_url());
+            if let Ok(resp) = reqwest::Client::new()
+                .get(&url)
+                .header("X-Telegram-Init-Data", init_data.clone())
+                .header("X-Admin-Telegram-Id", telegram_id.to_string())
+                .send().await
+            {
+                if let Ok(data) = resp.json::<SetsResp>().await {
+                    cache.set(data.sets);
+                }
+            }
+            loading.set(false);
+            Some(())
+        }
+    });
+
+    let filtered: Vec<AdminSet> = {
+        let q = search_query.read().to_lowercase();
+        cache.read().iter().filter(|s| {
+            q.is_empty() || s.name.to_lowercase().contains(&q)
+        }).cloned().collect()
+    };
+
+    rsx! {
+        div {
+            FormCard {
+                title: "Добавить сет".to_string(),
+                children: rsx!{
+                    input { style: input_style(), placeholder: "Название", value: "{name}",
+                        oninput: move |e| name.set(e.value()) }
+                    textarea { style: textarea_style(), placeholder: "Описание", value: "{description}",
+                        oninput: move |e| description.set(e.value()) }
+                    input { style: input_style(), placeholder: "Иконка (emoji или URL)", value: "{icon}",
+                        oninput: move |e| icon.set(e.value()) }
+                    textarea { style: textarea_style(), placeholder: "Strain IDs (через запятую)", value: "{strain_ids}",
+                        oninput: move |e| strain_ids.set(e.value()) }
+                    textarea { style: textarea_style(), placeholder: "Accessory IDs (через запятую)", value: "{accessory_ids}",
+                        oninput: move |e| accessory_ids.set(e.value()) }
+                    input { style: input_style(), placeholder: "Цена ฿", value: "{total_price}", r#type: "number",
+                        oninput: move |e| total_price.set(e.value()) }
+                    input { style: input_style(), placeholder: "Скидка %", value: "{discount_percent}", r#type: "number",
+                        oninput: move |e| discount_percent.set(e.value()) }
+                    label { style: "display:flex;align-items:center;gap:8px;font-size:13px;color:#888;",
+                        input { r#type: "checkbox", checked: is_deal_of_day(),
+                            onchange: move |e| is_deal_of_day.set(e.checked()) }
+                        "Deal of the day"
+                    }
+                    button {
+                        style: if *submitting.read() { submit_btn_disabled_style() } else { submit_btn_style() },
+                        disabled: *submitting.read(),
+                        onclick: move |_| {
+                            let n = name().trim().to_string();
+                            let p = match total_price.read().trim().parse::<f64>() {
+                                Ok(v) if v >= 0.0 => v,
+                                _ => { status.set("❌ Цена должна быть числом ≥ 0".into()); return; }
+                            };
+                            let d = discount_percent.read().trim().parse::<f64>().unwrap_or(0.0);
+                            if n.is_empty() { status.set("❌ Название обязательно".into()); return; }
+                            let s_ids: Vec<String> = strain_ids().split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
+                            let a_ids: Vec<String> = accessory_ids().split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
+                            let desc = description();
+                            let ic = icon();
+                            let deal = is_deal_of_day();
+                            submitting.set(true);
+                            let temp_id = format!("temp-{}", uuid::Uuid::new_v4());
+                            cache.write().insert(0, AdminSet {
+                                id: temp_id.clone(), name: n.clone(),
+                                description: if desc.is_empty() { None } else { Some(desc.clone()) },
+                                icon: if ic.is_empty() { None } else { Some(ic.clone()) },
+                                strain_ids: s_ids.clone(), accessory_ids: a_ids.clone(),
+                                total_price: p, discount_percent: d,
+                                is_available: true, is_deal_of_day: deal,
+                            });
+                            status.set("✅ Добавлен!".into());
+                            name.set(String::new()); description.set(String::new()); icon.set(String::new());
+                            strain_ids.set(String::new()); accessory_ids.set(String::new());
+                            total_price.set(String::new()); discount_percent.set(String::new());
+                            is_deal_of_day.set(false);
+                            auto_scroll_to_list();
+                            spawn(async move {
+                                let body = json!({
+                                    "name": n, "total_price": p, "discount_percent": d,
+                                    "description": if desc.is_empty() { serde_json::Value::Null } else { desc.into() },
+                                    "icon": if ic.is_empty() { serde_json::Value::Null } else { ic.into() },
+                                    "strain_ids": s_ids, "accessory_ids": a_ids,
+                                    "is_deal_of_day": deal,
+                                });
+                                let url = format!("{}/api/sets", api_base_url());
+                                let res = reqwest::Client::new().post(&url)
+                                    .header("X-Telegram-Init-Data", init_data.read().clone())
+                                    .header("X-Admin-Telegram-Id", telegram_id.to_string())
+                                    .json(&body).send().await;
+                                submitting.set(false);
+                                match res {
+                                    Ok(r) if r.status().is_success() => {
+                                        if let Ok(data) = r.json::<serde_json::Value>().await {
+                                            if let Some(real_id) = data["id"].as_str() {
+                                                cache.write().iter_mut().find(|s| s.id == temp_id).map(|s| s.id = real_id.to_string());
+                                            }
+                                        }
+                                        TelegramApp::init().haptic_notification(HapticNotification::Success);
+                                    }
+                                    _ => {
+                                        cache.write().retain(|s| s.id != temp_id);
+                                        status.set("❌ Ошибка добавления".into());
+                                        TelegramApp::init().haptic_notification(HapticNotification::Error);
+                                    }
+                                }
+                            });
+                        },
+                        if *submitting.read() { "⏳..." } else { "➕ Добавить" }
+                    }
+                    {render_status(status)}
+                }
+            }
+            h3 { style: list_title_style(), "Сеты ({filtered.len()})" }
+            {render_search(search_query)}
+            if *loading.read() {
+                div { style: "display:flex;flex-direction:column;gap:8px;",
+                    for _ in 0..4 {
+                        div { style: "background:#1a1a2e;padding:8px 10px;border-radius:6px;display:flex;align-items:center;gap:6px;",
+                            Skeleton { shape: SkeletonShape::Avatar }
+                            div { style: "flex:1;display:flex;flex-direction:column;gap:4px;",
+                                Skeleton { shape: SkeletonShape::Text, width: Some("60%".into()) }
+                                Skeleton { shape: SkeletonShape::TextSm, width: Some("40%".into()) }
+                            }
+                        }
+                    }
+                }
+            } else if filtered.is_empty() {
+                EmptyState {
+                    icon: "🔍",
+                    title: "Ничего не найдено",
+                    description: "Попробуйте изменить запрос поиска",
+                    action: rsx! {
+                        button {
+                            style: "padding:8px 16px;background:#2a2a4a;color:#e8e8e8;border:none;border-radius:4px;font-size:13px;cursor:pointer;",
+                            onclick: move |_| search_query.set(String::new()),
+                            "Очистить поиск"
+                        }
+                    },
+                }
+            } else {
+                div { "data-list": "true", style: "display:flex;flex-direction:column;gap:8px;",
+                    for s in filtered {
+                        if editing_id.read().as_deref() == Some(s.id.as_str()) {
+                            EditSetCard {
+                                key: "{s.id}",
+                                item: s.clone(),
+                                cache: cache,
+                                on_saved: move |_| editing_id.set(None),
+                                on_cancel: move |_| editing_id.set(None),
+                            }
+                        } else {
+                            ItemRow {
+                                key: "{s.id}",
+                                name: s.name.clone(),
+                                sub: format!("{} strains • {} accessories • {}฿", s.strain_ids.len(), s.accessory_ids.len(), s.total_price),
+                                is_available: s.is_available,
+                                image_url: s.icon.clone().filter(|i| i.starts_with("http")),
+                                on_edit: { let id = s.id.clone(); move |_| editing_id.set(Some(id.clone())) },
+                                on_toggle: {
+                                    let id = s.id.clone(); let next = !s.is_available;
+                                    move |_| {
+                                        let id = id.clone();
+                                        cache.write().iter_mut().find(|s| s.id == id).map(|s| s.is_available = next);
+                                        spawn(async move {
+                                            let url = format!("{}/api/sets/{}/availability", api_base_url(), id);
+                                            let res = reqwest::Client::new().put(&url)
+                                                .header("X-Telegram-Init-Data", init_data.read().clone())
+                                                .header("X-Admin-Telegram-Id", telegram_id.to_string())
+                                                .json(&json!({ "is_available": next })).send().await;
+                                            match res {
+                                                Ok(r) if r.status().is_success() => { TelegramApp::init().haptic_notification(HapticNotification::Success); }
+                                                _ => {
+                                                    cache.write().iter_mut().find(|s| s.id == id).map(|s| s.is_available = !next);
+                                                    push_toast(toasts, "Не удалось изменить статус сета".into(), ToastKind::Error);
+                                                    TelegramApp::init().haptic_notification(HapticNotification::Error);
+                                                }
+                                            }
+                                        });
+                                    }
+                                },
+                                on_delete: { let id = s.id.clone(); move |_| delete_target_id.set(Some(id.clone())) }
+                            }
+                        }
+                    }
+                }
+            }
+            DeleteConfirmModal {
+                target: delete_target_id,
+                item_name: "сет".to_string(),
+                on_confirm: move |id: String| {
+                    let deleted = cache.read().iter().find(|s| s.id == id).cloned();
+                    cache.write().retain(|s| s.id != id);
+                    spawn(async move {
+                        let url = format!("{}/api/sets/{}", api_base_url(), id);
+                        let res = reqwest::Client::new().delete(&url)
+                            .header("X-Telegram-Init-Data", init_data.read().clone())
+                            .header("X-Admin-Telegram-Id", telegram_id.to_string())
+                            .send().await;
+                        match res {
+                            Ok(r) if r.status().is_success() => { push_toast(toasts, "Сет удалён".into(), ToastKind::Success); TelegramApp::init().haptic_notification(HapticNotification::Success); }
+                            _ => {
+                                if let Some(item) = deleted { cache.write().push(item); }
+                                push_toast(toasts, "Не удалось удалить сет".into(), ToastKind::Error);
+                                TelegramApp::init().haptic_notification(HapticNotification::Error);
+                            }
+                        }
+                    });
+                }
+            }
+            {render_toasts(toasts)}
+        }
+    }
+}
+
+#[component]
+fn EditSetCard(
+    item: AdminSet,
+    cache: Signal<Vec<AdminSet>>,
+    on_saved: EventHandler<()>,
+    on_cancel: EventHandler<()>,
+) -> Element {
+    let telegram_id = use_telegram_id().unwrap_or(0);
+    let init_data = use_signal(use_telegram_init_data);
+    let mut name = use_signal(|| item.name.clone());
+    let mut description = use_signal(|| item.description.clone().unwrap_or_default());
+    let mut icon = use_signal(|| item.icon.clone().unwrap_or_default());
+    let mut strain_ids = use_signal(|| item.strain_ids.join(", "));
+    let mut accessory_ids = use_signal(|| item.accessory_ids.join(", "));
+    let mut total_price = use_signal(|| item.total_price.to_string());
+    let mut discount_percent = use_signal(|| item.discount_percent.to_string());
+    let mut is_deal_of_day = use_signal(|| item.is_deal_of_day);
+    let mut status = use_signal(String::new);
+    let item_id = item.id.clone();
+    rsx! {
+        div { "data-editing": "true", style: edit_card_style(),
+            div { style: edit_header_style(), "✏️ Редактирование" }
+            input { style: input_style(), placeholder: "Название", value: "{name}", oninput: move |e| name.set(e.value()) }
+            textarea { style: textarea_style(), placeholder: "Описание", value: "{description}", oninput: move |e| description.set(e.value()) }
+            input { style: input_style(), placeholder: "Иконка", value: "{icon}", oninput: move |e| icon.set(e.value()) }
+            textarea { style: textarea_style(), placeholder: "Strain IDs (через запятую)", value: "{strain_ids}", oninput: move |e| strain_ids.set(e.value()) }
+            textarea { style: textarea_style(), placeholder: "Accessory IDs (через запятую)", value: "{accessory_ids}", oninput: move |e| accessory_ids.set(e.value()) }
+            input { style: input_style(), placeholder: "Цена ฿", value: "{total_price}", r#type: "number", oninput: move |e| total_price.set(e.value()) }
+            input { style: input_style(), placeholder: "Скидка %", value: "{discount_percent}", r#type: "number", oninput: move |e| discount_percent.set(e.value()) }
+            label { style: "display:flex;align-items:center;gap:8px;font-size:13px;color:#888;",
+                input { r#type: "checkbox", checked: is_deal_of_day(),
+                    onchange: move |e| is_deal_of_day.set(e.checked()) }
+                "Deal of the day"
+            }
+            div { style: "display:flex;gap:8px;",
+                button { style: submit_btn_style(),
+                    onclick: move |_| {
+                        let n = name().trim().to_string();
+                        let p = match total_price.read().trim().parse::<f64>() {
+                            Ok(v) if v >= 0.0 => v,
+                            _ => { status.set("❌ Цена должна быть числом ≥ 0".into()); return; }
+                        };
+                        let d = discount_percent.read().trim().parse::<f64>().unwrap_or(0.0);
+                        if n.is_empty() { status.set("❌ Название обязательно".into()); return; }
+                        let desc = description();
+                        let ic = icon();
+                        let s_ids: Vec<String> = strain_ids().split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
+                        let a_ids: Vec<String> = accessory_ids().split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
+                        let deal = is_deal_of_day();
+                        let id = item_id.clone();
+                        let original = cache.read().iter().find(|s| s.id == id).cloned();
+                        cache.write().iter_mut().find(|s| s.id == id).map(|s| {
+                            s.name = n.clone();
+                            s.description = if desc.is_empty() { None } else { Some(desc.clone()) };
+                            s.icon = if ic.is_empty() { None } else { Some(ic.clone()) };
+                            s.strain_ids = s_ids.clone();
+                            s.accessory_ids = a_ids.clone();
+                            s.total_price = p;
+                            s.discount_percent = d;
+                            s.is_deal_of_day = deal;
+                        });
+                        on_saved.call(());
+                        spawn(async move {
+                            let body = json!({
+                                "name": n, "total_price": p, "discount_percent": d,
+                                "description": if desc.is_empty() { serde_json::Value::Null } else { desc.into() },
+                                "icon": if ic.is_empty() { serde_json::Value::Null } else { ic.into() },
+                                "strain_ids": s_ids, "accessory_ids": a_ids,
+                                "is_deal_of_day": deal,
+                            });
+                            let url = format!("{}/api/sets/{}", api_base_url(), id);
+                            let res = reqwest::Client::new().put(&url)
+                                .header("X-Telegram-Init-Data", init_data.read().clone())
+                                .header("X-Admin-Telegram-Id", telegram_id.to_string())
+                                .json(&body).send().await;
+                            let success = match res { Ok(r) => r.status().is_success(), Err(_) => false };
+                            if success {
+                                TelegramApp::init().haptic_notification(HapticNotification::Success);
+                            } else {
+                                TelegramApp::init().haptic_notification(HapticNotification::Error);
+                                if let Some(orig) = original { cache.write().iter_mut().find(|s| s.id == id).map(|s| *s = orig); }
+                                status.set("❌ Не сохранено. Попробуйте снова".into());
+                            }
+                        });
+                    },
+                    "💾 Сохранить"
+                }
+                button { style: cancel_btn_style(), onclick: move |_| on_cancel.call(()), "Отмена" }
+            }
+            {render_status(status)}
+        }
+    }
+}
+
+// ── Accessory Sets tab (Optimistic UI) ────────────────────────
+
+#[component]
+fn AccessorySetsTab() -> Element {
+    let telegram_id = use_telegram_id().unwrap_or(0);
+    let init_data = use_signal(use_telegram_init_data);
+    let mut cache: Signal<Vec<AdminAccessorySet>> = use_signal(|| {
+        #[cfg(target_arch = "wasm32")]
+        {
+            if let Some(window) = web_sys::window() {
+                if let Ok(Some(storage)) = window.local_storage() {
+                    if let Ok(Some(json)) = storage.get_item("wwb_admin_accessory_sets") {
+                        if let Ok(data) = serde_json::from_str::<Vec<AdminAccessorySet>>(&json) {
+                            return data;
+                        }
+                    }
+                }
+            }
+        }
+        Vec::new()
+    });
+    let mut loading = use_signal(|| true);
+    let mut name = use_signal(String::new);
+    let mut description = use_signal(String::new);
+    let mut icon = use_signal(String::new);
+    let mut accessories = use_signal(String::new);
+    let mut total_price = use_signal(String::new);
+    let mut discount_percent = use_signal(String::new);
+    let mut is_deal_of_day = use_signal(|| false);
+    let mut name_en = use_signal(String::new);
+    let mut description_en = use_signal(String::new);
+    let mut status = use_signal(String::new);
+    let mut submitting = use_signal(|| false);
+    let mut editing_id: Signal<Option<String>> = use_signal(|| None);
+    let mut delete_target_id: Signal<Option<String>> = use_signal(|| None);
+    let mut search_query = use_signal(String::new);
+    let reload = use_signal(|| 0u32);
+    let toasts: Signal<Vec<ToastItem>> = use_signal(Vec::new);
+
+    use_effect(move || {
+        if editing_id.read().is_some() {
+            let _ = js_sys::eval("setTimeout(()=>{var el=document.querySelector('[data-editing]');if(el)el.scrollIntoView({behavior:'smooth',block:'center'});},100);");
+        }
+    });
+
+    use_effect(move || {
+        let data = cache.read().clone();
+        #[cfg(target_arch = "wasm32")]
+        {
+            if let Some(window) = web_sys::window() {
+                if let Ok(Some(storage)) = window.local_storage() {
+                    let _ = storage.set_item("wwb_admin_accessory_sets", &serde_json::to_string(&data).unwrap_or_default());
+                }
+            }
+        }
+    });
+
+    let _ = use_resource(move || {
+        let _ = reload.read();
+        let init_data = init_data.read().clone();
+        async move {
+            let url = format!("{}/api/accessory-sets?include_hidden=1", api_base_url());
+            if let Ok(resp) = reqwest::Client::new()
+                .get(&url)
+                .header("X-Telegram-Init-Data", init_data.clone())
+                .header("X-Admin-Telegram-Id", telegram_id.to_string())
+                .send().await
+            {
+                if let Ok(data) = resp.json::<AccessorySetsResp>().await {
+                    cache.set(data.accessory_sets);
+                }
+            }
+            loading.set(false);
+            Some(())
+        }
+    });
+
+    let filtered: Vec<AdminAccessorySet> = {
+        let q = search_query.read().to_lowercase();
+        cache.read().iter().filter(|s| {
+            q.is_empty() || s.name.to_lowercase().contains(&q)
+        }).cloned().collect()
+    };
+
+    rsx! {
+        div {
+            FormCard {
+                title: "Добавить набор аксессуаров".to_string(),
+                children: rsx!{
+                    input { style: input_style(), placeholder: "Название (RU)", value: "{name}",
+                        oninput: move |e| name.set(e.value()) }
+                    textarea { style: textarea_style(), placeholder: "Описание (RU)", value: "{description}",
+                        oninput: move |e| description.set(e.value()) }
+                    input { style: input_style(), placeholder: "Иконка (emoji или URL)", value: "{icon}",
+                        oninput: move |e| icon.set(e.value()) }
+                    textarea { style: textarea_style(), placeholder: "Accessory IDs (через запятую)", value: "{accessories}",
+                        oninput: move |e| accessories.set(e.value()) }
+                    input { style: input_style(), placeholder: "Цена ฿", value: "{total_price}", r#type: "number",
+                        oninput: move |e| total_price.set(e.value()) }
+                    input { style: input_style(), placeholder: "Скидка %", value: "{discount_percent}", r#type: "number",
+                        oninput: move |e| discount_percent.set(e.value()) }
+                    label { style: "display:flex;align-items:center;gap:8px;font-size:13px;color:#888;",
+                        input { r#type: "checkbox", checked: is_deal_of_day(),
+                            onchange: move |e| is_deal_of_day.set(e.checked()) }
+                        "Deal of the day"
+                    }
+                    div { style: en_section_style(), "🇬🇧 English" }
+                    input { style: input_style(), placeholder: "Name (EN)", value: "{name_en}",
+                        oninput: move |e| name_en.set(e.value()) }
+                    textarea { style: textarea_style(), placeholder: "Description (EN)", value: "{description_en}",
+                        oninput: move |e| description_en.set(e.value()) }
+                    button {
+                        style: if *submitting.read() { submit_btn_disabled_style() } else { submit_btn_style() },
+                        disabled: *submitting.read(),
+                        onclick: move |_| {
+                            let n = name().trim().to_string();
+                            let p = match total_price.read().trim().parse::<f64>() {
+                                Ok(v) if v >= 0.0 => v,
+                                _ => { status.set("❌ Цена должна быть числом ≥ 0".into()); return; }
+                            };
+                            let d = discount_percent.read().trim().parse::<f64>().unwrap_or(0.0);
+                            if n.is_empty() { status.set("❌ Название обязательно".into()); return; }
+                            let accs: Vec<String> = accessories().split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
+                            let desc = description();
+                            let ic = icon();
+                            let deal = is_deal_of_day();
+                            let ne = name_en(); let de = description_en();
+                            submitting.set(true);
+                            let temp_id = format!("temp-{}", uuid::Uuid::new_v4());
+                            cache.write().insert(0, AdminAccessorySet {
+                                id: temp_id.clone(), name: n.clone(),
+                                description: if desc.is_empty() { None } else { Some(desc.clone()) },
+                                icon: if ic.is_empty() { None } else { Some(ic.clone()) },
+                                accessories: accs.clone(),
+                                total_price: p, discount_percent: d,
+                                is_available: true, is_deal_of_day: deal,
+                                name_en: if ne.is_empty() { None } else { Some(ne.clone()) },
+                                description_en: if de.is_empty() { None } else { Some(de.clone()) },
+                            });
+                            status.set("✅ Добавлен!".into());
+                            name.set(String::new()); description.set(String::new()); icon.set(String::new());
+                            accessories.set(String::new()); total_price.set(String::new()); discount_percent.set(String::new());
+                            is_deal_of_day.set(false); name_en.set(String::new()); description_en.set(String::new());
+                            auto_scroll_to_list();
+                            spawn(async move {
+                                let body = json!({
+                                    "name": n, "total_price": p, "discount_percent": d,
+                                    "description": if desc.is_empty() { serde_json::Value::Null } else { desc.into() },
+                                    "icon": if ic.is_empty() { serde_json::Value::Null } else { ic.into() },
+                                    "accessories": accs,
+                                    "is_deal_of_day": deal,
+                                    "name_en": if ne.is_empty() { serde_json::Value::Null } else { ne.into() },
+                                    "description_en": if de.is_empty() { serde_json::Value::Null } else { de.into() },
+                                });
+                                let url = format!("{}/api/accessory-sets", api_base_url());
+                                let res = reqwest::Client::new().post(&url)
+                                    .header("X-Telegram-Init-Data", init_data.read().clone())
+                                    .header("X-Admin-Telegram-Id", telegram_id.to_string())
+                                    .json(&body).send().await;
+                                submitting.set(false);
+                                match res {
+                                    Ok(r) if r.status().is_success() => {
+                                        if let Ok(data) = r.json::<serde_json::Value>().await {
+                                            if let Some(real_id) = data["id"].as_str() {
+                                                cache.write().iter_mut().find(|s| s.id == temp_id).map(|s| s.id = real_id.to_string());
+                                            }
+                                        }
+                                        TelegramApp::init().haptic_notification(HapticNotification::Success);
+                                    }
+                                    _ => {
+                                        cache.write().retain(|s| s.id != temp_id);
+                                        status.set("❌ Ошибка добавления".into());
+                                        TelegramApp::init().haptic_notification(HapticNotification::Error);
+                                    }
+                                }
+                            });
+                        },
+                        if *submitting.read() { "⏳..." } else { "➕ Добавить" }
+                    }
+                    {render_status(status)}
+                }
+            }
+            h3 { style: list_title_style(), "Наборы аксессуаров ({filtered.len()})" }
+            {render_search(search_query)}
+            if *loading.read() {
+                div { style: "display:flex;flex-direction:column;gap:8px;",
+                    for _ in 0..4 {
+                        div { style: "background:#1a1a2e;padding:8px 10px;border-radius:6px;display:flex;align-items:center;gap:6px;",
+                            Skeleton { shape: SkeletonShape::Avatar }
+                            div { style: "flex:1;display:flex;flex-direction:column;gap:4px;",
+                                Skeleton { shape: SkeletonShape::Text, width: Some("60%".into()) }
+                                Skeleton { shape: SkeletonShape::TextSm, width: Some("40%".into()) }
+                            }
+                        }
+                    }
+                }
+            } else if filtered.is_empty() {
+                EmptyState {
+                    icon: "🔍",
+                    title: "Ничего не найдено",
+                    description: "Попробуйте изменить запрос поиска",
+                    action: rsx! {
+                        button {
+                            style: "padding:8px 16px;background:#2a2a4a;color:#e8e8e8;border:none;border-radius:4px;font-size:13px;cursor:pointer;",
+                            onclick: move |_| search_query.set(String::new()),
+                            "Очистить поиск"
+                        }
+                    },
+                }
+            } else {
+                div { "data-list": "true", style: "display:flex;flex-direction:column;gap:8px;",
+                    for s in filtered {
+                        if editing_id.read().as_deref() == Some(s.id.as_str()) {
+                            EditAccessorySetCard {
+                                key: "{s.id}",
+                                item: s.clone(),
+                                cache: cache,
+                                on_saved: move |_| editing_id.set(None),
+                                on_cancel: move |_| editing_id.set(None),
+                            }
+                        } else {
+                            ItemRow {
+                                key: "{s.id}",
+                                name: s.name.clone(),
+                                sub: format!("{} items • {}฿", s.accessories.len(), s.total_price),
+                                is_available: s.is_available,
+                                image_url: s.icon.clone().filter(|i| i.starts_with("http")),
+                                on_edit: { let id = s.id.clone(); move |_| editing_id.set(Some(id.clone())) },
+                                on_toggle: {
+                                    let id = s.id.clone(); let next = !s.is_available;
+                                    move |_| {
+                                        let id = id.clone();
+                                        cache.write().iter_mut().find(|s| s.id == id).map(|s| s.is_available = next);
+                                        spawn(async move {
+                                            let url = format!("{}/api/accessory-sets/{}/availability", api_base_url(), id);
+                                            let res = reqwest::Client::new().put(&url)
+                                                .header("X-Telegram-Init-Data", init_data.read().clone())
+                                                .header("X-Admin-Telegram-Id", telegram_id.to_string())
+                                                .json(&json!({ "is_available": next })).send().await;
+                                            match res {
+                                                Ok(r) if r.status().is_success() => { TelegramApp::init().haptic_notification(HapticNotification::Success); }
+                                                _ => {
+                                                    cache.write().iter_mut().find(|s| s.id == id).map(|s| s.is_available = !next);
+                                                    push_toast(toasts, "Не удалось изменить статус".into(), ToastKind::Error);
+                                                    TelegramApp::init().haptic_notification(HapticNotification::Error);
+                                                }
+                                            }
+                                        });
+                                    }
+                                },
+                                on_delete: { let id = s.id.clone(); move |_| delete_target_id.set(Some(id.clone())) }
+                            }
+                        }
+                    }
+                }
+            }
+            DeleteConfirmModal {
+                target: delete_target_id,
+                item_name: "набор".to_string(),
+                on_confirm: move |id: String| {
+                    let deleted = cache.read().iter().find(|s| s.id == id).cloned();
+                    cache.write().retain(|s| s.id != id);
+                    spawn(async move {
+                        let url = format!("{}/api/accessory-sets/{}", api_base_url(), id);
+                        let res = reqwest::Client::new().delete(&url)
+                            .header("X-Telegram-Init-Data", init_data.read().clone())
+                            .header("X-Admin-Telegram-Id", telegram_id.to_string())
+                            .send().await;
+                        match res {
+                            Ok(r) if r.status().is_success() => { push_toast(toasts, "Набор удалён".into(), ToastKind::Success); TelegramApp::init().haptic_notification(HapticNotification::Success); }
+                            _ => {
+                                if let Some(item) = deleted { cache.write().push(item); }
+                                push_toast(toasts, "Не удалось удалить набор".into(), ToastKind::Error);
+                                TelegramApp::init().haptic_notification(HapticNotification::Error);
+                            }
+                        }
+                    });
+                }
+            }
+            {render_toasts(toasts)}
+        }
+    }
+}
+
+#[component]
+fn EditAccessorySetCard(
+    item: AdminAccessorySet,
+    cache: Signal<Vec<AdminAccessorySet>>,
+    on_saved: EventHandler<()>,
+    on_cancel: EventHandler<()>,
+) -> Element {
+    let telegram_id = use_telegram_id().unwrap_or(0);
+    let init_data = use_signal(use_telegram_init_data);
+    let mut name = use_signal(|| item.name.clone());
+    let mut description = use_signal(|| item.description.clone().unwrap_or_default());
+    let mut icon = use_signal(|| item.icon.clone().unwrap_or_default());
+    let mut accessories = use_signal(|| item.accessories.join(", "));
+    let mut total_price = use_signal(|| item.total_price.to_string());
+    let mut discount_percent = use_signal(|| item.discount_percent.to_string());
+    let mut is_deal_of_day = use_signal(|| item.is_deal_of_day);
+    let mut name_en = use_signal(|| item.name_en.clone().unwrap_or_default());
+    let mut description_en = use_signal(|| item.description_en.clone().unwrap_or_default());
+    let mut status = use_signal(String::new);
+    let item_id = item.id.clone();
+    rsx! {
+        div { "data-editing": "true", style: edit_card_style(),
+            div { style: edit_header_style(), "✏️ Редактирование" }
+            input { style: input_style(), placeholder: "Название (RU)", value: "{name}", oninput: move |e| name.set(e.value()) }
+            textarea { style: textarea_style(), placeholder: "Описание (RU)", value: "{description}", oninput: move |e| description.set(e.value()) }
+            input { style: input_style(), placeholder: "Иконка", value: "{icon}", oninput: move |e| icon.set(e.value()) }
+            textarea { style: textarea_style(), placeholder: "Accessory IDs (через запятую)", value: "{accessories}", oninput: move |e| accessories.set(e.value()) }
+            input { style: input_style(), placeholder: "Цена ฿", value: "{total_price}", r#type: "number", oninput: move |e| total_price.set(e.value()) }
+            input { style: input_style(), placeholder: "Скидка %", value: "{discount_percent}", r#type: "number", oninput: move |e| discount_percent.set(e.value()) }
+            label { style: "display:flex;align-items:center;gap:8px;font-size:13px;color:#888;",
+                input { r#type: "checkbox", checked: is_deal_of_day(),
+                    onchange: move |e| is_deal_of_day.set(e.checked()) }
+                "Deal of the day"
+            }
+            div { style: en_section_style(), "🇬🇧 English" }
+            input { style: input_style(), placeholder: "Name (EN)", value: "{name_en}", oninput: move |e| name_en.set(e.value()) }
+            textarea { style: textarea_style(), placeholder: "Description (EN)", value: "{description_en}", oninput: move |e| description_en.set(e.value()) }
+            div { style: "display:flex;gap:8px;",
+                button { style: submit_btn_style(),
+                    onclick: move |_| {
+                        let n = name().trim().to_string();
+                        let p = match total_price.read().trim().parse::<f64>() {
+                            Ok(v) if v >= 0.0 => v,
+                            _ => { status.set("❌ Цена должна быть числом ≥ 0".into()); return; }
+                        };
+                        let d = discount_percent.read().trim().parse::<f64>().unwrap_or(0.0);
+                        if n.is_empty() { status.set("❌ Название обязательно".into()); return; }
+                        let accs: Vec<String> = accessories().split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
+                        let desc = description();
+                        let ic = icon();
+                        let deal = is_deal_of_day();
+                        let ne = name_en(); let de = description_en();
+                        let id = item_id.clone();
+                        let original = cache.read().iter().find(|s| s.id == id).cloned();
+                        cache.write().iter_mut().find(|s| s.id == id).map(|s| {
+                            s.name = n.clone();
+                            s.description = if desc.is_empty() { None } else { Some(desc.clone()) };
+                            s.icon = if ic.is_empty() { None } else { Some(ic.clone()) };
+                            s.accessories = accs.clone();
+                            s.total_price = p;
+                            s.discount_percent = d;
+                            s.is_deal_of_day = deal;
+                            s.name_en = if ne.is_empty() { None } else { Some(ne.clone()) };
+                            s.description_en = if de.is_empty() { None } else { Some(de.clone()) };
+                        });
+                        on_saved.call(());
+                        spawn(async move {
+                            let body = json!({
+                                "name": n, "total_price": p, "discount_percent": d,
+                                "description": if desc.is_empty() { serde_json::Value::Null } else { desc.into() },
+                                "icon": if ic.is_empty() { serde_json::Value::Null } else { ic.into() },
+                                "accessories": accs,
+                                "is_deal_of_day": deal,
+                                "name_en": if ne.is_empty() { serde_json::Value::Null } else { ne.into() },
+                                "description_en": if de.is_empty() { serde_json::Value::Null } else { de.into() },
+                            });
+                            let url = format!("{}/api/accessory-sets/{}", api_base_url(), id);
+                            let res = reqwest::Client::new().put(&url)
+                                .header("X-Telegram-Init-Data", init_data.read().clone())
+                                .header("X-Admin-Telegram-Id", telegram_id.to_string())
+                                .json(&body).send().await;
+                            let success = match res { Ok(r) => r.status().is_success(), Err(_) => false };
+                            if success {
+                                TelegramApp::init().haptic_notification(HapticNotification::Success);
+                            } else {
+                                TelegramApp::init().haptic_notification(HapticNotification::Error);
+                                if let Some(orig) = original { cache.write().iter_mut().find(|s| s.id == id).map(|s| *s = orig); }
+                                status.set("❌ Не сохранено. Попробуйте снова".into());
+                            }
+                        });
+                    },
+                    "💾 Сохранить"
+                }
+                button { style: cancel_btn_style(), onclick: move |_| on_cancel.call(()), "Отмена" }
+            }
+            {render_status(status)}
+        }
+    }
+}
+
+// ── Tea Sets tab (Optimistic UI) ──────────────────────────────
+
+#[component]
+fn TeaSetsTab() -> Element {
+    let telegram_id = use_telegram_id().unwrap_or(0);
+    let init_data = use_signal(use_telegram_init_data);
+    let mut cache: Signal<Vec<AdminTeaSet>> = use_signal(|| {
+        #[cfg(target_arch = "wasm32")]
+        {
+            if let Some(window) = web_sys::window() {
+                if let Ok(Some(storage)) = window.local_storage() {
+                    if let Ok(Some(json)) = storage.get_item("wwb_admin_tea_sets") {
+                        if let Ok(data) = serde_json::from_str::<Vec<AdminTeaSet>>(&json) {
+                            return data;
+                        }
+                    }
+                }
+            }
+        }
+        Vec::new()
+    });
+    let mut loading = use_signal(|| true);
+    let mut name = use_signal(String::new);
+    let mut description = use_signal(String::new);
+    let mut icon = use_signal(String::new);
+    let mut items = use_signal(String::new);
+    let mut total_price = use_signal(String::new);
+    let mut discount_percent = use_signal(String::new);
+    let mut name_en = use_signal(String::new);
+    let mut description_en = use_signal(String::new);
+    let mut status = use_signal(String::new);
+    let mut submitting = use_signal(|| false);
+    let mut editing_id: Signal<Option<String>> = use_signal(|| None);
+    let mut delete_target_id: Signal<Option<String>> = use_signal(|| None);
+    let mut search_query = use_signal(String::new);
+    let reload = use_signal(|| 0u32);
+    let toasts: Signal<Vec<ToastItem>> = use_signal(Vec::new);
+
+    use_effect(move || {
+        if editing_id.read().is_some() {
+            let _ = js_sys::eval("setTimeout(()=>{var el=document.querySelector('[data-editing]');if(el)el.scrollIntoView({behavior:'smooth',block:'center'});},100);");
+        }
+    });
+
+    use_effect(move || {
+        let data = cache.read().clone();
+        #[cfg(target_arch = "wasm32")]
+        {
+            if let Some(window) = web_sys::window() {
+                if let Ok(Some(storage)) = window.local_storage() {
+                    let _ = storage.set_item("wwb_admin_tea_sets", &serde_json::to_string(&data).unwrap_or_default());
+                }
+            }
+        }
+    });
+
+    let _ = use_resource(move || {
+        let _ = reload.read();
+        let init_data = init_data.read().clone();
+        async move {
+            let url = format!("{}/api/tea-sets?include_hidden=1", api_base_url());
+            if let Ok(resp) = reqwest::Client::new()
+                .get(&url)
+                .header("X-Telegram-Init-Data", init_data.clone())
+                .header("X-Admin-Telegram-Id", telegram_id.to_string())
+                .send().await
+            {
+                if let Ok(data) = resp.json::<TeaSetsResp>().await {
+                    cache.set(data.tea_sets);
+                }
+            }
+            loading.set(false);
+            Some(())
+        }
+    });
+
+    let filtered: Vec<AdminTeaSet> = {
+        let q = search_query.read().to_lowercase();
+        cache.read().iter().filter(|s| {
+            q.is_empty() || s.name.to_lowercase().contains(&q)
+        }).cloned().collect()
+    };
+
+    rsx! {
+        div {
+            FormCard {
+                title: "Добавить набор чая".to_string(),
+                children: rsx!{
+                    input { style: input_style(), placeholder: "Название (RU)", value: "{name}",
+                        oninput: move |e| name.set(e.value()) }
+                    textarea { style: textarea_style(), placeholder: "Описание (RU)", value: "{description}",
+                        oninput: move |e| description.set(e.value()) }
+                    input { style: input_style(), placeholder: "Иконка (emoji или URL)", value: "{icon}",
+                        oninput: move |e| icon.set(e.value()) }
+                    textarea { style: textarea_style(), placeholder: "Tea item IDs (через запятую)", value: "{items}",
+                        oninput: move |e| items.set(e.value()) }
+                    input { style: input_style(), placeholder: "Цена ฿", value: "{total_price}", r#type: "number",
+                        oninput: move |e| total_price.set(e.value()) }
+                    input { style: input_style(), placeholder: "Скидка %", value: "{discount_percent}", r#type: "number",
+                        oninput: move |e| discount_percent.set(e.value()) }
+                    div { style: en_section_style(), "🇬🇧 English" }
+                    input { style: input_style(), placeholder: "Name (EN)", value: "{name_en}",
+                        oninput: move |e| name_en.set(e.value()) }
+                    textarea { style: textarea_style(), placeholder: "Description (EN)", value: "{description_en}",
+                        oninput: move |e| description_en.set(e.value()) }
+                    button {
+                        style: if *submitting.read() { submit_btn_disabled_style() } else { submit_btn_style() },
+                        disabled: *submitting.read(),
+                        onclick: move |_| {
+                            let n = name().trim().to_string();
+                            let p = match total_price.read().trim().parse::<f64>() {
+                                Ok(v) if v >= 0.0 => v,
+                                _ => { status.set("❌ Цена должна быть числом ≥ 0".into()); return; }
+                            };
+                            let d = discount_percent.read().trim().parse::<f64>().unwrap_or(0.0);
+                            if n.is_empty() { status.set("❌ Название обязательно".into()); return; }
+                            let tea_items: Vec<String> = items().split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
+                            let desc = description();
+                            let ic = icon();
+                            let ne = name_en(); let de = description_en();
+                            submitting.set(true);
+                            let temp_id = format!("temp-{}", uuid::Uuid::new_v4());
+                            cache.write().insert(0, AdminTeaSet {
+                                id: temp_id.clone(), name: n.clone(),
+                                description: if desc.is_empty() { None } else { Some(desc.clone()) },
+                                icon: if ic.is_empty() { None } else { Some(ic.clone()) },
+                                items: tea_items.clone(),
+                                total_price: p, discount_percent: d,
+                                is_available: true,
+                                name_en: if ne.is_empty() { None } else { Some(ne.clone()) },
+                                description_en: if de.is_empty() { None } else { Some(de.clone()) },
+                            });
+                            status.set("✅ Добавлен!".into());
+                            name.set(String::new()); description.set(String::new()); icon.set(String::new());
+                            items.set(String::new()); total_price.set(String::new()); discount_percent.set(String::new());
+                            name_en.set(String::new()); description_en.set(String::new());
+                            auto_scroll_to_list();
+                            spawn(async move {
+                                let body = json!({
+                                    "name": n, "total_price": p, "discount_percent": d,
+                                    "description": if desc.is_empty() { serde_json::Value::Null } else { desc.into() },
+                                    "icon": if ic.is_empty() { serde_json::Value::Null } else { ic.into() },
+                                    "items": tea_items,
+                                    "name_en": if ne.is_empty() { serde_json::Value::Null } else { ne.into() },
+                                    "description_en": if de.is_empty() { serde_json::Value::Null } else { de.into() },
+                                });
+                                let url = format!("{}/api/tea-sets", api_base_url());
+                                let res = reqwest::Client::new().post(&url)
+                                    .header("X-Telegram-Init-Data", init_data.read().clone())
+                                    .header("X-Admin-Telegram-Id", telegram_id.to_string())
+                                    .json(&body).send().await;
+                                submitting.set(false);
+                                match res {
+                                    Ok(r) if r.status().is_success() => {
+                                        if let Ok(data) = r.json::<serde_json::Value>().await {
+                                            if let Some(real_id) = data["id"].as_str() {
+                                                cache.write().iter_mut().find(|s| s.id == temp_id).map(|s| s.id = real_id.to_string());
+                                            }
+                                        }
+                                        TelegramApp::init().haptic_notification(HapticNotification::Success);
+                                    }
+                                    _ => {
+                                        cache.write().retain(|s| s.id != temp_id);
+                                        status.set("❌ Ошибка добавления".into());
+                                        TelegramApp::init().haptic_notification(HapticNotification::Error);
+                                    }
+                                }
+                            });
+                        },
+                        if *submitting.read() { "⏳..." } else { "➕ Добавить" }
+                    }
+                    {render_status(status)}
+                }
+            }
+            h3 { style: list_title_style(), "Наборы чая ({filtered.len()})" }
+            {render_search(search_query)}
+            if *loading.read() {
+                div { style: "display:flex;flex-direction:column;gap:8px;",
+                    for _ in 0..4 {
+                        div { style: "background:#1a1a2e;padding:8px 10px;border-radius:6px;display:flex;align-items:center;gap:6px;",
+                            Skeleton { shape: SkeletonShape::Avatar }
+                            div { style: "flex:1;display:flex;flex-direction:column;gap:4px;",
+                                Skeleton { shape: SkeletonShape::Text, width: Some("60%".into()) }
+                                Skeleton { shape: SkeletonShape::TextSm, width: Some("40%".into()) }
+                            }
+                        }
+                    }
+                }
+            } else if filtered.is_empty() {
+                EmptyState {
+                    icon: "🔍",
+                    title: "Ничего не найдено",
+                    description: "Попробуйте изменить запрос поиска",
+                    action: rsx! {
+                        button {
+                            style: "padding:8px 16px;background:#2a2a4a;color:#e8e8e8;border:none;border-radius:4px;font-size:13px;cursor:pointer;",
+                            onclick: move |_| search_query.set(String::new()),
+                            "Очистить поиск"
+                        }
+                    },
+                }
+            } else {
+                div { "data-list": "true", style: "display:flex;flex-direction:column;gap:8px;",
+                    for s in filtered {
+                        if editing_id.read().as_deref() == Some(s.id.as_str()) {
+                            EditTeaSetCard {
+                                key: "{s.id}",
+                                item: s.clone(),
+                                cache: cache,
+                                on_saved: move |_| editing_id.set(None),
+                                on_cancel: move |_| editing_id.set(None),
+                            }
+                        } else {
+                            ItemRow {
+                                key: "{s.id}",
+                                name: s.name.clone(),
+                                sub: format!("{} items • {}฿", s.items.len(), s.total_price),
+                                is_available: s.is_available,
+                                image_url: s.icon.clone().filter(|i| i.starts_with("http")),
+                                on_edit: { let id = s.id.clone(); move |_| editing_id.set(Some(id.clone())) },
+                                on_toggle: {
+                                    let id = s.id.clone(); let next = !s.is_available;
+                                    move |_| {
+                                        let id = id.clone();
+                                        cache.write().iter_mut().find(|s| s.id == id).map(|s| s.is_available = next);
+                                        spawn(async move {
+                                            let url = format!("{}/api/tea-sets/{}/availability", api_base_url(), id);
+                                            let res = reqwest::Client::new().put(&url)
+                                                .header("X-Telegram-Init-Data", init_data.read().clone())
+                                                .header("X-Admin-Telegram-Id", telegram_id.to_string())
+                                                .json(&json!({ "is_available": next })).send().await;
+                                            match res {
+                                                Ok(r) if r.status().is_success() => { TelegramApp::init().haptic_notification(HapticNotification::Success); }
+                                                _ => {
+                                                    cache.write().iter_mut().find(|s| s.id == id).map(|s| s.is_available = !next);
+                                                    push_toast(toasts, "Не удалось изменить статус".into(), ToastKind::Error);
+                                                    TelegramApp::init().haptic_notification(HapticNotification::Error);
+                                                }
+                                            }
+                                        });
+                                    }
+                                },
+                                on_delete: { let id = s.id.clone(); move |_| delete_target_id.set(Some(id.clone())) }
+                            }
+                        }
+                    }
+                }
+            }
+            DeleteConfirmModal {
+                target: delete_target_id,
+                item_name: "набор чая".to_string(),
+                on_confirm: move |id: String| {
+                    let deleted = cache.read().iter().find(|s| s.id == id).cloned();
+                    cache.write().retain(|s| s.id != id);
+                    spawn(async move {
+                        let url = format!("{}/api/tea-sets/{}", api_base_url(), id);
+                        let res = reqwest::Client::new().delete(&url)
+                            .header("X-Telegram-Init-Data", init_data.read().clone())
+                            .header("X-Admin-Telegram-Id", telegram_id.to_string())
+                            .send().await;
+                        match res {
+                            Ok(r) if r.status().is_success() => { push_toast(toasts, "Набор чая удалён".into(), ToastKind::Success); TelegramApp::init().haptic_notification(HapticNotification::Success); }
+                            _ => {
+                                if let Some(item) = deleted { cache.write().push(item); }
+                                push_toast(toasts, "Не удалось удалить набор чая".into(), ToastKind::Error);
+                                TelegramApp::init().haptic_notification(HapticNotification::Error);
+                            }
+                        }
+                    });
+                }
+            }
+            {render_toasts(toasts)}
+        }
+    }
+}
+
+#[component]
+fn EditTeaSetCard(
+    item: AdminTeaSet,
+    cache: Signal<Vec<AdminTeaSet>>,
+    on_saved: EventHandler<()>,
+    on_cancel: EventHandler<()>,
+) -> Element {
+    let telegram_id = use_telegram_id().unwrap_or(0);
+    let init_data = use_signal(use_telegram_init_data);
+    let mut name = use_signal(|| item.name.clone());
+    let mut description = use_signal(|| item.description.clone().unwrap_or_default());
+    let mut icon = use_signal(|| item.icon.clone().unwrap_or_default());
+    let mut items = use_signal(|| item.items.join(", "));
+    let mut total_price = use_signal(|| item.total_price.to_string());
+    let mut discount_percent = use_signal(|| item.discount_percent.to_string());
+    let mut name_en = use_signal(|| item.name_en.clone().unwrap_or_default());
+    let mut description_en = use_signal(|| item.description_en.clone().unwrap_or_default());
+    let mut status = use_signal(String::new);
+    let item_id = item.id.clone();
+    rsx! {
+        div { "data-editing": "true", style: edit_card_style(),
+            div { style: edit_header_style(), "✏️ Редактирование" }
+            input { style: input_style(), placeholder: "Название (RU)", value: "{name}", oninput: move |e| name.set(e.value()) }
+            textarea { style: textarea_style(), placeholder: "Описание (RU)", value: "{description}", oninput: move |e| description.set(e.value()) }
+            input { style: input_style(), placeholder: "Иконка", value: "{icon}", oninput: move |e| icon.set(e.value()) }
+            textarea { style: textarea_style(), placeholder: "Tea item IDs (через запятую)", value: "{items}", oninput: move |e| items.set(e.value()) }
+            input { style: input_style(), placeholder: "Цена ฿", value: "{total_price}", r#type: "number", oninput: move |e| total_price.set(e.value()) }
+            input { style: input_style(), placeholder: "Скидка %", value: "{discount_percent}", r#type: "number", oninput: move |e| discount_percent.set(e.value()) }
+            div { style: en_section_style(), "🇬🇧 English" }
+            input { style: input_style(), placeholder: "Name (EN)", value: "{name_en}", oninput: move |e| name_en.set(e.value()) }
+            textarea { style: textarea_style(), placeholder: "Description (EN)", value: "{description_en}", oninput: move |e| description_en.set(e.value()) }
+            div { style: "display:flex;gap:8px;",
+                button { style: submit_btn_style(),
+                    onclick: move |_| {
+                        let n = name().trim().to_string();
+                        let p = match total_price.read().trim().parse::<f64>() {
+                            Ok(v) if v >= 0.0 => v,
+                            _ => { status.set("❌ Цена должна быть числом ≥ 0".into()); return; }
+                        };
+                        let d = discount_percent.read().trim().parse::<f64>().unwrap_or(0.0);
+                        if n.is_empty() { status.set("❌ Название обязательно".into()); return; }
+                        let tea_items: Vec<String> = items().split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
+                        let desc = description();
+                        let ic = icon();
+                        let ne = name_en(); let de = description_en();
+                        let id = item_id.clone();
+                        let original = cache.read().iter().find(|s| s.id == id).cloned();
+                        cache.write().iter_mut().find(|s| s.id == id).map(|s| {
+                            s.name = n.clone();
+                            s.description = if desc.is_empty() { None } else { Some(desc.clone()) };
+                            s.icon = if ic.is_empty() { None } else { Some(ic.clone()) };
+                            s.items = tea_items.clone();
+                            s.total_price = p;
+                            s.discount_percent = d;
+                            s.name_en = if ne.is_empty() { None } else { Some(ne.clone()) };
+                            s.description_en = if de.is_empty() { None } else { Some(de.clone()) };
+                        });
+                        on_saved.call(());
+                        spawn(async move {
+                            let body = json!({
+                                "name": n, "total_price": p, "discount_percent": d,
+                                "description": if desc.is_empty() { serde_json::Value::Null } else { desc.into() },
+                                "icon": if ic.is_empty() { serde_json::Value::Null } else { ic.into() },
+                                "items": tea_items,
+                                "name_en": if ne.is_empty() { serde_json::Value::Null } else { ne.into() },
+                                "description_en": if de.is_empty() { serde_json::Value::Null } else { de.into() },
+                            });
+                            let url = format!("{}/api/tea-sets/{}", api_base_url(), id);
+                            let res = reqwest::Client::new().put(&url)
+                                .header("X-Telegram-Init-Data", init_data.read().clone())
+                                .header("X-Admin-Telegram-Id", telegram_id.to_string())
+                                .json(&body).send().await;
+                            let success = match res { Ok(r) => r.status().is_success(), Err(_) => false };
+                            if success {
+                                TelegramApp::init().haptic_notification(HapticNotification::Success);
+                            } else {
+                                TelegramApp::init().haptic_notification(HapticNotification::Error);
+                                if let Some(orig) = original { cache.write().iter_mut().find(|s| s.id == id).map(|s| *s = orig); }
+                                status.set("❌ Не сохранено. Попробуйте снова".into());
+                            }
+                        });
+                    },
+                    "💾 Сохранить"
+                }
+                button { style: cancel_btn_style(), onclick: move |_| on_cancel.call(()), "Отмена" }
+            }
+            {render_status(status)}
+        }
+    }
+}
+
+// ── Shared UI helpers ─────────────────────────────────────────
 // ── Shared UI helpers ─────────────────────────────────────────
 
 fn auto_scroll_to_list() {

@@ -24,6 +24,7 @@ pub fn routes() -> Router<AppState> {
         .route("/accessory-sets", post(create_accessory_set))
         .route("/accessory-sets/:id", put(update_accessory_set))
         .route("/accessory-sets/:id", delete(delete_accessory_set))
+        .route("/accessory-sets/:id/availability", put(toggle_accessory_set_availability))
         // Tea Products
         .route("/tea-products", get(get_tea_products))
         .route("/tea-products", post(create_tea_product))
@@ -36,11 +37,13 @@ pub fn routes() -> Router<AppState> {
         .route("/tea-sets", post(create_tea_set))
         .route("/tea-sets/:id", put(update_tea_set))
         .route("/tea-sets/:id", delete(delete_tea_set))
-        // Sets
+        .route("/tea-sets/:id/availability", put(toggle_tea_set_availability))
+        // Sets (strain sets)
         .route("/sets", get(get_sets))
         .route("/sets", post(create_set))
         .route("/sets/:id", put(update_set))
         .route("/sets/:id", delete(delete_set))
+        .route("/sets/:id/availability", put(toggle_set_availability))
 }
 
 // ── Accessories ──────────────────────────────────────────────
@@ -136,7 +139,7 @@ async fn update_accessory(State(state): State<AppState>, headers: HeaderMap, Pat
 
 async fn delete_accessory(State(state): State<AppState>, headers: HeaderMap, Path(id): Path<String>) -> Result<Json<Value>, StatusCode> {
     check_admin(&headers, &state)?;
-    let client = state.db.pool.get().await.map_err(|e| { tracing::error!("delete_accessory pool error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
+    let client = state.db.pool.get().await map_err(|e| { tracing::error!("delete_accessory pool error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     client.execute("DELETE FROM accessories WHERE id = $1", &[&id])
         .await.map_err(|e| { tracing::error!("delete_accessory error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     Ok(Json(json!({ "success": true })))
@@ -178,12 +181,15 @@ fn accessory_set_row(r: &tokio_postgres::Row) -> Value {
     })
 }
 
-async fn get_accessory_sets(State(state): State<AppState>) -> Result<Json<Value>, StatusCode> {
-    let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    let rows = client.query(
-        "SELECT id, name, description, icon, accessories, total_price, discount_percent, is_available, is_deal_of_day, name_en, description_en FROM accessory_sets WHERE is_available = TRUE ORDER BY name",
-        &[],
-    ).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+async fn get_accessory_sets(State(state): State<AppState>, Query(q): Query<HashMap<String, String>>) -> Result<Json<Value>, StatusCode> {
+    let client = state.db.pool.get().await map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let include_hidden = q.get("include_hidden").map(|v| v == "1" || v == "true").unwrap_or(false);
+    let sql = if include_hidden {
+        "SELECT id, name, description, icon, accessories, total_price, discount_percent, is_available, is_deal_of_day, name_en, description_en FROM accessory_sets ORDER BY name"
+    } else {
+        "SELECT id, name, description, icon, accessories, total_price, discount_percent, is_available, is_deal_of_day, name_en, description_en FROM accessory_sets WHERE is_available = TRUE ORDER BY name"
+    };
+    let rows = client.query(sql, &[]).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let items: Vec<Value> = rows.iter().map(accessory_set_row).collect();
     Ok(Json(json!({ "accessory_sets": items })))
 }
@@ -215,6 +221,15 @@ async fn delete_accessory_set(State(state): State<AppState>, headers: HeaderMap,
     check_admin(&headers, &state)?;
     let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     client.execute("UPDATE accessory_sets SET is_available = false WHERE id = $1", &[&id])
+        .await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(Json(json!({ "success": true })))
+}
+
+async fn toggle_accessory_set_availability(State(state): State<AppState>, headers: HeaderMap, Path(id): Path<String>, Json(body): Json<Value>) -> Result<Json<Value>, StatusCode> {
+    check_admin(&headers, &state)?;
+    let available = body["is_available"].as_bool().unwrap_or(true);
+    let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    client.execute("UPDATE accessory_sets SET is_available = $1 WHERE id = $2", &[&available, &id])
         .await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(Json(json!({ "success": true })))
 }
@@ -353,12 +368,15 @@ fn tea_set_row(r: &tokio_postgres::Row) -> Value {
     })
 }
 
-async fn get_tea_sets(State(state): State<AppState>) -> Result<Json<Value>, StatusCode> {
+async fn get_tea_sets(State(state): State<AppState>, Query(q): Query<HashMap<String, String>>) -> Result<Json<Value>, StatusCode> {
     let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    let rows = client.query(
-        "SELECT id, name, description, icon, items, total_price, discount_percent, is_available, name_en, description_en FROM tea_sets WHERE is_available = TRUE ORDER BY name",
-        &[],
-    ).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let include_hidden = q.get("include_hidden").map(|v| v == "1" || v == "true").unwrap_or(false);
+    let sql = if include_hidden {
+        "SELECT id, name, description, icon, items, total_price, discount_percent, is_available, name_en, description_en FROM tea_sets ORDER BY name"
+    } else {
+        "SELECT id, name, description, icon, items, total_price, discount_percent, is_available, name_en, description_en FROM tea_sets WHERE is_available = TRUE ORDER BY name"
+    };
+    let rows = client.query(sql, &[]).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let items: Vec<Value> = rows.iter().map(tea_set_row).collect();
     Ok(Json(json!({ "tea_sets": items })))
 }
@@ -394,7 +412,16 @@ async fn delete_tea_set(State(state): State<AppState>, headers: HeaderMap, Path(
     Ok(Json(json!({ "success": true })))
 }
 
-// ── Sets (combined from accessory_sets and tea_sets) ───────
+async fn toggle_tea_set_availability(State(state): State<AppState>, headers: HeaderMap, Path(id): Path<String>, Json(body): Json<Value>) -> Result<Json<Value>, StatusCode> {
+    check_admin(&headers, &state)?;
+    let available = body["is_available"].as_bool().unwrap_or(true);
+    let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    client.execute("UPDATE tea_sets SET is_available = $1 WHERE id = $2", &[&available, &id])
+        .await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(Json(json!({ "success": true })))
+}
+
+// ── Sets (strain sets from `sets` table) ─────────────────────
 
 #[derive(Debug, Deserialize)]
 pub struct SetRequest {
@@ -410,17 +437,43 @@ pub struct SetRequest {
     pub is_deal_of_day: Option<bool>,
 }
 
-async fn get_sets(State(state): State<AppState>) -> Result<Json<Value>, StatusCode> {
-    let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+fn set_row(r: &tokio_postgres::Row) -> Value {
+    let strain_ids: Vec<String> = r.try_get::<_, Vec<String>>(4).unwrap_or_else(|_| vec![]);
+    let accessory_ids: Vec<String> = r.try_get::<_, Vec<String>>(5).unwrap_or_else(|_| vec![]);
+    json!({
+        "id": r.try_get::<_, String>(0).unwrap_or_default(),
+        "name": r.try_get::<_, String>(1).unwrap_or_default(),
+        "description": r.try_get::<_, String>(2).unwrap_or_default(),
+        "icon": r.try_get::<_, String>(3).unwrap_or_default(),
+        "strain_ids": strain_ids,
+        "accessory_ids": accessory_ids,
+        "total_price": r.try_get::<_, f64>(6).unwrap_or(0.0),
+        "discount_percent": r.try_get::<_, f64>(7).unwrap_or(0.0),
+        "is_available": r.try_get::<_, bool>(8).unwrap_or(false),
+        "is_deal_of_day": r.try_get::<_, bool>(9).unwrap_or(false),
+    })
+}
 
-    // Get accessory sets — uppercase TRUE forces a new prepared statement
-    // identity after schema ALTER TYPE invalidated the previous one.
+async fn get_sets(State(state): State<AppState>, Query(q): Query<HashMap<String, String>>) -> Result<Json<Value>, StatusCode> {
+    let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let include_hidden = q.get("include_hidden").map(|v| v == "1" || v == "true").unwrap_or(false);
+
+    if include_hidden {
+        // Admin mode: return raw `sets` table rows
+        let rows = client.query(
+            "SELECT id, name, description, icon, strain_ids, accessory_ids, total_price, discount_percent, is_available, is_deal_of_day FROM sets ORDER BY name",
+            &[],
+        ).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        let items: Vec<Value> = rows.iter().map(set_row).collect();
+        return Ok(Json(json!({ "sets": items })));
+    }
+
+    // Public mode: combine accessory_sets + tea_sets (backwards compat)
     let accessory_sets = client.query(
         "SELECT id, name, description, icon, accessories, total_price, discount_percent, is_available, is_deal_of_day, name_en, description_en FROM accessory_sets WHERE is_available = TRUE",
         &[],
     ).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    // Get tea sets
     let tea_sets = client.query(
         "SELECT id, name, description, icon, items, total_price, discount_percent, is_available, name_en, description_en FROM tea_sets WHERE is_available = TRUE",
         &[],
@@ -428,11 +481,8 @@ async fn get_sets(State(state): State<AppState>) -> Result<Json<Value>, StatusCo
 
     let mut items: Vec<serde_json::Value> = Vec::new();
 
-    // Add accessory sets
     for r in accessory_sets.iter() {
-        // Safe extraction of array column
-        let accessories: Vec<String> = r.try_get::<_, Vec<String>>(4)
-            .unwrap_or_else(|_| vec![]);
+        let accessories: Vec<String> = r.try_get::<_, Vec<String>>(4).unwrap_or_else(|_| vec![]);
         items.push(json!({
             "id": r.try_get::<_, String>(0).unwrap_or_default(),
             "name": r.try_get::<_, String>(1).unwrap_or_default(),
@@ -449,11 +499,8 @@ async fn get_sets(State(state): State<AppState>) -> Result<Json<Value>, StatusCo
         }));
     }
 
-    // Add tea sets
     for r in tea_sets.iter() {
-        // Safe extraction of array column
-        let tea_items: Vec<String> = r.try_get::<_, Vec<String>>(4)
-            .unwrap_or_else(|_| vec![]);
+        let tea_items: Vec<String> = r.try_get::<_, Vec<String>>(4).unwrap_or_else(|_| vec![]);
         items.push(json!({
             "id": r.try_get::<_, String>(0).unwrap_or_default(),
             "name": r.try_get::<_, String>(1).unwrap_or_default(),
@@ -479,14 +526,10 @@ async fn create_set(State(state): State<AppState>, headers: HeaderMap, Json(req)
     let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let strain_ids = req.strain_ids.unwrap_or_default();
     let accessory_ids = req.accessory_ids.unwrap_or_default();
-
-    let mut items: Vec<String> = strain_ids;
-    items.extend(accessory_ids);
-
     client.execute(
-        "INSERT INTO accessory_sets (id, name, description, icon, accessories, total_price, discount_percent, is_deal_of_day) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)",
-        &[&id, &req.name, &req.description.unwrap_or_default(), &req.icon.unwrap_or_default(), &items, &req.total_price, &req.discount_percent.unwrap_or(0.0), &req.is_deal_of_day.unwrap_or(false)],
-    ).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        "INSERT INTO sets (id, name, description, icon, strain_ids, accessory_ids, total_price, discount_percent, is_deal_of_day) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)",
+        &[&id, &req.name, &req.description.unwrap_or_default(), &req.icon.unwrap_or_default(), &strain_ids, &accessory_ids, &req.total_price, &req.discount_percent.unwrap_or(0.0), &req.is_deal_of_day.unwrap_or(false)],
+    ).await.map_err(|e| { tracing::error!("create_set error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     Ok(Json(json!({ "success": true, "id": id })))
 }
 
@@ -495,21 +538,26 @@ async fn update_set(State(state): State<AppState>, headers: HeaderMap, Path(id):
     let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let strain_ids = req.strain_ids.unwrap_or_default();
     let accessory_ids = req.accessory_ids.unwrap_or_default();
-
-    let mut items: Vec<String> = strain_ids;
-    items.extend(accessory_ids);
-
     client.execute(
-        "UPDATE accessory_sets SET name=$1, description=$2, icon=$3, accessories=$4, total_price=$5, discount_percent=$6, is_deal_of_day=$7 WHERE id=$8",
-        &[&req.name, &req.description.unwrap_or_default(), &req.icon.unwrap_or_default(), &items, &req.total_price, &req.discount_percent.unwrap_or(0.0), &req.is_deal_of_day.unwrap_or(false), &id],
-    ).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        "UPDATE sets SET name=$1, description=$2, icon=$3, strain_ids=$4, accessory_ids=$5, total_price=$6, discount_percent=$7, is_deal_of_day=$8 WHERE id=$9",
+        &[&req.name, &req.description.unwrap_or_default(), &req.icon.unwrap_or_default(), &strain_ids, &accessory_ids, &req.total_price, &req.discount_percent.unwrap_or(0.0), &req.is_deal_of_day.unwrap_or(false), &id],
+    ).await.map_err(|e| { tracing::error!("update_set error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     Ok(Json(json!({ "success": true })))
 }
 
 async fn delete_set(State(state): State<AppState>, headers: HeaderMap, Path(id): Path<String>) -> Result<Json<Value>, StatusCode> {
     check_admin(&headers, &state)?;
     let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    client.execute("UPDATE accessory_sets SET is_available = false WHERE id = $1", &[&id])
+    client.execute("UPDATE sets SET is_available = false WHERE id = $1", &[&id])
+        .await.map_err(|e| { tracing::error!("delete_set error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
+    Ok(Json(json!({ "success": true })))
+}
+
+async fn toggle_set_availability(State(state): State<AppState>, headers: HeaderMap, Path(id): Path<String>, Json(body): Json<Value>) -> Result<Json<Value>, StatusCode> {
+    check_admin(&headers, &state)?;
+    let available = body["is_available"].as_bool().unwrap_or(true);
+    let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    client.execute("UPDATE sets SET is_available = $1 WHERE id = $2", &[&available, &id])
         .await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(Json(json!({ "success": true })))
 }
