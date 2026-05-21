@@ -139,7 +139,7 @@ async fn update_accessory(State(state): State<AppState>, headers: HeaderMap, Pat
 
 async fn delete_accessory(State(state): State<AppState>, headers: HeaderMap, Path(id): Path<String>) -> Result<Json<Value>, StatusCode> {
     check_admin(&headers, &state)?;
-    let client = state.db.pool.get().await map_err(|e| { tracing::error!("delete_accessory pool error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
+    let client = state.db.pool.get().await.map_err(|e| { tracing::error!("delete_accessory pool error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     client.execute("DELETE FROM accessories WHERE id = $1", &[&id])
         .await.map_err(|e| { tracing::error!("delete_accessory error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     Ok(Json(json!({ "success": true })))
@@ -182,7 +182,7 @@ fn accessory_set_row(r: &tokio_postgres::Row) -> Value {
 }
 
 async fn get_accessory_sets(State(state): State<AppState>, Query(q): Query<HashMap<String, String>>) -> Result<Json<Value>, StatusCode> {
-    let client = state.db.pool.get().await map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let include_hidden = q.get("include_hidden").map(|v| v == "1" || v == "true").unwrap_or(false);
     let sql = if include_hidden {
         "SELECT id, name, description, icon, accessories, total_price, discount_percent, is_available, is_deal_of_day, name_en, description_en FROM accessory_sets ORDER BY name"
