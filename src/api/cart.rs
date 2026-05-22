@@ -1,7 +1,7 @@
 use axum::{
-    extract::{Path, State},
+    extract::Path,
     http::StatusCode,
-    routing::{delete, get, post, put},
+    routing::get,
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
@@ -31,7 +31,7 @@ pub fn routes() -> Router<AppState> {
 
 // Get cart (Telegram WebApp stores cart locally, this is for persistence)
 async fn get_cart(
-    axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
+    axum::extract::Query(_params): axum::extract::Query<std::collections::HashMap<String, String>>,
 ) -> Result<Json<Value>, StatusCode> {
     // For Telegram Mini Apps, cart is stored in localStorage on client
     // This endpoint returns an empty cart - actual cart lives on the client
@@ -40,8 +40,8 @@ async fn get_cart(
 
 // Save cart (optional - for future cart persistence feature)
 async fn save_cart(
-    axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
-    Json(req): Json<Cart>,
+    axum::extract::Query(_params): axum::extract::Query<std::collections::HashMap<String, String>>,
+    Json(_req): Json<Cart>,
 ) -> Result<Json<Value>, StatusCode> {
     // Cart persistence can be implemented here later
     // Currently returns success for compatibility
@@ -50,7 +50,7 @@ async fn save_cart(
 
 // Clear cart
 async fn clear_cart(
-    axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
+    axum::extract::Query(_params): axum::extract::Query<std::collections::HashMap<String, String>>,
 ) -> Result<Json<Value>, StatusCode> {
     Ok(json!({"success": true}).into())
 }

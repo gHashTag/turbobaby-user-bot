@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 // Admin API routes
-use crate::api::auth::{check_admin, validate_init_data, validate_init_data_debug};
+use crate::api::auth::{check_admin, validate_init_data};
 use crate::AppState;
 
 #[derive(Deserialize)]

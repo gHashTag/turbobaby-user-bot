@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use tokio_postgres::Row;
 
+#[allow(dead_code)] // Used for future loyalty profile operations
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LoyaltyProfile {
     pub telegram_id: i64,
@@ -18,6 +19,7 @@ pub struct LoyaltyProfile {
 // total_spent / bonus_balance в БД могут быть NUMERIC или DOUBLE PRECISION в зависимости от истории миграций.
 // В выборках всегда кастим через ::float8, но ровно на всякий случай используем try_get.
 impl LoyaltyProfile {
+    #[allow(dead_code)] // Используется в будущих cache invalidation путях
     pub fn from_row(row: &Row) -> Self {
         Self {
             telegram_id: row.get("telegram_id"),

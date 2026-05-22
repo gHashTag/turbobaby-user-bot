@@ -82,7 +82,7 @@ fn accessory_row(r: &tokio_postgres::Row) -> Value {
     })
 }
 
-async fn get_accessories(headers: HeaderMap, State(state): State<AppState>, Query(q): Query<HashMap<String, String>>) -> Result<Json<Value>, StatusCode> {
+async fn get_accessories(_headers: HeaderMap, State(state): State<AppState>, Query(q): Query<HashMap<String, String>>) -> Result<Json<Value>, StatusCode> {
     let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let include_hidden = q.get("include_hidden").map(|v| v == "1" || v == "true").unwrap_or(false);
     let sql = if include_hidden {
@@ -270,7 +270,7 @@ fn tea_product_row(r: &tokio_postgres::Row) -> Value {
     })
 }
 
-async fn get_tea_products(headers: HeaderMap, State(state): State<AppState>, Query(q): Query<HashMap<String, String>>) -> Result<Json<Value>, StatusCode> {
+async fn get_tea_products(_headers: HeaderMap, State(state): State<AppState>, Query(q): Query<HashMap<String, String>>) -> Result<Json<Value>, StatusCode> {
     let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let include_hidden = q.get("include_hidden").map(|v| v == "1" || v == "true").unwrap_or(false);
     let sql = if include_hidden {

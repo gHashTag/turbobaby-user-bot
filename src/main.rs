@@ -41,6 +41,10 @@ use tower_http::compression::CompressionLayer;
 #[cfg(not(target_arch = "wasm32"))]
 use axum::http::{HeaderName, HeaderValue};
 #[cfg(not(target_arch = "wasm32"))]
+use axum::middleware::Next;
+#[cfg(not(target_arch = "wasm32"))]
+use axum::http::Request;
+#[cfg(not(target_arch = "wasm32"))]
 use tracing::info;
 #[cfg(not(target_arch = "wasm32"))]
 use std::sync::Arc;
@@ -55,6 +59,8 @@ use crate::db::Database;
 use crate::api::cache::ETagCache;
 #[cfg(not(target_arch = "wasm32"))]
 use teloxide::Bot;
+#[cfg(not(target_arch = "wasm32"))]
+use axum_prometheus::PrometheusMetricLayer;
 
 #[cfg(not(target_arch = "wasm32"))]
 /// Application shared state
@@ -64,6 +70,27 @@ pub struct AppState {
     pub config: Arc<Config>,
     pub bot: Arc<Bot>,
     pub cache: Arc<ETagCache>,
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+async fn cache_middleware(req: Request<axum::body::Body>, next: Next) -> axum::response::Response {
+    let path = req.uri().path().to_string();
+    let mut resp = next.run(req).await;
+    let h = resp.headers_mut();
+    h.remove(axum::http::header::CACHE_CONTROL);
+    if path.ends_with(".html") || path == "/" || !path.contains('-') {
+        h.insert(
+            axum::http::header::CACHE_CONTROL,
+            HeaderValue::from_static("no-store, no-cache, must-revalidate, max-age=0"),
+        );
+    } else if path.ends_with(".wasm") || path.ends_with(".js") || path.ends_with(".css") {
+        // Hashed assets — safe to cache immutably
+        h.insert(
+            axum::http::header::CACHE_CONTROL,
+            HeaderValue::from_static("public, max-age=31536000, immutable"),
+        );
+    }
+    resp
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -115,6 +142,9 @@ async fn main() -> Result<()> {
         bot: bot_arc_for_state,
         cache: Arc::new(ETagCache::new()),
     };
+
+    // Prometheus metrics layer — tracks request count, latency histograms, errors per endpoint
+    let (prometheus_layer, metric_handle) = PrometheusMetricLayer::pair();
 
     // CORS configuration
     let cors = CorsLayer::new()
@@ -202,6 +232,9 @@ async fn main() -> Result<()> {
         .layer(ngrok_bypass)
         // Backend API routes (must be before static to avoid conflicts)
         .merge(api::router(app_state))
+        // Prometheus /metrics endpoint — placed after API routes so prometheus_layer counts API calls
+        .route("/metrics", get(|| async move { metric_handle.render() }))
+        .layer(prometheus_layer)
         // SPA routes - serve index.html for client-side routing
         .merge(spa_routes)
         // SPA routes - these should be served by the fallback
@@ -213,7 +246,7 @@ async fn main() -> Result<()> {
         // cache busting is the priority — no-store keeps deploys landing.
         .fallback_service(
             tower::ServiceBuilder::new()
-                .layer(html_no_cache_layer())
+                .layer(axum::middleware::from_fn(cache_middleware))
                 .service(dist_service),
         )
         // Compression applies to *all* responses (API JSON, WASM, HTML, CSS).
