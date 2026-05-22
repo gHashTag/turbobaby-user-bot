@@ -2893,39 +2893,39 @@ fn DashboardTab() -> Element {
         }
     });
 
-    let stat_card = |label: &str, value: String, color: &str| -> Element {
-        let (label, color) = (label.to_string(), color.to_string());
+    let stat_card = |label: &str, value: String, color_cls: &str| -> Element {
+        let (label, color_cls) = (label.to_string(), color_cls.to_string());
         rsx! {
-            div { style: "background:#1a1a2e;border:1px solid #2a2a4a;border-radius:8px;padding:16px;flex:1;min-width:120px;",
-                div { style: "font-size:24px;font-weight:800;color:{color};", "{value}" }
-                div { style: "font-size:12px;color:#888;margin-top:4px;", "{label}" }
+            div { class: "admin-stat-card {color_cls}",
+                div { class: "value", "{value}" }
+                div { class: "label", "{label}" }
             }
         }
     };
 
     rsx! {
         div {
-            h3 { style: "color:#39ff14;font-size:15px;margin-bottom:16px;", "📊 Статистика" }
+            h3 { class: "admin-card-title", "📊 Статистика" }
             if *loading.read() {
-                div { style: "color:#888;padding:20px 0;", "Загрузка..." }
+                div { class: "admin-empty", "Загрузка..." }
             } else if !error.read().is_empty() {
-                div { style: "color:#ff4757;padding:8px;", "Ошибка: {error}" }
+                div { class: "admin-badge danger", "Ошибка: {error}" }
             } else if let Some(s) = stats.read().clone() {
-                div { style: "display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;",
-                    {stat_card("Всего заказов", s.total_orders.to_string(), "#00e5ff")}
-                    {stat_card("Выручка (Бат)", s.total_revenue.map(|v| format!("{:.0}", v)).unwrap_or_else(|| "—".to_string()), "#39ff14")}
-                    {stat_card("Активных страйнов", s.active_strains.unwrap_or(0).to_string(), "#ffe600")}
+                div { class: "admin-stats-grid",
+                    {stat_card("Всего заказов", s.total_orders.to_string(), "cyan")}
+                    {stat_card("Выручка (Бат)", s.total_revenue.map(|v| format!("{:.0}", v)).unwrap_or_else(|| "—".to_string()), "")}
+                    {stat_card("Активных страйнов", s.active_strains.unwrap_or(0).to_string(), "yellow")}
                 }
                 if let Some(top) = s.top_strains.clone() {
                     if !top.is_empty() {
-                        div { style: "background:#1a1a2e;border:1px solid #2a2a4a;border-radius:8px;padding:16px;",
-                            h4 { style: "color:#888;font-size:12px;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;", "🌿 Топ страйны" }
+                        div { class: "admin-card",
+                            h4 { class: "admin-card-meta", "🌿 Топ страйны" }
                             for item in top {
-                                div { style: "display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #2a2a4a;",
-                                    div { style: "color:#e8e8e8;font-size:13px;",
+                                div { class: "admin-row",
+                                    div { class: "admin-row-main",
                                         "{item[\"name\"].as_str().unwrap_or(\"-\")}"
                                     }
-                                    div { style: "color:#39ff14;font-size:13px;font-weight:700;",
+                                    div { class: "admin-badge success",
                                         "{item[\"count\"].as_i64().unwrap_or(0)}"
                                     }
                                 }
@@ -2934,7 +2934,7 @@ fn DashboardTab() -> Element {
                     }
                 }
             } else {
-                div { style: "color:#888;padding:20px 0;", "Данных нет" }
+                div { class: "admin-empty", "Данных нет" }
             }
         }
     }
@@ -3011,49 +3011,45 @@ fn OrdersTab() -> Element {
         orders.read().iter().filter(|o| o.status == s).count()
     };
 
-    let filter_btn_style = |s: &str| -> String {
-        let active = *filter.read() == s;
-        if active {
-            "padding:6px 10px;background:#39ff14;color:#000;border:none;border-radius:4px;font-size:12px;font-weight:700;cursor:pointer;".to_string()
-        } else {
-            "padding:6px 10px;background:#1a1a2e;color:#888;border:1px solid #2a2a4a;border-radius:4px;font-size:12px;cursor:pointer;".to_string()
-        }
-    };
-
     rsx! {
         div {
             {render_toasts(toasts)}
-            h3 { style: "color:#39ff14;font-size:15px;margin-bottom:12px;", "📦 Заказы" }
+            h3 { class: "admin-card-title", "📦 Заказы" }
             if !error.read().is_empty() {
-                div { style: "color:#ff4757;margin-bottom:8px;font-size:13px;", "{error}" }
+                div { class: "admin-badge danger", "{error}" }
             }
-            // Stat chips
-            div { style: "display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;",
-                button { style: "{filter_btn_style(\"all\")}",
+            // Filter bar
+            div { class: "admin-filter-bar",
+                button {
+                    class: if *filter.read() == "all" { "admin-btn primary admin-btn-sm" } else { "admin-btn secondary admin-btn-sm" },
                     onclick: move |_| filter.set("all".into()), "Все ({orders.read().len()})" }
-                button { style: "{filter_btn_style(\"pending\")}",
+                button {
+                    class: if *filter.read() == "pending" { "admin-btn primary admin-btn-sm" } else { "admin-btn secondary admin-btn-sm" },
                     onclick: move |_| filter.set("pending".into()), "⏳ {count_by(\"pending\")}" }
-                button { style: "{filter_btn_style(\"confirmed\")}",
+                button {
+                    class: if *filter.read() == "confirmed" { "admin-btn primary admin-btn-sm" } else { "admin-btn secondary admin-btn-sm" },
                     onclick: move |_| filter.set("confirmed".into()), "✓ {count_by(\"confirmed\")}" }
-                button { style: "{filter_btn_style(\"completed\")}",
+                button {
+                    class: if *filter.read() == "completed" { "admin-btn primary admin-btn-sm" } else { "admin-btn secondary admin-btn-sm" },
                     onclick: move |_| filter.set("completed".into()), "✅ {count_by(\"completed\")}" }
-                button { style: "{filter_btn_style(\"cancelled\")}",
+                button {
+                    class: if *filter.read() == "cancelled" { "admin-btn primary admin-btn-sm" } else { "admin-btn secondary admin-btn-sm" },
                     onclick: move |_| filter.set("cancelled".into()), "✖ {count_by(\"cancelled\")}" }
             }
             input {
-                style: "{input_style()}width:100%;box-sizing:border-box;margin-bottom:10px;",
+                class: "admin-input",
                 placeholder: "🔍 Поиск по ID, имени, telegram...",
                 value: "{search}",
                 oninput: move |e| search.set(e.value())
             }
             if *loading.read() {
-                div { style: "color:#888;padding:20px 0;", "Загрузка..." }
+                div { class: "admin-empty", "Загрузка..." }
             } else if filtered.is_empty() {
-                div { style: "color:#888;padding:20px 0;text-align:center;",
+                div { class: "admin-empty",
                     if *filter.read() == "all" { "Заказов нет" } else { "Нет заказов с таким статусом" }
                 }
             } else {
-                div { style: "display:flex;flex-direction:column;gap:8px;",
+                div {
                     for order in filtered {
                         {
                             let order_id = order.id.clone();
@@ -3071,44 +3067,44 @@ fn OrdersTab() -> Element {
                                 "cancelled" => "✖ Отменён".to_string(),
                                 _ => order.status.clone(),
                             };
-                            let status_color = match order.status.as_str() {
-                                "pending" => "#ffe600",
-                                "confirmed" => "#4d9fff",
-                                "completed" => "#39ff14",
-                                "cancelled" => "#ff4757",
-                                _ => "#888",
+                            let status_badge_cls = match order.status.as_str() {
+                                "pending" => "admin-badge warn",
+                                "confirmed" => "admin-badge info",
+                                "completed" => "admin-badge success",
+                                "cancelled" => "admin-badge danger",
+                                _ => "admin-badge muted",
                             };
                             let short_id = if order.id.len() >= 6 { &order.id[order.id.len()-6..] } else { &order.id };
                             let short_id = short_id.to_string();
                             rsx! {
-                                div { style: "background:#1a1a2e;border:1px solid #2a2a4a;border-radius:8px;padding:12px;",
-                                    div { style: "display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;",
-                                        div {
-                                            div { style: "font-weight:700;font-size:14px;", "#{short_id}" }
+                                div { class: "admin-card",
+                                    div { class: "admin-row",
+                                        div { class: "admin-row-main",
+                                            div { class: "admin-card-title", "#{short_id}" }
                                             if let Some(name) = order.customer_name.clone() {
-                                                div { style: "font-size:12px;color:#888;", "{name}"
+                                                div { class: "admin-card-meta", "{name}"
                                                     if let Some(tg) = order.customer_telegram.clone() {
-                                                        span { style: "color:#4d9fff;", " @{tg}" }
+                                                        span { class: "admin-badge info", " @{tg}" }
                                                     }
                                                 }
                                             }
                                         }
-                                        span { style: "padding:3px 8px;border-radius:6px;font-size:12px;background:{status_color}20;color:{status_color};",
+                                        span { class: "{status_badge_cls}",
                                             "{status_label_str}"
                                         }
                                     }
-                                    div { style: "font-weight:700;color:#39ff14;font-size:14px;margin-bottom:8px;",
+                                    div { class: "admin-badge success",
                                         "{order.total:.0}Б"
                                         if order.bonus_used > 0.0 {
-                                            span { style: "font-size:11px;color:#ffe600;margin-left:6px;",
+                                            span { class: "admin-badge warn",
                                                 "-{order.bonus_used:.0}Б бонусов"
                                             }
                                         }
                                     }
-                                    div { style: "display:flex;gap:6px;",
+                                    div { class: "admin-row-actions",
                                         if status == "pending" {
                                             button {
-                                                style: if updating_id.read().as_deref() == Some(&order_id) { "flex:1;padding:8px;background:#4d9fff;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;opacity:0.6;" } else { "flex:1;padding:8px;background:#4d9fff;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;" },
+                                                class: "admin-btn secondary admin-btn-sm",
                                                 disabled: updating_id.read().as_deref() == Some(&order_id),
                                                 onclick: move |_| {
                                                     let oid = order_id.clone();
@@ -3138,7 +3134,7 @@ fn OrdersTab() -> Element {
                                         }
                                         if status2 == "confirmed" {
                                             button {
-                                                style: if updating_id.read().as_deref() == Some(&order_id2) { "flex:1;padding:8px;background:#39ff14;color:#000;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;opacity:0.6;" } else { "flex:1;padding:8px;background:#39ff14;color:#000;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;" },
+                                                class: "admin-btn primary admin-btn-sm",
                                                 disabled: updating_id.read().as_deref() == Some(&order_id2),
                                                 onclick: move |_| {
                                                     let oid = order_id2.clone();
@@ -3168,7 +3164,7 @@ fn OrdersTab() -> Element {
                                         }
                                         if status3 != "cancelled" && status3 != "completed" {
                                             button {
-                                                style: "padding:8px 10px;background:#3a1a1a;color:#ff8888;border:none;border-radius:6px;font-size:13px;cursor:pointer;",
+                                                class: "admin-btn danger admin-btn-sm",
                                                 onclick: move |_| {
                                                     let oid = order_id3.clone();
                                                     let id_c = init_data.read().clone();
@@ -3270,13 +3266,13 @@ fn QuestsTab() -> Element {
         return rsx! {
             div {
                 {render_toasts(toasts)}
-                div { style: edit_card_style(),
-                    div { style: edit_header_style(),
+                div { class: "admin-card",
+                    div { class: "admin-modal-title",
                         if is_creating { "➕ Новая квест-точка" } else { "✏️ Редактировать" }
                     }
-                    input { style: input_style(), placeholder: "Название", value: "{edit_name}",
+                    input { class: "admin-input", placeholder: "Название", value: "{edit_name}",
                         oninput: move |e| edit_name.set(e.value()) }
-                    select { style: input_style(), value: "{edit_cat}",
+                    select { class: "admin-select", value: "{edit_cat}",
                         oninput: move |e| edit_cat.set(e.value()),
                         option { value: "beach", "🏖️ Beach" }
                         option { value: "viewpoint", "🌄 Viewpoint" }
@@ -3286,21 +3282,21 @@ fn QuestsTab() -> Element {
                         option { value: "nature", "🌿 Nature" }
                     }
                     div { style: "display:flex;gap:8px;",
-                        input { style: input_style(), placeholder: "Lat", value: "{edit_lat}", r#type: "number",
+                        input { class: "admin-input", placeholder: "Lat", value: "{edit_lat}", r#type: "number",
                             oninput: move |e| edit_lat.set(e.value()) }
-                        input { style: input_style(), placeholder: "Lon", value: "{edit_lon}", r#type: "number",
+                        input { class: "admin-input", placeholder: "Lon", value: "{edit_lon}", r#type: "number",
                             oninput: move |e| edit_lon.set(e.value()) }
                     }
-                    textarea { style: textarea_style(), placeholder: "Описание", value: "{edit_desc}",
+                    textarea { class: "admin-textarea", placeholder: "Описание", value: "{edit_desc}",
                         oninput: move |e| edit_desc.set(e.value()) }
-                    input { style: input_style(), placeholder: "URL изображения", value: "{edit_img}",
+                    input { class: "admin-input", placeholder: "URL изображения", value: "{edit_img}",
                         oninput: move |e| edit_img.set(e.value()) }
                     if !error.read().is_empty() {
-                        div { style: "color:#ff4757;font-size:13px;", "{error}" }
+                        div { class: "admin-badge danger", "{error}" }
                     }
-                    div { style: "display:flex;gap:8px;",
+                    div { class: "admin-modal-footer",
                         button {
-                            style: if *saving.read() { submit_btn_disabled_style() } else { submit_btn_style() },
+                            class: if *saving.read() { "admin-btn" } else { "admin-btn primary" },
                             disabled: *saving.read(),
                             onclick: move |_| {
                                 let n = edit_name.read().trim().to_string();
@@ -3356,7 +3352,7 @@ fn QuestsTab() -> Element {
                             },
                             "💾 Сохранить"
                         }
-                        button { style: cancel_btn_style(), onclick: move |_| { editing.set(None); error.set(String::new()); }, "Отмена" }
+                        button { class: "admin-btn secondary", onclick: move |_| { editing.set(None); error.set(String::new()); }, "Отмена" }
                     }
                 }
             }
@@ -3366,9 +3362,10 @@ fn QuestsTab() -> Element {
     rsx! {
         div {
             {render_toasts(toasts)}
-            h3 { style: "color:#39ff14;font-size:15px;margin-bottom:12px;", "🗺️ Квест-точки" }
+            h3 { class: "admin-card-title", "🗺️ Квест-точки" }
             button {
-                style: "{submit_btn_style()}width:100%;margin-bottom:12px;",
+                class: "admin-btn primary",
+                style: "width:100%;margin-bottom:12px;",
                 onclick: move |_| {
                     is_new.set(true);
                     editing.set(Some(AdminQuestPlace {
@@ -3379,11 +3376,11 @@ fn QuestsTab() -> Element {
                 "+ Добавить точку"
             }
             if *loading.read() {
-                div { style: "color:#888;padding:20px 0;", "Загрузка..." }
+                div { class: "admin-empty", "Загрузка..." }
             } else if places.read().is_empty() {
-                div { style: "color:#888;padding:20px 0;text-align:center;", "Нет точек" }
+                div { class: "admin-empty", "Нет точек" }
             } else {
-                div { style: "display:flex;flex-direction:column;gap:6px;",
+                div {
                     for place in places.read().clone() {
                         {
                             let p2 = place.clone();
@@ -3393,38 +3390,40 @@ fn QuestsTab() -> Element {
                             let mut toasts2 = toasts.clone();
                             let mut reload2 = reload.clone();
                             rsx! {
-                                div { style: "background:#1a1a2e;border:1px solid #2a2a4a;border-radius:6px;padding:10px;display:flex;align-items:center;gap:8px;",
-                                    div { style: "flex:1;min-width:0;",
-                                        div { style: "font-weight:600;font-size:13px;", "{place.name}" }
-                                        div { style: "font-size:11px;color:#888;",
+                                div { class: "admin-row",
+                                    div { class: "admin-row-main",
+                                        div { class: "admin-card-title", "{place.name}" }
+                                        div { class: "admin-card-meta",
                                             "{place.category} • {place.lat:.4}, {place.lon:.4}"
                                         }
                                     }
-                                    button { style: "padding:8px 10px;background:#2a2a4a;color:#e8e8e8;border:none;border-radius:4px;font-size:14px;cursor:pointer;",
-                                        onclick: move |_| { is_new.set(false); editing.set(Some(p2.clone())); },
-                                        "✏️"
-                                    }
-                                    button { style: "padding:8px 10px;background:#3a1a1a;color:#ff8888;border:none;border-radius:4px;font-size:14px;cursor:pointer;",
-                                        onclick: move |_| {
-                                            let pid = p_id.clone();
-                                            let id_d = id_del.clone();
-                                            let mut places3 = places.clone();
-                                            let mut toasts3 = toasts2.clone();
-                                            spawn(async move {
-                                                let url = format!("{}/api/quest-places/{}", api_base_url(), pid);
-                                                let res = reqwest::Client::new().delete(&url)
-                                                    .header("X-Telegram-Init-Data", id_d)
-                                                    .send().await;
-                                                match res {
-                                                    Ok(r) if r.status().is_success() => {
-                                                        places3.write().retain(|p| p.id != pid);
-                                                        push_toast(toasts3, "Удалено".into(), ToastKind::Success);
+                                    div { class: "admin-row-actions",
+                                        button { class: "admin-btn secondary admin-btn-sm",
+                                            onclick: move |_| { is_new.set(false); editing.set(Some(p2.clone())); },
+                                            "✏️"
+                                        }
+                                        button { class: "admin-btn danger admin-btn-sm",
+                                            onclick: move |_| {
+                                                let pid = p_id.clone();
+                                                let id_d = id_del.clone();
+                                                let mut places3 = places.clone();
+                                                let mut toasts3 = toasts2.clone();
+                                                spawn(async move {
+                                                    let url = format!("{}/api/quest-places/{}", api_base_url(), pid);
+                                                    let res = reqwest::Client::new().delete(&url)
+                                                        .header("X-Telegram-Init-Data", id_d)
+                                                        .send().await;
+                                                    match res {
+                                                        Ok(r) if r.status().is_success() => {
+                                                            places3.write().retain(|p| p.id != pid);
+                                                            push_toast(toasts3, "Удалено".into(), ToastKind::Success);
+                                                        }
+                                                        _ => { push_toast(toasts3, "Ошибка удаления".into(), ToastKind::Error); }
                                                     }
-                                                    _ => { push_toast(toasts3, "Ошибка удаления".into(), ToastKind::Error); }
-                                                }
-                                            });
-                                        },
-                                        "🗑"
+                                                });
+                                            },
+                                            "🗑"
+                                        }
                                     }
                                 }
                             }
@@ -3514,38 +3513,38 @@ fn TreasuresTab() -> Element {
         return rsx! {
             div {
                 {render_toasts(toasts)}
-                div { style: edit_card_style(),
-                    div { style: edit_header_style(),
+                div { class: "admin-card",
+                    div { class: "admin-modal-title",
                         if is_creating { "➕ Новый квест" } else { "✏️ Редактировать" }
                     }
-                    input { style: input_style(), placeholder: "Название квеста", value: "{edit_name}",
+                    input { class: "admin-input", placeholder: "Название квеста", value: "{edit_name}",
                         oninput: move |e| edit_name.set(e.value()) }
-                    textarea { style: textarea_style(), placeholder: "Описание", value: "{edit_desc}",
+                    textarea { class: "admin-textarea", placeholder: "Описание", value: "{edit_desc}",
                         oninput: move |e| edit_desc.set(e.value()) }
-                    input { style: input_style(), placeholder: "URL изображения", value: "{edit_img}",
+                    input { class: "admin-input", placeholder: "URL изображения", value: "{edit_img}",
                         oninput: move |e| edit_img.set(e.value()) }
-                    div { style: en_section_style(), "☠️ Чёрная Метка (финальная награда)" }
-                    input { style: input_style(), placeholder: "Заголовок", value: "{edit_bm_title}",
+                    div { class: "admin-label", "☠️ Чёрная Метка (финальная награда)" }
+                    input { class: "admin-input", placeholder: "Заголовок", value: "{edit_bm_title}",
                         oninput: move |e| edit_bm_title.set(e.value()) }
-                    textarea { style: textarea_style(), placeholder: "Описание чёрной метки", value: "{edit_bm_desc}",
+                    textarea { class: "admin-textarea", placeholder: "Описание чёрной метки", value: "{edit_bm_desc}",
                         oninput: move |e| edit_bm_desc.set(e.value()) }
-                    input { style: input_style(), placeholder: "URL постера", value: "{edit_bm_img}",
+                    input { class: "admin-input", placeholder: "URL постера", value: "{edit_bm_img}",
                         oninput: move |e| edit_bm_img.set(e.value()) }
-                    div { style: en_section_style(), "🏴\u{200d}☠️ Стартовая точка (Woody)" }
-                    input { style: input_style(), placeholder: "Название", value: "{edit_start_name}",
+                    div { class: "admin-label", "🏴\u{200d}☠️ Стартовая точка (Woody)" }
+                    input { class: "admin-input", placeholder: "Название", value: "{edit_start_name}",
                         oninput: move |e| edit_start_name.set(e.value()) }
                     div { style: "display:flex;gap:8px;",
-                        input { style: input_style(), placeholder: "Lat", value: "{edit_start_lat}", r#type: "number",
+                        input { class: "admin-input", placeholder: "Lat", value: "{edit_start_lat}", r#type: "number",
                             oninput: move |e| edit_start_lat.set(e.value()) }
-                        input { style: input_style(), placeholder: "Lon", value: "{edit_start_lon}", r#type: "number",
+                        input { class: "admin-input", placeholder: "Lon", value: "{edit_start_lon}", r#type: "number",
                             oninput: move |e| edit_start_lon.set(e.value()) }
                     }
                     if !error.read().is_empty() {
-                        div { style: "color:#ff4757;font-size:13px;", "{error}" }
+                        div { class: "admin-badge danger", "{error}" }
                     }
-                    div { style: "display:flex;gap:8px;",
+                    div { class: "admin-modal-footer",
                         button {
-                            style: if *saving.read() { submit_btn_disabled_style() } else { submit_btn_style() },
+                            class: if *saving.read() { "admin-btn" } else { "admin-btn primary" },
                             disabled: *saving.read(),
                             onclick: move |_| {
                                 let n = edit_name.read().trim().to_string();
@@ -3601,7 +3600,7 @@ fn TreasuresTab() -> Element {
                             },
                             "💾 Сохранить"
                         }
-                        button { style: cancel_btn_style(), onclick: move |_| { editing.set(None); error.set(String::new()); }, "Отмена" }
+                        button { class: "admin-btn secondary", onclick: move |_| { editing.set(None); error.set(String::new()); }, "Отмена" }
                     }
                 }
             }
@@ -3611,9 +3610,10 @@ fn TreasuresTab() -> Element {
     rsx! {
         div {
             {render_toasts(toasts)}
-            h3 { style: "color:#39ff14;font-size:15px;margin-bottom:12px;", "🏴\u{200d}☠️ Поиск Сокровищ" }
+            h3 { class: "admin-card-title", "🏴\u{200d}☠️ Поиск Сокровищ" }
             button {
-                style: "{submit_btn_style()}width:100%;margin-bottom:12px;",
+                class: "admin-btn primary",
+                style: "width:100%;margin-bottom:12px;",
                 onclick: move |_| {
                     is_new.set(true);
                     editing.set(Some(AdminTreasureHunt {
@@ -3625,11 +3625,11 @@ fn TreasuresTab() -> Element {
                 "+ Создать квест"
             }
             if *loading.read() {
-                div { style: "color:#888;padding:20px 0;", "Загрузка..." }
+                div { class: "admin-empty", "Загрузка..." }
             } else if hunts.read().is_empty() {
-                div { style: "color:#888;padding:20px 0;text-align:center;", "Нет квестов" }
+                div { class: "admin-empty", "Нет квестов" }
             } else {
-                div { style: "display:flex;flex-direction:column;gap:6px;",
+                div {
                     for hunt in hunts.read().clone() {
                         {
                             let h2 = hunt.clone();
@@ -3638,23 +3638,24 @@ fn TreasuresTab() -> Element {
                             let mut toasts2 = toasts.clone();
                             let mut reload2 = reload.clone();
                             rsx! {
-                                div { style: "background:#1a1a2e;border:1px solid #2a2a4a;border-radius:6px;padding:10px;display:flex;align-items:center;gap:8px;",
-                                    div { style: "flex:1;min-width:0;",
-                                        div { style: "font-weight:600;font-size:13px;",
+                                div { class: "admin-row",
+                                    div { class: "admin-row-main",
+                                        div { class: "admin-card-title",
                                             "🏴\u{200d}☠️ {hunt.name}"
                                             if hunt.is_active {
-                                                span { style: "margin-left:6px;font-size:10px;background:#39ff1420;color:#39ff14;padding:2px 5px;border-radius:4px;", "Активен" }
+                                                span { class: "admin-badge success", "Активен" }
                                             }
                                         }
-                                        div { style: "font-size:11px;color:#888;",
+                                        div { class: "admin-card-meta",
                                             "Чёрная метка: {hunt.black_mark_title}"
                                         }
                                     }
-                                    button { style: "padding:8px 10px;background:#2a2a4a;color:#e8e8e8;border:none;border-radius:4px;font-size:14px;cursor:pointer;",
-                                        onclick: move |_| { is_new.set(false); editing.set(Some(h2.clone())); },
-                                        "✏️"
-                                    }
-                                    button { style: "padding:8px 10px;background:#3a1a1a;color:#ff8888;border:none;border-radius:4px;font-size:14px;cursor:pointer;",
+                                    div { class: "admin-row-actions",
+                                        button { class: "admin-btn secondary admin-btn-sm",
+                                            onclick: move |_| { is_new.set(false); editing.set(Some(h2.clone())); },
+                                            "✏️"
+                                        }
+                                        button { class: "admin-btn danger admin-btn-sm",
                                         onclick: move |_| {
                                             let hid = h_id.clone();
                                             let id_d = id_del.clone();
@@ -3674,7 +3675,8 @@ fn TreasuresTab() -> Element {
                                                 }
                                             });
                                         },
-                                        "🗑"
+                                            "🗑"
+                                        }
                                     }
                                 }
                             }
@@ -3739,50 +3741,48 @@ fn GardenTab() -> Element {
     rsx! {
         div {
             {render_toasts(toasts)}
-            h3 { style: "color:#39ff14;font-size:15px;margin-bottom:16px;", "🌱 Сад — Настройки" }
+            h3 { class: "admin-card-title", "🌱 Сад — Настройки" }
             if *loading.read() {
-                div { style: "color:#888;padding:20px 0;", "Загрузка..." }
+                div { class: "admin-empty", "Загрузка..." }
             } else {
-                div { style: "display:flex;flex-direction:column;gap:12px;",
+                div {
                     // Toggle enabled
-                    div { style: "background:#1a1a2e;border:1px solid #2a2a4a;border-radius:8px;padding:14px;display:flex;justify-content:space-between;align-items:center;",
-                        div {
-                            div { style: "font-weight:600;font-size:14px;", "Игра активна" }
-                            div { style: "font-size:12px;color:#888;margin-top:2px;", "Включить/выключить игру Сад" }
-                        }
-                        button {
-                            style: if *is_enabled.read() {
-                                "padding:8px 16px;background:#39ff14;color:#000;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;"
-                            } else {
-                                "padding:8px 16px;background:#3a1a1a;color:#ff8888;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;"
-                            },
-                            onclick: move |_| { let v = !*is_enabled.read(); is_enabled.set(v); },
-                            if *is_enabled.read() { "✓ Вкл" } else { "✖ Выкл" }
+                    div { class: "admin-card",
+                        div { class: "admin-row",
+                            div { class: "admin-row-main",
+                                div { class: "admin-card-title", "Игра активна" }
+                                div { class: "admin-card-meta", "Включить/выключить игру Сад" }
+                            }
+                            button {
+                                class: if *is_enabled.read() { "admin-btn primary" } else { "admin-btn danger" },
+                                onclick: move |_| { let v = !*is_enabled.read(); is_enabled.set(v); },
+                                if *is_enabled.read() { "✓ Вкл" } else { "✖ Выкл" }
+                            }
                         }
                     }
                     // Discount
-                    div { style: "background:#1a1a2e;border:1px solid #2a2a4a;border-radius:8px;padding:14px;",
-                        div { style: "font-weight:600;margin-bottom:8px;", "Скидка за награду (%)" }
-                        input { style: "{input_style()}width:100%;box-sizing:border-box;", r#type: "number",
+                    div { class: "admin-form-group",
+                        label { class: "admin-label", "Скидка за награду (%)" }
+                        input { class: "admin-input", r#type: "number",
                             value: "{discount}", oninput: move |e| discount.set(e.value()) }
                     }
                     // Bonus points
-                    div { style: "background:#1a1a2e;border:1px solid #2a2a4a;border-radius:8px;padding:14px;",
-                        div { style: "font-weight:600;margin-bottom:8px;", "Бонусные баллы за урожай" }
-                        input { style: "{input_style()}width:100%;box-sizing:border-box;", r#type: "number",
+                    div { class: "admin-form-group",
+                        label { class: "admin-label", "Бонусные баллы за урожай" }
+                        input { class: "admin-input", r#type: "number",
                             value: "{bonus_points}", oninput: move |e| bonus_points.set(e.value()) }
                     }
                     // Expiration days
-                    div { style: "background:#1a1a2e;border:1px solid #2a2a4a;border-radius:8px;padding:14px;",
-                        div { style: "font-weight:600;margin-bottom:8px;", "Срок действия награды (дней)" }
-                        input { style: "{input_style()}width:100%;box-sizing:border-box;", r#type: "number",
+                    div { class: "admin-form-group",
+                        label { class: "admin-label", "Срок действия награды (дней)" }
+                        input { class: "admin-input", r#type: "number",
                             value: "{expire_days}", oninput: move |e| expire_days.set(e.value()) }
                     }
                     if !error.read().is_empty() {
-                        div { style: "color:#ff4757;font-size:13px;", "{error}" }
+                        div { class: "admin-badge danger", "{error}" }
                     }
                     button {
-                        style: if *saving.read() { submit_btn_disabled_style() } else { submit_btn_style() },
+                        class: if *saving.read() { "admin-btn" } else { "admin-btn primary" },
                         disabled: *saving.read(),
                         onclick: move |_| {
                             let enabled = *is_enabled.read();
@@ -3906,45 +3906,41 @@ fn LoyaltyTab() -> Element {
         }
     });
 
-    let sub_btn = |key: &str, label: &str| -> Element {
-        let is_active = *active_sub.read() == key;
-        let k = key.to_string();
-        let l = label.to_string();
-        let style = if is_active {
-            "flex:1;padding:8px;background:#39ff14;color:#000;border:none;border-radius:4px;font-size:13px;font-weight:700;cursor:pointer;"
-        } else {
-            "flex:1;padding:8px;background:#1a1a2e;color:#888;border:1px solid #2a2a4a;border-radius:4px;font-size:13px;cursor:pointer;"
-        };
-        rsx! { button { style: "{style}", onclick: move |_| active_sub.set(k.clone()), "{l}" } }
-    };
-
     rsx! {
         div {
             {render_toasts(toasts)}
-            h3 { style: "color:#39ff14;font-size:15px;margin-bottom:12px;", "💎 Лояльность" }
-            div { style: "display:flex;gap:6px;margin-bottom:16px;",
-                {sub_btn("config", "🎟️ Тиры")}
-                {sub_btn("leaderboard", "🏆 Лидерборд")}
+            h3 { class: "admin-card-title", "💎 Лояльность" }
+            div { class: "admin-subtabs",
+                button {
+                    class: if *active_sub.read() == "config" { "admin-subtab active" } else { "admin-subtab" },
+                    onclick: move |_| active_sub.set("config".into()),
+                    "🎟️ Тиры"
+                }
+                button {
+                    class: if *active_sub.read() == "leaderboard" { "admin-subtab active" } else { "admin-subtab" },
+                    onclick: move |_| active_sub.set("leaderboard".into()),
+                    "🏆 Лидерборд"
+                }
             }
             if *loading.read() {
-                div { style: "color:#888;padding:20px 0;", "Загрузка..." }
+                div { class: "admin-empty", "Загрузка..." }
             } else if *active_sub.read() == "config" {
                 if tiers.read().is_empty() {
-                    div { style: "color:#888;padding:20px 0;", "Нет тиров" }
+                    div { class: "admin-empty", "Нет тиров" }
                 } else {
-                    div { style: "display:flex;flex-direction:column;gap:8px;",
+                    div {
                         for tier in tiers.read().clone() {
-                            div { style: "background:#1a1a2e;border:1px solid #2a2a4a;border-radius:8px;padding:12px;display:flex;align-items:center;gap:10px;",
+                            div { class: "admin-row",
                                 div { style: "font-size:24px;",
                                     "{tier.icon.clone().unwrap_or_else(|| \"💎\".to_string())}"
                                 }
-                                div { style: "flex:1;",
-                                    div { style: "font-weight:700;font-size:14px;", "{tier.name}" }
-                                    div { style: "font-size:12px;color:#888;",
+                                div { class: "admin-row-main",
+                                    div { class: "admin-card-title", "{tier.name}" }
+                                    div { class: "admin-card-meta",
                                         "От {tier.min_points} баллов • Скидка {tier.discount_percent}%"
                                     }
                                 }
-                                span { style: "font-size:11px;padding:3px 8px;border-radius:4px;background:#39ff1420;color:#39ff14;",
+                                span { class: "admin-badge success",
                                     "{tier.tier}"
                                 }
                             }
@@ -3954,9 +3950,9 @@ fn LoyaltyTab() -> Element {
             } else {
                 // Leaderboard
                 if leaderboard.read().is_empty() {
-                    div { style: "color:#888;padding:20px 0;", "Лидерборд пустой" }
+                    div { class: "admin-empty", "Лидерборд пустой" }
                 } else {
-                    div { style: "display:flex;flex-direction:column;gap:6px;",
+                    div {
                         for (idx, entry) in leaderboard.read().clone().iter().enumerate() {
                             {
                                 let medal = match idx {
@@ -3969,19 +3965,19 @@ fn LoyaltyTab() -> Element {
                                 let spent = entry.total_spent.unwrap_or(0.0);
                                 let tier_label = entry.tier.clone().unwrap_or_default();
                                 rsx! {
-                                    div { style: "background:#1a1a2e;border:1px solid #2a2a4a;border-radius:6px;padding:10px;display:flex;align-items:center;gap:8px;",
+                                    div { class: "admin-row",
                                         div { style: "font-size:18px;width:28px;text-align:center;",
                                             if medal.is_empty() {
-                                                span { style: "font-size:12px;color:#888;", "{idx+1}" }
+                                                span { class: "admin-badge muted", "{idx+1}" }
                                             } else {
                                                 "{medal}"
                                             }
                                         }
-                                        div { style: "flex:1;",
-                                            div { style: "font-weight:600;font-size:13px;", "{name}" }
-                                            div { style: "font-size:11px;color:#888;", "{tier_label}" }
+                                        div { class: "admin-row-main",
+                                            div { class: "admin-card-title", "{name}" }
+                                            div { class: "admin-card-meta", "{tier_label}" }
                                         }
-                                        div { style: "font-weight:700;color:#39ff14;font-size:14px;",
+                                        div { class: "admin-badge success",
                                             "{spent:.0}Б"
                                         }
                                     }
@@ -4050,26 +4046,33 @@ fn ManagersTab() -> Element {
     rsx! {
         div {
             {render_toasts(toasts)}
-            h3 { style: "color:#39ff14;font-size:15px;margin-bottom:12px;", "👥 Менеджеры" }
+            h3 { class: "admin-card-title", "👥 Менеджеры" }
             if !error.read().is_empty() {
-                div { style: "color:#ff4757;margin-bottom:8px;font-size:13px;", "{error}" }
+                div { class: "admin-badge danger", "{error}" }
             }
             button {
-                style: "{submit_btn_style()}width:100%;margin-bottom:12px;",
+                class: "admin-btn primary",
+                style: "width:100%;margin-bottom:12px;",
                 onclick: move |_| { let v = !*show_form.read(); show_form.set(v); },
                 if *show_form.read() { "✖ Скрыть форму" } else { "+ Добавить менеджера" }
             }
             if *show_form.read() {
-                div { style: "{edit_card_style()}margin-bottom:12px;",
-                    div { style: edit_header_style(), "➕ Новый менеджер" }
-                    input { style: input_style(), placeholder: "Telegram ID", value: "{form_tg_id}",
-                        r#type: "number", oninput: move |e| form_tg_id.set(e.value()) }
-                    input { style: input_style(), placeholder: "Имя", value: "{form_name}",
-                        oninput: move |e| form_name.set(e.value()) }
-                    input { style: input_style(), placeholder: "Commission % (напр. 10)", value: "{form_commission}",
-                        r#type: "number", oninput: move |e| form_commission.set(e.value()) }
+                div { class: "admin-card",
+                    div { class: "admin-modal-title", "➕ Новый менеджер" }
+                    div { class: "admin-form-group",
+                        input { class: "admin-input", placeholder: "Telegram ID", value: "{form_tg_id}",
+                            r#type: "number", oninput: move |e| form_tg_id.set(e.value()) }
+                    }
+                    div { class: "admin-form-group",
+                        input { class: "admin-input", placeholder: "Имя", value: "{form_name}",
+                            oninput: move |e| form_name.set(e.value()) }
+                    }
+                    div { class: "admin-form-group",
+                        input { class: "admin-input", placeholder: "Commission % (напр. 10)", value: "{form_commission}",
+                            r#type: "number", oninput: move |e| form_commission.set(e.value()) }
+                    }
                     button {
-                        style: if *submitting.read() { submit_btn_disabled_style() } else { submit_btn_style() },
+                        class: if *submitting.read() { "admin-btn" } else { "admin-btn primary" },
                         disabled: *submitting.read(),
                         onclick: move |_| {
                             let tg_id_str = form_tg_id.read().trim().to_string();
@@ -4115,28 +4118,28 @@ fn ManagersTab() -> Element {
                 }
             }
             if *loading.read() {
-                div { style: "color:#888;padding:20px 0;", "Загрузка..." }
+                div { class: "admin-empty", "Загрузка..." }
             } else if managers.read().is_empty() {
-                div { style: "color:#888;padding:20px 0;text-align:center;", "Нет менеджеров" }
+                div { class: "admin-empty", "Нет менеджеров" }
             } else {
-                div { style: "display:flex;flex-direction:column;gap:6px;",
+                div {
                     for mgr in managers.read().clone() {
-                        div { style: "background:#1a1a2e;border:1px solid #2a2a4a;border-radius:8px;padding:12px;",
-                            div { style: "font-weight:600;font-size:14px;",
+                        div { class: "admin-card",
+                            div { class: "admin-card-title",
                                 "👤 {mgr.name.clone().unwrap_or_else(|| \"—\".to_string())}"
                                 if let Some(uname) = mgr.username.clone() {
-                                    span { style: "color:#4d9fff;font-size:13px;margin-left:6px;",
+                                    span { class: "admin-badge info",
                                         "(@{uname})"
                                     }
                                 }
                             }
-                            div { style: "font-size:12px;color:#888;margin-top:4px;",
+                            div { class: "admin-card-meta",
                                 "Telegram ID: {mgr.telegram_id}"
                                 if let Some(rate) = mgr.commission_rate {
-                                    span { style: "margin-left:8px;color:#ffe600;", " • {rate}% комиссия" }
+                                    span { class: "admin-badge warn", " • {rate}% комиссия" }
                                 }
                                 if let Some(ref_code) = mgr.ref_code.clone() {
-                                    div { style: "margin-top:4px;color:#00e5ff;font-size:11px;",
+                                    div { class: "admin-badge info",
                                         "Реф. код: {ref_code}"
                                     }
                                 }

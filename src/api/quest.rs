@@ -49,26 +49,34 @@ pub struct QuestPlaceRequest {
 }
 
 async fn get_quest_places(State(state): State<AppState>) -> Result<Json<Value>, StatusCode> {
-    let client = state.db.pool.get().await
+    // Wave 3: полный row mapping. После миграции 020 lat/lon — DOUBLE PRECISION,
+    // но оставляем ::float8 на SELECT для совместимости со старыми инстансами.
+    use sea_orm::{Statement, DbBackend, ConnectionTrait};
+    let stmt = Statement::from_sql_and_values(
+        DbBackend::Postgres,
+        "SELECT id, name, COALESCE(category,'location') AS category, \
+                lat::float8 AS lat, lon::float8 AS lon, \
+                COALESCE(description,'') AS description, \
+                COALESCE(image_url,'') AS image_url, \
+                COALESCE(is_available, true) AS is_available \
+         FROM quest_places ORDER BY name",
+        [],
+    );
+    let rows = state.db.orm.query_all(stmt).await
         .map_err(|e| {
-            tracing::error!("Database connection error: {}", e);
+            tracing::error!("get_quest_places sea-orm: {e}");
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
-    // Try simpler query first
-    let rows = match client.query(
-        "SELECT * FROM quest_places",
-        &[],
-    ).await {
-        Ok(r) => r,
-        Err(e) => {
-            tracing::error!("Query error: {} - {}", e, e.to_string());
-            return Err(StatusCode::INTERNAL_SERVER_ERROR);
-        }
-    };
-
     let items: Vec<Value> = rows.iter().map(|r| json!({
-        "id": r.try_get::<_, String>(0).unwrap_or_default(),
+        "id":          r.try_get::<String>("", "id").unwrap_or_default(),
+        "name":        r.try_get::<String>("", "name").unwrap_or_default(),
+        "category":    r.try_get::<String>("", "category").unwrap_or_default(),
+        "lat":         r.try_get::<f64>("", "lat").unwrap_or(0.0),
+        "lon":         r.try_get::<f64>("", "lon").unwrap_or(0.0),
+        "description": r.try_get::<String>("", "description").unwrap_or_default(),
+        "image_url":   r.try_get::<String>("", "image_url").unwrap_or_default(),
+        "is_available":r.try_get::<bool>("", "is_available").unwrap_or(true),
     })).collect();
 
     Ok(Json(json!({ "quest_places": items })))
@@ -104,11 +112,18 @@ async fn update_quest_place(
     Json(req): Json<QuestPlaceRequest>,
 ) -> Result<Json<Value>, StatusCode> {
     check_admin(&headers, &state)?;
-    let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    client.execute(
-        "UPDATE quest_places SET name=$1, category=$2, lat=$3, lon=$4, description=$5, image_url=$6 WHERE id=$7",
-        &[&req.name, &req.category.unwrap_or_else(|| "location".to_string()), &req.lat, &req.lon, &req.description, &req.image_url, &id],
-    ).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    // Wave 3: UPDATE через SeaORM с ::float8 castом — устраняет NUMERIC баг.
+    use sea_orm::{Statement, DbBackend, ConnectionTrait};
+    let category = req.category.unwrap_or_else(|| "location".to_string());
+    let description = req.description.unwrap_or_default();
+    let image_url = req.image_url.unwrap_or_default();
+    let stmt = Statement::from_sql_and_values(
+        DbBackend::Postgres,
+        "UPDATE quest_places SET name=$1, category=$2, lat=$3::float8, lon=$4::float8, description=$5, image_url=$6 WHERE id=$7",
+        [req.name.into(), category.into(), req.lat.into(), req.lon.into(), description.into(), image_url.into(), id.into()],
+    );
+    state.db.orm.execute(stmt).await
+        .map_err(|e| { tracing::error!("update_quest_place sea-orm: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?;
     Ok(Json(json!({ "success": true })))
 }
 
@@ -118,9 +133,14 @@ async fn delete_quest_place(
     Path(id): Path<String>,
 ) -> Result<Json<Value>, StatusCode> {
     check_admin(&headers, &state)?;
-    let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    client.execute("UPDATE quest_places SET is_available = false WHERE id = $1", &[&id])
-        .await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    use sea_orm::{Statement, DbBackend, ConnectionTrait};
+    let stmt = Statement::from_sql_and_values(
+        DbBackend::Postgres,
+        "UPDATE quest_places SET is_available = false WHERE id = $1",
+        [id.into()],
+    );
+    state.db.orm.execute(stmt).await
+        .map_err(|e| { tracing::error!("delete_quest_place sea-orm: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?;
     Ok(Json(json!({ "success": true })))
 }
 
@@ -199,11 +219,19 @@ async fn update_treasure_hunt(
     Json(req): Json<TreasureHuntRequest>,
 ) -> Result<Json<Value>, StatusCode> {
     check_admin(&headers, &state)?;
-    let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    client.execute(
-        "UPDATE treasure_hunts SET name=$1, description=$2, image_url=$3, black_mark_title=$4, black_mark_description=$5, black_mark_image_url=$6, start_lat=$7, start_lon=$8, start_name=$9 WHERE id=$10",
-        &[&req.name, &req.description, &req.image_url, &req.black_mark_title, &req.black_mark_description, &req.black_mark_image_url, &req.start_lat, &req.start_lon, &req.start_name, &id],
-    ).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    // Wave 3: UPDATE через SeaORM с ::float8 castом для start_lat/start_lon.
+    use sea_orm::{Statement, DbBackend, ConnectionTrait};
+    let description = req.description.unwrap_or_default();
+    let image_url = req.image_url.unwrap_or_default();
+    let bm_desc = req.black_mark_description.unwrap_or_default();
+    let bm_image = req.black_mark_image_url.unwrap_or_default();
+    let stmt = Statement::from_sql_and_values(
+        DbBackend::Postgres,
+        "UPDATE treasure_hunts SET name=$1, description=$2, image_url=$3, black_mark_title=$4, black_mark_description=$5, black_mark_image_url=$6, start_lat=$7::float8, start_lon=$8::float8, start_name=$9 WHERE id=$10",
+        [req.name.into(), description.into(), image_url.into(), req.black_mark_title.into(), bm_desc.into(), bm_image.into(), req.start_lat.into(), req.start_lon.into(), req.start_name.into(), id.into()],
+    );
+    state.db.orm.execute(stmt).await
+        .map_err(|e| { tracing::error!("update_treasure_hunt sea-orm: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?;
     Ok(Json(json!({ "success": true })))
 }
 
@@ -213,9 +241,14 @@ async fn delete_treasure_hunt(
     Path(id): Path<String>,
 ) -> Result<Json<Value>, StatusCode> {
     check_admin(&headers, &state)?;
-    let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    client.execute("UPDATE treasure_hunts SET is_active = false WHERE id = $1", &[&id])
-        .await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    use sea_orm::{Statement, DbBackend, ConnectionTrait};
+    let stmt = Statement::from_sql_and_values(
+        DbBackend::Postgres,
+        "UPDATE treasure_hunts SET is_active = false WHERE id = $1",
+        [id.into()],
+    );
+    state.db.orm.execute(stmt).await
+        .map_err(|e| { tracing::error!("delete_treasure_hunt sea-orm: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?;
     Ok(Json(json!({ "success": true })))
 }
 
