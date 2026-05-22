@@ -260,19 +260,33 @@ async fn main() -> Result<()> {
         .route("/admin", get(spa_handler))
         .layer(html_no_cache_layer());
 
-    // Swagger UI — served at /swagger-ui/ (utoipa-swagger-ui 8.x, compatible with axum 0.7)
-    #[cfg(feature = "utoipa-swagger-ui")]
-    let swagger_router: Router = {
+    // OpenAPI JSON spec — served at /api-docs/openapi.json (no Swagger UI binary to keep musl build slim)
+    #[cfg(feature = "utoipa")]
+    let openapi_router: Router = {
         use utoipa::OpenApi;
-        let ui = utoipa_swagger_ui::SwaggerUi::new("/swagger-ui")
-            .url("/api-docs/openapi.json", crate::api::openapi::ApiDoc::openapi());
-        Router::from(ui)
+        let spec_json: std::sync::Arc<String> = std::sync::Arc::new(
+            crate::api::openapi::ApiDoc::openapi()
+                .to_json()
+                .unwrap_or_else(|_| "{}".to_string()),
+        );
+        Router::new().route(
+            "/api-docs/openapi.json",
+            get(move || {
+                let spec_json = spec_json.clone();
+                async move {
+                    (
+                        [(axum::http::header::CONTENT_TYPE, "application/json")],
+                        (*spec_json).clone(),
+                    )
+                }
+            }),
+        )
     };
-    #[cfg(not(feature = "utoipa-swagger-ui"))]
-    let swagger_router: Router = Router::new();
+    #[cfg(not(feature = "utoipa"))]
+    let openapi_router: Router = Router::new();
 
     let app = Router::new()
-        .merge(swagger_router)
+        .merge(openapi_router)
         // CORS layer MUST be first!
         .layer(cors)
         .layer(ngrok_bypass)
