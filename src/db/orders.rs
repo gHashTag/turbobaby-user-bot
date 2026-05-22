@@ -37,6 +37,22 @@ impl Order {
     }
 }
 
+// Wave 5: SeaORM Entity API path. Старый tokio-postgres код выше — будем удалять в Wave 6+.
+
+/// Returns all orders for a given telegram_id via SeaORM Entity API.
+#[allow(dead_code)]
+pub async fn get_user_orders_seaorm(
+    orm: &sea_orm::DatabaseConnection,
+    telegram_id: i64,
+) -> Result<Vec<crate::db::entities::order::Model>, sea_orm::DbErr> {
+    use sea_orm::{EntityTrait, QueryFilter, ColumnTrait};
+    use crate::db::entities::order::{Entity, Column};
+    Entity::find()
+        .filter(Column::TelegramId.eq(telegram_id))
+        .all(orm)
+        .await
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OrderItem {
     pub strain_id: Option<String>,

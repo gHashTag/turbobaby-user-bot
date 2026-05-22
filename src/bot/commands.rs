@@ -5,7 +5,7 @@ use teloxide::{
     utils::command::BotCommands,
 };
 
-use crate::{config::Config, db::Database, db::referrals as ref_db, locales::*, ai::{AiClient, get_random_joke_prompt, get_random_fact_prompt}};
+use crate::{config::Config, db::Database, db::referrals as ref_db, locales::*, ai::{AiClient, get_random_joke_prompt, get_random_fact_prompt}, notify::notify_admins};
 
 #[derive(BotCommands, Clone)]
 #[command(rename_rule = "lowercase", description = "Woody Bot commands:")]
@@ -67,7 +67,9 @@ pub async fn handle_command(
     config: Arc<Config>,
 ) -> Result<(), teloxide::RequestError> {
     let user_id = msg.from.as_ref().map(|u| u.id.0 as i64).unwrap_or(0);
-    let lang = db.get_user_lang(user_id).await
+    let existing_lang = db.get_user_lang(user_id).await;
+    let is_new_user = existing_lang.is_none();
+    let lang = existing_lang
         .unwrap_or_else(|| map_telegram_lang(msg.from.as_ref().and_then(|u| u.language_code.as_ref().map(|s| s.as_str()))));
     let locale = get_locale(&lang);
     let base = &config.web_app_url;
@@ -106,6 +108,23 @@ pub async fn handle_command(
 
             // Ensure profile
             // db.get_or_create_loyalty_profile(user_id).await.ok();
+
+            // Notify admins about new users
+            if is_new_user {
+                crate::metrics::user_registered();
+                let first_name = msg.from.as_ref().map(|u| u.first_name.clone()).unwrap_or_default();
+                let username = msg.from.as_ref().and_then(|u| u.username.clone()).unwrap_or_else(|| "unknown".to_string());
+                let language_code = msg.from.as_ref().and_then(|u| u.language_code.clone()).unwrap_or_else(|| "unknown".to_string());
+                let notify_bot = bot.clone();
+                let notify_config = config.clone();
+                let notify_text = format!(
+                    "\u{1F195} \u{041D}\u{043E}\u{0432}\u{044B}\u{0439} \u{043F}\u{043E}\u{043B}\u{044C}\u{0437}\u{043E}\u{0432}\u{0430}\u{0442}\u{0435}\u{043B}\u{044C}\n\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\n\u{1F464} {} (@{})\n\u{1F194} {}\n\u{1F30D} {}",
+                    first_name, username, user_id, language_code
+                );
+                tokio::spawn(async move {
+                    notify_admins(&notify_bot, &notify_config, &notify_text).await;
+                });
+            }
 
             let welcome = format!(
                 "🪵 <b>{}</b>\n━━━━━━━━━━━━━━━━\n{}\n\n🌿 {}\n🍷 {}\n🌱 {}\n🗺️ {}\n🛍️ {}\n💰 {}\n😜 {}\n\n👇 <i>{}</i>",

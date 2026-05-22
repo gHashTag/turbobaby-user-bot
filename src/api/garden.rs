@@ -449,6 +449,21 @@ async fn harvest_plant(
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
+    // Notify admins about garden reward
+    let bot = state.bot.clone();
+    let config = state.config.clone();
+    let notify_user_id = user_id.clone();
+    let notify_strain = strain_name.clone();
+    tokio::spawn(async move {
+        let text = format!(
+            "\u{1F33F} Garden reward \u{0432}\u{044B}\u{0434}\u{0430}\u{043D}\n\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\n\u{1F194} {}\n\u{1F381} {} (10% / 100pts)",
+            notify_user_id, notify_strain
+        );
+        crate::notify::notify_admins(&bot, &config, &text).await;
+    });
+
+    crate::metrics::garden_reward_claimed();
+
     Ok(Json(json!({
         "success": true,
         "reward_id": reward_id,

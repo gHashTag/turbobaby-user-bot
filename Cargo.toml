@@ -36,10 +36,15 @@ js-sys = "0.3"
 getrandom = { version = "0.2", features = ["js"] }
 regex = "1"
 
+# OpenAPI documentation (backend only)
+utoipa = { version = "5", features = ["axum_extras"], optional = true }
+utoipa-swagger-ui = { version = "8.0.3", features = ["axum"], optional = true }
+
 # Backend only dependencies - all optional
 teloxide = { version = "0.13", features = ["macros", "webhooks-axum", "rustls"], default-features = false, optional = true }
 axum = { version = "0.7", features = ["multipart"], optional = true }
 axum-prometheus = { version = "0.7", optional = true }
+metrics = { version = "0.23", optional = true }
 tower = { version = "0.4", optional = true }
 tower-http = { version = "0.5", features = ["cors", "fs", "trace", "set-header", "compression-br", "compression-gzip", "compression-zstd"], optional = true }
 tokio = { version = "1", features = ["full"], optional = true }
@@ -83,7 +88,10 @@ backend = [
     "tokio-postgres-rustls", "rustls", "rustls-native-certs",
     "sea-orm",
     "aws-config", "aws-sdk-s3", "tracing-subscriber", "url", "md5",
-    "axum-prometheus"
+    "axum-prometheus",
+    "metrics",
+    "utoipa",
+    "utoipa-swagger-ui"
 ]
 web = []
 
