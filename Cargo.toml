@@ -38,7 +38,6 @@ regex = "1"
 
 # OpenAPI documentation (backend only)
 utoipa = { version = "5", features = ["axum_extras"], optional = true }
-utoipa-swagger-ui = { version = "8.0.3", features = ["axum"], optional = true }
 
 # Backend only dependencies - all optional
 teloxide = { version = "0.13", features = ["macros", "webhooks-axum", "rustls"], default-features = false, optional = true }
@@ -90,8 +89,7 @@ backend = [
     "aws-config", "aws-sdk-s3", "tracing-subscriber", "url", "md5",
     "axum-prometheus",
     "metrics",
-    "utoipa",
-    "utoipa-swagger-ui"
+    "utoipa"
 ]
 web = []
 
