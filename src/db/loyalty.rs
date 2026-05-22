@@ -15,12 +15,14 @@ pub struct LoyaltyProfile {
     pub is_blocked: bool,
 }
 
+// total_spent / bonus_balance в БД могут быть NUMERIC или DOUBLE PRECISION в зависимости от истории миграций.
+// В выборках всегда кастим через ::float8, но ровно на всякий случай используем try_get.
 impl LoyaltyProfile {
     pub fn from_row(row: &Row) -> Self {
         Self {
             telegram_id: row.get("telegram_id"),
-            total_spent: row.get("total_spent"),
-            bonus_balance: row.get("bonus_balance"),
+            total_spent: row.try_get::<_, f64>("total_spent").ok().or_else(|| row.try_get::<_, Option<f64>>("total_spent").ok().flatten()),
+            bonus_balance: row.try_get::<_, f64>("bonus_balance").unwrap_or(0.0),
             tier: row.get("tier"),
             referral_code: row.get("referral_code"),
             referred_by: row.get("referred_by"),

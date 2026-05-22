@@ -51,13 +51,31 @@ async fn get_loyalty_tiers(State(state): State<AppState>) -> Result<Json<Value>,
 }
 
 async fn get_profile(State(state): State<AppState>, Path(telegram_id): Path<i64>) -> Result<Json<Value>, StatusCode> {
-    let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    let row = client.query_opt(
-        "SELECT telegram_id, total_spent, bonus_balance, tier, referral_code, referred_by, referral_count, first_purchase_at, manager_telegram_id, is_blocked FROM loyalty_profiles WHERE telegram_id = $1",
-        &[&telegram_id],
-    ).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    // SeaORM-версия: sqlx безопасно читает NUMERIC в f64.
+    use sea_orm::{Statement, DbBackend, ConnectionTrait};
+    let stmt = Statement::from_sql_and_values(
+        DbBackend::Postgres,
+        "SELECT telegram_id, total_spent::float8 AS total_spent, bonus_balance::float8 AS bonus_balance, tier, referral_code, referred_by, referral_count, first_purchase_at, manager_telegram_id, is_blocked FROM loyalty_profiles WHERE telegram_id = $1",
+        [telegram_id.into()],
+    );
+    let row = state.db.orm.query_one(stmt).await
+        .map_err(|e| { tracing::error!("get_profile sea-orm: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?;
     match row {
-        Some(r) => Ok(Json(json!({ "profile": LoyaltyProfile::from_row(&r) }))),
+        Some(r) => {
+            let profile = json!({
+                "telegram_id": r.try_get::<i64>("", "telegram_id").unwrap_or(0),
+                "total_spent": r.try_get::<Option<f64>>("", "total_spent").ok().flatten(),
+                "bonus_balance": r.try_get::<Option<f64>>("", "bonus_balance").ok().flatten().unwrap_or(0.0),
+                "tier": r.try_get::<String>("", "tier").unwrap_or_default(),
+                "referral_code": r.try_get::<Option<String>>("", "referral_code").ok().flatten(),
+                "referred_by": r.try_get::<Option<i64>>("", "referred_by").ok().flatten(),
+                "referral_count": r.try_get::<i32>("", "referral_count").unwrap_or(0),
+                "first_purchase_at": r.try_get::<Option<chrono::DateTime<chrono::Utc>>>("", "first_purchase_at").ok().flatten(),
+                "manager_telegram_id": r.try_get::<Option<i64>>("", "manager_telegram_id").ok().flatten(),
+                "is_blocked": r.try_get::<bool>("", "is_blocked").unwrap_or(false),
+            });
+            Ok(Json(json!({ "profile": profile })))
+        }
         None => Err(StatusCode::NOT_FOUND),
     }
 }
@@ -100,16 +118,25 @@ async fn use_bonus(
 }
 
 async fn get_leaderboard(State(state): State<AppState>) -> Result<Json<Value>, StatusCode> {
-    let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    let rows = client.query(
-        "SELECT telegram_id, total_spent, tier FROM loyalty_profiles ORDER BY total_spent DESC LIMIT 20",
-        &[],
-    ).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    let leaderboard: Vec<Value> = rows.iter().map(|r| json!({
-        "telegram_id": r.get::<_, i64>("telegram_id"),
-        "total_spent": r.get::<_, f64>("total_spent"),
-        "tier": r.get::<_, String>("tier"),
-    })).collect();
+    // SeaORM-версия: обходит все проблемы с NUMERIC ↔ f64,
+    // потому что sqlx из коробки умеет читать numeric в f64.
+    use sea_orm::{Statement, DbBackend, ConnectionTrait};
+    let stmt = Statement::from_string(
+        DbBackend::Postgres,
+        "SELECT telegram_id, total_spent::float8 AS total_spent, tier FROM loyalty_profiles ORDER BY total_spent DESC NULLS LAST LIMIT 20".to_string(),
+    );
+    let rows = state.db.orm.query_all(stmt).await
+        .map_err(|e| { tracing::error!("get_leaderboard sea-orm: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?;
+    let leaderboard: Vec<Value> = rows.iter().map(|r| {
+        let telegram_id: i64 = r.try_get("", "telegram_id").unwrap_or(0);
+        let total_spent: Option<f64> = r.try_get("", "total_spent").ok();
+        let tier: String = r.try_get("", "tier").unwrap_or_default();
+        json!({
+            "telegram_id": telegram_id,
+            "total_spent": total_spent.unwrap_or(0.0),
+            "tier": tier,
+        })
+    }).collect();
     Ok(Json(json!({ "leaderboard": leaderboard })))
 }
 

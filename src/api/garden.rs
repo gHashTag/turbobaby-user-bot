@@ -620,6 +620,11 @@ async fn update_config(
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
+    // BUG-5: is_enabled в БД — BOOLEAN, раньше передавался i32 → type mismatch.
+    let is_enabled = req.is_enabled;
+    let reward_discount_percent = req.reward_discount_percent.map(|p| p as i32);
+    let reward_bonus_points = req.reward_bonus_points.map(|p| p as i32);
+    let reward_expiration_days = req.reward_expiration_days.map(|d| d as i32);
     client.execute(
         "UPDATE garden_config
          SET is_enabled = COALESCE($1, is_enabled),
@@ -629,10 +634,10 @@ async fn update_config(
              updated_at = NOW()
          WHERE id = 1",
         &[
-            &req.is_enabled.map(|b| b as i32),
-            &req.reward_discount_percent.map(|p| p as i32),
-            &req.reward_bonus_points.map(|p| p as i32),
-            &req.reward_expiration_days.map(|d| d as i32),
+            &is_enabled,
+            &reward_discount_percent,
+            &reward_bonus_points,
+            &reward_expiration_days,
         ],
     ).await.map_err(|e| {
         tracing::error!("Update error: {}", e);

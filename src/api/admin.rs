@@ -63,7 +63,7 @@ async fn get_all_users(
     })?;
     let rows = client.query(
         "SELECT ul.telegram_id, ul.first_name, ul.language,
-                lp.total_spent, lp.bonus_balance, lp.tier, lp.is_blocked
+                lp.total_spent::float8 AS total_spent, lp.bonus_balance::float8 AS bonus_balance, lp.tier, lp.is_blocked
          FROM user_languages ul
          LEFT JOIN loyalty_profiles lp ON ul.telegram_id = lp.telegram_id
          ORDER BY lp.total_spent DESC NULLS LAST LIMIT 500",
@@ -77,7 +77,7 @@ async fn get_all_users(
         "telegram_id": r.get::<_, i64>("telegram_id"),
         "first_name": r.get::<_, Option<String>>("first_name"),
         "language": r.get::<_, Option<String>>("language"),
-        "total_spent": r.get::<_, Option<f64>>("total_spent"),
+        "total_spent": r.try_get::<_, Option<f64>>("total_spent").ok().flatten(),
         "bonus_balance": r.get::<_, Option<f64>>("bonus_balance"),
         "tier": r.get::<_, Option<String>>("tier"),
         "is_blocked": r.get::<_, Option<bool>>("is_blocked"),

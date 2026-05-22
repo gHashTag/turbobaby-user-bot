@@ -177,7 +177,7 @@ struct TeaSetsResp { tea_sets: Vec<AdminTeaSet> }
 struct AdminCheck { is_admin: bool }
 
 #[derive(Clone, Copy, PartialEq)]
-enum Tab { Strains, Accessories, Tea, Sets, AccessorySets, TeaSets }
+enum Tab { Strains, Accessories, Tea, Sets, AccessorySets, TeaSets, Dashboard, Orders, Quests, Treasures, Garden, Loyalty, Managers }
 
 // ── File upload helper ─────────────────────────────────────────
 
@@ -299,12 +299,19 @@ fn AdminPanel(active_tab: Signal<Tab>) -> Element {
     rsx! {
         div {
             div { style: "display:flex;gap:2px;margin-bottom:16px;border-radius:4px;overflow:hidden;flex-wrap:wrap;",
+                {tab_btn(Tab::Dashboard, "📊 Дашборд")}
+                {tab_btn(Tab::Orders, "📦 Заказы")}
                 {tab_btn(Tab::Strains, "🌿 Strains")}
                 {tab_btn(Tab::Accessories, "⚙️ Gear")}
                 {tab_btn(Tab::Tea, "🍵 Tea")}
                 {tab_btn(Tab::Sets, "📦 Sets")}
                 {tab_btn(Tab::AccessorySets, "🔧 Acc.Sets")}
                 {tab_btn(Tab::TeaSets, "🫖 Tea Sets")}
+                {tab_btn(Tab::Quests, "🗺️ Квесты")}
+                {tab_btn(Tab::Treasures, "🏴\u{200d}☠️ Сокровища")}
+                {tab_btn(Tab::Garden, "🌱 Сад")}
+                {tab_btn(Tab::Loyalty, "💎 Лояльность")}
+                {tab_btn(Tab::Managers, "👥 Менеджеры")}
             }
             match *active_tab.read() {
                 Tab::Strains => rsx!(StrainsTab {}),
@@ -313,6 +320,13 @@ fn AdminPanel(active_tab: Signal<Tab>) -> Element {
                 Tab::Sets => rsx!(SetsTab {}),
                 Tab::AccessorySets => rsx!(AccessorySetsTab {}),
                 Tab::TeaSets => rsx!(TeaSetsTab {}),
+                Tab::Dashboard => rsx!(DashboardTab {}),
+                Tab::Orders => rsx!(OrdersTab {}),
+                Tab::Quests => rsx!(QuestsTab {}),
+                Tab::Treasures => rsx!(TreasuresTab {}),
+                Tab::Garden => rsx!(GardenTab {}),
+                Tab::Loyalty => rsx!(LoyaltyTab {}),
+                Tab::Managers => rsx!(ManagersTab {}),
             }
         }
     }
@@ -2824,6 +2838,1313 @@ fn EditTeaCard(
                 button { style: cancel_btn_style(), onclick: move |_| on_cancel.call(()), "Отмена" }
             }
             {render_status(status)}
+        }
+    }
+}
+
+// ══════════════════════════════════════════════════════════════
+// ── 7 NEW TABS ────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════
+
+// ─── Dashboard ───────────────────────────────────────────────
+
+#[derive(Debug, Clone, Deserialize)]
+struct AdminStats {
+    #[serde(default)]
+    total_orders: i64,
+    #[serde(default)]
+    total_revenue: Option<f64>,
+    #[serde(default)]
+    top_strains: Option<Vec<serde_json::Value>>,
+    #[serde(default)]
+    active_strains: Option<i64>,
+}
+
+#[component]
+fn DashboardTab() -> Element {
+    let init_data = use_signal(use_telegram_init_data);
+    let mut stats: Signal<Option<AdminStats>> = use_signal(|| None);
+    let mut loading = use_signal(|| true);
+    let mut error = use_signal(String::new);
+
+    let _ = use_resource(move || {
+        let init_data = init_data.read().clone();
+        async move {
+            let url = format!("{}/api/admin/stats", api_base_url());
+            match reqwest::Client::new()
+                .get(&url)
+                .header("X-Telegram-Init-Data", init_data)
+                .send().await
+            {
+                Ok(resp) => {
+                    if resp.status().is_success() {
+                        match resp.json::<AdminStats>().await {
+                            Ok(data) => { stats.set(Some(data)); }
+                            Err(e) => { error.set(format!("Ошибка разбора: {e}")); }
+                        }
+                    } else {
+                        error.set(format!("HTTP {}", resp.status().as_u16()));
+                    }
+                }
+                Err(e) => { error.set(format!("Сеть: {e}")); }
+            }
+            loading.set(false);
+            Some(())
+        }
+    });
+
+    let stat_card = |label: &str, value: String, color: &str| -> Element {
+        let (label, color) = (label.to_string(), color.to_string());
+        rsx! {
+            div { style: "background:#1a1a2e;border:1px solid #2a2a4a;border-radius:8px;padding:16px;flex:1;min-width:120px;",
+                div { style: "font-size:24px;font-weight:800;color:{color};", "{value}" }
+                div { style: "font-size:12px;color:#888;margin-top:4px;", "{label}" }
+            }
+        }
+    };
+
+    rsx! {
+        div {
+            h3 { style: "color:#39ff14;font-size:15px;margin-bottom:16px;", "📊 Статистика" }
+            if *loading.read() {
+                div { style: "color:#888;padding:20px 0;", "Загрузка..." }
+            } else if !error.read().is_empty() {
+                div { style: "color:#ff4757;padding:8px;", "Ошибка: {error}" }
+            } else if let Some(s) = stats.read().clone() {
+                div { style: "display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;",
+                    {stat_card("Всего заказов", s.total_orders.to_string(), "#00e5ff")}
+                    {stat_card("Выручка (Бат)", s.total_revenue.map(|v| format!("{:.0}", v)).unwrap_or_else(|| "—".to_string()), "#39ff14")}
+                    {stat_card("Активных страйнов", s.active_strains.unwrap_or(0).to_string(), "#ffe600")}
+                }
+                if let Some(top) = s.top_strains.clone() {
+                    if !top.is_empty() {
+                        div { style: "background:#1a1a2e;border:1px solid #2a2a4a;border-radius:8px;padding:16px;",
+                            h4 { style: "color:#888;font-size:12px;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;", "🌿 Топ страйны" }
+                            for item in top {
+                                div { style: "display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #2a2a4a;",
+                                    div { style: "color:#e8e8e8;font-size:13px;",
+                                        "{item[\"name\"].as_str().unwrap_or(\"-\")}"
+                                    }
+                                    div { style: "color:#39ff14;font-size:13px;font-weight:700;",
+                                        "{item[\"count\"].as_i64().unwrap_or(0)}"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                div { style: "color:#888;padding:20px 0;", "Данных нет" }
+            }
+        }
+    }
+}
+
+// ─── Orders ───────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+struct AdminOrder {
+    id: String,
+    #[serde(default)]
+    customer_name: Option<String>,
+    #[serde(default)]
+    customer_telegram: Option<String>,
+    status: String,
+    total: f64,
+    #[serde(default)]
+    bonus_used: f64,
+    #[serde(rename = "created_at", default)]
+    created_at: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct OrdersResp { orders: Vec<AdminOrder> }
+
+#[component]
+fn OrdersTab() -> Element {
+    let init_data = use_signal(use_telegram_init_data);
+    let mut orders: Signal<Vec<AdminOrder>> = use_signal(Vec::new);
+    let mut loading = use_signal(|| true);
+    let mut filter = use_signal(|| "all".to_string());
+    let mut search = use_signal(String::new);
+    let mut updating_id: Signal<Option<String>> = use_signal(|| None);
+    let mut error = use_signal(String::new);
+    let toasts: Signal<Vec<ToastItem>> = use_signal(Vec::new);
+
+    let _ = use_resource(move || {
+        let init_data = init_data.read().clone();
+        async move {
+            let url = format!("{}/api/orders?limit=100", api_base_url());
+            match reqwest::Client::new()
+                .get(&url)
+                .header("X-Telegram-Init-Data", init_data)
+                .send().await
+            {
+                Ok(resp) if resp.status().is_success() => {
+                    if let Ok(data) = resp.json::<OrdersResp>().await {
+                        orders.set(data.orders);
+                    }
+                }
+                Ok(resp) => { error.set(format!("HTTP {}", resp.status().as_u16())); }
+                Err(e) => { error.set(format!("Сеть: {e}")); }
+            }
+            loading.set(false);
+            Some(())
+        }
+    });
+
+    let filtered: Vec<AdminOrder> = {
+        let f = filter.read().clone();
+        let q = search.read().to_lowercase();
+        orders.read().iter().filter(|o| {
+            let status_ok = f == "all" || o.status == f;
+            let search_ok = q.is_empty()
+                || o.id.to_lowercase().contains(&q)
+                || o.customer_name.as_deref().unwrap_or("").to_lowercase().contains(&q)
+                || o.customer_telegram.as_deref().unwrap_or("").to_lowercase().contains(&q);
+            status_ok && search_ok
+        }).cloned().collect()
+    };
+
+    let count_by = |s: &str| -> usize {
+        let s = s.to_string();
+        orders.read().iter().filter(|o| o.status == s).count()
+    };
+
+    let filter_btn_style = |s: &str| -> String {
+        let active = *filter.read() == s;
+        if active {
+            "padding:6px 10px;background:#39ff14;color:#000;border:none;border-radius:4px;font-size:12px;font-weight:700;cursor:pointer;".to_string()
+        } else {
+            "padding:6px 10px;background:#1a1a2e;color:#888;border:1px solid #2a2a4a;border-radius:4px;font-size:12px;cursor:pointer;".to_string()
+        }
+    };
+
+    rsx! {
+        div {
+            {render_toasts(toasts)}
+            h3 { style: "color:#39ff14;font-size:15px;margin-bottom:12px;", "📦 Заказы" }
+            if !error.read().is_empty() {
+                div { style: "color:#ff4757;margin-bottom:8px;font-size:13px;", "{error}" }
+            }
+            // Stat chips
+            div { style: "display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;",
+                button { style: "{filter_btn_style(\"all\")}",
+                    onclick: move |_| filter.set("all".into()), "Все ({orders.read().len()})" }
+                button { style: "{filter_btn_style(\"pending\")}",
+                    onclick: move |_| filter.set("pending".into()), "⏳ {count_by(\"pending\")}" }
+                button { style: "{filter_btn_style(\"confirmed\")}",
+                    onclick: move |_| filter.set("confirmed".into()), "✓ {count_by(\"confirmed\")}" }
+                button { style: "{filter_btn_style(\"completed\")}",
+                    onclick: move |_| filter.set("completed".into()), "✅ {count_by(\"completed\")}" }
+                button { style: "{filter_btn_style(\"cancelled\")}",
+                    onclick: move |_| filter.set("cancelled".into()), "✖ {count_by(\"cancelled\")}" }
+            }
+            input {
+                style: "{input_style()}width:100%;box-sizing:border-box;margin-bottom:10px;",
+                placeholder: "🔍 Поиск по ID, имени, telegram...",
+                value: "{search}",
+                oninput: move |e| search.set(e.value())
+            }
+            if *loading.read() {
+                div { style: "color:#888;padding:20px 0;", "Загрузка..." }
+            } else if filtered.is_empty() {
+                div { style: "color:#888;padding:20px 0;text-align:center;",
+                    if *filter.read() == "all" { "Заказов нет" } else { "Нет заказов с таким статусом" }
+                }
+            } else {
+                div { style: "display:flex;flex-direction:column;gap:8px;",
+                    for order in filtered {
+                        {
+                            let order_id = order.id.clone();
+                            let order_id2 = order.id.clone();
+                            let order_id3 = order.id.clone();
+                            let status = order.status.clone();
+                            let status2 = order.status.clone();
+                            let status3 = order.status.clone();
+                            let init_data2 = init_data.clone();
+                            let init_data3 = init_data.clone();
+                            let status_label_str = match order.status.as_str() {
+                                "pending" => "⏳ Ожидает".to_string(),
+                                "confirmed" => "✓ Подтверждён".to_string(),
+                                "completed" => "✅ Выполнен".to_string(),
+                                "cancelled" => "✖ Отменён".to_string(),
+                                _ => order.status.clone(),
+                            };
+                            let status_color = match order.status.as_str() {
+                                "pending" => "#ffe600",
+                                "confirmed" => "#4d9fff",
+                                "completed" => "#39ff14",
+                                "cancelled" => "#ff4757",
+                                _ => "#888",
+                            };
+                            let short_id = if order.id.len() >= 6 { &order.id[order.id.len()-6..] } else { &order.id };
+                            let short_id = short_id.to_string();
+                            rsx! {
+                                div { style: "background:#1a1a2e;border:1px solid #2a2a4a;border-radius:8px;padding:12px;",
+                                    div { style: "display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;",
+                                        div {
+                                            div { style: "font-weight:700;font-size:14px;", "#{short_id}" }
+                                            if let Some(name) = order.customer_name.clone() {
+                                                div { style: "font-size:12px;color:#888;", "{name}"
+                                                    if let Some(tg) = order.customer_telegram.clone() {
+                                                        span { style: "color:#4d9fff;", " @{tg}" }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        span { style: "padding:3px 8px;border-radius:6px;font-size:12px;background:{status_color}20;color:{status_color};",
+                                            "{status_label_str}"
+                                        }
+                                    }
+                                    div { style: "font-weight:700;color:#39ff14;font-size:14px;margin-bottom:8px;",
+                                        "{order.total:.0}Б"
+                                        if order.bonus_used > 0.0 {
+                                            span { style: "font-size:11px;color:#ffe600;margin-left:6px;",
+                                                "-{order.bonus_used:.0}Б бонусов"
+                                            }
+                                        }
+                                    }
+                                    div { style: "display:flex;gap:6px;",
+                                        if status == "pending" {
+                                            button {
+                                                style: if updating_id.read().as_deref() == Some(&order_id) { "flex:1;padding:8px;background:#4d9fff;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;opacity:0.6;" } else { "flex:1;padding:8px;background:#4d9fff;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;" },
+                                                disabled: updating_id.read().as_deref() == Some(&order_id),
+                                                onclick: move |_| {
+                                                    let oid = order_id.clone();
+                                                    let id2 = init_data2.read().clone();
+                                                    updating_id.set(Some(oid.clone()));
+                                                    let mut orders2 = orders.clone();
+                                                    let mut updating2 = updating_id.clone();
+                                                    let mut toasts2 = toasts.clone();
+                                                    spawn(async move {
+                                                        let url = format!("{}/api/orders/{}/status", api_base_url(), oid);
+                                                        let res = reqwest::Client::new().put(&url)
+                                                            .header("X-Telegram-Init-Data", id2)
+                                                            .json(&json!({"status": "confirmed"}))
+                                                            .send().await;
+                                                        updating2.set(None);
+                                                        match res {
+                                                            Ok(r) if r.status().is_success() => {
+                                                                orders2.write().iter_mut().find(|o| o.id == oid).map(|o| o.status = "confirmed".into());
+                                                                push_toast(toasts2, "✓ Заказ подтверждён".into(), ToastKind::Success);
+                                                            }
+                                                            _ => { push_toast(toasts2, "Ошибка подтверждения".into(), ToastKind::Error); }
+                                                        }
+                                                    });
+                                                },
+                                                "✓ Подтвердить"
+                                            }
+                                        }
+                                        if status2 == "confirmed" {
+                                            button {
+                                                style: if updating_id.read().as_deref() == Some(&order_id2) { "flex:1;padding:8px;background:#39ff14;color:#000;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;opacity:0.6;" } else { "flex:1;padding:8px;background:#39ff14;color:#000;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;" },
+                                                disabled: updating_id.read().as_deref() == Some(&order_id2),
+                                                onclick: move |_| {
+                                                    let oid = order_id2.clone();
+                                                    let id3 = init_data3.read().clone();
+                                                    updating_id.set(Some(oid.clone()));
+                                                    let mut orders3 = orders.clone();
+                                                    let mut updating3 = updating_id.clone();
+                                                    let mut toasts3 = toasts.clone();
+                                                    spawn(async move {
+                                                        let url = format!("{}/api/orders/{}/status", api_base_url(), oid);
+                                                        let res = reqwest::Client::new().put(&url)
+                                                            .header("X-Telegram-Init-Data", id3)
+                                                            .json(&json!({"status": "completed"}))
+                                                            .send().await;
+                                                        updating3.set(None);
+                                                        match res {
+                                                            Ok(r) if r.status().is_success() => {
+                                                                orders3.write().iter_mut().find(|o| o.id == oid).map(|o| o.status = "completed".into());
+                                                                push_toast(toasts3, "✅ Заказ выполнен".into(), ToastKind::Success);
+                                                            }
+                                                            _ => { push_toast(toasts3, "Ошибка выполнения".into(), ToastKind::Error); }
+                                                        }
+                                                    });
+                                                },
+                                                "📦 Выполнить"
+                                            }
+                                        }
+                                        if status3 != "cancelled" && status3 != "completed" {
+                                            button {
+                                                style: "padding:8px 10px;background:#3a1a1a;color:#ff8888;border:none;border-radius:6px;font-size:13px;cursor:pointer;",
+                                                onclick: move |_| {
+                                                    let oid = order_id3.clone();
+                                                    let id_c = init_data.read().clone();
+                                                    let mut orders_c = orders.clone();
+                                                    let mut toasts_c = toasts.clone();
+                                                    spawn(async move {
+                                                        let url = format!("{}/api/orders/{}/status", api_base_url(), oid);
+                                                        let res = reqwest::Client::new().put(&url)
+                                                            .header("X-Telegram-Init-Data", id_c)
+                                                            .json(&json!({"status": "cancelled"}))
+                                                            .send().await;
+                                                        match res {
+                                                            Ok(r) if r.status().is_success() => {
+                                                                orders_c.write().iter_mut().find(|o| o.id == oid).map(|o| o.status = "cancelled".into());
+                                                                push_toast(toasts_c, "Заказ отменён".into(), ToastKind::Success);
+                                                            }
+                                                            _ => { push_toast(toasts_c, "Ошибка отмены".into(), ToastKind::Error); }
+                                                        }
+                                                    });
+                                                },
+                                                "✖ Отмена"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ─── Quests ───────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+struct AdminQuestPlace {
+    #[serde(default)]
+    id: String,
+    name: String,
+    #[serde(default)]
+    category: String,
+    lat: f64,
+    lon: f64,
+    #[serde(default)]
+    description: Option<String>,
+    #[serde(default)]
+    image_url: Option<String>,
+    #[serde(default)]
+    is_available: bool,
+}
+
+#[derive(Debug, Deserialize)]
+struct QuestPlacesResp { quest_places: Vec<AdminQuestPlace> }
+
+#[component]
+fn QuestsTab() -> Element {
+    let init_data = use_signal(use_telegram_init_data);
+    let mut places: Signal<Vec<AdminQuestPlace>> = use_signal(Vec::new);
+    let mut loading = use_signal(|| true);
+    let mut editing: Signal<Option<AdminQuestPlace>> = use_signal(|| None);
+    let mut is_new = use_signal(|| false);
+    let mut saving = use_signal(|| false);
+    let mut error = use_signal(String::new);
+    let toasts: Signal<Vec<ToastItem>> = use_signal(Vec::new);
+
+    let reload = use_signal(|| 0u32);
+    let _ = use_resource(move || {
+        let _ = reload.read();
+        let init_data = init_data.read().clone();
+        async move {
+            let url = format!("{}/api/quest-places", api_base_url());
+            match reqwest::Client::new().get(&url).header("X-Telegram-Init-Data", init_data).send().await {
+                Ok(resp) if resp.status().is_success() => {
+                    if let Ok(data) = resp.json::<QuestPlacesResp>().await {
+                        places.set(data.quest_places);
+                    }
+                }
+                _ => {}
+            }
+            loading.set(false);
+            Some(())
+        }
+    });
+
+    if let Some(ref item) = editing.read().clone() {
+        let item = item.clone();
+        let item_id = item.id.clone();
+        let is_creating = *is_new.read();
+
+        let mut edit_name = use_signal(|| item.name.clone());
+        let mut edit_cat = use_signal(|| item.category.clone());
+        let mut edit_lat = use_signal(|| item.lat.to_string());
+        let mut edit_lon = use_signal(|| item.lon.to_string());
+        let mut edit_desc = use_signal(|| item.description.clone().unwrap_or_default());
+        let mut edit_img = use_signal(|| item.image_url.clone().unwrap_or_default());
+
+        return rsx! {
+            div {
+                {render_toasts(toasts)}
+                div { style: edit_card_style(),
+                    div { style: edit_header_style(),
+                        if is_creating { "➕ Новая квест-точка" } else { "✏️ Редактировать" }
+                    }
+                    input { style: input_style(), placeholder: "Название", value: "{edit_name}",
+                        oninput: move |e| edit_name.set(e.value()) }
+                    select { style: input_style(), value: "{edit_cat}",
+                        oninput: move |e| edit_cat.set(e.value()),
+                        option { value: "beach", "🏖️ Beach" }
+                        option { value: "viewpoint", "🌄 Viewpoint" }
+                        option { value: "restaurant", "🍽️ Restaurant" }
+                        option { value: "bar", "🍻 Bar" }
+                        option { value: "temple", "🛭️ Temple" }
+                        option { value: "nature", "🌿 Nature" }
+                    }
+                    div { style: "display:flex;gap:8px;",
+                        input { style: input_style(), placeholder: "Lat", value: "{edit_lat}", r#type: "number",
+                            oninput: move |e| edit_lat.set(e.value()) }
+                        input { style: input_style(), placeholder: "Lon", value: "{edit_lon}", r#type: "number",
+                            oninput: move |e| edit_lon.set(e.value()) }
+                    }
+                    textarea { style: textarea_style(), placeholder: "Описание", value: "{edit_desc}",
+                        oninput: move |e| edit_desc.set(e.value()) }
+                    input { style: input_style(), placeholder: "URL изображения", value: "{edit_img}",
+                        oninput: move |e| edit_img.set(e.value()) }
+                    if !error.read().is_empty() {
+                        div { style: "color:#ff4757;font-size:13px;", "{error}" }
+                    }
+                    div { style: "display:flex;gap:8px;",
+                        button {
+                            style: if *saving.read() { submit_btn_disabled_style() } else { submit_btn_style() },
+                            disabled: *saving.read(),
+                            onclick: move |_| {
+                                let n = edit_name.read().trim().to_string();
+                                if n.is_empty() { error.set("Название обязательно".into()); return; }
+                                let lat = match edit_lat.read().trim().parse::<f64>() {
+                                    Ok(v) => v,
+                                    Err(_) => { error.set("Неверная широта".into()); return; }
+                                };
+                                let lon = match edit_lon.read().trim().parse::<f64>() {
+                                    Ok(v) => v,
+                                    Err(_) => { error.set("Неверная долгота".into()); return; }
+                                };
+                                let cat = edit_cat.read().clone();
+                                let desc = edit_desc.read().trim().to_string();
+                                let img = edit_img.read().trim().to_string();
+                                let iid = item_id.clone();
+                                let is_cr = is_creating;
+                                let id_data = init_data.read().clone();
+                                saving.set(true);
+                                error.set(String::new());
+                                let mut places2 = places.clone();
+                                let mut editing2 = editing.clone();
+                                let mut saving2 = saving.clone();
+                                let mut toasts2 = toasts.clone();
+                                let mut reload2 = reload.clone();
+                                spawn(async move {
+                                    let body = json!({
+                                        "name": n.clone(), "category": cat,
+                                        "lat": lat, "lon": lon,
+                                        "description": if desc.is_empty() { serde_json::Value::Null } else { desc.clone().into() },
+                                        "image_url": if img.is_empty() { serde_json::Value::Null } else { img.clone().into() },
+                                    });
+                                    let base = api_base_url();
+                                    let res = if is_cr {
+                                        reqwest::Client::new().post(&format!("{}/api/quest-places", base))
+                                            .header("X-Telegram-Init-Data", id_data)
+                                            .json(&body).send().await
+                                    } else {
+                                        reqwest::Client::new().put(&format!("{}/api/quest-places/{}", base, iid))
+                                            .header("X-Telegram-Init-Data", id_data)
+                                            .json(&body).send().await
+                                    };
+                                    saving2.set(false);
+                                    match res {
+                                        Ok(r) if r.status().is_success() => {
+                                            editing2.set(None);
+                                            { let v = reload2.read().wrapping_add(1); reload2.set(v); }
+                                            push_toast(toasts2, "✓ Сохранено".into(), ToastKind::Success);
+                                        }
+                                        _ => { push_toast(toasts2, "Ошибка сохранения".into(), ToastKind::Error); }
+                                    }
+                                });
+                            },
+                            "💾 Сохранить"
+                        }
+                        button { style: cancel_btn_style(), onclick: move |_| { editing.set(None); error.set(String::new()); }, "Отмена" }
+                    }
+                }
+            }
+        };
+    }
+
+    rsx! {
+        div {
+            {render_toasts(toasts)}
+            h3 { style: "color:#39ff14;font-size:15px;margin-bottom:12px;", "🗺️ Квест-точки" }
+            button {
+                style: "{submit_btn_style()}width:100%;margin-bottom:12px;",
+                onclick: move |_| {
+                    is_new.set(true);
+                    editing.set(Some(AdminQuestPlace {
+                        id: String::new(), name: String::new(), category: "beach".into(),
+                        lat: 0.0, lon: 0.0, description: None, image_url: None, is_available: true,
+                    }));
+                },
+                "+ Добавить точку"
+            }
+            if *loading.read() {
+                div { style: "color:#888;padding:20px 0;", "Загрузка..." }
+            } else if places.read().is_empty() {
+                div { style: "color:#888;padding:20px 0;text-align:center;", "Нет точек" }
+            } else {
+                div { style: "display:flex;flex-direction:column;gap:6px;",
+                    for place in places.read().clone() {
+                        {
+                            let p2 = place.clone();
+                            let p3 = place.clone();
+                            let p_id = place.id.clone();
+                            let id_del = init_data.read().clone();
+                            let mut toasts2 = toasts.clone();
+                            let mut reload2 = reload.clone();
+                            rsx! {
+                                div { style: "background:#1a1a2e;border:1px solid #2a2a4a;border-radius:6px;padding:10px;display:flex;align-items:center;gap:8px;",
+                                    div { style: "flex:1;min-width:0;",
+                                        div { style: "font-weight:600;font-size:13px;", "{place.name}" }
+                                        div { style: "font-size:11px;color:#888;",
+                                            "{place.category} • {place.lat:.4}, {place.lon:.4}"
+                                        }
+                                    }
+                                    button { style: "padding:8px 10px;background:#2a2a4a;color:#e8e8e8;border:none;border-radius:4px;font-size:14px;cursor:pointer;",
+                                        onclick: move |_| { is_new.set(false); editing.set(Some(p2.clone())); },
+                                        "✏️"
+                                    }
+                                    button { style: "padding:8px 10px;background:#3a1a1a;color:#ff8888;border:none;border-radius:4px;font-size:14px;cursor:pointer;",
+                                        onclick: move |_| {
+                                            let pid = p_id.clone();
+                                            let id_d = id_del.clone();
+                                            let mut places3 = places.clone();
+                                            let mut toasts3 = toasts2.clone();
+                                            spawn(async move {
+                                                let url = format!("{}/api/quest-places/{}", api_base_url(), pid);
+                                                let res = reqwest::Client::new().delete(&url)
+                                                    .header("X-Telegram-Init-Data", id_d)
+                                                    .send().await;
+                                                match res {
+                                                    Ok(r) if r.status().is_success() => {
+                                                        places3.write().retain(|p| p.id != pid);
+                                                        push_toast(toasts3, "Удалено".into(), ToastKind::Success);
+                                                    }
+                                                    _ => { push_toast(toasts3, "Ошибка удаления".into(), ToastKind::Error); }
+                                                }
+                                            });
+                                        },
+                                        "🗑"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ─── Treasures ────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+struct AdminTreasureHunt {
+    #[serde(default)]
+    id: String,
+    name: String,
+    #[serde(default)]
+    description: Option<String>,
+    #[serde(default)]
+    image_url: Option<String>,
+    #[serde(default)]
+    black_mark_title: String,
+    #[serde(default)]
+    black_mark_description: Option<String>,
+    #[serde(default)]
+    black_mark_image_url: Option<String>,
+    #[serde(default)]
+    start_lat: f64,
+    #[serde(default)]
+    start_lon: f64,
+    #[serde(default)]
+    start_name: String,
+    #[serde(default)]
+    is_active: bool,
+}
+
+#[derive(Debug, Deserialize)]
+struct TreasureHuntsResp { treasure_hunts: Vec<AdminTreasureHunt> }
+
+#[component]
+fn TreasuresTab() -> Element {
+    let init_data = use_signal(use_telegram_init_data);
+    let mut hunts: Signal<Vec<AdminTreasureHunt>> = use_signal(Vec::new);
+    let mut loading = use_signal(|| true);
+    let mut editing: Signal<Option<AdminTreasureHunt>> = use_signal(|| None);
+    let mut is_new = use_signal(|| false);
+    let mut saving = use_signal(|| false);
+    let mut error = use_signal(String::new);
+    let toasts: Signal<Vec<ToastItem>> = use_signal(Vec::new);
+    let reload = use_signal(|| 0u32);
+
+    let _ = use_resource(move || {
+        let _ = reload.read();
+        let init_data = init_data.read().clone();
+        async move {
+            let url = format!("{}/api/treasure-hunts", api_base_url());
+            match reqwest::Client::new().get(&url).header("X-Telegram-Init-Data", init_data).send().await {
+                Ok(resp) if resp.status().is_success() => {
+                    if let Ok(data) = resp.json::<TreasureHuntsResp>().await {
+                        hunts.set(data.treasure_hunts);
+                    }
+                }
+                _ => {}
+            }
+            loading.set(false);
+            Some(())
+        }
+    });
+
+    if let Some(ref item) = editing.read().clone() {
+        let item = item.clone();
+        let item_id = item.id.clone();
+        let is_creating = *is_new.read();
+
+        let mut edit_name = use_signal(|| item.name.clone());
+        let mut edit_desc = use_signal(|| item.description.clone().unwrap_or_default());
+        let mut edit_img = use_signal(|| item.image_url.clone().unwrap_or_default());
+        let mut edit_bm_title = use_signal(|| item.black_mark_title.clone());
+        let mut edit_bm_desc = use_signal(|| item.black_mark_description.clone().unwrap_or_default());
+        let mut edit_bm_img = use_signal(|| item.black_mark_image_url.clone().unwrap_or_default());
+        let mut edit_start_lat = use_signal(|| item.start_lat.to_string());
+        let mut edit_start_lon = use_signal(|| item.start_lon.to_string());
+        let mut edit_start_name = use_signal(|| item.start_name.clone());
+
+        return rsx! {
+            div {
+                {render_toasts(toasts)}
+                div { style: edit_card_style(),
+                    div { style: edit_header_style(),
+                        if is_creating { "➕ Новый квест" } else { "✏️ Редактировать" }
+                    }
+                    input { style: input_style(), placeholder: "Название квеста", value: "{edit_name}",
+                        oninput: move |e| edit_name.set(e.value()) }
+                    textarea { style: textarea_style(), placeholder: "Описание", value: "{edit_desc}",
+                        oninput: move |e| edit_desc.set(e.value()) }
+                    input { style: input_style(), placeholder: "URL изображения", value: "{edit_img}",
+                        oninput: move |e| edit_img.set(e.value()) }
+                    div { style: en_section_style(), "☠️ Чёрная Метка (финальная награда)" }
+                    input { style: input_style(), placeholder: "Заголовок", value: "{edit_bm_title}",
+                        oninput: move |e| edit_bm_title.set(e.value()) }
+                    textarea { style: textarea_style(), placeholder: "Описание чёрной метки", value: "{edit_bm_desc}",
+                        oninput: move |e| edit_bm_desc.set(e.value()) }
+                    input { style: input_style(), placeholder: "URL постера", value: "{edit_bm_img}",
+                        oninput: move |e| edit_bm_img.set(e.value()) }
+                    div { style: en_section_style(), "🏴\u{200d}☠️ Стартовая точка (Woody)" }
+                    input { style: input_style(), placeholder: "Название", value: "{edit_start_name}",
+                        oninput: move |e| edit_start_name.set(e.value()) }
+                    div { style: "display:flex;gap:8px;",
+                        input { style: input_style(), placeholder: "Lat", value: "{edit_start_lat}", r#type: "number",
+                            oninput: move |e| edit_start_lat.set(e.value()) }
+                        input { style: input_style(), placeholder: "Lon", value: "{edit_start_lon}", r#type: "number",
+                            oninput: move |e| edit_start_lon.set(e.value()) }
+                    }
+                    if !error.read().is_empty() {
+                        div { style: "color:#ff4757;font-size:13px;", "{error}" }
+                    }
+                    div { style: "display:flex;gap:8px;",
+                        button {
+                            style: if *saving.read() { submit_btn_disabled_style() } else { submit_btn_style() },
+                            disabled: *saving.read(),
+                            onclick: move |_| {
+                                let n = edit_name.read().trim().to_string();
+                                if n.is_empty() { error.set("Название обязательно".into()); return; }
+                                let bm_title = edit_bm_title.read().trim().to_string();
+                                if bm_title.is_empty() { error.set("Заголовок Чёрной Метки обязателен".into()); return; }
+                                let desc = edit_desc.read().trim().to_string();
+                                let img = edit_img.read().trim().to_string();
+                                let bm_desc = edit_bm_desc.read().trim().to_string();
+                                let bm_img = edit_bm_img.read().trim().to_string();
+                                let start_lat = edit_start_lat.read().trim().parse::<f64>().unwrap_or(0.0);
+                                let start_lon = edit_start_lon.read().trim().parse::<f64>().unwrap_or(0.0);
+                                let start_name = edit_start_name.read().trim().to_string();
+                                let iid = item_id.clone();
+                                let is_cr = is_creating;
+                                let id_data = init_data.read().clone();
+                                saving.set(true);
+                                error.set(String::new());
+                                let mut editing2 = editing.clone();
+                                let mut saving2 = saving.clone();
+                                let mut toasts2 = toasts.clone();
+                                let mut reload2 = reload.clone();
+                                spawn(async move {
+                                    let body = json!({
+                                        "name": n,
+                                        "description": if desc.is_empty() { serde_json::Value::Null } else { desc.into() },
+                                        "image_url": if img.is_empty() { serde_json::Value::Null } else { img.into() },
+                                        "black_mark_title": bm_title,
+                                        "black_mark_description": if bm_desc.is_empty() { serde_json::Value::Null } else { bm_desc.into() },
+                                        "black_mark_image_url": if bm_img.is_empty() { serde_json::Value::Null } else { bm_img.into() },
+                                        "start_lat": start_lat, "start_lon": start_lon, "start_name": start_name,
+                                    });
+                                    let base = api_base_url();
+                                    let res = if is_cr {
+                                        reqwest::Client::new().post(&format!("{}/api/treasure-hunts", base))
+                                            .header("X-Telegram-Init-Data", id_data)
+                                            .json(&body).send().await
+                                    } else {
+                                        reqwest::Client::new().put(&format!("{}/api/treasure-hunts/{}", base, iid))
+                                            .header("X-Telegram-Init-Data", id_data)
+                                            .json(&body).send().await
+                                    };
+                                    saving2.set(false);
+                                    match res {
+                                        Ok(r) if r.status().is_success() => {
+                                            editing2.set(None);
+                                            { let v = reload2.read().wrapping_add(1); reload2.set(v); }
+                                            push_toast(toasts2, "✓ Сохранено".into(), ToastKind::Success);
+                                        }
+                                        _ => { push_toast(toasts2, "Ошибка сохранения".into(), ToastKind::Error); }
+                                    }
+                                });
+                            },
+                            "💾 Сохранить"
+                        }
+                        button { style: cancel_btn_style(), onclick: move |_| { editing.set(None); error.set(String::new()); }, "Отмена" }
+                    }
+                }
+            }
+        };
+    }
+
+    rsx! {
+        div {
+            {render_toasts(toasts)}
+            h3 { style: "color:#39ff14;font-size:15px;margin-bottom:12px;", "🏴\u{200d}☠️ Поиск Сокровищ" }
+            button {
+                style: "{submit_btn_style()}width:100%;margin-bottom:12px;",
+                onclick: move |_| {
+                    is_new.set(true);
+                    editing.set(Some(AdminTreasureHunt {
+                        id: String::new(), name: String::new(), description: None, image_url: None,
+                        black_mark_title: String::new(), black_mark_description: None, black_mark_image_url: None,
+                        start_lat: 0.0, start_lon: 0.0, start_name: String::new(), is_active: true,
+                    }));
+                },
+                "+ Создать квест"
+            }
+            if *loading.read() {
+                div { style: "color:#888;padding:20px 0;", "Загрузка..." }
+            } else if hunts.read().is_empty() {
+                div { style: "color:#888;padding:20px 0;text-align:center;", "Нет квестов" }
+            } else {
+                div { style: "display:flex;flex-direction:column;gap:6px;",
+                    for hunt in hunts.read().clone() {
+                        {
+                            let h2 = hunt.clone();
+                            let h_id = hunt.id.clone();
+                            let id_del = init_data.read().clone();
+                            let mut toasts2 = toasts.clone();
+                            let mut reload2 = reload.clone();
+                            rsx! {
+                                div { style: "background:#1a1a2e;border:1px solid #2a2a4a;border-radius:6px;padding:10px;display:flex;align-items:center;gap:8px;",
+                                    div { style: "flex:1;min-width:0;",
+                                        div { style: "font-weight:600;font-size:13px;",
+                                            "🏴\u{200d}☠️ {hunt.name}"
+                                            if hunt.is_active {
+                                                span { style: "margin-left:6px;font-size:10px;background:#39ff1420;color:#39ff14;padding:2px 5px;border-radius:4px;", "Активен" }
+                                            }
+                                        }
+                                        div { style: "font-size:11px;color:#888;",
+                                            "Чёрная метка: {hunt.black_mark_title}"
+                                        }
+                                    }
+                                    button { style: "padding:8px 10px;background:#2a2a4a;color:#e8e8e8;border:none;border-radius:4px;font-size:14px;cursor:pointer;",
+                                        onclick: move |_| { is_new.set(false); editing.set(Some(h2.clone())); },
+                                        "✏️"
+                                    }
+                                    button { style: "padding:8px 10px;background:#3a1a1a;color:#ff8888;border:none;border-radius:4px;font-size:14px;cursor:pointer;",
+                                        onclick: move |_| {
+                                            let hid = h_id.clone();
+                                            let id_d = id_del.clone();
+                                            let mut hunts2 = hunts.clone();
+                                            let mut toasts3 = toasts2.clone();
+                                            spawn(async move {
+                                                let url = format!("{}/api/treasure-hunts/{}", api_base_url(), hid);
+                                                let res = reqwest::Client::new().delete(&url)
+                                                    .header("X-Telegram-Init-Data", id_d)
+                                                    .send().await;
+                                                match res {
+                                                    Ok(r) if r.status().is_success() => {
+                                                        hunts2.write().retain(|h| h.id != hid);
+                                                        push_toast(toasts3, "Удалено".into(), ToastKind::Success);
+                                                    }
+                                                    _ => { push_toast(toasts3, "Ошибка удаления".into(), ToastKind::Error); }
+                                                }
+                                            });
+                                        },
+                                        "🗑"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ─── Garden ───────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Deserialize)]
+struct GardenConfig {
+    #[serde(default = "default_true")]
+    is_enabled: bool,
+    #[serde(default)]
+    reward_discount_percent: f64,
+    #[serde(default)]
+    reward_bonus_points: f64,
+    #[serde(default)]
+    reward_expiration_days: f64,
+}
+
+fn default_true() -> bool { true }
+
+#[component]
+fn GardenTab() -> Element {
+    let init_data = use_signal(use_telegram_init_data);
+    let mut config: Signal<Option<GardenConfig>> = use_signal(|| None);
+    let mut loading = use_signal(|| true);
+    let mut saving = use_signal(|| false);
+    let mut is_enabled = use_signal(|| true);
+    let mut discount = use_signal(|| "10".to_string());
+    let mut bonus_points = use_signal(|| "100".to_string());
+    let mut expire_days = use_signal(|| "7".to_string());
+    let mut error = use_signal(String::new);
+    let toasts: Signal<Vec<ToastItem>> = use_signal(Vec::new);
+
+    let _ = use_resource(move || {
+        let init_data = init_data.read().clone();
+        async move {
+            let url = format!("{}/api/garden/config", api_base_url());
+            match reqwest::Client::new().get(&url).header("X-Telegram-Init-Data", init_data).send().await {
+                Ok(resp) if resp.status().is_success() => {
+                    if let Ok(cfg) = resp.json::<GardenConfig>().await {
+                        is_enabled.set(cfg.is_enabled);
+                        discount.set(cfg.reward_discount_percent.to_string());
+                        bonus_points.set(cfg.reward_bonus_points.to_string());
+                        expire_days.set(cfg.reward_expiration_days.to_string());
+                        config.set(Some(cfg));
+                    }
+                }
+                _ => {}
+            }
+            loading.set(false);
+            Some(())
+        }
+    });
+
+    rsx! {
+        div {
+            {render_toasts(toasts)}
+            h3 { style: "color:#39ff14;font-size:15px;margin-bottom:16px;", "🌱 Сад — Настройки" }
+            if *loading.read() {
+                div { style: "color:#888;padding:20px 0;", "Загрузка..." }
+            } else {
+                div { style: "display:flex;flex-direction:column;gap:12px;",
+                    // Toggle enabled
+                    div { style: "background:#1a1a2e;border:1px solid #2a2a4a;border-radius:8px;padding:14px;display:flex;justify-content:space-between;align-items:center;",
+                        div {
+                            div { style: "font-weight:600;font-size:14px;", "Игра активна" }
+                            div { style: "font-size:12px;color:#888;margin-top:2px;", "Включить/выключить игру Сад" }
+                        }
+                        button {
+                            style: if *is_enabled.read() {
+                                "padding:8px 16px;background:#39ff14;color:#000;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;"
+                            } else {
+                                "padding:8px 16px;background:#3a1a1a;color:#ff8888;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;"
+                            },
+                            onclick: move |_| { let v = !*is_enabled.read(); is_enabled.set(v); },
+                            if *is_enabled.read() { "✓ Вкл" } else { "✖ Выкл" }
+                        }
+                    }
+                    // Discount
+                    div { style: "background:#1a1a2e;border:1px solid #2a2a4a;border-radius:8px;padding:14px;",
+                        div { style: "font-weight:600;margin-bottom:8px;", "Скидка за награду (%)" }
+                        input { style: "{input_style()}width:100%;box-sizing:border-box;", r#type: "number",
+                            value: "{discount}", oninput: move |e| discount.set(e.value()) }
+                    }
+                    // Bonus points
+                    div { style: "background:#1a1a2e;border:1px solid #2a2a4a;border-radius:8px;padding:14px;",
+                        div { style: "font-weight:600;margin-bottom:8px;", "Бонусные баллы за урожай" }
+                        input { style: "{input_style()}width:100%;box-sizing:border-box;", r#type: "number",
+                            value: "{bonus_points}", oninput: move |e| bonus_points.set(e.value()) }
+                    }
+                    // Expiration days
+                    div { style: "background:#1a1a2e;border:1px solid #2a2a4a;border-radius:8px;padding:14px;",
+                        div { style: "font-weight:600;margin-bottom:8px;", "Срок действия награды (дней)" }
+                        input { style: "{input_style()}width:100%;box-sizing:border-box;", r#type: "number",
+                            value: "{expire_days}", oninput: move |e| expire_days.set(e.value()) }
+                    }
+                    if !error.read().is_empty() {
+                        div { style: "color:#ff4757;font-size:13px;", "{error}" }
+                    }
+                    button {
+                        style: if *saving.read() { submit_btn_disabled_style() } else { submit_btn_style() },
+                        disabled: *saving.read(),
+                        onclick: move |_| {
+                            let enabled = *is_enabled.read();
+                            let disc = discount.read().trim().parse::<f64>().unwrap_or(10.0);
+                            let bp = bonus_points.read().trim().parse::<f64>().unwrap_or(100.0);
+                            let ed = expire_days.read().trim().parse::<f64>().unwrap_or(7.0);
+                            let id_data = init_data.read().clone();
+                            saving.set(true);
+                            error.set(String::new());
+                            let mut saving2 = saving.clone();
+                            let mut toasts2 = toasts.clone();
+                            let mut error2 = error.clone();
+                            spawn(async move {
+                                let body = json!({
+                                    "is_enabled": enabled,
+                                    "reward_discount_percent": disc,
+                                    "reward_bonus_points": bp,
+                                    "reward_expiration_days": ed,
+                                });
+                                let url = format!("{}/api/garden/config", api_base_url());
+                                let res = reqwest::Client::new().put(&url)
+                                    .header("X-Telegram-Init-Data", id_data)
+                                    .json(&body).send().await;
+                                saving2.set(false);
+                                match res {
+                                    Ok(r) if r.status().is_success() => {
+                                        push_toast(toasts2, "✓ Настройки сохранены!".into(), ToastKind::Success);
+                                    }
+                                    _ => {
+                                        error2.set("Ошибка сохранения".into());
+                                        push_toast(toasts2, "Ошибка сохранения".into(), ToastKind::Error);
+                                    }
+                                }
+                            });
+                        },
+                        if *saving.read() { "⏳ Сохранение..." } else { "💾 Сохранить настройки" }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ─── Loyalty ──────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+struct LoyaltyTier {
+    tier: String,
+    name: String,
+    min_points: i64,
+    discount_percent: i64,
+    #[serde(default)]
+    icon: Option<String>,
+    #[serde(default)]
+    color: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+struct LeaderboardEntry {
+    #[serde(default)]
+    telegram_id: Option<i64>,
+    #[serde(default)]
+    first_name: Option<String>,
+    #[serde(default)]
+    total_spent: Option<f64>,
+    #[serde(default)]
+    tier: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct LoyaltyConfigResp {
+    #[serde(default)]
+    tiers: Vec<LoyaltyTier>,
+}
+
+#[derive(Debug, Deserialize)]
+struct LeaderboardResp {
+    #[serde(default)]
+    leaderboard: Vec<LeaderboardEntry>,
+}
+
+#[component]
+fn LoyaltyTab() -> Element {
+    let init_data = use_signal(use_telegram_init_data);
+    let mut tiers: Signal<Vec<LoyaltyTier>> = use_signal(Vec::new);
+    let mut leaderboard: Signal<Vec<LeaderboardEntry>> = use_signal(Vec::new);
+    let mut loading = use_signal(|| true);
+    let mut active_sub = use_signal(|| "config".to_string());
+    let toasts: Signal<Vec<ToastItem>> = use_signal(Vec::new);
+
+    let _ = use_resource(move || {
+        let init_data = init_data.read().clone();
+        async move {
+            let base = api_base_url();
+            // Fetch config/tiers
+            if let Ok(resp) = reqwest::Client::new()
+                .get(&format!("{}/api/loyalty/config", base))
+                .header("X-Telegram-Init-Data", init_data.clone())
+                .send().await
+            {
+                if resp.status().is_success() {
+                    if let Ok(data) = resp.json::<LoyaltyConfigResp>().await {
+                        tiers.set(data.tiers);
+                    }
+                }
+            }
+            // Fetch leaderboard
+            if let Ok(resp) = reqwest::Client::new()
+                .get(&format!("{}/api/loyalty/leaderboard", base))
+                .header("X-Telegram-Init-Data", init_data.clone())
+                .send().await
+            {
+                if resp.status().is_success() {
+                    if let Ok(data) = resp.json::<LeaderboardResp>().await {
+                        leaderboard.set(data.leaderboard);
+                    }
+                }
+            }
+            loading.set(false);
+            Some(())
+        }
+    });
+
+    let sub_btn = |key: &str, label: &str| -> Element {
+        let is_active = *active_sub.read() == key;
+        let k = key.to_string();
+        let l = label.to_string();
+        let style = if is_active {
+            "flex:1;padding:8px;background:#39ff14;color:#000;border:none;border-radius:4px;font-size:13px;font-weight:700;cursor:pointer;"
+        } else {
+            "flex:1;padding:8px;background:#1a1a2e;color:#888;border:1px solid #2a2a4a;border-radius:4px;font-size:13px;cursor:pointer;"
+        };
+        rsx! { button { style: "{style}", onclick: move |_| active_sub.set(k.clone()), "{l}" } }
+    };
+
+    rsx! {
+        div {
+            {render_toasts(toasts)}
+            h3 { style: "color:#39ff14;font-size:15px;margin-bottom:12px;", "💎 Лояльность" }
+            div { style: "display:flex;gap:6px;margin-bottom:16px;",
+                {sub_btn("config", "🎟️ Тиры")}
+                {sub_btn("leaderboard", "🏆 Лидерборд")}
+            }
+            if *loading.read() {
+                div { style: "color:#888;padding:20px 0;", "Загрузка..." }
+            } else if *active_sub.read() == "config" {
+                if tiers.read().is_empty() {
+                    div { style: "color:#888;padding:20px 0;", "Нет тиров" }
+                } else {
+                    div { style: "display:flex;flex-direction:column;gap:8px;",
+                        for tier in tiers.read().clone() {
+                            div { style: "background:#1a1a2e;border:1px solid #2a2a4a;border-radius:8px;padding:12px;display:flex;align-items:center;gap:10px;",
+                                div { style: "font-size:24px;",
+                                    "{tier.icon.clone().unwrap_or_else(|| \"💎\".to_string())}"
+                                }
+                                div { style: "flex:1;",
+                                    div { style: "font-weight:700;font-size:14px;", "{tier.name}" }
+                                    div { style: "font-size:12px;color:#888;",
+                                        "От {tier.min_points} баллов • Скидка {tier.discount_percent}%"
+                                    }
+                                }
+                                span { style: "font-size:11px;padding:3px 8px;border-radius:4px;background:#39ff1420;color:#39ff14;",
+                                    "{tier.tier}"
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                // Leaderboard
+                if leaderboard.read().is_empty() {
+                    div { style: "color:#888;padding:20px 0;", "Лидерборд пустой" }
+                } else {
+                    div { style: "display:flex;flex-direction:column;gap:6px;",
+                        for (idx, entry) in leaderboard.read().clone().iter().enumerate() {
+                            {
+                                let medal = match idx {
+                                    0 => "🥇",
+                                    1 => "🥈",
+                                    2 => "🥉",
+                                    _ => "",
+                                };
+                                let name = entry.first_name.clone().unwrap_or_else(|| "Unknown".to_string());
+                                let spent = entry.total_spent.unwrap_or(0.0);
+                                let tier_label = entry.tier.clone().unwrap_or_default();
+                                rsx! {
+                                    div { style: "background:#1a1a2e;border:1px solid #2a2a4a;border-radius:6px;padding:10px;display:flex;align-items:center;gap:8px;",
+                                        div { style: "font-size:18px;width:28px;text-align:center;",
+                                            if medal.is_empty() {
+                                                span { style: "font-size:12px;color:#888;", "{idx+1}" }
+                                            } else {
+                                                "{medal}"
+                                            }
+                                        }
+                                        div { style: "flex:1;",
+                                            div { style: "font-weight:600;font-size:13px;", "{name}" }
+                                            div { style: "font-size:11px;color:#888;", "{tier_label}" }
+                                        }
+                                        div { style: "font-weight:700;color:#39ff14;font-size:14px;",
+                                            "{spent:.0}Б"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ─── Managers ─────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+struct AdminManager {
+    telegram_id: i64,
+    #[serde(default)]
+    name: Option<String>,
+    #[serde(default)]
+    username: Option<String>,
+    #[serde(default)]
+    ref_code: Option<String>,
+    #[serde(default)]
+    commission_rate: Option<f64>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ManagersResp { managers: Vec<AdminManager> }
+
+#[component]
+fn ManagersTab() -> Element {
+    let init_data = use_signal(use_telegram_init_data);
+    let mut managers: Signal<Vec<AdminManager>> = use_signal(Vec::new);
+    let mut loading = use_signal(|| true);
+    let mut error = use_signal(String::new);
+    let mut show_form = use_signal(|| false);
+    let mut form_tg_id = use_signal(String::new);
+    let mut form_name = use_signal(String::new);
+    let mut form_commission = use_signal(|| "10".to_string());
+    let mut submitting = use_signal(|| false);
+    let toasts: Signal<Vec<ToastItem>> = use_signal(Vec::new);
+    let reload = use_signal(|| 0u32);
+
+    let _ = use_resource(move || {
+        let _ = reload.read();
+        let init_data = init_data.read().clone();
+        async move {
+            let url = format!("{}/api/admin/managers", api_base_url());
+            match reqwest::Client::new().get(&url).header("X-Telegram-Init-Data", init_data).send().await {
+                Ok(resp) if resp.status().is_success() => {
+                    match resp.json::<ManagersResp>().await {
+                        Ok(data) => { managers.set(data.managers); }
+                        Err(e) => { error.set(format!("Ошибка разбора: {e}")); }
+                    }
+                }
+                Ok(resp) => { error.set(format!("HTTP {}", resp.status().as_u16())); }
+                Err(e) => { error.set(format!("Сеть: {e}")); }
+            }
+            loading.set(false);
+            Some(())
+        }
+    });
+
+    rsx! {
+        div {
+            {render_toasts(toasts)}
+            h3 { style: "color:#39ff14;font-size:15px;margin-bottom:12px;", "👥 Менеджеры" }
+            if !error.read().is_empty() {
+                div { style: "color:#ff4757;margin-bottom:8px;font-size:13px;", "{error}" }
+            }
+            button {
+                style: "{submit_btn_style()}width:100%;margin-bottom:12px;",
+                onclick: move |_| { let v = !*show_form.read(); show_form.set(v); },
+                if *show_form.read() { "✖ Скрыть форму" } else { "+ Добавить менеджера" }
+            }
+            if *show_form.read() {
+                div { style: "{edit_card_style()}margin-bottom:12px;",
+                    div { style: edit_header_style(), "➕ Новый менеджер" }
+                    input { style: input_style(), placeholder: "Telegram ID", value: "{form_tg_id}",
+                        r#type: "number", oninput: move |e| form_tg_id.set(e.value()) }
+                    input { style: input_style(), placeholder: "Имя", value: "{form_name}",
+                        oninput: move |e| form_name.set(e.value()) }
+                    input { style: input_style(), placeholder: "Commission % (напр. 10)", value: "{form_commission}",
+                        r#type: "number", oninput: move |e| form_commission.set(e.value()) }
+                    button {
+                        style: if *submitting.read() { submit_btn_disabled_style() } else { submit_btn_style() },
+                        disabled: *submitting.read(),
+                        onclick: move |_| {
+                            let tg_id_str = form_tg_id.read().trim().to_string();
+                            let tg_id = match tg_id_str.parse::<i64>() {
+                                Ok(v) => v,
+                                Err(_) => { push_toast(toasts, "Неверный Telegram ID".into(), ToastKind::Error); return; }
+                            };
+                            let name = form_name.read().trim().to_string();
+                            let commission = form_commission.read().trim().parse::<f64>().unwrap_or(10.0);
+                            let id_data = init_data.read().clone();
+                            submitting.set(true);
+                            let mut submitting2 = submitting.clone();
+                            let mut show_form2 = show_form.clone();
+                            let mut toasts2 = toasts.clone();
+                            let mut reload2 = reload.clone();
+                            let mut form_tg_id2 = form_tg_id.clone();
+                            let mut form_name2 = form_name.clone();
+                            spawn(async move {
+                                let body = json!({
+                                    "telegram_id": tg_id,
+                                    "name": if name.is_empty() { serde_json::Value::Null } else { name.into() },
+                                    "commission_rate": commission,
+                                });
+                                let url = format!("{}/api/admin/managers", api_base_url());
+                                let res = reqwest::Client::new().post(&url)
+                                    .header("X-Telegram-Init-Data", id_data)
+                                    .json(&body).send().await;
+                                submitting2.set(false);
+                                match res {
+                                    Ok(r) if r.status().is_success() => {
+                                        show_form2.set(false);
+                                        form_tg_id2.set(String::new());
+                                        form_name2.set(String::new());
+                                        { let v = reload2.read().wrapping_add(1); reload2.set(v); }
+                                        push_toast(toasts2, "✓ Менеджер добавлен".into(), ToastKind::Success);
+                                    }
+                                    _ => { push_toast(toasts2, "Ошибка сохранения".into(), ToastKind::Error); }
+                                }
+                            });
+                        },
+                        if *submitting.read() { "⏳ Сохранение..." } else { "💾 Сохранить" }
+                    }
+                }
+            }
+            if *loading.read() {
+                div { style: "color:#888;padding:20px 0;", "Загрузка..." }
+            } else if managers.read().is_empty() {
+                div { style: "color:#888;padding:20px 0;text-align:center;", "Нет менеджеров" }
+            } else {
+                div { style: "display:flex;flex-direction:column;gap:6px;",
+                    for mgr in managers.read().clone() {
+                        div { style: "background:#1a1a2e;border:1px solid #2a2a4a;border-radius:8px;padding:12px;",
+                            div { style: "font-weight:600;font-size:14px;",
+                                "👤 {mgr.name.clone().unwrap_or_else(|| \"—\".to_string())}"
+                                if let Some(uname) = mgr.username.clone() {
+                                    span { style: "color:#4d9fff;font-size:13px;margin-left:6px;",
+                                        "(@{uname})"
+                                    }
+                                }
+                            }
+                            div { style: "font-size:12px;color:#888;margin-top:4px;",
+                                "Telegram ID: {mgr.telegram_id}"
+                                if let Some(rate) = mgr.commission_rate {
+                                    span { style: "margin-left:8px;color:#ffe600;", " • {rate}% комиссия" }
+                                }
+                                if let Some(ref_code) = mgr.ref_code.clone() {
+                                    div { style: "margin-top:4px;color:#00e5ff;font-size:11px;",
+                                        "Реф. код: {ref_code}"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }
