@@ -1,7 +1,7 @@
 use axum::{
     extract::{Path, State},
     http::{HeaderMap, HeaderValue, StatusCode},
-    routing::{delete, get, post, put},
+    routing::{get, put},
     Json, Router,
 };
 use serde::Deserialize;
@@ -9,7 +9,7 @@ use serde_json::{json, Value};
 
 use crate::AppState;
 use crate::api::auth::check_admin;
-use crate::api::cache::{ETagCache, invalidate_strains, make_etag_header};
+use crate::api::cache::{invalidate_strains, make_etag_header};
 use crate::db::strains::Strain;
 
 #[derive(Debug, Deserialize)]

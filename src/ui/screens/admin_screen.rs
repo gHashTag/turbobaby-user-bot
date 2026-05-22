@@ -3281,7 +3281,7 @@ fn QuestsTab() -> Element {
                         option { value: "temple", "🛭️ Temple" }
                         option { value: "nature", "🌿 Nature" }
                     }
-                    div { style: "display:flex;gap:8px;",
+                    div { class: "admin-form-row-2col",
                         input { class: "admin-input", placeholder: "Lat", value: "{edit_lat}", r#type: "number",
                             oninput: move |e| edit_lat.set(e.value()) }
                         input { class: "admin-input", placeholder: "Lon", value: "{edit_lon}", r#type: "number",
@@ -3365,7 +3365,7 @@ fn QuestsTab() -> Element {
             h3 { class: "admin-card-title", "🗺️ Квест-точки" }
             button {
                 class: "admin-btn primary",
-                style: "width:100%;margin-bottom:12px;",
+                class: "admin-btn-full",
                 onclick: move |_| {
                     is_new.set(true);
                     editing.set(Some(AdminQuestPlace {
@@ -3533,7 +3533,7 @@ fn TreasuresTab() -> Element {
                     div { class: "admin-label", "🏴\u{200d}☠️ Стартовая точка (Woody)" }
                     input { class: "admin-input", placeholder: "Название", value: "{edit_start_name}",
                         oninput: move |e| edit_start_name.set(e.value()) }
-                    div { style: "display:flex;gap:8px;",
+                    div { class: "admin-form-row-2col",
                         input { class: "admin-input", placeholder: "Lat", value: "{edit_start_lat}", r#type: "number",
                             oninput: move |e| edit_start_lat.set(e.value()) }
                         input { class: "admin-input", placeholder: "Lon", value: "{edit_start_lon}", r#type: "number",
@@ -3613,7 +3613,7 @@ fn TreasuresTab() -> Element {
             h3 { class: "admin-card-title", "🏴\u{200d}☠️ Поиск Сокровищ" }
             button {
                 class: "admin-btn primary",
-                style: "width:100%;margin-bottom:12px;",
+                class: "admin-btn-full",
                 onclick: move |_| {
                     is_new.set(true);
                     editing.set(Some(AdminTreasureHunt {
@@ -3931,7 +3931,7 @@ fn LoyaltyTab() -> Element {
                     div {
                         for tier in tiers.read().clone() {
                             div { class: "admin-row",
-                                div { style: "font-size:24px;",
+                                div { class: "admin-emoji-lg",
                                     "{tier.icon.clone().unwrap_or_else(|| \"💎\".to_string())}"
                                 }
                                 div { class: "admin-row-main",
@@ -3966,7 +3966,7 @@ fn LoyaltyTab() -> Element {
                                 let tier_label = entry.tier.clone().unwrap_or_default();
                                 rsx! {
                                     div { class: "admin-row",
-                                        div { style: "font-size:18px;width:28px;text-align:center;",
+                                        div { class: "admin-medal",
                                             if medal.is_empty() {
                                                 span { class: "admin-badge muted", "{idx+1}" }
                                             } else {
@@ -4022,6 +4022,7 @@ fn ManagersTab() -> Element {
     let mut submitting = use_signal(|| false);
     let toasts: Signal<Vec<ToastItem>> = use_signal(Vec::new);
     let reload = use_signal(|| 0u32);
+    let mut selected_manager: Signal<Option<AdminManager>> = use_signal(|| None);
 
     let _ = use_resource(move || {
         let _ = reload.read();
@@ -4052,7 +4053,7 @@ fn ManagersTab() -> Element {
             }
             button {
                 class: "admin-btn primary",
-                style: "width:100%;margin-bottom:12px;",
+                class: "admin-btn-full",
                 onclick: move |_| { let v = !*show_form.read(); show_form.set(v); },
                 if *show_form.read() { "✖ Скрыть форму" } else { "+ Добавить менеджера" }
             }
@@ -4124,26 +4125,176 @@ fn ManagersTab() -> Element {
             } else {
                 div {
                     for mgr in managers.read().clone() {
-                        div { class: "admin-card",
-                            div { class: "admin-card-title",
-                                "👤 {mgr.name.clone().unwrap_or_else(|| \"—\".to_string())}"
-                                if let Some(uname) = mgr.username.clone() {
-                                    span { class: "admin-badge info",
-                                        "(@{uname})"
+                        {
+                            let mgr_clone = mgr.clone();
+                            rsx! {
+                                div {
+                                    class: "admin-card",
+                                    style: "cursor:pointer;",
+                                    onclick: move |_| { selected_manager.set(Some(mgr_clone.clone())); },
+                                    div { class: "admin-card-title",
+                                        "👤 {mgr.name.clone().unwrap_or_else(|| \"—\".to_string())}"
+                                        if let Some(uname) = mgr.username.clone() {
+                                            span { class: "admin-badge info",
+                                                "(@{uname})"
+                                            }
+                                        }
+                                    }
+                                    div { class: "admin-card-meta",
+                                        "Telegram ID: {mgr.telegram_id}"
+                                        if let Some(rate) = mgr.commission_rate {
+                                            span { class: "admin-badge warn", " • {rate}% комиссия" }
+                                        }
+                                        if let Some(ref_code) = mgr.ref_code.clone() {
+                                            div { class: "admin-badge info",
+                                                "Реф. код: {ref_code}"
+                                            }
+                                        }
                                     }
                                 }
                             }
-                            div { class: "admin-card-meta",
-                                "Telegram ID: {mgr.telegram_id}"
-                                if let Some(rate) = mgr.commission_rate {
-                                    span { class: "admin-badge warn", " • {rate}% комиссия" }
+                        }
+                    }
+                }
+            }
+            if let Some(mgr) = selected_manager.read().clone() {
+                ManagerDetailModal {
+                    manager: mgr,
+                    on_close: move |_| { selected_manager.set(None); },
+                    init_data: init_data.read().clone(),
+                }
+            }
+        }
+    }
+}
+
+// ── ManagerDetailModal ────────────────────────────────────────
+
+#[derive(Props, Clone, PartialEq)]
+struct ManagerDetailModalProps {
+    manager: AdminManager,
+    on_close: EventHandler<()>,
+    init_data: String,
+}
+
+#[component]
+fn ManagerDetailModal(props: ManagerDetailModalProps) -> Element {
+    let mgr = props.manager.clone();
+    let mut editing = use_signal(|| false);
+    let mut edit_name = use_signal(|| mgr.name.clone().unwrap_or_default());
+    let mut edit_ref_code = use_signal(|| mgr.ref_code.clone().unwrap_or_default());
+    let mut saving = use_signal(|| false);
+    let stats_text = use_signal(|| "Загрузка...".to_string());
+    let manager_id = mgr.telegram_id;
+    let init_data = props.init_data.clone();
+
+    // Fetch stats (endpoint may not exist yet — OK)
+    let stats_signal = stats_text.clone();
+    use_effect(move || {
+        let url = format!("{}/api/admin/managers/{}/stats", api_base_url(), manager_id);
+        spawn(async move {
+            match reqwest::Client::new().get(&url).send().await {
+                Ok(r) if r.status().is_success() => {
+                    if let Ok(text) = r.text().await {
+                        stats_signal.clone().set(text);
+                    }
+                }
+                _ => {}
+            }
+        });
+    });
+
+    rsx! {
+        div {
+            class: "admin-overlay",
+            onclick: move |_| { props.on_close.call(()); },
+            div {
+                class: "admin-modal",
+                onclick: move |e| { e.stop_propagation(); },
+                // Header
+                div { class: "admin-modal-header",
+                    span { class: "admin-modal-title", "👤 Карточка менеджера" }
+                    button {
+                        class: "admin-modal-close",
+                        onclick: move |_| { props.on_close.call(()); },
+                        "✖"
+                    }
+                }
+                // Info section
+                if !*editing.read() {
+                    div { class: "admin-form-group",
+                        div { class: "admin-card-meta", "Telegram ID: {mgr.telegram_id}" }
+                        div { class: "admin-card-meta",
+                            "Имя: {mgr.name.clone().unwrap_or_else(|| \"—\".to_string())}"
+                        }
+                        div { class: "admin-card-meta",
+                            "@{mgr.username.clone().unwrap_or_else(|| \"—\".to_string())}"
+                        }
+                        div { class: "admin-card-meta",
+                            "Реф-код: {mgr.ref_code.clone().unwrap_or_else(|| \"—\".to_string())}"
+                        }
+                    }
+                    // Stats section
+                    div { class: "admin-card-title", "📊 Статистика" }
+                    div { class: "admin-card-meta", "{stats_text}" }
+                    // Actions
+                    button {
+                        class: "admin-btn secondary",
+                        onclick: move |_| { editing.set(true); },
+                        "✏️ Редактировать"
+                    }
+                } else {
+                    // Edit mode
+                    div { class: "admin-form-group",
+                        input {
+                            class: "admin-input",
+                            placeholder: "Имя",
+                            value: "{edit_name}",
+                            oninput: move |e| edit_name.set(e.value()),
+                        }
+                    }
+                    div { class: "admin-form-group",
+                        input {
+                            class: "admin-input",
+                            placeholder: "Реф-код",
+                            value: "{edit_ref_code}",
+                            oninput: move |e| edit_ref_code.set(e.value()),
+                        }
+                    }
+                    div { class: "admin-row",
+                        button {
+                            class: if *saving.read() { "admin-btn" } else { "admin-btn primary" },
+                            disabled: *saving.read(),
+                            onclick: {
+                                let init_data = init_data.clone();
+                                let tg_id = mgr.telegram_id;
+                                move |_| {
+                                    let name = edit_name.read().trim().to_string();
+                                    let ref_code = edit_ref_code.read().trim().to_string();
+                                    let id_data = init_data.clone();
+                                    saving.set(true);
+                                    let mut saving2 = saving.clone();
+                                    let mut editing2 = editing.clone();
+                                    spawn(async move {
+                                        let body = json!({
+                                            "name": if name.is_empty() { serde_json::Value::Null } else { name.into() },
+                                            "ref_code": if ref_code.is_empty() { serde_json::Value::Null } else { ref_code.into() },
+                                        });
+                                        let url = format!("{}/api/admin/managers/{}", api_base_url(), tg_id);
+                                        let _ = reqwest::Client::new().put(&url)
+                                            .header("X-Telegram-Init-Data", id_data)
+                                            .json(&body).send().await;
+                                        saving2.set(false);
+                                        editing2.set(false);
+                                    });
                                 }
-                                if let Some(ref_code) = mgr.ref_code.clone() {
-                                    div { class: "admin-badge info",
-                                        "Реф. код: {ref_code}"
-                                    }
-                                }
-                            }
+                            },
+                            if *saving.read() { "⏳ Сохранение..." } else { "💾 Сохранить" }
+                        }
+                        button {
+                            class: "admin-btn",
+                            onclick: move |_| { editing.set(false); },
+                            "❌ Отмена"
                         }
                     }
                 }

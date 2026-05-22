@@ -1,6 +1,7 @@
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
+#[allow(dead_code)] // Standard SeaORM entity pattern
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "loyalty_profiles")]
 pub struct Model {
@@ -19,6 +20,7 @@ pub struct Model {
     pub is_blocked: bool,
 }
 
+#[allow(dead_code)] // Standard SeaORM entity pattern
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {}
 

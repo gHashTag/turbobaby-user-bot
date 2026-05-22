@@ -9,7 +9,7 @@ use serde_json::{json, Value};
 
 use crate::api::auth::check_admin;
 use crate::AppState;
-use crate::db::loyalty::LoyaltyProfile;
+
 
 #[derive(Debug, Deserialize)]
 pub struct AddBonusRequest {

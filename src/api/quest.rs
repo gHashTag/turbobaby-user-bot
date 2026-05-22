@@ -98,10 +98,22 @@ async fn create_quest_place(
     let stmt = Statement::from_sql_and_values(
         DbBackend::Postgres,
         "INSERT INTO quest_places (id, name, category, lat, lon, description, image_url) VALUES ($1,$2,$3,$4::float8,$5::float8,$6,$7)",
-        [id.clone().into(), req.name.into(), category.into(), req.lat.into(), req.lon.into(), description.into(), image_url.into()],
+        [id.clone().into(), req.name.clone().into(), category.clone().into(), req.lat.into(), req.lon.into(), description.clone().into(), image_url.into()],
     );
     state.db.orm.execute(stmt).await
         .map_err(|e| { tracing::error!("create_quest_place sea-orm: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?;
+
+    let bot = state.bot.clone();
+    let config = state.config.clone();
+    let name = req.name.clone();
+    let cat = category.clone();
+    let lat = req.lat;
+    let lon = req.lon;
+    let desc = description.clone();
+    tokio::spawn(async move {
+        notify_quest_place_admins(&bot, &config, &name, &cat, lat, lon, &desc).await;
+    });
+
     Ok(Json(json!({ "success": true, "id": id })))
 }
 
@@ -205,10 +217,22 @@ async fn create_treasure_hunt(
     let stmt = Statement::from_sql_and_values(
         DbBackend::Postgres,
         "INSERT INTO treasure_hunts (id, name, description, image_url, black_mark_title, black_mark_description, black_mark_image_url, start_lat, start_lon, start_name) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::float8,$9::float8,$10)",
-        [id.clone().into(), req.name.into(), description.into(), image_url.into(), req.black_mark_title.into(), bm_desc.into(), bm_image.into(), req.start_lat.into(), req.start_lon.into(), req.start_name.into()],
+        [id.clone().into(), req.name.clone().into(), description.clone().into(), image_url.into(), req.black_mark_title.into(), bm_desc.into(), bm_image.into(), req.start_lat.into(), req.start_lon.into(), req.start_name.clone().into()],
     );
     state.db.orm.execute(stmt).await
         .map_err(|e| { tracing::error!("create_treasure_hunt sea-orm: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?;
+
+    let bot = state.bot.clone();
+    let config = state.config.clone();
+    let name = req.name.clone();
+    let desc = description.clone();
+    let start_name = req.start_name.clone();
+    let start_lat = req.start_lat;
+    let start_lon = req.start_lon;
+    tokio::spawn(async move {
+        notify_treasure_hunt_admins(&bot, &config, &name, &desc, &start_name, start_lat, start_lon).await;
+    });
+
     Ok(Json(json!({ "success": true, "id": id })))
 }
 
@@ -339,5 +363,53 @@ async fn scan_quest_qr(State(state): State<AppState>, Json(body): Json<Value>) -
             }
         }))),
         None => Ok(Json(json!({ "success": false, "error": "Invalid QR token" }))),
+    }
+}
+
+// ── Admin Notifications ───────────────────────────────────────
+
+async fn notify_quest_place_admins(
+    bot: &teloxide::Bot,
+    config: &crate::config::Config,
+    name: &str,
+    category: &str,
+    lat: f64,
+    lon: f64,
+    description: &str,
+) {
+    use teloxide::prelude::*;
+
+    let text = format!(
+        "📍 Новое квест-место создано\n━━━━━━━━━━━━━━━━\n🏷 {}\n📂 {}\n🗺 {}, {}\n📝 {}",
+        name, category, lat, lon, description
+    );
+
+    for admin_id in &config.admin_ids {
+        let _ = bot
+            .send_message(teloxide::types::ChatId(*admin_id), &text)
+            .await;
+    }
+}
+
+async fn notify_treasure_hunt_admins(
+    bot: &teloxide::Bot,
+    config: &crate::config::Config,
+    name: &str,
+    description: &str,
+    start_name: &str,
+    start_lat: f64,
+    start_lon: f64,
+) {
+    use teloxide::prelude::*;
+
+    let text = format!(
+        "🏴\u{200d}☠️ Новый treasure hunt создан\n━━━━━━━━━━━━━━━━\n🏷 {}\n📜 {}\n🗺 Старт: {} ({}, {})",
+        name, description, start_name, start_lat, start_lon
+    );
+
+    for admin_id in &config.admin_ids {
+        let _ = bot
+            .send_message(teloxide::types::ChatId(*admin_id), &text)
+            .await;
     }
 }

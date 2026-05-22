@@ -4,3 +4,5 @@ pub mod treasure_hunt;
 pub mod quest_place;
 pub mod garden_config;
 pub mod order;
+pub mod user;
+pub mod strain;

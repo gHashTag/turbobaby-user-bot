@@ -1,12 +1,11 @@
 use std::collections::HashMap;
 use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
+use std::hash::Hasher;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use axum::{
     http::{HeaderValue},
 };
-use serde_json::Value;
 
 /// Simple in-memory ETag cache for API responses
 #[derive(Clone)]
@@ -64,14 +63,20 @@ pub async fn invalidate_strains(cache: &ETagCache) {
     cache.hashes.write().await.remove("strains");
 }
 
+// Используется в будущих cache invalidation путях
+#[allow(dead_code)]
 pub async fn invalidate_accessories(cache: &ETagCache) {
     cache.hashes.write().await.remove("accessories");
 }
 
+// Используется в будущих cache invalidation путях
+#[allow(dead_code)]
 pub async fn invalidate_sets(cache: &ETagCache) {
     cache.hashes.write().await.remove("sets");
 }
 
+// Используется в будущих cache invalidation путях
+#[allow(dead_code)]
 pub async fn invalidate_tea_products(cache: &ETagCache) {
     cache.hashes.write().await.remove("tea_products");
 }

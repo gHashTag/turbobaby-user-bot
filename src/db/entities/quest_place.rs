@@ -1,6 +1,7 @@
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
+#[allow(dead_code)] // Standard SeaORM entity pattern
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "quest_places")]
 pub struct Model {
@@ -16,6 +17,7 @@ pub struct Model {
     pub created_at: DateTimeWithTimeZone,
 }
 
+#[allow(dead_code)] // Standard SeaORM entity pattern
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {}
 
