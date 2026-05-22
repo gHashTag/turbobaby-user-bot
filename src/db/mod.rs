@@ -157,7 +157,11 @@ impl Database {
 
         // Поднимаем SeaORM-подключение по той же DATABASE_URL.
         // SeaORM использует sqlx внутри, ssl-режим в URL (sslmode=require) обрабатывается автоматически.
-        let mut orm_opts = sea_orm::ConnectOptions::new(database_url.to_string());
+        //
+        // Чистим неподдерживаемые sqlx-postgres параметры (например channel_binding=require
+        // у Neon/Supabase PG16+) чтобы не плодить WARN в логах. Сам TLS работает через sslmode.
+        let sanitized_url = sanitize_pg_url_for_sqlx(database_url);
+        let mut orm_opts = sea_orm::ConnectOptions::new(sanitized_url);
         orm_opts
             .max_connections(10)
             .min_connections(1)
@@ -251,4 +255,46 @@ impl Database {
     }
 
     pub fn raw(&self) -> &Pool { &self.pool }
+}
+
+/// Убирает из connection-URL параметры, которые sqlx-postgres не понимает
+/// и пишет про них WARN (например channel_binding=require у Neon/Supabase).
+///
+/// tokio-postgres тоже их игнорирует, но мы чистим URL только для SeaORM/sqlx,
+/// чтобы не влиять на deadpool_postgres-путь.
+fn sanitize_pg_url_for_sqlx(url: &str) -> String {
+    const UNSUPPORTED: &[&str] = &["channel_binding"];
+    let (base, query) = match url.split_once('?') {
+        Some((b, q)) => (b, q),
+        None => return url.to_string(),
+    };
+    let kept: Vec<&str> = query
+        .split('&')
+        .filter(|pair| {
+            let key = pair.split('=').next().unwrap_or("");
+            !UNSUPPORTED.iter().any(|u| key.eq_ignore_ascii_case(u))
+        })
+        .collect();
+    if kept.is_empty() {
+        base.to_string()
+    } else {
+        format!("{}?{}", base, kept.join("&"))
+    }
+}
+
+#[cfg(test)]
+mod url_sanitize_tests {
+    use super::sanitize_pg_url_for_sqlx as s;
+    #[test] fn drops_channel_binding() {
+        assert_eq!(s("postgres://u:p@h/d?sslmode=require&channel_binding=require"), "postgres://u:p@h/d?sslmode=require");
+    }
+    #[test] fn keeps_others() {
+        assert_eq!(s("postgres://u:p@h/d?sslmode=require"), "postgres://u:p@h/d?sslmode=require");
+    }
+    #[test] fn no_query() {
+        assert_eq!(s("postgres://u:p@h/d"), "postgres://u:p@h/d");
+    }
+    #[test] fn only_unsupported() {
+        assert_eq!(s("postgres://u:p@h/d?channel_binding=require"), "postgres://u:p@h/d");
+    }
 }
