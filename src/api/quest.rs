@@ -81,11 +81,14 @@ async fn create_quest_place(
 ) -> Result<Json<Value>, StatusCode> {
     check_admin(&headers, &state)?;
     let id = uuid::Uuid::new_v4().to_string();
-    let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let client = state.db.pool.get().await.map_err(|e| { tracing::error!("create_quest_place pool: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?;
+    let category = req.category.unwrap_or_else(|| "location".to_string());
+    let description = req.description.unwrap_or_default();
+    let image_url = req.image_url.unwrap_or_default();
     client.execute(
         "INSERT INTO quest_places (id, name, category, lat, lon, description, image_url) VALUES ($1,$2,$3,$4,$5,$6,$7)",
-        &[&id, &req.name, &req.category.unwrap_or_else(|| "location".to_string()), &req.lat, &req.lon, &req.description, &req.image_url],
-    ).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        &[&id, &req.name, &category, &req.lat, &req.lon, &description, &image_url],
+    ).await.map_err(|e| { tracing::error!("create_quest_place insert: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?;
     Ok(Json(json!({ "success": true, "id": id })))
 }
 
@@ -168,11 +171,16 @@ async fn create_treasure_hunt(
 ) -> Result<Json<Value>, StatusCode> {
     check_admin(&headers, &state)?;
     let id = uuid::Uuid::new_v4().to_string();
-    let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let client = state.db.pool.get().await.map_err(|e| { tracing::error!("create_treasure_hunt pool: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?;
+    // BUG-4: NOT NULL колонки получают явные дефолты, логируем ошибки.
+    let description = req.description.unwrap_or_default();
+    let image_url = req.image_url.unwrap_or_default();
+    let bm_desc = req.black_mark_description.unwrap_or_default();
+    let bm_image = req.black_mark_image_url.unwrap_or_default();
     client.execute(
         "INSERT INTO treasure_hunts (id, name, description, image_url, black_mark_title, black_mark_description, black_mark_image_url, start_lat, start_lon, start_name) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)",
-        &[&id, &req.name, &req.description, &req.image_url, &req.black_mark_title, &req.black_mark_description, &req.black_mark_image_url, &req.start_lat, &req.start_lon, &req.start_name],
-    ).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        &[&id, &req.name, &description, &image_url, &req.black_mark_title, &bm_desc, &bm_image, &req.start_lat, &req.start_lon, &req.start_name],
+    ).await.map_err(|e| { tracing::error!("create_treasure_hunt insert: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?;
     Ok(Json(json!({ "success": true, "id": id })))
 }
 

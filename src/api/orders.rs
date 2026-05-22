@@ -49,12 +49,15 @@ async fn create_order(
     let items_json = serde_json::to_value(&req.items).unwrap_or(json!([]));
     let bonus_used = req.bonus_used.unwrap_or(0.0);
 
-    let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let client = state.db.pool.get().await.map_err(|e| { error!("create_order pool: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?;
+    // Приводим JSON к строке и кастим в jsonb в SQL — это обходит баг с сериализацией
+    // при пустых/примитивных Value (BUG-3).
+    let items_str = items_json.to_string();
     client.execute(
         "INSERT INTO orders (id, telegram_id, customer_name, customer_phone, customer_telegram, items, subtotal, bonus_used, total, status, shop_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending', $10)",
+         VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, 'pending', $10)",
         &[&id, &req.telegram_id, &req.customer_name, &req.customer_phone, &req.customer_telegram,
-          &items_json, &req.subtotal, &bonus_used, &req.total, &req.shop_id],
+          &items_str, &req.subtotal, &bonus_used, &req.total, &req.shop_id],
     ).await.map_err(|e| { error!("create_order: {}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
 
     let bot = state.bot.clone();

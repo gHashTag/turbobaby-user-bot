@@ -44,6 +44,7 @@ tower-http = { version = "0.5", features = ["cors", "fs", "trace", "set-header",
 tokio = { version = "1", features = ["full"], optional = true }
 tokio-postgres = { version = "0.7", features = ["with-chrono-0_4", "with-serde_json-1", "with-uuid-1"], optional = true }
 deadpool-postgres = { version = "0.14", features = ["rt_tokio_1"], optional = true }
+sea-orm = { version = "1.1", features = ["sqlx-postgres", "runtime-tokio-rustls", "macros", "with-chrono", "with-uuid", "with-json"], default-features = false, optional = true }
 postgres-types = { version = "0.2", features = ["with-chrono-0_4", "with-serde_json-1", "with-uuid-1"], optional = true }
 tokio-postgres-rustls = { version = "0.13", optional = true }
 rustls = { version = "0.23", features = ["ring"], optional = true }
@@ -79,6 +80,7 @@ backend = [
     "teloxide", "axum", "tower", "tower-http", "tokio",
     "tokio-postgres", "deadpool-postgres", "postgres-types",
     "tokio-postgres-rustls", "rustls", "rustls-native-certs",
+    "sea-orm",
     "aws-config", "aws-sdk-s3", "tracing-subscriber", "url", "md5"
 ]
 web = []

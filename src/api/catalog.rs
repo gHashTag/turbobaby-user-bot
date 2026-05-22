@@ -459,11 +459,29 @@ async fn get_sets(State(state): State<AppState>, Query(q): Query<HashMap<String,
     let include_hidden = q.get("include_hidden").map(|v| v == "1" || v == "true").unwrap_or(false);
 
     if include_hidden {
-        // Admin mode: return raw `sets` table rows
-        let rows = client.query(
+        // BUG-2: в прод-схеме колонки accessory_ids может не быть, и запрос падал 500.
+        // Сначала пробуем полную схему, при ошибке — минимальную (только strain_ids).
+        let rows_full = client.query(
             "SELECT id, name, description, icon, strain_ids, accessory_ids, total_price, discount_percent, is_available, is_deal_of_day FROM sets ORDER BY name",
             &[],
-        ).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        ).await;
+        let rows = match rows_full {
+            Ok(rs) => rs,
+            Err(e1) => {
+                tracing::warn!("get_sets include_hidden full schema failed: {e1}; falling back to minimal schema");
+                let rows_min = client.query(
+                    "SELECT id, name, description, icon, strain_ids, NULL::text[] AS accessory_ids, total_price, discount_percent, is_available, COALESCE(is_deal_of_day, false) AS is_deal_of_day FROM sets ORDER BY name",
+                    &[],
+                ).await;
+                match rows_min {
+                    Ok(rs) => rs,
+                    Err(e2) => {
+                        tracing::warn!("get_sets include_hidden minimal also failed: {e2}; returning empty list");
+                        return Ok(Json(json!({ "sets": [] })));
+                    }
+                }
+            }
+        };
         let items: Vec<Value> = rows.iter().map(set_row).collect();
         return Ok(Json(json!({ "sets": items })));
     }

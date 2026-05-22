@@ -3,6 +3,7 @@ pub mod loyalty;
 pub mod orders;
 pub mod users;
 pub mod referrals;
+pub mod entities;
 
 pub use strains::*;
 
@@ -90,6 +91,8 @@ impl Connect for RustlsConnect {
 
 pub struct Database {
     pub pool: Pool,
+    // SeaORM connection живёт параллельно с deadpool. Используется в новых/переписанных эндпоинтах.
+    pub orm: sea_orm::DatabaseConnection,
 }
 
 impl Database {
@@ -150,7 +153,20 @@ impl Database {
             .map_err(|e| anyhow::anyhow!("Failed to build pool: {}", e))?;
 
         let _ = pool.get().await.context("Failed to connect to database")?;
-        Ok(Self { pool })
+
+        // Поднимаем SeaORM-подключение по той же DATABASE_URL.
+        // SeaORM использует sqlx внутри, ssl-режим в URL (sslmode=require) обрабатывается автоматически.
+        let mut orm_opts = sea_orm::ConnectOptions::new(database_url.to_string());
+        orm_opts
+            .max_connections(10)
+            .min_connections(1)
+            .connect_timeout(std::time::Duration::from_secs(10))
+            .idle_timeout(std::time::Duration::from_secs(300))
+            .sqlx_logging(false);
+        let orm = sea_orm::Database::connect(orm_opts).await
+            .context("Failed to connect SeaORM")?;
+
+        Ok(Self { pool, orm })
     }
 
     pub async fn run_migrations(&self) -> Result<()> {
