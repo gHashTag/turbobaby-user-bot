@@ -49,16 +49,17 @@ async fn create_order(
     let items_json = serde_json::to_value(&req.items).unwrap_or(json!([]));
     let bonus_used = req.bonus_used.unwrap_or(0.0);
 
-    let client = state.db.pool.get().await.map_err(|e| { error!("create_order pool: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?;
-    // Приводим JSON к строке и кастим в jsonb в SQL — это обходит баг с сериализацией
-    // при пустых/примитивных Value (BUG-3).
+    // BUG-3 fix via SeaORM: subtotal/bonus_used/total могут быть NUMERIC на проде.
+    // sqlx + ::float8 каст и ::jsonb cast решают все варианты.
     let items_str = items_json.to_string();
-    client.execute(
-        "INSERT INTO orders (id, telegram_id, customer_name, customer_phone, customer_telegram, items, subtotal, bonus_used, total, status, shop_id)
-         VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, 'pending', $10)",
-        &[&id, &req.telegram_id, &req.customer_name, &req.customer_phone, &req.customer_telegram,
-          &items_str, &req.subtotal, &bonus_used, &req.total, &req.shop_id],
-    ).await.map_err(|e| { error!("create_order: {}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
+    use sea_orm::{Statement, DbBackend, ConnectionTrait};
+    let stmt = Statement::from_sql_and_values(
+        DbBackend::Postgres,
+        "INSERT INTO orders (id, telegram_id, customer_name, customer_phone, customer_telegram, items, subtotal, bonus_used, total, status, shop_id) VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::float8, $8::float8, $9::float8, 'pending', $10)",
+        [id.clone().into(), req.telegram_id.into(), req.customer_name.clone().into(), req.customer_phone.clone().into(), req.customer_telegram.clone().into(), items_str.into(), req.subtotal.into(), bonus_used.into(), req.total.into(), req.shop_id.clone().into()],
+    );
+    state.db.orm.execute(stmt).await
+        .map_err(|e| { error!("create_order sea-orm: {}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
 
     let bot = state.bot.clone();
     let config = state.config.clone();

@@ -81,14 +81,19 @@ async fn create_quest_place(
 ) -> Result<Json<Value>, StatusCode> {
     check_admin(&headers, &state)?;
     let id = uuid::Uuid::new_v4().to_string();
-    let client = state.db.pool.get().await.map_err(|e| { tracing::error!("create_quest_place pool: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?;
     let category = req.category.unwrap_or_else(|| "location".to_string());
     let description = req.description.unwrap_or_default();
     let image_url = req.image_url.unwrap_or_default();
-    client.execute(
-        "INSERT INTO quest_places (id, name, category, lat, lon, description, image_url) VALUES ($1,$2,$3,$4,$5,$6,$7)",
-        &[&id, &req.name, &category, &req.lat, &req.lon, &description, &image_url],
-    ).await.map_err(|e| { tracing::error!("create_quest_place insert: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?;
+    // BUG-6 fix via SeaORM: в прод-схеме lat/lon могут быть NUMERIC (не DOUBLE PRECISION).
+    // sqlx под капотом кастит f64 в numeric автоматически; то же для explicit ::float8 cast.
+    use sea_orm::{Statement, DbBackend, ConnectionTrait};
+    let stmt = Statement::from_sql_and_values(
+        DbBackend::Postgres,
+        "INSERT INTO quest_places (id, name, category, lat, lon, description, image_url) VALUES ($1,$2,$3,$4::float8,$5::float8,$6,$7)",
+        [id.clone().into(), req.name.into(), category.into(), req.lat.into(), req.lon.into(), description.into(), image_url.into()],
+    );
+    state.db.orm.execute(stmt).await
+        .map_err(|e| { tracing::error!("create_quest_place sea-orm: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?;
     Ok(Json(json!({ "success": true, "id": id })))
 }
 
@@ -171,16 +176,19 @@ async fn create_treasure_hunt(
 ) -> Result<Json<Value>, StatusCode> {
     check_admin(&headers, &state)?;
     let id = uuid::Uuid::new_v4().to_string();
-    let client = state.db.pool.get().await.map_err(|e| { tracing::error!("create_treasure_hunt pool: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?;
-    // BUG-4: NOT NULL колонки получают явные дефолты, логируем ошибки.
     let description = req.description.unwrap_or_default();
     let image_url = req.image_url.unwrap_or_default();
     let bm_desc = req.black_mark_description.unwrap_or_default();
     let bm_image = req.black_mark_image_url.unwrap_or_default();
-    client.execute(
-        "INSERT INTO treasure_hunts (id, name, description, image_url, black_mark_title, black_mark_description, black_mark_image_url, start_lat, start_lon, start_name) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)",
-        &[&id, &req.name, &description, &image_url, &req.black_mark_title, &bm_desc, &bm_image, &req.start_lat, &req.start_lon, &req.start_name],
-    ).await.map_err(|e| { tracing::error!("create_treasure_hunt insert: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?;
+    // BUG-4 fix via SeaORM: start_lat/start_lon могут быть NUMERIC.
+    use sea_orm::{Statement, DbBackend, ConnectionTrait};
+    let stmt = Statement::from_sql_and_values(
+        DbBackend::Postgres,
+        "INSERT INTO treasure_hunts (id, name, description, image_url, black_mark_title, black_mark_description, black_mark_image_url, start_lat, start_lon, start_name) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::float8,$9::float8,$10)",
+        [id.clone().into(), req.name.into(), description.into(), image_url.into(), req.black_mark_title.into(), bm_desc.into(), bm_image.into(), req.start_lat.into(), req.start_lon.into(), req.start_name.into()],
+    );
+    state.db.orm.execute(stmt).await
+        .map_err(|e| { tracing::error!("create_treasure_hunt sea-orm: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?;
     Ok(Json(json!({ "success": true, "id": id })))
 }
 
