@@ -92,6 +92,7 @@ async fn notify_admins(
         arr.iter().map(|item| {
             let name = item["strain_name"].as_str()
                 .or(item["accessory_name"].as_str())
+                .or(item["tea_name"].as_str())
                 .or(item["set_name"].as_str())
                 .unwrap_or("?");
             let qty = item["quantity"].as_f64().unwrap_or(0.0);

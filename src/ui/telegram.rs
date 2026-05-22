@@ -160,6 +160,21 @@ impl TelegramApp {
         s.parse::<i64>().ok().filter(|id| *id != 0)
     }
 
+    /// Get Telegram username from initDataUnsafe
+    pub fn get_username(&self) -> Option<String> {
+        let js = r#"(function(){try{
+            if(window.Telegram && window.Telegram.WebApp){
+                var u = window.Telegram.WebApp.initDataUnsafe;
+                if(u && u.user && u.user.username) return u.user.username;
+            }
+            return '';
+        }catch(e){return '';}})()"#;
+        let val = js_sys::eval(js).ok()?;
+        let s = val.as_string()?;
+        if s.is_empty() { return None; }
+        Some(s)
+    }
+
     /// Diagnostic dump of what is actually available in Telegram.WebApp.
     /// Used by the admin screen to show why authentication failed.
     pub fn debug_dump(&self) -> String {
@@ -233,6 +248,11 @@ pub fn use_telegram() -> TelegramApp {
 /// Hook to get current Telegram user ID
 pub fn use_telegram_id() -> Option<i64> {
     use_telegram().get_user_id()
+}
+
+/// Hook to get current Telegram username
+pub fn use_telegram_username() -> Option<String> {
+    use_telegram().get_username()
 }
 
 /// Hook to get raw initData string for server validation

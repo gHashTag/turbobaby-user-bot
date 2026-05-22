@@ -23,10 +23,22 @@ pub async fn handle_callback(
 ) -> Result<(), teloxide::RequestError> {
     let data = match q.data.as_ref().map(|s| s.as_str()) {
         Some(d) => d.to_string(),
-        None => { bot.answer_callback_query(&q.id).await?; return Ok(()); }
+        None => {
+            tracing::warn!("callback_query: empty data from user_id={}", q.from.id.0);
+            bot.answer_callback_query(&q.id).await?;
+            return Ok(());
+        }
     };
 
     let user_id = q.from.id.0 as i64;
+    tracing::info!(
+        "callback_query received: data='{}' user_id={} username={:?} message_id={:?}",
+        data, user_id, q.from.username, q.message.as_ref().map(|m| match m {
+            MaybeInaccessibleMessage::Regular(msg) => msg.id.0,
+            MaybeInaccessibleMessage::Inaccessible(_) => 0,
+        })
+    );
+
     let lang = db.get_user_lang(user_id).await
         .unwrap_or_else(|| map_telegram_lang(q.from.language_code.as_ref().map(|s| s.as_str())));
     let locale = get_locale(&lang);
@@ -131,9 +143,16 @@ pub async fn handle_callback(
 
         d if d.starts_with("confirm_") => {
             let order_id = &d["confirm_".len()..];
+            tracing::info!("callback: confirm order_id={} by user_id={}", order_id, user_id);
             bot.answer_callback_query(&q.id).text(&format!("✅ {}", locale.order_confirmed)).await?;
-            if let Ok(client) = db.pool.get().await {
-                let _ = client.execute("UPDATE orders SET status = 'confirmed' WHERE id = $1", &[&order_id]).await;
+            match db.pool.get().await {
+                Ok(client) => {
+                    match client.execute("UPDATE orders SET status = 'confirmed' WHERE id = $1", &[&order_id]).await {
+                        Ok(rows) => tracing::info!("callback: confirm order_id={} updated {} rows", order_id, rows),
+                        Err(e) => tracing::error!("callback: confirm order_id={} DB error: {}", order_id, e),
+                    }
+                }
+                Err(e) => tracing::error!("callback: confirm order_id={} pool error: {}", order_id, e),
             }
             if let Some(msg) = q.message.as_ref().and_then(|m| match m {
     MaybeInaccessibleMessage::Regular(msg) => Some(msg),
@@ -148,6 +167,7 @@ pub async fn handle_callback(
 
         d if d.starts_with("complete_") => {
             let order_id = &d["complete_".len()..];
+            tracing::info!("callback: complete order_id={} by user_id={}", order_id, user_id);
             bot.answer_callback_query(&q.id).text("📦 Completed!").await?;
 
             // Check if this is the user's first order BEFORE updating status
@@ -178,8 +198,14 @@ pub async fn handle_callback(
             }
 
             // Now update the order status
-            if let Ok(client) = db.pool.get().await {
-                let _ = client.execute("UPDATE orders SET status = 'completed' WHERE id = $1", &[&order_id]).await;
+            match db.pool.get().await {
+                Ok(client) => {
+                    match client.execute("UPDATE orders SET status = 'completed' WHERE id = $1", &[&order_id]).await {
+                        Ok(rows) => tracing::info!("callback: complete order_id={} updated {} rows", order_id, rows),
+                        Err(e) => tracing::error!("callback: complete order_id={} DB error: {}", order_id, e),
+                    }
+                }
+                Err(e) => tracing::error!("callback: complete order_id={} pool error: {}", order_id, e),
             }
 
             // If first order, confirm referral and notify referrer
@@ -228,9 +254,16 @@ pub async fn handle_callback(
 
         d if d.starts_with("reject_") => {
             let _order_id = &d["reject_".len()..];
+            tracing::info!("callback: reject order_id={} by user_id={}", _order_id, user_id);
             bot.answer_callback_query(&q.id).text(&format!("❌ {}", locale.order_rejected)).await?;
-            if let Ok(client) = db.pool.get().await {
-                let _ = client.execute("UPDATE orders SET status = 'rejected' WHERE id = $1", &[&_order_id]).await;
+            match db.pool.get().await {
+                Ok(client) => {
+                    match client.execute("UPDATE orders SET status = 'rejected' WHERE id = $1", &[&_order_id]).await {
+                        Ok(rows) => tracing::info!("callback: reject order_id={} updated {} rows", _order_id, rows),
+                        Err(e) => tracing::error!("callback: reject order_id={} DB error: {}", _order_id, e),
+                    }
+                }
+                Err(e) => tracing::error!("callback: reject order_id={} pool error: {}", _order_id, e),
             }
             if let Some(msg) = q.message.as_ref().and_then(|m| match m {
     MaybeInaccessibleMessage::Regular(msg) => Some(msg),
@@ -241,7 +274,10 @@ pub async fn handle_callback(
             }
         }
 
-        _ => { bot.answer_callback_query(&q.id).await?; }
+        _ => {
+            tracing::warn!("callback: unknown data='{}' from user_id={}", data, user_id);
+            bot.answer_callback_query(&q.id).await?;
+        }
     }
 
     Ok(())

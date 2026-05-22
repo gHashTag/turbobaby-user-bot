@@ -5,7 +5,7 @@ use tokio_postgres::Row;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Order {
     pub id: String,
-    pub telegram_id: i64,
+    pub telegram_id: Option<i64>,
     pub customer_name: Option<String>,
     pub customer_phone: Option<String>,
     pub customer_telegram: Option<String>,

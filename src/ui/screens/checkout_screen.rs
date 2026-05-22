@@ -4,7 +4,7 @@ use web_sys;
 use crate::ui::routes::Route;
 use crate::ui::state::{Cart, CartItem, CartItemType};
 use crate::ui::api::context::api_base_url;
-use crate::ui::telegram::{use_telegram_id, use_telegram_init_data};
+use crate::ui::telegram::{use_telegram_id, use_telegram_username, use_telegram_init_data};
 use crate::trios::store::validate_checkout;
 use crate::trios::core::Lang;
 use crate::trios::i18n::{t, T_CHECKOUT_TITLE, T_YOUR_ORDER, T_YOUR_INFO, T_PICKUP_LOCATION, T_DELIVERY, T_PAYMENT, T_PLACE_ORDER, T_BACK, T_TOTAL};
@@ -85,6 +85,7 @@ pub fn CheckoutScreen() -> Element {
             "telegram_id": telegram_id,
             "customer_name": customer_name(),
             "customer_phone": customer_phone(),
+            "customer_telegram": use_telegram_username(),
             "items": items_json,
             "subtotal": cart_total,
             "total": cart_total,
