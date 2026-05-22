@@ -162,11 +162,32 @@ async fn main() -> Result<()> {
     let db_for_bot = db.clone();
     let config_for_bot = config.clone();
     tokio::spawn(async move {
+        use teloxide::update_listeners::Polling;
+        use teloxide::types::AllowedUpdate;
         let handler = bot::create_handler();
+        // Явно запрашиваем все нужные типы апдейтов — включая CallbackQuery.
+        // Без этого Telegram помнит старый фильтр (напр. только ["message"])
+        // и inline-кнопки "Confirm/Reject" под заказами никогда не доходят до бота.
+        let listener = Polling::builder(bot.clone())
+            .allowed_updates(vec![
+                AllowedUpdate::Message,
+                AllowedUpdate::EditedMessage,
+                AllowedUpdate::CallbackQuery,
+                AllowedUpdate::InlineQuery,
+                AllowedUpdate::MyChatMember,
+                AllowedUpdate::ChatMember,
+            ])
+            .delete_webhook().await
+            .build();
         Dispatcher::builder(bot.clone(), handler)
             .dependencies(dptree::deps![Arc::clone(&db_for_bot), Arc::clone(&config_for_bot)])
             .build()
-            .dispatch()
+            .dispatch_with_listener(
+                listener,
+                teloxide::error_handlers::LoggingErrorHandler::with_custom_text(
+                    "An error from the update listener",
+                ),
+            )
             .await;
     });
 
