@@ -326,23 +326,13 @@ pub fn HomeScreen() -> Element {
                 }
             }
 
-            div { style: "padding:0 16px 16px;",
-                h2 { style: "font-size:13px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;text-shadow:2px 2px 0 #000;",
-                    "🔧 More"
-                }
-                div { style: "display:grid;grid-template-columns:1fr;gap:12px;",
-                    Link { to: Route::TechTree {},
-                        div { style: "
-                            background:#16213e;border:4px solid #2a2a4a;
-                            box-shadow:4px 4px 0 #000;
-                            padding:12px;text-align:center;cursor:pointer;
-                        ",
-                            div { style: "font-size:28px;margin-bottom:4px;", "🌳" }
-                            div { style: "font-size:13px;font-weight:700;color:#b388ff;", "Tech Tree" }
-                        }
-                    }
-                }
-            }
+            // Tech Tree временно скрыт (по просьбе владельца). Код сохранён в routes/screens.
+            // div { style: "padding:0 16px 16px;",
+            //     h2 { style: "...", "🔧 More" }
+            //     div { style: "display:grid;grid-template-columns:1fr;gap:12px;",
+            //         Link { to: Route::TechTree {}, ... }
+            //     }
+            // }
 
             BottomNav { cart_count }
         }
