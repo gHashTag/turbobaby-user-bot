@@ -37,10 +37,9 @@ pub fn CheckoutScreen() -> Element {
     let back = t(Lang::Russian, T_BACK);
     let total_label = t(Lang::Russian, T_TOTAL);
 
+    // Единственная реальная точка самовывоза.
     let shops = [
-        ("🏠 Woody Phangan", "Koh Phangan, Thailand"),
-        ("🏠 Woody Haad Rin", "Haad Rin, Koh Phangan"),
-        ("🏠 Woody Srithanu", "Srithanu, Koh Phangan"),
+        ("🏠 Woody Weed Pecker", "44, 129, Koh Phangan, Surat Thani 84280"),
     ];
 
     let submit_cart_items = cart_items.clone();
