@@ -76,3 +76,24 @@ impl StrainOfDay {
         }
     }
 }
+
+// Wave 5: SeaORM Entity API path. Старый tokio-postgres код выше — будем удалять в Wave 6+.
+
+/// Returns all strains via SeaORM Entity API.
+#[allow(dead_code)]
+pub async fn get_all_strains_seaorm(
+    orm: &sea_orm::DatabaseConnection,
+) -> Result<Vec<crate::db::entities::strain::Model>, sea_orm::DbErr> {
+    use sea_orm::EntityTrait;
+    crate::db::entities::strain::Entity::find().all(orm).await
+}
+
+/// Returns a single strain by its UUID string primary key via SeaORM.
+#[allow(dead_code)]
+pub async fn get_strain_by_id_seaorm(
+    orm: &sea_orm::DatabaseConnection,
+    id: &str,
+) -> Result<Option<crate::db::entities::strain::Model>, sea_orm::DbErr> {
+    use sea_orm::EntityTrait;
+    crate::db::entities::strain::Entity::find_by_id(id.to_string()).one(orm).await
+}

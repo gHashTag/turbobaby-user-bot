@@ -103,6 +103,8 @@ async fn create_quest_place(
     state.db.orm.execute(stmt).await
         .map_err(|e| { tracing::error!("create_quest_place sea-orm: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?;
 
+    crate::metrics::quest_created("place");
+
     let bot = state.bot.clone();
     let config = state.config.clone();
     let name = req.name.clone();
@@ -221,6 +223,8 @@ async fn create_treasure_hunt(
     );
     state.db.orm.execute(stmt).await
         .map_err(|e| { tracing::error!("create_treasure_hunt sea-orm: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?;
+
+    crate::metrics::quest_created("treasure");
 
     let bot = state.bot.clone();
     let config = state.config.clone();
@@ -348,20 +352,39 @@ async fn update_quest_location(
 
 async fn scan_quest_qr(State(state): State<AppState>, Json(body): Json<Value>) -> Result<Json<Value>, StatusCode> {
     let qr_token = body["qr_token"].as_str().unwrap_or("");
+    let telegram_id = body["telegram_id"].as_i64();
     let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let row = client.query_opt(
         "SELECT id, name, is_final FROM location_quest_locations WHERE qr_token = $1 AND is_active = true",
         &[&qr_token],
     ).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     match row {
-        Some(r) => Ok(Json(json!({
-            "success": true,
-            "location": {
-                "id": r.get::<_, i32>(0),
-                "name": r.get::<_, String>(1),
-                "is_final": r.get::<_, bool>(2),
-            }
-        }))),
+        Some(r) => {
+            let location_name: String = r.get(1);
+            let is_final: bool = r.get(2);
+            crate::metrics::qr_scanned(is_final);
+            // Notify admins about QR scan
+            let bot = state.bot.clone();
+            let config = state.config.clone();
+            let loc_name = location_name.clone();
+            tokio::spawn(async move {
+                let final_str = if is_final { "\n\u{1F3C1} \u{0444}\u{0438}\u{043D}\u{0430}\u{043B}\u{044C}\u{043D}\u{0430}\u{044F} \u{0442}\u{043E}\u{0447}\u{043A}\u{0430}!" } else { "" };
+                let user_str = telegram_id.map(|id| format!("\n\u{1F194} user: {}", id)).unwrap_or_default();
+                let text = format!(
+                    "\u{1F4F2} QR \u{043E}\u{0442}\u{0441}\u{043A}\u{0430}\u{043D}\u{0438}\u{0440}\u{043E}\u{0432}\u{0430}\u{043D}\n\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\n\u{1F4CD} {}{}{}" ,
+                    loc_name, user_str, final_str
+                );
+                crate::notify::notify_admins(&bot, &config, &text).await;
+            });
+            Ok(Json(json!({
+                "success": true,
+                "location": {
+                    "id": r.get::<_, i32>(0),
+                    "name": location_name,
+                    "is_final": is_final,
+                }
+            })))
+        },
         None => Ok(Json(json!({ "success": false, "error": "Invalid QR token" }))),
     }
 }

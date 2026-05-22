@@ -12,6 +12,8 @@ pub mod referrals;
 pub mod tech_tree;
 pub mod cart;
 pub mod cache;
+#[cfg(feature = "utoipa")]
+pub mod openapi;
 
 use axum::{
     Router,

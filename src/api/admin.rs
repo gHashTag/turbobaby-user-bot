@@ -1,7 +1,7 @@
 use axum::{
-    extract::{Query, State},
+    extract::{Path, Query, State},
     http::{HeaderMap, StatusCode},
-    routing::{get, post},
+    routing::{get, post, put},
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
@@ -38,6 +38,8 @@ pub fn routes() -> Router<AppState> {
         .route("/admin/stats", get(get_stats))
         .route("/admin/data", get(get_stats))
         .route("/admin/managers", get(get_managers))
+        .route("/admin/managers/:telegram_id/stats", get(get_manager_stats))
+        .route("/admin/managers/:telegram_id", put(update_manager).delete(delete_manager))
         .route("/admin/check", get(check_admin_access))
         .route("/admin/ping", get(ping))
         .route("/debug/validate-initdata", post(debug_validate_init_data))
@@ -108,6 +110,69 @@ async fn get_managers(
         "ref_code": r.get::<_, Option<String>>("ref_code"),
     })).collect();
     Ok(Json(json!({ "managers": managers })))
+}
+
+async fn get_manager_stats(
+    Path(telegram_id): Path<i64>,
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<Value>, StatusCode> {
+    check_admin(&headers, &state)?;
+    let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    // TODO: orders.referrer_id column does not exist in current schema — using 0 as placeholder
+    // referral_events.referrer_id exists (migration 007)
+    let row = client.query_one(
+        "SELECT 
+            0::int as orders_count,
+            (SELECT COUNT(*) FROM referral_events WHERE referrer_id = $1)::int as referrals_count,
+            (SELECT MAX(created_at) FROM referral_events WHERE referrer_id = $1) as last_referral
+         ",
+        &[&telegram_id],
+    ).await.map_err(|e| { tracing::error!("manager stats: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?;
+    Ok(Json(json!({
+        "telegram_id": telegram_id,
+        "orders_count": row.try_get::<_, i32>("orders_count").unwrap_or(0),
+        "referrals_count": row.try_get::<_, i32>("referrals_count").unwrap_or(0),
+        "last_referral": row.try_get::<_, Option<chrono::DateTime<chrono::Utc>>>("last_referral").ok().flatten().map(|d| d.to_rfc3339()),
+    })))
+}
+
+#[derive(Deserialize)]
+struct UpdateManagerRequest {
+    name: Option<String>,
+    username: Option<String>,
+    ref_code: Option<String>,
+}
+
+async fn update_manager(
+    Path(telegram_id): Path<i64>,
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(req): Json<UpdateManagerRequest>,
+) -> Result<Json<Value>, StatusCode> {
+    check_admin(&headers, &state)?;
+    let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    client.execute(
+        "UPDATE managers SET 
+            name = COALESCE($2, name),
+            username = COALESCE($3, username),
+            ref_code = COALESCE($4, ref_code)
+         WHERE telegram_id = $1",
+        &[&telegram_id, &req.name, &req.username, &req.ref_code],
+    ).await.map_err(|e| { tracing::error!("update_manager: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?;
+    Ok(Json(json!({ "success": true })))
+}
+
+async fn delete_manager(
+    Path(telegram_id): Path<i64>,
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<Value>, StatusCode> {
+    check_admin(&headers, &state)?;
+    let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    client.execute("DELETE FROM managers WHERE telegram_id = $1", &[&telegram_id])
+        .await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(Json(json!({ "success": true })))
 }
 
 async fn check_admin_access(

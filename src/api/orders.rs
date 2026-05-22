@@ -61,6 +61,8 @@ async fn create_order(
     state.db.orm.execute(stmt).await
         .map_err(|e| { error!("create_order sea-orm: {}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
 
+    crate::metrics::order_created();
+
     let bot = state.bot.clone();
     let config = state.config.clone();
     let order_id = id.clone();

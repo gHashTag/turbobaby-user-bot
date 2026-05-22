@@ -13,6 +13,10 @@ mod api;
 mod ai;
 #[cfg(not(target_arch = "wasm32"))]
 mod locales;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod metrics;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod notify;
 
 // Business logic modules (shared between backend and web)
 pub mod trios;
@@ -62,6 +66,7 @@ use teloxide::Bot;
 #[cfg(not(target_arch = "wasm32"))]
 use axum_prometheus::PrometheusMetricLayer;
 
+
 #[cfg(not(target_arch = "wasm32"))]
 /// Application shared state
 #[derive(Clone)]
@@ -70,6 +75,35 @@ pub struct AppState {
     pub config: Arc<Config>,
     pub bot: Arc<Bot>,
     pub cache: Arc<ETagCache>,
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn html_escape(s: &str) -> String {
+    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+async fn alert_5xx_middleware(
+    axum::extract::State(state): axum::extract::State<AppState>,
+    req: Request<axum::body::Body>,
+    next: Next,
+) -> axum::response::Response {
+    let method = req.method().to_string();
+    let path = req.uri().path().to_string();
+    let resp = next.run(req).await;
+    if resp.status().is_server_error() {
+        let bot = state.bot.clone();
+        let config = state.config.clone();
+        let status = resp.status().as_u16();
+        tokio::spawn(async move {
+            let text = format!(
+                "\u{1F6A8} <b>5xx Error on prod</b>\n\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\n\u{1F4CD} {method} {path}\n\u{1F4A5} HTTP {status}",
+                method = html_escape(&method), path = html_escape(&path), status = status
+            );
+            crate::notify::notify_admins(&bot, &config, &text).await;
+        });
+    }
+    resp
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -226,12 +260,24 @@ async fn main() -> Result<()> {
         .route("/admin", get(spa_handler))
         .layer(html_no_cache_layer());
 
+    // Swagger UI — served at /swagger-ui/ (utoipa-swagger-ui 8.x, compatible with axum 0.7)
+    #[cfg(feature = "utoipa-swagger-ui")]
+    let swagger_router: Router = {
+        use utoipa::OpenApi;
+        let ui = utoipa_swagger_ui::SwaggerUi::new("/swagger-ui")
+            .url("/api-docs/openapi.json", crate::api::openapi::ApiDoc::openapi());
+        Router::from(ui)
+    };
+    #[cfg(not(feature = "utoipa-swagger-ui"))]
+    let swagger_router: Router = Router::new();
+
     let app = Router::new()
+        .merge(swagger_router)
         // CORS layer MUST be first!
         .layer(cors)
         .layer(ngrok_bypass)
         // Backend API routes (must be before static to avoid conflicts)
-        .merge(api::router(app_state))
+        .merge(api::router(app_state.clone()).layer(axum::middleware::from_fn_with_state(app_state.clone(), alert_5xx_middleware)))
         // Prometheus /metrics endpoint — placed after API routes so prometheus_layer counts API calls
         .route("/metrics", get(|| async move { metric_handle.render() }))
         .layer(prometheus_layer)
