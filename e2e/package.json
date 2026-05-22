@@ -1,0 +1,14 @@
+{
+  "name": "woody-weed-bot-e2e",
+  "version": "1.0.0",
+  "description": "E2E Playwright tests for woody-weed-bot admin panel",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:debug": "playwright test --debug"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.44.0",
+    "@types/node": "^20.0.0"
+  }
+}

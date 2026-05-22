@@ -422,3 +422,10 @@
   .admin-row { flex-direction: column; align-items: stretch; }
   .admin-row-actions { justify-content: flex-end; }
 }
+
+/* ── Utility classes (wave-4) ────────────────────────────────────── */
+.admin-form-row-2col { display: flex; gap: var(--space-sm); }
+.admin-form-row-2col > * { flex: 1; }
+.admin-btn-full { width: 100%; margin-bottom: var(--space-md); }
+.admin-emoji-lg { font-size: 24px; }
+.admin-medal { font-size: 18px; width: 28px; text-align: center; }
