@@ -3384,15 +3384,74 @@ fn OrdersTab() -> Element {
         orders.read().iter().filter(|o| o.status == s).count()
     };
 
+    let export_csv = move || {
+        let mut csv = "ID,Дата,Статус,Клиент,Телефон,Telegram,Товары,Подытог,Бонусы,Итого\n".to_string();
+        for o in orders.read().iter() {
+            let items_str = o.items.iter().map(|i| {
+                i.strain_name.clone()
+                    .or(i.accessory_name.clone())
+                    .or(i.tea_name.clone())
+                    .or(i.set_name.clone())
+                    .unwrap_or_else(|| "Неизвестно".into())
+            }).collect::<Vec<_>>().join("; ");
+            let status_ru = match o.status.as_str() {
+                "pending" => "Ожидает",
+                "confirmed" => "Подтверждён",
+                "completed" => "Выполнен",
+                "rejected" => "Отменён",
+                _ => &o.status,
+            };
+            csv.push_str(&format!(
+                "\"{}\",\"{}\",\"{}\",\"{}\",\"{}\",\"{}\",\"{}\",{},{},{}\n",
+                o.id.replace('"', "\"\""),
+                o.created_at.as_deref().unwrap_or(""),
+                status_ru,
+                o.customer_name.as_deref().unwrap_or("").replace('"', "\"\""),
+                o.customer_phone.as_deref().unwrap_or(""),
+                o.customer_telegram.as_deref().unwrap_or(""),
+                items_str.replace('"', "\"\""),
+                o.subtotal,
+                o.bonus_used,
+                o.total,
+            ));
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            if let Some(window) = web_sys::window() {
+                let arr = js_sys::Array::new();
+                arr.push(&js_sys::JsString::from(csv).into());
+                if let Ok(blob) = web_sys::Blob::new_with_str_sequence(&arr) {
+                    if let Ok(url) = web_sys::Url::create_object_url_with_blob(&blob) {
+                        if let Some(document) = window.document() {
+                            if let Ok(a) = document.create_element("a") {
+                                let _ = a.set_attribute("href", &url);
+                                let _ = a.set_attribute("download", "orders.csv");
+                                let _ = a.dyn_into::<web_sys::HtmlElement>().map(|el| el.click());
+                            }
+                        }
+                        let _ = web_sys::Url::revoke_object_url(&url);
+                    }
+                }
+            }
+        }
+    };
+
     rsx! {
         div {
             {render_toasts(toasts)}
             div { style: "display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;",
                 h3 { class: "admin-card-title", style: "margin:0;", "📦 Заказы" }
-                label { style: "display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:#888;",
-                    input { r#type: "checkbox", checked: auto_refresh(),
-                        onchange: move |e| auto_refresh.set(e.checked()) }
-                    "🔄 Авто"
+                div { style: "display:flex;align-items:center;gap:8px;",
+                    button {
+                        style: "padding:6px 12px;background:#1a3a1a;color:#39ff14;border:1px solid #2a5a2a;border-radius:4px;font-size:12px;cursor:pointer;",
+                        onclick: move |_| export_csv(),
+                        "📥 CSV"
+                    }
+                    label { style: "display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:#888;",
+                        input { r#type: "checkbox", checked: auto_refresh(),
+                            onchange: move |e| auto_refresh.set(e.checked()) }
+                        "🔄 Авто"
+                    }
                 }
             }
             if !error.read().is_empty() {
