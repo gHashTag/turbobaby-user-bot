@@ -3316,12 +3316,28 @@ fn OrdersTab() -> Element {
     let mut offset = use_signal(|| 0i64);
     let mut limit = use_signal(|| 20i64);
     let reload = use_signal(|| 0u32);
+    let mut auto_refresh = use_signal(|| true);
+    let mut tick = use_signal(|| 0u32);
+    let mut prev_pending_count = use_signal(|| 0usize);
+
+    use_effect(move || {
+        if !auto_refresh() { return; }
+        spawn(async move {
+            loop {
+                gloo_timers::future::TimeoutFuture::new(10000).await;
+                if !auto_refresh() { break; }
+                tick.set(tick() + 1);
+            }
+        });
+    });
 
     let _ = use_resource(move || {
         let init_data = init_data.read().clone();
         let off = *offset.read();
         let lim = *limit.read();
         let _r = *reload.read();
+        let _t = *tick.read();
+        let toasts2 = toasts.clone();
         async move {
             loading.set(true);
             let url = format!("{}/api/orders?limit={}&offset={}", api_base_url(), lim, off);
@@ -3332,6 +3348,13 @@ fn OrdersTab() -> Element {
             {
                 Ok(resp) if resp.status().is_success() => {
                     if let Ok(data) = resp.json::<OrdersResp>().await {
+                        let new_pending = data.orders.iter().filter(|o| o.status == "pending").count();
+                        let old_pending = *prev_pending_count.read();
+                        if new_pending > old_pending && old_pending > 0 {
+                            let diff = new_pending - old_pending;
+                            push_toast(toasts2, format!("🛎️ {} новых заказов!", diff), ToastKind::Info);
+                        }
+                        prev_pending_count.set(new_pending);
                         orders.set(data.orders);
                     }
                 }
@@ -3364,7 +3387,14 @@ fn OrdersTab() -> Element {
     rsx! {
         div {
             {render_toasts(toasts)}
-            h3 { class: "admin-card-title", "📦 Заказы" }
+            div { style: "display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;",
+                h3 { class: "admin-card-title", style: "margin:0;", "📦 Заказы" }
+                label { style: "display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:#888;",
+                    input { r#type: "checkbox", checked: auto_refresh(),
+                        onchange: move |e| auto_refresh.set(e.checked()) }
+                    "🔄 Авто"
+                }
+            }
             if !error.read().is_empty() {
                 div { class: "admin-badge danger", "{error}" }
             }
