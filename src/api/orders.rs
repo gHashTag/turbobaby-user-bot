@@ -155,10 +155,12 @@ async fn get_order(
 }
 
 async fn update_order_status(
+    headers: HeaderMap,
     State(state): State<AppState>,
     Path(id): Path<String>,
     Json(req): Json<UpdateOrderStatusRequest>,
 ) -> Result<Json<Value>, StatusCode> {
+    check_admin(&headers, &state)?;
     let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     client.execute("UPDATE orders SET status = $1 WHERE id = $2", &[&req.status, &id])
         .await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;

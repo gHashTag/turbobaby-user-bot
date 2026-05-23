@@ -414,6 +414,25 @@
   transform: translateX(20px);
 }
 
+/* ── Skeleton loaders ────────────────────────────────────────────── */
+.skeleton-stat-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-lg);
+  text-align: center;
+}
+.skeleton-stat-card .skeleton-label {
+  width: 60%;
+  height: 12px;
+  margin: 0 auto var(--space-sm);
+}
+.skeleton-stat-card .skeleton-value {
+  width: 40%;
+  height: 32px;
+  margin: 0 auto;
+}
+
 /* ── Responsive ──────────────────────────────────────────────────── */
 @media (max-width: 600px) {
   .admin-page { padding: var(--space-sm); }

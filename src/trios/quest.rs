@@ -555,8 +555,8 @@ mod tests {
         )
         .with_location(location);
 
-        assert!(quest.get_location("loc-1").is_some());
-        assert!(quest.get_location("loc-2").is_none());
+        assert!(quest.get_location(&"loc-1".to_string()).is_some());
+        assert!(quest.get_location(&"loc-2".to_string()).is_none());
     }
 
     #[test]

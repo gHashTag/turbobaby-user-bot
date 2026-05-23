@@ -55,7 +55,7 @@ pub fn validate_init_data(init_data: &str, bot_token: &str) -> Option<TelegramUs
         .collect();
     data_pairs.sort_by(|a, b| a.0.cmp(&b.0));
 
-    // Try URL-decoded values first (matches Go/Python reference implementations)
+    // Build data_check_string from URL-decoded values (real Telegram behavior)
     let data_check_string_decoded = data_pairs
         .iter()
         .map(|(k, v)| {
@@ -66,20 +66,34 @@ pub fn validate_init_data(init_data: &str, bot_token: &str) -> Option<TelegramUs
         .collect::<Vec<_>>()
         .join("\n");
 
+    // Build data_check_string from raw values (fallback for some generators)
+    let data_check_string_raw = data_pairs
+        .iter()
+        .map(|(k, v)| format!("{}={}", k, v))
+        .collect::<Vec<_>>()
+        .join("\n");
+
     // secret_key = HMAC_SHA256("WebAppData", bot_token)
     let mut secret_mac = HmacSha256::new_from_slice(b"WebAppData").ok()?;
     secret_mac.update(bot_token.as_bytes());
     let secret_key = secret_mac.finalize().into_bytes();
 
-    // expected_hash = HMAC_SHA256(secret_key, data_check_string)
+    // expected_hash (decoded)
     let mut mac = HmacSha256::new_from_slice(&secret_key).ok()?;
     mac.update(data_check_string_decoded.as_bytes());
-    let result = mac.finalize().into_bytes();
-    let expected_hash = hex::encode(result);
+    let expected_hash = hex::encode(mac.finalize().into_bytes());
 
-    // Constant-time comparison
-    if !constant_time_eq::constant_time_eq(expected_hash.as_bytes(), hash.as_bytes()) {
-        tracing::warn!("initData HMAC mismatch (decoded)");
+    // expected_hash (raw fallback)
+    let mut mac_raw = HmacSha256::new_from_slice(&secret_key).ok()?;
+    mac_raw.update(data_check_string_raw.as_bytes());
+    let expected_hash_raw = hex::encode(mac_raw.finalize().into_bytes());
+
+    // Try both constant-time comparisons
+    let ok_decoded = constant_time_eq::constant_time_eq(expected_hash.as_bytes(), hash.as_bytes());
+    let ok_raw = constant_time_eq::constant_time_eq(expected_hash_raw.as_bytes(), hash.as_bytes());
+
+    if !ok_decoded && !ok_raw {
+        tracing::warn!("initData HMAC mismatch (decoded={}, raw={})", ok_decoded, ok_raw);
         return None;
     }
 
@@ -120,7 +134,7 @@ pub fn validate_init_data_debug(init_data: &str, bot_token: &str) -> (bool, Stri
     let mut data_pairs: Vec<_> = pairs.into_iter().filter(|(k, _)| k != "hash").collect();
     data_pairs.sort_by(|a, b| a.0.cmp(&b.0));
 
-    let data_check_string = data_pairs
+    let data_check_string_decoded = data_pairs
         .iter()
         .map(|(k, v)| {
             let kd = urlencoding::decode(k).unwrap_or(std::borrow::Cow::Borrowed(k));
@@ -130,20 +144,32 @@ pub fn validate_init_data_debug(init_data: &str, bot_token: &str) -> (bool, Stri
         .collect::<Vec<_>>()
         .join("\n");
 
+    let data_check_string_raw = data_pairs
+        .iter()
+        .map(|(k, v)| format!("{}={}", k, v))
+        .collect::<Vec<_>>()
+        .join("\n");
+
     let mut secret_mac = match HmacSha256::new_from_slice(b"WebAppData") {
         Ok(m) => m,
-        Err(_) => return (false, data_check_string.clone(), hash.clone(), String::new(), None, Some("HMAC init failed".to_string())),
+        Err(_) => return (false, data_check_string_decoded.clone(), hash.clone(), String::new(), None, Some("HMAC init failed".to_string())),
     };
     secret_mac.update(bot_token.as_bytes());
     let secret_key = secret_mac.finalize().into_bytes();
 
     let mut mac = match HmacSha256::new_from_slice(&secret_key) {
         Ok(m) => m,
-        Err(_) => return (false, data_check_string.clone(), hash.clone(), String::new(), None, Some("HMAC init failed".to_string())),
+        Err(_) => return (false, data_check_string_decoded.clone(), hash.clone(), String::new(), None, Some("HMAC init failed".to_string())),
     };
-    mac.update(data_check_string.as_bytes());
-    let result = mac.finalize().into_bytes();
-    let expected_hash = hex::encode(result);
+    mac.update(data_check_string_decoded.as_bytes());
+    let expected_hash = hex::encode(mac.finalize().into_bytes());
+
+    let mut mac_raw = match HmacSha256::new_from_slice(&secret_key) {
+        Ok(m) => m,
+        Err(_) => return (false, data_check_string_raw.clone(), hash.clone(), String::new(), None, Some("HMAC init failed".to_string())),
+    };
+    mac_raw.update(data_check_string_raw.as_bytes());
+    let expected_hash_raw = hex::encode(mac_raw.finalize().into_bytes());
 
     let user = data_pairs.iter().find(|(k, _)| k == "user").and_then(|(_, v)| {
         let decoded = urlencoding::decode(v).ok()?;
@@ -154,8 +180,10 @@ pub fn validate_init_data_debug(init_data: &str, bot_token: &str) -> (bool, Stri
         Some(TelegramUser { id, first_name, username })
     });
 
-    let ok = constant_time_eq::constant_time_eq(expected_hash.as_bytes(), hash.as_bytes());
-    (ok, data_check_string, hash, expected_hash, user, None)
+    let ok_decoded = constant_time_eq::constant_time_eq(expected_hash.as_bytes(), hash.as_bytes());
+    let ok_raw = constant_time_eq::constant_time_eq(expected_hash_raw.as_bytes(), hash.as_bytes());
+    let ok = ok_decoded || ok_raw;
+    (ok, data_check_string_decoded, hash, expected_hash, user, None)
 }
 
 #[cfg(test)]
@@ -167,10 +195,12 @@ mod tests {
             "{{\"id\":{},\"first_name\":\"{}\"}}",
             user_id, first_name
         );
-        let user_encoded = urlencoding::encode(&user_json);
+        let user_json_for_encode = user_json.clone();
+        let user_encoded = urlencoding::encode(&user_json_for_encode);
+        // Compute hash over DECODED values (matches real Telegram behavior)
         let mut pairs = vec![
             ("auth_date".to_string(), "1234567890".to_string()),
-            ("user".to_string(), user_encoded.to_string()),
+            ("user".to_string(), user_json),
         ];
         pairs.sort_by(|a, b| a.0.cmp(&b.0));
         let data_check_string = pairs
@@ -187,6 +217,7 @@ mod tests {
         mac.update(data_check_string.as_bytes());
         let hash = hex::encode(mac.finalize().into_bytes());
 
+        // Emit the URL-encoded user value in the query string
         format!(
             "auth_date=1234567890&hash={}&user={}",
             hash, user_encoded
@@ -226,6 +257,19 @@ mod tests {
     }
 }
 
+pub fn generate_admin_token(password: &str, bot_token: &str) -> String {
+    let mut mac = HmacSha256::new_from_slice(b"WoodyWeedBotAdmin").unwrap();
+    mac.update(bot_token.as_bytes());
+    mac.update(b":");
+    mac.update(password.as_bytes());
+    hex::encode(mac.finalize().into_bytes())
+}
+
+pub fn verify_admin_token(token: &str, bot_token: &str, expected_password: &str) -> bool {
+    let expected = generate_admin_token(expected_password, bot_token);
+    constant_time_eq::constant_time_eq(token.as_bytes(), expected.as_bytes())
+}
+
 pub fn check_admin(headers: &HeaderMap, state: &AppState) -> Result<i64, StatusCode> {
     // 1. Try Telegram initData validation (production path)
     if let Some(init_data) = headers
@@ -255,7 +299,17 @@ pub fn check_admin(headers: &HeaderMap, state: &AppState) -> Result<i64, StatusC
         }
     }
 
-    // 2. Fallback for local development (debug builds only): trust X-Admin-Telegram-Id header
+    // 2. Password login via X-Admin-Token (works in all builds if ADMIN_PASSWORD is set)
+    if let Some(token) = headers.get("X-Admin-Token").and_then(|v| v.to_str().ok()) {
+        if let Some(ref password) = state.config.admin_password {
+            if verify_admin_token(token, &state.config.bot_token, password) {
+                tracing::info!("admin authenticated via password token");
+                return Ok(0);
+            }
+        }
+    }
+
+    // 3. Fallback for local development (debug builds only): trust X-Admin-Telegram-Id header
     //    NEVER allow this in production — it is a full auth bypass vector.
     #[cfg(debug_assertions)]
     {
@@ -264,7 +318,7 @@ pub fn check_admin(headers: &HeaderMap, state: &AppState) -> Result<i64, StatusC
             .and_then(|v| v.to_str().ok())
             .and_then(|s| s.parse::<i64>().ok())
             .ok_or_else(|| {
-                tracing::warn!("admin request without X-Telegram-Init-Data or X-Admin-Telegram-Id");
+                tracing::warn!("admin request without valid auth (initData, token, or fallback)");
                 StatusCode::UNAUTHORIZED
             })?;
 
@@ -277,7 +331,7 @@ pub fn check_admin(headers: &HeaderMap, state: &AppState) -> Result<i64, StatusC
     }
     #[cfg(not(debug_assertions))]
     {
-        tracing::warn!("admin request without valid X-Telegram-Init-Data (fallback disabled in release builds)");
+        tracing::warn!("admin request without valid auth (initData or token)");
         Err(StatusCode::UNAUTHORIZED)
     }
 }

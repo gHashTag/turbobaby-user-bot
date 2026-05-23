@@ -41,6 +41,11 @@ const MIGRATION_SQL: &str = concat!(
     include_str!("../../migrations/018_seed_tea_products.sql"),
     include_str!("../../migrations/019_add_default_images.sql"),
     include_str!("../../migrations/020_force_double_precision.sql"),
+    include_str!("../../migrations/020_hunt_checkpoints_fields.sql"),
+    include_str!("../../migrations/021_orders_telegram_nullable.sql"),
+    include_str!("../../migrations/022_strains_video_url.sql"),
+    include_str!("../../migrations/023_managers_commission_rate.sql"),
+    include_str!("../../migrations/024_catalog_video_url.sql"),
 );
 
 type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;

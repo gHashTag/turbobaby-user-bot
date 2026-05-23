@@ -61,6 +61,8 @@ struct AdminStrain {
     available_grams: Option<f64>,
     is_available: bool,
     image_url: Option<String>,
+    #[serde(default)]
+    video_url: Option<String>,
     name_en: Option<String>,
     description_en: Option<String>,
     effect_en: Option<String>,
@@ -121,6 +123,8 @@ struct AdminSet {
     is_available: bool,
     #[serde(default)]
     is_deal_of_day: bool,
+    #[serde(default)]
+    video_url: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -141,6 +145,10 @@ struct AdminAccessorySet {
     is_deal_of_day: bool,
     name_en: Option<String>,
     description_en: Option<String>,
+    #[serde(default)]
+    image_url: Option<String>,
+    #[serde(default)]
+    video_url: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -159,6 +167,8 @@ struct AdminTeaSet {
     is_available: bool,
     name_en: Option<String>,
     description_en: Option<String>,
+    #[serde(default)]
+    video_url: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -181,38 +191,42 @@ enum Tab { Strains, Accessories, Tea, Sets, AccessorySets, TeaSets, Dashboard, O
 
 // ── File upload helper ─────────────────────────────────────────
 
-async fn upload_image() -> Option<String> {
-    let js = r#"
-new Promise((resolve) => {
+async fn upload_file(accept: &str) -> Option<String> {
+    let accept = accept.to_string();
+    let js = format!(r#"
+new Promise((resolve) => {{
     var input = document.createElement('input');
     input.type = 'file';
-    input.accept = 'image/*';
+    input.accept = '{}';
     var resolved = false;
-    input.onchange = async (e) => {
+    input.onchange = async (e) => {{
         if (resolved) return;
         resolved = true;
         var file = e.target.files[0];
-        if (!file) { resolve(''); return; }
+        if (!file) {{ resolve(''); return; }}
         var formData = new FormData();
         formData.append('file', file);
-        try {
+        try {{
             var baseUrl = window.location.origin;
-            var resp = await fetch(baseUrl + '/api/upload', { method: 'POST', body: formData });
+            var resp = await fetch(baseUrl + '/api/upload', {{ method: 'POST', body: formData }});
             var data = await resp.json();
             resolve(data.url || '');
-        } catch(err) { console.error('Upload error:', err); resolve(''); }
-    };
-    setTimeout(() => { if (!resolved) { resolved = true; resolve(''); } }, 120000);
+        }} catch(err) {{ console.error('Upload error:', err); resolve(''); }}
+    }};
+    setTimeout(() => {{ if (!resolved) {{ resolved = true; resolve(''); }} }}, 120000);
     input.click();
-})
-"#;
-    let promise_val = js_sys::eval(js).ok()?;
+}})
+"#, accept);
+    let promise_val = js_sys::eval(&js).ok()?;
     let promise = promise_val.dyn_into::<js_sys::Promise>().ok()?;
     let result = wasm_bindgen_futures::JsFuture::from(promise).await.ok()?;
     let url = result.as_string()?;
     if url.is_empty() { return None; }
     Some(url)
 }
+
+async fn upload_image() -> Option<String> { upload_file("image/*").await }
+async fn upload_video() -> Option<String> { upload_file("video/*").await }
 
 // ── Main component ────────────────────────────────────────────
 
@@ -228,14 +242,32 @@ pub fn AdminScreen() -> Element {
         web_sys::console::log_1(&format!("[WWB Admin] telegram_id={}, init_data_len={}, init_data_preview={}", telegram_id, init_data.len(), &init_data[..init_data.len().min(80)]).into());
     }
 
+    let password_token = use_signal(|| {
+        #[cfg(target_arch = "wasm32")]
+        {
+            if let Some(window) = web_sys::window() {
+                if let Ok(Some(storage)) = window.local_storage() {
+                    if let Ok(Some(token)) = storage.get_item("wwb_admin_token") {
+                        return token;
+                    }
+                }
+            }
+        }
+        String::new()
+    });
+
     let access = use_resource(move || {
         let init_data = init_data.clone();
+        let token = password_token.read().clone();
         async move {
             let base = api_base_url();
             let url = format!("{}/api/admin/check?telegram_id={}", base, telegram_id);
-            let resp = reqwest::Client::new().get(&url)
-                .header("X-Telegram-Init-Data", init_data.clone())
-                .send().await
+            let mut req = reqwest::Client::new().get(&url)
+                .header("X-Telegram-Init-Data", init_data.clone());
+            if !token.is_empty() {
+                req = req.header("X-Admin-Token", token);
+            }
+            let resp = req.send().await
                 .map_err(|e| format!("send to {url}: {e}"))?;
         let status = resp.status();
         if !status.is_success() {
@@ -255,16 +287,19 @@ pub fn AdminScreen() -> Element {
             match &*access.read() {
                 None => rsx!(div { style: "color:#888;padding:20px 0;", "Проверка доступа..." }),
                 Some(Err(e)) => rsx!(div { style: "color:#ff4757;padding:20px 0;", "Ошибка: {e}" }),
-                Some(Ok(false)) => rsx!(AccessDeniedScreen { telegram_id }),
-                Some(Ok(true)) => rsx!(AdminPanel { active_tab }),
+                Some(Ok(false)) => rsx!(AccessDeniedScreen { telegram_id, password_token }),
+                Some(Ok(true)) => rsx!(AdminPanel { active_tab, password_token }),
             }
         }
     }
 }
 
 #[component]
-fn AccessDeniedScreen(telegram_id: i64) -> Element {
+fn AccessDeniedScreen(telegram_id: i64, mut password_token: Signal<String>) -> Element {
     let debug = TelegramApp::init().debug_dump();
+    let mut password = use_signal(String::new);
+    let mut error = use_signal(String::new);
+    let mut logging_in = use_signal(|| false);
     rsx! {
         div { style: "padding:30px 16px;text-align:center;",
             div { style: "font-size:48px;margin-bottom:12px;", "🔒" }
@@ -273,6 +308,52 @@ fn AccessDeniedScreen(telegram_id: i64) -> Element {
                 "Попросите владельца добавить ваш Telegram ID в админы." }
             div { style: "margin-top:20px;padding:12px;background:#1a1a2e;border-radius:8px;font-family:monospace;font-size:13px;color:#39ff14;display:inline-block;",
                 "ID: {telegram_id}" }
+            div { style: "margin-top:20px;max-width:300px;margin-left:auto;margin-right:auto;",
+                input { style: input_style(), r#type: "password", placeholder: "Пароль админа",
+                    value: "{password}", oninput: move |e| password.set(e.value()) }
+                if !error.read().is_empty() {
+                    div { style: "color:#ff4757;font-size:12px;margin-top:4px;", "{error}" }
+                }
+                button {
+                    style: if *logging_in.read() { submit_btn_disabled_style() } else { submit_btn_style() },
+                    disabled: *logging_in.read(),
+                    onclick: move |_| {
+                        let pw = password.read().trim().to_string();
+                        if pw.is_empty() { error.set("Введите пароль".into()); return; }
+                        logging_in.set(true);
+                        error.set(String::new());
+                        let mut token_signal = password_token.clone();
+                        let mut error2 = error.clone();
+                        let mut logging_in2 = logging_in.clone();
+                        spawn(async move {
+                            let url = format!("{}/api/admin/login", api_base_url());
+                            let res = reqwest::Client::new().post(&url)
+                                .json(&serde_json::json!({"password": pw}))
+                                .send().await;
+                            logging_in2.set(false);
+                            match res {
+                                Ok(r) if r.status().is_success() => {
+                                    if let Ok(data) = r.json::<serde_json::Value>().await {
+                                        if let Some(token) = data["token"].as_str() {
+                                            #[cfg(target_arch = "wasm32")]
+                                            {
+                                                if let Some(window) = web_sys::window() {
+                                                    if let Ok(Some(storage)) = window.local_storage() {
+                                                        let _ = storage.set_item("wwb_admin_token", token);
+                                                    }
+                                                }
+                                            }
+                                            token_signal.set(token.to_string());
+                                        }
+                                    }
+                                }
+                                _ => { error2.set("Неверный пароль".into()); }
+                            }
+                        });
+                    },
+                    if *logging_in.read() { "⏳..." } else { "🔑 Войти по паролю" }
+                }
+            }
             details { style: "margin-top:16px;text-align:left;max-width:340px;margin-left:auto;margin-right:auto;",
                 summary { style: "color:#666;font-size:11px;cursor:pointer;", "debug" }
                 pre { style: "font-size:10px;color:#888;background:#1a1a2e;padding:8px;border-radius:6px;white-space:pre-wrap;word-break:break-all;",
@@ -285,7 +366,7 @@ fn AccessDeniedScreen(telegram_id: i64) -> Element {
 // ── Admin panel with tabs ─────────────────────────────────────
 
 #[component]
-fn AdminPanel(active_tab: Signal<Tab>) -> Element {
+fn AdminPanel(active_tab: Signal<Tab>, mut password_token: Signal<String>) -> Element {
     let tab_btn = |t: Tab, label: &str| -> Element {
         let is_active = *active_tab.read() == t;
         let style = if is_active {
@@ -298,7 +379,24 @@ fn AdminPanel(active_tab: Signal<Tab>) -> Element {
     };
     rsx! {
         div {
-            div { style: "display:flex;gap:2px;margin-bottom:16px;border-radius:4px;overflow:hidden;flex-wrap:wrap;",
+            div { style: "display:flex;justify-content:flex-end;margin-bottom:8px;",
+                button {
+                    style: "padding:6px 12px;background:#2a2a4a;color:#888;border:none;border-radius:4px;font-size:12px;cursor:pointer;",
+                    onclick: move |_| {
+                        #[cfg(target_arch = "wasm32")]
+                        {
+                            if let Some(window) = web_sys::window() {
+                                if let Ok(Some(storage)) = window.local_storage() {
+                                    let _ = storage.remove_item("wwb_admin_token");
+                                }
+                            }
+                        }
+                        password_token.set(String::new());
+                    },
+                    "🚪 Выйти"
+                }
+            }
+            div { class: "admin-tabs",
                 {tab_btn(Tab::Dashboard, "📊 Дашборд")}
                 {tab_btn(Tab::Orders, "📦 Заказы")}
                 {tab_btn(Tab::Strains, "🌿 Strains")}
@@ -364,6 +462,7 @@ fn StrainsTab() -> Element {
     let mut effect = use_signal(String::new);
     let mut flavor_profile = use_signal(String::new);
     let mut image_url = use_signal(String::new);
+    let mut video_url = use_signal(String::new);
     let mut name_en = use_signal(String::new);
     let mut description_en = use_signal(String::new);
     let mut effect_en = use_signal(String::new);
@@ -452,6 +551,7 @@ fn StrainsTab() -> Element {
                     textarea { style: textarea_style(), placeholder: "Вкусовой профиль (RU)", value: "{flavor_profile}",
                         oninput: move |e| flavor_profile.set(e.value()) }
                     {render_image_upload(image_url)}
+                    {render_video_upload(video_url)}
                     div { style: en_section_style(), "🇬🇧 English" }
                     input { style: input_style(), placeholder: "Name (EN)", value: "{name_en}",
                         oninput: move |e| name_en.set(e.value()) }
@@ -481,7 +581,7 @@ fn StrainsTab() -> Element {
                             };
                             if n.is_empty() { status.set("❌ Название обязательно".into()); return; }
                             let d = description(); let ef = effect(); let fp = flavor_profile();
-                            let img = image_url();
+                            let img = image_url(); let vid = video_url();
                             let ne = name_en(); let de = description_en(); let ee = effect_en();
                             let fpe = flavor_profile_en(); let ste = strain_type_en();
                             submitting.set(true);
@@ -495,6 +595,7 @@ fn StrainsTab() -> Element {
                                 description: if d.is_empty() { None } else { Some(d.clone()) },
                                 price_per_gram: p, available_grams: Some(g), is_available: true,
                                 image_url: if img.is_empty() { None } else { Some(img.clone()) },
+                                video_url: if vid.is_empty() { None } else { Some(vid.clone()) },
                                 name_en: if ne.is_empty() { None } else { Some(ne.clone()) },
                                 description_en: if de.is_empty() { None } else { Some(de.clone()) },
                                 effect_en: if ee.is_empty() { None } else { Some(ee.clone()) },
@@ -505,7 +606,7 @@ fn StrainsTab() -> Element {
                             name.set(String::new()); price.set(String::new());
                             thc.set(String::new()); cbd.set(String::new()); grams.set(String::new());
                             description.set(String::new()); effect.set(String::new()); flavor_profile.set(String::new());
-                            image_url.set(String::new());
+                            image_url.set(String::new()); video_url.set(String::new());
                             name_en.set(String::new()); description_en.set(String::new());
                             effect_en.set(String::new()); flavor_profile_en.set(String::new());
                             strain_type_en.set(String::new());
@@ -518,6 +619,7 @@ fn StrainsTab() -> Element {
                                     "flavor_profile": if fp.is_empty() { serde_json::Value::Null } else { fp.into() },
                                     "description": if d.is_empty() { serde_json::Value::Null } else { d.into() },
                                     "image_url": if img.is_empty() { serde_json::Value::Null } else { img.into() },
+                                    "video_url": if vid.is_empty() { serde_json::Value::Null } else { vid.into() },
                                     "name_en": if ne.is_empty() { serde_json::Value::Null } else { ne.into() },
                                     "description_en": if de.is_empty() { serde_json::Value::Null } else { de.into() },
                                     "effect_en": if ee.is_empty() { serde_json::Value::Null } else { ee.into() },
@@ -598,6 +700,7 @@ fn StrainsTab() -> Element {
                                 sub: format!("{} • {}฿/г • {}г", s.category.clone().unwrap_or_default(), s.price_per_gram, s.available_grams.unwrap_or(0.0)),
                                 is_available: s.is_available,
                                 image_url: s.image_url.clone(),
+                                video_url: s.video_url.clone(),
                                 on_edit: {
                                     let id = s.id.clone();
                                     move |_| editing_id.set(Some(id.clone()))
@@ -774,8 +877,7 @@ fn AccessoriesTab() -> Element {
                     textarea { style: textarea_style(), placeholder: "Описание (RU)", value: "{description}",
                         oninput: move |e| description.set(e.value()) }
                     {render_image_upload(image_url)}
-                    input { style: input_style(), placeholder: "Видео URL", value: "{video_url}",
-                        oninput: move |e| video_url.set(e.value()) }
+                    {render_video_upload(video_url)}
                     div { style: en_section_style(), "🇬🇧 English" }
                     input { style: input_style(), placeholder: "Name (EN)", value: "{name_en}",
                         oninput: move |e| name_en.set(e.value()) }
@@ -888,6 +990,7 @@ fn AccessoriesTab() -> Element {
                                 sub: format!("{} • {}฿ • {} шт.", a.category.clone().unwrap_or_default(), a.price, a.stock.unwrap_or(0)),
                                 is_available: a.is_available,
                                 image_url: a.image_url.clone(),
+                                video_url: a.video_url.clone(),
                                 on_edit: { let id = a.id.clone(); move |_| editing_id.set(Some(id.clone())) },
                                 on_toggle: {
                                     let id = a.id.clone(); let next = !a.is_available;
@@ -1057,8 +1160,7 @@ fn TeaTab() -> Element {
                     textarea { style: textarea_style(), placeholder: "Описание (RU)", value: "{description}",
                         oninput: move |e| description.set(e.value()) }
                     {render_image_upload(image_url)}
-                    input { style: input_style(), placeholder: "Видео URL", value: "{video_url}",
-                        oninput: move |e| video_url.set(e.value()) }
+                    {render_video_upload(video_url)}
                     div { style: en_section_style(), "🇬🇧 English" }
                     input { style: input_style(), placeholder: "Name (EN)", value: "{name_en}",
                         oninput: move |e| name_en.set(e.value()) }
@@ -1171,6 +1273,7 @@ fn TeaTab() -> Element {
                                 sub: format!("{} • {}฿ • {} шт.", t.subcategory.clone().unwrap_or_default(), t.price, t.stock.unwrap_or(0)),
                                 is_available: t.is_available,
                                 image_url: t.image_url.clone(),
+                                video_url: t.video_url.clone(),
                                 on_edit: { let id = t.id.clone(); move |_| editing_id.set(Some(id.clone())) },
                                 on_toggle: {
                                     let id = t.id.clone(); let next = !t.is_available;
@@ -1256,6 +1359,7 @@ fn SetsTab() -> Element {
     let mut name = use_signal(String::new);
     let mut description = use_signal(String::new);
     let mut icon = use_signal(String::new);
+    let mut video_url = use_signal(String::new);
     let mut strain_ids = use_signal(String::new);
     let mut accessory_ids = use_signal(String::new);
     let mut total_price = use_signal(String::new);
@@ -1325,6 +1429,7 @@ fn SetsTab() -> Element {
                         oninput: move |e| description.set(e.value()) }
                     input { style: input_style(), placeholder: "Иконка (emoji или URL)", value: "{icon}",
                         oninput: move |e| icon.set(e.value()) }
+                    {render_video_upload(video_url)}
                     textarea { style: textarea_style(), placeholder: "Strain IDs (через запятую)", value: "{strain_ids}",
                         oninput: move |e| strain_ids.set(e.value()) }
                     textarea { style: textarea_style(), placeholder: "Accessory IDs (через запятую)", value: "{accessory_ids}",
@@ -1352,7 +1457,7 @@ fn SetsTab() -> Element {
                             let s_ids: Vec<String> = strain_ids().split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
                             let a_ids: Vec<String> = accessory_ids().split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
                             let desc = description();
-                            let ic = icon();
+                            let ic = icon(); let vid = video_url();
                             let deal = is_deal_of_day();
                             submitting.set(true);
                             let temp_id = format!("temp-{}", uuid::Uuid::new_v4());
@@ -1360,12 +1465,14 @@ fn SetsTab() -> Element {
                                 id: temp_id.clone(), name: n.clone(),
                                 description: if desc.is_empty() { None } else { Some(desc.clone()) },
                                 icon: if ic.is_empty() { None } else { Some(ic.clone()) },
+                                video_url: if vid.is_empty() { None } else { Some(vid.clone()) },
                                 strain_ids: s_ids.clone(), accessory_ids: a_ids.clone(),
                                 total_price: p, discount_percent: d,
                                 is_available: true, is_deal_of_day: deal,
                             });
                             status.set("✅ Добавлен!".into());
                             name.set(String::new()); description.set(String::new()); icon.set(String::new());
+                            video_url.set(String::new());
                             strain_ids.set(String::new()); accessory_ids.set(String::new());
                             total_price.set(String::new()); discount_percent.set(String::new());
                             is_deal_of_day.set(false);
@@ -1375,6 +1482,7 @@ fn SetsTab() -> Element {
                                     "name": n, "total_price": p, "discount_percent": d,
                                     "description": if desc.is_empty() { serde_json::Value::Null } else { desc.into() },
                                     "icon": if ic.is_empty() { serde_json::Value::Null } else { ic.into() },
+                                    "video_url": if vid.is_empty() { serde_json::Value::Null } else { vid.into() },
                                     "strain_ids": s_ids, "accessory_ids": a_ids,
                                     "is_deal_of_day": deal,
                                 });
@@ -1451,6 +1559,7 @@ fn SetsTab() -> Element {
                                 sub: format!("{} strains • {} accessories • {}฿", s.strain_ids.len(), s.accessory_ids.len(), s.total_price),
                                 is_available: s.is_available,
                                 image_url: s.icon.clone().filter(|i| i.starts_with("http")),
+                                video_url: s.video_url.clone(),
                                 on_edit: { let id = s.id.clone(); move |_| editing_id.set(Some(id.clone())) },
                                 on_toggle: {
                                     let id = s.id.clone(); let next = !s.is_available;
@@ -1520,6 +1629,7 @@ fn EditSetCard(
     let mut name = use_signal(|| item.name.clone());
     let mut description = use_signal(|| item.description.clone().unwrap_or_default());
     let mut icon = use_signal(|| item.icon.clone().unwrap_or_default());
+    let video_url = use_signal(|| item.video_url.clone().unwrap_or_default());
     let mut strain_ids = use_signal(|| item.strain_ids.join(", "));
     let mut accessory_ids = use_signal(|| item.accessory_ids.join(", "));
     let mut total_price = use_signal(|| item.total_price.to_string());
@@ -1533,6 +1643,7 @@ fn EditSetCard(
             input { style: input_style(), placeholder: "Название", value: "{name}", oninput: move |e| name.set(e.value()) }
             textarea { style: textarea_style(), placeholder: "Описание", value: "{description}", oninput: move |e| description.set(e.value()) }
             input { style: input_style(), placeholder: "Иконка", value: "{icon}", oninput: move |e| icon.set(e.value()) }
+            {render_video_upload(video_url)}
             textarea { style: textarea_style(), placeholder: "Strain IDs (через запятую)", value: "{strain_ids}", oninput: move |e| strain_ids.set(e.value()) }
             textarea { style: textarea_style(), placeholder: "Accessory IDs (через запятую)", value: "{accessory_ids}", oninput: move |e| accessory_ids.set(e.value()) }
             input { style: input_style(), placeholder: "Цена ฿", value: "{total_price}", r#type: "number", oninput: move |e| total_price.set(e.value()) }
@@ -1553,7 +1664,7 @@ fn EditSetCard(
                         let d = discount_percent.read().trim().parse::<f64>().unwrap_or(0.0);
                         if n.is_empty() { status.set("❌ Название обязательно".into()); return; }
                         let desc = description();
-                        let ic = icon();
+                        let ic = icon(); let vid = video_url();
                         let s_ids: Vec<String> = strain_ids().split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
                         let a_ids: Vec<String> = accessory_ids().split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
                         let deal = is_deal_of_day();
@@ -1563,6 +1674,7 @@ fn EditSetCard(
                             s.name = n.clone();
                             s.description = if desc.is_empty() { None } else { Some(desc.clone()) };
                             s.icon = if ic.is_empty() { None } else { Some(ic.clone()) };
+                            s.video_url = if vid.is_empty() { None } else { Some(vid.clone()) };
                             s.strain_ids = s_ids.clone();
                             s.accessory_ids = a_ids.clone();
                             s.total_price = p;
@@ -1575,6 +1687,7 @@ fn EditSetCard(
                                 "name": n, "total_price": p, "discount_percent": d,
                                 "description": if desc.is_empty() { serde_json::Value::Null } else { desc.into() },
                                 "icon": if ic.is_empty() { serde_json::Value::Null } else { ic.into() },
+                                "video_url": if vid.is_empty() { serde_json::Value::Null } else { vid.into() },
                                 "strain_ids": s_ids, "accessory_ids": a_ids,
                                 "is_deal_of_day": deal,
                             });
@@ -1627,6 +1740,8 @@ fn AccessorySetsTab() -> Element {
     let mut name = use_signal(String::new);
     let mut description = use_signal(String::new);
     let mut icon = use_signal(String::new);
+    let mut image_url = use_signal(String::new);
+    let mut video_url = use_signal(String::new);
     let mut accessories = use_signal(String::new);
     let mut total_price = use_signal(String::new);
     let mut discount_percent = use_signal(String::new);
@@ -1697,6 +1812,8 @@ fn AccessorySetsTab() -> Element {
                         oninput: move |e| description.set(e.value()) }
                     input { style: input_style(), placeholder: "Иконка (emoji или URL)", value: "{icon}",
                         oninput: move |e| icon.set(e.value()) }
+                    {render_image_upload(image_url)}
+                    {render_video_upload(video_url)}
                     textarea { style: textarea_style(), placeholder: "Accessory IDs (через запятую)", value: "{accessories}",
                         oninput: move |e| accessories.set(e.value()) }
                     input { style: input_style(), placeholder: "Цена ฿", value: "{total_price}", r#type: "number",
@@ -1726,7 +1843,7 @@ fn AccessorySetsTab() -> Element {
                             if n.is_empty() { status.set("❌ Название обязательно".into()); return; }
                             let accs: Vec<String> = accessories().split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
                             let desc = description();
-                            let ic = icon();
+                            let ic = icon(); let img = image_url(); let vid = video_url();
                             let deal = is_deal_of_day();
                             let ne = name_en(); let de = description_en();
                             submitting.set(true);
@@ -1740,9 +1857,11 @@ fn AccessorySetsTab() -> Element {
                                 is_available: true, is_deal_of_day: deal,
                                 name_en: if ne.is_empty() { None } else { Some(ne.clone()) },
                                 description_en: if de.is_empty() { None } else { Some(de.clone()) },
+                                image_url: if img.is_empty() { None } else { Some(img.clone()) },
+                                video_url: if vid.is_empty() { None } else { Some(vid.clone()) },
                             });
                             status.set("✅ Добавлен!".into());
-                            name.set(String::new()); description.set(String::new()); icon.set(String::new());
+                            name.set(String::new()); description.set(String::new()); icon.set(String::new()); image_url.set(String::new()); video_url.set(String::new());
                             accessories.set(String::new()); total_price.set(String::new()); discount_percent.set(String::new());
                             is_deal_of_day.set(false); name_en.set(String::new()); description_en.set(String::new());
                             auto_scroll_to_list();
@@ -1751,6 +1870,8 @@ fn AccessorySetsTab() -> Element {
                                     "name": n, "total_price": p, "discount_percent": d,
                                     "description": if desc.is_empty() { serde_json::Value::Null } else { desc.into() },
                                     "icon": if ic.is_empty() { serde_json::Value::Null } else { ic.into() },
+                                    "image_url": if img.is_empty() { serde_json::Value::Null } else { img.into() },
+                                    "video_url": if vid.is_empty() { serde_json::Value::Null } else { vid.into() },
                                     "accessories": accs,
                                     "is_deal_of_day": deal,
                                     "name_en": if ne.is_empty() { serde_json::Value::Null } else { ne.into() },
@@ -1828,7 +1949,8 @@ fn AccessorySetsTab() -> Element {
                                 name: s.name.clone(),
                                 sub: format!("{} items • {}฿", s.accessories.len(), s.total_price),
                                 is_available: s.is_available,
-                                image_url: s.icon.clone().filter(|i| i.starts_with("http")),
+                                image_url: s.image_url.clone().filter(|i| i.starts_with("http")).or_else(|| s.icon.clone().filter(|i| i.starts_with("http"))),
+                                video_url: s.video_url.clone(),
                                 on_edit: { let id = s.id.clone(); move |_| editing_id.set(Some(id.clone())) },
                                 on_toggle: {
                                     let id = s.id.clone(); let next = !s.is_available;
@@ -1898,6 +2020,8 @@ fn EditAccessorySetCard(
     let mut name = use_signal(|| item.name.clone());
     let mut description = use_signal(|| item.description.clone().unwrap_or_default());
     let mut icon = use_signal(|| item.icon.clone().unwrap_or_default());
+    let image_url = use_signal(|| item.image_url.clone().unwrap_or_default());
+    let video_url = use_signal(|| item.video_url.clone().unwrap_or_default());
     let mut accessories = use_signal(|| item.accessories.join(", "));
     let mut total_price = use_signal(|| item.total_price.to_string());
     let mut discount_percent = use_signal(|| item.discount_percent.to_string());
@@ -1912,6 +2036,8 @@ fn EditAccessorySetCard(
             input { style: input_style(), placeholder: "Название (RU)", value: "{name}", oninput: move |e| name.set(e.value()) }
             textarea { style: textarea_style(), placeholder: "Описание (RU)", value: "{description}", oninput: move |e| description.set(e.value()) }
             input { style: input_style(), placeholder: "Иконка", value: "{icon}", oninput: move |e| icon.set(e.value()) }
+            {render_image_upload(image_url)}
+            {render_video_upload(video_url)}
             textarea { style: textarea_style(), placeholder: "Accessory IDs (через запятую)", value: "{accessories}", oninput: move |e| accessories.set(e.value()) }
             input { style: input_style(), placeholder: "Цена ฿", value: "{total_price}", r#type: "number", oninput: move |e| total_price.set(e.value()) }
             input { style: input_style(), placeholder: "Скидка %", value: "{discount_percent}", r#type: "number", oninput: move |e| discount_percent.set(e.value()) }
@@ -1935,7 +2061,7 @@ fn EditAccessorySetCard(
                         if n.is_empty() { status.set("❌ Название обязательно".into()); return; }
                         let accs: Vec<String> = accessories().split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
                         let desc = description();
-                        let ic = icon();
+                        let ic = icon(); let img = image_url(); let vid = video_url();
                         let deal = is_deal_of_day();
                         let ne = name_en(); let de = description_en();
                         let id = item_id.clone();
@@ -1944,6 +2070,8 @@ fn EditAccessorySetCard(
                             s.name = n.clone();
                             s.description = if desc.is_empty() { None } else { Some(desc.clone()) };
                             s.icon = if ic.is_empty() { None } else { Some(ic.clone()) };
+                            s.image_url = if img.is_empty() { None } else { Some(img.clone()) };
+                            s.video_url = if vid.is_empty() { None } else { Some(vid.clone()) };
                             s.accessories = accs.clone();
                             s.total_price = p;
                             s.discount_percent = d;
@@ -1957,6 +2085,8 @@ fn EditAccessorySetCard(
                                 "name": n, "total_price": p, "discount_percent": d,
                                 "description": if desc.is_empty() { serde_json::Value::Null } else { desc.into() },
                                 "icon": if ic.is_empty() { serde_json::Value::Null } else { ic.into() },
+                                "image_url": if img.is_empty() { serde_json::Value::Null } else { img.into() },
+                                "video_url": if vid.is_empty() { serde_json::Value::Null } else { vid.into() },
                                 "accessories": accs,
                                 "is_deal_of_day": deal,
                                 "name_en": if ne.is_empty() { serde_json::Value::Null } else { ne.into() },
@@ -2011,6 +2141,7 @@ fn TeaSetsTab() -> Element {
     let mut name = use_signal(String::new);
     let mut description = use_signal(String::new);
     let mut icon = use_signal(String::new);
+    let mut video_url = use_signal(String::new);
     let mut items = use_signal(String::new);
     let mut total_price = use_signal(String::new);
     let mut discount_percent = use_signal(String::new);
@@ -2080,6 +2211,7 @@ fn TeaSetsTab() -> Element {
                         oninput: move |e| description.set(e.value()) }
                     input { style: input_style(), placeholder: "Иконка (emoji или URL)", value: "{icon}",
                         oninput: move |e| icon.set(e.value()) }
+                    {render_video_upload(video_url)}
                     textarea { style: textarea_style(), placeholder: "Tea item IDs (через запятую)", value: "{items}",
                         oninput: move |e| items.set(e.value()) }
                     input { style: input_style(), placeholder: "Цена ฿", value: "{total_price}", r#type: "number",
@@ -2104,7 +2236,7 @@ fn TeaSetsTab() -> Element {
                             if n.is_empty() { status.set("❌ Название обязательно".into()); return; }
                             let tea_items: Vec<String> = items().split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
                             let desc = description();
-                            let ic = icon();
+                            let ic = icon(); let vid = video_url();
                             let ne = name_en(); let de = description_en();
                             submitting.set(true);
                             let temp_id = format!("temp-{}", uuid::Uuid::new_v4());
@@ -2112,6 +2244,7 @@ fn TeaSetsTab() -> Element {
                                 id: temp_id.clone(), name: n.clone(),
                                 description: if desc.is_empty() { None } else { Some(desc.clone()) },
                                 icon: if ic.is_empty() { None } else { Some(ic.clone()) },
+                                video_url: if vid.is_empty() { None } else { Some(vid.clone()) },
                                 items: tea_items.clone(),
                                 total_price: p, discount_percent: d,
                                 is_available: true,
@@ -2119,7 +2252,7 @@ fn TeaSetsTab() -> Element {
                                 description_en: if de.is_empty() { None } else { Some(de.clone()) },
                             });
                             status.set("✅ Добавлен!".into());
-                            name.set(String::new()); description.set(String::new()); icon.set(String::new());
+                            name.set(String::new()); description.set(String::new()); icon.set(String::new()); video_url.set(String::new());
                             items.set(String::new()); total_price.set(String::new()); discount_percent.set(String::new());
                             name_en.set(String::new()); description_en.set(String::new());
                             auto_scroll_to_list();
@@ -2128,6 +2261,7 @@ fn TeaSetsTab() -> Element {
                                     "name": n, "total_price": p, "discount_percent": d,
                                     "description": if desc.is_empty() { serde_json::Value::Null } else { desc.into() },
                                     "icon": if ic.is_empty() { serde_json::Value::Null } else { ic.into() },
+                                    "video_url": if vid.is_empty() { serde_json::Value::Null } else { vid.into() },
                                     "items": tea_items,
                                     "name_en": if ne.is_empty() { serde_json::Value::Null } else { ne.into() },
                                     "description_en": if de.is_empty() { serde_json::Value::Null } else { de.into() },
@@ -2205,6 +2339,7 @@ fn TeaSetsTab() -> Element {
                                 sub: format!("{} items • {}฿", s.items.len(), s.total_price),
                                 is_available: s.is_available,
                                 image_url: s.icon.clone().filter(|i| i.starts_with("http")),
+                                video_url: s.video_url.clone(),
                                 on_edit: { let id = s.id.clone(); move |_| editing_id.set(Some(id.clone())) },
                                 on_toggle: {
                                     let id = s.id.clone(); let next = !s.is_available;
@@ -2274,6 +2409,7 @@ fn EditTeaSetCard(
     let mut name = use_signal(|| item.name.clone());
     let mut description = use_signal(|| item.description.clone().unwrap_or_default());
     let mut icon = use_signal(|| item.icon.clone().unwrap_or_default());
+    let video_url = use_signal(|| item.video_url.clone().unwrap_or_default());
     let mut items = use_signal(|| item.items.join(", "));
     let mut total_price = use_signal(|| item.total_price.to_string());
     let mut discount_percent = use_signal(|| item.discount_percent.to_string());
@@ -2287,6 +2423,7 @@ fn EditTeaSetCard(
             input { style: input_style(), placeholder: "Название (RU)", value: "{name}", oninput: move |e| name.set(e.value()) }
             textarea { style: textarea_style(), placeholder: "Описание (RU)", value: "{description}", oninput: move |e| description.set(e.value()) }
             input { style: input_style(), placeholder: "Иконка", value: "{icon}", oninput: move |e| icon.set(e.value()) }
+            {render_video_upload(video_url)}
             textarea { style: textarea_style(), placeholder: "Tea item IDs (через запятую)", value: "{items}", oninput: move |e| items.set(e.value()) }
             input { style: input_style(), placeholder: "Цена ฿", value: "{total_price}", r#type: "number", oninput: move |e| total_price.set(e.value()) }
             input { style: input_style(), placeholder: "Скидка %", value: "{discount_percent}", r#type: "number", oninput: move |e| discount_percent.set(e.value()) }
@@ -2305,7 +2442,7 @@ fn EditTeaSetCard(
                         if n.is_empty() { status.set("❌ Название обязательно".into()); return; }
                         let tea_items: Vec<String> = items().split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
                         let desc = description();
-                        let ic = icon();
+                        let ic = icon(); let vid = video_url();
                         let ne = name_en(); let de = description_en();
                         let id = item_id.clone();
                         let original = cache.read().iter().find(|s| s.id == id).cloned();
@@ -2313,6 +2450,7 @@ fn EditTeaSetCard(
                             s.name = n.clone();
                             s.description = if desc.is_empty() { None } else { Some(desc.clone()) };
                             s.icon = if ic.is_empty() { None } else { Some(ic.clone()) };
+                            s.video_url = if vid.is_empty() { None } else { Some(vid.clone()) };
                             s.items = tea_items.clone();
                             s.total_price = p;
                             s.discount_percent = d;
@@ -2325,6 +2463,7 @@ fn EditTeaSetCard(
                                 "name": n, "total_price": p, "discount_percent": d,
                                 "description": if desc.is_empty() { serde_json::Value::Null } else { desc.into() },
                                 "icon": if ic.is_empty() { serde_json::Value::Null } else { ic.into() },
+                                "video_url": if vid.is_empty() { serde_json::Value::Null } else { vid.into() },
                                 "items": tea_items,
                                 "name_en": if ne.is_empty() { serde_json::Value::Null } else { ne.into() },
                                 "description_en": if de.is_empty() { serde_json::Value::Null } else { de.into() },
@@ -2388,6 +2527,36 @@ fn render_image_upload(mut image_url: Signal<String>) -> Element {
                     let url = image_url.read().clone();
                     let _ = web_sys::window().and_then(|w| w.open_with_url_and_target(&url, "_blank").ok());
                 } }
+            }
+        }
+    }
+}
+
+fn render_video_upload(mut video_url: Signal<String>) -> Element {
+    let mut uploading = use_signal(|| false);
+    rsx! {
+        div { style: "display:flex;gap:6px;align-items:center;",
+            input { style: "flex:1;{input_style()}", placeholder: "URL видео", value: "{video_url}",
+                oninput: move |e| video_url.set(e.value()) }
+            if *uploading.read() {
+                div { style: "padding:10px 12px;background:#1a1a2e;color:#6699ff;border:1px dashed #2a2a4a;border-radius:4px;font-size:13px;white-space:nowrap;", "⏳ Загрузка..." }
+            } else {
+                button { style: upload_btn_style(),
+                    onclick: move |_| {
+                        uploading.set(true);
+                        spawn(async move {
+                            let result = upload_video().await;
+                            uploading.set(false);
+                            if let Some(url) = result { video_url.set(url); }
+                        });
+                    },
+                    "🎥 Upload"
+                }
+            }
+        }
+        if !video_url.read().is_empty() {
+            div { style: "margin-top:4px;",
+                video { src: "{video_url}", controls: true, style: "width:120px;height:80px;object-fit:cover;border-radius:6px;border:1px solid #2a2a4a;" }
             }
         }
     }
@@ -2471,12 +2640,23 @@ fn FormCard(title: String, children: Element) -> Element {
 }
 
 #[component]
+#[component]
 fn ItemRow(
-    name: String, sub: String, is_available: bool, image_url: Option<String>,
-    on_edit: EventHandler<()>, on_toggle: EventHandler<()>, on_delete: EventHandler<()>,
+    name: String,
+    sub: String,
+    is_available: bool,
+    image_url: Option<String>,
+    #[props(default)]
+    video_url: Option<String>,
+    on_edit: EventHandler<()>,
+    on_toggle: EventHandler<()>,
+    on_delete: EventHandler<()>,
+    #[props(default)]
+    on_sotd: Option<EventHandler<()>>,
 ) -> Element {
     let badge = if is_available { ("#39ff14", "ВКЛ") } else { ("#666", "ВЫКЛ") };
     let toggle_label = if is_available { "👁️" } else { "🚫" };
+    let mut show_video = use_signal(|| false);
     let thumb = match image_url.as_deref() {
         Some(url) if !url.is_empty() => rsx! { img { src: "{url}", style: "width:36px;height:36px;object-fit:cover;border-radius:6px;border:1px solid #2a2a4a;flex-shrink:0;" } },
         _ => rsx! { div { style: "width:36px;height:36px;background:#2a2a4a;border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:16px;", "📦" } },
@@ -2490,10 +2670,45 @@ fn ItemRow(
                 div { style: "font-size:10px;color:#888;margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;", "{sub}" }
             }
             span { style: "font-size:9px;padding:2px 5px;background:{badge.0}20;color:{badge.0};border-radius:8px;font-weight:600;flex-shrink:0;", "{badge.1}" }
+            {if let Some(ref url) = video_url {
+                let url = url.clone();
+                rsx! {
+                    button { style: "flex-shrink:0;min-width:44px;min-height:44px;padding:8px 10px;background:#1a2a3a;color:#4fc3f7;border:none;border-radius:4px;font-size:16px;cursor:pointer;line-height:1;display:flex;align-items:center;justify-content:center;",
+                        onclick: move |e: Event<MouseData>| { e.stop_propagation(); show_video.set(true); }, "▶️" }
+                    {if show_video() {
+                        rsx! {
+                            div { style: "position:fixed;inset:0;background:rgba(0,0,0,0.8);display:flex;align-items:center;justify-content:center;z-index:1000;padding:16px;",
+                                onclick: move |_| show_video.set(false),
+                                div { style: "background:#1a1a2e;padding:16px;border-radius:8px;max-width:90vw;max-height:80vh;display:flex;flex-direction:column;align-items:center;gap:8px;",
+                                    onclick: move |e: Event<MouseData>| e.stop_propagation(),
+                                    video { style: "max-width:100%;max-height:60vh;border-radius:6px;", controls: true,
+                                        source { src: "{url}", r#type: "video/mp4" }
+                                    }
+                                    button { style: "padding:8px 16px;background:#2a2a4a;color:#e8e8e8;border:none;border-radius:4px;cursor:pointer;",
+                                        onclick: move |_| show_video.set(false), "Закрыть" }
+                                }
+                            }
+                        }
+                    } else {
+                        rsx! {}
+                    }}
+                }
+            } else {
+                rsx! {}
+            }}
             button { style: "flex-shrink:0;min-width:44px;min-height:44px;padding:8px 10px;background:#2a2a4a;color:#e8e8e8;border:none;border-radius:4px;font-size:16px;cursor:pointer;line-height:1;display:flex;align-items:center;justify-content:center;",
                 onclick: move |e: Event<MouseData>| { e.stop_propagation(); on_edit.call(()); }, "✏️" }
             button { style: "flex-shrink:0;min-width:44px;min-height:44px;padding:8px 10px;background:#2a2a4a;color:#e8e8e8;border:none;border-radius:4px;font-size:16px;cursor:pointer;line-height:1;display:flex;align-items:center;justify-content:center;",
                 onclick: move |e: Event<MouseData>| { e.stop_propagation(); on_toggle.call(()); }, "{toggle_label}" }
+            {if let Some(handler) = on_sotd {
+                let handler = handler.clone();
+                rsx! {
+                    button { style: "flex-shrink:0;min-width:44px;min-height:44px;padding:8px 10px;background:#2a2a1a;color:#ffe600;border:none;border-radius:4px;font-size:16px;cursor:pointer;line-height:1;display:flex;align-items:center;justify-content:center;",
+                        onclick: move |e: Event<MouseData>| { e.stop_propagation(); handler.call(()); }, "🌟" }
+                }
+            } else {
+                rsx! {}
+            }}
             button { style: "flex-shrink:0;min-width:44px;min-height:44px;padding:8px 10px;background:#3a1a1a;color:#ff8888;border:none;border-radius:4px;font-size:16px;cursor:pointer;line-height:1;display:flex;align-items:center;justify-content:center;",
                 onclick: move |e: Event<MouseData>| { e.stop_propagation(); on_delete.call(()); }, "🗑" }
         }
@@ -2521,6 +2736,7 @@ fn EditStrainCard(
     let mut effect = use_signal(|| item.effect.clone().unwrap_or_default());
     let mut flavor_profile = use_signal(|| item.flavor_profile.clone().unwrap_or_default());
     let image_url = use_signal(|| item.image_url.clone().unwrap_or_default());
+    let video_url = use_signal(|| item.video_url.clone().unwrap_or_default());
     let mut name_en = use_signal(|| item.name_en.clone().unwrap_or_default());
     let mut description_en = use_signal(|| item.description_en.clone().unwrap_or_default());
     let mut effect_en = use_signal(|| item.effect_en.clone().unwrap_or_default());
@@ -2542,6 +2758,7 @@ fn EditStrainCard(
             textarea { style: textarea_style(), placeholder: "Эффект (RU)", value: "{effect}", oninput: move |e| effect.set(e.value()) }
             textarea { style: textarea_style(), placeholder: "Вкусовой профиль (RU)", value: "{flavor_profile}", oninput: move |e| flavor_profile.set(e.value()) }
             {render_image_upload(image_url)}
+            {render_video_upload(video_url)}
             div { style: en_section_style(), "🇬🇧 English" }
             input { style: input_style(), placeholder: "Name (EN)", value: "{name_en}", oninput: move |e| name_en.set(e.value()) }
             textarea { style: textarea_style(), placeholder: "Description (EN)", value: "{description_en}", oninput: move |e| description_en.set(e.value()) }
@@ -2564,7 +2781,7 @@ fn EditStrainCard(
                             _ => { status.set("❌ Граммы должны быть числом ≥ 0".into()); return; }
                         };
                         if n.is_empty() { status.set("❌ Название обязательно".into()); return; }
-                        let d = description(); let ef = effect(); let fp = flavor_profile(); let img = image_url();
+                        let d = description(); let ef = effect(); let fp = flavor_profile(); let img = image_url(); let vid = video_url();
                         let ne = name_en(); let de = description_en(); let ee = effect_en();
                         let fpe = flavor_profile_en(); let ste = strain_type_en();
                         let id = item_id.clone();
@@ -2578,6 +2795,7 @@ fn EditStrainCard(
                             s.flavor_profile = if fp.is_empty() { None } else { Some(fp.clone()) };
                             s.available_grams = Some(g);
                             s.image_url = if img.is_empty() { None } else { Some(img.clone()) };
+                            s.video_url = if vid.is_empty() { None } else { Some(vid.clone()) };
                             s.name_en = if ne.is_empty() { None } else { Some(ne.clone()) };
                             s.description_en = if de.is_empty() { None } else { Some(de.clone()) };
                             s.effect_en = if ee.is_empty() { None } else { Some(ee.clone()) };
@@ -2594,6 +2812,7 @@ fn EditStrainCard(
                                 "flavor_profile": if fp.is_empty() { serde_json::Value::Null } else { fp.into() },
                                 "is_available": item.is_available,
                                 "image_url": if img.is_empty() { serde_json::Value::Null } else { img.into() },
+                                "video_url": if vid.is_empty() { serde_json::Value::Null } else { vid.into() },
                                 "name_en": if ne.is_empty() { serde_json::Value::Null } else { ne.into() },
                                 "description_en": if de.is_empty() { serde_json::Value::Null } else { de.into() },
                                 "effect_en": if ee.is_empty() { serde_json::Value::Null } else { ee.into() },
@@ -2644,7 +2863,7 @@ fn EditAccessoryCard(
     let mut stock = use_signal(|| item.stock.map(|s| s.to_string()).unwrap_or_default());
     let mut description = use_signal(|| item.description.clone().unwrap_or_default());
     let image_url = use_signal(|| item.image_url.clone().unwrap_or_default());
-    let mut video_url = use_signal(|| item.video_url.clone().unwrap_or_default());
+    let video_url = use_signal(|| item.video_url.clone().unwrap_or_default());
     let mut name_en = use_signal(|| item.name_en.clone().unwrap_or_default());
     let mut description_en = use_signal(|| item.description_en.clone().unwrap_or_default());
     let mut category_en = use_signal(|| item.category_en.clone().unwrap_or_default());
@@ -2663,7 +2882,7 @@ fn EditAccessoryCard(
             input { style: input_style(), placeholder: "Кол-во", value: "{stock}", r#type: "number", oninput: move |e| stock.set(e.value()) }
             textarea { style: textarea_style(), placeholder: "Описание (RU)", value: "{description}", oninput: move |e| description.set(e.value()) }
             {render_image_upload(image_url)}
-            input { style: input_style(), placeholder: "Видео URL", value: "{video_url}", oninput: move |e| video_url.set(e.value()) }
+            {render_video_upload(video_url)}
             div { style: en_section_style(), "🇬🇧 English" }
             input { style: input_style(), placeholder: "Name (EN)", value: "{name_en}", oninput: move |e| name_en.set(e.value()) }
             textarea { style: textarea_style(), placeholder: "Description (EN)", value: "{description_en}", oninput: move |e| description_en.set(e.value()) }
@@ -2751,7 +2970,7 @@ fn EditTeaCard(
     let mut stock = use_signal(|| item.stock.map(|s| s.to_string()).unwrap_or_default());
     let mut description = use_signal(|| item.description.clone().unwrap_or_default());
     let image_url = use_signal(|| item.image_url.clone().unwrap_or_default());
-    let mut video_url = use_signal(|| item.video_url.clone().unwrap_or_default());
+    let video_url = use_signal(|| item.video_url.clone().unwrap_or_default());
     let mut name_en = use_signal(|| item.name_en.clone().unwrap_or_default());
     let mut description_en = use_signal(|| item.description_en.clone().unwrap_or_default());
     let mut subcategory_en = use_signal(|| item.subcategory_en.clone().unwrap_or_default());
@@ -2769,7 +2988,7 @@ fn EditTeaCard(
             input { style: input_style(), placeholder: "Кол-во", value: "{stock}", r#type: "number", oninput: move |e| stock.set(e.value()) }
             textarea { style: textarea_style(), placeholder: "Описание (RU)", value: "{description}", oninput: move |e| description.set(e.value()) }
             {render_image_upload(image_url)}
-            input { style: input_style(), placeholder: "Видео URL", value: "{video_url}", oninput: move |e| video_url.set(e.value()) }
+            {render_video_upload(video_url)}
             div { style: en_section_style(), "🇬🇧 English" }
             input { style: input_style(), placeholder: "Name (EN)", value: "{name_en}", oninput: move |e| name_en.set(e.value()) }
             textarea { style: textarea_style(), placeholder: "Description (EN)", value: "{description_en}", oninput: move |e| description_en.set(e.value()) }
@@ -2907,7 +3126,14 @@ fn DashboardTab() -> Element {
         div {
             h3 { class: "admin-card-title", "📊 Статистика" }
             if *loading.read() {
-                div { class: "admin-empty", "Загрузка..." }
+                div { class: "admin-stats-grid",
+                    for _ in 0..3 {
+                        div { class: "skeleton-stat-card",
+                            div { class: "skeleton-loader skeleton-label" }
+                            div { class: "skeleton-loader skeleton-value" }
+                        }
+                    }
+                }
             } else if !error.read().is_empty() {
                 div { class: "admin-badge danger", "Ошибка: {error}" }
             } else if let Some(s) = stats.read().clone() {
@@ -3033,8 +3259,8 @@ fn OrdersTab() -> Element {
                     class: if *filter.read() == "completed" { "admin-btn primary admin-btn-sm" } else { "admin-btn secondary admin-btn-sm" },
                     onclick: move |_| filter.set("completed".into()), "✅ {count_by(\"completed\")}" }
                 button {
-                    class: if *filter.read() == "cancelled" { "admin-btn primary admin-btn-sm" } else { "admin-btn secondary admin-btn-sm" },
-                    onclick: move |_| filter.set("cancelled".into()), "✖ {count_by(\"cancelled\")}" }
+                    class: if *filter.read() == "rejected" { "admin-btn primary admin-btn-sm" } else { "admin-btn secondary admin-btn-sm" },
+                    onclick: move |_| filter.set("rejected".into()), "✖ {count_by(\"rejected\")}" }
             }
             input {
                 class: "admin-input",
@@ -3043,10 +3269,22 @@ fn OrdersTab() -> Element {
                 oninput: move |e| search.set(e.value())
             }
             if *loading.read() {
-                div { class: "admin-empty", "Загрузка..." }
+                div { style: "display:flex;flex-direction:column;gap:8px;",
+                    for _ in 0..4 {
+                        div { style: "background:#1a1a2e;padding:8px 10px;border-radius:6px;display:flex;align-items:center;gap:6px;",
+                            Skeleton { shape: SkeletonShape::Avatar }
+                            div { style: "flex:1;display:flex;flex-direction:column;gap:4px;",
+                                Skeleton { shape: SkeletonShape::Text, width: Some("60%".into()) }
+                                Skeleton { shape: SkeletonShape::TextSm, width: Some("40%".into()) }
+                            }
+                        }
+                    }
+                }
             } else if filtered.is_empty() {
-                div { class: "admin-empty",
-                    if *filter.read() == "all" { "Заказов нет" } else { "Нет заказов с таким статусом" }
+                EmptyState {
+                    icon: "📦",
+                    title: if *filter.read() == "all" { "Заказов нет".to_string() } else { "Нет заказов с таким статусом".to_string() },
+                    description: "Заказы будут отображаться здесь",
                 }
             } else {
                 div {
@@ -3064,14 +3302,14 @@ fn OrdersTab() -> Element {
                                 "pending" => "⏳ Ожидает".to_string(),
                                 "confirmed" => "✓ Подтверждён".to_string(),
                                 "completed" => "✅ Выполнен".to_string(),
-                                "cancelled" => "✖ Отменён".to_string(),
+                                "rejected" => "✖ Отменён".to_string(),
                                 _ => order.status.clone(),
                             };
                             let status_badge_cls = match order.status.as_str() {
                                 "pending" => "admin-badge warn",
                                 "confirmed" => "admin-badge info",
                                 "completed" => "admin-badge success",
-                                "cancelled" => "admin-badge danger",
+                                "rejected" => "admin-badge danger",
                                 _ => "admin-badge muted",
                             };
                             let short_id = if order.id.len() >= 6 { &order.id[order.id.len()-6..] } else { &order.id };
@@ -3112,7 +3350,7 @@ fn OrdersTab() -> Element {
                                                     updating_id.set(Some(oid.clone()));
                                                     let mut orders2 = orders.clone();
                                                     let mut updating2 = updating_id.clone();
-                                                    let mut toasts2 = toasts.clone();
+                                                    let toasts2 = toasts.clone();
                                                     spawn(async move {
                                                         let url = format!("{}/api/orders/{}/status", api_base_url(), oid);
                                                         let res = reqwest::Client::new().put(&url)
@@ -3142,7 +3380,7 @@ fn OrdersTab() -> Element {
                                                     updating_id.set(Some(oid.clone()));
                                                     let mut orders3 = orders.clone();
                                                     let mut updating3 = updating_id.clone();
-                                                    let mut toasts3 = toasts.clone();
+                                                    let toasts3 = toasts.clone();
                                                     spawn(async move {
                                                         let url = format!("{}/api/orders/{}/status", api_base_url(), oid);
                                                         let res = reqwest::Client::new().put(&url)
@@ -3162,23 +3400,23 @@ fn OrdersTab() -> Element {
                                                 "📦 Выполнить"
                                             }
                                         }
-                                        if status3 != "cancelled" && status3 != "completed" {
+                                        if status3 != "rejected" && status3 != "completed" {
                                             button {
                                                 class: "admin-btn danger admin-btn-sm",
                                                 onclick: move |_| {
                                                     let oid = order_id3.clone();
                                                     let id_c = init_data.read().clone();
                                                     let mut orders_c = orders.clone();
-                                                    let mut toasts_c = toasts.clone();
+                                                    let toasts_c = toasts.clone();
                                                     spawn(async move {
                                                         let url = format!("{}/api/orders/{}/status", api_base_url(), oid);
                                                         let res = reqwest::Client::new().put(&url)
                                                             .header("X-Telegram-Init-Data", id_c)
-                                                            .json(&json!({"status": "cancelled"}))
+                                                            .json(&json!({"status": "rejected"}))
                                                             .send().await;
                                                         match res {
                                                             Ok(r) if r.status().is_success() => {
-                                                                orders_c.write().iter_mut().find(|o| o.id == oid).map(|o| o.status = "cancelled".into());
+                                                                orders_c.write().iter_mut().find(|o| o.id == oid).map(|o| o.status = "rejected".into());
                                                                 push_toast(toasts_c, "Заказ отменён".into(), ToastKind::Success);
                                                             }
                                                             _ => { push_toast(toasts_c, "Ошибка отмены".into(), ToastKind::Error); }
@@ -3317,10 +3555,10 @@ fn QuestsTab() -> Element {
                                 let id_data = init_data.read().clone();
                                 saving.set(true);
                                 error.set(String::new());
-                                let mut places2 = places.clone();
+                                let _places2 = places.clone();
                                 let mut editing2 = editing.clone();
                                 let mut saving2 = saving.clone();
-                                let mut toasts2 = toasts.clone();
+                                let toasts2 = toasts.clone();
                                 let mut reload2 = reload.clone();
                                 spawn(async move {
                                     let body = json!({
@@ -3376,7 +3614,7 @@ fn QuestsTab() -> Element {
                 "+ Добавить точку"
             }
             if *loading.read() {
-                div { class: "admin-empty", "Загрузка..." }
+                EmptyState { icon: "⏳".to_string(), title: "Загрузка...".to_string(), description: "Получаем данные с сервера".to_string() }
             } else if places.read().is_empty() {
                 div { class: "admin-empty", "Нет точек" }
             } else {
@@ -3384,11 +3622,11 @@ fn QuestsTab() -> Element {
                     for place in places.read().clone() {
                         {
                             let p2 = place.clone();
-                            let p3 = place.clone();
+                            let _p3 = place.clone();
                             let p_id = place.id.clone();
                             let id_del = init_data.read().clone();
-                            let mut toasts2 = toasts.clone();
-                            let mut reload2 = reload.clone();
+                            let toasts2 = toasts.clone();
+                            let _reload2 = reload.clone();
                             rsx! {
                                 div { class: "admin-row",
                                     div { class: "admin-row-main",
@@ -3407,7 +3645,7 @@ fn QuestsTab() -> Element {
                                                 let pid = p_id.clone();
                                                 let id_d = id_del.clone();
                                                 let mut places3 = places.clone();
-                                                let mut toasts3 = toasts2.clone();
+                                                let toasts3 = toasts2.clone();
                                                 spawn(async move {
                                                     let url = format!("{}/api/quest-places/{}", api_base_url(), pid);
                                                     let res = reqwest::Client::new().delete(&url)
@@ -3565,7 +3803,7 @@ fn TreasuresTab() -> Element {
                                 error.set(String::new());
                                 let mut editing2 = editing.clone();
                                 let mut saving2 = saving.clone();
-                                let mut toasts2 = toasts.clone();
+                                let toasts2 = toasts.clone();
                                 let mut reload2 = reload.clone();
                                 spawn(async move {
                                     let body = json!({
@@ -3625,7 +3863,7 @@ fn TreasuresTab() -> Element {
                 "+ Создать квест"
             }
             if *loading.read() {
-                div { class: "admin-empty", "Загрузка..." }
+                EmptyState { icon: "⏳".to_string(), title: "Загрузка...".to_string(), description: "Получаем данные с сервера".to_string() }
             } else if hunts.read().is_empty() {
                 div { class: "admin-empty", "Нет квестов" }
             } else {
@@ -3635,8 +3873,8 @@ fn TreasuresTab() -> Element {
                             let h2 = hunt.clone();
                             let h_id = hunt.id.clone();
                             let id_del = init_data.read().clone();
-                            let mut toasts2 = toasts.clone();
-                            let mut reload2 = reload.clone();
+                            let toasts2 = toasts.clone();
+                            let _reload2 = reload.clone();
                             rsx! {
                                 div { class: "admin-row",
                                     div { class: "admin-row-main",
@@ -3660,7 +3898,7 @@ fn TreasuresTab() -> Element {
                                             let hid = h_id.clone();
                                             let id_d = id_del.clone();
                                             let mut hunts2 = hunts.clone();
-                                            let mut toasts3 = toasts2.clone();
+                                            let toasts3 = toasts2.clone();
                                             spawn(async move {
                                                 let url = format!("{}/api/treasure-hunts/{}", api_base_url(), hid);
                                                 let res = reqwest::Client::new().delete(&url)
@@ -3743,7 +3981,7 @@ fn GardenTab() -> Element {
             {render_toasts(toasts)}
             h3 { class: "admin-card-title", "🌱 Сад — Настройки" }
             if *loading.read() {
-                div { class: "admin-empty", "Загрузка..." }
+                EmptyState { icon: "⏳".to_string(), title: "Загрузка...".to_string(), description: "Получаем данные с сервера".to_string() }
             } else {
                 div {
                     // Toggle enabled
@@ -3793,7 +4031,7 @@ fn GardenTab() -> Element {
                             saving.set(true);
                             error.set(String::new());
                             let mut saving2 = saving.clone();
-                            let mut toasts2 = toasts.clone();
+                            let toasts2 = toasts.clone();
                             let mut error2 = error.clone();
                             spawn(async move {
                                 let body = json!({
@@ -3879,7 +4117,7 @@ fn LoyaltyTab() -> Element {
             let base = api_base_url();
             // Fetch config/tiers
             if let Ok(resp) = reqwest::Client::new()
-                .get(&format!("{}/api/loyalty/config", base))
+                .get(&format!("{}/api/loyalty/tiers", base))
                 .header("X-Telegram-Init-Data", init_data.clone())
                 .send().await
             {
@@ -3923,7 +4161,7 @@ fn LoyaltyTab() -> Element {
                 }
             }
             if *loading.read() {
-                div { class: "admin-empty", "Загрузка..." }
+                EmptyState { icon: "⏳".to_string(), title: "Загрузка...".to_string(), description: "Получаем данные с сервера".to_string() }
             } else if *active_sub.read() == "config" {
                 if tiers.read().is_empty() {
                     div { class: "admin-empty", "Нет тиров" }
@@ -4087,7 +4325,7 @@ fn ManagersTab() -> Element {
                             submitting.set(true);
                             let mut submitting2 = submitting.clone();
                             let mut show_form2 = show_form.clone();
-                            let mut toasts2 = toasts.clone();
+                            let toasts2 = toasts.clone();
                             let mut reload2 = reload.clone();
                             let mut form_tg_id2 = form_tg_id.clone();
                             let mut form_name2 = form_name.clone();
@@ -4119,7 +4357,7 @@ fn ManagersTab() -> Element {
                 }
             }
             if *loading.read() {
-                div { class: "admin-empty", "Загрузка..." }
+                EmptyState { icon: "⏳".to_string(), title: "Загрузка...".to_string(), description: "Получаем данные с сервера".to_string() }
             } else if managers.read().is_empty() {
                 div { class: "admin-empty", "Нет менеджеров" }
             } else {

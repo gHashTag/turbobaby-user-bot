@@ -619,7 +619,10 @@ async fn get_config(State(state): State<AppState>) -> Result<Json<Value>, Status
     };
 
     Ok(Json(json!({
-        "config": config
+        "is_enabled": config.is_enabled,
+        "reward_discount_percent": config.reward_discount_percent as f64,
+        "reward_bonus_points": config.reward_bonus_points as f64,
+        "reward_expiration_days": config.reward_expiration_days as f64,
     })))
 }
 

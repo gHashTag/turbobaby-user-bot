@@ -17,6 +17,11 @@ struct AdminCheckQuery {
 }
 
 #[derive(Deserialize)]
+struct AdminLoginRequest {
+    password: String,
+}
+
+#[derive(Deserialize)]
 struct ValidateInitDataRequest {
     init_data: String,
 }
@@ -37,20 +42,78 @@ pub fn routes() -> Router<AppState> {
         .route("/admin/users", get(get_all_users))
         .route("/admin/stats", get(get_stats))
         .route("/admin/data", get(get_stats))
-        .route("/admin/managers", get(get_managers))
+        .route("/admin/managers", get(get_managers).post(create_manager))
         .route("/admin/managers/:telegram_id/stats", get(get_manager_stats))
         .route("/admin/managers/:telegram_id", put(update_manager).delete(delete_manager))
         .route("/admin/check", get(check_admin_access))
+        .route("/admin/login", post(admin_login))
         .route("/admin/ping", get(ping))
         .route("/debug/validate-initdata", post(debug_validate_init_data))
 }
 
-async fn get_stats(_state: State<AppState>) -> Result<Json<Value>, StatusCode> {
+async fn get_stats(State(state): State<AppState>) -> Result<Json<Value>, StatusCode> {
+    let client = state.db.pool.get().await.map_err(|e| {
+        tracing::error!("get_stats pool error: {:?}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    let total_orders: i64 = client
+        .query_one("SELECT COUNT(*) FROM orders", &[])
+        .await
+        .map(|r| r.try_get(0).unwrap_or(0))
+        .unwrap_or(0);
+
+    let total_revenue: f64 = client
+        .query_one("SELECT COALESCE(SUM(total), 0) FROM orders WHERE status = 'completed'", &[])
+        .await
+        .map(|r| r.try_get(0).unwrap_or(0.0))
+        .unwrap_or(0.0);
+
+    let active_strains: i64 = client
+        .query_one("SELECT COUNT(*) FROM strains WHERE is_available = true", &[])
+        .await
+        .map(|r| r.try_get(0).unwrap_or(0))
+        .unwrap_or(0);
+
+    let total_users: i64 = client
+        .query_one("SELECT COUNT(*) FROM user_languages", &[])
+        .await
+        .map(|r| r.try_get(0).unwrap_or(0))
+        .unwrap_or(0);
+
+    // Top strains by order count (from orders.items JSONB)
+    let top_strains: Vec<Value> = client
+        .query(
+            r#"
+            SELECT s.name, COUNT(*) as cnt
+            FROM orders o,
+                 jsonb_array_elements(o.items) AS item
+            JOIN strains s ON (item->>'id') = s.id
+            WHERE o.status = 'completed'
+            GROUP BY s.name
+            ORDER BY cnt DESC
+            LIMIT 5
+            "#,
+            &[],
+        )
+        .await
+        .map(|rows| {
+            rows.iter()
+                .map(|r| {
+                    let name: String = r.try_get(0).unwrap_or_default();
+                    let count: i64 = r.try_get(1).unwrap_or(0);
+                    json!({ "name": name, "count": count })
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
     Ok(Json(json!({
-        "total_users": 0,
-        "total_orders": 0,
-        "total_revenue": null,
-        "active_strains": 12,
+        "total_users": total_users,
+        "total_orders": total_orders,
+        "total_revenue": total_revenue,
+        "active_strains": active_strains,
+        "top_strains": top_strains,
     })))
 }
 
@@ -97,7 +160,7 @@ async fn get_managers(
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
     let rows = client.query(
-        "SELECT telegram_id, name, username, ref_code FROM managers ORDER BY name",
+        "SELECT telegram_id, name, username, ref_code, commission_rate FROM managers ORDER BY name",
         &[],
     ).await.map_err(|e| {
         tracing::error!("admin managers: query failed: {:?}", e);
@@ -108,6 +171,7 @@ async fn get_managers(
         "name": r.get::<_, Option<String>>("name"),
         "username": r.get::<_, Option<String>>("username"),
         "ref_code": r.get::<_, Option<String>>("ref_code"),
+        "commission_rate": r.get::<_, Option<f64>>("commission_rate"),
     })).collect();
     Ok(Json(json!({ "managers": managers })))
 }
@@ -138,10 +202,34 @@ async fn get_manager_stats(
 }
 
 #[derive(Deserialize)]
+struct CreateManagerRequest {
+    telegram_id: i64,
+    name: Option<String>,
+    username: Option<String>,
+    ref_code: Option<String>,
+    commission_rate: Option<f64>,
+}
+
+#[derive(Deserialize)]
 struct UpdateManagerRequest {
     name: Option<String>,
     username: Option<String>,
     ref_code: Option<String>,
+    commission_rate: Option<f64>,
+}
+
+async fn create_manager(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(req): Json<CreateManagerRequest>,
+) -> Result<Json<Value>, StatusCode> {
+    check_admin(&headers, &state)?;
+    let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    client.execute(
+        "INSERT INTO managers (telegram_id, name, username, ref_code, commission_rate) VALUES ($1, $2, $3, $4, $5)",
+        &[&req.telegram_id, &req.name, &req.username, &req.ref_code, &req.commission_rate],
+    ).await.map_err(|e| { tracing::error!("create_manager: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?;
+    Ok(Json(json!({ "success": true, "telegram_id": req.telegram_id })))
 }
 
 async fn update_manager(
@@ -156,9 +244,10 @@ async fn update_manager(
         "UPDATE managers SET 
             name = COALESCE($2, name),
             username = COALESCE($3, username),
-            ref_code = COALESCE($4, ref_code)
+            ref_code = COALESCE($4, ref_code),
+            commission_rate = COALESCE($5, commission_rate)
          WHERE telegram_id = $1",
-        &[&telegram_id, &req.name, &req.username, &req.ref_code],
+        &[&telegram_id, &req.name, &req.username, &req.ref_code, &req.commission_rate],
     ).await.map_err(|e| { tracing::error!("update_manager: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?;
     Ok(Json(json!({ "success": true })))
 }
@@ -207,6 +296,24 @@ async fn check_admin_access(
     }
 
     tracing::warn!("admin/check: unauthorized telegram_id={}", id);
+    Err(StatusCode::UNAUTHORIZED)
+}
+
+async fn admin_login(
+    State(state): State<AppState>,
+    Json(req): Json<AdminLoginRequest>,
+) -> Result<Json<Value>, StatusCode> {
+    if let Some(ref password) = state.config.admin_password {
+        if crate::api::auth::verify_admin_token(
+            &crate::api::auth::generate_admin_token(&req.password, &state.config.bot_token),
+            &state.config.bot_token,
+            password,
+        ) {
+            let token = crate::api::auth::generate_admin_token(password, &state.config.bot_token);
+            return Ok(Json(json!({ "success": true, "token": token })));
+        }
+    }
+    tracing::warn!("admin_login: invalid password attempt");
     Err(StatusCode::UNAUTHORIZED)
 }
 

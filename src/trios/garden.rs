@@ -251,11 +251,10 @@ pub fn calculate_progress(plant: &Plant, now: Timestamp) -> PlantProgress {
 
     // Calculate watering cooldown
     let last_watered = plant.last_watered_at.unwrap_or(0);
-    let planted_at = plant.planted_at;
     let cooldown_ref = if last_watered > 0 {
         last_watered
     } else {
-        planted_at
+        0 // New plant: no cooldown, can water immediately
     };
     let next_water_at = if cooldown_ref > 0 {
         cooldown_ref.saturating_add(WATER_COOLDOWN_MS)

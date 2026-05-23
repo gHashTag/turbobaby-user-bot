@@ -123,7 +123,7 @@ async fn get_leaderboard(State(state): State<AppState>) -> Result<Json<Value>, S
     use sea_orm::{Statement, DbBackend, ConnectionTrait};
     let stmt = Statement::from_string(
         DbBackend::Postgres,
-        "SELECT telegram_id, total_spent::float8 AS total_spent, tier FROM loyalty_profiles ORDER BY total_spent DESC NULLS LAST LIMIT 20".to_string(),
+        "SELECT lp.telegram_id, lp.total_spent::float8 AS total_spent, lp.tier, ul.first_name FROM loyalty_profiles lp LEFT JOIN user_languages ul ON lp.telegram_id = ul.telegram_id ORDER BY lp.total_spent DESC NULLS LAST LIMIT 20".to_string(),
     );
     let rows = state.db.orm.query_all(stmt).await
         .map_err(|e| { tracing::error!("get_leaderboard sea-orm: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?;
@@ -131,8 +131,10 @@ async fn get_leaderboard(State(state): State<AppState>) -> Result<Json<Value>, S
         let telegram_id: i64 = r.try_get("", "telegram_id").unwrap_or(0);
         let total_spent: Option<f64> = r.try_get("", "total_spent").ok();
         let tier: String = r.try_get("", "tier").unwrap_or_default();
+        let first_name: Option<String> = r.try_get("", "first_name").ok();
         json!({
             "telegram_id": telegram_id,
+            "first_name": first_name,
             "total_spent": total_spent.unwrap_or(0.0),
             "tier": tier,
         })

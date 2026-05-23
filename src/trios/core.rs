@@ -153,6 +153,7 @@ pub type Amount = i64;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::str::FromStr;
 
     #[test]
     fn test_lang_serialization() {
