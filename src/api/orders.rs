@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::{HeaderMap, StatusCode},
     routing::{get, post, put},
     Json, Router,
@@ -126,12 +126,15 @@ async fn notify_admins(
 async fn get_orders(
     headers: HeaderMap,
     State(state): State<AppState>,
+    Query(params): Query<std::collections::HashMap<String, String>>,
 ) -> Result<Json<Value>, StatusCode> {
     check_admin(&headers, &state)?;
+    let limit = params.get("limit").and_then(|v| v.parse::<i64>().ok()).unwrap_or(100).clamp(1, 500);
+    let offset = params.get("offset").and_then(|v| v.parse::<i64>().ok()).unwrap_or(0).max(0);
     let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let rows = client.query(
-        "SELECT id, telegram_id, customer_name, customer_phone, customer_telegram, items, subtotal, bonus_used, total, status, shop_id, created_at FROM orders ORDER BY created_at DESC LIMIT 100",
-        &[],
+        "SELECT id, telegram_id, customer_name, customer_phone, customer_telegram, items, subtotal, bonus_used, total, status, shop_id, created_at FROM orders ORDER BY created_at DESC LIMIT $1 OFFSET $2",
+        &[&limit, &offset],
     ).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let orders: Vec<Order> = rows.iter().map(Order::from_row).collect();
     Ok(Json(json!({ "orders": orders })))

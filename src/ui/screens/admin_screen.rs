@@ -3172,19 +3172,135 @@ fn DashboardTab() -> Element {
 struct AdminOrder {
     id: String,
     #[serde(default)]
+    telegram_id: Option<i64>,
+    #[serde(default)]
     customer_name: Option<String>,
     #[serde(default)]
+    customer_phone: Option<String>,
+    #[serde(default)]
     customer_telegram: Option<String>,
-    status: String,
-    total: f64,
+    #[serde(default)]
+    items: Vec<AdminOrderItem>,
+    #[serde(default)]
+    subtotal: f64,
     #[serde(default)]
     bonus_used: f64,
+    total: f64,
+    status: String,
+    #[serde(default)]
+    shop_id: Option<String>,
     #[serde(rename = "created_at", default)]
     created_at: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+struct AdminOrderItem {
+    #[serde(default)]
+    strain_id: Option<String>,
+    #[serde(default)]
+    strain_name: Option<String>,
+    #[serde(default)]
+    accessory_id: Option<String>,
+    #[serde(default)]
+    accessory_name: Option<String>,
+    #[serde(default)]
+    tea_id: Option<String>,
+    #[serde(default)]
+    tea_name: Option<String>,
+    #[serde(default)]
+    set_id: Option<String>,
+    #[serde(default)]
+    set_name: Option<String>,
+    #[serde(default)]
+    quantity: f64,
+}
+
 #[derive(Debug, Deserialize)]
 struct OrdersResp { orders: Vec<AdminOrder> }
+
+#[component]
+fn OrderDetailModal(order: AdminOrder, on_close: EventHandler<()>) -> Element {
+    let status_label = match order.status.as_str() {
+        "pending" => "⏳ Ожидает",
+        "confirmed" => "✓ Подтверждён",
+        "completed" => "✅ Выполнен",
+        "rejected" => "✖ Отменён",
+        _ => &order.status,
+    };
+    let status_cls = match order.status.as_str() {
+        "pending" => "admin-badge warn",
+        "confirmed" => "admin-badge info",
+        "completed" => "admin-badge success",
+        "rejected" => "admin-badge danger",
+        _ => "admin-badge muted",
+    };
+    let order_title = format!("Заказ #{}...{}", &order.id[..4], &order.id[order.id.len().saturating_sub(4)..]);
+    rsx! {
+        div { style: "position:fixed;inset:0;background:rgba(0,0,0,0.8);display:flex;align-items:center;justify-content:center;z-index:2000;padding:16px;",
+            onclick: move |_| on_close.call(()),
+            div { style: "background:#1a1a2e;border:2px solid #2a2a4a;border-radius:8px;max-width:480px;width:100%;max-height:90vh;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:12px;",
+                onclick: move |e: Event<MouseData>| e.stop_propagation(),
+                div { style: "display:flex;justify-content:space-between;align-items:center;",
+                    h3 { style: "margin:0;color:#39ff14;font-size:17px;", "{order_title}" }
+                    button { style: "background:none;border:none;color:#888;font-size:20px;cursor:pointer;", onclick: move |_| on_close.call(()), "✕" }
+                }
+                div { style: "display:flex;align-items:center;gap:8px;",
+                    span { class: "{status_cls}", "{status_label}" }
+                    if let Some(ref dt) = order.created_at {
+                        span { style: "font-size:12px;color:#666;", "{dt}" }
+                    }
+                }
+                if let Some(ref name) = order.customer_name {
+                    div { style: "display:flex;flex-direction:column;gap:4px;",
+                        div { style: "font-size:14px;font-weight:600;color:#e8e8e8;", "👤 {name}" }
+                        if let Some(ref phone) = order.customer_phone {
+                            div { style: "font-size:13px;color:#888;", "📞 {phone}" }
+                        }
+                        if let Some(ref tg) = order.customer_telegram {
+                            div { style: "font-size:13px;color:#888;", "📱 @{tg}" }
+                        }
+                    }
+                }
+                div { style: "border-top:1px solid #2a2a4a;padding-top:12px;display:flex;flex-direction:column;gap:8px;",
+                    h4 { style: "margin:0;color:#00e5ff;font-size:14px;", "📋 Товары" }
+                    for item in order.items.clone() {
+                        div { style: "display:flex;justify-content:space-between;align-items:center;background:#0f0f1a;padding:8px 10px;border-radius:6px;",
+                            span { style: "font-size:13px;color:#e8e8e8;",
+                                {
+                                    let name = item.strain_name.clone()
+                                        .or(item.accessory_name.clone())
+                                        .or(item.tea_name.clone())
+                                        .or(item.set_name.clone())
+                                        .unwrap_or_else(|| "Неизвестно".into());
+                                    format!("{} × {:.0}", name, item.quantity)
+                                }
+                            }
+                        }
+                    }
+                }
+                div { style: "border-top:1px solid #2a2a4a;padding-top:12px;display:flex;flex-direction:column;gap:4px;",
+                    div { style: "display:flex;justify-content:space-between;font-size:13px;color:#888;",
+                        span { "Подытог" }
+                        span { "{order.subtotal:.0} Бат" }
+                    }
+                    if order.bonus_used > 0.0 {
+                        div { style: "display:flex;justify-content:space-between;font-size:13px;color:#ffe600;",
+                            span { "Бонусы" }
+                            span { "-{order.bonus_used:.0} Бат" }
+                        }
+                    }
+                    div { style: "display:flex;justify-content:space-between;font-size:16px;font-weight:700;color:#39ff14;",
+                        span { "Итого" }
+                        span { "{order.total:.0} Бат" }
+                    }
+                }
+                if let Some(ref shop) = order.shop_id {
+                    div { style: "font-size:12px;color:#666;", "🏪 Магазин: {shop}" }
+                }
+            }
+        }
+    }
+}
 
 #[component]
 fn OrdersTab() -> Element {
@@ -3196,11 +3312,19 @@ fn OrdersTab() -> Element {
     let mut updating_id: Signal<Option<String>> = use_signal(|| None);
     let mut error = use_signal(String::new);
     let toasts: Signal<Vec<ToastItem>> = use_signal(Vec::new);
+    let mut selected_order: Signal<Option<AdminOrder>> = use_signal(|| None);
+    let mut offset = use_signal(|| 0i64);
+    let mut limit = use_signal(|| 20i64);
+    let reload = use_signal(|| 0u32);
 
     let _ = use_resource(move || {
         let init_data = init_data.read().clone();
+        let off = *offset.read();
+        let lim = *limit.read();
+        let _r = *reload.read();
         async move {
-            let url = format!("{}/api/orders?limit=100", api_base_url());
+            loading.set(true);
+            let url = format!("{}/api/orders?limit={}&offset={}", api_base_url(), lim, off);
             match reqwest::Client::new()
                 .get(&url)
                 .header("X-Telegram-Init-Data", init_data)
@@ -3288,7 +3412,7 @@ fn OrdersTab() -> Element {
                 }
             } else {
                 div {
-                    for order in filtered {
+                    for order in filtered.iter().cloned() {
                         {
                             let order_id = order.id.clone();
                             let order_id2 = order.id.clone();
@@ -3315,7 +3439,11 @@ fn OrdersTab() -> Element {
                             let short_id = if order.id.len() >= 6 { &order.id[order.id.len()-6..] } else { &order.id };
                             let short_id = short_id.to_string();
                             rsx! {
-                                div { class: "admin-card",
+                                div { class: "admin-card", style: "cursor:pointer;",
+                                    onclick: {
+                                        let o = order.clone();
+                                        move |_| selected_order.set(Some(o.clone()))
+                                    },
                                     div { class: "admin-row",
                                         div { class: "admin-row-main",
                                             div { class: "admin-card-title", "#{short_id}" }
@@ -3432,6 +3560,51 @@ fn OrdersTab() -> Element {
                         }
                     }
                 }
+                {
+                    let page = (*offset.read() / *limit.read()) + 1;
+                    let lim = *limit.read();
+                    let has_prev = *offset.read() > 0;
+                    let has_next = filtered.len() >= lim as usize;
+                    rsx! {
+                        div { style: "display:flex;justify-content:center;align-items:center;gap:12px;margin-top:16px;",
+                            button {
+                                style: if !has_prev { "padding:8px 16px;background:#2a2a4a;color:#666;border:none;border-radius:4px;font-size:13px;cursor:not-allowed;" } else { "padding:8px 16px;background:#2a2a4a;color:#e8e8e8;border:none;border-radius:4px;font-size:13px;cursor:pointer;" },
+                                disabled: !has_prev,
+                                onclick: move |_| {
+                                    let new_off = (*offset.read() - *limit.read()).max(0);
+                                    offset.set(new_off);
+                                },
+                                "← Назад"
+                            }
+                            span { style: "font-size:13px;color:#888;", "Страница {page} (по {lim})" }
+                            select {
+                                style: "padding:6px 10px;background:#1a1a2e;color:#e8e8e8;border:1px solid #2a2a4a;border-radius:4px;font-size:13px;",
+                                value: "{lim}",
+                                onchange: move |e| {
+                                    if let Ok(v) = e.value().parse::<i64>() {
+                                        limit.set(v);
+                                        offset.set(0);
+                                    }
+                                },
+                                option { value: "20", "20" }
+                                option { value: "50", "50" }
+                                option { value: "100", "100" }
+                            }
+                            button {
+                                style: if !has_next { "padding:8px 16px;background:#2a2a4a;color:#666;border:none;border-radius:4px;font-size:13px;cursor:not-allowed;" } else { "padding:8px 16px;background:#2a2a4a;color:#e8e8e8;border:none;border-radius:4px;font-size:13px;cursor:pointer;" },
+                                disabled: !has_next,
+                                onclick: move |_| {
+                                    let current = *offset.read();
+                                    offset.set(current + *limit.read());
+                                },
+                                "Вперёд →"
+                            }
+                        }
+                    }
+                }
+            }
+            if let Some(o) = selected_order.read().clone() {
+                OrderDetailModal { order: o.clone(), on_close: move |_| selected_order.set(None) }
             }
         }
     }
