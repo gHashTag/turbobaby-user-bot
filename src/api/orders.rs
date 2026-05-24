@@ -184,8 +184,11 @@ async fn update_order_status(
         return Err(StatusCode::BAD_REQUEST);
     }
     let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    client.execute("UPDATE orders SET status = $1 WHERE id = $2", &[&req.status, &id])
+    let rows = client.execute("UPDATE orders SET status = $1 WHERE id = $2", &[&req.status, &id])
         .await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    if rows == 0 {
+        return Err(StatusCode::NOT_FOUND);
+    }
     Ok(Json(json!({ "success": true })))
 }
 

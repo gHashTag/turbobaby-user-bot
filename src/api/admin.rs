@@ -314,6 +314,7 @@ async fn admin_login(
         }
     }
     tracing::warn!("admin_login: invalid password attempt");
+    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
     Err(StatusCode::UNAUTHORIZED)
 }
 

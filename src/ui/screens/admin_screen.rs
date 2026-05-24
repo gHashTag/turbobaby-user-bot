@@ -3656,7 +3656,7 @@ fn OrdersTab() -> Element {
                     let page = (*offset.read() / *limit.read()) + 1;
                     let lim = *limit.read();
                     let has_prev = *offset.read() > 0;
-                    let has_next = filtered.len() >= lim as usize;
+                    let has_next = orders.read().len() >= lim as usize;
                     rsx! {
                         div { style: "display:flex;justify-content:center;align-items:center;gap:12px;margin-top:16px;",
                             button {

@@ -337,9 +337,31 @@ async fn main() -> Result<()> {
     info!("🚀 HTTP server listening on {}", addr);
     info!("🎨 UI assets served from: styles/, assets/");
     let listener = tokio::net::TcpListener::bind(addr).await?;
-    axum::serve(listener, app).await?;
+    axum::serve(listener, app)
+        .with_graceful_shutdown(shutdown_signal())
+        .await?;
 
     Ok(())
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        tokio::signal::ctrl_c()
+            .await
+            .expect("failed to install Ctrl+C handler");
+    };
+    let terminate = async {
+        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            .expect("failed to install signal handler")
+            .recv()
+            .await;
+    };
+    tokio::select! {
+        _ = ctrl_c => {},
+        _ = terminate => {},
+    }
+    info!("🛑 Shutdown signal received, starting graceful shutdown...");
 }
 
 // WASM entry point is now in src/lib.rs via #[wasm_bindgen(start)]
