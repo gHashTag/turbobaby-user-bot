@@ -164,6 +164,10 @@ async fn update_order_status(
     Json(req): Json<UpdateOrderStatusRequest>,
 ) -> Result<Json<Value>, StatusCode> {
     check_admin(&headers, &state)?;
+    const VALID_STATUSES: &[&str] = &["pending", "confirmed", "completed", "rejected", "ready", "cancelled"];
+    if !VALID_STATUSES.contains(&req.status.as_str()) {
+        return Err(StatusCode::BAD_REQUEST);
+    }
     let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     client.execute("UPDATE orders SET status = $1 WHERE id = $2", &[&req.status, &id])
         .await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;

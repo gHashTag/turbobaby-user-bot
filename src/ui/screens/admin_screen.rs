@@ -12,6 +12,9 @@ use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use wasm_bindgen::JsCast;
+use std::sync::LazyLock;
+
+static HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| reqwest::Client::new());
 use crate::ui::api::context::api_base_url;
 use crate::ui::components::{EmptyState, Modal, Toast, ToastKind, ToastContainer, Skeleton, SkeletonShape};
 use crate::ui::telegram::{use_telegram_id, use_telegram_init_data, TelegramApp, HapticNotification};
@@ -262,7 +265,7 @@ pub fn AdminScreen() -> Element {
         async move {
             let base = api_base_url();
             let url = format!("{}/api/admin/check?telegram_id={}", base, telegram_id);
-            let mut req = reqwest::Client::new().get(&url)
+            let mut req = HTTP_CLIENT.clone().get(&url)
                 .header("X-Telegram-Init-Data", init_data.clone());
             if !token.is_empty() {
                 req = req.header("X-Admin-Token", token);
@@ -327,7 +330,7 @@ fn AccessDeniedScreen(telegram_id: i64, mut password_token: Signal<String>) -> E
                         let mut logging_in2 = logging_in.clone();
                         spawn(async move {
                             let url = format!("{}/api/admin/login", api_base_url());
-                            let res = reqwest::Client::new().post(&url)
+                            let res = HTTP_CLIENT.clone().post(&url)
                                 .json(&serde_json::json!({"password": pw}))
                                 .send().await;
                             logging_in2.set(false);
@@ -501,7 +504,7 @@ fn StrainsTab() -> Element {
         let init_data = init_data.read().clone();
         async move {
         let url = format!("{}/api/strains?include_hidden=1", api_base_url());
-        if let Ok(resp) = reqwest::Client::new()
+        if let Ok(resp) = HTTP_CLIENT.clone()
             .get(&url)
             .header("X-Telegram-Init-Data", init_data.clone())
             .header("X-Admin-Telegram-Id", telegram_id.to_string())
@@ -627,7 +630,7 @@ fn StrainsTab() -> Element {
                                     "strain_type_en": if ste.is_empty() { serde_json::Value::Null } else { ste.into() },
                                 });
                                 let url = format!("{}/api/strains", api_base_url());
-                                let res = reqwest::Client::new().post(&url)
+                                let res = HTTP_CLIENT.clone().post(&url)
                                     .header("X-Telegram-Init-Data", init_data.read().clone())
  .header("X-Admin-Telegram-Id", telegram_id.to_string())
                                     .json(&body).send().await;
@@ -713,7 +716,7 @@ fn StrainsTab() -> Element {
                                         cache.write().iter_mut().find(|s| s.id == id).map(|s| s.is_available = next_avail);
                                         spawn(async move {
                                             let url = format!("{}/api/strains/{}/availability", api_base_url(), id);
-                                            let res = reqwest::Client::new().put(&url)
+                                            let res = HTTP_CLIENT.clone().put(&url)
                                                 .header("X-Telegram-Init-Data", init_data.read().clone())
                                                 .header("X-Admin-Telegram-Id", telegram_id.to_string())
                                                 .json(&json!({ "is_available": next_avail }))
@@ -746,7 +749,7 @@ fn StrainsTab() -> Element {
                     cache.write().retain(|s| s.id != id);
                     spawn(async move {
                         let url = format!("{}/api/strains/{}", api_base_url(), id);
-                        let res = reqwest::Client::new().delete(&url)
+                        let res = HTTP_CLIENT.clone().delete(&url)
                             .header("X-Telegram-Init-Data", init_data.read().clone())
                             .header("X-Admin-Telegram-Id", telegram_id.to_string())
                             .send().await;
@@ -830,7 +833,7 @@ fn AccessoriesTab() -> Element {
         let init_data = init_data.read().clone();
         async move {
         let url = format!("{}/api/accessories?include_hidden=1", api_base_url());
-        if let Ok(resp) = reqwest::Client::new()
+        if let Ok(resp) = HTTP_CLIENT.clone()
             .get(&url)
             .header("X-Telegram-Init-Data", init_data.clone())
             .header("X-Admin-Telegram-Id", telegram_id.to_string())
@@ -922,7 +925,7 @@ fn AccessoriesTab() -> Element {
                                     "category_en": if ce.is_empty() { serde_json::Value::Null } else { ce.into() },
                                 });
                                 let url = format!("{}/api/accessories", api_base_url());
-                                let res = reqwest::Client::new().post(&url)
+                                let res = HTTP_CLIENT.clone().post(&url)
                                     .header("X-Telegram-Init-Data", init_data.read().clone())
  .header("X-Admin-Telegram-Id", telegram_id.to_string())
                                     .json(&body).send().await;
@@ -999,7 +1002,7 @@ fn AccessoriesTab() -> Element {
                                         cache.write().iter_mut().find(|a| a.id == id).map(|a| a.is_available = next);
                                         spawn(async move {
                                             let url = format!("{}/api/accessories/{}/availability", api_base_url(), id);
-                                            let res = reqwest::Client::new().put(&url)
+                                            let res = HTTP_CLIENT.clone().put(&url)
                                                 .header("X-Telegram-Init-Data", init_data.read().clone())
                                                 .header("X-Admin-Telegram-Id", telegram_id.to_string())
                                                 .json(&json!({ "is_available": next })).send().await;
@@ -1031,7 +1034,7 @@ fn AccessoriesTab() -> Element {
                     cache.write().retain(|a| a.id != id);
                     spawn(async move {
                         let url = format!("{}/api/accessories/{}", api_base_url(), id);
-                        let res = reqwest::Client::new().delete(&url)
+                        let res = HTTP_CLIENT.clone().delete(&url)
                             .header("X-Telegram-Init-Data", init_data.read().clone())
                             .header("X-Admin-Telegram-Id", telegram_id.to_string())
                             .send().await;
@@ -1115,7 +1118,7 @@ fn TeaTab() -> Element {
         let init_data = init_data.read().clone();
         async move {
         let url = format!("{}/api/tea-products?include_hidden=1", api_base_url());
-        if let Ok(resp) = reqwest::Client::new()
+        if let Ok(resp) = HTTP_CLIENT.clone()
             .get(&url)
             .header("X-Telegram-Init-Data", init_data.clone())
             .header("X-Admin-Telegram-Id", telegram_id.to_string())
@@ -1205,7 +1208,7 @@ fn TeaTab() -> Element {
                                     "subcategory_en": if sce.is_empty() { serde_json::Value::Null } else { sce.into() },
                                 });
                                 let url = format!("{}/api/tea-products", api_base_url());
-                                let res = reqwest::Client::new().post(&url)
+                                let res = HTTP_CLIENT.clone().post(&url)
                                     .header("X-Telegram-Init-Data", init_data.read().clone())
  .header("X-Admin-Telegram-Id", telegram_id.to_string())
                                     .json(&body).send().await;
@@ -1282,7 +1285,7 @@ fn TeaTab() -> Element {
                                         cache.write().iter_mut().find(|t| t.id == id).map(|t| t.is_available = next);
                                         spawn(async move {
                                             let url = format!("{}/api/tea-products/{}/availability", api_base_url(), id);
-                                            let res = reqwest::Client::new().put(&url)
+                                            let res = HTTP_CLIENT.clone().put(&url)
                                                 .header("X-Telegram-Init-Data", init_data.read().clone())
                                                 .header("X-Admin-Telegram-Id", telegram_id.to_string())
                                                 .json(&json!({ "is_available": next })).send().await;
@@ -1314,7 +1317,7 @@ fn TeaTab() -> Element {
                     cache.write().retain(|t| t.id != id);
                     spawn(async move {
                         let url = format!("{}/api/tea-products/{}", api_base_url(), id);
-                        let res = reqwest::Client::new().delete(&url)
+                        let res = HTTP_CLIENT.clone().delete(&url)
                             .header("X-Telegram-Init-Data", init_data.read().clone())
                             .header("X-Admin-Telegram-Id", telegram_id.to_string())
                             .send().await;
@@ -1396,7 +1399,7 @@ fn SetsTab() -> Element {
         let init_data = init_data.read().clone();
         async move {
             let url = format!("{}/api/sets?include_hidden=1", api_base_url());
-            if let Ok(resp) = reqwest::Client::new()
+            if let Ok(resp) = HTTP_CLIENT.clone()
                 .get(&url)
                 .header("X-Telegram-Init-Data", init_data.clone())
                 .header("X-Admin-Telegram-Id", telegram_id.to_string())
@@ -1487,7 +1490,7 @@ fn SetsTab() -> Element {
                                     "is_deal_of_day": deal,
                                 });
                                 let url = format!("{}/api/sets", api_base_url());
-                                let res = reqwest::Client::new().post(&url)
+                                let res = HTTP_CLIENT.clone().post(&url)
                                     .header("X-Telegram-Init-Data", init_data.read().clone())
                                     .header("X-Admin-Telegram-Id", telegram_id.to_string())
                                     .json(&body).send().await;
@@ -1568,7 +1571,7 @@ fn SetsTab() -> Element {
                                         cache.write().iter_mut().find(|s| s.id == id).map(|s| s.is_available = next);
                                         spawn(async move {
                                             let url = format!("{}/api/sets/{}/availability", api_base_url(), id);
-                                            let res = reqwest::Client::new().put(&url)
+                                            let res = HTTP_CLIENT.clone().put(&url)
                                                 .header("X-Telegram-Init-Data", init_data.read().clone())
                                                 .header("X-Admin-Telegram-Id", telegram_id.to_string())
                                                 .json(&json!({ "is_available": next })).send().await;
@@ -1597,7 +1600,7 @@ fn SetsTab() -> Element {
                     cache.write().retain(|s| s.id != id);
                     spawn(async move {
                         let url = format!("{}/api/sets/{}", api_base_url(), id);
-                        let res = reqwest::Client::new().delete(&url)
+                        let res = HTTP_CLIENT.clone().delete(&url)
                             .header("X-Telegram-Init-Data", init_data.read().clone())
                             .header("X-Admin-Telegram-Id", telegram_id.to_string())
                             .send().await;
@@ -1692,7 +1695,7 @@ fn EditSetCard(
                                 "is_deal_of_day": deal,
                             });
                             let url = format!("{}/api/sets/{}", api_base_url(), id);
-                            let res = reqwest::Client::new().put(&url)
+                            let res = HTTP_CLIENT.clone().put(&url)
                                 .header("X-Telegram-Init-Data", init_data.read().clone())
                                 .header("X-Admin-Telegram-Id", telegram_id.to_string())
                                 .json(&body).send().await;
@@ -1779,7 +1782,7 @@ fn AccessorySetsTab() -> Element {
         let init_data = init_data.read().clone();
         async move {
             let url = format!("{}/api/accessory-sets?include_hidden=1", api_base_url());
-            if let Ok(resp) = reqwest::Client::new()
+            if let Ok(resp) = HTTP_CLIENT.clone()
                 .get(&url)
                 .header("X-Telegram-Init-Data", init_data.clone())
                 .header("X-Admin-Telegram-Id", telegram_id.to_string())
@@ -1878,7 +1881,7 @@ fn AccessorySetsTab() -> Element {
                                     "description_en": if de.is_empty() { serde_json::Value::Null } else { de.into() },
                                 });
                                 let url = format!("{}/api/accessory-sets", api_base_url());
-                                let res = reqwest::Client::new().post(&url)
+                                let res = HTTP_CLIENT.clone().post(&url)
                                     .header("X-Telegram-Init-Data", init_data.read().clone())
                                     .header("X-Admin-Telegram-Id", telegram_id.to_string())
                                     .json(&body).send().await;
@@ -1959,7 +1962,7 @@ fn AccessorySetsTab() -> Element {
                                         cache.write().iter_mut().find(|s| s.id == id).map(|s| s.is_available = next);
                                         spawn(async move {
                                             let url = format!("{}/api/accessory-sets/{}/availability", api_base_url(), id);
-                                            let res = reqwest::Client::new().put(&url)
+                                            let res = HTTP_CLIENT.clone().put(&url)
                                                 .header("X-Telegram-Init-Data", init_data.read().clone())
                                                 .header("X-Admin-Telegram-Id", telegram_id.to_string())
                                                 .json(&json!({ "is_available": next })).send().await;
@@ -1988,7 +1991,7 @@ fn AccessorySetsTab() -> Element {
                     cache.write().retain(|s| s.id != id);
                     spawn(async move {
                         let url = format!("{}/api/accessory-sets/{}", api_base_url(), id);
-                        let res = reqwest::Client::new().delete(&url)
+                        let res = HTTP_CLIENT.clone().delete(&url)
                             .header("X-Telegram-Init-Data", init_data.read().clone())
                             .header("X-Admin-Telegram-Id", telegram_id.to_string())
                             .send().await;
@@ -2093,7 +2096,7 @@ fn EditAccessorySetCard(
                                 "description_en": if de.is_empty() { serde_json::Value::Null } else { de.into() },
                             });
                             let url = format!("{}/api/accessory-sets/{}", api_base_url(), id);
-                            let res = reqwest::Client::new().put(&url)
+                            let res = HTTP_CLIENT.clone().put(&url)
                                 .header("X-Telegram-Init-Data", init_data.read().clone())
                                 .header("X-Admin-Telegram-Id", telegram_id.to_string())
                                 .json(&body).send().await;
@@ -2178,7 +2181,7 @@ fn TeaSetsTab() -> Element {
         let init_data = init_data.read().clone();
         async move {
             let url = format!("{}/api/tea-sets?include_hidden=1", api_base_url());
-            if let Ok(resp) = reqwest::Client::new()
+            if let Ok(resp) = HTTP_CLIENT.clone()
                 .get(&url)
                 .header("X-Telegram-Init-Data", init_data.clone())
                 .header("X-Admin-Telegram-Id", telegram_id.to_string())
@@ -2267,7 +2270,7 @@ fn TeaSetsTab() -> Element {
                                     "description_en": if de.is_empty() { serde_json::Value::Null } else { de.into() },
                                 });
                                 let url = format!("{}/api/tea-sets", api_base_url());
-                                let res = reqwest::Client::new().post(&url)
+                                let res = HTTP_CLIENT.clone().post(&url)
                                     .header("X-Telegram-Init-Data", init_data.read().clone())
                                     .header("X-Admin-Telegram-Id", telegram_id.to_string())
                                     .json(&body).send().await;
@@ -2348,7 +2351,7 @@ fn TeaSetsTab() -> Element {
                                         cache.write().iter_mut().find(|s| s.id == id).map(|s| s.is_available = next);
                                         spawn(async move {
                                             let url = format!("{}/api/tea-sets/{}/availability", api_base_url(), id);
-                                            let res = reqwest::Client::new().put(&url)
+                                            let res = HTTP_CLIENT.clone().put(&url)
                                                 .header("X-Telegram-Init-Data", init_data.read().clone())
                                                 .header("X-Admin-Telegram-Id", telegram_id.to_string())
                                                 .json(&json!({ "is_available": next })).send().await;
@@ -2377,7 +2380,7 @@ fn TeaSetsTab() -> Element {
                     cache.write().retain(|s| s.id != id);
                     spawn(async move {
                         let url = format!("{}/api/tea-sets/{}", api_base_url(), id);
-                        let res = reqwest::Client::new().delete(&url)
+                        let res = HTTP_CLIENT.clone().delete(&url)
                             .header("X-Telegram-Init-Data", init_data.read().clone())
                             .header("X-Admin-Telegram-Id", telegram_id.to_string())
                             .send().await;
@@ -2469,7 +2472,7 @@ fn EditTeaSetCard(
                                 "description_en": if de.is_empty() { serde_json::Value::Null } else { de.into() },
                             });
                             let url = format!("{}/api/tea-sets/{}", api_base_url(), id);
-                            let res = reqwest::Client::new().put(&url)
+                            let res = HTTP_CLIENT.clone().put(&url)
                                 .header("X-Telegram-Init-Data", init_data.read().clone())
                                 .header("X-Admin-Telegram-Id", telegram_id.to_string())
                                 .json(&body).send().await;
@@ -2820,7 +2823,7 @@ fn EditStrainCard(
                                 "strain_type_en": if ste.is_empty() { serde_json::Value::Null } else { ste.into() },
                             });
                             let url = format!("{}/api/strains/{}", api_base_url(), id);
-                            let res = reqwest::Client::new().put(&url)
+                            let res = HTTP_CLIENT.clone().put(&url)
                                 .header("X-Telegram-Init-Data", init_data.read().clone())
  .header("X-Admin-Telegram-Id", telegram_id.to_string())
                                 .json(&body).send().await;
@@ -2927,7 +2930,7 @@ fn EditAccessoryCard(
                                 "category_en": if ce.is_empty() { serde_json::Value::Null } else { ce.into() },
                             });
                             let url = format!("{}/api/accessories/{}", api_base_url(), id);
-                            let res = reqwest::Client::new().put(&url)
+                            let res = HTTP_CLIENT.clone().put(&url)
                                 .header("X-Telegram-Init-Data", init_data.read().clone())
  .header("X-Admin-Telegram-Id", telegram_id.to_string())
                                 .json(&body).send().await;
@@ -3033,7 +3036,7 @@ fn EditTeaCard(
                                 "subcategory_en": if sce.is_empty() { serde_json::Value::Null } else { sce.into() },
                             });
                             let url = format!("{}/api/tea-products/{}", api_base_url(), id);
-                            let res = reqwest::Client::new().put(&url)
+                            let res = HTTP_CLIENT.clone().put(&url)
                                 .header("X-Telegram-Init-Data", init_data.read().clone())
  .header("X-Admin-Telegram-Id", telegram_id.to_string())
                                 .json(&body).send().await;
@@ -3090,7 +3093,7 @@ fn DashboardTab() -> Element {
         let init_data = init_data.read().clone();
         async move {
             let url = format!("{}/api/admin/stats", api_base_url());
-            match reqwest::Client::new()
+            match HTTP_CLIENT.clone()
                 .get(&url)
                 .header("X-Telegram-Init-Data", init_data)
                 .send().await
@@ -3320,15 +3323,15 @@ fn OrdersTab() -> Element {
     let mut tick = use_signal(|| 0u32);
     let mut prev_pending_count = use_signal(|| 0usize);
 
-    use_effect(move || {
-        if !auto_refresh() { return; }
-        spawn(async move {
+    let _poll = use_resource(move || {
+        let enabled = auto_refresh();
+        async move {
+            if !enabled { return Some(()); }
             loop {
                 gloo_timers::future::TimeoutFuture::new(10000).await;
-                if !auto_refresh() { break; }
                 tick.set(tick() + 1);
             }
-        });
+        }
     });
 
     let _ = use_resource(move || {
@@ -3341,7 +3344,7 @@ fn OrdersTab() -> Element {
         async move {
             loading.set(true);
             let url = format!("{}/api/orders?limit={}&offset={}", api_base_url(), lim, off);
-            match reqwest::Client::new()
+            match HTTP_CLIENT.clone()
                 .get(&url)
                 .header("X-Telegram-Init-Data", init_data)
                 .send().await
@@ -3570,7 +3573,7 @@ fn OrdersTab() -> Element {
                                                     let toasts2 = toasts.clone();
                                                     spawn(async move {
                                                         let url = format!("{}/api/orders/{}/status", api_base_url(), oid);
-                                                        let res = reqwest::Client::new().put(&url)
+                                                        let res = HTTP_CLIENT.clone().put(&url)
                                                             .header("X-Telegram-Init-Data", id2)
                                                             .json(&json!({"status": "confirmed"}))
                                                             .send().await;
@@ -3600,7 +3603,7 @@ fn OrdersTab() -> Element {
                                                     let toasts3 = toasts.clone();
                                                     spawn(async move {
                                                         let url = format!("{}/api/orders/{}/status", api_base_url(), oid);
-                                                        let res = reqwest::Client::new().put(&url)
+                                                        let res = HTTP_CLIENT.clone().put(&url)
                                                             .header("X-Telegram-Init-Data", id3)
                                                             .json(&json!({"status": "completed"}))
                                                             .send().await;
@@ -3627,7 +3630,7 @@ fn OrdersTab() -> Element {
                                                     let toasts_c = toasts.clone();
                                                     spawn(async move {
                                                         let url = format!("{}/api/orders/{}/status", api_base_url(), oid);
-                                                        let res = reqwest::Client::new().put(&url)
+                                                        let res = HTTP_CLIENT.clone().put(&url)
                                                             .header("X-Telegram-Init-Data", id_c)
                                                             .json(&json!({"status": "rejected"}))
                                                             .send().await;
@@ -3738,7 +3741,7 @@ fn QuestsTab() -> Element {
         let init_data = init_data.read().clone();
         async move {
             let url = format!("{}/api/quest-places", api_base_url());
-            match reqwest::Client::new().get(&url).header("X-Telegram-Init-Data", init_data).send().await {
+            match HTTP_CLIENT.clone().get(&url).header("X-Telegram-Init-Data", init_data).send().await {
                 Ok(resp) if resp.status().is_success() => {
                     if let Ok(data) = resp.json::<QuestPlacesResp>().await {
                         places.set(data.quest_places);
@@ -3831,11 +3834,11 @@ fn QuestsTab() -> Element {
                                     });
                                     let base = api_base_url();
                                     let res = if is_cr {
-                                        reqwest::Client::new().post(&format!("{}/api/quest-places", base))
+                                        HTTP_CLIENT.clone().post(&format!("{}/api/quest-places", base))
                                             .header("X-Telegram-Init-Data", id_data)
                                             .json(&body).send().await
                                     } else {
-                                        reqwest::Client::new().put(&format!("{}/api/quest-places/{}", base, iid))
+                                        HTTP_CLIENT.clone().put(&format!("{}/api/quest-places/{}", base, iid))
                                             .header("X-Telegram-Init-Data", id_data)
                                             .json(&body).send().await
                                     };
@@ -3910,7 +3913,7 @@ fn QuestsTab() -> Element {
                                                 let toasts3 = toasts2.clone();
                                                 spawn(async move {
                                                     let url = format!("{}/api/quest-places/{}", api_base_url(), pid);
-                                                    let res = reqwest::Client::new().delete(&url)
+                                                    let res = HTTP_CLIENT.clone().delete(&url)
                                                         .header("X-Telegram-Init-Data", id_d)
                                                         .send().await;
                                                     match res {
@@ -3982,7 +3985,7 @@ fn TreasuresTab() -> Element {
         let init_data = init_data.read().clone();
         async move {
             let url = format!("{}/api/treasure-hunts", api_base_url());
-            match reqwest::Client::new().get(&url).header("X-Telegram-Init-Data", init_data).send().await {
+            match HTTP_CLIENT.clone().get(&url).header("X-Telegram-Init-Data", init_data).send().await {
                 Ok(resp) if resp.status().is_success() => {
                     if let Ok(data) = resp.json::<TreasureHuntsResp>().await {
                         hunts.set(data.treasure_hunts);
@@ -4079,11 +4082,11 @@ fn TreasuresTab() -> Element {
                                     });
                                     let base = api_base_url();
                                     let res = if is_cr {
-                                        reqwest::Client::new().post(&format!("{}/api/treasure-hunts", base))
+                                        HTTP_CLIENT.clone().post(&format!("{}/api/treasure-hunts", base))
                                             .header("X-Telegram-Init-Data", id_data)
                                             .json(&body).send().await
                                     } else {
-                                        reqwest::Client::new().put(&format!("{}/api/treasure-hunts/{}", base, iid))
+                                        HTTP_CLIENT.clone().put(&format!("{}/api/treasure-hunts/{}", base, iid))
                                             .header("X-Telegram-Init-Data", id_data)
                                             .json(&body).send().await
                                     };
@@ -4163,7 +4166,7 @@ fn TreasuresTab() -> Element {
                                             let toasts3 = toasts2.clone();
                                             spawn(async move {
                                                 let url = format!("{}/api/treasure-hunts/{}", api_base_url(), hid);
-                                                let res = reqwest::Client::new().delete(&url)
+                                                let res = HTTP_CLIENT.clone().delete(&url)
                                                     .header("X-Telegram-Init-Data", id_d)
                                                     .send().await;
                                                 match res {
@@ -4221,7 +4224,7 @@ fn GardenTab() -> Element {
         let init_data = init_data.read().clone();
         async move {
             let url = format!("{}/api/garden/config", api_base_url());
-            match reqwest::Client::new().get(&url).header("X-Telegram-Init-Data", init_data).send().await {
+            match HTTP_CLIENT.clone().get(&url).header("X-Telegram-Init-Data", init_data).send().await {
                 Ok(resp) if resp.status().is_success() => {
                     if let Ok(cfg) = resp.json::<GardenConfig>().await {
                         is_enabled.set(cfg.is_enabled);
@@ -4303,7 +4306,7 @@ fn GardenTab() -> Element {
                                     "reward_expiration_days": ed,
                                 });
                                 let url = format!("{}/api/garden/config", api_base_url());
-                                let res = reqwest::Client::new().put(&url)
+                                let res = HTTP_CLIENT.clone().put(&url)
                                     .header("X-Telegram-Init-Data", id_data)
                                     .json(&body).send().await;
                                 saving2.set(false);
@@ -4378,7 +4381,7 @@ fn LoyaltyTab() -> Element {
         async move {
             let base = api_base_url();
             // Fetch config/tiers
-            if let Ok(resp) = reqwest::Client::new()
+            if let Ok(resp) = HTTP_CLIENT.clone()
                 .get(&format!("{}/api/loyalty/tiers", base))
                 .header("X-Telegram-Init-Data", init_data.clone())
                 .send().await
@@ -4390,7 +4393,7 @@ fn LoyaltyTab() -> Element {
                 }
             }
             // Fetch leaderboard
-            if let Ok(resp) = reqwest::Client::new()
+            if let Ok(resp) = HTTP_CLIENT.clone()
                 .get(&format!("{}/api/loyalty/leaderboard", base))
                 .header("X-Telegram-Init-Data", init_data.clone())
                 .send().await
@@ -4529,7 +4532,7 @@ fn ManagersTab() -> Element {
         let init_data = init_data.read().clone();
         async move {
             let url = format!("{}/api/admin/managers", api_base_url());
-            match reqwest::Client::new().get(&url).header("X-Telegram-Init-Data", init_data).send().await {
+            match HTTP_CLIENT.clone().get(&url).header("X-Telegram-Init-Data", init_data).send().await {
                 Ok(resp) if resp.status().is_success() => {
                     match resp.json::<ManagersResp>().await {
                         Ok(data) => { managers.set(data.managers); }
@@ -4598,7 +4601,7 @@ fn ManagersTab() -> Element {
                                     "commission_rate": commission,
                                 });
                                 let url = format!("{}/api/admin/managers", api_base_url());
-                                let res = reqwest::Client::new().post(&url)
+                                let res = HTTP_CLIENT.clone().post(&url)
                                     .header("X-Telegram-Init-Data", id_data)
                                     .json(&body).send().await;
                                 submitting2.set(false);
@@ -4693,7 +4696,7 @@ fn ManagerDetailModal(props: ManagerDetailModalProps) -> Element {
     use_effect(move || {
         let url = format!("{}/api/admin/managers/{}/stats", api_base_url(), manager_id);
         spawn(async move {
-            match reqwest::Client::new().get(&url).send().await {
+            match HTTP_CLIENT.clone().get(&url).send().await {
                 Ok(r) if r.status().is_success() => {
                     if let Ok(text) = r.text().await {
                         stats_signal.clone().set(text);
@@ -4781,7 +4784,7 @@ fn ManagerDetailModal(props: ManagerDetailModalProps) -> Element {
                                             "ref_code": if ref_code.is_empty() { serde_json::Value::Null } else { ref_code.into() },
                                         });
                                         let url = format!("{}/api/admin/managers/{}", api_base_url(), tg_id);
-                                        let _ = reqwest::Client::new().put(&url)
+                                        let _ = HTTP_CLIENT.clone().put(&url)
                                             .header("X-Telegram-Init-Data", id_data)
                                             .json(&body).send().await;
                                         saving2.set(false);
