@@ -44,6 +44,7 @@ use tower_http::set_header::SetResponseHeaderLayer;
 use tower_http::compression::CompressionLayer;
 #[cfg(not(target_arch = "wasm32"))]
 use axum::http::{HeaderName, HeaderValue};
+use bytes::Bytes;
 #[cfg(not(target_arch = "wasm32"))]
 use axum::middleware::Next;
 #[cfg(not(target_arch = "wasm32"))]
@@ -218,11 +219,10 @@ async fn main() -> Result<()> {
 
     // ── Performance layers ────────────────────────────────────────────
     // Brotli / Gzip / Zstd compression for text assets (> 1 KB).
-    // Temporarily disabled to debug slow WASM downloads on Railway.
-    // let compression = CompressionLayer::new()
-    //     .br(true)
-    //     .gzip(true)
-    //     .zstd(true);
+    let compression = CompressionLayer::new()
+        .br(true)
+        .gzip(true)
+        .zstd(true);
 
     // For `/assets/*` images the URL is stable so 1 day is enough.
     // (Hashed Trunk bundles are served via the SPA fallback with no-store
@@ -239,9 +239,9 @@ async fn main() -> Result<()> {
         HeaderValue::from_static("no-store, no-cache, must-revalidate, max-age=0"),
     );
 
-    // Load small dist files into memory to bypass slow Railway disk I/O
+    // Load dist files into memory to bypass slow Railway disk I/O
     // for the WASM bundle (~4 MB) and hashed JS/CSS.
-    let mut static_cache: std::collections::HashMap<String, (Vec<u8>, &'static str)> =
+    let mut static_cache: std::collections::HashMap<String, (Bytes, &'static str)> =
         std::collections::HashMap::new();
     match std::fs::read_dir("dist") {
         Ok(entries) => {
@@ -258,6 +258,7 @@ async fn main() -> Result<()> {
                                 if let Ok(bytes) = std::fs::read(&sub_path) {
                                     let key = sub_path.strip_prefix("dist/").unwrap_or(&sub_path)
                                         .to_string_lossy().to_string();
+                                    let bytes = Bytes::from(bytes);
                                     let ct = match sub_path.extension().and_then(|e| e.to_str()) {
                                         Some("html") => "text/html",
                                         Some("js") => "text/javascript",
@@ -277,6 +278,7 @@ async fn main() -> Result<()> {
             } else if let Ok(bytes) = std::fs::read(&path) {
                 let key = path.strip_prefix("dist/").unwrap_or(&path)
                     .to_string_lossy().to_string();
+                let bytes = Bytes::from(bytes);
                 let ct = match path.extension().and_then(|e| e.to_str()) {
                     Some("html") => "text/html",
                     Some("js") => "text/javascript",
@@ -424,9 +426,8 @@ async fn main() -> Result<()> {
         // headers globally on the fallback; immutable cache for hashed
         // assets would be ideal but requires per-file logic. Telegram WebApp
         // cache busting is the priority — no-store keeps deploys landing.
-        .fallback(serve_dist);
-        // Compression temporarily disabled for debugging.
-        // .layer(compression);
+        .fallback(serve_dist)
+        .layer(compression);
 
     let addr = SocketAddr::from(([0, 0, 0, 0], config.port));
     info!("🚀 HTTP server listening on {}", addr);

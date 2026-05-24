@@ -11,12 +11,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Add wasm32 target
 RUN rustup target add wasm32-unknown-unknown
 
-# Install trunk + wasm-bindgen-cli from prebuilt binaries (fast: ~5s instead of 10min cargo install)
+# Install trunk + wasm-bindgen-cli + wasm-opt from prebuilt binaries
 RUN curl -fsSL https://github.com/trunk-rs/trunk/releases/download/v0.21.5/trunk-x86_64-unknown-linux-gnu.tar.gz \
         | tar -xz -C /usr/local/bin trunk \
     && curl -fsSL https://github.com/rustwasm/wasm-bindgen/releases/download/0.2.121/wasm-bindgen-0.2.121-x86_64-unknown-linux-musl.tar.gz \
         | tar -xz --strip-components=1 -C /usr/local/bin wasm-bindgen-0.2.121-x86_64-unknown-linux-musl/wasm-bindgen \
-    && trunk --version && wasm-bindgen --version
+    && curl -fsSL https://github.com/WebAssembly/binaryen/releases/download/version_129/binaryen-version_129-x86_64-linux.tar.gz \
+        | tar -xz --strip-components=1 -C /usr/local/bin binaryen-version_129/bin/wasm-opt \
+    && trunk --version && wasm-bindgen --version && wasm-opt --version
 
 # Copy sources required for trunk build
 COPY Cargo.toml Cargo.lock Trunk.toml index.html build.rs ./
@@ -28,7 +30,13 @@ COPY assets ./assets
 # BUILD_VERSION arg lets CI inject a deterministic version when .git is absent.
 ARG BUILD_VERSION=docker
 ENV BUILD_VERSION_OVERRIDE=$BUILD_VERSION
+# Shrink WASM binary: optimize for size and abort on panic
+ENV CARGO_PROFILE_RELEASE_OPT_LEVEL=z
+ENV CARGO_PROFILE_RELEASE_PANIC=abort
 RUN trunk build --release
+# Run wasm-opt manually because Trunk's bundled version is too old for modern
+# rustc features (bulk-memory / nontrapping-float-to-int).
+RUN find dist -name '*.wasm' -exec wasm-opt -Oz --enable-bulk-memory --enable-nontrapping-float-to-int {} -o {} \;
 
 # SRI disabled via Trunk.toml no_sri=true — no sed stripping needed
 

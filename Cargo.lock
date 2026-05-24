@@ -5854,6 +5854,7 @@ dependencies = [
  "axum",
  "axum-prometheus",
  "base64 0.21.7",
+ "bytes",
  "chrono",
  "console_error_panic_hook",
  "constant_time_eq",
