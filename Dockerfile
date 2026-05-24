@@ -17,7 +17,9 @@ RUN curl -fsSL https://github.com/trunk-rs/trunk/releases/download/v0.21.5/trunk
     && curl -fsSL https://github.com/rustwasm/wasm-bindgen/releases/download/0.2.121/wasm-bindgen-0.2.121-x86_64-unknown-linux-musl.tar.gz \
         | tar -xz --strip-components=1 -C /usr/local/bin wasm-bindgen-0.2.121-x86_64-unknown-linux-musl/wasm-bindgen \
     && curl -fsSL https://github.com/WebAssembly/binaryen/releases/download/version_129/binaryen-version_129-x86_64-linux.tar.gz \
-        | tar -xz --strip-components=1 -C /usr/local/bin binaryen-version_129/bin/wasm-opt \
+        | tar -xz -C /tmp \
+    && mv /tmp/binaryen-version_129/bin/wasm-opt /usr/local/bin/wasm-opt \
+    && rm -rf /tmp/binaryen-version_129 \
     && trunk --version && wasm-bindgen --version && wasm-opt --version
 
 # Copy sources required for trunk build
