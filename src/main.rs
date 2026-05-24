@@ -41,7 +41,7 @@ use tower_http::services::{ServeDir, ServeFile};
 #[cfg(not(target_arch = "wasm32"))]
 use tower_http::set_header::SetResponseHeaderLayer;
 #[cfg(not(target_arch = "wasm32"))]
-use tower_http::compression::CompressionLayer;
+// use tower_http::compression::CompressionLayer;
 #[cfg(not(target_arch = "wasm32"))]
 use axum::http::{HeaderName, HeaderValue};
 use bytes::Bytes;
@@ -78,6 +78,14 @@ pub struct AppState {
     pub config: Arc<Config>,
     pub bot: Arc<Bot>,
     pub cache: Arc<ETagCache>,
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+struct CachedFile {
+    raw: Bytes,
+    gzip: Option<Bytes>,
+    br: Option<Bytes>,
+    content_type: &'static str,
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -213,10 +221,12 @@ async fn main() -> Result<()> {
 
     // ── Performance layers ────────────────────────────────────────────
     // Brotli / Gzip / Zstd compression for text assets (> 1 KB).
-    let compression = CompressionLayer::new()
-        .br(true)
-        .gzip(true)
-        .zstd(true);
+    // DISABLED: we now serve pre-compressed .br / .gz files directly from
+    // memory, avoiding runtime CPU overhead.
+    // let compression = CompressionLayer::new()
+    //     .br(true)
+    //     .gzip(true)
+    //     .zstd(true);
 
     // For `/assets/*` images the URL is stable so 1 day is enough.
     // (Hashed Trunk bundles are served via the SPA fallback with no-store
@@ -235,57 +245,77 @@ async fn main() -> Result<()> {
 
     // Load dist files into memory to bypass slow Railway disk I/O
     // for the WASM bundle (~4 MB) and hashed JS/CSS.
-    let mut static_cache: std::collections::HashMap<String, (Bytes, &'static str)> =
+    let mut static_cache: std::collections::HashMap<String, CachedFile> =
         std::collections::HashMap::new();
+
+    fn content_type_for(path: &std::path::Path) -> &'static str {
+        match path.extension().and_then(|e| e.to_str()) {
+            Some("html") => "text/html",
+            Some("js") => "text/javascript",
+            Some("css") => "text/css",
+            Some("wasm") => "application/wasm",
+            Some("svg") => "image/svg+xml",
+            Some("png") => "image/png",
+            Some("jpg") | Some("jpeg") => "image/jpeg",
+            _ => "application/octet-stream",
+        }
+    }
+
+    fn load_file(path: &std::path::Path) -> Option<Bytes> {
+        std::fs::read(path).ok().map(Bytes::from)
+    }
+
+    fn add_to_cache(
+        cache: &mut std::collections::HashMap<String, CachedFile>,
+        path: &std::path::Path,
+    ) {
+        // Skip pre-compressed sidecar files — they are handled together with the original
+        if path.extension().and_then(|e| e.to_str()) == Some("br")
+            || path.extension().and_then(|e| e.to_str()) == Some("gz")
+        {
+            return;
+        }
+        let key = path.strip_prefix("dist/").unwrap_or(path)
+            .to_string_lossy().to_string();
+        let raw = match load_file(path) {
+            Some(b) => b,
+            None => return,
+        };
+        let br_path = path.with_extension(
+            format!("{}.{}", path.extension().unwrap_or_default().to_string_lossy(), "br")
+        );
+        let gz_path = path.with_extension(
+            format!("{}.{}", path.extension().unwrap_or_default().to_string_lossy(), "gz")
+        );
+        let br = load_file(&br_path);
+        let gzip = load_file(&gz_path);
+        cache.insert(key, CachedFile {
+            raw,
+            gzip,
+            br,
+            content_type: content_type_for(path),
+        });
+    }
+
     match std::fs::read_dir("dist") {
         Ok(entries) => {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.is_dir() {
-                // skip dist/assets (served via static_assets router from assets/)
-                if path.file_name() != Some(std::ffi::OsStr::new("assets")) {
-                    // recurse into subdirs (snippets/)
-                    if let Ok(sub) = std::fs::read_dir(&path) {
-                        for sub_entry in sub.flatten() {
-                            let sub_path = sub_entry.path();
-                            if sub_path.is_file() {
-                                if let Ok(bytes) = std::fs::read(&sub_path) {
-                                    let key = sub_path.strip_prefix("dist/").unwrap_or(&sub_path)
-                                        .to_string_lossy().to_string();
-                                    let bytes = Bytes::from(bytes);
-                                    let ct = match sub_path.extension().and_then(|e| e.to_str()) {
-                                        Some("html") => "text/html",
-                                        Some("js") => "text/javascript",
-                                        Some("css") => "text/css",
-                                        Some("wasm") => "application/wasm",
-                                        Some("svg") => "image/svg+xml",
-                                        Some("png") => "image/png",
-                                        Some("jpg") | Some("jpeg") => "image/jpeg",
-                                        _ => "application/octet-stream",
-                                    };
-                                    static_cache.insert(key, (bytes, ct));
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    if path.file_name() != Some(std::ffi::OsStr::new("assets")) {
+                        if let Ok(sub) = std::fs::read_dir(&path) {
+                            for sub_entry in sub.flatten() {
+                                let sub_path = sub_entry.path();
+                                if sub_path.is_file() {
+                                    add_to_cache(&mut static_cache, &sub_path);
                                 }
                             }
                         }
                     }
+                } else {
+                    add_to_cache(&mut static_cache, &path);
                 }
-            } else if let Ok(bytes) = std::fs::read(&path) {
-                let key = path.strip_prefix("dist/").unwrap_or(&path)
-                    .to_string_lossy().to_string();
-                let bytes = Bytes::from(bytes);
-                let ct = match path.extension().and_then(|e| e.to_str()) {
-                    Some("html") => "text/html",
-                    Some("js") => "text/javascript",
-                    Some("css") => "text/css",
-                    Some("wasm") => "application/wasm",
-                    Some("svg") => "image/svg+xml",
-                    Some("png") => "image/png",
-                    Some("jpg") | Some("jpeg") => "image/jpeg",
-                    _ => "application/octet-stream",
-                };
-                static_cache.insert(key, (bytes, ct));
             }
-        }
         }
         Err(e) => {
             println!("ERROR: failed to read_dir(dist): {}", e);
@@ -308,28 +338,47 @@ async fn main() -> Result<()> {
     //
     // In-memory fallback handler using the pre-loaded static_cache.
     let static_cache = std::sync::Arc::new(static_cache);
+
+    fn pick_encoding(headers: &axum::http::HeaderMap) -> Option<&'static str> {
+        let accept = headers.get(axum::http::header::ACCEPT_ENCODING)?
+            .to_str().ok()?;
+        if accept.contains("br") {
+            Some("br")
+        } else if accept.contains("gzip") {
+            Some("gzip")
+        } else {
+            None
+        }
+    }
+
     let serve_dist = {
         let static_cache = static_cache.clone();
-        move |uri: axum::http::Uri| {
+        move |uri: axum::http::Uri, headers: axum::http::HeaderMap| {
             let static_cache = static_cache.clone();
             async move {
                 let path = uri.path().trim_start_matches('/');
                 if path.contains("..") {
                     return (axum::http::StatusCode::NOT_FOUND, "Not found").into_response();
                 }
-                if let Some((bytes, ct)) = static_cache.get(path) {
-                    let mut resp = (axum::http::StatusCode::OK, bytes.clone()).into_response();
+                let cached = static_cache.get(path)
+                    .or_else(|| static_cache.get("index.html"));
+                if let Some(file) = cached {
+                    let (body, encoding) = match pick_encoding(&headers) {
+                        Some("br") if file.br.is_some() => (file.br.clone().unwrap(), Some("br")),
+                        Some("gzip") if file.gzip.is_some() => (file.gzip.clone().unwrap(), Some("gzip")),
+                        _ => (file.raw.clone(), None),
+                    };
+                    let mut resp = (axum::http::StatusCode::OK, body).into_response();
                     resp.headers_mut().insert(
                         axum::http::header::CONTENT_TYPE,
-                        axum::http::HeaderValue::from_static(ct),
+                        axum::http::HeaderValue::from_static(file.content_type),
                     );
-                    resp
-                } else if let Some((bytes, ct)) = static_cache.get("index.html") {
-                    let mut resp = (axum::http::StatusCode::OK, bytes.clone()).into_response();
-                    resp.headers_mut().insert(
-                        axum::http::header::CONTENT_TYPE,
-                        axum::http::HeaderValue::from_static(ct),
-                    );
+                    if let Some(enc) = encoding {
+                        resp.headers_mut().insert(
+                            axum::http::header::CONTENT_ENCODING,
+                            axum::http::HeaderValue::from_static(enc),
+                        );
+                    }
                     resp
                 } else {
                     (axum::http::StatusCode::NOT_FOUND, "Not found").into_response()
@@ -342,8 +391,8 @@ async fn main() -> Result<()> {
     let spa_handler = {
         let static_cache = static_cache.clone();
         move || async move {
-            if let Some((bytes, _ct)) = static_cache.get("index.html") {
-                axum::response::Html(String::from_utf8_lossy(bytes).to_string())
+            if let Some(file) = static_cache.get("index.html") {
+                axum::response::Html(String::from_utf8_lossy(&file.raw).to_string())
             } else {
                 axum::response::Html("<h1>App not found</h1>".to_string())
             }
@@ -432,8 +481,8 @@ async fn main() -> Result<()> {
         // headers globally on the fallback; immutable cache for hashed
         // assets would be ideal but requires per-file logic. Telegram WebApp
         // cache busting is the priority — no-store keeps deploys landing.
-        .fallback(serve_dist)
-        .layer(compression);
+        .fallback(serve_dist);
+        // .layer(compression);
 
     let addr = SocketAddr::from(([0, 0, 0, 0], config.port));
     info!("🚀 HTTP server listening on {}", addr);

@@ -5,7 +5,7 @@ FROM rust:1.91-slim AS frontend
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    pkg-config ca-certificates curl xz-utils \
+    pkg-config ca-certificates curl xz-utils brotli \
     && rm -rf /var/lib/apt/lists/*
 
 # Add wasm32 target
@@ -37,6 +37,10 @@ RUN trunk build --release
 # Run wasm-opt manually because Trunk's bundled version is too old for modern
 # rustc features (bulk-memory / nontrapping-float-to-int).
 RUN find dist -name '*.wasm' -exec wasm-opt -Oz --enable-bulk-memory --enable-nontrapping-float-to-int {} -o {} \;
+# Pre-compress static assets so we can serve them directly without runtime CPU overhead.
+RUN find dist -type f \( -name '*.html' -o -name '*.js' -o -name '*.css' -o -name '*.wasm' -o -name '*.svg' \) \
+    -exec gzip -9 -k {} \; \
+    -exec brotli -q 11 -k {} \;
 
 # SRI disabled via Trunk.toml no_sri=true — no sed stripping needed
 
