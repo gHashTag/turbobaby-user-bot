@@ -379,6 +379,16 @@ async fn main() -> Result<()> {
                             axum::http::HeaderValue::from_static(enc),
                         );
                     }
+                    // Cache control: hashed assets are immutable, HTML must never be cached
+                    let cache_header = if path == "index.html" || path == "" || !path.contains('-') {
+                        "no-store, no-cache, must-revalidate, max-age=0"
+                    } else {
+                        "public, max-age=31536000, immutable"
+                    };
+                    resp.headers_mut().insert(
+                        axum::http::header::CACHE_CONTROL,
+                        axum::http::HeaderValue::from_static(cache_header),
+                    );
                     resp
                 } else {
                     (axum::http::StatusCode::NOT_FOUND, "Not found").into_response()
