@@ -1,12 +1,11 @@
 //! Validation rules for Trios ecosystem
 
-use regex::Regex;
-use std::sync::LazyLock;
 use crate::trios::core::{Error, QrToken, Result, TelegramId};
 
-/// Telegram ID validation regex: must be positive integer, 1-20 digits
-static TELEGRAM_ID_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"^\d{1,20}$").expect("valid regex"));
+/// Check if string is 1-20 digits (replaces regex to shrink WASM)
+fn is_telegram_id_str(s: &str) -> bool {
+    !s.is_empty() && s.len() <= 20 && s.chars().all(|c| c.is_ascii_digit())
+}
 
 /// Purchase amount minimum for location quest
 pub const MIN_PURCHASE_AMOUNT: i64 = 300;
@@ -29,7 +28,7 @@ pub fn validate_telegram_id(id: i64) -> Result<TelegramId> {
 
 /// Validate Telegram ID from string
 pub fn validate_telegram_id_str(s: &str) -> Result<TelegramId> {
-    if !TELEGRAM_ID_RE.is_match(s) {
+    if !is_telegram_id_str(s) {
         return Err(Error::Validation(
             "Telegram ID must be a 1-20 digit number".to_string(),
         ));
