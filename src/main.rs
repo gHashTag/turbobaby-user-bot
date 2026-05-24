@@ -131,12 +131,6 @@ async fn cache_middleware(req: Request<axum::body::Body>, next: Next) -> axum::r
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-async fn spa_handler() -> impl axum::response::IntoResponse {
-    let html = tokio::fs::read_to_string("dist/index.html").await.unwrap_or_else(|_| "<h1>App not found</h1>".to_string());
-    axum::response::Html(html)
-}
-
-#[cfg(not(target_arch = "wasm32"))]
 #[tokio::main]
 async fn main() -> Result<()> {
     // Must be called before ANY rustls usage
@@ -344,26 +338,38 @@ async fn main() -> Result<()> {
         }
     };
 
+    // SPA handler that serves index.html from memory (avoids slow Railway disk I/O)
+    let spa_handler = {
+        let static_cache = static_cache.clone();
+        move || async move {
+            if let Some((bytes, _ct)) = static_cache.get("index.html") {
+                axum::response::Html(String::from_utf8_lossy(bytes).to_string())
+            } else {
+                axum::response::Html("<h1>App not found</h1>".to_string())
+            }
+        }
+    };
+
     // SPA routes that should return index.html for client-side routing
     let spa_routes = Router::new()
-        .route("/menu", get(spa_handler))
-        .route("/sets", get(spa_handler))
-        .route("/sommelier", get(spa_handler))
-        .route("/accessories", get(spa_handler))
-        .route("/tea", get(spa_handler))
-        .route("/cart", get(spa_handler))
-        .route("/checkout", get(spa_handler))
-        .route("/success", get(spa_handler))
-        .route("/orders", get(spa_handler))
-        .route("/profile", get(spa_handler))
-        .route("/garden", get(spa_handler))
-        .route("/quest", get(spa_handler))
-        .route("/game", get(spa_handler))
-        .route("/referrals", get(spa_handler))
-        .route("/treasure-hunt", get(spa_handler))
-        .route("/ar-hunt", get(spa_handler))
-        .route("/location-quest", get(spa_handler))
-        .route("/tech-tree", get(spa_handler))
+        .route("/menu", get(spa_handler.clone()))
+        .route("/sets", get(spa_handler.clone()))
+        .route("/sommelier", get(spa_handler.clone()))
+        .route("/accessories", get(spa_handler.clone()))
+        .route("/tea", get(spa_handler.clone()))
+        .route("/cart", get(spa_handler.clone()))
+        .route("/checkout", get(spa_handler.clone()))
+        .route("/success", get(spa_handler.clone()))
+        .route("/orders", get(spa_handler.clone()))
+        .route("/profile", get(spa_handler.clone()))
+        .route("/garden", get(spa_handler.clone()))
+        .route("/quest", get(spa_handler.clone()))
+        .route("/game", get(spa_handler.clone()))
+        .route("/referrals", get(spa_handler.clone()))
+        .route("/treasure-hunt", get(spa_handler.clone()))
+        .route("/ar-hunt", get(spa_handler.clone()))
+        .route("/location-quest", get(spa_handler.clone()))
+        .route("/tech-tree", get(spa_handler.clone()))
         .route("/admin", get(spa_handler))
         .layer(html_no_cache_layer());
 
