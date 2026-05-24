@@ -14,6 +14,9 @@ pub fn routes() -> Router<AppState> {
         .route("/upload", post(upload_file))
 }
 
+const MAX_UPLOAD_SIZE: usize = 10 * 1024 * 1024; // 10 MB
+const ALLOWED_EXTENSIONS: &[&str] = &["jpg", "jpeg", "png", "gif", "webp", "mp4", "mov", "webm"];
+
 async fn upload_file(
     headers: HeaderMap,
     State(state): State<AppState>,
@@ -24,9 +27,21 @@ async fn upload_file(
         let filename = field.file_name().unwrap_or("upload").to_string();
         let data = field.bytes().await.map_err(|_| StatusCode::BAD_REQUEST)?;
 
-        // Add unique prefix to avoid filename collisions
+        // Size limit
+        if data.len() > MAX_UPLOAD_SIZE {
+            return Err(StatusCode::PAYLOAD_TOO_LARGE);
+        }
+
+        // Extension check
+        let ext = filename.rsplit('.').next().unwrap_or("").to_lowercase();
+        if !ALLOWED_EXTENSIONS.contains(&ext.as_str()) {
+            return Err(StatusCode::UNSUPPORTED_MEDIA_TYPE);
+        }
+
+        // Path traversal protection
+        let safe_name = filename.replace('/', "_").replace("\\", "_").replace("..", "_");
         let short_id = uuid::Uuid::new_v4().to_string();
-        let unique_name = format!("{}-{}", &short_id[..8], filename);
+        let unique_name = format!("{}-{}", &short_id[..8], safe_name);
 
         // Save locally (S3 disabled for now)
         let path = format!("/data/uploads/{}", unique_name);

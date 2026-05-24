@@ -45,9 +45,17 @@ async fn create_order(
     State(state): State<AppState>,
     Json(req): Json<CreateOrderRequest>,
 ) -> Result<Json<Value>, StatusCode> {
+    // Validation
+    if req.items.is_empty() {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    if req.total < 0.0 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    let bonus_used = req.bonus_used.unwrap_or(0.0).max(0.0);
+
     let id = uuid::Uuid::new_v4().to_string();
     let items_json = serde_json::to_value(&req.items).unwrap_or(json!([]));
-    let bonus_used = req.bonus_used.unwrap_or(0.0);
 
     // BUG-3 fix via SeaORM: subtotal/bonus_used/total могут быть NUMERIC на проде.
     // sqlx + ::float8 каст и ::jsonb cast решают все варианты.
@@ -74,6 +82,10 @@ async fn create_order(
     Ok(Json(json!({ "success": true, "order_id": id })))
 }
 
+fn html_escape(s: &str) -> String {
+    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
+}
+
 async fn notify_admins(
     bot: &teloxide::Bot,
     config: &crate::config::Config,
@@ -96,13 +108,13 @@ async fn notify_admins(
                 .or(item["set_name"].as_str())
                 .unwrap_or("?");
             let qty = item["quantity"].as_f64().unwrap_or(0.0);
-            format!("  • {} × {}g", name, qty)
+            format!("  • {} × {}g", html_escape(name), qty)
         }).collect::<Vec<_>>().join("\n")
     }).unwrap_or_default();
 
     let source = customer_telegram.as_ref()
-        .map(|t| format!("@{}", t))
-        .or_else(|| customer_name.clone())
+        .map(|t| format!("@{}", html_escape(t)))
+        .or_else(|| customer_name.as_ref().map(|n| html_escape(n)))
         .unwrap_or_else(|| "Anonymous".into());
 
     let text = format!(

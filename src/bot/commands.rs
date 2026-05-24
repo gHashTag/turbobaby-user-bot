@@ -39,7 +39,13 @@ pub enum Command {
 }
 
 fn web_app_btn(text: &str, url: &str) -> InlineKeyboardButton {
-    InlineKeyboardButton::web_app(text, WebAppInfo { url: url.parse().unwrap() })
+    match url.parse() {
+        Ok(u) => InlineKeyboardButton::web_app(text, WebAppInfo { url: u }),
+        Err(e) => {
+            tracing::error!("Invalid web_app URL '{}': {}", url, e);
+            InlineKeyboardButton::url(text, "https://t.me".parse().unwrap())
+        }
+    }
 }
 
 fn callback_btn(text: &str, data: &str) -> InlineKeyboardButton {

@@ -19,6 +19,7 @@ use axum::{
     Router,
     routing::get,
     response::Json,
+    extract::DefaultBodyLimit,
 };
 use serde_json::{json, Value};
 use crate::AppState;
@@ -44,6 +45,7 @@ fn api_routes(state: AppState) -> Router {
         .merge(referrals::routes())
         .merge(tech_tree::routes())
         .merge(cart::routes())
+        .layer(DefaultBodyLimit::max(10 * 1024 * 1024))
         .with_state(state)
 }
 

@@ -8,10 +8,22 @@ use crate::{config::Config, db::Database, locales::*, ai::{AiClient}};
 use crate::bot::commands::build_app_url;
 
 fn web_app_btn(text: &str, url: &str) -> InlineKeyboardButton {
-    InlineKeyboardButton::web_app(text, WebAppInfo { url: url.parse().unwrap() })
+    match url.parse() {
+        Ok(u) => InlineKeyboardButton::web_app(text, WebAppInfo { url: u }),
+        Err(e) => {
+            tracing::error!("Invalid web_app URL '{}': {}", url, e);
+            InlineKeyboardButton::url(text, "https://t.me".parse().unwrap())
+        }
+    }
 }
 fn url_btn(text: &str, url: &str) -> InlineKeyboardButton {
-    InlineKeyboardButton::url(text, url.parse().unwrap())
+    match url.parse() {
+        Ok(u) => InlineKeyboardButton::url(text, u),
+        Err(e) => {
+            tracing::error!("Invalid URL '{}': {}", url, e);
+            InlineKeyboardButton::url(text, "https://t.me".parse().unwrap())
+        }
+    }
 }
 
 pub async fn handle_text(
