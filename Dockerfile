@@ -14,8 +14,8 @@ RUN rustup target add wasm32-unknown-unknown
 # Install trunk + wasm-bindgen-cli from prebuilt binaries (fast: ~5s instead of 10min cargo install)
 RUN curl -fsSL https://github.com/trunk-rs/trunk/releases/download/v0.21.5/trunk-x86_64-unknown-linux-gnu.tar.gz \
         | tar -xz -C /usr/local/bin trunk \
-    && curl -fsSL https://github.com/rustwasm/wasm-bindgen/releases/download/0.2.95/wasm-bindgen-0.2.95-x86_64-unknown-linux-musl.tar.gz \
-        | tar -xz --strip-components=1 -C /usr/local/bin wasm-bindgen-0.2.95-x86_64-unknown-linux-musl/wasm-bindgen \
+    && curl -fsSL https://github.com/rustwasm/wasm-bindgen/releases/download/0.2.121/wasm-bindgen-0.2.121-x86_64-unknown-linux-musl.tar.gz \
+        | tar -xz --strip-components=1 -C /usr/local/bin wasm-bindgen-0.2.121-x86_64-unknown-linux-musl/wasm-bindgen \
     && trunk --version && wasm-bindgen --version
 
 # Copy sources required for trunk build

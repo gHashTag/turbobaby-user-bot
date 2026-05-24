@@ -196,6 +196,15 @@ enum Tab { Strains, Accessories, Tea, Sets, AccessorySets, TeaSets, Dashboard, O
 
 async fn upload_file(accept: &str) -> Option<String> {
     let accept = accept.to_string();
+    let init_data = use_telegram_init_data();
+    let telegram_id = use_telegram_id().unwrap_or(0).to_string();
+    let token = web_sys::window()
+        .and_then(|w| w.local_storage().ok())
+        .flatten()
+        .and_then(|s| s.get_item("wwb_admin_token").ok())
+        .flatten()
+        .unwrap_or_default();
+    let token_js = token.replace('\\', "\\\\").replace('\'', "\\'").replace('\n', "");
     let js = format!(r#"
 new Promise((resolve) => {{
     var input = document.createElement('input');
@@ -211,7 +220,15 @@ new Promise((resolve) => {{
         formData.append('file', file);
         try {{
             var baseUrl = window.location.origin;
-            var resp = await fetch(baseUrl + '/api/upload', {{ method: 'POST', body: formData }});
+            var resp = await fetch(baseUrl + '/api/upload', {{
+                method: 'POST',
+                body: formData,
+                headers: {{
+                    'X-Telegram-Init-Data': '{}',
+                    'X-Admin-Telegram-Id': '{}',
+                    'X-Admin-Token': '{}'
+                }}
+            }});
             var data = await resp.json();
             resolve(data.url || '');
         }} catch(err) {{ console.error('Upload error:', err); resolve(''); }}
@@ -219,7 +236,7 @@ new Promise((resolve) => {{
     setTimeout(() => {{ if (!resolved) {{ resolved = true; resolve(''); }} }}, 120000);
     input.click();
 }})
-"#, accept);
+"#, accept, init_data.replace('\\', "\\\\").replace('\'', "\\'").replace('\n', ""), telegram_id, token_js);
     let promise_val = js_sys::eval(&js).ok()?;
     let promise = promise_val.dyn_into::<js_sys::Promise>().ok()?;
     let result = wasm_bindgen_futures::JsFuture::from(promise).await.ok()?;

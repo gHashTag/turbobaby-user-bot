@@ -21,7 +21,7 @@ dist = "dist"
 cargo = false
 
 [tools]
-wasm-bindgen = "0.2.95"
+wasm-bindgen = "0.2.121"
 
 [watch]
 watch = ["src", "assets"]

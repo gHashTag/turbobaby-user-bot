@@ -9,3 +9,7 @@ target/
 dist/
 logs/
 *.log
+# E2E test artifacts
+e2e/uploads/
+e2e/test-results/
+e2e/playwright-report/

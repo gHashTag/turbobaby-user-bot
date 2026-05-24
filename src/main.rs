@@ -49,6 +49,8 @@ use axum::middleware::Next;
 #[cfg(not(target_arch = "wasm32"))]
 use axum::http::Request;
 #[cfg(not(target_arch = "wasm32"))]
+use axum::response::IntoResponse;
+#[cfg(not(target_arch = "wasm32"))]
 use tracing::info;
 #[cfg(not(target_arch = "wasm32"))]
 use std::sync::Arc;
@@ -215,15 +217,12 @@ async fn main() -> Result<()> {
     );
 
     // ── Performance layers ────────────────────────────────────────────
-    // Brotli / Gzip / Zstd compression for everything (WASM 2 MB → ~600 KB).
-    // Default predicate skips application/wasm, so use a permissive
-    // size-only predicate (anything > 1 KB gets compressed).
-    use tower_http::compression::predicate::SizeAbove;
-    let compression = CompressionLayer::new()
-        .br(true)
-        .gzip(true)
-        .zstd(true)
-        .compress_when(SizeAbove::new(1024));
+    // Brotli / Gzip / Zstd compression for text assets (> 1 KB).
+    // Temporarily disabled to debug slow WASM downloads on Railway.
+    // let compression = CompressionLayer::new()
+    //     .br(true)
+    //     .gzip(true)
+    //     .zstd(true);
 
     // For `/assets/*` images the URL is stable so 1 day is enough.
     // (Hashed Trunk bundles are served via the SPA fallback with no-store
@@ -240,6 +239,64 @@ async fn main() -> Result<()> {
         HeaderValue::from_static("no-store, no-cache, must-revalidate, max-age=0"),
     );
 
+    // Load small dist files into memory to bypass slow Railway disk I/O
+    // for the WASM bundle (~4 MB) and hashed JS/CSS.
+    let mut static_cache: std::collections::HashMap<String, (Vec<u8>, &'static str)> =
+        std::collections::HashMap::new();
+    match std::fs::read_dir("dist") {
+        Ok(entries) => {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                // skip dist/assets (served via static_assets router from assets/)
+                if path.file_name() != Some(std::ffi::OsStr::new("assets")) {
+                    // recurse into subdirs (snippets/)
+                    if let Ok(sub) = std::fs::read_dir(&path) {
+                        for sub_entry in sub.flatten() {
+                            let sub_path = sub_entry.path();
+                            if sub_path.is_file() {
+                                if let Ok(bytes) = std::fs::read(&sub_path) {
+                                    let key = sub_path.strip_prefix("dist/").unwrap_or(&sub_path)
+                                        .to_string_lossy().to_string();
+                                    let ct = match sub_path.extension().and_then(|e| e.to_str()) {
+                                        Some("html") => "text/html",
+                                        Some("js") => "text/javascript",
+                                        Some("css") => "text/css",
+                                        Some("wasm") => "application/wasm",
+                                        Some("svg") => "image/svg+xml",
+                                        Some("png") => "image/png",
+                                        Some("jpg") | Some("jpeg") => "image/jpeg",
+                                        _ => "application/octet-stream",
+                                    };
+                                    static_cache.insert(key, (bytes, ct));
+                                }
+                            }
+                        }
+                    }
+                }
+            } else if let Ok(bytes) = std::fs::read(&path) {
+                let key = path.strip_prefix("dist/").unwrap_or(&path)
+                    .to_string_lossy().to_string();
+                let ct = match path.extension().and_then(|e| e.to_str()) {
+                    Some("html") => "text/html",
+                    Some("js") => "text/javascript",
+                    Some("css") => "text/css",
+                    Some("wasm") => "application/wasm",
+                    Some("svg") => "image/svg+xml",
+                    Some("png") => "image/png",
+                    Some("jpg") | Some("jpeg") => "image/jpeg",
+                    _ => "application/octet-stream",
+                };
+                static_cache.insert(key, (bytes, ct));
+            }
+        }
+        }
+        Err(e) => {
+            println!("ERROR: failed to read_dir(dist): {}", e);
+        }
+    }
+    println!("DEBUG: Cached {} dist files in memory", static_cache.len());
+
     // /assets, /styles, /images — stable URLs, day-long browser cache.
     let static_assets = Router::new()
         .nest_service("/styles", ServeDir::new("styles"))
@@ -253,10 +310,37 @@ async fn main() -> Result<()> {
     // when a request doesn't match a file, ServeDir falls back to index.html
     // (which is NOT hashed, so we need to override caching for it separately).
     //
-    // Single fallback strategy: one Router with one fallback_service on dist/
-    // that itself falls back to index.html via ServeDir::not_found_service.
-    let spa_index = ServeFile::new("dist/index.html");
-    let dist_service = ServeDir::new("dist").not_found_service(spa_index);
+    // In-memory fallback handler using the pre-loaded static_cache.
+    let static_cache = std::sync::Arc::new(static_cache);
+    let serve_dist = {
+        let static_cache = static_cache.clone();
+        move |uri: axum::http::Uri| {
+            let static_cache = static_cache.clone();
+            async move {
+                let path = uri.path().trim_start_matches('/');
+                if path.contains("..") {
+                    return (axum::http::StatusCode::NOT_FOUND, "Not found").into_response();
+                }
+                if let Some((bytes, ct)) = static_cache.get(path) {
+                    let mut resp = (axum::http::StatusCode::OK, bytes.clone()).into_response();
+                    resp.headers_mut().insert(
+                        axum::http::header::CONTENT_TYPE,
+                        axum::http::HeaderValue::from_static(ct),
+                    );
+                    resp
+                } else if let Some((bytes, ct)) = static_cache.get("index.html") {
+                    let mut resp = (axum::http::StatusCode::OK, bytes.clone()).into_response();
+                    resp.headers_mut().insert(
+                        axum::http::header::CONTENT_TYPE,
+                        axum::http::HeaderValue::from_static(ct),
+                    );
+                    resp
+                } else {
+                    (axum::http::StatusCode::NOT_FOUND, "Not found").into_response()
+                }
+            }
+        }
+    };
 
     // SPA routes that should return index.html for client-side routing
     let spa_routes = Router::new()
@@ -320,18 +404,29 @@ async fn main() -> Result<()> {
         .merge(spa_routes)
         // SPA routes - these should be served by the fallback
         .merge(static_assets)
+        // Debug endpoint to inspect static cache
+        .route("/api/debug/dist", get({
+            let keys: Vec<String> = static_cache.keys().cloned().collect();
+            move || async move {
+                axum::Json(serde_json::json!({
+                    "count": keys.len(),
+                    "keys": keys,
+                }))
+            }
+        }))
+        // Test endpoint: return 4 MB of zeros to check if Railway throttles large bodies
+        .route("/api/debug/large", get(|| async move {
+            let zeros = vec![0u8; 4 * 1024 * 1024];
+            ([(axum::http::header::CONTENT_TYPE, "application/octet-stream")], zeros)
+        }))
         // Single top-level fallback: serve hashed bundles from dist/, fall
         // back to SPA index.html if path not found. We apply no-store cache
         // headers globally on the fallback; immutable cache for hashed
         // assets would be ideal but requires per-file logic. Telegram WebApp
         // cache busting is the priority — no-store keeps deploys landing.
-        .fallback_service(
-            tower::ServiceBuilder::new()
-                .layer(axum::middleware::from_fn(cache_middleware))
-                .service(dist_service),
-        )
-        // Compression applies to *all* responses (API JSON, WASM, HTML, CSS).
-        .layer(compression);
+        .fallback(serve_dist);
+        // Compression temporarily disabled for debugging.
+        // .layer(compression);
 
     let addr = SocketAddr::from(([0, 0, 0, 0], config.port));
     info!("🚀 HTTP server listening on {}", addr);

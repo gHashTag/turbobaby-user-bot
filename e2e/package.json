@@ -5,10 +5,14 @@
   "scripts": {
     "test": "playwright test",
     "test:headed": "playwright test --headed",
-    "test:debug": "playwright test --debug"
+    "test:debug": "playwright test --debug",
+    "mock": "node mock_api.js"
   },
   "devDependencies": {
     "@playwright/test": "^1.44.0",
-    "@types/node": "^20.0.0"
+    "@types/node": "^20.0.0",
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "multer": "^1.4.5-lts.1"
   }
 }
