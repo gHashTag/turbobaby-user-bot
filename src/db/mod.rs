@@ -151,6 +151,11 @@ impl Database {
             Manager::from_connect(pg_config, RustlsConnect { tls }, manager_cfg)
         };
 
+        cfg.pool = Some(deadpool_postgres::PoolConfig {
+            max_size: 16,
+            timeouts: deadpool_postgres::Timeouts::wait_millis(30000),
+            ..Default::default()
+        });
         let pool_config = cfg.get_pool_config();
         let pool = Pool::builder(manager)
             .config(pool_config)

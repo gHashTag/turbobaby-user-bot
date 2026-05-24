@@ -49,6 +49,9 @@ async fn create_order(
     if req.items.is_empty() {
         return Err(StatusCode::BAD_REQUEST);
     }
+    if req.items.iter().any(|i| i.quantity <= 0.0) {
+        return Err(StatusCode::BAD_REQUEST);
+    }
     if req.total < 0.0 {
         return Err(StatusCode::BAD_REQUEST);
     }

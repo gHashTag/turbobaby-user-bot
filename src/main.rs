@@ -177,7 +177,6 @@ async fn main() -> Result<()> {
                 AllowedUpdate::MyChatMember,
                 AllowedUpdate::ChatMember,
             ])
-            .drop_pending_updates()
             .delete_webhook().await
             .build();
         Dispatcher::builder(bot.clone(), handler)
