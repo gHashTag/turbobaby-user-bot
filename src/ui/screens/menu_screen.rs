@@ -20,6 +20,7 @@ pub struct ApiStrain {
     price_per_gram: f64,
     available_grams: Option<f64>,
     image_url: Option<String>,
+    video_url: Option<String>,
     is_available: bool,
     is_strain_of_day: bool,
     strain_of_day_discount: f64,
@@ -281,6 +282,9 @@ fn render_strain_card(strain: ApiStrain, mut cart: Signal<Cart>) -> Element {
     let has_image = !img_url.is_empty();
     let alt_name = strain.name.clone();
     let img_url_bust = if img_url.is_empty() { String::new() } else { format!("{}?v=2", img_url) };
+    let video_url = strain.video_url.clone().unwrap_or_default();
+    let has_video = !video_url.is_empty();
+    let mut show_video = use_signal(|| false);
 
     rsx! {
         div { key: strain.id.clone(), class: "comet-card", style: card_style,
@@ -306,6 +310,27 @@ fn render_strain_card(strain: ApiStrain, mut cart: Signal<Cart>) -> Element {
                         padding:4px 8px;box-shadow:2px 2px 0 #000;z-index:2;
                     ", "⭐ SOTD" }
                 })}
+                {has_video.then(|| rsx! {
+                    button { style: "position:absolute;bottom:8px;right:8px;width:36px;height:36px;border-radius:50%;background:rgba(0,0,0,0.6);border:1px solid #fff;color:#fff;font-size:16px;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:2;",
+                        onclick: move |e: Event<MouseData>| { e.stop_propagation(); show_video.set(true); }, "▶️" }
+                })}
+                {if show_video() {
+                    rsx! {
+                        div { style: "position:fixed;inset:0;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;z-index:1000;padding:16px;",
+                            onclick: move |_| show_video.set(false),
+                            div { style: "background:#1a1a2e;padding:16px;border-radius:8px;max-width:90vw;max-height:80vh;display:flex;flex-direction:column;align-items:center;gap:8px;",
+                                onclick: move |e: Event<MouseData>| e.stop_propagation(),
+                                video { style: "max-width:100%;max-height:60vh;border-radius:6px;", controls: true,
+                                    source { src: "{video_url}", r#type: "video/mp4" }
+                                }
+                                button { style: "padding:8px 16px;background:#2a2a4a;color:#e8e8e8;border:none;border-radius:4px;cursor:pointer;",
+                                    onclick: move |_| show_video.set(false), "Закрыть" }
+                            }
+                        }
+                    }
+                } else {
+                    rsx! {}
+                }}
             }
             div { style: "padding:12px;",
                 div { style: "font-size:17px;font-weight:700;margin-bottom:6px;color:#fff;line-height:1.2;text-shadow:2px 2px 0 #000;",
