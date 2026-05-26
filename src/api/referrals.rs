@@ -1,7 +1,7 @@
 use axum::{
     extract::{Path, Query, State},
     http::{HeaderMap, StatusCode},
-    routing::{get, post},
+    routing::get,
     Json, Router,
 };
 use serde::Deserialize;
@@ -9,8 +9,7 @@ use serde_json::{json, Value};
 
 use crate::AppState;
 use crate::db::referrals::{
-    find_referrer_by_code, get_or_create_referral_code, get_referrer_stats, get_top_referrers,
-    record_referral,
+    get_or_create_referral_code, get_referrer_stats, get_top_referrers,
 };
 
 // ──────────────────────────────────────────────────────────────────
@@ -21,7 +20,6 @@ pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/referrals/me/:telegram_id", get(get_my_referrals))
         .route("/referrals/leaderboard", get(get_leaderboard))
-        .route("/referrals/track", post(track_referral))
 }
 
 // ──────────────────────────────────────────────────────────────────
@@ -32,13 +30,6 @@ pub fn routes() -> Router<AppState> {
 pub struct LeaderboardQuery {
     pub period: Option<String>,
     pub limit: Option<i64>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct TrackReferralRequest {
-    pub code: String,
-    pub referred_id: i64,
-    pub source: Option<String>,
 }
 
 // ──────────────────────────────────────────────────────────────────
@@ -95,50 +86,3 @@ async fn get_leaderboard(
     })))
 }
 
-/// POST /api/referrals/track
-///
-/// Internal endpoint called from the bot /start handler when a user arrives
-/// via a referral link. Idempotent — silently returns ok if already tracked.
-async fn track_referral(
-    State(state): State<AppState>,
-    Json(req): Json<TrackReferralRequest>,
-) -> Result<Json<Value>, StatusCode> {
-    // Look up referrer
-    let referrer_id = find_referrer_by_code(&state.db.pool, &req.code)
-        .await
-        .map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
-
-    let referrer_id = match referrer_id {
-        Some(id) => id,
-        None => {
-            return Ok(Json(json!({
-                "success": false,
-                "reason": "unknown_code"
-            })))
-        }
-    };
-
-    // Self-referral guard
-    if referrer_id == req.referred_id {
-        return Ok(Json(json!({
-            "success": false,
-            "reason": "self_referral"
-        })));
-    }
-
-    let event_id = record_referral(
-        &state.db.pool,
-        referrer_id,
-        req.referred_id,
-        &req.code,
-        req.source.as_deref(),
-    )
-    .await
-    .map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
-
-    Ok(Json(json!({
-        "success": true,
-        "event_id": event_id,
-        "referrer_id": referrer_id,
-    })))
-}

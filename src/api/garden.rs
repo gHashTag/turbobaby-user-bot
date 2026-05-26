@@ -17,7 +17,6 @@ pub fn routes() -> Router<AppState> {
         // User plants
         .route("/garden/plants", get(get_user_plants))
         .route("/garden/plants", post(plant_seed))
-        .route("/garden/plants/:id", get(get_plant))
         .route("/garden/plants/:id/water", post(water_plant))
         .route("/garden/plants/:id/harvest", post(harvest_plant))
         // Rewards
@@ -205,83 +204,6 @@ async fn plant_seed(
         "success": true,
         "plant_id": plant_id
     })))
-}
-
-async fn get_plant(
-    State(state): State<AppState>,
-    Path(id): Path<String>,
-) -> Result<Json<Value>, StatusCode> {
-    let client = state.db.pool.get().await
-        .map_err(|e| {
-            tracing::error!("Database connection error: {}", e);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
-
-    let row = client.query_opt(
-        "SELECT id, user_id, strain_id, strain_name, current_stage, planted_at,
-                is_completed, harvested_at, water_count, last_watered_at
-         FROM garden_plants
-         WHERE id = $1",
-        &[&id],
-    ).await.map_err(|e| {
-        tracing::error!("Query error: {}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-
-    match row {
-        Some(r) => {
-            let plant = garden::Plant {
-                id: r.get(0),
-                user_id: r.get(1),
-                strain_id: r.get(2),
-                strain_name: r.get(3),
-                current_stage: match r.get::<_, String>(4).as_str() {
-                    "seed" => garden::GrowthStage::Seed,
-                    "sprout" => garden::GrowthStage::Sprout,
-                    "first_leaf" => garden::GrowthStage::FirstLeaf,
-                    "young_bush" => garden::GrowthStage::YoungBush,
-                    "veg_start" => garden::GrowthStage::VegStart,
-                    "big_veg" => garden::GrowthStage::BigVeg,
-                    "pre_flower" => garden::GrowthStage::PreFlower,
-                    "small_buds" => garden::GrowthStage::SmallBuds,
-                    "big_buds" => garden::GrowthStage::BigBuds,
-                    "trimming" => garden::GrowthStage::Trimming,
-                    "curing" => garden::GrowthStage::Curing,
-                    "lab" => garden::GrowthStage::Lab,
-                    "delivery" => garden::GrowthStage::Delivery,
-                    _ => garden::GrowthStage::Final,
-                },
-                planted_at: r.get(5),
-                is_completed: r.get(6),
-                harvested_at: r.get(7),
-                reward_claimed: false,
-                water_count: r.get(8),
-                last_watered_at: r.get(9),
-            };
-
-            let now = chrono::Utc::now().timestamp_millis();
-            let progress = garden::calculate_progress(&plant, now);
-
-            Ok(Json(json!({
-                "plant": {
-                    "id": plant.id,
-                    "user_id": plant.user_id,
-                    "strain_id": plant.strain_id,
-                    "strain_name": plant.strain_name,
-                    "current_stage": format!("{:?}", plant.current_stage).to_lowercase(),
-                    "stage_name": progress.stage_name,
-                    "stage_emoji": progress.stage_emoji,
-                    "planted_at": plant.planted_at,
-                    "is_completed": plant.is_completed,
-                    "water_count": plant.water_count,
-                    "progress": progress.total_progress,
-                    "can_water": progress.can_water,
-                    "next_water_at": progress.next_water_at,
-                }
-            })))
-        }
-        None => Ok(Json(json!({ "error": "Plant not found" }))),
-    }
 }
 
 async fn water_plant(

@@ -581,7 +581,7 @@ fn StrainsTab() -> Element {
                     textarea { style: textarea_style(), placeholder: "Вкусовой профиль (RU)", value: "{flavor_profile}",
                         oninput: move |e| flavor_profile.set(e.value()) }
                     {render_image_upload(image_url)}
-                    {render_video_upload(video_url)}
+                    VideoUpload { video_url }
                     div { style: en_section_style(), "🇬🇧 English" }
                     input { style: input_style(), placeholder: "Name (EN)", value: "{name_en}",
                         oninput: move |e| name_en.set(e.value()) }
@@ -907,7 +907,7 @@ fn AccessoriesTab() -> Element {
                     textarea { style: textarea_style(), placeholder: "Описание (RU)", value: "{description}",
                         oninput: move |e| description.set(e.value()) }
                     {render_image_upload(image_url)}
-                    {render_video_upload(video_url)}
+                    VideoUpload { video_url }
                     div { style: en_section_style(), "🇬🇧 English" }
                     input { style: input_style(), placeholder: "Name (EN)", value: "{name_en}",
                         oninput: move |e| name_en.set(e.value()) }
@@ -1190,7 +1190,7 @@ fn TeaTab() -> Element {
                     textarea { style: textarea_style(), placeholder: "Описание (RU)", value: "{description}",
                         oninput: move |e| description.set(e.value()) }
                     {render_image_upload(image_url)}
-                    {render_video_upload(video_url)}
+                    VideoUpload { video_url }
                     div { style: en_section_style(), "🇬🇧 English" }
                     input { style: input_style(), placeholder: "Name (EN)", value: "{name_en}",
                         oninput: move |e| name_en.set(e.value()) }
@@ -1459,7 +1459,7 @@ fn SetsTab() -> Element {
                         oninput: move |e| description.set(e.value()) }
                     input { style: input_style(), placeholder: "Иконка (emoji или URL)", value: "{icon}",
                         oninput: move |e| icon.set(e.value()) }
-                    {render_video_upload(video_url)}
+                    VideoUpload { video_url }
                     textarea { style: textarea_style(), placeholder: "Strain IDs (через запятую)", value: "{strain_ids}",
                         oninput: move |e| strain_ids.set(e.value()) }
                     textarea { style: textarea_style(), placeholder: "Accessory IDs (через запятую)", value: "{accessory_ids}",
@@ -1673,7 +1673,7 @@ fn EditSetCard(
             input { style: input_style(), placeholder: "Название", value: "{name}", oninput: move |e| name.set(e.value()) }
             textarea { style: textarea_style(), placeholder: "Описание", value: "{description}", oninput: move |e| description.set(e.value()) }
             input { style: input_style(), placeholder: "Иконка", value: "{icon}", oninput: move |e| icon.set(e.value()) }
-            {render_video_upload(video_url)}
+            VideoUpload { video_url }
             textarea { style: textarea_style(), placeholder: "Strain IDs (через запятую)", value: "{strain_ids}", oninput: move |e| strain_ids.set(e.value()) }
             textarea { style: textarea_style(), placeholder: "Accessory IDs (через запятую)", value: "{accessory_ids}", oninput: move |e| accessory_ids.set(e.value()) }
             input { style: input_style(), placeholder: "Цена ฿", value: "{total_price}", r#type: "number", oninput: move |e| total_price.set(e.value()) }
@@ -1843,7 +1843,7 @@ fn AccessorySetsTab() -> Element {
                     input { style: input_style(), placeholder: "Иконка (emoji или URL)", value: "{icon}",
                         oninput: move |e| icon.set(e.value()) }
                     {render_image_upload(image_url)}
-                    {render_video_upload(video_url)}
+                    VideoUpload { video_url }
                     textarea { style: textarea_style(), placeholder: "Accessory IDs (через запятую)", value: "{accessories}",
                         oninput: move |e| accessories.set(e.value()) }
                     input { style: input_style(), placeholder: "Цена ฿", value: "{total_price}", r#type: "number",
@@ -2067,7 +2067,7 @@ fn EditAccessorySetCard(
             textarea { style: textarea_style(), placeholder: "Описание (RU)", value: "{description}", oninput: move |e| description.set(e.value()) }
             input { style: input_style(), placeholder: "Иконка", value: "{icon}", oninput: move |e| icon.set(e.value()) }
             {render_image_upload(image_url)}
-            {render_video_upload(video_url)}
+            VideoUpload { video_url }
             textarea { style: textarea_style(), placeholder: "Accessory IDs (через запятую)", value: "{accessories}", oninput: move |e| accessories.set(e.value()) }
             input { style: input_style(), placeholder: "Цена ฿", value: "{total_price}", r#type: "number", oninput: move |e| total_price.set(e.value()) }
             input { style: input_style(), placeholder: "Скидка %", value: "{discount_percent}", r#type: "number", oninput: move |e| discount_percent.set(e.value()) }
@@ -2241,7 +2241,7 @@ fn TeaSetsTab() -> Element {
                         oninput: move |e| description.set(e.value()) }
                     input { style: input_style(), placeholder: "Иконка (emoji или URL)", value: "{icon}",
                         oninput: move |e| icon.set(e.value()) }
-                    {render_video_upload(video_url)}
+                    VideoUpload { video_url }
                     textarea { style: textarea_style(), placeholder: "Tea item IDs (через запятую)", value: "{items}",
                         oninput: move |e| items.set(e.value()) }
                     input { style: input_style(), placeholder: "Цена ฿", value: "{total_price}", r#type: "number",
@@ -2453,7 +2453,7 @@ fn EditTeaSetCard(
             input { style: input_style(), placeholder: "Название (RU)", value: "{name}", oninput: move |e| name.set(e.value()) }
             textarea { style: textarea_style(), placeholder: "Описание (RU)", value: "{description}", oninput: move |e| description.set(e.value()) }
             input { style: input_style(), placeholder: "Иконка", value: "{icon}", oninput: move |e| icon.set(e.value()) }
-            {render_video_upload(video_url)}
+            VideoUpload { video_url }
             textarea { style: textarea_style(), placeholder: "Tea item IDs (через запятую)", value: "{items}", oninput: move |e| items.set(e.value()) }
             input { style: input_style(), placeholder: "Цена ฿", value: "{total_price}", r#type: "number", oninput: move |e| total_price.set(e.value()) }
             input { style: input_style(), placeholder: "Скидка %", value: "{discount_percent}", r#type: "number", oninput: move |e| discount_percent.set(e.value()) }
@@ -2562,7 +2562,8 @@ fn render_image_upload(mut image_url: Signal<String>) -> Element {
     }
 }
 
-fn render_video_upload(mut video_url: Signal<String>) -> Element {
+#[component]
+fn VideoUpload(mut video_url: Signal<String>) -> Element {
     let mut uploading = use_signal(|| false);
     rsx! {
         div { style: "display:flex;gap:6px;align-items:center;",
@@ -2575,30 +2576,17 @@ fn render_video_upload(mut video_url: Signal<String>) -> Element {
                     onclick: move |_| {
                         uploading.set(true);
                         spawn(async move {
-                            web_sys::console::log_1(&"[ADMIN RS] upload_video starting...".into());
                             let result = upload_video().await;
-                            web_sys::console::log_1(&format!("[ADMIN RS] upload_video result: {:?}", result).into());
                             uploading.set(false);
                             if let Some(url) = result {
-                                web_sys::console::log_1(&format!("[ADMIN RS] setting video_url={}", url).into());
                                 video_url.set(url);
-                            } else {
-                                web_sys::console::log_1(&"[ADMIN RS] upload_video returned None".into());
                             }
                         });
                     },
                     "🎥 Upload"
                 }
-                button { style: "padding:6px 12px;background:#2a2a4a;color:#e8e8e8;border:1px solid #39ff14;border-radius:4px;font-size:12px;cursor:pointer;",
-                    onclick: move |_| {
-                        web_sys::console::log_1(&"[ADMIN TEST] Direct set video_url".into());
-                        video_url.set("/uploads/test-direct.mp4".into());
-                    },
-                    "Test Set"
-                }
             }
         }
-        {}
         if !video_url.read().is_empty() {
             div { style: "margin-top:4px;",
                 video { src: "{video_url}", controls: true, style: "width:120px;height:80px;object-fit:cover;border-radius:6px;border:1px solid #2a2a4a;" }
@@ -2803,7 +2791,7 @@ fn EditStrainCard(
             textarea { style: textarea_style(), placeholder: "Эффект (RU)", value: "{effect}", oninput: move |e| effect.set(e.value()) }
             textarea { style: textarea_style(), placeholder: "Вкусовой профиль (RU)", value: "{flavor_profile}", oninput: move |e| flavor_profile.set(e.value()) }
             {render_image_upload(image_url)}
-            {render_video_upload(video_url)}
+            VideoUpload { video_url }
             div { style: en_section_style(), "🇬🇧 English" }
             input { style: input_style(), placeholder: "Name (EN)", value: "{name_en}", oninput: move |e| name_en.set(e.value()) }
             textarea { style: textarea_style(), placeholder: "Description (EN)", value: "{description_en}", oninput: move |e| description_en.set(e.value()) }
@@ -2927,7 +2915,7 @@ fn EditAccessoryCard(
             input { style: input_style(), placeholder: "Кол-во", value: "{stock}", r#type: "number", oninput: move |e| stock.set(e.value()) }
             textarea { style: textarea_style(), placeholder: "Описание (RU)", value: "{description}", oninput: move |e| description.set(e.value()) }
             {render_image_upload(image_url)}
-            {render_video_upload(video_url)}
+            VideoUpload { video_url }
             div { style: en_section_style(), "🇬🇧 English" }
             input { style: input_style(), placeholder: "Name (EN)", value: "{name_en}", oninput: move |e| name_en.set(e.value()) }
             textarea { style: textarea_style(), placeholder: "Description (EN)", value: "{description_en}", oninput: move |e| description_en.set(e.value()) }
@@ -3033,7 +3021,7 @@ fn EditTeaCard(
             input { style: input_style(), placeholder: "Кол-во", value: "{stock}", r#type: "number", oninput: move |e| stock.set(e.value()) }
             textarea { style: textarea_style(), placeholder: "Описание (RU)", value: "{description}", oninput: move |e| description.set(e.value()) }
             {render_image_upload(image_url)}
-            {render_video_upload(video_url)}
+            VideoUpload { video_url }
             div { style: en_section_style(), "🇬🇧 English" }
             input { style: input_style(), placeholder: "Name (EN)", value: "{name_en}", oninput: move |e| name_en.set(e.value()) }
             textarea { style: textarea_style(), placeholder: "Description (EN)", value: "{description_en}", oninput: move |e| description_en.set(e.value()) }
