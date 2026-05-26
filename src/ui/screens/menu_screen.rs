@@ -22,7 +22,9 @@ pub struct ApiStrain {
     image_url: Option<String>,
     video_url: Option<String>,
     is_available: bool,
+    #[serde(default)]
     is_strain_of_day: bool,
+    #[serde(default)]
     strain_of_day_discount: f64,
 }
 

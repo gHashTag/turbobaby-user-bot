@@ -20,6 +20,7 @@ pub struct Strain {
     pub video_url: Option<String>,
     pub is_available: bool,
     #[serde(rename = "is_strain_of_day")]
+    #[serde(default)]
     pub is_strain_of_day: bool,
     #[serde(default)]
     pub available_grams: Option<f64>,

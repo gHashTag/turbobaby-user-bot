@@ -1,0 +1,24 @@
+[build]
+target = "index.html"
+dist = "dist"
+public_url = "/"
+filehash = true
+release = false
+no_opt = true
+no_sri = true
+
+[serve]
+addresses = ["127.0.0.1"]
+port = 8080
+open = false
+
+[[proxy]]
+backend = "http://localhost:3001/api/"
+rewrite = "/api/"
+
+[tools]
+wasm-bindgen = "0.2.95"
+
+[watch]
+watch = ["src", "assets"]
+ignore = ["dist"]

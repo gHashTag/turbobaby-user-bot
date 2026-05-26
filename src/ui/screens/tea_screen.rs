@@ -171,6 +171,15 @@ pub fn TeaScreen() -> Element {
                                                         padding: 1px 6px; border-radius: 0;
                                                     ", "SOLD OUT" }
                                                 }
+                                                {if let Some(ref vid) = t.video_url {
+                                                    if !vid.is_empty() {
+                                                        let vid = vid.clone();
+                                                        rsx! {
+                                                            a { href: "{vid}", target: "_blank", style: "position:absolute;bottom:4px;right:4px;width:28px;height:28px;border-radius:50%;background:rgba(0,0,0,0.6);border:1px solid #fff;color:#fff;font-size:12px;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:2;text-decoration:none;",
+                                                                onclick: move |e: Event<MouseData>| { e.stop_propagation(); }, "▶️" }
+                                                        }
+                                                    } else { rsx!{ "" } }
+                                                } else { rsx!{ "" } }}
                                             }
                                             div { style: "padding: 8px;",
                                                 div { style: "font-size: 13px; font-weight: 700; color: #b388ff; margin-bottom: 2px; text-transform: uppercase;", "{sub}" }
