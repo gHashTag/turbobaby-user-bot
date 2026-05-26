@@ -33,7 +33,7 @@ pub fn routes() -> Router<AppState> {
 async fn get_loyalty_tiers(State(state): State<AppState>) -> Result<Json<Value>, StatusCode> {
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     let rows = client.query(
-        "SELECT tier, name, min_points, discount_percent, points_multiplier, perks, icon, color \
+        "SELECT tier, name, min_points, discount_percent, points_multiplier::float8, perks, icon, color \
          FROM loyalty_tiers ORDER BY min_points ASC",
         &[],
     ).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
@@ -42,7 +42,7 @@ async fn get_loyalty_tiers(State(state): State<AppState>) -> Result<Json<Value>,
         "name":             r.get::<_, String>("name"),
         "min_points":       r.get::<_, i32>("min_points"),
         "discount_percent": r.get::<_, i32>("discount_percent"),
-        "points_multiplier":r.get::<_, f32>("points_multiplier"),
+        "points_multiplier":r.get::<_, f64>("points_multiplier"),
         "perks":            r.get::<_, Vec<String>>("perks"),
         "icon":             r.get::<_, String>("icon"),
         "color":            r.get::<_, String>("color"),

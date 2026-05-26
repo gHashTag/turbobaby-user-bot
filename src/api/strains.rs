@@ -56,9 +56,9 @@ async fn get_strains(
         crate::api::auth::check_admin(&headers, &state)?;
     }
     let sql = if include_hidden {
-        "SELECT id, name, category, thc_percent, cbd_percent, effect, flavor_profile, description, price_per_gram, available_grams, image_url, video_url, is_available, is_strain_of_day, strain_of_day_discount, name_en, description_en, effect_en, flavor_profile_en, strain_type_en FROM strains ORDER BY name"
+        "SELECT id, name, category, thc_percent::float8, cbd_percent::float8, effect, flavor_profile, description, price_per_gram::float8, available_grams::float8, image_url, video_url, is_available, is_strain_of_day, strain_of_day_discount::float8, name_en, description_en, effect_en, flavor_profile_en, strain_type_en FROM strains ORDER BY name"
     } else {
-        "SELECT id, name, category, thc_percent, cbd_percent, effect, flavor_profile, description, price_per_gram, available_grams, image_url, video_url, is_available, is_strain_of_day, strain_of_day_discount, name_en, description_en, effect_en, flavor_profile_en, strain_type_en FROM strains WHERE is_available = TRUE ORDER BY name"
+        "SELECT id, name, category, thc_percent::float8, cbd_percent::float8, effect, flavor_profile, description, price_per_gram::float8, available_grams::float8, image_url, video_url, is_available, is_strain_of_day, strain_of_day_discount::float8, name_en, description_en, effect_en, flavor_profile_en, strain_type_en FROM strains WHERE is_available = TRUE ORDER BY name"
     };
     let client = state.db.pool.get().await.map_err(|e| {
         tracing::error!("get_strains pool error: {:?}", e);
@@ -100,7 +100,7 @@ async fn get_strains(
 async fn get_strain(State(state): State<AppState>, Path(id): Path<String>) -> Result<Json<Value>, StatusCode> {
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     let row = client.query_opt(
-        "SELECT id, name, category, thc_percent, cbd_percent, effect, flavor_profile, description, price_per_gram, available_grams, image_url, video_url, is_available, is_strain_of_day, strain_of_day_discount, name_en, description_en, effect_en, flavor_profile_en, strain_type_en FROM strains WHERE id = $1 AND is_available = TRUE",
+        "SELECT id, name, category, thc_percent::float8, cbd_percent::float8, effect, flavor_profile, description, price_per_gram::float8, available_grams::float8, image_url, video_url, is_available, is_strain_of_day, strain_of_day_discount::float8, name_en, description_en, effect_en, flavor_profile_en, strain_type_en FROM strains WHERE id = $1 AND is_available = TRUE",
         &[&id],
     ).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     match row {

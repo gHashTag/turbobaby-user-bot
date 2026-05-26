@@ -8,49 +8,43 @@ const { chromium } = require('playwright-core');
   await page.goto('http://localhost:8081/admin');
   await page.waitForTimeout(5000);
   
-  const logs = [];
-  page.on('console', msg => logs.push(msg.text()));
-  
-  // Click Upload and simulate file
-  const uploadBtn = page.locator('button').filter({ hasText: /🎥 Upload/ });
+  // Click Upload button to trigger dynamic file input
+  const uploadBtn = page.locator('button').filter({ hasText: /🎥 Upload/ }).first();
   await uploadBtn.click();
-  await page.waitForTimeout(2000);
+  await page.waitForTimeout(1000);
   
-  await page.evaluate(() => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'video/*';
-    input.onchange = async (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      const formData = new FormData();
-      formData.append('file', file);
-      const resp = await fetch('/api/upload', {
-        method: 'POST',
-        body: formData,
-        headers: { 'X-Telegram-Init-Data': 'test', 'X-Admin-Telegram-Id': '123', 'X-Admin-Token': 'test' }
-      });
-      const data = await resp.json();
-      console.log('[TEST] Upload result:', JSON.stringify(data));
-    };
+  // Find the dynamically created input and inject a file
+  const input = await page.locator('input[type=file]').first();
+  const count = await input.count();
+  if (count === 0) {
+    console.log('FAIL: No file input found');
+    await browser.close();
+    process.exit(1);
+  }
+  
+  await input.evaluate((el) => {
     const blob = new Blob(['test'], { type: 'video/mp4' });
     const file = new File([blob], 'test.mp4', { type: 'video/mp4' });
     const dt = new DataTransfer();
     dt.items.add(file);
-    input.files = dt.files;
-    input.dispatchEvent(new Event('change'));
+    el.files = dt.files;
+    el.dispatchEvent(new Event('change'));
   });
   
-  await page.waitForTimeout(5000);
+  // Wait for upload + UI update
+  await page.waitForTimeout(8000);
   
   const videos = await page.locator('video').count();
-  console.log('Video elements:', videos);
+  const inputs = await page.locator('input[placeholder="URL видео"]').all();
+  const hasUrl = inputs.length > 0 && (await inputs[0].inputValue()).includes('/uploads/');
   
-  const src = await page.locator('video').getAttribute('src').catch(() => 'none');
-  console.log('Video src:', src);
-  
-  const relevant = logs.filter(l => l.includes('VideoUpload') || l.includes('TEST'));
-  relevant.forEach(l => console.log('LOG:', l));
+  if (videos > 0 && hasUrl) {
+    console.log('PASS: Video preview visible after upload');
+  } else {
+    console.log('FAIL: Video elements:', videos, 'Has URL:', hasUrl);
+    await browser.close();
+    process.exit(1);
+  }
   
   await browser.close();
 })();

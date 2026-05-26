@@ -212,13 +212,15 @@ new Promise((resolve) => {{
     var input = document.createElement('input');
     input.type = 'file';
     input.accept = '{}';
+    input.style.display = 'none';
+    document.body.appendChild(input);
     var resolved = false;
     input.onchange = async (e) => {{
         if (resolved) return;
         resolved = true;
         console.log('[UPLOAD] Step 1: File selected');
         var file = e.target.files[0];
-        if (!file) {{ console.log('[UPLOAD] Step 1: No file selected'); resolve(''); return; }}
+        if (!file) {{ console.log('[UPLOAD] Step 1: No file selected'); document.body.removeChild(input); resolve(''); return; }}
         console.log('[UPLOAD] Step 2: File name=' + file.name + ' size=' + file.size + ' type=' + file.type);
         var formData = new FormData();
         formData.append('file', file);
@@ -239,10 +241,11 @@ new Promise((resolve) => {{
             console.log('[UPLOAD] Step 5: Response status=' + resp.status + ' ok=' + resp.ok);
             var data = await resp.json();
             console.log('[UPLOAD] Step 6: Response data=', JSON.stringify(data));
+            document.body.removeChild(input);
             resolve(data.url || '');
-        }} catch(err) {{ console.error('[UPLOAD] ERROR:', err); resolve(''); }}
+        }} catch(err) {{ console.error('[UPLOAD] ERROR:', err); document.body.removeChild(input); resolve(''); }}
     }};
-    setTimeout(() => {{ if (!resolved) {{ console.log('[UPLOAD] Timeout after 120s'); resolved = true; resolve(''); }} }}, 120000);
+    setTimeout(() => {{ if (!resolved) {{ console.log('[UPLOAD] Timeout after 120s'); resolved = true; try {{ document.body.removeChild(input); }} catch(e) {{}} resolve(''); }} }}, 120000);
     console.log('[UPLOAD] Step 0: Clicking file input');
     input.click();
 }})
@@ -580,8 +583,8 @@ fn StrainsTab() -> Element {
                         oninput: move |e| effect.set(e.value()) }
                     textarea { style: textarea_style(), placeholder: "Вкусовой профиль (RU)", value: "{flavor_profile}",
                         oninput: move |e| flavor_profile.set(e.value()) }
-                    {render_image_upload(image_url)}
-                    VideoUpload { video_url }
+                    ImageUpload { image_url: image_url.read().clone(), on_change: move |url: String| image_url.set(url) }
+                    VideoUpload { video_url: video_url.read().clone(), on_change: move |url: String| video_url.set(url) }
                     div { style: en_section_style(), "🇬🇧 English" }
                     input { style: input_style(), placeholder: "Name (EN)", value: "{name_en}",
                         oninput: move |e| name_en.set(e.value()) }
@@ -906,8 +909,8 @@ fn AccessoriesTab() -> Element {
                         oninput: move |e| stock.set(e.value()) }
                     textarea { style: textarea_style(), placeholder: "Описание (RU)", value: "{description}",
                         oninput: move |e| description.set(e.value()) }
-                    {render_image_upload(image_url)}
-                    VideoUpload { video_url }
+                    ImageUpload { image_url: image_url.read().clone(), on_change: move |url: String| image_url.set(url) }
+                    VideoUpload { video_url: video_url.read().clone(), on_change: move |url: String| video_url.set(url) }
                     div { style: en_section_style(), "🇬🇧 English" }
                     input { style: input_style(), placeholder: "Name (EN)", value: "{name_en}",
                         oninput: move |e| name_en.set(e.value()) }
@@ -1189,8 +1192,8 @@ fn TeaTab() -> Element {
                         oninput: move |e| stock.set(e.value()) }
                     textarea { style: textarea_style(), placeholder: "Описание (RU)", value: "{description}",
                         oninput: move |e| description.set(e.value()) }
-                    {render_image_upload(image_url)}
-                    VideoUpload { video_url }
+                    ImageUpload { image_url: image_url.read().clone(), on_change: move |url: String| image_url.set(url) }
+                    VideoUpload { video_url: video_url.read().clone(), on_change: move |url: String| video_url.set(url) }
                     div { style: en_section_style(), "🇬🇧 English" }
                     input { style: input_style(), placeholder: "Name (EN)", value: "{name_en}",
                         oninput: move |e| name_en.set(e.value()) }
@@ -1459,7 +1462,7 @@ fn SetsTab() -> Element {
                         oninput: move |e| description.set(e.value()) }
                     input { style: input_style(), placeholder: "Иконка (emoji или URL)", value: "{icon}",
                         oninput: move |e| icon.set(e.value()) }
-                    VideoUpload { video_url }
+                    VideoUpload { video_url: video_url.read().clone(), on_change: move |url: String| video_url.set(url) }
                     textarea { style: textarea_style(), placeholder: "Strain IDs (через запятую)", value: "{strain_ids}",
                         oninput: move |e| strain_ids.set(e.value()) }
                     textarea { style: textarea_style(), placeholder: "Accessory IDs (через запятую)", value: "{accessory_ids}",
@@ -1659,7 +1662,7 @@ fn EditSetCard(
     let mut name = use_signal(|| item.name.clone());
     let mut description = use_signal(|| item.description.clone().unwrap_or_default());
     let mut icon = use_signal(|| item.icon.clone().unwrap_or_default());
-    let video_url = use_signal(|| item.video_url.clone().unwrap_or_default());
+    let mut video_url = use_signal(|| item.video_url.clone().unwrap_or_default());
     let mut strain_ids = use_signal(|| item.strain_ids.join(", "));
     let mut accessory_ids = use_signal(|| item.accessory_ids.join(", "));
     let mut total_price = use_signal(|| item.total_price.to_string());
@@ -1673,7 +1676,7 @@ fn EditSetCard(
             input { style: input_style(), placeholder: "Название", value: "{name}", oninput: move |e| name.set(e.value()) }
             textarea { style: textarea_style(), placeholder: "Описание", value: "{description}", oninput: move |e| description.set(e.value()) }
             input { style: input_style(), placeholder: "Иконка", value: "{icon}", oninput: move |e| icon.set(e.value()) }
-            VideoUpload { video_url }
+            VideoUpload { video_url: video_url.read().clone(), on_change: move |url: String| video_url.set(url) }
             textarea { style: textarea_style(), placeholder: "Strain IDs (через запятую)", value: "{strain_ids}", oninput: move |e| strain_ids.set(e.value()) }
             textarea { style: textarea_style(), placeholder: "Accessory IDs (через запятую)", value: "{accessory_ids}", oninput: move |e| accessory_ids.set(e.value()) }
             input { style: input_style(), placeholder: "Цена ฿", value: "{total_price}", r#type: "number", oninput: move |e| total_price.set(e.value()) }
@@ -1842,8 +1845,8 @@ fn AccessorySetsTab() -> Element {
                         oninput: move |e| description.set(e.value()) }
                     input { style: input_style(), placeholder: "Иконка (emoji или URL)", value: "{icon}",
                         oninput: move |e| icon.set(e.value()) }
-                    {render_image_upload(image_url)}
-                    VideoUpload { video_url }
+                    ImageUpload { image_url: image_url.read().clone(), on_change: move |url: String| image_url.set(url) }
+                    VideoUpload { video_url: video_url.read().clone(), on_change: move |url: String| video_url.set(url) }
                     textarea { style: textarea_style(), placeholder: "Accessory IDs (через запятую)", value: "{accessories}",
                         oninput: move |e| accessories.set(e.value()) }
                     input { style: input_style(), placeholder: "Цена ฿", value: "{total_price}", r#type: "number",
@@ -2050,8 +2053,8 @@ fn EditAccessorySetCard(
     let mut name = use_signal(|| item.name.clone());
     let mut description = use_signal(|| item.description.clone().unwrap_or_default());
     let mut icon = use_signal(|| item.icon.clone().unwrap_or_default());
-    let image_url = use_signal(|| item.image_url.clone().unwrap_or_default());
-    let video_url = use_signal(|| item.video_url.clone().unwrap_or_default());
+    let mut image_url = use_signal(|| item.image_url.clone().unwrap_or_default());
+    let mut video_url = use_signal(|| item.video_url.clone().unwrap_or_default());
     let mut accessories = use_signal(|| item.accessories.join(", "));
     let mut total_price = use_signal(|| item.total_price.to_string());
     let mut discount_percent = use_signal(|| item.discount_percent.to_string());
@@ -2066,8 +2069,8 @@ fn EditAccessorySetCard(
             input { style: input_style(), placeholder: "Название (RU)", value: "{name}", oninput: move |e| name.set(e.value()) }
             textarea { style: textarea_style(), placeholder: "Описание (RU)", value: "{description}", oninput: move |e| description.set(e.value()) }
             input { style: input_style(), placeholder: "Иконка", value: "{icon}", oninput: move |e| icon.set(e.value()) }
-            {render_image_upload(image_url)}
-            VideoUpload { video_url }
+            ImageUpload { image_url: image_url.read().clone(), on_change: move |url: String| image_url.set(url) }
+            VideoUpload { video_url: video_url.read().clone(), on_change: move |url: String| video_url.set(url) }
             textarea { style: textarea_style(), placeholder: "Accessory IDs (через запятую)", value: "{accessories}", oninput: move |e| accessories.set(e.value()) }
             input { style: input_style(), placeholder: "Цена ฿", value: "{total_price}", r#type: "number", oninput: move |e| total_price.set(e.value()) }
             input { style: input_style(), placeholder: "Скидка %", value: "{discount_percent}", r#type: "number", oninput: move |e| discount_percent.set(e.value()) }
@@ -2241,7 +2244,7 @@ fn TeaSetsTab() -> Element {
                         oninput: move |e| description.set(e.value()) }
                     input { style: input_style(), placeholder: "Иконка (emoji или URL)", value: "{icon}",
                         oninput: move |e| icon.set(e.value()) }
-                    VideoUpload { video_url }
+                    VideoUpload { video_url: video_url.read().clone(), on_change: move |url: String| video_url.set(url) }
                     textarea { style: textarea_style(), placeholder: "Tea item IDs (через запятую)", value: "{items}",
                         oninput: move |e| items.set(e.value()) }
                     input { style: input_style(), placeholder: "Цена ฿", value: "{total_price}", r#type: "number",
@@ -2439,7 +2442,7 @@ fn EditTeaSetCard(
     let mut name = use_signal(|| item.name.clone());
     let mut description = use_signal(|| item.description.clone().unwrap_or_default());
     let mut icon = use_signal(|| item.icon.clone().unwrap_or_default());
-    let video_url = use_signal(|| item.video_url.clone().unwrap_or_default());
+    let mut video_url = use_signal(|| item.video_url.clone().unwrap_or_default());
     let mut items = use_signal(|| item.items.join(", "));
     let mut total_price = use_signal(|| item.total_price.to_string());
     let mut discount_percent = use_signal(|| item.discount_percent.to_string());
@@ -2453,7 +2456,7 @@ fn EditTeaSetCard(
             input { style: input_style(), placeholder: "Название (RU)", value: "{name}", oninput: move |e| name.set(e.value()) }
             textarea { style: textarea_style(), placeholder: "Описание (RU)", value: "{description}", oninput: move |e| description.set(e.value()) }
             input { style: input_style(), placeholder: "Иконка", value: "{icon}", oninput: move |e| icon.set(e.value()) }
-            VideoUpload { video_url }
+            VideoUpload { video_url: video_url.read().clone(), on_change: move |url: String| video_url.set(url) }
             textarea { style: textarea_style(), placeholder: "Tea item IDs (через запятую)", value: "{items}", oninput: move |e| items.set(e.value()) }
             input { style: input_style(), placeholder: "Цена ฿", value: "{total_price}", r#type: "number", oninput: move |e| total_price.set(e.value()) }
             input { style: input_style(), placeholder: "Скидка %", value: "{discount_percent}", r#type: "number", oninput: move |e| discount_percent.set(e.value()) }
@@ -2529,12 +2532,14 @@ fn auto_scroll_to_list() {
     let _ = js_sys::eval("setTimeout(()=>{var el=document.querySelector('[data-list]');if(el)el.scrollIntoView({behavior:'smooth'});},100);");
 }
 
-fn render_image_upload(mut image_url: Signal<String>) -> Element {
+#[component]
+fn ImageUpload(image_url: String, on_change: EventHandler<String>) -> Element {
     let mut uploading = use_signal(|| false);
+    let img_url = image_url.clone();
     rsx! {
         div { style: "display:flex;gap:6px;align-items:center;",
             input { style: "flex:1;{input_style()}", placeholder: "URL картинки", value: "{image_url}",
-                oninput: move |e| image_url.set(e.value()) }
+                oninput: move |e| on_change.call(e.value()) }
             if *uploading.read() {
                 div { style: "padding:10px 12px;background:#1a1a2e;color:#6699ff;border:1px dashed #2a2a4a;border-radius:4px;font-size:13px;white-space:nowrap;", "⏳ Загрузка..." }
             } else {
@@ -2544,18 +2549,17 @@ fn render_image_upload(mut image_url: Signal<String>) -> Element {
                         spawn(async move {
                             let result = upload_image().await;
                             uploading.set(false);
-                            if let Some(url) = result { image_url.set(url); }
+                            if let Some(url) = result { on_change.call(url); }
                         });
                     },
                     "📷 Upload"
                 }
             }
         }
-        if !image_url.read().is_empty() {
+        if !image_url.is_empty() {
             div { style: "margin-top:4px;",
                 img { src: "{image_url}", style: "width:64px;height:64px;object-fit:cover;border-radius:6px;border:1px solid #2a2a4a;cursor:pointer;", onclick: move |_| {
-                    let url = image_url.read().clone();
-                    let _ = web_sys::window().and_then(|w| w.open_with_url_and_target(&url, "_blank").ok());
+                    let _ = web_sys::window().and_then(|w| w.open_with_url_and_target(&img_url, "_blank").ok());
                 } }
             }
         }
@@ -2563,50 +2567,29 @@ fn render_image_upload(mut image_url: Signal<String>) -> Element {
 }
 
 #[component]
-fn VideoUpload(mut video_url: Signal<String>) -> Element {
+fn VideoUpload(video_url: String, on_change: EventHandler<String>) -> Element {
     let mut uploading = use_signal(|| false);
-    let mut upload_result = use_signal(|| None::<String>);
-    
-    // Apply upload result when uploading finishes
-    use_effect(move || {
-        let is_uploading = *uploading.read();
-        let url_opt = upload_result.read().clone();
-        if !is_uploading {
-            if let Some(url) = url_opt {
-                web_sys::console::log_1(&format!("[VideoUpload] Applying upload result: {}", url).into());
-                video_url.set(url);
-                upload_result.set(None);
-            }
-        }
-    });
-    
     rsx! {
-        // Force Dioxus to subscribe to upload_result changes
-        div { style: "display:none;", "{upload_result.read().as_ref().clone().unwrap_or_default()}" }
         div { style: "display:flex;gap:6px;align-items:center;",
             input { style: "flex:1;{input_style()}", placeholder: "URL видео", value: "{video_url}",
-                oninput: move |e| video_url.set(e.value()) }
+                oninput: move |e| on_change.call(e.value()) }
             if *uploading.read() {
                 div { style: "padding:10px 12px;background:#1a1a2e;color:#6699ff;border:1px dashed #2a2a4a;border-radius:4px;font-size:13px;white-space:nowrap;", "⏳ Загрузка..." }
             } else {
                 button { style: upload_btn_style(),
                     onclick: move |_| {
                         uploading.set(true);
-                        let mut ur = upload_result.clone();
                         spawn(async move {
                             let result = upload_video().await;
                             uploading.set(false);
-                            if let Some(url) = result {
-                                web_sys::console::log_1(&format!("[VideoUpload] Upload done: {}", url).into());
-                                ur.set(Some(url));
-                            }
+                            if let Some(url) = result { on_change.call(url); }
                         });
                     },
                     "🎥 Upload"
                 }
             }
         }
-        if !video_url.read().is_empty() {
+        if !video_url.is_empty() {
             div { style: "margin-top:4px;",
                 video { src: "{video_url}", controls: true, style: "width:120px;height:80px;object-fit:cover;border-radius:6px;border:1px solid #2a2a4a;" }
             }
@@ -2787,8 +2770,8 @@ fn EditStrainCard(
     let mut description = use_signal(|| item.description.clone().unwrap_or_default());
     let mut effect = use_signal(|| item.effect.clone().unwrap_or_default());
     let mut flavor_profile = use_signal(|| item.flavor_profile.clone().unwrap_or_default());
-    let image_url = use_signal(|| item.image_url.clone().unwrap_or_default());
-    let video_url = use_signal(|| item.video_url.clone().unwrap_or_default());
+    let mut image_url = use_signal(|| item.image_url.clone().unwrap_or_default());
+    let mut video_url = use_signal(|| item.video_url.clone().unwrap_or_default());
     let mut name_en = use_signal(|| item.name_en.clone().unwrap_or_default());
     let mut description_en = use_signal(|| item.description_en.clone().unwrap_or_default());
     let mut effect_en = use_signal(|| item.effect_en.clone().unwrap_or_default());
@@ -2809,8 +2792,8 @@ fn EditStrainCard(
             textarea { style: textarea_style(), placeholder: "Описание (RU)", value: "{description}", oninput: move |e| description.set(e.value()) }
             textarea { style: textarea_style(), placeholder: "Эффект (RU)", value: "{effect}", oninput: move |e| effect.set(e.value()) }
             textarea { style: textarea_style(), placeholder: "Вкусовой профиль (RU)", value: "{flavor_profile}", oninput: move |e| flavor_profile.set(e.value()) }
-            {render_image_upload(image_url)}
-            VideoUpload { video_url }
+            ImageUpload { image_url: image_url.read().clone(), on_change: move |url: String| image_url.set(url) }
+            VideoUpload { video_url: video_url.read().clone(), on_change: move |url: String| video_url.set(url) }
             div { style: en_section_style(), "🇬🇧 English" }
             input { style: input_style(), placeholder: "Name (EN)", value: "{name_en}", oninput: move |e| name_en.set(e.value()) }
             textarea { style: textarea_style(), placeholder: "Description (EN)", value: "{description_en}", oninput: move |e| description_en.set(e.value()) }
@@ -2914,8 +2897,8 @@ fn EditAccessoryCard(
     let mut price = use_signal(|| item.price.to_string());
     let mut stock = use_signal(|| item.stock.map(|s| s.to_string()).unwrap_or_default());
     let mut description = use_signal(|| item.description.clone().unwrap_or_default());
-    let image_url = use_signal(|| item.image_url.clone().unwrap_or_default());
-    let video_url = use_signal(|| item.video_url.clone().unwrap_or_default());
+    let mut image_url = use_signal(|| item.image_url.clone().unwrap_or_default());
+    let mut video_url = use_signal(|| item.video_url.clone().unwrap_or_default());
     let mut name_en = use_signal(|| item.name_en.clone().unwrap_or_default());
     let mut description_en = use_signal(|| item.description_en.clone().unwrap_or_default());
     let mut category_en = use_signal(|| item.category_en.clone().unwrap_or_default());
@@ -2933,8 +2916,8 @@ fn EditAccessoryCard(
             input { style: input_style(), placeholder: "Цена ฿", value: "{price}", r#type: "number", oninput: move |e| price.set(e.value()) }
             input { style: input_style(), placeholder: "Кол-во", value: "{stock}", r#type: "number", oninput: move |e| stock.set(e.value()) }
             textarea { style: textarea_style(), placeholder: "Описание (RU)", value: "{description}", oninput: move |e| description.set(e.value()) }
-            {render_image_upload(image_url)}
-            VideoUpload { video_url }
+            ImageUpload { image_url: image_url.read().clone(), on_change: move |url: String| image_url.set(url) }
+            VideoUpload { video_url: video_url.read().clone(), on_change: move |url: String| video_url.set(url) }
             div { style: en_section_style(), "🇬🇧 English" }
             input { style: input_style(), placeholder: "Name (EN)", value: "{name_en}", oninput: move |e| name_en.set(e.value()) }
             textarea { style: textarea_style(), placeholder: "Description (EN)", value: "{description_en}", oninput: move |e| description_en.set(e.value()) }
@@ -3021,8 +3004,8 @@ fn EditTeaCard(
     let mut price = use_signal(|| item.price.to_string());
     let mut stock = use_signal(|| item.stock.map(|s| s.to_string()).unwrap_or_default());
     let mut description = use_signal(|| item.description.clone().unwrap_or_default());
-    let image_url = use_signal(|| item.image_url.clone().unwrap_or_default());
-    let video_url = use_signal(|| item.video_url.clone().unwrap_or_default());
+    let mut image_url = use_signal(|| item.image_url.clone().unwrap_or_default());
+    let mut video_url = use_signal(|| item.video_url.clone().unwrap_or_default());
     let mut name_en = use_signal(|| item.name_en.clone().unwrap_or_default());
     let mut description_en = use_signal(|| item.description_en.clone().unwrap_or_default());
     let mut subcategory_en = use_signal(|| item.subcategory_en.clone().unwrap_or_default());
@@ -3039,8 +3022,8 @@ fn EditTeaCard(
             input { style: input_style(), placeholder: "Цена ฿", value: "{price}", r#type: "number", oninput: move |e| price.set(e.value()) }
             input { style: input_style(), placeholder: "Кол-во", value: "{stock}", r#type: "number", oninput: move |e| stock.set(e.value()) }
             textarea { style: textarea_style(), placeholder: "Описание (RU)", value: "{description}", oninput: move |e| description.set(e.value()) }
-            {render_image_upload(image_url)}
-            VideoUpload { video_url }
+            ImageUpload { image_url: image_url.read().clone(), on_change: move |url: String| image_url.set(url) }
+            VideoUpload { video_url: video_url.read().clone(), on_change: move |url: String| video_url.set(url) }
             div { style: en_section_style(), "🇬🇧 English" }
             input { style: input_style(), placeholder: "Name (EN)", value: "{name_en}", oninput: move |e| name_en.set(e.value()) }
             textarea { style: textarea_style(), placeholder: "Description (EN)", value: "{description_en}", oninput: move |e| description_en.set(e.value()) }
@@ -4742,10 +4725,12 @@ fn ManagerDetailModal(props: ManagerDetailModalProps) -> Element {
 
     // Fetch stats (endpoint may not exist yet — OK)
     let stats_signal = stats_text.clone();
+    let init_data2 = init_data.clone();
     use_effect(move || {
         let url = format!("{}/api/admin/managers/{}/stats", api_base_url(), manager_id);
+        let id_data = init_data2.clone();
         spawn(async move {
-            match HTTP_CLIENT.clone().get(&url).send().await {
+            match HTTP_CLIENT.clone().get(&url).header("X-Telegram-Init-Data", id_data).send().await {
                 Ok(r) if r.status().is_success() => {
                     if let Ok(text) = r.text().await {
                         stats_signal.clone().set(text);

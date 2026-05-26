@@ -188,7 +188,7 @@ pub struct TreasureHuntRequest {
 async fn get_treasure_hunts(State(state): State<AppState>) -> Result<Json<Value>, StatusCode> {
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     let rows = client.query(
-        "SELECT id, name, description, image_url, black_mark_title, black_mark_description, black_mark_image_url, is_active, starts_at, ends_at, start_lat, start_lon, start_name FROM treasure_hunts WHERE is_active = true ORDER BY created_at DESC",
+        "SELECT id, name, description, image_url, black_mark_title, black_mark_description, black_mark_image_url, is_active, starts_at, ends_at, start_lat::float8, start_lon::float8, start_name FROM treasure_hunts WHERE is_active = true ORDER BY created_at DESC",
         &[],
     ).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     let items: Vec<Value> = rows.iter().map(|r| json!({

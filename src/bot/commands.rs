@@ -131,7 +131,7 @@ pub async fn handle_command(
                 let notify_config = config.clone();
                 let notify_text = format!(
                     "\u{1F195} \u{041D}\u{043E}\u{0432}\u{044B}\u{0439} \u{043F}\u{043E}\u{043B}\u{044C}\u{0437}\u{043E}\u{0432}\u{0430}\u{0442}\u{0435}\u{043B}\u{044C}\n\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\n\u{1F464} {} (@{})\n\u{1F194} {}\n\u{1F30D} {}",
-                    first_name, username, user_id, language_code
+                    html_escape(&first_name), html_escape(&username), user_id, language_code
                 );
                 tokio::spawn(async move {
                     notify_admins(&notify_bot, &notify_config, &notify_text).await;

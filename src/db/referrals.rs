@@ -176,6 +176,9 @@ pub async fn record_referral(
 /// - Credits bonus to referrer's balance via bonus_transactions
 /// - Increments referrer's referral_count
 pub async fn confirm_referral(pool: &Pool, referred_id: i64, bonus: f64) -> Result<()> {
+    if !bonus.is_finite() || bonus < 0.0 {
+        anyhow::bail!("invalid bonus: {}", bonus);
+    }
     let mut client = pool.get().await.context("db pool")?;
     let tx = client.transaction().await.context("start tx")?;
 
@@ -241,7 +244,7 @@ pub async fn get_referrer_stats(pool: &Pool, telegram_id: i64) -> Result<Referre
                 COUNT(*)                                    AS total_invited,
                 COUNT(*) FILTER (WHERE status = 'confirmed' OR status = 'paid') AS confirmed,
                 COUNT(*) FILTER (WHERE status = 'pending')  AS pending,
-                COALESCE(SUM(bonus_paid), 0)                AS total_bonus_earned
+                COALESCE(SUM(bonus_paid)::float8, 0)        AS total_bonus_earned
              FROM referral_events
              WHERE referrer_id = $1",
             &[&telegram_id],
@@ -266,7 +269,7 @@ pub async fn get_top_referrers(pool: &Pool, period: &str, limit: i64) -> Result<
             "SELECT
                 re.referrer_id          AS telegram_id,
                 COUNT(*)                AS referral_count,
-                COALESCE(SUM(re.bonus_paid), 0) AS total_bonus_earned
+                COALESCE(SUM(re.bonus_paid)::float8, 0) AS total_bonus_earned
              FROM referral_events re
              WHERE (re.status = 'confirmed' OR re.status = 'paid')
              AND re.created_at >= NOW() - INTERVAL '7 days'
@@ -278,7 +281,7 @@ pub async fn get_top_referrers(pool: &Pool, period: &str, limit: i64) -> Result<
             "SELECT
                 re.referrer_id          AS telegram_id,
                 COUNT(*)                AS referral_count,
-                COALESCE(SUM(re.bonus_paid), 0) AS total_bonus_earned
+                COALESCE(SUM(re.bonus_paid)::float8, 0) AS total_bonus_earned
              FROM referral_events re
              WHERE (re.status = 'confirmed' OR re.status = 'paid')
              AND re.created_at >= NOW() - INTERVAL '30 days'
@@ -290,7 +293,7 @@ pub async fn get_top_referrers(pool: &Pool, period: &str, limit: i64) -> Result<
             "SELECT
                 re.referrer_id          AS telegram_id,
                 COUNT(*)                AS referral_count,
-                COALESCE(SUM(re.bonus_paid), 0) AS total_bonus_earned
+                COALESCE(SUM(re.bonus_paid)::float8, 0) AS total_bonus_earned
              FROM referral_events re
              WHERE (re.status = 'confirmed' OR re.status = 'paid')
              GROUP BY re.referrer_id

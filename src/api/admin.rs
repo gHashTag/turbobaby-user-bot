@@ -293,6 +293,16 @@ async fn check_admin_access(
         }
     }
 
+    // 2. Fallback: password token (X-Admin-Token)
+    let token_opt = headers.get("X-Admin-Token").and_then(|v| v.to_str().ok());
+    if let Some(token) = token_opt {
+        if let Some(ref password) = state.config.admin_password {
+            if crate::api::auth::verify_admin_token(token, &state.config.bot_token, password) {
+                return Ok(Json(json!({ "is_admin": true, "telegram_id": query.telegram_id })));
+            }
+        }
+    }
+
     tracing::warn!("admin/check: unauthorized — invalid or missing initData");
     Err(StatusCode::UNAUTHORIZED)
 }
@@ -312,7 +322,7 @@ async fn admin_login(
         }
     }
     tracing::warn!("admin_login: invalid password attempt");
-    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+    tokio::time::sleep(std::time::Duration::from_secs(3)).await;
     Err(StatusCode::UNAUTHORIZED)
 }
 

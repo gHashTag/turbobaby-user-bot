@@ -89,9 +89,9 @@ async fn get_accessories(headers: HeaderMap, State(state): State<AppState>, Quer
         crate::api::auth::check_admin(&headers, &state)?;
     }
     let sql = if include_hidden {
-        "SELECT id, name, category, description, price, stock, image_url, video_url, is_available, name_en, description_en, category_en FROM accessories ORDER BY name"
+        "SELECT id, name, category, description, price::float8, stock, image_url, video_url, is_available, name_en, description_en, category_en FROM accessories ORDER BY name"
     } else {
-        "SELECT id, name, category, description, price, stock, image_url, video_url, is_available, name_en, description_en, category_en FROM accessories WHERE is_available = TRUE ORDER BY name"
+        "SELECT id, name, category, description, price::float8, stock, image_url, video_url, is_available, name_en, description_en, category_en FROM accessories WHERE is_available = TRUE ORDER BY name"
     };
     let rows = client.query(sql, &[]).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     let items: Vec<Value> = rows.iter().map(accessory_row).collect();
@@ -110,7 +110,7 @@ async fn toggle_accessory_availability(State(state): State<AppState>, headers: H
 async fn get_accessory(State(state): State<AppState>, Path(id): Path<String>) -> Result<Json<Value>, StatusCode> {
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     let row = client.query_opt(
-        "SELECT id, name, category, description, price, stock, image_url, video_url, is_available, name_en, description_en, category_en FROM accessories WHERE id = $1 AND is_available = TRUE",
+        "SELECT id, name, category, description, price::float8, stock, image_url, video_url, is_available, name_en, description_en, category_en FROM accessories WHERE id = $1 AND is_available = TRUE",
         &[&id],
     ).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     match row {
@@ -127,7 +127,7 @@ async fn create_accessory(State(state): State<AppState>, headers: HeaderMap, Jso
     let id = uuid::Uuid::new_v4().to_string();
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("create_accessory pool error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     client.execute(
-        "INSERT INTO accessories (id, name, category, description, price, stock, image_url, video_url, is_available, name_en, description_en, category_en) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)",
+        "INSERT INTO accessories (id, name, category, description, price::float8, stock, image_url, video_url, is_available, name_en, description_en, category_en) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)",
         &[&id, &req.name, &req.category.unwrap_or_default(), &req.description.unwrap_or_default(), &req.price, &req.stock.unwrap_or(0), &req.image_url.unwrap_or_default(), &req.video_url, &true, &req.name_en, &req.description_en, &req.category_en],
     ).await.map_err(|e| { tracing::error!("create_accessory error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     Ok(Json(json!({ "success": true, "id": id })))
@@ -201,9 +201,9 @@ async fn get_accessory_sets(headers: HeaderMap, State(state): State<AppState>, Q
         crate::api::auth::check_admin(&headers, &state)?;
     }
     let sql = if include_hidden {
-        "SELECT id, name, description, icon, accessories, total_price, discount_percent, is_available, is_deal_of_day, name_en, description_en, image_url, video_url FROM accessory_sets ORDER BY name"
+        "SELECT id, name, description, icon, accessories, total_price::float8, discount_percent::float8, is_available, is_deal_of_day, name_en, description_en, image_url, video_url FROM accessory_sets ORDER BY name"
     } else {
-        "SELECT id, name, description, icon, accessories, total_price, discount_percent, is_available, is_deal_of_day, name_en, description_en, image_url, video_url FROM accessory_sets WHERE is_available = TRUE ORDER BY name"
+        "SELECT id, name, description, icon, accessories, total_price::float8, discount_percent::float8, is_available, is_deal_of_day, name_en, description_en, image_url, video_url FROM accessory_sets WHERE is_available = TRUE ORDER BY name"
     };
     let rows = client.query(sql, &[]).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     let items: Vec<Value> = rows.iter().map(accessory_set_row).collect();
@@ -301,9 +301,9 @@ async fn get_tea_products(headers: HeaderMap, State(state): State<AppState>, Que
         crate::api::auth::check_admin(&headers, &state)?;
     }
     let sql = if include_hidden {
-        "SELECT id, name, subcategory, description, price, stock, image_url, video_url, is_available, name_en, description_en, subcategory_en FROM tea_products ORDER BY name"
+        "SELECT id, name, subcategory, description, price::float8, stock, image_url, video_url, is_available, name_en, description_en, subcategory_en FROM tea_products ORDER BY name"
     } else {
-        "SELECT id, name, subcategory, description, price, stock, image_url, video_url, is_available, name_en, description_en, subcategory_en FROM tea_products WHERE is_available = TRUE ORDER BY name"
+        "SELECT id, name, subcategory, description, price::float8, stock, image_url, video_url, is_available, name_en, description_en, subcategory_en FROM tea_products WHERE is_available = TRUE ORDER BY name"
     };
     let rows = client.query(sql, &[]).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     let items: Vec<Value> = rows.iter().map(tea_product_row).collect();
@@ -323,7 +323,7 @@ async fn toggle_tea_availability(State(state): State<AppState>, headers: HeaderM
 async fn get_tea_product(State(state): State<AppState>, Path(id): Path<String>) -> Result<Json<Value>, StatusCode> {
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     let row = client.query_opt(
-        "SELECT id, name, subcategory, description, price, stock, image_url, video_url, is_available, name_en, description_en, subcategory_en FROM tea_products WHERE id = $1 AND is_available = TRUE",
+        "SELECT id, name, subcategory, description, price::float8, stock, image_url, video_url, is_available, name_en, description_en, subcategory_en FROM tea_products WHERE id = $1 AND is_available = TRUE",
         &[&id],
     ).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     match row {
@@ -340,7 +340,7 @@ async fn create_tea_product(State(state): State<AppState>, headers: HeaderMap, J
     let id = uuid::Uuid::new_v4().to_string();
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("create_tea_product pool error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     client.execute(
-        "INSERT INTO tea_products (id, name, subcategory, description, price, stock, image_url, video_url, is_available, name_en, description_en, subcategory_en) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)",
+        "INSERT INTO tea_products (id, name, subcategory, description, price::float8, stock, image_url, video_url, is_available, name_en, description_en, subcategory_en) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)",
         &[&id, &req.name, &req.subcategory.unwrap_or_else(|| "tea".to_string()), &req.description.unwrap_or_default(), &req.price, &req.stock.unwrap_or(0), &req.image_url.unwrap_or_default(), &req.video_url, &true, &req.name_en, &req.description_en, &req.subcategory_en],
     ).await.map_err(|e| { tracing::error!("create_tea_product error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     Ok(Json(json!({ "success": true, "id": id })))
@@ -410,9 +410,9 @@ async fn get_tea_sets(headers: HeaderMap, State(state): State<AppState>, Query(q
         crate::api::auth::check_admin(&headers, &state)?;
     }
     let sql = if include_hidden {
-        "SELECT id, name, description, icon, items, total_price, discount_percent, is_available, name_en, description_en, video_url FROM tea_sets ORDER BY name"
+        "SELECT id, name, description, icon, items, total_price::float8, discount_percent::float8, is_available, name_en, description_en, video_url FROM tea_sets ORDER BY name"
     } else {
-        "SELECT id, name, description, icon, items, total_price, discount_percent, is_available, name_en, description_en, video_url FROM tea_sets WHERE is_available = TRUE ORDER BY name"
+        "SELECT id, name, description, icon, items, total_price::float8, discount_percent::float8, is_available, name_en, description_en, video_url FROM tea_sets WHERE is_available = TRUE ORDER BY name"
     };
     let rows = client.query(sql, &[]).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     let items: Vec<Value> = rows.iter().map(tea_set_row).collect();
@@ -512,7 +512,7 @@ async fn get_sets(headers: HeaderMap, State(state): State<AppState>, Query(q): Q
     if include_hidden {
         // Use a single compatible query that works with or without accessory_ids column.
         let rows = client.query(
-            "SELECT id, name, description, icon, strain_ids, COALESCE(accessory_ids, NULL::text[]) AS accessory_ids, total_price, discount_percent, is_available, COALESCE(is_deal_of_day, false) AS is_deal_of_day, video_url FROM sets ORDER BY name",
+            "SELECT id, name, description, icon, strain_ids, COALESCE(accessory_ids, NULL::text[]) AS accessory_ids, total_price::float8, discount_percent::float8, is_available, COALESCE(is_deal_of_day, false) AS is_deal_of_day, video_url FROM sets ORDER BY name",
             &[],
         ).await.map_err(|e| { tracing::error!("get_sets admin query error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
         let items: Vec<Value> = rows.iter().map(set_row).collect();
@@ -521,12 +521,12 @@ async fn get_sets(headers: HeaderMap, State(state): State<AppState>, Query(q): Q
 
     // Public mode: combine accessory_sets + tea_sets (backwards compat)
     let accessory_sets = client.query(
-        "SELECT id, name, description, icon, accessories, total_price, discount_percent, is_available, is_deal_of_day, name_en, description_en FROM accessory_sets WHERE is_available = TRUE",
+        "SELECT id, name, description, icon, accessories, total_price::float8, discount_percent::float8, is_available, is_deal_of_day, name_en, description_en FROM accessory_sets WHERE is_available = TRUE",
         &[],
     ).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
 
     let tea_sets = client.query(
-        "SELECT id, name, description, icon, items, total_price, discount_percent, is_available, name_en, description_en FROM tea_sets WHERE is_available = TRUE",
+        "SELECT id, name, description, icon, items, total_price::float8, discount_percent::float8, is_available, name_en, description_en FROM tea_sets WHERE is_available = TRUE",
         &[],
     ).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
 

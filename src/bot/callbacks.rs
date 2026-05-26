@@ -218,19 +218,19 @@ pub async fn handle_callback(
 
                         if let Err(e) = ref_db::confirm_referral(pool, cid, bonus).await {
                             tracing::error!("callback: confirm_referral failed for referred_id={}: {}", cid, e);
-                        }
-
-                        // Notify referrer if we can find them
-                        let event_row = db_client.query_opt(
-                            "SELECT referrer_id FROM referral_events WHERE referred_id = $1",
-                            &[&cid],
-                        ).await.ok().flatten();
-                        if let Some(ev) = event_row {
-                            let referrer_id: i64 = ev.get("referrer_id");
-                            let _ = bot.send_message(
-                                teloxide::types::ChatId(referrer_id),
-                                format!("🎉 {} +{:.0} ฿", locale.referral_bonus, bonus),
-                            ).await;
+                        } else {
+                            // Notify referrer only after successful bonus credit
+                            let event_row = db_client.query_opt(
+                                "SELECT referrer_id FROM referral_events WHERE referred_id = $1",
+                                &[&cid],
+                            ).await.ok().flatten();
+                            if let Some(ev) = event_row {
+                                let referrer_id: i64 = ev.get("referrer_id");
+                                let _ = bot.send_message(
+                                    teloxide::types::ChatId(referrer_id),
+                                    format!("🎉 {} +{:.0} ฿", locale.referral_bonus, bonus),
+                                ).await;
+                            }
                         }
                     }
                 }

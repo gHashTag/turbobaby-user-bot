@@ -458,21 +458,6 @@ async fn main() -> Result<()> {
         .merge(spa_routes)
         // SPA routes - these should be served by the fallback
         .merge(static_assets)
-        // Debug endpoint to inspect static cache
-        .route("/api/debug/dist", get({
-            let keys: Vec<String> = static_cache.keys().cloned().collect();
-            move || async move {
-                axum::Json(serde_json::json!({
-                    "count": keys.len(),
-                    "keys": keys,
-                }))
-            }
-        }))
-        // Test endpoint: return 4 MB of zeros to check if Railway throttles large bodies
-        .route("/api/debug/large", get(|| async move {
-            let zeros = vec![0u8; 4 * 1024 * 1024];
-            ([(axum::http::header::CONTENT_TYPE, "application/octet-stream")], zeros)
-        }))
         // Single top-level fallback: serve hashed bundles from dist/, fall
         // back to SPA index.html if path not found. We apply no-store cache
         // headers globally on the fallback; immutable cache for hashed

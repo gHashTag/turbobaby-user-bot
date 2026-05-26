@@ -45,7 +45,7 @@ fn api_routes(state: AppState) -> Router {
         .merge(referrals::routes())
         .merge(tech_tree::routes())
         .merge(cart::routes())
-        .layer(DefaultBodyLimit::max(10 * 1024 * 1024))
+        .layer(DefaultBodyLimit::max(110 * 1024 * 1024))
         .with_state(state)
 }
 

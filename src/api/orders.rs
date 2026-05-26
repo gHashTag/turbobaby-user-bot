@@ -71,6 +71,18 @@ async fn create_order(
         return Err(StatusCode::BAD_REQUEST);
     }
 
+    // Rate-limit: не более 1 заказа в минуту от одного telegram_id.
+    if let Some(tid) = req.telegram_id {
+        let client = state.db.pool.get().await.map_err(|e| { error!("create_order pool error: {}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
+        let recent = client.query_opt(
+            "SELECT 1 FROM orders WHERE telegram_id = $1 AND created_at > NOW() - INTERVAL '1 minute' LIMIT 1",
+            &[&tid],
+        ).await.map_err(|e| { error!("rate-limit check error: {}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
+        if recent.is_some() {
+            return Err(StatusCode::TOO_MANY_REQUESTS);
+        }
+    }
+
     let id = uuid::Uuid::new_v4().to_string();
     let items_json = serde_json::to_value(&req.items)
         .map_err(|e| { error!("items serialization failed: {}", e); StatusCode::BAD_REQUEST })?;

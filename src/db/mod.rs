@@ -252,7 +252,7 @@ impl Database {
     pub async fn get_strains_of_day(&self) -> Result<Vec<StrainOfDay>> {
         let client = self.pool.get().await?;
         let rows = client.query(
-            "SELECT s.id, s.name, s.category, s.thc_percent, s.price_per_gram, s.strain_of_day_discount, s.image_url FROM strains s WHERE s.is_strain_of_day = true AND s.is_available = true ORDER BY s.strain_of_day_set_at DESC LIMIT 5",
+            "SELECT s.id, s.name, s.category, s.thc_percent::float8, s.price_per_gram::float8, s.strain_of_day_discount::float8, s.image_url FROM strains s WHERE s.is_strain_of_day = true AND s.is_available = true ORDER BY s.strain_of_day_set_at DESC LIMIT 5",
             &[],
         ).await?;
         Ok(rows.iter().map(StrainOfDay::from_row).collect())
