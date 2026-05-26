@@ -62,6 +62,11 @@ async fn create_order(
     if !bonus_used.is_finite() {
         return Err(StatusCode::BAD_REQUEST);
     }
+    // Sanity-check frontend math: total must equal subtotal minus bonus (within 1 satang).
+    let expected_total = (req.subtotal - bonus_used).max(0.0);
+    if (req.total - expected_total).abs() > 0.01 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
 
     let id = uuid::Uuid::new_v4().to_string();
     let items_json = serde_json::to_value(&req.items)
@@ -213,11 +218,23 @@ async fn update_order_status(
     if !VALID_STATUSES.contains(&req.status.as_str()) {
         return Err(StatusCode::BAD_REQUEST);
     }
-    let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
-    let rows = client.execute("UPDATE orders SET status = $1 WHERE id = $2", &[&req.status, &id])
-        .await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
-    if rows == 0 {
-        return Err(StatusCode::NOT_FOUND);
+    if req.status == "completed" {
+        let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
+        let exists = client.query_opt("SELECT 1 FROM orders WHERE id = $1", &[&id]).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
+        if exists.is_none() {
+            return Err(StatusCode::NOT_FOUND);
+        }
+        if let Err(e) = crate::db::orders::complete_order_and_update_loyalty(&state.db.pool, &id).await {
+            tracing::error!("update_order_status: complete_order_and_update_loyalty error: {}", e);
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    } else {
+        let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
+        let rows = client.execute("UPDATE orders SET status = $1 WHERE id = $2", &[&req.status, &id])
+            .await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
+        if rows == 0 {
+            return Err(StatusCode::NOT_FOUND);
+        }
     }
     Ok(Json(json!({ "success": true })))
 }

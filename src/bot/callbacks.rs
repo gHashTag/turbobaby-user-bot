@@ -191,91 +191,14 @@ pub async fn handle_callback(
             bot.answer_callback_query(&q.id).text("📦 Completed!").await?;
 
             // Atomically complete order, update loyalty profile, and recalculate tier
-            let mut is_first = false;
-            let mut customer_telegram_id: Option<i64> = None;
-            match db.pool.get().await {
-                Ok(mut client) => {
-                    let tx = match client.transaction().await {
-                        Ok(t) => t,
-                        Err(e) => {
-                            tracing::error!("callback: complete tx start error: {}", e);
-                            return Ok(());
-                        }
-                    };
-                    let order_row = match tx.query_opt(
-                        "SELECT telegram_id, total::float8, status FROM orders WHERE id = $1",
-                        &[&order_id],
-                    ).await {
-                        Ok(r) => r,
-                        Err(e) => {
-                            tracing::error!("callback: complete order select error: {}", e);
-                            let _ = tx.rollback().await;
-                            return Ok(());
-                        }
-                    };
-                    if let Some(row) = order_row {
-                        let cid: i64 = row.get("telegram_id");
-                        let total: f64 = row.get("total");
-                        let status: String = row.get("status");
-                        customer_telegram_id = Some(cid);
-                        if status != "completed" {
-                            let count_before = match tx.query_one(
-                                "SELECT COUNT(*) as cnt FROM orders WHERE telegram_id = $1 AND status = 'completed'",
-                                &[&cid],
-                            ).await {
-                                Ok(r) => r.get::<_, i64>("cnt"),
-                                Err(e) => {
-                                    tracing::error!("callback: complete count_before error: {}", e);
-                                    let _ = tx.rollback().await;
-                                    return Ok(());
-                                }
-                            };
-                            is_first = count_before == 0;
-                            if let Err(e) = tx.execute(
-                                "UPDATE orders SET status = 'completed' WHERE id = $1",
-                                &[&order_id],
-                            ).await {
-                                tracing::error!("callback: complete order update error: {}", e);
-                                let _ = tx.rollback().await;
-                                return Ok(());
-                            }
-                            if let Err(e) = tx.execute(
-                                "INSERT INTO loyalty_profiles (telegram_id, total_spent, first_purchase_at) VALUES ($1, $2, NOW())
-                                 ON CONFLICT (telegram_id) DO UPDATE SET
-                                   total_spent = COALESCE(loyalty_profiles.total_spent, 0) + EXCLUDED.total_spent,
-                                   first_purchase_at = COALESCE(loyalty_profiles.first_purchase_at, NOW())",
-                                &[&cid, &total],
-                            ).await {
-                                tracing::error!("callback: complete loyalty update error: {}", e);
-                                let _ = tx.rollback().await;
-                                return Ok(());
-                            }
-                            if let Err(e) = tx.execute(
-                                "UPDATE loyalty_profiles SET tier = CASE
-                                    WHEN loyalty_profiles.total_spent >= (SELECT (config->>'gold_threshold')::float8 FROM loyalty_config WHERE id = 1 LIMIT 1) THEN 'gold'
-                                    WHEN loyalty_profiles.total_spent >= (SELECT (config->>'silver_threshold')::float8 FROM loyalty_config WHERE id = 1 LIMIT 1) THEN 'silver'
-                                    WHEN loyalty_profiles.total_spent >= (SELECT (config->>'bronze_threshold')::float8 FROM loyalty_config WHERE id = 1 LIMIT 1) THEN 'bronze'
-                                    ELSE 'none'
-                                 END
-                                 WHERE telegram_id = $1",
-                                &[&cid],
-                            ).await {
-                                tracing::error!("callback: complete tier update error: {}", e);
-                                let _ = tx.rollback().await;
-                                return Ok(());
-                            }
-                        }
-                    }
-                    if let Err(e) = tx.commit().await {
-                        tracing::error!("callback: complete commit error: {}", e);
-                        return Ok(());
-                    }
-                }
+            let (is_first, customer_telegram_id) = match crate::db::orders::complete_order_and_update_loyalty(&db.pool, order_id).await {
+                Ok(Some((cid, first))) => (first, Some(cid)),
+                Ok(None) => (false, None),
                 Err(e) => {
-                    tracing::error!("callback: complete pool error: {}", e);
+                    tracing::error!("callback: complete_order_and_update_loyalty error: {}", e);
                     return Ok(());
                 }
-            }
+            };
 
             // If first order, confirm referral and notify referrer
             if is_first {

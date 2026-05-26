@@ -2565,14 +2565,28 @@ fn render_image_upload(mut image_url: Signal<String>) -> Element {
 #[component]
 fn VideoUpload(mut video_url: Signal<String>) -> Element {
     let mut uploading = use_signal(|| false);
+    let mut local_url = use_signal(|| video_url.read().clone());
+    
+    // Sync from parent
     use_effect(move || {
-        let val = video_url.read();
-        web_sys::console::log_1(&format!("[VideoUpload] effect fired, video_url='{}' empty={}", val, val.is_empty()).into());
+        let parent_val = video_url.read();
+        if *local_url.read() != *parent_val {
+            local_url.set(parent_val.clone());
+        }
     });
+    
+    // Sync to parent
+    use_effect(move || {
+        let local_val = local_url.read();
+        if *video_url.read() != *local_val {
+            video_url.set(local_val.clone());
+        }
+    });
+    
     rsx! {
         div { style: "display:flex;gap:6px;align-items:center;",
-            input { style: "flex:1;{input_style()}", placeholder: "URL видео", value: "{video_url}",
-                oninput: move |e| video_url.set(e.value()) }
+            input { style: "flex:1;{input_style()}", placeholder: "URL видео", value: "{local_url}",
+                oninput: move |e| local_url.set(e.value()) }
             if *uploading.read() {
                 div { style: "padding:10px 12px;background:#1a1a2e;color:#6699ff;border:1px dashed #2a2a4a;border-radius:4px;font-size:13px;white-space:nowrap;", "⏳ Загрузка..." }
             } else {
@@ -2583,7 +2597,7 @@ fn VideoUpload(mut video_url: Signal<String>) -> Element {
                             let result = upload_video().await;
                             uploading.set(false);
                             if let Some(url) = result {
-                                video_url.set(url);
+                                local_url.set(url);
                             }
                         });
                     },
@@ -2591,9 +2605,9 @@ fn VideoUpload(mut video_url: Signal<String>) -> Element {
                 }
             }
         }
-        if !video_url.read().is_empty() {
+        if !local_url.read().is_empty() {
             div { style: "margin-top:4px;",
-                video { src: "{video_url}", controls: true, style: "width:120px;height:80px;object-fit:cover;border-radius:6px;border:1px solid #2a2a4a;" }
+                video { src: "{local_url}", controls: true, style: "width:120px;height:80px;object-fit:cover;border-radius:6px;border:1px solid #2a2a4a;" }
             }
         }
     }

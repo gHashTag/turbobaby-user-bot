@@ -53,6 +53,68 @@ pub async fn get_user_orders_seaorm(
         .await
 }
 
+/// Atomically mark an order as completed and update the customer's loyalty profile.
+/// Returns `Some((telegram_id, is_first_order))` if the order was newly completed,
+/// or `None` if it was already completed (idempotent).
+pub async fn complete_order_and_update_loyalty(
+    pool: &deadpool_postgres::Pool,
+    order_id: &str,
+) -> Result<Option<(i64, bool)>, Box<dyn std::error::Error + Send + Sync>> {
+    let mut client = pool.get().await?;
+    let tx = client.transaction().await?;
+
+    let order_row = tx.query_opt(
+        "SELECT telegram_id, total::float8, status FROM orders WHERE id = $1 FOR UPDATE",
+        &[&order_id],
+    ).await?;
+
+    let result = if let Some(row) = order_row {
+        let cid: i64 = row.get("telegram_id");
+        let total: f64 = row.get("total");
+        let status: String = row.get("status");
+        if status != "completed" {
+            let count_before = tx.query_one(
+                "SELECT COUNT(*) as cnt FROM orders WHERE telegram_id = $1 AND status = 'completed'",
+                &[&cid],
+            ).await?.get::<_, i64>("cnt");
+            let is_first = count_before == 0;
+
+            tx.execute(
+                "UPDATE orders SET status = 'completed' WHERE id = $1",
+                &[&order_id],
+            ).await?;
+
+            tx.execute(
+                "INSERT INTO loyalty_profiles (telegram_id, total_spent, first_purchase_at) VALUES ($1, $2, NOW())
+                 ON CONFLICT (telegram_id) DO UPDATE SET
+                   total_spent = COALESCE(loyalty_profiles.total_spent, 0) + EXCLUDED.total_spent,
+                   first_purchase_at = COALESCE(loyalty_profiles.first_purchase_at, NOW())",
+                &[&cid, &total],
+            ).await?;
+
+            tx.execute(
+                "UPDATE loyalty_profiles SET tier = CASE
+                    WHEN loyalty_profiles.total_spent >= (SELECT (config->>'gold_threshold')::float8 FROM loyalty_config WHERE id = 1 LIMIT 1) THEN 'gold'
+                    WHEN loyalty_profiles.total_spent >= (SELECT (config->>'silver_threshold')::float8 FROM loyalty_config WHERE id = 1 LIMIT 1) THEN 'silver'
+                    WHEN loyalty_profiles.total_spent >= (SELECT (config->>'bronze_threshold')::float8 FROM loyalty_config WHERE id = 1 LIMIT 1) THEN 'bronze'
+                    ELSE 'none'
+                 END
+                 WHERE telegram_id = $1",
+                &[&cid],
+            ).await?;
+
+            Some((cid, is_first))
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    tx.commit().await?;
+    Ok(result)
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OrderItem {
     pub strain_id: Option<String>,

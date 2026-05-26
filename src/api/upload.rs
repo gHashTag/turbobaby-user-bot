@@ -23,7 +23,6 @@ async fn upload_file(
     mut multipart: Multipart,
 ) -> Result<Json<Value>, StatusCode> {
     tracing::info!("=== UPLOAD START ===");
-    tracing::info!("Headers: {:?}", headers);
     
     tracing::info!("Step 1: Checking admin auth...");
     match check_admin(&headers, &state) {

@@ -35,7 +35,7 @@ pub struct TelegramUser {
 /// 6. expected_hash = HMAC_SHA256(key=secret_key, msg=data_check_string) in hex
 /// 7. Compare expected_hash with received `hash` (constant-time)
 pub fn validate_init_data(init_data: &str, bot_token: &str) -> Option<TelegramUser> {
-    tracing::info!("validate_init_data: len={}, hash_present={}, preview={}", init_data.len(), init_data.contains("hash="), &init_data[..init_data.len().min(100)]);
+    tracing::info!("validate_init_data: len={}, hash_present={}", init_data.len(), init_data.contains("hash="));
     let mut pairs: Vec<(String, String)> = Vec::new();
     for pair in init_data.split('&') {
         let mut parts = pair.splitn(2, '=');

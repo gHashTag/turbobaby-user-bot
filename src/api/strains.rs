@@ -183,6 +183,9 @@ async fn set_strain_of_day(State(state): State<AppState>, headers: HeaderMap, Pa
     }
     let enabled = body["is_strain_of_day"].as_bool().unwrap_or(true);
     let discount = body["discount"].as_f64().unwrap_or(10.0);
+    if !discount.is_finite() || discount < 0.0 || discount > 100.0 {
+        return Err((StatusCode::BAD_REQUEST, Json(json!({ "error": "invalid discount" }))));
+    }
     let client = state.db.pool.get().await.map_err(|e| {
         tracing::error!("SOTD pool error: {:?}", e);
         (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": format!("pool: {}", e) })))
