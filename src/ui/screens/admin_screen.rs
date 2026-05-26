@@ -268,7 +268,7 @@ pub fn AdminScreen() -> Element {
 
     #[cfg(target_arch = "wasm32")]
     {
-        web_sys::console::log_1(&format!("[WWB Admin] telegram_id={}, init_data_len={}, init_data_preview={}", telegram_id, init_data.len(), &init_data[..init_data.len().min(80)]).into());
+        web_sys::web_sys::console::log_1(&format!("[WWB Admin] telegram_id={}, init_data_len={}, init_data_preview={}", telegram_id, init_data.len(), &init_data[..init_data.len().min(80)]).into());
     }
 
     let password_token = use_signal(|| {
@@ -2575,15 +2575,15 @@ fn render_video_upload(mut video_url: Signal<String>) -> Element {
                         uploading.set(true);
                         let mut vid = video_url.clone();
                         spawn(async move {
-                            console::log_1(&"[ADMIN] Starting upload_video...".into());
+                            web_sys::console::log_1(&"[ADMIN] Starting upload_video...".into());
                             let result = upload_video().await;
-                            console::log_1(&format!("[ADMIN] upload_video result: {:?}", result).into());
+                            web_sys::console::log_1(&format!("[ADMIN] upload_video result: {:?}", result).into());
                             uploading.set(false);
                             if let Some(url) = result {
-                                console::log_1(&format!("[ADMIN] Setting video_url to: {}", url).into());
+                                web_sys::console::log_1(&format!("[ADMIN] Setting video_url to: {}", url).into());
                                 vid.set(url);
                             } else {
-                                console::log_1(&"[ADMIN] upload_video returned None".into());
+                                web_sys::console::log_1(&"[ADMIN] upload_video returned None".into());
                             }
                         });
                     },
@@ -2591,7 +2591,7 @@ fn render_video_upload(mut video_url: Signal<String>) -> Element {
                 }
             }
         }
-        { console::log_1(&format!("[ADMIN] render_video_upload: video_url='{}' empty={}", video_url.read(), video_url.read().is_empty()).into()); }
+        { web_sys::console::log_1(&format!("[ADMIN] render_video_upload: video_url='{}' empty={}", video_url.read(), video_url.read().is_empty()).into()); }
         if !video_url.read().is_empty() {
             div { style: "margin-top:4px;",
                 video { src: "{video_url}", controls: true, style: "width:120px;height:80px;object-fit:cover;border-radius:6px;border:1px solid #2a2a4a;" }

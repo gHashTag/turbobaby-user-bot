@@ -210,7 +210,7 @@ impl TelegramApp {
         let js = r#"(function(){try{
             if(window.Telegram && window.Telegram.WebApp){
                 var d = window.Telegram.WebApp.initData;
-                console.log('[WWB] initData type:', typeof d, 'len:', d ? d.length : 0, 'preview:', d ? d.substring(0,80) : 'EMPTY');
+                console.log('[WWB] initData type:', typeof d, 'len:', d ? d.length : 0);
                 if(typeof d === 'string' && d.length > 0) return d;
                 // Fallback: reconstruct from initDataUnsafe if initData is missing
                 var u = window.Telegram.WebApp.initDataUnsafe;
@@ -229,7 +229,7 @@ impl TelegramApp {
                     });
                     parts.push('hash=' + encodeURIComponent(u.hash));
                     var reconstructed = parts.join('&');
-                    console.log('[WWB] reconstructed initData len:', reconstructed.length, 'preview:', reconstructed.substring(0,80));
+                    console.log('[WWB] reconstructed initData len:', reconstructed.length);
                     return reconstructed;
                 }
             }
