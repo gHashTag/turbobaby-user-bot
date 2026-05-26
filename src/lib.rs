@@ -9,5 +9,5 @@ use crate::ui::app::App;
 #[wasm_bindgen::prelude::wasm_bindgen(start)]
 pub fn run() {
     console_error_panic_hook::set_once();
-    dioxus::launch(App);
+    dioxus::launch::launch_cfg(App, dioxus::launch::Config::new());
 }
