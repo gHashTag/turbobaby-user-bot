@@ -2565,13 +2565,14 @@ fn render_image_upload(mut image_url: Signal<String>) -> Element {
 #[component]
 fn VideoUpload(mut video_url: Signal<String>) -> Element {
     let mut uploading = use_signal(|| false);
-    let upload_result: Signal<Option<String>> = use_signal(|| None);
+    let mut upload_result = use_signal(|| None::<String>);
     
     // Apply upload result to video_url from within component context
     use_effect(move || {
-        if let Some(url) = upload_result.read().as_ref() {
+        let url_opt = upload_result.read().clone();
+        if let Some(url) = url_opt {
             web_sys::console::log_1(&format!("[VideoUpload] Applying upload result: {}", url).into());
-            video_url.set(url.clone());
+            video_url.set(url);
             upload_result.set(None);
         }
     });
@@ -2586,12 +2587,13 @@ fn VideoUpload(mut video_url: Signal<String>) -> Element {
                 button { style: upload_btn_style(),
                     onclick: move |_| {
                         uploading.set(true);
+                        let mut ur = upload_result.clone();
                         spawn(async move {
                             let result = upload_video().await;
                             uploading.set(false);
                             if let Some(url) = result {
                                 web_sys::console::log_1(&format!("[VideoUpload] Upload done: {}", url).into());
-                                upload_result.set(Some(url));
+                                ur.set(Some(url));
                             }
                         });
                     },

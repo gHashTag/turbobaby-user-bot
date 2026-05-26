@@ -335,7 +335,6 @@ async fn harvest_plant(
 
     // Create reward
     let reward_id = uuid::Uuid::new_v4().to_string();
-    let expires_at = now + (7 * 24 * 60 * 60 * 1000);
 
     // Start transaction
     let tx = client.transaction().await
@@ -343,6 +342,20 @@ async fn harvest_plant(
             tracing::error!("Transaction error: {}", e);
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
+
+    // Read garden config inside transaction for consistency
+    let config_row = tx.query_opt(
+        "SELECT reward_discount_percent, reward_bonus_points, reward_expiration_days FROM garden_config WHERE id = 1",
+        &[],
+    ).await.map_err(|e| {
+        tracing::error!("Config read error: {}", e);
+        return StatusCode::INTERNAL_SERVER_ERROR;
+    })?;
+    let (discount_percent, bonus_points, expiration_days) = match config_row {
+        Some(r) => (r.get::<_, i32>(0), r.get::<_, i32>(1), r.get::<_, i32>(2)),
+        None => (10, 100, 7),
+    };
+    let expires_at = now + (expiration_days as i64 * 24 * 60 * 60 * 1000);
 
     // Atomically mark plant as harvested — WHERE harvested_at IS NULL prevents race
     let rows = tx.execute(
@@ -369,8 +382,8 @@ async fn harvest_plant(
             &user_id,
             &strain_id,
             &strain_name,
-            &10i32,
-            &100i32,
+            &discount_percent,
+            &bonus_points,
             &expires_at,
             &false,
             &now,
@@ -390,10 +403,12 @@ async fn harvest_plant(
     let config = state.config.clone();
     let notify_user_id = user_id.clone();
     let notify_strain = strain_name.clone();
+    let notify_discount = discount_percent;
+    let notify_bonus = bonus_points;
     tokio::spawn(async move {
         let text = format!(
-            "\u{1F33F} Garden reward \u{0432}\u{044B}\u{0434}\u{0430}\u{043D}\n\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\n\u{1F194} {}\n\u{1F381} {} (10% / 100pts)",
-            notify_user_id, notify_strain
+            "\u{1F33F} Garden reward \u{0432}\u{044B}\u{0434}\u{0430}\u{043D}\n\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\n\u{1F194} {}\n\u{1F381} {} ({}% / {}pts)",
+            notify_user_id, notify_strain, notify_discount, notify_bonus
         );
         crate::notify::notify_admins(&bot, &config, &text).await;
     });
@@ -403,8 +418,8 @@ async fn harvest_plant(
     Ok(Json(json!({
         "success": true,
         "reward_id": reward_id,
-        "discount_percent": 10,
-        "bonus_points": 100,
+        "discount_percent": discount_percent,
+        "bonus_points": bonus_points,
         "expires_at": expires_at
     })))
 }
