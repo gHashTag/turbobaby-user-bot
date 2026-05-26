@@ -2565,6 +2565,10 @@ fn render_image_upload(mut image_url: Signal<String>) -> Element {
 #[component]
 fn VideoUpload(mut video_url: Signal<String>) -> Element {
     let mut uploading = use_signal(|| false);
+    use_effect(move || {
+        let val = video_url.read();
+        web_sys::console::log_1(&format!("[VideoUpload] effect fired, video_url='{}' empty={}", val, val.is_empty()).into());
+    });
     rsx! {
         div { style: "display:flex;gap:6px;align-items:center;",
             input { style: "flex:1;{input_style()}", placeholder: "URL видео", value: "{video_url}",

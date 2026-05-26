@@ -63,42 +63,44 @@ async fn create_order(
         return Err(StatusCode::BAD_REQUEST);
     }
 
-    // If bonus is used, verify the user has enough balance and deduct it.
+    let id = uuid::Uuid::new_v4().to_string();
+    let items_json = serde_json::to_value(&req.items)
+        .map_err(|e| { error!("items serialization failed: {}", e); StatusCode::BAD_REQUEST })?;
+
+    // Atomic transaction: deduct bonus (if any) and insert order together.
+    let mut client = state.db.pool.get().await.map_err(|e| { error!("create_order pool error: {}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
+    let tx = client.transaction().await.map_err(|e| { error!("create_order tx error: {}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
+
     if bonus_used > 0.0 {
         if let Some(tid) = req.telegram_id {
-            let client = state.db.pool.get().await.map_err(|e| { error!("bonus check pool error: {}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
-            let row = client.query_opt(
+            let row = tx.query_opt(
                 "SELECT bonus_balance::float8 FROM loyalty_profiles WHERE telegram_id = $1",
                 &[&tid],
             ).await.map_err(|e| { error!("bonus check query error: {}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
             let balance: f64 = row.and_then(|r| r.try_get::<_, Option<f64>>(0).ok().flatten()).unwrap_or(0.0);
             if balance < bonus_used {
+                let _ = tx.rollback().await;
                 return Err(StatusCode::BAD_REQUEST);
             }
-            client.execute(
+            tx.execute(
                 "UPDATE loyalty_profiles SET bonus_balance = GREATEST(0, bonus_balance - $1) WHERE telegram_id = $2",
                 &[&bonus_used, &tid],
             ).await.map_err(|e| { error!("bonus deduction error: {}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
         } else {
+            let _ = tx.rollback().await;
             return Err(StatusCode::BAD_REQUEST);
         }
     }
 
-    let id = uuid::Uuid::new_v4().to_string();
-    let items_json = serde_json::to_value(&req.items)
-        .map_err(|e| { error!("items serialization failed: {}", e); StatusCode::BAD_REQUEST })?;
+    tx.execute(
+        "INSERT INTO orders (id, telegram_id, customer_name, customer_phone, customer_telegram, items, subtotal, bonus_used, total, status, shop_id) VALUES ($1, $2, $3, $4, $5, $6, $7::float8, $8::float8, $9::float8, 'pending', $10)",
+        &[&id, &req.telegram_id, &req.customer_name, &req.customer_phone, &req.customer_telegram, &items_json, &req.subtotal, &bonus_used, &req.total, &req.shop_id],
+    ).await.map_err(|e| { error!("create_order insert error: {}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
 
-    // BUG-3 fix via SeaORM: subtotal/bonus_used/total могут быть NUMERIC на проде.
-    // sqlx + ::float8 каст и ::jsonb cast решают все варианты.
-    let items_str = items_json.to_string();
-    use sea_orm::{Statement, DbBackend, ConnectionTrait};
-    let stmt = Statement::from_sql_and_values(
-        DbBackend::Postgres,
-        "INSERT INTO orders (id, telegram_id, customer_name, customer_phone, customer_telegram, items, subtotal, bonus_used, total, status, shop_id) VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::float8, $8::float8, $9::float8, 'pending', $10)",
-        [id.clone().into(), req.telegram_id.into(), req.customer_name.clone().into(), req.customer_phone.clone().into(), req.customer_telegram.clone().into(), items_str.into(), req.subtotal.into(), bonus_used.into(), req.total.into(), req.shop_id.clone().into()],
-    );
-    state.db.orm.execute(stmt).await
-        .map_err(|e| { error!("create_order sea-orm: {}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
+    if let Err(e) = tx.commit().await {
+        error!("create_order commit error: {}", e);
+        return Err(StatusCode::INTERNAL_SERVER_ERROR);
+    }
 
     crate::metrics::order_created();
 
