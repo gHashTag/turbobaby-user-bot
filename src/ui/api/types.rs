@@ -16,6 +16,8 @@ pub struct Strain {
     #[serde(rename = "price_per_gram")]
     pub price: f64,
     pub image_url: String,
+    #[serde(default)]
+    pub video_url: Option<String>,
     pub is_available: bool,
     #[serde(rename = "is_strain_of_day")]
     pub is_strain_of_day: bool,
@@ -40,6 +42,7 @@ impl Default for Strain {
             description: String::new(),
             price: 0.0,
             image_url: String::new(),
+            video_url: None,
             is_available: false,
             is_strain_of_day: false,
             available_grams: None,

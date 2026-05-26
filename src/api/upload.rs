@@ -14,7 +14,7 @@ pub fn routes() -> Router<AppState> {
         .route("/upload", post(upload_file))
 }
 
-const MAX_UPLOAD_SIZE: usize = 10 * 1024 * 1024; // 10 MB
+const MAX_UPLOAD_SIZE: usize = 100 * 1024 * 1024; // 100 MB
 const ALLOWED_EXTENSIONS: &[&str] = &["jpg", "jpeg", "png", "gif", "webp", "mp4", "mov", "webm"];
 
 async fn upload_file(
