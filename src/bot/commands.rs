@@ -90,13 +90,15 @@ pub async fn handle_command(
                 if let Some(referrer_id) = referrer {
                     if referrer_id != user_id {
                         // Record pending referral event (idempotent)
-                        let _ = ref_db::record_referral(
+                        if let Err(e) = ref_db::record_referral(
                             &db.pool,
                             referrer_id,
                             user_id,
                             code,
                             Some("telegram_start"),
-                        ).await;
+                        ).await {
+                            tracing::error!("record_referral failed: {}", e);
+                        }
                     }
                 }
             }

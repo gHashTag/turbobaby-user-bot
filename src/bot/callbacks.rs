@@ -190,7 +190,7 @@ pub async fn handle_callback(
             let mut is_first = false;
             let mut customer_telegram_id: Option<i64> = None;
             match db.pool.get().await {
-                Ok(client) => {
+                Ok(mut client) => {
                     let tx = match client.transaction().await {
                         Ok(t) => t,
                         Err(e) => {
@@ -289,7 +289,9 @@ pub async fn handle_callback(
                             .and_then(|s| s.parse().ok())
                             .unwrap_or(200.0);
 
-                        let _ = ref_db::confirm_referral(pool, cid, bonus).await;
+                        if let Err(e) = ref_db::confirm_referral(pool, cid, bonus).await {
+                            tracing::error!("callback: confirm_referral failed for referred_id={}: {}", cid, e);
+                        }
 
                         // Notify referrer if we can find them
                         let event_row = db_client.query_opt(

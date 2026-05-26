@@ -2573,16 +2573,25 @@ fn render_video_upload(mut video_url: Signal<String>) -> Element {
                 button { style: upload_btn_style(),
                     onclick: move |_| {
                         uploading.set(true);
+                        let mut vid = video_url.clone();
                         spawn(async move {
+                            console::log_1(&"[ADMIN] Starting upload_video...".into());
                             let result = upload_video().await;
+                            console::log_1(&format!("[ADMIN] upload_video result: {:?}", result).into());
                             uploading.set(false);
-                            if let Some(url) = result { video_url.set(url); }
+                            if let Some(url) = result {
+                                console::log_1(&format!("[ADMIN] Setting video_url to: {}", url).into());
+                                vid.set(url);
+                            } else {
+                                console::log_1(&"[ADMIN] upload_video returned None".into());
+                            }
                         });
                     },
                     "🎥 Upload"
                 }
             }
         }
+        console::log_1(&format!("[ADMIN] render_video_upload: video_url='{}' empty={}", video_url.read(), video_url.read().is_empty()).into());
         if !video_url.read().is_empty() {
             div { style: "margin-top:4px;",
                 video { src: "{video_url}", controls: true, style: "width:120px;height:80px;object-fit:cover;border-radius:6px;border:1px solid #2a2a4a;" }
