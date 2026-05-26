@@ -88,6 +88,9 @@ async fn create_quest_place(
     Json(req): Json<QuestPlaceRequest>,
 ) -> Result<Json<Value>, StatusCode> {
     check_admin(&headers, &state)?;
+    if !req.lat.is_finite() || !req.lon.is_finite() {
+        return Err(StatusCode::BAD_REQUEST);
+    }
     let id = uuid::Uuid::new_v4().to_string();
     let category = req.category.unwrap_or_else(|| "location".to_string());
     let description = req.description.unwrap_or_default();
@@ -126,6 +129,9 @@ async fn update_quest_place(
     Json(req): Json<QuestPlaceRequest>,
 ) -> Result<Json<Value>, StatusCode> {
     check_admin(&headers, &state)?;
+    if !req.lat.is_finite() || !req.lon.is_finite() {
+        return Err(StatusCode::BAD_REQUEST);
+    }
     // Wave 3: UPDATE через SeaORM с ::float8 castом — устраняет NUMERIC баг.
     use sea_orm::{Statement, DbBackend, ConnectionTrait};
     let category = req.category.unwrap_or_else(|| "location".to_string());
@@ -209,6 +215,9 @@ async fn create_treasure_hunt(
     Json(req): Json<TreasureHuntRequest>,
 ) -> Result<Json<Value>, StatusCode> {
     check_admin(&headers, &state)?;
+    if !req.start_lat.is_finite() || !req.start_lon.is_finite() {
+        return Err(StatusCode::BAD_REQUEST);
+    }
     let id = uuid::Uuid::new_v4().to_string();
     let description = req.description.unwrap_or_default();
     let image_url = req.image_url.unwrap_or_default();
@@ -247,6 +256,9 @@ async fn update_treasure_hunt(
     Json(req): Json<TreasureHuntRequest>,
 ) -> Result<Json<Value>, StatusCode> {
     check_admin(&headers, &state)?;
+    if !req.start_lat.is_finite() || !req.start_lon.is_finite() {
+        return Err(StatusCode::BAD_REQUEST);
+    }
     // Wave 3: UPDATE через SeaORM с ::float8 castом для start_lat/start_lon.
     use sea_orm::{Statement, DbBackend, ConnectionTrait};
     let description = req.description.unwrap_or_default();

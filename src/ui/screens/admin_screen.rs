@@ -2589,6 +2589,13 @@ fn render_video_upload(mut video_url: Signal<String>) -> Element {
                     },
                     "🎥 Upload"
                 }
+                button { style: "padding:6px 12px;background:#2a2a4a;color:#e8e8e8;border:1px solid #39ff14;border-radius:4px;font-size:12px;cursor:pointer;",
+                    onclick: move |_| {
+                        web_sys::console::log_1(&"[ADMIN TEST] Direct set video_url".into());
+                        video_url.set("/uploads/test-direct.mp4".into());
+                    },
+                    "Test Set"
+                }
             }
         }
         {}

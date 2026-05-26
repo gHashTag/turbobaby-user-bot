@@ -121,6 +121,9 @@ async fn get_accessory(State(state): State<AppState>, Path(id): Path<String>) ->
 
 async fn create_accessory(State(state): State<AppState>, headers: HeaderMap, Json(req): Json<AccessoryRequest>) -> Result<Json<Value>, StatusCode> {
     check_admin(&headers, &state)?;
+    if !req.price.is_finite() || req.price < 0.0 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
     let id = uuid::Uuid::new_v4().to_string();
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("create_accessory pool error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     client.execute(
@@ -132,6 +135,9 @@ async fn create_accessory(State(state): State<AppState>, headers: HeaderMap, Jso
 
 async fn update_accessory(State(state): State<AppState>, headers: HeaderMap, Path(id): Path<String>, Json(req): Json<AccessoryRequest>) -> Result<Json<Value>, StatusCode> {
     check_admin(&headers, &state)?;
+    if !req.price.is_finite() || req.price < 0.0 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     client.execute(
         "UPDATE accessories SET name=$1, category=$2, description=$3, price=$4, stock=$5, image_url=$6, video_url=$7, name_en=$8, description_en=$9, category_en=$10 WHERE id=$11",
@@ -206,6 +212,10 @@ async fn get_accessory_sets(headers: HeaderMap, State(state): State<AppState>, Q
 
 async fn create_accessory_set(State(state): State<AppState>, headers: HeaderMap, Json(req): Json<AccessorySetRequest>) -> Result<Json<Value>, StatusCode> {
     check_admin(&headers, &state)?;
+    if !req.total_price.is_finite() || req.total_price < 0.0 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    if let Some(d) = req.discount_percent { if !d.is_finite() || d < 0.0 { return Err(StatusCode::BAD_REQUEST); } }
     let id = uuid::Uuid::new_v4().to_string();
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     let accessories = req.accessories.unwrap_or_default();
@@ -218,6 +228,10 @@ async fn create_accessory_set(State(state): State<AppState>, headers: HeaderMap,
 
 async fn update_accessory_set(State(state): State<AppState>, headers: HeaderMap, Path(id): Path<String>, Json(req): Json<AccessorySetRequest>) -> Result<Json<Value>, StatusCode> {
     check_admin(&headers, &state)?;
+    if !req.total_price.is_finite() || req.total_price < 0.0 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    if let Some(d) = req.discount_percent { if !d.is_finite() || d < 0.0 { return Err(StatusCode::BAD_REQUEST); } }
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     let accessories = req.accessories.unwrap_or_default();
     client.execute(
@@ -320,6 +334,9 @@ async fn get_tea_product(State(state): State<AppState>, Path(id): Path<String>) 
 
 async fn create_tea_product(State(state): State<AppState>, headers: HeaderMap, Json(req): Json<TeaProductRequest>) -> Result<Json<Value>, StatusCode> {
     check_admin(&headers, &state)?;
+    if !req.price.is_finite() || req.price < 0.0 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
     let id = uuid::Uuid::new_v4().to_string();
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("create_tea_product pool error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     client.execute(
@@ -331,6 +348,9 @@ async fn create_tea_product(State(state): State<AppState>, headers: HeaderMap, J
 
 async fn update_tea_product(State(state): State<AppState>, headers: HeaderMap, Path(id): Path<String>, Json(req): Json<TeaProductRequest>) -> Result<Json<Value>, StatusCode> {
     check_admin(&headers, &state)?;
+    if !req.price.is_finite() || req.price < 0.0 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     client.execute(
         "UPDATE tea_products SET name=$1, subcategory=$2, description=$3, price=$4, stock=$5, image_url=$6, video_url=$7, name_en=$8, description_en=$9, subcategory_en=$10 WHERE id=$11",
@@ -401,6 +421,10 @@ async fn get_tea_sets(headers: HeaderMap, State(state): State<AppState>, Query(q
 
 async fn create_tea_set(State(state): State<AppState>, headers: HeaderMap, Json(req): Json<TeaSetRequest>) -> Result<Json<Value>, StatusCode> {
     check_admin(&headers, &state)?;
+    if !req.total_price.is_finite() || req.total_price < 0.0 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    if let Some(d) = req.discount_percent { if !d.is_finite() || d < 0.0 { return Err(StatusCode::BAD_REQUEST); } }
     let id = uuid::Uuid::new_v4().to_string();
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     let tea_items = req.items.unwrap_or_default();
@@ -413,6 +437,10 @@ async fn create_tea_set(State(state): State<AppState>, headers: HeaderMap, Json(
 
 async fn update_tea_set(State(state): State<AppState>, headers: HeaderMap, Path(id): Path<String>, Json(req): Json<TeaSetRequest>) -> Result<Json<Value>, StatusCode> {
     check_admin(&headers, &state)?;
+    if !req.total_price.is_finite() || req.total_price < 0.0 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    if let Some(d) = req.discount_percent { if !d.is_finite() || d < 0.0 { return Err(StatusCode::BAD_REQUEST); } }
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     let tea_items = req.items.unwrap_or_default();
     client.execute(
@@ -545,6 +573,10 @@ async fn get_sets(headers: HeaderMap, State(state): State<AppState>, Query(q): Q
 
 async fn create_set(State(state): State<AppState>, headers: HeaderMap, Json(req): Json<SetRequest>) -> Result<Json<Value>, StatusCode> {
     check_admin(&headers, &state)?;
+    if !req.total_price.is_finite() || req.total_price < 0.0 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    if let Some(d) = req.discount_percent { if !d.is_finite() || d < 0.0 { return Err(StatusCode::BAD_REQUEST); } }
     let id = uuid::Uuid::new_v4().to_string();
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     let strain_ids = req.strain_ids.unwrap_or_default();
@@ -558,6 +590,10 @@ async fn create_set(State(state): State<AppState>, headers: HeaderMap, Json(req)
 
 async fn update_set(State(state): State<AppState>, headers: HeaderMap, Path(id): Path<String>, Json(req): Json<SetRequest>) -> Result<Json<Value>, StatusCode> {
     check_admin(&headers, &state)?;
+    if !req.total_price.is_finite() || req.total_price < 0.0 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    if let Some(d) = req.discount_percent { if !d.is_finite() || d < 0.0 { return Err(StatusCode::BAD_REQUEST); } }
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     let strain_ids = req.strain_ids.unwrap_or_default();
     let accessory_ids = req.accessory_ids.unwrap_or_default();

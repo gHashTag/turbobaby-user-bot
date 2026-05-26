@@ -111,6 +111,12 @@ async fn get_strain(State(state): State<AppState>, Path(id): Path<String>) -> Re
 
 async fn create_strain(State(state): State<AppState>, headers: HeaderMap, Json(req): Json<CreateStrainRequest>) -> Result<Json<Value>, StatusCode> {
     check_admin(&headers, &state)?;
+    if !req.price_per_gram.is_finite() || req.price_per_gram < 0.0 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    if let Some(t) = req.thc_percent { if !t.is_finite() || t < 0.0 { return Err(StatusCode::BAD_REQUEST); } }
+    if let Some(c) = req.cbd_percent { if !c.is_finite() || c < 0.0 { return Err(StatusCode::BAD_REQUEST); } }
+    if let Some(a) = req.available_grams { if !a.is_finite() || a < 0.0 { return Err(StatusCode::BAD_REQUEST); } }
     let id = uuid::Uuid::new_v4().to_string();
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     client.execute(
@@ -123,6 +129,12 @@ async fn create_strain(State(state): State<AppState>, headers: HeaderMap, Json(r
 
 async fn update_strain(State(state): State<AppState>, headers: HeaderMap, Path(id): Path<String>, Json(req): Json<CreateStrainRequest>) -> Result<Json<Value>, StatusCode> {
     check_admin(&headers, &state)?;
+    if !req.price_per_gram.is_finite() || req.price_per_gram < 0.0 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    if let Some(t) = req.thc_percent { if !t.is_finite() || t < 0.0 { return Err(StatusCode::BAD_REQUEST); } }
+    if let Some(c) = req.cbd_percent { if !c.is_finite() || c < 0.0 { return Err(StatusCode::BAD_REQUEST); } }
+    if let Some(a) = req.available_grams { if !a.is_finite() || a < 0.0 { return Err(StatusCode::BAD_REQUEST); } }
     let client = state.db.pool.get().await.map_err(|e| {
         tracing::error!("update_strain pool error: {:?}", e);
         StatusCode::INTERNAL_SERVER_ERROR

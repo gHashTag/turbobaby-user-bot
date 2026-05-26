@@ -67,7 +67,7 @@ async fn get_stats(
         .unwrap_or(0);
 
     let total_revenue: f64 = client
-        .query_one("SELECT COALESCE(SUM(total), 0) FROM orders WHERE status = 'completed'", &[])
+        .query_one("SELECT COALESCE(SUM(total)::float8, 0.0) FROM orders WHERE status = 'completed'", &[])
         .await
         .map(|r| r.try_get(0).unwrap_or(0.0))
         .unwrap_or(0.0);
@@ -165,7 +165,7 @@ async fn get_managers(
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
     let rows = client.query(
-        "SELECT telegram_id, name, username, ref_code, commission_rate FROM managers ORDER BY name",
+        "SELECT telegram_id, name, username, ref_code, commission_rate::float8 FROM managers ORDER BY name",
         &[],
     ).await.map_err(|e| {
         tracing::error!("admin managers: query failed: {:?}", e);
@@ -229,6 +229,7 @@ async fn create_manager(
     Json(req): Json<CreateManagerRequest>,
 ) -> Result<Json<Value>, StatusCode> {
     check_admin(&headers, &state)?;
+    if let Some(r) = req.commission_rate { if !r.is_finite() || r < 0.0 { return Err(StatusCode::BAD_REQUEST); } }
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     client.execute(
         "INSERT INTO managers (telegram_id, name, username, ref_code, commission_rate) VALUES ($1, $2, $3, $4, $5)",
@@ -244,6 +245,7 @@ async fn update_manager(
     Json(req): Json<UpdateManagerRequest>,
 ) -> Result<Json<Value>, StatusCode> {
     check_admin(&headers, &state)?;
+    if let Some(r) = req.commission_rate { if !r.is_finite() || r < 0.0 { return Err(StatusCode::BAD_REQUEST); } }
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     client.execute(
         "UPDATE managers SET 

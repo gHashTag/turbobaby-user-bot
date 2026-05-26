@@ -92,7 +92,7 @@ async fn add_bonus(
     Json(req): Json<AddBonusRequest>,
 ) -> Result<Json<Value>, StatusCode> {
     check_admin(&headers, &state)?;
-    if req.amount < 0.0 {
+    if !req.amount.is_finite() || req.amount < 0.0 {
         return Err(StatusCode::BAD_REQUEST);
     }
     let tx_id = uuid::Uuid::new_v4().to_string();
@@ -116,7 +116,7 @@ async fn use_bonus(
 ) -> Result<Json<Value>, StatusCode> {
     check_admin(&headers, &state)?;
     let amount = body["amount"].as_f64().unwrap_or(0.0);
-    if amount <= 0.0 {
+    if !amount.is_finite() || amount <= 0.0 {
         return Err(StatusCode::BAD_REQUEST);
     }
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;

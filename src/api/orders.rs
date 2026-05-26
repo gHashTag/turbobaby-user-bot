@@ -49,13 +49,19 @@ async fn create_order(
     if req.items.is_empty() {
         return Err(StatusCode::BAD_REQUEST);
     }
-    if req.items.iter().any(|i| i.quantity <= 0.0) {
+    if req.items.iter().any(|i| !i.quantity.is_finite() || i.quantity <= 0.0) {
         return Err(StatusCode::BAD_REQUEST);
     }
-    if req.total < 0.0 {
+    if !req.total.is_finite() || req.total < 0.0 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    if !req.subtotal.is_finite() || req.subtotal < 0.0 {
         return Err(StatusCode::BAD_REQUEST);
     }
     let bonus_used = req.bonus_used.unwrap_or(0.0).max(0.0);
+    if !bonus_used.is_finite() {
+        return Err(StatusCode::BAD_REQUEST);
+    }
 
     // If bonus is used, verify the user has enough balance and deduct it.
     if bonus_used > 0.0 {
@@ -170,7 +176,7 @@ async fn get_orders(
     let offset = params.get("offset").and_then(|v| v.parse::<i64>().ok()).unwrap_or(0).max(0);
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     let rows = client.query(
-        "SELECT id, telegram_id, customer_name, customer_phone, customer_telegram, items, subtotal, bonus_used, total, status, shop_id, created_at FROM orders ORDER BY created_at DESC LIMIT $1 OFFSET $2",
+        "SELECT id, telegram_id, customer_name, customer_phone, customer_telegram, items, subtotal::float8, bonus_used::float8, total::float8, status, shop_id, created_at FROM orders ORDER BY created_at DESC LIMIT $1 OFFSET $2",
         &[&limit, &offset],
     ).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     let orders: Vec<Order> = rows.iter().map(Order::from_row).collect();
@@ -185,7 +191,7 @@ async fn get_order(
     check_admin(&headers, &state)?;
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     let row = client.query_opt(
-        "SELECT id, telegram_id, customer_name, customer_phone, customer_telegram, items, subtotal, bonus_used, total, status, shop_id, created_at FROM orders WHERE id = $1",
+        "SELECT id, telegram_id, customer_name, customer_phone, customer_telegram, items, subtotal::float8, bonus_used::float8, total::float8, status, shop_id, created_at FROM orders WHERE id = $1",
         &[&id],
     ).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     match row {
@@ -222,7 +228,7 @@ async fn get_user_orders(
     crate::api::auth::check_owner(&headers, &state, telegram_id)?;
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     let rows = client.query(
-        "SELECT id, telegram_id, customer_name, customer_phone, customer_telegram, items, subtotal, bonus_used, total, status, shop_id, created_at FROM orders WHERE telegram_id = $1 ORDER BY created_at DESC LIMIT 50",
+        "SELECT id, telegram_id, customer_name, customer_phone, customer_telegram, items, subtotal::float8, bonus_used::float8, total::float8, status, shop_id, created_at FROM orders WHERE telegram_id = $1 ORDER BY created_at DESC LIMIT 50",
         &[&telegram_id],
     ).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     Ok(Json(json!({ "orders": rows.iter().map(Order::from_row).collect::<Vec<_>>() })))
