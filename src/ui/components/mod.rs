@@ -27,6 +27,7 @@ pub mod progress_bar;
 pub mod chip;
 pub mod rarity_glow;
 pub mod lazy_screen;
+pub mod error_overlay;
 
 // ---------------------------------------------------------------------------
 // Re-exports — original
@@ -52,6 +53,7 @@ pub use progress_bar::{ProgressBar, ProgressBarProps, ProgressColor, ProgressSiz
 pub use chip::{Chip, ChipProps, ChipColor, ChipGroup, ChipGroupProps};
 pub use rarity_glow::{RarityGlow, RarityGlowProps, Rarity};
 pub use lazy_screen::LazyScreen;
+pub use error_overlay::{ErrorOverlay, JsErrorItem, install_error_handlers};
 
 // Re-export types from state for convenience
 pub use crate::ui::state::CartItem as CartItemType;

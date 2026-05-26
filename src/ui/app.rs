@@ -8,6 +8,7 @@ use crate::ui::routes::Routes;
 use crate::ui::state::{Cart, LanguageProvider};
 use crate::ui::api::context::ApiClientProvider;
 use crate::ui::telegram::TelegramProvider;
+use crate::ui::components::{ErrorOverlay, JsErrorItem, install_error_handlers};
 
 const CART_STORAGE_KEY: &str = "wwb_cart";
 
@@ -48,10 +49,19 @@ pub fn App() -> Element {
         }
     });
 
+    // Global error overlay state
+    use_context_provider(|| Signal::new(Vec::<JsErrorItem>::new()));
+    let errors = use_context::<Signal<Vec<JsErrorItem>>>();
+
+    use_effect(move || {
+        install_error_handlers(errors.clone());
+    });
+
     rsx! {
         TelegramProvider {
             ApiClientProvider {
                 LanguageProvider {
+                    ErrorOverlay {}
                     Routes {}
                 }
             }
