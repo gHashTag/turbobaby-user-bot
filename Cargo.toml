@@ -19,8 +19,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 # Web UI (WASM compatible) - always included
-dioxus = { version = "0.6", features = ["web", "router"] }
-dioxus-logger = "0.6"
+dioxus = { version = "0.6", default-features = false, features = ["web", "router", "macro", "html", "signals", "hooks", "launch", "mounted", "file_engine", "document", "asset", "warnings", "cli-config"] }
 gloo-timers = { version = "0.3", features = ["futures"] }
 gloo-storage = "0.3"
 reqwest = { version = "0.11", features = ["json"], default-features = false }
