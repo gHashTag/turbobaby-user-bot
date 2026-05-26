@@ -38,6 +38,10 @@ pub enum Command {
     Admin,
 }
 
+fn html_escape(s: &str) -> String {
+    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
+}
+
 fn web_app_btn(text: &str, url: &str) -> InlineKeyboardButton {
     match url.parse() {
         Ok(u) => InlineKeyboardButton::web_app(text, WebAppInfo { url: u }),
@@ -167,9 +171,9 @@ pub async fn handle_command(
                 let discounted = (s.price_per_gram * (1.0 - discount / 100.0)).round();
                 let text = format!(
                     "🔥 <b>{}</b> (1/{})\n━━━━━━━━━━━━━━━━\n\n🌿 <b>{}</b>\n{}{}\n💰 <s>{} ฿/г</s> → <b>{} ฿/г</b>\n🔥 Скидка: -{}%",
-                    locale.strain_of_day, strains.len(), s.name,
+                    locale.strain_of_day, strains.len(), html_escape(&s.name),
                     s.thc_percent.map(|t| format!("⚡ THC: {}%\n", t)).unwrap_or_default(),
-                    s.category.as_ref().map(|c| format!("📁 {}\n", c)).unwrap_or_default(),
+                    s.category.as_ref().map(|c| format!("📁 {}\n", html_escape(c))).unwrap_or_default(),
                     s.price_per_gram, discounted, discount
                 );
                 let mut btns: Vec<Vec<InlineKeyboardButton>> = vec![];

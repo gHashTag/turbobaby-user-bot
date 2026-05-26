@@ -8,6 +8,10 @@ use crate::{config::Config, db::Database, locales::*, ai::{AiClient, get_random_
 use crate::bot::commands::build_app_url;
 use crate::db::referrals as ref_db;
 
+fn html_escape(s: &str) -> String {
+    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
+}
+
 fn web_app_btn(text: &str, url: &str) -> InlineKeyboardButton {
     match url.parse() {
         Ok(u) => InlineKeyboardButton::web_app(text, WebAppInfo { url: u }),
@@ -130,7 +134,7 @@ pub async fn handle_callback(
                     let discounted = (s.price_per_gram * (1.0 - discount / 100.0)).round();
                     let text = format!(
                         "🔥 <b>{}</b> ({}/{})\n━━━━━━━━━━━━━━━━\n🌿 <b>{}</b>\n{}💰 <s>{} ฿/г</s> → <b>{} ฿/г</b>\n🔥 -{:.0}%",
-                        locale.strain_of_day, new_idx + 1, strains.len(), s.name,
+                        locale.strain_of_day, new_idx + 1, strains.len(), html_escape(&s.name),
                         s.thc_percent.map(|t| format!("⚡ THC: {}%\n", t)).unwrap_or_default(),
                         s.price_per_gram, discounted, discount
                     );
