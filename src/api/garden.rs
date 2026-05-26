@@ -422,14 +422,19 @@ async fn harvest_plant(
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
-    // Mark plant as harvested
-    tx.execute(
-        "UPDATE garden_plants SET harvested_at = $1, reward_claimed = true WHERE id = $2",
+    // Atomically mark plant as harvested — WHERE harvested_at IS NULL prevents race
+    let rows = tx.execute(
+        "UPDATE garden_plants SET harvested_at = $1, reward_claimed = true WHERE id = $2 AND harvested_at IS NULL",
         &[&now, &id],
     ).await.map_err(|e| {
         tracing::error!("Update plant error: {}", e);
         return StatusCode::INTERNAL_SERVER_ERROR;
     })?;
+
+    if rows == 0 {
+        let _ = tx.rollback().await;
+        return Ok(Json(json!({ "success": false, "error": "Already harvested" })));
+    }
 
     // Create reward
     tx.execute(
@@ -538,7 +543,7 @@ async fn use_reward(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<Value>, StatusCode> {
-    let client = state.db.pool.get().await
+    let mut client = state.db.pool.get().await
         .map_err(|e| {
             tracing::error!("Database connection error: {}", e);
             StatusCode::INTERNAL_SERVER_ERROR
@@ -546,7 +551,7 @@ async fn use_reward(
 
     let now = chrono::Utc::now().timestamp_millis();
 
-    // Check reward
+    // Check reward (read-only, can stay outside tx for auth)
     let row = client.query_opt(
         "SELECT user_id, is_used, expires_at, discount_percent, bonus_points
          FROM garden_rewards
@@ -580,24 +585,38 @@ async fn use_reward(
     let discount_percent: i32 = r.get(3);
     let bonus_points: i32 = r.get(4);
 
-    // Credit bonus points to user's loyalty balance
+    // Atomically mark used and credit bonus inside a transaction
+    let tx = client.transaction().await.map_err(|e| {
+        tracing::error!("Transaction error: {}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    let rows = tx.execute(
+        "UPDATE garden_rewards SET is_used = true WHERE id = $1 AND is_used = false",
+        &[&id],
+    ).await.map_err(|e| {
+        tracing::error!("Mark reward used error: {}", e);
+        return StatusCode::INTERNAL_SERVER_ERROR;
+    })?;
+
+    if rows == 0 {
+        let _ = tx.rollback().await;
+        return Ok(Json(json!({ "success": false, "error": "Reward already used" })));
+    }
+
     if let Ok(tid) = user_id.parse::<i64>() {
         let bonus_f64 = bonus_points as f64;
-        client.execute(
+        tx.execute(
             "UPDATE loyalty_profiles SET bonus_balance = bonus_balance + $1 WHERE telegram_id = $2",
             &[&bonus_f64, &tid],
         ).await.map_err(|e| {
             tracing::error!("Credit bonus error: {}", e);
-            StatusCode::INTERNAL_SERVER_ERROR
+            return StatusCode::INTERNAL_SERVER_ERROR;
         })?;
     }
 
-    // Mark as used
-    client.execute(
-        "UPDATE garden_rewards SET is_used = true WHERE id = $1",
-        &[&id],
-    ).await.map_err(|e| {
-        tracing::error!("Update error: {}", e);
+    tx.commit().await.map_err(|e| {
+        tracing::error!("Commit error: {}", e);
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 

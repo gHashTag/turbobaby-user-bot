@@ -2591,7 +2591,7 @@ fn render_video_upload(mut video_url: Signal<String>) -> Element {
                 }
             }
         }
-        console::log_1(&format!("[ADMIN] render_video_upload: video_url='{}' empty={}", video_url.read(), video_url.read().is_empty()).into());
+        { console::log_1(&format!("[ADMIN] render_video_upload: video_url='{}' empty={}", video_url.read(), video_url.read().is_empty()).into()); }
         if !video_url.read().is_empty() {
             div { style: "margin-top:4px;",
                 video { src: "{video_url}", controls: true, style: "width:120px;height:80px;object-fit:cover;border-radius:6px;border:1px solid #2a2a4a;" }
