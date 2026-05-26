@@ -75,9 +75,11 @@ pub struct RewardResponse {
 // ── Plant Endpoints ───────────────────────────────────────────────
 
 async fn get_user_plants(
+    headers: HeaderMap,
     State(state): State<AppState>,
     Query(query): Query<UserPlantsQuery>,
 ) -> Result<Json<Value>, StatusCode> {
+    crate::api::auth::check_owner(&headers, &state, query.telegram_id)?;
     let client = state.db.pool.get().await
         .map_err(|e| {
             tracing::error!("Database connection error: {}", e);
@@ -152,9 +154,11 @@ async fn get_user_plants(
 }
 
 async fn plant_seed(
+    headers: HeaderMap,
     State(state): State<AppState>,
     Json(req): Json<PlantSeedRequest>,
 ) -> Result<Json<Value>, StatusCode> {
+    crate::api::auth::check_owner(&headers, &state, req.telegram_id)?;
     let client = state.db.pool.get().await
         .map_err(|e| {
             tracing::error!("Database connection error: {}", e);
@@ -163,29 +167,17 @@ async fn plant_seed(
 
     let user_id = req.telegram_id.to_string();
 
-    // Check if user already has an active plant
-    let existing = client.query_opt(
-        "SELECT id FROM garden_plants WHERE user_id = $1 AND is_completed = false",
-        &[&user_id],
-    ).await.map_err(|e| {
-        tracing::error!("Query error: {}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-
-    if existing.is_some() {
-        return Ok(Json(json!({
-            "success": false,
-            "error": "You already have an active plant"
-        })));
-    }
-
-    let plant = garden::Plant::new(user_id, req.strain_id, req.strain_name);
+    let plant = garden::Plant::new(user_id.clone(), req.strain_id, req.strain_name);
     let plant_id = plant.id.clone();
 
-    client.execute(
+    // Atomic insert: only succeeds if the user has no active plant.
+    let inserted = client.execute(
         "INSERT INTO garden_plants (id, user_id, strain_id, strain_name, current_stage,
                                     planted_at, is_completed, water_count, last_watered_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
+         SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9
+         WHERE NOT EXISTS (
+             SELECT 1 FROM garden_plants WHERE user_id = $2 AND is_completed = false
+         )",
         &[
             &plant.id,
             &plant.user_id,
@@ -201,6 +193,13 @@ async fn plant_seed(
         tracing::error!("Insert error: {}", e);
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
+
+    if inserted == 0 {
+        return Ok(Json(json!({
+            "success": false,
+            "error": "You already have an active plant"
+        })));
+    }
 
     Ok(Json(json!({
         "success": true,
@@ -286,6 +285,7 @@ async fn get_plant(
 }
 
 async fn water_plant(
+    headers: HeaderMap,
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<Value>, StatusCode> {
@@ -299,7 +299,7 @@ async fn water_plant(
 
     // Get current plant
     let row = client.query_opt(
-        "SELECT current_stage, is_completed, water_count, last_watered_at
+        "SELECT user_id, current_stage, is_completed, water_count, last_watered_at
          FROM garden_plants
          WHERE id = $1",
         &[&id],
@@ -312,29 +312,21 @@ async fn water_plant(
         return Ok(Json(json!({ "success": false, "error": "Plant not found" })));
     };
 
-    let current_stage: String = r.get(0);
-    let is_completed: bool = r.get(1);
-    let water_count: i32 = r.get(2);
-    let last_watered_at: Option<i64> = r.get(3);
+    let user_id: String = r.get(0);
+    if let Ok(tid) = user_id.parse::<i64>() {
+        crate::api::auth::check_owner(&headers, &state, tid)?;
+    }
+
+    let current_stage: String = r.get(1);
+    let is_completed: bool = r.get(2);
+    let water_count: i32 = r.get(3);
+    let last_watered_at: Option<i64> = r.get(4);
 
     if is_completed {
         return Ok(Json(json!({ "success": false, "error": "Plant already completed" })));
     }
 
-    // Check cooldown
-    let cooldown_ref = last_watered_at.unwrap_or(0);
-    if cooldown_ref > 0 {
-        let next_water_at = cooldown_ref + garden::WATER_COOLDOWN_MS;
-        if now < next_water_at {
-            return Ok(Json(json!({
-                "success": false,
-                "error": "Cooldown active",
-                "next_water_at": next_water_at
-            })));
-        }
-    }
-
-    // Increment water count and update stage
+    // Atomic update with cooldown guard in WHERE clause to prevent race conditions
     let new_count = (water_count + 1) as u32;
     let new_stage = if let Some(stage) = garden::GrowthStage::from_index(new_count as usize) {
         format!("{:?}", stage).to_lowercase()
@@ -342,16 +334,27 @@ async fn water_plant(
         current_stage
     };
     let new_completed = new_count >= 13;
+    let cooldown_ms = garden::WATER_COOLDOWN_MS as i64;
+    let max_last_water = now - cooldown_ms;
 
-    client.execute(
+    let rows = client.execute(
         "UPDATE garden_plants
          SET water_count = $1, current_stage = $2, is_completed = $3, last_watered_at = $4
-         WHERE id = $5",
-        &[&(new_count as i32), &new_stage, &new_completed, &now, &id],
+         WHERE id = $5 AND (last_watered_at IS NULL OR last_watered_at <= $6)",
+        &[&(new_count as i32), &new_stage, &new_completed, &now, &id, &max_last_water],
     ).await.map_err(|e| {
         tracing::error!("Update error: {}", e);
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
+
+    if rows == 0 {
+        let next_water_at = last_watered_at.map(|t| t + garden::WATER_COOLDOWN_MS).unwrap_or(now);
+        return Ok(Json(json!({
+            "success": false,
+            "error": "Cooldown active",
+            "next_water_at": next_water_at
+        })));
+    }
 
     Ok(Json(json!({
         "success": true,
@@ -362,6 +365,7 @@ async fn water_plant(
 }
 
 async fn harvest_plant(
+    headers: HeaderMap,
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<Value>, StatusCode> {
@@ -385,6 +389,11 @@ async fn harvest_plant(
     let Some(r) = row else {
         return Ok(Json(json!({ "success": false, "error": "Plant not found" })));
     };
+
+    let user_id: String = r.get(0);
+    if let Ok(tid) = user_id.parse::<i64>() {
+        crate::api::auth::check_owner(&headers, &state, tid)?;
+    }
 
     let is_completed: bool = r.get(3);
     let harvested_at: Option<i64> = r.get(4);
@@ -481,9 +490,11 @@ pub struct UserRewardsQuery {
 }
 
 async fn get_user_rewards(
+    headers: HeaderMap,
     State(state): State<AppState>,
     Query(query): Query<UserRewardsQuery>,
 ) -> Result<Json<Value>, StatusCode> {
+    crate::api::auth::check_owner(&headers, &state, query.telegram_id)?;
     let client = state.db.pool.get().await
         .map_err(|e| {
             tracing::error!("Database connection error: {}", e);
@@ -523,6 +534,7 @@ async fn get_user_rewards(
 }
 
 async fn use_reward(
+    headers: HeaderMap,
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<Value>, StatusCode> {
@@ -536,7 +548,7 @@ async fn use_reward(
 
     // Check reward
     let row = client.query_opt(
-        "SELECT is_used, expires_at, discount_percent, bonus_points
+        "SELECT user_id, is_used, expires_at, discount_percent, bonus_points
          FROM garden_rewards
          WHERE id = $1",
         &[&id],
@@ -549,8 +561,13 @@ async fn use_reward(
         return Ok(Json(json!({ "success": false, "error": "Reward not found" })));
     };
 
-    let is_used: bool = r.get(0);
-    let expires_at: i64 = r.get(1);
+    let user_id: String = r.get(0);
+    if let Ok(tid) = user_id.parse::<i64>() {
+        crate::api::auth::check_owner(&headers, &state, tid)?;
+    }
+
+    let is_used: bool = r.get(1);
+    let expires_at: i64 = r.get(2);
 
     if is_used {
         return Ok(Json(json!({ "success": false, "error": "Reward already used" })));
@@ -558,6 +575,21 @@ async fn use_reward(
 
     if expires_at < now {
         return Ok(Json(json!({ "success": false, "error": "Reward expired" })));
+    }
+
+    let discount_percent: i32 = r.get(3);
+    let bonus_points: i32 = r.get(4);
+
+    // Credit bonus points to user's loyalty balance
+    if let Ok(tid) = user_id.parse::<i64>() {
+        let bonus_f64 = bonus_points as f64;
+        client.execute(
+            "UPDATE loyalty_profiles SET bonus_balance = bonus_balance + $1 WHERE telegram_id = $2",
+            &[&bonus_f64, &tid],
+        ).await.map_err(|e| {
+            tracing::error!("Credit bonus error: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
     }
 
     // Mark as used
@@ -568,9 +600,6 @@ async fn use_reward(
         tracing::error!("Update error: {}", e);
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
-
-    let discount_percent: i32 = r.get(2);
-    let bonus_points: i32 = r.get(3);
 
     Ok(Json(json!({
         "success": true,

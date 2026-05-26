@@ -99,8 +99,6 @@ pub fn Button(props: ButtonProps) -> Element {
     let custom_class = props.class.as_deref().unwrap_or_default();
     let disabled_class = if props.disabled || props.loading { "btn-disabled" } else { "" };
 
-    let has_icon = props.icon.is_some();
-    let has_label = props.label.is_some();
 
     rsx! {
         button {
@@ -110,15 +108,15 @@ pub fn Button(props: ButtonProps) -> Element {
 
             if props.loading {
                 span { class: "btn-spinner", "⏳" }
-            } else if has_icon {
-                span { class: "btn-icon", "{props.icon.as_deref().unwrap()}" }
-                if has_label {
-                    span { class: "btn-label", "{props.label.as_deref().unwrap()}" }
+            } else if let Some(icon) = props.icon.as_deref() {
+                span { class: "btn-icon", "{icon}" }
+                if let Some(label) = props.label.as_deref() {
+                    span { class: "btn-label", "{label}" }
                 }
                 { props.children }
             } else {
-                if has_label {
-                    span { class: "btn-label", "{props.label.as_deref().unwrap()}" }
+                if let Some(label) = props.label.as_deref() {
+                    span { class: "btn-label", "{label}" }
                 }
                 { props.children }
             }

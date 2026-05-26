@@ -57,8 +57,30 @@ async fn create_order(
     }
     let bonus_used = req.bonus_used.unwrap_or(0.0).max(0.0);
 
+    // If bonus is used, verify the user has enough balance and deduct it.
+    if bonus_used > 0.0 {
+        if let Some(tid) = req.telegram_id {
+            let client = state.db.pool.get().await.map_err(|e| { error!("bonus check pool error: {}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
+            let row = client.query_opt(
+                "SELECT bonus_balance::float8 FROM loyalty_profiles WHERE telegram_id = $1",
+                &[&tid],
+            ).await.map_err(|e| { error!("bonus check query error: {}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
+            let balance: f64 = row.and_then(|r| r.try_get::<_, Option<f64>>(0).ok().flatten()).unwrap_or(0.0);
+            if balance < bonus_used {
+                return Err(StatusCode::BAD_REQUEST);
+            }
+            client.execute(
+                "UPDATE loyalty_profiles SET bonus_balance = GREATEST(0, bonus_balance - $1) WHERE telegram_id = $2",
+                &[&bonus_used, &tid],
+            ).await.map_err(|e| { error!("bonus deduction error: {}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
+        } else {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    }
+
     let id = uuid::Uuid::new_v4().to_string();
-    let items_json = serde_json::to_value(&req.items).unwrap_or(json!([]));
+    let items_json = serde_json::to_value(&req.items)
+        .map_err(|e| { error!("items serialization failed: {}", e); StatusCode::BAD_REQUEST })?;
 
     // BUG-3 fix via SeaORM: subtotal/bonus_used/total могут быть NUMERIC на проде.
     // sqlx + ::float8 каст и ::jsonb cast решают все варианты.
@@ -146,11 +168,11 @@ async fn get_orders(
     check_admin(&headers, &state)?;
     let limit = params.get("limit").and_then(|v| v.parse::<i64>().ok()).unwrap_or(100).clamp(1, 500);
     let offset = params.get("offset").and_then(|v| v.parse::<i64>().ok()).unwrap_or(0).max(0);
-    let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     let rows = client.query(
         "SELECT id, telegram_id, customer_name, customer_phone, customer_telegram, items, subtotal, bonus_used, total, status, shop_id, created_at FROM orders ORDER BY created_at DESC LIMIT $1 OFFSET $2",
         &[&limit, &offset],
-    ).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    ).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     let orders: Vec<Order> = rows.iter().map(Order::from_row).collect();
     Ok(Json(json!({ "orders": orders })))
 }
@@ -161,11 +183,11 @@ async fn get_order(
     Path(id): Path<String>,
 ) -> Result<Json<Value>, StatusCode> {
     check_admin(&headers, &state)?;
-    let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     let row = client.query_opt(
         "SELECT id, telegram_id, customer_name, customer_phone, customer_telegram, items, subtotal, bonus_used, total, status, shop_id, created_at FROM orders WHERE id = $1",
         &[&id],
-    ).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    ).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     match row {
         Some(r) => Ok(Json(json!({ "order": Order::from_row(&r) }))),
         None => Err(StatusCode::NOT_FOUND),
@@ -183,20 +205,25 @@ async fn update_order_status(
     if !VALID_STATUSES.contains(&req.status.as_str()) {
         return Err(StatusCode::BAD_REQUEST);
     }
-    let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     let rows = client.execute("UPDATE orders SET status = $1 WHERE id = $2", &[&req.status, &id])
-        .await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     if rows == 0 {
         return Err(StatusCode::NOT_FOUND);
     }
     Ok(Json(json!({ "success": true })))
 }
 
-async fn get_user_orders(State(state): State<AppState>, Path(telegram_id): Path<i64>) -> Result<Json<Value>, StatusCode> {
-    let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+async fn get_user_orders(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    Path(telegram_id): Path<i64>,
+) -> Result<Json<Value>, StatusCode> {
+    crate::api::auth::check_owner(&headers, &state, telegram_id)?;
+    let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     let rows = client.query(
         "SELECT id, telegram_id, customer_name, customer_phone, customer_telegram, items, subtotal, bonus_used, total, status, shop_id, created_at FROM orders WHERE telegram_id = $1 ORDER BY created_at DESC LIMIT 50",
         &[&telegram_id],
-    ).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    ).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     Ok(Json(json!({ "orders": rows.iter().map(Order::from_row).collect::<Vec<_>>() })))
 }

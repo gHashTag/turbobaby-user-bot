@@ -1,6 +1,6 @@
 use axum::{
     extract::{Path, Query, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     routing::{get, post},
     Json, Router,
 };
@@ -49,16 +49,18 @@ pub struct TrackReferralRequest {
 ///
 /// Returns the user's referral code, invite link, and statistics.
 async fn get_my_referrals(
+    headers: HeaderMap,
     State(state): State<AppState>,
     Path(telegram_id): Path<i64>,
 ) -> Result<Json<Value>, StatusCode> {
+    crate::api::auth::check_owner(&headers, &state, telegram_id)?;
     let code = get_or_create_referral_code(&state.db.pool, telegram_id)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
 
     let stats = get_referrer_stats(&state.db.pool, telegram_id)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
 
     let bot_username = &state.config.bot_username;
     let invite_link = format!("https://t.me/{}?start=ref_{}", bot_username, code);
@@ -85,7 +87,7 @@ async fn get_leaderboard(
 
     let top = get_top_referrers(&state.db.pool, period, limit)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
 
     Ok(Json(json!({
         "period": period,
@@ -104,7 +106,7 @@ async fn track_referral(
     // Look up referrer
     let referrer_id = find_referrer_by_code(&state.db.pool, &req.code)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
 
     let referrer_id = match referrer_id {
         Some(id) => id,
@@ -132,7 +134,7 @@ async fn track_referral(
         req.source.as_deref(),
     )
     .await
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    .map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
 
     Ok(Json(json!({
         "success": true,

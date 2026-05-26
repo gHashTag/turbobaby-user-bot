@@ -21,7 +21,7 @@ pub fn Checkout() -> Element {
         // For demo: generate order ID
         let order_id = format!("ORD-{}", std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or(std::time::Duration::ZERO)
             .as_secs());
 
         // Clear cart and navigate to success page

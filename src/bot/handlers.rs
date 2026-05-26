@@ -12,7 +12,7 @@ fn web_app_btn(text: &str, url: &str) -> InlineKeyboardButton {
         Ok(u) => InlineKeyboardButton::web_app(text, WebAppInfo { url: u }),
         Err(e) => {
             tracing::error!("Invalid web_app URL '{}': {}", url, e);
-            InlineKeyboardButton::url(text, "https://t.me".parse().unwrap())
+            InlineKeyboardButton::url(text, "https://t.me".parse().expect("static URL is always valid"))
         }
     }
 }
@@ -21,7 +21,7 @@ fn url_btn(text: &str, url: &str) -> InlineKeyboardButton {
         Ok(u) => InlineKeyboardButton::url(text, u),
         Err(e) => {
             tracing::error!("Invalid URL '{}': {}", url, e);
-            InlineKeyboardButton::url(text, "https://t.me".parse().unwrap())
+            InlineKeyboardButton::url(text, "https://t.me".parse().expect("static URL is always valid"))
         }
     }
 }

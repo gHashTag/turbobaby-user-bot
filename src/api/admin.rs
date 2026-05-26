@@ -32,7 +32,6 @@ struct ValidateInitDataResponse {
     data_check_string: String,
     received_hash: String,
     expected_hash: String,
-    token_preview: String,
     user: Option<Value>,
     error: Option<String>,
 }
@@ -51,7 +50,11 @@ pub fn routes() -> Router<AppState> {
         .route("/debug/validate-initdata", post(debug_validate_init_data))
 }
 
-async fn get_stats(State(state): State<AppState>) -> Result<Json<Value>, StatusCode> {
+async fn get_stats(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+) -> Result<Json<Value>, StatusCode> {
+    check_admin(&headers, &state)?;
     let client = state.db.pool.get().await.map_err(|e| {
         tracing::error!("get_stats pool error: {:?}", e);
         StatusCode::INTERNAL_SERVER_ERROR
@@ -81,15 +84,17 @@ async fn get_stats(State(state): State<AppState>) -> Result<Json<Value>, StatusC
         .map(|r| r.try_get(0).unwrap_or(0))
         .unwrap_or(0);
 
-    // Top strains by order count (from orders.items JSONB)
+    // Top strains by order count (avoid CROSS JOIN via subquery)
     let top_strains: Vec<Value> = client
         .query(
             r#"
             SELECT s.name, COUNT(*) as cnt
-            FROM orders o,
-                 jsonb_array_elements(o.items) AS item
-            JOIN strains s ON (item->>'id') = s.id
-            WHERE o.status = 'completed'
+            FROM (
+                SELECT (jsonb_array_elements(items)->>'id') as sid
+                FROM orders
+                WHERE status = 'completed'
+            ) item
+            JOIN strains s ON item.sid = s.id
             GROUP BY s.name
             ORDER BY cnt DESC
             LIMIT 5
@@ -182,9 +187,9 @@ async fn get_manager_stats(
     headers: HeaderMap,
 ) -> Result<Json<Value>, StatusCode> {
     check_admin(&headers, &state)?;
-    let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    // TODO: orders.referrer_id column does not exist in current schema — using 0 as placeholder
-    // referral_events.referrer_id exists (migration 007)
+    let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
+    // NOTE: orders.referrer_id column does not exist in current schema — using 0 as placeholder.
+    // When the column is added, replace 0::int with the real subquery.
     let row = client.query_one(
         "SELECT 
             0::int as orders_count,
@@ -224,7 +229,7 @@ async fn create_manager(
     Json(req): Json<CreateManagerRequest>,
 ) -> Result<Json<Value>, StatusCode> {
     check_admin(&headers, &state)?;
-    let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     client.execute(
         "INSERT INTO managers (telegram_id, name, username, ref_code, commission_rate) VALUES ($1, $2, $3, $4, $5)",
         &[&req.telegram_id, &req.name, &req.username, &req.ref_code, &req.commission_rate],
@@ -239,7 +244,7 @@ async fn update_manager(
     Json(req): Json<UpdateManagerRequest>,
 ) -> Result<Json<Value>, StatusCode> {
     check_admin(&headers, &state)?;
-    let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     client.execute(
         "UPDATE managers SET 
             name = COALESCE($2, name),
@@ -258,9 +263,9 @@ async fn delete_manager(
     headers: HeaderMap,
 ) -> Result<Json<Value>, StatusCode> {
     check_admin(&headers, &state)?;
-    let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     client.execute("DELETE FROM managers WHERE telegram_id = $1", &[&telegram_id])
-        .await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     Ok(Json(json!({ "success": true })))
 }
 
@@ -286,16 +291,7 @@ async fn check_admin_access(
         }
     }
 
-    // 2. Fallback: trust query telegram_id if it matches admin_ids
-    //    (temporary workaround until HMAC validation is fully fixed)
-    let id = query.telegram_id;
-    let is_admin = state.config.admin_ids.contains(&id);
-    if is_admin {
-        tracing::info!("admin/check: fallback accepted telegram_id={}", id);
-        return Ok(Json(json!({ "is_admin": true, "telegram_id": id })));
-    }
-
-    tracing::warn!("admin/check: unauthorized telegram_id={}", id);
+    tracing::warn!("admin/check: unauthorized — invalid or missing initData");
     Err(StatusCode::UNAUTHORIZED)
 }
 
@@ -323,18 +319,19 @@ async fn ping() -> Result<Json<Value>, StatusCode> {
 }
 
 async fn debug_validate_init_data(
+    headers: HeaderMap,
     State(state): State<AppState>,
     Json(req): Json<ValidateInitDataRequest>,
-) -> Json<ValidateInitDataResponse> {
+) -> Result<Json<ValidateInitDataResponse>, StatusCode> {
+    check_admin(&headers, &state)?;
     let (ok, data_check_string, received_hash, expected_hash, user, error) =
         crate::api::auth::validate_init_data_debug(&req.init_data, &state.config.bot_token);
-    Json(ValidateInitDataResponse {
+    Ok(Json(ValidateInitDataResponse {
         ok,
         data_check_string,
         received_hash,
         expected_hash,
-        token_preview: format!("{}...{}", &state.config.bot_token[..state.config.bot_token.len().min(4)], &state.config.bot_token[state.config.bot_token.len().saturating_sub(4)..]),
         user: user.map(|u| json!({"id": u.id, "first_name": u.first_name, "username": u.username})),
         error,
-    })
+    }))
 }

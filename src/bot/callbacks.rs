@@ -13,7 +13,7 @@ fn web_app_btn(text: &str, url: &str) -> InlineKeyboardButton {
         Ok(u) => InlineKeyboardButton::web_app(text, WebAppInfo { url: u }),
         Err(e) => {
             tracing::error!("Invalid web_app URL '{}': {}", url, e);
-            InlineKeyboardButton::url(text, "https://t.me".parse().unwrap())
+            InlineKeyboardButton::url(text, "https://t.me".parse().expect("static URL is always valid"))
         }
     }
 }
@@ -148,6 +148,11 @@ pub async fn handle_callback(
         }
 
         d if d.starts_with("confirm_") => {
+            if !config.admin_ids.contains(&user_id) {
+                tracing::warn!("callback: confirm rejected for non-admin user_id={}", user_id);
+                bot.answer_callback_query(&q.id).text("⛔ Admin only").await?;
+                return Ok(());
+            }
             let order_id = &d["confirm_".len()..];
             tracing::info!("callback: confirm order_id={} by user_id={}", order_id, user_id);
             bot.answer_callback_query(&q.id).text(&format!("✅ {}", locale.order_confirmed)).await?;
@@ -172,46 +177,100 @@ pub async fn handle_callback(
         }
 
         d if d.starts_with("complete_") => {
+            if !config.admin_ids.contains(&user_id) {
+                tracing::warn!("callback: complete rejected for non-admin user_id={}", user_id);
+                bot.answer_callback_query(&q.id).text("⛔ Admin only").await?;
+                return Ok(());
+            }
             let order_id = &d["complete_".len()..];
             tracing::info!("callback: complete order_id={} by user_id={}", order_id, user_id);
             bot.answer_callback_query(&q.id).text("📦 Completed!").await?;
 
-            // Check if this is the user's first order BEFORE updating status
+            // Atomically complete order, update loyalty profile, and recalculate tier
             let mut is_first = false;
             let mut customer_telegram_id: Option<i64> = None;
-            {
-                let pool = &db.pool;
-                let db_client = pool.get().await.ok();
-                if let Some(db_client) = db_client {
-                    // Get the telegram_id for this order
-                    let order_row = db_client.query_opt(
-                        "SELECT telegram_id FROM orders WHERE id = $1",
-                        &[&order_id],
-                    ).await.ok().flatten();
-
-                    if let Some(row) = order_row {
-                        let cid: i64 = row.get("telegram_id");
-                        customer_telegram_id = Some(cid);
-                        // Check completed order count BEFORE this update
-                        let order_count = db_client.query_one(
-                            "SELECT COUNT(*) as cnt FROM orders WHERE telegram_id = $1 AND status = 'completed' AND id != $2",
-                            &[&cid, &order_id],
-                        ).await.ok();
-
-                        is_first = order_count.map(|r| r.get::<_, i64>("cnt") == 0).unwrap_or(false);
-                    }
-                }
-            }
-
-            // Now update the order status
             match db.pool.get().await {
                 Ok(client) => {
-                    match client.execute("UPDATE orders SET status = 'completed' WHERE id = $1", &[&order_id]).await {
-                        Ok(rows) => tracing::info!("callback: complete order_id={} updated {} rows", order_id, rows),
-                        Err(e) => tracing::error!("callback: complete order_id={} DB error: {}", order_id, e),
+                    let tx = match client.transaction().await {
+                        Ok(t) => t,
+                        Err(e) => {
+                            tracing::error!("callback: complete tx start error: {}", e);
+                            return Ok(());
+                        }
+                    };
+                    let order_row = match tx.query_opt(
+                        "SELECT telegram_id, total::float8, status FROM orders WHERE id = $1",
+                        &[&order_id],
+                    ).await {
+                        Ok(r) => r,
+                        Err(e) => {
+                            tracing::error!("callback: complete order select error: {}", e);
+                            let _ = tx.rollback().await;
+                            return Ok(());
+                        }
+                    };
+                    if let Some(row) = order_row {
+                        let cid: i64 = row.get("telegram_id");
+                        let total: f64 = row.get("total");
+                        let status: String = row.get("status");
+                        customer_telegram_id = Some(cid);
+                        if status != "completed" {
+                            let count_before = match tx.query_one(
+                                "SELECT COUNT(*) as cnt FROM orders WHERE telegram_id = $1 AND status = 'completed'",
+                                &[&cid],
+                            ).await {
+                                Ok(r) => r.get::<_, i64>("cnt"),
+                                Err(e) => {
+                                    tracing::error!("callback: complete count_before error: {}", e);
+                                    let _ = tx.rollback().await;
+                                    return Ok(());
+                                }
+                            };
+                            is_first = count_before == 0;
+                            if let Err(e) = tx.execute(
+                                "UPDATE orders SET status = 'completed' WHERE id = $1",
+                                &[&order_id],
+                            ).await {
+                                tracing::error!("callback: complete order update error: {}", e);
+                                let _ = tx.rollback().await;
+                                return Ok(());
+                            }
+                            if let Err(e) = tx.execute(
+                                "INSERT INTO loyalty_profiles (telegram_id, total_spent, first_purchase_at) VALUES ($1, $2, NOW())
+                                 ON CONFLICT (telegram_id) DO UPDATE SET
+                                   total_spent = COALESCE(loyalty_profiles.total_spent, 0) + EXCLUDED.total_spent,
+                                   first_purchase_at = COALESCE(loyalty_profiles.first_purchase_at, NOW())",
+                                &[&cid, &total],
+                            ).await {
+                                tracing::error!("callback: complete loyalty update error: {}", e);
+                                let _ = tx.rollback().await;
+                                return Ok(());
+                            }
+                            if let Err(e) = tx.execute(
+                                "UPDATE loyalty_profiles SET tier = CASE
+                                    WHEN loyalty_profiles.total_spent >= (SELECT (config->>'gold_threshold')::float8 FROM loyalty_config WHERE id = 1 LIMIT 1) THEN 'gold'
+                                    WHEN loyalty_profiles.total_spent >= (SELECT (config->>'silver_threshold')::float8 FROM loyalty_config WHERE id = 1 LIMIT 1) THEN 'silver'
+                                    WHEN loyalty_profiles.total_spent >= (SELECT (config->>'bronze_threshold')::float8 FROM loyalty_config WHERE id = 1 LIMIT 1) THEN 'bronze'
+                                    ELSE 'none'
+                                 END
+                                 WHERE telegram_id = $1",
+                                &[&cid],
+                            ).await {
+                                tracing::error!("callback: complete tier update error: {}", e);
+                                let _ = tx.rollback().await;
+                                return Ok(());
+                            }
+                        }
+                    }
+                    if let Err(e) = tx.commit().await {
+                        tracing::error!("callback: complete commit error: {}", e);
+                        return Ok(());
                     }
                 }
-                Err(e) => tracing::error!("callback: complete order_id={} pool error: {}", order_id, e),
+                Err(e) => {
+                    tracing::error!("callback: complete pool error: {}", e);
+                    return Ok(());
+                }
             }
 
             // If first order, confirm referral and notify referrer
@@ -259,6 +318,11 @@ pub async fn handle_callback(
         }
 
         d if d.starts_with("reject_") => {
+            if !config.admin_ids.contains(&user_id) {
+                tracing::warn!("callback: reject rejected for non-admin user_id={}", user_id);
+                bot.answer_callback_query(&q.id).text("⛔ Admin only").await?;
+                return Ok(());
+            }
             let _order_id = &d["reject_".len()..];
             tracing::info!("callback: reject order_id={} by user_id={}", _order_id, user_id);
             bot.answer_callback_query(&q.id).text(&format!("❌ {}", locale.order_rejected)).await?;

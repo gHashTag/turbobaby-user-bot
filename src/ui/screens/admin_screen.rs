@@ -207,6 +207,7 @@ async fn upload_file(accept: &str) -> Option<String> {
     let token_js = token.replace('\\', "\\\\").replace('\'', "\\'").replace('\n', "");
     let js = format!(r#"
 new Promise((resolve) => {{
+    console.log('[UPLOAD] Step 0: Starting upload, accept={}');
     var input = document.createElement('input');
     input.type = 'file';
     input.accept = '{}';
@@ -214,12 +215,17 @@ new Promise((resolve) => {{
     input.onchange = async (e) => {{
         if (resolved) return;
         resolved = true;
+        console.log('[UPLOAD] Step 1: File selected');
         var file = e.target.files[0];
-        if (!file) {{ resolve(''); return; }}
+        if (!file) {{ console.log('[UPLOAD] Step 1: No file selected'); resolve(''); return; }}
+        console.log('[UPLOAD] Step 2: File name=' + file.name + ' size=' + file.size + ' type=' + file.type);
         var formData = new FormData();
         formData.append('file', file);
+        console.log('[UPLOAD] Step 3: FormData created');
         try {{
             var baseUrl = window.location.origin;
+            console.log('[UPLOAD] Step 4: Sending POST to ' + baseUrl + '/api/upload');
+            console.log('[UPLOAD] Step 4: Headers: X-Telegram-Init-Data len=' + '{}'.length + ' X-Admin-Token len=' + '{}'.length);
             var resp = await fetch(baseUrl + '/api/upload', {{
                 method: 'POST',
                 body: formData,
@@ -229,14 +235,17 @@ new Promise((resolve) => {{
                     'X-Admin-Token': '{}'
                 }}
             }});
+            console.log('[UPLOAD] Step 5: Response status=' + resp.status + ' ok=' + resp.ok);
             var data = await resp.json();
+            console.log('[UPLOAD] Step 6: Response data=', JSON.stringify(data));
             resolve(data.url || '');
-        }} catch(err) {{ console.error('Upload error:', err); resolve(''); }}
+        }} catch(err) {{ console.error('[UPLOAD] ERROR:', err); resolve(''); }}
     }};
-    setTimeout(() => {{ if (!resolved) {{ resolved = true; resolve(''); }} }}, 120000);
+    setTimeout(() => {{ if (!resolved) {{ console.log('[UPLOAD] Timeout after 120s'); resolved = true; resolve(''); }} }}, 120000);
+    console.log('[UPLOAD] Step 0: Clicking file input');
     input.click();
 }})
-"#, accept, init_data.replace('\\', "\\\\").replace('\'', "\\'").replace('\n', ""), telegram_id, token_js);
+"#, accept, init_data.replace('\\', "\\\\").replace('\'', "\\'").replace('\n', ""), token_js.len(), token_js.len(), init_data.replace('\\', "\\\\").replace('\'', "\\'").replace('\n', ""), telegram_id, token_js);
     let promise_val = js_sys::eval(&js).ok()?;
     let promise = promise_val.dyn_into::<js_sys::Promise>().ok()?;
     let result = wasm_bindgen_futures::JsFuture::from(promise).await.ok()?;

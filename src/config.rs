@@ -31,22 +31,22 @@ impl Config {
             .context("BOT_TOKEN not set")?
             .trim().to_string();
 
-        // Hard-coded admins — ensures admin works even before ADMIN_IDS env var is set.
-        // Additional admins can be added via ADMIN_IDS="id1,id2,..." without removing these defaults.
-        const DEFAULT_ADMIN_IDS: &[i64] = &[
-            8420420131, // shop owner
-            144022504,  // operator
-        ];
-        let mut admin_ids: Vec<i64> = std::env::var("ADMIN_IDS")
+        // Admin IDs from env; if ADMIN_IDS is set it is the only source of truth.
+        // Hard-coded defaults are used ONLY as a fallback when ADMIN_IDS is empty
+        // (local development before env is configured).
+        let env_ids: Vec<i64> = std::env::var("ADMIN_IDS")
             .unwrap_or_default()
             .split(',')
             .filter_map(|s| s.trim().parse::<i64>().ok())
             .collect();
-        for id in DEFAULT_ADMIN_IDS {
-            if !admin_ids.contains(id) {
-                admin_ids.push(*id);
-            }
-        }
+        let admin_ids = if !env_ids.is_empty() {
+            env_ids
+        } else {
+            vec![
+                8420420131, // shop owner
+                144022504,  // operator
+            ]
+        };
 
         // The backend service serves BOTH the API and the WASM frontend on the same origin.
         // If WEB_APP_URL is empty or points to the broken legacy TMA service, fall back to the

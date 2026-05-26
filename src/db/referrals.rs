@@ -261,27 +261,45 @@ pub async fn get_referrer_stats(pool: &Pool, telegram_id: i64) -> Result<Referre
 pub async fn get_top_referrers(pool: &Pool, period: &str, limit: i64) -> Result<Vec<TopReferrer>> {
     let client = pool.get().await.context("db pool")?;
 
-    let period_filter = match period {
-        "weekly" => "AND re.created_at >= NOW() - INTERVAL '7 days'",
-        "monthly" => "AND re.created_at >= NOW() - INTERVAL '30 days'",
-        _ => "",
+    let sql = match period {
+        "weekly" => {
+            "SELECT
+                re.referrer_id          AS telegram_id,
+                COUNT(*)                AS referral_count,
+                COALESCE(SUM(re.bonus_paid), 0) AS total_bonus_earned
+             FROM referral_events re
+             WHERE (re.status = 'confirmed' OR re.status = 'paid')
+             AND re.created_at >= NOW() - INTERVAL '7 days'
+             GROUP BY re.referrer_id
+             ORDER BY referral_count DESC, total_bonus_earned DESC
+             LIMIT $1"
+        }
+        "monthly" => {
+            "SELECT
+                re.referrer_id          AS telegram_id,
+                COUNT(*)                AS referral_count,
+                COALESCE(SUM(re.bonus_paid), 0) AS total_bonus_earned
+             FROM referral_events re
+             WHERE (re.status = 'confirmed' OR re.status = 'paid')
+             AND re.created_at >= NOW() - INTERVAL '30 days'
+             GROUP BY re.referrer_id
+             ORDER BY referral_count DESC, total_bonus_earned DESC
+             LIMIT $1"
+        }
+        _ => {
+            "SELECT
+                re.referrer_id          AS telegram_id,
+                COUNT(*)                AS referral_count,
+                COALESCE(SUM(re.bonus_paid), 0) AS total_bonus_earned
+             FROM referral_events re
+             WHERE (re.status = 'confirmed' OR re.status = 'paid')
+             GROUP BY re.referrer_id
+             ORDER BY referral_count DESC, total_bonus_earned DESC
+             LIMIT $1"
+        }
     };
 
-    let sql = format!(
-        "SELECT
-            re.referrer_id          AS telegram_id,
-            COUNT(*)                AS referral_count,
-            COALESCE(SUM(re.bonus_paid), 0) AS total_bonus_earned
-         FROM referral_events re
-         WHERE (re.status = 'confirmed' OR re.status = 'paid')
-         {}
-         GROUP BY re.referrer_id
-         ORDER BY referral_count DESC, total_bonus_earned DESC
-         LIMIT $1",
-        period_filter
-    );
-
-    let rows = client.query(&sql, &[&limit]).await?;
+    let rows = client.query(sql, &[&limit]).await?;
 
     Ok(rows
         .iter()

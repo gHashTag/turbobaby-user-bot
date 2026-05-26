@@ -258,7 +258,8 @@ mod tests {
 }
 
 pub fn generate_admin_token(password: &str, bot_token: &str) -> String {
-    let mut mac = HmacSha256::new_from_slice(b"WoodyWeedBotAdmin").unwrap();
+    let mut mac = HmacSha256::new_from_slice(b"WoodyWeedBotAdmin")
+        .expect("HMAC key length is always valid (32+ bytes)");
     mac.update(bot_token.as_bytes());
     mac.update(b":");
     mac.update(password.as_bytes());
@@ -271,13 +272,20 @@ pub fn verify_admin_token(token: &str, bot_token: &str, expected_password: &str)
 }
 
 pub fn check_admin(headers: &HeaderMap, state: &AppState) -> Result<i64, StatusCode> {
+    tracing::info!("CHECK_ADMIN: started");
+    tracing::info!("CHECK_ADMIN: bot_token len={}", state.config.bot_token.len());
+    tracing::info!("CHECK_ADMIN: admin_ids={:?}", state.config.admin_ids);
+    tracing::info!("CHECK_ADMIN: admin_password set={}", state.config.admin_password.is_some());
+    
     // 1. Try Telegram initData validation (production path)
-    if let Some(init_data) = headers
-        .get("X-Telegram-Init-Data")
-        .and_then(|v| v.to_str().ok())
-    {
+    let init_data_opt = headers.get("X-Telegram-Init-Data").and_then(|v| v.to_str().ok());
+    tracing::info!("CHECK_ADMIN: X-Telegram-Init-Data present={}", init_data_opt.is_some());
+    if let Some(init_data) = init_data_opt {
+        tracing::info!("CHECK_ADMIN: init_data len={} empty={}", init_data.len(), init_data.is_empty());
         if !init_data.is_empty() {
+            tracing::info!("CHECK_ADMIN: validating initData...");
             if let Some(user) = validate_init_data(init_data, &state.config.bot_token) {
+                tracing::info!("CHECK_ADMIN: initData valid, user_id={} username={:?}", user.id, user.username);
                 if state.config.admin_ids.contains(&user.id) {
                     tracing::info!(
                         "admin authenticated via initData telegram_id={} username={:?}",
@@ -287,8 +295,9 @@ pub fn check_admin(headers: &HeaderMap, state: &AppState) -> Result<i64, StatusC
                     return Ok(user.id);
                 } else {
                     tracing::warn!(
-                        "initData valid but user not admin telegram_id={}",
-                        user.id
+                        "initData valid but user not admin telegram_id={} admin_ids={:?}",
+                        user.id,
+                        state.config.admin_ids
                     );
                     return Err(StatusCode::FORBIDDEN);
                 }
@@ -296,42 +305,55 @@ pub fn check_admin(headers: &HeaderMap, state: &AppState) -> Result<i64, StatusC
                 tracing::warn!("invalid initData signature");
                 return Err(StatusCode::UNAUTHORIZED);
             }
+        } else {
+            tracing::info!("CHECK_ADMIN: initData empty");
         }
     }
 
     // 2. Password login via X-Admin-Token (works in all builds if ADMIN_PASSWORD is set)
-    if let Some(token) = headers.get("X-Admin-Token").and_then(|v| v.to_str().ok()) {
+    let token_opt = headers.get("X-Admin-Token").and_then(|v| v.to_str().ok());
+    tracing::info!("CHECK_ADMIN: X-Admin-Token present={}", token_opt.is_some());
+    if let Some(token) = token_opt {
+        tracing::info!("CHECK_ADMIN: token len={}", token.len());
         if let Some(ref password) = state.config.admin_password {
+            tracing::info!("CHECK_ADMIN: verifying token against password...");
             if verify_admin_token(token, &state.config.bot_token, password) {
                 tracing::info!("admin authenticated via password token");
                 return Ok(0);
+            } else {
+                tracing::warn!("CHECK_ADMIN: token verification FAILED");
+            }
+        } else {
+            tracing::warn!("CHECK_ADMIN: ADMIN_PASSWORD not set");
+        }
+    }
+
+    tracing::warn!("admin request without valid auth (initData or token)");
+    Err(StatusCode::UNAUTHORIZED)
+}
+
+/// Verify that the Telegram user in `X-Telegram-Init-Data` owns `expected_telegram_id`.
+/// Returns the authenticated telegram_id on success.
+pub fn check_owner(headers: &HeaderMap, state: &AppState, expected_telegram_id: i64) -> Result<i64, StatusCode> {
+    if let Some(init_data) = headers
+        .get("X-Telegram-Init-Data")
+        .and_then(|v| v.to_str().ok())
+    {
+        if !init_data.is_empty() {
+            if let Some(user) = validate_init_data(init_data, &state.config.bot_token) {
+                if user.id == expected_telegram_id {
+                    return Ok(user.id);
+                } else {
+                    tracing::warn!(
+                        "owner mismatch: initData user={} expected={}",
+                        user.id,
+                        expected_telegram_id
+                    );
+                    return Err(StatusCode::FORBIDDEN);
+                }
             }
         }
     }
-
-    // 3. Fallback for local development (debug builds only): trust X-Admin-Telegram-Id header
-    //    NEVER allow this in production — it is a full auth bypass vector.
-    #[cfg(debug_assertions)]
-    {
-        let id = headers
-            .get("X-Admin-Telegram-Id")
-            .and_then(|v| v.to_str().ok())
-            .and_then(|s| s.parse::<i64>().ok())
-            .ok_or_else(|| {
-                tracing::warn!("admin request without valid auth (initData, token, or fallback)");
-                StatusCode::UNAUTHORIZED
-            })?;
-
-        if !state.config.admin_ids.contains(&id) {
-            tracing::warn!("admin request from non-admin telegram_id={}", id);
-            return Err(StatusCode::FORBIDDEN);
-        }
-        tracing::info!("admin authenticated via fallback header telegram_id={}", id);
-        Ok(id)
-    }
-    #[cfg(not(debug_assertions))]
-    {
-        tracing::warn!("admin request without valid auth (initData or token)");
-        Err(StatusCode::UNAUTHORIZED)
-    }
+    tracing::warn!("owner check failed: missing or invalid initData");
+    Err(StatusCode::UNAUTHORIZED)
 }

@@ -180,11 +180,11 @@ pub struct TreasureHuntRequest {
 }
 
 async fn get_treasure_hunts(State(state): State<AppState>) -> Result<Json<Value>, StatusCode> {
-    let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     let rows = client.query(
         "SELECT id, name, description, image_url, black_mark_title, black_mark_description, black_mark_image_url, is_active, starts_at, ends_at, start_lat, start_lon, start_name FROM treasure_hunts WHERE is_active = true ORDER BY created_at DESC",
         &[],
-    ).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    ).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     let items: Vec<Value> = rows.iter().map(|r| json!({
         "id": r.try_get::<_, String>(0).unwrap_or_default(),
         "name": r.try_get::<_, String>(1).unwrap_or_default(),
@@ -303,11 +303,11 @@ async fn get_quest_locations(
     State(state): State<AppState>,
     Query(_params): Query<QuestLocationParams>,
 ) -> Result<Json<Value>, StatusCode> {
-    let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     let rows = client.query(
         "SELECT id, name, description, category, map_url, qr_token, is_active, is_final FROM location_quest_locations WHERE is_active = true ORDER BY id",
         &[],
-    ).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    ).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     let items: Vec<Value> = rows.iter().map(|r| json!({
         "id": r.get::<_, i32>(0),
         "name": r.get::<_, String>(1),
@@ -327,11 +327,11 @@ async fn create_quest_location(
     Json(req): Json<QuestLocationRequest>,
 ) -> Result<Json<Value>, StatusCode> {
     check_admin(&headers, &state)?;
-    let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     let row = client.query_one(
         "INSERT INTO location_quest_locations (name, description, category, map_url, is_final) VALUES ($1,$2,$3,$4,$5) RETURNING id",
         &[&req.name, &req.description.unwrap_or_default(), &req.category.unwrap_or_else(|| "location".to_string()), &req.map_url.unwrap_or_default(), &req.is_final.unwrap_or(false)],
-    ).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    ).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     Ok(Json(json!({ "success": true, "id": row.get::<_, i32>(0) })))
 }
 
@@ -342,22 +342,22 @@ async fn update_quest_location(
     Json(req): Json<QuestLocationRequest>,
 ) -> Result<Json<Value>, StatusCode> {
     check_admin(&headers, &state)?;
-    let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     client.execute(
         "UPDATE location_quest_locations SET name=$1, description=$2, category=$3, map_url=$4, is_final=$5 WHERE id=$6",
         &[&req.name, &req.description.unwrap_or_default(), &req.category.unwrap_or_else(|| "location".to_string()), &req.map_url.unwrap_or_default(), &req.is_final.unwrap_or(false), &id],
-    ).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    ).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     Ok(Json(json!({ "success": true })))
 }
 
 async fn scan_quest_qr(State(state): State<AppState>, Json(body): Json<Value>) -> Result<Json<Value>, StatusCode> {
     let qr_token = body["qr_token"].as_str().unwrap_or("");
     let telegram_id = body["telegram_id"].as_i64();
-    let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     let row = client.query_opt(
         "SELECT id, name, is_final FROM location_quest_locations WHERE qr_token = $1 AND is_active = true",
         &[&qr_token],
-    ).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    ).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     match row {
         Some(r) => {
             let location_name: String = r.get(1);

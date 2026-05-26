@@ -159,6 +159,9 @@ impl TelegramCache {
         let storage = js_sys::Reflect::get(&tg_webapp, &JsValue::from_str("CloudStorage"))
             .unwrap_or_else(|_| JsValue::NULL);
 
-        unsafe { storage.into() }
+        if storage.is_undefined() || storage.is_null() {
+            return Err(JsValue::from_str("CloudStorage not available"));
+        }
+        Ok(storage.unchecked_into::<CloudStorage>())
     }
 }

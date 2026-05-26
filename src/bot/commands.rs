@@ -43,7 +43,7 @@ fn web_app_btn(text: &str, url: &str) -> InlineKeyboardButton {
         Ok(u) => InlineKeyboardButton::web_app(text, WebAppInfo { url: u }),
         Err(e) => {
             tracing::error!("Invalid web_app URL '{}': {}", url, e);
-            InlineKeyboardButton::url(text, "https://t.me".parse().unwrap())
+            InlineKeyboardButton::url(text, "https://t.me".parse().expect("static URL is always valid"))
         }
     }
 }
@@ -260,12 +260,12 @@ pub async fn handle_command(
 
         Command::Engage => {
             if !config.admin_ids.contains(&user_id) { return Ok(()); }
-            bot.send_message(msg.chat.id, "📬 Engage stats: (TODO)").await?;
+            bot.send_message(msg.chat.id, "📬 Engage stats: feature not yet implemented").await?;
         }
 
         Command::Factpost => {
             if !config.admin_ids.contains(&user_id) { return Ok(()); }
-            bot.send_message(msg.chat.id, "🌿 Posting fact to group... (TODO)").await?;
+            bot.send_message(msg.chat.id, "🌿 Posting fact to group... feature not yet implemented").await?;
         }
 
         Command::Invite => {

@@ -2,6 +2,7 @@ use dioxus::prelude::*;
 use web_sys;
 use qrcode::QrCode;
 use serde::Deserialize;
+use base64::{Engine as _, engine::general_purpose::STANDARD};
 use crate::ui::routes::Route;
 use crate::ui::state::{Cart, use_language, Language};
 use crate::ui::assets;
@@ -242,7 +243,7 @@ pub fn ProfileScreen() -> Element {
             // QR Code Card
             {
                 let qr_value = format!("https://t.me/Woody_WeedPecker_bot?start=ref_{}", referral_code);
-                let qr_svg = QrCode::new(qr_value.as_bytes())
+                let qr_data_uri = QrCode::new(qr_value.as_bytes())
                     .ok()
                     .map(|code| {
                         let svg_str = code
@@ -252,7 +253,7 @@ pub fn ProfileScreen() -> Element {
                             .light_color(qrcode::render::svg::Color("#0f0f1a"))
                             .quiet_zone(false)
                             .build();
-                        svg_str
+                        format!("data:image/svg+xml;base64,{}", STANDARD.encode(svg_str.as_bytes()))
                     })
                     .unwrap_or_default();
                 let _qr_title = t(Lang::Russian, T_PROFILE_TITLE);
@@ -274,7 +275,11 @@ pub fn ProfileScreen() -> Element {
                             box-shadow: inset 0 0 20px rgba(57,255,20,0.05), 0 0 16px rgba(57,255,20,0.15);
                             line-height: 0;
                         ",
-                            div { dangerous_inner_html: "{qr_svg}" }
+                            img {
+                                src: "{qr_data_uri}",
+                                style: "width: 200px; height: 200px; display: block;",
+                                alt: "Referral QR"
+                            }
                         }
                         div { style: "
                             font-size: 14px; font-weight: 800; color: #39ff14;

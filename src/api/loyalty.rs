@@ -31,12 +31,12 @@ pub fn routes() -> Router<AppState> {
 }
 
 async fn get_loyalty_tiers(State(state): State<AppState>) -> Result<Json<Value>, StatusCode> {
-    let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     let rows = client.query(
         "SELECT tier, name, min_points, discount_percent, points_multiplier, perks, icon, color \
          FROM loyalty_tiers ORDER BY min_points ASC",
         &[],
-    ).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    ).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     let tiers: Vec<Value> = rows.iter().map(|r| json!({
         "tier":             r.get::<_, String>("tier"),
         "name":             r.get::<_, String>("name"),
@@ -50,7 +50,12 @@ async fn get_loyalty_tiers(State(state): State<AppState>) -> Result<Json<Value>,
     Ok(Json(json!({ "tiers": tiers })))
 }
 
-async fn get_profile(State(state): State<AppState>, Path(telegram_id): Path<i64>) -> Result<Json<Value>, StatusCode> {
+async fn get_profile(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    Path(telegram_id): Path<i64>,
+) -> Result<Json<Value>, StatusCode> {
+    crate::api::auth::check_owner(&headers, &state, telegram_id)?;
     // SeaORM-версия: sqlx безопасно читает NUMERIC в f64.
     use sea_orm::{Statement, DbBackend, ConnectionTrait};
     let stmt = Statement::from_sql_and_values(
@@ -87,16 +92,19 @@ async fn add_bonus(
     Json(req): Json<AddBonusRequest>,
 ) -> Result<Json<Value>, StatusCode> {
     check_admin(&headers, &state)?;
+    if req.amount < 0.0 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
     let tx_id = uuid::Uuid::new_v4().to_string();
-    let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     client.execute(
         "INSERT INTO bonus_transactions (id, telegram_id, amount, tx_type, description, related_order_id) VALUES ($1,$2,$3,$4,$5,$6)",
         &[&tx_id, &telegram_id, &req.amount, &req.tx_type, &req.description, &req.related_order_id],
-    ).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    ).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     client.execute(
         "UPDATE loyalty_profiles SET bonus_balance = bonus_balance + $1 WHERE telegram_id = $2",
         &[&req.amount, &telegram_id],
-    ).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    ).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     Ok(Json(json!({ "success": true, "tx_id": tx_id })))
 }
 
@@ -108,11 +116,14 @@ async fn use_bonus(
 ) -> Result<Json<Value>, StatusCode> {
     check_admin(&headers, &state)?;
     let amount = body["amount"].as_f64().unwrap_or(0.0);
-    let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    if amount <= 0.0 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     let result = client.execute(
         "UPDATE loyalty_profiles SET bonus_balance = GREATEST(0, bonus_balance - $1) WHERE telegram_id = $2 AND bonus_balance >= $1",
         &[&amount, &telegram_id],
-    ).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    ).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     if result == 0 { return Err(StatusCode::BAD_REQUEST); }
     Ok(Json(json!({ "success": true })))
 }
@@ -143,9 +154,9 @@ async fn get_leaderboard(State(state): State<AppState>) -> Result<Json<Value>, S
 }
 
 async fn get_loyalty_config(State(state): State<AppState>) -> Result<Json<Value>, StatusCode> {
-    let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     let row = client.query_opt("SELECT config FROM loyalty_config WHERE id = 1", &[])
-        .await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     match row {
         Some(r) => Ok(Json(json!({ "config": r.get::<_, Value>("config") }))),
         None => Ok(Json(json!({ "config": null }))),
@@ -158,10 +169,10 @@ async fn update_loyalty_config(
     Json(body): Json<Value>,
 ) -> Result<Json<Value>, StatusCode> {
     check_admin(&headers, &state)?;
-    let client = state.db.pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     client.execute(
         "INSERT INTO loyalty_config (id, config) VALUES (1, $1) ON CONFLICT (id) DO UPDATE SET config = $1",
         &[&body],
-    ).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    ).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     Ok(Json(json!({ "success": true })))
 }

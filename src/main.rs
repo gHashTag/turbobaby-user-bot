@@ -37,7 +37,7 @@ use teloxide::prelude::*;
 #[cfg(not(target_arch = "wasm32"))]
 use tower_http::cors::{Any, CorsLayer};
 #[cfg(not(target_arch = "wasm32"))]
-use tower_http::services::{ServeDir, ServeFile};
+use tower_http::services::ServeDir;
 #[cfg(not(target_arch = "wasm32"))]
 use tower_http::set_header::SetResponseHeaderLayer;
 #[cfg(not(target_arch = "wasm32"))]
@@ -88,10 +88,6 @@ struct CachedFile {
     content_type: &'static str,
 }
 
-#[cfg(not(target_arch = "wasm32"))]
-fn html_escape(s: &str) -> String {
-    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
-}
 
 #[cfg(not(target_arch = "wasm32"))]
 async fn alert_5xx_middleware(
@@ -108,32 +104,11 @@ async fn alert_5xx_middleware(
         let status = resp.status().as_u16();
         tokio::spawn(async move {
             let text = format!(
-                "\u{1F6A8} <b>5xx Error on prod</b>\n\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\n\u{1F4CD} {method} {path}\n\u{1F4A5} HTTP {status}",
-                method = html_escape(&method), path = html_escape(&path), status = status
+                "\u{1F6A8} 5xx Error on prod\n\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\n\u{1F4CD} {method} {path}\n\u{1F4A5} HTTP {status}",
+                method = method.replace('<', "«").replace('>', "»"), path = path.replace('<', "«").replace('>', "»"), status = status
             );
             crate::notify::notify_admins(&bot, &config, &text).await;
         });
-    }
-    resp
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-async fn cache_middleware(req: Request<axum::body::Body>, next: Next) -> axum::response::Response {
-    let path = req.uri().path().to_string();
-    let mut resp = next.run(req).await;
-    let h = resp.headers_mut();
-    h.remove(axum::http::header::CACHE_CONTROL);
-    if path.ends_with(".html") || path == "/" || !path.contains('-') {
-        h.insert(
-            axum::http::header::CACHE_CONTROL,
-            HeaderValue::from_static("no-store, no-cache, must-revalidate, max-age=0"),
-        );
-    } else if path.ends_with(".wasm") || path.ends_with(".js") || path.ends_with(".css") {
-        // Hashed assets — safe to cache immutably
-        h.insert(
-            axum::http::header::CACHE_CONTROL,
-            HeaderValue::from_static("public, max-age=31536000, immutable"),
-        );
     }
     resp
 }
@@ -364,8 +339,20 @@ async fn main() -> Result<()> {
                     .or_else(|| static_cache.get("index.html"));
                 if let Some(file) = cached {
                     let (body, encoding) = match pick_encoding(&headers) {
-                        Some("br") if file.br.is_some() => (file.br.clone().unwrap(), Some("br")),
-                        Some("gzip") if file.gzip.is_some() => (file.gzip.clone().unwrap(), Some("gzip")),
+                        Some("br") => {
+                            if let Some(br) = &file.br {
+                                (br.clone(), Some("br"))
+                            } else {
+                                (file.raw.clone(), None)
+                            }
+                        }
+                        Some("gzip") => {
+                            if let Some(gz) = &file.gzip {
+                                (gz.clone(), Some("gzip"))
+                            } else {
+                                (file.raw.clone(), None)
+                            }
+                        }
                         _ => (file.raw.clone(), None),
                     };
                     let mut resp = (axum::http::StatusCode::OK, body).into_response();

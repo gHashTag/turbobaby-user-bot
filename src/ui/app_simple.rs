@@ -30,7 +30,9 @@ pub fn SimpleApp() -> Element {
                 style: "text-align: center; margin-top: 40px;",
                     button {
                         onclick: move |_| {
-                            web_sys::window().unwrap().alert_with_message("Кнопка работает!").unwrap();
+                            if let Some(win) = web_sys::window() {
+                                let _ = win.alert_with_message("Кнопка работает!");
+                            }
                         },
                         style: "background: #39ff14; color: #000; border: none; padding: 18px 40px; font-size: 14px; border-radius: 10px; cursor: pointer; font-weight: bold;",
                         "🎉 Нажми меня!"

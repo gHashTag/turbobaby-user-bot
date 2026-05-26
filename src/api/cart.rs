@@ -1,6 +1,6 @@
 use axum::{
-    extract::Path,
-    http::StatusCode,
+    extract::{Path, State},
+    http::{HeaderMap, StatusCode},
     routing::get,
     Json, Router,
 };
@@ -55,10 +55,13 @@ async fn clear_cart(
     Ok(json!({"success": true}).into())
 }
 
-// Get cart by telegram_id (for admin view)
+// Get cart by telegram_id (owner only)
 async fn get_cart_by_id(
+    headers: HeaderMap,
+    State(state): State<AppState>,
     Path(telegram_id): Path<i64>,
 ) -> Result<Json<Value>, StatusCode> {
+    crate::api::auth::check_owner(&headers, &state, telegram_id)?;
     // Cart data not persisted on backend yet
     Ok(json!({"telegram_id": telegram_id, "items": [], "total": 0}).into())
 }
