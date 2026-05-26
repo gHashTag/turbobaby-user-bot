@@ -96,15 +96,17 @@ async fn add_bonus(
         return Err(StatusCode::BAD_REQUEST);
     }
     let tx_id = uuid::Uuid::new_v4().to_string();
-    let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
-    client.execute(
+    let mut client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
+    let tx = client.transaction().await.map_err(|e| { tracing::error!("DB tx error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
+    tx.execute(
         "INSERT INTO bonus_transactions (id, telegram_id, amount, tx_type, description, related_order_id) VALUES ($1,$2,$3,$4,$5,$6)",
         &[&tx_id, &telegram_id, &req.amount, &req.tx_type, &req.description, &req.related_order_id],
     ).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
-    client.execute(
+    tx.execute(
         "UPDATE loyalty_profiles SET bonus_balance = bonus_balance + $1 WHERE telegram_id = $2",
         &[&req.amount, &telegram_id],
     ).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
+    tx.commit().await.map_err(|e| { tracing::error!("DB commit error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     Ok(Json(json!({ "success": true, "tx_id": tx_id })))
 }
 
