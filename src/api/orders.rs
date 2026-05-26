@@ -63,6 +63,9 @@ async fn create_order(
         return Err(StatusCode::BAD_REQUEST);
     }
     // Sanity-check frontend math: total must equal subtotal minus bonus (within 1 satang).
+    if bonus_used > req.subtotal + 0.01 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
     let expected_total = (req.subtotal - bonus_used).max(0.0);
     if (req.total - expected_total).abs() > 0.01 {
         return Err(StatusCode::BAD_REQUEST);

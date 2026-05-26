@@ -71,7 +71,7 @@ impl TelegramApp {
 
     /// Set main button text and show it
     pub fn set_main_button_text(&self, text: &str) {
-        let escaped = text.replace('\\', "\\\\").replace('"', "\\\"");
+        let escaped = text.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', "\\n").replace('\r', "\\r").replace('\t', "\\t");
         let _ = document::eval(&format!(
             r#"if(window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.MainButton) {{ window.Telegram.WebApp.MainButton.setText("{}"); window.Telegram.WebApp.MainButton.show(); }}"#,
             escaped
@@ -111,7 +111,7 @@ impl TelegramApp {
 
     /// Show alert/popup
     pub fn show_alert(&self, message: &str) {
-        let escaped = message.replace('\\', "\\\\").replace('"', "\\\"");
+        let escaped = message.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', "\\n").replace('\r', "\\r").replace('\t', "\\t");
         let _ = document::eval(&format!(
             r#"if(window.Telegram && window.Telegram.WebApp) {{ window.Telegram.WebApp.showAlert("{}"); }}"#,
             escaped

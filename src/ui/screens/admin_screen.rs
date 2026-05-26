@@ -2565,28 +2565,21 @@ fn render_image_upload(mut image_url: Signal<String>) -> Element {
 #[component]
 fn VideoUpload(mut video_url: Signal<String>) -> Element {
     let mut uploading = use_signal(|| false);
-    let mut local_url = use_signal(|| video_url.read().clone());
+    let upload_result: Signal<Option<String>> = use_signal(|| None);
     
-    // Sync from parent
+    // Apply upload result to video_url from within component context
     use_effect(move || {
-        let parent_val = video_url.read();
-        if *local_url.read() != *parent_val {
-            local_url.set(parent_val.clone());
-        }
-    });
-    
-    // Sync to parent
-    use_effect(move || {
-        let local_val = local_url.read();
-        if *video_url.read() != *local_val {
-            video_url.set(local_val.clone());
+        if let Some(url) = upload_result.read().as_ref() {
+            web_sys::console::log_1(&format!("[VideoUpload] Applying upload result: {}", url).into());
+            video_url.set(url.clone());
+            upload_result.set(None);
         }
     });
     
     rsx! {
         div { style: "display:flex;gap:6px;align-items:center;",
-            input { style: "flex:1;{input_style()}", placeholder: "URL видео", value: "{local_url}",
-                oninput: move |e| local_url.set(e.value()) }
+            input { style: "flex:1;{input_style()}", placeholder: "URL видео", value: "{video_url}",
+                oninput: move |e| video_url.set(e.value()) }
             if *uploading.read() {
                 div { style: "padding:10px 12px;background:#1a1a2e;color:#6699ff;border:1px dashed #2a2a4a;border-radius:4px;font-size:13px;white-space:nowrap;", "⏳ Загрузка..." }
             } else {
@@ -2597,7 +2590,8 @@ fn VideoUpload(mut video_url: Signal<String>) -> Element {
                             let result = upload_video().await;
                             uploading.set(false);
                             if let Some(url) = result {
-                                local_url.set(url);
+                                web_sys::console::log_1(&format!("[VideoUpload] Upload done: {}", url).into());
+                                upload_result.set(Some(url));
                             }
                         });
                     },
@@ -2605,9 +2599,9 @@ fn VideoUpload(mut video_url: Signal<String>) -> Element {
                 }
             }
         }
-        if !local_url.read().is_empty() {
+        if !video_url.read().is_empty() {
             div { style: "margin-top:4px;",
-                video { src: "{local_url}", controls: true, style: "width:120px;height:80px;object-fit:cover;border-radius:6px;border:1px solid #2a2a4a;" }
+                video { src: "{video_url}", controls: true, style: "width:120px;height:80px;object-fit:cover;border-radius:6px;border:1px solid #2a2a4a;" }
             }
         }
     }
