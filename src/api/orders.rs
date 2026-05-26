@@ -101,7 +101,7 @@ async fn create_order(
     }
 
     tx.execute(
-        "INSERT INTO orders (id, telegram_id, customer_name, customer_phone, customer_telegram, items, subtotal, bonus_used, total, status, shop_id) VALUES ($1, $2, $3, $4, $5, $6, $7::float8, $8::float8, $9::float8, 'pending', $10)",
+        "INSERT INTO orders (id, telegram_id, customer_name, customer_phone, customer_telegram, items, subtotal, bonus_used, total, status, shop_id) VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::float8, $8::float8, $9::float8, 'pending', $10)",
         &[&id, &req.telegram_id, &req.customer_name, &req.customer_phone, &req.customer_telegram, &items_json, &req.subtotal, &bonus_used, &req.total, &req.shop_id],
     ).await.map_err(|e| { error!("create_order insert error: {}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
 

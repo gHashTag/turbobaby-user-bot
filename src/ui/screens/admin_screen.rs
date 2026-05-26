@@ -2581,6 +2581,8 @@ fn VideoUpload(mut video_url: Signal<String>) -> Element {
     });
     
     rsx! {
+        // Force Dioxus to subscribe to upload_result changes
+        div { style: "display:none;", "{upload_result.read().as_ref().clone().unwrap_or_default()}" }
         div { style: "display:flex;gap:6px;align-items:center;",
             input { style: "flex:1;{input_style()}", placeholder: "URL видео", value: "{video_url}",
                 oninput: move |e| video_url.set(e.value()) }

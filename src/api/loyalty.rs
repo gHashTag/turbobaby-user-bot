@@ -171,6 +171,14 @@ async fn update_loyalty_config(
     Json(body): Json<Value>,
 ) -> Result<Json<Value>, StatusCode> {
     check_admin(&headers, &state)?;
+    // Validate required numeric fields
+    let required = ["gold_threshold", "silver_threshold", "bronze_threshold", "referral_bonus"];
+    for key in required {
+        let val = body.get(key).and_then(|v| v.as_f64());
+        if val.is_none() || val.unwrap() < 0.0 || !val.unwrap().is_finite() {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    }
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     client.execute(
         "INSERT INTO loyalty_config (id, config) VALUES (1, $1) ON CONFLICT (id) DO UPDATE SET config = $1",

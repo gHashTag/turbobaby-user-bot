@@ -624,6 +624,15 @@ async fn update_config(
         })?;
 
     // BUG-5: is_enabled в БД — BOOLEAN, раньше передавался i32 → type mismatch.
+    if let Some(p) = req.reward_discount_percent {
+        if p > 100 { return Err(StatusCode::BAD_REQUEST); }
+    }
+    if let Some(p) = req.reward_bonus_points {
+        if p > 1_000_000 { return Err(StatusCode::BAD_REQUEST); }
+    }
+    if let Some(d) = req.reward_expiration_days {
+        if d == 0 || d > 365 { return Err(StatusCode::BAD_REQUEST); }
+    }
     let is_enabled = req.is_enabled;
     let reward_discount_percent = req.reward_discount_percent.map(|p| p as i32);
     let reward_bonus_points = req.reward_bonus_points.map(|p| p as i32);
