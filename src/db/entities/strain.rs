@@ -40,6 +40,9 @@ pub struct Model {
     pub effect_en: Option<String>,
     pub flavor_profile_en: Option<String>,
     pub strain_type_en: Option<String>,
+
+    // ── Media columns (022_strains_video_url.sql) ────────────────────
+    pub video_url: Option<String>,
 }
 
 #[allow(dead_code)] // Standard SeaORM entity pattern

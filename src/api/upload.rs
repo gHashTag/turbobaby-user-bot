@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Multipart, State},
+    extract::{DefaultBodyLimit, Multipart, State},
     http::{HeaderMap, StatusCode},
     routing::post,
     Json, Router,
@@ -12,6 +12,7 @@ use crate::AppState;
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/upload", post(upload_file))
+        .layer(DefaultBodyLimit::max(110 * 1024 * 1024))
 }
 
 const MAX_UPLOAD_SIZE: usize = 100 * 1024 * 1024; // 100 MB

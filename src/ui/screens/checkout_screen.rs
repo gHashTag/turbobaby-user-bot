@@ -10,7 +10,12 @@ use crate::trios::core::Lang;
 use crate::trios::i18n::{t, T_CHECKOUT_TITLE, T_YOUR_ORDER, T_YOUR_INFO, T_PICKUP_LOCATION, T_DELIVERY, T_PAYMENT, T_PLACE_ORDER, T_BACK, T_TOTAL};
 
 fn to_trios_items(items: &[CartItem]) -> Vec<crate::trios::store::CartItem> {
-    items.iter().map(|i| crate::trios::store::CartItem::new_strain(i.id.clone(), i.quantity)).collect()
+    items.iter().map(|i| match i.item_type {
+        CartItemType::Strain => crate::trios::store::CartItem::new_strain(i.id.clone(), i.quantity),
+        CartItemType::Accessory => crate::trios::store::CartItem::new_accessory(i.id.clone(), i.quantity),
+        CartItemType::Tea => crate::trios::store::CartItem::new_tea(i.id.clone(), i.quantity),
+        CartItemType::Set => crate::trios::store::CartItem::new_set(i.id.clone(), i.quantity),
+    }).collect()
 }
 
 #[component]

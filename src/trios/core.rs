@@ -105,7 +105,7 @@ impl Clone for Error {
                 std::io::ErrorKind::Other,
                 "cloned io error",
             )),
-            Error::Json(_) => Error::Json(serde_json::from_str::<serde_json::Value>("{}").unwrap_err()),
+            Error::Json(_) => Error::Json(serde_json::from_str::<serde_json::Value>("").unwrap_err()),
             Error::Other(s) => Error::Other(s.clone()),
             Error::Database(s) => Error::Database(s.clone()),
             Error::Config(s) => Error::Config(s.clone()),

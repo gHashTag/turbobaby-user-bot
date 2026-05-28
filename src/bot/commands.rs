@@ -6,6 +6,8 @@ use teloxide::{
 };
 
 use crate::{config::Config, db::Database, db::referrals as ref_db, locales::*, ai::{AiClient, get_random_joke_prompt, get_random_fact_prompt}, notify::notify_admins};
+use crate::bot::{AI_RATE_LIMIT, AI_COOLDOWN};
+use std::time::{Duration, Instant};
 
 #[derive(BotCommands, Clone)]
 #[command(rename_rule = "lowercase", description = "Woody Bot commands:")]
@@ -77,6 +79,12 @@ pub async fn handle_command(
     config: Arc<Config>,
 ) -> Result<(), teloxide::RequestError> {
     let user_id = msg.from.as_ref().map(|u| u.id.0 as i64).unwrap_or(0);
+
+    // Blocked-user guard
+    if db.is_user_blocked(user_id).await.unwrap_or(false) {
+        return Ok(());
+    }
+
     let existing_lang = db.get_user_lang(user_id).await;
     let is_new_user = existing_lang.is_none();
     let lang = existing_lang
@@ -215,6 +223,17 @@ pub async fn handle_command(
         }
 
         Command::Joke => {
+            {
+                let now = Instant::now();
+                let mut map = AI_RATE_LIMIT.lock().await;
+                map.retain(|_, last| now.duration_since(*last) < Duration::from_secs(300));
+                if let Some(last) = map.get(&user_id) {
+                    if now.duration_since(*last) < AI_COOLDOWN {
+                        return Ok(());
+                    }
+                }
+                map.insert(user_id, now);
+            }
             let thinking = bot.send_message(msg.chat.id, &locale.joke_thinking).await?;
             let ai = AiClient::new(config.grok_api_key.clone(), config.glm_api_key.clone());
             let prompt = get_random_joke_prompt(&locale.joke_prompt, None);
@@ -231,6 +250,17 @@ pub async fn handle_command(
         }
 
         Command::Fact => {
+            {
+                let now = Instant::now();
+                let mut map = AI_RATE_LIMIT.lock().await;
+                map.retain(|_, last| now.duration_since(*last) < Duration::from_secs(300));
+                if let Some(last) = map.get(&user_id) {
+                    if now.duration_since(*last) < AI_COOLDOWN {
+                        return Ok(());
+                    }
+                }
+                map.insert(user_id, now);
+            }
             let thinking = bot.send_message(msg.chat.id, &locale.fact_thinking).await?;
             let ai = AiClient::new(config.grok_api_key.clone(), config.glm_api_key.clone());
             let prompt = get_random_fact_prompt(&locale.fact_prompt);

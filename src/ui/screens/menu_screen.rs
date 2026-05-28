@@ -285,6 +285,7 @@ fn render_strain_card(strain: ApiStrain, mut cart: Signal<Cart>) -> Element {
     let alt_name = strain.name.clone();
     let img_url_bust = if img_url.is_empty() { String::new() } else { format!("{}?v=2", img_url) };
     let video_url = strain.video_url.clone().unwrap_or_default();
+    web_sys::console::log_1(&format!("[MENU] Strain {} video_url={:?}", strain.id, strain.video_url).into());
     let has_video = !video_url.is_empty();
     let mut show_video = use_signal(|| false);
 

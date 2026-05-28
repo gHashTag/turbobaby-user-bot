@@ -7,7 +7,7 @@ use crate::ui::components::Loading;
 #[component]
 pub fn Sets() -> Element {
     let sets = use_resource(|| async move {
-        match ApiClient::new(String::new()).get_sets().await {
+        match ApiClient::new(String::new(), String::new()).get_sets().await {
             Ok(s) => s,
             Err(_) => mock_sets(),
         }

@@ -24,7 +24,7 @@ fn get_base_url() -> String {
 /// Provider component for ApiClient
 #[component]
 pub fn ApiClientProvider(children: Element) -> Element {
-    let api_client = use_hook(|| Arc::new(ApiClient::new(get_base_url())));
+    let api_client = use_hook(|| Arc::new(ApiClient::new(get_base_url(), String::new())));
 
     provide_context(api_client);
     rsx! {

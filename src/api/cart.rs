@@ -7,6 +7,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
+use crate::api::auth::{check_owner, check_not_blocked};
 use crate::AppState;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -40,11 +41,13 @@ async fn get_cart(
 
 // Save cart (optional - for future cart persistence feature)
 async fn save_cart(
-    axum::extract::Query(_params): axum::extract::Query<std::collections::HashMap<String, String>>,
-    Json(_req): Json<Cart>,
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    Json(req): Json<Cart>,
 ) -> Result<Json<Value>, StatusCode> {
+    check_owner(&headers, &state, req.telegram_id)?;
+    check_not_blocked(&state, req.telegram_id).await?;
     // Cart persistence can be implemented here later
-    // Currently returns success for compatibility
     Ok(json!({"success": true}).into())
 }
 
@@ -61,7 +64,8 @@ async fn get_cart_by_id(
     State(state): State<AppState>,
     Path(telegram_id): Path<i64>,
 ) -> Result<Json<Value>, StatusCode> {
-    crate::api::auth::check_owner(&headers, &state, telegram_id)?;
+    check_owner(&headers, &state, telegram_id)?;
+    check_not_blocked(&state, telegram_id).await?;
     // Cart data not persisted on backend yet
     Ok(json!({"telegram_id": telegram_id, "items": [], "total": 0}).into())
 }

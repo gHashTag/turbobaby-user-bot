@@ -88,6 +88,10 @@ struct CachedFile {
     content_type: &'static str,
 }
 
+/// Global rate-limit for 5xx admin alerts (one per minute) to prevent DoS amplification.
+#[cfg(not(target_arch = "wasm32"))]
+static LAST_5XX_ALERT: std::sync::LazyLock<std::sync::Mutex<Option<std::time::Instant>>> =
+    std::sync::LazyLock::new(|| std::sync::Mutex::new(None));
 
 #[cfg(not(target_arch = "wasm32"))]
 async fn alert_5xx_middleware(
@@ -99,16 +103,33 @@ async fn alert_5xx_middleware(
     let path = req.uri().path().to_string();
     let resp = next.run(req).await;
     if resp.status().is_server_error() {
-        let bot = state.bot.clone();
-        let config = state.config.clone();
-        let status = resp.status().as_u16();
-        tokio::spawn(async move {
-            let text = format!(
-                "\u{1F6A8} 5xx Error on prod\n\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\n\u{1F4CD} {method} {path}\n\u{1F4A5} HTTP {status}",
-                method = method.replace('<', "«").replace('>', "»"), path = path.replace('<', "«").replace('>', "»"), status = status
-            );
-            crate::notify::notify_admins(&bot, &config, &text).await;
-        });
+        let should_alert = {
+            let mut last = LAST_5XX_ALERT.lock().unwrap_or_else(|e| e.into_inner());
+            let now = std::time::Instant::now();
+            if let Some(t) = *last {
+                if now.duration_since(t).as_secs() < 60 {
+                    false
+                } else {
+                    *last = Some(now);
+                    true
+                }
+            } else {
+                *last = Some(now);
+                true
+            }
+        };
+        if should_alert {
+            let bot = state.bot.clone();
+            let config = state.config.clone();
+            let status = resp.status().as_u16();
+            tokio::spawn(async move {
+                let text = format!(
+                    "\u{1F6A8} 5xx Error on prod\n\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\n\u{1F4CD} {method} {path}\n\u{1F4A5} HTTP {status}",
+                    method = method.replace('<', "«").replace('>', "»"), path = path.replace('<', "«").replace('>', "»"), status = status
+                );
+                crate::notify::notify_admins(&bot, &config, &text).await;
+            });
+        }
     }
     resp
 }

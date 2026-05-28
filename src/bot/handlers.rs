@@ -1,4 +1,7 @@
 use std::sync::Arc;
+use std::collections::HashMap;
+use std::time::{Duration, Instant};
+use tokio::sync::Mutex;
 use teloxide::{
     prelude::*,
     types::{InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo},
@@ -6,6 +9,7 @@ use teloxide::{
 
 use crate::{config::Config, db::Database, locales::*, ai::{AiClient}};
 use crate::bot::commands::build_app_url;
+use crate::bot::{AI_RATE_LIMIT, AI_COOLDOWN};
 
 fn web_app_btn(text: &str, url: &str) -> InlineKeyboardButton {
     match url.parse() {
@@ -45,11 +49,27 @@ pub async fn handle_text(
     let is_group = matches!(msg.chat.kind, teloxide::types::ChatKind::Public(_));
     let user_id = msg.from.as_ref().map(|u| u.id.0 as i64).unwrap_or(0);
 
+    // Blocked-user guard
+    if db.is_user_blocked(user_id).await.unwrap_or(false) {
+        return Ok(());
+    }
+
     let lang = detect_language(&text);
     let locale = get_locale(lang);
 
-    // Mark user unblocked
-    db.mark_user_unblocked(user_id).await.ok();
+    // AI rate-limit: 1 request per 5 seconds per user
+    {
+        let now = Instant::now();
+        let mut map = AI_RATE_LIMIT.lock().await;
+        map.retain(|_, last| now.duration_since(*last) < Duration::from_secs(300));
+        if let Some(last) = map.get(&user_id) {
+            if now.duration_since(*last) < AI_COOLDOWN {
+                tracing::warn!("AI rate limit hit for user_id={}", user_id);
+                return Ok(());
+            }
+        }
+        map.insert(user_id, now);
+    }
 
     let ai = AiClient::new(config.grok_api_key.clone(), config.glm_api_key.clone());
     let user = msg.from.as_ref();
@@ -93,9 +113,16 @@ pub async fn handle_text(
 pub async fn handle_web_app_data(
     _bot: Bot,
     msg: Message,
-    _db: Arc<Database>,
+    db: Arc<Database>,
     _config: Arc<Config>,
 ) -> Result<(), teloxide::RequestError> {
+    let user_id = msg.from.as_ref().map(|u| u.id.0 as i64).unwrap_or(0);
+
+    // Blocked-user guard
+    if db.is_user_blocked(user_id).await.unwrap_or(false) {
+        return Ok(());
+    }
+
     if let Some(data) = msg.web_app_data() {
         if let Ok(json) = serde_json::from_str::<serde_json::Value>(&data.data) {
             if json["type"] == "order" {

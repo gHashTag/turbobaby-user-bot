@@ -43,6 +43,9 @@ fn mime_from_filename(filename: &str) -> &'static str {
         "png" => "image/png",
         "webp" => "image/webp",
         "gif" => "image/gif",
+        "mp4" => "video/mp4",
+        "mov" => "video/quicktime",
+        "webm" => "video/webm",
         _ => "application/octet-stream",
     }
 }

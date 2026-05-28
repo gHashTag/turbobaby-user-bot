@@ -1,7 +1,7 @@
 use dioxus::prelude::*;
 use serde::Deserialize;
 use crate::ui::api::context::api_base_url;
-use crate::ui::telegram::use_telegram_id;
+use crate::ui::telegram::{use_telegram_id, use_telegram_init_data};
 
 #[derive(Debug, Clone, Default, Deserialize, PartialEq)]
 pub struct ReferralStats {
@@ -81,12 +81,14 @@ pub fn Referrals() -> Element {
     let leaderboard = use_signal(Vec::<TopReferrer>::new);
     let loading = use_signal(|| true);
     let mut copied = use_signal(|| false);
+    let init_data = use_telegram_init_data();
 
     {
         let mut me_c = referral_me;
         let mut board_c = leaderboard;
         let mut loading_c = loading;
         let tid = telegram_id;
+        let init = init_data.clone();
         use_hook(move || {
             if tid == 0 {
                 me_c.set(ReferralMe {
@@ -101,7 +103,11 @@ pub fn Referrals() -> Element {
                 let base = api_base_url();
                 let client = reqwest::Client::new();
 
-                if let Ok(resp) = client.get(format!("{}/api/referrals/me/{}", base, tid)).send().await {
+                if let Ok(resp) = client
+                    .get(format!("{}/api/referrals/me/{}", base, tid))
+                    .header("X-Telegram-Init-Data", &init)
+                    .send().await
+                {
                     if let Ok(text) = resp.text().await {
                         if let Ok(me) = serde_json::from_str::<ReferralMe>(&text) {
                             me_c.set(me);

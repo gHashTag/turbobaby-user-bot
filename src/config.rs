@@ -42,10 +42,8 @@ impl Config {
         let admin_ids = if !env_ids.is_empty() {
             env_ids
         } else {
-            vec![
-                8420420131, // shop owner
-                144022504,  // operator
-            ]
+            tracing::warn!("ADMIN_IDS not set — no admins configured");
+            vec![]
         };
 
         // The backend service serves BOTH the API and the WASM frontend on the same origin.

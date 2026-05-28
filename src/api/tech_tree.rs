@@ -25,19 +25,19 @@ async fn get_tech_nodes(State(state): State<AppState>) -> Result<Json<Value>, St
     ).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
 
     let nodes: Vec<Value> = rows.iter().map(|r| json!({
-        "id":              r.get::<_, String>("id"),
-        "name":            r.get::<_, String>("name"),
-        "description":     r.get::<_, String>("description"),
-        "category":        r.get::<_, String>("category"),
-        "icon":            r.get::<_, String>("icon"),
-        "status":          r.get::<_, String>("status"),
-        "xp_required":     r.get::<_, i32>("xp_required"),
-        "xp_reward":       r.get::<_, i32>("xp_reward"),
-        "dependencies":    r.get::<_, Vec<String>>("dependencies"),
-        "unlocks":         r.get::<_, Vec<String>>("unlocks"),
-        "features":        r.get::<_, Vec<String>>("features"),
-        "estimated_hours": r.get::<_, i32>("estimated_hours"),
-        "priority":        r.get::<_, i32>("priority"),
+        "id":              r.try_get::<_, String>("id").unwrap_or_default(),
+        "name":            r.try_get::<_, String>("name").unwrap_or_default(),
+        "description":     r.try_get::<_, String>("description").unwrap_or_default(),
+        "category":        r.try_get::<_, String>("category").unwrap_or_default(),
+        "icon":            r.try_get::<_, String>("icon").unwrap_or_default(),
+        "status":          r.try_get::<_, String>("status").unwrap_or_default(),
+        "xp_required":     r.try_get::<_, i32>("xp_required").unwrap_or(0),
+        "xp_reward":       r.try_get::<_, i32>("xp_reward").unwrap_or(0),
+        "dependencies":    r.try_get::<_, Vec<String>>("dependencies").unwrap_or_default(),
+        "unlocks":         r.try_get::<_, Vec<String>>("unlocks").unwrap_or_default(),
+        "features":        r.try_get::<_, Vec<String>>("features").unwrap_or_default(),
+        "estimated_hours": r.try_get::<_, i32>("estimated_hours").unwrap_or(0),
+        "priority":        r.try_get::<_, i32>("priority").unwrap_or(0),
     })).collect();
 
     Ok(Json(json!({ "nodes": nodes, "total": nodes.len() })))
@@ -58,19 +58,19 @@ async fn get_tech_node(
     match row {
         Some(r) => Ok(Json(json!({
             "node": {
-                "id":              r.get::<_, String>("id"),
-                "name":            r.get::<_, String>("name"),
-                "description":     r.get::<_, String>("description"),
-                "category":        r.get::<_, String>("category"),
-                "icon":            r.get::<_, String>("icon"),
-                "status":          r.get::<_, String>("status"),
-                "xp_required":     r.get::<_, i32>("xp_required"),
-                "xp_reward":       r.get::<_, i32>("xp_reward"),
-                "dependencies":    r.get::<_, Vec<String>>("dependencies"),
-                "unlocks":         r.get::<_, Vec<String>>("unlocks"),
-                "features":        r.get::<_, Vec<String>>("features"),
-                "estimated_hours": r.get::<_, i32>("estimated_hours"),
-                "priority":        r.get::<_, i32>("priority"),
+                "id":              r.try_get::<_, String>("id").unwrap_or_default(),
+                "name":            r.try_get::<_, String>("name").unwrap_or_default(),
+                "description":     r.try_get::<_, String>("description").unwrap_or_default(),
+                "category":        r.try_get::<_, String>("category").unwrap_or_default(),
+                "icon":            r.try_get::<_, String>("icon").unwrap_or_default(),
+                "status":          r.try_get::<_, String>("status").unwrap_or_default(),
+                "xp_required":     r.try_get::<_, i32>("xp_required").unwrap_or(0),
+                "xp_reward":       r.try_get::<_, i32>("xp_reward").unwrap_or(0),
+                "dependencies":    r.try_get::<_, Vec<String>>("dependencies").unwrap_or_default(),
+                "unlocks":         r.try_get::<_, Vec<String>>("unlocks").unwrap_or_default(),
+                "features":        r.try_get::<_, Vec<String>>("features").unwrap_or_default(),
+                "estimated_hours": r.try_get::<_, i32>("estimated_hours").unwrap_or(0),
+                "priority":        r.try_get::<_, i32>("priority").unwrap_or(0),
             }
         }))),
         None => Err(StatusCode::NOT_FOUND),
@@ -86,13 +86,13 @@ async fn get_achievements(State(state): State<AppState>) -> Result<Json<Value>, 
     ).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
 
     let achievements: Vec<Value> = rows.iter().map(|r| json!({
-        "id":          r.get::<_, String>("id"),
-        "name":        r.get::<_, String>("name"),
-        "description": r.get::<_, String>("description"),
-        "icon":        r.get::<_, String>("icon"),
-        "xp_reward":   r.get::<_, i32>("xp_reward"),
-        "requirement": r.get::<_, String>("requirement"),
-        "category":    r.get::<_, String>("category"),
+        "id":          r.try_get::<_, String>("id").unwrap_or_default(),
+        "name":        r.try_get::<_, String>("name").unwrap_or_default(),
+        "description": r.try_get::<_, String>("description").unwrap_or_default(),
+        "icon":        r.try_get::<_, String>("icon").unwrap_or_default(),
+        "xp_reward":   r.try_get::<_, i32>("xp_reward").unwrap_or(0),
+        "requirement": r.try_get::<_, String>("requirement").unwrap_or_default(),
+        "category":    r.try_get::<_, String>("category").unwrap_or_default(),
     })).collect();
 
     Ok(Json(json!({ "achievements": achievements, "total": achievements.len() })))

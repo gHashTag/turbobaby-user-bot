@@ -41,11 +41,11 @@ const MIGRATION_SQL: &str = concat!(
     include_str!("../../migrations/018_seed_tea_products.sql"),
     include_str!("../../migrations/019_add_default_images.sql"),
     include_str!("../../migrations/020_force_double_precision.sql"),
-    include_str!("../../migrations/020_hunt_checkpoints_fields.sql"),
-    include_str!("../../migrations/021_orders_telegram_nullable.sql"),
+    include_str!("../../migrations/021_hunt_checkpoints_fields.sql"),
     include_str!("../../migrations/022_strains_video_url.sql"),
     include_str!("../../migrations/023_managers_commission_rate.sql"),
     include_str!("../../migrations/024_catalog_video_url.sql"),
+    include_str!("../../migrations/025_orders_telegram_nullable.sql"),
 );
 
 type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
@@ -247,6 +247,15 @@ impl Database {
             &[&telegram_id],
         ).await?;
         Ok(())
+    }
+
+    pub async fn is_user_blocked(&self, telegram_id: i64) -> Result<bool> {
+        let client = self.pool.get().await?;
+        let row = client.query_opt(
+            "SELECT is_blocked FROM loyalty_profiles WHERE telegram_id = $1",
+            &[&telegram_id],
+        ).await?;
+        Ok(row.map(|r| r.try_get("is_blocked").unwrap_or(false)).unwrap_or(false))
     }
 
     pub async fn get_strains_of_day(&self) -> Result<Vec<StrainOfDay>> {

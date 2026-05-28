@@ -21,18 +21,18 @@ pub struct Order {
 impl Order {
     pub fn from_row(row: &Row) -> Self {
         Self {
-            id: row.get("id"),
-            telegram_id: row.get("telegram_id"),
-            customer_name: row.get("customer_name"),
-            customer_phone: row.get("customer_phone"),
-            customer_telegram: row.get("customer_telegram"),
-            items: row.get("items"),
-            subtotal: row.get("subtotal"),
-            bonus_used: row.get("bonus_used"),
-            total: row.get("total"),
-            status: row.get("status"),
-            shop_id: row.get("shop_id"),
-            created_at: row.get("created_at"),
+            id: row.try_get("id").unwrap_or_default(),
+            telegram_id: row.try_get("telegram_id").ok().flatten(),
+            customer_name: row.try_get("customer_name").ok().flatten(),
+            customer_phone: row.try_get("customer_phone").ok().flatten(),
+            customer_telegram: row.try_get("customer_telegram").ok().flatten(),
+            items: row.try_get("items").unwrap_or(Value::Null),
+            subtotal: row.try_get::<_, f64>("subtotal").unwrap_or(0.0),
+            bonus_used: row.try_get::<_, f64>("bonus_used").unwrap_or(0.0),
+            total: row.try_get::<_, f64>("total").unwrap_or(0.0),
+            status: row.try_get("status").unwrap_or_default(),
+            shop_id: row.try_get("shop_id").ok().flatten(),
+            created_at: row.try_get("created_at").unwrap_or_else(|_| chrono::Utc::now()),
         }
     }
 }
@@ -69,41 +69,46 @@ pub async fn complete_order_and_update_loyalty(
     ).await?;
 
     let result = if let Some(row) = order_row {
-        let cid: i64 = row.get("telegram_id");
-        let total: f64 = row.get("total");
-        let status: String = row.get("status");
+        let cid: Option<i64> = row.try_get("telegram_id").ok().flatten();
+        let total: f64 = row.try_get::<_, f64>("total").unwrap_or(0.0);
+        let status: String = row.try_get("status").unwrap_or_default();
         if status != "completed" {
-            let count_before = tx.query_one(
-                "SELECT COUNT(*) as cnt FROM orders WHERE telegram_id = $1 AND status = 'completed'",
-                &[&cid],
-            ).await?.get::<_, i64>("cnt");
-            let is_first = count_before == 0;
-
             tx.execute(
                 "UPDATE orders SET status = 'completed' WHERE id = $1",
                 &[&order_id],
             ).await?;
 
-            tx.execute(
-                "INSERT INTO loyalty_profiles (telegram_id, total_spent, first_purchase_at) VALUES ($1, $2, NOW())
-                 ON CONFLICT (telegram_id) DO UPDATE SET
-                   total_spent = COALESCE(loyalty_profiles.total_spent, 0) + EXCLUDED.total_spent,
-                   first_purchase_at = COALESCE(loyalty_profiles.first_purchase_at, NOW())",
-                &[&cid, &total],
-            ).await?;
+            let loyalty_result = if let Some(cid) = cid {
+                let count_before = tx.query_one(
+                    "SELECT COUNT(*) as cnt FROM orders WHERE telegram_id = $1 AND status = 'completed'",
+                    &[&cid],
+                ).await?.try_get::<_, i64>("cnt").unwrap_or(0);
+                let is_first = count_before == 0;
 
-            tx.execute(
-                "UPDATE loyalty_profiles SET tier = CASE
-                    WHEN loyalty_profiles.total_spent >= (SELECT (config->>'gold_threshold')::float8 FROM loyalty_config WHERE id = 1 LIMIT 1) THEN 'gold'
-                    WHEN loyalty_profiles.total_spent >= (SELECT (config->>'silver_threshold')::float8 FROM loyalty_config WHERE id = 1 LIMIT 1) THEN 'silver'
-                    WHEN loyalty_profiles.total_spent >= (SELECT (config->>'bronze_threshold')::float8 FROM loyalty_config WHERE id = 1 LIMIT 1) THEN 'bronze'
-                    ELSE 'none'
-                 END
-                 WHERE telegram_id = $1",
-                &[&cid],
-            ).await?;
+                tx.execute(
+                    "INSERT INTO loyalty_profiles (telegram_id, total_spent, first_purchase_at) VALUES ($1, $2, NOW())
+                     ON CONFLICT (telegram_id) DO UPDATE SET
+                       total_spent = COALESCE(loyalty_profiles.total_spent, 0) + EXCLUDED.total_spent,
+                       first_purchase_at = COALESCE(loyalty_profiles.first_purchase_at, NOW())",
+                    &[&cid, &total],
+                ).await?;
 
-            Some((cid, is_first))
+                tx.execute(
+                    "UPDATE loyalty_profiles SET tier = CASE
+                        WHEN loyalty_profiles.total_spent >= (SELECT (config->>'gold_threshold')::float8 FROM loyalty_config WHERE id = 1 LIMIT 1) THEN 'gold'
+                        WHEN loyalty_profiles.total_spent >= (SELECT (config->>'silver_threshold')::float8 FROM loyalty_config WHERE id = 1 LIMIT 1) THEN 'silver'
+                        WHEN loyalty_profiles.total_spent >= (SELECT (config->>'bronze_threshold')::float8 FROM loyalty_config WHERE id = 1 LIMIT 1) THEN 'bronze'
+                        ELSE 'none'
+                     END
+                     WHERE telegram_id = $1",
+                    &[&cid],
+                ).await?;
+
+                Some((cid, is_first))
+            } else {
+                None
+            };
+            loyalty_result
         } else {
             None
         }

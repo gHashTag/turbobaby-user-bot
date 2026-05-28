@@ -8,7 +8,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use crate::api::auth::check_admin;
+use crate::api::auth::{check_admin, check_not_blocked};
 use crate::AppState;
 use crate::trios::garden;
 
@@ -79,6 +79,7 @@ async fn get_user_plants(
     Query(query): Query<UserPlantsQuery>,
 ) -> Result<Json<Value>, StatusCode> {
     crate::api::auth::check_owner(&headers, &state, query.telegram_id)?;
+    check_not_blocked(&state, query.telegram_id).await?;
     let client = state.db.pool.get().await
         .map_err(|e| {
             tracing::error!("Database connection error: {}", e);
@@ -102,11 +103,11 @@ async fn get_user_plants(
     let now = chrono::Utc::now().timestamp_millis();
     let plants: Vec<PlantResponse> = rows.iter().map(|r| {
         let plant = garden::Plant {
-            id: r.get(0),
-            user_id: r.get(1),
-            strain_id: r.get(2),
-            strain_name: r.get(3),
-            current_stage: match r.get::<_, String>(4).as_str() {
+            id: r.try_get(0).unwrap_or_default(),
+            user_id: r.try_get(1).unwrap_or_default(),
+            strain_id: r.try_get(2).unwrap_or_default(),
+            strain_name: r.try_get(3).unwrap_or_default(),
+            current_stage: match r.try_get::<_, String>(4).unwrap_or_default().as_str() {
                 "seed" => garden::GrowthStage::Seed,
                 "sprout" => garden::GrowthStage::Sprout,
                 "first_leaf" => garden::GrowthStage::FirstLeaf,
@@ -122,12 +123,12 @@ async fn get_user_plants(
                 "delivery" => garden::GrowthStage::Delivery,
                 _ => garden::GrowthStage::Final,
             },
-            planted_at: r.get(5),
-            is_completed: r.get(6),
-            harvested_at: r.get(7),
-            reward_claimed: r.get(8),
-            water_count: r.get(9),
-            last_watered_at: r.get(10),
+            planted_at: r.try_get(5).unwrap_or(0),
+            is_completed: r.try_get(6).unwrap_or(false),
+            harvested_at: r.try_get(7).ok(),
+            reward_claimed: r.try_get(8).unwrap_or(false),
+            water_count: r.try_get(9).unwrap_or(0),
+            last_watered_at: r.try_get(10).ok(),
         };
 
         let progress = garden::calculate_progress(&plant, now);
@@ -158,6 +159,7 @@ async fn plant_seed(
     Json(req): Json<PlantSeedRequest>,
 ) -> Result<Json<Value>, StatusCode> {
     crate::api::auth::check_owner(&headers, &state, req.telegram_id)?;
+    check_not_blocked(&state, req.telegram_id).await?;
     let client = state.db.pool.get().await
         .map_err(|e| {
             tracing::error!("Database connection error: {}", e);
@@ -234,16 +236,16 @@ async fn water_plant(
         return Ok(Json(json!({ "success": false, "error": "Plant not found" })));
     };
 
-    let user_id: String = r.get(0);
+    let user_id: String = r.try_get(0).unwrap_or_default();
     if let Ok(tid) = user_id.parse::<i64>() {
         crate::api::auth::check_owner(&headers, &state, tid)?;
         check_not_blocked(&state, tid).await?;
     }
 
-    let current_stage: String = r.get(1);
-    let is_completed: bool = r.get(2);
-    let water_count: i32 = r.get(3);
-    let last_watered_at: Option<i64> = r.get(4);
+    let current_stage: String = r.try_get(1).unwrap_or_default();
+    let is_completed: bool = r.try_get(2).unwrap_or(false);
+    let water_count: i32 = r.try_get(3).unwrap_or(0);
+    let last_watered_at: Option<i64> = r.try_get(4).ok();
 
     if is_completed {
         return Ok(Json(json!({ "success": false, "error": "Plant already completed" })));
@@ -313,13 +315,14 @@ async fn harvest_plant(
         return Ok(Json(json!({ "success": false, "error": "Plant not found" })));
     };
 
-    let user_id: String = r.get(0);
+    let user_id: String = r.try_get(0).unwrap_or_default();
     if let Ok(tid) = user_id.parse::<i64>() {
         crate::api::auth::check_owner(&headers, &state, tid)?;
+        check_not_blocked(&state, tid).await?;
     }
 
-    let is_completed: bool = r.get(3);
-    let harvested_at: Option<i64> = r.get(4);
+    let is_completed: bool = r.try_get(3).unwrap_or(false);
+    let harvested_at: Option<i64> = r.try_get(4).ok();
 
     if !is_completed {
         return Ok(Json(json!({ "success": false, "error": "Plant not ready for harvest" })));
@@ -330,9 +333,9 @@ async fn harvest_plant(
     }
 
     let now = chrono::Utc::now().timestamp_millis();
-    let user_id: String = r.get(0);
-    let strain_id: String = r.get(1);
-    let strain_name: String = r.get(2);
+    let user_id: String = r.try_get(0).unwrap_or_default();
+    let strain_id: String = r.try_get(1).unwrap_or_default();
+    let strain_name: String = r.try_get(2).unwrap_or_default();
 
     // Create reward
     let reward_id = uuid::Uuid::new_v4().to_string();
@@ -353,7 +356,11 @@ async fn harvest_plant(
         return StatusCode::INTERNAL_SERVER_ERROR;
     })?;
     let (discount_percent, bonus_points, expiration_days) = match config_row {
-        Some(r) => (r.get::<_, i32>(0), r.get::<_, i32>(1), r.get::<_, i32>(2)),
+        Some(r) => (
+            r.try_get::<_, i32>(0).unwrap_or(10),
+            r.try_get::<_, i32>(1).unwrap_or(100),
+            r.try_get::<_, i32>(2).unwrap_or(7),
+        ),
         None => (10, 100, 7),
     };
     let expires_at = now + (expiration_days as i64 * 24 * 60 * 60 * 1000);
@@ -406,7 +413,7 @@ async fn harvest_plant(
     // Notify admins about garden reward
     let bot = state.bot.clone();
     let config = state.config.clone();
-    let notify_user_id = user_id.clone();
+    let notify_user_id = html_escape(&user_id);
     let notify_strain = html_escape(&strain_name);
     let notify_discount = discount_percent;
     let notify_bonus = bonus_points;
@@ -442,6 +449,7 @@ async fn get_user_rewards(
     Query(query): Query<UserRewardsQuery>,
 ) -> Result<Json<Value>, StatusCode> {
     crate::api::auth::check_owner(&headers, &state, query.telegram_id)?;
+    check_not_blocked(&state, query.telegram_id).await?;
     let client = state.db.pool.get().await
         .map_err(|e| {
             tracing::error!("Database connection error: {}", e);
@@ -463,14 +471,14 @@ async fn get_user_rewards(
     })?;
 
     let rewards: Vec<RewardResponse> = rows.iter().map(|r| {
-        let expires_at: i64 = r.get(5);
-        let is_used: bool = r.get(6);
+        let expires_at: i64 = r.try_get(5).unwrap_or(0);
+        let is_used: bool = r.try_get(6).unwrap_or(false);
         RewardResponse {
-            id: r.get(0),
-            plant_id: r.get(1),
-            strain_name: r.get(2),
-            discount_percent: r.get::<_, i32>(3) as u32,
-            bonus_points: r.get::<_, i32>(4) as u32,
+            id: r.try_get(0).unwrap_or_default(),
+            plant_id: r.try_get(1).unwrap_or_default(),
+            strain_name: r.try_get(2).unwrap_or_default(),
+            discount_percent: r.try_get::<_, i32>(3).unwrap_or(0) as u32,
+            bonus_points: r.try_get::<_, i32>(4).unwrap_or(0) as u32,
             expires_at,
             is_used,
             is_active: !is_used && expires_at > now,
@@ -508,13 +516,14 @@ async fn use_reward(
         return Ok(Json(json!({ "success": false, "error": "Reward not found" })));
     };
 
-    let user_id: String = r.get(0);
+    let user_id: String = r.try_get(0).unwrap_or_default();
     if let Ok(tid) = user_id.parse::<i64>() {
         crate::api::auth::check_owner(&headers, &state, tid)?;
+        check_not_blocked(&state, tid).await?;
     }
 
-    let is_used: bool = r.get(1);
-    let expires_at: i64 = r.get(2);
+    let is_used: bool = r.try_get(1).unwrap_or(false);
+    let expires_at: i64 = r.try_get(2).unwrap_or(0);
 
     if is_used {
         return Ok(Json(json!({ "success": false, "error": "Reward already used" })));
@@ -524,8 +533,8 @@ async fn use_reward(
         return Ok(Json(json!({ "success": false, "error": "Reward expired" })));
     }
 
-    let discount_percent: i32 = r.get(3);
-    let bonus_points: i32 = r.get(4);
+    let discount_percent: i32 = r.try_get(3).unwrap_or(0);
+    let bonus_points: i32 = r.try_get(4).unwrap_or(0);
 
     // Atomically mark used and credit bonus inside a transaction
     let tx = client.transaction().await.map_err(|e| {
@@ -599,10 +608,10 @@ async fn get_config(State(state): State<AppState>) -> Result<Json<Value>, Status
     let config = match row {
         Some(r) => {
             garden::GameConfig {
-                is_enabled: r.get(0),
-                reward_discount_percent: r.get::<_, i32>(1) as u32,
-                reward_bonus_points: r.get::<_, i32>(2) as u32,
-                reward_expiration_days: r.get::<_, i32>(3) as u32,
+                is_enabled: r.try_get(0).unwrap_or(false),
+                reward_discount_percent: r.try_get::<_, i32>(1).unwrap_or(0) as u32,
+                reward_bonus_points: r.try_get::<_, i32>(2).unwrap_or(0) as u32,
+                reward_expiration_days: r.try_get::<_, i32>(3).unwrap_or(0) as u32,
             }
         }
         None => garden::GameConfig::default(),

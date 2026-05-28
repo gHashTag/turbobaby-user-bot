@@ -1,4 +1,7 @@
 use std::sync::Arc;
+use std::collections::HashMap;
+use std::time::{Duration, Instant};
+use tokio::sync::Mutex;
 use teloxide::{
     prelude::*,
     types::{InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, MaybeInaccessibleMessage},
@@ -7,6 +10,7 @@ use teloxide::{
 use crate::{config::Config, db::Database, locales::*, ai::{AiClient, get_random_joke_prompt, get_random_fact_prompt}};
 use crate::bot::commands::build_app_url;
 use crate::db::referrals as ref_db;
+use crate::bot::{AI_RATE_LIMIT, AI_COOLDOWN};
 
 fn html_escape(s: &str) -> String {
     s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
@@ -41,6 +45,12 @@ pub async fn handle_callback(
     };
 
     let user_id = q.from.id.0 as i64;
+
+    // Blocked-user guard
+    if db.is_user_blocked(user_id).await.unwrap_or(false) {
+        return Ok(());
+    }
+
     tracing::info!(
         "callback_query received: data='{}' user_id={} username={:?} message_id={:?}",
         data, user_id, q.from.username, q.message.as_ref().map(|m| match m {
@@ -53,6 +63,23 @@ pub async fn handle_callback(
         .unwrap_or_else(|| map_telegram_lang(q.from.language_code.as_ref().map(|s| s.as_str())));
     let locale = get_locale(&lang);
     let base = &config.web_app_url;
+
+    // AI rate-limit for callbacks
+    let mut ai_allowed = true;
+    {
+        let now = Instant::now();
+        let mut map = AI_RATE_LIMIT.lock().await;
+        map.retain(|_, last| now.duration_since(*last) < Duration::from_secs(300));
+        if let Some(last) = map.get(&user_id) {
+            if now.duration_since(*last) < AI_COOLDOWN {
+                ai_allowed = false;
+            }
+        }
+        if ai_allowed {
+            map.insert(user_id, now);
+        }
+    }
+
     let ai = AiClient::new(config.grok_api_key.clone(), config.glm_api_key.clone());
 
     match data.as_str() {
@@ -63,13 +90,17 @@ pub async fn handle_callback(
     MaybeInaccessibleMessage::Regular(msg) => Some(msg),
     MaybeInaccessibleMessage::Inaccessible(_) => None,
 }) {
-                bot.edit_message_text(msg.chat.id, msg.id, &locale.joke_thinking).await.ok();
-                let joke = ai.ask_grok(&prompt, "Joker", &locale.lang_instruction).await;
-                let text = joke.map(|j| format!("😜 {}", j)).unwrap_or(locale.joke_fail_fallback.clone());
-                bot.edit_message_text(msg.chat.id, msg.id, &text)
-                    .reply_markup(InlineKeyboardMarkup::new(vec![
-                        vec![callback_btn(&format!("🔄 {}", locale.more_joke), "more_joke")]
-                    ])).await.ok();
+                if !ai_allowed {
+                    bot.edit_message_text(msg.chat.id, msg.id, "⏳ Too fast! Wait a few seconds.").await.ok();
+                } else {
+                    bot.edit_message_text(msg.chat.id, msg.id, &locale.joke_thinking).await.ok();
+                    let joke = ai.ask_grok(&prompt, "Joker", &locale.lang_instruction).await;
+                    let text = joke.map(|j| format!("😜 {}", j)).unwrap_or(locale.joke_fail_fallback.clone());
+                    bot.edit_message_text(msg.chat.id, msg.id, &text)
+                        .reply_markup(InlineKeyboardMarkup::new(vec![
+                            vec![callback_btn(&format!("🔄 {}", locale.more_joke), "more_joke")]
+                        ])).await.ok();
+                }
             }
         }
 
@@ -80,13 +111,17 @@ pub async fn handle_callback(
     MaybeInaccessibleMessage::Regular(msg) => Some(msg),
     MaybeInaccessibleMessage::Inaccessible(_) => None,
 }) {
-                bot.edit_message_text(msg.chat.id, msg.id, &locale.fact_thinking).await.ok();
-                let fact = ai.ask_grok(&prompt, "Professor", &locale.lang_instruction).await;
-                let text = fact.map(|f| format!("🧠 {}", f)).unwrap_or(locale.fact_fail_fallback.clone());
-                bot.edit_message_text(msg.chat.id, msg.id, &text)
-                    .reply_markup(InlineKeyboardMarkup::new(vec![
-                        vec![callback_btn(&format!("🔄 {}", locale.interesting_fact), "more_fact")]
-                    ])).await.ok();
+                if !ai_allowed {
+                    bot.edit_message_text(msg.chat.id, msg.id, "⏳ Too fast! Wait a few seconds.").await.ok();
+                } else {
+                    bot.edit_message_text(msg.chat.id, msg.id, &locale.fact_thinking).await.ok();
+                    let fact = ai.ask_grok(&prompt, "FactMaster", &locale.lang_instruction).await;
+                    let text = fact.map(|f| format!("🧠 {}", f)).unwrap_or(locale.fact_fail_fallback.clone());
+                    bot.edit_message_text(msg.chat.id, msg.id, &text)
+                        .reply_markup(InlineKeyboardMarkup::new(vec![
+                            vec![callback_btn(&format!("🔄 {}", locale.interesting_fact), "more_fact")]
+                        ])).await.ok();
+                }
             }
         }
 
@@ -212,7 +247,7 @@ pub async fn handle_callback(
                             &[],
                         ).await.ok().flatten();
                         let bonus: f64 = bonus_row
-                            .and_then(|r| r.get::<_, Option<String>>("bonus"))
+                            .and_then(|r| r.try_get::<_, Option<String>>("bonus").ok().flatten())
                             .and_then(|s| s.parse().ok())
                             .unwrap_or(200.0);
 
@@ -225,11 +260,15 @@ pub async fn handle_callback(
                                 &[&cid],
                             ).await.ok().flatten();
                             if let Some(ev) = event_row {
-                                let referrer_id: i64 = ev.get("referrer_id");
-                                let _ = bot.send_message(
-                                    teloxide::types::ChatId(referrer_id),
-                                    format!("🎉 {} +{:.0} ฿", locale.referral_bonus, bonus),
-                                ).await;
+                                let referrer_id: i64 = ev.try_get("referrer_id").unwrap_or(0);
+                                if referrer_id != 0 {
+                                    if let Err(e) = bot.send_message(
+                                        teloxide::types::ChatId(referrer_id),
+                                        format!("🎉 {} +{:.0} ฿", locale.referral_bonus, bonus),
+                                    ).await {
+                                        tracing::warn!("referral bonus notify failed for referrer_id={}: {}", referrer_id, e);
+                                    }
+                                }
                             }
                         }
                     }

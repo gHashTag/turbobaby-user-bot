@@ -21,7 +21,7 @@ async fn get_happy_hour(State(state): State<AppState>) -> Result<Json<Value>, St
 
     match row {
         Some(r) => {
-            let config: serde_json::Value = r.get(0);
+            let config: serde_json::Value = r.try_get(0).unwrap_or(Value::Null);
             let happy_hour = &config["happy_hour"];
             Ok(Json(json!({
                 "enabled": happy_hour["enabled"].as_bool().unwrap_or(false),

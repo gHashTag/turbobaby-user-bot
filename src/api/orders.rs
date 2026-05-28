@@ -8,7 +8,7 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 use tracing::error;
 
-use crate::api::auth::check_admin;
+use crate::api::auth::{check_admin, check_not_blocked};
 use crate::AppState;
 use crate::db::orders::{Order, OrderItem};
 
@@ -42,9 +42,16 @@ pub fn routes() -> Router<AppState> {
 }
 
 async fn create_order(
+    headers: HeaderMap,
     State(state): State<AppState>,
     Json(req): Json<CreateOrderRequest>,
 ) -> Result<Json<Value>, StatusCode> {
+    // If telegram_id is provided, verify ownership and blocked status.
+    if let Some(tid) = req.telegram_id {
+        crate::api::auth::check_owner(&headers, &state, tid)?;
+        check_not_blocked(&state, tid).await?;
+    }
+
     // Validation
     if req.items.is_empty() {
         return Err(StatusCode::BAD_REQUEST);
@@ -71,41 +78,37 @@ async fn create_order(
         return Err(StatusCode::BAD_REQUEST);
     }
 
-    // Rate-limit: не более 1 заказа в минуту от одного telegram_id.
-    if let Some(tid) = req.telegram_id {
-        let client = state.db.pool.get().await.map_err(|e| { error!("create_order pool error: {}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
-        let recent = client.query_opt(
-            "SELECT 1 FROM orders WHERE telegram_id = $1 AND created_at > NOW() - INTERVAL '1 minute' LIMIT 1",
-            &[&tid],
-        ).await.map_err(|e| { error!("rate-limit check error: {}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
-        if recent.is_some() {
-            return Err(StatusCode::TOO_MANY_REQUESTS);
-        }
-    }
-
     let id = uuid::Uuid::new_v4().to_string();
     let items_json = serde_json::to_value(&req.items)
         .map_err(|e| { error!("items serialization failed: {}", e); StatusCode::BAD_REQUEST })?;
 
-    // Atomic transaction: deduct bonus (if any) and insert order together.
+    // Atomic transaction: rate-limit check, bonus deduction, and insert order together.
     let mut client = state.db.pool.get().await.map_err(|e| { error!("create_order pool error: {}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     let tx = client.transaction().await.map_err(|e| { error!("create_order tx error: {}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
 
+    // Rate-limit inside tx to close the race window.
+    if let Some(tid) = req.telegram_id {
+        let recent = tx.query_opt(
+            "SELECT 1 FROM orders WHERE telegram_id = $1 AND created_at > NOW() - INTERVAL '1 minute' LIMIT 1",
+            &[&tid],
+        ).await.map_err(|e| { error!("rate-limit check error: {}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
+        if recent.is_some() {
+            let _ = tx.rollback().await;
+            return Err(StatusCode::TOO_MANY_REQUESTS);
+        }
+    }
+
+    // Atomic bonus deduction: UPDATE with built-in balance guard.
     if bonus_used > 0.0 {
         if let Some(tid) = req.telegram_id {
-            let row = tx.query_opt(
-                "SELECT bonus_balance::float8 FROM loyalty_profiles WHERE telegram_id = $1",
-                &[&tid],
-            ).await.map_err(|e| { error!("bonus check query error: {}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
-            let balance: f64 = row.and_then(|r| r.try_get::<_, Option<f64>>(0).ok().flatten()).unwrap_or(0.0);
-            if balance < bonus_used {
+            let deducted = tx.execute(
+                "UPDATE loyalty_profiles SET bonus_balance = GREATEST(0, bonus_balance - $1) WHERE telegram_id = $2 AND bonus_balance >= $1",
+                &[&bonus_used, &tid],
+            ).await.map_err(|e| { error!("bonus deduction error: {}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
+            if deducted == 0 {
                 let _ = tx.rollback().await;
                 return Err(StatusCode::BAD_REQUEST);
             }
-            tx.execute(
-                "UPDATE loyalty_profiles SET bonus_balance = GREATEST(0, bonus_balance - $1) WHERE telegram_id = $2",
-                &[&bonus_used, &tid],
-            ).await.map_err(|e| { error!("bonus deduction error: {}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
         } else {
             let _ = tx.rollback().await;
             return Err(StatusCode::BAD_REQUEST);
@@ -181,10 +184,13 @@ async fn notify_admins(
     ]]);
 
     for admin_id in &config.admin_ids {
-        let _ = bot.send_message(teloxide::types::ChatId(*admin_id), &text)
+        if let Err(e) = bot.send_message(teloxide::types::ChatId(*admin_id), &text)
             .parse_mode(teloxide::types::ParseMode::Html)
             .reply_markup(btns.clone())
-            .await;
+            .await
+        {
+            tracing::warn!("notify_admins (order) failed for admin_id={}: {}", admin_id, e);
+        }
     }
 }
 
@@ -260,6 +266,7 @@ async fn get_user_orders(
     Path(telegram_id): Path<i64>,
 ) -> Result<Json<Value>, StatusCode> {
     crate::api::auth::check_owner(&headers, &state, telegram_id)?;
+    check_not_blocked(&state, telegram_id).await?;
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     let rows = client.query(
         "SELECT id, telegram_id, customer_name, customer_phone, customer_telegram, items, subtotal::float8, bonus_used::float8, total::float8, status, shop_id, created_at FROM orders WHERE telegram_id = $1 ORDER BY created_at DESC LIMIT 50",

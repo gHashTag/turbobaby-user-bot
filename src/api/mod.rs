@@ -31,22 +31,26 @@ pub fn router(state: crate::AppState) -> Router {
 }
 
 fn api_routes(state: AppState) -> Router {
-    Router::new()
+    let mut router = Router::new()
         .route("/ping", get(ping_handler))
         .merge(orders::routes())
         .merge(strains::routes())
         .merge(loyalty::routes())
         .merge(admin::routes())
-        .merge(upload::routes())
         .merge(catalog::routes())
         .merge(quest::routes())
         .merge(happy_hour::routes())
         .merge(garden::routes())
         .merge(referrals::routes())
         .merge(tech_tree::routes())
-        .merge(cart::routes())
-        .layer(DefaultBodyLimit::max(110 * 1024 * 1024))
-        .with_state(state)
+        .merge(cart::routes());
+
+    // Apply 2MB body limit to all non-upload routes.
+    // Upload routes are merged AFTER this layer so their own 110MB limit remains effective.
+    router = router.layer(DefaultBodyLimit::max(2 * 1024 * 1024));
+    router = router.merge(upload::routes());
+
+    router.with_state(state)
 }
 
 async fn ping_handler() -> Json<Value> {

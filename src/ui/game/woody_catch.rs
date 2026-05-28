@@ -221,32 +221,37 @@ pub fn WoodyCatch() -> Element {
         });
     }
 
-    // ── Keyboard handler ─────────────────────────────────────────────────────
+    // ── Keyboard handler (RAII via gloo-events, auto-removed on unmount) ─────
     {
         let mut lane = lane.clone();
         let playing = playing.clone();
         let game_over = game_over.clone();
-        use_effect(move || {
-            let closure = Closure::<dyn FnMut(web_sys::KeyboardEvent)>::new(move |e: web_sys::KeyboardEvent| {
-                if !*playing.read() || *game_over.read() { return; }
-                let key = e.key();
-                if key == "ArrowLeft" || key == "a" || key == "A" {
-                    let cur = *lane.read();
-                    if cur > 0 { *lane.write() = cur - 1; }
-                }
-                if key == "ArrowRight" || key == "d" || key == "D" {
-                    let cur = *lane.read();
-                    if cur < 3 { *lane.write() = cur + 1; }
-                }
-            });
-            if let Some(win) = window() {
-                let _ = win.add_event_listener_with_callback(
-                    "keydown",
-                    closure.as_ref().unchecked_ref(),
-                );
-            }
-            closure.forget(); // Leak intentionally — runs for app lifetime
-        });
+        use_hook_with_cleanup(
+            move || {
+                let win = match window() {
+                    Some(w) => w,
+                    None => return None,
+                };
+                let listener = gloo_events::EventListener::new(&win, "keydown", move |e: &web_sys::Event| {
+                    let e: &web_sys::KeyboardEvent = match e.dyn_ref() {
+                        Some(k) => k,
+                        None => return,
+                    };
+                    if !*playing.read() || *game_over.read() { return; }
+                    let key = e.key();
+                    if key == "ArrowLeft" || key == "a" || key == "A" {
+                        let cur = *lane.read();
+                        if cur > 0 { *lane.write() = cur - 1; }
+                    }
+                    if key == "ArrowRight" || key == "d" || key == "D" {
+                        let cur = *lane.read();
+                        if cur < 3 { *lane.write() = cur + 1; }
+                    }
+                });
+                Some(std::rc::Rc::new(listener))
+            },
+            |_: Option<std::rc::Rc<gloo_events::EventListener>>| {},
+        );
     }
 
     // ── Start / Restart helper (Copy via use_callback so it can be reused) ───

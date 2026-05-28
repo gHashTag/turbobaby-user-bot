@@ -4,6 +4,7 @@ use crate::trios::garden::{GrowthStage, Plant, calculate_progress};
 use crate::trios::core::Lang;
 use crate::trios::i18n::{t, T_GARDEN_TITLE, T_GARDEN_SUBTITLE, T_BTN_WATER};
 use crate::ui::api::context::api_base_url;
+use crate::ui::telegram::{use_telegram_id, use_telegram_init_data};
 
 #[derive(Debug, Clone, serde::Deserialize)]
 struct ApiPlant {
@@ -41,9 +42,12 @@ struct GardenResponse {
     plants: Vec<ApiPlant>,
 }
 
-async fn fetch_plants() -> Result<Vec<Plant>, String> {
+async fn fetch_plants(telegram_id: i64, init_data: &str) -> Result<Vec<Plant>, String> {
     let base = api_base_url();
-    reqwest::get(format!("{}/api/garden/plants", base))
+    reqwest::Client::new()
+        .get(format!("{}/api/garden/plants?telegram_id={}", base, telegram_id))
+        .header("X-Telegram-Init-Data", init_data)
+        .send()
         .await
         .map_err(|e| e.to_string())?
         .json::<GardenResponse>()
@@ -52,10 +56,11 @@ async fn fetch_plants() -> Result<Vec<Plant>, String> {
         .map(|r| r.plants.into_iter().map(Into::into).collect())
 }
 
-async fn water_plant_api(plant_id: &str) -> Result<Plant, String> {
+async fn water_plant_api(plant_id: &str, init_data: &str) -> Result<Plant, String> {
     let base = api_base_url();
     reqwest::Client::new()
         .post(format!("{}/api/garden/plants/{}/water", base, plant_id))
+        .header("X-Telegram-Init-Data", init_data)
         .send()
         .await
         .map_err(|e| e.to_string())?
@@ -65,10 +70,11 @@ async fn water_plant_api(plant_id: &str) -> Result<Plant, String> {
         .map(Into::into)
 }
 
-async fn harvest_plant_api(plant_id: &str) -> Result<Plant, String> {
+async fn harvest_plant_api(plant_id: &str, init_data: &str) -> Result<Plant, String> {
     let base = api_base_url();
     reqwest::Client::new()
         .post(format!("{}/api/garden/plants/{}/harvest", base, plant_id))
+        .header("X-Telegram-Init-Data", init_data)
         .send()
         .await
         .map_err(|e| e.to_string())?
@@ -154,16 +160,28 @@ pub fn Garden() -> Element {
     let loading = use_signal(|| true);
     let error_msg = use_signal(|| String::new());
     let now_ms = use_signal(|| chrono::Utc::now().timestamp_millis());
+    let telegram_id = use_telegram_id().unwrap_or(0);
+    let init_data = use_telegram_init_data();
 
     {
         let mut plants_c = plants.clone();
         let mut loading_c = loading.clone();
-        use_future(move || async move {
-            match fetch_plants().await {
-                Ok(p) => { plants_c.set(p); }
-                Err(_) => { plants_c.set(mock_plants()); }
+        let tid = telegram_id;
+        let init = init_data.clone();
+        use_future(move || {
+            let value = init.clone();
+            async move {
+                if tid == 0 {
+                    plants_c.set(mock_plants());
+                    loading_c.set(false);
+                    return;
+                }
+                match fetch_plants(tid, &value).await {
+                    Ok(p) => { plants_c.set(p); }
+                    Err(_) => { plants_c.set(mock_plants()); }
+                }
+                loading_c.set(false);
             }
-            loading_c.set(false);
         });
     }
 
@@ -181,6 +199,7 @@ pub fn Garden() -> Element {
     let now = *now_ms.read();
     let is_loading = *loading.read();
     let err = error_msg.read().clone();
+    let init_for_closures = init_data.clone();
 
     let bg = "#0f0f1a";
     let bg_card = "#1a1a2e";
@@ -257,12 +276,14 @@ pub fn Garden() -> Element {
                         let plants_signal = plants.clone();
                         let error_signal = error_msg.clone();
                         let pid_for_water = pid.clone();
+                        let init_water = init_for_closures.clone();
                         let water_click = move |_| {
                             let mut ps = plants_signal.clone();
                             let mut es = error_signal.clone();
                             let plant_id = pid_for_water.clone();
+                            let init = init_water.clone();
                             spawn(async move {
-                                match water_plant_api(&plant_id).await {
+                                match water_plant_api(&plant_id, &init).await {
                                     Ok(updated) => {
                                         let mut list = ps.write();
                                         if let Some(p) = list.iter_mut().find(|p| p.id == plant_id) {
@@ -276,11 +297,13 @@ pub fn Garden() -> Element {
 
                         let plants_signal_h = plants.clone();
                         let pid_for_harvest = pid.clone();
+                        let init_harvest = init_for_closures.clone();
                         let harvest_click = move |_| {
                             let mut ps = plants_signal_h.clone();
                             let plant_id = pid_for_harvest.clone();
+                            let init = init_harvest.clone();
                             spawn(async move {
-                                let _ = harvest_plant_api(&plant_id).await;
+                                let _ = harvest_plant_api(&plant_id, &init).await;
                                 ps.write().retain(|p| p.id != plant_id);
                             });
                         };

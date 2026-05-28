@@ -652,7 +652,7 @@ fn StrainsTab() -> Element {
                                     "flavor_profile": if fp.is_empty() { serde_json::Value::Null } else { fp.into() },
                                     "description": if d.is_empty() { serde_json::Value::Null } else { d.into() },
                                     "image_url": if img.is_empty() { serde_json::Value::Null } else { img.into() },
-                                    "video_url": if vid.is_empty() { serde_json::Value::Null } else { vid.into() },
+                                    "video_url": if vid.is_empty() { serde_json::Value::Null } else { vid.clone().into() },
                                     "name_en": if ne.is_empty() { serde_json::Value::Null } else { ne.into() },
                                     "description_en": if de.is_empty() { serde_json::Value::Null } else { de.into() },
                                     "effect_en": if ee.is_empty() { serde_json::Value::Null } else { ee.into() },
@@ -949,7 +949,7 @@ fn AccessoriesTab() -> Element {
                                     "name": n, "category": c, "price": p, "stock": s_val,
                                     "description": if d.is_empty() { serde_json::Value::Null } else { d.into() },
                                     "image_url": if img.is_empty() { serde_json::Value::Null } else { img.into() },
-                                    "video_url": if vid.is_empty() { serde_json::Value::Null } else { vid.into() },
+                                    "video_url": if vid.is_empty() { serde_json::Value::Null } else { vid.clone().into() },
                                     "name_en": if ne.is_empty() { serde_json::Value::Null } else { ne.into() },
                                     "description_en": if de.is_empty() { serde_json::Value::Null } else { de.into() },
                                     "category_en": if ce.is_empty() { serde_json::Value::Null } else { ce.into() },
@@ -2847,13 +2847,14 @@ fn EditStrainCard(
                                 "flavor_profile": if fp.is_empty() { serde_json::Value::Null } else { fp.into() },
                                 "is_available": item.is_available,
                                 "image_url": if img.is_empty() { serde_json::Value::Null } else { img.into() },
-                                "video_url": if vid.is_empty() { serde_json::Value::Null } else { vid.into() },
+                                "video_url": if vid.is_empty() { serde_json::Value::Null } else { vid.clone().into() },
                                 "name_en": if ne.is_empty() { serde_json::Value::Null } else { ne.into() },
                                 "description_en": if de.is_empty() { serde_json::Value::Null } else { de.into() },
                                 "effect_en": if ee.is_empty() { serde_json::Value::Null } else { ee.into() },
                                 "flavor_profile_en": if fpe.is_empty() { serde_json::Value::Null } else { fpe.into() },
                                 "strain_type_en": if ste.is_empty() { serde_json::Value::Null } else { ste.into() },
                             });
+                            web_sys::console::log_1(&format!("[ADMIN] PUT strain id={} video_url={:?}", id, vid.clone()).into());
                             let url = format!("{}/api/strains/{}", api_base_url(), id);
                             let res = HTTP_CLIENT.clone().put(&url)
                                 .header("X-Telegram-Init-Data", init_data.read().clone())
@@ -3269,7 +3270,7 @@ fn OrderDetailModal(order: AdminOrder, on_close: EventHandler<()>) -> Element {
         "rejected" => "admin-badge danger",
         _ => "admin-badge muted",
     };
-    let order_title = format!("Заказ #{}...{}", &order.id[..4], &order.id[order.id.len().saturating_sub(4)..]);
+    let order_title = format!("Заказ #{}...{}", &order.id.get(0..4).unwrap_or(&order.id), &order.id[order.id.len().saturating_sub(4)..]);
     rsx! {
         div { style: "position:fixed;inset:0;background:rgba(0,0,0,0.8);display:flex;align-items:center;justify-content:center;z-index:2000;padding:16px;",
             onclick: move |_| on_close.call(()),

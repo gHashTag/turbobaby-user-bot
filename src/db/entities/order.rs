@@ -8,7 +8,7 @@ use serde_json::Value as JsonValue;
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub id: String,
-    pub telegram_id: i64,
+    pub telegram_id: Option<i64>,
     pub customer_name: Option<String>,
     pub customer_phone: Option<String>,
     pub customer_telegram: Option<String>,

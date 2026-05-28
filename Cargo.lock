@@ -2045,6 +2045,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "gloo-events"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8c6a94fa8cd88bea0babf8a27fe9abbcdece831fd1c3c84dd5c231fab4685ec7"
+dependencies = [
+ "wasm-bindgen",
+ "web-sys",
+]
+
+[[package]]
 name = "gloo-net"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5836,6 +5846,7 @@ dependencies = [
  "dioxus",
  "dotenvy",
  "getrandom 0.2.17",
+ "gloo-events",
  "gloo-storage",
  "gloo-timers",
  "hex",

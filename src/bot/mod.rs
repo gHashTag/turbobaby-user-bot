@@ -2,6 +2,14 @@ pub mod commands;
 pub mod callbacks;
 pub mod handlers;
 
+use std::collections::HashMap;
+use std::time::{Duration, Instant};
+use tokio::sync::Mutex;
+
+/// Shared AI rate-limit map across all bot entrypoints (text, commands, callbacks).
+pub static AI_RATE_LIMIT: std::sync::LazyLock<Mutex<HashMap<i64, Instant>>> = std::sync::LazyLock::new(|| Mutex::new(HashMap::new()));
+pub const AI_COOLDOWN: Duration = Duration::from_secs(5);
+
 use teloxide::prelude::*;
 use teloxide::dispatching::UpdateHandler;
 

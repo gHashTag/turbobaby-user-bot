@@ -34,6 +34,7 @@ pub struct ReferrerStats {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TopReferrer {
     pub telegram_id: i64,
+    pub first_name: Option<String>,
     pub referral_count: i64,
     pub total_bonus_earned: f64,
 }
@@ -76,7 +77,7 @@ pub async fn get_or_create_referral_code(pool: &Pool, telegram_id: i64) -> Resul
         )
         .await?
     {
-        let code: String = row.get("referral_code");
+        let code: String = row.try_get("referral_code").unwrap_or_default();
         return Ok(code);
     }
 
@@ -112,7 +113,7 @@ pub async fn get_or_create_referral_code(pool: &Pool, telegram_id: i64) -> Resul
             )
             .await?
         {
-            return Ok(row.get("referral_code"));
+            return Ok(row.try_get("referral_code").unwrap_or_default());
         }
         // Otherwise the code was taken by someone else — try next attempt
     }
@@ -133,7 +134,7 @@ pub async fn find_referrer_by_code(pool: &Pool, code: &str) -> Result<Option<i64
             &[&code],
         )
         .await?;
-    Ok(row.map(|r| r.get("telegram_id")))
+    Ok(row.map(|r| r.try_get("telegram_id").unwrap_or(0)))
 }
 
 /// Record a new pending referral event.
@@ -192,7 +193,7 @@ pub async fn confirm_referral(pool: &Pool, referred_id: i64, bonus: f64) -> Resu
         .await?;
 
     let (event_id, referrer_id): (Uuid, i64) = match row {
-        Some(r) => (r.get("id"), r.get("referrer_id")),
+        Some(r) => (r.try_get("id").unwrap_or_default(), r.try_get("referrer_id").unwrap_or(0)),
         None => {
             tx.commit().await.ok();
             return Ok(()); // nothing pending — silently ok
@@ -252,10 +253,10 @@ pub async fn get_referrer_stats(pool: &Pool, telegram_id: i64) -> Result<Referre
         .await?;
 
     Ok(ReferrerStats {
-        total_invited: row.get::<_, i64>("total_invited"),
-        confirmed: row.get::<_, i64>("confirmed"),
-        pending: row.get::<_, i64>("pending"),
-        total_bonus_earned: row.get::<_, f64>("total_bonus_earned"),
+        total_invited: row.try_get::<_, i64>("total_invited").unwrap_or(0),
+        confirmed: row.try_get::<_, i64>("confirmed").unwrap_or(0),
+        pending: row.try_get::<_, i64>("pending").unwrap_or(0),
+        total_bonus_earned: row.try_get::<_, f64>("total_bonus_earned").unwrap_or(0.0),
     })
 }
 
@@ -267,10 +268,12 @@ pub async fn get_top_referrers(pool: &Pool, period: &str, limit: i64) -> Result<
     let sql = match period {
         "weekly" => {
             "SELECT
-                re.referrer_id          AS telegram_id,
-                COUNT(*)                AS referral_count,
-                COALESCE(SUM(re.bonus_paid)::float8, 0) AS total_bonus_earned
+                re.referrer_id                              AS telegram_id,
+                COALESCE(MAX(ul.first_name), 'Anonymous') AS first_name,
+                COUNT(*)                                    AS referral_count,
+                COALESCE(SUM(re.bonus_paid)::float8, 0)     AS total_bonus_earned
              FROM referral_events re
+             LEFT JOIN user_languages ul ON re.referrer_id = ul.telegram_id
              WHERE (re.status = 'confirmed' OR re.status = 'paid')
              AND re.created_at >= NOW() - INTERVAL '7 days'
              GROUP BY re.referrer_id
@@ -279,10 +282,11 @@ pub async fn get_top_referrers(pool: &Pool, period: &str, limit: i64) -> Result<
         }
         "monthly" => {
             "SELECT
-                re.referrer_id          AS telegram_id,
-                COUNT(*)                AS referral_count,
-                COALESCE(SUM(re.bonus_paid)::float8, 0) AS total_bonus_earned
+                COALESCE(MAX(ul.first_name), 'Anonymous') AS first_name,
+                COUNT(*)                                  AS referral_count,
+                COALESCE(SUM(re.bonus_paid)::float8, 0)   AS total_bonus_earned
              FROM referral_events re
+             LEFT JOIN user_languages ul ON re.referrer_id = ul.telegram_id
              WHERE (re.status = 'confirmed' OR re.status = 'paid')
              AND re.created_at >= NOW() - INTERVAL '30 days'
              GROUP BY re.referrer_id
@@ -291,10 +295,11 @@ pub async fn get_top_referrers(pool: &Pool, period: &str, limit: i64) -> Result<
         }
         _ => {
             "SELECT
-                re.referrer_id          AS telegram_id,
-                COUNT(*)                AS referral_count,
-                COALESCE(SUM(re.bonus_paid)::float8, 0) AS total_bonus_earned
+                COALESCE(MAX(ul.first_name), 'Anonymous') AS first_name,
+                COUNT(*)                                  AS referral_count,
+                COALESCE(SUM(re.bonus_paid)::float8, 0)   AS total_bonus_earned
              FROM referral_events re
+             LEFT JOIN user_languages ul ON re.referrer_id = ul.telegram_id
              WHERE (re.status = 'confirmed' OR re.status = 'paid')
              GROUP BY re.referrer_id
              ORDER BY referral_count DESC, total_bonus_earned DESC
@@ -307,9 +312,10 @@ pub async fn get_top_referrers(pool: &Pool, period: &str, limit: i64) -> Result<
     Ok(rows
         .iter()
         .map(|r| TopReferrer {
-            telegram_id: r.get("telegram_id"),
-            referral_count: r.get("referral_count"),
-            total_bonus_earned: r.get("total_bonus_earned"),
+            telegram_id: r.try_get::<_, i64>("telegram_id").unwrap_or(0),
+            first_name: r.try_get::<_, String>("first_name").ok(),
+            referral_count: r.try_get::<_, i64>("referral_count").unwrap_or(0),
+            total_bonus_earned: r.try_get::<_, f64>("total_bonus_earned").unwrap_or(0.0),
         })
         .collect())
 }

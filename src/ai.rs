@@ -66,6 +66,25 @@ pub fn get_random_fact_prompt(base_prompt: &str) -> String {
     format!("{} Topic: {}. Don't repeat common facts, be surprising!", base_prompt, topic)
 }
 
+/// Strip common prompt-injection markers from user text before sending to LLM.
+pub fn sanitize_user_text(text: &str) -> String {
+    let lower = text.to_lowercase();
+    let dangerous = [
+        "###", "system:", "ignore previous", "ignore all previous", "forget everything",
+        "you are now", "new instructions", "override", "disregard", "prompt injection",
+        "jailbreak", "dan mode", "developer mode", "admin mode", "root access",
+        "simulate", "pretend you are", "act as", "roleplay as", "hypothetically",
+        "ignore the above", "do not follow", "bypass", "hack", "exploit",
+    ];
+    for marker in dangerous {
+        if lower.contains(marker) {
+            tracing::warn!("prompt injection marker detected: '{}'", marker);
+            return "[filtered]".to_string();
+        }
+    }
+    text.to_string()
+}
+
 pub struct AiClient {
     client: Client,
     grok_api_key: String,
@@ -83,15 +102,20 @@ impl AiClient {
 
     /// Ask Grok (primary) with GLM fallback
     pub async fn ask_grok(&self, prompt: &str, persona: &str, lang_instruction: &str) -> Option<String> {
+        let clean_prompt = sanitize_user_text(prompt);
+        if clean_prompt == "[filtered]" {
+            return Some("I can't process that request. Let's talk about our strains! 🌿".to_string());
+        }
+        let safe_persona = sanitize_user_text(persona);
         let system = format!(
             "You are Woody, a friendly cannabis shop assistant on Koh Phangan, Thailand. \
              Persona: {}. {}. Keep responses under 200 words.",
-            persona, lang_instruction
+            safe_persona, lang_instruction
         );
 
         // Try Grok first
         if !self.grok_api_key.is_empty() {
-            match self.call_grok(prompt, &system).await {
+            match self.call_grok(&clean_prompt, &system).await {
                 Ok(response) => return Some(response),
                 Err(e) => warn!("Grok failed: {}, trying GLM fallback", e),
             }
@@ -99,7 +123,7 @@ impl AiClient {
 
         // Fallback to GLM
         if !self.glm_api_key.is_empty() {
-            match self.call_glm(prompt, &system).await {
+            match self.call_glm(&clean_prompt, &system).await {
                 Ok(response) => return Some(response),
                 Err(e) => error!("GLM also failed: {}", e),
             }

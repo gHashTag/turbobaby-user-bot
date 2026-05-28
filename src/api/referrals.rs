@@ -7,6 +7,7 @@ use axum::{
 use serde::Deserialize;
 use serde_json::{json, Value};
 
+use crate::api::auth::check_not_blocked;
 use crate::AppState;
 use crate::db::referrals::{
     get_or_create_referral_code, get_referrer_stats, get_top_referrers,
@@ -45,6 +46,7 @@ async fn get_my_referrals(
     Path(telegram_id): Path<i64>,
 ) -> Result<Json<Value>, StatusCode> {
     crate::api::auth::check_owner(&headers, &state, telegram_id)?;
+    check_not_blocked(&state, telegram_id).await?;
     let code = get_or_create_referral_code(&state.db.pool, telegram_id)
         .await
         .map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;

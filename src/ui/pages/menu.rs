@@ -8,7 +8,7 @@ pub fn Menu() -> Element {
     // Fetch strains on mount
     let strains = use_resource(|| async move {
         // Try to fetch from API, return mock data if fails
-        match crate::ui::api::client::ApiClient::new(String::new()).get_strains().await {
+        match crate::ui::api::client::ApiClient::new(String::new(), String::new()).get_strains().await {
             Ok(s) => s,
             Err(_) => mock_strains(),
         }

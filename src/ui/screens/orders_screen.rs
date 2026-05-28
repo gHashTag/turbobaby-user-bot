@@ -5,6 +5,7 @@ use crate::ui::api::context::api_base_url;
 use crate::trios::core::Lang;
 use crate::trios::i18n::{t, T_ORDERS_TITLE, T_LOADING};
 use crate::ui::components::bottom_nav::BottomNav;
+use crate::ui::telegram::{use_telegram_id, use_telegram_init_data};
 
 #[derive(Debug, Clone, Deserialize)]
 struct ApiOrder {
@@ -13,14 +14,32 @@ struct ApiOrder {
     total: f64,
     status: String,
     created_at: String,
-    shop_name: Option<String>,
+    shop_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 struct ApiOrderItem {
-    name: String,
-    quantity: u32,
-    price: f64,
+    #[allow(dead_code)]
+    strain_id: Option<String>,
+    strain_name: Option<String>,
+    #[allow(dead_code)]
+    accessory_id: Option<String>,
+    accessory_name: Option<String>,
+    #[allow(dead_code)]
+    tea_id: Option<String>,
+    tea_name: Option<String>,
+    #[allow(dead_code)]
+    set_id: Option<String>,
+    set_name: Option<String>,
+    quantity: f64,
+}
+
+fn item_name(item: &ApiOrderItem) -> String {
+    item.strain_name.clone()
+        .or_else(|| item.accessory_name.clone())
+        .or_else(|| item.tea_name.clone())
+        .or_else(|| item.set_name.clone())
+        .unwrap_or_else(|| "Unknown".to_string())
 }
 
 #[derive(Debug, Deserialize)]
@@ -73,19 +92,28 @@ impl StatusFilter {
 #[component]
 pub fn OrdersScreen() -> Element {
     let mut active_filter = use_signal(|| StatusFilter::All);
+    let telegram_id = use_telegram_id().unwrap_or(0);
+    let init_data = use_telegram_init_data();
 
-    let orders_resource = use_resource(|| async move {
-        let base = api_base_url();
-        let url = format!("{}/api/orders?limit=20", base);
-        reqwest::Client::new()
-            .get(&url)
-            .send()
-            .await
-            .map_err(|e| e.to_string())?
-            .json::<OrdersResponse>()
-            .await
-            .map(|r| r.orders)
-            .map_err(|e| e.to_string())
+    let orders_resource = use_resource(move || {
+        let init = init_data.clone();
+        async move {
+            if telegram_id == 0 {
+                return Err("No telegram_id".to_string());
+            }
+            let base = api_base_url();
+            let url = format!("{}/api/orders/user/{}", base, telegram_id);
+            reqwest::Client::new()
+                .get(&url)
+                .header("X-Telegram-Init-Data", init)
+                .send()
+                .await
+                .map_err(|e| e.to_string())?
+                .json::<OrdersResponse>()
+                .await
+                .map(|r| r.orders)
+                .map_err(|e| e.to_string())
+        }
     });
 
     let filtered = match &*orders_resource.read() {
@@ -165,7 +193,7 @@ pub fn OrdersScreen() -> Element {
                                         let short_id = if o.id.len() > 6 { o.id[o.id.len()-6..].to_string() } else { o.id.clone() };
                                         let (status_color, status_label) = status_style(&o.status);
                                         let date_str = o.created_at.split('T').next().unwrap_or(&o.created_at).to_string();
-                                        let shop = o.shop_name.as_deref().unwrap_or("Woody Shop");
+                                        let shop = o.shop_id.as_deref().unwrap_or("Woody Shop");
                                         let total_str = format!("฿{}", o.total as i32);
                                         let is_cancelled = o.status == "cancelled";
                                         let opacity = if is_cancelled { "0.7" } else { "1" };
@@ -191,8 +219,7 @@ pub fn OrdersScreen() -> Element {
                                                 div { style: "margin-bottom: 8px;",
                                                     for item in o.items.iter() {
                                                         div { style: "display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 3px;",
-                                                            span { style: "color: #8b8b9e;", "{item.name} x{item.quantity}" }
-                                                            span { "฿{(item.price * item.quantity as f64) as i32}" }
+                                                            span { style: "color: #8b8b9e;", "{item_name(item)} x{item.quantity as i32}" }
                                                         }
                                                     }
                                                 }

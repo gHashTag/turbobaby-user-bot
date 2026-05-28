@@ -10,6 +10,7 @@ use crate::ui::api::context::api_base_url;
 use crate::trios::core::Lang;
 use crate::trios::i18n::{t, T_PROFILE_TITLE};
 use crate::ui::components::bottom_nav::BottomNav;
+use crate::ui::telegram::{use_telegram_id, use_telegram_init_data};
 
 #[derive(Debug, Clone, Deserialize)]
 struct LoyaltyResponse {
@@ -116,17 +117,25 @@ pub fn ProfileScreen() -> Element {
     let cart = use_context::<Signal<Cart>>();
     let cart_count: u32 = cart.read().items.iter().map(|i| i.quantity).sum();
 
-    // Mock telegram_id for development (in real app, get from Telegram WebApp)
-    let telegram_id = 123456i64;
+    let telegram_id = use_telegram_id().unwrap_or(0);
+    let init_data = use_telegram_init_data();
 
-    let loyalty_resource = use_resource(move || async move {
-        let base = api_base_url();
-        let url = format!("{}/api/loyalty/{}", base, telegram_id);
-        let client = reqwest::Client::new();
-        let resp = client.get(&url).send().await;
-        match resp {
-            Ok(r) => r.json::<LoyaltyResponse>().await.ok(),
-            Err(_) => None,
+    let loyalty_resource = use_resource(move || {
+        let init = init_data.clone();
+        async move {
+            if telegram_id == 0 {
+                return None;
+            }
+            let base = api_base_url();
+            let url = format!("{}/api/loyalty/{}", base, telegram_id);
+            let client = reqwest::Client::new();
+            let resp = client.get(&url)
+                .header("X-Telegram-Init-Data", init)
+                .send().await;
+            match resp {
+                Ok(r) => r.json::<LoyaltyResponse>().await.ok(),
+                Err(_) => None,
+            }
         }
     });
 

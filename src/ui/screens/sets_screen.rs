@@ -86,12 +86,12 @@ impl MoodFilter {
 
 #[component]
 pub fn SetsScreen() -> Element {
-    let mut cart = use_context::<Signal<Cart>>();
+    let cart = use_context::<Signal<Cart>>();
     let mut mood_filter = use_signal(|| MoodFilter::All);
 
     let sets_title = t(Lang::Russian, T_SETS_TITLE);
     let sets_desc = t(Lang::Russian, T_SETS_DESC);
-    let add_to_cart = t(Lang::Russian, T_ADD_TO_CART);
+    let _add_to_cart = t(Lang::Russian, T_ADD_TO_CART);
 
     let sets_resource = use_resource(|| async move {
         let base = api_base_url();

@@ -11,9 +11,11 @@
 
 use axum::http::{HeaderMap, StatusCode};
 use hmac::{Hmac, Mac};
+use sea_orm::EntityTrait;
 use sha2::Sha256;
 
 use crate::AppState;
+use crate::db::entities::loyalty_profile;
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -356,4 +358,24 @@ pub fn check_owner(headers: &HeaderMap, state: &AppState, expected_telegram_id: 
     }
     tracing::warn!("owner check failed: missing or invalid initData");
     Err(StatusCode::UNAUTHORIZED)
+}
+
+/// Returns `Ok(())` if the user is not blocked.
+/// Returns `Err(StatusCode::FORBIDDEN)` if the user is blocked or DB lookup fails.
+pub async fn check_not_blocked(state: &AppState, telegram_id: i64) -> Result<(), StatusCode> {
+    let result = loyalty_profile::Entity::find_by_id(telegram_id)
+        .one(&state.db.orm)
+        .await;
+
+    match result {
+        Ok(Some(profile)) if profile.is_blocked => {
+            tracing::warn!("blocked user attempted action telegram_id={}", telegram_id);
+            Err(StatusCode::FORBIDDEN)
+        }
+        Ok(_) => Ok(()),
+        Err(e) => {
+            tracing::error!("check_not_blocked DB error telegram_id={} err={}", telegram_id, e);
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+    }
 }

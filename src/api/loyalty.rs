@@ -7,7 +7,7 @@ use axum::{
 use serde::Deserialize;
 use serde_json::{json, Value};
 
-use crate::api::auth::check_admin;
+use crate::api::auth::{check_admin, check_not_blocked};
 use crate::AppState;
 
 
@@ -38,14 +38,14 @@ async fn get_loyalty_tiers(State(state): State<AppState>) -> Result<Json<Value>,
         &[],
     ).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     let tiers: Vec<Value> = rows.iter().map(|r| json!({
-        "tier":             r.get::<_, String>("tier"),
-        "name":             r.get::<_, String>("name"),
-        "min_points":       r.get::<_, i32>("min_points"),
-        "discount_percent": r.get::<_, i32>("discount_percent"),
-        "points_multiplier":r.get::<_, f64>("points_multiplier"),
-        "perks":            r.get::<_, Vec<String>>("perks"),
-        "icon":             r.get::<_, String>("icon"),
-        "color":            r.get::<_, String>("color"),
+        "tier":             r.try_get::<_, String>("tier").unwrap_or_default(),
+        "name":             r.try_get::<_, String>("name").unwrap_or_default(),
+        "min_points":       r.try_get::<_, i32>("min_points").unwrap_or(0),
+        "discount_percent": r.try_get::<_, i32>("discount_percent").unwrap_or(0),
+        "points_multiplier":r.try_get::<_, f64>("points_multiplier").unwrap_or(0.0),
+        "perks":            r.try_get::<_, Vec<String>>("perks").unwrap_or_default(),
+        "icon":             r.try_get::<_, String>("icon").unwrap_or_default(),
+        "color":            r.try_get::<_, String>("color").unwrap_or_default(),
     })).collect();
     Ok(Json(json!({ "tiers": tiers })))
 }
@@ -56,6 +56,7 @@ async fn get_profile(
     Path(telegram_id): Path<i64>,
 ) -> Result<Json<Value>, StatusCode> {
     crate::api::auth::check_owner(&headers, &state, telegram_id)?;
+    check_not_blocked(&state, telegram_id).await?;
     // SeaORM-версия: sqlx безопасно читает NUMERIC в f64.
     use sea_orm::{Statement, DbBackend, ConnectionTrait};
     let stmt = Statement::from_sql_and_values(
@@ -141,13 +142,12 @@ async fn get_leaderboard(State(state): State<AppState>) -> Result<Json<Value>, S
     let rows = state.db.orm.query_all(stmt).await
         .map_err(|e| { tracing::error!("get_leaderboard sea-orm: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?;
     let leaderboard: Vec<Value> = rows.iter().map(|r| {
-        let telegram_id: i64 = r.try_get("", "telegram_id").unwrap_or(0);
         let total_spent: Option<f64> = r.try_get("", "total_spent").ok();
         let tier: String = r.try_get("", "tier").unwrap_or_default();
         let first_name: Option<String> = r.try_get("", "first_name").ok();
+        let display_name = first_name.unwrap_or_else(|| "Anonymous".to_string());
         json!({
-            "telegram_id": telegram_id,
-            "first_name": first_name,
+            "name": display_name,
             "total_spent": total_spent.unwrap_or(0.0),
             "tier": tier,
         })
@@ -160,7 +160,7 @@ async fn get_loyalty_config(State(state): State<AppState>) -> Result<Json<Value>
     let row = client.query_opt("SELECT config FROM loyalty_config WHERE id = 1", &[])
         .await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     match row {
-        Some(r) => Ok(Json(json!({ "config": r.get::<_, Value>("config") }))),
+        Some(r) => Ok(Json(json!({ "config": r.try_get::<_, Value>("config").unwrap_or(Value::Null) }))),
         None => Ok(Json(json!({ "config": null }))),
     }
 }
@@ -174,8 +174,11 @@ async fn update_loyalty_config(
     // Validate required numeric fields
     let required = ["gold_threshold", "silver_threshold", "bronze_threshold", "referral_bonus"];
     for key in required {
-        let val = body.get(key).and_then(|v| v.as_f64());
-        if val.is_none() || val.unwrap() < 0.0 || !val.unwrap().is_finite() {
+        if let Some(v) = body.get(key).and_then(|v| v.as_f64()) {
+            if v < 0.0 || !v.is_finite() {
+                return Err(StatusCode::BAD_REQUEST);
+            }
+        } else {
             return Err(StatusCode::BAD_REQUEST);
         }
     }

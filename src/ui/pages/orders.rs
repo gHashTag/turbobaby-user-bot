@@ -1,13 +1,17 @@
 use dioxus::prelude::*;
 use crate::ui::api::{client::ApiClient, types::Order};
 use crate::ui::components::Loading;
-use crate::ui::telegram::use_telegram_id;
+use crate::ui::telegram::{use_telegram_id, use_telegram_init_data};
 
 #[component]
 pub fn Orders() -> Element {
     let telegram_id = use_telegram_id().unwrap_or(123456i64);
-    let orders = use_resource(move || async move {
-        ApiClient::new(String::new()).get_user_orders(telegram_id).await
+    let init_data = use_telegram_init_data();
+    let orders = use_resource(move || {
+        let init = init_data.clone();
+        async move {
+            ApiClient::new(String::new(), init).get_user_orders(telegram_id).await
+        }
     });
 
     rsx! {

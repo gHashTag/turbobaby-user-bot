@@ -90,7 +90,7 @@ pub async fn create_order_doc() {}
     get,
     path = "/api/admin/managers",
     params(
-        ("X-Admin-Key" = String, Header, description = "Admin authentication key"),
+        ("X-Admin-Token" = String, Header, description = "Admin password token"),
     ),
     responses(
         (status = 200, description = "List of managers", body = serde_json::Value),

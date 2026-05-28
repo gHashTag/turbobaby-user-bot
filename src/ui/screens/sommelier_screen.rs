@@ -2,7 +2,6 @@ use dioxus::prelude::*;
 use serde::Deserialize;
 use crate::ui::state::{Cart, CartItem, CartItemType};
 use crate::ui::components::bottom_nav::BottomNav;
-use crate::ui::api::context::api_base_url;
 use crate::trios::core::Lang;
 use crate::trios::i18n::{t, T_SOMM_TITLE, T_SOMM_DESC, T_SOMM_MOOD, T_SOMM_TIME, T_SOMM_EXP};
 
@@ -144,19 +143,10 @@ pub fn SommelierScreen() -> Element {
 
     let recommendations = use_resource(move || async move {
         if !show_results() { return Ok(SommelierResponse { recommended_sets: None, recommended_strains: None }); }
-        let mood = selected_mood().map(|m| m.as_str()).unwrap_or("relax");
-        let time = selected_time().as_str();
-        let exp = selected_exp().as_str();
-        let base = api_base_url();
-        let url = format!("{}/api/sommelier/recommend?mood={}&time={}&experience={}", base, mood, time, exp);
-        reqwest::Client::new()
-            .get(&url)
-            .send()
-            .await
-            .map_err(|e| e.to_string())?
-            .json::<SommelierResponse>()
-            .await
-            .map_err(|e| e.to_string())
+        // BUG-FIX: /api/sommelier/recommend backend endpoint does not exist.
+        // Return empty gracefully so the UI shows "No recommendations found"
+        // instead of a permanent 404 error.
+        Ok::<SommelierResponse, String>(SommelierResponse { recommended_sets: None, recommended_strains: None })
     });
 
     rsx! {

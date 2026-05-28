@@ -27,10 +27,20 @@ pub struct ApiClient {
 }
 
 impl ApiClient {
-    pub fn new(base_url: String) -> Self {
+    pub fn new(base_url: String, init_data: String) -> Self {
+        let mut headers = reqwest::header::HeaderMap::new();
+        if !init_data.is_empty() {
+            if let Ok(val) = reqwest::header::HeaderValue::from_str(&init_data) {
+                headers.insert("X-Telegram-Init-Data", val);
+            }
+        }
+        let client = Client::builder()
+            .default_headers(headers)
+            .build()
+            .unwrap_or_else(|_| Client::new());
         Self {
             base_url: base_url.trim_end_matches('/').to_string(),
-            client: Arc::new(Client::new()),
+            client: Arc::new(client),
         }
     }
 

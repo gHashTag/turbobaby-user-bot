@@ -1,3 +1,4 @@
+// Quest screen — static location-quest UI (no backend quest/state endpoint yet).
 use dioxus::prelude::*;
 use web_sys::window;
 use js_sys::eval;
@@ -8,40 +9,6 @@ use crate::trios::i18n::{
     T_CHECKIN_SUCCESS, T_QUEST_COMPLETE, T_REWARD_CLAIM, T_REWARD,
     T_PURCHASE_MIN, T_STATUS_LOCKED, T_STATUS_ACTIVE, T_STATUS_COMPLETED,
 };
-use crate::ui::api::context::api_base_url;
-
-#[derive(Debug, Clone, serde::Deserialize)]
-#[allow(dead_code)]
-struct QuestStateResponse {
-    telegram_id: i64,
-    current_checkpoint: u8,
-    started_at: Option<i64>,
-    completed_at: Option<i64>,
-}
-
-async fn fetch_quest_state() -> Result<QuestStateResponse, String> {
-    let base = api_base_url();
-    reqwest::get(format!("{}/api/quest/state", base))
-        .await
-        .map_err(|e| e.to_string())?
-        .json::<QuestStateResponse>()
-        .await
-        .map_err(|e| e.to_string())
-}
-
-async fn checkin_checkpoint(checkpoint_id: u8, qr_data: String) -> Result<(), String> {
-    let base = api_base_url();
-    reqwest::Client::new()
-        .post(format!("{}/api/quest/checkin", base))
-        .json(&serde_json::json!({
-            "checkpoint_id": checkpoint_id,
-            "qr_data": qr_data,
-        }))
-        .send()
-        .await
-        .map_err(|e| e.to_string())?;
-    Ok(())
-}
 
 fn checkpoint_emoji(id: u8) -> &'static str {
     match id {
@@ -59,25 +26,12 @@ pub fn Quest() -> Element {
     let current_checkpoint = use_signal(|| 0u8);
     let scanning = use_signal(|| false);
     let scan_result = use_signal(|| String::new());
-    let loading = use_signal(|| true);
+    let loading = use_signal(|| false);
     let checkpoints = get_checkpoints();
-
-    let mut cp_clone = current_checkpoint.clone();
-    let mut loading_clone = loading.clone();
-    use_future(move || async move {
-        match fetch_quest_state().await {
-            Ok(state) => {
-                cp_clone.set(state.current_checkpoint);
-            }
-            Err(_) => {}
-        }
-        loading_clone.set(false);
-    });
 
     let scan_qr = move |_| {
         let mut scanning_c = scanning.clone();
         let mut scan_result_c = scan_result.clone();
-        let mut current_cp = current_checkpoint.clone();
         spawn(async move {
             if let Some(_w) = window() {
                 let _ = eval(r#"
@@ -86,12 +40,7 @@ pub fn Quest() -> Element {
                     }
                 "#);
                 scanning_c.set(true);
-                scan_result_c.set("QR scanned!".to_string());
-
-                let next_cp = *current_cp.read() + 1;
-                let _ = checkin_checkpoint(next_cp, "scanned_data".to_string()).await;
-                current_cp.set(next_cp);
-                scanning_c.set(false);
+                scan_result_c.set("Scan the QR code at the location".to_string());
             }
         });
     };

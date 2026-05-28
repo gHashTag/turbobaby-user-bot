@@ -6,7 +6,7 @@ use axum::{
 };
 use serde::Deserialize;
 use serde_json::{json, Value};
-use crate::api::auth::check_admin;
+use crate::api::auth::{check_admin, validate_init_data, check_not_blocked};
 use crate::AppState;
 
 pub fn routes() -> Router<AppState> {
@@ -321,14 +321,14 @@ async fn get_quest_locations(
         &[],
     ).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     let items: Vec<Value> = rows.iter().map(|r| json!({
-        "id": r.get::<_, i32>(0),
-        "name": r.get::<_, String>(1),
-        "description": r.get::<_, String>(2),
-        "category": r.get::<_, String>(3),
-        "map_url": r.get::<_, String>(4),
-        "qr_token": r.get::<_, String>(5),
-        "is_active": r.get::<_, bool>(6),
-        "is_final": r.get::<_, bool>(7),
+        "id": r.try_get::<_, i32>(0).unwrap_or(0),
+        "name": r.try_get::<_, String>(1).unwrap_or_default(),
+        "description": r.try_get::<_, String>(2).ok(),
+        "category": r.try_get::<_, String>(3).ok(),
+        "map_url": r.try_get::<_, String>(4).ok(),
+        "qr_token": r.try_get::<_, String>(5).unwrap_or_default(),
+        "is_active": r.try_get::<_, bool>(6).unwrap_or(true),
+        "is_final": r.try_get::<_, bool>(7).unwrap_or(false),
     })).collect();
     Ok(Json(json!({ "locations": items })))
 }
@@ -344,7 +344,7 @@ async fn create_quest_location(
         "INSERT INTO location_quest_locations (name, description, category, map_url, is_final) VALUES ($1,$2,$3,$4,$5) RETURNING id",
         &[&req.name, &req.description.unwrap_or_default(), &req.category.unwrap_or_else(|| "location".to_string()), &req.map_url.unwrap_or_default(), &req.is_final.unwrap_or(false)],
     ).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
-    Ok(Json(json!({ "success": true, "id": row.get::<_, i32>(0) })))
+    Ok(Json(json!({ "success": true, "id": row.try_get::<_, i32>(0).unwrap_or(0) })))
 }
 
 async fn update_quest_location(
@@ -362,9 +362,21 @@ async fn update_quest_location(
     Ok(Json(json!({ "success": true })))
 }
 
-async fn scan_quest_qr(State(state): State<AppState>, Json(body): Json<Value>) -> Result<Json<Value>, StatusCode> {
+async fn scan_quest_qr(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    Json(body): Json<Value>,
+) -> Result<Json<Value>, StatusCode> {
+    // Require Telegram Mini App auth
+    let init_data = headers
+        .get("X-Telegram-Init-Data")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+    let user = validate_init_data(init_data, &state.config.bot_token)
+        .ok_or(StatusCode::UNAUTHORIZED)?;
+    check_not_blocked(&state, user.id).await?;
+
     let qr_token = body["qr_token"].as_str().unwrap_or("");
-    let telegram_id = body["telegram_id"].as_i64();
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     let row = client.query_opt(
         "SELECT id, name, is_final FROM location_quest_locations WHERE qr_token = $1 AND is_active = true",
@@ -372,16 +384,17 @@ async fn scan_quest_qr(State(state): State<AppState>, Json(body): Json<Value>) -
     ).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     match row {
         Some(r) => {
-            let location_name: String = r.get(1);
-            let is_final: bool = r.get(2);
+            let location_name: String = r.try_get(1).unwrap_or_default();
+            let is_final: bool = r.try_get(2).unwrap_or(false);
             crate::metrics::qr_scanned(is_final);
             // Notify admins about QR scan
             let bot = state.bot.clone();
             let config = state.config.clone();
             let loc_name = location_name.clone();
+            let telegram_id = user.id;
             tokio::spawn(async move {
                 let final_str = if is_final { "\n\u{1F3C1} \u{0444}\u{0438}\u{043D}\u{0430}\u{043B}\u{044C}\u{043D}\u{0430}\u{044F} \u{0442}\u{043E}\u{0447}\u{043A}\u{0430}!" } else { "" };
-                let user_str = telegram_id.map(|id| format!("\n\u{1F194} user: {}", id)).unwrap_or_default();
+                let user_str = format!("\n\u{1F194} user: {}", telegram_id);
                 let text = format!(
                     "\u{1F4F2} QR \u{043E}\u{0442}\u{0441}\u{043A}\u{0430}\u{043D}\u{0438}\u{0440}\u{043E}\u{0432}\u{0430}\u{043D}\n\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\n\u{1F4CD} {}{}{}" ,
                     loc_name, user_str, final_str
@@ -391,7 +404,7 @@ async fn scan_quest_qr(State(state): State<AppState>, Json(body): Json<Value>) -
             Ok(Json(json!({
                 "success": true,
                 "location": {
-                    "id": r.get::<_, i32>(0),
+                    "id": r.try_get::<_, i32>(0).unwrap_or(0),
                     "name": location_name,
                     "is_final": is_final,
                 }
@@ -402,6 +415,10 @@ async fn scan_quest_qr(State(state): State<AppState>, Json(body): Json<Value>) -
 }
 
 // ── Admin Notifications ───────────────────────────────────────
+
+fn html_escape(s: &str) -> String {
+    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
+}
 
 async fn notify_quest_place_admins(
     bot: &teloxide::Bot,
@@ -416,13 +433,16 @@ async fn notify_quest_place_admins(
 
     let text = format!(
         "📍 Новое квест-место создано\n━━━━━━━━━━━━━━━━\n🏷 {}\n📂 {}\n🗺 {}, {}\n📝 {}",
-        name, category, lat, lon, description
+        html_escape(name), html_escape(category), lat, lon, html_escape(description)
     );
 
     for admin_id in &config.admin_ids {
-        let _ = bot
+        if let Err(e) = bot
             .send_message(teloxide::types::ChatId(*admin_id), &text)
-            .await;
+            .await
+        {
+            tracing::warn!("notify_quest_place_admins failed for admin_id={}: {}", admin_id, e);
+        }
     }
 }
 
@@ -439,12 +459,15 @@ async fn notify_treasure_hunt_admins(
 
     let text = format!(
         "🏴\u{200d}☠️ Новый treasure hunt создан\n━━━━━━━━━━━━━━━━\n🏷 {}\n📜 {}\n🗺 Старт: {} ({}, {})",
-        name, description, start_name, start_lat, start_lon
+        html_escape(name), html_escape(description), html_escape(start_name), start_lat, start_lon
     );
 
     for admin_id in &config.admin_ids {
-        let _ = bot
+        if let Err(e) = bot
             .send_message(teloxide::types::ChatId(*admin_id), &text)
-            .await;
+            .await
+        {
+            tracing::warn!("notify_treasure_hunt_admins failed for admin_id={}: {}", admin_id, e);
+        }
     }
 }

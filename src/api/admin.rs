@@ -144,13 +144,13 @@ async fn get_all_users(
     })?;
 
     let users: Vec<Value> = rows.iter().map(|r| json!({
-        "telegram_id": r.get::<_, i64>("telegram_id"),
-        "first_name": r.get::<_, Option<String>>("first_name"),
-        "language": r.get::<_, Option<String>>("language"),
+        "telegram_id": r.try_get::<_, i64>("telegram_id").unwrap_or(0),
+        "first_name": r.try_get::<_, Option<String>>("first_name").ok().flatten(),
+        "language": r.try_get::<_, Option<String>>("language").ok().flatten(),
         "total_spent": r.try_get::<_, Option<f64>>("total_spent").ok().flatten(),
-        "bonus_balance": r.get::<_, Option<f64>>("bonus_balance"),
-        "tier": r.get::<_, Option<String>>("tier"),
-        "is_blocked": r.get::<_, Option<bool>>("is_blocked"),
+        "bonus_balance": r.try_get::<_, Option<f64>>("bonus_balance").ok().flatten(),
+        "tier": r.try_get::<_, Option<String>>("tier").ok().flatten(),
+        "is_blocked": r.try_get::<_, Option<bool>>("is_blocked").ok().flatten(),
     })).collect();
     Ok(Json(json!({ "users": users })))
 }
@@ -172,11 +172,11 @@ async fn get_managers(
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
     let managers: Vec<Value> = rows.iter().map(|r| json!({
-        "telegram_id": r.get::<_, i64>("telegram_id"),
-        "name": r.get::<_, Option<String>>("name"),
-        "username": r.get::<_, Option<String>>("username"),
-        "ref_code": r.get::<_, Option<String>>("ref_code"),
-        "commission_rate": r.get::<_, Option<f64>>("commission_rate"),
+        "telegram_id": r.try_get::<_, i64>("telegram_id").unwrap_or(0),
+        "name": r.try_get::<_, Option<String>>("name").ok().flatten(),
+        "username": r.try_get::<_, Option<String>>("username").ok().flatten(),
+        "ref_code": r.try_get::<_, Option<String>>("ref_code").ok().flatten(),
+        "commission_rate": r.try_get::<_, Option<f64>>("commission_rate").ok().flatten(),
     })).collect();
     Ok(Json(json!({ "managers": managers })))
 }
@@ -229,7 +229,7 @@ async fn create_manager(
     Json(req): Json<CreateManagerRequest>,
 ) -> Result<Json<Value>, StatusCode> {
     check_admin(&headers, &state)?;
-    if let Some(r) = req.commission_rate { if !r.is_finite() || r < 0.0 { return Err(StatusCode::BAD_REQUEST); } }
+    if let Some(r) = req.commission_rate { if !r.is_finite() || r < 0.0 || r > 100.0 { return Err(StatusCode::BAD_REQUEST); } }
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     client.execute(
         "INSERT INTO managers (telegram_id, name, username, ref_code, commission_rate) VALUES ($1, $2, $3, $4, $5)",
@@ -245,7 +245,7 @@ async fn update_manager(
     Json(req): Json<UpdateManagerRequest>,
 ) -> Result<Json<Value>, StatusCode> {
     check_admin(&headers, &state)?;
-    if let Some(r) = req.commission_rate { if !r.is_finite() || r < 0.0 { return Err(StatusCode::BAD_REQUEST); } }
+    if let Some(r) = req.commission_rate { if !r.is_finite() || r < 0.0 || r > 100.0 { return Err(StatusCode::BAD_REQUEST); } }
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     client.execute(
         "UPDATE managers SET 
