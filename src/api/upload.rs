@@ -72,7 +72,7 @@ async fn upload_file(
 
         // Generate safe filename
         let short_id = uuid::Uuid::new_v4().to_string();
-        let safe_name = format!("{}.{}", &short_id[..8], ext);
+        let safe_name = format!("{}.{}", short_id.get(0..8).unwrap_or(&short_id), ext);
         tracing::info!("Step 7: Safe filename='{}'", safe_name);
 
         // Save locally

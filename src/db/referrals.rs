@@ -208,6 +208,12 @@ pub async fn confirm_referral(pool: &Pool, referred_id: i64, bonus: f64) -> Resu
         &[&bonus, &event_id],
     ).await?;
 
+    // Ensure referrer loyalty profile exists
+    tx.execute(
+        "INSERT INTO loyalty_profiles (telegram_id, bonus_balance, total_spent) VALUES ($1, 0, 0) ON CONFLICT (telegram_id) DO NOTHING",
+        &[&referrer_id],
+    ).await?;
+
     // Credit bonus to referrer
     let tx_id = Uuid::new_v4().to_string();
     tx.execute(
@@ -216,10 +222,14 @@ pub async fn confirm_referral(pool: &Pool, referred_id: i64, bonus: f64) -> Resu
         &[&tx_id, &referrer_id, &bonus],
     ).await?;
 
-    tx.execute(
+    let updated = tx.execute(
         "UPDATE loyalty_profiles SET bonus_balance = bonus_balance + $1 WHERE telegram_id = $2",
         &[&bonus, &referrer_id],
     ).await?;
+    if updated == 0 {
+        let _ = tx.rollback().await;
+        anyhow::bail!("confirm_referral: loyalty profile missing for referrer_id={}", referrer_id);
+    }
 
     // Increment referral_count
     tx.execute(
@@ -282,6 +292,7 @@ pub async fn get_top_referrers(pool: &Pool, period: &str, limit: i64) -> Result<
         }
         "monthly" => {
             "SELECT
+                re.referrer_id                              AS telegram_id,
                 COALESCE(MAX(ul.first_name), 'Anonymous') AS first_name,
                 COUNT(*)                                  AS referral_count,
                 COALESCE(SUM(re.bonus_paid)::float8, 0)   AS total_bonus_earned
@@ -295,6 +306,7 @@ pub async fn get_top_referrers(pool: &Pool, period: &str, limit: i64) -> Result<
         }
         _ => {
             "SELECT
+                re.referrer_id                              AS telegram_id,
                 COALESCE(MAX(ul.first_name), 'Anonymous') AS first_name,
                 COUNT(*)                                  AS referral_count,
                 COALESCE(SUM(re.bonus_paid)::float8, 0)   AS total_bonus_earned

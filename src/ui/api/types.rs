@@ -160,24 +160,33 @@ pub struct OrderItem {
 #[serde(rename_all = "lowercase")]
 pub enum OrderStatus {
     Pending,
+    Confirmed,
     Processing,
     Shipped,
     Delivered,
+    Completed,
+    Rejected,
+    Ready,
     Cancelled,
 }
 
-/// Garden plant
+/// Garden plant — matches backend PlantResponse exactly
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Plant {
     pub id: String,
-    pub telegram_id: i64,
+    pub user_id: String,
     pub strain_id: String,
     pub strain_name: String,
-    pub growth_stage: GrowthStage,
+    pub current_stage: String,
+    pub stage_name: String,
+    pub stage_emoji: String,
+    pub planted_at: i64,
+    pub is_completed: bool,
+    pub harvested_at: Option<i64>,
+    pub water_count: u32,
     pub progress: u8,
-    pub planted_at: String,
-    pub watered_at: Option<String>,
-    pub is_ready_for_harvest: bool,
+    pub can_water: bool,
+    pub next_water_at: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -185,10 +194,18 @@ pub struct Plant {
 pub enum GrowthStage {
     Seed,
     Sprout,
-    SmallPlant,
-    MediumPlant,
-    LargePlant,
-    Mature,
+    FirstLeaf,
+    YoungBush,
+    VegStart,
+    BigVeg,
+    PreFlower,
+    SmallBuds,
+    BigBuds,
+    Trimming,
+    Curing,
+    Lab,
+    Delivery,
+    Final,
     Harvested,
 }
 
@@ -269,6 +286,8 @@ pub struct AccessorySetRequest {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum LoyaltyTier {
+    None,
+    Bronze,
     Brass,
     Silver,
     Gold,

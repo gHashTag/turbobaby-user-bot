@@ -25,6 +25,8 @@ pub struct CreateStrainRequest {
     pub available_grams: Option<f64>,
     pub image_url: Option<String>,
     pub video_url: Option<String>,
+    #[allow(dead_code)]
+    pub is_available: Option<bool>,
     // Bilingual EN fields (migration 016, all optional)
     pub name_en: Option<String>,
     pub description_en: Option<String>,
@@ -68,7 +70,7 @@ async fn get_strains(
         tracing::error!("get_strains query error: {:?}", e);
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
-    tracing::info!("get_strains: returned {} rows, first video_url={:?}", rows.len(), rows.first().and_then(|r| r.try_get::<_>("video_url").ok()));
+    tracing::info!("get_strains: returned {} rows, first video_url={:?}", rows.len(), rows.first().and_then(|r| r.try_get::<_, Option<String>>("video_url").ok()));
 
     let strains: Vec<Strain> = rows.iter().map(Strain::from_row).collect();
     let response_data = json!({ "strains": strains });
@@ -119,10 +121,10 @@ async fn create_strain(State(state): State<AppState>, headers: HeaderMap, Json(r
     if let Some(a) = req.available_grams { if !a.is_finite() || a < 0.0 { return Err(StatusCode::BAD_REQUEST); } }
     let id = uuid::Uuid::new_v4().to_string();
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
-    tracing::info!("update_strain id={} video_url={:?}", id, req.video_url);
+    tracing::info!("create_strain id={} video_url={:?}", id, req.video_url);
     client.execute(
         "INSERT INTO strains (id, name, category, thc_percent, cbd_percent, effect, flavor_profile, description, price_per_gram, available_grams, image_url, video_url, is_available, name_en, description_en, effect_en, flavor_profile_en, strain_type_en) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)",
-        &[&id, &req.name, &req.category, &req.thc_percent, &req.cbd_percent, &req.effect, &req.flavor_profile, &req.description, &req.price_per_gram, &req.available_grams, &req.image_url, &req.video_url, &true, &req.name_en, &req.description_en, &req.effect_en, &req.flavor_profile_en, &req.strain_type_en],
+        &[&id, &req.name, &req.category, &req.thc_percent, &req.cbd_percent, &req.effect, &req.flavor_profile, &req.description, &req.price_per_gram, &req.available_grams, &req.image_url, &req.video_url, &req.is_available.unwrap_or(true), &req.name_en, &req.description_en, &req.effect_en, &req.flavor_profile_en, &req.strain_type_en],
     ).await.map_err(|e| { tracing::error!("create_strain error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     invalidate_strains(&state.cache).await;
     Ok(Json(json!({ "success": true, "id": id })))
@@ -142,8 +144,8 @@ async fn update_strain(State(state): State<AppState>, headers: HeaderMap, Path(i
     })?;
     tracing::info!("update_strain id={} video_url={:?}", id, req.video_url);
     client.execute(
-        "UPDATE strains SET name=$1, category=$2, thc_percent=$3, cbd_percent=$4, effect=$5, flavor_profile=$6, description=$7, price_per_gram=$8, available_grams=$9, image_url=$10, video_url=$11, name_en=$12, description_en=$13, effect_en=$14, flavor_profile_en=$15, strain_type_en=$16 WHERE id=$17",
-        &[&req.name, &req.category, &req.thc_percent, &req.cbd_percent, &req.effect, &req.flavor_profile, &req.description, &req.price_per_gram, &req.available_grams, &req.image_url, &req.video_url, &req.name_en, &req.description_en, &req.effect_en, &req.flavor_profile_en, &req.strain_type_en, &id],
+        "UPDATE strains SET name=$1, category=$2, thc_percent=$3, cbd_percent=$4, effect=$5, flavor_profile=$6, description=$7, price_per_gram=$8, available_grams=$9, image_url=$10, video_url=$11, name_en=$12, description_en=$13, effect_en=$14, flavor_profile_en=$15, strain_type_en=$16, is_available=$17 WHERE id=$18",
+        &[&req.name, &req.category, &req.thc_percent, &req.cbd_percent, &req.effect, &req.flavor_profile, &req.description, &req.price_per_gram, &req.available_grams, &req.image_url, &req.video_url, &req.name_en, &req.description_en, &req.effect_en, &req.flavor_profile_en, &req.strain_type_en, &req.is_available.unwrap_or(true), &id],
     ).await.map_err(|e| {
         tracing::error!("update_strain SQL error for id={}: {:?}", id, e);
         StatusCode::INTERNAL_SERVER_ERROR
@@ -155,7 +157,6 @@ async fn update_strain(State(state): State<AppState>, headers: HeaderMap, Path(i
 async fn delete_strain(State(state): State<AppState>, headers: HeaderMap, Path(id): Path<String>) -> Result<Json<Value>, StatusCode> {
     check_admin(&headers, &state)?;
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("delete_strain pool error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
-    tracing::info!("update_strain id={} video_url={:?}", id, req.video_url);
     client.execute("DELETE FROM strains WHERE id = $1", &[&id])
         .await.map_err(|e| { tracing::error!("delete_strain error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     invalidate_strains(&state.cache).await;
@@ -166,7 +167,6 @@ async fn toggle_availability(State(state): State<AppState>, headers: HeaderMap, 
     check_admin(&headers, &state)?;
     let available = body["is_available"].as_bool().unwrap_or(true);
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
-    tracing::info!("update_strain id={} video_url={:?}", id, req.video_url);
     client.execute("UPDATE strains SET is_available = $1 WHERE id = $2", &[&available, &id])
         .await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     invalidate_strains(&state.cache).await;
@@ -195,14 +195,12 @@ async fn set_strain_of_day(State(state): State<AppState>, headers: HeaderMap, Pa
         (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": format!("pool: {}", e) })))
     })?;
     if enabled {
-        tracing::info!("update_strain id={} video_url={:?}", id, req.video_url);
-    client.execute("UPDATE strains SET is_strain_of_day = true, strain_of_day_discount = $1, strain_of_day_set_at = NOW() WHERE id = $2", &[&discount, &id]).await.map_err(|e| {
+        client.execute("UPDATE strains SET is_strain_of_day = true, strain_of_day_discount = $1, strain_of_day_set_at = NOW() WHERE id = $2", &[&discount, &id]).await.map_err(|e| {
             tracing::error!("SOTD update error for id={}: {:?}", id, e);
             (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": format!("update: {}", e), "id": id })))
         })?;
     } else {
-        tracing::info!("update_strain id={} video_url={:?}", id, req.video_url);
-    client.execute("UPDATE strains SET is_strain_of_day = false WHERE id = $1", &[&id])
+        client.execute("UPDATE strains SET is_strain_of_day = false WHERE id = $1", &[&id])
             .await.map_err(|e| {
                 tracing::error!("SOTD disable error for id={}: {:?}", id, e);
                 (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": format!("disable: {}", e), "id": id })))

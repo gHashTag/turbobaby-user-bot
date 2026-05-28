@@ -557,13 +557,26 @@ async fn use_reward(
 
     if let Ok(tid) = user_id.parse::<i64>() {
         let bonus_f64 = bonus_points as f64;
+        // Ensure loyalty profile exists before crediting bonus
         tx.execute(
+            "INSERT INTO loyalty_profiles (telegram_id, bonus_balance, total_spent) VALUES ($1, 0, 0) ON CONFLICT (telegram_id) DO NOTHING",
+            &[&tid],
+        ).await.map_err(|e| {
+            tracing::error!("Credit bonus upsert error: {}", e);
+            return StatusCode::INTERNAL_SERVER_ERROR;
+        })?;
+        let updated = tx.execute(
             "UPDATE loyalty_profiles SET bonus_balance = bonus_balance + $1 WHERE telegram_id = $2",
             &[&bonus_f64, &tid],
         ).await.map_err(|e| {
             tracing::error!("Credit bonus error: {}", e);
             return StatusCode::INTERNAL_SERVER_ERROR;
         })?;
+        if updated == 0 {
+            let _ = tx.rollback().await;
+            tracing::error!("use_reward: loyalty profile missing for telegram_id={}", tid);
+            return Ok(Json(json!({ "success": false, "error": "Loyalty profile not found" })));
+        }
     }
 
     tx.commit().await.map_err(|e| {

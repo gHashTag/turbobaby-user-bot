@@ -223,12 +223,15 @@ async fn create_treasure_hunt(
     let image_url = req.image_url.unwrap_or_default();
     let bm_desc = req.black_mark_description.unwrap_or_default();
     let bm_image = req.black_mark_image_url.unwrap_or_default();
+    let is_active = req.is_active.unwrap_or(true);
+    let starts_at = req.starts_at.unwrap_or_default();
+    let ends_at = req.ends_at.unwrap_or_default();
     // BUG-4 fix via SeaORM: start_lat/start_lon могут быть NUMERIC.
     use sea_orm::{Statement, DbBackend, ConnectionTrait};
     let stmt = Statement::from_sql_and_values(
         DbBackend::Postgres,
-        "INSERT INTO treasure_hunts (id, name, description, image_url, black_mark_title, black_mark_description, black_mark_image_url, start_lat, start_lon, start_name) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::float8,$9::float8,$10)",
-        [id.clone().into(), req.name.clone().into(), description.clone().into(), image_url.into(), req.black_mark_title.into(), bm_desc.into(), bm_image.into(), req.start_lat.into(), req.start_lon.into(), req.start_name.clone().into()],
+        "INSERT INTO treasure_hunts (id, name, description, image_url, black_mark_title, black_mark_description, black_mark_image_url, is_active, starts_at, ends_at, start_lat, start_lon, start_name) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::float8,$12::float8,$13)",
+        [id.clone().into(), req.name.clone().into(), description.clone().into(), image_url.into(), req.black_mark_title.into(), bm_desc.into(), bm_image.into(), is_active.into(), starts_at.into(), ends_at.into(), req.start_lat.into(), req.start_lon.into(), req.start_name.clone().into()],
     );
     state.db.orm.execute(stmt).await
         .map_err(|e| { tracing::error!("create_treasure_hunt sea-orm: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?;
@@ -265,10 +268,13 @@ async fn update_treasure_hunt(
     let image_url = req.image_url.unwrap_or_default();
     let bm_desc = req.black_mark_description.unwrap_or_default();
     let bm_image = req.black_mark_image_url.unwrap_or_default();
+    let is_active = req.is_active.unwrap_or(true);
+    let starts_at = req.starts_at.unwrap_or_default();
+    let ends_at = req.ends_at.unwrap_or_default();
     let stmt = Statement::from_sql_and_values(
         DbBackend::Postgres,
-        "UPDATE treasure_hunts SET name=$1, description=$2, image_url=$3, black_mark_title=$4, black_mark_description=$5, black_mark_image_url=$6, start_lat=$7::float8, start_lon=$8::float8, start_name=$9 WHERE id=$10",
-        [req.name.into(), description.into(), image_url.into(), req.black_mark_title.into(), bm_desc.into(), bm_image.into(), req.start_lat.into(), req.start_lon.into(), req.start_name.into(), id.into()],
+        "UPDATE treasure_hunts SET name=$1, description=$2, image_url=$3, black_mark_title=$4, black_mark_description=$5, black_mark_image_url=$6, is_active=$7, starts_at=$8, ends_at=$9, start_lat=$10::float8, start_lon=$11::float8, start_name=$12 WHERE id=$13",
+        [req.name.into(), description.into(), image_url.into(), req.black_mark_title.into(), bm_desc.into(), bm_image.into(), is_active.into(), starts_at.into(), ends_at.into(), req.start_lat.into(), req.start_lon.into(), req.start_name.into(), id.into()],
     );
     state.db.orm.execute(stmt).await
         .map_err(|e| { tracing::error!("update_treasure_hunt sea-orm: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?;
@@ -341,8 +347,8 @@ async fn create_quest_location(
     check_admin(&headers, &state)?;
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     let row = client.query_one(
-        "INSERT INTO location_quest_locations (name, description, category, map_url, is_final) VALUES ($1,$2,$3,$4,$5) RETURNING id",
-        &[&req.name, &req.description.unwrap_or_default(), &req.category.unwrap_or_else(|| "location".to_string()), &req.map_url.unwrap_or_default(), &req.is_final.unwrap_or(false)],
+        "INSERT INTO location_quest_locations (name, description, category, map_url, is_active, is_final) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id",
+        &[&req.name, &req.description.unwrap_or_default(), &req.category.unwrap_or_else(|| "location".to_string()), &req.map_url.unwrap_or_default(), &req.is_active.unwrap_or(true), &req.is_final.unwrap_or(false)],
     ).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     Ok(Json(json!({ "success": true, "id": row.try_get::<_, i32>(0).unwrap_or(0) })))
 }
@@ -356,8 +362,8 @@ async fn update_quest_location(
     check_admin(&headers, &state)?;
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     client.execute(
-        "UPDATE location_quest_locations SET name=$1, description=$2, category=$3, map_url=$4, is_final=$5 WHERE id=$6",
-        &[&req.name, &req.description.unwrap_or_default(), &req.category.unwrap_or_else(|| "location".to_string()), &req.map_url.unwrap_or_default(), &req.is_final.unwrap_or(false), &id],
+        "UPDATE location_quest_locations SET name=$1, description=$2, category=$3, map_url=$4, is_active=$5, is_final=$6 WHERE id=$7",
+        &[&req.name, &req.description.unwrap_or_default(), &req.category.unwrap_or_else(|| "location".to_string()), &req.map_url.unwrap_or_default(), &req.is_active.unwrap_or(true), &req.is_final.unwrap_or(false), &id],
     ).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     Ok(Json(json!({ "success": true })))
 }

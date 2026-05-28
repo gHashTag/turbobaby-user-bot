@@ -68,7 +68,15 @@ impl Config {
             is_production: std::env::var("NODE_ENV").unwrap_or_default() == "production"
                 || std::env::var("RAILWAY_ENVIRONMENT").is_ok(),
             admin_ids,
-            bot_username: std::env::var("BOT_USERNAME").unwrap_or("Woody_WeedPecker_bot".into()),
+            bot_username: {
+                let raw = std::env::var("BOT_USERNAME").unwrap_or("Woody_WeedPecker_bot".into());
+                let trimmed = raw.trim();
+                if trimmed.is_empty() {
+                    "Woody_WeedPecker_bot".into()
+                } else {
+                    trimmed.to_string()
+                }
+            },
             database_url: std::env::var("DATABASE_URL").context("DATABASE_URL not set")?,
             grok_api_key: std::env::var("GROK_API_KEY").unwrap_or_default(),
             glm_api_key: std::env::var("GLM_API_KEY").unwrap_or_default(),

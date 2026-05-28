@@ -24,13 +24,13 @@ pub fn Profile() -> Element {
 #[component]
 fn ProfileCard(profile: LoyaltyProfile, user_data: Option<serde_json::Value>) -> Element {
     let tier_class = match profile.tier {
-        LoyaltyTier::Brass => "brass",
+        LoyaltyTier::None | LoyaltyTier::Brass | LoyaltyTier::Bronze => "brass",
         LoyaltyTier::Silver => "silver",
         LoyaltyTier::Gold => "gold",
     };
 
     let tier_name = match profile.tier {
-        LoyaltyTier::Brass => "BRASS",
+        LoyaltyTier::None | LoyaltyTier::Brass | LoyaltyTier::Bronze => "BRASS",
         LoyaltyTier::Silver => "SILVER",
         LoyaltyTier::Gold => "GOLD",
     };
@@ -105,7 +105,7 @@ fn ProfileCard(profile: LoyaltyProfile, user_data: Option<serde_json::Value>) ->
 
 fn get_progress_percent(tier: &LoyaltyTier, spent: f64) -> i32 {
     let (min, max) = match tier {
-        LoyaltyTier::Brass => (0.0, 5000.0),
+        LoyaltyTier::None | LoyaltyTier::Brass | LoyaltyTier::Bronze => (0.0, 5000.0),
         LoyaltyTier::Silver => (5000.0, 20000.0),
         LoyaltyTier::Gold => (20000.0, 100000.0),
     };
@@ -115,7 +115,7 @@ fn get_progress_percent(tier: &LoyaltyTier, spent: f64) -> i32 {
 
 fn get_next_tier_info(tier: &LoyaltyTier, spent: f64) -> String {
     match tier {
-        LoyaltyTier::Brass => {
+        LoyaltyTier::None | LoyaltyTier::Brass | LoyaltyTier::Bronze => {
             let remaining = (5000.0 - spent).max(0.0) as i64;
             format!("До Silver: {} ₽", remaining)
         }

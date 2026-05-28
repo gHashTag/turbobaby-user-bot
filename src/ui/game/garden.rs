@@ -42,6 +42,29 @@ struct GardenResponse {
     plants: Vec<ApiPlant>,
 }
 
+#[derive(Debug, Clone, serde::Deserialize)]
+#[allow(dead_code)]
+struct WaterPlantResponse {
+    success: bool,
+    #[serde(default)]
+    water_count: u32,
+    #[serde(default)]
+    current_stage: Option<String>,
+    #[serde(default)]
+    is_completed: bool,
+    #[serde(default)]
+    error: Option<String>,
+    #[serde(default)]
+    next_water_at: Option<i64>,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+struct HarvestPlantResponse {
+    success: bool,
+    #[serde(default)]
+    error: Option<String>,
+}
+
 async fn fetch_plants(telegram_id: i64, init_data: &str) -> Result<Vec<Plant>, String> {
     let base = api_base_url();
     reqwest::Client::new()
@@ -56,7 +79,7 @@ async fn fetch_plants(telegram_id: i64, init_data: &str) -> Result<Vec<Plant>, S
         .map(|r| r.plants.into_iter().map(Into::into).collect())
 }
 
-async fn water_plant_api(plant_id: &str, init_data: &str) -> Result<Plant, String> {
+async fn water_plant_api(plant_id: &str, init_data: &str) -> Result<WaterPlantResponse, String> {
     let base = api_base_url();
     reqwest::Client::new()
         .post(format!("{}/api/garden/plants/{}/water", base, plant_id))
@@ -64,24 +87,27 @@ async fn water_plant_api(plant_id: &str, init_data: &str) -> Result<Plant, Strin
         .send()
         .await
         .map_err(|e| e.to_string())?
-        .json::<ApiPlant>()
+        .json::<WaterPlantResponse>()
         .await
         .map_err(|e| e.to_string())
-        .map(Into::into)
 }
 
-async fn harvest_plant_api(plant_id: &str, init_data: &str) -> Result<Plant, String> {
+async fn harvest_plant_api(plant_id: &str, init_data: &str) -> Result<(), String> {
     let base = api_base_url();
-    reqwest::Client::new()
+    let resp: HarvestPlantResponse = reqwest::Client::new()
         .post(format!("{}/api/garden/plants/{}/harvest", base, plant_id))
         .header("X-Telegram-Init-Data", init_data)
         .send()
         .await
         .map_err(|e| e.to_string())?
-        .json::<ApiPlant>()
+        .json()
         .await
-        .map_err(|e| e.to_string())
-        .map(Into::into)
+        .map_err(|e| e.to_string())?;
+    if resp.success {
+        Ok(())
+    } else {
+        Err(resp.error.unwrap_or_else(|| "Harvest failed".into()))
+    }
 }
 
 fn mock_plants() -> Vec<Plant> {
@@ -284,10 +310,20 @@ pub fn Garden() -> Element {
                             let init = init_water.clone();
                             spawn(async move {
                                 match water_plant_api(&plant_id, &init).await {
-                                    Ok(updated) => {
-                                        let mut list = ps.write();
-                                        if let Some(p) = list.iter_mut().find(|p| p.id == plant_id) {
-                                            *p = updated;
+                                    Ok(resp) => {
+                                        if resp.success {
+                                            let mut list = ps.write();
+                                            if let Some(p) = list.iter_mut().find(|p| p.id == plant_id) {
+                                                p.water_count = resp.water_count;
+                                                if let Some(stage_str) = resp.current_stage {
+                                                    if let Ok(stage) = serde_json::from_str::<GrowthStage>(&format!("\"{}\"", stage_str)) {
+                                                        p.current_stage = stage;
+                                                    }
+                                                }
+                                                p.is_completed = resp.is_completed;
+                                            }
+                                        } else {
+                                            es.set(resp.error.unwrap_or_else(|| "Water failed".into()));
                                         }
                                     }
                                     Err(e) => { es.set(e); }
@@ -303,8 +339,9 @@ pub fn Garden() -> Element {
                             let plant_id = pid_for_harvest.clone();
                             let init = init_harvest.clone();
                             spawn(async move {
-                                let _ = harvest_plant_api(&plant_id, &init).await;
-                                ps.write().retain(|p| p.id != plant_id);
+                                if let Ok(()) = harvest_plant_api(&plant_id, &init).await {
+                                    ps.write().retain(|p| p.id != plant_id);
+                                }
                             });
                         };
 

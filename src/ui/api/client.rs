@@ -153,7 +153,12 @@ impl ApiClient {
     }
 
     pub async fn get_sets(&self) -> Result<Vec<Set>> {
-        self.get("/api/sets").await
+        #[derive(Deserialize)]
+        struct SetsResponse {
+            sets: Vec<Set>,
+        }
+        let resp: SetsResponse = self.get("/api/sets").await?;
+        Ok(resp.sets)
     }
 
     pub async fn get_tea_products(&self) -> Result<Vec<TeaProduct>> {
@@ -171,7 +176,12 @@ impl ApiClient {
 
     // Order endpoints
     pub async fn get_user_orders(&self, telegram_id: i64) -> Result<Vec<Order>> {
-        self.get(&format!("/api/orders/user/{}", telegram_id)).await
+        #[derive(Deserialize)]
+        struct OrdersResponse {
+            orders: Vec<Order>,
+        }
+        let resp: OrdersResponse = self.get(&format!("/api/orders/user/{}", telegram_id)).await?;
+        Ok(resp.orders)
     }
 
     pub async fn create_order(&self, order: &CreateOrderRequest) -> Result<Order> {
@@ -180,30 +190,23 @@ impl ApiClient {
 
     // Garden endpoints
     pub async fn get_user_plants(&self, telegram_id: i64) -> Result<Vec<Plant>> {
-        self.get(&format!("/api/garden/plants?telegram_id={}", telegram_id))
-            .await
-    }
-
-    pub async fn plant_seed(
-        &self,
-        request: &PlantSeedRequest,
-    ) -> Result<Plant> {
-        self.post("/api/garden/plants", request).await
-    }
-
-    pub async fn water_plant(&self, plant_id: &str) -> Result<Plant> {
-        self.post(&format!("/api/garden/plants/{}/water", plant_id), &())
-            .await
-    }
-
-    pub async fn harvest_plant(&self, plant_id: &str) -> Result<Plant> {
-        self.post(&format!("/api/garden/plants/{}/harvest", plant_id), &())
-            .await
+        #[derive(Deserialize)]
+        struct PlantsResponse {
+            plants: Vec<Plant>,
+        }
+        let resp: PlantsResponse = self.get(&format!("/api/garden/plants?telegram_id={}", telegram_id))
+            .await?;
+        Ok(resp.plants)
     }
 
     // Quest endpoints
     pub async fn get_quest_locations(&self) -> Result<Vec<QuestLocation>> {
-        self.get("/api/quest/locations").await
+        #[derive(Deserialize)]
+        struct LocationsResponse {
+            locations: Vec<QuestLocation>,
+        }
+        let resp: LocationsResponse = self.get("/api/quest/locations").await?;
+        Ok(resp.locations)
     }
 
     pub async fn scan_qr_code(&self, code: &str) -> Result<ScanResponse> {
@@ -213,12 +216,22 @@ impl ApiClient {
 
     // Loyalty endpoints
     pub async fn get_loyalty_profile(&self, telegram_id: i64) -> Result<LoyaltyProfile> {
-        self.get(&format!("/api/loyalty/{}", telegram_id)).await
+        #[derive(Deserialize)]
+        struct ProfileResponse {
+            profile: LoyaltyProfile,
+        }
+        let resp: ProfileResponse = self.get(&format!("/api/loyalty/{}", telegram_id)).await?;
+        Ok(resp.profile)
     }
 
     // Strain of day
     pub async fn get_strain_of_day(&self) -> Result<Vec<Strain>> {
-        self.get("/api/strains/strain-of-day").await
+        #[derive(Deserialize)]
+        struct StrainsResponse {
+            strains: Vec<Strain>,
+        }
+        let resp: StrainsResponse = self.get("/api/strains/strain-of-day").await?;
+        Ok(resp.strains)
     }
 }
 
@@ -234,13 +247,6 @@ pub struct OrderItemRequest {
     pub name: String,
     pub quantity: u32,
     pub price: f64,
-}
-
-#[derive(Debug, Serialize)]
-pub struct PlantSeedRequest {
-    pub telegram_id: i64,
-    pub strain_id: String,
-    pub strain_name: String,
 }
 
 #[derive(Debug, Serialize)]

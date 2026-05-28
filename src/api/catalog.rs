@@ -140,8 +140,8 @@ async fn update_accessory(State(state): State<AppState>, headers: HeaderMap, Pat
     }
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     client.execute(
-        "UPDATE accessories SET name=$1, category=$2, description=$3, price=$4, stock=$5, image_url=$6, video_url=$7, name_en=$8, description_en=$9, category_en=$10 WHERE id=$11",
-        &[&req.name, &req.category.unwrap_or_default(), &req.description.unwrap_or_default(), &req.price, &req.stock.unwrap_or(0), &req.image_url.unwrap_or_default(), &req.video_url, &req.name_en, &req.description_en, &req.category_en, &id],
+        "UPDATE accessories SET name=$1, category=$2, description=$3, price=$4, stock=$5, image_url=$6, video_url=$7, name_en=$8, description_en=$9, category_en=$10, is_available=$11 WHERE id=$12",
+        &[&req.name, &req.category.unwrap_or_default(), &req.description.unwrap_or_default(), &req.price, &req.stock.unwrap_or(0), &req.image_url.unwrap_or_default(), &req.video_url, &req.name_en, &req.description_en, &req.category_en, &req.is_available.unwrap_or(true), &id],
     ).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     Ok(Json(json!({ "success": true })))
 }
@@ -235,8 +235,8 @@ async fn update_accessory_set(State(state): State<AppState>, headers: HeaderMap,
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     let accessories = req.accessories.unwrap_or_default();
     client.execute(
-        "UPDATE accessory_sets SET name=$1, description=$2, icon=$3, accessories=$4, total_price=$5, discount_percent=$6, is_deal_of_day=$7, name_en=$8, description_en=$9, image_url=$10, video_url=$11 WHERE id=$12",
-        &[&req.name, &req.description.unwrap_or_default(), &req.icon.unwrap_or_default(), &accessories, &req.total_price, &req.discount_percent.unwrap_or(0.0), &req.is_deal_of_day.unwrap_or(false), &req.name_en, &req.description_en, &req.image_url, &req.video_url, &id],
+        "UPDATE accessory_sets SET name=$1, description=$2, icon=$3, accessories=$4, total_price=$5, discount_percent=$6, is_deal_of_day=$7, name_en=$8, description_en=$9, image_url=$10, video_url=$11, is_available=$12 WHERE id=$13",
+        &[&req.name, &req.description.unwrap_or_default(), &req.icon.unwrap_or_default(), &accessories, &req.total_price, &req.discount_percent.unwrap_or(0.0), &req.is_deal_of_day.unwrap_or(false), &req.name_en, &req.description_en, &req.image_url, &req.video_url, &req.is_available.unwrap_or(true), &id],
     ).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     Ok(Json(json!({ "success": true })))
 }
@@ -353,8 +353,8 @@ async fn update_tea_product(State(state): State<AppState>, headers: HeaderMap, P
     }
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     client.execute(
-        "UPDATE tea_products SET name=$1, subcategory=$2, description=$3, price=$4, stock=$5, image_url=$6, video_url=$7, name_en=$8, description_en=$9, subcategory_en=$10 WHERE id=$11",
-        &[&req.name, &req.subcategory.unwrap_or_else(|| "tea".to_string()), &req.description.unwrap_or_default(), &req.price, &req.stock.unwrap_or(0), &req.image_url.unwrap_or_default(), &req.video_url, &req.name_en, &req.description_en, &req.subcategory_en, &id],
+        "UPDATE tea_products SET name=$1, subcategory=$2, description=$3, price=$4, stock=$5, image_url=$6, video_url=$7, name_en=$8, description_en=$9, subcategory_en=$10, is_available=$11 WHERE id=$12",
+        &[&req.name, &req.subcategory.unwrap_or_else(|| "tea".to_string()), &req.description.unwrap_or_default(), &req.price, &req.stock.unwrap_or(0), &req.image_url.unwrap_or_default(), &req.video_url, &req.name_en, &req.description_en, &req.subcategory_en, &req.is_available.unwrap_or(true), &id],
     ).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     Ok(Json(json!({ "success": true })))
 }
@@ -444,8 +444,8 @@ async fn update_tea_set(State(state): State<AppState>, headers: HeaderMap, Path(
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     let tea_items = req.items.unwrap_or_default();
     client.execute(
-        "UPDATE tea_sets SET name=$1, description=$2, icon=$3, items=$4, total_price=$5, discount_percent=$6, name_en=$7, description_en=$8, video_url=$9 WHERE id=$10",
-        &[&req.name, &req.description.unwrap_or_default(), &req.icon.unwrap_or_default(), &tea_items, &req.total_price, &req.discount_percent.unwrap_or(0.0), &req.name_en, &req.description_en, &req.video_url, &id],
+        "UPDATE tea_sets SET name=$1, description=$2, icon=$3, items=$4, total_price=$5, discount_percent=$6, name_en=$7, description_en=$8, video_url=$9, is_available=$10 WHERE id=$11",
+        &[&req.name, &req.description.unwrap_or_default(), &req.icon.unwrap_or_default(), &tea_items, &req.total_price, &req.discount_percent.unwrap_or(0.0), &req.name_en, &req.description_en, &req.video_url, &req.is_available.unwrap_or(true), &id],
     ).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     Ok(Json(json!({ "success": true })))
 }
@@ -602,8 +602,8 @@ async fn update_set(State(state): State<AppState>, headers: HeaderMap, Path(id):
     let strain_ids = req.strain_ids.unwrap_or_default();
     let accessory_ids = req.accessory_ids.unwrap_or_default();
     client.execute(
-        "UPDATE sets SET name=$1, description=$2, icon=$3, strain_ids=$4, accessory_ids=$5, total_price=$6, discount_percent=$7, is_deal_of_day=$8, video_url=$9 WHERE id=$10",
-        &[&req.name, &req.description.unwrap_or_default(), &req.icon.unwrap_or_default(), &strain_ids, &accessory_ids, &req.total_price, &req.discount_percent.unwrap_or(0.0), &req.is_deal_of_day.unwrap_or(false), &req.video_url, &id],
+        "UPDATE sets SET name=$1, description=$2, icon=$3, strain_ids=$4, accessory_ids=$5, total_price=$6, discount_percent=$7, is_deal_of_day=$8, video_url=$9, is_available=$10 WHERE id=$11",
+        &[&req.name, &req.description.unwrap_or_default(), &req.icon.unwrap_or_default(), &strain_ids, &accessory_ids, &req.total_price, &req.discount_percent.unwrap_or(0.0), &req.is_deal_of_day.unwrap_or(false), &req.video_url, &req.is_available.unwrap_or(true), &id],
     ).await.map_err(|e| { tracing::error!("update_set error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     Ok(Json(json!({ "success": true })))
 }

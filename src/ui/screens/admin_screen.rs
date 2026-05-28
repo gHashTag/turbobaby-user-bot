@@ -1747,7 +1747,6 @@ fn EditSetCard(
                             s.discount_percent = d;
                             s.is_deal_of_day = deal;
                         });
-                        on_saved.call(());
                         spawn(async move {
                             let body = json!({
                                 "name": n, "total_price": p, "discount_percent": d,
@@ -2150,7 +2149,6 @@ fn EditAccessorySetCard(
                             s.name_en = if ne.is_empty() { None } else { Some(ne.clone()) };
                             s.description_en = if de.is_empty() { None } else { Some(de.clone()) };
                         });
-                        on_saved.call(());
                         spawn(async move {
                             let body = json!({
                                 "name": n, "total_price": p, "discount_percent": d,
@@ -2171,6 +2169,8 @@ fn EditAccessorySetCard(
                                 .json(&body).send().await;
                             let success = match res { Ok(r) => r.status().is_success(), Err(_) => false };
                             if success {
+                                on_saved.call(());
+                                status.set("✅ Сохранено".into());
                                 TelegramApp::init().haptic_notification(HapticNotification::Success);
                             } else {
                                 TelegramApp::init().haptic_notification(HapticNotification::Error);
@@ -2533,7 +2533,6 @@ fn EditTeaSetCard(
                             s.name_en = if ne.is_empty() { None } else { Some(ne.clone()) };
                             s.description_en = if de.is_empty() { None } else { Some(de.clone()) };
                         });
-                        on_saved.call(());
                         spawn(async move {
                             let body = json!({
                                 "name": n, "total_price": p, "discount_percent": d,
@@ -2552,6 +2551,8 @@ fn EditTeaSetCard(
                                 .json(&body).send().await;
                             let success = match res { Ok(r) => r.status().is_success(), Err(_) => false };
                             if success {
+                                on_saved.call(());
+                                status.set("✅ Сохранено".into());
                                 TelegramApp::init().haptic_notification(HapticNotification::Success);
                             } else {
                                 TelegramApp::init().haptic_notification(HapticNotification::Error);
@@ -2881,7 +2882,6 @@ fn EditStrainCard(
                             s.flavor_profile_en = if fpe.is_empty() { None } else { Some(fpe.clone()) };
                             s.strain_type_en = if ste.is_empty() { None } else { Some(ste.clone()) };
                         });
-                        on_saved.call(());
                         spawn(async move {
                             let body = json!({
                                 "name": n, "category": c, "price_per_gram": p, "available_grams": g,
@@ -2910,6 +2910,8 @@ fn EditStrainCard(
                                 Err(_) => false,
                             };
                             if success {
+                                on_saved.call(());
+                                status.set("✅ Сохранено".into());
                                 TelegramApp::init().haptic_notification(HapticNotification::Success);
                             } else {
                                 TelegramApp::init().haptic_notification(HapticNotification::Error);
@@ -2996,7 +2998,6 @@ fn EditAccessoryCard(
                             a.description_en = if de.is_empty() { None } else { Some(de.clone()) };
                             a.category_en = if ce.is_empty() { None } else { Some(ce.clone()) };
                         });
-                        on_saved.call(());
                         spawn(async move {
                             let body = json!({
                                 "name": n, "category": c, "price": p, "stock": s_val, "is_available": item.is_available,
@@ -3018,6 +3019,8 @@ fn EditAccessoryCard(
                                 Err(_) => false,
                             };
                             if success {
+                                on_saved.call(());
+                                status.set("✅ Сохранено".into());
                                 TelegramApp::init().haptic_notification(HapticNotification::Success);
                             } else {
                                 TelegramApp::init().haptic_notification(HapticNotification::Error);
@@ -3103,7 +3106,6 @@ fn EditTeaCard(
                             t.description_en = if de.is_empty() { None } else { Some(de.clone()) };
                             t.subcategory_en = if sce.is_empty() { None } else { Some(sce.clone()) };
                         });
-                        on_saved.call(());
                         spawn(async move {
                             let body = json!({
                                 "name": n, "subcategory": sc, "price": p, "stock": s_val, "is_available": item.is_available,
@@ -3125,6 +3127,8 @@ fn EditTeaCard(
                                 Err(_) => false,
                             };
                             if success {
+                                on_saved.call(());
+                                status.set("✅ Сохранено".into());
                                 TelegramApp::init().haptic_notification(HapticNotification::Success);
                             } else {
                                 TelegramApp::init().haptic_notification(HapticNotification::Error);
@@ -3733,7 +3737,7 @@ fn OrdersTab() -> Element {
                     }
                 }
                 {
-                    let page = (*offset.read() / *limit.read()) + 1;
+                    let page = (*offset.read() / (*limit.read()).max(1)) + 1;
                     let lim = *limit.read();
                     let has_prev = *offset.read() > 0;
                     let has_next = orders.read().len() >= lim as usize;

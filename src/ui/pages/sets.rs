@@ -98,7 +98,7 @@ fn FeaturedSetCard(set: Set) -> Element {
     };
 
     let price = format!("{:.0}", set.price);
-    let original_price = if set.discount > 0.0 {
+    let original_price = if set.discount > 0.0 && set.discount < 1.0 {
         let original = set.price / (1.0 - set.discount);
         format!("{:.0}", original)
     } else {
@@ -140,7 +140,7 @@ fn FeaturedSetCard(set: Set) -> Element {
 fn SetCard(set: Set) -> Element {
     let available = set.is_available;
     let price = format!("{:.0}", set.price);
-    let original_price = if set.discount > 0.0 {
+    let original_price = if set.discount > 0.0 && set.discount < 1.0 {
         let original = set.price / (1.0 - set.discount);
         format!("{:.0}", original)
     } else {
