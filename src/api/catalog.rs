@@ -521,12 +521,12 @@ async fn get_sets(headers: HeaderMap, State(state): State<AppState>, Query(q): Q
 
     // Public mode: combine accessory_sets + tea_sets (backwards compat)
     let accessory_sets = client.query(
-        "SELECT id, name, description, icon, accessories, total_price::float8, discount_percent::float8, is_available, is_deal_of_day, name_en, description_en FROM accessory_sets WHERE is_available = TRUE",
+        "SELECT id, name, description, icon, accessories, total_price::float8, discount_percent::float8, is_available, is_deal_of_day, name_en, description_en, image_url, video_url FROM accessory_sets WHERE is_available = TRUE",
         &[],
     ).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
 
     let tea_sets = client.query(
-        "SELECT id, name, description, icon, items, total_price::float8, discount_percent::float8, is_available, name_en, description_en FROM tea_sets WHERE is_available = TRUE",
+        "SELECT id, name, description, icon, items, total_price::float8, discount_percent::float8, is_available, name_en, description_en, image_url, video_url FROM tea_sets WHERE is_available = TRUE",
         &[],
     ).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
 
@@ -547,6 +547,8 @@ async fn get_sets(headers: HeaderMap, State(state): State<AppState>, Query(q): Q
             "is_deal_of_day": r.try_get::<_, bool>(8).unwrap_or(false),
             "name_en": r.try_get::<_, Option<String>>(9).ok().flatten(),
             "description_en": r.try_get::<_, Option<String>>(10).ok().flatten(),
+            "image_url": r.try_get::<_, Option<String>>(11).ok().flatten(),
+            "video_url": r.try_get::<_, Option<String>>(12).ok().flatten(),
         }));
     }
 
@@ -565,6 +567,8 @@ async fn get_sets(headers: HeaderMap, State(state): State<AppState>, Query(q): Q
             "is_deal_of_day": false,
             "name_en": r.try_get::<_, Option<String>>(8).ok().flatten(),
             "description_en": r.try_get::<_, Option<String>>(9).ok().flatten(),
+            "image_url": r.try_get::<_, Option<String>>(10).ok().flatten(),
+            "video_url": r.try_get::<_, Option<String>>(11).ok().flatten(),
         }));
     }
 

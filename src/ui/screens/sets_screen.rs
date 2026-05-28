@@ -22,6 +22,8 @@ struct ApiSet {
     target_mood: Option<String>,
     time_of_day: Option<String>,
     image_url: Option<String>,
+    #[serde(default)]
+    video_url: Option<String>,
     is_available: Option<bool>,
 }
 
@@ -198,108 +200,7 @@ pub fn SetsScreen() -> Element {
                         }
                         div { style: "display:flex;flex-direction:column;gap:12px;padding:0 16px;",
                             for set in filtered_sets.iter() {
-                                {
-                                    let s = set.clone();
-                                    let mood = s.target_mood.as_deref().unwrap_or("party");
-                                    let emoji = mood_emoji(mood);
-                                    let m_color = mood_color(mood);
-                                    let has_discount = s.discount_percent > 0.0;
-                                    let discounted_price = if has_discount {
-                                        s.total_price * (1.0 - s.discount_percent / 100.0)
-                                    } else {
-                                        s.total_price
-                                    };
-                                    let original_price_str = format!("฿{}", s.total_price as i32);
-                                    let price_str = format!("฿{}", discounted_price as i32);
-                                    let discount_badge = if has_discount {
-                                        format!("{}% OFF", s.discount_percent as i32)
-                                    } else {
-                                        String::new()
-                                    };
-                                    let set_name = s.name.clone();
-                                    let set_id = s.id.clone();
-                                    let icon = s.icon.as_deref().unwrap_or("🎁");
-                                    let desc = s.description.as_deref().unwrap_or("");
-                                    let time_str = s.time_of_day.as_deref().unwrap_or("");
-                                    let strains_count = s.strains.as_ref().map(|v| v.len()).unwrap_or(0);
-                                    let strains_label = if strains_count > 0 { format!("{} strains", strains_count) } else { String::new() };
-
-                                    rsx! {
-                                        div { style: "
-                                            background:#16213e;
-                                            border:4px solid {m_color}33;
-                                            box-shadow:4px 4px 0 #000;
-                                            overflow:hidden;
-                                        ",
-                                            div { style: "
-                                                height:100px;
-                                                background:linear-gradient(135deg,#1a1a2e,#16213e);
-                                                display:flex;align-items:center;justify-content:center;
-                                                font-size:40px;position:relative;
-                                            ",
-                                                "{icon}"
-                                                if has_discount {
-                                                    span { style: "
-                                                        position:absolute;top:8px;right:8px;
-                                                        font-size:13px;font-weight:700;background:{m_color};color:#000;
-                                                        padding:4px 8px;box-shadow:2px 2px 0 #000;
-                                                    ", "{discount_badge}" }
-                                                }
-                                            }
-                                            div { style: "padding:14px;",
-                                                div { style: "display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;",
-                                                    span { style: "font-size:16px;font-weight:700;text-shadow:2px 2px 0 #000;", "{set_name}" }
-                                                    span { style: "font-size:13px;color:{m_color};", "{emoji} {mood}" }
-                                                }
-                                                if !desc.is_empty() {
-                                                    div { style: "font-size:13px;color:#888;margin-bottom:6px;", "{desc}" }
-                                                }
-                                                if !strains_label.is_empty() || !time_str.is_empty() {
-                                                    div { style: "font-size:13px;color:#888;margin-bottom:8px;",
-                                                        if !strains_label.is_empty() {
-                                                            span { style: "border:2px solid #2a2a4a;padding:2px 8px;margin-right:4px;", "{strains_label}" }
-                                                        }
-                                                        if !time_str.is_empty() {
-                                                            span { style: "border:2px solid #2a2a4a;padding:2px 8px;", "🕐 {time_str}" }
-                                                        }
-                                                    }
-                                                }
-                                                div { style: "display:flex;justify-content:space-between;align-items:center;",
-                                                    div {
-                                                        if has_discount {
-                                                            span { style: "font-size:13px;color:#888;text-decoration:line-through;margin-right:6px;", "{original_price_str}" }
-                                                        }
-                                                        span { style: "font-size:22px;font-weight:800;color:#ffe600;text-shadow:2px 2px 0 #000;", "{price_str}" }
-                                                    }
-                                                }
-                                            }
-                                            div { style: "padding:0 14px 14px;",
-                                                button {
-                                                    style: "
-                                                        font-size:14px;font-weight:700;width:100%;padding:12px 20px;
-                                                        background:#39ff14;color:#000;
-                                                        border:4px solid #2d9e0f;
-                                                        box-shadow:3px 3px 0 #000;
-                                                        cursor:pointer;
-                                                    ",
-                                                    onclick: move |_| {
-                                                        let mut c = cart.write();
-                                                        c.add_item(CartItem {
-                                                            id: set_id.clone(),
-                                                            name: set_name.clone(),
-                                                            price: discounted_price,
-                                                            quantity: 1,
-                                                            image_url: None,
-                                                            item_type: CartItemType::Set,
-                                                        });
-                                                        crate::ui::telegram::TelegramApp::init().haptic_notification(crate::ui::telegram::HapticNotification::Success);
-                                                    },
-                                                    "{add_to_cart}"
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
+                                { render_set_card(set.clone(), cart) }
                             }
                         }
                     },
@@ -324,6 +225,134 @@ pub fn SetsScreen() -> Element {
             }
 
             BottomNav {}
+        }
+    }
+}
+
+fn render_set_card(set: ApiSet, mut cart: Signal<Cart>) -> Element {
+    let add_to_cart = t(Lang::Russian, T_ADD_TO_CART).to_string();
+    let mood = set.target_mood.as_deref().unwrap_or("party");
+    let emoji = mood_emoji(mood);
+    let m_color = mood_color(mood);
+    let has_discount = set.discount_percent > 0.0;
+    let discounted_price = if has_discount {
+        set.total_price * (1.0 - set.discount_percent / 100.0)
+    } else {
+        set.total_price
+    };
+    let original_price_str = format!("฿{}", set.total_price as i32);
+    let price_str = format!("฿{}", discounted_price as i32);
+    let discount_badge = if has_discount {
+        format!("{}% OFF", set.discount_percent as i32)
+    } else {
+        String::new()
+    };
+    let set_name = set.name.clone();
+    let set_id = set.id.clone();
+    let icon = set.icon.as_deref().unwrap_or("🎁");
+    let desc = set.description.as_deref().unwrap_or("");
+    let time_str = set.time_of_day.as_deref().unwrap_or("");
+    let strains_count = set.strains.as_ref().map(|v| v.len()).unwrap_or(0);
+    let strains_label = if strains_count > 0 { format!("{} strains", strains_count) } else { String::new() };
+    let img_url = set.image_url.clone().unwrap_or_default();
+    let has_image = !img_url.is_empty();
+    let video_url = set.video_url.clone().unwrap_or_default();
+    let has_video = !video_url.is_empty();
+    let mut show_video = use_signal(|| false);
+
+    rsx! {
+        div { style: "
+            background:#16213e;
+            border:4px solid {m_color}33;
+            box-shadow:4px 4px 0 #000;
+            overflow:hidden;
+            position:relative;
+        ",
+            div { style: "
+                height:100px;
+                background:linear-gradient(135deg,#1a1a2e,#16213e);
+                display:flex;align-items:center;justify-content:center;
+                font-size:40px;position:relative;overflow:hidden;
+            ",
+                if has_image {
+                    img { src: "{img_url}", style: "width:100%;height:100%;object-fit:cover;position:absolute;inset:0;" }
+                } else {
+                    "{icon}"
+                }
+                if has_discount {
+                    span { style: "
+                        position:absolute;top:8px;right:8px;
+                        font-size:13px;font-weight:700;background:{m_color};color:#000;
+                        padding:4px 8px;box-shadow:2px 2px 0 #000;z-index:2;
+                    ", "{discount_badge}" }
+                }
+                if has_video {
+                    button { style: "position:absolute;bottom:8px;right:8px;width:32px;height:32px;border-radius:50%;background:rgba(0,0,0,0.6);border:1px solid #fff;color:#fff;font-size:14px;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:2;",
+                        onclick: move |e: Event<MouseData>| { e.stop_propagation(); show_video.set(true); }, "▶️" }
+                }
+                if show_video() {
+                    div { style: "position:fixed;inset:0;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;z-index:1000;padding:16px;",
+                        onclick: move |_| show_video.set(false),
+                        div { style: "background:#1a1a2e;padding:16px;border-radius:8px;max-width:90vw;max-height:80vh;display:flex;flex-direction:column;align-items:center;gap:8px;",
+                            onclick: move |e: Event<MouseData>| e.stop_propagation(),
+                            video { style: "max-width:100%;max-height:60vh;border-radius:6px;", controls: true, src: "{video_url}" }
+                            button { style: "padding:8px 16px;background:#2a2a4a;color:#e8e8e8;border:none;border-radius:4px;cursor:pointer;",
+                                onclick: move |_| show_video.set(false), "Закрыть" }
+                        }
+                    }
+                }
+            }
+            div { style: "padding:14px;",
+                div { style: "display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;",
+                    span { style: "font-size:16px;font-weight:700;text-shadow:2px 2px 0 #000;", "{set_name}" }
+                    span { style: "font-size:13px;color:{m_color};", "{emoji} {mood}" }
+                }
+                if !desc.is_empty() {
+                    div { style: "font-size:13px;color:#888;margin-bottom:6px;", "{desc}" }
+                }
+                if !strains_label.is_empty() || !time_str.is_empty() {
+                    div { style: "font-size:13px;color:#888;margin-bottom:8px;",
+                        if !strains_label.is_empty() {
+                            span { style: "border:2px solid #2a2a4a;padding:2px 8px;margin-right:4px;", "{strains_label}" }
+                        }
+                        if !time_str.is_empty() {
+                            span { style: "border:2px solid #2a2a4a;padding:2px 8px;", "🕐 {time_str}" }
+                        }
+                    }
+                }
+                div { style: "display:flex;justify-content:space-between;align-items:center;",
+                    div {
+                        if has_discount {
+                            span { style: "font-size:13px;color:#888;text-decoration:line-through;margin-right:6px;", "{original_price_str}" }
+                        }
+                        span { style: "font-size:22px;font-weight:800;color:#ffe600;text-shadow:2px 2px 0 #000;", "{price_str}" }
+                    }
+                }
+            }
+            div { style: "padding:0 14px 14px;",
+                button {
+                    style: "
+                        font-size:14px;font-weight:700;width:100%;padding:12px 20px;
+                        background:#39ff14;color:#000;
+                        border:4px solid #2d9e0f;
+                        box-shadow:3px 3px 0 #000;
+                        cursor:pointer;
+                    ",
+                    onclick: move |_| {
+                        let mut c = cart.write();
+                        c.add_item(CartItem {
+                            id: set_id.clone(),
+                            name: set_name.clone(),
+                            price: discounted_price,
+                            quantity: 1,
+                            image_url: None,
+                            item_type: CartItemType::Set,
+                        });
+                        crate::ui::telegram::TelegramApp::init().haptic_notification(crate::ui::telegram::HapticNotification::Success);
+                    },
+                    "{add_to_cart}"
+                }
+            }
         }
     }
 }

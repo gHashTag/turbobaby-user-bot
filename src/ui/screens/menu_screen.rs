@@ -322,9 +322,7 @@ fn render_strain_card(strain: ApiStrain, mut cart: Signal<Cart>) -> Element {
                             onclick: move |_| show_video.set(false),
                             div { style: "background:#1a1a2e;padding:16px;border-radius:8px;max-width:90vw;max-height:80vh;display:flex;flex-direction:column;align-items:center;gap:8px;",
                                 onclick: move |e: Event<MouseData>| e.stop_propagation(),
-                                video { style: "max-width:100%;max-height:60vh;border-radius:6px;", controls: true,
-                                    source { src: "{video_url}", r#type: "video/mp4" }
-                                }
+                                video { style: "max-width:100%;max-height:60vh;border-radius:6px;", controls: true, src: "{video_url}" }
                                 button { style: "padding:8px 16px;background:#2a2a4a;color:#e8e8e8;border:none;border-radius:4px;cursor:pointer;",
                                     onclick: move |_| show_video.set(false), "Закрыть" }
                             }

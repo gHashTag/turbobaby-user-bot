@@ -237,6 +237,7 @@ async fn water_plant(
     let user_id: String = r.get(0);
     if let Ok(tid) = user_id.parse::<i64>() {
         crate::api::auth::check_owner(&headers, &state, tid)?;
+        check_not_blocked(&state, tid).await?;
     }
 
     let current_stage: String = r.get(1);
