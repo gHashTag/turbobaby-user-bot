@@ -338,9 +338,8 @@ pub fn AdminScreen() -> Element {
             div { style: "font-size:10px;color:#444;margin-bottom:16px;font-family:monospace;", "v{build_version}" }
             match &*access.read() {
                 None => rsx!(div { style: "color:#888;padding:20px 0;", "Проверка доступа..." }),
-                Some(Err(e)) => rsx!(div { style: "color:#ff4757;padding:20px 0;", "Ошибка: {e}" }),
-                Some(Ok(false)) => rsx!(AccessDeniedScreen { telegram_id, password_token, access_reload }),
                 Some(Ok(true)) => rsx!(AdminPanel { active_tab, password_token }),
+                _ => rsx!(AccessDeniedScreen { telegram_id, password_token, access_reload }),
             }
         }
     }

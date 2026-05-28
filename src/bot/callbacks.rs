@@ -296,20 +296,23 @@ pub async fn handle_callback(
             bot.answer_callback_query(&q.id).text(&format!("❌ {}", locale.order_rejected)).await?;
             match db.pool.get().await {
                 Ok(client) => {
-                    // Refund bonus if order is rejected.
-                    if let Ok(Some(r)) = client.query_opt("SELECT telegram_id, bonus_used::float8 FROM orders WHERE id = $1", &[&_order_id]).await {
-                        let bonus: f64 = r.try_get::<_, f64>("bonus_used").unwrap_or(0.0);
-                        let tid: Option<i64> = r.try_get("telegram_id").ok().flatten();
-                        if bonus > 0.0 {
-                            if let Some(tid) = tid {
-                                let _ = client.execute(
-                                    "INSERT INTO loyalty_profiles (telegram_id, bonus_balance, total_spent) VALUES ($1, 0, 0) ON CONFLICT (telegram_id) DO NOTHING",
-                                    &[&tid],
-                                ).await;
-                                let _ = client.execute(
-                                    "UPDATE loyalty_profiles SET bonus_balance = bonus_balance + $1 WHERE telegram_id = $2",
-                                    &[&bonus, &tid],
-                                ).await;
+                    // Refund bonus if order is being rejected for the first time.
+                    if let Ok(Some(r)) = client.query_opt("SELECT telegram_id, bonus_used::float8, status FROM orders WHERE id = $1", &[&_order_id]).await {
+                        let current_status: String = r.try_get("status").unwrap_or_default();
+                        if current_status != "rejected" {
+                            let bonus: f64 = r.try_get::<_, f64>("bonus_used").unwrap_or(0.0);
+                            let tid: Option<i64> = r.try_get("telegram_id").ok().flatten();
+                            if bonus > 0.0 {
+                                if let Some(tid) = tid {
+                                    let _ = client.execute(
+                                        "INSERT INTO loyalty_profiles (telegram_id, bonus_balance, total_spent) VALUES ($1, 0, 0) ON CONFLICT (telegram_id) DO NOTHING",
+                                        &[&tid],
+                                    ).await;
+                                    let _ = client.execute(
+                                        "UPDATE loyalty_profiles SET bonus_balance = bonus_balance + $1 WHERE telegram_id = $2",
+                                        &[&bonus, &tid],
+                                    ).await;
+                                }
                             }
                         }
                     }
