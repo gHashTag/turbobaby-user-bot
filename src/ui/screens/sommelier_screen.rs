@@ -26,16 +26,6 @@ impl Mood {
             Self::Taste => "👅 Taste",
         }
     }
-    fn as_str(&self) -> &'static str {
-        match self {
-            Self::Relax => "relax",
-            Self::Energy => "energy",
-            Self::Creative => "creative",
-            Self::Sleep => "sleep",
-            Self::Strong => "strong",
-            Self::Taste => "taste",
-        }
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -53,13 +43,6 @@ impl TimeOfDay {
             Self::Any => "🔄 Any",
         }
     }
-    fn as_str(&self) -> &'static str {
-        match self {
-            Self::Day => "day",
-            Self::Evening => "evening",
-            Self::Any => "any",
-        }
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -75,13 +58,6 @@ impl Experience {
             Self::Beginner => "🌱 Beginner",
             Self::Medium => "🌿 Medium",
             Self::Expert => "🔥 Expert",
-        }
-    }
-    fn as_str(&self) -> &'static str {
-        match self {
-            Self::Beginner => "beginner",
-            Self::Medium => "medium",
-            Self::Expert => "expert",
         }
     }
 }

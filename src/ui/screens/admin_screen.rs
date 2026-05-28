@@ -558,8 +558,16 @@ fn StrainsTab() -> Element {
             .header("X-Admin-Telegram-Id", telegram_id.to_string())
             .send().await
         {
-            if let Ok(data) = resp.json::<StrainsResp>().await {
+            let text = resp.text().await.unwrap_or_default();
+            web_sys::console::log_1(&format!("[ADMIN] GET strains response len={}", text.len()).into());
+            if let Ok(data) = serde_json::from_str::<StrainsResp>(&text) {
+                web_sys::console::log_1(&format!("[ADMIN] Loaded {} strains", data.strains.len()).into());
+                for s in &data.strains {
+                    web_sys::console::log_1(&format!("[ADMIN] strain id={} name={} video_url={:?}", s.id, s.name, s.video_url).into());
+                }
                 cache.set(data.strains);
+            } else {
+                web_sys::console::log_1(&format!("[ADMIN] Failed to parse strains response: {}", &text[..text.len().min(200)]).into());
             }
         }
         loading.set(false);
@@ -2627,7 +2635,12 @@ fn VideoUpload(video_url: String, on_change: EventHandler<String>) -> Element {
                         spawn(async move {
                             let result = upload_video().await;
                             uploading.set(false);
-                            if let Some(url) = result { on_change.call(url); }
+                            if let Some(url) = result {
+                                web_sys::console::log_1(&format!("[VideoUpload] callback url={}", url).into());
+                                on_change.call(url);
+                            } else {
+                                web_sys::console::log_1(&"[VideoUpload] upload returned None".into());
+                            }
                         });
                     },
                     "🎥 Upload"
@@ -2898,13 +2911,17 @@ fn EditStrainCard(
                                 "flavor_profile_en": if fpe.is_empty() { serde_json::Value::Null } else { fpe.into() },
                                 "strain_type_en": if ste.is_empty() { serde_json::Value::Null } else { ste.into() },
                             });
-                            web_sys::console::log_1(&format!("[ADMIN] PUT strain id={} video_url={:?}", id, vid.clone()).into());
+                            web_sys::console::log_1(&format!("[ADMIN] PUT strain id={} video_url={:?} body={}", id, vid.clone(), serde_json::to_string(&body).unwrap_or_default()).into());
                             let url = format!("{}/api/strains/{}", api_base_url(), id);
                             let res = HTTP_CLIENT.clone().put(&url)
                                 .header("X-Telegram-Init-Data", init_data.read().clone())
  .header("X-Admin-Token", admin_token())
  .header("X-Admin-Telegram-Id", telegram_id.to_string())
                                 .json(&body).send().await;
+                            match &res {
+                                Ok(r) => web_sys::console::log_1(&format!("[ADMIN] PUT response status={}", r.status()).into()),
+                                Err(e) => web_sys::console::log_1(&format!("[ADMIN] PUT request FAILED: {:?}", e).into()),
+                            }
                             let success = match res {
                                 Ok(r) => r.status().is_success(),
                                 Err(_) => false,

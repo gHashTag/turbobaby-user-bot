@@ -38,7 +38,7 @@ impl Cart {
 
     pub fn add_item(&mut self, item: CartItem) {
         if let Some(existing) = self.items.iter_mut().find(|i| i.id == item.id) {
-            existing.quantity += item.quantity;
+            existing.quantity = existing.quantity.saturating_add(item.quantity);
         } else {
             self.items.push(item);
         }

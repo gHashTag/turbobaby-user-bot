@@ -112,7 +112,7 @@ fn CartItemRow(props: CartItemRowProps) -> Element {
                             let id = item_id_increase.clone();
                             let mut c = cart.write();
                             if let Some(it) = c.items.iter_mut().find(|i| i.id == id) {
-                                it.quantity += 1;
+                                it.quantity = it.quantity.saturating_add(1);
                                 c.recalculate_total();
                             }
                         },

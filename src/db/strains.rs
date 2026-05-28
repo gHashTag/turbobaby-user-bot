@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use tokio_postgres::Row;
+use tracing;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Strain {
@@ -28,9 +29,13 @@ pub struct Strain {
 
 impl Strain {
     pub fn from_row(row: &Row) -> Self {
+        let id: String = row.try_get("id").unwrap_or_default();
+        let name: String = row.try_get("name").unwrap_or_default();
+        let video_url: Option<String> = row.try_get("video_url").ok();
+        tracing::info!("Strain::from_row id={} name={} video_url={:?}", id, name, video_url);
         Self {
-            id: row.try_get("id").unwrap_or_default(),
-            name: row.try_get("name").unwrap_or_default(),
+            id,
+            name,
             category: row.try_get("category").ok(),
             thc_percent: row.try_get("thc_percent").ok(),
             cbd_percent: row.try_get("cbd_percent").ok(),
@@ -40,7 +45,7 @@ impl Strain {
             price_per_gram: row.try_get("price_per_gram").unwrap_or(0.0),
             available_grams: row.try_get("available_grams").ok(),
             image_url: row.try_get("image_url").ok(),
-            video_url: row.try_get("video_url").ok(),
+            video_url,
             is_available: row.try_get("is_available").unwrap_or(false),
             is_strain_of_day: row.try_get("is_strain_of_day").unwrap_or(false),
             strain_of_day_discount: row.try_get("strain_of_day_discount").unwrap_or(0.0),

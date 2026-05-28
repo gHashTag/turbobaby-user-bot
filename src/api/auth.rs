@@ -278,6 +278,10 @@ pub fn check_admin(headers: &HeaderMap, state: &AppState) -> Result<i64, StatusC
     tracing::info!("CHECK_ADMIN: bot_token len={}", state.config.bot_token.len());
     tracing::info!("CHECK_ADMIN: admin_ids={:?}", state.config.admin_ids);
     tracing::info!("CHECK_ADMIN: admin_password set={}", state.config.admin_password.is_some());
+    tracing::info!("CHECK_ADMIN: headers: X-Telegram-Init-Data={:?} X-Admin-Token={:?} X-Admin-Telegram-Id={:?}",
+        headers.get("X-Telegram-Init-Data").and_then(|v| v.to_str().ok()).map(|s| if s.is_empty() { "EMPTY".to_string() } else { format!("len={}", s.len()) }),
+        headers.get("X-Admin-Token").and_then(|v| v.to_str().ok()).map(|s| if s.is_empty() { "EMPTY".to_string() } else { format!("len={}", s.len()) }),
+        headers.get("X-Admin-Telegram-Id").and_then(|v| v.to_str().ok()));
     
     // 1. Try Telegram initData validation (production path)
     let init_data_opt = headers.get("X-Telegram-Init-Data").and_then(|v| v.to_str().ok());

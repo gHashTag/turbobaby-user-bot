@@ -131,26 +131,41 @@ async fn create_strain(State(state): State<AppState>, headers: HeaderMap, Json(r
 }
 
 async fn update_strain(State(state): State<AppState>, headers: HeaderMap, Path(id): Path<String>, Json(req): Json<CreateStrainRequest>) -> Result<Json<Value>, StatusCode> {
-    check_admin(&headers, &state)?;
+    tracing::info!("=== UPDATE_STRAIN START id={} ===", id);
+    tracing::info!("UPDATE_STRAIN: checking admin auth...");
+    match check_admin(&headers, &state) {
+        Ok(admin_id) => tracing::info!("UPDATE_STRAIN: auth OK admin_id={}", admin_id),
+        Err(e) => {
+            tracing::error!("UPDATE_STRAIN: AUTH FAILED — {:?}", e);
+            return Err(e);
+        }
+    }
     if !req.price_per_gram.is_finite() || req.price_per_gram < 0.0 {
+        tracing::error!("UPDATE_STRAIN: BAD_REQUEST price_per_gram={}", req.price_per_gram);
         return Err(StatusCode::BAD_REQUEST);
     }
-    if let Some(t) = req.thc_percent { if !t.is_finite() || t < 0.0 { return Err(StatusCode::BAD_REQUEST); } }
-    if let Some(c) = req.cbd_percent { if !c.is_finite() || c < 0.0 { return Err(StatusCode::BAD_REQUEST); } }
-    if let Some(a) = req.available_grams { if !a.is_finite() || a < 0.0 { return Err(StatusCode::BAD_REQUEST); } }
+    if let Some(t) = req.thc_percent { if !t.is_finite() || t < 0.0 { tracing::error!("UPDATE_STRAIN: BAD_REQUEST thc_percent={}", t); return Err(StatusCode::BAD_REQUEST); } }
+    if let Some(c) = req.cbd_percent { if !c.is_finite() || c < 0.0 { tracing::error!("UPDATE_STRAIN: BAD_REQUEST cbd_percent={}", c); return Err(StatusCode::BAD_REQUEST); } }
+    if let Some(a) = req.available_grams { if !a.is_finite() || a < 0.0 { tracing::error!("UPDATE_STRAIN: BAD_REQUEST available_grams={}", a); return Err(StatusCode::BAD_REQUEST); } }
     let client = state.db.pool.get().await.map_err(|e| {
         tracing::error!("update_strain pool error: {:?}", e);
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
-    tracing::info!("update_strain id={} video_url={:?}", id, req.video_url);
-    client.execute(
+    tracing::info!("UPDATE_STRAIN: id={} name={:?} video_url={:?} image_url={:?}", id, req.name, req.video_url, req.image_url);
+    tracing::info!("UPDATE_STRAIN: executing SQL...");
+    match client.execute(
         "UPDATE strains SET name=$1, category=$2, thc_percent=$3, cbd_percent=$4, effect=$5, flavor_profile=$6, description=$7, price_per_gram=$8, available_grams=$9, image_url=$10, video_url=$11, name_en=$12, description_en=$13, effect_en=$14, flavor_profile_en=$15, strain_type_en=$16, is_available=$17 WHERE id=$18",
         &[&req.name, &req.category, &req.thc_percent, &req.cbd_percent, &req.effect, &req.flavor_profile, &req.description, &req.price_per_gram, &req.available_grams, &req.image_url, &req.video_url, &req.name_en, &req.description_en, &req.effect_en, &req.flavor_profile_en, &req.strain_type_en, &req.is_available.unwrap_or(true), &id],
-    ).await.map_err(|e| {
-        tracing::error!("update_strain SQL error for id={}: {:?}", id, e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
+    ).await {
+        Ok(rows_affected) => tracing::info!("UPDATE_STRAIN: SQL OK rows_affected={}", rows_affected),
+        Err(e) => {
+            tracing::error!("UPDATE_STRAIN: SQL ERROR for id={}: {:?}", id, e);
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    }
+    tracing::info!("UPDATE_STRAIN: invalidating cache...");
     invalidate_strains(&state.cache).await;
+    tracing::info!("=== UPDATE_STRAIN SUCCESS id={} ===", id);
     Ok(Json(json!({ "success": true })))
 }
 

@@ -90,13 +90,15 @@ pub fn MenuScreen() -> Element {
                 .await
                 .map_err(|e| format!("Network error: {}", e))?;
 
-            let strains = response
-                .json::<StrainsResponse>()
-                .await
-                .map_err(|e| format!("Parse error: {}", e))?
-                .strains;
+            let text = response.text().await.map_err(|e| format!("Read text error: {}", e))?;
+            web_sys::console::log_1(&format!("[MENU] /api/strains response len={} text_preview={}", text.len(), &text[..text.len().min(200)]).into());
+            let strains_resp: StrainsResponse = serde_json::from_str(&text).map_err(|e| format!("Parse error: {}", e))?;
+            web_sys::console::log_1(&format!("[MENU] Parsed {} strains", strains_resp.strains.len()).into());
+            for s in &strains_resp.strains {
+                web_sys::console::log_1(&format!("[MENU] strain id={} name={} video_url={:?}", s.id, s.name, s.video_url).into());
+            }
 
-            Ok(strains)
+            Ok(strains_resp.strains)
         }
     });
 
