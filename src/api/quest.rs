@@ -381,7 +381,9 @@ async fn scan_quest_qr(
         .ok_or(StatusCode::UNAUTHORIZED)?;
     check_not_blocked(&state, user.id).await?;
 
-    let qr_token = body["qr_token"].as_str().unwrap_or("");
+    let qr_token = body["qr_token"].as_str()
+        .or(body["code"].as_str())
+        .unwrap_or("");
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     let row = client.query_opt(
         "SELECT id, name, is_final FROM location_quest_locations WHERE qr_token = $1 AND is_active = true",
