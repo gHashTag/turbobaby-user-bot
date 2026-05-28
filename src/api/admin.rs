@@ -286,20 +286,31 @@ async fn check_admin_access(
         if !init_data.is_empty() {
             if let Some(user) = validate_init_data(init_data, &state.config.bot_token) {
                 let is_admin = state.config.admin_ids.contains(&user.id);
-                return Ok(Json(json!({ "is_admin": is_admin, "telegram_id": user.id })));
+                if is_admin {
+                    tracing::info!("admin/check: initData valid user={} IS admin", user.id);
+                    return Ok(Json(json!({ "is_admin": true, "telegram_id": user.id })));
+                }
+                tracing::warn!("admin/check: initData valid user={} but NOT in admin_ids, trying X-Admin-Token fallback", user.id);
+                // Don't return here — allow password fallback below
             } else {
-                tracing::warn!("admin/check: invalid initData signature, falling back to query telegram_id");
+                tracing::warn!("admin/check: invalid initData signature, falling back to X-Admin-Token");
             }
         }
     }
 
     // 2. Fallback: password token (X-Admin-Token)
     let token_opt = headers.get("X-Admin-Token").and_then(|v| v.to_str().ok());
+    tracing::info!("admin/check: X-Admin-Token present={}", token_opt.is_some());
     if let Some(token) = token_opt {
         if let Some(ref password) = state.config.admin_password {
+            tracing::info!("admin/check: verifying token against password...");
             if crate::api::auth::verify_admin_token(token, &state.config.bot_token, password) {
+                tracing::info!("admin/check: token valid, granting access");
                 return Ok(Json(json!({ "is_admin": true, "telegram_id": query.telegram_id })));
             }
+            tracing::warn!("admin/check: token verification FAILED");
+        } else {
+            tracing::warn!("admin/check: ADMIN_PASSWORD not set");
         }
     }
 
