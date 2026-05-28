@@ -20,6 +20,23 @@ use crate::ui::api::context::api_base_url;
 use crate::ui::components::{EmptyState, Modal, Toast, ToastKind, ToastContainer, Skeleton, SkeletonShape};
 use crate::ui::telegram::{use_telegram_id, use_telegram_init_data, TelegramApp, HapticNotification};
 
+fn admin_token() -> String {
+    #[cfg(target_arch = "wasm32")]
+    {
+        web_sys::window()
+            .and_then(|w| w.local_storage().ok())
+            .flatten()
+            .and_then(|s| s.get_item("wwb_admin_token").ok())
+            .flatten()
+            .unwrap_or_default()
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        String::new()
+    }
+}
+
+
 #[derive(Clone)]
 struct ToastItem { id: u64, message: String, kind: ToastKind }
 
@@ -537,6 +554,7 @@ fn StrainsTab() -> Element {
         if let Ok(resp) = HTTP_CLIENT.clone()
             .get(&url)
             .header("X-Telegram-Init-Data", init_data.clone())
+            .header("X-Admin-Token", admin_token())
             .header("X-Admin-Telegram-Id", telegram_id.to_string())
             .send().await
         {
@@ -662,6 +680,7 @@ fn StrainsTab() -> Element {
                                 let url = format!("{}/api/strains", api_base_url());
                                 let res = HTTP_CLIENT.clone().post(&url)
                                     .header("X-Telegram-Init-Data", init_data.read().clone())
+ .header("X-Admin-Token", admin_token())
  .header("X-Admin-Telegram-Id", telegram_id.to_string())
                                     .json(&body).send().await;
                                 submitting.set(false);
@@ -748,6 +767,7 @@ fn StrainsTab() -> Element {
                                             let url = format!("{}/api/strains/{}/availability", api_base_url(), id);
                                             let res = HTTP_CLIENT.clone().put(&url)
                                                 .header("X-Telegram-Init-Data", init_data.read().clone())
+                                                .header("X-Admin-Token", admin_token())
                                                 .header("X-Admin-Telegram-Id", telegram_id.to_string())
                                                 .json(&json!({ "is_available": next_avail }))
                                                 .send().await;
@@ -781,6 +801,7 @@ fn StrainsTab() -> Element {
                         let url = format!("{}/api/strains/{}", api_base_url(), id);
                         let res = HTTP_CLIENT.clone().delete(&url)
                             .header("X-Telegram-Init-Data", init_data.read().clone())
+                            .header("X-Admin-Token", admin_token())
                             .header("X-Admin-Telegram-Id", telegram_id.to_string())
                             .send().await;
                         match res {
@@ -866,6 +887,7 @@ fn AccessoriesTab() -> Element {
         if let Ok(resp) = HTTP_CLIENT.clone()
             .get(&url)
             .header("X-Telegram-Init-Data", init_data.clone())
+            .header("X-Admin-Token", admin_token())
             .header("X-Admin-Telegram-Id", telegram_id.to_string())
             .send().await
         {
@@ -957,6 +979,7 @@ fn AccessoriesTab() -> Element {
                                 let url = format!("{}/api/accessories", api_base_url());
                                 let res = HTTP_CLIENT.clone().post(&url)
                                     .header("X-Telegram-Init-Data", init_data.read().clone())
+ .header("X-Admin-Token", admin_token())
  .header("X-Admin-Telegram-Id", telegram_id.to_string())
                                     .json(&body).send().await;
                                 submitting.set(false);
@@ -1034,6 +1057,7 @@ fn AccessoriesTab() -> Element {
                                             let url = format!("{}/api/accessories/{}/availability", api_base_url(), id);
                                             let res = HTTP_CLIENT.clone().put(&url)
                                                 .header("X-Telegram-Init-Data", init_data.read().clone())
+                                                .header("X-Admin-Token", admin_token())
                                                 .header("X-Admin-Telegram-Id", telegram_id.to_string())
                                                 .json(&json!({ "is_available": next })).send().await;
                                             match res {
@@ -1066,6 +1090,7 @@ fn AccessoriesTab() -> Element {
                         let url = format!("{}/api/accessories/{}", api_base_url(), id);
                         let res = HTTP_CLIENT.clone().delete(&url)
                             .header("X-Telegram-Init-Data", init_data.read().clone())
+                            .header("X-Admin-Token", admin_token())
                             .header("X-Admin-Telegram-Id", telegram_id.to_string())
                             .send().await;
                         match res {
@@ -1151,6 +1176,7 @@ fn TeaTab() -> Element {
         if let Ok(resp) = HTTP_CLIENT.clone()
             .get(&url)
             .header("X-Telegram-Init-Data", init_data.clone())
+            .header("X-Admin-Token", admin_token())
             .header("X-Admin-Telegram-Id", telegram_id.to_string())
             .send().await
         {
@@ -1240,6 +1266,7 @@ fn TeaTab() -> Element {
                                 let url = format!("{}/api/tea-products", api_base_url());
                                 let res = HTTP_CLIENT.clone().post(&url)
                                     .header("X-Telegram-Init-Data", init_data.read().clone())
+ .header("X-Admin-Token", admin_token())
  .header("X-Admin-Telegram-Id", telegram_id.to_string())
                                     .json(&body).send().await;
                                 submitting.set(false);
@@ -1317,6 +1344,7 @@ fn TeaTab() -> Element {
                                             let url = format!("{}/api/tea-products/{}/availability", api_base_url(), id);
                                             let res = HTTP_CLIENT.clone().put(&url)
                                                 .header("X-Telegram-Init-Data", init_data.read().clone())
+                                                .header("X-Admin-Token", admin_token())
                                                 .header("X-Admin-Telegram-Id", telegram_id.to_string())
                                                 .json(&json!({ "is_available": next })).send().await;
                                             match res {
@@ -1349,6 +1377,7 @@ fn TeaTab() -> Element {
                         let url = format!("{}/api/tea-products/{}", api_base_url(), id);
                         let res = HTTP_CLIENT.clone().delete(&url)
                             .header("X-Telegram-Init-Data", init_data.read().clone())
+                            .header("X-Admin-Token", admin_token())
                             .header("X-Admin-Telegram-Id", telegram_id.to_string())
                             .send().await;
                         match res {
@@ -1432,6 +1461,7 @@ fn SetsTab() -> Element {
             if let Ok(resp) = HTTP_CLIENT.clone()
                 .get(&url)
                 .header("X-Telegram-Init-Data", init_data.clone())
+                .header("X-Admin-Token", admin_token())
                 .header("X-Admin-Telegram-Id", telegram_id.to_string())
                 .send().await
             {
@@ -1522,6 +1552,7 @@ fn SetsTab() -> Element {
                                 let url = format!("{}/api/sets", api_base_url());
                                 let res = HTTP_CLIENT.clone().post(&url)
                                     .header("X-Telegram-Init-Data", init_data.read().clone())
+                                    .header("X-Admin-Token", admin_token())
                                     .header("X-Admin-Telegram-Id", telegram_id.to_string())
                                     .json(&body).send().await;
                                 submitting.set(false);
@@ -1603,6 +1634,7 @@ fn SetsTab() -> Element {
                                             let url = format!("{}/api/sets/{}/availability", api_base_url(), id);
                                             let res = HTTP_CLIENT.clone().put(&url)
                                                 .header("X-Telegram-Init-Data", init_data.read().clone())
+                                                .header("X-Admin-Token", admin_token())
                                                 .header("X-Admin-Telegram-Id", telegram_id.to_string())
                                                 .json(&json!({ "is_available": next })).send().await;
                                             match res {
@@ -1632,6 +1664,7 @@ fn SetsTab() -> Element {
                         let url = format!("{}/api/sets/{}", api_base_url(), id);
                         let res = HTTP_CLIENT.clone().delete(&url)
                             .header("X-Telegram-Init-Data", init_data.read().clone())
+                            .header("X-Admin-Token", admin_token())
                             .header("X-Admin-Telegram-Id", telegram_id.to_string())
                             .send().await;
                         match res {
@@ -1727,6 +1760,7 @@ fn EditSetCard(
                             let url = format!("{}/api/sets/{}", api_base_url(), id);
                             let res = HTTP_CLIENT.clone().put(&url)
                                 .header("X-Telegram-Init-Data", init_data.read().clone())
+                                .header("X-Admin-Token", admin_token())
                                 .header("X-Admin-Telegram-Id", telegram_id.to_string())
                                 .json(&body).send().await;
                             let success = match res { Ok(r) => r.status().is_success(), Err(_) => false };
@@ -1815,6 +1849,7 @@ fn AccessorySetsTab() -> Element {
             if let Ok(resp) = HTTP_CLIENT.clone()
                 .get(&url)
                 .header("X-Telegram-Init-Data", init_data.clone())
+                .header("X-Admin-Token", admin_token())
                 .header("X-Admin-Telegram-Id", telegram_id.to_string())
                 .send().await
             {
@@ -1913,6 +1948,7 @@ fn AccessorySetsTab() -> Element {
                                 let url = format!("{}/api/accessory-sets", api_base_url());
                                 let res = HTTP_CLIENT.clone().post(&url)
                                     .header("X-Telegram-Init-Data", init_data.read().clone())
+                                    .header("X-Admin-Token", admin_token())
                                     .header("X-Admin-Telegram-Id", telegram_id.to_string())
                                     .json(&body).send().await;
                                 submitting.set(false);
@@ -1994,6 +2030,7 @@ fn AccessorySetsTab() -> Element {
                                             let url = format!("{}/api/accessory-sets/{}/availability", api_base_url(), id);
                                             let res = HTTP_CLIENT.clone().put(&url)
                                                 .header("X-Telegram-Init-Data", init_data.read().clone())
+                                                .header("X-Admin-Token", admin_token())
                                                 .header("X-Admin-Telegram-Id", telegram_id.to_string())
                                                 .json(&json!({ "is_available": next })).send().await;
                                             match res {
@@ -2023,6 +2060,7 @@ fn AccessorySetsTab() -> Element {
                         let url = format!("{}/api/accessory-sets/{}", api_base_url(), id);
                         let res = HTTP_CLIENT.clone().delete(&url)
                             .header("X-Telegram-Init-Data", init_data.read().clone())
+                            .header("X-Admin-Token", admin_token())
                             .header("X-Admin-Telegram-Id", telegram_id.to_string())
                             .send().await;
                         match res {
@@ -2128,6 +2166,7 @@ fn EditAccessorySetCard(
                             let url = format!("{}/api/accessory-sets/{}", api_base_url(), id);
                             let res = HTTP_CLIENT.clone().put(&url)
                                 .header("X-Telegram-Init-Data", init_data.read().clone())
+                                .header("X-Admin-Token", admin_token())
                                 .header("X-Admin-Telegram-Id", telegram_id.to_string())
                                 .json(&body).send().await;
                             let success = match res { Ok(r) => r.status().is_success(), Err(_) => false };
@@ -2214,6 +2253,7 @@ fn TeaSetsTab() -> Element {
             if let Ok(resp) = HTTP_CLIENT.clone()
                 .get(&url)
                 .header("X-Telegram-Init-Data", init_data.clone())
+                .header("X-Admin-Token", admin_token())
                 .header("X-Admin-Telegram-Id", telegram_id.to_string())
                 .send().await
             {
@@ -2302,6 +2342,7 @@ fn TeaSetsTab() -> Element {
                                 let url = format!("{}/api/tea-sets", api_base_url());
                                 let res = HTTP_CLIENT.clone().post(&url)
                                     .header("X-Telegram-Init-Data", init_data.read().clone())
+                                    .header("X-Admin-Token", admin_token())
                                     .header("X-Admin-Telegram-Id", telegram_id.to_string())
                                     .json(&body).send().await;
                                 submitting.set(false);
@@ -2383,6 +2424,7 @@ fn TeaSetsTab() -> Element {
                                             let url = format!("{}/api/tea-sets/{}/availability", api_base_url(), id);
                                             let res = HTTP_CLIENT.clone().put(&url)
                                                 .header("X-Telegram-Init-Data", init_data.read().clone())
+                                                .header("X-Admin-Token", admin_token())
                                                 .header("X-Admin-Telegram-Id", telegram_id.to_string())
                                                 .json(&json!({ "is_available": next })).send().await;
                                             match res {
@@ -2412,6 +2454,7 @@ fn TeaSetsTab() -> Element {
                         let url = format!("{}/api/tea-sets/{}", api_base_url(), id);
                         let res = HTTP_CLIENT.clone().delete(&url)
                             .header("X-Telegram-Init-Data", init_data.read().clone())
+                            .header("X-Admin-Token", admin_token())
                             .header("X-Admin-Telegram-Id", telegram_id.to_string())
                             .send().await;
                         match res {
@@ -2504,6 +2547,7 @@ fn EditTeaSetCard(
                             let url = format!("{}/api/tea-sets/{}", api_base_url(), id);
                             let res = HTTP_CLIENT.clone().put(&url)
                                 .header("X-Telegram-Init-Data", init_data.read().clone())
+                                .header("X-Admin-Token", admin_token())
                                 .header("X-Admin-Telegram-Id", telegram_id.to_string())
                                 .json(&body).send().await;
                             let success = match res { Ok(r) => r.status().is_success(), Err(_) => false };
@@ -2858,6 +2902,7 @@ fn EditStrainCard(
                             let url = format!("{}/api/strains/{}", api_base_url(), id);
                             let res = HTTP_CLIENT.clone().put(&url)
                                 .header("X-Telegram-Init-Data", init_data.read().clone())
+ .header("X-Admin-Token", admin_token())
  .header("X-Admin-Telegram-Id", telegram_id.to_string())
                                 .json(&body).send().await;
                             let success = match res {
@@ -2965,6 +3010,7 @@ fn EditAccessoryCard(
                             let url = format!("{}/api/accessories/{}", api_base_url(), id);
                             let res = HTTP_CLIENT.clone().put(&url)
                                 .header("X-Telegram-Init-Data", init_data.read().clone())
+ .header("X-Admin-Token", admin_token())
  .header("X-Admin-Telegram-Id", telegram_id.to_string())
                                 .json(&body).send().await;
                             let success = match res {
@@ -3071,6 +3117,7 @@ fn EditTeaCard(
                             let url = format!("{}/api/tea-products/{}", api_base_url(), id);
                             let res = HTTP_CLIENT.clone().put(&url)
                                 .header("X-Telegram-Init-Data", init_data.read().clone())
+ .header("X-Admin-Token", admin_token())
  .header("X-Admin-Telegram-Id", telegram_id.to_string())
                                 .json(&body).send().await;
                             let success = match res {

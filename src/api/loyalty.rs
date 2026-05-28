@@ -147,7 +147,7 @@ async fn get_leaderboard(State(state): State<AppState>) -> Result<Json<Value>, S
         let first_name: Option<String> = r.try_get("", "first_name").ok();
         let display_name = first_name.unwrap_or_else(|| "Anonymous".to_string());
         json!({
-            "name": display_name,
+            "first_name": display_name,
             "total_spent": total_spent.unwrap_or(0.0),
             "tier": tier,
         })
