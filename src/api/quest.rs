@@ -323,7 +323,7 @@ async fn get_quest_locations(
 ) -> Result<Json<Value>, StatusCode> {
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     let rows = client.query(
-        "SELECT id, name, description, category, map_url, qr_token, is_active, is_final FROM location_quest_locations WHERE is_active = true ORDER BY id",
+        "SELECT id, name, description, category, map_url, is_active, is_final FROM location_quest_locations WHERE is_active = true ORDER BY id",
         &[],
     ).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     let items: Vec<Value> = rows.iter().map(|r| json!({
@@ -332,9 +332,8 @@ async fn get_quest_locations(
         "description": r.try_get::<_, String>(2).ok(),
         "category": r.try_get::<_, String>(3).ok(),
         "map_url": r.try_get::<_, String>(4).ok(),
-        "qr_token": r.try_get::<_, String>(5).unwrap_or_default(),
-        "is_active": r.try_get::<_, bool>(6).unwrap_or(true),
-        "is_final": r.try_get::<_, bool>(7).unwrap_or(false),
+        "is_active": r.try_get::<_, bool>(5).unwrap_or(true),
+        "is_final": r.try_get::<_, bool>(6).unwrap_or(false),
     })).collect();
     Ok(Json(json!({ "locations": items })))
 }

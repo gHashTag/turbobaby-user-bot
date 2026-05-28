@@ -305,8 +305,10 @@ pub fn AdminScreen() -> Element {
         }
         String::new()
     });
+    let mut access_reload = use_signal(|| 0u32);
 
     let access = use_resource(move || {
+        let _ = access_reload.read();
         let init_data = init_data.clone();
         let token = password_token.read().clone();
         async move {
@@ -337,7 +339,7 @@ pub fn AdminScreen() -> Element {
             match &*access.read() {
                 None => rsx!(div { style: "color:#888;padding:20px 0;", "Проверка доступа..." }),
                 Some(Err(e)) => rsx!(div { style: "color:#ff4757;padding:20px 0;", "Ошибка: {e}" }),
-                Some(Ok(false)) => rsx!(AccessDeniedScreen { telegram_id, password_token }),
+                Some(Ok(false)) => rsx!(AccessDeniedScreen { telegram_id, password_token, access_reload }),
                 Some(Ok(true)) => rsx!(AdminPanel { active_tab, password_token }),
             }
         }
@@ -345,7 +347,7 @@ pub fn AdminScreen() -> Element {
 }
 
 #[component]
-fn AccessDeniedScreen(telegram_id: i64, mut password_token: Signal<String>) -> Element {
+fn AccessDeniedScreen(telegram_id: i64, mut password_token: Signal<String>, mut access_reload: Signal<u32>) -> Element {
     let debug = TelegramApp::init().debug_dump();
     let mut password = use_signal(String::new);
     let mut error = use_signal(String::new);
@@ -394,6 +396,9 @@ fn AccessDeniedScreen(telegram_id: i64, mut password_token: Signal<String>) -> E
                                                 }
                                             }
                                             token_signal.set(token.to_string());
+                                            let new_reload = access_reload.read().wrapping_add(1);
+                                            access_reload.set(new_reload);
+                                            web_sys::console::log_1(&"[AccessDeniedScreen] Login OK, reloading access check".into());
                                         }
                                     }
                                 }

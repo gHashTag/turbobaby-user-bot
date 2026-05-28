@@ -301,15 +301,15 @@ pub fn check_admin(headers: &HeaderMap, state: &AppState) -> Result<i64, StatusC
                     return Ok(user.id);
                 } else {
                     tracing::warn!(
-                        "initData valid but user not admin telegram_id={} admin_ids={:?}",
+                        "initData valid but user not admin telegram_id={} admin_ids={:?} — trying X-Admin-Token fallback",
                         user.id,
                         state.config.admin_ids
                     );
-                    return Err(StatusCode::FORBIDDEN);
+                    // Don't return here — allow password fallback below
                 }
             } else {
-                tracing::warn!("invalid initData signature");
-                return Err(StatusCode::UNAUTHORIZED);
+                tracing::warn!("invalid initData signature — falling back to X-Admin-Token");
+                // Don't return here — allow password fallback below
             }
         } else {
             tracing::info!("CHECK_ADMIN: initData empty");
