@@ -633,13 +633,13 @@ fn StrainsTab() -> Element {
                         onclick: move |_| {
                             let n = name().trim().to_string(); let c = category();
                             let p = match price.read().trim().parse::<f64>() {
-                                Ok(v) if v > 0.0 => v,
+                                Ok(v) if v > 0.0 && v.is_finite() => v,
                                 _ => { status.set("❌ Цена должна быть числом больше 0".into()); return; }
                             };
-                            let t = thc.read().trim().parse::<f64>().ok();
-                            let cb = cbd.read().trim().parse::<f64>().ok();
+                            let t = thc.read().trim().parse::<f64>().ok().filter(|v| v.is_finite());
+                            let cb = cbd.read().trim().parse::<f64>().ok().filter(|v| v.is_finite());
                             let g = match grams.read().trim().parse::<f64>() {
-                                Ok(v) if v >= 0.0 => v,
+                                Ok(v) if v >= 0.0 && v.is_finite() => v,
                                 _ => { status.set("❌ Граммы должны быть числом ≥ 0".into()); return; }
                             };
                             if n.is_empty() { status.set("❌ Название обязательно".into()); return; }
@@ -960,7 +960,7 @@ fn AccessoriesTab() -> Element {
                             let s_val = stock.read().parse::<i32>().unwrap_or(0);
                             let d = description(); let img = image_url(); let vid = video_url();
                             let ne = name_en(); let de = description_en(); let ce = category_en();
-                            if n.trim().is_empty() || p <= 0.0 { status.set("❌ Name + price".into()); return; }
+                            if n.trim().is_empty() || p <= 0.0 || !p.is_finite() { status.set("❌ Name + price".into()); return; }
                             submitting.set(true);
                             let temp_id = format!("temp-{}", uuid::Uuid::new_v4());
                             cache.write().insert(0, AdminAccessory {
@@ -1247,7 +1247,7 @@ fn TeaTab() -> Element {
                             let s_val = stock.read().parse::<i32>().unwrap_or(0);
                             let d = description(); let img = image_url(); let vid = video_url();
                             let ne = name_en(); let de = description_en(); let sce = subcategory_en();
-                            if n.trim().is_empty() || p <= 0.0 { status.set("❌ Name + price".into()); return; }
+                            if n.trim().is_empty() || p <= 0.0 || !p.is_finite() { status.set("❌ Name + price".into()); return; }
                             submitting.set(true);
                             let temp_id = format!("temp-{}", uuid::Uuid::new_v4());
                             cache.write().insert(0, AdminTea {
@@ -1524,10 +1524,13 @@ fn SetsTab() -> Element {
                         onclick: move |_| {
                             let n = name().trim().to_string();
                             let p = match total_price.read().trim().parse::<f64>() {
-                                Ok(v) if v >= 0.0 => v,
+                                Ok(v) if v >= 0.0 && v.is_finite() => v,
                                 _ => { status.set("❌ Цена должна быть числом ≥ 0".into()); return; }
                             };
-                            let d = discount_percent.read().trim().parse::<f64>().unwrap_or(0.0);
+                            let d = match discount_percent.read().trim().parse::<f64>() {
+                                Ok(v) if v.is_finite() => v,
+                                _ => { status.set("❌ Скидка должна быть числом".into()); return; }
+                            };
                             if n.is_empty() { status.set("❌ Название обязательно".into()); return; }
                             let s_ids: Vec<String> = strain_ids().split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
                             let a_ids: Vec<String> = accessory_ids().split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
@@ -1736,10 +1739,13 @@ fn EditSetCard(
                     onclick: move |_| {
                         let n = name().trim().to_string();
                         let p = match total_price.read().trim().parse::<f64>() {
-                            Ok(v) if v >= 0.0 => v,
+                            Ok(v) if v >= 0.0 && v.is_finite() => v,
                             _ => { status.set("❌ Цена должна быть числом ≥ 0".into()); return; }
                         };
-                        let d = discount_percent.read().trim().parse::<f64>().unwrap_or(0.0);
+                        let d = match discount_percent.read().trim().parse::<f64>() {
+                            Ok(v) if v.is_finite() => v,
+                            _ => { status.set("❌ Скидка должна быть числом".into()); return; }
+                        };
                         if n.is_empty() { status.set("❌ Название обязательно".into()); return; }
                         let desc = description();
                         let ic = icon(); let vid = video_url();
@@ -1915,10 +1921,13 @@ fn AccessorySetsTab() -> Element {
                         onclick: move |_| {
                             let n = name().trim().to_string();
                             let p = match total_price.read().trim().parse::<f64>() {
-                                Ok(v) if v >= 0.0 => v,
+                                Ok(v) if v >= 0.0 && v.is_finite() => v,
                                 _ => { status.set("❌ Цена должна быть числом ≥ 0".into()); return; }
                             };
-                            let d = discount_percent.read().trim().parse::<f64>().unwrap_or(0.0);
+                            let d = match discount_percent.read().trim().parse::<f64>() {
+                                Ok(v) if v.is_finite() => v,
+                                _ => { status.set("❌ Скидка должна быть числом".into()); return; }
+                            };
                             if n.is_empty() { status.set("❌ Название обязательно".into()); return; }
                             let accs: Vec<String> = accessories().split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
                             let desc = description();
@@ -2136,10 +2145,13 @@ fn EditAccessorySetCard(
                     onclick: move |_| {
                         let n = name().trim().to_string();
                         let p = match total_price.read().trim().parse::<f64>() {
-                            Ok(v) if v >= 0.0 => v,
+                            Ok(v) if v >= 0.0 && v.is_finite() => v,
                             _ => { status.set("❌ Цена должна быть числом ≥ 0".into()); return; }
                         };
-                        let d = discount_percent.read().trim().parse::<f64>().unwrap_or(0.0);
+                        let d = match discount_percent.read().trim().parse::<f64>() {
+                            Ok(v) if v.is_finite() => v,
+                            _ => { status.set("❌ Скидка должна быть числом".into()); return; }
+                        };
                         if n.is_empty() { status.set("❌ Название обязательно".into()); return; }
                         let accs: Vec<String> = accessories().split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
                         let desc = description();
@@ -2314,10 +2326,13 @@ fn TeaSetsTab() -> Element {
                         onclick: move |_| {
                             let n = name().trim().to_string();
                             let p = match total_price.read().trim().parse::<f64>() {
-                                Ok(v) if v >= 0.0 => v,
+                                Ok(v) if v >= 0.0 && v.is_finite() => v,
                                 _ => { status.set("❌ Цена должна быть числом ≥ 0".into()); return; }
                             };
-                            let d = discount_percent.read().trim().parse::<f64>().unwrap_or(0.0);
+                            let d = match discount_percent.read().trim().parse::<f64>() {
+                                Ok(v) if v.is_finite() => v,
+                                _ => { status.set("❌ Скидка должна быть числом".into()); return; }
+                            };
                             if n.is_empty() { status.set("❌ Название обязательно".into()); return; }
                             let tea_items: Vec<String> = items().split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
                             let desc = description();
@@ -2523,10 +2538,13 @@ fn EditTeaSetCard(
                     onclick: move |_| {
                         let n = name().trim().to_string();
                         let p = match total_price.read().trim().parse::<f64>() {
-                            Ok(v) if v >= 0.0 => v,
+                            Ok(v) if v >= 0.0 && v.is_finite() => v,
                             _ => { status.set("❌ Цена должна быть числом ≥ 0".into()); return; }
                         };
-                        let d = discount_percent.read().trim().parse::<f64>().unwrap_or(0.0);
+                        let d = match discount_percent.read().trim().parse::<f64>() {
+                            Ok(v) if v.is_finite() => v,
+                            _ => { status.set("❌ Скидка должна быть числом".into()); return; }
+                        };
                         if n.is_empty() { status.set("❌ Название обязательно".into()); return; }
                         let tea_items: Vec<String> = items().split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
                         let desc = description();
@@ -2868,13 +2886,13 @@ fn EditStrainCard(
                         let n = name().trim().to_string();
                         let c = category();
                         let p = match price.read().trim().parse::<f64>() {
-                            Ok(v) if v > 0.0 => v,
+                            Ok(v) if v > 0.0 && v.is_finite() => v,
                             _ => { status.set("❌ Цена должна быть числом больше 0".into()); return; }
                         };
-                        let t = thc.read().trim().parse::<f64>().ok();
-                        let cb = cbd.read().trim().parse::<f64>().ok();
+                        let t = thc.read().trim().parse::<f64>().ok().filter(|v| v.is_finite());
+                        let cb = cbd.read().trim().parse::<f64>().ok().filter(|v| v.is_finite());
                         let g = match grams.read().trim().parse::<f64>() {
-                            Ok(v) if v >= 0.0 => v,
+                            Ok(v) if v >= 0.0 && v.is_finite() => v,
                             _ => { status.set("❌ Граммы должны быть числом ≥ 0".into()); return; }
                         };
                         if n.is_empty() { status.set("❌ Название обязательно".into()); return; }
@@ -2997,7 +3015,7 @@ fn EditAccessoryCard(
                         let n = name().trim().to_string();
                         let c = category();
                         let p = match price.read().trim().parse::<f64>() {
-                            Ok(v) if v > 0.0 => v,
+                            Ok(v) if v > 0.0 && v.is_finite() => v,
                             _ => { status.set("❌ Цена должна быть числом больше 0".into()); return; }
                         };
                         let s_str = stock();
@@ -3105,7 +3123,7 @@ fn EditTeaCard(
                         let n = name().trim().to_string();
                         let sc = subcategory();
                         let p = match price.read().trim().parse::<f64>() {
-                            Ok(v) if v > 0.0 => v,
+                            Ok(v) if v > 0.0 && v.is_finite() => v,
                             _ => { status.set("❌ Цена должна быть числом больше 0".into()); return; }
                         };
                         let s_str = stock();
@@ -4433,6 +4451,7 @@ fn GardenTab() -> Element {
                             let disc = discount.read().trim().parse::<f64>().unwrap_or(10.0);
                             let bp = bonus_points.read().trim().parse::<f64>().unwrap_or(100.0);
                             let ed = expire_days.read().trim().parse::<f64>().unwrap_or(7.0);
+                            if !disc.is_finite() || !bp.is_finite() || !ed.is_finite() { error.set("Неверные числовые значения".into()); return; }
                             let id_data = init_data.read().clone();
                             saving.set(true);
                             error.set(String::new());
@@ -4738,6 +4757,7 @@ fn ManagersTab() -> Element {
                             };
                             let name = form_name.read().trim().to_string();
                             let commission = form_commission.read().trim().parse::<f64>().unwrap_or(10.0);
+                            if !commission.is_finite() { push_toast(toasts, "Неверное значение комиссии".into(), ToastKind::Error); return; }
                             let id_data = init_data.read().clone();
                             submitting.set(true);
                             let mut submitting2 = submitting.clone();

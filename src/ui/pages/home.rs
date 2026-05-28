@@ -21,7 +21,7 @@ pub fn Home() -> Element {
             let price = strain.price_display();
             let thc = strain.thc_display();
             let discount = if strain.strain_of_day_discount > 0.0 {
-                format!("{:.0}% OFF", strain.strain_of_day_discount * 100.0)
+                format!("{:.0}% OFF", strain.strain_of_day_discount)
             } else {
                 "20% OFF".to_string()
             };

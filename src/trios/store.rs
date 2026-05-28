@@ -298,10 +298,11 @@ pub fn calculate_cart_total(
         total += price * item.quantity as i64;
     }
 
-    // Apply happy hour discount if active
+    // Apply happy hour discount if active (cap at 100% to avoid negative totals)
     if let Some(discount) = happy_hour_discount {
-        if discount > 0 {
-            total = total - (total * discount as i64 / 100);
+        let d = discount.min(100);
+        if d > 0 {
+            total = total - (total * d as i64 / 100);
         }
     }
 

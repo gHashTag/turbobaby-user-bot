@@ -79,15 +79,20 @@ pub async fn handle_text(
         .unwrap_or("friend");
     let ai_response = ai.ask_grok(&text, name, &locale.lang_instruction).await;
 
+    fn html_escape(s: &str) -> String {
+        s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
+    }
+
     if let Some(response) = ai_response {
+        let safe = html_escape(&response);
         if is_group {
-            bot.send_message(msg.chat.id, response)
+            bot.send_message(msg.chat.id, safe)
                 .reply_markup(InlineKeyboardMarkup::new(vec![
                     vec![url_btn(&format!("🛒 {}", locale.open_menu),
                         &format!("https://t.me/{}?start=channel", config.bot_username))]
                 ])).await?;
         } else {
-            bot.send_message(msg.chat.id, response).await?;
+            bot.send_message(msg.chat.id, safe).await?;
         }
     } else {
         let user_lang = db.get_user_lang(user_id).await.unwrap_or_else(|| lang.to_string());

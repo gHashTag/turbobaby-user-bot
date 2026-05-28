@@ -29,10 +29,11 @@ async fn get_happy_hour(State(state): State<AppState>) -> Result<Json<Value>, St
             let end = happy_hour["end"].as_i64().unwrap_or(21);
             let current_hour = chrono::Local::now().hour() as i64;
             let active = enabled && current_hour >= start && current_hour < end;
+            let discount = happy_hour["discount"].as_f64().unwrap_or(0.0).clamp(0.0, 100.0);
             Ok(Json(json!({
                 "enabled": enabled,
                 "active": active,
-                "discount": happy_hour["discount"].as_f64().unwrap_or(0.0),
+                "discount": discount,
                 "start": start,
                 "end": end,
             })))

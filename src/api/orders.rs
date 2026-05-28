@@ -251,20 +251,20 @@ async fn update_order_status(
         }
     } else {
         let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
-        // If rejecting, refund any bonus used back to the customer.
         if req.status == "rejected" {
-            if let Some(r) = client.query_opt("SELECT telegram_id, bonus_used::float8, status FROM orders WHERE id = $1", &[&id]).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })? {
+            let tx = client.transaction().await.map_err(|e| { tracing::error!("DB tx error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
+            if let Some(r) = tx.query_opt("SELECT telegram_id, bonus_used::float8, status FROM orders WHERE id = $1 FOR UPDATE", &[&id]).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })? {
                 let current_status: String = r.try_get("status").unwrap_or_default();
                 if current_status != "rejected" {
                     let bonus: f64 = r.try_get::<_, f64>("bonus_used").unwrap_or(0.0);
                     let tid: Option<i64> = r.try_get("telegram_id").ok().flatten();
                     if bonus > 0.0 {
                         if let Some(tid) = tid {
-                            let _ = client.execute(
+                            let _ = tx.execute(
                                 "INSERT INTO loyalty_profiles (telegram_id, bonus_balance, total_spent) VALUES ($1, 0, 0) ON CONFLICT (telegram_id) DO NOTHING",
                                 &[&tid],
                             ).await;
-                            let _ = client.execute(
+                            let _ = tx.execute(
                                 "UPDATE loyalty_profiles SET bonus_balance = bonus_balance + $1 WHERE telegram_id = $2",
                                 &[&bonus, &tid],
                             ).await;
@@ -272,11 +272,19 @@ async fn update_order_status(
                     }
                 }
             }
-        }
-        let rows = client.execute("UPDATE orders SET status = $1 WHERE id = $2", &[&req.status, &id])
-            .await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
-        if rows == 0 {
-            return Err(StatusCode::NOT_FOUND);
+            let rows = tx.execute("UPDATE orders SET status = $1 WHERE id = $2", &[&req.status, &id])
+                .await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
+            if rows == 0 {
+                let _ = tx.rollback().await;
+                return Err(StatusCode::NOT_FOUND);
+            }
+            tx.commit().await.map_err(|e| { tracing::error!("DB commit error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
+        } else {
+            let rows = client.execute("UPDATE orders SET status = $1 WHERE id = $2", &[&req.status, &id])
+                .await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
+            if rows == 0 {
+                return Err(StatusCode::NOT_FOUND);
+            }
         }
     }
     Ok(Json(json!({ "success": true })))

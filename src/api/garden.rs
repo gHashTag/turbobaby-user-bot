@@ -171,8 +171,18 @@ async fn plant_seed(
     let plant = garden::Plant::new(user_id.clone(), req.strain_id, req.strain_name);
     let plant_id = plant.id.clone();
 
-    // Atomic insert: only succeeds if the user has no active plant.
-    let inserted = client.execute(
+    let tx = client.transaction().await.map_err(|e| {
+        tracing::error!("Transaction error: {}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+    // Serialize plant_seed for this user to prevent race-condition duplicates.
+    let _ = tx.query_one("SELECT pg_advisory_xact_lock(hashtext($1))", &[&user_id,
+    ]).await.map_err(|e| {
+        tracing::error!("Advisory lock error: {}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    let inserted = tx.execute(
         "INSERT INTO garden_plants (id, user_id, strain_id, strain_name, current_stage,
                                     planted_at, is_completed, water_count, last_watered_at)
          SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9
@@ -192,6 +202,11 @@ async fn plant_seed(
         ],
     ).await.map_err(|e| {
         tracing::error!("Insert error: {}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    tx.commit().await.map_err(|e| {
+        tracing::error!("Commit error: {}", e);
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
@@ -237,10 +252,10 @@ async fn water_plant(
     };
 
     let user_id: String = r.try_get(0).unwrap_or_default();
-    if let Ok(tid) = user_id.parse::<i64>() {
-        crate::api::auth::check_owner(&headers, &state, tid)?;
-        check_not_blocked(&state, tid).await?;
-    }
+    let tid = user_id.parse::<i64>()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    crate::api::auth::check_owner(&headers, &state, tid)?;
+    check_not_blocked(&state, tid).await?;
 
     let current_stage: String = r.try_get(1).unwrap_or_default();
     let is_completed: bool = r.try_get(2).unwrap_or(false);
@@ -316,10 +331,10 @@ async fn harvest_plant(
     };
 
     let user_id: String = r.try_get(0).unwrap_or_default();
-    if let Ok(tid) = user_id.parse::<i64>() {
-        crate::api::auth::check_owner(&headers, &state, tid)?;
-        check_not_blocked(&state, tid).await?;
-    }
+    let tid = user_id.parse::<i64>()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    crate::api::auth::check_owner(&headers, &state, tid)?;
+    check_not_blocked(&state, tid).await?;
 
     let is_completed: bool = r.try_get(3).unwrap_or(false);
     let harvested_at: Option<i64> = r.try_get(4).ok();
@@ -517,10 +532,10 @@ async fn use_reward(
     };
 
     let user_id: String = r.try_get(0).unwrap_or_default();
-    if let Ok(tid) = user_id.parse::<i64>() {
-        crate::api::auth::check_owner(&headers, &state, tid)?;
-        check_not_blocked(&state, tid).await?;
-    }
+    let tid = user_id.parse::<i64>()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    crate::api::auth::check_owner(&headers, &state, tid)?;
+    check_not_blocked(&state, tid).await?;
 
     let is_used: bool = r.try_get(1).unwrap_or(false);
     let expires_at: i64 = r.try_get(2).unwrap_or(0);
@@ -555,28 +570,26 @@ async fn use_reward(
         return Ok(Json(json!({ "success": false, "error": "Reward already used" })));
     }
 
-    if let Ok(tid) = user_id.parse::<i64>() {
-        let bonus_f64 = bonus_points as f64;
-        // Ensure loyalty profile exists before crediting bonus
-        tx.execute(
-            "INSERT INTO loyalty_profiles (telegram_id, bonus_balance, total_spent) VALUES ($1, 0, 0) ON CONFLICT (telegram_id) DO NOTHING",
-            &[&tid],
-        ).await.map_err(|e| {
-            tracing::error!("Credit bonus upsert error: {}", e);
-            return StatusCode::INTERNAL_SERVER_ERROR;
-        })?;
-        let updated = tx.execute(
-            "UPDATE loyalty_profiles SET bonus_balance = bonus_balance + $1 WHERE telegram_id = $2",
-            &[&bonus_f64, &tid],
-        ).await.map_err(|e| {
-            tracing::error!("Credit bonus error: {}", e);
-            return StatusCode::INTERNAL_SERVER_ERROR;
-        })?;
-        if updated == 0 {
-            let _ = tx.rollback().await;
-            tracing::error!("use_reward: loyalty profile missing for telegram_id={}", tid);
-            return Ok(Json(json!({ "success": false, "error": "Loyalty profile not found" })));
-        }
+    let bonus_f64 = bonus_points as f64;
+    // Ensure loyalty profile exists before crediting bonus
+    tx.execute(
+        "INSERT INTO loyalty_profiles (telegram_id, bonus_balance, total_spent) VALUES ($1, 0, 0) ON CONFLICT (telegram_id) DO NOTHING",
+        &[&tid],
+    ).await.map_err(|e| {
+        tracing::error!("Credit bonus upsert error: {}", e);
+        return StatusCode::INTERNAL_SERVER_ERROR;
+    })?;
+    let updated = tx.execute(
+        "UPDATE loyalty_profiles SET bonus_balance = bonus_balance + $1 WHERE telegram_id = $2",
+        &[&bonus_f64, &tid],
+    ).await.map_err(|e| {
+        tracing::error!("Credit bonus error: {}", e);
+        return StatusCode::INTERNAL_SERVER_ERROR;
+    })?;
+    if updated == 0 {
+        let _ = tx.rollback().await;
+        tracing::error!("use_reward: loyalty profile missing for telegram_id={}", tid);
+        return Ok(Json(json!({ "success": false, "error": "Loyalty profile not found" })));
     }
 
     tx.commit().await.map_err(|e| {

@@ -176,7 +176,7 @@ pub async fn handle_command(
             if !strains.is_empty() {
                 let s = &strains[0];
                 let discount = s.strain_of_day_discount;
-                let discounted = (s.price_per_gram * (1.0 - discount / 100.0)).round();
+                let discounted = (s.price_per_gram * (1.0 - discount / 100.0)).max(0.0).round();
                 let text = format!(
                     "🔥 <b>{}</b> (1/{})\n━━━━━━━━━━━━━━━━\n\n🌿 <b>{}</b>\n{}{}\n💰 <s>{} ฿/г</s> → <b>{} ฿/г</b>\n🔥 Скидка: -{}%",
                     locale.strain_of_day, strains.len(), html_escape(&s.name),

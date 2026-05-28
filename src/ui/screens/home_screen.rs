@@ -108,7 +108,7 @@ pub fn HomeScreen() -> Element {
                             "⭐ SOTD".to_string()
                         };
                         let display_price = if has_discount {
-                            format_price(s.price_per_gram * (1.0 - s.strain_of_day_discount / 100.0))
+                            format_price((s.price_per_gram * (1.0 - s.strain_of_day_discount / 100.0)).max(0.0))
                         } else {
                             format_price(s.price_per_gram)
                         };
@@ -119,7 +119,7 @@ pub fn HomeScreen() -> Element {
                         let s_name = s.name.clone();
                         let s_id = s.id.clone();
                         let unit_price = if has_discount {
-                            s.price_per_gram * (1.0 - s.strain_of_day_discount / 100.0)
+                            (s.price_per_gram * (1.0 - s.strain_of_day_discount / 100.0)).max(0.0)
                         } else {
                             s.price_per_gram
                         };

@@ -261,7 +261,7 @@ fn render_strain_card(strain: ApiStrain, mut cart: Signal<Cart>) -> Element {
     );
 
     let display_price = if has_discount {
-        let discounted = strain.price_per_gram * (1.0 - discount / 100.0);
+        let discounted = (strain.price_per_gram * (1.0 - discount / 100.0)).max(0.0);
         format_price(discounted)
     } else {
         format_price(strain.price_per_gram)
@@ -316,8 +316,15 @@ fn render_strain_card(strain: ApiStrain, mut cart: Signal<Cart>) -> Element {
                     ", "⭐ SOTD" }
                 })}
                 {has_video.then(|| rsx! {
-                    button { style: "position:absolute;bottom:8px;right:8px;width:36px;height:36px;border-radius:50%;background:rgba(0,0,0,0.6);border:1px solid #fff;color:#fff;font-size:16px;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:2;",
-                        onclick: move |e: Event<MouseData>| { e.stop_propagation(); show_video.set(true); }, "▶️" }
+                    video {
+                        style: "position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:1;",
+                        src: "{video_url}",
+                        autoplay: true,
+                        muted: true,
+                        loop: true,
+                        playsinline: true,
+                        onclick: move |e: Event<MouseData>| { e.stop_propagation(); show_video.set(true); }
+                    }
                 })}
                 {if show_video() {
                     rsx! {
@@ -379,7 +386,7 @@ fn render_strain_card(strain: ApiStrain, mut cart: Signal<Cart>) -> Element {
             div { style: "padding:0 12px 12px;",
                 {if strain.is_available {
                     let unit_price = if has_discount {
-                        strain.price_per_gram * (1.0 - discount / 100.0)
+                        (strain.price_per_gram * (1.0 - discount / 100.0)).max(0.0)
                     } else {
                         strain.price_per_gram
                     };

@@ -89,7 +89,7 @@ fn SetsGrid(sets: Vec<Set>) -> Element {
 #[component]
 fn FeaturedSetCard(set: Set) -> Element {
     let discount_badge = if set.discount > 0.0 {
-        let discount_pct = format!("{:.0}% OFF", set.discount * 100.0);
+        let discount_pct = format!("{:.0}% OFF", set.discount);
         rsx!(
             div { class: "set-badge featured", "{discount_pct}" }
         )
@@ -98,8 +98,8 @@ fn FeaturedSetCard(set: Set) -> Element {
     };
 
     let price = format!("{:.0}", set.price);
-    let original_price = if set.discount > 0.0 && set.discount < 1.0 {
-        let original = set.price / (1.0 - set.discount);
+    let original_price = if set.discount > 0.0 && set.discount < 100.0 {
+        let original = set.price / (1.0 - set.discount / 100.0);
         format!("{:.0}", original)
     } else {
         String::new()
@@ -140,15 +140,15 @@ fn FeaturedSetCard(set: Set) -> Element {
 fn SetCard(set: Set) -> Element {
     let available = set.is_available;
     let price = format!("{:.0}", set.price);
-    let original_price = if set.discount > 0.0 && set.discount < 1.0 {
-        let original = set.price / (1.0 - set.discount);
+    let original_price = if set.discount > 0.0 && set.discount < 100.0 {
+        let original = set.price / (1.0 - set.discount / 100.0);
         format!("{:.0}", original)
     } else {
         String::new()
     };
 
     let discount_badge = if set.discount > 0.0 {
-        let discount_pct = format!("{:.0}% OFF", set.discount * 100.0);
+        let discount_pct = format!("{:.0}% OFF", set.discount);
         rsx!(
             div { class: "set-badge", "{discount_pct}" }
         )
@@ -206,7 +206,7 @@ fn mock_sets() -> Vec<Set> {
             set_type: "party".to_string(),
             items: vec![],
             price: 2520.0,
-            discount: 0.1,
+            discount: 10.0,
             is_available: true,
             is_deal_of_day: true,
         },
@@ -218,7 +218,7 @@ fn mock_sets() -> Vec<Set> {
             set_type: "party".to_string(),
             items: vec![],
             price: 3825.0,
-            discount: 0.15,
+            discount: 15.0,
             is_available: true,
             is_deal_of_day: true,
         },
@@ -230,7 +230,7 @@ fn mock_sets() -> Vec<Set> {
             set_type: "party".to_string(),
             items: vec![],
             price: 2944.0,
-            discount: 0.08,
+            discount: 8.0,
             is_available: true,
             is_deal_of_day: true,
         },
@@ -242,7 +242,7 @@ fn mock_sets() -> Vec<Set> {
             set_type: "party".to_string(),
             items: vec![],
             price: 1440.0,
-            discount: 0.2,
+            discount: 20.0,
             is_available: true,
             is_deal_of_day: true,
         },

@@ -236,7 +236,7 @@ fn render_set_card(set: ApiSet, mut cart: Signal<Cart>) -> Element {
     let m_color = mood_color(mood);
     let has_discount = set.discount_percent > 0.0;
     let discounted_price = if has_discount {
-        set.total_price * (1.0 - set.discount_percent / 100.0)
+        (set.total_price * (1.0 - set.discount_percent / 100.0)).max(0.0)
     } else {
         set.total_price
     };

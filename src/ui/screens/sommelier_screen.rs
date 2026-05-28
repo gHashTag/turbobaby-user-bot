@@ -268,7 +268,7 @@ pub fn SommelierScreen() -> Element {
                                         let mood = set.target_mood.clone().unwrap_or_default();
                                         let price = set.total_price.unwrap_or(0.0);
                                         let discount = set.discount_percent.unwrap_or(0.0);
-                                        let final_price = if discount > 0.0 { price * (1.0 - discount / 100.0) } else { price };
+                                        let final_price = if discount > 0.0 { (price * (1.0 - discount / 100.0)).max(0.0) } else { price };
                                         let price_str = format!("฿{}", final_price as i32);
 
                                         elements.push(rsx! {

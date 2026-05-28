@@ -11,6 +11,11 @@ use serde_json::{json, Value};
 use crate::api::auth::{check_admin, validate_init_data};
 use crate::AppState;
 
+/// Global mutex serializes admin-login attempts so that brute-force
+/// parallel requests are throttled to one every ~3 s.
+static LOGIN_LOCK: std::sync::LazyLock<std::sync::Mutex<()>> =
+    std::sync::LazyLock::new(|| std::sync::Mutex::new(()));
+
 #[derive(Deserialize)]
 struct AdminCheckQuery {
     telegram_id: i64,
@@ -322,6 +327,7 @@ async fn admin_login(
     State(state): State<AppState>,
     Json(req): Json<AdminLoginRequest>,
 ) -> Result<Json<Value>, StatusCode> {
+    let _guard = LOGIN_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     if let Some(ref password) = state.config.admin_password {
         if crate::api::auth::verify_admin_token(
             &crate::api::auth::generate_admin_token(&req.password, &state.config.bot_token),

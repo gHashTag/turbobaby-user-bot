@@ -384,6 +384,9 @@ async fn scan_quest_qr(
     let qr_token = body["qr_token"].as_str()
         .or(body["code"].as_str())
         .unwrap_or("");
+    if qr_token.is_empty() {
+        return Err(StatusCode::BAD_REQUEST);
+    }
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     let row = client.query_opt(
         "SELECT id, name, is_final FROM location_quest_locations WHERE qr_token = $1 AND is_active = true",

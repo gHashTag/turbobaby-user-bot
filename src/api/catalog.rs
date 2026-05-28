@@ -127,7 +127,7 @@ async fn create_accessory(State(state): State<AppState>, headers: HeaderMap, Jso
     let id = uuid::Uuid::new_v4().to_string();
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("create_accessory pool error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     client.execute(
-        "INSERT INTO accessories (id, name, category, description, price::float8, stock, image_url, video_url, is_available, name_en, description_en, category_en) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)",
+        "INSERT INTO accessories (id, name, category, description, price, stock, image_url, video_url, is_available, name_en, description_en, category_en) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)",
         &[&id, &req.name, &req.category.unwrap_or_default(), &req.description.unwrap_or_default(), &req.price, &req.stock.unwrap_or(0), &req.image_url.unwrap_or_default(), &req.video_url, &true, &req.name_en, &req.description_en, &req.category_en],
     ).await.map_err(|e| { tracing::error!("create_accessory error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     Ok(Json(json!({ "success": true, "id": id })))
@@ -340,7 +340,7 @@ async fn create_tea_product(State(state): State<AppState>, headers: HeaderMap, J
     let id = uuid::Uuid::new_v4().to_string();
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("create_tea_product pool error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     client.execute(
-        "INSERT INTO tea_products (id, name, subcategory, description, price::float8, stock, image_url, video_url, is_available, name_en, description_en, subcategory_en) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)",
+        "INSERT INTO tea_products (id, name, subcategory, description, price, stock, image_url, video_url, is_available, name_en, description_en, subcategory_en) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)",
         &[&id, &req.name, &req.subcategory.unwrap_or_else(|| "tea".to_string()), &req.description.unwrap_or_default(), &req.price, &req.stock.unwrap_or(0), &req.image_url.unwrap_or_default(), &req.video_url, &true, &req.name_en, &req.description_en, &req.subcategory_en],
     ).await.map_err(|e| { tracing::error!("create_tea_product error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     Ok(Json(json!({ "success": true, "id": id })))
