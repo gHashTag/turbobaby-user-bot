@@ -259,6 +259,8 @@ fn render_set_card(set: ApiSet, mut cart: Signal<Cart>) -> Element {
     let video_url = set.video_url.clone().unwrap_or_default();
     let has_video = !video_url.is_empty();
     let mut show_video = use_signal(|| false);
+    let is_available = set.is_available.unwrap_or(true);
+    let opacity = if is_available { "" } else { "opacity:0.6;" };
 
     rsx! {
         div { style: "
@@ -267,6 +269,7 @@ fn render_set_card(set: ApiSet, mut cart: Signal<Cart>) -> Element {
             box-shadow:4px 4px 0 #000;
             overflow:hidden;
             position:relative;
+            {opacity}
         ",
             div { style: "
                 height:100px;
@@ -330,28 +333,43 @@ fn render_set_card(set: ApiSet, mut cart: Signal<Cart>) -> Element {
                 }
             }
             div { style: "padding:0 14px 14px;",
-                button {
-                    style: "
-                        font-size:14px;font-weight:700;width:100%;padding:12px 20px;
-                        background:#39ff14;color:#000;
-                        border:4px solid #2d9e0f;
-                        box-shadow:3px 3px 0 #000;
-                        cursor:pointer;
-                    ",
-                    onclick: move |_| {
-                        let mut c = cart.write();
-                        c.add_item(CartItem {
-                            id: set_id.clone(),
-                            name: set_name.clone(),
-                            price: discounted_price,
-                            quantity: 1,
-                            image_url: None,
-                            item_type: CartItemType::Set,
-                        });
-                        crate::ui::telegram::TelegramApp::init().haptic_notification(crate::ui::telegram::HapticNotification::Success);
-                    },
-                    "{add_to_cart}"
-                }
+                {if is_available {
+                    rsx! {
+                        button {
+                            style: "
+                                font-size:14px;font-weight:700;width:100%;padding:12px 20px;
+                                background:#39ff14;color:#000;
+                                border:4px solid #2d9e0f;
+                                box-shadow:3px 3px 0 #000;
+                                cursor:pointer;
+                            ",
+                            onclick: move |_| {
+                                let mut c = cart.write();
+                                c.add_item(CartItem {
+                                    id: set_id.clone(),
+                                    name: set_name.clone(),
+                                    price: discounted_price,
+                                    quantity: 1,
+                                    image_url: None,
+                                    item_type: CartItemType::Set,
+                                });
+                                crate::ui::telegram::TelegramApp::init().haptic_notification(crate::ui::telegram::HapticNotification::Success);
+                            },
+                            "{add_to_cart}"
+                        }
+                    }
+                } else {
+                    rsx! {
+                        button { style: "
+                            font-size:14px;font-weight:600;
+                            width:100%;padding:12px 20px;
+                            background:transparent;color:#888;
+                            border:4px solid #2a2a4a;
+                            box-shadow:3px 3px 0 #000;
+                            cursor:not-allowed;
+                        ", "Sold Out" }
+                    }
+                }}
             }
         }
     }

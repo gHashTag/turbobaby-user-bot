@@ -3190,6 +3190,7 @@ struct AdminStats {
 
 #[component]
 fn DashboardTab() -> Element {
+    let telegram_id = use_telegram_id().unwrap_or(0);
     let init_data = use_signal(use_telegram_init_data);
     let mut stats: Signal<Option<AdminStats>> = use_signal(|| None);
     let mut loading = use_signal(|| true);
@@ -3202,6 +3203,8 @@ fn DashboardTab() -> Element {
             match HTTP_CLIENT.clone()
                 .get(&url)
                 .header("X-Telegram-Init-Data", init_data)
+                .header("X-Admin-Token", admin_token())
+                .header("X-Admin-Telegram-Id", telegram_id.to_string())
                 .send().await
             {
                 Ok(resp) => {
@@ -3413,6 +3416,7 @@ fn OrderDetailModal(order: AdminOrder, on_close: EventHandler<()>) -> Element {
 
 #[component]
 fn OrdersTab() -> Element {
+    let telegram_id = use_telegram_id().unwrap_or(0);
     let init_data = use_signal(use_telegram_init_data);
     let mut orders: Signal<Vec<AdminOrder>> = use_signal(Vec::new);
     let mut loading = use_signal(|| true);
@@ -3453,6 +3457,8 @@ fn OrdersTab() -> Element {
             match HTTP_CLIENT.clone()
                 .get(&url)
                 .header("X-Telegram-Init-Data", init_data)
+                .header("X-Admin-Token", admin_token())
+                .header("X-Admin-Telegram-Id", telegram_id.to_string())
                 .send().await
             {
                 Ok(resp) if resp.status().is_success() => {
@@ -3681,6 +3687,8 @@ fn OrdersTab() -> Element {
                                                         let url = format!("{}/api/orders/{}/status", api_base_url(), oid);
                                                         let res = HTTP_CLIENT.clone().put(&url)
                                                             .header("X-Telegram-Init-Data", id2)
+                                                            .header("X-Admin-Token", admin_token())
+                                                            .header("X-Admin-Telegram-Id", telegram_id.to_string())
                                                             .json(&json!({"status": "confirmed"}))
                                                             .send().await;
                                                         updating2.set(None);
@@ -3711,6 +3719,8 @@ fn OrdersTab() -> Element {
                                                         let url = format!("{}/api/orders/{}/status", api_base_url(), oid);
                                                         let res = HTTP_CLIENT.clone().put(&url)
                                                             .header("X-Telegram-Init-Data", id3)
+                                                            .header("X-Admin-Token", admin_token())
+                                                            .header("X-Admin-Telegram-Id", telegram_id.to_string())
                                                             .json(&json!({"status": "completed"}))
                                                             .send().await;
                                                         updating3.set(None);
@@ -3738,6 +3748,8 @@ fn OrdersTab() -> Element {
                                                         let url = format!("{}/api/orders/{}/status", api_base_url(), oid);
                                                         let res = HTTP_CLIENT.clone().put(&url)
                                                             .header("X-Telegram-Init-Data", id_c)
+                                                            .header("X-Admin-Token", admin_token())
+                                                            .header("X-Admin-Telegram-Id", telegram_id.to_string())
                                                             .json(&json!({"status": "rejected"}))
                                                             .send().await;
                                                         match res {
@@ -3832,6 +3844,7 @@ struct QuestPlacesResp { quest_places: Vec<AdminQuestPlace> }
 
 #[component]
 fn QuestsTab() -> Element {
+    let telegram_id = use_telegram_id().unwrap_or(0);
     let init_data = use_signal(use_telegram_init_data);
     let mut places: Signal<Vec<AdminQuestPlace>> = use_signal(Vec::new);
     let mut loading = use_signal(|| true);
@@ -3847,7 +3860,10 @@ fn QuestsTab() -> Element {
         let init_data = init_data.read().clone();
         async move {
             let url = format!("{}/api/quest-places", api_base_url());
-            match HTTP_CLIENT.clone().get(&url).header("X-Telegram-Init-Data", init_data).send().await {
+            match HTTP_CLIENT.clone().get(&url).header("X-Telegram-Init-Data", init_data)
+                .header("X-Admin-Token", admin_token())
+                .header("X-Admin-Telegram-Id", telegram_id.to_string())
+                .send().await {
                 Ok(resp) if resp.status().is_success() => {
                     if let Ok(data) = resp.json::<QuestPlacesResp>().await {
                         places.set(data.quest_places);
@@ -3942,10 +3958,14 @@ fn QuestsTab() -> Element {
                                     let res = if is_cr {
                                         HTTP_CLIENT.clone().post(&format!("{}/api/quest-places", base))
                                             .header("X-Telegram-Init-Data", id_data)
+                                            .header("X-Admin-Token", admin_token())
+                                            .header("X-Admin-Telegram-Id", telegram_id.to_string())
                                             .json(&body).send().await
                                     } else {
                                         HTTP_CLIENT.clone().put(&format!("{}/api/quest-places/{}", base, iid))
                                             .header("X-Telegram-Init-Data", id_data)
+                                            .header("X-Admin-Token", admin_token())
+                                            .header("X-Admin-Telegram-Id", telegram_id.to_string())
                                             .json(&body).send().await
                                     };
                                     saving2.set(false);
@@ -4021,6 +4041,8 @@ fn QuestsTab() -> Element {
                                                     let url = format!("{}/api/quest-places/{}", api_base_url(), pid);
                                                     let res = HTTP_CLIENT.clone().delete(&url)
                                                         .header("X-Telegram-Init-Data", id_d)
+                                                        .header("X-Admin-Token", admin_token())
+                                                        .header("X-Admin-Telegram-Id", telegram_id.to_string())
                                                         .send().await;
                                                     match res {
                                                         Ok(r) if r.status().is_success() => {
@@ -4076,6 +4098,7 @@ struct TreasureHuntsResp { treasure_hunts: Vec<AdminTreasureHunt> }
 
 #[component]
 fn TreasuresTab() -> Element {
+    let telegram_id = use_telegram_id().unwrap_or(0);
     let init_data = use_signal(use_telegram_init_data);
     let mut hunts: Signal<Vec<AdminTreasureHunt>> = use_signal(Vec::new);
     let mut loading = use_signal(|| true);
@@ -4091,7 +4114,10 @@ fn TreasuresTab() -> Element {
         let init_data = init_data.read().clone();
         async move {
             let url = format!("{}/api/treasure-hunts", api_base_url());
-            match HTTP_CLIENT.clone().get(&url).header("X-Telegram-Init-Data", init_data).send().await {
+            match HTTP_CLIENT.clone().get(&url).header("X-Telegram-Init-Data", init_data)
+                .header("X-Admin-Token", admin_token())
+                .header("X-Admin-Telegram-Id", telegram_id.to_string())
+                .send().await {
                 Ok(resp) if resp.status().is_success() => {
                     if let Ok(data) = resp.json::<TreasureHuntsResp>().await {
                         hunts.set(data.treasure_hunts);
@@ -4190,10 +4216,14 @@ fn TreasuresTab() -> Element {
                                     let res = if is_cr {
                                         HTTP_CLIENT.clone().post(&format!("{}/api/treasure-hunts", base))
                                             .header("X-Telegram-Init-Data", id_data)
+                                            .header("X-Admin-Token", admin_token())
+                                            .header("X-Admin-Telegram-Id", telegram_id.to_string())
                                             .json(&body).send().await
                                     } else {
                                         HTTP_CLIENT.clone().put(&format!("{}/api/treasure-hunts/{}", base, iid))
                                             .header("X-Telegram-Init-Data", id_data)
+                                            .header("X-Admin-Token", admin_token())
+                                            .header("X-Admin-Telegram-Id", telegram_id.to_string())
                                             .json(&body).send().await
                                     };
                                     saving2.set(false);
@@ -4274,6 +4304,8 @@ fn TreasuresTab() -> Element {
                                                 let url = format!("{}/api/treasure-hunts/{}", api_base_url(), hid);
                                                 let res = HTTP_CLIENT.clone().delete(&url)
                                                     .header("X-Telegram-Init-Data", id_d)
+                                                    .header("X-Admin-Token", admin_token())
+                                                    .header("X-Admin-Telegram-Id", telegram_id.to_string())
                                                     .send().await;
                                                 match res {
                                                     Ok(r) if r.status().is_success() => {
@@ -4315,6 +4347,7 @@ fn default_true() -> bool { true }
 
 #[component]
 fn GardenTab() -> Element {
+    let telegram_id = use_telegram_id().unwrap_or(0);
     let init_data = use_signal(use_telegram_init_data);
     let mut config: Signal<Option<GardenConfig>> = use_signal(|| None);
     let mut loading = use_signal(|| true);
@@ -4330,7 +4363,10 @@ fn GardenTab() -> Element {
         let init_data = init_data.read().clone();
         async move {
             let url = format!("{}/api/garden/config", api_base_url());
-            match HTTP_CLIENT.clone().get(&url).header("X-Telegram-Init-Data", init_data).send().await {
+            match HTTP_CLIENT.clone().get(&url).header("X-Telegram-Init-Data", init_data)
+                .header("X-Admin-Token", admin_token())
+                .header("X-Admin-Telegram-Id", telegram_id.to_string())
+                .send().await {
                 Ok(resp) if resp.status().is_success() => {
                     if let Ok(cfg) = resp.json::<GardenConfig>().await {
                         is_enabled.set(cfg.is_enabled);
@@ -4414,6 +4450,8 @@ fn GardenTab() -> Element {
                                 let url = format!("{}/api/garden/config", api_base_url());
                                 let res = HTTP_CLIENT.clone().put(&url)
                                     .header("X-Telegram-Init-Data", id_data)
+                                    .header("X-Admin-Token", admin_token())
+                                    .header("X-Admin-Telegram-Id", telegram_id.to_string())
                                     .json(&body).send().await;
                                 saving2.set(false);
                                 match res {
@@ -4475,6 +4513,7 @@ struct LeaderboardResp {
 
 #[component]
 fn LoyaltyTab() -> Element {
+    let telegram_id = use_telegram_id().unwrap_or(0);
     let init_data = use_signal(use_telegram_init_data);
     let mut tiers: Signal<Vec<LoyaltyTier>> = use_signal(Vec::new);
     let mut leaderboard: Signal<Vec<LeaderboardEntry>> = use_signal(Vec::new);
@@ -4490,6 +4529,8 @@ fn LoyaltyTab() -> Element {
             if let Ok(resp) = HTTP_CLIENT.clone()
                 .get(&format!("{}/api/loyalty/tiers", base))
                 .header("X-Telegram-Init-Data", init_data.clone())
+                .header("X-Admin-Token", admin_token())
+                .header("X-Admin-Telegram-Id", telegram_id.to_string())
                 .send().await
             {
                 if resp.status().is_success() {
@@ -4502,6 +4543,8 @@ fn LoyaltyTab() -> Element {
             if let Ok(resp) = HTTP_CLIENT.clone()
                 .get(&format!("{}/api/loyalty/leaderboard", base))
                 .header("X-Telegram-Init-Data", init_data.clone())
+                .header("X-Admin-Token", admin_token())
+                .header("X-Admin-Telegram-Id", telegram_id.to_string())
                 .send().await
             {
                 if resp.status().is_success() {
@@ -4620,6 +4663,7 @@ struct ManagersResp { managers: Vec<AdminManager> }
 
 #[component]
 fn ManagersTab() -> Element {
+    let telegram_id = use_telegram_id().unwrap_or(0);
     let init_data = use_signal(use_telegram_init_data);
     let mut managers: Signal<Vec<AdminManager>> = use_signal(Vec::new);
     let mut loading = use_signal(|| true);
@@ -4638,7 +4682,10 @@ fn ManagersTab() -> Element {
         let init_data = init_data.read().clone();
         async move {
             let url = format!("{}/api/admin/managers", api_base_url());
-            match HTTP_CLIENT.clone().get(&url).header("X-Telegram-Init-Data", init_data).send().await {
+            match HTTP_CLIENT.clone().get(&url).header("X-Telegram-Init-Data", init_data)
+                .header("X-Admin-Token", admin_token())
+                .header("X-Admin-Telegram-Id", telegram_id.to_string())
+                .send().await {
                 Ok(resp) if resp.status().is_success() => {
                     match resp.json::<ManagersResp>().await {
                         Ok(data) => { managers.set(data.managers); }
@@ -4709,6 +4756,8 @@ fn ManagersTab() -> Element {
                                 let url = format!("{}/api/admin/managers", api_base_url());
                                 let res = HTTP_CLIENT.clone().post(&url)
                                     .header("X-Telegram-Init-Data", id_data)
+                                    .header("X-Admin-Token", admin_token())
+                                    .header("X-Admin-Telegram-Id", telegram_id.to_string())
                                     .json(&body).send().await;
                                 submitting2.set(false);
                                 match res {
@@ -4788,6 +4837,7 @@ struct ManagerDetailModalProps {
 
 #[component]
 fn ManagerDetailModal(props: ManagerDetailModalProps) -> Element {
+    let telegram_id = use_telegram_id().unwrap_or(0);
     let mgr = props.manager.clone();
     let mut editing = use_signal(|| false);
     let mut edit_name = use_signal(|| mgr.name.clone().unwrap_or_default());
@@ -4804,7 +4854,10 @@ fn ManagerDetailModal(props: ManagerDetailModalProps) -> Element {
         let url = format!("{}/api/admin/managers/{}/stats", api_base_url(), manager_id);
         let id_data = init_data2.clone();
         spawn(async move {
-            match HTTP_CLIENT.clone().get(&url).header("X-Telegram-Init-Data", id_data).send().await {
+            match HTTP_CLIENT.clone().get(&url).header("X-Telegram-Init-Data", id_data)
+                .header("X-Admin-Token", admin_token())
+                .header("X-Admin-Telegram-Id", telegram_id.to_string())
+                .send().await {
                 Ok(r) if r.status().is_success() => {
                     if let Ok(text) = r.text().await {
                         stats_signal.clone().set(text);
@@ -4894,6 +4947,8 @@ fn ManagerDetailModal(props: ManagerDetailModalProps) -> Element {
                                         let url = format!("{}/api/admin/managers/{}", api_base_url(), tg_id);
                                         let _ = HTTP_CLIENT.clone().put(&url)
                                             .header("X-Telegram-Init-Data", id_data)
+                                            .header("X-Admin-Token", admin_token())
+                                            .header("X-Admin-Telegram-Id", telegram_id.to_string())
                                             .json(&body).send().await;
                                         saving2.set(false);
                                         editing2.set(false);
