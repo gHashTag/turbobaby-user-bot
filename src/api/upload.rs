@@ -69,16 +69,28 @@ async fn upload_file(
     // Prefer S3 when configured — local /data/uploads is ephemeral on Railway
     // (no persistent volume) and vanishes on every redeploy.
     if state.config.s3_enabled() {
-        match crate::s3::upload_to_s3(&state.config, &safe_name, &data).await {
-            Ok(url) => {
+        // Wrap the S3 upload in a hard timeout so a stuck PutObject can never
+        // hang the worker long enough for Railway's edge to return 502 or for
+        // the healthcheck to mark the container unhealthy.
+        let s3_fut = crate::s3::upload_to_s3(&state.config, &safe_name, data.clone());
+        match tokio::time::timeout(std::time::Duration::from_secs(90), s3_fut).await {
+            Ok(Ok(url)) => {
                 tracing::info!("upload success (s3): url={}", url);
                 return Ok(Json(json!({
                     "url": url,
                     "filename": safe_name
                 })));
             }
-            Err(e) => {
+            Ok(Err(e)) => {
                 tracing::error!("upload s3 error: {:?}", e);
+                return Err(StatusCode::INTERNAL_SERVER_ERROR);
+            }
+            Err(_elapsed) => {
+                tracing::error!(
+                    "upload s3 timeout after 90s: filename={} size={}",
+                    safe_name,
+                    data.len()
+                );
                 return Err(StatusCode::INTERNAL_SERVER_ERROR);
             }
         }

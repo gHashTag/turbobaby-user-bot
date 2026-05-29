@@ -1,20 +1,30 @@
 use anyhow::Result;
+use bytes::Bytes;
 use crate::config::Config;
 
 #[allow(dead_code)]
-pub async fn upload_to_s3(config: &Config, filename: &str, data: &[u8]) -> Result<String> {
-    use aws_config::Region;
+pub async fn upload_to_s3(config: &Config, filename: &str, data: Bytes) -> Result<String> {
+    use aws_config::{BehaviorVersion, Region};
     use aws_sdk_s3::{config::Credentials, Client, primitives::ByteStream};
 
     let bucket = config.s3_bucket.as_deref().unwrap_or("");
-    let endpoint = config.s3_endpoint.as_deref().unwrap_or("");
+    // Prefer the Railway-private endpoint for the S3 client itself so the
+    // upload travels over the internal network. Fall back to the public one
+    // when S3_INTERNAL_ENDPOINT is unset.
+    let endpoint = config.s3_internal_endpoint.as_deref()
+        .filter(|s| !s.is_empty())
+        .or(config.s3_endpoint.as_deref())
+        .unwrap_or("");
     let public_url = config.s3_public_url.as_deref().unwrap_or("");
     let region = config.s3_region.as_deref().unwrap_or("us-east-1");
     let access_key = config.s3_access_key.as_deref().unwrap_or("");
     let secret_key = config.s3_secret_key.as_deref().unwrap_or("");
 
     let creds = Credentials::new(access_key, secret_key, None, None, "static");
+    // BehaviorVersion is required by aws-config 1.x and aws-sdk-s3 1.x to
+    // avoid a runtime panic when none is configured.
     let s3_config = aws_sdk_s3::config::Builder::new()
+        .behavior_version(BehaviorVersion::latest())
         .region(Region::new(region.to_string()))
         .credentials_provider(creds)
         .endpoint_url(endpoint)
@@ -31,11 +41,13 @@ pub async fn upload_to_s3(config: &Config, filename: &str, data: &[u8]) -> Resul
     };
     let key = format!("uploads/{}", safe_name);
 
+    // ByteStream::from(Bytes) reuses the underlying buffer — no extra copy
+    // of the upload body, unlike ByteStream::from(Vec<u8>) from a slice.
     client
         .put_object()
         .bucket(bucket)
         .key(&key)
-        .body(ByteStream::from(data.to_vec()))
+        .body(ByteStream::from(data))
         .content_type(mime_from_filename(filename))
         .send()
         .await?;

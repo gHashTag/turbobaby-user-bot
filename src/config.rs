@@ -15,6 +15,11 @@ pub struct Config {
     pub glm_api_key: String,
     pub s3_bucket: Option<String>,
     pub s3_endpoint: Option<String>,
+    /// Optional Railway-private endpoint used for the S3 client itself.
+    /// When set, uploads go over the internal network (e.g. http://bucket.railway.internal:9000)
+    /// while `s3_public_url` keeps producing browser-facing URLs over the public edge.
+    /// Falls back to `s3_endpoint` when unset.
+    pub s3_internal_endpoint: Option<String>,
     pub s3_public_url: Option<String>,
     pub s3_region: Option<String>,
     pub s3_access_key: Option<String>,
@@ -84,6 +89,8 @@ impl Config {
             glm_api_key: std::env::var("GLM_API_KEY").unwrap_or_default(),
             s3_bucket: std::env::var("S3_BUCKET").ok(),
             s3_endpoint: std::env::var("S3_ENDPOINT").ok(),
+            s3_internal_endpoint: std::env::var("S3_INTERNAL_ENDPOINT").ok()
+                .filter(|s| !s.trim().is_empty()),
             s3_public_url: std::env::var("S3_PUBLIC_URL").ok(),
             s3_region: std::env::var("S3_REGION").ok(),
             s3_access_key: std::env::var("S3_ACCESS_KEY_ID").ok(),
@@ -118,6 +125,7 @@ mod tests {
             glm_api_key: String::new(),
             s3_bucket: Some("bucket".into()),
             s3_endpoint: Some("http://s3".into()),
+            s3_internal_endpoint: None,
             s3_public_url: None,
             s3_region: None,
             s3_access_key: None,
@@ -173,6 +181,7 @@ mod tests {
             glm_api_key: String::new(),
             s3_bucket: None,
             s3_endpoint: None,
+            s3_internal_endpoint: None,
             s3_public_url: None,
             s3_region: None,
             s3_access_key: None,
