@@ -235,10 +235,13 @@ async fn upload_file(accept: &str) -> Option<String> {
             .replace('\r', "\\r")
             .replace('\t', "\\t")
             .replace('\0', "\\0")
+            .replace("</script>", "<\\/script>")
+            .replace("</SCRIPT>", "<\\/SCRIPT>")
     }
     let token_js = js_escape(&token);
     let telegram_id_js = js_escape(&telegram_id);
     let init_data_js = js_escape(&init_data);
+    let accept_js = js_escape(&accept);
     let js = format!(r#"
 new Promise((resolve) => {{
     var input = document.createElement('input');
@@ -273,7 +276,7 @@ new Promise((resolve) => {{
     setTimeout(() => {{ if (!resolved) {{ resolved = true; try {{ document.body.removeChild(input); }} catch(e) {{}} resolve(''); }} }}, 120000);
     input.click();
 }})
-"#, accept, init_data_js, telegram_id_js, token_js);
+"#, accept_js, init_data_js, telegram_id_js, token_js);
     if js.len() > 100_000 { return None; }
     let promise_val = js_sys::eval(&js).ok()?;
     let promise = promise_val.dyn_into::<js_sys::Promise>().ok()?;

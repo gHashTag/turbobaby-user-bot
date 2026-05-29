@@ -69,17 +69,25 @@ impl TelegramApp {
         let _ = document::eval("if(window.Telegram && window.Telegram.WebApp) { window.Telegram.WebApp.close(); }");
     }
 
-    /// Set main button text and show it
-    pub fn set_main_button_text(&self, text: &str) {
-        let escaped = text.replace('\0', "")
-            .replace('\\', "\\\\")
+    /// Escape a string for safe injection into a JavaScript double-quoted string literal.
+    /// Also defangs `</script>` to prevent breaking out of a `<script>` context.
+    fn js_escape(s: &str) -> String {
+        s.replace('\', "\\\\")
             .replace('"', "\\\"")
             .replace('\'', "\\'")
             .replace('`', "\\`")
             .replace('$', "\\$")
             .replace('\n', "\\n")
             .replace('\r', "\\r")
-            .replace('\t', "\\t");
+            .replace('\t', "\\t")
+            .replace('\0', "\\0")
+            .replace("</script>", "<\\/script>")
+            .replace("</SCRIPT>", "<\\/SCRIPT>")
+    }
+
+    /// Set main button text and show it
+    pub fn set_main_button_text(&self, text: &str) {
+        let escaped = js_escape(text);
         let _ = document::eval(&format!(
             r#"if(window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.MainButton) {{ window.Telegram.WebApp.MainButton.setText("{}"); window.Telegram.WebApp.MainButton.show(); }}"#,
             escaped
@@ -119,15 +127,7 @@ impl TelegramApp {
 
     /// Show alert/popup
     pub fn show_alert(&self, message: &str) {
-        let escaped = message.replace('\0', "")
-            .replace('\\', "\\\\")
-            .replace('"', "\\\"")
-            .replace('\'', "\\'")
-            .replace('`', "\\`")
-            .replace('$', "\\$")
-            .replace('\n', "\\n")
-            .replace('\r', "\\r")
-            .replace('\t', "\\t");
+        let escaped = Self::js_escape(message);
         let _ = document::eval(&format!(
             r#"if(window.Telegram && window.Telegram.WebApp) {{ window.Telegram.WebApp.showAlert("{}"); }}"#,
             escaped

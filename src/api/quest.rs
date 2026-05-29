@@ -454,7 +454,7 @@ async fn scan_quest_qr(
                 let user_str = format!("\n\u{1F194} user: {}", telegram_id);
                 let text = format!(
                     "\u{1F4F2} QR \u{043E}\u{0442}\u{0441}\u{043A}\u{0430}\u{043D}\u{0438}\u{0440}\u{043E}\u{0432}\u{0430}\u{043D}\n\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\n\u{1F4CD} {}{}{}" ,
-                    html_escape(&loc_name), user_str, final_str
+                    loc_name, user_str, final_str
                 );
                 crate::notify::notify_admins(&bot, &config, &text).await;
             });

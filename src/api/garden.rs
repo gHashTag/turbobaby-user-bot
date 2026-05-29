@@ -429,21 +429,15 @@ async fn harvest_plant(
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
-    fn html_escape(s: &str) -> String {
-        s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
-    }
-
     // Notify admins about garden reward
     let bot = state.bot.clone();
     let config = state.config.clone();
-    let notify_user_id = html_escape(&user_id);
-    let notify_strain = html_escape(&strain_name);
     let notify_discount = discount_percent;
     let notify_bonus = bonus_points;
     tokio::spawn(async move {
         let text = format!(
             "\u{1F33F} Garden reward \u{0432}\u{044B}\u{0434}\u{0430}\u{043D}\n\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\n\u{1F194} {}\n\u{1F381} {} ({}% / {}pts)",
-            notify_user_id, notify_strain, notify_discount, notify_bonus
+            user_id, strain_name, notify_discount, notify_bonus
         );
         crate::notify::notify_admins(&bot, &config, &text).await;
     });

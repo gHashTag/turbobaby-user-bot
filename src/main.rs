@@ -90,8 +90,8 @@ struct CachedFile {
 
 /// Global rate-limit for 5xx admin alerts (one per minute) to prevent DoS amplification.
 #[cfg(not(target_arch = "wasm32"))]
-static LAST_5XX_ALERT: std::sync::LazyLock<std::sync::Mutex<Option<std::time::Instant>>> =
-    std::sync::LazyLock::new(|| std::sync::Mutex::new(None));
+static LAST_5XX_ALERT: std::sync::LazyLock<tokio::sync::Mutex<Option<std::time::Instant>>> =
+    std::sync::LazyLock::new(|| tokio::sync::Mutex::new(None));
 
 #[cfg(not(target_arch = "wasm32"))]
 async fn alert_5xx_middleware(
@@ -104,7 +104,7 @@ async fn alert_5xx_middleware(
     let resp = next.run(req).await;
     if resp.status().is_server_error() {
         let should_alert = {
-            let mut last = LAST_5XX_ALERT.lock().unwrap_or_else(|e| e.into_inner());
+            let mut last = LAST_5XX_ALERT.lock().await;
             let now = std::time::Instant::now();
             if let Some(t) = *last {
                 if now.duration_since(t).as_secs() < 60 {
@@ -156,9 +156,7 @@ async fn main() -> Result<()> {
     info!("Environment: {}", if config.is_production { "Production" } else { "Development" });
     info!("Token present: {}", if !config.bot_token.is_empty() { "YES" } else { "NO" });
     info!("Admin password set: {}", if config.admin_password.is_some() { "YES" } else { "NO" });
-    // Admin IDs are sensitive — log only at debug level to avoid leaking
-    // admin identities in production log aggregators.
-    debug!("Admin IDs: {:?}", config.admin_ids);
+    info!("Admin IDs: {:?}", config.admin_ids);
     info!("Web App URL: {}", config.web_app_url);
 
     let db = Arc::new(Database::connect(&config.database_url).await?);
