@@ -13,6 +13,16 @@ pub fn routes() -> Router<AppState> {
         .route("/happy-hour", get(get_happy_hour))
 }
 
+fn compute_happy_hour(config: &Value, current_hour: i64) -> (bool, bool, f64, i64, i64) {
+    let happy_hour = &config["happy_hour"];
+    let enabled = happy_hour["enabled"].as_bool().unwrap_or(false);
+    let start = happy_hour["start"].as_i64().unwrap_or(18);
+    let end = happy_hour["end"].as_i64().unwrap_or(21);
+    let active = enabled && current_hour >= start && current_hour < end;
+    let discount = happy_hour["discount"].as_f64().unwrap_or(0.0).clamp(0.0, 100.0);
+    (enabled, active, discount, start, end)
+}
+
 async fn get_happy_hour(State(state): State<AppState>) -> Result<Json<Value>, StatusCode> {
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     let row = client.query_opt(
@@ -23,13 +33,8 @@ async fn get_happy_hour(State(state): State<AppState>) -> Result<Json<Value>, St
     match row {
         Some(r) => {
             let config: serde_json::Value = r.try_get(0).unwrap_or(Value::Null);
-            let happy_hour = &config["happy_hour"];
-            let enabled = happy_hour["enabled"].as_bool().unwrap_or(false);
-            let start = happy_hour["start"].as_i64().unwrap_or(18);
-            let end = happy_hour["end"].as_i64().unwrap_or(21);
             let current_hour = chrono::Local::now().hour() as i64;
-            let active = enabled && current_hour >= start && current_hour < end;
-            let discount = happy_hour["discount"].as_f64().unwrap_or(0.0).clamp(0.0, 100.0);
+            let (enabled, active, discount, start, end) = compute_happy_hour(&config, current_hour);
             Ok(Json(json!({
                 "enabled": enabled,
                 "active": active,
@@ -45,5 +50,76 @@ async fn get_happy_hour(State(state): State<AppState>) -> Result<Json<Value>, St
             "start": 18,
             "end": 21,
         })))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::compute_happy_hour;
+    use serde_json::json;
+
+    #[test]
+    fn test_compute_happy_hour_active() {
+        let config = json!({"happy_hour": {"enabled": true, "start": 18, "end": 21, "discount": 10.0}});
+        let (enabled, active, discount, start, end) = compute_happy_hour(&config, 19);
+        assert!(enabled);
+        assert!(active);
+        assert_eq!(discount, 10.0);
+        assert_eq!(start, 18);
+        assert_eq!(end, 21);
+    }
+
+    #[test]
+    fn test_compute_happy_hour_inactive_before() {
+        let config = json!({"happy_hour": {"enabled": true, "start": 18, "end": 21, "discount": 10.0}});
+        let (_, active, _, _, _) = compute_happy_hour(&config, 17);
+        assert!(!active);
+    }
+
+    #[test]
+    fn test_compute_happy_hour_inactive_after() {
+        let config = json!({"happy_hour": {"enabled": true, "start": 18, "end": 21, "discount": 10.0}});
+        let (_, active, _, _, _) = compute_happy_hour(&config, 21);
+        assert!(!active);
+    }
+
+    #[test]
+    fn test_compute_happy_hour_disabled() {
+        let config = json!({"happy_hour": {"enabled": false, "start": 18, "end": 21, "discount": 10.0}});
+        let (enabled, active, _, _, _) = compute_happy_hour(&config, 19);
+        assert!(!enabled);
+        assert!(!active);
+    }
+
+    #[test]
+    fn test_compute_happy_hour_defaults() {
+        let config = json!({});
+        let (enabled, active, discount, start, end) = compute_happy_hour(&config, 19);
+        assert!(!enabled);
+        assert!(!active);
+        assert_eq!(discount, 0.0);
+        assert_eq!(start, 18);
+        assert_eq!(end, 21);
+    }
+
+    #[test]
+    fn test_compute_happy_hour_discount_clamp_high() {
+        let config = json!({"happy_hour": {"enabled": true, "discount": 150.0}});
+        let (_, _, discount, _, _) = compute_happy_hour(&config, 19);
+        assert_eq!(discount, 100.0);
+    }
+
+    #[test]
+    fn test_compute_happy_hour_discount_clamp_low() {
+        let config = json!({"happy_hour": {"enabled": true, "discount": -10.0}});
+        let (_, _, discount, _, _) = compute_happy_hour(&config, 19);
+        assert_eq!(discount, 0.0);
+    }
+
+    #[test]
+    fn test_compute_happy_hour_start_greater_than_end() {
+        let config = json!({"happy_hour": {"enabled": true, "start": 21, "end": 18}});
+        let (_, active, _, _, _) = compute_happy_hour(&config, 19);
+        assert!(!active);
     }
 }

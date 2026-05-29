@@ -12,6 +12,26 @@ use crate::bot::{AI_RATE_LIMIT, AI_COOLDOWN};
 
 use crate::util::html_escape;
 
+pub fn is_callback_data_valid(data: &str) -> bool {
+    data.len() <= 200
+}
+
+pub fn parse_pagination_index(data: &str) -> Option<usize> {
+    data.split('_').next_back().and_then(|s| s.parse().ok())
+}
+
+pub fn can_confirm_order(status: &str) -> bool {
+    status == "pending" || status == "confirmed"
+}
+
+pub fn should_refund_bonus(status: &str) -> bool {
+    status != "rejected" && status != "completed"
+}
+
+pub fn calculate_discounted_price(price: f64, discount: f64) -> f64 {
+    (price * (1.0 - discount / 100.0)).max(0.0).round()
+}
+
 fn web_app_btn(text: &str, url: &str) -> InlineKeyboardButton {
     match url.parse() {
         Ok(u) => InlineKeyboardButton::web_app(text, WebAppInfo { url: u }),
@@ -34,7 +54,7 @@ pub async fn handle_callback(
 ) -> Result<(), teloxide::RequestError> {
     let data = match q.data.as_deref() {
         Some(d) => {
-            if d.len() > 200 {
+            if !is_callback_data_valid(d) {
                 tracing::warn!("callback_query: data too long ({}) from user_id={}", d.len(), q.from.id.0);
                 bot.answer_callback_query(q.id).await?;
                 return Ok(());
@@ -159,7 +179,7 @@ pub async fn handle_callback(
         d if d.starts_with("sotd_next_") || d.starts_with("sotd_prev_") => {
             bot.answer_callback_query(q.id).await?;
             let is_next = d.starts_with("sotd_next_");
-            let current: usize = d.split('_').next_back().and_then(|s| s.parse().ok()).unwrap_or(0);
+            let current = parse_pagination_index(d).unwrap_or(0);
             let new_idx = if is_next { current + 1 } else { current.saturating_sub(1) };
             let strains = db.get_strains_of_day().await.unwrap_or_default();
             if let Some(s) = strains.get(new_idx) {
@@ -168,7 +188,7 @@ pub async fn handle_callback(
     MaybeInaccessibleMessage::Inaccessible(_) => None,
 }) {
                     let discount = s.strain_of_day_discount;
-                    let discounted = (s.price_per_gram * (1.0 - discount / 100.0)).max(0.0).round();
+                    let discounted = calculate_discounted_price(s.price_per_gram, discount);
                     let text = format!(
                         "🔥 <b>{}</b> ({}/{})\n━━━━━━━━━━━━━━━━\n🌿 <b>{}</b>\n{}💰 <s>{} ฿/г</s> → <b>{} ฿/г</b>\n🔥 -{:.0}%",
                         locale.strain_of_day, new_idx + 1, strains.len(), html_escape(&s.name),
@@ -202,7 +222,7 @@ pub async fn handle_callback(
                             let ok = match tx.query_opt("SELECT status FROM orders WHERE id = $1 FOR UPDATE", &[&order_id]).await {
                                 Ok(Some(row)) => {
                                     let status: String = row.try_get("status").unwrap_or_default();
-                                    if status == "pending" || status == "confirmed" {
+                                    if can_confirm_order(&status) {
                                         match tx.execute("UPDATE orders SET status = 'confirmed' WHERE id = $1", &[&order_id]).await {
                                             Ok(rows) => {
                                                 tracing::info!("callback: confirm order_id={} updated {} rows", order_id, rows);
@@ -358,7 +378,7 @@ pub async fn handle_callback(
                             // Refund bonus atomically if this is the first rejection.
                             if let Ok(Some(r)) = tx.query_opt("SELECT telegram_id, bonus_used::float8, status FROM orders WHERE id = $1 FOR UPDATE", &[&_order_id]).await {
                                 let current_status: String = r.try_get("status").unwrap_or_default();
-                                if current_status != "rejected" && current_status != "completed" {
+                                if should_refund_bonus(&current_status) {
                                     let bonus: f64 = r.try_get::<_, f64>("bonus_used").unwrap_or(0.0);
                                     let tid: Option<i64> = r.try_get("telegram_id").ok().flatten();
                                     if bonus > 0.0 {
@@ -416,4 +436,106 @@ pub async fn handle_callback(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{is_callback_data_valid, parse_pagination_index, can_confirm_order, should_refund_bonus, calculate_discounted_price};
+
+    #[test]
+    fn test_is_callback_data_valid_ok() {
+        assert!(is_callback_data_valid("confirm_abc123"));
+    }
+
+    #[test]
+    fn test_is_callback_data_valid_too_long() {
+        let data = "a".repeat(201);
+        assert!(!is_callback_data_valid(&data));
+    }
+
+    #[test]
+    fn test_is_callback_data_valid_exactly_200() {
+        let data = "a".repeat(200);
+        assert!(is_callback_data_valid(&data));
+    }
+
+    #[test]
+    fn test_parse_pagination_index_next() {
+        assert_eq!(parse_pagination_index("sotd_next_5"), Some(5));
+    }
+
+    #[test]
+    fn test_parse_pagination_index_prev() {
+        assert_eq!(parse_pagination_index("sotd_prev_3"), Some(3));
+    }
+
+    #[test]
+    fn test_parse_pagination_index_invalid() {
+        assert_eq!(parse_pagination_index("sotd_next_abc"), None);
+    }
+
+    #[test]
+    fn test_parse_pagination_index_no_underscore() {
+        assert_eq!(parse_pagination_index("sotd"), None);
+    }
+
+    #[test]
+    fn test_can_confirm_order_pending() {
+        assert!(can_confirm_order("pending"));
+    }
+
+    #[test]
+    fn test_can_confirm_order_confirmed() {
+        assert!(can_confirm_order("confirmed"));
+    }
+
+    #[test]
+    fn test_can_confirm_order_rejected() {
+        assert!(!can_confirm_order("rejected"));
+    }
+
+    #[test]
+    fn test_should_refund_bonus_pending() {
+        assert!(should_refund_bonus("pending"));
+    }
+
+    #[test]
+    fn test_should_refund_bonus_confirmed() {
+        assert!(should_refund_bonus("confirmed"));
+    }
+
+    #[test]
+    fn test_should_refund_bonus_rejected() {
+        assert!(!should_refund_bonus("rejected"));
+    }
+
+    #[test]
+    fn test_should_refund_bonus_completed() {
+        assert!(!should_refund_bonus("completed"));
+    }
+
+    #[test]
+    fn test_calculate_discounted_price_basic() {
+        assert_eq!(calculate_discounted_price(100.0, 10.0), 90.0);
+    }
+
+    #[test]
+    fn test_calculate_discounted_price_zero() {
+        assert_eq!(calculate_discounted_price(100.0, 0.0), 100.0);
+    }
+
+    #[test]
+    fn test_calculate_discounted_price_full() {
+        assert_eq!(calculate_discounted_price(100.0, 100.0), 0.0);
+    }
+
+    #[test]
+    fn test_calculate_discounted_price_over_100() {
+        assert_eq!(calculate_discounted_price(100.0, 150.0), 0.0);
+    }
+
+    #[test]
+    fn test_calculate_discounted_price_rounding() {
+        assert_eq!(calculate_discounted_price(99.0, 10.0), 89.0);
+    }
 }

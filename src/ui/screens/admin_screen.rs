@@ -375,6 +375,32 @@ fn AccessDeniedScreen(telegram_id: i64, mut password_token: Signal<String>, mut 
     let mut admin_id = use_signal(String::new);
     let mut error = use_signal(String::new);
     let mut logging_in = use_signal(|| false);
+    let storage_dump = {
+        #[cfg(target_arch = "wasm32")]
+        {
+            web_sys::window()
+                .and_then(|w| w.local_storage().ok())
+                .flatten()
+                .map(|s| {
+                    let mut items = vec![];
+                    let len = s.length().unwrap_or(0);
+                    for i in 0..len {
+                        if let Some(key) = s.key(i).ok().flatten() {
+                            if key.starts_with("wwb_") {
+                                let val = s.get_item(&key).ok().flatten().unwrap_or_default();
+                                items.push(format!("{}={}", key, val.chars().take(20).collect::<String>()));
+                            }
+                        }
+                    }
+                    items.join("\n")
+                })
+                .unwrap_or_else(|| "localStorage unavailable".to_string())
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            "N/A".to_string()
+        }
+    };
     rsx! {
         div { style: "padding:30px 16px;text-align:center;",
             div { style: "font-size:48px;margin-bottom:12px;", "🔒" }
@@ -448,6 +474,8 @@ fn AccessDeniedScreen(telegram_id: i64, mut password_token: Signal<String>, mut 
                 summary { style: "color:#666;font-size:11px;cursor:pointer;", "debug" }
                 pre { style: "font-size:10px;color:#888;background:#1a1a2e;padding:8px;border-radius:6px;white-space:pre-wrap;word-break:break-all;",
                     "{debug}" }
+                pre { style: "font-size:10px;color:#39ff14;background:#1a1a2e;padding:8px;border-radius:6px;white-space:pre-wrap;word-break:break-all;margin-top:4px;",
+                    "localStorage:\n{storage_dump}" }
             }
         }
     }

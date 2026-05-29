@@ -10,6 +10,22 @@ use crate::bot::{AI_RATE_LIMIT, AI_COOLDOWN};
 use crate::bot::commands::build_app_url;
 use crate::util::html_escape;
 
+fn truncate_text(input: &str, max_len: usize) -> String {
+    if input.len() > max_len {
+        input.chars().take(max_len).collect()
+    } else {
+        input.to_string()
+    }
+}
+
+fn should_ignore_message(text: &str) -> bool {
+    text.starts_with('/') || text.starts_with(['🎁', '🍷', '😜', '🧠', '🌐', '⚙', '🛒'])
+}
+
+fn is_web_app_data_too_large(len: usize, max: usize) -> bool {
+    len > max
+}
+
 fn web_app_btn(text: &str, url: &str) -> InlineKeyboardButton {
     match url.parse() {
         Ok(u) => InlineKeyboardButton::web_app(text, WebAppInfo { url: u }),
@@ -42,16 +58,10 @@ pub async fn handle_text(
     };
 
     // Cap length to prevent AI context-window abuse and API cost spikes
-    let text = if text.len() > 1500 {
-        text.chars().take(1500).collect::<String>()
-    } else {
-        text
-    };
+    let text = truncate_text(&text, 1500);
 
-    // Skip commands
-    if text.starts_with('/') { return Ok(()); }
-    // Skip emoji keyboard presses
-    if text.starts_with(['🎁', '🍷', '😜', '🧠', '🌐', '⚙', '🛒']) { return Ok(()); }
+    // Skip commands and emoji keyboard presses
+    if should_ignore_message(&text) { return Ok(()); }
 
     let is_group = matches!(msg.chat.kind, teloxide::types::ChatKind::Public(_));
     let user_id = msg.from.as_ref().map(|u| u.id.0 as i64).unwrap_or(0);
@@ -134,7 +144,7 @@ pub async fn handle_web_app_data(
     }
 
     if let Some(data) = msg.web_app_data() {
-        if data.data.len() > 100_000 {
+        if is_web_app_data_too_large(data.data.len(), 100_000) {
             tracing::warn!("web_app_data too large from user_id={}", user_id);
             return Ok(());
         }
@@ -147,4 +157,58 @@ pub async fn handle_web_app_data(
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{truncate_text, should_ignore_message, is_web_app_data_too_large};
+
+    #[test]
+    fn test_truncate_text_shorter() {
+        assert_eq!(truncate_text("hello", 10), "hello");
+    }
+
+    #[test]
+    fn test_truncate_text_exact() {
+        let s = "a".repeat(1500);
+        assert_eq!(truncate_text(&s, 1500), s);
+    }
+
+    #[test]
+    fn test_truncate_text_longer() {
+        let s = "a".repeat(2000);
+        assert_eq!(truncate_text(&s, 1500).len(), 1500);
+    }
+
+    #[test]
+    fn test_truncate_text_unicode() {
+        let s = "🔥".repeat(1000); // 4 bytes each, 4000 bytes total, 1000 chars
+        assert_eq!(truncate_text(&s, 500).len(), 500 * 4); // 500 chars remain
+        assert_eq!(truncate_text(&s, 500).chars().count(), 500);
+    }
+
+    #[test]
+    fn test_should_ignore_message_command() {
+        assert!(should_ignore_message("/start"));
+    }
+
+    #[test]
+    fn test_should_ignore_message_emoji() {
+        assert!(should_ignore_message("🛒 Каталог"));
+    }
+
+    #[test]
+    fn test_should_ignore_message_normal() {
+        assert!(!should_ignore_message("Hello there"));
+    }
+
+    #[test]
+    fn test_is_web_app_data_too_large_true() {
+        assert!(is_web_app_data_too_large(100_001, 100_000));
+    }
+
+    #[test]
+    fn test_is_web_app_data_too_large_false() {
+        assert!(!is_web_app_data_too_large(100_000, 100_000));
+    }
 }
