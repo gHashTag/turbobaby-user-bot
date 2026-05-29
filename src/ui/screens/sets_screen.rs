@@ -255,9 +255,11 @@ fn render_set_card(set: ApiSet, mut cart: Signal<Cart>) -> Element {
     let strains_count = set.strains.as_ref().map(|v| v.len()).unwrap_or(0);
     let strains_label = if strains_count > 0 { format!("{} strains", strains_count) } else { String::new() };
     let img_url = set.image_url.clone().unwrap_or_default();
-    let has_image = !img_url.is_empty();
+    let has_image = !img_url.is_empty()
+        && (img_url.starts_with("http://") || img_url.starts_with("https://") || img_url.starts_with('/'));
     let video_url = set.video_url.clone().unwrap_or_default();
-    let has_video = !video_url.is_empty();
+    let has_video = !video_url.is_empty()
+        && (video_url.starts_with("http://") || video_url.starts_with("https://") || video_url.starts_with('/'));
     let mut show_video = use_signal(|| false);
     let is_available = set.is_available.unwrap_or(true);
     let opacity = if is_available { "" } else { "opacity:0.6;" };

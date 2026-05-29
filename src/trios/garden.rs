@@ -130,7 +130,8 @@ impl Plant {
                 "Plant is already completed".to_string(),
             ));
         }
-        let new_count = self.water_count + 1;
+        let new_count = self.water_count.checked_add(1)
+            .ok_or_else(|| Error::InvalidState("Water count overflow".to_string()))?;
         validate_water_count(new_count)?;
         self.water_count = new_count;
         self.last_watered_at = Some(chrono::Utc::now().timestamp_millis());
@@ -147,7 +148,7 @@ impl Plant {
         Ok(())
     }
 
-    pub fn harvest(&mut self) -> Result<PlantReward> {
+    pub fn harvest(&mut self, config: &GameConfig) -> Result<PlantReward> {
         if !self.is_completed {
             return Err(Error::InvalidState(
                 "Plant is not ready for harvest".to_string(),
@@ -155,15 +156,20 @@ impl Plant {
         }
         self.harvested_at = Some(chrono::Utc::now().timestamp_millis());
         let now: Timestamp = chrono::Utc::now().timestamp_millis();
+        let expiration_ms = (config.reward_expiration_days as i64)
+            .saturating_mul(24)
+            .saturating_mul(60)
+            .saturating_mul(60)
+            .saturating_mul(1000);
         Ok(PlantReward {
             id: format!("reward_{}", self.id),
             plant_id: self.id.clone(),
             user_id: self.user_id.clone(),
             strain_id: self.strain_id.clone(),
             strain_name: self.strain_name.clone(),
-            discount_percent: 10,
-            bonus_points: 100,
-            expires_at: now.saturating_add(7 * 24 * 60 * 60 * 1000),
+            discount_percent: config.reward_discount_percent,
+            bonus_points: config.reward_bonus_points,
+            expires_at: now.saturating_add(expiration_ms),
             is_used: false,
             created_at: now,
         })
@@ -375,10 +381,11 @@ mod tests {
         );
         plant.is_completed = true;
         plant.water_count = 13;
-        let reward = plant.harvest().unwrap();
+        let config = GameConfig::default();
+        let reward = plant.harvest(&config).unwrap();
         assert_eq!(reward.strain_name, "OG Kush");
-        assert_eq!(reward.discount_percent, 10);
-        assert_eq!(reward.bonus_points, 100);
+        assert_eq!(reward.discount_percent, config.reward_discount_percent);
+        assert_eq!(reward.bonus_points, config.reward_bonus_points);
     }
 
     #[test]
@@ -388,7 +395,8 @@ mod tests {
             "strain456".to_string(),
             "OG Kush".to_string(),
         );
-        assert!(plant.harvest().is_err());
+        let config = GameConfig::default();
+        assert!(plant.harvest(&config).is_err());
     }
 
     #[test]

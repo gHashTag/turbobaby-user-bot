@@ -59,7 +59,7 @@ async fn get_quest_places(State(state): State<AppState>) -> Result<Json<Value>, 
                 COALESCE(description,'') AS description, \
                 COALESCE(image_url,'') AS image_url, \
                 COALESCE(is_available, true) AS is_available \
-         FROM quest_places ORDER BY name",
+         FROM quest_places ORDER BY name LIMIT 2000",
         [],
     );
     let rows = state.db.orm.query_all(stmt).await
@@ -88,9 +88,16 @@ async fn create_quest_place(
     Json(req): Json<QuestPlaceRequest>,
 ) -> Result<Json<Value>, StatusCode> {
     check_admin(&headers, &state)?;
+    if req.name.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
+    if let Some(ref c) = req.category { if c.len() > 200 { return Err(StatusCode::BAD_REQUEST); } }
+    if let Some(ref d) = req.description { if d.len() > 1000 { return Err(StatusCode::BAD_REQUEST); } }
     if !req.lat.is_finite() || !req.lon.is_finite() {
         return Err(StatusCode::BAD_REQUEST);
     }
+    if req.lat < -90.0 || req.lat > 90.0 || req.lon < -180.0 || req.lon > 180.0 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    crate::api::validate_url(&req.image_url)?;
     let id = uuid::Uuid::new_v4().to_string();
     let category = req.category.unwrap_or_else(|| "location".to_string());
     let description = req.description.unwrap_or_default();
@@ -128,10 +135,18 @@ async fn update_quest_place(
     Path(id): Path<String>,
     Json(req): Json<QuestPlaceRequest>,
 ) -> Result<Json<Value>, StatusCode> {
+    if id.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
     check_admin(&headers, &state)?;
+    if req.name.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
+    if let Some(ref c) = req.category { if c.len() > 200 { return Err(StatusCode::BAD_REQUEST); } }
+    if let Some(ref d) = req.description { if d.len() > 1000 { return Err(StatusCode::BAD_REQUEST); } }
     if !req.lat.is_finite() || !req.lon.is_finite() {
         return Err(StatusCode::BAD_REQUEST);
     }
+    if req.lat < -90.0 || req.lat > 90.0 || req.lon < -180.0 || req.lon > 180.0 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    crate::api::validate_url(&req.image_url)?;
     // Wave 3: UPDATE через SeaORM с ::float8 castом — устраняет NUMERIC баг.
     use sea_orm::{Statement, DbBackend, ConnectionTrait};
     let category = req.category.unwrap_or_else(|| "location".to_string());
@@ -152,6 +167,7 @@ async fn delete_quest_place(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<Value>, StatusCode> {
+    if id.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
     check_admin(&headers, &state)?;
     use sea_orm::{Statement, DbBackend, ConnectionTrait};
     let stmt = Statement::from_sql_and_values(
@@ -188,7 +204,7 @@ pub struct TreasureHuntRequest {
 async fn get_treasure_hunts(State(state): State<AppState>) -> Result<Json<Value>, StatusCode> {
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     let rows = client.query(
-        "SELECT id, name, description, image_url, black_mark_title, black_mark_description, black_mark_image_url, is_active, starts_at, ends_at, start_lat::float8, start_lon::float8, start_name FROM treasure_hunts WHERE is_active = true ORDER BY created_at DESC",
+        "SELECT id, name, description, image_url, black_mark_title, black_mark_description, black_mark_image_url, is_active, starts_at, ends_at, start_lat::float8, start_lon::float8, start_name FROM treasure_hunts WHERE is_active = true ORDER BY created_at DESC LIMIT 2000",
         &[],
     ).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     let items: Vec<Value> = rows.iter().map(|r| json!({
@@ -215,9 +231,19 @@ async fn create_treasure_hunt(
     Json(req): Json<TreasureHuntRequest>,
 ) -> Result<Json<Value>, StatusCode> {
     check_admin(&headers, &state)?;
+    if req.name.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
+    if req.black_mark_title.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
+    if req.start_name.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
+    if let Some(ref d) = req.description { if d.len() > 1000 { return Err(StatusCode::BAD_REQUEST); } }
+    if let Some(ref d) = req.black_mark_description { if d.len() > 1000 { return Err(StatusCode::BAD_REQUEST); } }
     if !req.start_lat.is_finite() || !req.start_lon.is_finite() {
         return Err(StatusCode::BAD_REQUEST);
     }
+    if req.start_lat < -90.0 || req.start_lat > 90.0 || req.start_lon < -180.0 || req.start_lon > 180.0 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    crate::api::validate_url(&req.image_url)?;
+    crate::api::validate_url(&req.black_mark_image_url)?;
     let id = uuid::Uuid::new_v4().to_string();
     let description = req.description.unwrap_or_default();
     let image_url = req.image_url.unwrap_or_default();
@@ -258,10 +284,21 @@ async fn update_treasure_hunt(
     Path(id): Path<String>,
     Json(req): Json<TreasureHuntRequest>,
 ) -> Result<Json<Value>, StatusCode> {
+    if id.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
     check_admin(&headers, &state)?;
+    if req.name.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
+    if req.black_mark_title.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
+    if req.start_name.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
+    if let Some(ref d) = req.description { if d.len() > 1000 { return Err(StatusCode::BAD_REQUEST); } }
+    if let Some(ref d) = req.black_mark_description { if d.len() > 1000 { return Err(StatusCode::BAD_REQUEST); } }
     if !req.start_lat.is_finite() || !req.start_lon.is_finite() {
         return Err(StatusCode::BAD_REQUEST);
     }
+    if req.start_lat < -90.0 || req.start_lat > 90.0 || req.start_lon < -180.0 || req.start_lon > 180.0 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    crate::api::validate_url(&req.image_url)?;
+    crate::api::validate_url(&req.black_mark_image_url)?;
     // Wave 3: UPDATE через SeaORM с ::float8 castом для start_lat/start_lon.
     use sea_orm::{Statement, DbBackend, ConnectionTrait};
     let description = req.description.unwrap_or_default();
@@ -286,6 +323,7 @@ async fn delete_treasure_hunt(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<Value>, StatusCode> {
+    if id.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
     check_admin(&headers, &state)?;
     use sea_orm::{Statement, DbBackend, ConnectionTrait};
     let stmt = Statement::from_sql_and_values(
@@ -323,7 +361,7 @@ async fn get_quest_locations(
 ) -> Result<Json<Value>, StatusCode> {
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     let rows = client.query(
-        "SELECT id, name, description, category, map_url, is_active, is_final FROM location_quest_locations WHERE is_active = true ORDER BY id",
+        "SELECT id, name, description, category, map_url, is_active, is_final FROM location_quest_locations WHERE is_active = true ORDER BY id LIMIT 2000",
         &[],
     ).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     let items: Vec<Value> = rows.iter().map(|r| json!({
@@ -344,6 +382,10 @@ async fn create_quest_location(
     Json(req): Json<QuestLocationRequest>,
 ) -> Result<Json<Value>, StatusCode> {
     check_admin(&headers, &state)?;
+    if req.name.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
+    if let Some(ref c) = req.category { if c.len() > 200 { return Err(StatusCode::BAD_REQUEST); } }
+    if let Some(ref d) = req.description { if d.len() > 1000 { return Err(StatusCode::BAD_REQUEST); } }
+    crate::api::validate_url(&req.map_url)?;
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     let row = client.query_one(
         "INSERT INTO location_quest_locations (name, description, category, map_url, is_active, is_final) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id",
@@ -359,6 +401,10 @@ async fn update_quest_location(
     Json(req): Json<QuestLocationRequest>,
 ) -> Result<Json<Value>, StatusCode> {
     check_admin(&headers, &state)?;
+    if req.name.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
+    if let Some(ref c) = req.category { if c.len() > 200 { return Err(StatusCode::BAD_REQUEST); } }
+    if let Some(ref d) = req.description { if d.len() > 1000 { return Err(StatusCode::BAD_REQUEST); } }
+    crate::api::validate_url(&req.map_url)?;
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     client.execute(
         "UPDATE location_quest_locations SET name=$1, description=$2, category=$3, map_url=$4, is_active=$5, is_final=$6 WHERE id=$7",
@@ -384,12 +430,13 @@ async fn scan_quest_qr(
     let qr_token = body["qr_token"].as_str()
         .or(body["code"].as_str())
         .unwrap_or("");
+    if qr_token.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
     if qr_token.is_empty() {
         return Err(StatusCode::BAD_REQUEST);
     }
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     let row = client.query_opt(
-        "SELECT id, name, is_final FROM location_quest_locations WHERE qr_token = $1 AND is_active = true",
+        "SELECT id, name, is_final FROM location_quest_locations WHERE qr_token = $1 AND is_active = true LIMIT 1",
         &[&qr_token],
     ).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     match row {
@@ -407,7 +454,7 @@ async fn scan_quest_qr(
                 let user_str = format!("\n\u{1F194} user: {}", telegram_id);
                 let text = format!(
                     "\u{1F4F2} QR \u{043E}\u{0442}\u{0441}\u{043A}\u{0430}\u{043D}\u{0438}\u{0440}\u{043E}\u{0432}\u{0430}\u{043D}\n\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\n\u{1F4CD} {}{}{}" ,
-                    loc_name, user_str, final_str
+                    html_escape(&loc_name), user_str, final_str
                 );
                 crate::notify::notify_admins(&bot, &config, &text).await;
             });

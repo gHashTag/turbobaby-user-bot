@@ -21,8 +21,35 @@ use axum::{
     response::Json,
     extract::DefaultBodyLimit,
 };
+use axum::http::StatusCode;
 use serde_json::{json, Value};
 use crate::AppState;
+
+/// Validates that a URL is either empty/None or starts with an allowed scheme.
+/// Allowed: http://, https://, /, data:image/, data:video/
+pub fn validate_url(url: &Option<String>) -> Result<(), StatusCode> {
+    if let Some(ref u) = url {
+        if u.is_empty() {
+            return Ok(());
+        }
+        if u.len() > 2048 {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+        // Block protocol-relative URLs (//evil.com/...)
+        if u.starts_with("//") {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+        let allowed = u.starts_with("http://")
+            || u.starts_with("https://")
+            || u.starts_with('/')
+            || u.starts_with("data:image/")
+            || u.starts_with("data:video/");
+        if !allowed {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    }
+    Ok(())
+}
 
 pub fn router(state: crate::AppState) -> Router {
     Router::new()

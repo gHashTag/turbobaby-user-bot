@@ -170,7 +170,7 @@ async fn get_managers(
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
     let rows = client.query(
-        "SELECT telegram_id, name, username, ref_code, commission_rate::float8 FROM managers ORDER BY name",
+        "SELECT telegram_id, name, username, ref_code, commission_rate::float8 FROM managers ORDER BY name LIMIT 500",
         &[],
     ).await.map_err(|e| {
         tracing::error!("admin managers: query failed: {:?}", e);
@@ -234,6 +234,9 @@ async fn create_manager(
     Json(req): Json<CreateManagerRequest>,
 ) -> Result<Json<Value>, StatusCode> {
     check_admin(&headers, &state)?;
+    if let Some(ref n) = req.name { if n.len() > 200 { return Err(StatusCode::BAD_REQUEST); } }
+    if let Some(ref u) = req.username { if u.len() > 200 { return Err(StatusCode::BAD_REQUEST); } }
+    if let Some(ref c) = req.ref_code { if c.len() > 200 { return Err(StatusCode::BAD_REQUEST); } }
     if let Some(r) = req.commission_rate { if !r.is_finite() || r < 0.0 || r > 100.0 { return Err(StatusCode::BAD_REQUEST); } }
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     client.execute(
@@ -250,6 +253,9 @@ async fn update_manager(
     Json(req): Json<UpdateManagerRequest>,
 ) -> Result<Json<Value>, StatusCode> {
     check_admin(&headers, &state)?;
+    if let Some(ref n) = req.name { if n.len() > 200 { return Err(StatusCode::BAD_REQUEST); } }
+    if let Some(ref u) = req.username { if u.len() > 200 { return Err(StatusCode::BAD_REQUEST); } }
+    if let Some(ref c) = req.ref_code { if c.len() > 200 { return Err(StatusCode::BAD_REQUEST); } }
     if let Some(r) = req.commission_rate { if !r.is_finite() || r < 0.0 || r > 100.0 { return Err(StatusCode::BAD_REQUEST); } }
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     client.execute(
@@ -284,42 +290,42 @@ async fn check_admin_access(
     let init_data_opt = headers
         .get("X-Telegram-Init-Data")
         .and_then(|v| v.to_str().ok());
-    tracing::info!("admin/check: telegram_id_query={}, init_data_len={}, init_data_present={}", query.telegram_id, init_data_opt.map(|s| s.len()).unwrap_or(0), init_data_opt.is_some());
+    tracing::debug!(
+        "admin/check: telegram_id_query={}, init_data_present={}",
+        query.telegram_id, init_data_opt.is_some()
+    );
 
     // 1. Try Telegram initData HMAC validation
     if let Some(init_data) = init_data_opt {
         if !init_data.is_empty() {
             if let Some(user) = validate_init_data(init_data, &state.config.bot_token) {
-                let is_admin = state.config.admin_ids.contains(&user.id);
-                if is_admin {
-                    tracing::info!("admin/check: initData valid user={} IS admin", user.id);
+                if state.config.admin_ids.contains(&user.id) {
+                    tracing::debug!("admin/check: initData authenticated telegram_id={}", user.id);
                     return Ok(Json(json!({ "is_admin": true, "telegram_id": user.id })));
                 }
-                tracing::warn!("admin/check: initData valid user={} but NOT in admin_ids, trying X-Admin-Token fallback", user.id);
+                tracing::warn!("admin/check: initData valid but user not admin telegram_id={}", user.id);
                 // Don't return here — allow password fallback below
             } else {
-                tracing::warn!("admin/check: invalid initData signature, falling back to X-Admin-Token");
+                tracing::warn!("admin/check: invalid initData signature");
             }
         }
     }
 
     // 2. Fallback: password token (X-Admin-Token)
     let token_opt = headers.get("X-Admin-Token").and_then(|v| v.to_str().ok());
-    tracing::info!("admin/check: X-Admin-Token present={}", token_opt.is_some());
     if let Some(token) = token_opt {
         if let Some(ref password) = state.config.admin_password {
-            tracing::info!("admin/check: verifying token against password...");
             if crate::api::auth::verify_admin_token(token, &state.config.bot_token, password) {
-                tracing::info!("admin/check: token valid, granting access");
-                return Ok(Json(json!({ "is_admin": true, "telegram_id": query.telegram_id })));
+                tracing::info!("admin/check: token authenticated");
+                return Ok(Json(json!({ "is_admin": true, "telegram_id": 0 })));
             }
-            tracing::warn!("admin/check: token verification FAILED");
+            tracing::warn!("admin/check: token verification failed");
         } else {
             tracing::warn!("admin/check: ADMIN_PASSWORD not set");
         }
     }
 
-    tracing::warn!("admin/check: unauthorized — invalid or missing initData");
+    tracing::warn!("admin/check: unauthorized");
     Err(StatusCode::UNAUTHORIZED)
 }
 
@@ -327,14 +333,25 @@ async fn admin_login(
     State(state): State<AppState>,
     Json(req): Json<AdminLoginRequest>,
 ) -> Result<Json<Value>, StatusCode> {
-    let _guard = LOGIN_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-    if let Some(ref password) = state.config.admin_password {
-        if crate::api::auth::verify_admin_token(
-            &crate::api::auth::generate_admin_token(&req.password, &state.config.bot_token),
-            &state.config.bot_token,
-            password,
-        ) {
-            let token = crate::api::auth::generate_admin_token(password, &state.config.bot_token);
+    if req.password.len() > 1000 { return Err(StatusCode::BAD_REQUEST); }
+    let valid = {
+        let _guard = LOGIN_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(ref password) = state.config.admin_password {
+            crate::api::auth::verify_admin_token(
+                &crate::api::auth::generate_admin_token(&req.password, &state.config.bot_token),
+                &state.config.bot_token,
+                password,
+            )
+        } else {
+            false
+        }
+    };
+    if valid {
+        if let Some(ref password) = state.config.admin_password {
+            let token = crate::api::auth::generate_admin_token(
+                password,
+                &state.config.bot_token,
+            );
             return Ok(Json(json!({ "success": true, "token": token })));
         }
     }

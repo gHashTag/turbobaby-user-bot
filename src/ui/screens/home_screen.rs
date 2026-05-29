@@ -1,6 +1,5 @@
 use dioxus::prelude::*;
 use serde::Deserialize;
-use web_sys;
 use crate::ui::routes::Route;
 use crate::ui::state::{Cart, CartItem, CartItemType};
 use crate::ui::assets;
@@ -80,10 +79,7 @@ pub fn HomeScreen() -> Element {
                     onclick: move |_| {
                         *logo_clicks.write() += 1;
                         let clicks = *logo_clicks.read();
-                        web_sys::console::log_1(&format!("Logo clicks: {}", clicks).into());
                         if clicks >= 5 {
-                            web_sys::console::log_1(&"Secret admin access!".into());
-                            // Navigate to admin via Dioxus router
                             nav.push(Route::Admin {});
                             *logo_clicks.write() = 0;
                         }

@@ -77,8 +77,9 @@ fn OrdersListView(orders: Vec<Order>) -> Element {
 #[component]
 fn OrderCard(order: Order) -> Element {
     let status = format!("{:?}", order.status);
-    let oid = if order.id.len() > 8 {
-        format!("...{}", &order.id[order.id.len()-8..])
+    let oid = if order.id.chars().count() > 8 {
+        let last: String = order.id.chars().rev().take(8).collect::<Vec<_>>().into_iter().rev().collect();
+        format!("...{}", last)
     } else {
         order.id.clone()
     };

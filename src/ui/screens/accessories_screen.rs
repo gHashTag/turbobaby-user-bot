@@ -177,9 +177,11 @@ fn render_accessory_card(a: ApiAccessory, mut cart: Signal<Cart>, add_to_cart: &
     let opacity = if show_out_of_stock { "opacity:0.6;" } else { "" };
     let desc = a.description.as_deref().unwrap_or("");
     let img_url = a.image_url.clone().unwrap_or_default();
-    let has_image = !img_url.is_empty();
+    let has_image = !img_url.is_empty()
+        && (img_url.starts_with("http://") || img_url.starts_with("https://") || img_url.starts_with('/'));
     let video_url = a.video_url.clone().unwrap_or_default();
-    let has_video = !video_url.is_empty();
+    let has_video = !video_url.is_empty()
+        && (video_url.starts_with("http://") || video_url.starts_with("https://") || video_url.starts_with('/'));
     let mut show_video = use_signal(|| false);
     let badge_style = category_badge_style(cat);
     let badge_label = format!("{} {}", emoji, cat);

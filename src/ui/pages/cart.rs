@@ -76,12 +76,16 @@ fn CartItemRow(props: CartItemRowProps) -> Element {
     let item_id_remove = item.id.clone();
     let mut cart = props.cart.clone();
 
+    let img_url = item.image_url.as_deref().unwrap_or("");
+    let has_image = !img_url.is_empty()
+        && (img_url.starts_with("http://") || img_url.starts_with("https://") || img_url.starts_with('/'));
+
     rsx! {
         div { class: "cart-item",
-            if let Some(ref image_url) = item.image_url {
+            if has_image {
                 img {
                     class: "cart-item-image",
-                    src: "{image_url}?v=2",
+                    src: "{img_url}?v=2",
                     alt: "{item.name}"
                 }
             }

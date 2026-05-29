@@ -82,7 +82,7 @@ async fn fetch_plants(telegram_id: i64, init_data: &str) -> Result<Vec<Plant>, S
 async fn water_plant_api(plant_id: &str, init_data: &str) -> Result<WaterPlantResponse, String> {
     let base = api_base_url();
     reqwest::Client::new()
-        .post(format!("{}/api/garden/plants/{}/water", base, plant_id))
+        .post(format!("{}/api/garden/plants/{}/water", base, urlencoding::encode(plant_id)))
         .header("X-Telegram-Init-Data", init_data)
         .send()
         .await
@@ -95,7 +95,7 @@ async fn water_plant_api(plant_id: &str, init_data: &str) -> Result<WaterPlantRe
 async fn harvest_plant_api(plant_id: &str, init_data: &str) -> Result<(), String> {
     let base = api_base_url();
     let resp: HarvestPlantResponse = reqwest::Client::new()
-        .post(format!("{}/api/garden/plants/{}/harvest", base, plant_id))
+        .post(format!("{}/api/garden/plants/{}/harvest", base, urlencoding::encode(plant_id)))
         .header("X-Telegram-Init-Data", init_data)
         .send()
         .await
@@ -316,7 +316,7 @@ pub fn Garden() -> Element {
                                             if let Some(p) = list.iter_mut().find(|p| p.id == plant_id) {
                                                 p.water_count = resp.water_count;
                                                 if let Some(stage_str) = resp.current_stage {
-                                                    if let Ok(stage) = serde_json::from_str::<GrowthStage>(&format!("\"{}\"", stage_str)) {
+                                                    if let Ok(stage) = serde_json::from_value::<GrowthStage>(serde_json::Value::String(stage_str)) {
                                                         p.current_stage = stage;
                                                     }
                                                 }

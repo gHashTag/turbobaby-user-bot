@@ -89,9 +89,9 @@ async fn get_accessories(headers: HeaderMap, State(state): State<AppState>, Quer
         crate::api::auth::check_admin(&headers, &state)?;
     }
     let sql = if include_hidden {
-        "SELECT id, name, category, description, price::float8, stock, image_url, video_url, is_available, name_en, description_en, category_en FROM accessories ORDER BY name"
+        "SELECT id, name, category, description, price::float8, stock, image_url, video_url, is_available, name_en, description_en, category_en FROM accessories ORDER BY name LIMIT 5000"
     } else {
-        "SELECT id, name, category, description, price::float8, stock, image_url, video_url, is_available, name_en, description_en, category_en FROM accessories WHERE is_available = TRUE ORDER BY name"
+        "SELECT id, name, category, description, price::float8, stock, image_url, video_url, is_available, name_en, description_en, category_en FROM accessories WHERE is_available = TRUE ORDER BY name LIMIT 2000"
     };
     let rows = client.query(sql, &[]).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     let items: Vec<Value> = rows.iter().map(accessory_row).collect();
@@ -99,6 +99,7 @@ async fn get_accessories(headers: HeaderMap, State(state): State<AppState>, Quer
 }
 
 async fn toggle_accessory_availability(State(state): State<AppState>, headers: HeaderMap, Path(id): Path<String>, Json(body): Json<Value>) -> Result<Json<Value>, StatusCode> {
+    if id.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
     check_admin(&headers, &state)?;
     let available = body["is_available"].as_bool().unwrap_or(true);
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
@@ -108,6 +109,7 @@ async fn toggle_accessory_availability(State(state): State<AppState>, headers: H
 }
 
 async fn get_accessory(State(state): State<AppState>, Path(id): Path<String>) -> Result<Json<Value>, StatusCode> {
+    if id.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     let row = client.query_opt(
         "SELECT id, name, category, description, price::float8, stock, image_url, video_url, is_available, name_en, description_en, category_en FROM accessories WHERE id = $1 AND is_available = TRUE",
@@ -121,9 +123,17 @@ async fn get_accessory(State(state): State<AppState>, Path(id): Path<String>) ->
 
 async fn create_accessory(State(state): State<AppState>, headers: HeaderMap, Json(req): Json<AccessoryRequest>) -> Result<Json<Value>, StatusCode> {
     check_admin(&headers, &state)?;
-    if !req.price.is_finite() || req.price < 0.0 {
+    if req.name.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
+    if let Some(ref c) = req.category { if c.len() > 200 { return Err(StatusCode::BAD_REQUEST); } }
+    if let Some(ref d) = req.description { if d.len() > 1000 { return Err(StatusCode::BAD_REQUEST); } }
+    if let Some(ref n) = req.name_en { if n.len() > 200 { return Err(StatusCode::BAD_REQUEST); } }
+    if let Some(ref d) = req.description_en { if d.len() > 1000 { return Err(StatusCode::BAD_REQUEST); } }
+    if let Some(ref c) = req.category_en { if c.len() > 200 { return Err(StatusCode::BAD_REQUEST); } }
+    if !req.price.is_finite() || req.price < 0.0 || req.price > 1_000_000.0 {
         return Err(StatusCode::BAD_REQUEST);
     }
+    crate::api::validate_url(&req.image_url)?;
+    crate::api::validate_url(&req.video_url)?;
     let id = uuid::Uuid::new_v4().to_string();
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("create_accessory pool error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     client.execute(
@@ -134,10 +144,19 @@ async fn create_accessory(State(state): State<AppState>, headers: HeaderMap, Jso
 }
 
 async fn update_accessory(State(state): State<AppState>, headers: HeaderMap, Path(id): Path<String>, Json(req): Json<AccessoryRequest>) -> Result<Json<Value>, StatusCode> {
+    if id.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
     check_admin(&headers, &state)?;
-    if !req.price.is_finite() || req.price < 0.0 {
+    if req.name.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
+    if let Some(ref c) = req.category { if c.len() > 200 { return Err(StatusCode::BAD_REQUEST); } }
+    if let Some(ref d) = req.description { if d.len() > 1000 { return Err(StatusCode::BAD_REQUEST); } }
+    if let Some(ref n) = req.name_en { if n.len() > 200 { return Err(StatusCode::BAD_REQUEST); } }
+    if let Some(ref d) = req.description_en { if d.len() > 1000 { return Err(StatusCode::BAD_REQUEST); } }
+    if let Some(ref c) = req.category_en { if c.len() > 200 { return Err(StatusCode::BAD_REQUEST); } }
+    if !req.price.is_finite() || req.price < 0.0 || req.price > 1_000_000.0 {
         return Err(StatusCode::BAD_REQUEST);
     }
+    crate::api::validate_url(&req.image_url)?;
+    crate::api::validate_url(&req.video_url)?;
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     client.execute(
         "UPDATE accessories SET name=$1, category=$2, description=$3, price=$4, stock=$5, image_url=$6, video_url=$7, name_en=$8, description_en=$9, category_en=$10, is_available=$11 WHERE id=$12",
@@ -147,6 +166,7 @@ async fn update_accessory(State(state): State<AppState>, headers: HeaderMap, Pat
 }
 
 async fn delete_accessory(State(state): State<AppState>, headers: HeaderMap, Path(id): Path<String>) -> Result<Json<Value>, StatusCode> {
+    if id.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
     check_admin(&headers, &state)?;
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("delete_accessory pool error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     client.execute("DELETE FROM accessories WHERE id = $1", &[&id])
@@ -201,9 +221,9 @@ async fn get_accessory_sets(headers: HeaderMap, State(state): State<AppState>, Q
         crate::api::auth::check_admin(&headers, &state)?;
     }
     let sql = if include_hidden {
-        "SELECT id, name, description, icon, accessories, total_price::float8, discount_percent::float8, is_available, is_deal_of_day, name_en, description_en, image_url, video_url FROM accessory_sets ORDER BY name"
+        "SELECT id, name, description, icon, accessories, total_price::float8, discount_percent::float8, is_available, is_deal_of_day, name_en, description_en, image_url, video_url FROM accessory_sets ORDER BY name LIMIT 5000"
     } else {
-        "SELECT id, name, description, icon, accessories, total_price::float8, discount_percent::float8, is_available, is_deal_of_day, name_en, description_en, image_url, video_url FROM accessory_sets WHERE is_available = TRUE ORDER BY name"
+        "SELECT id, name, description, icon, accessories, total_price::float8, discount_percent::float8, is_available, is_deal_of_day, name_en, description_en, image_url, video_url FROM accessory_sets WHERE is_available = TRUE ORDER BY name LIMIT 2000"
     };
     let rows = client.query(sql, &[]).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     let items: Vec<Value> = rows.iter().map(accessory_set_row).collect();
@@ -212,13 +232,21 @@ async fn get_accessory_sets(headers: HeaderMap, State(state): State<AppState>, Q
 
 async fn create_accessory_set(State(state): State<AppState>, headers: HeaderMap, Json(req): Json<AccessorySetRequest>) -> Result<Json<Value>, StatusCode> {
     check_admin(&headers, &state)?;
-    if !req.total_price.is_finite() || req.total_price < 0.0 {
+    if req.name.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
+    if let Some(ref d) = req.description { if d.len() > 1000 { return Err(StatusCode::BAD_REQUEST); } }
+    if let Some(ref i) = req.icon { if i.len() > 200 { return Err(StatusCode::BAD_REQUEST); } }
+    if let Some(ref n) = req.name_en { if n.len() > 200 { return Err(StatusCode::BAD_REQUEST); } }
+    if let Some(ref d) = req.description_en { if d.len() > 1000 { return Err(StatusCode::BAD_REQUEST); } }
+    if !req.total_price.is_finite() || req.total_price < 0.0 || req.total_price > 1_000_000.0 {
         return Err(StatusCode::BAD_REQUEST);
     }
     if let Some(d) = req.discount_percent { if !d.is_finite() || d < 0.0 || d > 100.0 { return Err(StatusCode::BAD_REQUEST); } }
+    crate::api::validate_url(&req.image_url)?;
+    crate::api::validate_url(&req.video_url)?;
     let id = uuid::Uuid::new_v4().to_string();
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     let accessories = req.accessories.unwrap_or_default();
+    if accessories.len() > 100 { return Err(StatusCode::BAD_REQUEST); }
     client.execute(
         "INSERT INTO accessory_sets (id, name, description, icon, accessories, total_price, discount_percent, is_deal_of_day, name_en, description_en, image_url, video_url) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)",
         &[&id, &req.name, &req.description.unwrap_or_default(), &req.icon.unwrap_or_default(), &accessories, &req.total_price, &req.discount_percent.unwrap_or(0.0), &req.is_deal_of_day.unwrap_or(false), &req.name_en, &req.description_en, &req.image_url, &req.video_url],
@@ -227,13 +255,22 @@ async fn create_accessory_set(State(state): State<AppState>, headers: HeaderMap,
 }
 
 async fn update_accessory_set(State(state): State<AppState>, headers: HeaderMap, Path(id): Path<String>, Json(req): Json<AccessorySetRequest>) -> Result<Json<Value>, StatusCode> {
+    if id.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
     check_admin(&headers, &state)?;
-    if !req.total_price.is_finite() || req.total_price < 0.0 {
+    if req.name.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
+    if let Some(ref d) = req.description { if d.len() > 1000 { return Err(StatusCode::BAD_REQUEST); } }
+    if let Some(ref i) = req.icon { if i.len() > 200 { return Err(StatusCode::BAD_REQUEST); } }
+    if let Some(ref n) = req.name_en { if n.len() > 200 { return Err(StatusCode::BAD_REQUEST); } }
+    if let Some(ref d) = req.description_en { if d.len() > 1000 { return Err(StatusCode::BAD_REQUEST); } }
+    if !req.total_price.is_finite() || req.total_price < 0.0 || req.total_price > 1_000_000.0 {
         return Err(StatusCode::BAD_REQUEST);
     }
     if let Some(d) = req.discount_percent { if !d.is_finite() || d < 0.0 || d > 100.0 { return Err(StatusCode::BAD_REQUEST); } }
+    crate::api::validate_url(&req.image_url)?;
+    crate::api::validate_url(&req.video_url)?;
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     let accessories = req.accessories.unwrap_or_default();
+    if accessories.len() > 100 { return Err(StatusCode::BAD_REQUEST); }
     client.execute(
         "UPDATE accessory_sets SET name=$1, description=$2, icon=$3, accessories=$4, total_price=$5, discount_percent=$6, is_deal_of_day=$7, name_en=$8, description_en=$9, image_url=$10, video_url=$11, is_available=$12 WHERE id=$13",
         &[&req.name, &req.description.unwrap_or_default(), &req.icon.unwrap_or_default(), &accessories, &req.total_price, &req.discount_percent.unwrap_or(0.0), &req.is_deal_of_day.unwrap_or(false), &req.name_en, &req.description_en, &req.image_url, &req.video_url, &req.is_available.unwrap_or(true), &id],
@@ -242,6 +279,7 @@ async fn update_accessory_set(State(state): State<AppState>, headers: HeaderMap,
 }
 
 async fn delete_accessory_set(State(state): State<AppState>, headers: HeaderMap, Path(id): Path<String>) -> Result<Json<Value>, StatusCode> {
+    if id.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
     check_admin(&headers, &state)?;
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     client.execute("DELETE FROM accessory_sets WHERE id = $1", &[&id])
@@ -250,6 +288,7 @@ async fn delete_accessory_set(State(state): State<AppState>, headers: HeaderMap,
 }
 
 async fn toggle_accessory_set_availability(State(state): State<AppState>, headers: HeaderMap, Path(id): Path<String>, Json(body): Json<Value>) -> Result<Json<Value>, StatusCode> {
+    if id.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
     check_admin(&headers, &state)?;
     let available = body["is_available"].as_bool().unwrap_or(true);
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
@@ -301,9 +340,9 @@ async fn get_tea_products(headers: HeaderMap, State(state): State<AppState>, Que
         crate::api::auth::check_admin(&headers, &state)?;
     }
     let sql = if include_hidden {
-        "SELECT id, name, subcategory, description, price::float8, stock, image_url, video_url, is_available, name_en, description_en, subcategory_en FROM tea_products ORDER BY name"
+        "SELECT id, name, subcategory, description, price::float8, stock, image_url, video_url, is_available, name_en, description_en, subcategory_en FROM tea_products ORDER BY name LIMIT 5000"
     } else {
-        "SELECT id, name, subcategory, description, price::float8, stock, image_url, video_url, is_available, name_en, description_en, subcategory_en FROM tea_products WHERE is_available = TRUE ORDER BY name"
+        "SELECT id, name, subcategory, description, price::float8, stock, image_url, video_url, is_available, name_en, description_en, subcategory_en FROM tea_products WHERE is_available = TRUE ORDER BY name LIMIT 2000"
     };
     let rows = client.query(sql, &[]).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     let items: Vec<Value> = rows.iter().map(tea_product_row).collect();
@@ -312,6 +351,7 @@ async fn get_tea_products(headers: HeaderMap, State(state): State<AppState>, Que
 }
 
 async fn toggle_tea_availability(State(state): State<AppState>, headers: HeaderMap, Path(id): Path<String>, Json(body): Json<Value>) -> Result<Json<Value>, StatusCode> {
+    if id.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
     check_admin(&headers, &state)?;
     let available = body["is_available"].as_bool().unwrap_or(true);
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
@@ -321,6 +361,7 @@ async fn toggle_tea_availability(State(state): State<AppState>, headers: HeaderM
 }
 
 async fn get_tea_product(State(state): State<AppState>, Path(id): Path<String>) -> Result<Json<Value>, StatusCode> {
+    if id.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     let row = client.query_opt(
         "SELECT id, name, subcategory, description, price::float8, stock, image_url, video_url, is_available, name_en, description_en, subcategory_en FROM tea_products WHERE id = $1 AND is_available = TRUE",
@@ -334,9 +375,17 @@ async fn get_tea_product(State(state): State<AppState>, Path(id): Path<String>) 
 
 async fn create_tea_product(State(state): State<AppState>, headers: HeaderMap, Json(req): Json<TeaProductRequest>) -> Result<Json<Value>, StatusCode> {
     check_admin(&headers, &state)?;
-    if !req.price.is_finite() || req.price < 0.0 {
+    if req.name.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
+    if let Some(ref s) = req.subcategory { if s.len() > 200 { return Err(StatusCode::BAD_REQUEST); } }
+    if let Some(ref d) = req.description { if d.len() > 1000 { return Err(StatusCode::BAD_REQUEST); } }
+    if let Some(ref n) = req.name_en { if n.len() > 200 { return Err(StatusCode::BAD_REQUEST); } }
+    if let Some(ref d) = req.description_en { if d.len() > 1000 { return Err(StatusCode::BAD_REQUEST); } }
+    if let Some(ref s) = req.subcategory_en { if s.len() > 200 { return Err(StatusCode::BAD_REQUEST); } }
+    if !req.price.is_finite() || req.price < 0.0 || req.price > 1_000_000.0 {
         return Err(StatusCode::BAD_REQUEST);
     }
+    crate::api::validate_url(&req.image_url)?;
+    crate::api::validate_url(&req.video_url)?;
     let id = uuid::Uuid::new_v4().to_string();
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("create_tea_product pool error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     client.execute(
@@ -347,10 +396,19 @@ async fn create_tea_product(State(state): State<AppState>, headers: HeaderMap, J
 }
 
 async fn update_tea_product(State(state): State<AppState>, headers: HeaderMap, Path(id): Path<String>, Json(req): Json<TeaProductRequest>) -> Result<Json<Value>, StatusCode> {
+    if id.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
     check_admin(&headers, &state)?;
-    if !req.price.is_finite() || req.price < 0.0 {
+    if req.name.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
+    if let Some(ref s) = req.subcategory { if s.len() > 200 { return Err(StatusCode::BAD_REQUEST); } }
+    if let Some(ref d) = req.description { if d.len() > 1000 { return Err(StatusCode::BAD_REQUEST); } }
+    if let Some(ref n) = req.name_en { if n.len() > 200 { return Err(StatusCode::BAD_REQUEST); } }
+    if let Some(ref d) = req.description_en { if d.len() > 1000 { return Err(StatusCode::BAD_REQUEST); } }
+    if let Some(ref s) = req.subcategory_en { if s.len() > 200 { return Err(StatusCode::BAD_REQUEST); } }
+    if !req.price.is_finite() || req.price < 0.0 || req.price > 1_000_000.0 {
         return Err(StatusCode::BAD_REQUEST);
     }
+    crate::api::validate_url(&req.image_url)?;
+    crate::api::validate_url(&req.video_url)?;
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     client.execute(
         "UPDATE tea_products SET name=$1, subcategory=$2, description=$3, price=$4, stock=$5, image_url=$6, video_url=$7, name_en=$8, description_en=$9, subcategory_en=$10, is_available=$11 WHERE id=$12",
@@ -360,6 +418,7 @@ async fn update_tea_product(State(state): State<AppState>, headers: HeaderMap, P
 }
 
 async fn delete_tea_product(State(state): State<AppState>, headers: HeaderMap, Path(id): Path<String>) -> Result<Json<Value>, StatusCode> {
+    if id.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
     check_admin(&headers, &state)?;
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("delete_tea_product pool error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     client.execute("DELETE FROM tea_products WHERE id = $1", &[&id])
@@ -410,9 +469,9 @@ async fn get_tea_sets(headers: HeaderMap, State(state): State<AppState>, Query(q
         crate::api::auth::check_admin(&headers, &state)?;
     }
     let sql = if include_hidden {
-        "SELECT id, name, description, icon, items, total_price::float8, discount_percent::float8, is_available, name_en, description_en, video_url FROM tea_sets ORDER BY name"
+        "SELECT id, name, description, icon, items, total_price::float8, discount_percent::float8, is_available, name_en, description_en, video_url FROM tea_sets ORDER BY name LIMIT 5000"
     } else {
-        "SELECT id, name, description, icon, items, total_price::float8, discount_percent::float8, is_available, name_en, description_en, video_url FROM tea_sets WHERE is_available = TRUE ORDER BY name"
+        "SELECT id, name, description, icon, items, total_price::float8, discount_percent::float8, is_available, name_en, description_en, video_url FROM tea_sets WHERE is_available = TRUE ORDER BY name LIMIT 2000"
     };
     let rows = client.query(sql, &[]).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     let items: Vec<Value> = rows.iter().map(tea_set_row).collect();
@@ -421,13 +480,20 @@ async fn get_tea_sets(headers: HeaderMap, State(state): State<AppState>, Query(q
 
 async fn create_tea_set(State(state): State<AppState>, headers: HeaderMap, Json(req): Json<TeaSetRequest>) -> Result<Json<Value>, StatusCode> {
     check_admin(&headers, &state)?;
-    if !req.total_price.is_finite() || req.total_price < 0.0 {
+    if req.name.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
+    if let Some(ref d) = req.description { if d.len() > 1000 { return Err(StatusCode::BAD_REQUEST); } }
+    if let Some(ref i) = req.icon { if i.len() > 200 { return Err(StatusCode::BAD_REQUEST); } }
+    if let Some(ref n) = req.name_en { if n.len() > 200 { return Err(StatusCode::BAD_REQUEST); } }
+    if let Some(ref d) = req.description_en { if d.len() > 1000 { return Err(StatusCode::BAD_REQUEST); } }
+    if !req.total_price.is_finite() || req.total_price < 0.0 || req.total_price > 1_000_000.0 {
         return Err(StatusCode::BAD_REQUEST);
     }
     if let Some(d) = req.discount_percent { if !d.is_finite() || d < 0.0 || d > 100.0 { return Err(StatusCode::BAD_REQUEST); } }
+    crate::api::validate_url(&req.video_url)?;
     let id = uuid::Uuid::new_v4().to_string();
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     let tea_items = req.items.unwrap_or_default();
+    if tea_items.len() > 100 { return Err(StatusCode::BAD_REQUEST); }
     client.execute(
         "INSERT INTO tea_sets (id, name, description, icon, items, total_price, discount_percent, name_en, description_en, video_url) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)",
         &[&id, &req.name, &req.description.unwrap_or_default(), &req.icon.unwrap_or_default(), &tea_items, &req.total_price, &req.discount_percent.unwrap_or(0.0), &req.name_en, &req.description_en, &req.video_url],
@@ -436,13 +502,21 @@ async fn create_tea_set(State(state): State<AppState>, headers: HeaderMap, Json(
 }
 
 async fn update_tea_set(State(state): State<AppState>, headers: HeaderMap, Path(id): Path<String>, Json(req): Json<TeaSetRequest>) -> Result<Json<Value>, StatusCode> {
+    if id.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
     check_admin(&headers, &state)?;
-    if !req.total_price.is_finite() || req.total_price < 0.0 {
+    if req.name.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
+    if let Some(ref d) = req.description { if d.len() > 1000 { return Err(StatusCode::BAD_REQUEST); } }
+    if let Some(ref i) = req.icon { if i.len() > 200 { return Err(StatusCode::BAD_REQUEST); } }
+    if let Some(ref n) = req.name_en { if n.len() > 200 { return Err(StatusCode::BAD_REQUEST); } }
+    if let Some(ref d) = req.description_en { if d.len() > 1000 { return Err(StatusCode::BAD_REQUEST); } }
+    if !req.total_price.is_finite() || req.total_price < 0.0 || req.total_price > 1_000_000.0 {
         return Err(StatusCode::BAD_REQUEST);
     }
     if let Some(d) = req.discount_percent { if !d.is_finite() || d < 0.0 || d > 100.0 { return Err(StatusCode::BAD_REQUEST); } }
+    crate::api::validate_url(&req.video_url)?;
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     let tea_items = req.items.unwrap_or_default();
+    if tea_items.len() > 100 { return Err(StatusCode::BAD_REQUEST); }
     client.execute(
         "UPDATE tea_sets SET name=$1, description=$2, icon=$3, items=$4, total_price=$5, discount_percent=$6, name_en=$7, description_en=$8, video_url=$9, is_available=$10 WHERE id=$11",
         &[&req.name, &req.description.unwrap_or_default(), &req.icon.unwrap_or_default(), &tea_items, &req.total_price, &req.discount_percent.unwrap_or(0.0), &req.name_en, &req.description_en, &req.video_url, &req.is_available.unwrap_or(true), &id],
@@ -451,6 +525,7 @@ async fn update_tea_set(State(state): State<AppState>, headers: HeaderMap, Path(
 }
 
 async fn delete_tea_set(State(state): State<AppState>, headers: HeaderMap, Path(id): Path<String>) -> Result<Json<Value>, StatusCode> {
+    if id.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
     check_admin(&headers, &state)?;
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     client.execute("DELETE FROM tea_sets WHERE id = $1", &[&id])
@@ -459,6 +534,7 @@ async fn delete_tea_set(State(state): State<AppState>, headers: HeaderMap, Path(
 }
 
 async fn toggle_tea_set_availability(State(state): State<AppState>, headers: HeaderMap, Path(id): Path<String>, Json(body): Json<Value>) -> Result<Json<Value>, StatusCode> {
+    if id.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
     check_admin(&headers, &state)?;
     let available = body["is_available"].as_bool().unwrap_or(true);
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
@@ -512,7 +588,7 @@ async fn get_sets(headers: HeaderMap, State(state): State<AppState>, Query(q): Q
     if include_hidden {
         // Use a single compatible query that works with or without accessory_ids column.
         let rows = client.query(
-            "SELECT id, name, description, icon, strain_ids, COALESCE(accessory_ids, NULL::text[]) AS accessory_ids, total_price::float8, discount_percent::float8, is_available, COALESCE(is_deal_of_day, false) AS is_deal_of_day, video_url FROM sets ORDER BY name",
+            "SELECT id, name, description, icon, strain_ids, COALESCE(accessory_ids, NULL::text[]) AS accessory_ids, total_price::float8, discount_percent::float8, is_available, COALESCE(is_deal_of_day, false) AS is_deal_of_day, video_url FROM sets ORDER BY name LIMIT 5000",
             &[],
         ).await.map_err(|e| { tracing::error!("get_sets admin query error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
         let items: Vec<Value> = rows.iter().map(set_row).collect();
@@ -521,12 +597,12 @@ async fn get_sets(headers: HeaderMap, State(state): State<AppState>, Query(q): Q
 
     // Public mode: combine accessory_sets + tea_sets (backwards compat)
     let accessory_sets = client.query(
-        "SELECT id, name, description, icon, accessories, total_price::float8, discount_percent::float8, is_available, is_deal_of_day, name_en, description_en, image_url, video_url FROM accessory_sets WHERE is_available = TRUE",
+        "SELECT id, name, description, icon, accessories, total_price::float8, discount_percent::float8, is_available, is_deal_of_day, name_en, description_en, image_url, video_url FROM accessory_sets WHERE is_available = TRUE LIMIT 2000",
         &[],
     ).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
 
     let tea_sets = client.query(
-        "SELECT id, name, description, icon, items, total_price::float8, discount_percent::float8, is_available, name_en, description_en, image_url, video_url FROM tea_sets WHERE is_available = TRUE",
+        "SELECT id, name, description, icon, items, total_price::float8, discount_percent::float8, is_available, name_en, description_en, image_url, video_url FROM tea_sets WHERE is_available = TRUE LIMIT 2000",
         &[],
     ).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
 
@@ -577,14 +653,19 @@ async fn get_sets(headers: HeaderMap, State(state): State<AppState>, Query(q): Q
 
 async fn create_set(State(state): State<AppState>, headers: HeaderMap, Json(req): Json<SetRequest>) -> Result<Json<Value>, StatusCode> {
     check_admin(&headers, &state)?;
-    if !req.total_price.is_finite() || req.total_price < 0.0 {
+    if req.name.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
+    if let Some(ref d) = req.description { if d.len() > 1000 { return Err(StatusCode::BAD_REQUEST); } }
+    if let Some(ref i) = req.icon { if i.len() > 200 { return Err(StatusCode::BAD_REQUEST); } }
+    if !req.total_price.is_finite() || req.total_price < 0.0 || req.total_price > 1_000_000.0 {
         return Err(StatusCode::BAD_REQUEST);
     }
     if let Some(d) = req.discount_percent { if !d.is_finite() || d < 0.0 || d > 100.0 { return Err(StatusCode::BAD_REQUEST); } }
+    crate::api::validate_url(&req.video_url)?;
     let id = uuid::Uuid::new_v4().to_string();
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     let strain_ids = req.strain_ids.unwrap_or_default();
     let accessory_ids = req.accessory_ids.unwrap_or_default();
+    if strain_ids.len() > 100 || accessory_ids.len() > 100 { return Err(StatusCode::BAD_REQUEST); }
     client.execute(
         "INSERT INTO sets (id, name, description, icon, strain_ids, accessory_ids, total_price, discount_percent, is_deal_of_day, video_url) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)",
         &[&id, &req.name, &req.description.unwrap_or_default(), &req.icon.unwrap_or_default(), &strain_ids, &accessory_ids, &req.total_price, &req.discount_percent.unwrap_or(0.0), &req.is_deal_of_day.unwrap_or(false), &req.video_url],
@@ -593,14 +674,20 @@ async fn create_set(State(state): State<AppState>, headers: HeaderMap, Json(req)
 }
 
 async fn update_set(State(state): State<AppState>, headers: HeaderMap, Path(id): Path<String>, Json(req): Json<SetRequest>) -> Result<Json<Value>, StatusCode> {
+    if id.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
     check_admin(&headers, &state)?;
-    if !req.total_price.is_finite() || req.total_price < 0.0 {
+    if req.name.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
+    if let Some(ref d) = req.description { if d.len() > 1000 { return Err(StatusCode::BAD_REQUEST); } }
+    if let Some(ref i) = req.icon { if i.len() > 200 { return Err(StatusCode::BAD_REQUEST); } }
+    if !req.total_price.is_finite() || req.total_price < 0.0 || req.total_price > 1_000_000.0 {
         return Err(StatusCode::BAD_REQUEST);
     }
     if let Some(d) = req.discount_percent { if !d.is_finite() || d < 0.0 || d > 100.0 { return Err(StatusCode::BAD_REQUEST); } }
+    crate::api::validate_url(&req.video_url)?;
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     let strain_ids = req.strain_ids.unwrap_or_default();
     let accessory_ids = req.accessory_ids.unwrap_or_default();
+    if strain_ids.len() > 100 || accessory_ids.len() > 100 { return Err(StatusCode::BAD_REQUEST); }
     client.execute(
         "UPDATE sets SET name=$1, description=$2, icon=$3, strain_ids=$4, accessory_ids=$5, total_price=$6, discount_percent=$7, is_deal_of_day=$8, video_url=$9, is_available=$10 WHERE id=$11",
         &[&req.name, &req.description.unwrap_or_default(), &req.icon.unwrap_or_default(), &strain_ids, &accessory_ids, &req.total_price, &req.discount_percent.unwrap_or(0.0), &req.is_deal_of_day.unwrap_or(false), &req.video_url, &req.is_available.unwrap_or(true), &id],
@@ -609,6 +696,7 @@ async fn update_set(State(state): State<AppState>, headers: HeaderMap, Path(id):
 }
 
 async fn delete_set(State(state): State<AppState>, headers: HeaderMap, Path(id): Path<String>) -> Result<Json<Value>, StatusCode> {
+    if id.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
     check_admin(&headers, &state)?;
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     client.execute("DELETE FROM sets WHERE id = $1", &[&id])
@@ -617,6 +705,7 @@ async fn delete_set(State(state): State<AppState>, headers: HeaderMap, Path(id):
 }
 
 async fn toggle_set_availability(State(state): State<AppState>, headers: HeaderMap, Path(id): Path<String>, Json(body): Json<Value>) -> Result<Json<Value>, StatusCode> {
+    if id.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
     check_admin(&headers, &state)?;
     let available = body["is_available"].as_bool().unwrap_or(true);
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;

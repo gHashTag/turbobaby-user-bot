@@ -1,13 +1,11 @@
 use std::sync::Arc;
-use std::collections::HashMap;
 use std::time::{Duration, Instant};
-use tokio::sync::Mutex;
 use teloxide::{
     prelude::*,
     types::{InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, MaybeInaccessibleMessage},
 };
 
-use crate::{config::Config, db::Database, locales::*, ai::{AiClient, get_random_joke_prompt, get_random_fact_prompt}};
+use crate::{config::Config, db::Database, locales::*, ai::{get_random_joke_prompt, get_random_fact_prompt}};
 use crate::bot::commands::build_app_url;
 use crate::db::referrals as ref_db;
 use crate::bot::{AI_RATE_LIMIT, AI_COOLDOWN};
@@ -34,6 +32,7 @@ pub async fn handle_callback(
     q: CallbackQuery,
     db: Arc<Database>,
     config: Arc<Config>,
+    ai_client: Arc<crate::ai::AiClient>,
 ) -> Result<(), teloxide::RequestError> {
     let data = match q.data.as_ref().map(|s| s.as_str()) {
         Some(d) => d.to_string(),
@@ -51,7 +50,7 @@ pub async fn handle_callback(
         return Ok(());
     }
 
-    tracing::info!(
+    tracing::debug!(
         "callback_query received: data='{}' user_id={} username={:?} message_id={:?}",
         data, user_id, q.from.username, q.message.as_ref().map(|m| match m {
             MaybeInaccessibleMessage::Regular(msg) => msg.id.0,
@@ -80,8 +79,6 @@ pub async fn handle_callback(
         }
     }
 
-    let ai = AiClient::new(config.grok_api_key.clone(), config.glm_api_key.clone());
-
     match data.as_str() {
         "start_joke" | "more_joke" => {
             bot.answer_callback_query(&q.id).await?;
@@ -94,7 +91,7 @@ pub async fn handle_callback(
                     bot.edit_message_text(msg.chat.id, msg.id, "⏳ Too fast! Wait a few seconds.").await.ok();
                 } else {
                     bot.edit_message_text(msg.chat.id, msg.id, &locale.joke_thinking).await.ok();
-                    let joke = ai.ask_grok(&prompt, "Joker", &locale.lang_instruction).await;
+                    let joke = ai_client.ask_grok(&prompt, "Joker", &locale.lang_instruction).await;
                     let text = joke.map(|j| format!("😜 {}", j)).unwrap_or(locale.joke_fail_fallback.clone());
                     bot.edit_message_text(msg.chat.id, msg.id, &text)
                         .reply_markup(InlineKeyboardMarkup::new(vec![
@@ -115,7 +112,7 @@ pub async fn handle_callback(
                     bot.edit_message_text(msg.chat.id, msg.id, "⏳ Too fast! Wait a few seconds.").await.ok();
                 } else {
                     bot.edit_message_text(msg.chat.id, msg.id, &locale.fact_thinking).await.ok();
-                    let fact = ai.ask_grok(&prompt, "FactMaster", &locale.lang_instruction).await;
+                    let fact = ai_client.ask_grok(&prompt, "FactMaster", &locale.lang_instruction).await;
                     let text = fact.map(|f| format!("🧠 {}", f)).unwrap_or(locale.fact_fail_fallback.clone());
                     bot.edit_message_text(msg.chat.id, msg.id, &text)
                         .reply_markup(InlineKeyboardMarkup::new(vec![
@@ -193,25 +190,41 @@ pub async fn handle_callback(
                 return Ok(());
             }
             let order_id = &d["confirm_".len()..];
-            tracing::info!("callback: confirm order_id={} by user_id={}", order_id, user_id);
-            bot.answer_callback_query(&q.id).text(&format!("✅ {}", locale.order_confirmed)).await?;
-            match db.pool.get().await {
+            let db_ok = match db.pool.get().await {
                 Ok(client) => {
                     match client.execute("UPDATE orders SET status = 'confirmed' WHERE id = $1", &[&order_id]).await {
-                        Ok(rows) => tracing::info!("callback: confirm order_id={} updated {} rows", order_id, rows),
-                        Err(e) => tracing::error!("callback: confirm order_id={} DB error: {}", order_id, e),
+                        Ok(rows) => {
+                            tracing::info!("callback: confirm order_id={} updated {} rows", order_id, rows);
+                            true
+                        }
+                        Err(e) => {
+                            tracing::error!("callback: confirm order_id={} DB error: {}", order_id, e);
+                            false
+                        }
                     }
                 }
-                Err(e) => tracing::error!("callback: confirm order_id={} pool error: {}", order_id, e),
-            }
-            if let Some(msg) = q.message.as_ref().and_then(|m| match m {
+                Err(e) => {
+                    tracing::error!("callback: confirm order_id={} pool error: {}", order_id, e);
+                    false
+                }
+            };
+            if db_ok {
+                bot.answer_callback_query(&q.id).text(&format!("✅ {}", locale.order_confirmed)).await?;
+                if let Some(msg) = q.message.as_ref().and_then(|m| match m {
     MaybeInaccessibleMessage::Regular(msg) => Some(msg),
     MaybeInaccessibleMessage::Inaccessible(_) => None,
 }) {
-                bot.edit_message_reply_markup(msg.chat.id, msg.id)
-                    .reply_markup(InlineKeyboardMarkup::new(vec![
-                        vec![callback_btn(&format!("📦 {}", locale.order_complete_btn), &format!("complete_{}", order_id))]
-                    ])).await.ok();
+                    bot.edit_message_reply_markup(msg.chat.id, msg.id)
+                        .reply_markup(InlineKeyboardMarkup::new(vec![
+                            vec![callback_btn(&format!("📦 {}", locale.order_complete_btn), &format!("complete_{}", order_id))]
+                        ])).await.ok();
+                }
+            } else if let Some(msg) = q.message.as_ref().and_then(|m| match m {
+    MaybeInaccessibleMessage::Regular(msg) => Some(msg),
+    MaybeInaccessibleMessage::Inaccessible(_) => None,
+}) {
+                bot.answer_callback_query(&q.id).text("❌ DB error — check logs").await.ok();
+                bot.send_message(msg.chat.id, format!("❌ Failed to confirm order #{}", order_id)).await.ok();
             }
         }
 
@@ -222,7 +235,7 @@ pub async fn handle_callback(
                 return Ok(());
             }
             let order_id = &d["complete_".len()..];
-            tracing::info!("callback: complete order_id={} by user_id={}", order_id, user_id);
+            tracing::info!("callback: complete order_id={}", order_id);
             bot.answer_callback_query(&q.id).text("📦 Completed!").await?;
 
             // Atomically complete order, update loyalty profile, and recalculate tier
@@ -292,39 +305,48 @@ pub async fn handle_callback(
                 return Ok(());
             }
             let _order_id = &d["reject_".len()..];
-            tracing::info!("callback: reject order_id={} by user_id={}", _order_id, user_id);
+            tracing::info!("callback: reject order_id={}", _order_id);
             bot.answer_callback_query(&q.id).text(&format!("❌ {}", locale.order_rejected)).await?;
             match db.pool.get().await {
-                Ok(client) => {
+                Ok(mut client) => {
                     match client.transaction().await {
                         Ok(tx) => {
                             // Refund bonus atomically if this is the first rejection.
                             if let Ok(Some(r)) = tx.query_opt("SELECT telegram_id, bonus_used::float8, status FROM orders WHERE id = $1 FOR UPDATE", &[&_order_id]).await {
                                 let current_status: String = r.try_get("status").unwrap_or_default();
-                                if current_status != "rejected" {
+                                if current_status != "rejected" && current_status != "completed" {
                                     let bonus: f64 = r.try_get::<_, f64>("bonus_used").unwrap_or(0.0);
                                     let tid: Option<i64> = r.try_get("telegram_id").ok().flatten();
                                     if bonus > 0.0 {
                                         if let Some(tid) = tid {
-                                            let _ = tx.execute(
+                                            if let Err(e) = tx.execute(
                                                 "INSERT INTO loyalty_profiles (telegram_id, bonus_balance, total_spent) VALUES ($1, 0, 0) ON CONFLICT (telegram_id) DO NOTHING",
                                                 &[&tid],
-                                            ).await;
-                                            let _ = tx.execute(
+                                            ).await {
+                                                tracing::error!("callback: reject bonus upsert error: {}", e);
+                                            }
+                                            if let Err(e) = tx.execute(
                                                 "UPDATE loyalty_profiles SET bonus_balance = bonus_balance + $1 WHERE telegram_id = $2",
                                                 &[&bonus, &tid],
-                                            ).await;
+                                            ).await {
+                                                tracing::error!("callback: reject bonus refund error: {}", e);
+                                            }
                                         }
                                     }
                                 }
                             }
                             match tx.execute("UPDATE orders SET status = 'rejected' WHERE id = $1", &[&_order_id]).await {
                                 Ok(rows) => {
-                                    let _ = tx.commit().await;
-                                    tracing::info!("callback: reject order_id={} updated {} rows", _order_id, rows);
+                                    if let Err(e) = tx.commit().await {
+                                        tracing::error!("callback: reject commit error order_id={} err={}", _order_id, e);
+                                    } else {
+                                        tracing::info!("callback: reject order_id={} updated {} rows", _order_id, rows);
+                                    }
                                 }
                                 Err(e) => {
-                                    let _ = tx.rollback().await;
+                                    if let Err(rollback_err) = tx.rollback().await {
+                                        tracing::error!("callback: reject rollback error order_id={} err={}", _order_id, rollback_err);
+                                    }
                                     tracing::error!("callback: reject order_id={} DB error: {}", _order_id, e);
                                 }
                             }

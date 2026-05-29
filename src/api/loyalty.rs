@@ -34,7 +34,7 @@ async fn get_loyalty_tiers(State(state): State<AppState>) -> Result<Json<Value>,
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     let rows = client.query(
         "SELECT tier, name, min_points, discount_percent, points_multiplier::float8, perks, icon, color \
-         FROM loyalty_tiers ORDER BY min_points ASC",
+         FROM loyalty_tiers ORDER BY min_points ASC LIMIT 500",
         &[],
     ).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     let tiers: Vec<Value> = rows.iter().map(|r| json!({
@@ -93,6 +93,9 @@ async fn add_bonus(
     Json(req): Json<AddBonusRequest>,
 ) -> Result<Json<Value>, StatusCode> {
     check_admin(&headers, &state)?;
+    if req.tx_type.len() > 50 { return Err(StatusCode::BAD_REQUEST); }
+    if let Some(ref d) = req.description { if d.len() > 1000 { return Err(StatusCode::BAD_REQUEST); } }
+    if let Some(ref r) = req.related_order_id { if r.len() > 200 { return Err(StatusCode::BAD_REQUEST); } }
     if !req.amount.is_finite() || req.amount < 0.0 {
         return Err(StatusCode::BAD_REQUEST);
     }
@@ -113,7 +116,7 @@ async fn add_bonus(
         &[&req.amount, &telegram_id],
     ).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     if updated == 0 {
-        let _ = tx.rollback().await;
+        if let Err(e) = tx.rollback().await { tracing::error!("loyalty rollback error: {}", e); }
         tracing::error!("add_bonus: loyalty profile missing for telegram_id={}", telegram_id);
         return Err(StatusCode::INTERNAL_SERVER_ERROR);
     }
@@ -185,7 +188,7 @@ async fn update_loyalty_config(
     let required = ["gold_threshold", "silver_threshold", "bronze_threshold", "referral_bonus"];
     for key in required {
         if let Some(v) = body.get(key).and_then(|v| v.as_f64()) {
-            if v < 0.0 || !v.is_finite() {
+            if v < 0.0 || !v.is_finite() || v > 1_000_000_000.0 {
                 return Err(StatusCode::BAD_REQUEST);
             }
         } else {

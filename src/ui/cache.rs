@@ -37,6 +37,7 @@ impl CacheManager {
             Err(_) => return None, // Any storage error, skip cache
         };
 
+        if data_str.len() > 5_000_000 { return None; }
         let cached = match serde_json::from_str::<CachedData<Vec<crate::ui::screens::menu_screen::ApiStrain>>>(&data_str) {
             Ok(c) => c,
             Err(_) => return None, // JSON parse error, skip cache

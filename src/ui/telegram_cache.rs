@@ -108,6 +108,7 @@ impl TelegramCache {
 
         match Self::get_item(key).await {
             Ok(Some(data_str)) => {
+                if data_str.len() > 5_000_000 { return None; }
                 if let Ok(cached) = serde_json::from_str::<CachedData<Vec<crate::ui::screens::menu_screen::ApiStrain>>>(&data_str) {
                     let now = Self::now_ms();
                     if cached.version == "v1" && (now - cached.timestamp_ms) < CACHE_TTL_MS {

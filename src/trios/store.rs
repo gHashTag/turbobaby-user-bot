@@ -314,8 +314,14 @@ pub fn validate_checkout(name: &str, phone: &str, items: &[CartItem]) -> Result<
     if name.trim().is_empty() {
         return Err(Error::Validation("Name is required".to_string()));
     }
+    if name.trim().len() > 200 {
+        return Err(Error::Validation("Name is too long".to_string()));
+    }
     if phone.trim().is_empty() {
         return Err(Error::Validation("Phone is required".to_string()));
+    }
+    if phone.trim().len() > 50 {
+        return Err(Error::Validation("Phone is too long".to_string()));
     }
     if items.is_empty() {
         return Err(Error::Validation("Cart cannot be empty".to_string()));

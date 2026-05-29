@@ -22,10 +22,15 @@ pub async fn upload_to_s3(config: &Config, filename: &str, data: &[u8]) -> Resul
         .build();
 
     let client = Client::from_conf(s3_config);
-    let safe_name = filename
-        .replace("..", "_")
-        .replace('/', "_")
-        .replace('\\', "_");
+    let safe_name = {
+        let mut s = filename
+            .replace("..", "_")
+            .replace('/', "_")
+            .replace('\\', "_")
+            .replace('\0', "_");
+        if s.len() > 255 { s.truncate(255); }
+        s
+    };
     let key = format!("uploads/{}", safe_name);
 
     client

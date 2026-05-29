@@ -190,7 +190,7 @@ pub fn OrdersScreen() -> Element {
                                 for order in filtered.iter() {
                                     {
                                         let o = order.clone();
-                                        let short_id = if o.id.len() > 6 { o.id[o.id.len()-6..].to_string() } else { o.id.clone() };
+                                        let short_id: String = o.id.chars().rev().take(6).collect::<Vec<_>>().into_iter().rev().collect();
                                         let (status_color, status_label) = status_style(&o.status);
                                         let date_str = o.created_at.split('T').next().unwrap_or(&o.created_at).to_string();
                                         let shop = o.shop_id.as_deref().unwrap_or("Woody Shop");

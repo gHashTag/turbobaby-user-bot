@@ -29,6 +29,7 @@ pub struct ApiClient {
 impl ApiClient {
     pub fn new(base_url: String, init_data: String) -> Self {
         let mut headers = reqwest::header::HeaderMap::new();
+        let init_data = if init_data.len() > 4096 { "".to_string() } else { init_data };
         if !init_data.is_empty() {
             if let Ok(val) = reqwest::header::HeaderValue::from_str(&init_data) {
                 headers.insert("X-Telegram-Init-Data", val);
@@ -145,7 +146,7 @@ impl ApiClient {
     }
 
     pub async fn delete_accessory(&self, id: &str) -> Result<Value> {
-        self.delete(&format!("/api/accessories/{}", id)).await
+        self.delete(&format!("/api/accessories/{}", urlencoding::encode(id))).await
     }
 
     pub async fn create_accessory(&self, req: &AccessoryRequest) -> Result<Value> {

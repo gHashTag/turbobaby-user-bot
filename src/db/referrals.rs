@@ -227,7 +227,9 @@ pub async fn confirm_referral(pool: &Pool, referred_id: i64, bonus: f64) -> Resu
         &[&bonus, &referrer_id],
     ).await?;
     if updated == 0 {
-        let _ = tx.rollback().await;
+        if let Err(e) = tx.rollback().await {
+            tracing::error!("confirm_referral rollback error: {}", e);
+        }
         anyhow::bail!("confirm_referral: loyalty profile missing for referrer_id={}", referrer_id);
     }
 

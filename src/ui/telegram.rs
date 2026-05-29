@@ -71,7 +71,15 @@ impl TelegramApp {
 
     /// Set main button text and show it
     pub fn set_main_button_text(&self, text: &str) {
-        let escaped = text.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', "\\n").replace('\r', "\\r").replace('\t', "\\t");
+        let escaped = text.replace('\0', "")
+            .replace('\\', "\\\\")
+            .replace('"', "\\\"")
+            .replace('\'', "\\'")
+            .replace('`', "\\`")
+            .replace('$', "\\$")
+            .replace('\n', "\\n")
+            .replace('\r', "\\r")
+            .replace('\t', "\\t");
         let _ = document::eval(&format!(
             r#"if(window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.MainButton) {{ window.Telegram.WebApp.MainButton.setText("{}"); window.Telegram.WebApp.MainButton.show(); }}"#,
             escaped
@@ -111,7 +119,15 @@ impl TelegramApp {
 
     /// Show alert/popup
     pub fn show_alert(&self, message: &str) {
-        let escaped = message.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', "\\n").replace('\r', "\\r").replace('\t', "\\t");
+        let escaped = message.replace('\0', "")
+            .replace('\\', "\\\\")
+            .replace('"', "\\\"")
+            .replace('\'', "\\'")
+            .replace('`', "\\`")
+            .replace('$', "\\$")
+            .replace('\n', "\\n")
+            .replace('\r', "\\r")
+            .replace('\t', "\\t");
         let _ = document::eval(&format!(
             r#"if(window.Telegram && window.Telegram.WebApp) {{ window.Telegram.WebApp.showAlert("{}"); }}"#,
             escaped
@@ -119,11 +135,11 @@ impl TelegramApp {
     }
 
     /// Get Telegram user ID from WebApp.
-    /// Tries three sources in order:
+    /// Tries two sources in order:
     ///   1. `window.Telegram.WebApp.initDataUnsafe.user.id`
     ///   2. parse user from `window.Telegram.WebApp.initData` (URL-encoded)
-    ///   3. `?tgid=<id>` query parameter (manual fallback)
-    /// Returns `None` only if all three fail (e.g. plain browser).
+    /// Returns `None` if Telegram WebApp is not available (e.g. plain browser).
+    /// NOTE: `?tgid=` query fallback removed to prevent URL-based impersonation.
     pub fn get_user_id(&self) -> Option<i64> {
         // Returns the id as a STRING (so we don't lose precision on big ints)
         // or empty string if not found.
@@ -146,12 +162,6 @@ impl TelegramApp {
                     }catch(e){}
                 }
             }
-            // 3) ?tgid= manual override
-            try{
-                var qp = new URLSearchParams(window.location.search);
-                var manual = qp.get('tgid');
-                if(manual) return manual;
-            }catch(e){}
             return '';
         }catch(e){return '';}})()"#;
         let val = js_sys::eval(js).ok()?;

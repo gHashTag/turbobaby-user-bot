@@ -5,7 +5,7 @@ use teloxide::{
     utils::command::BotCommands,
 };
 
-use crate::{config::Config, db::Database, db::referrals as ref_db, locales::*, ai::{AiClient, get_random_joke_prompt, get_random_fact_prompt}, notify::notify_admins};
+use crate::{config::Config, db::Database, db::referrals as ref_db, locales::*, ai::{get_random_joke_prompt, get_random_fact_prompt}, notify::notify_admins};
 use crate::bot::{AI_RATE_LIMIT, AI_COOLDOWN};
 use std::time::{Duration, Instant};
 
@@ -77,6 +77,7 @@ pub async fn handle_command(
     cmd: Command,
     db: Arc<Database>,
     config: Arc<Config>,
+    ai_client: Arc<crate::ai::AiClient>,
 ) -> Result<(), teloxide::RequestError> {
     let user_id = msg.from.as_ref().map(|u| u.id.0 as i64).unwrap_or(0);
 
@@ -97,19 +98,23 @@ pub async fn handle_command(
             // Handle referral: /start ref_<code>
             if args.starts_with("ref_") {
                 let code = args.trim_start_matches("ref_");
-                // Only process if this is NOT the same user who owns the code
-                let referrer = ref_db::find_referrer_by_code(&db.pool, code).await.ok().flatten();
-                if let Some(referrer_id) = referrer {
-                    if referrer_id != user_id {
-                        // Record pending referral event (idempotent)
-                        if let Err(e) = ref_db::record_referral(
-                            &db.pool,
-                            referrer_id,
-                            user_id,
-                            code,
-                            Some("telegram_start"),
-                        ).await {
-                            tracing::error!("record_referral failed: {}", e);
+                if code.len() > 200 {
+                    tracing::warn!("referral code too long from user_id={}", user_id);
+                } else {
+                    // Only process if this is NOT the same user who owns the code
+                    let referrer = ref_db::find_referrer_by_code(&db.pool, code).await.ok().flatten();
+                    if let Some(referrer_id) = referrer {
+                        if referrer_id != user_id {
+                            // Record pending referral event (idempotent)
+                            if let Err(e) = ref_db::record_referral(
+                                &db.pool,
+                                referrer_id,
+                                user_id,
+                                code,
+                                Some("telegram_start"),
+                            ).await {
+                                tracing::error!("record_referral failed: {}", e);
+                            }
                         }
                     }
                 }
@@ -139,7 +144,7 @@ pub async fn handle_command(
                 let notify_config = config.clone();
                 let notify_text = format!(
                     "\u{1F195} \u{041D}\u{043E}\u{0432}\u{044B}\u{0439} \u{043F}\u{043E}\u{043B}\u{044C}\u{0437}\u{043E}\u{0432}\u{0430}\u{0442}\u{0435}\u{043B}\u{044C}\n\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\n\u{1F464} {} (@{})\n\u{1F194} {}\n\u{1F30D} {}",
-                    html_escape(&first_name), html_escape(&username), user_id, language_code
+                    html_escape(&first_name), html_escape(&username), user_id, html_escape(&language_code)
                 );
                 tokio::spawn(async move {
                     notify_admins(&notify_bot, &notify_config, &notify_text).await;
@@ -235,9 +240,8 @@ pub async fn handle_command(
                 map.insert(user_id, now);
             }
             let thinking = bot.send_message(msg.chat.id, &locale.joke_thinking).await?;
-            let ai = AiClient::new(config.grok_api_key.clone(), config.glm_api_key.clone());
             let prompt = get_random_joke_prompt(&locale.joke_prompt, None);
-            let joke = ai.ask_grok(&prompt, "Joker", &locale.lang_instruction).await;
+            let joke = ai_client.ask_grok(&prompt, "Joker", &locale.lang_instruction).await;
             bot.delete_message(msg.chat.id, thinking.id).await.ok();
             if let Some(j) = joke {
                 bot.send_message(msg.chat.id, format!("😜 {}", j))
@@ -262,9 +266,8 @@ pub async fn handle_command(
                 map.insert(user_id, now);
             }
             let thinking = bot.send_message(msg.chat.id, &locale.fact_thinking).await?;
-            let ai = AiClient::new(config.grok_api_key.clone(), config.glm_api_key.clone());
             let prompt = get_random_fact_prompt(&locale.fact_prompt);
-            let fact = ai.ask_grok(&prompt, "Professor", &locale.lang_instruction).await;
+            let fact = ai_client.ask_grok(&prompt, "Professor", &locale.lang_instruction).await;
             bot.delete_message(msg.chat.id, thinking.id).await.ok();
             if let Some(f) = fact {
                 bot.send_message(msg.chat.id, format!("🧠 {}", f))

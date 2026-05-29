@@ -73,17 +73,18 @@ pub async fn complete_order_and_update_loyalty(
         let total: f64 = row.try_get::<_, f64>("total").unwrap_or(0.0);
         let status: String = row.try_get("status").unwrap_or_default();
         if status != "completed" {
-            tx.execute(
-                "UPDATE orders SET status = 'completed' WHERE id = $1",
-                &[&order_id],
-            ).await?;
-
             let loyalty_result = if let Some(cid) = cid {
+                // Count BEFORE updating so is_first is accurate
                 let count_before = tx.query_one(
-                    "SELECT COUNT(*) as cnt FROM orders WHERE telegram_id = $1 AND status = 'completed'",
-                    &[&cid],
+                    "SELECT COUNT(*) as cnt FROM orders WHERE telegram_id = $1 AND status = 'completed' AND id != $2",
+                    &[&cid, &order_id],
                 ).await?.try_get::<_, i64>("cnt").unwrap_or(0);
                 let is_first = count_before == 0;
+
+                tx.execute(
+                    "UPDATE orders SET status = 'completed' WHERE id = $1",
+                    &[&order_id],
+                ).await?;
 
                 tx.execute(
                     "INSERT INTO loyalty_profiles (telegram_id, total_spent, first_purchase_at) VALUES ($1, $2, NOW())

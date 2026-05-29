@@ -47,6 +47,19 @@ async fn save_cart(
 ) -> Result<Json<Value>, StatusCode> {
     check_owner(&headers, &state, req.telegram_id)?;
     check_not_blocked(&state, req.telegram_id).await?;
+    if !req.total.is_finite() || req.total < 0.0 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    if req.items.len() > 100 { return Err(StatusCode::BAD_REQUEST); }
+    for item in &req.items {
+        if item.strain_id.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
+        if !item.quantity.is_finite() || item.quantity <= 0.0 || item.quantity > 1_000_000.0 {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+        if !item.price_per_gram.is_finite() || item.price_per_gram < 0.0 || item.price_per_gram > 1_000_000.0 {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    }
     // Cart persistence can be implemented here later
     Ok(json!({"success": true}).into())
 }

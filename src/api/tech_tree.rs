@@ -20,7 +20,7 @@ async fn get_tech_nodes(State(state): State<AppState>) -> Result<Json<Value>, St
     let rows = client.query(
         "SELECT id, name, description, category, icon, status, xp_required, xp_reward, \
                 dependencies, unlocks, features, estimated_hours, priority \
-         FROM tech_nodes ORDER BY priority ASC, xp_required ASC",
+         FROM tech_nodes ORDER BY priority ASC, xp_required ASC LIMIT 2000",
         &[],
     ).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
 
@@ -47,6 +47,7 @@ async fn get_tech_node(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<Value>, StatusCode> {
+    if id.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     let row = client.query_opt(
         "SELECT id, name, description, category, icon, status, xp_required, xp_reward, \
@@ -81,7 +82,7 @@ async fn get_achievements(State(state): State<AppState>) -> Result<Json<Value>, 
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     let rows = client.query(
         "SELECT id, name, description, icon, xp_reward, requirement, category \
-         FROM achievements ORDER BY xp_reward ASC",
+         FROM achievements ORDER BY xp_reward ASC LIMIT 2000",
         &[],
     ).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
 

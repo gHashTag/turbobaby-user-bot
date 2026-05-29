@@ -94,7 +94,10 @@ pub struct AiClient {
 impl AiClient {
     pub fn new(grok_api_key: String, glm_api_key: String) -> Self {
         Self {
-            client: Client::new(),
+            client: Client::builder()
+                .timeout(std::time::Duration::from_secs(30))
+                .build()
+                .unwrap_or_else(|_| Client::new()),
             grok_api_key,
             glm_api_key,
         }

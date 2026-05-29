@@ -155,7 +155,7 @@ pub fn TeaScreen() -> Element {
                                                 font-size: 36px; position: relative;
                                             ",
                                                 if let Some(ref img) = t.image_url {
-                                                    if !img.is_empty() {
+                                                    if !img.is_empty() && (img.starts_with("http://") || img.starts_with("https://") || img.starts_with('/')) {
                                                         img { src: "{img}", alt: "{t_name}", style: "width: 100%; height: 100%; object-fit: cover;" }
                                                     } else {
                                                         "{emoji}"
@@ -172,7 +172,7 @@ pub fn TeaScreen() -> Element {
                                                     ", "SOLD OUT" }
                                                 }
                                                 {if let Some(ref vid) = t.video_url {
-                                                    if !vid.is_empty() {
+                                                    if !vid.is_empty() && (vid.starts_with("http://") || vid.starts_with("https://") || vid.starts_with('/')) {
                                                         let vid = vid.clone();
                                                         rsx! {
                                                             a { href: "{vid}", target: "_blank", style: "position:absolute;bottom:4px;right:4px;width:28px;height:28px;border-radius:50%;background:rgba(0,0,0,0.6);border:1px solid #fff;color:#fff;font-size:12px;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:2;text-decoration:none;",

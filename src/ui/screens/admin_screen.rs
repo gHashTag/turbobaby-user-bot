@@ -23,12 +23,13 @@ use crate::ui::telegram::{use_telegram_id, use_telegram_init_data, TelegramApp, 
 fn admin_token() -> String {
     #[cfg(target_arch = "wasm32")]
     {
-        web_sys::window()
+        let token = web_sys::window()
             .and_then(|w| w.local_storage().ok())
             .flatten()
             .and_then(|s| s.get_item("wwb_admin_token").ok())
             .flatten()
-            .unwrap_or_default()
+            .unwrap_or_default();
+        if token.len() > 2048 { String::new() } else { token }
     }
     #[cfg(not(target_arch = "wasm32"))]
     {
@@ -222,7 +223,22 @@ async fn upload_file(accept: &str) -> Option<String> {
         .and_then(|s| s.get_item("wwb_admin_token").ok())
         .flatten()
         .unwrap_or_default();
-    let token_js = token.replace('\\', "\\\\").replace('\'', "\\'").replace('\n', "");
+    if init_data.len() > 4096 { return None; }
+    if token.len() > 2048 { return None; }
+    fn js_escape(s: &str) -> String {
+        s.replace('\\', "\\\\")
+            .replace('\'', "\\'")
+            .replace('"', "\\\"")
+            .replace('`', "\\`")
+            .replace('$', "\\$")
+            .replace('\n', "\\n")
+            .replace('\r', "\\r")
+            .replace('\t', "\\t")
+            .replace('\0', "\\0")
+    }
+    let token_js = js_escape(&token);
+    let telegram_id_js = js_escape(&telegram_id);
+    let init_data_js = js_escape(&init_data);
     let js = format!(r#"
 new Promise((resolve) => {{
     console.log('[UPLOAD] Step 0: Starting upload, accept={}');
@@ -266,7 +282,8 @@ new Promise((resolve) => {{
     console.log('[UPLOAD] Step 0: Clicking file input');
     input.click();
 }})
-"#, accept, init_data.replace('\\', "\\\\").replace('\'', "\\'").replace('\n', ""), token_js.len(), token_js.len(), init_data.replace('\\', "\\\\").replace('\'', "\\'").replace('\n', ""), telegram_id, token_js);
+"#, accept, init_data_js, init_data_js.len(), token_js.len(), init_data_js, telegram_id_js, token_js);
+    if js.len() > 100_000 { return None; }
     let promise_val = js_sys::eval(&js).ok()?;
     let promise = promise_val.dyn_into::<js_sys::Promise>().ok()?;
     let result = wasm_bindgen_futures::JsFuture::from(promise).await.ok()?;
@@ -298,14 +315,16 @@ pub fn AdminScreen() -> Element {
             if let Some(window) = web_sys::window() {
                 if let Ok(Some(storage)) = window.local_storage() {
                     if let Ok(Some(token)) = storage.get_item("wwb_admin_token") {
-                        return token;
+                        if token.len() <= 2048 {
+                            return token;
+                        }
                     }
                 }
             }
         }
         String::new()
     });
-    let mut access_reload = use_signal(|| 0u32);
+    let access_reload = use_signal(|| 0u32);
 
     let access = use_resource(move || {
         let _ = access_reload.read();
@@ -496,8 +515,10 @@ fn StrainsTab() -> Element {
             if let Some(window) = web_sys::window() {
                 if let Ok(Some(storage)) = window.local_storage() {
                     if let Ok(Some(json)) = storage.get_item("wwb_admin_strains") {
-                        if let Ok(data) = serde_json::from_str::<Vec<AdminStrain>>(&json) {
-                            return data;
+                        if json.len() <= 1_000_000 {
+                            if let Ok(data) = serde_json::from_str::<Vec<AdminStrain>>(&json) {
+                                return data;
+                            }
                         }
                     }
                 }
@@ -844,8 +865,10 @@ fn AccessoriesTab() -> Element {
             if let Some(window) = web_sys::window() {
                 if let Ok(Some(storage)) = window.local_storage() {
                     if let Ok(Some(json)) = storage.get_item("wwb_admin_accessories") {
-                        if let Ok(data) = serde_json::from_str::<Vec<AdminAccessory>>(&json) {
-                            return data;
+                        if json.len() <= 1_000_000 {
+                            if let Ok(data) = serde_json::from_str::<Vec<AdminAccessory>>(&json) {
+                                return data;
+                            }
                         }
                     }
                 }
@@ -1133,8 +1156,10 @@ fn TeaTab() -> Element {
             if let Some(window) = web_sys::window() {
                 if let Ok(Some(storage)) = window.local_storage() {
                     if let Ok(Some(json)) = storage.get_item("wwb_admin_tea") {
-                        if let Ok(data) = serde_json::from_str::<Vec<AdminTea>>(&json) {
-                            return data;
+                        if json.len() <= 1_000_000 {
+                            if let Ok(data) = serde_json::from_str::<Vec<AdminTea>>(&json) {
+                                return data;
+                            }
                         }
                     }
                 }
@@ -1420,8 +1445,10 @@ fn SetsTab() -> Element {
             if let Some(window) = web_sys::window() {
                 if let Ok(Some(storage)) = window.local_storage() {
                     if let Ok(Some(json)) = storage.get_item("wwb_admin_sets") {
-                        if let Ok(data) = serde_json::from_str::<Vec<AdminSet>>(&json) {
-                            return data;
+                        if json.len() <= 1_000_000 {
+                            if let Ok(data) = serde_json::from_str::<Vec<AdminSet>>(&json) {
+                                return data;
+                            }
                         }
                     }
                 }
@@ -1811,8 +1838,10 @@ fn AccessorySetsTab() -> Element {
             if let Some(window) = web_sys::window() {
                 if let Ok(Some(storage)) = window.local_storage() {
                     if let Ok(Some(json)) = storage.get_item("wwb_admin_accessory_sets") {
-                        if let Ok(data) = serde_json::from_str::<Vec<AdminAccessorySet>>(&json) {
-                            return data;
+                        if json.len() <= 1_000_000 {
+                            if let Ok(data) = serde_json::from_str::<Vec<AdminAccessorySet>>(&json) {
+                                return data;
+                            }
                         }
                     }
                 }
@@ -2224,8 +2253,10 @@ fn TeaSetsTab() -> Element {
             if let Some(window) = web_sys::window() {
                 if let Ok(Some(storage)) = window.local_storage() {
                     if let Ok(Some(json)) = storage.get_item("wwb_admin_tea_sets") {
-                        if let Ok(data) = serde_json::from_str::<Vec<AdminTeaSet>>(&json) {
-                            return data;
+                        if json.len() <= 1_000_000 {
+                            if let Ok(data) = serde_json::from_str::<Vec<AdminTeaSet>>(&json) {
+                                return data;
+                            }
                         }
                     }
                 }
@@ -3363,7 +3394,8 @@ fn OrderDetailModal(order: AdminOrder, on_close: EventHandler<()>) -> Element {
         "rejected" => "admin-badge danger",
         _ => "admin-badge muted",
     };
-    let order_title = format!("Заказ #{}...{}", &order.id.get(0..4).unwrap_or(&order.id), &order.id[order.id.len().saturating_sub(4)..]);
+    let suffix: String = order.id.chars().rev().take(4).collect::<Vec<_>>().into_iter().rev().collect();
+    let order_title = format!("Заказ #{}...{}", &order.id.get(0..4).unwrap_or(&order.id), suffix);
     rsx! {
         div { style: "position:fixed;inset:0;background:rgba(0,0,0,0.8);display:flex;align-items:center;justify-content:center;z-index:2000;padding:16px;",
             onclick: move |_| on_close.call(()),
@@ -3657,8 +3689,7 @@ fn OrdersTab() -> Element {
                                 "rejected" => "admin-badge danger",
                                 _ => "admin-badge muted",
                             };
-                            let short_id = if order.id.len() >= 6 { &order.id[order.id.len()-6..] } else { &order.id };
-                            let short_id = short_id.to_string();
+                            let short_id: String = order.id.chars().rev().take(6).collect::<Vec<_>>().into_iter().rev().collect();
                             rsx! {
                                 div { class: "admin-card", style: "cursor:pointer;",
                                     onclick: {

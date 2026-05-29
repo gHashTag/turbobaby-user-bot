@@ -22,8 +22,10 @@ pub fn App() -> Element {
             if let Some(window) = web_sys::window() {
                 if let Ok(Some(storage)) = window.local_storage() {
                     if let Ok(Some(json)) = storage.get_item(CART_STORAGE_KEY) {
-                        if let Ok(parsed) = serde_json::from_str::<Cart>(&json) {
-                            cart = parsed;
+                        if json.len() <= 1_000_000 {
+                            if let Ok(parsed) = serde_json::from_str::<Cart>(&json) {
+                                cart = parsed;
+                            }
                         }
                     }
                 }

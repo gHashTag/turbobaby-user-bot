@@ -59,6 +59,15 @@ fn format_price(price: f64) -> String {
     format!("฿{}", price as i32)
 }
 
+/// Safe f64 comparison that places NaN at the end.
+fn cmp_f64(a: f64, b: f64) -> std::cmp::Ordering {
+    a.partial_cmp(&b).unwrap_or_else(|| {
+        if a.is_nan() && b.is_nan() { std::cmp::Ordering::Equal }
+        else if a.is_nan() { std::cmp::Ordering::Greater }
+        else { std::cmp::Ordering::Less }
+    })
+}
+
 fn filter_tab_style(is_active: bool) -> String {
     if is_active {
         "font-size:12px;font-weight:600;padding:8px 16px;background:rgba(57,255,20,0.15);color:#39ff14;border:3px solid #39ff14;border-radius:20px;cursor:pointer;white-space:nowrap;".to_string()
@@ -91,12 +100,7 @@ pub fn MenuScreen() -> Element {
                 .map_err(|e| format!("Network error: {}", e))?;
 
             let text = response.text().await.map_err(|e| format!("Read text error: {}", e))?;
-            web_sys::console::log_1(&format!("[MENU] /api/strains response len={} text_preview={}", text.len(), &text[..text.len().min(200)]).into());
             let strains_resp: StrainsResponse = serde_json::from_str(&text).map_err(|e| format!("Parse error: {}", e))?;
-            web_sys::console::log_1(&format!("[MENU] Parsed {} strains", strains_resp.strains.len()).into());
-            for s in &strains_resp.strains {
-                web_sys::console::log_1(&format!("[MENU] strain id={} name={} video_url={:?}", s.id, s.name, s.video_url).into());
-            }
 
             Ok(strains_resp.strains)
         }
@@ -190,10 +194,10 @@ pub fn MenuScreen() -> Element {
                                 .collect()
                         };
                         match sort_val.as_str() {
-                            "price-asc" => filtered.sort_by(|a,b| a.price_per_gram.partial_cmp(&b.price_per_gram).unwrap_or(std::cmp::Ordering::Equal)),
-                            "price-desc" => filtered.sort_by(|a,b| b.price_per_gram.partial_cmp(&a.price_per_gram).unwrap_or(std::cmp::Ordering::Equal)),
+                            "price-asc" => filtered.sort_by(|a,b| cmp_f64(a.price_per_gram, b.price_per_gram)),
+                            "price-desc" => filtered.sort_by(|a,b| cmp_f64(b.price_per_gram, a.price_per_gram)),
                             "name" => filtered.sort_by(|a,b| a.name.to_lowercase().cmp(&b.name.to_lowercase())),
-                            "thc" => filtered.sort_by(|a,b| b.thc_percent.unwrap_or(0.0).partial_cmp(&a.thc_percent.unwrap_or(0.0)).unwrap_or(std::cmp::Ordering::Equal)),
+                            "thc" => filtered.sort_by(|a,b| cmp_f64(b.thc_percent.unwrap_or(0.0), a.thc_percent.unwrap_or(0.0))),
                             _ => {
                                 filtered.sort_by(|a,b| {
                                     let a_sod = if a.is_strain_of_day { 0 } else { 1 };
@@ -283,18 +287,31 @@ fn render_strain_card(strain: ApiStrain, mut cart: Signal<Cart>) -> Element {
     let badge_label = format!("{} {}", emoji, cat);
 
     let img_url = strain.image_url.clone().unwrap_or_default();
-    let has_image = !img_url.is_empty();
+    let has_image = !img_url.is_empty()
+        && (img_url.starts_with("http://") || img_url.starts_with("https://") || img_url.starts_with('/'));
     let alt_name = strain.name.clone();
-    let img_url_bust = if img_url.is_empty() { String::new() } else { format!("{}?v=2", img_url) };
+    let img_url_bust = if !has_image { String::new() } else { format!("{}?v=2", img_url) };
     let video_url = strain.video_url.clone().unwrap_or_default();
-    web_sys::console::log_1(&format!("[MENU] Strain {} video_url={:?}", strain.id, strain.video_url).into());
-    let has_video = !video_url.is_empty();
+    let has_video = !video_url.is_empty()
+        && (video_url.starts_with("http://") || video_url.starts_with("https://") || video_url.starts_with('/'));
     let mut show_video = use_signal(|| false);
 
     rsx! {
         div { key: strain.id.clone(), class: "comet-card", style: card_style,
             div { style: "width:100%;aspect-ratio:2/3;background:linear-gradient(135deg,#1a1a2e,#16213e);display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;",
-                {if has_image {
+                {if has_video {
+                    rsx! {
+                        video {
+                            style: "width:100%;height:100%;object-fit:cover;display:block;",
+                            src: "{video_url}",
+                            autoplay: true,
+                            muted: true,
+                            loop: true,
+                            playsinline: true,
+                            onclick: move |e: Event<MouseData>| { e.stop_propagation(); show_video.set(true); }
+                        }
+                    }
+                } else if has_image {
                     rsx! {
                         img {
                             src: "{img_url_bust}",
@@ -314,17 +331,6 @@ fn render_strain_card(strain: ApiStrain, mut cart: Signal<Cart>) -> Element {
                         font-size:13px;font-weight:700;background:#ffe600;color:#000;
                         padding:4px 8px;box-shadow:2px 2px 0 #000;z-index:2;
                     ", "⭐ SOTD" }
-                })}
-                {has_video.then(|| rsx! {
-                    video {
-                        style: "position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:1;",
-                        src: "{video_url}",
-                        autoplay: true,
-                        muted: true,
-                        loop: true,
-                        playsinline: true,
-                        onclick: move |e: Event<MouseData>| { e.stop_propagation(); show_video.set(true); }
-                    }
                 })}
                 {if show_video() {
                     rsx! {

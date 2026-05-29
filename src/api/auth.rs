@@ -5,9 +5,7 @@
 // `X-Telegram-Init-Data` header. The server verifies the HMAC, extracts
 // the user id, and checks it against admin_ids.
 //
-// Fallback: if initData is missing/invalid but `X-Admin-Telegram-Id` is
-// present and the request is from localhost (debug), we accept it. This
-// allows local development without Telegram.
+// Fallback: X-Admin-Token password login (no localhost bypass).
 
 use axum::http::{HeaderMap, StatusCode};
 use hmac::{Hmac, Mac};
@@ -37,7 +35,11 @@ pub struct TelegramUser {
 /// 6. expected_hash = HMAC_SHA256(key=secret_key, msg=data_check_string) in hex
 /// 7. Compare expected_hash with received `hash` (constant-time)
 pub fn validate_init_data(init_data: &str, bot_token: &str) -> Option<TelegramUser> {
-    tracing::info!("validate_init_data: len={}, hash_present={}", init_data.len(), init_data.contains("hash="));
+    if init_data.len() > 4096 {
+        tracing::warn!("init_data too long ({} bytes)", init_data.len());
+        return None;
+    }
+    tracing::debug!("validate_init_data: len={}, hash_present={}", init_data.len(), init_data.contains("hash="));
     let mut pairs: Vec<(String, String)> = Vec::new();
     for pair in init_data.split('&') {
         let mut parts = pair.splitn(2, '=');
@@ -99,6 +101,25 @@ pub fn validate_init_data(init_data: &str, bot_token: &str) -> Option<TelegramUs
         return None;
     }
 
+    // Validate auth_date freshness (initData valid for 24h per Telegram docs)
+    let auth_date = data_pairs
+        .iter()
+        .find(|(k, _)| k == "auth_date")
+        .and_then(|(_, v)| v.parse::<i64>().ok());
+    if let Some(ad) = auth_date {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .ok()?
+            .as_secs() as i64;
+        if now.saturating_sub(ad) > 86400 {
+            tracing::warn!("initData expired: auth_date={} now={}", ad, now);
+            return None;
+        }
+    } else {
+        tracing::warn!("initData missing auth_date");
+        return None;
+    }
+
     // Extract user JSON
     let user_json = data_pairs
         .iter()
@@ -117,6 +138,9 @@ pub fn validate_init_data(init_data: &str, bot_token: &str) -> Option<TelegramUs
 
 /// Debug version that returns detailed validation info instead of just Option.
 pub fn validate_init_data_debug(init_data: &str, bot_token: &str) -> (bool, String, String, String, Option<TelegramUser>, Option<String>) {
+    if init_data.len() > 4096 {
+        return (false, String::new(), String::new(), String::new(), None, Some("init_data too long".to_string()));
+    }
     let mut pairs: Vec<(String, String)> = Vec::new();
     for pair in init_data.split('&') {
         let mut parts = pair.splitn(2, '=');
@@ -184,8 +208,31 @@ pub fn validate_init_data_debug(init_data: &str, bot_token: &str) -> (bool, Stri
 
     let ok_decoded = constant_time_eq::constant_time_eq(expected_hash.as_bytes(), hash.as_bytes());
     let ok_raw = constant_time_eq::constant_time_eq(expected_hash_raw.as_bytes(), hash.as_bytes());
-    let ok = ok_decoded || ok_raw;
-    (ok, data_check_string_decoded, hash, expected_hash, user, None)
+    let mut ok = ok_decoded || ok_raw;
+    let mut error = None;
+
+    if ok {
+        let auth_date = data_pairs
+            .iter()
+            .find(|(k, _)| k == "auth_date")
+            .and_then(|(_, v)| v.parse::<i64>().ok());
+        if let Some(ad) = auth_date {
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .ok()
+                .map(|d| d.as_secs() as i64)
+                .unwrap_or(0);
+            if now.saturating_sub(ad) > 86400 {
+                ok = false;
+                error = Some(format!("initData expired: auth_date={} now={}", ad, now));
+            }
+        } else {
+            ok = false;
+            error = Some("initData missing auth_date".to_string());
+        }
+    }
+
+    (ok, data_check_string_decoded, hash, expected_hash, user, error)
 }
 
 #[cfg(test)]
@@ -199,9 +246,15 @@ mod tests {
         );
         let user_json_for_encode = user_json.clone();
         let user_encoded = urlencoding::encode(&user_json_for_encode);
+        // Use a fresh auth_date so freshness check passes (within last hour)
+        let auth_date = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64 - 3600;
+        let auth_date_str = auth_date.to_string();
         // Compute hash over DECODED values (matches real Telegram behavior)
         let mut pairs = vec![
-            ("auth_date".to_string(), "1234567890".to_string()),
+            ("auth_date".to_string(), auth_date_str.clone()),
             ("user".to_string(), user_json),
         ];
         pairs.sort_by(|a, b| a.0.cmp(&b.0));
@@ -221,8 +274,8 @@ mod tests {
 
         // Emit the URL-encoded user value in the query string
         format!(
-            "auth_date=1234567890&hash={}&user={}",
-            hash, user_encoded
+            "auth_date={}&hash={}&user={}",
+            auth_date_str, hash, user_encoded
         )
     }
 
@@ -260,8 +313,10 @@ mod tests {
 }
 
 pub fn generate_admin_token(password: &str, bot_token: &str) -> String {
-    let mut mac = HmacSha256::new_from_slice(b"WoodyWeedBotAdmin")
-        .expect("HMAC key length is always valid (32+ bytes)");
+    let mut mac = match HmacSha256::new_from_slice(b"WoodyWeedBotAdmin") {
+        Ok(m) => m,
+        Err(_) => return String::new(),
+    };
     mac.update(bot_token.as_bytes());
     mac.update(b":");
     mac.update(password.as_bytes());
@@ -274,26 +329,22 @@ pub fn verify_admin_token(token: &str, bot_token: &str, expected_password: &str)
 }
 
 pub fn check_admin(headers: &HeaderMap, state: &AppState) -> Result<i64, StatusCode> {
-    tracing::info!("CHECK_ADMIN: started");
-    tracing::info!("CHECK_ADMIN: bot_token len={}", state.config.bot_token.len());
-    tracing::info!("CHECK_ADMIN: admin_ids={:?}", state.config.admin_ids);
-    tracing::info!("CHECK_ADMIN: admin_password set={}", state.config.admin_password.is_some());
-    tracing::info!("CHECK_ADMIN: headers: X-Telegram-Init-Data={:?} X-Admin-Token={:?} X-Admin-Telegram-Id={:?}",
-        headers.get("X-Telegram-Init-Data").and_then(|v| v.to_str().ok()).map(|s| if s.is_empty() { "EMPTY".to_string() } else { format!("len={}", s.len()) }),
-        headers.get("X-Admin-Token").and_then(|v| v.to_str().ok()).map(|s| if s.is_empty() { "EMPTY".to_string() } else { format!("len={}", s.len()) }),
-        headers.get("X-Admin-Telegram-Id").and_then(|v| v.to_str().ok()));
-    
+    // Debug-level diagnostics only; admin_ids values are sensitive and never logged.
+    tracing::debug!(
+        "CHECK_ADMIN: bot_token_len={} admin_count={} admin_password_set={} init_data_present={} token_present={}",
+        state.config.bot_token.len(),
+        state.config.admin_ids.len(),
+        state.config.admin_password.is_some(),
+        headers.get("X-Telegram-Init-Data").is_some(),
+        headers.get("X-Admin-Token").is_some(),
+    );
+
     // 1. Try Telegram initData validation (production path)
-    let init_data_opt = headers.get("X-Telegram-Init-Data").and_then(|v| v.to_str().ok());
-    tracing::info!("CHECK_ADMIN: X-Telegram-Init-Data present={}", init_data_opt.is_some());
-    if let Some(init_data) = init_data_opt {
-        tracing::info!("CHECK_ADMIN: init_data len={} empty={}", init_data.len(), init_data.is_empty());
+    if let Some(init_data) = headers.get("X-Telegram-Init-Data").and_then(|v| v.to_str().ok()) {
         if !init_data.is_empty() {
-            tracing::info!("CHECK_ADMIN: validating initData...");
             if let Some(user) = validate_init_data(init_data, &state.config.bot_token) {
-                tracing::info!("CHECK_ADMIN: initData valid, user_id={} username={:?}", user.id, user.username);
                 if state.config.admin_ids.contains(&user.id) {
-                    tracing::info!(
+                    tracing::debug!(
                         "admin authenticated via initData telegram_id={} username={:?}",
                         user.id,
                         user.username
@@ -301,9 +352,8 @@ pub fn check_admin(headers: &HeaderMap, state: &AppState) -> Result<i64, StatusC
                     return Ok(user.id);
                 } else {
                     tracing::warn!(
-                        "initData valid but user not admin telegram_id={} admin_ids={:?} — trying X-Admin-Token fallback",
+                        "initData valid but user not admin telegram_id={} — trying X-Admin-Token fallback",
                         user.id,
-                        state.config.admin_ids
                     );
                     // Don't return here — allow password fallback below
                 }
@@ -311,18 +361,12 @@ pub fn check_admin(headers: &HeaderMap, state: &AppState) -> Result<i64, StatusC
                 tracing::warn!("invalid initData signature — falling back to X-Admin-Token");
                 // Don't return here — allow password fallback below
             }
-        } else {
-            tracing::info!("CHECK_ADMIN: initData empty");
         }
     }
 
     // 2. Password login via X-Admin-Token (works in all builds if ADMIN_PASSWORD is set)
-    let token_opt = headers.get("X-Admin-Token").and_then(|v| v.to_str().ok());
-    tracing::info!("CHECK_ADMIN: X-Admin-Token present={}", token_opt.is_some());
-    if let Some(token) = token_opt {
-        tracing::info!("CHECK_ADMIN: token len={}", token.len());
+    if let Some(token) = headers.get("X-Admin-Token").and_then(|v| v.to_str().ok()) {
         if let Some(ref password) = state.config.admin_password {
-            tracing::info!("CHECK_ADMIN: verifying token against password...");
             if verify_admin_token(token, &state.config.bot_token, password) {
                 tracing::info!("admin authenticated via password token");
                 return Ok(0);

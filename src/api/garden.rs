@@ -93,7 +93,7 @@ async fn get_user_plants(
                 is_completed, harvested_at, reward_claimed, water_count, last_watered_at
          FROM garden_plants
          WHERE user_id = $1
-         ORDER BY planted_at DESC",
+         ORDER BY planted_at DESC LIMIT 200",
         &[&user_id],
     ).await.map_err(|e| {
         tracing::error!("Query error: {}", e);
@@ -160,7 +160,9 @@ async fn plant_seed(
 ) -> Result<Json<Value>, StatusCode> {
     crate::api::auth::check_owner(&headers, &state, req.telegram_id)?;
     check_not_blocked(&state, req.telegram_id).await?;
-    let client = state.db.pool.get().await
+    if req.strain_id.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
+    if req.strain_name.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
+    let mut client = state.db.pool.get().await
         .map_err(|e| {
             tracing::error!("Database connection error: {}", e);
             StatusCode::INTERNAL_SERVER_ERROR
@@ -228,19 +230,24 @@ async fn water_plant(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<Value>, StatusCode> {
-    let client = state.db.pool.get().await
+    if id.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
+    let mut client = state.db.pool.get().await
         .map_err(|e| {
             tracing::error!("Database connection error: {}", e);
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
     let now = chrono::Utc::now().timestamp_millis();
+    let tx = client.transaction().await.map_err(|e| {
+        tracing::error!("Transaction error: {}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
 
-    // Get current plant
-    let row = client.query_opt(
+    let row = tx.query_opt(
         "SELECT user_id, current_stage, is_completed, water_count, last_watered_at
          FROM garden_plants
-         WHERE id = $1",
+         WHERE id = $1
+         FOR UPDATE",
         &[&id],
     ).await.map_err(|e| {
         tracing::error!("Query error: {}", e);
@@ -257,7 +264,6 @@ async fn water_plant(
     crate::api::auth::check_owner(&headers, &state, tid)?;
     check_not_blocked(&state, tid).await?;
 
-    let current_stage: String = r.try_get(1).unwrap_or_default();
     let is_completed: bool = r.try_get(2).unwrap_or(false);
     let water_count: i32 = r.try_get(3).unwrap_or(0);
     let last_watered_at: Option<i64> = r.try_get(4).ok();
@@ -266,18 +272,18 @@ async fn water_plant(
         return Ok(Json(json!({ "success": false, "error": "Plant already completed" })));
     }
 
-    // Atomic update with cooldown guard in WHERE clause to prevent race conditions
-    let new_count = (water_count + 1) as u32;
+    let new_count = water_count.checked_add(1)
+        .ok_or(StatusCode::BAD_REQUEST)? as u32;
     let new_stage = if let Some(stage) = garden::GrowthStage::from_index(new_count as usize) {
         format!("{:?}", stage).to_lowercase()
     } else {
-        current_stage
+        r.try_get::<_, String>(1).unwrap_or_default()
     };
     let new_completed = new_count >= 13;
     let cooldown_ms = garden::WATER_COOLDOWN_MS as i64;
     let max_last_water = now - cooldown_ms;
 
-    let rows = client.execute(
+    let rows = tx.execute(
         "UPDATE garden_plants
          SET water_count = $1, current_stage = $2, is_completed = $3, last_watered_at = $4
          WHERE id = $5 AND (last_watered_at IS NULL OR last_watered_at <= $6)",
@@ -296,6 +302,11 @@ async fn water_plant(
         })));
     }
 
+    tx.commit().await.map_err(|e| {
+        tracing::error!("Commit error: {}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
     Ok(Json(json!({
         "success": true,
         "water_count": new_count,
@@ -309,17 +320,24 @@ async fn harvest_plant(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<Value>, StatusCode> {
+    if id.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
     let mut client = state.db.pool.get().await
         .map_err(|e| {
             tracing::error!("Database connection error: {}", e);
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
-    // Get plant
-    let row = client.query_opt(
+    let now = chrono::Utc::now().timestamp_millis();
+    let tx = client.transaction().await.map_err(|e| {
+        tracing::error!("Transaction error: {}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    let row = tx.query_opt(
         "SELECT user_id, strain_id, strain_name, is_completed, harvested_at
          FROM garden_plants
-         WHERE id = $1",
+         WHERE id = $1
+         FOR UPDATE",
         &[&id],
     ).await.map_err(|e| {
         tracing::error!("Query error: {}", e);
@@ -347,20 +365,10 @@ async fn harvest_plant(
         return Ok(Json(json!({ "success": false, "error": "Already harvested" })));
     }
 
-    let now = chrono::Utc::now().timestamp_millis();
-    let user_id: String = r.try_get(0).unwrap_or_default();
     let strain_id: String = r.try_get(1).unwrap_or_default();
     let strain_name: String = r.try_get(2).unwrap_or_default();
 
-    // Create reward
     let reward_id = uuid::Uuid::new_v4().to_string();
-
-    // Start transaction
-    let tx = client.transaction().await
-        .map_err(|e| {
-            tracing::error!("Transaction error: {}", e);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
 
     // Read garden config inside transaction for consistency
     let config_row = tx.query_opt(
@@ -386,11 +394,11 @@ async fn harvest_plant(
         &[&now, &id],
     ).await.map_err(|e| {
         tracing::error!("Update plant error: {}", e);
-        return StatusCode::INTERNAL_SERVER_ERROR;
+        StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
     if rows == 0 {
-        let _ = tx.rollback().await;
+        if let Err(e) = tx.rollback().await { tracing::error!("garden rollback error: {}", e); }
         return Ok(Json(json!({ "success": false, "error": "Already harvested" })));
     }
 
@@ -413,7 +421,7 @@ async fn harvest_plant(
         ],
     ).await.map_err(|e| {
         tracing::error!("Insert reward error: {}", e);
-        return StatusCode::INTERNAL_SERVER_ERROR;
+        StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
     tx.commit().await.map_err(|e| {
@@ -478,7 +486,7 @@ async fn get_user_rewards(
         "SELECT id, plant_id, strain_name, discount_percent, bonus_points, expires_at, is_used
          FROM garden_rewards
          WHERE user_id = $1
-         ORDER BY created_at DESC",
+         ORDER BY created_at DESC LIMIT 200",
         &[&user_id],
     ).await.map_err(|e| {
         tracing::error!("Query error: {}", e);
@@ -508,6 +516,7 @@ async fn use_reward(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<Value>, StatusCode> {
+    if id.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
     let mut client = state.db.pool.get().await
         .map_err(|e| {
             tracing::error!("Database connection error: {}", e);
@@ -562,11 +571,11 @@ async fn use_reward(
         &[&id],
     ).await.map_err(|e| {
         tracing::error!("Mark reward used error: {}", e);
-        return StatusCode::INTERNAL_SERVER_ERROR;
+        StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
     if rows == 0 {
-        let _ = tx.rollback().await;
+        if let Err(e) = tx.rollback().await { tracing::error!("garden rollback error: {}", e); }
         return Ok(Json(json!({ "success": false, "error": "Reward already used" })));
     }
 
@@ -577,17 +586,17 @@ async fn use_reward(
         &[&tid],
     ).await.map_err(|e| {
         tracing::error!("Credit bonus upsert error: {}", e);
-        return StatusCode::INTERNAL_SERVER_ERROR;
+        StatusCode::INTERNAL_SERVER_ERROR
     })?;
     let updated = tx.execute(
         "UPDATE loyalty_profiles SET bonus_balance = bonus_balance + $1 WHERE telegram_id = $2",
         &[&bonus_f64, &tid],
     ).await.map_err(|e| {
         tracing::error!("Credit bonus error: {}", e);
-        return StatusCode::INTERNAL_SERVER_ERROR;
+        StatusCode::INTERNAL_SERVER_ERROR
     })?;
     if updated == 0 {
-        let _ = tx.rollback().await;
+        if let Err(e) = tx.rollback().await { tracing::error!("garden rollback error: {}", e); }
         tracing::error!("use_reward: loyalty profile missing for telegram_id={}", tid);
         return Ok(Json(json!({ "success": false, "error": "Loyalty profile not found" })));
     }

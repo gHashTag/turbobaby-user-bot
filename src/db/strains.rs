@@ -1,6 +1,5 @@
 use serde::{Deserialize, Serialize};
 use tokio_postgres::Row;
-use tracing;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Strain {
@@ -32,7 +31,6 @@ impl Strain {
         let id: String = row.try_get("id").unwrap_or_default();
         let name: String = row.try_get("name").unwrap_or_default();
         let video_url: Option<String> = row.try_get("video_url").ok();
-        tracing::info!("Strain::from_row id={} name={} video_url={:?}", id, name, video_url);
         Self {
             id,
             name,

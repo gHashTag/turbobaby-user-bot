@@ -66,6 +66,22 @@ pub fn ErrorOverlay() -> Element {
     }
 }
 
+const MAX_ERRORS: usize = 50;
+const MAX_MSG_LEN: usize = 2000;
+const MAX_STACK_LEN: usize = 5000;
+
+fn push_error(mut errors: Signal<Vec<JsErrorItem>>, mut item: JsErrorItem) {
+    item.message.truncate(MAX_MSG_LEN);
+    if let Some(ref mut s) = item.stack {
+        s.truncate(MAX_STACK_LEN);
+    }
+    let mut vec = errors.write();
+    vec.push(item);
+    if vec.len() > MAX_ERRORS {
+        vec.remove(0);
+    }
+}
+
 /// Install global JS error handlers and Rust panic hook.
 /// Call this once inside App or a top-level provider.
 pub fn install_error_handlers(errors: Signal<Vec<JsErrorItem>>) {
@@ -73,7 +89,7 @@ pub fn install_error_handlers(errors: Signal<Vec<JsErrorItem>>) {
     {
         if let Some(window) = web_sys::window() {
             // window.onerror
-            let mut errors_clone = errors.clone();
+            let errors_clone = errors.clone();
             let onerror = Closure::wrap(Box::new(move |event: Event| {
                 let msg = js_sys::Reflect::get(&event, &"message".into())
                     .ok().and_then(|v| v.as_string()).unwrap_or_else(|| "Unknown error".into());
@@ -85,7 +101,7 @@ pub fn install_error_handlers(errors: Signal<Vec<JsErrorItem>>) {
                     .ok().and_then(|v| v.as_f64()).map(|v| v as u32).unwrap_or(0);
                 let stack = get_stack_from_event(&event);
                 let full_msg = format!("{} at {}:{}:{}", msg, filename, lineno, colno);
-                errors_clone.write().push(JsErrorItem {
+                push_error(errors_clone.clone(), JsErrorItem {
                     id: js_sys::Date::now() as u64,
                     message: full_msg,
                     stack,
@@ -96,12 +112,12 @@ pub fn install_error_handlers(errors: Signal<Vec<JsErrorItem>>) {
             onerror.forget();
 
             // unhandledrejection
-            let mut errors_clone = errors.clone();
+            let errors_clone = errors.clone();
             let onunhandled = Closure::wrap(Box::new(move |event: Event| {
                 let reason = js_sys::Reflect::get(&event, &"reason".into())
                     .ok().and_then(|v| v.as_string())
                     .unwrap_or_else(|| "Promise rejected".into());
-                errors_clone.write().push(JsErrorItem {
+                push_error(errors_clone.clone(), JsErrorItem {
                     id: js_sys::Date::now() as u64,
                     message: reason,
                     stack: None,

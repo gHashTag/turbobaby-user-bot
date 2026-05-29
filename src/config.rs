@@ -34,6 +34,9 @@ impl Config {
         // Admin IDs from env; if ADMIN_IDS is set it is the only source of truth.
         // Hard-coded defaults are used ONLY as a fallback when ADMIN_IDS is empty
         // (local development before env is configured).
+        let is_production = std::env::var("NODE_ENV").unwrap_or_default() == "production"
+            || std::env::var("RAILWAY_ENVIRONMENT").is_ok();
+
         let env_ids: Vec<i64> = std::env::var("ADMIN_IDS")
             .unwrap_or_default()
             .split(',')
@@ -41,9 +44,11 @@ impl Config {
             .collect();
         let admin_ids = if !env_ids.is_empty() {
             env_ids
-        } else {
+        } else if !is_production {
             tracing::warn!("ADMIN_IDS not set — using default admin 144022504");
             vec![144022504]
+        } else {
+            return Err(anyhow::anyhow!("ADMIN_IDS must be set in production"));
         };
 
         // The backend service serves BOTH the API and the WASM frontend on the same origin.
@@ -65,8 +70,7 @@ impl Config {
             port: std::env::var("PORT").unwrap_or("3000".into()).parse().unwrap_or(3000),
             webhook_path: std::env::var("WEBHOOK_PATH").unwrap_or("/webhook".into()),
             app_url: std::env::var("APP_URL").unwrap_or_default(),
-            is_production: std::env::var("NODE_ENV").unwrap_or_default() == "production"
-                || std::env::var("RAILWAY_ENVIRONMENT").is_ok(),
+            is_production,
             admin_ids,
             bot_username: {
                 let raw = std::env::var("BOT_USERNAME").unwrap_or("Woody_WeedPecker_bot".into());

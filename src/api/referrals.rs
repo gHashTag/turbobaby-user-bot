@@ -76,6 +76,9 @@ async fn get_leaderboard(
     Query(params): Query<LeaderboardQuery>,
 ) -> Result<Json<Value>, StatusCode> {
     let period = params.period.as_deref().unwrap_or("all");
+    if !matches!(period, "weekly" | "monthly" | "all") {
+        return Err(StatusCode::BAD_REQUEST);
+    }
     let limit = params.limit.unwrap_or(10).min(50);
 
     let top = get_top_referrers(&state.db.pool, period, limit)

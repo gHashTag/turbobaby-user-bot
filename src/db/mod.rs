@@ -212,30 +212,33 @@ impl Database {
     }
 
     pub async fn set_user_lang(&self, telegram_id: i64, lang: &str) -> Result<()> {
+        let trimmed: String = lang.chars().take(50).collect();
         let client = self.pool.get().await?;
         client.execute(
             "INSERT INTO user_languages (telegram_id, language) VALUES ($1, $2)
              ON CONFLICT (telegram_id) DO UPDATE SET language = $2, updated_at = NOW()",
-            &[&telegram_id, &lang],
+            &[&telegram_id, &trimmed],
         ).await?;
         Ok(())
     }
 
     pub async fn set_user_timezone(&self, telegram_id: i64, tz: &str) -> Result<()> {
+        let trimmed: String = tz.chars().take(100).collect();
         let client = self.pool.get().await?;
         client.execute(
             "UPDATE user_languages SET timezone = $2 WHERE telegram_id = $1",
-            &[&telegram_id, &tz],
+            &[&telegram_id, &trimmed],
         ).await?;
         Ok(())
     }
 
     pub async fn save_user_name(&self, telegram_id: i64, first_name: &str) -> Result<()> {
+        let trimmed: String = first_name.chars().take(200).collect();
         let client = self.pool.get().await?;
         client.execute(
             "INSERT INTO user_languages (telegram_id, first_name) VALUES ($1, $2)
              ON CONFLICT (telegram_id) DO UPDATE SET first_name = $2",
-            &[&telegram_id, &first_name],
+            &[&telegram_id, &trimmed],
         ).await?;
         Ok(())
     }

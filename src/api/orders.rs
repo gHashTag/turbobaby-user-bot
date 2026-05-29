@@ -53,7 +53,23 @@ async fn create_order(
     }
 
     // Validation
-    if req.items.is_empty() {
+    if let Some(ref name) = req.customer_name { if name.len() > 200 { return Err(StatusCode::BAD_REQUEST); } }
+    if let Some(ref phone) = req.customer_phone { if phone.len() > 50 { return Err(StatusCode::BAD_REQUEST); } }
+    if let Some(ref tg) = req.customer_telegram { if tg.len() > 100 { return Err(StatusCode::BAD_REQUEST); } }
+    if let Some(ref shop_id) = req.shop_id { if shop_id.len() > 200 { return Err(StatusCode::BAD_REQUEST); } }
+    if req.items.is_empty() || req.items.len() > 100 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    if req.items.iter().any(|i| {
+        i.strain_id.as_ref().map_or(false, |n| n.len() > 200)
+        || i.strain_name.as_ref().map_or(false, |n| n.len() > 200)
+        || i.accessory_id.as_ref().map_or(false, |n| n.len() > 200)
+        || i.accessory_name.as_ref().map_or(false, |n| n.len() > 200)
+        || i.tea_id.as_ref().map_or(false, |n| n.len() > 200)
+        || i.tea_name.as_ref().map_or(false, |n| n.len() > 200)
+        || i.set_id.as_ref().map_or(false, |n| n.len() > 200)
+        || i.set_name.as_ref().map_or(false, |n| n.len() > 200)
+    }) {
         return Err(StatusCode::BAD_REQUEST);
     }
     if req.items.iter().any(|i| !i.quantity.is_finite() || i.quantity <= 0.0) {
@@ -86,6 +102,13 @@ async fn create_order(
     let mut client = state.db.pool.get().await.map_err(|e| { error!("create_order pool error: {}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     let tx = client.transaction().await.map_err(|e| { error!("create_order tx error: {}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
 
+    // Serialize order creation per user to close the rate-limit race window.
+    if let Some(tid) = req.telegram_id {
+        tx.execute("SELECT pg_advisory_xact_lock($1)", &[&tid])
+            .await
+            .map_err(|e| { error!("advisory lock error: {}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
+    }
+
     // Rate-limit inside tx to close the race window.
     if let Some(tid) = req.telegram_id {
         let recent = tx.query_opt(
@@ -93,7 +116,7 @@ async fn create_order(
             &[&tid],
         ).await.map_err(|e| { error!("rate-limit check error: {}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
         if recent.is_some() {
-            let _ = tx.rollback().await;
+            if let Err(e) = tx.rollback().await { tracing::error!("create_order rollback error: {}", e); }
             return Err(StatusCode::TOO_MANY_REQUESTS);
         }
     }
@@ -106,11 +129,11 @@ async fn create_order(
                 &[&bonus_used, &tid],
             ).await.map_err(|e| { error!("bonus deduction error: {}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
             if deducted == 0 {
-                let _ = tx.rollback().await;
+                if let Err(e) = tx.rollback().await { tracing::error!("create_order rollback error: {}", e); }
                 return Err(StatusCode::BAD_REQUEST);
             }
         } else {
-            let _ = tx.rollback().await;
+            if let Err(e) = tx.rollback().await { tracing::error!("create_order rollback error: {}", e); }
             return Err(StatusCode::BAD_REQUEST);
         }
     }
@@ -175,7 +198,7 @@ async fn notify_admins(
 
     let text = format!(
         "🚨 <b>New Order!</b>\n━━━━━━━━━━━━━━━━\n👤 {}\n📦 Items:\n{}\n━━━━━━━━━━━━━━━━\n💰 Subtotal: {} ฿\n🎁 Bonus: -{} ฿\n💳 Total: {} ฿\n🔖 #{}",
-        source, items_text, subtotal, bonus_used, total, &order_id[order_id.len().saturating_sub(6)..]
+        source, items_text, subtotal, bonus_used, total, html_escape(&order_id[order_id.len().saturating_sub(6)..])
     );
 
     let btns = InlineKeyboardMarkup::new(vec![vec![
@@ -216,6 +239,7 @@ async fn get_order(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<Value>, StatusCode> {
+    if id.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
     check_admin(&headers, &state)?;
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     let row = client.query_opt(
@@ -234,40 +258,51 @@ async fn update_order_status(
     Path(id): Path<String>,
     Json(req): Json<UpdateOrderStatusRequest>,
 ) -> Result<Json<Value>, StatusCode> {
+    if id.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
     check_admin(&headers, &state)?;
+    if req.status.len() > 50 { return Err(StatusCode::BAD_REQUEST); }
     const VALID_STATUSES: &[&str] = &["pending", "confirmed", "completed", "rejected", "ready", "cancelled"];
     if !VALID_STATUSES.contains(&req.status.as_str()) {
         return Err(StatusCode::BAD_REQUEST);
     }
-    if req.status == "completed" {
-        let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
-        let exists = client.query_opt("SELECT 1 FROM orders WHERE id = $1", &[&id]).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
-        if exists.is_none() {
-            return Err(StatusCode::NOT_FOUND);
+    let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
+    let current_status: Option<String> = client.query_opt("SELECT status FROM orders WHERE id = $1", &[&id])
+        .await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?
+        .map(|r| r.try_get("status").unwrap_or_default());
+    match current_status {
+        Some(ref current) if current == "completed" || current == "rejected" || current == "cancelled" => {
+            if req.status != *current {
+                return Err(StatusCode::BAD_REQUEST);
+            }
         }
+        None => return Err(StatusCode::NOT_FOUND),
+        _ => {}
+    }
+
+    if req.status == "completed" {
         if let Err(e) = crate::db::orders::complete_order_and_update_loyalty(&state.db.pool, &id).await {
             tracing::error!("update_order_status: complete_order_and_update_loyalty error: {}", e);
             return Err(StatusCode::INTERNAL_SERVER_ERROR);
         }
     } else {
-        let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
+        let mut client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
         if req.status == "rejected" {
             let tx = client.transaction().await.map_err(|e| { tracing::error!("DB tx error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
             if let Some(r) = tx.query_opt("SELECT telegram_id, bonus_used::float8, status FROM orders WHERE id = $1 FOR UPDATE", &[&id]).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })? {
                 let current_status: String = r.try_get("status").unwrap_or_default();
-                if current_status != "rejected" {
+                if current_status != "rejected" && current_status != "completed" {
                     let bonus: f64 = r.try_get::<_, f64>("bonus_used").unwrap_or(0.0);
                     let tid: Option<i64> = r.try_get("telegram_id").ok().flatten();
                     if bonus > 0.0 {
                         if let Some(tid) = tid {
-                            let _ = tx.execute(
+                            tx.execute(
                                 "INSERT INTO loyalty_profiles (telegram_id, bonus_balance, total_spent) VALUES ($1, 0, 0) ON CONFLICT (telegram_id) DO NOTHING",
                                 &[&tid],
-                            ).await;
-                            let _ = tx.execute(
+                            ).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
+                            tx.execute(
                                 "UPDATE loyalty_profiles SET bonus_balance = bonus_balance + $1 WHERE telegram_id = $2",
                                 &[&bonus, &tid],
-                            ).await;
+                            ).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
                         }
                     }
                 }
@@ -275,7 +310,9 @@ async fn update_order_status(
             let rows = tx.execute("UPDATE orders SET status = $1 WHERE id = $2", &[&req.status, &id])
                 .await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
             if rows == 0 {
-                let _ = tx.rollback().await;
+                if let Err(e) = tx.rollback().await {
+                    tracing::error!("update_order_status rollback error: {:?}", e);
+                }
                 return Err(StatusCode::NOT_FOUND);
             }
             tx.commit().await.map_err(|e| { tracing::error!("DB commit error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;

@@ -43,7 +43,7 @@ use tower_http::set_header::SetResponseHeaderLayer;
 #[cfg(not(target_arch = "wasm32"))]
 // use tower_http::compression::CompressionLayer;
 #[cfg(not(target_arch = "wasm32"))]
-use axum::http::{HeaderName, HeaderValue};
+use axum::http::{HeaderMap, HeaderName, HeaderValue, StatusCode};
 use bytes::Bytes;
 #[cfg(not(target_arch = "wasm32"))]
 use axum::middleware::Next;
@@ -122,10 +122,14 @@ async fn alert_5xx_middleware(
             let bot = state.bot.clone();
             let config = state.config.clone();
             let status = resp.status().as_u16();
+            let safe_method: String = method.chars().take(20).collect();
+            let safe_path: String = path.chars().take(200).collect();
             tokio::spawn(async move {
                 let text = format!(
-                    "\u{1F6A8} 5xx Error on prod\n\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\n\u{1F4CD} {method} {path}\n\u{1F4A5} HTTP {status}",
-                    method = method.replace('<', "«").replace('>', "»"), path = path.replace('<', "«").replace('>', "»"), status = status
+                    "\u{1F6A8} 5xx Error on prod\n\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\n\u{1F4CD} {} {}\n\u{1F4A5} HTTP {}",
+                    safe_method.replace('<', "«").replace('>', "»"),
+                    safe_path.replace('<', "«").replace('>', "»"),
+                    status
                 );
                 crate::notify::notify_admins(&bot, &config, &text).await;
             });
@@ -158,11 +162,14 @@ async fn main() -> Result<()> {
     db.run_migrations().await?;
     info!("✅ Database connected");
 
+    let ai_client = Arc::new(crate::ai::AiClient::new(config.grok_api_key.clone(), config.glm_api_key.clone()));
+
     let bot = Bot::new(&config.bot_token);
     let bot_arc = Arc::new(bot.clone());
     let bot_arc_for_state = bot_arc.clone();
     let db_for_bot = db.clone();
     let config_for_bot = config.clone();
+    let ai_client_for_bot = ai_client.clone();
     tokio::spawn(async move {
         use teloxide::update_listeners::Polling;
         use teloxide::types::AllowedUpdate;
@@ -182,7 +189,7 @@ async fn main() -> Result<()> {
             .delete_webhook().await
             .build();
         Dispatcher::builder(bot.clone(), handler)
-            .dependencies(dptree::deps![Arc::clone(&db_for_bot), Arc::clone(&config_for_bot)])
+            .dependencies(dptree::deps![Arc::clone(&db_for_bot), Arc::clone(&config_for_bot), Arc::clone(&ai_client_for_bot)])
             .build()
             .dispatch_with_listener(
                 listener,
@@ -206,9 +213,22 @@ async fn main() -> Result<()> {
     // CORS configuration
     let cors = CorsLayer::new()
         .allow_origin(Any)
-        .allow_methods([axum::http::Method::GET, axum::http::Method::POST, axum::http::Method::PUT, axum::http::Method::DELETE])
-        .allow_headers(Any)
-        .expose_headers(Any);
+        .allow_methods([
+            axum::http::Method::GET,
+            axum::http::Method::POST,
+            axum::http::Method::PUT,
+            axum::http::Method::DELETE,
+            axum::http::Method::OPTIONS,
+        ])
+        .allow_headers([
+            axum::http::header::CONTENT_TYPE,
+            axum::http::header::HeaderName::from_static("x-telegram-init-data"),
+            axum::http::header::HeaderName::from_static("x-admin-token"),
+            axum::http::header::HeaderName::from_static("x-admin-telegram-id"),
+            axum::http::header::ACCEPT,
+            axum::http::header::ACCEPT_ENCODING,
+        ])
+        .expose_headers([axum::http::header::CONTENT_ENCODING]);
 
     // Bypass ngrok interstitial page on free tier
     let ngrok_bypass = SetResponseHeaderLayer::overriding(
@@ -232,12 +252,33 @@ async fn main() -> Result<()> {
         axum::http::header::CACHE_CONTROL,
         HeaderValue::from_static("public, max-age=86400"),
     );
+    let nosniff_layer = || SetResponseHeaderLayer::if_not_present(
+        axum::http::header::X_CONTENT_TYPE_OPTIONS,
+        HeaderValue::from_static("nosniff"),
+    );
     // HTML must NEVER be cached — Telegram WebApp aggressively keeps the
     // index.html in cache, which breaks deploys (new WASM hash never
     // fetched). `no-store` forces a re-validate on every load.
     let html_no_cache_layer = || SetResponseHeaderLayer::overriding(
         axum::http::header::CACHE_CONTROL,
         HeaderValue::from_static("no-store, no-cache, must-revalidate, max-age=0"),
+    );
+    // CSP for Telegram Mini App: allow self, WASM eval, inline styles, and API/S3 images.
+    let csp_layer = || SetResponseHeaderLayer::if_not_present(
+        axum::http::header::CONTENT_SECURITY_POLICY,
+        HeaderValue::from_static(
+            "default-src 'self'; \
+             script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; \
+             style-src 'self' 'unsafe-inline'; \
+             img-src 'self' data: https: blob:; \
+             connect-src 'self' https:; \
+             font-src 'self'; \
+             frame-ancestors https://*.telegram.org"
+        ),
+    );
+    let referrer_layer = || SetResponseHeaderLayer::if_not_present(
+        axum::http::header::REFERRER_POLICY,
+        HeaderValue::from_static("strict-origin-when-cross-origin"),
     );
 
     // Load dist files into memory to bypass slow Railway disk I/O
@@ -315,10 +356,10 @@ async fn main() -> Result<()> {
             }
         }
         Err(e) => {
-            println!("ERROR: failed to read_dir(dist): {}", e);
+            tracing::error!("failed to read_dir(dist): {}", e);
         }
     }
-    println!("DEBUG: Cached {} dist files in memory", static_cache.len());
+    tracing::info!("Cached {} dist files in memory", static_cache.len());
 
     // /assets, /styles, /images — stable URLs, day-long browser cache.
     let static_assets = Router::new()
@@ -326,7 +367,8 @@ async fn main() -> Result<()> {
         .nest_service("/assets", ServeDir::new("assets"))
         .nest_service("/images", ServeDir::new("assets"))
         .nest_service("/uploads", ServeDir::new("/data/uploads"))
-        .layer(assets_cache_layer());
+        .layer(assets_cache_layer())
+        .layer(nosniff_layer());
 
     // Trunk emits hashed JS/WASM/CSS at the root of dist/ with absolute paths
     // (e.g. /woody-weed-bot-<hash>.js). We serve dist/ as the root static dir;
@@ -354,11 +396,11 @@ async fn main() -> Result<()> {
             let static_cache = static_cache.clone();
             async move {
                 let path = uri.path().trim_start_matches('/');
-                if path.contains("..") {
+                if path.contains("..") || path.contains('\\') || path.contains('\0') {
                     return (axum::http::StatusCode::NOT_FOUND, "Not found").into_response();
                 }
-                let cached = static_cache.get(path)
-                    .or_else(|| static_cache.get("index.html"));
+                let exact = static_cache.get(path);
+                let cached = exact.or_else(|| static_cache.get("index.html"));
                 if let Some(file) = cached {
                     let (body, encoding) = match pick_encoding(&headers) {
                         Some("br") => {
@@ -388,11 +430,11 @@ async fn main() -> Result<()> {
                             axum::http::HeaderValue::from_static(enc),
                         );
                     }
-                    // Cache control: hashed assets are immutable, HTML must never be cached
-                    let cache_header = if path == "index.html" || path == "" || !path.contains('-') {
-                        "no-store, no-cache, must-revalidate, max-age=0"
-                    } else {
+                    // Cache control: only exact hashed assets are immutable; HTML/fallback must never be cached
+                    let cache_header = if exact.is_some() && path.contains('-') {
                         "public, max-age=31536000, immutable"
+                    } else {
+                        "no-store, no-cache, must-revalidate, max-age=0"
                     };
                     resp.headers_mut().insert(
                         axum::http::header::CACHE_CONTROL,
@@ -439,7 +481,9 @@ async fn main() -> Result<()> {
         .route("/location-quest", get(spa_handler.clone()))
         .route("/tech-tree", get(spa_handler.clone()))
         .route("/admin", get(spa_handler))
-        .layer(html_no_cache_layer());
+        .layer(html_no_cache_layer())
+        .layer(csp_layer())
+        .layer(referrer_layer());
 
     // OpenAPI JSON spec — served at /api-docs/openapi.json (no Swagger UI binary to keep musl build slim)
     #[cfg(feature = "utoipa")]
@@ -466,16 +510,26 @@ async fn main() -> Result<()> {
     #[cfg(not(feature = "utoipa"))]
     let openapi_router: Router = Router::new();
 
-    let app = Router::new()
+    let api_router = api::router(app_state.clone())
+        .layer(axum::middleware::from_fn_with_state(app_state.clone(), alert_5xx_middleware));
+
+    let mut app = Router::new()
         .merge(openapi_router)
-        // CORS layer MUST be first!
+        .merge(api_router)
+        // CORS layer MUST be first! (applied globally after all backend route merges)
         .layer(cors)
-        .layer(ngrok_bypass)
-        // Backend API routes (must be before static to avoid conflicts)
-        .merge(api::router(app_state.clone()).layer(axum::middleware::from_fn_with_state(app_state.clone(), alert_5xx_middleware)))
-        // Prometheus /metrics endpoint — placed after API routes so prometheus_layer counts API calls
-        .route("/metrics", get(|| async move { metric_handle.render() }))
-        .layer(prometheus_layer)
+        .layer(ngrok_bypass);
+
+    // Prometheus /metrics endpoint — gated behind admin auth
+    let metrics_auth_state = app_state.clone();
+    app = app.route("/metrics", get(move |headers: HeaderMap| async move {
+        if crate::api::auth::check_admin(&headers, &metrics_auth_state).is_err() {
+            return StatusCode::UNAUTHORIZED.into_response();
+        }
+        metric_handle.render().into_response()
+    }));
+
+    app = app.layer(prometheus_layer)
         // SPA routes - serve index.html for client-side routing
         .merge(spa_routes)
         // SPA routes - these should be served by the fallback
@@ -485,7 +539,12 @@ async fn main() -> Result<()> {
         // headers globally on the fallback; immutable cache for hashed
         // assets would be ideal but requires per-file logic. Telegram WebApp
         // cache busting is the priority — no-store keeps deploys landing.
-        .fallback(serve_dist);
+        .fallback(serve_dist)
+        // Global security headers: ensure fallback and static assets also get CSP,
+        // Referrer-Policy, and X-Content-Type-Options (API responses are unaffected).
+        .layer(csp_layer())
+        .layer(referrer_layer())
+        .layer(nosniff_layer());
         // .layer(compression);
 
     let addr = SocketAddr::from(([0, 0, 0, 0], config.port));
