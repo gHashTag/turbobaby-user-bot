@@ -150,6 +150,11 @@ fn content_type_for(path: &std::path::Path) -> &'static str {
         Some("svg") => "image/svg+xml",
         Some("png") => "image/png",
         Some("jpg") | Some("jpeg") => "image/jpeg",
+        Some("webp") => "image/webp",
+        Some("gif") => "image/gif",
+        Some("mp4") => "video/mp4",
+        Some("webm") => "video/webm",
+        Some("mov") => "video/quicktime",
         _ => "application/octet-stream",
     }
 }
@@ -288,6 +293,7 @@ async fn main() -> Result<()> {
              script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' https://telegram.org; \
              style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; \
              img-src 'self' data: https: blob:; \
+             media-src 'self' data: https: blob:; \
              connect-src 'self' https:; \
              font-src 'self' https://fonts.gstatic.com; \
              frame-ancestors https://*.telegram.org"
