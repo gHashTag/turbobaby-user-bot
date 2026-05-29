@@ -55,6 +55,7 @@ rustls = { version = "0.23", features = ["ring"], optional = true }
 rustls-native-certs = { version = "0.8", optional = true }
 aws-config = { version = "1", default-features = false, features = ["rustls"], optional = true }
 aws-sdk-s3 = { version = "1", default-features = false, features = ["rustls"], optional = true }
+aws-smithy-async = { version = "1", features = ["rt-tokio"], optional = true }
 tracing-subscriber = { version = "0.3", features = ["env-filter"], optional = true }
 url = { version = "2", optional = true }
 
@@ -85,7 +86,7 @@ backend = [
     "tokio-postgres", "deadpool-postgres", "postgres-types",
     "tokio-postgres-rustls", "rustls", "rustls-native-certs",
     "sea-orm",
-    "aws-config", "aws-sdk-s3", "tracing-subscriber", "url",
+    "aws-config", "aws-sdk-s3", "aws-smithy-async", "tracing-subscriber", "url",
     "axum-prometheus",
     "metrics",
     "utoipa"

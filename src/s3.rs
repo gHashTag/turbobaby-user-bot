@@ -23,8 +23,16 @@ pub async fn upload_to_s3(config: &Config, filename: &str, data: Bytes) -> Resul
     let creds = Credentials::new(access_key, secret_key, None, None, "static");
     // BehaviorVersion is required by aws-config 1.x and aws-sdk-s3 1.x to
     // avoid a runtime panic when none is configured.
+    //
+    // CRITICAL: aws-sdk-s3 is built with default-features = false, which omits
+    // the default `rt-tokio` feature that auto-installs an async sleep impl.
+    // Without a sleep_impl the SDK PANICS at request time ("An async sleep
+    // implementation is required for retry to work"), which kills the worker
+    // thread and surfaces as an HTTP 502. Install TokioSleep explicitly.
+    use aws_smithy_async::rt::sleep::{SharedAsyncSleep, TokioSleep};
     let s3_config = aws_sdk_s3::config::Builder::new()
         .behavior_version(BehaviorVersion::latest())
+        .sleep_impl(SharedAsyncSleep::new(TokioSleep::new()))
         .region(Region::new(region.to_string()))
         .credentials_provider(creds)
         .endpoint_url(endpoint)
