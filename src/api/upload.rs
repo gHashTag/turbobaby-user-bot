@@ -4,6 +4,7 @@ use axum::{
     routing::post,
     Json, Router,
 };
+use bytes::{Bytes, BytesMut};
 use serde_json::{json, Value};
 
 use crate::api::auth::check_admin;
@@ -18,20 +19,37 @@ pub fn routes() -> Router<AppState> {
 const MAX_UPLOAD_SIZE: usize = 100 * 1024 * 1024; // 100 MB
 const ALLOWED_EXTENSIONS: &[&str] = &["jpg", "jpeg", "png", "gif", "webp", "mp4", "mov", "webm"];
 
-fn validate_upload(filename: &str, data: &[ u8]) -> Result<(), StatusCode> {
-    if filename.len() > 500 { return Err(StatusCode::BAD_REQUEST); }
-    if data.is_empty() { return Err(StatusCode::BAD_REQUEST); }
-    if data.len() > MAX_UPLOAD_SIZE {
-        tracing::warn!("upload file too large: {} bytes", data.len());
-        return Err(StatusCode::PAYLOAD_TOO_LARGE);
+type UploadError = (StatusCode, Json<Value>);
+
+fn err(status: StatusCode, msg: impl Into<String>) -> UploadError {
+    let msg = msg.into();
+    (status, Json(json!({ "error": msg })))
+}
+
+fn validate_filename(filename: &str, size: usize) -> Result<(), UploadError> {
+    if filename.len() > 500 {
+        return Err(err(StatusCode::BAD_REQUEST, "filename too long"));
+    }
+    if size == 0 {
+        return Err(err(StatusCode::BAD_REQUEST, "empty file"));
+    }
+    if size > MAX_UPLOAD_SIZE {
+        tracing::warn!("upload file too large: {} bytes", size);
+        return Err(err(
+            StatusCode::PAYLOAD_TOO_LARGE,
+            format!("file too large: {} bytes (max {})", size, MAX_UPLOAD_SIZE),
+        ));
     }
     let ext = filename.rsplit('.').next().unwrap_or("").to_lowercase();
     if ext.len() > 50 {
-        return Err(StatusCode::BAD_REQUEST);
+        return Err(err(StatusCode::BAD_REQUEST, "extension too long"));
     }
     if !ALLOWED_EXTENSIONS.contains(&ext.as_str()) {
         tracing::warn!("upload disallowed extension: {}", ext);
-        return Err(StatusCode::UNSUPPORTED_MEDIA_TYPE);
+        return Err(err(
+            StatusCode::UNSUPPORTED_MEDIA_TYPE,
+            format!("disallowed extension: .{}", ext),
+        ));
     }
     Ok(())
 }
@@ -40,42 +58,134 @@ async fn upload_file(
     headers: HeaderMap,
     State(state): State<AppState>,
     mut multipart: Multipart,
-) -> Result<Json<Value>, StatusCode> {
-    check_admin(&headers, &state)?;
+) -> Result<Json<Value>, UploadError> {
+    tracing::info!("upload: request received at /api/upload");
 
-    let field = match multipart.next_field().await {
-        Ok(Some(f)) => f,
-        Ok(None) => {
-            tracing::warn!("upload: no fields in multipart");
-            return Err(StatusCode::BAD_REQUEST);
+    let admin_id = check_admin(&headers, &state).map_err(|status| {
+        tracing::warn!("upload: admin auth failed status={}", status);
+        err(status, "admin auth failed")
+    })?;
+    tracing::info!("upload: admin auth ok admin_id={}", admin_id);
+
+    // Walk multipart fields. We accept the first non-empty file-like field; log
+    // every field we encounter so we can see in Railway logs what the client
+    // actually sent if the wrong shape arrives.
+    let mut chosen: Option<(String, BytesMut)> = None;
+    loop {
+        let next = multipart.next_field().await.map_err(|e| {
+            tracing::error!("upload: next_field error: {:?}", e);
+            err(StatusCode::BAD_REQUEST, format!("multipart parse error: {}", e))
+        })?;
+        let mut field = match next {
+            Some(f) => f,
+            None => break,
+        };
+        let field_name = field.name().unwrap_or("").to_string();
+        let filename = field.file_name().unwrap_or("").to_string();
+        tracing::info!(
+            "upload: multipart field name={:?} filename={:?}",
+            field_name,
+            filename
+        );
+
+        if filename.is_empty() {
+            // Non-file field — drain and skip.
+            while let Ok(Some(_)) = field.chunk().await {}
+            continue;
         }
-        Err(e) => {
-            tracing::error!("upload next_field error: {:?}", e);
-            return Err(StatusCode::BAD_REQUEST);
+
+        // Stream chunks into a single contiguous buffer. We avoid
+        // `field.bytes()` because it internally collects the whole body via
+        // `http_body_util::BodyExt::collect` which can fragment + double-copy.
+        // Reading chunk-by-chunk lets us enforce the size cap incrementally
+        // and abort before the buffer grows past MAX_UPLOAD_SIZE — that's the
+        // safety net against OOM on Railway's small plan.
+        let mut buf = BytesMut::new();
+        tracing::info!("upload: begin streaming field filename={}", filename);
+        loop {
+            match field.chunk().await {
+                Ok(Some(chunk)) => {
+                    if buf.len().saturating_add(chunk.len()) > MAX_UPLOAD_SIZE {
+                        tracing::warn!(
+                            "upload: aborting — would exceed MAX_UPLOAD_SIZE (have {} + chunk {} > {})",
+                            buf.len(),
+                            chunk.len(),
+                            MAX_UPLOAD_SIZE
+                        );
+                        return Err(err(
+                            StatusCode::PAYLOAD_TOO_LARGE,
+                            format!("file exceeds max size of {} bytes", MAX_UPLOAD_SIZE),
+                        ));
+                    }
+                    buf.extend_from_slice(&chunk);
+                }
+                Ok(None) => break,
+                Err(e) => {
+                    tracing::error!("upload: chunk read error after {} bytes: {:?}", buf.len(), e);
+                    return Err(err(
+                        StatusCode::BAD_REQUEST,
+                        format!("chunk read error: {}", e),
+                    ));
+                }
+            }
+        }
+        tracing::info!(
+            "upload: finished streaming filename={} total_bytes={}",
+            filename,
+            buf.len()
+        );
+        chosen = Some((filename, buf));
+        break;
+    }
+
+    let (filename, buf) = match chosen {
+        Some(p) => p,
+        None => {
+            tracing::warn!("upload: no file field found in multipart");
+            return Err(err(
+                StatusCode::BAD_REQUEST,
+                "no file field in multipart body",
+            ));
         }
     };
 
-    let filename = field.file_name().unwrap_or("upload").to_string();
-    let data = field.bytes().await.map_err(|e| {
-        tracing::error!("upload field.bytes() error: {:?}", e);
-        StatusCode::BAD_REQUEST
-    })?;
-    validate_upload(&filename, &data)?;
+    validate_filename(&filename, buf.len())?;
     let ext = filename.rsplit('.').next().unwrap_or("").to_lowercase();
 
     let short_id = uuid::Uuid::new_v4().to_string();
     let safe_name = format!("{}.{}", short_id.get(0..8).unwrap_or(&short_id), ext);
 
+    // Freeze BytesMut -> Bytes is a zero-copy handoff: the same allocation is
+    // moved into ByteStream so we never duplicate the payload.
+    let data: Bytes = buf.freeze();
+    let size = data.len();
+
+    let s3_on = state.config.s3_enabled();
+    tracing::info!(
+        "upload: s3_enabled={} branch={} safe_name={} size={}",
+        s3_on,
+        if s3_on { "s3" } else { "local" },
+        safe_name,
+        size
+    );
+
     // Prefer S3 when configured — local /data/uploads is ephemeral on Railway
     // (no persistent volume) and vanishes on every redeploy.
-    if state.config.s3_enabled() {
+    if s3_on {
+        let bucket = state.config.s3_bucket.as_deref().unwrap_or("");
+        tracing::info!(
+            "upload: calling upload_to_s3 bucket={} key=uploads/{} size={}",
+            bucket,
+            safe_name,
+            size
+        );
         // Wrap the S3 upload in a hard timeout so a stuck PutObject can never
         // hang the worker long enough for Railway's edge to return 502 or for
         // the healthcheck to mark the container unhealthy.
-        let s3_fut = crate::s3::upload_to_s3(&state.config, &safe_name, data.clone());
+        let s3_fut = crate::s3::upload_to_s3(&state.config, &safe_name, data);
         match tokio::time::timeout(std::time::Duration::from_secs(90), s3_fut).await {
             Ok(Ok(url)) => {
-                tracing::info!("upload success (s3): url={}", url);
+                tracing::info!("upload: success (s3) url={} size={}", url, size);
                 return Ok(Json(json!({
                     "url": url,
                     "filename": safe_name
@@ -83,20 +193,27 @@ async fn upload_file(
             }
             Ok(Err(e)) => {
                 tracing::error!("upload s3 error: {:?}", e);
-                return Err(StatusCode::INTERNAL_SERVER_ERROR);
+                return Err(err(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("s3 upload failed: {}", e),
+                ));
             }
             Err(_elapsed) => {
                 tracing::error!(
                     "upload s3 timeout after 90s: filename={} size={}",
                     safe_name,
-                    data.len()
+                    size
                 );
-                return Err(StatusCode::INTERNAL_SERVER_ERROR);
+                return Err(err(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "s3 upload timed out after 90s",
+                ));
             }
         }
     }
 
     let path = format!("/data/uploads/{}", safe_name);
+    tracing::info!("upload: writing to local path={} size={}", path, size);
 
     if let Err(e) = tokio::fs::create_dir_all("/data/uploads").await {
         tracing::error!("upload create_dir_all error: {:?}", e);
@@ -105,7 +222,7 @@ async fn upload_file(
     match tokio::fs::write(&path, &data).await {
         Ok(_) => {
             let url = format!("/uploads/{}", safe_name);
-            tracing::info!("upload success (local): url={}", url);
+            tracing::info!("upload: success (local) url={} size={}", url, size);
             Ok(Json(json!({
                 "url": url,
                 "filename": safe_name
@@ -113,57 +230,60 @@ async fn upload_file(
         }
         Err(e) => {
             tracing::error!("upload file write error: {:?}", e);
-            Err(StatusCode::INTERNAL_SERVER_ERROR)
+            Err(err(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("local write failed: {}", e),
+            ))
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{validate_upload, ALLOWED_EXTENSIONS, MAX_UPLOAD_SIZE};
+    use super::{validate_filename, ALLOWED_EXTENSIONS, MAX_UPLOAD_SIZE};
     use axum::http::StatusCode;
 
     #[test]
     fn test_validate_upload_ok() {
-        assert!(validate_upload("photo.jpg", &[0u8; 100]).is_ok());
+        assert!(validate_filename("photo.jpg", 100).is_ok());
     }
 
     #[test]
     fn test_validate_upload_empty_file() {
-        assert_eq!(validate_upload("photo.jpg", &[]).unwrap_err(), StatusCode::BAD_REQUEST);
+        assert_eq!(validate_filename("photo.jpg", 0).unwrap_err().0, StatusCode::BAD_REQUEST);
     }
 
     #[test]
     fn test_validate_upload_name_too_long() {
         let name = "a".repeat(501) + ".jpg";
-        assert_eq!(validate_upload(&name, &[0u8; 100]).unwrap_err(), StatusCode::BAD_REQUEST);
+        assert_eq!(validate_filename(&name, 100).unwrap_err().0, StatusCode::BAD_REQUEST);
     }
 
     #[test]
     fn test_validate_upload_too_large() {
-        assert_eq!(validate_upload("photo.jpg", &vec![0u8; MAX_UPLOAD_SIZE + 1]).unwrap_err(), StatusCode::PAYLOAD_TOO_LARGE);
+        assert_eq!(validate_filename("photo.jpg", MAX_UPLOAD_SIZE + 1).unwrap_err().0, StatusCode::PAYLOAD_TOO_LARGE);
     }
 
     #[test]
     fn test_validate_upload_disallowed_ext() {
-        assert_eq!(validate_upload("photo.exe", &[0u8; 100]).unwrap_err(), StatusCode::UNSUPPORTED_MEDIA_TYPE);
+        assert_eq!(validate_filename("photo.exe", 100).unwrap_err().0, StatusCode::UNSUPPORTED_MEDIA_TYPE);
     }
 
     #[test]
     fn test_validate_upload_no_ext() {
-        assert_eq!(validate_upload("photo", &[0u8; 100]).unwrap_err(), StatusCode::UNSUPPORTED_MEDIA_TYPE);
+        assert_eq!(validate_filename("photo", 100).unwrap_err().0, StatusCode::UNSUPPORTED_MEDIA_TYPE);
     }
 
     #[test]
     fn test_validate_upload_ext_too_long() {
         let name = format!("photo.{}", "a".repeat(51));
-        assert_eq!(validate_upload(&name, &[0u8; 100]).unwrap_err(), StatusCode::BAD_REQUEST);
+        assert_eq!(validate_filename(&name, 100).unwrap_err().0, StatusCode::BAD_REQUEST);
     }
 
     #[test]
     fn test_allowed_extensions_coverage() {
         for ext in ALLOWED_EXTENSIONS {
-            assert!(validate_upload(&format!("file.{}", ext), &[0u8; 10]).is_ok(), "ext {} should be allowed", ext);
+            assert!(validate_filename(&format!("file.{}", ext), 10).is_ok(), "ext {} should be allowed", ext);
         }
     }
 }

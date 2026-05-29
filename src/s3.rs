@@ -40,19 +40,41 @@ pub async fn upload_to_s3(config: &Config, filename: &str, data: Bytes) -> Resul
         s
     };
     let key = format!("uploads/{}", safe_name);
+    let size = data.len();
+    let content_type = mime_from_filename(filename);
+
+    tracing::info!(
+        "s3: PutObject begin bucket={} key={} size={} content_type={} endpoint={} region={}",
+        bucket, key, size, content_type, endpoint, region
+    );
 
     // ByteStream::from(Bytes) reuses the underlying buffer — no extra copy
     // of the upload body, unlike ByteStream::from(Vec<u8>) from a slice.
-    client
+    let resp = client
         .put_object()
         .bucket(bucket)
         .key(&key)
         .body(ByteStream::from(data))
-        .content_type(mime_from_filename(filename))
+        .content_type(content_type)
         .send()
-        .await?;
+        .await;
 
-    Ok(build_s3_public_url(public_url, bucket, &key))
+    match resp {
+        Ok(out) => {
+            tracing::info!(
+                "s3: PutObject ok bucket={} key={} size={} etag={:?}",
+                bucket, key, size, out.e_tag()
+            );
+        }
+        Err(e) => {
+            tracing::error!("s3: PutObject error bucket={} key={} size={} err={:?}", bucket, key, size, e);
+            return Err(e.into());
+        }
+    }
+
+    let url = build_s3_public_url(public_url, bucket, &key);
+    tracing::info!("s3: public url={}", url);
+    Ok(url)
 }
 
 fn build_s3_public_url(public_url: &str, bucket: &str, key: &str) -> String {
