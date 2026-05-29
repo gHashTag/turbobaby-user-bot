@@ -269,7 +269,7 @@ async fn main() -> Result<()> {
         axum::http::header::CONTENT_SECURITY_POLICY,
         HeaderValue::from_static(
             "default-src 'self'; \
-             script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; \
+             script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval'; \
              style-src 'self' 'unsafe-inline'; \
              img-src 'self' data: https: blob:; \
              connect-src 'self' https:; \
