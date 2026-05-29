@@ -307,6 +307,16 @@ fn render_strain_card(strain: ApiStrain, mut cart: Signal<Cart>) -> Element {
                             autoplay: true,
                             muted: true,
                             loop: true,
+                            // playsinline is REQUIRED for muted autoplay inside
+                            // mobile WebViews (Telegram/iOS Safari). Without it the
+                            // browser blocks autoplay, the <video> stays paused on a
+                            // blank frame and the card looks like it has no video.
+                            "playsinline": "true",
+                            "webkit-playsinline": "true",
+                            preload: "auto",
+                            // poster shows the product image until the first video
+                            // frame is painted, so there is never an empty box.
+                            poster: if has_image { "{img_url}" } else { "" },
                             onclick: move |e: Event<MouseData>| { e.stop_propagation(); show_video.set(true); }
                         }
                     }
