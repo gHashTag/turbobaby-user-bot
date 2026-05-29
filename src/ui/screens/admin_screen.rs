@@ -411,8 +411,14 @@ fn AccessDeniedScreen(telegram_id: i64, mut password_token: Signal<String>, mut 
                                                 if let Some(window) = web_sys::window() {
                                                     if let Ok(Some(storage)) = window.local_storage() {
                                                         let _ = storage.set_item("wwb_admin_token", token);
-                                                        let _ = storage.set_item("wwb_admin_telegram_id", &id_parsed.to_string());
+                                                        let set_res = storage.set_item("wwb_admin_telegram_id", &id_parsed.to_string());
+                                                        let msg = format!("saved admin_id={} to localStorage: {:?}", id_parsed, set_res);
+                                                        web_sys::console::log_1(&msg.into());
+                                                    } else {
+                                                        web_sys::console::log_1(&"localStorage not available".into());
                                                     }
+                                                } else {
+                                                    web_sys::console::log_1(&"window not available".into());
                                                 }
                                             }
                                             token_signal.set(token.to_string());

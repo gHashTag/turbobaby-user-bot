@@ -121,8 +121,7 @@ async fn get_accessory(State(state): State<AppState>, Path(id): Path<String>) ->
     }
 }
 
-async fn create_accessory(State(state): State<AppState>, headers: HeaderMap, Json(req): Json<AccessoryRequest>) -> Result<Json<Value>, StatusCode> {
-    check_admin(&headers, &state)?;
+fn validate_accessory_request(req: &AccessoryRequest) -> Result<(), StatusCode> {
     if req.name.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
     if let Some(ref c) = req.category { if c.len() > 200 { return Err(StatusCode::BAD_REQUEST); } }
     if let Some(ref d) = req.description { if d.len() > 1000 { return Err(StatusCode::BAD_REQUEST); } }
@@ -134,6 +133,12 @@ async fn create_accessory(State(state): State<AppState>, headers: HeaderMap, Jso
     }
     crate::api::validate_url(&req.image_url)?;
     crate::api::validate_url(&req.video_url)?;
+    Ok(())
+}
+
+async fn create_accessory(State(state): State<AppState>, headers: HeaderMap, Json(req): Json<AccessoryRequest>) -> Result<Json<Value>, StatusCode> {
+    check_admin(&headers, &state)?;
+    validate_accessory_request(&req)?;
     let id = uuid::Uuid::new_v4().to_string();
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("create_accessory pool error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     client.execute(
@@ -146,17 +151,7 @@ async fn create_accessory(State(state): State<AppState>, headers: HeaderMap, Jso
 async fn update_accessory(State(state): State<AppState>, headers: HeaderMap, Path(id): Path<String>, Json(req): Json<AccessoryRequest>) -> Result<Json<Value>, StatusCode> {
     if id.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
     check_admin(&headers, &state)?;
-    if req.name.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
-    if let Some(ref c) = req.category { if c.len() > 200 { return Err(StatusCode::BAD_REQUEST); } }
-    if let Some(ref d) = req.description { if d.len() > 1000 { return Err(StatusCode::BAD_REQUEST); } }
-    if let Some(ref n) = req.name_en { if n.len() > 200 { return Err(StatusCode::BAD_REQUEST); } }
-    if let Some(ref d) = req.description_en { if d.len() > 1000 { return Err(StatusCode::BAD_REQUEST); } }
-    if let Some(ref c) = req.category_en { if c.len() > 200 { return Err(StatusCode::BAD_REQUEST); } }
-    if !req.price.is_finite() || req.price < 0.0 || req.price > 1_000_000.0 {
-        return Err(StatusCode::BAD_REQUEST);
-    }
-    crate::api::validate_url(&req.image_url)?;
-    crate::api::validate_url(&req.video_url)?;
+    validate_accessory_request(&req)?;
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     client.execute(
         "UPDATE accessories SET name=$1, category=$2, description=$3, price=$4, stock=$5, image_url=$6, video_url=$7, name_en=$8, description_en=$9, category_en=$10, is_available=$11 WHERE id=$12",
@@ -373,8 +368,7 @@ async fn get_tea_product(State(state): State<AppState>, Path(id): Path<String>) 
     }
 }
 
-async fn create_tea_product(State(state): State<AppState>, headers: HeaderMap, Json(req): Json<TeaProductRequest>) -> Result<Json<Value>, StatusCode> {
-    check_admin(&headers, &state)?;
+fn validate_tea_product_request(req: &TeaProductRequest) -> Result<(), StatusCode> {
     if req.name.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
     if let Some(ref s) = req.subcategory { if s.len() > 200 { return Err(StatusCode::BAD_REQUEST); } }
     if let Some(ref d) = req.description { if d.len() > 1000 { return Err(StatusCode::BAD_REQUEST); } }
@@ -386,6 +380,12 @@ async fn create_tea_product(State(state): State<AppState>, headers: HeaderMap, J
     }
     crate::api::validate_url(&req.image_url)?;
     crate::api::validate_url(&req.video_url)?;
+    Ok(())
+}
+
+async fn create_tea_product(State(state): State<AppState>, headers: HeaderMap, Json(req): Json<TeaProductRequest>) -> Result<Json<Value>, StatusCode> {
+    check_admin(&headers, &state)?;
+    validate_tea_product_request(&req)?;
     let id = uuid::Uuid::new_v4().to_string();
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("create_tea_product pool error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     client.execute(
@@ -398,17 +398,7 @@ async fn create_tea_product(State(state): State<AppState>, headers: HeaderMap, J
 async fn update_tea_product(State(state): State<AppState>, headers: HeaderMap, Path(id): Path<String>, Json(req): Json<TeaProductRequest>) -> Result<Json<Value>, StatusCode> {
     if id.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
     check_admin(&headers, &state)?;
-    if req.name.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
-    if let Some(ref s) = req.subcategory { if s.len() > 200 { return Err(StatusCode::BAD_REQUEST); } }
-    if let Some(ref d) = req.description { if d.len() > 1000 { return Err(StatusCode::BAD_REQUEST); } }
-    if let Some(ref n) = req.name_en { if n.len() > 200 { return Err(StatusCode::BAD_REQUEST); } }
-    if let Some(ref d) = req.description_en { if d.len() > 1000 { return Err(StatusCode::BAD_REQUEST); } }
-    if let Some(ref s) = req.subcategory_en { if s.len() > 200 { return Err(StatusCode::BAD_REQUEST); } }
-    if !req.price.is_finite() || req.price < 0.0 || req.price > 1_000_000.0 {
-        return Err(StatusCode::BAD_REQUEST);
-    }
-    crate::api::validate_url(&req.image_url)?;
-    crate::api::validate_url(&req.video_url)?;
+    validate_tea_product_request(&req)?;
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     client.execute(
         "UPDATE tea_products SET name=$1, subcategory=$2, description=$3, price=$4, stock=$5, image_url=$6, video_url=$7, name_en=$8, description_en=$9, subcategory_en=$10, is_available=$11 WHERE id=$12",
@@ -712,4 +702,122 @@ async fn toggle_set_availability(State(state): State<AppState>, headers: HeaderM
     client.execute("UPDATE sets SET is_available = $1 WHERE id = $2", &[&available, &id])
         .await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     Ok(Json(json!({ "success": true })))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{AccessoryRequest, TeaProductRequest, validate_accessory_request, validate_tea_product_request};
+    use axum::http::StatusCode;
+
+    fn valid_accessory() -> AccessoryRequest {
+        AccessoryRequest {
+            name: "Pipe".into(),
+            category: Some("Glass".into()),
+            description: Some("Nice pipe".into()),
+            price: 100.0,
+            stock: Some(10),
+            image_url: Some("/uploads/pipe.jpg".into()),
+            video_url: None,
+            is_available: Some(true),
+            name_en: Some("Pipe".into()),
+            description_en: Some("Nice pipe".into()),
+            category_en: Some("Glass".into()),
+        }
+    }
+
+    #[test]
+    fn test_validate_accessory_ok() {
+        assert!(validate_accessory_request(&valid_accessory()).is_ok());
+    }
+
+    #[test]
+    fn test_validate_accessory_name_too_long() {
+        let mut req = valid_accessory();
+        req.name = "a".repeat(201);
+        assert_eq!(validate_accessory_request(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn test_validate_accessory_category_too_long() {
+        let mut req = valid_accessory();
+        req.category = Some("a".repeat(201));
+        assert_eq!(validate_accessory_request(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn test_validate_accessory_description_too_long() {
+        let mut req = valid_accessory();
+        req.description = Some("a".repeat(1001));
+        assert_eq!(validate_accessory_request(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn test_validate_accessory_price_negative() {
+        let mut req = valid_accessory();
+        req.price = -1.0;
+        assert_eq!(validate_accessory_request(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn test_validate_accessory_price_too_high() {
+        let mut req = valid_accessory();
+        req.price = 2_000_000.0;
+        assert_eq!(validate_accessory_request(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn test_validate_accessory_price_nan() {
+        let mut req = valid_accessory();
+        req.price = f64::NAN;
+        assert_eq!(validate_accessory_request(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn test_validate_accessory_bad_image_url() {
+        let mut req = valid_accessory();
+        req.image_url = Some("javascript:alert(1)".into());
+        assert_eq!(validate_accessory_request(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+    }
+
+    fn valid_tea() -> TeaProductRequest {
+        TeaProductRequest {
+            name: "Green Tea".into(),
+            subcategory: Some("Herbal".into()),
+            description: Some("Fresh".into()),
+            price: 50.0,
+            stock: Some(5),
+            image_url: None,
+            video_url: None,
+            is_available: Some(true),
+            name_en: Some("Green Tea".into()),
+            description_en: Some("Fresh".into()),
+            subcategory_en: Some("Herbal".into()),
+        }
+    }
+
+    #[test]
+    fn test_validate_tea_ok() {
+        assert!(validate_tea_product_request(&valid_tea()).is_ok());
+    }
+
+    #[test]
+    fn test_validate_tea_name_too_long() {
+        let mut req = valid_tea();
+        req.name = "a".repeat(201);
+        assert_eq!(validate_tea_product_request(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn test_validate_tea_subcategory_too_long() {
+        let mut req = valid_tea();
+        req.subcategory = Some("a".repeat(201));
+        assert_eq!(validate_tea_product_request(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn test_validate_tea_price_negative() {
+        let mut req = valid_tea();
+        req.price = -0.01;
+        assert_eq!(validate_tea_product_request(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+    }
 }

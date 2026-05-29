@@ -112,8 +112,7 @@ async fn get_strain(State(state): State<AppState>, Path(id): Path<String>) -> Re
     }
 }
 
-async fn create_strain(State(state): State<AppState>, headers: HeaderMap, Json(req): Json<CreateStrainRequest>) -> Result<Json<Value>, StatusCode> {
-    check_admin(&headers, &state)?;
+fn validate_strain_request(req: &CreateStrainRequest) -> Result<(), StatusCode> {
     if req.name.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
     if let Some(ref c) = req.category { if c.len() > 200 { return Err(StatusCode::BAD_REQUEST); } }
     if let Some(ref e) = req.effect { if e.len() > 1000 { return Err(StatusCode::BAD_REQUEST); } }
@@ -132,6 +131,12 @@ async fn create_strain(State(state): State<AppState>, headers: HeaderMap, Json(r
     if let Some(t) = req.thc_percent { if !t.is_finite() || !(0.0..=100.0).contains(&t) { return Err(StatusCode::BAD_REQUEST); } }
     if let Some(c) = req.cbd_percent { if !c.is_finite() || !(0.0..=100.0).contains(&c) { return Err(StatusCode::BAD_REQUEST); } }
     if let Some(a) = req.available_grams { if !a.is_finite() || !(0.0..=1_000_000.0).contains(&a) { return Err(StatusCode::BAD_REQUEST); } }
+    Ok(())
+}
+
+async fn create_strain(State(state): State<AppState>, headers: HeaderMap, Json(req): Json<CreateStrainRequest>) -> Result<Json<Value>, StatusCode> {
+    check_admin(&headers, &state)?;
+    validate_strain_request(&req)?;
     let id = uuid::Uuid::new_v4().to_string();
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     client.execute(
@@ -145,24 +150,7 @@ async fn create_strain(State(state): State<AppState>, headers: HeaderMap, Json(r
 async fn update_strain(State(state): State<AppState>, headers: HeaderMap, Path(id): Path<String>, Json(req): Json<CreateStrainRequest>) -> Result<Json<Value>, StatusCode> {
     if id.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
     check_admin(&headers, &state)?;
-    if req.name.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
-    if let Some(ref c) = req.category { if c.len() > 200 { return Err(StatusCode::BAD_REQUEST); } }
-    if let Some(ref e) = req.effect { if e.len() > 1000 { return Err(StatusCode::BAD_REQUEST); } }
-    if let Some(ref f) = req.flavor_profile { if f.len() > 1000 { return Err(StatusCode::BAD_REQUEST); } }
-    if let Some(ref d) = req.description { if d.len() > 1000 { return Err(StatusCode::BAD_REQUEST); } }
-    if let Some(ref n) = req.name_en { if n.len() > 200 { return Err(StatusCode::BAD_REQUEST); } }
-    if let Some(ref d) = req.description_en { if d.len() > 1000 { return Err(StatusCode::BAD_REQUEST); } }
-    if let Some(ref e) = req.effect_en { if e.len() > 1000 { return Err(StatusCode::BAD_REQUEST); } }
-    if let Some(ref f) = req.flavor_profile_en { if f.len() > 1000 { return Err(StatusCode::BAD_REQUEST); } }
-    if let Some(ref t) = req.strain_type_en { if t.len() > 200 { return Err(StatusCode::BAD_REQUEST); } }
-    crate::api::validate_url(&req.image_url)?;
-    crate::api::validate_url(&req.video_url)?;
-    if !req.price_per_gram.is_finite() || req.price_per_gram < 0.0 || req.price_per_gram > 1_000_000.0 {
-        return Err(StatusCode::BAD_REQUEST);
-    }
-    if let Some(t) = req.thc_percent { if !t.is_finite() || !(0.0..=100.0).contains(&t) { return Err(StatusCode::BAD_REQUEST); } }
-    if let Some(c) = req.cbd_percent { if !c.is_finite() || !(0.0..=100.0).contains(&c) { return Err(StatusCode::BAD_REQUEST); } }
-    if let Some(a) = req.available_grams { if !a.is_finite() || !(0.0..=1_000_000.0).contains(&a) { return Err(StatusCode::BAD_REQUEST); } }
+    validate_strain_request(&req)?;
     let client = state.db.pool.get().await.map_err(|e| {
         tracing::error!("update_strain pool error: {:?}", e);
         StatusCode::INTERNAL_SERVER_ERROR
@@ -240,5 +228,80 @@ async fn set_strain_of_day(State(state): State<AppState>, headers: HeaderMap, Pa
     }
     invalidate_strains(&state.cache).await;
     Ok(Json(json!({ "success": true, "id": id })))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{CreateStrainRequest, validate_strain_request};
+    use axum::http::StatusCode;
+
+    fn valid_strain() -> CreateStrainRequest {
+        CreateStrainRequest {
+            name: "OG Kush".into(),
+            category: Some("Indica".into()),
+            thc_percent: Some(20.0),
+            cbd_percent: Some(0.5),
+            effect: Some("Relax".into()),
+            flavor_profile: Some("Earthy".into()),
+            description: Some("Classic.".into()),
+            price_per_gram: 100.0,
+            available_grams: Some(50.0),
+            image_url: Some("/uploads/kush.jpg".into()),
+            video_url: None,
+            is_available: Some(true),
+            name_en: Some("OG Kush".into()),
+            description_en: Some("Classic.".into()),
+            effect_en: Some("Relax".into()),
+            flavor_profile_en: Some("Earthy".into()),
+            strain_type_en: Some("Indica".into()),
+        }
+    }
+
+    #[test]
+    fn test_validate_strain_ok() {
+        assert!(validate_strain_request(&valid_strain()).is_ok());
+    }
+
+    #[test]
+    fn test_validate_strain_name_too_long() {
+        let mut req = valid_strain();
+        req.name = "a".repeat(201);
+        assert_eq!(validate_strain_request(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn test_validate_strain_price_negative() {
+        let mut req = valid_strain();
+        req.price_per_gram = -1.0;
+        assert_eq!(validate_strain_request(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn test_validate_strain_thc_out_of_range() {
+        let mut req = valid_strain();
+        req.thc_percent = Some(101.0);
+        assert_eq!(validate_strain_request(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn test_validate_strain_thc_nan() {
+        let mut req = valid_strain();
+        req.thc_percent = Some(f64::NAN);
+        assert_eq!(validate_strain_request(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn test_validate_strain_bad_image_url() {
+        let mut req = valid_strain();
+        req.image_url = Some("javascript:alert(1)".into());
+        assert_eq!(validate_strain_request(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn test_validate_strain_available_grams_too_high() {
+        let mut req = valid_strain();
+        req.available_grams = Some(2_000_000.0);
+        assert_eq!(validate_strain_request(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+    }
 }
 

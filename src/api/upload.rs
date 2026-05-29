@@ -18,6 +18,24 @@ pub fn routes() -> Router<AppState> {
 const MAX_UPLOAD_SIZE: usize = 100 * 1024 * 1024; // 100 MB
 const ALLOWED_EXTENSIONS: &[&str] = &["jpg", "jpeg", "png", "gif", "webp", "mp4", "mov", "webm"];
 
+fn validate_upload(filename: &str, data: &[ u8]) -> Result<(), StatusCode> {
+    if filename.len() > 500 { return Err(StatusCode::BAD_REQUEST); }
+    if data.is_empty() { return Err(StatusCode::BAD_REQUEST); }
+    if data.len() > MAX_UPLOAD_SIZE {
+        tracing::warn!("upload file too large: {} bytes", data.len());
+        return Err(StatusCode::PAYLOAD_TOO_LARGE);
+    }
+    let ext = filename.rsplit('.').next().unwrap_or("").to_lowercase();
+    if ext.len() > 50 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    if !ALLOWED_EXTENSIONS.contains(&ext.as_str()) {
+        tracing::warn!("upload disallowed extension: {}", ext);
+        return Err(StatusCode::UNSUPPORTED_MEDIA_TYPE);
+    }
+    Ok(())
+}
+
 async fn upload_file(
     headers: HeaderMap,
     State(state): State<AppState>,
@@ -38,26 +56,12 @@ async fn upload_file(
     };
 
     let filename = field.file_name().unwrap_or("upload").to_string();
-    if filename.len() > 500 { return Err(StatusCode::BAD_REQUEST); }
-
     let data = field.bytes().await.map_err(|e| {
         tracing::error!("upload field.bytes() error: {:?}", e);
         StatusCode::BAD_REQUEST
     })?;
-
-    if data.len() > MAX_UPLOAD_SIZE {
-        tracing::warn!("upload file too large: {} bytes", data.len());
-        return Err(StatusCode::PAYLOAD_TOO_LARGE);
-    }
-
+    validate_upload(&filename, &data)?;
     let ext = filename.rsplit('.').next().unwrap_or("").to_lowercase();
-    if ext.len() > 50 {
-        return Err(StatusCode::BAD_REQUEST);
-    }
-    if !ALLOWED_EXTENSIONS.contains(&ext.as_str()) {
-        tracing::warn!("upload disallowed extension: {}", ext);
-        return Err(StatusCode::UNSUPPORTED_MEDIA_TYPE);
-    }
 
     let short_id = uuid::Uuid::new_v4().to_string();
     let safe_name = format!("{}.{}", short_id.get(0..8).unwrap_or(&short_id), ext);
@@ -79,6 +83,56 @@ async fn upload_file(
         Err(e) => {
             tracing::error!("upload file write error: {:?}", e);
             Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{validate_upload, ALLOWED_EXTENSIONS, MAX_UPLOAD_SIZE};
+    use axum::http::StatusCode;
+
+    #[test]
+    fn test_validate_upload_ok() {
+        assert!(validate_upload("photo.jpg", &[0u8; 100]).is_ok());
+    }
+
+    #[test]
+    fn test_validate_upload_empty_file() {
+        assert_eq!(validate_upload("photo.jpg", &[]).unwrap_err(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn test_validate_upload_name_too_long() {
+        let name = "a".repeat(501) + ".jpg";
+        assert_eq!(validate_upload(&name, &[0u8; 100]).unwrap_err(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn test_validate_upload_too_large() {
+        assert_eq!(validate_upload("photo.jpg", &vec![0u8; MAX_UPLOAD_SIZE + 1]).unwrap_err(), StatusCode::PAYLOAD_TOO_LARGE);
+    }
+
+    #[test]
+    fn test_validate_upload_disallowed_ext() {
+        assert_eq!(validate_upload("photo.exe", &[0u8; 100]).unwrap_err(), StatusCode::UNSUPPORTED_MEDIA_TYPE);
+    }
+
+    #[test]
+    fn test_validate_upload_no_ext() {
+        assert_eq!(validate_upload("photo", &[0u8; 100]).unwrap_err(), StatusCode::UNSUPPORTED_MEDIA_TYPE);
+    }
+
+    #[test]
+    fn test_validate_upload_ext_too_long() {
+        let name = format!("photo.{}", "a".repeat(51));
+        assert_eq!(validate_upload(&name, &[0u8; 100]).unwrap_err(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn test_allowed_extensions_coverage() {
+        for ext in ALLOWED_EXTENSIONS {
+            assert!(validate_upload(&format!("file.{}", ext), &[0u8; 10]).is_ok(), "ext {} should be allowed", ext);
         }
     }
 }

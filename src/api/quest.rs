@@ -82,12 +82,7 @@ async fn get_quest_places(State(state): State<AppState>) -> Result<Json<Value>, 
     Ok(Json(json!({ "quest_places": items })))
 }
 
-async fn create_quest_place(
-    headers: HeaderMap,
-    State(state): State<AppState>,
-    Json(req): Json<QuestPlaceRequest>,
-) -> Result<Json<Value>, StatusCode> {
-    check_admin(&headers, &state)?;
+fn validate_quest_place_request(req: &QuestPlaceRequest) -> Result<(), StatusCode> {
     if req.name.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
     if let Some(ref c) = req.category { if c.len() > 200 { return Err(StatusCode::BAD_REQUEST); } }
     if let Some(ref d) = req.description { if d.len() > 1000 { return Err(StatusCode::BAD_REQUEST); } }
@@ -98,6 +93,16 @@ async fn create_quest_place(
         return Err(StatusCode::BAD_REQUEST);
     }
     crate::api::validate_url(&req.image_url)?;
+    Ok(())
+}
+
+async fn create_quest_place(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    Json(req): Json<QuestPlaceRequest>,
+) -> Result<Json<Value>, StatusCode> {
+    check_admin(&headers, &state)?;
+    validate_quest_place_request(&req)?;
     let id = uuid::Uuid::new_v4().to_string();
     let category = req.category.unwrap_or_else(|| "location".to_string());
     let description = req.description.unwrap_or_default();
@@ -137,16 +142,7 @@ async fn update_quest_place(
 ) -> Result<Json<Value>, StatusCode> {
     if id.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
     check_admin(&headers, &state)?;
-    if req.name.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
-    if let Some(ref c) = req.category { if c.len() > 200 { return Err(StatusCode::BAD_REQUEST); } }
-    if let Some(ref d) = req.description { if d.len() > 1000 { return Err(StatusCode::BAD_REQUEST); } }
-    if !req.lat.is_finite() || !req.lon.is_finite() {
-        return Err(StatusCode::BAD_REQUEST);
-    }
-    if req.lat < -90.0 || req.lat > 90.0 || req.lon < -180.0 || req.lon > 180.0 {
-        return Err(StatusCode::BAD_REQUEST);
-    }
-    crate::api::validate_url(&req.image_url)?;
+    validate_quest_place_request(&req)?;
     // Wave 3: UPDATE через SeaORM с ::float8 castом — устраняет NUMERIC баг.
     use sea_orm::{Statement, DbBackend, ConnectionTrait};
     let category = req.category.unwrap_or_else(|| "location".to_string());
@@ -225,12 +221,7 @@ async fn get_treasure_hunts(State(state): State<AppState>) -> Result<Json<Value>
     Ok(Json(json!({ "treasure_hunts": items })))
 }
 
-async fn create_treasure_hunt(
-    headers: HeaderMap,
-    State(state): State<AppState>,
-    Json(req): Json<TreasureHuntRequest>,
-) -> Result<Json<Value>, StatusCode> {
-    check_admin(&headers, &state)?;
+fn validate_treasure_hunt_request(req: &TreasureHuntRequest) -> Result<(), StatusCode> {
     if req.name.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
     if req.black_mark_title.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
     if req.start_name.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
@@ -244,6 +235,16 @@ async fn create_treasure_hunt(
     }
     crate::api::validate_url(&req.image_url)?;
     crate::api::validate_url(&req.black_mark_image_url)?;
+    Ok(())
+}
+
+async fn create_treasure_hunt(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    Json(req): Json<TreasureHuntRequest>,
+) -> Result<Json<Value>, StatusCode> {
+    check_admin(&headers, &state)?;
+    validate_treasure_hunt_request(&req)?;
     let id = uuid::Uuid::new_v4().to_string();
     let description = req.description.unwrap_or_default();
     let image_url = req.image_url.unwrap_or_default();
@@ -286,19 +287,7 @@ async fn update_treasure_hunt(
 ) -> Result<Json<Value>, StatusCode> {
     if id.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
     check_admin(&headers, &state)?;
-    if req.name.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
-    if req.black_mark_title.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
-    if req.start_name.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
-    if let Some(ref d) = req.description { if d.len() > 1000 { return Err(StatusCode::BAD_REQUEST); } }
-    if let Some(ref d) = req.black_mark_description { if d.len() > 1000 { return Err(StatusCode::BAD_REQUEST); } }
-    if !req.start_lat.is_finite() || !req.start_lon.is_finite() {
-        return Err(StatusCode::BAD_REQUEST);
-    }
-    if req.start_lat < -90.0 || req.start_lat > 90.0 || req.start_lon < -180.0 || req.start_lon > 180.0 {
-        return Err(StatusCode::BAD_REQUEST);
-    }
-    crate::api::validate_url(&req.image_url)?;
-    crate::api::validate_url(&req.black_mark_image_url)?;
+    validate_treasure_hunt_request(&req)?;
     // Wave 3: UPDATE через SeaORM с ::float8 castом для start_lat/start_lon.
     use sea_orm::{Statement, DbBackend, ConnectionTrait};
     let description = req.description.unwrap_or_default();
@@ -376,16 +365,21 @@ async fn get_quest_locations(
     Ok(Json(json!({ "locations": items })))
 }
 
+fn validate_quest_location_request(req: &QuestLocationRequest) -> Result<(), StatusCode> {
+    if req.name.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
+    if let Some(ref c) = req.category { if c.len() > 200 { return Err(StatusCode::BAD_REQUEST); } }
+    if let Some(ref d) = req.description { if d.len() > 1000 { return Err(StatusCode::BAD_REQUEST); } }
+    crate::api::validate_url(&req.map_url)?;
+    Ok(())
+}
+
 async fn create_quest_location(
     headers: HeaderMap,
     State(state): State<AppState>,
     Json(req): Json<QuestLocationRequest>,
 ) -> Result<Json<Value>, StatusCode> {
     check_admin(&headers, &state)?;
-    if req.name.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
-    if let Some(ref c) = req.category { if c.len() > 200 { return Err(StatusCode::BAD_REQUEST); } }
-    if let Some(ref d) = req.description { if d.len() > 1000 { return Err(StatusCode::BAD_REQUEST); } }
-    crate::api::validate_url(&req.map_url)?;
+    validate_quest_location_request(&req)?;
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     let row = client.query_one(
         "INSERT INTO location_quest_locations (name, description, category, map_url, is_active, is_final) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id",
@@ -401,10 +395,7 @@ async fn update_quest_location(
     Json(req): Json<QuestLocationRequest>,
 ) -> Result<Json<Value>, StatusCode> {
     check_admin(&headers, &state)?;
-    if req.name.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
-    if let Some(ref c) = req.category { if c.len() > 200 { return Err(StatusCode::BAD_REQUEST); } }
-    if let Some(ref d) = req.description { if d.len() > 1000 { return Err(StatusCode::BAD_REQUEST); } }
-    crate::api::validate_url(&req.map_url)?;
+    validate_quest_location_request(&req)?;
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     client.execute(
         "UPDATE location_quest_locations SET name=$1, description=$2, category=$3, map_url=$4, is_active=$5, is_final=$6 WHERE id=$7",
@@ -524,5 +515,178 @@ async fn notify_treasure_hunt_admins(
         {
             tracing::warn!("notify_treasure_hunt_admins failed for admin_id={}: {}", admin_id, e);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{QuestPlaceRequest, TreasureHuntRequest, QuestLocationRequest, validate_quest_place_request, validate_treasure_hunt_request, validate_quest_location_request};
+    use axum::http::StatusCode;
+
+    fn valid_quest_place() -> QuestPlaceRequest {
+        QuestPlaceRequest {
+            name: "Place".into(),
+            category: Some("cat".into()),
+            lat: 55.0,
+            lon: 37.0,
+            description: Some("desc".into()),
+            image_url: Some("/uploads/place.jpg".into()),
+            is_available: Some(true),
+        }
+    }
+
+    #[test]
+    fn test_validate_quest_place_ok() {
+        assert!(validate_quest_place_request(&valid_quest_place()).is_ok());
+    }
+
+    #[test]
+    fn test_validate_quest_place_name_too_long() {
+        let mut req = valid_quest_place();
+        req.name = "a".repeat(201);
+        assert_eq!(validate_quest_place_request(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn test_validate_quest_place_category_too_long() {
+        let mut req = valid_quest_place();
+        req.category = Some("a".repeat(201));
+        assert_eq!(validate_quest_place_request(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn test_validate_quest_place_description_too_long() {
+        let mut req = valid_quest_place();
+        req.description = Some("a".repeat(1001));
+        assert_eq!(validate_quest_place_request(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn test_validate_quest_place_lat_out_of_range() {
+        let mut req = valid_quest_place();
+        req.lat = 91.0;
+        assert_eq!(validate_quest_place_request(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn test_validate_quest_place_lon_out_of_range() {
+        let mut req = valid_quest_place();
+        req.lon = 181.0;
+        assert_eq!(validate_quest_place_request(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn test_validate_quest_place_bad_image_url() {
+        let mut req = valid_quest_place();
+        req.image_url = Some("javascript:alert(1)".into());
+        assert_eq!(validate_quest_place_request(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+    }
+
+    fn valid_treasure_hunt() -> TreasureHuntRequest {
+        TreasureHuntRequest {
+            name: "Hunt".into(),
+            description: Some("desc".into()),
+            image_url: Some("/uploads/hunt.jpg".into()),
+            black_mark_title: "Mark".into(),
+            black_mark_description: Some("bm desc".into()),
+            black_mark_image_url: Some("/uploads/bm.jpg".into()),
+            is_active: Some(true),
+            starts_at: None,
+            ends_at: None,
+            start_lat: 55.0,
+            start_lon: 37.0,
+            start_name: "Start".into(),
+        }
+    }
+
+    #[test]
+    fn test_validate_treasure_hunt_ok() {
+        assert!(validate_treasure_hunt_request(&valid_treasure_hunt()).is_ok());
+    }
+
+    #[test]
+    fn test_validate_treasure_hunt_name_too_long() {
+        let mut req = valid_treasure_hunt();
+        req.name = "a".repeat(201);
+        assert_eq!(validate_treasure_hunt_request(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn test_validate_treasure_hunt_black_mark_title_too_long() {
+        let mut req = valid_treasure_hunt();
+        req.black_mark_title = "a".repeat(201);
+        assert_eq!(validate_treasure_hunt_request(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn test_validate_treasure_hunt_start_name_too_long() {
+        let mut req = valid_treasure_hunt();
+        req.start_name = "a".repeat(201);
+        assert_eq!(validate_treasure_hunt_request(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn test_validate_treasure_hunt_description_too_long() {
+        let mut req = valid_treasure_hunt();
+        req.description = Some("a".repeat(1001));
+        assert_eq!(validate_treasure_hunt_request(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn test_validate_treasure_hunt_start_lat_out_of_range() {
+        let mut req = valid_treasure_hunt();
+        req.start_lat = 91.0;
+        assert_eq!(validate_treasure_hunt_request(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn test_validate_treasure_hunt_bad_image_url() {
+        let mut req = valid_treasure_hunt();
+        req.image_url = Some("javascript:alert(1)".into());
+        assert_eq!(validate_treasure_hunt_request(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+    }
+
+    fn valid_quest_location() -> QuestLocationRequest {
+        QuestLocationRequest {
+            name: "Loc".into(),
+            description: Some("desc".into()),
+            category: Some("cat".into()),
+            map_url: Some("/uploads/map.jpg".into()),
+            is_active: Some(true),
+            is_final: Some(false),
+        }
+    }
+
+    #[test]
+    fn test_validate_quest_location_ok() {
+        assert!(validate_quest_location_request(&valid_quest_location()).is_ok());
+    }
+
+    #[test]
+    fn test_validate_quest_location_name_too_long() {
+        let mut req = valid_quest_location();
+        req.name = "a".repeat(201);
+        assert_eq!(validate_quest_location_request(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn test_validate_quest_location_category_too_long() {
+        let mut req = valid_quest_location();
+        req.category = Some("a".repeat(201));
+        assert_eq!(validate_quest_location_request(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn test_validate_quest_location_description_too_long() {
+        let mut req = valid_quest_location();
+        req.description = Some("a".repeat(1001));
+        assert_eq!(validate_quest_location_request(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn test_validate_quest_location_bad_map_url() {
+        let mut req = valid_quest_location();
+        req.map_url = Some("javascript:alert(1)".into());
+        assert_eq!(validate_quest_location_request(&req).unwrap_err(), StatusCode::BAD_REQUEST);
     }
 }

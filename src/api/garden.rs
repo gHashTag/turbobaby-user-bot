@@ -654,19 +654,7 @@ async fn get_config(State(state): State<AppState>) -> Result<Json<Value>, Status
     })))
 }
 
-async fn update_config(
-    headers: HeaderMap,
-    State(state): State<AppState>,
-    Json(req): Json<ConfigUpdateRequest>,
-) -> Result<Json<Value>, StatusCode> {
-    check_admin(&headers, &state)?;
-    let client = state.db.pool.get().await
-        .map_err(|e| {
-            tracing::error!("Database connection error: {}", e);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
-
-    // BUG-5: is_enabled в БД — BOOLEAN, раньше передавался i32 → type mismatch.
+fn validate_garden_config_update(req: &ConfigUpdateRequest) -> Result<(), StatusCode> {
     if let Some(p) = req.reward_discount_percent {
         if p > 100 { return Err(StatusCode::BAD_REQUEST); }
     }
@@ -676,6 +664,23 @@ async fn update_config(
     if let Some(d) = req.reward_expiration_days {
         if d == 0 || d > 365 { return Err(StatusCode::BAD_REQUEST); }
     }
+    Ok(())
+}
+
+async fn update_config(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    Json(req): Json<ConfigUpdateRequest>,
+) -> Result<Json<Value>, StatusCode> {
+    check_admin(&headers, &state)?;
+    validate_garden_config_update(&req)?;
+    let client = state.db.pool.get().await
+        .map_err(|e| {
+            tracing::error!("Database connection error: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    // BUG-5: is_enabled в БД — BOOLEAN, раньше передавался i32 → type mismatch.
     let is_enabled = req.is_enabled;
     let reward_discount_percent = req.reward_discount_percent.map(|p| p as i32);
     let reward_bonus_points = req.reward_bonus_points.map(|p| p as i32);
@@ -700,4 +705,76 @@ async fn update_config(
     })?;
 
     Ok(Json(json!({ "success": true })))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ConfigUpdateRequest, validate_garden_config_update};
+    use axum::http::StatusCode;
+
+    #[test]
+    fn test_validate_garden_config_ok() {
+        let req = ConfigUpdateRequest {
+            is_enabled: Some(true),
+            reward_discount_percent: Some(50),
+            reward_bonus_points: Some(100),
+            reward_expiration_days: Some(7),
+        };
+        assert!(validate_garden_config_update(&req).is_ok());
+    }
+
+    #[test]
+    fn test_validate_garden_config_all_none() {
+        let req = ConfigUpdateRequest {
+            is_enabled: None,
+            reward_discount_percent: None,
+            reward_bonus_points: None,
+            reward_expiration_days: None,
+        };
+        assert!(validate_garden_config_update(&req).is_ok());
+    }
+
+    #[test]
+    fn test_validate_garden_config_discount_too_high() {
+        let req = ConfigUpdateRequest {
+            is_enabled: None,
+            reward_discount_percent: Some(101),
+            reward_bonus_points: None,
+            reward_expiration_days: None,
+        };
+        assert_eq!(validate_garden_config_update(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn test_validate_garden_config_bonus_too_high() {
+        let req = ConfigUpdateRequest {
+            is_enabled: None,
+            reward_discount_percent: None,
+            reward_bonus_points: Some(1_000_001),
+            reward_expiration_days: None,
+        };
+        assert_eq!(validate_garden_config_update(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn test_validate_garden_config_days_zero() {
+        let req = ConfigUpdateRequest {
+            is_enabled: None,
+            reward_discount_percent: None,
+            reward_bonus_points: None,
+            reward_expiration_days: Some(0),
+        };
+        assert_eq!(validate_garden_config_update(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn test_validate_garden_config_days_too_high() {
+        let req = ConfigUpdateRequest {
+            is_enabled: None,
+            reward_discount_percent: None,
+            reward_bonus_points: None,
+            reward_expiration_days: Some(366),
+        };
+        assert_eq!(validate_garden_config_update(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+    }
 }

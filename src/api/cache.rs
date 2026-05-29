@@ -1,13 +1,14 @@
 use std::collections::HashMap;
-use std::collections::hash_map::DefaultHasher;
-use std::hash::Hasher;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use axum::{
     http::{HeaderValue},
 };
+use sha2::{Sha256, Digest};
 
-/// Simple in-memory ETag cache for API responses
+/// Simple in-memory ETag cache for API responses.
+/// Uses SHA-256 truncated to 16 hex chars so the hash is stable across
+/// process restarts (DefaultHasher is NOT stable across Rust releases).
 #[derive(Clone)]
 pub struct ETagCache {
     hashes: Arc<RwLock<HashMap<String, String>>>,
@@ -20,11 +21,10 @@ impl ETagCache {
         }
     }
 
-    /// Compute hash of JSON response using standard hasher
+    /// Compute stable hash of JSON response (first 64 bits of SHA-256).
     pub fn compute_hash(data: &str) -> String {
-        let mut hasher = DefaultHasher::new();
-        hasher.write(data.as_bytes());
-        format!("{:x}", hasher.finish())
+        let hash = Sha256::digest(data.as_bytes());
+        format!("{:016x}", u64::from_be_bytes(hash[0..8].try_into().unwrap_or_default()))
     }
 
     /// Get cached hash for a key

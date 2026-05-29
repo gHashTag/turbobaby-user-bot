@@ -39,14 +39,7 @@ async fn get_cart(
     Ok(json!({"items": [], "total": 0}).into())
 }
 
-// Save cart (optional - for future cart persistence feature)
-async fn save_cart(
-    headers: HeaderMap,
-    State(state): State<AppState>,
-    Json(req): Json<Cart>,
-) -> Result<Json<Value>, StatusCode> {
-    check_owner(&headers, &state, req.telegram_id)?;
-    check_not_blocked(&state, req.telegram_id).await?;
+fn validate_cart(req: &Cart) -> Result<(), StatusCode> {
     if !req.total.is_finite() || req.total < 0.0 {
         return Err(StatusCode::BAD_REQUEST);
     }
@@ -60,6 +53,18 @@ async fn save_cart(
             return Err(StatusCode::BAD_REQUEST);
         }
     }
+    Ok(())
+}
+
+// Save cart (optional - for future cart persistence feature)
+async fn save_cart(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    Json(req): Json<Cart>,
+) -> Result<Json<Value>, StatusCode> {
+    check_owner(&headers, &state, req.telegram_id)?;
+    check_not_blocked(&state, req.telegram_id).await?;
+    validate_cart(&req)?;
     // Cart persistence can be implemented here later
     Ok(json!({"success": true}).into())
 }
@@ -81,4 +86,94 @@ async fn get_cart_by_id(
     check_not_blocked(&state, telegram_id).await?;
     // Cart data not persisted on backend yet
     Ok(json!({"telegram_id": telegram_id, "items": [], "total": 0}).into())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Cart, CartItem, validate_cart};
+    use axum::http::StatusCode;
+
+    fn valid_cart() -> Cart {
+        Cart {
+            telegram_id: 123,
+            items: vec![CartItem {
+                strain_id: "strain-1".into(),
+                quantity: 1.0,
+                price_per_gram: 100.0,
+            }],
+            total: 100.0,
+        }
+    }
+
+    #[test]
+    fn test_validate_cart_ok() {
+        assert!(validate_cart(&valid_cart()).is_ok());
+    }
+
+    #[test]
+    fn test_validate_cart_total_negative() {
+        let mut req = valid_cart();
+        req.total = -1.0;
+        assert_eq!(validate_cart(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn test_validate_cart_total_nan() {
+        let mut req = valid_cart();
+        req.total = f64::NAN;
+        assert_eq!(validate_cart(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn test_validate_cart_too_many_items() {
+        let mut req = valid_cart();
+        req.items = (0..101).map(|i| CartItem {
+            strain_id: format!("strain-{i}"),
+            quantity: 1.0,
+            price_per_gram: 1.0,
+        }).collect();
+        assert_eq!(validate_cart(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn test_validate_cart_strain_id_too_long() {
+        let mut req = valid_cart();
+        req.items[0].strain_id = "a".repeat(201);
+        assert_eq!(validate_cart(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn test_validate_cart_quantity_zero() {
+        let mut req = valid_cart();
+        req.items[0].quantity = 0.0;
+        assert_eq!(validate_cart(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn test_validate_cart_quantity_negative() {
+        let mut req = valid_cart();
+        req.items[0].quantity = -1.0;
+        assert_eq!(validate_cart(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn test_validate_cart_quantity_too_high() {
+        let mut req = valid_cart();
+        req.items[0].quantity = 2_000_000.0;
+        assert_eq!(validate_cart(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn test_validate_cart_price_negative() {
+        let mut req = valid_cart();
+        req.items[0].price_per_gram = -1.0;
+        assert_eq!(validate_cart(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn test_validate_cart_price_too_high() {
+        let mut req = valid_cart();
+        req.items[0].price_per_gram = 2_000_000.0;
+        assert_eq!(validate_cart(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+    }
 }

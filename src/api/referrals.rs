@@ -70,16 +70,21 @@ async fn get_my_referrals(
     })))
 }
 
-/// GET /api/referrals/leaderboard?period=weekly|monthly|all&limit=10
-async fn get_leaderboard(
-    State(state): State<AppState>,
-    Query(params): Query<LeaderboardQuery>,
-) -> Result<Json<Value>, StatusCode> {
+fn validate_leaderboard_query(params: &LeaderboardQuery) -> Result<(&str, i64), StatusCode> {
     let period = params.period.as_deref().unwrap_or("all");
     if !matches!(period, "weekly" | "monthly" | "all") {
         return Err(StatusCode::BAD_REQUEST);
     }
     let limit = params.limit.unwrap_or(10).min(50);
+    Ok((period, limit))
+}
+
+/// GET /api/referrals/leaderboard?period=weekly|monthly|all&limit=10
+async fn get_leaderboard(
+    State(state): State<AppState>,
+    Query(params): Query<LeaderboardQuery>,
+) -> Result<Json<Value>, StatusCode> {
+    let (period, limit) = validate_leaderboard_query(&params)?;
 
     let top = get_top_referrers(&state.db.pool, period, limit)
         .await
@@ -89,5 +94,35 @@ async fn get_leaderboard(
         "period": period,
         "leaderboard": top,
     })))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{LeaderboardQuery, validate_leaderboard_query};
+    use axum::http::StatusCode;
+
+    #[test]
+    fn test_validate_leaderboard_defaults() {
+        let q = LeaderboardQuery { period: None, limit: None };
+        assert_eq!(validate_leaderboard_query(&q).unwrap(), ("all", 10));
+    }
+
+    #[test]
+    fn test_validate_leaderboard_weekly() {
+        let q = LeaderboardQuery { period: Some("weekly".into()), limit: Some(20) };
+        assert_eq!(validate_leaderboard_query(&q).unwrap(), ("weekly", 20));
+    }
+
+    #[test]
+    fn test_validate_leaderboard_limit_capped() {
+        let q = LeaderboardQuery { period: None, limit: Some(100) };
+        assert_eq!(validate_leaderboard_query(&q).unwrap(), ("all", 50));
+    }
+
+    #[test]
+    fn test_validate_leaderboard_invalid_period() {
+        let q = LeaderboardQuery { period: Some("daily".into()), limit: None };
+        assert_eq!(validate_leaderboard_query(&q).unwrap_err(), StatusCode::BAD_REQUEST);
+    }
 }
 

@@ -40,7 +40,16 @@ pub async fn upload_to_s3(config: &Config, filename: &str, data: &[u8]) -> Resul
         .send()
         .await?;
 
-    Ok(format!("{}/{}/{}", public_url, bucket, key))
+    Ok(build_s3_public_url(public_url, bucket, &key))
+}
+
+fn build_s3_public_url(public_url: &str, bucket: &str, key: &str) -> String {
+    let base = public_url.trim_end_matches('/');
+    if base.is_empty() {
+        format!("s3://{}/{}", bucket, key)
+    } else {
+        format!("{}/{}/{}", base, bucket, key)
+    }
 }
 
 #[allow(dead_code)]
@@ -59,7 +68,7 @@ fn mime_from_filename(filename: &str) -> &'static str {
 
 #[cfg(test)]
 mod tests {
-    use super::mime_from_filename;
+    use super::{mime_from_filename, build_s3_public_url};
 
     #[test]
     fn test_mime_from_filename_lowercase() {
@@ -90,5 +99,37 @@ mod tests {
     fn test_mime_from_filename_multiple_dots() {
         assert_eq!(mime_from_filename("archive.tar.gz"), "application/octet-stream");
         assert_eq!(mime_from_filename("video.min.mp4"), "video/mp4");
+    }
+
+    #[test]
+    fn test_build_s3_public_url_basic() {
+        assert_eq!(
+            build_s3_public_url("https://cdn.example.com", "bucket", "uploads/file.jpg"),
+            "https://cdn.example.com/bucket/uploads/file.jpg"
+        );
+    }
+
+    #[test]
+    fn test_build_s3_public_url_trailing_slash() {
+        assert_eq!(
+            build_s3_public_url("https://cdn.example.com/", "bucket", "uploads/file.jpg"),
+            "https://cdn.example.com/bucket/uploads/file.jpg"
+        );
+    }
+
+    #[test]
+    fn test_build_s3_public_url_multiple_slashes() {
+        assert_eq!(
+            build_s3_public_url("https://cdn.example.com//", "bucket", "uploads/file.jpg"),
+            "https://cdn.example.com/bucket/uploads/file.jpg"
+        );
+    }
+
+    #[test]
+    fn test_build_s3_public_url_empty_falls_back() {
+        assert_eq!(
+            build_s3_public_url("", "bucket", "uploads/file.jpg"),
+            "s3://bucket/uploads/file.jpg"
+        );
     }
 }

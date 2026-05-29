@@ -41,18 +41,8 @@ pub fn routes() -> Router<AppState> {
         .route("/orders/user/:telegram_id", get(get_user_orders))
 }
 
-async fn create_order(
-    headers: HeaderMap,
-    State(state): State<AppState>,
-    Json(req): Json<CreateOrderRequest>,
-) -> Result<Json<Value>, StatusCode> {
-    // If telegram_id is provided, verify ownership and blocked status.
-    if let Some(tid) = req.telegram_id {
-        crate::api::auth::check_owner(&headers, &state, tid)?;
-        check_not_blocked(&state, tid).await?;
-    }
-
-    // Validation
+/// Validates a CreateOrderRequest. Returns the sanitized bonus_used on success.
+fn validate_create_order(req: &CreateOrderRequest) -> Result<f64, StatusCode> {
     if let Some(ref name) = req.customer_name { if name.len() > 200 { return Err(StatusCode::BAD_REQUEST); } }
     if let Some(ref phone) = req.customer_phone { if phone.len() > 50 { return Err(StatusCode::BAD_REQUEST); } }
     if let Some(ref tg) = req.customer_telegram { if tg.len() > 100 { return Err(StatusCode::BAD_REQUEST); } }
@@ -85,7 +75,6 @@ async fn create_order(
     if !bonus_used.is_finite() {
         return Err(StatusCode::BAD_REQUEST);
     }
-    // Sanity-check frontend math: total must equal subtotal minus bonus (within 1 satang).
     if bonus_used > req.subtotal + 0.01 {
         return Err(StatusCode::BAD_REQUEST);
     }
@@ -93,6 +82,21 @@ async fn create_order(
     if (req.total - expected_total).abs() > 0.01 {
         return Err(StatusCode::BAD_REQUEST);
     }
+    Ok(bonus_used)
+}
+
+async fn create_order(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    Json(req): Json<CreateOrderRequest>,
+) -> Result<Json<Value>, StatusCode> {
+    // If telegram_id is provided, verify ownership and blocked status.
+    if let Some(tid) = req.telegram_id {
+        crate::api::auth::check_owner(&headers, &state, tid)?;
+        check_not_blocked(&state, tid).await?;
+    }
+
+    let bonus_used = validate_create_order(&req)?;
 
     let id = uuid::Uuid::new_v4().to_string();
     let items_json = serde_json::to_value(&req.items)
@@ -338,4 +342,160 @@ async fn get_user_orders(
         &[&telegram_id],
     ).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     Ok(Json(json!({ "orders": rows.iter().map(Order::from_row).collect::<Vec<_>>() })))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{CreateOrderRequest, validate_create_order};
+    use axum::http::StatusCode;
+    use crate::db::orders::OrderItem;
+
+    fn valid_req() -> CreateOrderRequest {
+        CreateOrderRequest {
+            telegram_id: Some(1),
+            customer_name: Some("Alice".into()),
+            customer_phone: Some("+123".into()),
+            customer_telegram: Some("alice".into()),
+            items: vec![OrderItem {
+                strain_id: Some("s1".into()),
+                strain_name: Some("Indica".into()),
+                accessory_id: None,
+                accessory_name: None,
+                tea_id: None,
+                tea_name: None,
+                set_id: None,
+                set_name: None,
+                quantity: 1.0,
+                is_set: None,
+                is_accessory: None,
+                is_tea: None,
+                is_tea_set: None,
+            }],
+            subtotal: 100.0,
+            bonus_used: Some(10.0),
+            total: 90.0,
+            shop_id: None,
+        }
+    }
+
+    #[test]
+    fn test_validate_ok() {
+        let req = valid_req();
+        assert_eq!(validate_create_order(&req).unwrap(), 10.0);
+    }
+
+    #[test]
+    fn test_validate_no_bonus() {
+        let mut req = valid_req();
+        req.bonus_used = None;
+        req.total = 100.0;
+        assert_eq!(validate_create_order(&req).unwrap(), 0.0);
+    }
+
+    #[test]
+    fn test_validate_empty_items() {
+        let mut req = valid_req();
+        req.items = vec![];
+        assert_eq!(validate_create_order(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn test_validate_too_many_items() {
+        let mut req = valid_req();
+        req.items = (0..101).map(|_| OrderItem {
+            strain_id: Some("s".into()),
+            strain_name: Some("X".into()),
+            accessory_id: None,
+            accessory_name: None,
+            tea_id: None,
+            tea_name: None,
+            set_id: None,
+            set_name: None,
+            quantity: 1.0,
+            is_set: None,
+            is_accessory: None,
+            is_tea: None,
+            is_tea_set: None,
+        }).collect();
+        assert_eq!(validate_create_order(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn test_validate_name_too_long() {
+        let mut req = valid_req();
+        req.customer_name = Some("a".repeat(201));
+        assert_eq!(validate_create_order(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn test_validate_phone_too_long() {
+        let mut req = valid_req();
+        req.customer_phone = Some("a".repeat(51));
+        assert_eq!(validate_create_order(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn test_validate_telegram_too_long() {
+        let mut req = valid_req();
+        req.customer_telegram = Some("a".repeat(101));
+        assert_eq!(validate_create_order(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn test_validate_shop_id_too_long() {
+        let mut req = valid_req();
+        req.shop_id = Some("a".repeat(201));
+        assert_eq!(validate_create_order(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn test_validate_strain_id_too_long() {
+        let mut req = valid_req();
+        req.items[0].strain_id = Some("a".repeat(201));
+        assert_eq!(validate_create_order(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn test_validate_negative_total() {
+        let mut req = valid_req();
+        req.total = -1.0;
+        assert_eq!(validate_create_order(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn test_validate_nan_total() {
+        let mut req = valid_req();
+        req.total = f64::NAN;
+        assert_eq!(validate_create_order(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn test_validate_negative_quantity() {
+        let mut req = valid_req();
+        req.items[0].quantity = -1.0;
+        assert_eq!(validate_create_order(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn test_validate_bonus_exceeds_subtotal() {
+        let mut req = valid_req();
+        req.bonus_used = Some(101.0);
+        req.total = -1.0; // will fail before math check, but let's set valid total
+        req.total = 0.0;
+        assert_eq!(validate_create_order(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn test_validate_total_mismatch() {
+        let mut req = valid_req();
+        req.total = 95.0; // expected 90.0
+        assert_eq!(validate_create_order(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn test_validate_total_tolerance() {
+        let mut req = valid_req();
+        req.total = 90.009; // within 0.01 of expected 90.0
+        assert_eq!(validate_create_order(&req).unwrap(), 10.0);
+    }
 }

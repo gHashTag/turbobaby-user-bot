@@ -33,7 +33,14 @@ pub async fn handle_callback(
     ai_client: Arc<crate::ai::AiClient>,
 ) -> Result<(), teloxide::RequestError> {
     let data = match q.data.as_deref() {
-        Some(d) => d.to_string(),
+        Some(d) => {
+            if d.len() > 200 {
+                tracing::warn!("callback_query: data too long ({}) from user_id={}", d.len(), q.from.id.0);
+                bot.answer_callback_query(q.id).await?;
+                return Ok(());
+            }
+            d.to_string()
+        }
         None => {
             tracing::warn!("callback_query: empty data from user_id={}", q.from.id.0);
             bot.answer_callback_query(q.id).await?;

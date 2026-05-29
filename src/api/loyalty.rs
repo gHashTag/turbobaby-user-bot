@@ -86,6 +86,16 @@ async fn get_profile(
     }
 }
 
+fn validate_add_bonus_request(req: &AddBonusRequest) -> Result<(), StatusCode> {
+    if req.tx_type.len() > 50 { return Err(StatusCode::BAD_REQUEST); }
+    if let Some(ref d) = req.description { if d.len() > 1000 { return Err(StatusCode::BAD_REQUEST); } }
+    if let Some(ref r) = req.related_order_id { if r.len() > 200 { return Err(StatusCode::BAD_REQUEST); } }
+    if !req.amount.is_finite() || req.amount < 0.0 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    Ok(())
+}
+
 async fn add_bonus(
     headers: HeaderMap,
     State(state): State<AppState>,
@@ -93,12 +103,7 @@ async fn add_bonus(
     Json(req): Json<AddBonusRequest>,
 ) -> Result<Json<Value>, StatusCode> {
     check_admin(&headers, &state)?;
-    if req.tx_type.len() > 50 { return Err(StatusCode::BAD_REQUEST); }
-    if let Some(ref d) = req.description { if d.len() > 1000 { return Err(StatusCode::BAD_REQUEST); } }
-    if let Some(ref r) = req.related_order_id { if r.len() > 200 { return Err(StatusCode::BAD_REQUEST); } }
-    if !req.amount.is_finite() || req.amount < 0.0 {
-        return Err(StatusCode::BAD_REQUEST);
-    }
+    validate_add_bonus_request(&req)?;
     let tx_id = uuid::Uuid::new_v4().to_string();
     let mut client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     let tx = client.transaction().await.map_err(|e| { tracing::error!("DB tx error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
@@ -178,13 +183,7 @@ async fn get_loyalty_config(State(state): State<AppState>) -> Result<Json<Value>
     }
 }
 
-async fn update_loyalty_config(
-    headers: HeaderMap,
-    State(state): State<AppState>,
-    Json(body): Json<Value>,
-) -> Result<Json<Value>, StatusCode> {
-    check_admin(&headers, &state)?;
-    // Validate required numeric fields
+fn validate_loyalty_config_body(body: &Value) -> Result<(), StatusCode> {
     let required = ["gold_threshold", "silver_threshold", "bronze_threshold", "referral_bonus"];
     for key in required {
         if let Some(v) = body.get(key).and_then(|v| v.as_f64()) {
@@ -195,10 +194,126 @@ async fn update_loyalty_config(
             return Err(StatusCode::BAD_REQUEST);
         }
     }
+    Ok(())
+}
+
+async fn update_loyalty_config(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    Json(body): Json<Value>,
+) -> Result<Json<Value>, StatusCode> {
+    check_admin(&headers, &state)?;
+    validate_loyalty_config_body(&body)?;
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     client.execute(
         "INSERT INTO loyalty_config (id, config) VALUES (1, $1) ON CONFLICT (id) DO UPDATE SET config = $1",
         &[&body],
     ).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     Ok(Json(json!({ "success": true })))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{AddBonusRequest, validate_add_bonus_request, validate_loyalty_config_body};
+    use axum::http::StatusCode;
+    use serde_json::json;
+
+    fn valid_bonus_req() -> AddBonusRequest {
+        AddBonusRequest {
+            amount: 10.0,
+            tx_type: "manual".into(),
+            description: Some("test".into()),
+            related_order_id: None,
+        }
+    }
+
+    #[test]
+    fn test_validate_add_bonus_ok() {
+        assert!(validate_add_bonus_request(&valid_bonus_req()).is_ok());
+    }
+
+    #[test]
+    fn test_validate_add_bonus_tx_type_too_long() {
+        let mut req = valid_bonus_req();
+        req.tx_type = "a".repeat(51);
+        assert_eq!(validate_add_bonus_request(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn test_validate_add_bonus_description_too_long() {
+        let mut req = valid_bonus_req();
+        req.description = Some("a".repeat(1001));
+        assert_eq!(validate_add_bonus_request(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn test_validate_add_bonus_related_order_id_too_long() {
+        let mut req = valid_bonus_req();
+        req.related_order_id = Some("a".repeat(201));
+        assert_eq!(validate_add_bonus_request(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn test_validate_add_bonus_amount_negative() {
+        let mut req = valid_bonus_req();
+        req.amount = -1.0;
+        assert_eq!(validate_add_bonus_request(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn test_validate_add_bonus_amount_nan() {
+        let mut req = valid_bonus_req();
+        req.amount = f64::NAN;
+        assert_eq!(validate_add_bonus_request(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn test_validate_loyalty_config_ok() {
+        let body = json!({
+            "gold_threshold": 1000.0,
+            "silver_threshold": 500.0,
+            "bronze_threshold": 100.0,
+            "referral_bonus": 50.0
+        });
+        assert!(validate_loyalty_config_body(&body).is_ok());
+    }
+
+    #[test]
+    fn test_validate_loyalty_config_missing_field() {
+        let body = json!({"gold_threshold": 100.0});
+        assert_eq!(validate_loyalty_config_body(&body).unwrap_err(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn test_validate_loyalty_config_negative_value() {
+        let body = json!({
+            "gold_threshold": -1.0,
+            "silver_threshold": 500.0,
+            "bronze_threshold": 100.0,
+            "referral_bonus": 50.0
+        });
+        assert_eq!(validate_loyalty_config_body(&body).unwrap_err(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn test_validate_loyalty_config_nan_value() {
+        let body = json!({
+            "gold_threshold": f64::NAN,
+            "silver_threshold": 500.0,
+            "bronze_threshold": 100.0,
+            "referral_bonus": 50.0
+        });
+        assert_eq!(validate_loyalty_config_body(&body).unwrap_err(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn test_validate_loyalty_config_too_high() {
+        let body = json!({
+            "gold_threshold": 2_000_000_000.0,
+            "silver_threshold": 500.0,
+            "bronze_threshold": 100.0,
+            "referral_bonus": 50.0
+        });
+        assert_eq!(validate_loyalty_config_body(&body).unwrap_err(), StatusCode::BAD_REQUEST);
+    }
 }

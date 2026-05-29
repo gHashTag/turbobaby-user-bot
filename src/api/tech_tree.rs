@@ -43,11 +43,16 @@ async fn get_tech_nodes(State(state): State<AppState>) -> Result<Json<Value>, St
     Ok(Json(json!({ "nodes": nodes, "total": nodes.len() })))
 }
 
+fn validate_id(id: &str) -> Result<(), StatusCode> {
+    if id.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
+    Ok(())
+}
+
 async fn get_tech_node(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<Value>, StatusCode> {
-    if id.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
+    validate_id(&id)?;
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     let row = client.query_opt(
         "SELECT id, name, description, category, icon, status, xp_required, xp_reward, \
@@ -97,4 +102,27 @@ async fn get_achievements(State(state): State<AppState>) -> Result<Json<Value>, 
     })).collect();
 
     Ok(Json(json!({ "achievements": achievements, "total": achievements.len() })))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{validate_id};
+    use axum::http::StatusCode;
+
+    #[test]
+    fn test_validate_id_ok() {
+        assert!(validate_id("abc123").is_ok());
+    }
+
+    #[test]
+    fn test_validate_id_too_long() {
+        let id = "a".repeat(201);
+        assert_eq!(validate_id(&id).unwrap_err(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn test_validate_id_exactly_200() {
+        let id = "a".repeat(200);
+        assert!(validate_id(&id).is_ok());
+    }
 }

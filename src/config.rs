@@ -97,3 +97,88 @@ impl Config {
         self.s3_bucket.is_some() && self.s3_endpoint.is_some()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::Config;
+
+    #[test]
+    fn test_s3_enabled_both_set() {
+        let cfg = Config {
+            bot_token: String::new(),
+            web_app_url: String::new(),
+            port: 3000,
+            webhook_path: String::new(),
+            app_url: String::new(),
+            is_production: false,
+            admin_ids: vec![],
+            bot_username: String::new(),
+            database_url: String::new(),
+            grok_api_key: String::new(),
+            glm_api_key: String::new(),
+            s3_bucket: Some("bucket".into()),
+            s3_endpoint: Some("http://s3".into()),
+            s3_public_url: None,
+            s3_region: None,
+            s3_access_key: None,
+            s3_secret_key: None,
+            backup_assets: false,
+            admin_password: None,
+        };
+        assert!(cfg.s3_enabled());
+    }
+
+    #[test]
+    fn test_s3_enabled_missing_endpoint() {
+        let cfg = Config {
+            s3_bucket: Some("bucket".into()),
+            s3_endpoint: None,
+            ..test_config()
+        };
+        assert!(!cfg.s3_enabled());
+    }
+
+    #[test]
+    fn test_s3_enabled_missing_bucket() {
+        let cfg = Config {
+            s3_bucket: None,
+            s3_endpoint: Some("http://s3".into()),
+            ..test_config()
+        };
+        assert!(!cfg.s3_enabled());
+    }
+
+    #[test]
+    fn test_s3_enabled_both_missing() {
+        let cfg = Config {
+            s3_bucket: None,
+            s3_endpoint: None,
+            ..test_config()
+        };
+        assert!(!cfg.s3_enabled());
+    }
+
+    fn test_config() -> Config {
+        Config {
+            bot_token: String::new(),
+            web_app_url: String::new(),
+            port: 3000,
+            webhook_path: String::new(),
+            app_url: String::new(),
+            is_production: false,
+            admin_ids: vec![],
+            bot_username: String::new(),
+            database_url: String::new(),
+            grok_api_key: String::new(),
+            glm_api_key: String::new(),
+            s3_bucket: None,
+            s3_endpoint: None,
+            s3_public_url: None,
+            s3_region: None,
+            s3_access_key: None,
+            s3_secret_key: None,
+            backup_assets: false,
+            admin_password: None,
+        }
+    }
+}

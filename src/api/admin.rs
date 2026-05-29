@@ -229,16 +229,21 @@ struct UpdateManagerRequest {
     commission_rate: Option<f64>,
 }
 
+fn validate_manager_fields(name: &Option<String>, username: &Option<String>, ref_code: &Option<String>, commission_rate: Option<f64>) -> Result<(), StatusCode> {
+    if let Some(ref n) = name { if n.len() > 200 { return Err(StatusCode::BAD_REQUEST); } }
+    if let Some(ref u) = username { if u.len() > 200 { return Err(StatusCode::BAD_REQUEST); } }
+    if let Some(ref c) = ref_code { if c.len() > 200 { return Err(StatusCode::BAD_REQUEST); } }
+    if let Some(r) = commission_rate { if !r.is_finite() || !(0.0..=100.0).contains(&r) { return Err(StatusCode::BAD_REQUEST); } }
+    Ok(())
+}
+
 async fn create_manager(
     State(state): State<AppState>,
     headers: HeaderMap,
     Json(req): Json<CreateManagerRequest>,
 ) -> Result<Json<Value>, StatusCode> {
     check_admin(&headers, &state)?;
-    if let Some(ref n) = req.name { if n.len() > 200 { return Err(StatusCode::BAD_REQUEST); } }
-    if let Some(ref u) = req.username { if u.len() > 200 { return Err(StatusCode::BAD_REQUEST); } }
-    if let Some(ref c) = req.ref_code { if c.len() > 200 { return Err(StatusCode::BAD_REQUEST); } }
-    if let Some(r) = req.commission_rate { if !r.is_finite() || !(0.0..=100.0).contains(&r) { return Err(StatusCode::BAD_REQUEST); } }
+    validate_manager_fields(&req.name, &req.username, &req.ref_code, req.commission_rate)?;
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     client.execute(
         "INSERT INTO managers (telegram_id, name, username, ref_code, commission_rate) VALUES ($1, $2, $3, $4, $5)",
@@ -254,13 +259,10 @@ async fn update_manager(
     Json(req): Json<UpdateManagerRequest>,
 ) -> Result<Json<Value>, StatusCode> {
     check_admin(&headers, &state)?;
-    if let Some(ref n) = req.name { if n.len() > 200 { return Err(StatusCode::BAD_REQUEST); } }
-    if let Some(ref u) = req.username { if u.len() > 200 { return Err(StatusCode::BAD_REQUEST); } }
-    if let Some(ref c) = req.ref_code { if c.len() > 200 { return Err(StatusCode::BAD_REQUEST); } }
-    if let Some(r) = req.commission_rate { if !r.is_finite() || !(0.0..=100.0).contains(&r) { return Err(StatusCode::BAD_REQUEST); } }
+    validate_manager_fields(&req.name, &req.username, &req.ref_code, req.commission_rate)?;
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     client.execute(
-        "UPDATE managers SET 
+        "UPDATE managers SET
             name = COALESCE($2, name),
             username = COALESCE($3, username),
             ref_code = COALESCE($4, ref_code),
@@ -330,11 +332,16 @@ async fn check_admin_access(
     Err(StatusCode::UNAUTHORIZED)
 }
 
+fn validate_admin_login(req: &AdminLoginRequest) -> Result<(), StatusCode> {
+    if req.password.len() > 1000 { return Err(StatusCode::BAD_REQUEST); }
+    Ok(())
+}
+
 async fn admin_login(
     State(state): State<AppState>,
     Json(req): Json<AdminLoginRequest>,
 ) -> Result<Json<Value>, StatusCode> {
-    if req.password.len() > 1000 { return Err(StatusCode::BAD_REQUEST); }
+    validate_admin_login(&req)?;
     let valid = {
         let _guard = LOGIN_LOCK.lock().await;
         if let Some(ref password) = state.config.admin_password {
@@ -381,4 +388,62 @@ async fn debug_validate_init_data(
         user: user.map(|u| json!({"id": u.id, "first_name": u.first_name, "username": u.username})),
         error,
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{validate_manager_fields, validate_admin_login, AdminLoginRequest};
+    use axum::http::StatusCode;
+
+    #[test]
+    fn test_validate_manager_fields_ok() {
+        assert!(validate_manager_fields(&Some("Name".into()), &Some("user".into()), &Some("code".into()), Some(10.0)).is_ok());
+    }
+
+    #[test]
+    fn test_validate_manager_fields_all_none() {
+        assert!(validate_manager_fields(&None, &None, &None, None).is_ok());
+    }
+
+    #[test]
+    fn test_validate_manager_name_too_long() {
+        assert_eq!(validate_manager_fields(&Some("a".repeat(201)), &None, &None, None).unwrap_err(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn test_validate_manager_username_too_long() {
+        assert_eq!(validate_manager_fields(&None, &Some("a".repeat(201)), &None, None).unwrap_err(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn test_validate_manager_ref_code_too_long() {
+        assert_eq!(validate_manager_fields(&None, &None, &Some("a".repeat(201)), None).unwrap_err(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn test_validate_manager_commission_negative() {
+        assert_eq!(validate_manager_fields(&None, &None, &None, Some(-1.0)).unwrap_err(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn test_validate_manager_commission_too_high() {
+        assert_eq!(validate_manager_fields(&None, &None, &None, Some(101.0)).unwrap_err(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn test_validate_manager_commission_nan() {
+        assert_eq!(validate_manager_fields(&None, &None, &None, Some(f64::NAN)).unwrap_err(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn test_validate_admin_login_ok() {
+        let req = AdminLoginRequest { password: "secret".into(), telegram_id: None };
+        assert!(validate_admin_login(&req).is_ok());
+    }
+
+    #[test]
+    fn test_validate_admin_login_password_too_long() {
+        let req = AdminLoginRequest { password: "a".repeat(1001), telegram_id: None };
+        assert_eq!(validate_admin_login(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+    }
 }
