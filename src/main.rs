@@ -17,6 +17,8 @@ mod locales;
 pub mod metrics;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod notify;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod util;
 
 // Business logic modules (shared between backend and web)
 pub mod trios;
@@ -52,7 +54,7 @@ use axum::http::Request;
 #[cfg(not(target_arch = "wasm32"))]
 use axum::response::IntoResponse;
 #[cfg(not(target_arch = "wasm32"))]
-use tracing::{debug, info};
+use tracing::info;
 #[cfg(not(target_arch = "wasm32"))]
 use std::sync::Arc;
 #[cfg(not(target_arch = "wasm32"))]
@@ -136,6 +138,20 @@ async fn alert_5xx_middleware(
         }
     }
     resp
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn content_type_for(path: &std::path::Path) -> &'static str {
+    match path.extension().and_then(|e| e.to_str()).map(|s| s.to_lowercase()).as_deref() {
+        Some("html") => "text/html",
+        Some("js") => "text/javascript",
+        Some("css") => "text/css",
+        Some("wasm") => "application/wasm",
+        Some("svg") => "image/svg+xml",
+        Some("png") => "image/png",
+        Some("jpg") | Some("jpeg") => "image/jpeg",
+        _ => "application/octet-stream",
+    }
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -286,19 +302,6 @@ async fn main() -> Result<()> {
     // for the WASM bundle (~4 MB) and hashed JS/CSS.
     let mut static_cache: std::collections::HashMap<String, CachedFile> =
         std::collections::HashMap::new();
-
-    fn content_type_for(path: &std::path::Path) -> &'static str {
-        match path.extension().and_then(|e| e.to_str()).map(|s| s.to_lowercase()).as_deref() {
-            Some("html") => "text/html",
-            Some("js") => "text/javascript",
-            Some("css") => "text/css",
-            Some("wasm") => "application/wasm",
-            Some("svg") => "image/svg+xml",
-            Some("png") => "image/png",
-            Some("jpg") | Some("jpeg") => "image/jpeg",
-            _ => "application/octet-stream",
-        }
-    }
 
     fn load_file(path: &std::path::Path) -> Option<Bytes> {
         std::fs::read(path).ok().map(Bytes::from)
@@ -577,6 +580,64 @@ async fn shutdown_signal() {
         _ = terminate => {},
     }
     info!("🛑 Shutdown signal received, starting graceful shutdown...");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::content_type_for;
+    use std::path::Path;
+
+    #[test]
+    fn test_content_type_for_html() {
+        assert_eq!(content_type_for(Path::new("index.html")), "text/html");
+    }
+
+    #[test]
+    fn test_content_type_for_js() {
+        assert_eq!(content_type_for(Path::new("app.js")), "text/javascript");
+    }
+
+    #[test]
+    fn test_content_type_for_css() {
+        assert_eq!(content_type_for(Path::new("style.css")), "text/css");
+    }
+
+    #[test]
+    fn test_content_type_for_wasm() {
+        assert_eq!(content_type_for(Path::new("app.wasm")), "application/wasm");
+    }
+
+    #[test]
+    fn test_content_type_for_svg() {
+        assert_eq!(content_type_for(Path::new("logo.svg")), "image/svg+xml");
+    }
+
+    #[test]
+    fn test_content_type_for_png() {
+        assert_eq!(content_type_for(Path::new("image.png")), "image/png");
+    }
+
+    #[test]
+    fn test_content_type_for_jpg() {
+        assert_eq!(content_type_for(Path::new("photo.jpg")), "image/jpeg");
+    }
+
+    #[test]
+    fn test_content_type_for_jpeg() {
+        assert_eq!(content_type_for(Path::new("photo.jpeg")), "image/jpeg");
+    }
+
+    #[test]
+    fn test_content_type_for_uppercase() {
+        assert_eq!(content_type_for(Path::new("photo.JPG")), "image/jpeg");
+        assert_eq!(content_type_for(Path::new("app.JS")), "text/javascript");
+    }
+
+    #[test]
+    fn test_content_type_for_unknown() {
+        assert_eq!(content_type_for(Path::new("data.bin")), "application/octet-stream");
+        assert_eq!(content_type_for(Path::new("noext")), "application/octet-stream");
+    }
 }
 
 // WASM entry point is now in src/lib.rs via #[wasm_bindgen(start)]

@@ -235,83 +235,6 @@ pub fn validate_init_data_debug(init_data: &str, bot_token: &str) -> (bool, Stri
     (ok, data_check_string_decoded, hash, user, error)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn generate_init_data(bot_token: &str, user_id: i64, first_name: &str) -> String {
-        let user_json = format!(
-            "{{\"id\":{},\"first_name\":\"{}\"}}",
-            user_id, first_name
-        );
-        let user_json_for_encode = user_json.clone();
-        let user_encoded = urlencoding::encode(&user_json_for_encode);
-        // Use a fresh auth_date so freshness check passes (within last hour)
-        let auth_date = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs() as i64 - 3600;
-        let auth_date_str = auth_date.to_string();
-        // Compute hash over DECODED values (matches real Telegram behavior)
-        let mut pairs = vec![
-            ("auth_date".to_string(), auth_date_str.clone()),
-            ("user".to_string(), user_json),
-        ];
-        pairs.sort_by(|a, b| a.0.cmp(&b.0));
-        let data_check_string = pairs
-            .iter()
-            .map(|(k, v)| format!("{}={}", k, v))
-            .collect::<Vec<_>>()
-            .join("\n");
-
-        let mut secret_mac = HmacSha256::new_from_slice(b"WebAppData").unwrap();
-        secret_mac.update(bot_token.as_bytes());
-        let secret_key = secret_mac.finalize().into_bytes();
-
-        let mut mac = HmacSha256::new_from_slice(&secret_key).unwrap();
-        mac.update(data_check_string.as_bytes());
-        let hash = hex::encode(mac.finalize().into_bytes());
-
-        // Emit the URL-encoded user value in the query string
-        format!(
-            "auth_date={}&hash={}&user={}",
-            auth_date_str, hash, user_encoded
-        )
-    }
-
-    #[test]
-    fn test_validate_init_data_success() {
-        let token = "test_bot_token_12345";
-        let init_data = generate_init_data(token, 8420420131, "ShopOwner");
-        let user = validate_init_data(&init_data, token).expect("should validate");
-        assert_eq!(user.id, 8420420131);
-        assert_eq!(user.first_name, Some("ShopOwner".to_string()));
-    }
-
-    #[test]
-    fn test_validate_init_data_bad_hash() {
-        let token = "test_bot_token_12345";
-        let mut init_data = generate_init_data(token, 8420420131, "ShopOwner");
-        // Corrupt the hash
-        init_data = init_data.replace("hash=", "hash=bad");
-        assert!(validate_init_data(&init_data, token).is_none());
-    }
-
-    #[test]
-    fn test_validate_init_data_wrong_token() {
-        let token = "test_bot_token_12345";
-        let init_data = generate_init_data(token, 8420420131, "ShopOwner");
-        assert!(validate_init_data(&init_data, "wrong_token").is_none());
-    }
-
-    #[test]
-    fn test_validate_init_data_missing_user() {
-        let token = "test_bot_token_12345";
-        let init_data = "auth_date=1234567890&hash=abcd1234";
-        assert!(validate_init_data(init_data, token).is_none());
-    }
-}
-
 pub fn generate_admin_token(password: &str, bot_token: &str) -> String {
     let mut mac = match HmacSha256::new_from_slice(b"WoodyWeedBotAdmin") {
         Ok(m) => m,
@@ -425,5 +348,108 @@ pub async fn check_not_blocked(state: &AppState, telegram_id: i64) -> Result<(),
             tracing::error!("check_not_blocked DB error telegram_id={} err={}", telegram_id, e);
             Err(StatusCode::INTERNAL_SERVER_ERROR)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn generate_init_data(bot_token: &str, user_id: i64, first_name: &str) -> String {
+        let user_json = format!(
+            "{{\"id\":{},\"first_name\":\"{}\"}}",
+            user_id, first_name
+        );
+        let user_json_for_encode = user_json.clone();
+        let user_encoded = urlencoding::encode(&user_json_for_encode);
+        // Use a fresh auth_date so freshness check passes (within last hour)
+        let auth_date = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64 - 3600;
+        let auth_date_str = auth_date.to_string();
+        // Compute hash over DECODED values (matches real Telegram behavior)
+        let mut pairs = [
+            ("auth_date".to_string(), auth_date_str.clone()),
+            ("user".to_string(), user_json),
+        ];
+        pairs.sort_by(|a, b| a.0.cmp(&b.0));
+        let data_check_string = pairs
+            .iter()
+            .map(|(k, v)| format!("{}={}", k, v))
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        let mut secret_mac = HmacSha256::new_from_slice(b"WebAppData").unwrap();
+        secret_mac.update(bot_token.as_bytes());
+        let secret_key = secret_mac.finalize().into_bytes();
+
+        let mut mac = HmacSha256::new_from_slice(&secret_key).unwrap();
+        mac.update(data_check_string.as_bytes());
+        let hash = hex::encode(mac.finalize().into_bytes());
+
+        // Emit the URL-encoded user value in the query string
+        format!(
+            "auth_date={}&hash={}&user={}",
+            auth_date_str, hash, user_encoded
+        )
+    }
+
+    #[test]
+    fn test_validate_init_data_success() {
+        let token = "test_bot_token_12345";
+        let init_data = generate_init_data(token, 8420420131, "ShopOwner");
+        let user = validate_init_data(&init_data, token).expect("should validate");
+        assert_eq!(user.id, 8420420131);
+        assert_eq!(user.first_name, Some("ShopOwner".to_string()));
+    }
+
+    #[test]
+    fn test_validate_init_data_bad_hash() {
+        let token = "test_bot_token_12345";
+        let mut init_data = generate_init_data(token, 8420420131, "ShopOwner");
+        // Corrupt the hash
+        init_data = init_data.replace("hash=", "hash=bad");
+        assert!(validate_init_data(&init_data, token).is_none());
+    }
+
+    #[test]
+    fn test_validate_init_data_wrong_token() {
+        let token = "test_bot_token_12345";
+        let init_data = generate_init_data(token, 8420420131, "ShopOwner");
+        assert!(validate_init_data(&init_data, "wrong_token").is_none());
+    }
+
+    #[test]
+    fn test_validate_init_data_missing_user() {
+        let token = "test_bot_token_12345";
+        let init_data = "auth_date=1234567890&hash=abcd1234";
+        assert!(validate_init_data(init_data, token).is_none());
+    }
+
+    #[test]
+    fn test_generate_admin_token_deterministic() {
+        let t1 = generate_admin_token("password123", "bot_token");
+        let t2 = generate_admin_token("password123", "bot_token");
+        assert_eq!(t1, t2);
+        assert_eq!(t1.len(), 64); // hex-encoded SHA-256
+    }
+
+    #[test]
+    fn test_verify_admin_token_success() {
+        let token = generate_admin_token("secret", "bot");
+        assert!(verify_admin_token(&token, "bot", "secret"));
+    }
+
+    #[test]
+    fn test_verify_admin_token_wrong_password() {
+        let token = generate_admin_token("secret", "bot");
+        assert!(!verify_admin_token(&token, "bot", "wrong"));
+    }
+
+    #[test]
+    fn test_verify_admin_token_wrong_bot_token() {
+        let token = generate_admin_token("secret", "bot");
+        assert!(!verify_admin_token(&token, "other_bot", "secret"));
     }
 }

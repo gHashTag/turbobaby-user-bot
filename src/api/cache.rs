@@ -85,3 +85,52 @@ pub async fn invalidate_tea_products(cache: &ETagCache) {
 pub fn make_etag_header(hash: &str) -> HeaderValue {
     HeaderValue::from_str(&format!("\"{}\"", hash)).unwrap_or_else(|_| HeaderValue::from_static("\"\""))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{ETagCache, make_etag_header};
+    use axum::http::HeaderValue;
+
+    #[test]
+    fn test_compute_hash_deterministic() {
+        let h1 = ETagCache::compute_hash("abc");
+        let h2 = ETagCache::compute_hash("abc");
+        assert_eq!(h1, h2);
+        assert!(!h1.is_empty());
+    }
+
+    #[test]
+    fn test_compute_hash_different_input() {
+        let h1 = ETagCache::compute_hash("abc");
+        let h2 = ETagCache::compute_hash("def");
+        assert_ne!(h1, h2);
+    }
+
+    #[tokio::test]
+    async fn test_cache_get_set() {
+        let cache = ETagCache::new();
+        assert!(cache.get("key1").await.is_none());
+        let hash = cache.set("key1", "data").await;
+        assert!(!hash.is_empty());
+        assert_eq!(cache.get("key1").await, Some(hash));
+    }
+
+    #[tokio::test]
+    async fn test_cache_has_changed() {
+        let cache = ETagCache::new();
+        let (changed, hash1) = cache.has_changed("k", "v1").await;
+        assert!(changed);
+        let (changed2, hash2) = cache.has_changed("k", "v1").await;
+        assert!(!changed2);
+        assert_eq!(hash1, hash2);
+        let (changed3, hash3) = cache.has_changed("k", "v2").await;
+        assert!(changed3);
+        assert_ne!(hash2, hash3);
+    }
+
+    #[test]
+    fn test_make_etag_header() {
+        let h = make_etag_header("abc123");
+        assert_eq!(h, HeaderValue::from_static("\"abc123\""));
+    }
+}

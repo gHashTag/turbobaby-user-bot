@@ -8,6 +8,7 @@ use teloxide::{
 use crate::{config::Config, db::Database, locales::*};
 use crate::bot::{AI_RATE_LIMIT, AI_COOLDOWN};
 use crate::bot::commands::build_app_url;
+use crate::util::html_escape;
 
 fn web_app_btn(text: &str, url: &str) -> InlineKeyboardButton {
     match url.parse() {
@@ -83,10 +84,6 @@ pub async fn handle_text(
         .map(|s| s.as_str())
         .unwrap_or("friend");
     let ai_response = ai_client.ask_grok(&text, name, &locale.lang_instruction).await;
-
-    fn html_escape(s: &str) -> String {
-        s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
-    }
 
     if let Some(response) = ai_response {
         let safe = html_escape(&response);

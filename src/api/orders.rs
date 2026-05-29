@@ -161,9 +161,7 @@ async fn create_order(
     Ok(Json(json!({ "success": true, "order_id": id })))
 }
 
-fn html_escape(s: &str) -> String {
-    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
-}
+use crate::util::html_escape;
 
 #[allow(clippy::too_many_arguments)]
 async fn notify_admins(

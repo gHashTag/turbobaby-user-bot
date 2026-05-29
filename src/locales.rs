@@ -233,3 +233,79 @@ fn en() -> Locale { Locale {
     referral_leaderboard: "Leaderboard".into(),
 }}
 
+#[cfg(test)]
+mod tests {
+    use super::{get_locale, map_telegram_lang, detect_language, supported_langs, lang_to_timezone};
+
+    #[test]
+    fn test_get_locale_ru() {
+        let l = get_locale("ru");
+        assert_eq!(l.code, "ru");
+        assert_eq!(l.flag, "🇷🇺");
+    }
+
+    #[test]
+    fn test_get_locale_en_fallback() {
+        let l = get_locale("en");
+        assert_eq!(l.code, "en");
+        assert_eq!(l.flag, "🇬🇧");
+    }
+
+    #[test]
+    fn test_get_locale_unknown_fallback() {
+        let l = get_locale("fr");
+        assert_eq!(l.code, "en");
+    }
+
+    #[test]
+    fn test_map_telegram_lang_ru() {
+        assert_eq!(map_telegram_lang(Some("ru")), "ru");
+        assert_eq!(map_telegram_lang(Some("be")), "ru");
+        assert_eq!(map_telegram_lang(Some("uk")), "ru");
+    }
+
+    #[test]
+    fn test_map_telegram_lang_en_fallback() {
+        assert_eq!(map_telegram_lang(Some("en")), "en");
+        assert_eq!(map_telegram_lang(Some("de")), "en");
+        assert_eq!(map_telegram_lang(None), "en");
+    }
+
+    #[test]
+    fn test_detect_language_ru() {
+        assert_eq!(detect_language("Привет"), "ru");
+    }
+
+    #[test]
+    fn test_detect_language_th() {
+        assert_eq!(detect_language("สวัสดี"), "th");
+    }
+
+    #[test]
+    fn test_detect_language_zh() {
+        assert_eq!(detect_language("你好"), "zh");
+    }
+
+    #[test]
+    fn test_detect_language_ar() {
+        assert_eq!(detect_language("مرحبا"), "ar");
+    }
+
+    #[test]
+    fn test_detect_language_en_fallback() {
+        assert_eq!(detect_language("Hello"), "en");
+    }
+
+    #[test]
+    fn test_supported_langs() {
+        assert_eq!(supported_langs(), vec!["ru", "en"]);
+    }
+
+    #[test]
+    fn test_lang_to_timezone() {
+        assert_eq!(lang_to_timezone("ru"), "Europe/Moscow");
+        assert_eq!(lang_to_timezone("en"), "Asia/Bangkok");
+        assert_eq!(lang_to_timezone("fr"), "Asia/Bangkok");
+    }
+}
+

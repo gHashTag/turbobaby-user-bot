@@ -10,9 +10,7 @@ use crate::bot::commands::build_app_url;
 use crate::db::referrals as ref_db;
 use crate::bot::{AI_RATE_LIMIT, AI_COOLDOWN};
 
-fn html_escape(s: &str) -> String {
-    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
-}
+use crate::util::html_escape;
 
 fn web_app_btn(text: &str, url: &str) -> InlineKeyboardButton {
     match url.parse() {

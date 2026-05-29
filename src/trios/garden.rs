@@ -469,7 +469,7 @@ mod tests {
 
     #[test]
     fn test_plant_reward_is_active() {
-        let now = 5000;
+        let _now = 5000;
         let reward = PlantReward {
             id: "reward1".to_string(),
             plant_id: "plant1".to_string(),

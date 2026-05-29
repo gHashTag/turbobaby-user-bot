@@ -25,6 +25,7 @@ struct AdminCheckQuery {
 #[derive(Deserialize)]
 struct AdminLoginRequest {
     password: String,
+    telegram_id: Option<i64>,
 }
 
 #[derive(Deserialize)]
@@ -352,7 +353,8 @@ async fn admin_login(
                 password,
                 &state.config.bot_token,
             );
-            return Ok(Json(json!({ "success": true, "token": token })));
+            let telegram_id = req.telegram_id.unwrap_or(0);
+            return Ok(Json(json!({ "success": true, "token": token, "telegram_id": telegram_id })));
         }
     }
     tracing::warn!("admin_login: invalid password attempt");

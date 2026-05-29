@@ -40,9 +40,7 @@ pub enum Command {
     Admin,
 }
 
-fn html_escape(s: &str) -> String {
-    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
-}
+use crate::util::html_escape;
 
 fn web_app_btn(text: &str, url: &str) -> InlineKeyboardButton {
     match url.parse() {
@@ -387,4 +385,39 @@ pub async fn handle_command(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{build_app_url, build_admin_url};
+
+    #[test]
+    fn test_build_app_url_basic() {
+        assert_eq!(build_app_url("https://app.com", "en", None), "https://app.com?lang=en");
+    }
+
+    #[test]
+    fn test_build_app_url_with_page() {
+        assert_eq!(build_app_url("https://app.com", "ru", Some("admin")), "https://app.com?lang=ru&page=admin");
+    }
+
+    #[test]
+    fn test_build_app_url_trailing_slash() {
+        assert_eq!(build_app_url("https://app.com/", "th", None), "https://app.com/?lang=th");
+    }
+
+    #[test]
+    fn test_build_admin_url_basic() {
+        assert_eq!(build_admin_url("https://app.com"), "https://app.com/admin");
+    }
+
+    #[test]
+    fn test_build_admin_url_trailing_slash() {
+        assert_eq!(build_admin_url("https://app.com/"), "https://app.com/admin");
+    }
+
+    #[test]
+    fn test_build_admin_url_multiple_slashes() {
+        assert_eq!(build_admin_url("https://app.com//"), "https://app.com/admin");
+    }
 }

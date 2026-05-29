@@ -18,7 +18,7 @@ use std::sync::LazyLock;
 static HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| reqwest::Client::new());
 use crate::ui::api::context::api_base_url;
 use crate::ui::components::{EmptyState, Modal, Toast, ToastKind, ToastContainer, Skeleton, SkeletonShape};
-use crate::ui::telegram::{use_telegram_id, use_telegram_init_data, TelegramApp, HapticNotification};
+use crate::ui::telegram::{use_telegram_id_or_admin as use_telegram_id, use_telegram_init_data, TelegramApp, HapticNotification};
 
 fn admin_token() -> String {
     #[cfg(target_arch = "wasm32")]
@@ -362,6 +362,7 @@ pub fn AdminScreen() -> Element {
 fn AccessDeniedScreen(telegram_id: i64, mut password_token: Signal<String>, mut access_reload: Signal<u32>) -> Element {
     let debug = TelegramApp::init().debug_dump();
     let mut password = use_signal(String::new);
+    let mut admin_id = use_signal(String::new);
     let mut error = use_signal(String::new);
     let mut logging_in = use_signal(|| false);
     rsx! {
@@ -373,6 +374,8 @@ fn AccessDeniedScreen(telegram_id: i64, mut password_token: Signal<String>, mut 
             div { style: "margin-top:20px;padding:12px;background:#1a1a2e;border-radius:8px;font-family:monospace;font-size:13px;color:#39ff14;display:inline-block;",
                 "ID: {telegram_id}" }
             div { style: "margin-top:20px;max-width:300px;margin-left:auto;margin-right:auto;",
+                input { style: input_style(), r#type: "text", placeholder: "Ваш Telegram ID (число)",
+                    value: "{admin_id}", oninput: move |e| admin_id.set(e.value()) }
                 input { style: input_style(), r#type: "password", placeholder: "Пароль админа",
                     value: "{password}", oninput: move |e| password.set(e.value()) }
                 if !error.read().is_empty() {
@@ -383,7 +386,11 @@ fn AccessDeniedScreen(telegram_id: i64, mut password_token: Signal<String>, mut 
                     disabled: *logging_in.read(),
                     onclick: move |_| {
                         let pw = password.read().trim().to_string();
+                        let id_str = admin_id.read().trim().to_string();
                         if pw.is_empty() { error.set("Введите пароль".into()); return; }
+                        if id_str.is_empty() { error.set("Введите ваш Telegram ID".into()); return; }
+                        let id_parsed = id_str.parse::<i64>().unwrap_or(0);
+                        if id_parsed == 0 { error.set("Некорректный Telegram ID".into()); return; }
                         logging_in.set(true);
                         error.set(String::new());
                         let mut token_signal = password_token.clone();
@@ -392,7 +399,7 @@ fn AccessDeniedScreen(telegram_id: i64, mut password_token: Signal<String>, mut 
                         spawn(async move {
                             let url = format!("{}/api/admin/login", api_base_url());
                             let res = HTTP_CLIENT.clone().post(&url)
-                                .json(&serde_json::json!({"password": pw}))
+                                .json(&serde_json::json!({"password": pw, "telegram_id": id_parsed}))
                                 .send().await;
                             logging_in2.set(false);
                             match res {
@@ -404,6 +411,7 @@ fn AccessDeniedScreen(telegram_id: i64, mut password_token: Signal<String>, mut 
                                                 if let Some(window) = web_sys::window() {
                                                     if let Ok(Some(storage)) = window.local_storage() {
                                                         let _ = storage.set_item("wwb_admin_token", token);
+                                                        let _ = storage.set_item("wwb_admin_telegram_id", &id_parsed.to_string());
                                                     }
                                                 }
                                             }
@@ -454,6 +462,7 @@ fn AdminPanel(active_tab: Signal<Tab>, mut password_token: Signal<String>) -> El
                             if let Some(window) = web_sys::window() {
                                 if let Ok(Some(storage)) = window.local_storage() {
                                     let _ = storage.remove_item("wwb_admin_token");
+                                    let _ = storage.remove_item("wwb_admin_telegram_id");
                                 }
                             }
                         }

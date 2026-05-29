@@ -257,6 +257,27 @@ pub fn use_telegram_id() -> Option<i64> {
     use_telegram().get_user_id()
 }
 
+/// Hook to get Telegram user ID, falling back to locally-stored admin ID
+/// when running outside Telegram WebApp (e.g. plain browser with password login).
+pub fn use_telegram_id_or_admin() -> Option<i64> {
+    use_telegram_id().or_else(|| {
+        #[cfg(target_arch = "wasm32")]
+        {
+            web_sys::window()
+                .and_then(|w| w.local_storage().ok())
+                .flatten()
+                .and_then(|s| s.get_item("wwb_admin_telegram_id").ok())
+                .flatten()
+                .and_then(|id| id.parse::<i64>().ok())
+                .filter(|id| *id != 0)
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            None
+        }
+    })
+}
+
 /// Hook to get current Telegram username
 pub fn use_telegram_username() -> Option<String> {
     use_telegram().get_username()

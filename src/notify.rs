@@ -2,9 +2,7 @@ use teloxide::Bot;
 use teloxide::prelude::*;
 use crate::config::Config;
 
-fn html_escape(s: &str) -> String {
-    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
-}
+use crate::util::html_escape;
 
 pub async fn notify_admins(bot: &Bot, config: &Config, text: &str) {
     let safe = html_escape(text);

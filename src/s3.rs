@@ -56,3 +56,39 @@ fn mime_from_filename(filename: &str) -> &'static str {
         _ => "application/octet-stream",
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::mime_from_filename;
+
+    #[test]
+    fn test_mime_from_filename_lowercase() {
+        assert_eq!(mime_from_filename("photo.jpg"), "image/jpeg");
+        assert_eq!(mime_from_filename("clip.mp4"), "video/mp4");
+        assert_eq!(mime_from_filename("data.bin"), "application/octet-stream");
+    }
+
+    #[test]
+    fn test_mime_from_filename_uppercase() {
+        assert_eq!(mime_from_filename("photo.JPG"), "image/jpeg");
+        assert_eq!(mime_from_filename("clip.MP4"), "video/mp4");
+        assert_eq!(mime_from_filename("image.PNG"), "image/png");
+    }
+
+    #[test]
+    fn test_mime_from_filename_mixed_case() {
+        assert_eq!(mime_from_filename("anim.WebP"), "image/webp");
+        assert_eq!(mime_from_filename("MOVIE.mOV"), "video/quicktime");
+    }
+
+    #[test]
+    fn test_mime_from_filename_no_ext() {
+        assert_eq!(mime_from_filename("unknown"), "application/octet-stream");
+    }
+
+    #[test]
+    fn test_mime_from_filename_multiple_dots() {
+        assert_eq!(mime_from_filename("archive.tar.gz"), "application/octet-stream");
+        assert_eq!(mime_from_filename("video.min.mp4"), "video/mp4");
+    }
+}

@@ -1,7 +1,7 @@
-/// Referral system tests.
-///
-/// Unit tests replicate the pure `generate_referral_code` logic — no DB needed.
-/// Integration tests (marked #[ignore]) need a live DATABASE_URL and `--features backend`.
+// Referral system tests.
+//
+// Unit tests replicate the pure `generate_referral_code` logic — no DB needed.
+// Integration tests (marked #[ignore]) need a live DATABASE_URL and `--features backend`.
 
 // ──────────────────────────────────────────────────────────────────
 // Replicate the pure code-generation logic for standalone unit tests

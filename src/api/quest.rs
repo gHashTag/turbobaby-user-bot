@@ -473,9 +473,7 @@ async fn scan_quest_qr(
 
 // ── Admin Notifications ───────────────────────────────────────
 
-fn html_escape(s: &str) -> String {
-    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
-}
+use crate::util::html_escape;
 
 async fn notify_quest_place_admins(
     bot: &teloxide::Bot,
