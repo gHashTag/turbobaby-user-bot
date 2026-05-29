@@ -213,7 +213,11 @@ enum Tab { Strains, Accessories, Tea, Sets, AccessorySets, TeaSets, Dashboard, O
 
 // ── File upload helper ─────────────────────────────────────────
 
-async fn upload_file(accept: &str) -> Option<String> {
+/// Result of an upload attempt.
+/// - `Ok(Some(url))` — success, server returned a URL
+/// - `Ok(None)` — user cancelled / didn't pick a file
+/// - `Err(msg)` — server or network error; `msg` is a human-readable Russian string
+async fn upload_file(accept: &str) -> Result<Option<String>, String> {
     let accept = accept.to_string();
     let init_data = use_telegram_init_data();
     let telegram_id = use_telegram_id().unwrap_or(0).to_string();
@@ -223,8 +227,8 @@ async fn upload_file(accept: &str) -> Option<String> {
         .and_then(|s| s.get_item("wwb_admin_token").ok())
         .flatten()
         .unwrap_or_default();
-    if init_data.len() > 4096 { return None; }
-    if token.len() > 2048 { return None; }
+    if init_data.len() > 4096 { return Err("Ошибка загрузки: слишком длинные init_data".into()); }
+    if token.len() > 2048 { return Err("Ошибка загрузки: слишком длинный admin token".into()); }
     fn js_escape(s: &str) -> String {
         s.replace('\\', "\\\\")
             .replace('\'', "\\'")
@@ -242,6 +246,11 @@ async fn upload_file(accept: &str) -> Option<String> {
     let telegram_id_js = js_escape(&telegram_id);
     let init_data_js = js_escape(&init_data);
     let accept_js = js_escape(&accept);
+    // JS resolves one of:
+    //   ''                       — user cancelled (no file picked) or timeout
+    //   <url>                    — success (plain URL string from server)
+    //   'ERROR::<status>::<body>' — HTTP non-2xx; <status> is numeric, <body> truncated server text
+    //   'ERROR::0::<message>'     — network/JS exception; <message> is err.message
     let js = format!(r#"
 new Promise((resolve) => {{
     var input = document.createElement('input');
@@ -250,11 +259,12 @@ new Promise((resolve) => {{
     input.style.display = 'none';
     document.body.appendChild(input);
     var resolved = false;
+    var cleanup = () => {{ try {{ document.body.removeChild(input); }} catch(e) {{}} }};
     input.onchange = async (e) => {{
         if (resolved) return;
         resolved = true;
         var file = e.target.files[0];
-        if (!file) {{ document.body.removeChild(input); resolve(''); return; }}
+        if (!file) {{ cleanup(); resolve(''); return; }}
         var formData = new FormData();
         formData.append('file', file);
         try {{
@@ -268,26 +278,60 @@ new Promise((resolve) => {{
                     'X-Admin-Token': '{}'
                 }}
             }});
-            var data = await resp.json();
-            document.body.removeChild(input);
-            resolve(data.url || '');
-        }} catch(err) {{ document.body.removeChild(input); resolve(''); }}
+            if (!resp.ok) {{
+                var bodyText = '';
+                try {{ bodyText = await resp.text(); }} catch(_) {{}}
+                if (bodyText && bodyText.length > 500) bodyText = bodyText.slice(0, 500) + '...';
+                try {{
+                    var parsed = JSON.parse(bodyText);
+                    if (parsed && (parsed.error || parsed.message)) bodyText = parsed.error || parsed.message;
+                }} catch(_) {{}}
+                cleanup();
+                resolve('ERROR::' + resp.status + '::' + bodyText);
+                return;
+            }}
+            var text = await resp.text();
+            var url = '';
+            try {{ var data = JSON.parse(text); url = (data && data.url) || ''; }} catch(_) {{}}
+            cleanup();
+            if (!url) {{
+                resolve('ERROR::' + resp.status + '::Пустой ответ сервера');
+                return;
+            }}
+            resolve(url);
+        }} catch(err) {{
+            cleanup();
+            var msg = (err && err.message) ? err.message : String(err);
+            if (msg.length > 500) msg = msg.slice(0, 500) + '...';
+            resolve('ERROR::0::' + msg);
+        }}
     }};
-    setTimeout(() => {{ if (!resolved) {{ resolved = true; try {{ document.body.removeChild(input); }} catch(e) {{}} resolve(''); }} }}, 120000);
+    setTimeout(() => {{ if (!resolved) {{ resolved = true; cleanup(); resolve(''); }} }}, 120000);
     input.click();
 }})
 "#, accept_js, init_data_js, telegram_id_js, token_js);
-    if js.len() > 100_000 { return None; }
-    let promise_val = js_sys::eval(&js).ok()?;
-    let promise = promise_val.dyn_into::<js_sys::Promise>().ok()?;
-    let result = wasm_bindgen_futures::JsFuture::from(promise).await.ok()?;
-    let url = result.as_string()?;
-    if url.is_empty() { return None; }
-    Some(url)
+    if js.len() > 100_000 { return Err("Ошибка загрузки: внутренний лимит JS".into()); }
+    let promise_val = js_sys::eval(&js).map_err(|_| "Ошибка загрузки: не удалось запустить JS".to_string())?;
+    let promise = promise_val.dyn_into::<js_sys::Promise>().map_err(|_| "Ошибка загрузки: некорректный Promise".to_string())?;
+    let result = wasm_bindgen_futures::JsFuture::from(promise).await.map_err(|_| "Ошибка загрузки: JS Promise отклонён".to_string())?;
+    let raw = result.as_string().ok_or_else(|| "Ошибка загрузки: неожиданный тип результата".to_string())?;
+    if raw.is_empty() { return Ok(None); }
+    if let Some(rest) = raw.strip_prefix("ERROR::") {
+        let mut parts = rest.splitn(2, "::");
+        let status = parts.next().unwrap_or("0");
+        let body = parts.next().unwrap_or("");
+        let trimmed = body.trim();
+        return Err(if trimmed.is_empty() {
+            format!("Ошибка загрузки: HTTP {}", status)
+        } else {
+            format!("Ошибка загрузки: HTTP {} — {}", status, trimmed)
+        });
+    }
+    Ok(Some(raw))
 }
 
-async fn upload_image() -> Option<String> { upload_file("image/*").await }
-async fn upload_video() -> Option<String> { upload_file("video/*").await }
+async fn upload_image() -> Result<Option<String>, String> { upload_file("image/*").await }
+async fn upload_video() -> Result<Option<String>, String> { upload_file("video/*").await }
 
 // ── Main component ────────────────────────────────────────────
 
@@ -2679,9 +2723,14 @@ fn auto_scroll_to_list() {
     let _ = js_sys::eval("setTimeout(()=>{var el=document.querySelector('[data-list]');if(el)el.scrollIntoView({behavior:'smooth'});},100);");
 }
 
+fn upload_error_style() -> &'static str {
+    "margin-top:6px;padding:8px 10px;background:#2a0f15;color:#ff6b7a;border:1px solid #ff4757;border-radius:4px;font-size:12px;line-height:1.4;word-break:break-word;"
+}
+
 #[component]
 fn ImageUpload(image_url: String, on_change: EventHandler<String>) -> Element {
     let mut uploading = use_signal(|| false);
+    let mut error_msg = use_signal(String::new);
     let img_url = image_url.clone();
     rsx! {
         div { style: "display:flex;gap:6px;align-items:center;",
@@ -2693,13 +2742,28 @@ fn ImageUpload(image_url: String, on_change: EventHandler<String>) -> Element {
                 button { style: upload_btn_style(),
                     onclick: move |_| {
                         uploading.set(true);
+                        error_msg.set(String::new());
                         spawn(async move {
                             let result = upload_image().await;
                             uploading.set(false);
-                            if let Some(url) = result { on_change.call(url); }
+                            match result {
+                                Ok(Some(url)) => on_change.call(url),
+                                Ok(None) => {}
+                                Err(msg) => error_msg.set(msg),
+                            }
                         });
                     },
                     "📷 Upload"
+                }
+            }
+        }
+        if !error_msg.read().is_empty() {
+            div { style: upload_error_style(),
+                "❌ {error_msg}"
+                button {
+                    style: "margin-left:8px;background:transparent;color:#ff6b7a;border:1px solid #ff4757;border-radius:3px;font-size:11px;padding:1px 6px;cursor:pointer;",
+                    onclick: move |_| error_msg.set(String::new()),
+                    "✕"
                 }
             }
         }
@@ -2718,6 +2782,7 @@ fn ImageUpload(image_url: String, on_change: EventHandler<String>) -> Element {
 #[component]
 fn VideoUpload(video_url: String, on_change: EventHandler<String>) -> Element {
     let mut uploading = use_signal(|| false);
+    let mut error_msg = use_signal(String::new);
     rsx! {
         div { style: "display:flex;gap:6px;align-items:center;",
             input { style: "flex:1;{input_style()}", placeholder: "URL видео", value: "{video_url}",
@@ -2728,15 +2793,28 @@ fn VideoUpload(video_url: String, on_change: EventHandler<String>) -> Element {
                 button { style: upload_btn_style(),
                     onclick: move |_| {
                         uploading.set(true);
+                        error_msg.set(String::new());
                         spawn(async move {
                             let result = upload_video().await;
                             uploading.set(false);
-                            if let Some(url) = result {
-                                on_change.call(url);
+                            match result {
+                                Ok(Some(url)) => on_change.call(url),
+                                Ok(None) => {}
+                                Err(msg) => error_msg.set(msg),
                             }
                         });
                     },
                     "🎥 Upload"
+                }
+            }
+        }
+        if !error_msg.read().is_empty() {
+            div { style: upload_error_style(),
+                "❌ {error_msg}"
+                button {
+                    style: "margin-left:8px;background:transparent;color:#ff6b7a;border:1px solid #ff4757;border-radius:3px;font-size:11px;padding:1px 6px;cursor:pointer;",
+                    onclick: move |_| error_msg.set(String::new()),
+                    "✕"
                 }
             }
         }
