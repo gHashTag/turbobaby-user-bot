@@ -319,8 +319,8 @@ async fn check_admin_access(
     if let Some(token) = token_opt {
         if let Some(ref password) = state.config.admin_password {
             if crate::api::auth::verify_admin_token(token, &state.config.bot_token, password) {
-                tracing::info!("admin/check: token authenticated");
-                return Ok(Json(json!({ "is_admin": true, "telegram_id": 0 })));
+                tracing::info!("admin/check: token authenticated telegram_id={}", query.telegram_id);
+                return Ok(Json(json!({ "is_admin": true, "telegram_id": query.telegram_id })));
             }
             tracing::warn!("admin/check: token verification failed");
         } else {

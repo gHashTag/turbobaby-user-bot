@@ -285,11 +285,11 @@ async fn main() -> Result<()> {
         axum::http::header::CONTENT_SECURITY_POLICY,
         HeaderValue::from_static(
             "default-src 'self'; \
-             script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval'; \
-             style-src 'self' 'unsafe-inline'; \
+             script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' https://telegram.org; \
+             style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; \
              img-src 'self' data: https: blob:; \
              connect-src 'self' https:; \
-             font-src 'self'; \
+             font-src 'self' https://fonts.gstatic.com; \
              frame-ancestors https://*.telegram.org"
         ),
     );
@@ -339,30 +339,20 @@ async fn main() -> Result<()> {
         });
     }
 
-    match std::fs::read_dir("dist") {
-        Ok(entries) => {
+    fn walk_dir(cache: &mut std::collections::HashMap<String, CachedFile>, dir: &std::path::Path) {
+        if let Ok(entries) = std::fs::read_dir(dir) {
             for entry in entries.flatten() {
                 let path = entry.path();
                 if path.is_dir() {
-                    if path.file_name() != Some(std::ffi::OsStr::new("assets")) {
-                        if let Ok(sub) = std::fs::read_dir(&path) {
-                            for sub_entry in sub.flatten() {
-                                let sub_path = sub_entry.path();
-                                if sub_path.is_file() {
-                                    add_to_cache(&mut static_cache, &sub_path);
-                                }
-                            }
-                        }
-                    }
+                    walk_dir(cache, &path);
                 } else {
-                    add_to_cache(&mut static_cache, &path);
+                    add_to_cache(cache, &path);
                 }
             }
         }
-        Err(e) => {
-            tracing::error!("failed to read_dir(dist): {}", e);
-        }
     }
+
+    walk_dir(&mut static_cache, std::path::Path::new("dist"));
     tracing::info!("Cached {} dist files in memory", static_cache.len());
 
     // /assets, /styles, /images — stable URLs, day-long browser cache.

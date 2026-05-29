@@ -18,7 +18,7 @@ use std::sync::LazyLock;
 static HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| reqwest::Client::new());
 use crate::ui::api::context::api_base_url;
 use crate::ui::components::{EmptyState, Modal, Toast, ToastKind, ToastContainer, Skeleton, SkeletonShape};
-use crate::ui::telegram::{use_telegram_id_or_admin as use_telegram_id, use_telegram_init_data, TelegramApp, HapticNotification};
+use crate::ui::telegram::{use_telegram_id, use_telegram_init_data, TelegramApp, HapticNotification};
 
 fn admin_token() -> String {
     #[cfg(target_arch = "wasm32")]
@@ -293,7 +293,17 @@ async fn upload_video() -> Option<String> { upload_file("video/*").await }
 
 #[component]
 pub fn AdminScreen() -> Element {
-    let telegram_id = use_telegram_id().unwrap_or(0);
+    let tg_id = use_telegram_id();
+    #[cfg(target_arch = "wasm32")]
+    let stored_id = web_sys::window()
+        .and_then(|w| w.local_storage().ok())
+        .flatten()
+        .and_then(|s| s.get_item("wwb_admin_telegram_id").ok())
+        .flatten()
+        .and_then(|id| id.parse::<i64>().ok());
+    #[cfg(not(target_arch = "wasm32"))]
+    let stored_id: Option<i64> = None;
+    let telegram_id = tg_id.or(stored_id).unwrap_or(0);
     let active_tab = use_signal(|| Tab::Strains);
     let build_version: &'static str = env!("BUILD_VERSION");
     let init_data = use_telegram_init_data();
