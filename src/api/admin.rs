@@ -36,7 +36,6 @@ struct ValidateInitDataResponse {
     ok: bool,
     data_check_string: String,
     received_hash: String,
-    expected_hash: String,
     user: Option<Value>,
     error: Option<String>,
 }
@@ -370,13 +369,12 @@ async fn debug_validate_init_data(
     Json(req): Json<ValidateInitDataRequest>,
 ) -> Result<Json<ValidateInitDataResponse>, StatusCode> {
     check_admin(&headers, &state)?;
-    let (ok, data_check_string, received_hash, expected_hash, user, error) =
+    let (ok, data_check_string, received_hash, _expected_hash, user, error) =
         crate::api::auth::validate_init_data_debug(&req.init_data, &state.config.bot_token);
     Ok(Json(ValidateInitDataResponse {
         ok,
         data_check_string,
         received_hash,
-        expected_hash,
         user: user.map(|u| json!({"id": u.id, "first_name": u.first_name, "username": u.username})),
         error,
     }))

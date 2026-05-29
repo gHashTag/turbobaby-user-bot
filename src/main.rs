@@ -156,6 +156,7 @@ async fn main() -> Result<()> {
     info!("Environment: {}", if config.is_production { "Production" } else { "Development" });
     info!("Token present: {}", if !config.bot_token.is_empty() { "YES" } else { "NO" });
     info!("Admin password set: {}", if config.admin_password.is_some() { "YES" } else { "NO" });
+    info!("Admin IDs: {:?}", config.admin_ids);
     info!("Web App URL: {}", config.web_app_url);
 
     let db = Arc::new(Database::connect(&config.database_url).await?);
