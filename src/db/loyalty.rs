@@ -83,3 +83,82 @@ pub fn calculate_tier(total_spent: f64, order_count: i64, config: &LoyaltyConfig
     } else { 0.0 };
     (tier, tier_pct.max(progressive_pct))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{calculate_tier, LoyaltyConfig};
+
+    fn test_config() -> LoyaltyConfig {
+        LoyaltyConfig {
+            bronze_threshold: 1000.0,
+            silver_threshold: 5000.0,
+            gold_threshold: 10000.0,
+            bronze_cashback_pct: 5.0,
+            silver_cashback_pct: 10.0,
+            gold_cashback_pct: 15.0,
+            referral_bonus: 100.0,
+            max_bonus_usage_pct: 50.0,
+            progressive_cashback: vec![1.0, 2.0, 3.0],
+            happy_hour_start: 0,
+            happy_hour_end: 0,
+            happy_hour_enabled: false,
+            happy_hour_discount: 0.0,
+        }
+    }
+
+    #[test]
+    fn test_calculate_tier_none() {
+        let config = test_config();
+        assert_eq!(calculate_tier(0.0, 0, &config), ("none", 0.0));
+    }
+
+    #[test]
+    fn test_calculate_tier_bronze() {
+        let config = test_config();
+        assert_eq!(calculate_tier(1000.0, 1, &config), ("bronze", 5.0));
+    }
+
+    #[test]
+    fn test_calculate_tier_silver() {
+        let config = test_config();
+        assert_eq!(calculate_tier(5000.0, 1, &config), ("silver", 10.0));
+    }
+
+    #[test]
+    fn test_calculate_tier_gold() {
+        let config = test_config();
+        assert_eq!(calculate_tier(10000.0, 1, &config), ("gold", 15.0));
+    }
+
+    #[test]
+    fn test_calculate_tier_progressive_overrides() {
+        let config = test_config();
+        // 3 orders = index 2 = 3.0%, which is less than bronze 5%
+        assert_eq!(calculate_tier(1000.0, 3, &config), ("bronze", 5.0));
+        // 2 orders = index 1 = 2.0%, which is less than silver 10%
+        assert_eq!(calculate_tier(5000.0, 2, &config), ("silver", 10.0));
+    }
+
+    #[test]
+    fn test_calculate_tier_progressive_wins() {
+        let mut config = test_config();
+        config.progressive_cashback = vec![20.0, 25.0, 30.0];
+        // 3 orders = index 2 = 30.0%, which beats bronze 5%
+        assert_eq!(calculate_tier(1000.0, 3, &config), ("bronze", 30.0));
+    }
+
+    #[test]
+    fn test_calculate_tier_order_count_clamped() {
+        let mut config = test_config();
+        config.progressive_cashback = vec![1.0, 2.0];
+        // 10 orders clamps to last index (1) = 2.0%
+        assert_eq!(calculate_tier(1000.0, 10, &config), ("bronze", 5.0));
+    }
+
+    #[test]
+    fn test_calculate_tier_edge_exact_threshold() {
+        let config = test_config();
+        assert_eq!(calculate_tier(999.99, 1, &config), ("none", 1.0));
+        assert_eq!(calculate_tier(1000.0, 1, &config), ("bronze", 5.0));
+    }
+}
