@@ -65,6 +65,25 @@ async fn upload_file(
 
     let short_id = uuid::Uuid::new_v4().to_string();
     let safe_name = format!("{}.{}", short_id.get(0..8).unwrap_or(&short_id), ext);
+
+    // Prefer S3 when configured — local /data/uploads is ephemeral on Railway
+    // (no persistent volume) and vanishes on every redeploy.
+    if state.config.s3_enabled() {
+        match crate::s3::upload_to_s3(&state.config, &safe_name, &data).await {
+            Ok(url) => {
+                tracing::info!("upload success (s3): url={}", url);
+                return Ok(Json(json!({
+                    "url": url,
+                    "filename": safe_name
+                })));
+            }
+            Err(e) => {
+                tracing::error!("upload s3 error: {:?}", e);
+                return Err(StatusCode::INTERNAL_SERVER_ERROR);
+            }
+        }
+    }
+
     let path = format!("/data/uploads/{}", safe_name);
 
     if let Err(e) = tokio::fs::create_dir_all("/data/uploads").await {
@@ -74,7 +93,7 @@ async fn upload_file(
     match tokio::fs::write(&path, &data).await {
         Ok(_) => {
             let url = format!("/uploads/{}", safe_name);
-            tracing::info!("upload success: url={}", url);
+            tracing::info!("upload success (local): url={}", url);
             Ok(Json(json!({
                 "url": url,
                 "filename": safe_name
