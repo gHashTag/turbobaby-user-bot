@@ -137,16 +137,16 @@ pub fn validate_init_data(init_data: &str, bot_token: &str) -> Option<TelegramUs
 }
 
 /// Debug version that returns detailed validation info instead of just Option.
-pub fn validate_init_data_debug(init_data: &str, bot_token: &str) -> (bool, String, String, String, Option<TelegramUser>, Option<String>) {
+pub fn validate_init_data_debug(init_data: &str, bot_token: &str) -> (bool, String, String, Option<TelegramUser>, Option<String>) {
     if init_data.len() > 4096 {
-        return (false, String::new(), String::new(), String::new(), None, Some("init_data too long".to_string()));
+        return (false, String::new(), String::new(), None, Some("init_data too long".to_string()));
     }
     let mut pairs: Vec<(String, String)> = Vec::new();
     for pair in init_data.split('&') {
         let mut parts = pair.splitn(2, '=');
         let key = match parts.next() {
             Some(k) => k,
-            None => return (false, String::new(), String::new(), String::new(), None, Some("empty pair".to_string())),
+            None => return (false, String::new(), String::new(), None, Some("empty pair".to_string())),
         };
         let value = parts.next().unwrap_or("");
         pairs.push((key.to_string(), value.to_string()));
@@ -154,7 +154,7 @@ pub fn validate_init_data_debug(init_data: &str, bot_token: &str) -> (bool, Stri
 
     let hash = match pairs.iter().find(|(k, _)| k == "hash").map(|(_, v)| v.clone()) {
         Some(h) => h,
-        None => return (false, String::new(), String::new(), String::new(), None, Some("missing hash".to_string())),
+        None => return (false, String::new(), String::new(), None, Some("missing hash".to_string())),
     };
 
     let mut data_pairs: Vec<_> = pairs.into_iter().filter(|(k, _)| k != "hash").collect();
@@ -178,21 +178,21 @@ pub fn validate_init_data_debug(init_data: &str, bot_token: &str) -> (bool, Stri
 
     let mut secret_mac = match HmacSha256::new_from_slice(b"WebAppData") {
         Ok(m) => m,
-        Err(_) => return (false, data_check_string_decoded.clone(), hash.clone(), String::new(), None, Some("HMAC init failed".to_string())),
+        Err(_) => return (false, data_check_string_decoded.clone(), hash.clone(), None, Some("HMAC init failed".to_string())),
     };
     secret_mac.update(bot_token.as_bytes());
     let secret_key = secret_mac.finalize().into_bytes();
 
     let mut mac = match HmacSha256::new_from_slice(&secret_key) {
         Ok(m) => m,
-        Err(_) => return (false, data_check_string_decoded.clone(), hash.clone(), String::new(), None, Some("HMAC init failed".to_string())),
+        Err(_) => return (false, data_check_string_decoded.clone(), hash.clone(), None, Some("HMAC init failed".to_string())),
     };
     mac.update(data_check_string_decoded.as_bytes());
     let expected_hash = hex::encode(mac.finalize().into_bytes());
 
     let mut mac_raw = match HmacSha256::new_from_slice(&secret_key) {
         Ok(m) => m,
-        Err(_) => return (false, data_check_string_raw.clone(), hash.clone(), String::new(), None, Some("HMAC init failed".to_string())),
+        Err(_) => return (false, data_check_string_raw.clone(), hash.clone(), None, Some("HMAC init failed".to_string())),
     };
     mac_raw.update(data_check_string_raw.as_bytes());
     let expected_hash_raw = hex::encode(mac_raw.finalize().into_bytes());
@@ -232,7 +232,7 @@ pub fn validate_init_data_debug(init_data: &str, bot_token: &str) -> (bool, Stri
         }
     }
 
-    (ok, data_check_string_decoded, hash, expected_hash, user, error)
+    (ok, data_check_string_decoded, hash, user, error)
 }
 
 #[cfg(test)]

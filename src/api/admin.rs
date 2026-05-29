@@ -369,7 +369,7 @@ async fn debug_validate_init_data(
     Json(req): Json<ValidateInitDataRequest>,
 ) -> Result<Json<ValidateInitDataResponse>, StatusCode> {
     check_admin(&headers, &state)?;
-    let (ok, data_check_string, received_hash, _expected_hash, user, error) =
+    let (ok, data_check_string, received_hash, user, error) =
         crate::api::auth::validate_init_data_debug(&req.init_data, &state.config.bot_token);
     Ok(Json(ValidateInitDataResponse {
         ok,

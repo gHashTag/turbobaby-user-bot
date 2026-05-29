@@ -44,6 +44,9 @@ impl Config {
             .collect();
         let admin_ids = if !env_ids.is_empty() {
             env_ids
+        } else if is_production {
+            tracing::error!("ADMIN_IDS not set in production — defaulting to empty admin list");
+            vec![]
         } else {
             tracing::warn!("ADMIN_IDS not set — using default admins 144022504, 8420420131");
             vec![144022504, 8420420131]

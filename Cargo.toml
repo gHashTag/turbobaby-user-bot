@@ -39,7 +39,7 @@ getrandom = { version = "0.2", features = ["js"] }
 utoipa = { version = "5", features = ["axum_extras"], optional = true }
 
 # Backend only dependencies - all optional
-teloxide = { version = "0.13", features = ["macros", "webhooks-axum", "rustls"], default-features = false, optional = true }
+teloxide = { version = "0.17", features = ["macros", "webhooks-axum", "rustls"], default-features = false, optional = true }
 axum = { version = "0.7", features = ["multipart"], optional = true }
 axum-prometheus = { version = "0.7", optional = true }
 metrics = { version = "0.23", optional = true }
@@ -75,7 +75,6 @@ rand = "0.8"
 base64 = "0.21"
 anyhow = "1"
 thiserror = "1"
-md5 = { version = "0.7", optional = true }
 image = { version = "0.24", default-features = false, features = ["jpeg", "png", "webp"] }
 qrcode = { version = "0.14.1", default-features = false, features = ["svg"] }
 urlencoding = "2.1.3"
@@ -87,7 +86,7 @@ backend = [
     "tokio-postgres", "deadpool-postgres", "postgres-types",
     "tokio-postgres-rustls", "rustls", "rustls-native-certs",
     "sea-orm",
-    "aws-config", "aws-sdk-s3", "tracing-subscriber", "url", "md5",
+    "aws-config", "aws-sdk-s3", "tracing-subscriber", "url",
     "axum-prometheus",
     "metrics",
     "utoipa"

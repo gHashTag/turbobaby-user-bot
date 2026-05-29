@@ -38,7 +38,7 @@ pub async fn handle_callback(
         Some(d) => d.to_string(),
         None => {
             tracing::warn!("callback_query: empty data from user_id={}", q.from.id.0);
-            bot.answer_callback_query(&q.id).await?;
+            bot.answer_callback_query(q.id).await?;
             return Ok(());
         }
     };
@@ -81,7 +81,7 @@ pub async fn handle_callback(
 
     match data.as_str() {
         "start_joke" | "more_joke" => {
-            bot.answer_callback_query(&q.id).await?;
+            bot.answer_callback_query(q.id).await?;
             let prompt = get_random_joke_prompt(&locale.joke_prompt, None);
             if let Some(msg) = q.message.as_ref().and_then(|m| match m {
     MaybeInaccessibleMessage::Regular(msg) => Some(msg),
@@ -102,7 +102,7 @@ pub async fn handle_callback(
         }
 
         "start_fact" | "more_fact" => {
-            bot.answer_callback_query(&q.id).await?;
+            bot.answer_callback_query(q.id).await?;
             let prompt = get_random_fact_prompt(&locale.fact_prompt);
             if let Some(msg) = q.message.as_ref().and_then(|m| match m {
     MaybeInaccessibleMessage::Regular(msg) => Some(msg),
@@ -123,7 +123,7 @@ pub async fn handle_callback(
         }
 
         "show_lang" => {
-            bot.answer_callback_query(&q.id).await?;
+            bot.answer_callback_query(q.id).await?;
             let btns: Vec<Vec<InlineKeyboardButton>> = supported_langs().iter().map(|code| {
                 let l = get_locale(code);
                 vec![callback_btn(&format!("{} {}", l.flag, l.name), &format!("set_lang_{}", code))]
@@ -141,7 +141,7 @@ pub async fn handle_callback(
             let new_lang = &d["set_lang_".len()..];
             db.set_user_lang(user_id, new_lang).await.ok();
             let new_locale = get_locale(new_lang);
-            bot.answer_callback_query(&q.id).text(&new_locale.lang_changed).await?;
+            bot.answer_callback_query(q.id).text(&new_locale.lang_changed).await?;
             if let Some(msg) = q.message.as_ref().and_then(|m| match m {
     MaybeInaccessibleMessage::Regular(msg) => Some(msg),
     MaybeInaccessibleMessage::Inaccessible(_) => None,
@@ -152,7 +152,7 @@ pub async fn handle_callback(
         }
 
         d if d.starts_with("sotd_next_") || d.starts_with("sotd_prev_") => {
-            bot.answer_callback_query(&q.id).await?;
+            bot.answer_callback_query(q.id).await?;
             let is_next = d.starts_with("sotd_next_");
             let current: usize = d.split('_').next_back().and_then(|s| s.parse().ok()).unwrap_or(0);
             let new_idx = if is_next { current + 1 } else { current.saturating_sub(1) };
@@ -186,7 +186,7 @@ pub async fn handle_callback(
         d if d.starts_with("confirm_") => {
             if !config.admin_ids.contains(&user_id) {
                 tracing::warn!("callback: confirm rejected for non-admin user_id={}", user_id);
-                bot.answer_callback_query(&q.id).text("⛔ Admin only").await?;
+                bot.answer_callback_query(q.id).text("⛔ Admin only").await?;
                 return Ok(());
             }
             let order_id = &d["confirm_".len()..];
@@ -209,7 +209,7 @@ pub async fn handle_callback(
                 }
             };
             if db_ok {
-                bot.answer_callback_query(&q.id).text(format!("✅ {}", locale.order_confirmed)).await?;
+                bot.answer_callback_query(q.id).text(format!("✅ {}", locale.order_confirmed)).await?;
                 if let Some(msg) = q.message.as_ref().and_then(|m| match m {
     MaybeInaccessibleMessage::Regular(msg) => Some(msg),
     MaybeInaccessibleMessage::Inaccessible(_) => None,
@@ -223,7 +223,7 @@ pub async fn handle_callback(
     MaybeInaccessibleMessage::Regular(msg) => Some(msg),
     MaybeInaccessibleMessage::Inaccessible(_) => None,
 }) {
-                bot.answer_callback_query(&q.id).text("❌ DB error — check logs").await.ok();
+                bot.answer_callback_query(q.id).text("❌ DB error — check logs").await.ok();
                 bot.send_message(msg.chat.id, format!("❌ Failed to confirm order #{}", order_id)).await.ok();
             }
         }
@@ -231,12 +231,12 @@ pub async fn handle_callback(
         d if d.starts_with("complete_") => {
             if !config.admin_ids.contains(&user_id) {
                 tracing::warn!("callback: complete rejected for non-admin user_id={}", user_id);
-                bot.answer_callback_query(&q.id).text("⛔ Admin only").await?;
+                bot.answer_callback_query(q.id).text("⛔ Admin only").await?;
                 return Ok(());
             }
             let order_id = &d["complete_".len()..];
             tracing::info!("callback: complete order_id={}", order_id);
-            bot.answer_callback_query(&q.id).text("📦 Completed!").await?;
+            bot.answer_callback_query(q.id).text("📦 Completed!").await?;
 
             // Atomically complete order, update loyalty profile, and recalculate tier
             let (is_first, customer_telegram_id) = match crate::db::orders::complete_order_and_update_loyalty(&db.pool, order_id).await {
@@ -301,12 +301,12 @@ pub async fn handle_callback(
         d if d.starts_with("reject_") => {
             if !config.admin_ids.contains(&user_id) {
                 tracing::warn!("callback: reject rejected for non-admin user_id={}", user_id);
-                bot.answer_callback_query(&q.id).text("⛔ Admin only").await?;
+                bot.answer_callback_query(q.id).text("⛔ Admin only").await?;
                 return Ok(());
             }
             let _order_id = &d["reject_".len()..];
             tracing::info!("callback: reject order_id={}", _order_id);
-            bot.answer_callback_query(&q.id).text(format!("❌ {}", locale.order_rejected)).await?;
+            bot.answer_callback_query(q.id).text(format!("❌ {}", locale.order_rejected)).await?;
             match db.pool.get().await {
                 Ok(mut client) => {
                     match client.transaction().await {
@@ -367,7 +367,7 @@ pub async fn handle_callback(
 
         _ => {
             tracing::warn!("callback: unknown data='{}' from user_id={}", data, user_id);
-            bot.answer_callback_query(&q.id).await?;
+            bot.answer_callback_query(q.id).await?;
         }
     }
 

@@ -41,11 +41,6 @@ fn format_price(price: f64) -> String {
 pub fn HomeScreen() -> Element {
     let mut cart = use_context::<Signal<Cart>>();
     let cart_count: u32 = cart.read().items.iter().map(|i| i.quantity).sum();
-    let nav = navigator();
-
-    // Secret admin access: 5 clicks on logo - navigate to admin URL directly
-    let mut logo_clicks = use_signal(|| 0u32);
-
     let home_subtitle = t(Lang::Russian, T_HOME_SUBTITLE).to_string();
     let nav_menu = t(Lang::Russian, T_NAV_MENU).to_string();
     let nav_sets = t(Lang::Russian, T_NAV_SETS).to_string();
@@ -76,14 +71,6 @@ pub fn HomeScreen() -> Element {
                     src: "{assets::logo::MAIN}",
                     alt: "Woody Weed Bot",
                     style: "height:120px;width:auto;display:block;margin:0 auto;box-shadow:0 0 20px rgba(57,255,20,0.3);cursor:pointer;user-select:none;transition:transform 0.1s;",
-                    onclick: move |_| {
-                        *logo_clicks.write() += 1;
-                        let clicks = *logo_clicks.read();
-                        if clicks >= 5 {
-                            nav.push(Route::Admin {});
-                            *logo_clicks.write() = 0;
-                        }
-                    }
                 }
                 h1 { style: "font-size:24px;font-weight:800;color:#39ff14;text-shadow:3px 3px 0 #000,0 0 10px rgba(57,255,20,0.5);letter-spacing:2px;margin-top:12px;",
                     "WOODY WEEDPECKER"

@@ -307,7 +307,6 @@ fn render_strain_card(strain: ApiStrain, mut cart: Signal<Cart>) -> Element {
                             autoplay: true,
                             muted: true,
                             loop: true,
-                            playsinline: true,
                             onclick: move |e: Event<MouseData>| { e.stop_propagation(); show_video.set(true); }
                         }
                     }
