@@ -294,24 +294,32 @@ async fn upload_video() -> Option<String> { upload_file("video/*").await }
 #[component]
 pub fn AdminScreen() -> Element {
     let tg_id = use_telegram_id();
-    #[cfg(target_arch = "wasm32")]
-    let stored_id = web_sys::window()
-        .and_then(|w| w.local_storage().ok())
-        .flatten()
-        .and_then(|s| s.get_item("wwb_admin_telegram_id").ok())
-        .flatten()
-        .and_then(|id| id.parse::<i64>().ok());
-    #[cfg(not(target_arch = "wasm32"))]
-    let stored_id: Option<i64> = None;
-    let telegram_id = tg_id.or(stored_id).unwrap_or(0);
     let active_tab = use_signal(|| Tab::Strains);
     let build_version: &'static str = env!("BUILD_VERSION");
     let init_data = use_telegram_init_data();
+    let access_reload = use_signal(|| 0u32);
 
-    #[cfg(target_arch = "wasm32")]
-    {
-        // init_data logging removed
-    }
+    // Reactive telegram_id: re-reads localStorage whenever access_reload changes
+    // (e.g. after a successful password login). Falls back to the Telegram WebApp
+    // user id when running inside Telegram.
+    let telegram_id = use_memo(move || {
+        let _ = access_reload.read();
+        #[cfg(target_arch = "wasm32")]
+        {
+            let stored = web_sys::window()
+                .and_then(|w| w.local_storage().ok())
+                .flatten()
+                .and_then(|s| s.get_item("wwb_admin_telegram_id").ok())
+                .flatten()
+                .and_then(|id| id.parse::<i64>().ok())
+                .filter(|id| *id != 0);
+            tg_id.or(stored).unwrap_or(0)
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            tg_id.unwrap_or(0)
+        }
+    });
 
     let password_token = use_signal(|| {
         #[cfg(target_arch = "wasm32")]
@@ -328,12 +336,12 @@ pub fn AdminScreen() -> Element {
         }
         String::new()
     });
-    let access_reload = use_signal(|| 0u32);
 
     let access = use_resource(move || {
         let _ = access_reload.read();
         let init_data = init_data.clone();
         let token = password_token.read().clone();
+        let telegram_id = telegram_id();
         async move {
             let base = api_base_url();
             let url = format!("{}/api/admin/check?telegram_id={}", base, telegram_id);
@@ -357,12 +365,12 @@ pub fn AdminScreen() -> Element {
     rsx! {
         div { style: "min-height:100vh;background:#0f0f1a;color:#e8e8e8;padding:16px;padding-bottom:80px;",
             h1 { style: "font-size:22px;color:#ff4757;margin-bottom:4px;", "🔧 Admin" }
-            div { style: "font-size:11px;color:#666;margin-bottom:4px;", "tg: {telegram_id}" }
+            div { style: "font-size:11px;color:#666;margin-bottom:4px;", "tg: {telegram_id()}" }
             div { style: "font-size:10px;color:#444;margin-bottom:16px;font-family:monospace;", "v{build_version}" }
             match &*access.read() {
                 None => rsx!(div { style: "color:#888;padding:20px 0;", "Проверка доступа..." }),
                 Some(Ok(true)) => rsx!(AdminPanel { active_tab, password_token }),
-                _ => rsx!(AccessDeniedScreen { telegram_id, password_token, access_reload }),
+                _ => rsx!(AccessDeniedScreen { telegram_id: telegram_id(), password_token, access_reload }),
             }
         }
     }
@@ -447,14 +455,8 @@ fn AccessDeniedScreen(telegram_id: i64, mut password_token: Signal<String>, mut 
                                                 if let Some(window) = web_sys::window() {
                                                     if let Ok(Some(storage)) = window.local_storage() {
                                                         let _ = storage.set_item("wwb_admin_token", token);
-                                                        let set_res = storage.set_item("wwb_admin_telegram_id", &id_parsed.to_string());
-                                                        let msg = format!("saved admin_id={} to localStorage: {:?}", id_parsed, set_res);
-                                                        web_sys::console::log_1(&msg.into());
-                                                    } else {
-                                                        web_sys::console::log_1(&"localStorage not available".into());
+                                                        let _ = storage.set_item("wwb_admin_telegram_id", &id_parsed.to_string());
                                                     }
-                                                } else {
-                                                    web_sys::console::log_1(&"window not available".into());
                                                 }
                                             }
                                             token_signal.set(token.to_string());
