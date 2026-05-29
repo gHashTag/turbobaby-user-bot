@@ -183,11 +183,11 @@ pub async fn confirm_referral(pool: &Pool, referred_id: i64, bonus: f64) -> Resu
     let mut client = pool.get().await.context("db pool")?;
     let tx = client.transaction().await.context("start tx")?;
 
-    // Find the pending event
+    // Find the pending event (FOR UPDATE prevents double-credit races)
     let row = tx
         .query_opt(
             "SELECT id, referrer_id FROM referral_events
-             WHERE referred_id = $1 AND status = 'pending'",
+             WHERE referred_id = $1 AND status = 'pending' FOR UPDATE",
             &[&referred_id],
         )
         .await?;

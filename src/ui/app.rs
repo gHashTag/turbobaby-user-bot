@@ -14,6 +14,8 @@ const CART_STORAGE_KEY: &str = "wwb_cart";
 
 #[component]
 pub fn App() -> Element {
+    #[cfg(target_arch = "wasm32")]
+    web_sys::console::log_1(&"[WASM] Step 5: App component rendering".into());
     // Provide global cart state — try to restore from localStorage on WASM
     use_context_provider(|| {
         let mut cart = Cart::new();

@@ -8,7 +8,9 @@ use crate::ui::app::App;
 
 #[wasm_bindgen::prelude::wasm_bindgen(start)]
 pub fn run() {
+    web_sys::console::log_1(&"[WASM] Step 1: run() called".into());
     console_error_panic_hook::set_once();
+    web_sys::console::log_1(&"[WASM] Step 2: panic hook set".into());
     #[cfg(target_arch = "wasm32")]
     {
         std::panic::set_hook(Box::new(|info| {
@@ -28,5 +30,7 @@ pub fn run() {
             }
         }));
     }
+    web_sys::console::log_1(&"[WASM] Step 3: launching Dioxus App".into());
     dioxus::launch(App);
+    web_sys::console::log_1(&"[WASM] Step 4: App launched".into());
 }
