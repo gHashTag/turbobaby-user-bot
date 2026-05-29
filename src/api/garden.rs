@@ -280,7 +280,7 @@ async fn water_plant(
         r.try_get::<_, String>(1).unwrap_or_default()
     };
     let new_completed = new_count >= 13;
-    let cooldown_ms = garden::WATER_COOLDOWN_MS as i64;
+    let cooldown_ms = garden::WATER_COOLDOWN_MS;
     let max_last_water = now - cooldown_ms;
 
     let rows = tx.execute(
@@ -376,7 +376,7 @@ async fn harvest_plant(
         &[],
     ).await.map_err(|e| {
         tracing::error!("Config read error: {}", e);
-        return StatusCode::INTERNAL_SERVER_ERROR;
+        StatusCode::INTERNAL_SERVER_ERROR
     })?;
     let (discount_percent, bonus_points, expiration_days) = match config_row {
         Some(r) => (

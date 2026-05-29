@@ -89,7 +89,7 @@ pub async fn handle_command(
     let existing_lang = db.get_user_lang(user_id).await;
     let is_new_user = existing_lang.is_none();
     let lang = existing_lang
-        .unwrap_or_else(|| map_telegram_lang(msg.from.as_ref().and_then(|u| u.language_code.as_ref().map(|s| s.as_str()))));
+        .unwrap_or_else(|| map_telegram_lang(msg.from.as_ref().and_then(|u| u.language_code.as_deref())));
     let locale = get_locale(&lang);
     let base = &config.web_app_url;
 
@@ -323,8 +323,8 @@ pub async fn handle_command(
             );
             // Share button via switch_inline_query so Telegram shows "Share" UX
             let share_btn = InlineKeyboardButton::switch_inline_query(
-                &format!("📤 {}", locale.referral_share_button),
-                &format!("🪵 Woody Weed — {invite_link}"),
+                format!("📤 {}", locale.referral_share_button),
+                format!("🪵 Woody Weed — {invite_link}"),
             );
             bot.send_message(msg.chat.id, text)
                 .parse_mode(teloxide::types::ParseMode::Html)

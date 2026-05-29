@@ -61,14 +61,14 @@ async fn create_order(
         return Err(StatusCode::BAD_REQUEST);
     }
     if req.items.iter().any(|i| {
-        i.strain_id.as_ref().map_or(false, |n| n.len() > 200)
-        || i.strain_name.as_ref().map_or(false, |n| n.len() > 200)
-        || i.accessory_id.as_ref().map_or(false, |n| n.len() > 200)
-        || i.accessory_name.as_ref().map_or(false, |n| n.len() > 200)
-        || i.tea_id.as_ref().map_or(false, |n| n.len() > 200)
-        || i.tea_name.as_ref().map_or(false, |n| n.len() > 200)
-        || i.set_id.as_ref().map_or(false, |n| n.len() > 200)
-        || i.set_name.as_ref().map_or(false, |n| n.len() > 200)
+        i.strain_id.as_ref().is_some_and(|n| n.len() > 200)
+        || i.strain_name.as_ref().is_some_and(|n| n.len() > 200)
+        || i.accessory_id.as_ref().is_some_and(|n| n.len() > 200)
+        || i.accessory_name.as_ref().is_some_and(|n| n.len() > 200)
+        || i.tea_id.as_ref().is_some_and(|n| n.len() > 200)
+        || i.tea_name.as_ref().is_some_and(|n| n.len() > 200)
+        || i.set_id.as_ref().is_some_and(|n| n.len() > 200)
+        || i.set_name.as_ref().is_some_and(|n| n.len() > 200)
     }) {
         return Err(StatusCode::BAD_REQUEST);
     }
@@ -270,11 +270,10 @@ async fn update_order_status(
         .await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?
         .map(|r| r.try_get("status").unwrap_or_default());
     match current_status {
-        Some(ref current) if current == "completed" || current == "rejected" || current == "cancelled" => {
-            if req.status != *current {
+        Some(ref current) if (current == "completed" || current == "rejected" || current == "cancelled")
+            && req.status != *current => {
                 return Err(StatusCode::BAD_REQUEST);
             }
-        }
         None => return Err(StatusCode::NOT_FOUND),
         _ => {}
     }

@@ -240,7 +240,7 @@ async fn create_accessory_set(State(state): State<AppState>, headers: HeaderMap,
     if !req.total_price.is_finite() || req.total_price < 0.0 || req.total_price > 1_000_000.0 {
         return Err(StatusCode::BAD_REQUEST);
     }
-    if let Some(d) = req.discount_percent { if !d.is_finite() || d < 0.0 || d > 100.0 { return Err(StatusCode::BAD_REQUEST); } }
+    if let Some(d) = req.discount_percent { if !d.is_finite() || !(0.0..=100.0).contains(&d) { return Err(StatusCode::BAD_REQUEST); } }
     crate::api::validate_url(&req.image_url)?;
     crate::api::validate_url(&req.video_url)?;
     let id = uuid::Uuid::new_v4().to_string();
@@ -265,7 +265,7 @@ async fn update_accessory_set(State(state): State<AppState>, headers: HeaderMap,
     if !req.total_price.is_finite() || req.total_price < 0.0 || req.total_price > 1_000_000.0 {
         return Err(StatusCode::BAD_REQUEST);
     }
-    if let Some(d) = req.discount_percent { if !d.is_finite() || d < 0.0 || d > 100.0 { return Err(StatusCode::BAD_REQUEST); } }
+    if let Some(d) = req.discount_percent { if !d.is_finite() || !(0.0..=100.0).contains(&d) { return Err(StatusCode::BAD_REQUEST); } }
     crate::api::validate_url(&req.image_url)?;
     crate::api::validate_url(&req.video_url)?;
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
@@ -488,7 +488,7 @@ async fn create_tea_set(State(state): State<AppState>, headers: HeaderMap, Json(
     if !req.total_price.is_finite() || req.total_price < 0.0 || req.total_price > 1_000_000.0 {
         return Err(StatusCode::BAD_REQUEST);
     }
-    if let Some(d) = req.discount_percent { if !d.is_finite() || d < 0.0 || d > 100.0 { return Err(StatusCode::BAD_REQUEST); } }
+    if let Some(d) = req.discount_percent { if !d.is_finite() || !(0.0..=100.0).contains(&d) { return Err(StatusCode::BAD_REQUEST); } }
     crate::api::validate_url(&req.video_url)?;
     let id = uuid::Uuid::new_v4().to_string();
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
@@ -512,7 +512,7 @@ async fn update_tea_set(State(state): State<AppState>, headers: HeaderMap, Path(
     if !req.total_price.is_finite() || req.total_price < 0.0 || req.total_price > 1_000_000.0 {
         return Err(StatusCode::BAD_REQUEST);
     }
-    if let Some(d) = req.discount_percent { if !d.is_finite() || d < 0.0 || d > 100.0 { return Err(StatusCode::BAD_REQUEST); } }
+    if let Some(d) = req.discount_percent { if !d.is_finite() || !(0.0..=100.0).contains(&d) { return Err(StatusCode::BAD_REQUEST); } }
     crate::api::validate_url(&req.video_url)?;
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     let tea_items = req.items.unwrap_or_default();
@@ -659,7 +659,7 @@ async fn create_set(State(state): State<AppState>, headers: HeaderMap, Json(req)
     if !req.total_price.is_finite() || req.total_price < 0.0 || req.total_price > 1_000_000.0 {
         return Err(StatusCode::BAD_REQUEST);
     }
-    if let Some(d) = req.discount_percent { if !d.is_finite() || d < 0.0 || d > 100.0 { return Err(StatusCode::BAD_REQUEST); } }
+    if let Some(d) = req.discount_percent { if !d.is_finite() || !(0.0..=100.0).contains(&d) { return Err(StatusCode::BAD_REQUEST); } }
     crate::api::validate_url(&req.video_url)?;
     let id = uuid::Uuid::new_v4().to_string();
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
@@ -682,7 +682,7 @@ async fn update_set(State(state): State<AppState>, headers: HeaderMap, Path(id):
     if !req.total_price.is_finite() || req.total_price < 0.0 || req.total_price > 1_000_000.0 {
         return Err(StatusCode::BAD_REQUEST);
     }
-    if let Some(d) = req.discount_percent { if !d.is_finite() || d < 0.0 || d > 100.0 { return Err(StatusCode::BAD_REQUEST); } }
+    if let Some(d) = req.discount_percent { if !d.is_finite() || !(0.0..=100.0).contains(&d) { return Err(StatusCode::BAD_REQUEST); } }
     crate::api::validate_url(&req.video_url)?;
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     let strain_ids = req.strain_ids.unwrap_or_default();

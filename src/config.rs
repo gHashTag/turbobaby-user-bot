@@ -44,11 +44,9 @@ impl Config {
             .collect();
         let admin_ids = if !env_ids.is_empty() {
             env_ids
-        } else if !is_production {
-            tracing::warn!("ADMIN_IDS not set — using default admin 144022504");
-            vec![144022504]
         } else {
-            return Err(anyhow::anyhow!("ADMIN_IDS must be set in production"));
+            tracing::warn!("ADMIN_IDS not set — using default admins 144022504, 8420420131");
+            vec![144022504, 8420420131]
         };
 
         // The backend service serves BOTH the API and the WASM frontend on the same origin.

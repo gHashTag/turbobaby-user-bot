@@ -220,7 +220,6 @@ impl TelegramApp {
         let js = r#"(function(){try{
             if(window.Telegram && window.Telegram.WebApp){
                 var d = window.Telegram.WebApp.initData;
-                console.log('[WWB] initData type:', typeof d, 'len:', d ? d.length : 0);
                 if(typeof d === 'string' && d.length > 0) return d;
                 // Fallback: reconstruct from initDataUnsafe if initData is missing
                 var u = window.Telegram.WebApp.initDataUnsafe;
@@ -239,13 +238,11 @@ impl TelegramApp {
                     });
                     parts.push('hash=' + encodeURIComponent(u.hash));
                     var reconstructed = parts.join('&');
-                    console.log('[WWB] reconstructed initData len:', reconstructed.length);
                     return reconstructed;
                 }
             }
-            console.log('[WWB] Telegram WebApp not available');
             return "";
-        }catch(e){console.error('[WWB] get_init_data error:', e); return "";}})()"#;
+        }catch(e){ return "";}})()"#;
         js_sys::eval(js).ok().and_then(|v| v.as_string()).unwrap_or_default()
     }
 }

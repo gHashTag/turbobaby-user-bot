@@ -6,12 +6,12 @@ pub async fn upload_to_s3(config: &Config, filename: &str, data: &[u8]) -> Resul
     use aws_config::Region;
     use aws_sdk_s3::{config::Credentials, Client, primitives::ByteStream};
 
-    let bucket = config.s3_bucket.as_ref().map(|s| s.as_str()).unwrap_or("");
-    let endpoint = config.s3_endpoint.as_ref().map(|s| s.as_str()).unwrap_or("");
-    let public_url = config.s3_public_url.as_ref().map(|s| s.as_str()).unwrap_or("");
-    let region = config.s3_region.as_ref().map(|s| s.as_str()).unwrap_or("us-east-1");
-    let access_key = config.s3_access_key.as_ref().map(|s| s.as_str()).unwrap_or("");
-    let secret_key = config.s3_secret_key.as_ref().map(|s| s.as_str()).unwrap_or("");
+    let bucket = config.s3_bucket.as_deref().unwrap_or("");
+    let endpoint = config.s3_endpoint.as_deref().unwrap_or("");
+    let public_url = config.s3_public_url.as_deref().unwrap_or("");
+    let region = config.s3_region.as_deref().unwrap_or("us-east-1");
+    let access_key = config.s3_access_key.as_deref().unwrap_or("");
+    let secret_key = config.s3_secret_key.as_deref().unwrap_or("");
 
     let creds = Credentials::new(access_key, secret_key, None, None, "static");
     let s3_config = aws_sdk_s3::config::Builder::new()
@@ -25,9 +25,7 @@ pub async fn upload_to_s3(config: &Config, filename: &str, data: &[u8]) -> Resul
     let safe_name = {
         let mut s = filename
             .replace("..", "_")
-            .replace('/', "_")
-            .replace('\\', "_")
-            .replace('\0', "_");
+            .replace(['/', '\\', '\0'], "_");
         if s.len() > 255 { s.truncate(255); }
         s
     };

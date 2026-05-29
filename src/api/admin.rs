@@ -237,7 +237,7 @@ async fn create_manager(
     if let Some(ref n) = req.name { if n.len() > 200 { return Err(StatusCode::BAD_REQUEST); } }
     if let Some(ref u) = req.username { if u.len() > 200 { return Err(StatusCode::BAD_REQUEST); } }
     if let Some(ref c) = req.ref_code { if c.len() > 200 { return Err(StatusCode::BAD_REQUEST); } }
-    if let Some(r) = req.commission_rate { if !r.is_finite() || r < 0.0 || r > 100.0 { return Err(StatusCode::BAD_REQUEST); } }
+    if let Some(r) = req.commission_rate { if !r.is_finite() || !(0.0..=100.0).contains(&r) { return Err(StatusCode::BAD_REQUEST); } }
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     client.execute(
         "INSERT INTO managers (telegram_id, name, username, ref_code, commission_rate) VALUES ($1, $2, $3, $4, $5)",
@@ -256,7 +256,7 @@ async fn update_manager(
     if let Some(ref n) = req.name { if n.len() > 200 { return Err(StatusCode::BAD_REQUEST); } }
     if let Some(ref u) = req.username { if u.len() > 200 { return Err(StatusCode::BAD_REQUEST); } }
     if let Some(ref c) = req.ref_code { if c.len() > 200 { return Err(StatusCode::BAD_REQUEST); } }
-    if let Some(r) = req.commission_rate { if !r.is_finite() || r < 0.0 || r > 100.0 { return Err(StatusCode::BAD_REQUEST); } }
+    if let Some(r) = req.commission_rate { if !r.is_finite() || !(0.0..=100.0).contains(&r) { return Err(StatusCode::BAD_REQUEST); } }
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     client.execute(
         "UPDATE managers SET 

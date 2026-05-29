@@ -241,7 +241,6 @@ async fn upload_file(accept: &str) -> Option<String> {
     let init_data_js = js_escape(&init_data);
     let js = format!(r#"
 new Promise((resolve) => {{
-    console.log('[UPLOAD] Step 0: Starting upload, accept={}');
     var input = document.createElement('input');
     input.type = 'file';
     input.accept = '{}';
@@ -251,17 +250,12 @@ new Promise((resolve) => {{
     input.onchange = async (e) => {{
         if (resolved) return;
         resolved = true;
-        console.log('[UPLOAD] Step 1: File selected');
         var file = e.target.files[0];
-        if (!file) {{ console.log('[UPLOAD] Step 1: No file selected'); document.body.removeChild(input); resolve(''); return; }}
-        console.log('[UPLOAD] Step 2: File name=' + file.name + ' size=' + file.size + ' type=' + file.type);
+        if (!file) {{ document.body.removeChild(input); resolve(''); return; }}
         var formData = new FormData();
         formData.append('file', file);
-        console.log('[UPLOAD] Step 3: FormData created');
         try {{
             var baseUrl = window.location.origin;
-            console.log('[UPLOAD] Step 4: Sending POST to ' + baseUrl + '/api/upload');
-            console.log('[UPLOAD] Step 4: Headers: X-Telegram-Init-Data len=' + '{}'.length + ' X-Admin-Token len=' + '{}'.length);
             var resp = await fetch(baseUrl + '/api/upload', {{
                 method: 'POST',
                 body: formData,
@@ -271,18 +265,15 @@ new Promise((resolve) => {{
                     'X-Admin-Token': '{}'
                 }}
             }});
-            console.log('[UPLOAD] Step 5: Response status=' + resp.status + ' ok=' + resp.ok);
             var data = await resp.json();
-            console.log('[UPLOAD] Step 6: Response data=', JSON.stringify(data));
             document.body.removeChild(input);
             resolve(data.url || '');
-        }} catch(err) {{ console.error('[UPLOAD] ERROR:', err); document.body.removeChild(input); resolve(''); }}
+        }} catch(err) {{ document.body.removeChild(input); resolve(''); }}
     }};
-    setTimeout(() => {{ if (!resolved) {{ console.log('[UPLOAD] Timeout after 120s'); resolved = true; try {{ document.body.removeChild(input); }} catch(e) {{}} resolve(''); }} }}, 120000);
-    console.log('[UPLOAD] Step 0: Clicking file input');
+    setTimeout(() => {{ if (!resolved) {{ resolved = true; try {{ document.body.removeChild(input); }} catch(e) {{}} resolve(''); }} }}, 120000);
     input.click();
 }})
-"#, accept, init_data_js, init_data_js.len(), token_js.len(), init_data_js, telegram_id_js, token_js);
+"#, accept, init_data_js, telegram_id_js, token_js);
     if js.len() > 100_000 { return None; }
     let promise_val = js_sys::eval(&js).ok()?;
     let promise = promise_val.dyn_into::<js_sys::Promise>().ok()?;
@@ -416,7 +407,6 @@ fn AccessDeniedScreen(telegram_id: i64, mut password_token: Signal<String>, mut 
                                             token_signal.set(token.to_string());
                                             let new_reload = access_reload.read().wrapping_add(1);
                                             access_reload.set(new_reload);
-                                            web_sys::console::log_1(&"[AccessDeniedScreen] Login OK, reloading access check".into());
                                         }
                                     }
                                 }
@@ -584,15 +574,8 @@ fn StrainsTab() -> Element {
             .send().await
         {
             let text = resp.text().await.unwrap_or_default();
-            web_sys::console::log_1(&format!("[ADMIN] GET strains response len={}", text.len()).into());
             if let Ok(data) = serde_json::from_str::<StrainsResp>(&text) {
-                web_sys::console::log_1(&format!("[ADMIN] Loaded {} strains", data.strains.len()).into());
-                for s in &data.strains {
-                    web_sys::console::log_1(&format!("[ADMIN] strain id={} name={} video_url={:?}", s.id, s.name, s.video_url).into());
-                }
                 cache.set(data.strains);
-            } else {
-                web_sys::console::log_1(&format!("[ADMIN] Failed to parse strains response: {}", &text[..text.len().min(200)]).into());
             }
         }
         loading.set(false);
@@ -2689,10 +2672,7 @@ fn VideoUpload(video_url: String, on_change: EventHandler<String>) -> Element {
                             let result = upload_video().await;
                             uploading.set(false);
                             if let Some(url) = result {
-                                web_sys::console::log_1(&format!("[VideoUpload] callback url={}", url).into());
                                 on_change.call(url);
-                            } else {
-                                web_sys::console::log_1(&"[VideoUpload] upload returned None".into());
                             }
                         });
                     },
@@ -2964,17 +2944,13 @@ fn EditStrainCard(
                                 "flavor_profile_en": if fpe.is_empty() { serde_json::Value::Null } else { fpe.into() },
                                 "strain_type_en": if ste.is_empty() { serde_json::Value::Null } else { ste.into() },
                             });
-                            web_sys::console::log_1(&format!("[ADMIN] PUT strain id={} video_url={:?} body={}", id, vid.clone(), serde_json::to_string(&body).unwrap_or_default()).into());
                             let url = format!("{}/api/strains/{}", api_base_url(), id);
                             let res = HTTP_CLIENT.clone().put(&url)
                                 .header("X-Telegram-Init-Data", init_data.read().clone())
  .header("X-Admin-Token", admin_token())
  .header("X-Admin-Telegram-Id", telegram_id.to_string())
                                 .json(&body).send().await;
-                            match &res {
-                                Ok(r) => web_sys::console::log_1(&format!("[ADMIN] PUT response status={}", r.status()).into()),
-                                Err(e) => web_sys::console::log_1(&format!("[ADMIN] PUT request FAILED: {:?}", e).into()),
-                            }
+                            let _ = &res;
                             let success = match res {
                                 Ok(r) => r.status().is_success(),
                                 Err(_) => false,

@@ -34,7 +34,7 @@ pub async fn handle_callback(
     config: Arc<Config>,
     ai_client: Arc<crate::ai::AiClient>,
 ) -> Result<(), teloxide::RequestError> {
-    let data = match q.data.as_ref().map(|s| s.as_str()) {
+    let data = match q.data.as_deref() {
         Some(d) => d.to_string(),
         None => {
             tracing::warn!("callback_query: empty data from user_id={}", q.from.id.0);
@@ -59,7 +59,7 @@ pub async fn handle_callback(
     );
 
     let lang = db.get_user_lang(user_id).await
-        .unwrap_or_else(|| map_telegram_lang(q.from.language_code.as_ref().map(|s| s.as_str())));
+        .unwrap_or_else(|| map_telegram_lang(q.from.language_code.as_deref()));
     let locale = get_locale(&lang);
     let base = &config.web_app_url;
 
@@ -154,7 +154,7 @@ pub async fn handle_callback(
         d if d.starts_with("sotd_next_") || d.starts_with("sotd_prev_") => {
             bot.answer_callback_query(&q.id).await?;
             let is_next = d.starts_with("sotd_next_");
-            let current: usize = d.split('_').last().and_then(|s| s.parse().ok()).unwrap_or(0);
+            let current: usize = d.split('_').next_back().and_then(|s| s.parse().ok()).unwrap_or(0);
             let new_idx = if is_next { current + 1 } else { current.saturating_sub(1) };
             let strains = db.get_strains_of_day().await.unwrap_or_default();
             if let Some(s) = strains.get(new_idx) {
@@ -209,7 +209,7 @@ pub async fn handle_callback(
                 }
             };
             if db_ok {
-                bot.answer_callback_query(&q.id).text(&format!("✅ {}", locale.order_confirmed)).await?;
+                bot.answer_callback_query(&q.id).text(format!("✅ {}", locale.order_confirmed)).await?;
                 if let Some(msg) = q.message.as_ref().and_then(|m| match m {
     MaybeInaccessibleMessage::Regular(msg) => Some(msg),
     MaybeInaccessibleMessage::Inaccessible(_) => None,
@@ -306,7 +306,7 @@ pub async fn handle_callback(
             }
             let _order_id = &d["reject_".len()..];
             tracing::info!("callback: reject order_id={}", _order_id);
-            bot.answer_callback_query(&q.id).text(&format!("❌ {}", locale.order_rejected)).await?;
+            bot.answer_callback_query(&q.id).text(format!("❌ {}", locale.order_rejected)).await?;
             match db.pool.get().await {
                 Ok(mut client) => {
                     match client.transaction().await {

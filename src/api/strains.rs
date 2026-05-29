@@ -129,9 +129,9 @@ async fn create_strain(State(state): State<AppState>, headers: HeaderMap, Json(r
     if !req.price_per_gram.is_finite() || req.price_per_gram < 0.0 || req.price_per_gram > 1_000_000.0 {
         return Err(StatusCode::BAD_REQUEST);
     }
-    if let Some(t) = req.thc_percent { if !t.is_finite() || t < 0.0 || t > 100.0 { return Err(StatusCode::BAD_REQUEST); } }
-    if let Some(c) = req.cbd_percent { if !c.is_finite() || c < 0.0 || c > 100.0 { return Err(StatusCode::BAD_REQUEST); } }
-    if let Some(a) = req.available_grams { if !a.is_finite() || a < 0.0 || a > 1_000_000.0 { return Err(StatusCode::BAD_REQUEST); } }
+    if let Some(t) = req.thc_percent { if !t.is_finite() || !(0.0..=100.0).contains(&t) { return Err(StatusCode::BAD_REQUEST); } }
+    if let Some(c) = req.cbd_percent { if !c.is_finite() || !(0.0..=100.0).contains(&c) { return Err(StatusCode::BAD_REQUEST); } }
+    if let Some(a) = req.available_grams { if !a.is_finite() || !(0.0..=1_000_000.0).contains(&a) { return Err(StatusCode::BAD_REQUEST); } }
     let id = uuid::Uuid::new_v4().to_string();
     let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
     client.execute(
@@ -160,9 +160,9 @@ async fn update_strain(State(state): State<AppState>, headers: HeaderMap, Path(i
     if !req.price_per_gram.is_finite() || req.price_per_gram < 0.0 || req.price_per_gram > 1_000_000.0 {
         return Err(StatusCode::BAD_REQUEST);
     }
-    if let Some(t) = req.thc_percent { if !t.is_finite() || t < 0.0 || t > 100.0 { return Err(StatusCode::BAD_REQUEST); } }
-    if let Some(c) = req.cbd_percent { if !c.is_finite() || c < 0.0 || c > 100.0 { return Err(StatusCode::BAD_REQUEST); } }
-    if let Some(a) = req.available_grams { if !a.is_finite() || a < 0.0 || a > 1_000_000.0 { return Err(StatusCode::BAD_REQUEST); } }
+    if let Some(t) = req.thc_percent { if !t.is_finite() || !(0.0..=100.0).contains(&t) { return Err(StatusCode::BAD_REQUEST); } }
+    if let Some(c) = req.cbd_percent { if !c.is_finite() || !(0.0..=100.0).contains(&c) { return Err(StatusCode::BAD_REQUEST); } }
+    if let Some(a) = req.available_grams { if !a.is_finite() || !(0.0..=1_000_000.0).contains(&a) { return Err(StatusCode::BAD_REQUEST); } }
     let client = state.db.pool.get().await.map_err(|e| {
         tracing::error!("update_strain pool error: {:?}", e);
         StatusCode::INTERNAL_SERVER_ERROR
@@ -219,7 +219,7 @@ async fn set_strain_of_day(State(state): State<AppState>, headers: HeaderMap, Pa
     }
     let enabled = body["is_strain_of_day"].as_bool().unwrap_or(true);
     let discount = body["discount"].as_f64().unwrap_or(10.0);
-    if !discount.is_finite() || discount < 0.0 || discount > 100.0 {
+    if !discount.is_finite() || !(0.0..=100.0).contains(&discount) {
         return Err((StatusCode::BAD_REQUEST, Json(json!({ "error": "invalid discount" }))));
     }
     let client = state.db.pool.get().await.map_err(|e| {
