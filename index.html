@@ -43,6 +43,32 @@
         }
     </style>
     <script>
+    // Error catcher — shows errors on screen before WASM loads
+    window.__errors = [];
+    window.onerror = function(msg, url, line, col, err) {
+        window.__errors.push({msg: msg, url: url, line: line, col: col, stack: err && err.stack});
+        var box = document.getElementById('error-box');
+        if (box) box.style.display = 'block';
+        updateErrorBox();
+        return false;
+    };
+    window.onunhandledrejection = function(e) {
+        window.__errors.push({msg: 'Unhandled: ' + e.reason, stack: ''});
+        var box = document.getElementById('error-box');
+        if (box) box.style.display = 'block';
+        updateErrorBox();
+    };
+    function updateErrorBox() {
+        var box = document.getElementById('error-box');
+        if (!box) return;
+        box.innerHTML = '<h3 style="color:#ff4757;margin:0 0 8px">🚨 Errors (' + window.__errors.length + ')</h3>' +
+            window.__errors.map(function(e) {
+                return '<div style="margin-bottom:8px;font-size:12px;border-bottom:1px solid #333;padding-bottom:4px">' +
+                    '<div style="color:#ff4757">' + (e.msg || 'Unknown') + '</div>' +
+                    '<div style="color:#888;font-size:10px">' + (e.url||'') + ':' + (e.line||'') + '</div>' +
+                    '<pre style="color:#aaa;font-size:10px;margin:4px 0;white-space:pre-wrap">' + (e.stack||'').substring(0,500) + '</pre></div>';
+            }).join('');
+    }
     // 3D Comet Card tilt effect (matching old React bot exactly)
     document.addEventListener('DOMContentLoaded', function() {
         document.addEventListener('mousemove', function(e) {
@@ -80,6 +106,7 @@
         <div class="spinner"></div>
         <div class="loading-text">Загрузка...</div>
     </div>
+    <div id="error-box" style="display:none;position:fixed;top:0;left:0;width:100%;max-height:50vh;background:#1a1a2e;color:#e8e8e8;padding:12px;font-family:monospace;font-size:12px;z-index:100000;overflow:auto;border-bottom:2px solid #ff4757;"></div>
     <div id="main"></div>
     <script>
         // Hide preloader when app mounts

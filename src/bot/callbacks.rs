@@ -191,14 +191,53 @@ pub async fn handle_callback(
             }
             let order_id = &d["confirm_".len()..];
             let db_ok = match db.pool.get().await {
-                Ok(client) => {
-                    match client.execute("UPDATE orders SET status = 'confirmed' WHERE id = $1", &[&order_id]).await {
-                        Ok(rows) => {
-                            tracing::info!("callback: confirm order_id={} updated {} rows", order_id, rows);
-                            true
+                Ok(mut client) => {
+                    match client.transaction().await {
+                        Ok(tx) => {
+                            let ok = match tx.query_opt("SELECT status FROM orders WHERE id = $1 FOR UPDATE", &[&order_id]).await {
+                                Ok(Some(row)) => {
+                                    let status: String = row.try_get("status").unwrap_or_default();
+                                    if status == "pending" || status == "confirmed" {
+                                        match tx.execute("UPDATE orders SET status = 'confirmed' WHERE id = $1", &[&order_id]).await {
+                                            Ok(rows) => {
+                                                tracing::info!("callback: confirm order_id={} updated {} rows", order_id, rows);
+                                                true
+                                            }
+                                            Err(e) => {
+                                                tracing::error!("callback: confirm order_id={} UPDATE error: {}", order_id, e);
+                                                false
+                                            }
+                                        }
+                                    } else {
+                                        tracing::warn!("callback: confirm order_id={} skipped, current status={}", order_id, status);
+                                        false
+                                    }
+                                }
+                                Ok(None) => {
+                                    tracing::warn!("callback: confirm order_id={} not found", order_id);
+                                    false
+                                }
+                                Err(e) => {
+                                    tracing::error!("callback: confirm order_id={} SELECT error: {}", order_id, e);
+                                    false
+                                }
+                            };
+                            if ok {
+                                if let Err(e) = tx.commit().await {
+                                    tracing::error!("callback: confirm commit error order_id={} err={}", order_id, e);
+                                    false
+                                } else {
+                                    true
+                                }
+                            } else {
+                                if let Err(e) = tx.rollback().await {
+                                    tracing::error!("callback: confirm rollback error order_id={} err={}", order_id, e);
+                                }
+                                false
+                            }
                         }
                         Err(e) => {
-                            tracing::error!("callback: confirm order_id={} DB error: {}", order_id, e);
+                            tracing::error!("callback: confirm order_id={} tx error: {}", order_id, e);
                             false
                         }
                     }

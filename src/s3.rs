@@ -45,7 +45,7 @@ pub async fn upload_to_s3(config: &Config, filename: &str, data: &[u8]) -> Resul
 
 #[allow(dead_code)]
 fn mime_from_filename(filename: &str) -> &'static str {
-    match filename.rsplit('.').next().unwrap_or("") {
+    match filename.rsplit('.').next().unwrap_or("").to_lowercase().as_str() {
         "jpg" | "jpeg" => "image/jpeg",
         "png" => "image/png",
         "webp" => "image/webp",

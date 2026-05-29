@@ -288,7 +288,7 @@ async fn main() -> Result<()> {
         std::collections::HashMap::new();
 
     fn content_type_for(path: &std::path::Path) -> &'static str {
-        match path.extension().and_then(|e| e.to_str()) {
+        match path.extension().and_then(|e| e.to_str()).map(|s| s.to_lowercase()).as_deref() {
             Some("html") => "text/html",
             Some("js") => "text/javascript",
             Some("css") => "text/css",

@@ -72,7 +72,7 @@ impl TelegramApp {
     /// Escape a string for safe injection into a JavaScript double-quoted string literal.
     /// Also defangs `</script>` to prevent breaking out of a `<script>` context.
     fn js_escape(s: &str) -> String {
-        s.replace('\', "\\\\")
+        s.replace('\\', "\\\\")
             .replace('"', "\\\"")
             .replace('\'', "\\'")
             .replace('`', "\\`")
@@ -87,7 +87,7 @@ impl TelegramApp {
 
     /// Set main button text and show it
     pub fn set_main_button_text(&self, text: &str) {
-        let escaped = js_escape(text);
+        let escaped = Self::js_escape(text);
         let _ = document::eval(&format!(
             r#"if(window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.MainButton) {{ window.Telegram.WebApp.MainButton.setText("{}"); window.Telegram.WebApp.MainButton.show(); }}"#,
             escaped
