@@ -165,6 +165,7 @@ fn html_escape(s: &str) -> String {
     s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn notify_admins(
     bot: &teloxide::Bot,
     config: &crate::config::Config,

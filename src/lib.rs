@@ -19,7 +19,8 @@ pub fn run() {
                     if let Some(body) = document.body() {
                         if let Ok(div) = document.create_element("div") {
                             let _ = div.set_attribute("style", "position:fixed;inset:0;background:#000;color:#ff4757;padding:20px;font-family:monospace;white-space:pre-wrap;z-index:99999;overflow:auto;");
-                            div.set_inner_html(&format!("<h1 style='color:#ff4757'>🚨 PANIC</h1><pre style='font-size:14px'>{}</pre>", msg));
+                            let safe_msg = msg.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;");
+                            div.set_inner_html(&format!("<h1 style='color:#ff4757'>🚨 PANIC</h1><pre style='font-size:14px'>{}</pre>", safe_msg));
                             let _ = body.append_child(&div);
                         }
                     }
