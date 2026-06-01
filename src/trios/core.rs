@@ -136,6 +136,89 @@ mod detect_lang_tests {
     }
 }
 
+/// Pick the rendering `Lang` for a screen by composing two source signals:
+/// an explicit `?lang=xx` URL override and the Telegram WebApp's user
+/// `language_code`. Pure — both args are owned `Option<&str>`.
+///
+/// **Precedence (highest first):**
+///   1. `query` — explicit user choice via URL, e.g. opening
+///      `https://app/checkout?lang=en` from Telegram.
+///   2. `tg_lang_code` — `initDataUnsafe.user.language_code`, the
+///      passive Telegram-client locale.
+///   3. `Lang::Russian` — production default (we ship Russian copy
+///      everywhere; English is staged but no other locale yet).
+///
+/// Cycle #71: cycle #70 only used the URL source, which works on
+/// desktop but not on mobile where URL juggling is unfriendly. The
+/// Telegram fallback closes that gap without forcing the caller to
+/// memorise the resolution order.
+pub fn pick_lang(query: Option<&str>, tg_lang_code: Option<&str>) -> Lang {
+    if let Some(q) = query {
+        if let Some(lang) = detect_lang_from_query(q) {
+            return lang;
+        }
+    }
+    if let Some(code) = tg_lang_code {
+        // Telegram sends short codes like "ru", "en", "zh". `from_str`
+        // already lowercases and matches them.
+        if let Ok(lang) = code.parse::<Lang>() {
+            return lang;
+        }
+    }
+    Lang::Russian
+}
+
+#[cfg(test)]
+mod pick_lang_tests {
+    use super::*;
+
+    #[test]
+    fn query_wins_over_telegram_when_both_present() {
+        // User explicitly opened ?lang=en — even if Telegram says ru,
+        // honour the URL override (= user just made a deliberate choice).
+        assert_eq!(pick_lang(Some("?lang=en"), Some("ru")), Lang::English,);
+    }
+
+    #[test]
+    fn falls_back_to_telegram_when_query_missing() {
+        // Mobile case: no URL param, Telegram client locale "en".
+        assert_eq!(pick_lang(None, Some("en")), Lang::English,);
+    }
+
+    #[test]
+    fn falls_back_to_telegram_when_query_present_but_no_lang_param() {
+        // Real query has initData + theme but no lang= key.
+        assert_eq!(
+            pick_lang(Some("?initData=abc&theme=dark"), Some("th")),
+            Lang::Thai,
+        );
+    }
+
+    #[test]
+    fn defaults_to_russian_when_both_sources_empty() {
+        // Cold launch with no init data — RU is what we ship.
+        assert_eq!(pick_lang(None, None), Lang::Russian);
+    }
+
+    #[test]
+    fn skips_unknown_telegram_code_and_returns_default() {
+        // Telegram could send any locale code; we only know a subset.
+        // Don't pick a silent wrong locale — default to RU.
+        assert_eq!(pick_lang(None, Some("klingon")), Lang::Russian,);
+    }
+
+    #[test]
+    fn skips_unknown_query_and_telegram_code_together() {
+        // Both sources present but neither parses → default to RU. This
+        // is the path that catches the "?lang=xx" typo case where the
+        // URL is otherwise well-formed.
+        assert_eq!(
+            pick_lang(Some("?lang=elvish"), Some("dwarvish")),
+            Lang::Russian,
+        );
+    }
+}
+
 /// Result type alias
 pub type Result<T> = std::result::Result<T, Error>;
 

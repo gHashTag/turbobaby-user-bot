@@ -195,6 +195,29 @@ impl TelegramApp {
         Some(s)
     }
 
+    /// Telegram-client locale code (`"ru"`, `"en"`, `"th"`, …) read from
+    /// `initDataUnsafe.user.language_code`. Cycle #71 — used by the
+    /// checkout screen to localise error banners on mobile where opening
+    /// `?lang=xx` URLs by hand is unfriendly.
+    ///
+    /// Returns `None` outside the Telegram WebApp (e.g. plain-browser
+    /// preview) or when the user object simply doesn't carry the code.
+    pub fn get_language_code(&self) -> Option<String> {
+        let js = r#"(function(){try{
+            if(window.Telegram && window.Telegram.WebApp){
+                var u = window.Telegram.WebApp.initDataUnsafe;
+                if(u && u.user && u.user.language_code) return u.user.language_code;
+            }
+            return '';
+        }catch(e){return '';}})()"#;
+        let val = js_sys::eval(js).ok()?;
+        let s = val.as_string()?;
+        if s.is_empty() {
+            return None;
+        }
+        Some(s)
+    }
+
     /// Diagnostic dump of what is actually available in Telegram.WebApp.
     /// Used by the admin screen to show why authentication failed.
     pub fn debug_dump(&self) -> String {

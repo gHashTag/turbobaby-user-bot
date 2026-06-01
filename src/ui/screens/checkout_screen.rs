@@ -48,15 +48,16 @@ pub fn CheckoutScreen() -> Element {
     let telegram_username = use_telegram_username();
     let init_data = use_telegram_init_data();
 
-    // Cycle #70 / C: pick up `?lang=xx` from the WebApp launch URL so the
-    // friendly_order_error banner localises when the Telegram client passes
-    // a non-Russian locale. Falls back to Russian (current production default).
-    // The rest of the screen still uses hardcoded Lang::Russian — a full
-    // Signal<Lang> migration touches ~20 callsites and is its own cycle.
-    let lang = web_sys::window()
+    // Cycle #70 / #71: pick up rendering locale from `?lang=xx` (URL
+    // override) and the Telegram WebApp's `initDataUnsafe.user.language_code`
+    // (passive fallback). On mobile users rarely tweak the URL — the
+    // Telegram-client locale is the realistic source. `pick_lang` enforces
+    // precedence: query → telegram → Lang::Russian default.
+    let url_query: Option<String> = web_sys::window()
         .and_then(|w| w.location().search().ok())
-        .and_then(|q| crate::trios::core::detect_lang_from_query(&q))
-        .unwrap_or(Lang::Russian);
+        .filter(|s| !s.is_empty());
+    let tg_lang_code: Option<String> = crate::ui::telegram::TelegramApp::init().get_language_code();
+    let lang = crate::trios::core::pick_lang(url_query.as_deref(), tg_lang_code.as_deref());
 
     let checkout_title = t(Lang::Russian, T_CHECKOUT_TITLE);
     let your_order = t(Lang::Russian, T_YOUR_ORDER);
