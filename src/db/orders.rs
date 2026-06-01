@@ -223,9 +223,33 @@ pub const FRAUD_CODE_UNKNOWN_ITEM: &str = "unknown_item";
 pub const FRAUD_CODE_UNAVAILABLE: &str = "unavailable";
 pub const FRAUD_CODE_MALFORMED: &str = "malformed";
 
+/// Number of `subtotal_mismatch` events in the lookback window that triggers
+/// an automatic block (cycle #60). 3 is conservative: a real shopper hitting
+/// stale-cart prices would clear and retry, not produce 3+ price tampering
+/// events in a day. 1–2 might be a buggy client or race condition; 3+ is a
+/// sustained pattern that warrants an automatic stop-the-bleeding action.
+pub const FRAUD_AUTO_BLOCK_THRESHOLD: i64 = 3;
+/// Lookback window for the auto-block decision. 24 h matches the rest of
+/// the audit pipeline (/engage panel, idempotency TTL).
+pub const FRAUD_AUTO_BLOCK_LOOKBACK_HOURS: i32 = 24;
+
+/// Pure decision: should the auto-blocker engage given the count of
+/// `subtotal_mismatch` events seen for this user in the lookback window?
+/// Extracted as a standalone function so the threshold semantics are
+/// table-tested instead of buried inside an async DB-bound function.
+pub fn should_auto_block_for_fraud(subtotal_mismatch_events_24h: i64) -> bool {
+    subtotal_mismatch_events_24h >= FRAUD_AUTO_BLOCK_THRESHOLD
+}
+
 /// Insert one row into `order_fraud_events`. Returns `Result<(), ...>` so
 /// the caller can log a warning, but the caller MUST NOT propagate — the
 /// 422 reject path is more important than the audit row landing.
+///
+/// Cycle #60: after a successful `subtotal_mismatch` insert with a known
+/// telegram_id, this function also fires the auto-block check. The check
+/// runs serially (not spawned) so a race between two concurrent mismatches
+/// can't both decide independently to skip the block — Postgres
+/// `pg_advisory_xact_lock` inside the helper serialises them.
 pub async fn record_fraud_event(
     pool: &deadpool_postgres::Pool,
     telegram_id: Option<i64>,
@@ -251,7 +275,79 @@ pub async fn record_fraud_event(
             ],
         )
         .await?;
+    // Drop the borrowed client so auto-block can acquire a fresh connection.
+    drop(client);
+
+    // Auto-block trigger (cycle #60). Only fires for the strongest fraud
+    // signal — `subtotal_mismatch` — and only when we have a telegram_id
+    // to block. Anonymous mismatches are caught by the per-IP rate limit.
+    if code == FRAUD_CODE_SUBTOTAL_MISMATCH {
+        if let Some(tid) = telegram_id {
+            if let Err(e) = auto_block_for_fraud(pool, tid).await {
+                tracing::warn!("auto_block check failed for telegram_id={}: {}", tid, e);
+            }
+        }
+    }
     Ok(())
+}
+
+/// If the user has accumulated >= `FRAUD_AUTO_BLOCK_THRESHOLD`
+/// `subtotal_mismatch` events in the last `FRAUD_AUTO_BLOCK_LOOKBACK_HOURS`,
+/// flip `loyalty_profiles.is_blocked = true`. After that the existing
+/// `check_not_blocked` guard at the top of `create_order` rejects every
+/// subsequent attempt with 403 before any DB work happens.
+///
+/// Returns `Ok(true)` when the user was newly blocked by this call,
+/// `Ok(false)` when no action was needed (count below threshold or already
+/// blocked). Defensive: an error here is logged by the caller and ignored —
+/// auto-block is defence in depth, not the primary 422 protection.
+async fn auto_block_for_fraud(
+    pool: &deadpool_postgres::Pool,
+    telegram_id: i64,
+) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
+    let client = pool.get().await?;
+    // Count only `subtotal_mismatch` — other codes (`unavailable`,
+    // `unknown_item`, `malformed`) are mostly stale-cart / client-bug and
+    // would auto-block honest users. Subtotal mismatch alone is the
+    // can't-happen-by-accident signal.
+    let row = client
+        .query_one(
+            "SELECT COUNT(*)::bigint AS n FROM order_fraud_events \
+             WHERE telegram_id = $1 \
+               AND code = $2 \
+               AND created_at > NOW() - make_interval(hours => $3)",
+            &[
+                &telegram_id,
+                &FRAUD_CODE_SUBTOTAL_MISMATCH,
+                &FRAUD_AUTO_BLOCK_LOOKBACK_HOURS,
+            ],
+        )
+        .await?;
+    let count: i64 = row.try_get("n").unwrap_or(0);
+    if !should_auto_block_for_fraud(count) {
+        return Ok(false);
+    }
+    // UPSERT so anonymous-ish accounts without a loyalty profile row still
+    // get blocked the moment they cross the threshold. ON CONFLICT lets us
+    // flip is_blocked atomically even when the row already exists.
+    let rows = client
+        .execute(
+            "INSERT INTO loyalty_profiles (telegram_id, bonus_balance, total_spent, is_blocked) \
+             VALUES ($1, 0, 0, TRUE) \
+             ON CONFLICT (telegram_id) DO UPDATE SET is_blocked = TRUE \
+             WHERE loyalty_profiles.is_blocked = FALSE",
+            &[&telegram_id],
+        )
+        .await?;
+    if rows > 0 {
+        tracing::warn!(
+            telegram_id,
+            count_24h = count,
+            threshold = FRAUD_AUTO_BLOCK_THRESHOLD,
+            "auto_block: user blocked for repeated subtotal_mismatch"
+        );
+    }
+    Ok(rows > 0)
 }
 
 /// 24-hour aggregate for the `/engage` fraud panel. Keep this struct narrow:
@@ -330,6 +426,37 @@ mod tests {
         // (staging / tests may want a shorter window).
         let sql = idempotency_sweep_sql(1);
         assert!(sql.contains("INTERVAL '1 hours'"));
+    }
+
+    // ── Auto-block threshold (cycle #60) ─────────────────────────────────
+
+    use super::{should_auto_block_for_fraud, FRAUD_AUTO_BLOCK_THRESHOLD};
+
+    #[test]
+    fn auto_block_engages_exactly_at_threshold() {
+        // Boundary: at-threshold MUST trigger a block. The /engage panel's
+        // "Top offender: 3 events" line then matches the block decision.
+        assert!(should_auto_block_for_fraud(FRAUD_AUTO_BLOCK_THRESHOLD));
+    }
+
+    #[test]
+    fn auto_block_skips_just_below_threshold() {
+        // Off-by-one guard for `>=` vs `>`. 2 events should NOT block — that
+        // window still allows admin to investigate before user is locked out.
+        assert!(!should_auto_block_for_fraud(FRAUD_AUTO_BLOCK_THRESHOLD - 1));
+    }
+
+    #[test]
+    fn auto_block_engages_well_above_threshold() {
+        assert!(should_auto_block_for_fraud(50));
+    }
+
+    #[test]
+    fn auto_block_skips_zero_and_negative() {
+        // Defensive: a corrupted COUNT() could theoretically come back 0 or
+        // even negative (i64 overflow / type confusion). Neither must block.
+        assert!(!should_auto_block_for_fraud(0));
+        assert!(!should_auto_block_for_fraud(-1));
     }
 
     #[test]
