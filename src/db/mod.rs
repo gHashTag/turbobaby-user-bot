@@ -437,6 +437,175 @@ mod entity_schema_consistency_tests {
     }
 }
 
+/// Cycle #103: orphan-table detection — the reverse of cycle #102's
+/// check. #102 ensures every entity column has a backing migration;
+/// this one ensures every table created in migrations is actually
+/// *used* in the codebase (via SeaORM entity, raw `Statement`, or
+/// any other reference).
+///
+/// Dead schema costs nothing at runtime, but accumulates: every
+/// future migration touching the dead table is wasted work, every
+/// `try_get_warn!` reverse-audit has to mentally skip it, and
+/// re-onboarding devs ask "what's this for?" Cycle #103 found
+/// `hunt_checkpoints` orphaned this way — table created in
+/// migration 003, ALTER COLUMN added in 021, zero code references
+/// (the `get_checkpoints()` UI helper returns hardcoded
+/// `vec![QuestCheckpoint::new(...)]`, no DB read).
+///
+/// Allowlist mechanism: known-orphan tables go in `ALLOWED_ORPHANS`
+/// with an inline rationale. The test fails on *new* orphans only.
+#[cfg(test)]
+mod orphan_table_tests {
+    /// Tables created in migrations but intentionally unused in code.
+    /// Each entry must carry a rationale comment so future contributors
+    /// know whether to wire it up or drop the migration.
+    const ALLOWED_ORPHANS: &[&str] = &[
+        // Cycle #103: created in migrations 003/021 to back a DB-driven
+        // location-quest checkpoint feature that never shipped. The UI
+        // (src/ui/game/quest.rs) uses a hardcoded `get_checkpoints()`
+        // helper in src/trios/quest.rs. Leaving the table in place is
+        // cheap (idempotent CREATE TABLE IF NOT EXISTS); dropping it
+        // would require a new migration + prod coordination. Re-evaluate
+        // when location quests are revisited.
+        "hunt_checkpoints",
+    ];
+
+    fn migration_tables() -> Vec<String> {
+        let manifest = env!("CARGO_MANIFEST_DIR");
+        let mig_dir = std::path::Path::new(manifest).join("migrations");
+        let mut out = Vec::new();
+        let mut entries: Vec<_> = std::fs::read_dir(&mig_dir)
+            .expect("migrations/ readable")
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_name().to_str().is_some_and(|n| n.ends_with(".sql")))
+            .collect();
+        entries.sort_by_key(|e| e.file_name());
+        for entry in entries {
+            let content = std::fs::read_to_string(entry.path()).expect("read migration");
+            for line in content.lines() {
+                let t = line.trim();
+                // Match "CREATE TABLE [IF NOT EXISTS] <name>" — case-insensitive
+                // on the keywords, identifier ends at first non-alnum/underscore.
+                let lower = t.to_ascii_lowercase();
+                let rest = if let Some(r) = lower.strip_prefix("create table if not exists ") {
+                    &t[t.len() - r.len()..]
+                } else if let Some(r) = lower.strip_prefix("create table ") {
+                    &t[t.len() - r.len()..]
+                } else {
+                    continue;
+                };
+                let name: String = rest
+                    .chars()
+                    .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
+                    .collect();
+                if !name.is_empty() {
+                    out.push(name);
+                }
+            }
+        }
+        out.sort();
+        out.dedup();
+        out
+    }
+
+    fn code_corpus() -> String {
+        let manifest = env!("CARGO_MANIFEST_DIR");
+        let src = std::path::Path::new(manifest).join("src");
+        // The file this test lives in carries the allowlist constant and
+        // the `migrations/<file>.sql` include_str! lines — including it
+        // would create false-positive code references for the very names
+        // we're auditing. Real callsites live in api/, bot/, ui/,
+        // db/entities/, etc.
+        let self_path = std::path::Path::new(manifest).join("src/db/mod.rs");
+        let mut buf = String::new();
+        fn walk(p: &std::path::Path, skip: &std::path::Path, buf: &mut String) {
+            for entry in std::fs::read_dir(p)
+                .expect("readable")
+                .filter_map(|e| e.ok())
+            {
+                let path = entry.path();
+                if path.is_dir() {
+                    walk(&path, skip, buf);
+                } else if path == skip {
+                    continue;
+                } else if path
+                    .extension()
+                    .and_then(|s| s.to_str())
+                    .is_some_and(|s| s == "rs")
+                {
+                    if let Ok(s) = std::fs::read_to_string(&path) {
+                        buf.push_str(&s);
+                        buf.push('\n');
+                    }
+                }
+            }
+        }
+        walk(&src, &self_path, &mut buf);
+        buf
+    }
+
+    fn contains_word(haystack: &str, needle: &str) -> bool {
+        let mut start = 0;
+        while let Some(pos) = haystack[start..].find(needle) {
+            let abs = start + pos;
+            let before_ok = abs == 0
+                || (!haystack.as_bytes()[abs - 1].is_ascii_alphanumeric()
+                    && haystack.as_bytes()[abs - 1] != b'_');
+            let end = abs + needle.len();
+            let after_ok = end >= haystack.len()
+                || (!haystack.as_bytes()[end].is_ascii_alphanumeric()
+                    && haystack.as_bytes()[end] != b'_');
+            if before_ok && after_ok {
+                return true;
+            }
+            start = abs + needle.len();
+        }
+        false
+    }
+
+    #[test]
+    fn no_unexpected_orphan_tables() {
+        let tables = migration_tables();
+        assert!(!tables.is_empty(), "no CREATE TABLE statements parsed?");
+        let corpus = code_corpus();
+
+        let mut orphans = Vec::new();
+        for t in &tables {
+            if ALLOWED_ORPHANS.iter().any(|a| *a == t.as_str()) {
+                continue;
+            }
+            if !contains_word(&corpus, t) {
+                orphans.push(t.clone());
+            }
+        }
+        assert!(
+            orphans.is_empty(),
+            "tables created in migrations but never referenced in src/ ({}): {:?}\n\
+             Either wire them up, drop the migration, or add to ALLOWED_ORPHANS with rationale.",
+            orphans.len(),
+            orphans
+        );
+    }
+
+    /// Catches the case where a table gets wired up later but the
+    /// allowlist entry is forgotten. Failing fast keeps the allowlist
+    /// from rotting into a "things we used to ignore" graveyard.
+    #[test]
+    fn allowlist_entries_are_still_orphans() {
+        let corpus = code_corpus();
+        let stale: Vec<&&str> = ALLOWED_ORPHANS
+            .iter()
+            .filter(|t| contains_word(&corpus, t))
+            .collect();
+        assert!(
+            stale.is_empty(),
+            "ALLOWED_ORPHANS contains tables that are now referenced in src/: {:?}\n\
+             Remove from the allowlist — the orphan check will start covering them.",
+            stale
+        );
+    }
+}
+
 #[cfg(test)]
 mod url_sanitize_tests {
     use super::sanitize_pg_url_for_sqlx as s;
