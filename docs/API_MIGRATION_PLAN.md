@@ -14,7 +14,7 @@ when a file hits 0 callsites, mark it ✅.
 | File | Callsites | Tx? | Entities needed? | Priority | Status |
 |------|-----------|-----|------------------|----------|--------|
 | `api/catalog.rs` | 27 | No (all CRUD) | accessory, tea_product, set, accessory_set, tea_set (5 entities!) | low — bulk of work | 🔴 |
-| `api/garden.rs` | 8 | Some (reward-use tx) | maybe garden_plant + garden_harvest | medium | 🔴 |
+| `api/garden.rs` | 8 | Some (reward-use tx) | maybe garden_plant + garden_harvest | medium | ✅ #94 |
 | `api/admin.rs` | 7 | No | none (stats only) | medium | ✅ #92 |
 | `api/quest.rs` | 5 | No | quest_place exists; treasure_hunt exists | medium | ✅ #93 |
 | `api/tech_tree.rs` | 4 | Yes (cascade tx) | none — Statement throughout | low | ✅ #93 |

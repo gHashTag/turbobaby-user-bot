@@ -81,25 +81,29 @@ async fn get_user_plants(
     validate_telegram_id_param(query.telegram_id)?;
     crate::api::auth::check_owner(&headers, &state, query.telegram_id)?;
     check_not_blocked(&state, query.telegram_id).await?;
-    let client = state.db.pool.get().await.map_err(|e| {
-        tracing::error!("Database connection error: {}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
+    // Cycle #94: SeaORM via Statement. No `garden_plant` entity — wire
+    // shape (`PlantResponse`) is a heavily-derived view (`progress`,
+    // `stage_name`, `stage_emoji` computed from raw columns), so an
+    // entity would only model 11 of the JSON fields anyway.
+    use sea_orm::{ConnectionTrait, DbBackend, Statement};
 
     let user_id = query.telegram_id.to_string();
 
-    let rows = client
-        .query(
-            "SELECT id, user_id, strain_id, strain_name, current_stage, planted_at,
-                is_completed, harvested_at, reward_claimed, water_count, last_watered_at
-         FROM garden_plants
-         WHERE user_id = $1
+    let rows = state
+        .db
+        .orm
+        .query_all(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            "SELECT id, user_id, strain_id, strain_name, current_stage, planted_at, \
+                is_completed, harvested_at, reward_claimed, water_count, last_watered_at \
+         FROM garden_plants \
+         WHERE user_id = $1 \
          ORDER BY planted_at DESC LIMIT 200",
-            &[&user_id],
-        )
+            [user_id.clone().into()],
+        ))
         .await
         .map_err(|e| {
-            tracing::error!("Query error: {}", e);
+            tracing::error!("get_user_plants: {e}");
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
@@ -108,11 +112,15 @@ async fn get_user_plants(
         .iter()
         .map(|r| {
             let plant = garden::Plant {
-                id: r.try_get(0).unwrap_or_default(),
-                user_id: r.try_get(1).unwrap_or_default(),
-                strain_id: r.try_get(2).unwrap_or_default(),
-                strain_name: r.try_get(3).unwrap_or_default(),
-                current_stage: match r.try_get::<_, String>(4).unwrap_or_default().as_str() {
+                id: r.try_get("", "id").unwrap_or_default(),
+                user_id: r.try_get("", "user_id").unwrap_or_default(),
+                strain_id: r.try_get("", "strain_id").unwrap_or_default(),
+                strain_name: r.try_get("", "strain_name").unwrap_or_default(),
+                current_stage: match r
+                    .try_get::<String>("", "current_stage")
+                    .unwrap_or_default()
+                    .as_str()
+                {
                     "seed" => garden::GrowthStage::Seed,
                     "sprout" => garden::GrowthStage::Sprout,
                     "first_leaf" => garden::GrowthStage::FirstLeaf,
@@ -128,12 +136,12 @@ async fn get_user_plants(
                     "delivery" => garden::GrowthStage::Delivery,
                     _ => garden::GrowthStage::Final,
                 },
-                planted_at: r.try_get(5).unwrap_or(0),
-                is_completed: r.try_get(6).unwrap_or(false),
-                harvested_at: r.try_get(7).ok(),
-                reward_claimed: r.try_get(8).unwrap_or(false),
-                water_count: r.try_get(9).unwrap_or(0),
-                last_watered_at: r.try_get(10).ok(),
+                planted_at: r.try_get("", "planted_at").unwrap_or(0),
+                is_completed: r.try_get("", "is_completed").unwrap_or(false),
+                harvested_at: r.try_get("", "harvested_at").ok(),
+                reward_claimed: r.try_get("", "reward_claimed").unwrap_or(false),
+                water_count: r.try_get("", "water_count").unwrap_or(0),
+                last_watered_at: r.try_get("", "last_watered_at").ok(),
             };
 
             let progress = garden::calculate_progress(&plant, now);
@@ -178,61 +186,67 @@ async fn plant_seed(
     crate::api::auth::check_owner(&headers, &state, req.telegram_id)?;
     check_not_blocked(&state, req.telegram_id).await?;
     validate_plant_seed_request(&req)?;
-    let mut client = state.db.pool.get().await.map_err(|e| {
-        tracing::error!("Database connection error: {}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
+
+    // Cycle #94: SeaORM tx. Advisory lock via raw Statement (pattern #21),
+    // then conditional INSERT WHERE NOT EXISTS via raw Statement
+    // (`SELECT ... WHERE NOT EXISTS (subquery)` syntax not in typed builder).
+    use sea_orm::{ConnectionTrait, DbBackend, Statement, TransactionTrait};
 
     let user_id = req.telegram_id.to_string();
 
     let plant = garden::Plant::new(user_id.clone(), req.strain_id, req.strain_name);
     let plant_id = plant.id.clone();
 
-    let tx = client.transaction().await.map_err(|e| {
-        tracing::error!("Transaction error: {}", e);
+    let tx = state.db.orm.begin().await.map_err(|e| {
+        tracing::error!("plant_seed tx.begin: {e}");
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
     // Serialize plant_seed for this user to prevent race-condition duplicates.
-    let _ = tx
-        .query_one("SELECT pg_advisory_xact_lock(hashtext($1))", &[&user_id])
-        .await
-        .map_err(|e| {
-            tracing::error!("Advisory lock error: {}", e);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
+    tx.execute(Statement::from_sql_and_values(
+        DbBackend::Postgres,
+        "SELECT pg_advisory_xact_lock(hashtext($1))",
+        [user_id.clone().into()],
+    ))
+    .await
+    .map_err(|e| {
+        tracing::error!("plant_seed advisory lock: {e}");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
 
+    let stage = format!("{:?}", plant.current_stage).to_lowercase();
     let inserted = tx
-        .execute(
-            "INSERT INTO garden_plants (id, user_id, strain_id, strain_name, current_stage,
-                                    planted_at, is_completed, water_count, last_watered_at)
-         SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9
-         WHERE NOT EXISTS (
-             SELECT 1 FROM garden_plants WHERE user_id = $2 AND is_completed = false
-         )",
-            &[
-                &plant.id,
-                &plant.user_id,
-                &plant.strain_id,
-                &plant.strain_name,
-                &format!("{:?}", plant.current_stage).to_lowercase(),
-                &plant.planted_at,
-                &plant.is_completed,
-                &plant.water_count,
-                &plant.last_watered_at,
+        .execute(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            "INSERT INTO garden_plants (id, user_id, strain_id, strain_name, current_stage, \
+                                    planted_at, is_completed, water_count, last_watered_at) \
+             SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9 \
+             WHERE NOT EXISTS ( \
+                 SELECT 1 FROM garden_plants WHERE user_id = $2 AND is_completed = false \
+             )",
+            [
+                plant.id.into(),
+                plant.user_id.into(),
+                plant.strain_id.into(),
+                plant.strain_name.into(),
+                stage.into(),
+                plant.planted_at.into(),
+                plant.is_completed.into(),
+                plant.water_count.into(),
+                plant.last_watered_at.into(),
             ],
-        )
+        ))
         .await
         .map_err(|e| {
-            tracing::error!("Insert error: {}", e);
+            tracing::error!("plant_seed insert: {e}");
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
     tx.commit().await.map_err(|e| {
-        tracing::error!("Commit error: {}", e);
+        tracing::error!("plant_seed commit: {e}");
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
-    if inserted == 0 {
+    if inserted.rows_affected() == 0 {
         return Ok(Json(json!({
             "success": false,
             "error": "You already have an active plant"
@@ -253,28 +267,29 @@ async fn water_plant(
     if id.len() > 200 {
         return Err(StatusCode::BAD_REQUEST);
     }
-    let mut client = state.db.pool.get().await.map_err(|e| {
-        tracing::error!("Database connection error: {}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
+    // Cycle #94: SeaORM tx with raw SELECT … FOR UPDATE (Statement-based;
+    // no garden_plant entity to use `lock_exclusive` against). Conditional
+    // UPDATE with cooldown guard preserved via WHERE clause.
+    use sea_orm::{ConnectionTrait, DbBackend, Statement, TransactionTrait};
 
     let now = chrono::Utc::now().timestamp_millis();
-    let tx = client.transaction().await.map_err(|e| {
-        tracing::error!("Transaction error: {}", e);
+    let tx = state.db.orm.begin().await.map_err(|e| {
+        tracing::error!("water_plant tx.begin: {e}");
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
     let row = tx
-        .query_opt(
-            "SELECT user_id, current_stage, is_completed, water_count, last_watered_at
-         FROM garden_plants
-         WHERE id = $1
-         FOR UPDATE",
-            &[&id],
-        )
+        .query_one(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            "SELECT user_id, current_stage, is_completed, water_count, last_watered_at \
+             FROM garden_plants \
+             WHERE id = $1 \
+             FOR UPDATE",
+            [id.clone().into()],
+        ))
         .await
         .map_err(|e| {
-            tracing::error!("Query error: {}", e);
+            tracing::error!("water_plant FOR UPDATE: {e}");
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
@@ -284,16 +299,16 @@ async fn water_plant(
         ));
     };
 
-    let user_id: String = r.try_get(0).unwrap_or_default();
+    let user_id: String = r.try_get("", "user_id").unwrap_or_default();
     let tid = user_id
         .parse::<i64>()
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     crate::api::auth::check_owner(&headers, &state, tid)?;
     check_not_blocked(&state, tid).await?;
 
-    let is_completed: bool = r.try_get(2).unwrap_or(false);
-    let water_count: i32 = r.try_get(3).unwrap_or(0);
-    let last_watered_at: Option<i64> = r.try_get(4).ok();
+    let is_completed: bool = r.try_get("", "is_completed").unwrap_or(false);
+    let water_count: i32 = r.try_get("", "water_count").unwrap_or(0);
+    let last_watered_at: Option<i64> = r.try_get("", "last_watered_at").ok();
 
     if is_completed {
         return Ok(Json(
@@ -308,36 +323,38 @@ async fn water_plant(
     let new_stage = if let Some(stage) = garden::GrowthStage::from_index(new_count as usize) {
         format!("{:?}", stage).to_lowercase()
     } else {
-        r.try_get::<_, String>(1).unwrap_or_default()
+        r.try_get::<String>("", "current_stage").unwrap_or_default()
     };
     let new_completed = new_count >= 13;
     let cooldown_ms = garden::WATER_COOLDOWN_MS;
     let max_last_water = now.saturating_sub(cooldown_ms);
 
     let rows = tx
-        .execute(
-            "UPDATE garden_plants
-         SET water_count = $1, current_stage = $2, is_completed = $3, last_watered_at = $4
-         WHERE id = $5 AND (last_watered_at IS NULL OR last_watered_at <= $6)",
-            &[
-                &(new_count as i32),
-                &new_stage,
-                &new_completed,
-                &now,
-                &id,
-                &max_last_water,
+        .execute(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            "UPDATE garden_plants \
+             SET water_count = $1, current_stage = $2, is_completed = $3, last_watered_at = $4 \
+             WHERE id = $5 AND (last_watered_at IS NULL OR last_watered_at <= $6)",
+            [
+                (new_count as i32).into(),
+                new_stage.clone().into(),
+                new_completed.into(),
+                now.into(),
+                id.into(),
+                max_last_water.into(),
             ],
-        )
+        ))
         .await
         .map_err(|e| {
-            tracing::error!("Update error: {}", e);
+            tracing::error!("water_plant update: {e}");
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
-    if rows == 0 {
+    if rows.rows_affected() == 0 {
         let next_water_at = last_watered_at
             .map(|t| t.saturating_add(garden::WATER_COOLDOWN_MS))
             .unwrap_or(now);
+        // tx drops → auto-rollback.
         return Ok(Json(json!({
             "success": false,
             "error": "Cooldown active",
@@ -346,7 +363,7 @@ async fn water_plant(
     }
 
     tx.commit().await.map_err(|e| {
-        tracing::error!("Commit error: {}", e);
+        tracing::error!("water_plant commit: {e}");
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
@@ -366,28 +383,29 @@ async fn harvest_plant(
     if id.len() > 200 {
         return Err(StatusCode::BAD_REQUEST);
     }
-    let mut client = state.db.pool.get().await.map_err(|e| {
-        tracing::error!("Database connection error: {}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
+    // Cycle #94: SeaORM tx. FOR UPDATE row lock + config read + atomic
+    // UPDATE (WHERE harvested_at IS NULL) + INSERT reward. Drop-rollback
+    // removes the explicit .rollback() arm.
+    use sea_orm::{ConnectionTrait, DbBackend, Statement, TransactionTrait};
 
     let now = chrono::Utc::now().timestamp_millis();
-    let tx = client.transaction().await.map_err(|e| {
-        tracing::error!("Transaction error: {}", e);
+    let tx = state.db.orm.begin().await.map_err(|e| {
+        tracing::error!("harvest_plant tx.begin: {e}");
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
     let row = tx
-        .query_opt(
-            "SELECT user_id, strain_id, strain_name, is_completed, harvested_at
-         FROM garden_plants
-         WHERE id = $1
-         FOR UPDATE",
-            &[&id],
-        )
+        .query_one(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            "SELECT user_id, strain_id, strain_name, is_completed, harvested_at \
+             FROM garden_plants \
+             WHERE id = $1 \
+             FOR UPDATE",
+            [id.clone().into()],
+        ))
         .await
         .map_err(|e| {
-            tracing::error!("Query error: {}", e);
+            tracing::error!("harvest_plant FOR UPDATE: {e}");
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
@@ -397,15 +415,15 @@ async fn harvest_plant(
         ));
     };
 
-    let user_id: String = r.try_get(0).unwrap_or_default();
+    let user_id: String = r.try_get("", "user_id").unwrap_or_default();
     let tid = user_id
         .parse::<i64>()
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     crate::api::auth::check_owner(&headers, &state, tid)?;
     check_not_blocked(&state, tid).await?;
 
-    let is_completed: bool = r.try_get(3).unwrap_or(false);
-    let harvested_at: Option<i64> = r.try_get(4).ok();
+    let is_completed: bool = r.try_get("", "is_completed").unwrap_or(false);
+    let harvested_at: Option<i64> = r.try_get("", "harvested_at").ok();
 
     if !is_completed {
         return Ok(Json(
@@ -419,73 +437,72 @@ async fn harvest_plant(
         ));
     }
 
-    let strain_id: String = r.try_get(1).unwrap_or_default();
-    let strain_name: String = r.try_get(2).unwrap_or_default();
+    let strain_id: String = r.try_get("", "strain_id").unwrap_or_default();
+    let strain_name: String = r.try_get("", "strain_name").unwrap_or_default();
 
     let reward_id = uuid::Uuid::new_v4().to_string();
 
     // Read garden config inside transaction for consistency
-    let config_row = tx.query_opt(
-        "SELECT reward_discount_percent, reward_bonus_points, reward_expiration_days FROM garden_config WHERE id = 1",
-        &[],
-    ).await.map_err(|e| {
-        tracing::error!("Config read error: {}", e);
+    let config_row = tx.query_one(Statement::from_string(
+        DbBackend::Postgres,
+        "SELECT reward_discount_percent, reward_bonus_points, reward_expiration_days FROM garden_config WHERE id = 1".to_string(),
+    )).await.map_err(|e| {
+        tracing::error!("harvest_plant config: {e}");
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
     let (discount_percent, bonus_points, expiration_days) = match config_row {
         Some(r) => (
-            r.try_get::<_, i32>(0).unwrap_or(10),
-            r.try_get::<_, i32>(1).unwrap_or(100),
-            r.try_get::<_, i32>(2).unwrap_or(7),
+            r.try_get::<i32>("", "reward_discount_percent")
+                .unwrap_or(10),
+            r.try_get::<i32>("", "reward_bonus_points").unwrap_or(100),
+            r.try_get::<i32>("", "reward_expiration_days").unwrap_or(7),
         ),
         None => (10, 100, 7),
     };
     let expires_at = now.saturating_add(expiration_days as i64 * 24 * 60 * 60 * 1000);
 
     // Atomically mark plant as harvested — WHERE harvested_at IS NULL prevents race
-    let rows = tx.execute(
+    let rows = tx.execute(Statement::from_sql_and_values(
+        DbBackend::Postgres,
         "UPDATE garden_plants SET harvested_at = $1, reward_claimed = true WHERE id = $2 AND harvested_at IS NULL",
-        &[&now, &id],
-    ).await.map_err(|e| {
-        tracing::error!("Update plant error: {}", e);
+        [now.into(), id.clone().into()],
+    )).await.map_err(|e| {
+        tracing::error!("harvest_plant update: {e}");
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
-    if rows == 0 {
-        if let Err(e) = tx.rollback().await {
-            tracing::error!("garden rollback error: {}", e);
-        }
+    if rows.rows_affected() == 0 {
+        // tx drops → auto-rollback.
         return Ok(Json(
             json!({ "success": false, "error": "Already harvested" }),
         ));
     }
 
     // Create reward
-    tx.execute(
-        "INSERT INTO garden_rewards (id, plant_id, user_id, strain_id, strain_name,
-                                    discount_percent, bonus_points, expires_at, is_used, created_at)
+    tx.execute(Statement::from_sql_and_values(
+        DbBackend::Postgres,
+        "INSERT INTO garden_rewards (id, plant_id, user_id, strain_id, strain_name, \
+                                    discount_percent, bonus_points, expires_at, is_used, created_at) \
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
-        &[
-            &reward_id,
-            &id,
-            &user_id,
-            &strain_id,
-            &strain_name,
-            &discount_percent,
-            &bonus_points,
-            &expires_at,
-            &false,
-            &now,
+        [
+            reward_id.clone().into(),
+            id.into(),
+            user_id.clone().into(),
+            strain_id.into(),
+            strain_name.clone().into(),
+            discount_percent.into(),
+            bonus_points.into(),
+            expires_at.into(),
+            false.into(),
+            now.into(),
         ],
-    )
-    .await
-    .map_err(|e| {
-        tracing::error!("Insert reward error: {}", e);
+    )).await.map_err(|e| {
+        tracing::error!("harvest_plant insert reward: {e}");
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
     tx.commit().await.map_err(|e| {
-        tracing::error!("Commit error: {}", e);
+        tracing::error!("harvest_plant commit: {e}");
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
@@ -528,39 +545,36 @@ async fn get_user_rewards(
     validate_telegram_id_param(query.telegram_id)?;
     crate::api::auth::check_owner(&headers, &state, query.telegram_id)?;
     check_not_blocked(&state, query.telegram_id).await?;
-    let client = state.db.pool.get().await.map_err(|e| {
-        tracing::error!("Database connection error: {}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
+    // Cycle #94: SeaORM via Statement.
+    use sea_orm::{ConnectionTrait, DbBackend, Statement};
 
     let user_id = query.telegram_id.to_string();
     let now = chrono::Utc::now().timestamp_millis();
 
-    let rows = client
-        .query(
-            "SELECT id, plant_id, strain_name, discount_percent, bonus_points, expires_at, is_used
-         FROM garden_rewards
-         WHERE user_id = $1
+    let rows = state.db.orm.query_all(Statement::from_sql_and_values(
+        DbBackend::Postgres,
+        "SELECT id, plant_id, strain_name, discount_percent, bonus_points, expires_at, is_used \
+         FROM garden_rewards \
+         WHERE user_id = $1 \
          ORDER BY created_at DESC LIMIT 200",
-            &[&user_id],
-        )
-        .await
-        .map_err(|e| {
-            tracing::error!("Query error: {}", e);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
+        [user_id.into()],
+    )).await.map_err(|e| {
+        tracing::error!("get_user_rewards: {e}");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
 
     let rewards: Vec<RewardResponse> = rows
         .iter()
         .map(|r| {
-            let expires_at: i64 = r.try_get(5).unwrap_or(0);
-            let is_used: bool = r.try_get(6).unwrap_or(false);
+            let expires_at: i64 = r.try_get("", "expires_at").unwrap_or(0);
+            let is_used: bool = r.try_get("", "is_used").unwrap_or(false);
             RewardResponse {
-                id: r.try_get(0).unwrap_or_default(),
-                plant_id: r.try_get(1).unwrap_or_default(),
-                strain_name: r.try_get(2).unwrap_or_default(),
-                discount_percent: r.try_get::<_, i32>(3).unwrap_or(0).max(0) as u32,
-                bonus_points: r.try_get::<_, i32>(4).unwrap_or(0).max(0) as u32,
+                id: r.try_get("", "id").unwrap_or_default(),
+                plant_id: r.try_get("", "plant_id").unwrap_or_default(),
+                strain_name: r.try_get("", "strain_name").unwrap_or_default(),
+                discount_percent: r.try_get::<i32>("", "discount_percent").unwrap_or(0).max(0)
+                    as u32,
+                bonus_points: r.try_get::<i32>("", "bonus_points").unwrap_or(0).max(0) as u32,
                 expires_at,
                 is_used,
                 is_active: !is_used && expires_at > now,
@@ -579,42 +593,53 @@ async fn use_reward(
     if id.len() > 200 {
         return Err(StatusCode::BAD_REQUEST);
     }
-    let mut client = state.db.pool.get().await.map_err(|e| {
-        tracing::error!("Database connection error: {}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
+    // Cycle #94: SeaORM tx — finally migrates the last db.pool.get() in
+    // garden.rs. Uses typed entity for the loyalty upsert (cycle #82's
+    // `loyalty_profile`) but raw Statement for the reward + balance
+    // updates (no garden_reward entity warranted by single-call site).
+    use crate::db::entities::loyalty_profile::{
+        ActiveModel as LpAm, Column as LpCol, Entity as LpEntity,
+    };
+    use sea_orm::sea_query::OnConflict;
+    use sea_orm::{
+        ActiveValue::Set, ColumnTrait, ConnectionTrait, DbBackend, EntityTrait, QueryFilter,
+        Statement, TransactionTrait,
+    };
 
     let now = chrono::Utc::now().timestamp_millis();
 
-    // Check reward (read-only, can stay outside tx for auth)
-    let row = client
-        .query_opt(
-            "SELECT user_id, is_used, expires_at, discount_percent, bonus_points
-         FROM garden_rewards
+    // Read reward (read-only, outside tx — auth happens here).
+    let r = state
+        .db
+        .orm
+        .query_one(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            "SELECT user_id, is_used, expires_at, discount_percent, bonus_points \
+         FROM garden_rewards \
          WHERE id = $1",
-            &[&id],
-        )
+            [id.clone().into()],
+        ))
         .await
         .map_err(|e| {
-            tracing::error!("Query error: {}", e);
+            tracing::error!("use_reward query: {e}");
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
-    let Some(r) = row else {
+    let Some(r) = r else {
         return Ok(Json(
             json!({ "success": false, "error": "Reward not found" }),
         ));
     };
 
-    let user_id: String = r.try_get(0).unwrap_or_default();
+    let user_id: String = r.try_get("", "user_id").unwrap_or_default();
     let tid = user_id
         .parse::<i64>()
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     crate::api::auth::check_owner(&headers, &state, tid)?;
     check_not_blocked(&state, tid).await?;
 
-    let is_used: bool = r.try_get(1).unwrap_or(false);
-    let expires_at: i64 = r.try_get(2).unwrap_or(0);
+    let is_used: bool = r.try_get("", "is_used").unwrap_or(false);
+    let expires_at: i64 = r.try_get("", "expires_at").unwrap_or(0);
 
     if is_used {
         return Ok(Json(
@@ -626,69 +651,81 @@ async fn use_reward(
         return Ok(Json(json!({ "success": false, "error": "Reward expired" })));
     }
 
-    let discount_percent: i32 = r.try_get(3).unwrap_or(0);
-    let bonus_points: i32 = r.try_get(4).unwrap_or(0);
+    let discount_percent: i32 = r.try_get("", "discount_percent").unwrap_or(0);
+    let bonus_points: i32 = r.try_get("", "bonus_points").unwrap_or(0);
 
-    // Atomically mark used and credit bonus inside a transaction
-    let tx = client.transaction().await.map_err(|e| {
-        tracing::error!("Transaction error: {}", e);
+    // Atomically mark used and credit bonus inside a transaction.
+    let tx = state.db.orm.begin().await.map_err(|e| {
+        tracing::error!("use_reward tx.begin: {e}");
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
     let rows = tx
-        .execute(
+        .execute(Statement::from_sql_and_values(
+            DbBackend::Postgres,
             "UPDATE garden_rewards SET is_used = true WHERE id = $1 AND is_used = false",
-            &[&id],
-        )
+            [id.into()],
+        ))
         .await
         .map_err(|e| {
-            tracing::error!("Mark reward used error: {}", e);
+            tracing::error!("use_reward mark used: {e}");
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
-    if rows == 0 {
-        if let Err(e) = tx.rollback().await {
-            tracing::error!("garden rollback error: {}", e);
-        }
+    if rows.rows_affected() == 0 {
+        // tx drops → auto-rollback.
         return Ok(Json(
             json!({ "success": false, "error": "Reward already used" }),
         ));
     }
 
     let bonus_f64 = bonus_points as f64;
-    // Ensure loyalty profile exists before crediting bonus
-    tx.execute(
-        "INSERT INTO loyalty_profiles (telegram_id, bonus_balance, total_spent) VALUES ($1, 0, 0) ON CONFLICT (telegram_id) DO NOTHING",
-        &[&tid],
-    ).await.map_err(|e| {
-        tracing::error!("Credit bonus upsert error: {}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-    let updated = tx
-        .execute(
-            "UPDATE loyalty_profiles SET bonus_balance = bonus_balance + $1 WHERE telegram_id = $2",
-            &[&bonus_f64, &tid],
+    // Idempotent profile seed via pattern #9.
+    let lp_seed = LpAm {
+        telegram_id: Set(tid),
+        bonus_balance: Set(Some(0.0)),
+        total_spent: Set(Some(0.0)),
+        ..Default::default()
+    };
+    LpEntity::insert(lp_seed)
+        .on_conflict(
+            OnConflict::column(LpCol::TelegramId)
+                .do_nothing()
+                .to_owned(),
         )
+        .do_nothing()
+        .exec(&tx)
         .await
         .map_err(|e| {
-            tracing::error!("Credit bonus error: {}", e);
+            tracing::error!("use_reward loyalty seed: {e}");
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
-    if updated == 0 {
-        if let Err(e) = tx.rollback().await {
-            tracing::error!("garden rollback error: {}", e);
-        }
+    // Bump balance via column-expr UPDATE (pattern #11).
+    let updated = LpEntity::update_many()
+        .col_expr(
+            LpCol::BonusBalance,
+            sea_orm::sea_query::Expr::cust_with_values("bonus_balance + $1", [bonus_f64]),
+        )
+        .filter(LpCol::TelegramId.eq(tid))
+        .exec(&tx)
+        .await
+        .map_err(|e| {
+            tracing::error!("use_reward balance bump: {e}");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+    if updated.rows_affected == 0 {
         tracing::error!(
-            "use_reward: loyalty profile missing for telegram_id={}",
+            "use_reward: loyalty profile missing for telegram_id={} after upsert (race?)",
             tid
         );
+        // tx drops → auto-rollback.
         return Ok(Json(
             json!({ "success": false, "error": "Loyalty profile not found" }),
         ));
     }
 
     tx.commit().await.map_err(|e| {
-        tracing::error!("Commit error: {}", e);
+        tracing::error!("use_reward commit: {e}");
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
@@ -710,27 +747,34 @@ pub struct ConfigUpdateRequest {
 }
 
 async fn get_config(State(state): State<AppState>) -> Result<Json<Value>, StatusCode> {
-    let client = state.db.pool.get().await.map_err(|e| {
-        tracing::error!("Database connection error: {}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
+    // Cycle #94: SeaORM via Statement (no entity — singleton `garden_config` row).
+    use sea_orm::{ConnectionTrait, DbBackend, Statement};
 
-    let row = client.query_opt(
-        "SELECT is_enabled, reward_discount_percent, reward_bonus_points, reward_expiration_days
-         FROM garden_config
-         LIMIT 1",
-        &[],
-    ).await.map_err(|e| {
-        tracing::error!("Query error: {}", e);
+    let row = state.db.orm.query_one(Statement::from_string(
+        DbBackend::Postgres,
+        "SELECT is_enabled, reward_discount_percent, reward_bonus_points, reward_expiration_days \
+         FROM garden_config \
+         LIMIT 1".to_string(),
+    )).await.map_err(|e| {
+        tracing::error!("get_config: {e}");
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
     let config = match row {
         Some(r) => garden::GameConfig {
-            is_enabled: r.try_get(0).unwrap_or(false),
-            reward_discount_percent: r.try_get::<_, i32>(1).unwrap_or(0).max(0) as u32,
-            reward_bonus_points: r.try_get::<_, i32>(2).unwrap_or(0).max(0) as u32,
-            reward_expiration_days: r.try_get::<_, i32>(3).unwrap_or(0).max(0) as u32,
+            is_enabled: r.try_get("", "is_enabled").unwrap_or(false),
+            reward_discount_percent: r
+                .try_get::<i32>("", "reward_discount_percent")
+                .unwrap_or(0)
+                .max(0) as u32,
+            reward_bonus_points: r
+                .try_get::<i32>("", "reward_bonus_points")
+                .unwrap_or(0)
+                .max(0) as u32,
+            reward_expiration_days: r
+                .try_get::<i32>("", "reward_expiration_days")
+                .unwrap_or(0)
+                .max(0) as u32,
         },
         None => garden::GameConfig::default(),
     };
@@ -769,35 +813,37 @@ async fn update_config(
 ) -> Result<Json<Value>, StatusCode> {
     check_admin(&headers, &state)?;
     validate_garden_config_update(&req)?;
-    let client = state.db.pool.get().await.map_err(|e| {
-        tracing::error!("Database connection error: {}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
+    // Cycle #94: SeaORM via Statement. COALESCE($n, col) partial-update
+    // semantics preserved.
+    use sea_orm::{ConnectionTrait, DbBackend, Statement};
 
     // BUG-5: is_enabled в БД — BOOLEAN, раньше передавался i32 → type mismatch.
     let is_enabled = req.is_enabled;
     let reward_discount_percent = req.reward_discount_percent.map(|p| p as i32);
     let reward_bonus_points = req.reward_bonus_points.map(|p| p as i32);
     let reward_expiration_days = req.reward_expiration_days.map(|d| d as i32);
-    client
-        .execute(
-            "UPDATE garden_config
-         SET is_enabled = COALESCE($1, is_enabled),
-             reward_discount_percent = COALESCE($2, reward_discount_percent),
-             reward_bonus_points = COALESCE($3, reward_bonus_points),
-             reward_expiration_days = COALESCE($4, reward_expiration_days),
-             updated_at = NOW()
+    state
+        .db
+        .orm
+        .execute(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            "UPDATE garden_config \
+         SET is_enabled = COALESCE($1, is_enabled), \
+             reward_discount_percent = COALESCE($2, reward_discount_percent), \
+             reward_bonus_points = COALESCE($3, reward_bonus_points), \
+             reward_expiration_days = COALESCE($4, reward_expiration_days), \
+             updated_at = NOW() \
          WHERE id = 1",
-            &[
-                &is_enabled,
-                &reward_discount_percent,
-                &reward_bonus_points,
-                &reward_expiration_days,
+            [
+                is_enabled.into(),
+                reward_discount_percent.into(),
+                reward_bonus_points.into(),
+                reward_expiration_days.into(),
             ],
-        )
+        ))
         .await
         .map_err(|e| {
-            tracing::error!("Update error: {}", e);
+            tracing::error!("update_config: {e}");
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
