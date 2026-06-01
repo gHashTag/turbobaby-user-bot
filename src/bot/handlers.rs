@@ -138,9 +138,16 @@ pub async fn handle_web_app_data(
         }
         if let Ok(json) = serde_json::from_str::<serde_json::Value>(&data.data) {
             if json["type"] == "order" {
-                // notify admins about order from web_app_data
+                // Cycle #77: legacy path. The Dioxus SPA submits orders
+                // via `POST /api/orders` (which itself calls notify_admins
+                // in src/api/orders.rs). `Telegram.WebApp.sendData()` is
+                // not used by the current frontend (`grep -r sendData
+                // src/ui/` is empty), so this branch is defensive coverage
+                // for old WebApp clients. Calling notify_admins here would
+                // produce duplicate admin pings for any client running
+                // both paths simultaneously — keep the log line for
+                // visibility and let the HTTP path own the notification.
                 tracing::info!("📱 web_app_data order: {:?}", json["order"]["id"]);
-                // TODO: call notify_admins_about_order
             }
         }
     }

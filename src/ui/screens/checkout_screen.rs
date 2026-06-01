@@ -87,12 +87,15 @@ pub fn CheckoutScreen() -> Element {
         // Generate or reuse the idempotency key (cycle #57). The signal stays
         // alive across spawned tasks because Dioxus signals are rooted in the
         // component, not the closure.
+        //
+        // Cycle #77: `Option::get_or_insert_with` encodes the
+        // "is_none → set; is_some → keep" invariant in the type system,
+        // returning `&mut String` directly. Cleaner than the old
+        // write-then-clone-unwrap pattern, and provably panic-free.
         let key = {
             let mut k = idempotency_key.write();
-            if k.is_none() {
-                *k = Some(uuid::Uuid::new_v4().to_string());
-            }
-            k.clone().unwrap()
+            k.get_or_insert_with(|| uuid::Uuid::new_v4().to_string())
+                .clone()
         };
 
         let items_json: Vec<serde_json::Value> = submit_cart_items

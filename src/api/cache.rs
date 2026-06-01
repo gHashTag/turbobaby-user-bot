@@ -22,10 +22,15 @@ impl ETagCache {
     /// Compute stable hash of JSON response (first 64 bits of SHA-256).
     pub fn compute_hash(data: &str) -> String {
         let hash = Sha256::digest(data.as_bytes());
-        format!(
-            "{:016x}",
-            u64::from_be_bytes(hash[0..8].try_into().unwrap())
-        )
+        // Cycle #77: self-documenting expect — SHA-256 digest is fixed
+        // at 32 bytes by spec, so [..8] is always exactly 8 bytes and
+        // try_into::<[u8; 8]>() always succeeds. If a future refactor
+        // swaps in a different hash with shorter output, this panics
+        // loudly with the invariant message.
+        let arr: [u8; 8] = hash[0..8]
+            .try_into()
+            .expect("SHA-256 digest is 32 bytes; [..8] is always 8");
+        format!("{:016x}", u64::from_be_bytes(arr))
     }
 
     /// Get cached hash for a key
