@@ -10,7 +10,10 @@ use tracing::error;
 
 use crate::api::auth::{check_admin, check_not_blocked, validate_telegram_id_param};
 use crate::db::orders::{Order, OrderItem};
+use crate::db::strains::Strain;
+use crate::trios::pricing::{effective_strain_price, MarketingFlags};
 use crate::AppState;
+use std::collections::HashMap;
 
 #[derive(Debug, Deserialize)]
 pub struct CreateOrderRequest {
@@ -105,6 +108,93 @@ fn validate_create_order(req: &CreateOrderRequest) -> Result<f64, StatusCode> {
     Ok(bonus_used)
 }
 
+/// Outcome of the server-side strain-subtotal check (cycle #56). Distinct
+/// variants so audit logs can tell stale-cart / typo / fraud apart.
+#[derive(Debug, PartialEq)]
+pub enum SubtotalCheck {
+    /// Server-computed strain portion matches the client-claimed subtotal
+    /// within tolerance (strain-only orders) or fits within it (mixed orders).
+    Ok,
+    /// Item references an unknown `strain_id` — caller may be referencing a
+    /// deleted strain, or fabricated the id outright.
+    UnknownStrain(String),
+    /// Mixed order: the strain portion alone *exceeds* the claimed subtotal,
+    /// which is impossible unless the client lied about prices.
+    StrainExceedsSubtotal { strain: f64, claimed: f64 },
+    /// Strain-only order: server total disagrees with claimed by more than
+    /// `tolerance`. `expected` and `claimed` go in audit logs but MUST NOT be
+    /// echoed to the client (anti price-probing).
+    StrainOnlyMismatch { claimed: f64, expected: f64 },
+}
+
+/// Server-authoritative price check for the strain portion of an order.
+///
+/// Pure helper — does no IO. Caller fetches the strain rows and assembles
+/// the `strain_map`. Uses `trios::pricing::effective_strain_price` so the
+/// precedence rules cannot drift from the customer-facing menu.
+///
+/// Semantics:
+/// * Strain-only order (no `accessory_id` / `tea_id` / `set_id`): the server-
+///   computed strain subtotal must equal `claimed_subtotal` within `tolerance`.
+/// * Mixed order: only check that the strain portion alone does not exceed
+///   the claimed subtotal. Accessory / tea / set price authority is a
+///   separate cycle; until then, trust the client for those.
+/// * Unknown strain id: short-circuit with `UnknownStrain`.
+pub fn check_strain_subtotal(
+    items: &[OrderItem],
+    strain_map: &HashMap<&str, &Strain>,
+    claimed_subtotal: f64,
+    tolerance: f64,
+    now: chrono::DateTime<chrono::Utc>,
+) -> SubtotalCheck {
+    let mut strain_sum = 0.0_f64;
+    let mut has_non_strain = false;
+    for item in items {
+        if let Some(sid) = item.strain_id.as_deref() {
+            let Some(strain) = strain_map.get(sid) else {
+                return SubtotalCheck::UnknownStrain(sid.to_string());
+            };
+            let flags = MarketingFlags {
+                price_per_gram: strain.price_per_gram,
+                is_strain_of_day: strain.is_strain_of_day,
+                strain_of_day_discount: strain.strain_of_day_discount,
+                sale_active: strain.sale_active,
+                sale_until: strain.sale_until.as_deref(),
+                sale_price: strain.sale_price,
+                discount_percent: strain.discount_percent,
+                is_new_arrival: strain.is_new_arrival,
+                new_until: strain.new_until.as_deref(),
+            };
+            let priced = effective_strain_price(&flags, now);
+            let qty = if item.quantity.is_finite() {
+                item.quantity.max(0.0)
+            } else {
+                0.0
+            };
+            strain_sum += priced.price * qty;
+        } else if item.accessory_id.is_some() || item.tea_id.is_some() || item.set_id.is_some() {
+            has_non_strain = true;
+        }
+    }
+    if has_non_strain {
+        if strain_sum > claimed_subtotal + tolerance {
+            return SubtotalCheck::StrainExceedsSubtotal {
+                strain: strain_sum,
+                claimed: claimed_subtotal,
+            };
+        }
+        return SubtotalCheck::Ok;
+    }
+    // Strain-only path — strict equality.
+    if (strain_sum - claimed_subtotal).abs() > tolerance {
+        return SubtotalCheck::StrainOnlyMismatch {
+            claimed: claimed_subtotal,
+            expected: strain_sum,
+        };
+    }
+    SubtotalCheck::Ok
+}
+
 async fn create_order(
     headers: HeaderMap,
     State(state): State<AppState>,
@@ -117,6 +207,79 @@ async fn create_order(
     }
 
     let bonus_used = validate_create_order(&req)?;
+
+    // Cycle #56: server-side price authority for strain items. Without this
+    // the client could declare `subtotal: 1.0` for any cart and the server
+    // happily inserted it. Uses `trios::pricing` (cycle #55) so the math is
+    // identical to the customer-facing menu — divergence would otherwise
+    // flag every legitimate order as fraud.
+    let strain_ids: Vec<String> = req
+        .items
+        .iter()
+        .filter_map(|i| i.strain_id.clone())
+        .collect();
+    if !strain_ids.is_empty() {
+        let lookup_client = state.db.pool.get().await.map_err(|e| {
+            error!("price-auth pool error: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+        let rows = lookup_client
+            .query(
+                "SELECT id, name, category, thc_percent::float8, cbd_percent::float8, effect, \
+                    flavor_profile, description, price_per_gram::float8, available_grams::float8, \
+                    image_url, video_url, is_available, is_strain_of_day, \
+                    strain_of_day_discount::float8, name_en, description_en, effect_en, \
+                    flavor_profile_en, strain_type_en, discount_percent::float8, \
+                    sale_price::float8, sale_active, sale_until, is_best_seller, \
+                    is_new_arrival, new_until, display_order \
+             FROM strains WHERE id = ANY($1)",
+                &[&strain_ids],
+            )
+            .await
+            .map_err(|e| {
+                error!("price-auth strain lookup: {}", e);
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?;
+        let strains: Vec<Strain> = rows.iter().map(Strain::from_row).collect();
+        let strain_map: HashMap<&str, &Strain> =
+            strains.iter().map(|s| (s.id.as_str(), s)).collect();
+        match check_strain_subtotal(
+            &req.items,
+            &strain_map,
+            req.subtotal,
+            0.01,
+            chrono::Utc::now(),
+        ) {
+            SubtotalCheck::Ok => {}
+            SubtotalCheck::UnknownStrain(sid) => {
+                tracing::warn!(
+                    telegram_id = req.telegram_id.unwrap_or(0),
+                    unknown_strain_id = %sid,
+                    "create_order: order references missing strain"
+                );
+                return Err(StatusCode::UNPROCESSABLE_ENTITY);
+            }
+            SubtotalCheck::StrainExceedsSubtotal { strain, claimed } => {
+                tracing::warn!(
+                    telegram_id = req.telegram_id.unwrap_or(0),
+                    strain_subtotal = strain,
+                    claimed_subtotal = claimed,
+                    "create_order: strain portion exceeds claimed subtotal — possible tampering"
+                );
+                return Err(StatusCode::UNPROCESSABLE_ENTITY);
+            }
+            SubtotalCheck::StrainOnlyMismatch { claimed, expected } => {
+                tracing::warn!(
+                    telegram_id = req.telegram_id.unwrap_or(0),
+                    claimed_subtotal = claimed,
+                    expected_subtotal = expected,
+                    items = req.items.len(),
+                    "create_order: subtotal mismatch — possible client tampering"
+                );
+                return Err(StatusCode::UNPROCESSABLE_ENTITY);
+            }
+        }
+    }
 
     let id = uuid::Uuid::new_v4().to_string();
     let items_json = serde_json::to_value(&req.items).map_err(|e| {
@@ -486,9 +649,198 @@ async fn get_user_orders(
 
 #[cfg(test)]
 mod tests {
-    use super::{validate_create_order, validate_update_order_status, CreateOrderRequest};
+    use super::{
+        check_strain_subtotal, validate_create_order, validate_update_order_status,
+        CreateOrderRequest, SubtotalCheck,
+    };
     use crate::db::orders::OrderItem;
+    use crate::db::strains::Strain;
     use axum::http::StatusCode;
+    use std::collections::HashMap;
+
+    fn strain(id: &str, price: f64) -> Strain {
+        Strain {
+            id: id.into(),
+            name: id.into(),
+            category: None,
+            thc_percent: None,
+            cbd_percent: None,
+            effect: None,
+            flavor_profile: None,
+            description: None,
+            price_per_gram: price,
+            available_grams: Some(100.0),
+            image_url: None,
+            video_url: None,
+            is_available: true,
+            is_strain_of_day: false,
+            strain_of_day_discount: 0.0,
+            name_en: None,
+            description_en: None,
+            effect_en: None,
+            flavor_profile_en: None,
+            strain_type_en: None,
+            discount_percent: 0.0,
+            sale_price: None,
+            sale_active: false,
+            sale_until: None,
+            is_best_seller: false,
+            is_new_arrival: false,
+            new_until: None,
+            display_order: 0,
+        }
+    }
+
+    fn strain_item(id: &str, qty: f64) -> OrderItem {
+        OrderItem {
+            strain_id: Some(id.into()),
+            strain_name: Some(id.into()),
+            accessory_id: None,
+            accessory_name: None,
+            tea_id: None,
+            tea_name: None,
+            set_id: None,
+            set_name: None,
+            quantity: qty,
+            is_set: None,
+            is_accessory: None,
+            is_tea: None,
+            is_tea_set: None,
+        }
+    }
+
+    fn accessory_item() -> OrderItem {
+        OrderItem {
+            strain_id: None,
+            strain_name: None,
+            accessory_id: Some("acc-1".into()),
+            accessory_name: Some("Grinder".into()),
+            tea_id: None,
+            tea_name: None,
+            set_id: None,
+            set_name: None,
+            quantity: 1.0,
+            is_set: None,
+            is_accessory: Some(true),
+            is_tea: None,
+            is_tea_set: None,
+        }
+    }
+
+    fn now_utc() -> chrono::DateTime<chrono::Utc> {
+        chrono::Utc::now()
+    }
+
+    #[test]
+    fn subtotal_check_strain_only_ok_at_exact_match() {
+        let s = strain("s1", 100.0);
+        let mut map = HashMap::new();
+        map.insert(s.id.as_str(), &s);
+        // 100 * 2.5 = 250
+        let items = vec![strain_item("s1", 2.5)];
+        assert_eq!(
+            check_strain_subtotal(&items, &map, 250.0, 0.01, now_utc()),
+            SubtotalCheck::Ok
+        );
+    }
+
+    #[test]
+    fn subtotal_check_strain_only_mismatch_flags_fraud() {
+        let s = strain("s1", 350.0);
+        let mut map = HashMap::new();
+        map.insert(s.id.as_str(), &s);
+        // Client lies: 1 baht for a strain worth 350.
+        let items = vec![strain_item("s1", 1.0)];
+        match check_strain_subtotal(&items, &map, 1.0, 0.01, now_utc()) {
+            SubtotalCheck::StrainOnlyMismatch { claimed, expected } => {
+                assert!((claimed - 1.0).abs() < 1e-9);
+                assert!((expected - 350.0).abs() < 1e-9);
+            }
+            other => panic!("expected StrainOnlyMismatch, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn subtotal_check_unknown_strain_short_circuits() {
+        let map: HashMap<&str, &Strain> = HashMap::new();
+        let items = vec![strain_item("missing-id", 1.0)];
+        assert_eq!(
+            check_strain_subtotal(&items, &map, 999.0, 0.01, now_utc()),
+            SubtotalCheck::UnknownStrain("missing-id".into())
+        );
+    }
+
+    #[test]
+    fn subtotal_check_mixed_within_subtotal_ok() {
+        // Strain portion: 100. Accessory adds 50 (we trust the client for
+        // non-strain in this cycle). Claimed subtotal: 150 is fine.
+        let s = strain("s1", 100.0);
+        let mut map = HashMap::new();
+        map.insert(s.id.as_str(), &s);
+        let items = vec![strain_item("s1", 1.0), accessory_item()];
+        assert_eq!(
+            check_strain_subtotal(&items, &map, 150.0, 0.01, now_utc()),
+            SubtotalCheck::Ok
+        );
+    }
+
+    #[test]
+    fn subtotal_check_mixed_strain_exceeds_claimed_flags() {
+        // Strain alone is 200 but client claimed total 100 — impossible.
+        let s = strain("s1", 100.0);
+        let mut map = HashMap::new();
+        map.insert(s.id.as_str(), &s);
+        let items = vec![strain_item("s1", 2.0), accessory_item()];
+        match check_strain_subtotal(&items, &map, 100.0, 0.01, now_utc()) {
+            SubtotalCheck::StrainExceedsSubtotal { strain, claimed } => {
+                assert!((strain - 200.0).abs() < 1e-9);
+                assert!((claimed - 100.0).abs() < 1e-9);
+            }
+            other => panic!("expected StrainExceedsSubtotal, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn subtotal_check_honors_sale_discount_from_pricing_module() {
+        // Sanity that the helper actually uses `trios::pricing` precedence:
+        // sale_active + discount 50% on a 200-baht strain should produce
+        // an expected 100-baht subtotal at qty 1.
+        let mut s = strain("s1", 200.0);
+        s.sale_active = true;
+        s.discount_percent = 50.0;
+        let mut map = HashMap::new();
+        map.insert(s.id.as_str(), &s);
+        let items = vec![strain_item("s1", 1.0)];
+        assert_eq!(
+            check_strain_subtotal(&items, &map, 100.0, 0.01, now_utc()),
+            SubtotalCheck::Ok
+        );
+    }
+
+    #[test]
+    fn subtotal_check_expired_sale_falls_back_to_base() {
+        // Client tries to claim sale_price after sale_until expired — server
+        // must charge base price.
+        let in_past = (chrono::Utc::now() - chrono::Duration::hours(1)).to_rfc3339();
+        let mut s = strain("s1", 200.0);
+        s.sale_active = true;
+        s.sale_until = Some(in_past);
+        s.discount_percent = 50.0;
+        let mut map = HashMap::new();
+        map.insert(s.id.as_str(), &s);
+        let items = vec![strain_item("s1", 1.0)];
+        // Client thinks they got the discount: subtotal=100
+        match check_strain_subtotal(&items, &map, 100.0, 0.01, now_utc()) {
+            SubtotalCheck::StrainOnlyMismatch { claimed, expected } => {
+                assert!((claimed - 100.0).abs() < 1e-9);
+                assert!((expected - 200.0).abs() < 1e-9);
+            }
+            other => panic!(
+                "expected StrainOnlyMismatch from expired sale, got {:?}",
+                other
+            ),
+        }
+    }
 
     fn valid_req() -> CreateOrderRequest {
         CreateOrderRequest {
