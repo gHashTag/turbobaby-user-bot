@@ -548,6 +548,17 @@ mod tests {
             effect_en: Some("Relax".into()),
             flavor_profile_en: Some("Earthy".into()),
             strain_type_en: Some("Indica".into()),
+            // TZ #2 marketing fields default to None — tests check the
+            // request validator, not the marketing precedence (that lives in
+            // trios::pricing with its own table-driven tests).
+            discount_percent: None,
+            sale_price: None,
+            sale_active: None,
+            sale_until: None,
+            is_best_seller: None,
+            is_new_arrival: None,
+            new_until: None,
+            display_order: None,
         }
     }
 

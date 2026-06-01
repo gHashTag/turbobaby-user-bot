@@ -3,6 +3,7 @@
 pub mod core;
 pub mod garden;
 pub mod i18n;
+pub mod pricing;
 pub mod quest;
 pub mod store;
 pub mod validation;

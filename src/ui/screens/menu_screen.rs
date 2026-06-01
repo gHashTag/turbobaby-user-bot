@@ -46,20 +46,12 @@ pub struct ApiStrain {
     display_order: i32,
 }
 
-/// True if an `_until` expiry timestamp (RFC3339) is in the future or absent.
-/// Mirrors the server-side priority CASE so the customer UI doesn't render
-/// stale "🔥 SALE" badges after the admin's expiry has passed.
+/// Local convenience wrapper around the shared `trios::pricing` helper.
+/// Cycle #55 extracted the math into `trios/pricing.rs` so a future
+/// server-side price-authority check uses the same code path — drift between
+/// client and server pricing would otherwise flag every order as fraud.
 fn is_active_until(until: Option<&str>) -> bool {
-    let Some(s) = until else {
-        return true;
-    };
-    if s.is_empty() {
-        return true;
-    }
-    match chrono::DateTime::parse_from_rfc3339(s) {
-        Ok(t) => t > chrono::Utc::now(),
-        Err(_) => true, // permissive on malformed timestamps
-    }
+    crate::trios::pricing::is_active_until(until, chrono::Utc::now())
 }
 
 #[derive(Debug, Deserialize)]
@@ -370,28 +362,27 @@ fn render_strain_card(strain: ApiStrain, mut cart: Signal<Cart>) -> Element {
     let new_live = strain.is_new_arrival && is_active_until(strain.new_until.as_deref());
     let is_best = strain.is_best_seller;
 
-    // Effective per-gram price. Precedence MUST match the server's
-    // `effective_strain_price` (api/strains.rs) — divergence here means every
-    // order gets flagged as fraud by the price-authority check.
-    let (effective_price, has_discount) = if is_sotd && discount > 0.0 {
-        ((price * (1.0 - discount / 100.0)).max(0.0), true)
-    } else if sale_live {
-        if let Some(sp) = strain
-            .sale_price
-            .filter(|v| v.is_finite() && *v > 0.0 && *v < price)
-        {
-            (sp.max(0.0), true)
-        } else if strain.discount_percent.is_finite() && strain.discount_percent > 0.0 {
-            (
-                (price * (1.0 - strain.discount_percent / 100.0)).max(0.0),
-                true,
-            )
-        } else {
-            (price, false)
-        }
-    } else {
-        (price, false)
-    };
+    // Cycle #55: math extracted to `trios::pricing::effective_strain_price`
+    // so a future server-side price-authority check reuses the same function
+    // (otherwise drift between client and server math flags every order as
+    // fraud). 15 table-driven unit tests in `trios::pricing` cover the
+    // precedence rules.
+    let priced = crate::trios::pricing::effective_strain_price(
+        &crate::trios::pricing::MarketingFlags {
+            price_per_gram: strain.price_per_gram,
+            is_strain_of_day: is_sotd,
+            strain_of_day_discount: discount,
+            sale_active: strain.sale_active,
+            sale_until: strain.sale_until.as_deref(),
+            sale_price: strain.sale_price,
+            discount_percent: strain.discount_percent,
+            is_new_arrival: strain.is_new_arrival,
+            new_until: strain.new_until.as_deref(),
+        },
+        chrono::Utc::now(),
+    );
+    let effective_price = priced.price;
+    let has_discount = priced.has_discount;
 
     // Border tints by the highest-priority flag — same precedence as the
     // priority CASE that drives sort order.
