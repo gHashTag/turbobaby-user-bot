@@ -1,6 +1,5 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use tokio_postgres::Row;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Order {
@@ -18,62 +17,35 @@ pub struct Order {
     pub created_at: chrono::DateTime<chrono::Utc>,
 }
 
-impl Order {
-    pub fn from_row(row: &Row) -> Self {
+// Cycle #85: SeaORM `order::Model` → wire `Order` conversion. Wire shape
+// preserves the f64 finite-clamp from the old `from_row` path so a
+// `NUMERIC → DOUBLE PRECISION` migration artifact (NaN/Inf in the column)
+// can't poison clients. Entity has identical column set; `DateTimeWithTimeZone`
+// converts to `chrono::DateTime<chrono::Utc>` via `.into()` (re-zones).
+impl From<crate::db::entities::order::Model> for Order {
+    fn from(m: crate::db::entities::order::Model) -> Self {
+        let clamp = |v: f64| -> f64 {
+            if v.is_finite() {
+                v.max(0.0)
+            } else {
+                0.0
+            }
+        };
         Self {
-            id: row.try_get("id").unwrap_or_default(),
-            telegram_id: row.try_get("telegram_id").ok().flatten(),
-            customer_name: row.try_get("customer_name").ok().flatten(),
-            customer_phone: row.try_get("customer_phone").ok().flatten(),
-            customer_telegram: row.try_get("customer_telegram").ok().flatten(),
-            items: row.try_get("items").unwrap_or(Value::Null),
-            subtotal: {
-                let v = row.try_get::<_, f64>("subtotal").unwrap_or(0.0);
-                if v.is_finite() {
-                    v.max(0.0)
-                } else {
-                    0.0
-                }
-            },
-            bonus_used: {
-                let v = row.try_get::<_, f64>("bonus_used").unwrap_or(0.0);
-                if v.is_finite() {
-                    v.max(0.0)
-                } else {
-                    0.0
-                }
-            },
-            total: {
-                let v = row.try_get::<_, f64>("total").unwrap_or(0.0);
-                if v.is_finite() {
-                    v.max(0.0)
-                } else {
-                    0.0
-                }
-            },
-            status: row.try_get("status").unwrap_or_default(),
-            shop_id: row.try_get("shop_id").ok().flatten(),
-            created_at: row
-                .try_get("created_at")
-                .unwrap_or_else(|_| chrono::Utc::now()),
+            id: m.id,
+            telegram_id: m.telegram_id,
+            customer_name: m.customer_name,
+            customer_phone: m.customer_phone,
+            customer_telegram: m.customer_telegram,
+            items: m.items,
+            subtotal: clamp(m.subtotal),
+            bonus_used: clamp(m.bonus_used),
+            total: clamp(m.total),
+            status: m.status,
+            shop_id: m.shop_id,
+            created_at: m.created_at.with_timezone(&chrono::Utc),
         }
     }
-}
-
-// Wave 5: SeaORM Entity API path. Старый tokio-postgres код выше — будем удалять в Wave 6+.
-
-/// Returns all orders for a given telegram_id via SeaORM Entity API.
-#[allow(dead_code)]
-pub async fn get_user_orders_seaorm(
-    orm: &sea_orm::DatabaseConnection,
-    telegram_id: i64,
-) -> Result<Vec<crate::db::entities::order::Model>, sea_orm::DbErr> {
-    use crate::db::entities::order::{Column, Entity};
-    use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
-    Entity::find()
-        .filter(Column::TelegramId.eq(telegram_id))
-        .all(orm)
-        .await
 }
 
 /// Atomically mark an order as completed and update the customer's loyalty profile.

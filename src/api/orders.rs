@@ -856,15 +856,21 @@ async fn get_orders(
         .and_then(|v| v.parse::<i64>().ok())
         .unwrap_or(0)
         .max(0);
-    let client = state.db.pool.get().await.map_err(|e| {
-        tracing::error!("DB error: {:?}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-    let rows = client.query(
-        "SELECT id, telegram_id, customer_name, customer_phone, customer_telegram, items, subtotal::float8, bonus_used::float8, total::float8, status, shop_id, created_at FROM orders ORDER BY created_at DESC LIMIT $1 OFFSET $2",
-        &[&limit, &offset],
-    ).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
-    let orders: Vec<Order> = rows.iter().map(Order::from_row).collect();
+    // Cycle #85 Part 1: SeaORM. The legacy SQL cast `subtotal::float8`
+    // etc. — sqlx auto-coerces NUMERIC↔f64 so the cast goes away.
+    use crate::db::entities::order::{Column as OrderCol, Entity as OrderEntity};
+    use sea_orm::{EntityTrait, Order as SortOrder, QueryOrder, QuerySelect};
+    let models = OrderEntity::find()
+        .order_by(OrderCol::CreatedAt, SortOrder::Desc)
+        .limit(limit as u64)
+        .offset(offset as u64)
+        .all(&state.db.orm)
+        .await
+        .map_err(|e| {
+            tracing::error!("get_orders SeaORM error: {:?}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+    let orders: Vec<Order> = models.into_iter().map(Order::from).collect();
     Ok(Json(json!({ "orders": orders })))
 }
 
@@ -877,16 +883,18 @@ async fn get_order(
         return Err(StatusCode::BAD_REQUEST);
     }
     check_admin(&headers, &state)?;
-    let client = state.db.pool.get().await.map_err(|e| {
-        tracing::error!("DB error: {:?}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-    let row = client.query_opt(
-        "SELECT id, telegram_id, customer_name, customer_phone, customer_telegram, items, subtotal::float8, bonus_used::float8, total::float8, status, shop_id, created_at FROM orders WHERE id = $1",
-        &[&id],
-    ).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
-    match row {
-        Some(r) => Ok(Json(json!({ "order": Order::from_row(&r) }))),
+    // Cycle #85 Part 1: SeaORM `find_by_id`.
+    use crate::db::entities::order::Entity as OrderEntity;
+    use sea_orm::EntityTrait;
+    let model = OrderEntity::find_by_id(id)
+        .one(&state.db.orm)
+        .await
+        .map_err(|e| {
+            tracing::error!("get_order SeaORM error: {:?}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+    match model {
+        Some(m) => Ok(Json(json!({ "order": Order::from(m) }))),
         None => Err(StatusCode::NOT_FOUND),
     }
 }
@@ -1030,17 +1038,23 @@ async fn get_user_orders(
     validate_telegram_id_param(telegram_id)?;
     crate::api::auth::check_owner(&headers, &state, telegram_id)?;
     check_not_blocked(&state, telegram_id).await?;
-    let client = state.db.pool.get().await.map_err(|e| {
-        tracing::error!("DB error: {:?}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-    let rows = client.query(
-        "SELECT id, telegram_id, customer_name, customer_phone, customer_telegram, items, subtotal::float8, bonus_used::float8, total::float8, status, shop_id, created_at FROM orders WHERE telegram_id = $1 ORDER BY created_at DESC LIMIT 50",
-        &[&telegram_id],
-    ).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
-    Ok(Json(
-        json!({ "orders": rows.iter().map(Order::from_row).collect::<Vec<_>>() }),
-    ))
+    // Cycle #85 Part 1: SeaORM filter + order + limit.
+    use crate::db::entities::order::{Column as OrderCol, Entity as OrderEntity};
+    use sea_orm::{
+        ColumnTrait, EntityTrait, Order as SortOrder, QueryFilter, QueryOrder, QuerySelect,
+    };
+    let models = OrderEntity::find()
+        .filter(OrderCol::TelegramId.eq(telegram_id))
+        .order_by(OrderCol::CreatedAt, SortOrder::Desc)
+        .limit(50)
+        .all(&state.db.orm)
+        .await
+        .map_err(|e| {
+            tracing::error!("get_user_orders SeaORM error: {:?}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+    let orders: Vec<Order> = models.into_iter().map(Order::from).collect();
+    Ok(Json(json!({ "orders": orders })))
 }
 
 #[cfg(test)]

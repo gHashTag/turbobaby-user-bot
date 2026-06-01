@@ -110,7 +110,10 @@ Notable wins:
 | #82 ✅ | `db/loyalty.rs` cleanup + 2 new entities + `api/happy_hour.rs` migration | ~80 net | small/medium | **done** — see below for scope shift |
 | #83 ✅ | `api/loyalty.rs` 2 endpoints: `use_bonus` + `add_bonus` (full SeaORM tx) | ~80 | small/medium | **done** — validated tx pattern |
 | #84 ✅ | `db/referrals.rs` full file (6 functions + 1 entity + 6 callsites + tests) | ~290 | medium | **done — file 100% off raw SQL** |
-| #85 (next) | `src/db/orders.rs` (split into 3-4 cycles by feature) | 1271 | large | |
+| #85 ✅ | `orders.rs` Part 1 — reads (`Order::from_row` → `From<Model>` + 3 callsites) | ~70 | small/medium | **done** |
+| #86 (next) | `orders.rs` Part 2 — `create_order` SeaORM tx (large, ~300 lines) | ~300 | large | |
+| #87 | `orders.rs` Part 3 — `update_order_status` + reject refund tx | ~200 | medium/large | |
+| #88 | `orders.rs` Part 4 — fraud_events + block_history audits | ~250 | medium | |
 | #84-#86 | `src/db/orders.rs` (split into 3-4 cycles by feature) | 1271 | large | |
 
 Total ≈ 6-8 cycles. Each cycle is independently committable; no big-bang.
@@ -271,6 +274,35 @@ passing (was 6).
 bonus_transactions INSERT from cycle #82 is part of `confirm_referral`
 and was completed here. The `Pool` import was removed entirely from
 this file — first DB-module file to be fully `DatabaseConnection`-only.
+
+### Cycle #85 — orders.rs Part 1 (reads)
+
+The biggest file in the migration plan (1271 lines) was split into 4
+parts per the table. Part 1 = the read path only — safest first slice,
+identical pattern to cycle #80's strain reads.
+
+* `Order::from_row(&Row)` deleted (~40 lines) → `impl From<Model> for
+  Order` with the same finite-clamp on f64 numeric columns. The
+  `tokio_postgres::Row` import is gone from `src/db/orders.rs`. Write-
+  side functions in the same file still use raw `tokio_postgres` —
+  those move in Parts 2-4.
+* `api/orders.rs::get_orders` (paginated admin): `find().order_by
+  (CreatedAt, Desc).limit(N as u64).offset(M as u64).all()`. The
+  `::float8` cast in the SQL goes away because sqlx auto-coerces
+  NUMERIC↔f64 (lesson from #80).
+* `api/orders.rs::get_order` (find_by_id): straightforward
+  `find_by_id().one()`.
+* `api/orders.rs::get_user_orders`: `find().filter(TelegramId.eq).
+  order_by(CreatedAt, Desc).limit(50).all()`.
+* The `get_user_orders_seaorm` dead-code wrapper at the top of
+  `src/db/orders.rs` (from a prior staging step) is removed — the
+  canonical reads now live in `api/orders.rs` per the call-site
+  ownership model.
+
+Part 2 (next cycle) tackles the big `create_order` transaction —
+loyalty upsert + bonus deduction + idempotency check + order insert +
+fraud event + manager attribution + auto-block. That's where the
+`SeaORM tx` pattern from #83 will really earn its keep.
 
 ## Why this is worth doing
 
