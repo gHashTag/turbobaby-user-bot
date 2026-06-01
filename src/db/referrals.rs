@@ -1,5 +1,4 @@
 use anyhow::{Context, Result};
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
@@ -8,19 +7,10 @@ use uuid::Uuid;
 // Domain types
 // ──────────────────────────────────────────────────────────────────
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[allow(dead_code)]
-pub struct ReferralEvent {
-    pub id: Uuid,
-    pub referrer_id: i64,
-    pub referred_id: i64,
-    pub code: String,
-    pub bonus_paid: f64,
-    pub status: String,
-    pub source: Option<String>,
-    pub created_at: DateTime<Utc>,
-    pub confirmed_at: Option<DateTime<Utc>>,
-}
+// Cycle #99: removed unused `ReferralEvent` struct. Cycle #84's migration
+// generated `entities/referral_event.rs` (SeaORM Model) which became the
+// canonical shape — the wire struct here had zero callers since then,
+// just an `#[allow(dead_code)]` annotation hiding the rot.
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReferrerStats {
