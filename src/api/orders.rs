@@ -419,14 +419,13 @@ async fn create_order(
         || !tea_ids.is_empty()
         || !set_ids.is_empty()
     {
-        let lookup_client = state.db.pool.get().await.map_err(|e| {
-            error!("price-auth pool error: {}", e);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
+        // Cycle #90: full SeaORM. The legacy `lookup_client = state.db.pool.get()`
+        // is gone — strains go through the typed entity, accessory / tea /
+        // sets go through raw `Statement` (pattern #15). This was the last
+        // `state.db.pool` usage in api/orders.rs; after this cycle the
+        // orders endpoint is 100% off raw Pool.
+        use sea_orm::{ConnectionTrait, DbBackend, Statement};
         let mut catalog: PriceCatalog<'_> = PriceCatalog::default();
-        // Cycle #80: strain lookup migrated to SeaORM. Accessory/tea/set
-        // tables don't have entities yet (separate cycle), so they stay
-        // on `lookup_client`.
         let strains: Vec<Strain> = if !strain_ids.is_empty() {
             use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
             let models = crate::db::entities::strain::Entity::find()
@@ -444,21 +443,28 @@ async fn create_order(
         for s in &strains {
             catalog.strains.insert(s.id.as_str(), s);
         }
-        // Accessories — flat (price, is_available).
+        // Accessories / tea_products — read-only price-auth lookups via raw
+        // `Statement` (pattern #15). Generating full entities just for a
+        // 3-column SELECT in a single call site isn't a useful trade —
+        // the typed builder doesn't buy us much over `Statement` here.
         let acc_rows: Vec<(String, f64, bool)> = if !accessory_ids.is_empty() {
-            let rows = lookup_client.query(
-                "SELECT id, price::float8 AS price, is_available FROM accessories WHERE id = ANY($1)",
-                &[&accessory_ids],
-            ).await.map_err(|e| {
-                error!("price-auth accessory lookup: {}", e);
-                StatusCode::INTERNAL_SERVER_ERROR
-            })?;
+            let rows = state.db.orm
+                .query_all(Statement::from_sql_and_values(
+                    DbBackend::Postgres,
+                    "SELECT id, price::float8 AS price, is_available FROM accessories WHERE id = ANY($1)",
+                    [accessory_ids.clone().into()],
+                ))
+                .await
+                .map_err(|e| {
+                    error!("price-auth accessory lookup: {}", e);
+                    StatusCode::INTERNAL_SERVER_ERROR
+                })?;
             rows.iter()
                 .map(|r| {
                     (
-                        r.try_get::<_, String>("id").unwrap_or_default(),
-                        r.try_get::<_, f64>("price").unwrap_or(0.0),
-                        r.try_get::<_, bool>("is_available").unwrap_or(false),
+                        r.try_get::<String>("", "id").unwrap_or_default(),
+                        r.try_get::<f64>("", "price").unwrap_or(0.0),
+                        r.try_get::<bool>("", "is_available").unwrap_or(false),
                     )
                 })
                 .collect()
@@ -468,21 +474,24 @@ async fn create_order(
         for (id, p, a) in &acc_rows {
             catalog.accessories.insert(id.as_str(), (*p, *a));
         }
-        // Tea products — same schema as accessories.
         let tea_rows: Vec<(String, f64, bool)> = if !tea_ids.is_empty() {
-            let rows = lookup_client.query(
-                "SELECT id, price::float8 AS price, is_available FROM tea_products WHERE id = ANY($1)",
-                &[&tea_ids],
-            ).await.map_err(|e| {
-                error!("price-auth tea lookup: {}", e);
-                StatusCode::INTERNAL_SERVER_ERROR
-            })?;
+            let rows = state.db.orm
+                .query_all(Statement::from_sql_and_values(
+                    DbBackend::Postgres,
+                    "SELECT id, price::float8 AS price, is_available FROM tea_products WHERE id = ANY($1)",
+                    [tea_ids.clone().into()],
+                ))
+                .await
+                .map_err(|e| {
+                    error!("price-auth tea lookup: {}", e);
+                    StatusCode::INTERNAL_SERVER_ERROR
+                })?;
             rows.iter()
                 .map(|r| {
                     (
-                        r.try_get::<_, String>("id").unwrap_or_default(),
-                        r.try_get::<_, f64>("price").unwrap_or(0.0),
-                        r.try_get::<_, bool>("is_available").unwrap_or(false),
+                        r.try_get::<String>("", "id").unwrap_or_default(),
+                        r.try_get::<f64>("", "price").unwrap_or(0.0),
+                        r.try_get::<bool>("", "is_available").unwrap_or(false),
                     )
                 })
                 .collect()
@@ -492,11 +501,13 @@ async fn create_order(
         for (id, p, a) in &tea_rows {
             catalog.tea_products.insert(id.as_str(), (*p, *a));
         }
-        // Sets — UNION across three tables (`sets`, `accessory_sets`,
+        // Sets — UNION ALL across three tables (`sets`, `accessory_sets`,
         // `tea_sets`). Same `(total_price, discount_percent)` shape; UUID
-        // PKs across the three don't collide.
+        // PKs across the three don't collide. SeaORM 1.1 has no idiomatic
+        // UNION builder, so raw `Statement` is the cleanest path.
         let set_rows: Vec<(String, f64, f64, bool)> = if !set_ids.is_empty() {
-            let rows = lookup_client.query(
+            let rows = state.db.orm.query_all(Statement::from_sql_and_values(
+                DbBackend::Postgres,
                 "SELECT id, total_price::float8 AS tp, discount_percent::float8 AS dp, is_available \
                  FROM sets WHERE id = ANY($1) \
                  UNION ALL \
@@ -505,18 +516,18 @@ async fn create_order(
                  UNION ALL \
                  SELECT id, total_price::float8 AS tp, discount_percent::float8 AS dp, is_available \
                  FROM tea_sets WHERE id = ANY($1)",
-                &[&set_ids],
-            ).await.map_err(|e| {
+                [set_ids.clone().into()],
+            )).await.map_err(|e| {
                 error!("price-auth sets lookup: {}", e);
                 StatusCode::INTERNAL_SERVER_ERROR
             })?;
             rows.iter()
                 .map(|r| {
                     (
-                        r.try_get::<_, String>("id").unwrap_or_default(),
-                        r.try_get::<_, f64>("tp").unwrap_or(0.0),
-                        r.try_get::<_, f64>("dp").unwrap_or(0.0),
-                        r.try_get::<_, bool>("is_available").unwrap_or(false),
+                        r.try_get::<String>("", "id").unwrap_or_default(),
+                        r.try_get::<f64>("", "tp").unwrap_or(0.0),
+                        r.try_get::<f64>("", "dp").unwrap_or(0.0),
+                        r.try_get::<bool>("", "is_available").unwrap_or(false),
                     )
                 })
                 .collect()

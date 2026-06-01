@@ -115,7 +115,24 @@ Notable wins:
 | #87 ✅ | `orders.rs` Part 2 — `create_order` SeaORM tx (7 stmts incl. advisory locks) | ~140 | large | **done** |
 | #88 ✅ | `orders.rs` Part 3 — `update_order_status` (3 branches) + `complete_order_and_update_loyalty` (4-stmt tx) | ~280 | medium/large | **done** |
 | #89 ✅ | `db/orders.rs` 8 scattered helpers (fraud + block + stats) + 2 new entities | ~340 | medium | **done — `db/orders.rs` 100% off raw `Pool`** |
-| #90 (next) | accessory/tea/set entities + price-auth lookups in `create_order` (only remaining `&state.db.pool`) | ~150 | medium | |
+| #90 ✅ | api/orders price-auth (accessory/tea/sets) via raw `Statement` | ~100 | small/medium | **done — `api/orders.rs` 100% off raw `Pool`** |
+
+### After #90 — honest accounting
+
+Audit grep `state.db.pool` revealed **60 callsites remaining across 7 files** that the migration plan never enumerated. The original plan's "per file" table tracked `src/db/*` (now 100% done) but secondary `src/api/*` endpoints were migrated piecemeal as they became blockers for higher-priority work. Honest state:
+
+| File | Pool callsites | Plan |
+|------|----------------|------|
+| `api/garden.rs` | 8 | #91 (largest unmigrated) |
+| `api/loyalty.rs` | ~3 (get_profile-style scattered) | #92 |
+| `api/tech_tree.rs` | 4 | #93 |
+| `api/game.rs` | 3 | #94 (smaller) |
+| `api/quest.rs` | ? grep next | #94 |
+| `api/catalog.rs` | ? grep next | #94 |
+| `api/admin.rs` | ? grep next | #95 |
+| `bot/callbacks.rs` | 1+ scattered | #95 |
+
+The `Database::pool` field cannot be dropped until all of the above migrate. Realistic finish: cycles #91-#95 (5 more cycles) for the api/* sweep, then #96 to remove `Database::pool` + `deadpool_postgres` from Cargo.toml. **The "90% done" estimate from cycle #89 was wrong — closer to 70% by callsite count, though 100% by db-module count.**
 | #84-#86 | `src/db/orders.rs` (split into 3-4 cycles by feature) | 1271 | large | |
 
 Total ≈ 6-8 cycles. Each cycle is independently committable; no big-bang.
