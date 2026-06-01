@@ -5,6 +5,7 @@ pub mod loyalty_config;
 pub mod loyalty_profile;
 pub mod order;
 pub mod quest_place;
+pub mod referral_event;
 pub mod strain;
 pub mod treasure_hunt;
 pub mod user;

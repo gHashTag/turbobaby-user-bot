@@ -46,14 +46,14 @@ async fn get_my_referrals(
     validate_telegram_id_param(telegram_id)?;
     crate::api::auth::check_owner(&headers, &state, telegram_id)?;
     check_not_blocked(&state, telegram_id).await?;
-    let code = get_or_create_referral_code(&state.db.pool, telegram_id)
+    let code = get_or_create_referral_code(&state.db.orm, telegram_id)
         .await
         .map_err(|e| {
             tracing::error!("DB error: {:?}", e);
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
-    let stats = get_referrer_stats(&state.db.pool, telegram_id)
+    let stats = get_referrer_stats(&state.db.orm, telegram_id)
         .await
         .map_err(|e| {
             tracing::error!("DB error: {:?}", e);
@@ -91,7 +91,7 @@ async fn get_leaderboard(
 ) -> Result<Json<Value>, StatusCode> {
     let (period, limit) = validate_leaderboard_query(&params)?;
 
-    let top = get_top_referrers(&state.db.pool, period, limit)
+    let top = get_top_referrers(&state.db.orm, period, limit)
         .await
         .map_err(|e| {
             tracing::error!("DB error: {:?}", e);

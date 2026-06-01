@@ -109,7 +109,7 @@ pub async fn handle_command(
                     tracing::warn!("referral code too long from user_id={}", user_id);
                 } else {
                     // Only process if this is NOT the same user who owns the code
-                    let referrer = ref_db::find_referrer_by_code(&db.pool, code)
+                    let referrer = ref_db::find_referrer_by_code(&db.orm, code)
                         .await
                         .ok()
                         .flatten();
@@ -117,7 +117,7 @@ pub async fn handle_command(
                         if referrer_id != user_id {
                             // Record pending referral event (idempotent)
                             if let Err(e) = ref_db::record_referral(
-                                &db.pool,
+                                &db.orm,
                                 referrer_id,
                                 user_id,
                                 code,
@@ -514,7 +514,7 @@ pub async fn handle_command(
         }
 
         Command::Invite => {
-            let code = ref_db::get_or_create_referral_code(&db.pool, user_id)
+            let code = ref_db::get_or_create_referral_code(&db.orm, user_id)
                 .await
                 .unwrap_or_else(|_| "error".into());
             let invite_link = format!("https://t.me/{}?start=ref_{}", config.bot_username, code);
@@ -534,7 +534,7 @@ pub async fn handle_command(
         }
 
         Command::Refstats => {
-            let stats = ref_db::get_referrer_stats(&db.pool, user_id)
+            let stats = ref_db::get_referrer_stats(&db.orm, user_id)
                 .await
                 .unwrap_or(crate::db::referrals::ReferrerStats {
                     total_invited: 0,

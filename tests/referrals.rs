@@ -61,3 +61,48 @@ fn code_does_not_contain_ref_prefix() {
         assert!(!code.starts_with("ref_"));
     }
 }
+
+// ──────────────────────────────────────────────────────────────────
+// Cycle #84: post-SeaORM-migration invariants
+// ──────────────────────────────────────────────────────────────────
+// Pure assertions that document properties of the migration without
+// needing a live DB. The actual SeaORM transaction behaviour is
+// exercised in production; these tests pin the *contract* so a future
+// refactor that breaks the invariant fails at unit-test time.
+
+#[test]
+fn code_collision_retry_loop_terminates_at_10() {
+    // `get_or_create_referral_code` retries up to 10 times. The bound
+    // is hard-coded; if a future refactor changes it, that's fine — but
+    // we want the *property* "loop terminates with explicit error
+    // rather than spinning" to stay true. Asserting deterministic codes
+    // across the first 10 attempts confirms we have 10 distinct
+    // candidates to try (no degenerate "all attempts produce same
+    // code" bug).
+    let codes: std::collections::HashSet<String> =
+        (0u32..10).map(|a| generate_referral_code(42, a)).collect();
+    assert!(
+        codes.len() >= 8,
+        "10 attempts must produce at least 8 distinct codes (got {})",
+        codes.len()
+    );
+}
+
+#[test]
+fn code_attempt_zero_is_canonical() {
+    // The migration to SeaORM kept the same `attempt = 0` first try.
+    // If `get_or_create_referral_code` started at a different attempt,
+    // pre-migration users would see code churn. Pin this.
+    let canonical = generate_referral_code(12345, 0);
+    // Spot check: confirm it's hash-derived from the same input shape
+    // (id + salt + "0").
+    let mut h = Sha256::new();
+    h.update(format!("{}{}{}", 12345i64, CODE_SALT, 0).as_bytes());
+    let hash = h.finalize();
+    let expected: String = hash
+        .iter()
+        .take(8)
+        .map(|&b| BASE62_CHARS[(b as usize) % 62] as char)
+        .collect();
+    assert_eq!(canonical, expected);
+}

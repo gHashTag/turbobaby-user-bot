@@ -479,7 +479,7 @@ pub async fn handle_callback(
                             .and_then(|s| s.parse().ok())
                             .unwrap_or(200.0);
 
-                        if let Err(e) = ref_db::confirm_referral(pool, cid, bonus).await {
+                        if let Err(e) = ref_db::confirm_referral(&db.orm, cid, bonus).await {
                             tracing::error!(
                                 "callback: confirm_referral failed for referred_id={}: {}",
                                 cid,

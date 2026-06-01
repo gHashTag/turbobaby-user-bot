@@ -109,7 +109,8 @@ Notable wins:
 | #81 ✅ | `api/strains.rs` writes (create + update + delete + toggle + SOTD) | ~140 | medium | **done — file 100% off raw SQL** |
 | #82 ✅ | `db/loyalty.rs` cleanup + 2 new entities + `api/happy_hour.rs` migration | ~80 net | small/medium | **done** — see below for scope shift |
 | #83 ✅ | `api/loyalty.rs` 2 endpoints: `use_bonus` + `add_bonus` (full SeaORM tx) | ~80 | small/medium | **done** — validated tx pattern |
-| #84 (next) | `src/db/referrals.rs` (split into 2 cycles if needed, includes the deferred bonus_transactions INSERT from #82) | 417 | medium/large | |
+| #84 ✅ | `db/referrals.rs` full file (6 functions + 1 entity + 6 callsites + tests) | ~290 | medium | **done — file 100% off raw SQL** |
+| #85 (next) | `src/db/orders.rs` (split into 3-4 cycles by feature) | 1271 | large | |
 | #84-#86 | `src/db/orders.rs` (split into 3-4 cycles by feature) | 1271 | large | |
 
 Total ≈ 6-8 cycles. Each cycle is independently committable; no big-bang.
@@ -234,6 +235,42 @@ unblocks cycle #84's referrals migration (which has the bigger
 order tx, garden.rs reward-use tx, callbacks.rs order-reject refund tx).
 Migrating one statement out of those tx would split the boundary —
 defer until those whole transactions migrate in cycles #84-#86.
+
+### Cycle #84 — `src/db/referrals.rs` fully migrated
+
+Largest single-cycle migration so far. The whole file (6 public
+functions, 5 statements per `confirm_referral` tx, retry loops in
+`get_or_create_referral_code`) moved off `Pool` onto
+`&sea_orm::DatabaseConnection`. New patterns:
+
+* **`QuerySelect::lock_exclusive()` = `SELECT ... FOR UPDATE`.** The
+  race-guard in `confirm_referral` (which is *the* reason this whole
+  flow is in a tx) maps cleanly. No extra ceremony.
+* **OnConflict with column-expression preserved value** (record_referral
+  upsert): `INSERT ... ON CONFLICT DO UPDATE SET referred_by =
+  COALESCE(existing, EXCLUDED.referred_by)` → use
+  `OnConflict::column(pk).value(col, Expr::cust_with_values("COALESCE(table.col, $1)", [...]))`.
+  The standard `update_columns(...)` form would clobber; the
+  `.value(col, Expr...)` form is the escape hatch for "compute the new
+  value from existing".
+* **Mixing typed entity API with raw `Statement` for aggregates.**
+  `COUNT(*) FILTER (WHERE ...)` and `GROUP BY ... LEFT JOIN ...
+  ORDER BY agg DESC` don't have idiomatic SeaORM builder forms in 1.1.
+  Use `Statement::from_sql_and_values(DbBackend::Postgres, sql, [args])`
+  + `orm.query_one(stmt)` / `orm.query_all(stmt)`. Same approach as
+  `api/loyalty.rs::get_leaderboard` from before — formalised here.
+* **Signature change: `&Pool` → `&sea_orm::DatabaseConnection`.** The
+  6 callsites updated mechanically: `&db.pool` → `&db.orm` /
+  `&state.db.pool` → `&state.db.orm`. No structural caller changes.
+
+Combined commit + tests (cycle #84 added 2 unit-tests pinning the
+retry-loop semantics post-migration): `tests/referrals.rs` now has 8
+passing (was 6).
+
+`src/db/referrals.rs` is now 100% off raw SQL. The deferred
+bonus_transactions INSERT from cycle #82 is part of `confirm_referral`
+and was completed here. The `Pool` import was removed entirely from
+this file — first DB-module file to be fully `DatabaseConnection`-only.
 
 ## Why this is worth doing
 

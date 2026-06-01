@@ -1,6 +1,5 @@
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
-use deadpool_postgres::Pool;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
@@ -66,56 +65,81 @@ pub fn generate_referral_code(telegram_id: i64, attempt: u32) -> String {
 
 /// Get existing referral code for `telegram_id`, or generate and persist a new one.
 /// Retries on collision (up to 10 attempts).
-pub async fn get_or_create_referral_code(pool: &Pool, telegram_id: i64) -> Result<String> {
-    let client = pool.get().await.context("db pool")?;
+///
+/// Cycle #84: SeaORM. Same retry loop, just talking through the ORM.
+pub async fn get_or_create_referral_code(
+    orm: &sea_orm::DatabaseConnection,
+    telegram_id: i64,
+) -> Result<String> {
+    use crate::db::entities::loyalty_profile::{
+        ActiveModel as LpAm, Column as LpCol, Entity as LoyaltyProfileEntity,
+    };
+    use sea_orm::sea_query::OnConflict;
+    use sea_orm::{ActiveValue::Set, ColumnTrait, EntityTrait, QueryFilter};
 
-    // Check existing code first
-    if let Some(row) = client
-        .query_opt(
-            "SELECT referral_code FROM loyalty_profiles WHERE telegram_id = $1 AND referral_code IS NOT NULL",
-            &[&telegram_id],
-        )
-        .await?
+    // Check existing code first.
+    if let Some(m) = LoyaltyProfileEntity::find_by_id(telegram_id)
+        .filter(LpCol::ReferralCode.is_not_null())
+        .one(orm)
+        .await
+        .context("read existing referral_code")?
     {
-        let code: String = row.try_get("referral_code").unwrap_or_default();
-        return Ok(code);
+        if let Some(code) = m.referral_code {
+            return Ok(code);
+        }
     }
 
-    // Ensure profile row exists
-    client
-        .execute(
-            "INSERT INTO loyalty_profiles (telegram_id) VALUES ($1) ON CONFLICT (telegram_id) DO NOTHING",
-            &[&telegram_id],
+    // Ensure profile row exists.
+    let seed = LpAm {
+        telegram_id: Set(telegram_id),
+        ..Default::default()
+    };
+    LoyaltyProfileEntity::insert(seed)
+        .on_conflict(
+            OnConflict::column(LpCol::TelegramId)
+                .do_nothing()
+                .to_owned(),
         )
-        .await?;
+        .do_nothing()
+        .exec(orm)
+        .await
+        .context("seed loyalty_profile for referral_code")?;
 
-    // Try up to 10 times to find a unique code
+    // Try up to 10 times to find a unique code. The UPDATE filters on
+    // `referral_code IS NULL` so the *first* successful attempt wins
+    // against concurrent callers for the same telegram_id; the UNIQUE
+    // constraint on referral_code rejects code collisions across users.
     for attempt in 0u32..10 {
         let code = generate_referral_code(telegram_id, attempt);
 
-        let updated = client
-            .execute(
-                "UPDATE loyalty_profiles SET referral_code = $1
-                 WHERE telegram_id = $2 AND referral_code IS NULL",
-                &[&code, &telegram_id],
+        let updated = LoyaltyProfileEntity::update_many()
+            .col_expr(
+                LpCol::ReferralCode,
+                sea_orm::sea_query::Expr::value(code.clone()),
             )
-            .await?;
+            .filter(LpCol::TelegramId.eq(telegram_id))
+            .filter(LpCol::ReferralCode.is_null())
+            .exec(orm)
+            .await
+            .context("write generated referral_code")?;
 
-        if updated > 0 {
+        if updated.rows_affected > 0 {
             return Ok(code);
         }
 
-        // Check if our telegram_id now has a code (another concurrent request may have set it)
-        if let Some(row) = client
-            .query_opt(
-                "SELECT referral_code FROM loyalty_profiles WHERE telegram_id = $1 AND referral_code IS NOT NULL",
-                &[&telegram_id],
-            )
-            .await?
+        // Either our row already has a code (concurrent winner) or the
+        // generated code collided with another user's. Check first.
+        if let Some(m) = LoyaltyProfileEntity::find_by_id(telegram_id)
+            .filter(LpCol::ReferralCode.is_not_null())
+            .one(orm)
+            .await
+            .context("re-read referral_code after collision")?
         {
-            return Ok(row.try_get("referral_code").unwrap_or_default());
+            if let Some(code) = m.referral_code {
+                return Ok(code);
+            }
         }
-        // Otherwise the code was taken by someone else — try next attempt
+        // Otherwise the code was taken by someone else — try next attempt.
     }
 
     anyhow::bail!(
@@ -129,48 +153,91 @@ pub async fn get_or_create_referral_code(pool: &Pool, telegram_id: i64) -> Resul
 // ──────────────────────────────────────────────────────────────────
 
 /// Find the telegram_id of the owner of `code` (looks in loyalty_profiles.referral_code).
-pub async fn find_referrer_by_code(pool: &Pool, code: &str) -> Result<Option<i64>> {
-    let client = pool.get().await.context("db pool")?;
-    let row = client
-        .query_opt(
-            "SELECT telegram_id FROM loyalty_profiles WHERE referral_code = $1",
-            &[&code],
-        )
-        .await?;
-    Ok(row.map(|r| r.try_get("telegram_id").unwrap_or(0)))
+///
+/// Cycle #84: SeaORM. Single read, no schema changes.
+pub async fn find_referrer_by_code(
+    orm: &sea_orm::DatabaseConnection,
+    code: &str,
+) -> Result<Option<i64>> {
+    use crate::db::entities::loyalty_profile::{Column as LpCol, Entity as LoyaltyProfileEntity};
+    use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
+    let m = LoyaltyProfileEntity::find()
+        .filter(LpCol::ReferralCode.eq(code))
+        .one(orm)
+        .await
+        .context("find_referrer_by_code")?;
+    Ok(m.map(|m| m.telegram_id))
 }
 
 /// Record a new pending referral event.
 /// Returns the new event UUID.
+///
+/// Cycle #84: SeaORM. Two statements — not wrapped in a tx because the
+/// raw SQL wasn't either. The `COALESCE(existing, new)` semantics on the
+/// `referred_by` upsert preserves a pre-existing referrer attribution
+/// (first-touch wins); we express that via raw `Expr::cust_with_values`
+/// since SeaORM's `OnConflict::update_columns` would overwrite.
 pub async fn record_referral(
-    pool: &Pool,
+    orm: &sea_orm::DatabaseConnection,
     referrer_id: i64,
     referred_id: i64,
     code: &str,
     source: Option<&str>,
 ) -> Result<Uuid> {
-    let client = pool.get().await.context("db pool")?;
+    use crate::db::entities::{
+        loyalty_profile::{ActiveModel as LpAm, Column as LpCol, Entity as LoyaltyProfileEntity},
+        referral_event::{
+            ActiveModel as RefEventAm, Column as RefEventCol, Entity as RefEventEntity,
+        },
+    };
+    use sea_orm::sea_query::OnConflict;
+    use sea_orm::{ActiveValue::Set, EntityTrait};
     let id = Uuid::new_v4();
 
-    // Ensure referred user has a loyalty profile row
-    client
-        .execute(
-            "INSERT INTO loyalty_profiles (telegram_id, referred_by)
-             VALUES ($1, $2)
-             ON CONFLICT (telegram_id) DO UPDATE SET referred_by = COALESCE(loyalty_profiles.referred_by, EXCLUDED.referred_by)",
-            &[&referred_id, &referrer_id],
+    // Ensure referred user has a loyalty_profile row with a referrer
+    // attribution. First-touch wins via COALESCE.
+    let lp_am = LpAm {
+        telegram_id: Set(referred_id),
+        referred_by: Set(Some(referrer_id)),
+        ..Default::default()
+    };
+    LoyaltyProfileEntity::insert(lp_am)
+        .on_conflict(
+            OnConflict::column(LpCol::TelegramId)
+                .value(
+                    LpCol::ReferredBy,
+                    sea_orm::sea_query::Expr::cust_with_values(
+                        "COALESCE(loyalty_profiles.referred_by, $1)",
+                        [referrer_id],
+                    ),
+                )
+                .to_owned(),
         )
-        .await?;
+        .exec(orm)
+        .await
+        .context("upsert referred loyalty_profile")?;
 
-    // Insert event — ignore if the referred_id already has an event (UNIQUE constraint)
-    client
-        .execute(
-            "INSERT INTO referral_events (id, referrer_id, referred_id, code, status, source)
-             VALUES ($1, $2, $3, $4, 'pending', $5)
-             ON CONFLICT (referred_id) DO NOTHING",
-            &[&id, &referrer_id, &referred_id, &code, &source],
+    // Insert event — ignore if the referred_id already has one
+    // (UNIQUE constraint on referred_id).
+    let ev_am = RefEventAm {
+        id: Set(id),
+        referrer_id: Set(referrer_id),
+        referred_id: Set(referred_id),
+        code: Set(code.to_string()),
+        status: Set("pending".to_string()),
+        source: Set(source.map(|s| s.to_string())),
+        ..Default::default()
+    };
+    RefEventEntity::insert(ev_am)
+        .on_conflict(
+            OnConflict::column(RefEventCol::ReferredId)
+                .do_nothing()
+                .to_owned(),
         )
-        .await?;
+        .do_nothing()
+        .exec(orm)
+        .await
+        .context("insert referral_event")?;
 
     Ok(id)
 }
@@ -179,31 +246,51 @@ pub async fn record_referral(
 /// - Sets status = 'confirmed' + confirmed_at
 /// - Credits bonus to referrer's balance via bonus_transactions
 /// - Increments referrer's referral_count
-pub async fn confirm_referral(pool: &Pool, referred_id: i64, bonus: f64) -> Result<()> {
+///
+/// Cycle #84: migrated to SeaORM transaction. The `SELECT ... FOR UPDATE`
+/// race guard is preserved via `QuerySelect::lock_exclusive()`. All five
+/// statements run inside `db.begin().await?` and commit atomically; early
+/// `Err` returns auto-rollback via `DatabaseTransaction::drop`.
+pub async fn confirm_referral(
+    orm: &sea_orm::DatabaseConnection,
+    referred_id: i64,
+    bonus: f64,
+) -> Result<()> {
+    use crate::db::entities::{
+        bonus_transaction::{ActiveModel as BonusTxAm, Entity as BonusTxEntity},
+        loyalty_profile::{ActiveModel as LpAm, Column as LpCol, Entity as LoyaltyProfileEntity},
+        referral_event::{
+            ActiveModel as RefEventAm, Column as RefEventCol, Entity as RefEventEntity,
+        },
+    };
+    use sea_orm::sea_query::OnConflict;
+    use sea_orm::{
+        ActiveValue::Set, ColumnTrait, EntityTrait, QueryFilter, QuerySelect, TransactionTrait,
+    };
+
     if !bonus.is_finite() || bonus < 0.0 {
         anyhow::bail!("invalid bonus: {}", bonus);
     }
-    let mut client = pool.get().await.context("db pool")?;
-    let tx = client.transaction().await.context("start tx")?;
 
-    // Find the pending event (FOR UPDATE prevents double-credit races)
-    let row = tx
-        .query_opt(
-            "SELECT id, referrer_id FROM referral_events
-             WHERE referred_id = $1 AND status = 'pending' FOR UPDATE",
-            &[&referred_id],
-        )
-        .await?;
+    let tx = orm.begin().await.context("start SeaORM tx")?;
 
-    let (event_id, referrer_id): (Uuid, i64) = match row {
-        Some(r) => (
-            r.try_get("id").unwrap_or_default(),
-            r.try_get("referrer_id").unwrap_or(0),
-        ),
+    // 1. Find the pending event with row-level lock (FOR UPDATE) to
+    //    prevent double-credit races. `QuerySelect::lock_exclusive` is
+    //    SeaORM's equivalent of the raw `SELECT ... FOR UPDATE`.
+    let pending = RefEventEntity::find()
+        .filter(RefEventCol::ReferredId.eq(referred_id))
+        .filter(RefEventCol::Status.eq("pending"))
+        .lock_exclusive()
+        .one(&tx)
+        .await
+        .context("query pending referral_event")?;
+
+    let pending = match pending {
+        Some(m) => m,
         None => {
-            // Cycle #76: was `.ok()` — pool/connection issues here were
-            // invisible. Empty-tx commit has no data effects to lose, but
-            // a failure still signals real infra trouble worth seeing.
+            // No pending event — semantically a no-op. Commit the empty
+            // tx (releases the lock if FOR UPDATE held anything); log on
+            // failure as cycle #76 began doing.
             if let Err(e) = tx.commit().await {
                 tracing::warn!(
                     "referrals.confirm_referral: empty-tx commit failed for referred_id={}: {}",
@@ -211,58 +298,82 @@ pub async fn confirm_referral(pool: &Pool, referred_id: i64, bonus: f64) -> Resu
                     e
                 );
             }
-            return Ok(()); // nothing pending — semantically a no-op
+            return Ok(());
         }
     };
+    let event_id = pending.id;
+    let referrer_id = pending.referrer_id;
 
-    // Mark confirmed
-    tx.execute(
-        "UPDATE referral_events
-         SET status = 'confirmed', confirmed_at = NOW(), bonus_paid = $1
-         WHERE id = $2",
-        &[&bonus, &event_id],
-    )
-    .await?;
+    // 2. Mark event confirmed.
+    let mut event_am: RefEventAm = pending.into();
+    event_am.status = Set("confirmed".to_string());
+    event_am.confirmed_at = Set(Some(chrono::Utc::now().into()));
+    event_am.bonus_paid = Set(bonus);
+    RefEventEntity::update_many()
+        .set(event_am)
+        .filter(RefEventCol::Id.eq(event_id))
+        .exec(&tx)
+        .await
+        .context("update referral_event status")?;
 
-    // Ensure referrer loyalty profile exists
-    tx.execute(
-        "INSERT INTO loyalty_profiles (telegram_id, bonus_balance, total_spent) VALUES ($1, 0, 0) ON CONFLICT (telegram_id) DO NOTHING",
-        &[&referrer_id],
-    ).await?;
-
-    // Credit bonus to referrer
-    let tx_id = Uuid::new_v4().to_string();
-    tx.execute(
-        "INSERT INTO bonus_transactions (id, telegram_id, amount, tx_type, description)
-         VALUES ($1, $2, $3, 'referral_bonus', 'Referral bonus for new user')",
-        &[&tx_id, &referrer_id, &bonus],
-    )
-    .await?;
-
-    let updated = tx
-        .execute(
-            "UPDATE loyalty_profiles SET bonus_balance = bonus_balance + $1 WHERE telegram_id = $2",
-            &[&bonus, &referrer_id],
+    // 3. Ensure referrer loyalty_profile row exists (idempotent upsert).
+    let lp_seed = LpAm {
+        telegram_id: Set(referrer_id),
+        bonus_balance: Set(Some(0.0)),
+        total_spent: Set(Some(0.0)),
+        ..Default::default()
+    };
+    LoyaltyProfileEntity::insert(lp_seed)
+        .on_conflict(
+            OnConflict::column(LpCol::TelegramId)
+                .do_nothing()
+                .to_owned(),
         )
-        .await?;
-    if updated == 0 {
-        if let Err(e) = tx.rollback().await {
-            tracing::error!("confirm_referral rollback error: {}", e);
-        }
+        .do_nothing()
+        .exec(&tx)
+        .await
+        .context("upsert referrer loyalty_profile")?;
+
+    // 4. Append bonus_transactions ledger row.
+    let tx_id = Uuid::new_v4().to_string();
+    let bt_am = BonusTxAm {
+        id: Set(tx_id),
+        telegram_id: Set(referrer_id),
+        amount: Set(bonus),
+        tx_type: Set("referral_bonus".to_string()),
+        description: Set(Some("Referral bonus for new user".to_string())),
+        related_order_id: Set(None),
+        ..Default::default()
+    };
+    BonusTxEntity::insert(bt_am)
+        .exec(&tx)
+        .await
+        .context("insert referral bonus_transaction")?;
+
+    // 5. Credit balance + increment referral_count. We do them as a
+    //    single update_many so the WHERE-clause check fires once.
+    let updated = LoyaltyProfileEntity::update_many()
+        .col_expr(
+            LpCol::BonusBalance,
+            sea_orm::sea_query::Expr::cust_with_values("bonus_balance + $1", [bonus]),
+        )
+        .col_expr(
+            LpCol::ReferralCount,
+            sea_orm::sea_query::Expr::cust("referral_count + 1"),
+        )
+        .filter(LpCol::TelegramId.eq(referrer_id))
+        .exec(&tx)
+        .await
+        .context("credit referrer bonus + count")?;
+    if updated.rows_affected == 0 {
+        // tx drops → auto-rollback.
         anyhow::bail!(
-            "confirm_referral: loyalty profile missing for referrer_id={}",
+            "confirm_referral: loyalty profile missing for referrer_id={} after upsert (race?)",
             referrer_id
         );
     }
 
-    // Increment referral_count
-    tx.execute(
-        "UPDATE loyalty_profiles SET referral_count = referral_count + 1 WHERE telegram_id = $1",
-        &[&referrer_id],
-    )
-    .await?;
-
-    tx.commit().await.context("commit referral tx")?;
+    tx.commit().await.context("commit SeaORM referral tx")?;
     Ok(())
 }
 
@@ -271,28 +382,38 @@ pub async fn confirm_referral(pool: &Pool, referred_id: i64, bonus: f64) -> Resu
 // ──────────────────────────────────────────────────────────────────
 
 /// Return referral statistics for a specific user.
-pub async fn get_referrer_stats(pool: &Pool, telegram_id: i64) -> Result<ReferrerStats> {
-    let client = pool.get().await.context("db pool")?;
-
-    let row = client
-        .query_one(
-            "SELECT
+///
+/// Cycle #84: SeaORM via `Statement::from_sql_and_values`. The query
+/// uses `COUNT(*) FILTER (WHERE ...)` aggregates which SeaORM's typed
+/// builder API doesn't express idiomatically — raw SQL is the right
+/// trade-off here (same approach as `api/loyalty.rs::get_leaderboard`).
+pub async fn get_referrer_stats(
+    orm: &sea_orm::DatabaseConnection,
+    telegram_id: i64,
+) -> Result<ReferrerStats> {
+    use sea_orm::{ConnectionTrait, DbBackend, Statement};
+    let stmt = Statement::from_sql_and_values(
+        DbBackend::Postgres,
+        "SELECT
                 COUNT(*)                                    AS total_invited,
                 COUNT(*) FILTER (WHERE status = 'confirmed' OR status = 'paid') AS confirmed,
                 COUNT(*) FILTER (WHERE status = 'pending')  AS pending,
                 COALESCE(SUM(bonus_paid)::float8, 0)        AS total_bonus_earned
              FROM referral_events
              WHERE referrer_id = $1",
-            &[&telegram_id],
-        )
-        .await?;
-
+        [telegram_id.into()],
+    );
+    let row = orm
+        .query_one(stmt)
+        .await
+        .context("get_referrer_stats")?
+        .ok_or_else(|| anyhow::anyhow!("get_referrer_stats: empty result (impossible — COUNT)"))?;
     Ok(ReferrerStats {
-        total_invited: row.try_get::<_, i64>("total_invited").unwrap_or(0),
-        confirmed: row.try_get::<_, i64>("confirmed").unwrap_or(0),
-        pending: row.try_get::<_, i64>("pending").unwrap_or(0),
+        total_invited: row.try_get::<i64>("", "total_invited").unwrap_or(0),
+        confirmed: row.try_get::<i64>("", "confirmed").unwrap_or(0),
+        pending: row.try_get::<i64>("", "pending").unwrap_or(0),
         total_bonus_earned: {
-            let v = row.try_get::<_, f64>("total_bonus_earned").unwrap_or(0.0);
+            let v = row.try_get::<f64>("", "total_bonus_earned").unwrap_or(0.0);
             if v.is_finite() {
                 v.max(0.0)
             } else {
@@ -304,9 +425,15 @@ pub async fn get_referrer_stats(pool: &Pool, telegram_id: i64) -> Result<Referre
 
 /// Return top referrers leaderboard.
 /// `period` accepts "weekly" | "monthly" | "all" (anything else → all-time).
-pub async fn get_top_referrers(pool: &Pool, period: &str, limit: i64) -> Result<Vec<TopReferrer>> {
-    let client = pool.get().await.context("db pool")?;
-
+///
+/// Cycle #84: SeaORM via `Statement::from_sql_and_values`. GROUP BY +
+/// aggregates + LEFT JOIN — same reasoning as [`get_referrer_stats`].
+pub async fn get_top_referrers(
+    orm: &sea_orm::DatabaseConnection,
+    period: &str,
+    limit: i64,
+) -> Result<Vec<TopReferrer>> {
+    use sea_orm::{ConnectionTrait, DbBackend, Statement};
     let sql = match period {
         "weekly" => {
             "SELECT
@@ -350,17 +477,17 @@ pub async fn get_top_referrers(pool: &Pool, period: &str, limit: i64) -> Result<
              LIMIT $1"
         }
     };
-
-    let rows = client.query(sql, &[&limit]).await?;
+    let stmt = Statement::from_sql_and_values(DbBackend::Postgres, sql, [limit.into()]);
+    let rows = orm.query_all(stmt).await.context("get_top_referrers")?;
 
     Ok(rows
         .iter()
         .map(|r| TopReferrer {
-            telegram_id: r.try_get::<_, i64>("telegram_id").unwrap_or(0),
-            first_name: r.try_get::<_, String>("first_name").ok(),
-            referral_count: r.try_get::<_, i64>("referral_count").unwrap_or(0),
+            telegram_id: r.try_get::<i64>("", "telegram_id").unwrap_or(0),
+            first_name: r.try_get::<String>("", "first_name").ok(),
+            referral_count: r.try_get::<i64>("", "referral_count").unwrap_or(0),
             total_bonus_earned: {
-                let v = r.try_get::<_, f64>("total_bonus_earned").unwrap_or(0.0);
+                let v = r.try_get::<f64>("", "total_bonus_earned").unwrap_or(0.0);
                 if v.is_finite() {
                     v.max(0.0)
                 } else {
