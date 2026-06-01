@@ -439,9 +439,9 @@ pub async fn handle_command(
                 return Ok(());
             }
             let (order_res, fraud_res, block_res) = tokio::join!(
-                crate::db::orders::order_stats_24h(&db.pool),
-                crate::db::orders::fraud_stats_24h(&db.pool),
-                crate::db::orders::block_stats_24h(&db.pool),
+                crate::db::orders::order_stats_24h(&db.orm),
+                crate::db::orders::fraud_stats_24h(&db.orm),
+                crate::db::orders::block_stats_24h(&db.orm),
             );
             let order_block = match order_res {
                 Ok(o) => crate::db::orders::format_order_stats(&o),
@@ -592,7 +592,7 @@ pub async fn handle_command(
                 return Ok(());
             }
             let limit = crate::db::orders::BLOCKED_USERS_LIST_LIMIT;
-            let text = match crate::db::orders::query_blocked_users(&db.pool, limit).await {
+            let text = match crate::db::orders::query_blocked_users(&db.orm, limit).await {
                 Ok(rows) => crate::db::orders::format_blocks_message(&rows, rows.len()),
                 Err(e) => {
                     tracing::error!("/blocks DB error: {}", e);
@@ -625,7 +625,7 @@ pub async fn handle_command(
                     return Ok(());
                 }
             };
-            match crate::db::orders::manual_unblock(&db.pool, target).await {
+            match crate::db::orders::manual_unblock(&db.orm, target).await {
                 Ok(true) => {
                     tracing::info!(
                         admin = user_id,
@@ -636,7 +636,7 @@ pub async fn handle_command(
                     // ran it is accountable on review. Best-effort: a failure
                     // here logs a warn but doesn't block the reply.
                     if let Err(e) = crate::db::orders::record_block_history(
-                        &db.pool,
+                        &db.orm,
                         target,
                         crate::db::orders::BLOCK_ACTION_UNBLOCK,
                         Some("admin_manual"),

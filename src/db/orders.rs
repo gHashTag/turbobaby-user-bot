@@ -365,39 +365,37 @@ pub fn should_auto_block_for_fraud(subtotal_mismatch_events_24h: i64) -> bool {
 /// can't both decide independently to skip the block — Postgres
 /// `pg_advisory_xact_lock` inside the helper serialises them.
 pub async fn record_fraud_event(
-    pool: &deadpool_postgres::Pool,
+    orm: &sea_orm::DatabaseConnection,
     telegram_id: Option<i64>,
     code: &str,
     catalog: Option<&str>,
     item_id: Option<&str>,
     claimed_subtotal: Option<f64>,
     expected_subtotal: Option<f64>,
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let client = pool.get().await?;
-    client
-        .execute(
-            "INSERT INTO order_fraud_events \
-             (telegram_id, code, catalog, item_id, claimed_subtotal, expected_subtotal) \
-             VALUES ($1, $2, $3, $4, $5, $6)",
-            &[
-                &telegram_id,
-                &code,
-                &catalog,
-                &item_id,
-                &claimed_subtotal,
-                &expected_subtotal,
-            ],
-        )
-        .await?;
-    // Drop the borrowed client so auto-block can acquire a fresh connection.
-    drop(client);
+) -> Result<(), sea_orm::DbErr> {
+    use crate::db::entities::order_fraud_event::{ActiveModel as FraudAm, Entity as FraudEntity};
+    use sea_orm::{ActiveValue::Set, EntityTrait};
+    // Cycle #89: SeaORM ActiveModel insert. The `drop(client)` dance for
+    // freeing the deadpool connection before the recursive call to
+    // `auto_block_for_fraud` is gone — `DatabaseConnection` clones cheaply
+    // and SeaORM handles connection lifecycle internally.
+    let am = FraudAm {
+        telegram_id: Set(telegram_id),
+        code: Set(code.to_string()),
+        catalog: Set(catalog.map(|s| s.to_string())),
+        item_id: Set(item_id.map(|s| s.to_string())),
+        claimed_subtotal: Set(claimed_subtotal),
+        expected_subtotal: Set(expected_subtotal),
+        ..Default::default()
+    };
+    FraudEntity::insert(am).exec(orm).await?;
 
     // Auto-block trigger (cycle #60). Only fires for the strongest fraud
     // signal — `subtotal_mismatch` — and only when we have a telegram_id
     // to block. Anonymous mismatches are caught by the per-IP rate limit.
     if code == FRAUD_CODE_SUBTOTAL_MISMATCH {
         if let Some(tid) = telegram_id {
-            if let Err(e) = auto_block_for_fraud(pool, tid).await {
+            if let Err(e) = auto_block_for_fraud(orm, tid).await {
                 tracing::warn!("auto_block check failed for telegram_id={}: {}", tid, e);
             }
         }
@@ -451,12 +449,15 @@ pub const BLOCKED_USERS_LIST_LIMIT: i64 = 50;
 /// planner index-scan `idx_fraud_events_created_at` per user instead of
 /// doing a window scan across the whole table.
 pub async fn query_blocked_users(
-    pool: &deadpool_postgres::Pool,
+    orm: &sea_orm::DatabaseConnection,
     limit: i64,
-) -> Result<Vec<BlockedUserRow>, Box<dyn std::error::Error + Send + Sync>> {
-    let client = pool.get().await?;
-    let rows = client
-        .query(
+) -> Result<Vec<BlockedUserRow>, sea_orm::DbErr> {
+    use sea_orm::{ConnectionTrait, DbBackend, Statement};
+    // Cycle #89: raw Statement (pattern #15) — LATERAL JOIN + NULLS LAST
+    // ordering doesn't have a typed builder equivalent in SeaORM 1.1.
+    let rows = orm
+        .query_all(Statement::from_sql_and_values(
+            DbBackend::Postgres,
             "SELECT lp.telegram_id, \
                     fe.created_at AS last_fraud_at, \
                     fe.code       AS last_fraud_code \
@@ -470,19 +471,19 @@ pub async fn query_blocked_users(
              WHERE lp.is_blocked = TRUE \
              ORDER BY fe.created_at DESC NULLS LAST, lp.telegram_id \
              LIMIT $1",
-            &[&limit],
-        )
+            [limit.into()],
+        ))
         .await?;
     let mut out = Vec::with_capacity(rows.len());
     for r in &rows {
         out.push(BlockedUserRow {
-            telegram_id: r.try_get("telegram_id").unwrap_or(0),
+            telegram_id: r.try_get::<i64>("", "telegram_id").unwrap_or(0),
             last_fraud_at: r
-                .try_get::<_, Option<chrono::DateTime<chrono::Utc>>>("last_fraud_at")
+                .try_get::<Option<chrono::DateTime<chrono::Utc>>>("", "last_fraud_at")
                 .ok()
                 .flatten(),
             last_fraud_code: r
-                .try_get::<_, Option<String>>("last_fraud_code")
+                .try_get::<Option<String>>("", "last_fraud_code")
                 .ok()
                 .flatten(),
         });
@@ -548,20 +549,22 @@ pub const BLOCK_ACTION_UNBLOCK: &str = "unblock";
 /// log a warning on failure, but the caller MUST swallow — losing an audit
 /// row is preferable to blocking the underlying block / unblock action.
 pub async fn record_block_history(
-    pool: &deadpool_postgres::Pool,
+    orm: &sea_orm::DatabaseConnection,
     telegram_id: i64,
     action: &str,
     reason: Option<&str>,
     actor_admin_id: Option<i64>,
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let client = pool.get().await?;
-    client
-        .execute(
-            "INSERT INTO block_history (telegram_id, action, reason, actor_admin_id) \
-             VALUES ($1, $2, $3, $4)",
-            &[&telegram_id, &action, &reason, &actor_admin_id],
-        )
-        .await?;
+) -> Result<(), sea_orm::DbErr> {
+    use crate::db::entities::block_history::{ActiveModel as BhAm, Entity as BhEntity};
+    use sea_orm::{ActiveValue::Set, EntityTrait};
+    let am = BhAm {
+        telegram_id: Set(telegram_id),
+        action: Set(action.to_string()),
+        reason: Set(reason.map(|s| s.to_string())),
+        actor_admin_id: Set(actor_admin_id),
+        ..Default::default()
+    };
+    BhEntity::insert(am).exec(orm).await?;
     Ok(())
 }
 
@@ -574,18 +577,20 @@ pub async fn record_block_history(
 /// guard means an admin can spam `/unblock 123` without each call writing
 /// a fresh `is_blocked = false` UPDATE.
 pub async fn manual_unblock(
-    pool: &deadpool_postgres::Pool,
+    orm: &sea_orm::DatabaseConnection,
     telegram_id: i64,
-) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
-    let client = pool.get().await?;
-    let rows = client
-        .execute(
-            "UPDATE loyalty_profiles SET is_blocked = FALSE \
-             WHERE telegram_id = $1 AND is_blocked = TRUE",
-            &[&telegram_id],
-        )
+) -> Result<bool, sea_orm::DbErr> {
+    use crate::db::entities::loyalty_profile::{Column as LpCol, Entity as LpEntity};
+    use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
+    // The `is_blocked = TRUE` guard means an admin can spam `/unblock 123`
+    // without each call writing a fresh UPDATE.
+    let result = LpEntity::update_many()
+        .col_expr(LpCol::IsBlocked, sea_orm::sea_query::Expr::value(false))
+        .filter(LpCol::TelegramId.eq(telegram_id))
+        .filter(LpCol::IsBlocked.eq(true))
+        .exec(orm)
         .await?;
-    Ok(rows > 0)
+    Ok(result.rows_affected > 0)
 }
 
 /// If the user has accumulated >= `FRAUD_AUTO_BLOCK_THRESHOLD`
@@ -599,55 +604,65 @@ pub async fn manual_unblock(
 /// blocked). Defensive: an error here is logged by the caller and ignored —
 /// auto-block is defence in depth, not the primary 422 protection.
 async fn auto_block_for_fraud(
-    pool: &deadpool_postgres::Pool,
+    orm: &sea_orm::DatabaseConnection,
     telegram_id: i64,
-) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
-    let client = pool.get().await?;
+) -> Result<bool, sea_orm::DbErr> {
+    use sea_orm::{ConnectionTrait, DbBackend, Statement};
     // Count only `subtotal_mismatch` — other codes (`unavailable`,
     // `unknown_item`, `malformed`) are mostly stale-cart / client-bug and
     // would auto-block honest users. Subtotal mismatch alone is the
     // can't-happen-by-accident signal.
-    let row = client
-        .query_one(
+    let row = orm
+        .query_one(Statement::from_sql_and_values(
+            DbBackend::Postgres,
             "SELECT COUNT(*)::bigint AS n FROM order_fraud_events \
              WHERE telegram_id = $1 \
                AND code = $2 \
                AND created_at > NOW() - make_interval(hours => $3)",
-            &[
-                &telegram_id,
-                &FRAUD_CODE_SUBTOTAL_MISMATCH,
-                &FRAUD_AUTO_BLOCK_LOOKBACK_HOURS,
+            [
+                telegram_id.into(),
+                FRAUD_CODE_SUBTOTAL_MISMATCH.into(),
+                FRAUD_AUTO_BLOCK_LOOKBACK_HOURS.into(),
             ],
-        )
-        .await?;
-    let count: i64 = row.try_get("n").unwrap_or(0);
+        ))
+        .await?
+        .ok_or_else(|| sea_orm::DbErr::Custom("auto_block_for_fraud: COUNT no rows".into()))?;
+    let count: i64 = row.try_get("", "n").unwrap_or(0);
     if !should_auto_block_for_fraud(count) {
         return Ok(false);
     }
     // UPSERT so anonymous-ish accounts without a loyalty profile row still
-    // get blocked the moment they cross the threshold. ON CONFLICT lets us
-    // flip is_blocked atomically even when the row already exists.
-    let rows = client
-        .execute(
+    // get blocked the moment they cross the threshold. The
+    // `WHERE loyalty_profiles.is_blocked = FALSE` action filter is the
+    // "only flip if currently unblocked" guard — keeps `rows > 0` as the
+    // "newly blocked" signal that drives the audit log + warn line.
+    //
+    // Cycle #89 note: SeaORM's `OnConflict::value(...)` doesn't support a
+    // conditional `WHERE` on the action clause; the raw Statement keeps
+    // the original semantics intact. This is pattern #15 (aggregates +
+    // unusual conflict shapes use raw Statement).
+    let result = orm
+        .execute(Statement::from_sql_and_values(
+            DbBackend::Postgres,
             "INSERT INTO loyalty_profiles (telegram_id, bonus_balance, total_spent, is_blocked) \
              VALUES ($1, 0, 0, TRUE) \
              ON CONFLICT (telegram_id) DO UPDATE SET is_blocked = TRUE \
              WHERE loyalty_profiles.is_blocked = FALSE",
-            &[&telegram_id],
-        )
+            [telegram_id.into()],
+        ))
         .await?;
-    if rows > 0 {
+    let newly_blocked = result.rows_affected() > 0;
+    if newly_blocked {
         tracing::warn!(
             telegram_id,
             count_24h = count,
             threshold = FRAUD_AUTO_BLOCK_THRESHOLD,
             "auto_block: user blocked for repeated subtotal_mismatch"
         );
-        // Drop the borrowed client before re-acquiring inside record_block_history
-        // (small pool — second pool.get() would deadlock on the same connection).
-        drop(client);
+        // Cycle #89: no more drop(client) dance — SeaORM connections are
+        // pooled internally and `&orm` clones for free.
         if let Err(e) = record_block_history(
-            pool,
+            orm,
             telegram_id,
             BLOCK_ACTION_AUTO,
             Some("subtotal_mismatch_threshold"),
@@ -662,7 +677,7 @@ async fn auto_block_for_fraud(
             );
         }
     }
-    Ok(rows > 0)
+    Ok(newly_blocked)
 }
 
 /// 24-hour aggregate for the `/engage` orders block (cycle #63 / B).
@@ -685,23 +700,25 @@ pub struct OrderStats24h {
 /// `pending_total` for the right-now view. Uses partial indexes already on
 /// `created_at` and `status`; cheap even on large `orders` tables.
 pub async fn order_stats_24h(
-    pool: &deadpool_postgres::Pool,
-) -> Result<OrderStats24h, Box<dyn std::error::Error + Send + Sync>> {
-    let client = pool.get().await?;
-    let row = client
-        .query_one(
+    orm: &sea_orm::DatabaseConnection,
+) -> Result<OrderStats24h, sea_orm::DbErr> {
+    use sea_orm::{ConnectionTrait, DbBackend, Statement};
+    let row = orm
+        .query_one(Statement::from_string(
+            DbBackend::Postgres,
             "SELECT \
                 COUNT(*)::bigint                                    AS total_orders, \
                 COALESCE(SUM(total::float8), 0)::float8             AS revenue, \
-                COUNT(DISTINCT telegram_id)                         \
+                COUNT(DISTINCT telegram_id) \
                     FILTER (WHERE telegram_id IS NOT NULL)::bigint  AS unique_buyers \
-             FROM orders WHERE created_at > NOW() - INTERVAL '24 hours'",
-            &[],
-        )
-        .await?;
-    let total_orders: i64 = row.try_get("total_orders").unwrap_or(0);
-    let revenue: f64 = row.try_get("revenue").unwrap_or(0.0);
-    let unique_buyers: i64 = row.try_get("unique_buyers").unwrap_or(0);
+             FROM orders WHERE created_at > NOW() - INTERVAL '24 hours'"
+                .to_string(),
+        ))
+        .await?
+        .ok_or_else(|| sea_orm::DbErr::Custom("order_stats_24h: aggregate row missing".into()))?;
+    let total_orders: i64 = row.try_get("", "total_orders").unwrap_or(0);
+    let revenue: f64 = row.try_get("", "revenue").unwrap_or(0.0);
+    let unique_buyers: i64 = row.try_get("", "unique_buyers").unwrap_or(0);
 
     let avg_order_value = if total_orders > 0 && revenue.is_finite() {
         revenue / total_orders as f64
@@ -709,13 +726,14 @@ pub async fn order_stats_24h(
         0.0
     };
 
-    let pending_row = client
-        .query_one(
-            "SELECT COUNT(*)::bigint AS pending FROM orders WHERE status = 'pending'",
-            &[],
-        )
-        .await?;
-    let pending_total: i64 = pending_row.try_get("pending").unwrap_or(0);
+    let pending_row = orm
+        .query_one(Statement::from_string(
+            DbBackend::Postgres,
+            "SELECT COUNT(*)::bigint AS pending FROM orders WHERE status = 'pending'".to_string(),
+        ))
+        .await?
+        .ok_or_else(|| sea_orm::DbErr::Custom("order_stats_24h: pending row missing".into()))?;
+    let pending_total: i64 = pending_row.try_get("", "pending").unwrap_or(0);
 
     Ok(OrderStats24h {
         total_orders,
@@ -744,40 +762,45 @@ pub struct BlockStats24h {
 /// Uses `COUNT(*) FILTER (WHERE action = ...)` so the per-action counts
 /// come from a single index scan over `(created_at)`.
 pub async fn block_stats_24h(
-    pool: &deadpool_postgres::Pool,
-) -> Result<BlockStats24h, Box<dyn std::error::Error + Send + Sync>> {
-    let client = pool.get().await?;
-    let row = client
-        .query_one(
+    orm: &sea_orm::DatabaseConnection,
+) -> Result<BlockStats24h, sea_orm::DbErr> {
+    use sea_orm::{ConnectionTrait, DbBackend, Statement};
+    let row = orm
+        .query_one(Statement::from_sql_and_values(
+            DbBackend::Postgres,
             "SELECT \
                 COUNT(*) FILTER (WHERE action = $1)::bigint AS auto_blocks, \
                 COUNT(*) FILTER (WHERE action = $2)::bigint AS unblocks \
              FROM block_history WHERE created_at > NOW() - INTERVAL '24 hours'",
-            &[&BLOCK_ACTION_AUTO, &BLOCK_ACTION_UNBLOCK],
-        )
-        .await?;
+            [BLOCK_ACTION_AUTO.into(), BLOCK_ACTION_UNBLOCK.into()],
+        ))
+        .await?
+        .ok_or_else(|| sea_orm::DbErr::Custom("block_stats_24h: aggregate row missing".into()))?;
     let mut s = BlockStats24h {
-        auto_blocks: row.try_get("auto_blocks").unwrap_or(0),
-        unblocks: row.try_get("unblocks").unwrap_or(0),
+        auto_blocks: row.try_get("", "auto_blocks").unwrap_or(0),
+        unblocks: row.try_get("", "unblocks").unwrap_or(0),
         top_actor_admin: None,
         top_actor_count: 0,
     };
     // Top admin actor — scoped to manual `unblock` rows because
     // `auto_block` events have NULL `actor_admin_id` by design.
-    if let Ok(Some(top)) = client
-        .query_opt(
+    if let Ok(top) = orm
+        .query_one(Statement::from_sql_and_values(
+            DbBackend::Postgres,
             "SELECT actor_admin_id::text AS aid, COUNT(*)::bigint AS n \
              FROM block_history \
              WHERE created_at > NOW() - INTERVAL '24 hours' \
                AND action = $1 \
                AND actor_admin_id IS NOT NULL \
              GROUP BY actor_admin_id ORDER BY n DESC LIMIT 1",
-            &[&BLOCK_ACTION_UNBLOCK],
-        )
+            [BLOCK_ACTION_UNBLOCK.into()],
+        ))
         .await
     {
-        s.top_actor_admin = top.try_get::<_, Option<String>>("aid").ok().flatten();
-        s.top_actor_count = top.try_get("n").unwrap_or(0);
+        if let Some(top) = top {
+            s.top_actor_admin = top.try_get::<Option<String>>("", "aid").ok().flatten();
+            s.top_actor_count = top.try_get("", "n").unwrap_or(0);
+        }
     }
     Ok(s)
 }
@@ -843,44 +866,49 @@ pub struct FraudStats24h {
 
 /// One round-trip aggregate over `order_fraud_events` for the last 24h.
 pub async fn fraud_stats_24h(
-    pool: &deadpool_postgres::Pool,
-) -> Result<FraudStats24h, Box<dyn std::error::Error + Send + Sync>> {
-    let client = pool.get().await?;
+    orm: &sea_orm::DatabaseConnection,
+) -> Result<FraudStats24h, sea_orm::DbErr> {
+    use sea_orm::{ConnectionTrait, DbBackend, Statement};
     // Per-code counts. COUNT(*) FILTER (...) keeps the whole thing in one
     // index scan over `idx_fraud_events_created_at`.
-    let row = client
-        .query_one(
+    let row = orm
+        .query_one(Statement::from_string(
+            DbBackend::Postgres,
             "SELECT \
                 COUNT(*) FILTER (WHERE code = 'subtotal_mismatch')::bigint AS subtotal_mismatch, \
                 COUNT(*) FILTER (WHERE code = 'unknown_item')::bigint        AS unknown_item, \
                 COUNT(*) FILTER (WHERE code = 'unavailable')::bigint         AS unavailable, \
                 COUNT(*) FILTER (WHERE code = 'malformed')::bigint           AS malformed \
-             FROM order_fraud_events WHERE created_at > NOW() - INTERVAL '24 hours'",
-            &[],
-        )
-        .await?;
+             FROM order_fraud_events WHERE created_at > NOW() - INTERVAL '24 hours'"
+                .to_string(),
+        ))
+        .await?
+        .ok_or_else(|| sea_orm::DbErr::Custom("fraud_stats_24h: aggregate row missing".into()))?;
     let mut s = FraudStats24h {
-        subtotal_mismatch: row.try_get("subtotal_mismatch").unwrap_or(0),
-        unknown_item: row.try_get("unknown_item").unwrap_or(0),
-        unavailable: row.try_get("unavailable").unwrap_or(0),
-        malformed: row.try_get("malformed").unwrap_or(0),
+        subtotal_mismatch: row.try_get("", "subtotal_mismatch").unwrap_or(0),
+        unknown_item: row.try_get("", "unknown_item").unwrap_or(0),
+        unavailable: row.try_get("", "unavailable").unwrap_or(0),
+        malformed: row.try_get("", "malformed").unwrap_or(0),
         top_offender: None,
         top_offender_count: 0,
     };
     // Top offender — separate cheap query because it's bounded LIMIT 1.
-    if let Ok(Some(top)) = client
-        .query_opt(
+    if let Ok(top) = orm
+        .query_one(Statement::from_string(
+            DbBackend::Postgres,
             "SELECT telegram_id::text AS tid, COUNT(*)::bigint AS n \
              FROM order_fraud_events \
              WHERE created_at > NOW() - INTERVAL '24 hours' \
                AND telegram_id IS NOT NULL \
-             GROUP BY telegram_id ORDER BY n DESC LIMIT 1",
-            &[],
-        )
+             GROUP BY telegram_id ORDER BY n DESC LIMIT 1"
+                .to_string(),
+        ))
         .await
     {
-        s.top_offender = top.try_get::<_, Option<String>>("tid").ok().flatten();
-        s.top_offender_count = top.try_get("n").unwrap_or(0);
+        if let Some(top) = top {
+            s.top_offender = top.try_get::<Option<String>>("", "tid").ok().flatten();
+            s.top_offender_count = top.try_get("", "n").unwrap_or(0);
+        }
     }
     Ok(s)
 }

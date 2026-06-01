@@ -539,7 +539,7 @@ async fn create_order(
                 // Cycle #59: persist for /engage admin panel. Best-effort —
                 // we don't fail the reject path if the audit insert blips.
                 if let Err(e) = crate::db::orders::record_fraud_event(
-                    &state.db.pool,
+                    &state.db.orm,
                     req.telegram_id,
                     crate::db::orders::FRAUD_CODE_UNKNOWN_ITEM,
                     Some(cat),
@@ -563,7 +563,7 @@ async fn create_order(
                     "create_order: order references item marked unavailable"
                 );
                 if let Err(e) = crate::db::orders::record_fraud_event(
-                    &state.db.pool,
+                    &state.db.orm,
                     req.telegram_id,
                     crate::db::orders::FRAUD_CODE_UNAVAILABLE,
                     Some(cat),
@@ -586,7 +586,7 @@ async fn create_order(
                     "create_order: subtotal mismatch — possible client tampering"
                 );
                 if let Err(e) = crate::db::orders::record_fraud_event(
-                    &state.db.pool,
+                    &state.db.orm,
                     req.telegram_id,
                     crate::db::orders::FRAUD_CODE_SUBTOTAL_MISMATCH,
                     None,
@@ -607,7 +607,7 @@ async fn create_order(
                     "create_order: malformed line item — no *_id field set"
                 );
                 if let Err(e) = crate::db::orders::record_fraud_event(
-                    &state.db.pool,
+                    &state.db.orm,
                     req.telegram_id,
                     crate::db::orders::FRAUD_CODE_MALFORMED,
                     None,

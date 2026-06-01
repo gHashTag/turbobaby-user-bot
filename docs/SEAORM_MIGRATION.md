@@ -114,8 +114,8 @@ Notable wins:
 | #86 ✅ | `orders.rs` Part 4 (sweeps) + memory capture `seaorm-patterns.md` | ~90 | small | **done** — scope-shifted; Part 2 too big for one cycle |
 | #87 ✅ | `orders.rs` Part 2 — `create_order` SeaORM tx (7 stmts incl. advisory locks) | ~140 | large | **done** |
 | #88 ✅ | `orders.rs` Part 3 — `update_order_status` (3 branches) + `complete_order_and_update_loyalty` (4-stmt tx) | ~280 | medium/large | **done** |
-| #89 (next) | accessory/tea/set entities + price-auth lookups in `create_order` | ~150 | medium | |
-| #90 | record_fraud_event + scattered helpers (query_blocked_users, manual_unblock, record_block_history) | ~200 | medium | |
+| #89 ✅ | `db/orders.rs` 8 scattered helpers (fraud + block + stats) + 2 new entities | ~340 | medium | **done — `db/orders.rs` 100% off raw `Pool`** |
+| #90 (next) | accessory/tea/set entities + price-auth lookups in `create_order` (only remaining `&state.db.pool`) | ~150 | medium | |
 | #84-#86 | `src/db/orders.rs` (split into 3-4 cycles by feature) | 1271 | large | |
 
 Total ≈ 6-8 cycles. Each cycle is independently committable; no big-bang.
