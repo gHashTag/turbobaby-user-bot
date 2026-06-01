@@ -1,41 +1,52 @@
-//! Friendly Russian error messages for the checkout HTTP response codes
+//! Friendly localised error messages for the checkout HTTP response codes
 //! returned by `POST /api/orders`.
 //!
-//! Cycle #65: before this, the checkout screen rendered raw "Ошибка
-//! сервера: 403" for an auto-blocked user (cycle #60), and similar opaque
-//! strings for every other failure mode. Each known status now maps to a
-//! specific Russian sentence with an actionable next step ("свяжитесь с
-//! поддержкой" / "обновите меню" / etc.). Unknown statuses fall back to
-//! the raw code — better than silently lying about what happened.
+//! Cycle #65 introduced the helper with Russian strings hardcoded inline.
+//! Cycle #69 moved the copy into `trios::i18n` keys so adding English /
+//! Thai / etc. is one table edit instead of forking the function. The
+//! caller now passes its current `Lang`; rendering goes through the
+//! standard `t(lang, key)` lookup with English fallback for locales that
+//! haven't been translated yet.
 //!
-//! Lives in `trios/` (not under `ui/`) so it compiles for both backend
-//! and wasm targets and can be unit-tested via plain `cargo test`.
+//! Unknown HTTP statuses keep their inline `format!` fallback — routing
+//! arbitrary integers through the static key table is more machinery
+//! than the rare "we got HTTP 999" path warrants.
+
+use super::core::Lang;
+use super::i18n::{
+    t, T_CHECKOUT_ERR_400, T_CHECKOUT_ERR_403, T_CHECKOUT_ERR_404, T_CHECKOUT_ERR_409,
+    T_CHECKOUT_ERR_422, T_CHECKOUT_ERR_429, T_CHECKOUT_ERR_5XX,
+};
 
 /// Map an HTTP status code from `POST /api/orders` to a customer-friendly
-/// Russian sentence. Pure — no IO, no allocations beyond the returned String.
-pub fn friendly_order_error(status: u16) -> String {
-    match status {
-        400 => "Что-то не так с корзиной. Попробуйте очистить её и собрать заново.".to_string(),
-        403 => "Аккаунт временно ограничен. Свяжитесь с поддержкой, чтобы продолжить заказы."
-            .to_string(),
-        404 => "Один из товаров больше не доступен. Обновите меню и попробуйте снова.".to_string(),
-        409 => "Этот заказ уже создан. Откройте «Мои заказы» — он там.".to_string(),
-        422 => "Цены или товары изменились с момента добавления в корзину. Обновите меню и оформите заказ заново.".to_string(),
-        429 => "Слишком быстро. Подождите минуту и попробуйте снова.".to_string(),
-        500..=599 => "Сервер сейчас недоступен. Попробуйте через минуту.".to_string(),
-        _ => format!("Ошибка сервера: HTTP {}", status),
-    }
+/// localised sentence. Pure — looks up via the shared i18n table.
+pub fn friendly_order_error(lang: Lang, status: u16) -> String {
+    let key = match status {
+        400 => T_CHECKOUT_ERR_400,
+        403 => T_CHECKOUT_ERR_403,
+        404 => T_CHECKOUT_ERR_404,
+        409 => T_CHECKOUT_ERR_409,
+        422 => T_CHECKOUT_ERR_422,
+        429 => T_CHECKOUT_ERR_429,
+        500..=599 => T_CHECKOUT_ERR_5XX,
+        _ => return format!("Ошибка сервера: HTTP {}", status),
+    };
+    t(lang, key).to_string()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    fn ru(status: u16) -> String {
+        friendly_order_error(Lang::Russian, status)
+    }
+
     #[test]
     fn maps_403_to_account_restricted_phrase() {
         // The whole point of cycle #65 — auto-blocked users from cycle #60
         // must see something they can act on, not just "HTTP 403".
-        let s = friendly_order_error(403);
+        let s = ru(403);
         assert!(
             s.contains("ограничен"),
             "403 should mention account being restricted, got: {}",
@@ -52,37 +63,34 @@ mod tests {
 
     #[test]
     fn maps_429_to_rate_limit_phrase() {
-        let s = friendly_order_error(429);
+        let s = ru(429);
         assert!(s.contains("Слишком быстро") || s.contains("минут"));
         assert!(!s.contains("429"));
     }
 
     #[test]
     fn maps_422_to_price_change_hint() {
-        // 422 from cycle #56-#58 price authority means catalog drift between
-        // menu load and submit. Customer should be told to refresh, not
-        // stare at a generic error.
-        let s = friendly_order_error(422);
+        let s = ru(422);
         assert!(s.contains("Цен") || s.contains("товар"));
         assert!(s.contains("Обновите"));
     }
 
     #[test]
     fn maps_400_to_cart_corruption_hint() {
-        let s = friendly_order_error(400);
+        let s = ru(400);
         assert!(s.contains("корзин"));
     }
 
     #[test]
     fn maps_409_to_duplicate_hint() {
-        let s = friendly_order_error(409);
+        let s = ru(409);
         assert!(s.contains("Мои заказы") || s.contains("уже создан"));
     }
 
     #[test]
     fn maps_5xx_range_to_server_unavailable_phrase() {
         for status in [500u16, 502, 503, 504, 511, 599] {
-            let s = friendly_order_error(status);
+            let s = ru(status);
             assert!(
                 s.contains("недоступен") || s.contains("Сервер"),
                 "5xx ({}) should mention server unavailable, got: {}",
@@ -102,18 +110,18 @@ mod tests {
     fn maps_unknown_status_to_raw_code_fallback() {
         // Better to show "HTTP 999" than silently say nothing when we
         // genuinely don't know what happened.
-        let s = friendly_order_error(999);
+        let s = ru(999);
         assert!(s.contains("999"));
     }
 
     #[test]
     fn includes_actionable_next_step_for_every_known_code() {
         // Heuristic: every known code's message points the user at *something*
-        // they can do (cart, menu, support, орденс, minute). This catches
-        // future regressions where someone shortens a message to "Ошибка"
-        // and removes the recovery hint.
+        // they can do (cart, menu, support, заказы, minute). Catches future
+        // regressions where someone shortens a message to "Ошибка" and removes
+        // the recovery hint.
         for status in [400u16, 403, 404, 409, 422, 429, 500] {
-            let s = friendly_order_error(status);
+            let s = ru(status);
             let has_action = ["корзин", "поддерж", "Обновите", "Мои заказы", "минут"]
                 .iter()
                 .any(|kw| s.contains(kw));
@@ -123,5 +131,30 @@ mod tests {
                 status, s
             );
         }
+    }
+
+    // ── i18n surface (cycle #69) ─────────────────────────────────────────
+
+    #[test]
+    fn english_locale_renders_for_403() {
+        // Sanity: the EN table actually got wired up. We don't need to test
+        // every code — that would duplicate the Russian table — but at
+        // least one key must round-trip through Lang::English so a future
+        // typo in the EN match arm gets caught.
+        let s = friendly_order_error(Lang::English, 403);
+        assert!(s.contains("restricted"));
+        assert!(s.contains("support"));
+        // No Cyrillic leakage from the RU fallback.
+        assert!(!s.contains("ограничен"));
+    }
+
+    #[test]
+    fn unknown_status_renders_same_text_regardless_of_lang() {
+        // The fallback path bypasses i18n, so Russian and English produce
+        // identical output. Pin that explicitly so a future refactor that
+        // adds per-lang fallback doesn't silently change behaviour.
+        let ru_msg = friendly_order_error(Lang::Russian, 999);
+        let en_msg = friendly_order_error(Lang::English, 999);
+        assert_eq!(ru_msg, en_msg);
     }
 }

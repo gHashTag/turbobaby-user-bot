@@ -154,10 +154,13 @@ pub fn CheckoutScreen() -> Element {
                 }
                 Ok(resp) => {
                     let status = resp.status().as_u16();
-                    // Cycle #65: friendly per-status message so an auto-blocked
-                    // user (403) sees "Аккаунт ограничен. Свяжитесь с
-                    // поддержкой" instead of a raw status code they can't act on.
+                    // Cycle #65 + #69: friendly per-status message localised
+                    // via trios::i18n. Auto-blocked users (403) see "Аккаунт
+                    // ограничен. Свяжитесь с поддержкой" instead of a raw
+                    // status code they can't act on. Lang::Russian for now
+                    // — when EN/TH locales ship, swap to use_signal-driven Lang.
                     order_error.set(Some(crate::trios::checkout_errors::friendly_order_error(
+                        Lang::Russian,
                         status,
                     )));
                 }

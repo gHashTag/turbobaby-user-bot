@@ -112,6 +112,19 @@ pub const T_SOMM_TIME: Key = "somm.time";
 pub const T_SOMM_EXP: Key = "somm.experience";
 pub const T_SOMM_RESULT: Key = "somm.result";
 
+// Checkout error messages (cycle #69). Mapped from HTTP status by
+// `trios::checkout_errors::friendly_order_error`. Unknown statuses
+// fall back to an inline `Ошибка сервера: HTTP {n}` since templating
+// arbitrary integers through the static key table is more machinery
+// than it's worth for one rare path.
+pub const T_CHECKOUT_ERR_400: Key = "checkout.err.400";
+pub const T_CHECKOUT_ERR_403: Key = "checkout.err.403";
+pub const T_CHECKOUT_ERR_404: Key = "checkout.err.404";
+pub const T_CHECKOUT_ERR_409: Key = "checkout.err.409";
+pub const T_CHECKOUT_ERR_422: Key = "checkout.err.422";
+pub const T_CHECKOUT_ERR_429: Key = "checkout.err.429";
+pub const T_CHECKOUT_ERR_5XX: Key = "checkout.err.5xx";
+
 /// Get translation for a key and language
 pub fn t(lang: Lang, key: Key) -> Value {
     match lang {
@@ -223,6 +236,14 @@ fn get_ru_translation(key: Key) -> Value {
         T_SOMM_TIME => "Время суток",
         T_SOMM_EXP => "Опыт",
         T_SOMM_RESULT => "Рекомендации",
+        // Checkout error messages (cycle #69)
+        T_CHECKOUT_ERR_400 => "Что-то не так с корзиной. Попробуйте очистить её и собрать заново.",
+        T_CHECKOUT_ERR_403 => "Аккаунт временно ограничен. Свяжитесь с поддержкой, чтобы продолжить заказы.",
+        T_CHECKOUT_ERR_404 => "Один из товаров больше не доступен. Обновите меню и попробуйте снова.",
+        T_CHECKOUT_ERR_409 => "Этот заказ уже создан. Откройте «Мои заказы» — он там.",
+        T_CHECKOUT_ERR_422 => "Цены или товары изменились с момента добавления в корзину. Обновите меню и оформите заказ заново.",
+        T_CHECKOUT_ERR_429 => "Слишком быстро. Подождите минуту и попробуйте снова.",
+        T_CHECKOUT_ERR_5XX => "Сервер сейчас недоступен. Попробуйте через минуту.",
         _ => key,
     }
 }
@@ -324,6 +345,14 @@ fn get_en_translation(key: Key) -> Value {
         T_SOMM_TIME => "Time of Day",
         T_SOMM_EXP => "Experience",
         T_SOMM_RESULT => "Recommendations",
+        // Checkout error messages (cycle #69)
+        T_CHECKOUT_ERR_400 => "Something looks wrong with your cart. Try clearing it and adding items again.",
+        T_CHECKOUT_ERR_403 => "Your account is temporarily restricted. Contact support to keep ordering.",
+        T_CHECKOUT_ERR_404 => "One of the items is no longer available. Refresh the menu and try again.",
+        T_CHECKOUT_ERR_409 => "This order has already been placed. Open «My Orders» — it's there.",
+        T_CHECKOUT_ERR_422 => "Prices or items changed since you added to cart. Refresh the menu and place the order again.",
+        T_CHECKOUT_ERR_429 => "Too fast. Wait a minute and try again.",
+        T_CHECKOUT_ERR_5XX => "Server is currently unavailable. Try again in a minute.",
         _ => key,
     }
 }
