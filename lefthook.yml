@@ -89,3 +89,18 @@ pre-commit:
       run: cargo check --target wasm32-unknown-unknown
       fail_text: |
         WASM compilation failed. Fix errors before committing.
+
+    # Cycle #104: the schema-truth test triad (#101 migration manifest, #102
+    # entity columns, #103 orphan tables) is cheap (file IO + grep, no DB,
+    # no network) — sub-second after the first compile — but was previously
+    # CI-only. A dev could break a defensive test and only learn about it
+    # post-push. This step compiles the test harness (catching broken test
+    # code that `cargo check` misses) and runs every `db::*` test (55, all
+    # pure helpers). Total impact: ~1s incremental, ~5s cold.
+    db-defensive-tests:
+      glob: "*.rs"
+      run: "cargo test --offline --features backend --bin woody-weed-bot-server --quiet db::"
+      fail_text: |
+        Defensive db:: tests failed (schema-truth triad or pure helpers).
+        Run `cargo test --features backend --bin woody-weed-bot-server db::`
+        locally to see the failure details.
