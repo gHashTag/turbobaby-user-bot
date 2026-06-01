@@ -682,6 +682,91 @@ pub async fn order_stats_24h(
     })
 }
 
+/// 24-hour aggregate for the `/engage` blocks panel (cycle #68).
+/// Mirrors the shape of `OrderStats24h` / `FraudStats24h` so the bot
+/// handler can stack all three panels symmetrically.
+#[derive(Debug, Default, Clone)]
+pub struct BlockStats24h {
+    pub auto_blocks: i64,
+    pub unblocks: i64,
+    /// Admin who issued the most `/unblock` commands in the window, as
+    /// a stringified telegram_id (matches FraudStats24h::top_offender).
+    /// None when no manual unblocks happened.
+    pub top_actor_admin: Option<String>,
+    pub top_actor_count: i64,
+}
+
+/// One round-trip aggregate over `block_history` for the last 24h.
+/// Uses `COUNT(*) FILTER (WHERE action = ...)` so the per-action counts
+/// come from a single index scan over `(created_at)`.
+pub async fn block_stats_24h(
+    pool: &deadpool_postgres::Pool,
+) -> Result<BlockStats24h, Box<dyn std::error::Error + Send + Sync>> {
+    let client = pool.get().await?;
+    let row = client
+        .query_one(
+            "SELECT \
+                COUNT(*) FILTER (WHERE action = $1)::bigint AS auto_blocks, \
+                COUNT(*) FILTER (WHERE action = $2)::bigint AS unblocks \
+             FROM block_history WHERE created_at > NOW() - INTERVAL '24 hours'",
+            &[&BLOCK_ACTION_AUTO, &BLOCK_ACTION_UNBLOCK],
+        )
+        .await?;
+    let mut s = BlockStats24h {
+        auto_blocks: row.try_get("auto_blocks").unwrap_or(0),
+        unblocks: row.try_get("unblocks").unwrap_or(0),
+        top_actor_admin: None,
+        top_actor_count: 0,
+    };
+    // Top admin actor — scoped to manual `unblock` rows because
+    // `auto_block` events have NULL `actor_admin_id` by design.
+    if let Ok(Some(top)) = client
+        .query_opt(
+            "SELECT actor_admin_id::text AS aid, COUNT(*)::bigint AS n \
+             FROM block_history \
+             WHERE created_at > NOW() - INTERVAL '24 hours' \
+               AND action = $1 \
+               AND actor_admin_id IS NOT NULL \
+             GROUP BY actor_admin_id ORDER BY n DESC LIMIT 1",
+            &[&BLOCK_ACTION_UNBLOCK],
+        )
+        .await
+    {
+        s.top_actor_admin = top.try_get::<_, Option<String>>("aid").ok().flatten();
+        s.top_actor_count = top.try_get("n").unwrap_or(0);
+    }
+    Ok(s)
+}
+
+/// Pure helper: render the `/engage` blocks block as Telegram HTML.
+/// Symmetric with `format_order_stats` / fraud rendering inside the
+/// engage handler. Empty window → ✅ none so admin doesn't see a panel
+/// full of zeros every quiet day.
+pub fn format_block_stats(s: &BlockStats24h) -> String {
+    use crate::util::html_escape;
+    if s.auto_blocks == 0 && s.unblocks == 0 {
+        return "<b>🚫 Blocks (24h)</b>\n✅ <i>none</i>".to_string();
+    }
+    let top = s
+        .top_actor_admin
+        .as_deref()
+        .map(|t| {
+            format!(
+                "<code>{}</code> ({} unblocks)",
+                html_escape(t),
+                s.top_actor_count
+            )
+        })
+        .unwrap_or_else(|| "—".to_string());
+    format!(
+        "<b>🚫 Blocks (24h)</b>\n\
+         🤖 Auto-blocks: <b>{}</b>\n\
+         🔓 Manual unblocks: <b>{}</b>\n\
+         👮 Top admin: {}",
+        s.auto_blocks, s.unblocks, top,
+    )
+}
+
 /// Pure helper: render the `/engage` orders block as Telegram HTML.
 /// Caller wraps in `parse_mode(Html)`. Extracted from the bot handler so
 /// the layout is unit-testable.
@@ -889,6 +974,57 @@ mod tests {
         assert!(!out.contains("inf"));
         assert!(!out.contains("NaN"));
         assert!(out.contains("0"));
+    }
+
+    // ── /engage blocks panel (cycle #68) ─────────────────────────────────
+
+    use super::{format_block_stats, BlockStats24h};
+
+    #[test]
+    fn block_stats_format_renders_full_panel() {
+        let s = BlockStats24h {
+            auto_blocks: 3,
+            unblocks: 1,
+            top_actor_admin: Some("8420420131".into()),
+            top_actor_count: 1,
+        };
+        let out = format_block_stats(&s);
+        assert!(out.contains("Blocks (24h)"));
+        assert!(out.contains("Auto-blocks") && out.contains("3"));
+        assert!(out.contains("Manual unblocks") && out.contains("1"));
+        // Admin actor id appears verbatim so admin can spot themselves.
+        assert!(out.contains("8420420131"));
+        // No `none` short-circuit on a populated window.
+        assert!(!out.contains("none"));
+    }
+
+    #[test]
+    fn block_stats_format_empty_window_says_none() {
+        // Quiet day: zero auto-blocks AND zero unblocks → ✅ none. Symmetric
+        // with the fraud panel — admin doesn't see a wall of zeros every
+        // morning.
+        let out = format_block_stats(&BlockStats24h::default());
+        assert!(out.contains("Blocks (24h)"));
+        assert!(out.contains("none"));
+        // Make sure we're not silently leaking 0-counts behind the badge.
+        assert!(!out.contains("Auto-blocks"));
+    }
+
+    #[test]
+    fn block_stats_format_handles_missing_top_actor() {
+        // 5 auto-blocks but 0 manual unblocks (no admin actor).
+        // Panel must still render — auto_blocks count alone is meaningful.
+        let s = BlockStats24h {
+            auto_blocks: 5,
+            unblocks: 0,
+            top_actor_admin: None,
+            top_actor_count: 0,
+        };
+        let out = format_block_stats(&s);
+        assert!(out.contains("Blocks (24h)"));
+        assert!(out.contains("5"));
+        // Em-dash placeholder for missing admin keeps the line balanced.
+        assert!(out.contains("—"));
     }
 
     // ── Auto-block threshold (cycle #60) ─────────────────────────────────

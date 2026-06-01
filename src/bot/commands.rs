@@ -454,9 +454,10 @@ pub async fn handle_command(
             if !config.admin_ids.contains(&user_id) {
                 return Ok(());
             }
-            let (order_res, fraud_res) = tokio::join!(
+            let (order_res, fraud_res, block_res) = tokio::join!(
                 crate::db::orders::order_stats_24h(&db.pool),
                 crate::db::orders::fraud_stats_24h(&db.pool),
+                crate::db::orders::block_stats_24h(&db.pool),
             );
             let order_block = match order_res {
                 Ok(o) => crate::db::orders::format_order_stats(&o),
@@ -498,9 +499,19 @@ pub async fn handle_command(
                     "<b>🛡 Fraud signals (24h)</b>\n<i>failed to query DB</i>".to_string()
                 }
             };
+            // Cycle #68: third panel — `block_history` activity. Symmetric
+            // with the fraud panel: empty window renders ✅ none so admin
+            // doesn't see a wall of zeros on quiet days.
+            let block_block = match block_res {
+                Ok(b) => crate::db::orders::format_block_stats(&b),
+                Err(e) => {
+                    tracing::error!("engage block_stats query failed: {}", e);
+                    "<b>🚫 Blocks (24h)</b>\n<i>failed to query DB</i>".to_string()
+                }
+            };
             let text = format!(
-                "📬 <b>Engage — last 24h</b>\n━━━━━━━━━━━━━━━━\n{}\n\n{}",
-                order_block, fraud_block,
+                "📬 <b>Engage — last 24h</b>\n━━━━━━━━━━━━━━━━\n{}\n\n{}\n\n{}",
+                order_block, fraud_block, block_block,
             );
             bot.send_message(msg.chat.id, text)
                 .parse_mode(teloxide::types::ParseMode::Html)
