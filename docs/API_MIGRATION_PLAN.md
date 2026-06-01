@@ -15,10 +15,10 @@ when a file hits 0 callsites, mark it ✅.
 |------|-----------|-----|------------------|----------|--------|
 | `api/catalog.rs` | 27 | No (all CRUD) | accessory, tea_product, set, accessory_set, tea_set (5 entities!) | low — bulk of work | 🔴 |
 | `api/garden.rs` | 8 | Some (reward-use tx) | maybe garden_plant + garden_harvest | medium | 🔴 |
-| `api/admin.rs` | 7 | No | none (stats only) | medium | 🔴 |
+| `api/admin.rs` | 7 | No | none (stats only) | medium | ✅ #92 |
 | `api/quest.rs` | 5 | No | quest_place exists; treasure_hunt exists | medium | 🔴 |
 | `api/tech_tree.rs` | 4 | No | tech_tree_node entity needed | low | 🔴 |
-| `api/loyalty.rs` | 3 | No (get_profile, get_loyalty_tiers, update_loyalty_config) | loyalty_tier? | low | 🔴 |
+| `api/loyalty.rs` | 3 | No (get_profile, get_loyalty_tiers, update_loyalty_config) | loyalty_tier? | low | ✅ #92 |
 | `api/game.rs` | 3 | No (read + upsert + leaderboard) | game_high_score (single use) | high (smallest) | ✅ #91 |
 | `bot/callbacks.rs` | 1 | No (single SELECT inside larger flow) | none — uses existing entities | high (1 callsite) | ✅ #91 |
 

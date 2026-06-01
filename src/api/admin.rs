@@ -64,53 +64,64 @@ async fn get_stats(
     State(state): State<AppState>,
 ) -> Result<Json<Value>, StatusCode> {
     check_admin(&headers, &state)?;
-    let client = state.db.pool.get().await.map_err(|e| {
-        tracing::error!("get_stats pool error: {:?}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
+    // Cycle #92: SeaORM via raw `Statement` (pattern #15). All 5 queries
+    // are simple aggregates / GROUP BY; typed builder would be heavier
+    // than the SQL itself.
+    use sea_orm::{ConnectionTrait, DbBackend, Statement};
+    let orm = &state.db.orm;
 
-    let total_orders: i64 = client
-        .query_one("SELECT COUNT(*) FROM orders", &[])
+    let total_orders: i64 = orm
+        .query_one(Statement::from_string(
+            DbBackend::Postgres,
+            "SELECT COUNT(*)::bigint AS n FROM orders".to_string(),
+        ))
         .await
-        .map(|r| r.try_get(0).unwrap_or(0))
+        .ok()
+        .flatten()
+        .and_then(|r| r.try_get::<i64>("", "n").ok())
         .unwrap_or(0);
 
-    let total_revenue: f64 = client
-        .query_one(
-            "SELECT COALESCE(SUM(total)::float8, 0.0) FROM orders WHERE status = 'completed'",
-            &[],
-        )
+    let total_revenue: f64 = orm
+        .query_one(Statement::from_string(
+            DbBackend::Postgres,
+            "SELECT COALESCE(SUM(total)::float8, 0.0) AS v FROM orders WHERE status = 'completed'"
+                .to_string(),
+        ))
         .await
-        .map(|r| {
-            let v: f64 = r.try_get(0).unwrap_or(0.0);
-            if v.is_finite() {
-                v.max(0.0)
-            } else {
-                0.0
-            }
-        })
+        .ok()
+        .flatten()
+        .and_then(|r| r.try_get::<f64>("", "v").ok())
+        .map(|v| if v.is_finite() { v.max(0.0) } else { 0.0 })
         .unwrap_or(0.0);
 
-    let active_strains: i64 = client
-        .query_one(
-            "SELECT COUNT(*) FROM strains WHERE is_available = true",
-            &[],
-        )
+    let active_strains: i64 = orm
+        .query_one(Statement::from_string(
+            DbBackend::Postgres,
+            "SELECT COUNT(*)::bigint AS n FROM strains WHERE is_available = true".to_string(),
+        ))
         .await
-        .map(|r| r.try_get(0).unwrap_or(0))
+        .ok()
+        .flatten()
+        .and_then(|r| r.try_get::<i64>("", "n").ok())
         .unwrap_or(0);
 
-    let total_users: i64 = client
-        .query_one("SELECT COUNT(*) FROM user_languages", &[])
+    let total_users: i64 = orm
+        .query_one(Statement::from_string(
+            DbBackend::Postgres,
+            "SELECT COUNT(*)::bigint AS n FROM user_languages".to_string(),
+        ))
         .await
-        .map(|r| r.try_get(0).unwrap_or(0))
+        .ok()
+        .flatten()
+        .and_then(|r| r.try_get::<i64>("", "n").ok())
         .unwrap_or(0);
 
     // Top strains by order count (avoid CROSS JOIN via subquery)
-    let top_strains: Vec<Value> = client
-        .query(
+    let top_strains: Vec<Value> = orm
+        .query_all(Statement::from_string(
+            DbBackend::Postgres,
             r#"
-            SELECT s.name, COUNT(*) as cnt
+            SELECT s.name AS name, COUNT(*)::bigint AS cnt
             FROM (
                 SELECT (jsonb_array_elements(items)->>'id') as sid
                 FROM orders
@@ -120,15 +131,15 @@ async fn get_stats(
             GROUP BY s.name
             ORDER BY cnt DESC
             LIMIT 5
-            "#,
-            &[],
-        )
+            "#
+            .to_string(),
+        ))
         .await
         .map(|rows| {
             rows.iter()
                 .map(|r| {
-                    let name: String = r.try_get(0).unwrap_or_default();
-                    let count: i64 = r.try_get(1).unwrap_or(0);
+                    let name: String = r.try_get("", "name").unwrap_or_default();
+                    let count: i64 = r.try_get("", "cnt").unwrap_or(0);
                     json!({ "name": name, "count": count })
                 })
                 .collect()
@@ -149,30 +160,29 @@ async fn get_all_users(
     State(state): State<AppState>,
 ) -> Result<Json<Value>, StatusCode> {
     check_admin(&headers, &state)?;
-    let client = state.db.pool.get().await.map_err(|e| {
-        tracing::error!("admin users: pool.get() failed: {:?}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-    let rows = client.query(
+    // Cycle #92: SeaORM via Statement (LEFT JOIN + NULLS LAST ordering,
+    // pattern #15).
+    use sea_orm::{ConnectionTrait, DbBackend, Statement};
+    let rows = state.db.orm.query_all(Statement::from_string(
+        DbBackend::Postgres,
         "SELECT ul.telegram_id, ul.first_name, ul.language,
                 lp.total_spent::float8 AS total_spent, lp.bonus_balance::float8 AS bonus_balance, lp.tier, lp.is_blocked
          FROM user_languages ul
          LEFT JOIN loyalty_profiles lp ON ul.telegram_id = lp.telegram_id
-         ORDER BY lp.total_spent DESC NULLS LAST LIMIT 500",
-        &[],
-    ).await.map_err(|e| {
+         ORDER BY lp.total_spent DESC NULLS LAST LIMIT 500".to_string(),
+    )).await.map_err(|e| {
         tracing::error!("admin users: query failed: {:?}", e);
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
     let users: Vec<Value> = rows.iter().map(|r| json!({
-        "telegram_id": r.try_get::<_, i64>("telegram_id").unwrap_or(0),
-        "first_name": r.try_get::<_, Option<String>>("first_name").ok().flatten(),
-        "language": r.try_get::<_, Option<String>>("language").ok().flatten(),
-        "total_spent": r.try_get::<_, Option<f64>>("total_spent").ok().flatten().filter(|v| v.is_finite()),
-        "bonus_balance": r.try_get::<_, Option<f64>>("bonus_balance").ok().flatten().filter(|v| v.is_finite()),
-        "tier": r.try_get::<_, Option<String>>("tier").ok().flatten(),
-        "is_blocked": r.try_get::<_, Option<bool>>("is_blocked").ok().flatten(),
+        "telegram_id": r.try_get::<i64>("", "telegram_id").unwrap_or(0),
+        "first_name": r.try_get::<Option<String>>("", "first_name").ok().flatten(),
+        "language": r.try_get::<Option<String>>("", "language").ok().flatten(),
+        "total_spent": r.try_get::<Option<f64>>("", "total_spent").ok().flatten().filter(|v| v.is_finite()),
+        "bonus_balance": r.try_get::<Option<f64>>("", "bonus_balance").ok().flatten().filter(|v| v.is_finite()),
+        "tier": r.try_get::<Option<String>>("", "tier").ok().flatten(),
+        "is_blocked": r.try_get::<Option<bool>>("", "is_blocked").ok().flatten(),
     })).collect();
     Ok(Json(json!({ "users": users })))
 }
@@ -182,23 +192,20 @@ async fn get_managers(
     State(state): State<AppState>,
 ) -> Result<Json<Value>, StatusCode> {
     check_admin(&headers, &state)?;
-    let client = state.db.pool.get().await.map_err(|e| {
-        tracing::error!("admin managers: pool.get() failed: {:?}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-    let rows = client.query(
-        "SELECT telegram_id, name, username, ref_code, commission_rate::float8 FROM managers ORDER BY name LIMIT 500",
-        &[],
-    ).await.map_err(|e| {
+    use sea_orm::{ConnectionTrait, DbBackend, Statement};
+    let rows = state.db.orm.query_all(Statement::from_string(
+        DbBackend::Postgres,
+        "SELECT telegram_id, name, username, ref_code, commission_rate::float8 FROM managers ORDER BY name LIMIT 500".to_string(),
+    )).await.map_err(|e| {
         tracing::error!("admin managers: query failed: {:?}", e);
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
     let managers: Vec<Value> = rows.iter().map(|r| json!({
-        "telegram_id": r.try_get::<_, i64>("telegram_id").unwrap_or(0),
-        "name": r.try_get::<_, Option<String>>("name").ok().flatten(),
-        "username": r.try_get::<_, Option<String>>("username").ok().flatten(),
-        "ref_code": r.try_get::<_, Option<String>>("ref_code").ok().flatten(),
-        "commission_rate": r.try_get::<_, Option<f64>>("commission_rate").ok().flatten().filter(|v| v.is_finite()),
+        "telegram_id": r.try_get::<i64>("", "telegram_id").unwrap_or(0),
+        "name": r.try_get::<Option<String>>("", "name").ok().flatten(),
+        "username": r.try_get::<Option<String>>("", "username").ok().flatten(),
+        "ref_code": r.try_get::<Option<String>>("", "ref_code").ok().flatten(),
+        "commission_rate": r.try_get::<Option<f64>>("", "commission_rate").ok().flatten().filter(|v| v.is_finite()),
     })).collect();
     Ok(Json(json!({ "managers": managers })))
 }
@@ -210,31 +217,34 @@ async fn get_manager_stats(
 ) -> Result<Json<Value>, StatusCode> {
     validate_telegram_id_param(telegram_id)?;
     check_admin(&headers, &state)?;
-    let client = state.db.pool.get().await.map_err(|e| {
-        tracing::error!("DB error: {:?}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
     // NOTE: orders.referrer_id column does not exist in current schema — using 0 as placeholder.
     // When the column is added, replace 0::int with the real subquery.
-    let row = client
-        .query_one(
-            "SELECT 
-            0::int as orders_count,
-            (SELECT COUNT(*) FROM referral_events WHERE referrer_id = $1)::int as referrals_count,
-            (SELECT MAX(created_at) FROM referral_events WHERE referrer_id = $1) as last_referral
-         ",
-            &[&telegram_id],
-        )
+    use sea_orm::{ConnectionTrait, DbBackend, Statement};
+    let row = state
+        .db
+        .orm
+        .query_one(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            "SELECT \
+            0::int as orders_count, \
+            (SELECT COUNT(*) FROM referral_events WHERE referrer_id = $1)::int as referrals_count, \
+            (SELECT MAX(created_at) FROM referral_events WHERE referrer_id = $1) as last_referral",
+            [telegram_id.into()],
+        ))
         .await
         .map_err(|e| {
             tracing::error!("manager stats: {e}");
             StatusCode::INTERNAL_SERVER_ERROR
+        })?
+        .ok_or_else(|| {
+            tracing::error!("manager stats: no row");
+            StatusCode::INTERNAL_SERVER_ERROR
         })?;
     Ok(Json(json!({
         "telegram_id": telegram_id,
-        "orders_count": row.try_get::<_, i32>("orders_count").unwrap_or(0),
-        "referrals_count": row.try_get::<_, i32>("referrals_count").unwrap_or(0),
-        "last_referral": row.try_get::<_, Option<chrono::DateTime<chrono::Utc>>>("last_referral").ok().flatten().map(|d| d.to_rfc3339()),
+        "orders_count": row.try_get::<i32>("", "orders_count").unwrap_or(0),
+        "referrals_count": row.try_get::<i32>("", "referrals_count").unwrap_or(0),
+        "last_referral": row.try_get::<Option<chrono::DateTime<chrono::Utc>>>("", "last_referral").ok().flatten().map(|d| d.to_rfc3339()),
     })))
 }
 
@@ -292,14 +302,21 @@ async fn create_manager(
     validate_telegram_id_param(req.telegram_id)?;
     check_admin(&headers, &state)?;
     validate_manager_fields(&req.name, &req.username, &req.ref_code, req.commission_rate)?;
-    let client = state.db.pool.get().await.map_err(|e| {
-        tracing::error!("DB error: {:?}", e);
+    use sea_orm::{ConnectionTrait, DbBackend, Statement};
+    state.db.orm.execute(Statement::from_sql_and_values(
+        DbBackend::Postgres,
+        "INSERT INTO managers (telegram_id, name, username, ref_code, commission_rate) VALUES ($1, $2, $3, $4, $5)",
+        [
+            req.telegram_id.into(),
+            req.name.clone().into(),
+            req.username.clone().into(),
+            req.ref_code.clone().into(),
+            req.commission_rate.into(),
+        ],
+    )).await.map_err(|e| {
+        tracing::error!("create_manager: {e}");
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
-    client.execute(
-        "INSERT INTO managers (telegram_id, name, username, ref_code, commission_rate) VALUES ($1, $2, $3, $4, $5)",
-        &[&req.telegram_id, &req.name, &req.username, &req.ref_code, &req.commission_rate],
-    ).await.map_err(|e| { tracing::error!("create_manager: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?;
     Ok(Json(
         json!({ "success": true, "telegram_id": req.telegram_id }),
     ))
@@ -314,26 +331,26 @@ async fn update_manager(
     validate_telegram_id_param(telegram_id)?;
     check_admin(&headers, &state)?;
     validate_manager_fields(&req.name, &req.username, &req.ref_code, req.commission_rate)?;
-    let client = state.db.pool.get().await.map_err(|e| {
-        tracing::error!("DB error: {:?}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-    client
-        .execute(
-            "UPDATE managers SET
-            name = COALESCE($2, name),
-            username = COALESCE($3, username),
-            ref_code = COALESCE($4, ref_code),
-            commission_rate = COALESCE($5, commission_rate)
+    use sea_orm::{ConnectionTrait, DbBackend, Statement};
+    state
+        .db
+        .orm
+        .execute(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            "UPDATE managers SET \
+            name = COALESCE($2, name), \
+            username = COALESCE($3, username), \
+            ref_code = COALESCE($4, ref_code), \
+            commission_rate = COALESCE($5, commission_rate) \
          WHERE telegram_id = $1",
-            &[
-                &telegram_id,
-                &req.name,
-                &req.username,
-                &req.ref_code,
-                &req.commission_rate,
+            [
+                telegram_id.into(),
+                req.name.clone().into(),
+                req.username.clone().into(),
+                req.ref_code.clone().into(),
+                req.commission_rate.into(),
             ],
-        )
+        ))
         .await
         .map_err(|e| {
             tracing::error!("update_manager: {e}");
@@ -349,18 +366,18 @@ async fn delete_manager(
 ) -> Result<Json<Value>, StatusCode> {
     validate_telegram_id_param(telegram_id)?;
     check_admin(&headers, &state)?;
-    let client = state.db.pool.get().await.map_err(|e| {
-        tracing::error!("DB error: {:?}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-    client
-        .execute(
+    use sea_orm::{ConnectionTrait, DbBackend, Statement};
+    state
+        .db
+        .orm
+        .execute(Statement::from_sql_and_values(
+            DbBackend::Postgres,
             "DELETE FROM managers WHERE telegram_id = $1",
-            &[&telegram_id],
-        )
+            [telegram_id.into()],
+        ))
         .await
         .map_err(|e| {
-            tracing::error!("DB error: {:?}", e);
+            tracing::error!("delete_manager: {e}");
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
     Ok(Json(json!({ "success": true })))

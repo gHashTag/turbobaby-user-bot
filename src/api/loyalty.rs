@@ -30,29 +30,28 @@ pub fn routes() -> Router<AppState> {
 }
 
 async fn get_loyalty_tiers(State(state): State<AppState>) -> Result<Json<Value>, StatusCode> {
-    let client = state.db.pool.get().await.map_err(|e| {
-        tracing::error!("DB error: {:?}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-    let rows = client.query(
+    // Cycle #92: SeaORM via Statement. No `loyalty_tier` entity — single
+    // call site, read-only, full-row shape inlined into JSON.
+    use sea_orm::{ConnectionTrait, DbBackend, Statement};
+    let rows = state.db.orm.query_all(Statement::from_string(
+        DbBackend::Postgres,
         "SELECT tier, name, min_points, discount_percent, points_multiplier::float8, perks, icon, color \
-         FROM loyalty_tiers ORDER BY min_points ASC LIMIT 500",
-        &[],
-    ).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
+         FROM loyalty_tiers ORDER BY min_points ASC LIMIT 500".to_string(),
+    )).await.map_err(|e| { tracing::error!("loyalty_tiers: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?;
     let tiers: Vec<Value> = rows
         .iter()
         .map(|r| {
-            let pm = r.try_get::<_, f64>("points_multiplier").unwrap_or(0.0);
+            let pm = r.try_get::<f64>("", "points_multiplier").unwrap_or(0.0);
             let points_multiplier = if pm.is_finite() { pm.max(0.0) } else { 0.0 };
             json!({
-                "tier":             r.try_get::<_, String>("tier").unwrap_or_default(),
-                "name":             r.try_get::<_, String>("name").unwrap_or_default(),
-                "min_points":       r.try_get::<_, i32>("min_points").unwrap_or(0),
-                "discount_percent": r.try_get::<_, i32>("discount_percent").unwrap_or(0),
+                "tier":             r.try_get::<String>("", "tier").unwrap_or_default(),
+                "name":             r.try_get::<String>("", "name").unwrap_or_default(),
+                "min_points":       r.try_get::<i32>("", "min_points").unwrap_or(0),
+                "discount_percent": r.try_get::<i32>("", "discount_percent").unwrap_or(0),
                 "points_multiplier": points_multiplier,
-                "perks":            r.try_get::<_, Vec<String>>("perks").unwrap_or_default(),
-                "icon":             r.try_get::<_, String>("icon").unwrap_or_default(),
-                "color":            r.try_get::<_, String>("color").unwrap_or_default(),
+                "perks":            r.try_get::<Vec<String>>("", "perks").unwrap_or_default(),
+                "icon":             r.try_get::<String>("", "icon").unwrap_or_default(),
+                "color":            r.try_get::<String>("", "color").unwrap_or_default(),
             })
         })
         .collect();
@@ -314,21 +313,19 @@ async fn get_leaderboard(State(state): State<AppState>) -> Result<Json<Value>, S
 }
 
 async fn get_loyalty_config(State(state): State<AppState>) -> Result<Json<Value>, StatusCode> {
-    let client = state.db.pool.get().await.map_err(|e| {
-        tracing::error!("DB error: {:?}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-    let row = client
-        .query_opt("SELECT config FROM loyalty_config WHERE id = 1", &[])
+    // Cycle #92: SeaORM via the existing `loyalty_config` entity
+    // (cycle #82). `find_by_id(1)` for the singleton row.
+    use crate::db::entities::loyalty_config::Entity as LoyaltyConfigEntity;
+    use sea_orm::EntityTrait;
+    let model = LoyaltyConfigEntity::find_by_id(1)
+        .one(&state.db.orm)
         .await
         .map_err(|e| {
-            tracing::error!("DB error: {:?}", e);
+            tracing::error!("get_loyalty_config: {e}");
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
-    match row {
-        Some(r) => Ok(Json(
-            json!({ "config": r.try_get::<_, Value>("config").unwrap_or(Value::Null) }),
-        )),
+    match model {
+        Some(m) => Ok(Json(json!({ "config": m.config }))),
         None => Ok(Json(json!({ "config": null }))),
     }
 }
@@ -359,14 +356,29 @@ async fn update_loyalty_config(
 ) -> Result<Json<Value>, StatusCode> {
     check_admin(&headers, &state)?;
     validate_loyalty_config_body(&body)?;
-    let client = state.db.pool.get().await.map_err(|e| {
-        tracing::error!("DB error: {:?}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-    client.execute(
-        "INSERT INTO loyalty_config (id, config) VALUES (1, $1) ON CONFLICT (id) DO UPDATE SET config = $1",
-        &[&body],
-    ).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
+    // Cycle #92: SeaORM upsert via the `loyalty_config` entity. Pattern
+    // #8 (`OnConflict::column.update_columns`).
+    use crate::db::entities::loyalty_config::{
+        ActiveModel as LcAm, Column as LcCol, Entity as LcEntity,
+    };
+    use sea_orm::sea_query::OnConflict;
+    use sea_orm::{ActiveValue::Set, EntityTrait};
+    let am = LcAm {
+        id: Set(1),
+        config: Set(body),
+    };
+    LcEntity::insert(am)
+        .on_conflict(
+            OnConflict::column(LcCol::Id)
+                .update_column(LcCol::Config)
+                .to_owned(),
+        )
+        .exec(&state.db.orm)
+        .await
+        .map_err(|e| {
+            tracing::error!("update_loyalty_config: {e}");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
     Ok(Json(json!({ "success": true })))
 }
 
