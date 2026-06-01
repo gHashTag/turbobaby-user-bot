@@ -424,27 +424,23 @@ async fn create_order(
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
         let mut catalog: PriceCatalog<'_> = PriceCatalog::default();
-        // Strains — full SELECT to pick up all marketing flags (cycle #56).
-        let strains: Vec<Strain> =
-            if !strain_ids.is_empty() {
-                let rows = lookup_client.query(
-                "SELECT id, name, category, thc_percent::float8, cbd_percent::float8, effect, \
-                    flavor_profile, description, price_per_gram::float8, available_grams::float8, \
-                    image_url, video_url, is_available, is_strain_of_day, \
-                    strain_of_day_discount::float8, name_en, description_en, effect_en, \
-                    flavor_profile_en, strain_type_en, discount_percent::float8, \
-                    sale_price::float8, sale_active, sale_until, is_best_seller, \
-                    is_new_arrival, new_until, display_order \
-                 FROM strains WHERE id = ANY($1)",
-                &[&strain_ids],
-            ).await.map_err(|e| {
-                error!("price-auth strain lookup: {}", e);
-                StatusCode::INTERNAL_SERVER_ERROR
-            })?;
-                rows.iter().map(Strain::from_row).collect()
-            } else {
-                Vec::new()
-            };
+        // Cycle #80: strain lookup migrated to SeaORM. Accessory/tea/set
+        // tables don't have entities yet (separate cycle), so they stay
+        // on `lookup_client`.
+        let strains: Vec<Strain> = if !strain_ids.is_empty() {
+            use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
+            let models = crate::db::entities::strain::Entity::find()
+                .filter(crate::db::entities::strain::Column::Id.is_in(strain_ids.clone()))
+                .all(&state.db.orm)
+                .await
+                .map_err(|e| {
+                    error!("price-auth strain lookup (SeaORM): {}", e);
+                    StatusCode::INTERNAL_SERVER_ERROR
+                })?;
+            models.into_iter().map(Strain::from).collect()
+        } else {
+            Vec::new()
+        };
         for s in &strains {
             catalog.strains.insert(s.id.as_str(), s);
         }

@@ -105,8 +105,8 @@ Notable wins:
 | Cycle | File | Expected lines moved | Estimated effort | Status |
 |-------|------|----------------------|------------------|--------|
 | #79 ✅ | `src/db/mod.rs` (Database user methods) | 60 | small — validated pattern | **done** |
-| #80 (next) | `src/db/strains.rs` (read-side first) | ~120 | small/medium | |
-| #81 | `src/db/strains.rs` (write-side + marketing flags) | ~130 | medium | |
+| #80 ✅ | `db/strains.rs` reads (Strain::from_row → From<Model>) + 4 callsites | ~150 | small/medium | **done** |
+| #81 (next) | `api/strains.rs` write-side (PUT/POST/DELETE) + marketing flags | ~130 | medium | |
 | #82 | `src/db/loyalty.rs` | 182 | medium | |
 | #83 | `src/db/referrals.rs` (split into 2 cycles if needed) | 417 | medium/large | |
 | #84-#86 | `src/db/orders.rs` (split into 3-4 cycles by feature) | 1271 | large | |
@@ -122,6 +122,27 @@ The 6 user-related methods on `Database` migrated cleanly:
 * **Updates (no-row tolerant)**: `Entity::update_many().col_expr(col, Expr::value(v)).filter(pk.eq(id)).exec(&self.orm)`. Use `update_many` instead of `update` to silently no-op when the row doesn't exist — matches the raw-SQL `UPDATE ... WHERE id = $1` semantics.
 
 The 60-line migration touched zero callsites — all consumers go through `Database::method(...)` so the implementation swap is invisible.
+
+### Cycle #80 additions
+
+Two more shapes validated:
+
+* **`From<Model> for WireType`**: when the wire JSON shape diverges from the
+  entity (RFC3339 strings vs `DateTimeWithTimeZone`, hidden columns,
+  `f64` finite-clamps), put the conversion in `impl From<Model> for X`.
+  Cleaner than threading `Model` through callers, and centralises the
+  wire-shape drift in one place. Migration changes `from_row(&Row)` →
+  `From::from(Model)`.
+* **Custom ORDER BY**: when the legacy SQL had a `CASE WHEN` priority
+  expression, use `sea_orm::sea_query::Expr::cust("...")` and pass it to
+  `order_by`. Not as clean as native enum mapping but lets the migration
+  proceed without redesigning the sort algorithm.
+* **`WHERE id = ANY($1)` arrays**: `Column::Id.is_in(ids)`.
+
+Also obsoleted a defensive comment about SQLSTATE 0A000 cached-plan
+issues. SeaORM/sqlx don't share `tokio_postgres`'s prepared-statement
+cache shape and aren't subject to that ALTER TYPE bug, so the
+per-call statement-marker workaround disappeared cleanly.
 
 ## Why this is worth doing
 

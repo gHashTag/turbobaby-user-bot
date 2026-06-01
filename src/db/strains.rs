@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use tokio_postgres::Row;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Strain {
@@ -89,100 +88,8 @@ mod tests {
     }
 }
 
-impl Strain {
-    pub fn from_row(row: &Row) -> Self {
-        let id: String = row.try_get("id").unwrap_or_default();
-        let name: String = row.try_get("name").unwrap_or_default();
-        let video_url: Option<String> = row.try_get("video_url").ok();
-        Self {
-            id,
-            name,
-            category: row.try_get("category").ok(),
-            thc_percent: row
-                .try_get::<_, f64>("thc_percent")
-                .ok()
-                .filter(|v| v.is_finite()),
-            cbd_percent: row
-                .try_get::<_, f64>("cbd_percent")
-                .ok()
-                .filter(|v| v.is_finite()),
-            effect: row.try_get("effect").ok(),
-            flavor_profile: row.try_get("flavor_profile").ok(),
-            description: row.try_get("description").ok(),
-            price_per_gram: {
-                let v = row.try_get::<_, f64>("price_per_gram").unwrap_or(0.0);
-                if v.is_finite() {
-                    v.max(0.0)
-                } else {
-                    0.0
-                }
-            },
-            available_grams: row
-                .try_get::<_, f64>("available_grams")
-                .ok()
-                .filter(|v| v.is_finite()),
-            image_url: row.try_get("image_url").ok(),
-            video_url,
-            is_available: row.try_get("is_available").unwrap_or(false),
-            is_strain_of_day: row.try_get("is_strain_of_day").unwrap_or(false),
-            strain_of_day_discount: {
-                let v = row
-                    .try_get::<_, f64>("strain_of_day_discount")
-                    .unwrap_or(0.0);
-                if v.is_finite() {
-                    v.max(0.0)
-                } else {
-                    0.0
-                }
-            },
-            // Bilingual EN fields (migration 016, nullable)
-            name_en: row.try_get::<_, Option<String>>("name_en").ok().flatten(),
-            description_en: row
-                .try_get::<_, Option<String>>("description_en")
-                .ok()
-                .flatten(),
-            effect_en: row.try_get::<_, Option<String>>("effect_en").ok().flatten(),
-            flavor_profile_en: row
-                .try_get::<_, Option<String>>("flavor_profile_en")
-                .ok()
-                .flatten(),
-            strain_type_en: row
-                .try_get::<_, Option<String>>("strain_type_en")
-                .ok()
-                .flatten(),
-            // Marketing flags (migration 028, TZ #2). All optional in legacy
-            // SELECTs — try_get falls back to default if the column wasn't in
-            // the projection.
-            discount_percent: {
-                let v = row.try_get::<_, f64>("discount_percent").unwrap_or(0.0);
-                if v.is_finite() {
-                    v.max(0.0)
-                } else {
-                    0.0
-                }
-            },
-            sale_price: row
-                .try_get::<_, Option<f64>>("sale_price")
-                .ok()
-                .flatten()
-                .filter(|v| v.is_finite()),
-            sale_active: row.try_get("sale_active").unwrap_or(false),
-            sale_until: row
-                .try_get::<_, Option<chrono::DateTime<chrono::Utc>>>("sale_until")
-                .ok()
-                .flatten()
-                .map(|t| t.to_rfc3339()),
-            is_best_seller: row.try_get("is_best_seller").unwrap_or(false),
-            is_new_arrival: row.try_get("is_new_arrival").unwrap_or(false),
-            new_until: row
-                .try_get::<_, Option<chrono::DateTime<chrono::Utc>>>("new_until")
-                .ok()
-                .flatten()
-                .map(|t| t.to_rfc3339()),
-            display_order: row.try_get("display_order").unwrap_or(0),
-        }
-    }
-}
+// Cycle #80: `Strain::from_row` removed — all SELECTs now go through
+// SeaORM and use `Strain::from(Model)`. See the From-impl below.
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StrainOfDay {
@@ -195,58 +102,76 @@ pub struct StrainOfDay {
     pub image_url: Option<String>,
 }
 
-impl StrainOfDay {
-    pub fn from_row(row: &Row) -> Self {
+// Cycle #80: `StrainOfDay::from_row` removed alongside `Strain::from_row`.
+// Conversion now via `From<Model>` below.
+
+// Cycle #80: SeaORM `Model` → wire-shape `Strain` conversion. Wire shape
+// has two cosmetic differences from the entity:
+//   * `sale_until` / `new_until` are RFC3339 strings (clients parse them),
+//     entity has `DateTimeWithTimeZone`.
+//   * No `created_at` / `strain_of_day_set_at` on the wire (admin-only).
+//
+// f64 columns get the same `is_finite().max(0.0)` clamp `from_row` did —
+// guards against the rare NaN/Inf that can sneak in from manual SQL fixes.
+impl From<crate::db::entities::strain::Model> for Strain {
+    fn from(m: crate::db::entities::strain::Model) -> Self {
+        let clamp = |v: f64| -> f64 {
+            if v.is_finite() {
+                v.max(0.0)
+            } else {
+                0.0
+            }
+        };
         Self {
-            id: row.try_get("id").unwrap_or_default(),
-            name: row.try_get("name").unwrap_or_default(),
-            category: row.try_get("category").ok(),
-            thc_percent: row
-                .try_get::<_, f64>("thc_percent")
-                .ok()
-                .filter(|v| v.is_finite()),
-            price_per_gram: {
-                let v = row.try_get::<_, f64>("price_per_gram").unwrap_or(0.0);
-                if v.is_finite() {
-                    v.max(0.0)
-                } else {
-                    0.0
-                }
-            },
-            strain_of_day_discount: {
-                let v = row
-                    .try_get::<_, f64>("strain_of_day_discount")
-                    .unwrap_or(0.0);
-                if v.is_finite() {
-                    v.max(0.0)
-                } else {
-                    0.0
-                }
-            },
-            image_url: row.try_get("image_url").ok(),
+            id: m.id,
+            name: m.name,
+            category: m.category,
+            thc_percent: m.thc_percent.filter(|v| v.is_finite()),
+            cbd_percent: m.cbd_percent.filter(|v| v.is_finite()),
+            effect: m.effect,
+            flavor_profile: m.flavor_profile,
+            description: m.description,
+            price_per_gram: clamp(m.price_per_gram),
+            available_grams: m.available_grams.filter(|v| v.is_finite()),
+            image_url: m.image_url,
+            video_url: m.video_url,
+            is_available: m.is_available,
+            is_strain_of_day: m.is_strain_of_day,
+            strain_of_day_discount: clamp(m.strain_of_day_discount),
+            name_en: m.name_en,
+            description_en: m.description_en,
+            effect_en: m.effect_en,
+            flavor_profile_en: m.flavor_profile_en,
+            strain_type_en: m.strain_type_en,
+            discount_percent: clamp(m.discount_percent),
+            sale_price: m.sale_price.filter(|v| v.is_finite()),
+            sale_active: m.sale_active,
+            sale_until: m.sale_until.map(|t| t.to_rfc3339()),
+            is_best_seller: m.is_best_seller,
+            is_new_arrival: m.is_new_arrival,
+            new_until: m.new_until.map(|t| t.to_rfc3339()),
+            display_order: m.display_order,
         }
     }
 }
 
-// Wave 5: SeaORM Entity API path. Старый tokio-postgres код выше — будем удалять в Wave 6+.
-
-/// Returns all strains via SeaORM Entity API.
-#[allow(dead_code)]
-pub async fn get_all_strains_seaorm(
-    orm: &sea_orm::DatabaseConnection,
-) -> Result<Vec<crate::db::entities::strain::Model>, sea_orm::DbErr> {
-    use sea_orm::EntityTrait;
-    crate::db::entities::strain::Entity::find().all(orm).await
-}
-
-/// Returns a single strain by its UUID string primary key via SeaORM.
-#[allow(dead_code)]
-pub async fn get_strain_by_id_seaorm(
-    orm: &sea_orm::DatabaseConnection,
-    id: &str,
-) -> Result<Option<crate::db::entities::strain::Model>, sea_orm::DbErr> {
-    use sea_orm::EntityTrait;
-    crate::db::entities::strain::Entity::find_by_id(id.to_string())
-        .one(orm)
-        .await
+impl From<crate::db::entities::strain::Model> for StrainOfDay {
+    fn from(m: crate::db::entities::strain::Model) -> Self {
+        let clamp = |v: f64| -> f64 {
+            if v.is_finite() {
+                v.max(0.0)
+            } else {
+                0.0
+            }
+        };
+        Self {
+            id: m.id,
+            name: m.name,
+            category: m.category,
+            thc_percent: m.thc_percent.filter(|v| v.is_finite()),
+            price_per_gram: clamp(m.price_per_gram),
+            strain_of_day_discount: clamp(m.strain_of_day_discount),
+            image_url: m.image_url,
+        }
+    }
 }

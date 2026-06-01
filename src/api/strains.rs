@@ -71,10 +71,12 @@ async fn get_strains(
     axum::extract::Query(q): axum::extract::Query<std::collections::HashMap<String, String>>,
     headers: HeaderMap,
 ) -> Result<axum::response::Response, StatusCode> {
-    // Use a fresh prepare() with a unique statement marker each call to
-    // sidestep tokio-postgres' client-side prepared-statement cache, which
-    // would otherwise keep returning SQLSTATE 0A000 "cached plan must not
-    // change result type" after migration 012's ALTER TABLE ... TYPE.
+    // Cycle #80: migrated from raw tokio_postgres to SeaORM. The previous
+    // version had a defensive comment about a fresh prepare() per call to
+    // dodge the SQLSTATE 0A000 stale-plan issue from migration 012's
+    // ALTER TYPE; sqlx (which SeaORM uses) handles statement caching
+    // differently and is not subject to that bug, so the workaround is
+    // gone.
     let include_hidden = q
         .get("include_hidden")
         .map(|v| v == "1" || v == "true")
@@ -82,51 +84,44 @@ async fn get_strains(
     if include_hidden {
         crate::api::auth::check_admin(&headers, &state)?;
     }
-    // TZ #2: SELECT marketing flags + ORDER BY priority CASE.
+
+    // TZ #2 priority ordering:
     //   group 1: Strain of the Day
     //   group 2: New arrivals still within `new_until`
     //   group 3: Best sellers
     //   group 4: Active sales still within `sale_until`
     //   group 5: everything else
     // Within a group: display_order ASC, then name ASC.
-    let priority_clause = "CASE \
-            WHEN is_strain_of_day = TRUE THEN 1 \
-            WHEN is_new_arrival = TRUE AND (new_until IS NULL OR new_until > NOW()) THEN 2 \
-            WHEN is_best_seller = TRUE THEN 3 \
-            WHEN sale_active = TRUE AND (sale_until IS NULL OR sale_until > NOW()) THEN 4 \
-            ELSE 5 \
-         END";
-    let select_cols = "id, name, category, thc_percent::float8, cbd_percent::float8, effect, \
-            flavor_profile, description, price_per_gram::float8, available_grams::float8, \
-            image_url, video_url, is_available, is_strain_of_day, \
-            strain_of_day_discount::float8, name_en, description_en, effect_en, \
-            flavor_profile_en, strain_type_en, discount_percent::float8, \
-            sale_price::float8, sale_active, sale_until, is_best_seller, \
-            is_new_arrival, new_until, display_order";
-    let sql_owned = if include_hidden {
-        format!(
-            "SELECT {} FROM strains ORDER BY {} ASC, display_order ASC, name ASC LIMIT 5000",
-            select_cols, priority_clause
-        )
-    } else {
-        format!(
-            "SELECT {} FROM strains WHERE is_available = TRUE \
-             ORDER BY {} ASC, display_order ASC, name ASC LIMIT 2000",
-            select_cols, priority_clause
-        )
-    };
-    let sql = sql_owned.as_str();
-    let client = state.db.pool.get().await.map_err(|e| {
-        tracing::error!("get_strains pool error: {:?}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-    let rows = client.query(sql, &[]).await.map_err(|e| {
-        tracing::error!("get_strains query error: {:?}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-    tracing::debug!("get_strains: returned {} rows", rows.len());
+    use sea_orm::{ColumnTrait, EntityTrait, Order, QueryFilter, QueryOrder, QuerySelect};
+    let priority = sea_orm::sea_query::Expr::cust(
+        "CASE \
+         WHEN is_strain_of_day = TRUE THEN 1 \
+         WHEN is_new_arrival = TRUE AND (new_until IS NULL OR new_until > NOW()) THEN 2 \
+         WHEN is_best_seller = TRUE THEN 3 \
+         WHEN sale_active = TRUE AND (sale_until IS NULL OR sale_until > NOW()) THEN 4 \
+         ELSE 5 \
+         END",
+    );
+    use crate::db::entities::strain::{Column as StrainCol, Entity as StrainEntity};
+    let mut query = StrainEntity::find();
+    if !include_hidden {
+        query = query.filter(StrainCol::IsAvailable.eq(true));
+    }
+    let limit = if include_hidden { 5000 } else { 2000 };
+    let models = query
+        .order_by(priority, Order::Asc)
+        .order_by(StrainCol::DisplayOrder, Order::Asc)
+        .order_by(StrainCol::Name, Order::Asc)
+        .limit(limit)
+        .all(&state.db.orm)
+        .await
+        .map_err(|e| {
+            tracing::error!("get_strains SeaORM error: {:?}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+    tracing::debug!("get_strains: returned {} rows", models.len());
 
-    let strains: Vec<Strain> = rows.iter().map(Strain::from_row).collect();
+    let strains: Vec<Strain> = models.into_iter().map(Strain::from).collect();
     let response_data = json!({ "strains": strains });
     let data_json = response_data.to_string();
 
@@ -167,16 +162,22 @@ async fn get_strain(
     if id.len() > 200 {
         return Err(StatusCode::BAD_REQUEST);
     }
-    let client = state.db.pool.get().await.map_err(|e| {
-        tracing::error!("DB error: {:?}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-    let row = client.query_opt(
-        "SELECT id, name, category, thc_percent::float8, cbd_percent::float8, effect, flavor_profile, description, price_per_gram::float8, available_grams::float8, image_url, video_url, is_available, is_strain_of_day, strain_of_day_discount::float8, name_en, description_en, effect_en, flavor_profile_en, strain_type_en FROM strains WHERE id = $1 AND is_available = TRUE",
-        &[&id],
-    ).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
-    match row {
-        Some(r) => Ok(Json(json!({ "strain": Strain::from_row(&r) }))),
+    // Cycle #80: SeaORM migration. The raw SQL `WHERE id = $1 AND
+    // is_available = TRUE` becomes `find_by_id + filter`. find_by_id
+    // returns None if either the row is missing or it's hidden — either
+    // way the API contract is 404, so we don't need to differentiate.
+    use crate::db::entities::strain::{Column as StrainCol, Entity as StrainEntity};
+    use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
+    let model = StrainEntity::find_by_id(id.clone())
+        .filter(StrainCol::IsAvailable.eq(true))
+        .one(&state.db.orm)
+        .await
+        .map_err(|e| {
+            tracing::error!("get_strain SeaORM error: {:?}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+    match model {
+        Some(m) => Ok(Json(json!({ "strain": Strain::from(m) }))),
         None => Err(StatusCode::NOT_FOUND),
     }
 }

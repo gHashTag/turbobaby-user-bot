@@ -329,13 +329,20 @@ impl Database {
         Ok(row.map(|m| m.is_blocked).unwrap_or(false))
     }
 
+    /// Cycle #80: SeaORM migration. Same shape as before — top 5 strains
+    /// flagged as `is_strain_of_day`, freshest first by
+    /// `strain_of_day_set_at`.
     pub async fn get_strains_of_day(&self) -> Result<Vec<StrainOfDay>> {
-        let client = self.pool.get().await?;
-        let rows = client.query(
-            "SELECT s.id, s.name, s.category, s.thc_percent::float8, s.price_per_gram::float8, s.strain_of_day_discount::float8, s.image_url FROM strains s WHERE s.is_strain_of_day = true AND s.is_available = true ORDER BY s.strain_of_day_set_at DESC LIMIT 5",
-            &[],
-        ).await?;
-        Ok(rows.iter().map(StrainOfDay::from_row).collect())
+        use sea_orm::{ColumnTrait, EntityTrait, Order, QueryFilter, QueryOrder, QuerySelect};
+        let models = entities::strain::Entity::find()
+            .filter(entities::strain::Column::IsStrainOfDay.eq(true))
+            .filter(entities::strain::Column::IsAvailable.eq(true))
+            .order_by(entities::strain::Column::StrainOfDaySetAt, Order::Desc)
+            .limit(5)
+            .all(&self.orm)
+            .await
+            .context("get_strains_of_day SeaORM")?;
+        Ok(models.into_iter().map(StrainOfDay::from).collect())
     }
 
     pub fn raw(&self) -> &Pool {
