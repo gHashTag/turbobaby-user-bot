@@ -38,23 +38,33 @@ async fn get_loyalty_tiers(State(state): State<AppState>) -> Result<Json<Value>,
         "SELECT tier, name, min_points, discount_percent, points_multiplier::float8, perks, icon, color \
          FROM loyalty_tiers ORDER BY min_points ASC LIMIT 500".to_string(),
     )).await.map_err(|e| { tracing::error!("loyalty_tiers: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?;
+    // Cycle #98: propagate `try_get` errors on the *financial* fields
+    // (min_points / discount_percent / points_multiplier). Per
+    // TRY_GET_AUDIT, defaulting these to 0 on schema drift would wipe
+    // all tier-based discounts — UI would show "every user gets 0%"
+    // instead of failing loud. String/array fields keep default-on-
+    // missing since cosmetic columns are NULL-able by intent.
     let tiers: Vec<Value> = rows
         .iter()
         .map(|r| {
-            let pm = r.try_get::<f64>("", "points_multiplier").unwrap_or(0.0);
+            let pm = r.try_get::<f64>("", "points_multiplier")?;
             let points_multiplier = if pm.is_finite() { pm.max(0.0) } else { 0.0 };
-            json!({
+            Ok::<_, sea_orm::DbErr>(json!({
                 "tier":             r.try_get::<String>("", "tier").unwrap_or_default(),
                 "name":             r.try_get::<String>("", "name").unwrap_or_default(),
-                "min_points":       r.try_get::<i32>("", "min_points").unwrap_or(0),
-                "discount_percent": r.try_get::<i32>("", "discount_percent").unwrap_or(0),
+                "min_points":       r.try_get::<i32>("", "min_points")?,
+                "discount_percent": r.try_get::<i32>("", "discount_percent")?,
                 "points_multiplier": points_multiplier,
                 "perks":            r.try_get::<Vec<String>>("", "perks").unwrap_or_default(),
                 "icon":             r.try_get::<String>("", "icon").unwrap_or_default(),
                 "color":            r.try_get::<String>("", "color").unwrap_or_default(),
-            })
+            }))
         })
-        .collect();
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| {
+            tracing::error!("loyalty_tiers parse: {e}");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
     Ok(Json(json!({ "tiers": tiers })))
 }
 

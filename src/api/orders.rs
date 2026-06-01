@@ -459,15 +459,24 @@ async fn create_order(
                     error!("price-auth accessory lookup: {}", e);
                     StatusCode::INTERNAL_SERVER_ERROR
                 })?;
+            // Cycle #98: propagate `try_get` errors instead of
+            // defaulting to 0.0. Per TRY_GET_AUDIT 🔴 — schema drift
+            // (column rename, type change) would silently mark all
+            // accessories as priced 0, letting fabricated orders pass
+            // server-side authority. Propagating as 500 fails closed.
             rows.iter()
                 .map(|r| {
-                    (
-                        r.try_get::<String>("", "id").unwrap_or_default(),
-                        r.try_get::<f64>("", "price").unwrap_or(0.0),
-                        r.try_get::<bool>("", "is_available").unwrap_or(false),
-                    )
+                    Ok::<_, sea_orm::DbErr>((
+                        r.try_get::<String>("", "id")?,
+                        r.try_get::<f64>("", "price")?,
+                        r.try_get::<bool>("", "is_available")?,
+                    ))
                 })
-                .collect()
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|e| {
+                    error!("price-auth accessory parse: {}", e);
+                    StatusCode::INTERNAL_SERVER_ERROR
+                })?
         } else {
             Vec::new()
         };
@@ -486,15 +495,21 @@ async fn create_order(
                     error!("price-auth tea lookup: {}", e);
                     StatusCode::INTERNAL_SERVER_ERROR
                 })?;
+            // Cycle #98: same propagation as accessories above — schema
+            // drift fails closed instead of letting prices default to 0.
             rows.iter()
                 .map(|r| {
-                    (
-                        r.try_get::<String>("", "id").unwrap_or_default(),
-                        r.try_get::<f64>("", "price").unwrap_or(0.0),
-                        r.try_get::<bool>("", "is_available").unwrap_or(false),
-                    )
+                    Ok::<_, sea_orm::DbErr>((
+                        r.try_get::<String>("", "id")?,
+                        r.try_get::<f64>("", "price")?,
+                        r.try_get::<bool>("", "is_available")?,
+                    ))
                 })
-                .collect()
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|e| {
+                    error!("price-auth tea parse: {}", e);
+                    StatusCode::INTERNAL_SERVER_ERROR
+                })?
         } else {
             Vec::new()
         };
@@ -521,16 +536,21 @@ async fn create_order(
                 error!("price-auth sets lookup: {}", e);
                 StatusCode::INTERNAL_SERVER_ERROR
             })?;
+            // Cycle #98: propagate parse errors on tp/dp too.
             rows.iter()
                 .map(|r| {
-                    (
-                        r.try_get::<String>("", "id").unwrap_or_default(),
-                        r.try_get::<f64>("", "tp").unwrap_or(0.0),
-                        r.try_get::<f64>("", "dp").unwrap_or(0.0),
-                        r.try_get::<bool>("", "is_available").unwrap_or(false),
-                    )
+                    Ok::<_, sea_orm::DbErr>((
+                        r.try_get::<String>("", "id")?,
+                        r.try_get::<f64>("", "tp")?,
+                        r.try_get::<f64>("", "dp")?,
+                        r.try_get::<bool>("", "is_available")?,
+                    ))
                 })
-                .collect()
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|e| {
+                    error!("price-auth sets parse: {}", e);
+                    StatusCode::INTERNAL_SERVER_ERROR
+                })?
         } else {
             Vec::new()
         };

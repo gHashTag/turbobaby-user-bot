@@ -102,7 +102,7 @@ Admin tooling + referral lookups. Low-volume, admin-visible.
 
 ## Priority queue for follow-up cycles
 
-* **Cycle #98 (proposed):** Fix the 3 🔴 callsites in `api/orders.rs` price-auth — propagate `?` instead of `unwrap_or(0.0)`. Same fix for `loyalty_tiers.points_multiplier`. ~50 lines.
+* **Cycle #98 ✅ done:** Fixed the 4 🔴 callsites. `api/orders.rs` price-auth (acc/tea/sets) closures now `.map(|r| Result<(...), DbErr>).collect::<Result<Vec<_>, _>>()?` — schema drift on price columns 500s instead of letting fabricated orders pass server-side authority. `api/loyalty.rs::get_loyalty_tiers` propagates errors on `points_multiplier` / `min_points` / `discount_percent` (financial fields); strings/arrays stay default-on-missing (cosmetic).
 * **Cycle #99 (lower priority):** Audit the 🟡 callsites where default of `0` / `false` / `""` could be visually misleading in admin views. Add `tracing::warn!` when a NOT NULL read returns the default (proxies as "schema drift detected").
 * **Defer:** 🟢 callsites — that's expected NULL-able behaviour. No fix.
 
