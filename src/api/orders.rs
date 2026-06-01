@@ -532,6 +532,21 @@ async fn create_order(
                     missing_id = %id,
                     "create_order: order references missing catalog item"
                 );
+                // Cycle #59: persist for /engage admin panel. Best-effort —
+                // we don't fail the reject path if the audit insert blips.
+                if let Err(e) = crate::db::orders::record_fraud_event(
+                    &state.db.pool,
+                    req.telegram_id,
+                    crate::db::orders::FRAUD_CODE_UNKNOWN_ITEM,
+                    Some(cat),
+                    Some(&id),
+                    None,
+                    None,
+                )
+                .await
+                {
+                    tracing::warn!("fraud_event audit insert failed: {}", e);
+                }
                 return Err(StatusCode::UNPROCESSABLE_ENTITY);
             }
             FullSubtotalCheck::Unavailable { catalog: cat, id } => {
@@ -543,6 +558,19 @@ async fn create_order(
                     unavailable_id = %id,
                     "create_order: order references item marked unavailable"
                 );
+                if let Err(e) = crate::db::orders::record_fraud_event(
+                    &state.db.pool,
+                    req.telegram_id,
+                    crate::db::orders::FRAUD_CODE_UNAVAILABLE,
+                    Some(cat),
+                    Some(&id),
+                    None,
+                    None,
+                )
+                .await
+                {
+                    tracing::warn!("fraud_event audit insert failed: {}", e);
+                }
                 return Err(StatusCode::UNPROCESSABLE_ENTITY);
             }
             FullSubtotalCheck::Mismatch { claimed, expected } => {
@@ -553,6 +581,19 @@ async fn create_order(
                     items = req.items.len(),
                     "create_order: subtotal mismatch — possible client tampering"
                 );
+                if let Err(e) = crate::db::orders::record_fraud_event(
+                    &state.db.pool,
+                    req.telegram_id,
+                    crate::db::orders::FRAUD_CODE_SUBTOTAL_MISMATCH,
+                    None,
+                    None,
+                    Some(claimed),
+                    Some(expected),
+                )
+                .await
+                {
+                    tracing::warn!("fraud_event audit insert failed: {}", e);
+                }
                 return Err(StatusCode::UNPROCESSABLE_ENTITY);
             }
             FullSubtotalCheck::Malformed => {
@@ -561,6 +602,19 @@ async fn create_order(
                     items = req.items.len(),
                     "create_order: malformed line item — no *_id field set"
                 );
+                if let Err(e) = crate::db::orders::record_fraud_event(
+                    &state.db.pool,
+                    req.telegram_id,
+                    crate::db::orders::FRAUD_CODE_MALFORMED,
+                    None,
+                    None,
+                    None,
+                    None,
+                )
+                .await
+                {
+                    tracing::warn!("fraud_event audit insert failed: {}", e);
+                }
                 return Err(StatusCode::UNPROCESSABLE_ENTITY);
             }
         }

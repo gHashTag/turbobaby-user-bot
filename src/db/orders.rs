@@ -206,6 +206,113 @@ pub async fn cleanup_old_idempotency_keys(
     Ok(deleted)
 }
 
+// ─── Fraud-event audit log (cycle #59) ────────────────────────────────────
+//
+// Every 422 reject in `create_order` emits a structured `tracing::warn!`,
+// but those lines live in stdout — invisible to an admin who only opens
+// the Telegram bot. This append-only table mirrors the same data so the
+// `/engage` panel can show "Suspicious activity (24h)" without grep.
+//
+// Inserts are best-effort: a failure here MUST NOT block the reject path
+// the customer is already seeing. Worst case we lose a row, not a request.
+
+/// Stable codes for `order_fraud_events.code`. They mirror the JSON error
+/// codes the client UI may eventually parse for friendly messages.
+pub const FRAUD_CODE_SUBTOTAL_MISMATCH: &str = "subtotal_mismatch";
+pub const FRAUD_CODE_UNKNOWN_ITEM: &str = "unknown_item";
+pub const FRAUD_CODE_UNAVAILABLE: &str = "unavailable";
+pub const FRAUD_CODE_MALFORMED: &str = "malformed";
+
+/// Insert one row into `order_fraud_events`. Returns `Result<(), ...>` so
+/// the caller can log a warning, but the caller MUST NOT propagate — the
+/// 422 reject path is more important than the audit row landing.
+pub async fn record_fraud_event(
+    pool: &deadpool_postgres::Pool,
+    telegram_id: Option<i64>,
+    code: &str,
+    catalog: Option<&str>,
+    item_id: Option<&str>,
+    claimed_subtotal: Option<f64>,
+    expected_subtotal: Option<f64>,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let client = pool.get().await?;
+    client
+        .execute(
+            "INSERT INTO order_fraud_events \
+             (telegram_id, code, catalog, item_id, claimed_subtotal, expected_subtotal) \
+             VALUES ($1, $2, $3, $4, $5, $6)",
+            &[
+                &telegram_id,
+                &code,
+                &catalog,
+                &item_id,
+                &claimed_subtotal,
+                &expected_subtotal,
+            ],
+        )
+        .await?;
+    Ok(())
+}
+
+/// 24-hour aggregate for the `/engage` fraud panel. Keep this struct narrow:
+/// /engage's text rendering reads each field once.
+#[derive(Debug, Default, Clone)]
+pub struct FraudStats24h {
+    pub subtotal_mismatch: i64,
+    pub unknown_item: i64,
+    pub unavailable: i64,
+    pub malformed: i64,
+    /// telegram_id with the most events in the window. None if no events
+    /// had a telegram_id (anonymous-only). String to allow easy `format!`
+    /// without an extra cast.
+    pub top_offender: Option<String>,
+    pub top_offender_count: i64,
+}
+
+/// One round-trip aggregate over `order_fraud_events` for the last 24h.
+pub async fn fraud_stats_24h(
+    pool: &deadpool_postgres::Pool,
+) -> Result<FraudStats24h, Box<dyn std::error::Error + Send + Sync>> {
+    let client = pool.get().await?;
+    // Per-code counts. COUNT(*) FILTER (...) keeps the whole thing in one
+    // index scan over `idx_fraud_events_created_at`.
+    let row = client
+        .query_one(
+            "SELECT \
+                COUNT(*) FILTER (WHERE code = 'subtotal_mismatch')::bigint AS subtotal_mismatch, \
+                COUNT(*) FILTER (WHERE code = 'unknown_item')::bigint        AS unknown_item, \
+                COUNT(*) FILTER (WHERE code = 'unavailable')::bigint         AS unavailable, \
+                COUNT(*) FILTER (WHERE code = 'malformed')::bigint           AS malformed \
+             FROM order_fraud_events WHERE created_at > NOW() - INTERVAL '24 hours'",
+            &[],
+        )
+        .await?;
+    let mut s = FraudStats24h {
+        subtotal_mismatch: row.try_get("subtotal_mismatch").unwrap_or(0),
+        unknown_item: row.try_get("unknown_item").unwrap_or(0),
+        unavailable: row.try_get("unavailable").unwrap_or(0),
+        malformed: row.try_get("malformed").unwrap_or(0),
+        top_offender: None,
+        top_offender_count: 0,
+    };
+    // Top offender — separate cheap query because it's bounded LIMIT 1.
+    if let Ok(Some(top)) = client
+        .query_opt(
+            "SELECT telegram_id::text AS tid, COUNT(*)::bigint AS n \
+             FROM order_fraud_events \
+             WHERE created_at > NOW() - INTERVAL '24 hours' \
+               AND telegram_id IS NOT NULL \
+             GROUP BY telegram_id ORDER BY n DESC LIMIT 1",
+            &[],
+        )
+        .await
+    {
+        s.top_offender = top.try_get::<_, Option<String>>("tid").ok().flatten();
+        s.top_offender_count = top.try_get("n").unwrap_or(0);
+    }
+    Ok(s)
+}
+
 #[cfg(test)]
 mod tests {
     use super::{idempotency_sweep_sql, OrderItem};

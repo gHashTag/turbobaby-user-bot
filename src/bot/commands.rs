@@ -443,10 +443,52 @@ pub async fn handle_command(
         }
 
         Command::Engage => {
+            // Cycle #59: replaces the "not yet implemented" stub with a
+            // real fraud-detection panel over the last 24h. Currently
+            // surfaces only the audit table; future cycles can add order /
+            // revenue / DB-pool widgets next to it.
             if !config.admin_ids.contains(&user_id) {
                 return Ok(());
             }
-            bot.send_message(msg.chat.id, "📬 Engage stats: feature not yet implemented")
+            let text = match crate::db::orders::fraud_stats_24h(&db.pool).await {
+                Ok(s) => {
+                    let total = s.subtotal_mismatch + s.unknown_item + s.unavailable + s.malformed;
+                    let fraud_block = if total == 0 {
+                        String::from("\n<b>🛡 Fraud signals (24h)</b>\n✅ <i>none</i>")
+                    } else {
+                        let top = s
+                            .top_offender
+                            .as_deref()
+                            .map(|t| {
+                                format!(
+                                    "<code>{}</code> ({} events)",
+                                    html_escape(t),
+                                    s.top_offender_count
+                                )
+                            })
+                            .unwrap_or_else(|| "—".to_string());
+                        format!(
+                            "\n<b>🛡 Fraud signals (24h)</b>\n\
+                             🚨 Subtotal mismatch: <b>{}</b>\n\
+                             🚨 Unknown item: <b>{}</b>\n\
+                             ⚠️ Unavailable item: <b>{}</b>\n\
+                             ⚠️ Malformed payload: <b>{}</b>\n\
+                             👤 Top offender: {}",
+                            s.subtotal_mismatch, s.unknown_item, s.unavailable, s.malformed, top,
+                        )
+                    };
+                    format!(
+                        "📬 <b>Engage — last 24h</b>\n━━━━━━━━━━━━━━━━{}",
+                        fraud_block
+                    )
+                }
+                Err(e) => {
+                    tracing::error!("engage fraud_stats query failed: {}", e);
+                    "📬 Engage stats: <i>failed to query DB</i>".to_string()
+                }
+            };
+            bot.send_message(msg.chat.id, text)
+                .parse_mode(teloxide::types::ParseMode::Html)
                 .await?;
         }
 
