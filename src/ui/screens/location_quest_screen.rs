@@ -51,16 +51,19 @@ pub fn LocationQuestScreen() -> Element {
         // a visible "API недоступен" banner instead of a tear-jerking
         // "no location quests yet" empty state.
         let url = format!("{}/api/quest-places", api_base_url());
-        let result: Result<Vec<QuestPlace>, String> = async {
-            let text = crate::ui::api::http::fetch_text(&url)
+        // Cycle #74: route status through friendly_response_error.
+        let result: Result<Vec<QuestPlace>, Option<u16>> = async {
+            let (status, body) = crate::ui::api::http::fetch_text_full(&url)
                 .await
-                .map_err(|e| format!("Network: {e}"))?;
-            let val: serde_json::Value =
-                serde_json::from_str(&text).map_err(|e| format!("Parse: {e}"))?;
+                .map_err(|_| None)?;
+            if !(200..300).contains(&status) {
+                return Err(Some(status));
+            }
+            let val: serde_json::Value = serde_json::from_str(&body).map_err(|_| None)?;
             let arr = val
                 .get("quest_places")
                 .and_then(|v| v.as_array())
-                .ok_or_else(|| "Server returned no `quest_places` array".to_string())?;
+                .ok_or(None)?;
             Ok(arr
                 .iter()
                 .filter_map(|v| serde_json::from_value(v.clone()).ok())
@@ -72,8 +75,11 @@ pub fn LocationQuestScreen() -> Element {
                 places.set(items);
                 err_msg.set(String::new());
             }
-            Err(e) => {
-                err_msg.set(format!("Не удалось загрузить квесты: {e}"));
+            Err(status_opt) => {
+                err_msg.set(crate::trios::api_errors::friendly_response_error(
+                    crate::ui::lang::current_lang(),
+                    status_opt.unwrap_or(0),
+                ));
             }
         }
         loading.set(false);

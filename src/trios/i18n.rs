@@ -125,6 +125,14 @@ pub const T_CHECKOUT_ERR_422: Key = "checkout.err.422";
 pub const T_CHECKOUT_ERR_429: Key = "checkout.err.429";
 pub const T_CHECKOUT_ERR_5XX: Key = "checkout.err.5xx";
 
+// Generic API error messages (cycle #74). Used by
+// `trios::api_errors::friendly_response_error` for any non-checkout API
+// call. T_API_ERR_401 covers the "Telegram session expired" scenario;
+// T_API_ERR_UNKNOWN replaces the hardcoded RU `Ошибка сервера: HTTP {n}`
+// fallback so non-RU users don't see Cyrillic on a random 418.
+pub const T_API_ERR_401: Key = "api.err.401";
+pub const T_API_ERR_UNKNOWN: Key = "api.err.unknown";
+
 /// Get translation for a key and language
 pub fn t(lang: Lang, key: Key) -> Value {
     match lang {
@@ -244,6 +252,9 @@ fn get_ru_translation(key: Key) -> Value {
         T_CHECKOUT_ERR_422 => "Цены или товары изменились с момента добавления в корзину. Обновите меню и оформите заказ заново.",
         T_CHECKOUT_ERR_429 => "Слишком быстро. Подождите минуту и попробуйте снова.",
         T_CHECKOUT_ERR_5XX => "Сервер сейчас недоступен. Попробуйте через минуту.",
+        // Generic API error messages (cycle #74)
+        T_API_ERR_401 => "Войдите в Telegram WebApp заново.",
+        T_API_ERR_UNKNOWN => "Что-то пошло не так. Попробуйте позже.",
         _ => key,
     }
 }
@@ -353,6 +364,9 @@ fn get_en_translation(key: Key) -> Value {
         T_CHECKOUT_ERR_422 => "Prices or items changed since you added to cart. Refresh the menu and place the order again.",
         T_CHECKOUT_ERR_429 => "Too fast. Wait a minute and try again.",
         T_CHECKOUT_ERR_5XX => "Server is currently unavailable. Try again in a minute.",
+        // Generic API error messages (cycle #74)
+        T_API_ERR_401 => "Sign in to Telegram WebApp again.",
+        T_API_ERR_UNKNOWN => "Something went wrong. Please try again later.",
         _ => key,
     }
 }

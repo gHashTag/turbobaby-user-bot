@@ -1,5 +1,6 @@
 //! Trios ecosystem - business logic modules
 
+pub mod api_errors;
 pub mod checkout_errors;
 pub mod core;
 pub mod garden;

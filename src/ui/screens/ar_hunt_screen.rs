@@ -50,16 +50,21 @@ pub fn ARHuntScreen() -> Element {
         // Cycle #30: Result-propagated error path so a failed fetch shows
         // "API недоступен" instead of the misleading "No AR marks yet".
         let url = format!("{}/api/quest-places", api_base_url());
-        let result: Result<Vec<Place>, String> = async {
-            let text = crate::ui::api::http::fetch_text(&url)
+        // Cycle #74: route status through friendly_response_error so a
+        // 5xx/429 shows localised UX copy instead of "Network: HTTP 502…".
+        let result: Result<Vec<Place>, (Option<u16>, String)> = async {
+            let (status, body) = crate::ui::api::http::fetch_text_full(&url)
                 .await
-                .map_err(|e| format!("Network: {e}"))?;
+                .map_err(|e| (None, e))?;
+            if !(200..300).contains(&status) {
+                return Err((Some(status), body));
+            }
             let val: serde_json::Value =
-                serde_json::from_str(&text).map_err(|e| format!("Parse: {e}"))?;
+                serde_json::from_str(&body).map_err(|e| (None, format!("Parse: {e}")))?;
             let arr = val
                 .get("quest_places")
                 .and_then(|v| v.as_array())
-                .ok_or_else(|| "Server returned no `quest_places` array".to_string())?;
+                .ok_or_else(|| (None, "Server returned no `quest_places` array".to_string()))?;
             Ok(arr
                 .iter()
                 .filter_map(|v| serde_json::from_value(v.clone()).ok())
@@ -71,8 +76,17 @@ pub fn ARHuntScreen() -> Element {
                 places.set(items);
                 err_msg.set(String::new());
             }
-            Err(e) => {
-                err_msg.set(format!("Не удалось загрузить метки: {e}"));
+            Err((Some(status), _)) => {
+                err_msg.set(crate::trios::api_errors::friendly_response_error(
+                    crate::ui::lang::current_lang(),
+                    status,
+                ));
+            }
+            Err((None, _)) => {
+                err_msg.set(crate::trios::api_errors::friendly_response_error(
+                    crate::ui::lang::current_lang(),
+                    0,
+                ));
             }
         }
         loading.set(false);

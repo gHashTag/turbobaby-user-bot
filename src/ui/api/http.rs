@@ -53,6 +53,35 @@ pub async fn fetch_text_authed(url: &str, init_data: &str) -> Result<String, Str
     resp.text().await.map_err(|e| format!("Read error: {e}"))
 }
 
+/// GET `url`, surface full `(status, body)` so callers can route through a
+/// shared `friendly_response_error(lang, status)` helper (cycle #74). Mirror
+/// of [`post_json_authed_idempotent_full`] for the GET side — added so
+/// `menu` / `ar_hunt` / `location_quest` screens stop rendering raw err
+/// strings.
+pub async fn fetch_text_full(url: &str) -> Result<(u16, String), String> {
+    let resp = Request::get(url)
+        .send()
+        .await
+        .map_err(|e| format!("Network error: {e}"))?;
+    let status = resp.status();
+    let body = resp.text().await.map_err(|e| format!("Read error: {e}"))?;
+    Ok((status, body))
+}
+
+/// GET with `X-Telegram-Init-Data`, returns `(status, body)`. See
+/// [`fetch_text_full`] for rationale.
+#[allow(dead_code)]
+pub async fn fetch_text_authed_full(url: &str, init_data: &str) -> Result<(u16, String), String> {
+    let resp = Request::get(url)
+        .header("x-telegram-init-data", init_data)
+        .send()
+        .await
+        .map_err(|e| format!("Network error: {e}"))?;
+    let status = resp.status();
+    let body = resp.text().await.map_err(|e| format!("Read error: {e}"))?;
+    Ok((status, body))
+}
+
 /// POST `body` as JSON, return response body as text.
 pub async fn post_json(url: &str, body: &str) -> Result<String, String> {
     let resp = Request::post(url)

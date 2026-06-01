@@ -76,3 +76,27 @@ level detail). Localisation less critical here. Status quo acceptable.
 Scope estimate: one cycle (~80 lines + 6 keys + tests).
 
 Out of scope for cycle #73 — this audit is the deliverable.
+
+## Cycle #74 — DONE
+
+All three steps shipped:
+
+1. ✅ `trios::api_errors::friendly_response_error(lang, status)` in
+   `src/trios/api_errors.rs`. `checkout_errors::friendly_order_error`
+   left untouched (still wraps the same i18n keys); no caller change
+   needed for checkout.
+2. ✅ Migrated `tech_tree_screen.rs` (already had status), `ar_hunt_screen.rs`
+   + `location_quest_screen.rs` (moved from `fetch_text` → `fetch_text_full`),
+   `menu_screen.rs` (kept LocalClient, route `response.status().as_u16()`
+   through the helper). New helpers added: `fetch_text_full` +
+   `fetch_text_authed_full` in `src/ui/api/http.rs`.
+3. ✅ `T_API_ERR_401` ("Войдите в Telegram WebApp заново" /
+   "Sign in to Telegram WebApp again") and `T_API_ERR_UNKNOWN`
+   (replaces the inline RU `Ошибка сервера: HTTP {n}` fallback so
+   non-RU users don't see Cyrillic on a random 418). Existing
+   `T_CHECKOUT_ERR_*` keys NOT renamed — they're shared by reference
+   from `api_errors` so the rename would have been pure churn.
+
+Tests: 7 new in `api_errors::tests` covering 401 RU/EN, unknown-status
+localised fallback, shared 403 / 5xx copy, and an actionable-hint
+property test across all known codes. Total: 504 passing (was 497).

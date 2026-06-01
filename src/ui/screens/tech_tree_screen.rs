@@ -230,10 +230,8 @@ pub fn TechTreeScreen() -> Element {
                                                         let url = format!("{}/api/tech-tree/nodes/{}/complete", api_base_url(), urlencoding::encode(&id));
                                                         match crate::ui::api::http::post_admin_token(&url, Some(&admin_token()), "").await {
                                                             Ok((200..=299, _)) => { reload_tick += 1; }
-                                                            Ok((401, _)) | Ok((403, _)) => err_msg.set("Только для админа".into()),
-                                                            Ok((404, _)) => err_msg.set("Узел не найден".into()),
-                                                            Ok((status, body)) => err_msg.set(format!("HTTP {}: {}", status, body.chars().take(80).collect::<String>())),
-                                                            Err(e) => err_msg.set(format!("Ошибка: {}", e)),
+                                                            Ok((status, _)) => err_msg.set(crate::trios::api_errors::friendly_response_error(crate::ui::lang::current_lang(), status)),
+                                                            Err(e) => err_msg.set(format!("Network: {}", e)),
                                                         }
                                                     });
                                                 },

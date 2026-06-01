@@ -124,21 +124,42 @@ pub fn MenuScreen() -> Element {
 
     let strains_resource: Resource<Result<Vec<ApiStrain>, String>> = use_resource(move || {
         async move {
-            // Fetch from API
+            // Fetch from API. Cycle #74: route non-2xx status through
+            // friendly_response_error so a 5xx/429 shows localised UX
+            // copy instead of a parse error from an HTML body.
             let base = api_base_url();
             let url = format!("{}/api/strains", base);
             let response = crate::ui::api::local_client::LocalClient::new()
                 .get(&url)
                 .send()
                 .await
-                .map_err(|e| format!("Network error: {}", e))?;
+                .map_err(|_| {
+                    crate::trios::api_errors::friendly_response_error(
+                        crate::ui::lang::current_lang(),
+                        0,
+                    )
+                })?;
 
-            let text = response
-                .text()
-                .await
-                .map_err(|e| format!("Read text error: {}", e))?;
-            let strains_resp: StrainsResponse =
-                serde_json::from_str(&text).map_err(|e| format!("Parse error: {}", e))?;
+            let status = response.status().as_u16();
+            if !(200..300).contains(&status) {
+                return Err(crate::trios::api_errors::friendly_response_error(
+                    crate::ui::lang::current_lang(),
+                    status,
+                ));
+            }
+
+            let text = response.text().await.map_err(|_| {
+                crate::trios::api_errors::friendly_response_error(
+                    crate::ui::lang::current_lang(),
+                    0,
+                )
+            })?;
+            let strains_resp: StrainsResponse = serde_json::from_str(&text).map_err(|_| {
+                crate::trios::api_errors::friendly_response_error(
+                    crate::ui::lang::current_lang(),
+                    0,
+                )
+            })?;
 
             Ok(strains_resp.strains)
         }
@@ -315,12 +336,14 @@ pub fn MenuScreen() -> Element {
                         }
                     },
                     Some(Err(e)) => {
+                        // Cycle #74: `e` already contains the localised
+                        // user-facing copy from friendly_response_error,
+                        // so render it as the headline — no raw fallback.
                         let err_msg = e.clone();
                         rsx! {
                             div { style: "text-align:center;padding:48px 16px;",
                                 p { style: "font-size:20px;margin-bottom:12px;", "⚠️" }
-                                p { style: "font-size:15px;color:#ff4757;", "Error loading strains" }
-                                p { style: "font-size:13px;color:#888;margin-top:8px;word-break:break-all;", "{err_msg}" }
+                                p { style: "font-size:15px;color:#ff4757;", "{err_msg}" }
                             }
                         }
                     },
