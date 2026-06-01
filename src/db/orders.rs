@@ -444,6 +444,43 @@ pub fn format_blocks_message(rows: &[BlockedUserRow], total_count: usize) -> Str
     s
 }
 
+// ─── block_history audit log (cycle #64) ─────────────────────────────────
+//
+// migration 031 (`block_history`) has been on disk since cycle #46, but no
+// code wrote to it. Cycles #60 and #61 emit `tracing::warn!` / `info!` on
+// every auto-block and `/unblock` action, but those lines disappear into
+// stdout. This wires every state transition into the table so:
+//   * Compliance: "who unblocked telegram_id 42 on date X" is one query.
+//   * Forensics: scan repeat offenders across multiple block cycles.
+//   * Future /engage extensions can show "N auto-blocks today".
+
+/// Stable values for `block_history.action`. Kept here next to the writers
+/// so a future cycle that adds a new transition (e.g. admin manual block)
+/// has a single source of truth.
+pub const BLOCK_ACTION_AUTO: &str = "auto_block";
+pub const BLOCK_ACTION_UNBLOCK: &str = "unblock";
+
+/// Append one row to `block_history`. Returns `Result<(), _>` so callers can
+/// log a warning on failure, but the caller MUST swallow — losing an audit
+/// row is preferable to blocking the underlying block / unblock action.
+pub async fn record_block_history(
+    pool: &deadpool_postgres::Pool,
+    telegram_id: i64,
+    action: &str,
+    reason: Option<&str>,
+    actor_admin_id: Option<i64>,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let client = pool.get().await?;
+    client
+        .execute(
+            "INSERT INTO block_history (telegram_id, action, reason, actor_admin_id) \
+             VALUES ($1, $2, $3, $4)",
+            &[&telegram_id, &action, &reason, &actor_admin_id],
+        )
+        .await?;
+    Ok(())
+}
+
 /// Manually clear `is_blocked` for `telegram_id`. Counterpart to the
 /// automatic blocker in [`auto_block_for_fraud`] — admins drive this via
 /// the `/unblock` bot command (cycle #61).
@@ -522,6 +559,24 @@ async fn auto_block_for_fraud(
             threshold = FRAUD_AUTO_BLOCK_THRESHOLD,
             "auto_block: user blocked for repeated subtotal_mismatch"
         );
+        // Drop the borrowed client before re-acquiring inside record_block_history
+        // (small pool — second pool.get() would deadlock on the same connection).
+        drop(client);
+        if let Err(e) = record_block_history(
+            pool,
+            telegram_id,
+            BLOCK_ACTION_AUTO,
+            Some("subtotal_mismatch_threshold"),
+            None, // server-initiated, no admin actor
+        )
+        .await
+        {
+            tracing::warn!(
+                telegram_id,
+                "auto_block: block_history audit insert failed: {}",
+                e
+            );
+        }
     }
     Ok(rows > 0)
 }
@@ -719,6 +774,20 @@ mod tests {
         assert!(out.contains("Orders (24h)"));
         assert!(out.contains("Revenue"));
         assert!(out.contains("Pending right now"));
+    }
+
+    // ── block_history action constants (cycle #64) ──────────────────────
+
+    use super::{BLOCK_ACTION_AUTO, BLOCK_ACTION_UNBLOCK};
+
+    #[test]
+    fn block_action_constants_are_stable() {
+        // These strings end up in `block_history.action` as a wire-level
+        // enum. Renaming them silently would invalidate every existing row
+        // — pin the values here so the contract breaks at compile/test
+        // time instead.
+        assert_eq!(BLOCK_ACTION_AUTO, "auto_block");
+        assert_eq!(BLOCK_ACTION_UNBLOCK, "unblock");
     }
 
     #[test]

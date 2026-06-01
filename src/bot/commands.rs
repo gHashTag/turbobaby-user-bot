@@ -637,6 +637,20 @@ pub async fn handle_command(
                         target = target,
                         "/unblock: manual override applied"
                     );
+                    // Cycle #64: persist the action so the admin who actually
+                    // ran it is accountable on review. Best-effort: a failure
+                    // here logs a warn but doesn't block the reply.
+                    if let Err(e) = crate::db::orders::record_block_history(
+                        &db.pool,
+                        target,
+                        crate::db::orders::BLOCK_ACTION_UNBLOCK,
+                        Some("admin_manual"),
+                        Some(user_id),
+                    )
+                    .await
+                    {
+                        tracing::warn!("/unblock: block_history audit insert failed: {}", e);
+                    }
                     bot.send_message(
                         msg.chat.id,
                         format!("✅ User <code>{}</code> unblocked", target),
