@@ -84,7 +84,8 @@ fn OrderCard(order: Order) -> Element {
         order.id.clone()
     };
     let date = order.created_at.split('T').next().unwrap_or(&order.created_at).to_string();
-    let total = format!("{:.0}", order.total);
+    let total_val = if order.total.is_finite() { order.total.max(0.0) } else { 0.0 };
+    let total = format!("{:.0}", total_val);
 
     rsx! {
         div { class: "order-card",

@@ -1,6 +1,6 @@
 // Internationalization Module
-use dioxus::prelude::*;
 use crate::ui::state::Language;
+use dioxus::prelude::*;
 
 #[derive(Clone)]
 pub struct I18n {

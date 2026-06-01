@@ -19,13 +19,13 @@ impl SkeletonShape {
     pub fn css_class(&self) -> &'static str {
         match self {
             Self::Rectangle => "skeleton-loader",
-            Self::Text      => "skeleton-loader skeleton-text",
-            Self::TextSm    => "skeleton-loader skeleton-text-sm",
-            Self::Title     => "skeleton-loader skeleton-title",
-            Self::Avatar    => "skeleton-loader skeleton-avatar",
-            Self::AvatarLg  => "skeleton-loader skeleton-avatar-lg",
-            Self::Card      => "skeleton-loader skeleton-card",
-            Self::Button    => "skeleton-loader skeleton-btn",
+            Self::Text => "skeleton-loader skeleton-text",
+            Self::TextSm => "skeleton-loader skeleton-text-sm",
+            Self::Title => "skeleton-loader skeleton-title",
+            Self::Avatar => "skeleton-loader skeleton-avatar",
+            Self::AvatarLg => "skeleton-loader skeleton-avatar-lg",
+            Self::Card => "skeleton-loader skeleton-card",
+            Self::Button => "skeleton-loader skeleton-btn",
         }
     }
 }

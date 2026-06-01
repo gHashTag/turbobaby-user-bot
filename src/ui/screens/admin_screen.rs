@@ -11,14 +11,23 @@
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use std::sync::LazyLock;
 use wasm_bindgen::JsCast;
 use web_sys;
-use std::sync::LazyLock;
 
-static HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| reqwest::Client::new());
+// Drop-in replacement for `LazyLock<reqwest::Client>`. The 54 call sites use
+// the reqwest builder shape verbatim (.get/.post/.put/.delete().header().json().send())
+// which `LocalClient` mirrors, so the diff is single-line. Saves ≈300 KB
+// from the wasm bundle vs shipping reqwest itself.
+static HTTP_CLIENT: LazyLock<crate::ui::api::local_client::LocalClient> =
+    LazyLock::new(crate::ui::api::local_client::LocalClient::new);
 use crate::ui::api::context::api_base_url;
-use crate::ui::components::{EmptyState, Modal, Toast, ToastKind, ToastContainer, Skeleton, SkeletonShape};
-use crate::ui::telegram::{use_telegram_id, use_telegram_init_data, TelegramApp, HapticNotification};
+use crate::ui::components::{
+    EmptyState, Modal, Skeleton, SkeletonShape, Toast, ToastContainer, ToastKind,
+};
+use crate::ui::telegram::{
+    use_telegram_id, use_telegram_init_data, HapticNotification, TelegramApp,
+};
 
 fn admin_token() -> String {
     #[cfg(target_arch = "wasm32")]
@@ -29,7 +38,11 @@ fn admin_token() -> String {
             .and_then(|s| s.get_item("wwb_admin_token").ok())
             .flatten()
             .unwrap_or_default();
-        if token.len() > 2048 { String::new() } else { token }
+        if token.len() > 2048 {
+            String::new()
+        } else {
+            token
+        }
     }
     #[cfg(not(target_arch = "wasm32"))]
     {
@@ -37,9 +50,12 @@ fn admin_token() -> String {
     }
 }
 
-
 #[derive(Clone)]
-struct ToastItem { id: u64, message: String, kind: ToastKind }
+struct ToastItem {
+    id: u64,
+    message: String,
+    kind: ToastKind,
+}
 
 fn push_toast(mut toasts: Signal<Vec<ToastItem>>, message: String, kind: ToastKind) {
     let id = js_sys::Date::now() as u64;
@@ -52,7 +68,9 @@ fn push_toast(mut toasts: Signal<Vec<ToastItem>>, message: String, kind: ToastKi
 
 fn render_toasts(mut toasts: Signal<Vec<ToastItem>>) -> Element {
     let items = toasts.read().clone();
-    if items.is_empty() { return rsx! {}; }
+    if items.is_empty() {
+        return rsx! {};
+    }
     rsx! {
         ToastContainer {
             for toast in items {
@@ -90,6 +108,27 @@ struct AdminStrain {
     effect_en: Option<String>,
     flavor_profile_en: Option<String>,
     strain_type_en: Option<String>,
+    // Marketing flags (migration 028, TZ #2)
+    #[serde(default)]
+    is_strain_of_day: bool,
+    #[serde(default)]
+    strain_of_day_discount: f64,
+    #[serde(default)]
+    discount_percent: f64,
+    #[serde(default)]
+    sale_price: Option<f64>,
+    #[serde(default)]
+    sale_active: bool,
+    #[serde(default)]
+    sale_until: Option<String>,
+    #[serde(default)]
+    is_best_seller: bool,
+    #[serde(default)]
+    is_new_arrival: bool,
+    #[serde(default)]
+    new_until: Option<String>,
+    #[serde(default)]
+    display_order: i32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -194,22 +233,50 @@ struct AdminTeaSet {
 }
 
 #[derive(Debug, Deserialize)]
-struct StrainsResp { strains: Vec<AdminStrain> }
+struct StrainsResp {
+    strains: Vec<AdminStrain>,
+}
 #[derive(Debug, Deserialize)]
-struct AccessoriesResp { accessories: Vec<AdminAccessory> }
+struct AccessoriesResp {
+    accessories: Vec<AdminAccessory>,
+}
 #[derive(Debug, Deserialize)]
-struct TeaResp { tea_products: Vec<AdminTea> }
+struct TeaResp {
+    tea_products: Vec<AdminTea>,
+}
 #[derive(Debug, Deserialize)]
-struct SetsResp { sets: Vec<AdminSet> }
+struct SetsResp {
+    sets: Vec<AdminSet>,
+}
 #[derive(Debug, Deserialize)]
-struct AccessorySetsResp { accessory_sets: Vec<AdminAccessorySet> }
+struct AccessorySetsResp {
+    accessory_sets: Vec<AdminAccessorySet>,
+}
 #[derive(Debug, Deserialize)]
-struct TeaSetsResp { tea_sets: Vec<AdminTeaSet> }
+struct TeaSetsResp {
+    tea_sets: Vec<AdminTeaSet>,
+}
 #[derive(Debug, Deserialize)]
-struct AdminCheck { is_admin: bool }
+struct AdminCheck {
+    is_admin: bool,
+}
 
 #[derive(Clone, Copy, PartialEq)]
-enum Tab { Strains, Accessories, Tea, Sets, AccessorySets, TeaSets, Dashboard, Orders, Quests, Treasures, Garden, Loyalty, Managers }
+enum Tab {
+    Strains,
+    Accessories,
+    Tea,
+    Sets,
+    AccessorySets,
+    TeaSets,
+    Dashboard,
+    Orders,
+    Quests,
+    Treasures,
+    Garden,
+    Loyalty,
+    Managers,
+}
 
 // ── File upload helper ─────────────────────────────────────────
 
@@ -227,8 +294,12 @@ async fn upload_file(accept: &str) -> Result<Option<String>, String> {
         .and_then(|s| s.get_item("wwb_admin_token").ok())
         .flatten()
         .unwrap_or_default();
-    if init_data.len() > 4096 { return Err("Ошибка загрузки: слишком длинные init_data".into()); }
-    if token.len() > 2048 { return Err("Ошибка загрузки: слишком длинный admin token".into()); }
+    if init_data.len() > 4096 {
+        return Err("Ошибка загрузки: слишком длинные init_data".into());
+    }
+    if token.len() > 2048 {
+        return Err("Ошибка загрузки: слишком длинный admin token".into());
+    }
     fn js_escape(s: &str) -> String {
         s.replace('\\', "\\\\")
             .replace('\'', "\\'")
@@ -251,7 +322,8 @@ async fn upload_file(accept: &str) -> Result<Option<String>, String> {
     //   <url>                    — success (plain URL string from server)
     //   'ERROR::<status>::<body>' — HTTP non-2xx; <status> is numeric, <body> truncated server text
     //   'ERROR::0::<message>'     — network/JS exception; <message> is err.message
-    let js = format!(r#"
+    let js = format!(
+        r#"
 new Promise((resolve) => {{
     var input = document.createElement('input');
     input.type = 'file';
@@ -309,13 +381,26 @@ new Promise((resolve) => {{
     setTimeout(() => {{ if (!resolved) {{ resolved = true; cleanup(); resolve(''); }} }}, 120000);
     input.click();
 }})
-"#, accept_js, init_data_js, telegram_id_js, token_js);
-    if js.len() > 100_000 { return Err("Ошибка загрузки: внутренний лимит JS".into()); }
-    let promise_val = js_sys::eval(&js).map_err(|_| "Ошибка загрузки: не удалось запустить JS".to_string())?;
-    let promise = promise_val.dyn_into::<js_sys::Promise>().map_err(|_| "Ошибка загрузки: некорректный Promise".to_string())?;
-    let result = wasm_bindgen_futures::JsFuture::from(promise).await.map_err(|_| "Ошибка загрузки: JS Promise отклонён".to_string())?;
-    let raw = result.as_string().ok_or_else(|| "Ошибка загрузки: неожиданный тип результата".to_string())?;
-    if raw.is_empty() { return Ok(None); }
+"#,
+        accept_js, init_data_js, telegram_id_js, token_js
+    );
+    if js.len() > 100_000 {
+        return Err("Ошибка загрузки: внутренний лимит JS".into());
+    }
+    let promise_val =
+        js_sys::eval(&js).map_err(|_| "Ошибка загрузки: не удалось запустить JS".to_string())?;
+    let promise = promise_val
+        .dyn_into::<js_sys::Promise>()
+        .map_err(|_| "Ошибка загрузки: некорректный Promise".to_string())?;
+    let result = wasm_bindgen_futures::JsFuture::from(promise)
+        .await
+        .map_err(|_| "Ошибка загрузки: JS Promise отклонён".to_string())?;
+    let raw = result
+        .as_string()
+        .ok_or_else(|| "Ошибка загрузки: неожиданный тип результата".to_string())?;
+    if raw.is_empty() {
+        return Ok(None);
+    }
     if let Some(rest) = raw.strip_prefix("ERROR::") {
         let mut parts = rest.splitn(2, "::");
         let status = parts.next().unwrap_or("0");
@@ -330,8 +415,12 @@ new Promise((resolve) => {{
     Ok(Some(raw))
 }
 
-async fn upload_image() -> Result<Option<String>, String> { upload_file("image/*").await }
-async fn upload_video() -> Result<Option<String>, String> { upload_file("video/*").await }
+async fn upload_image() -> Result<Option<String>, String> {
+    upload_file("image/*").await
+}
+async fn upload_video() -> Result<Option<String>, String> {
+    upload_file("video/*").await
+}
 
 // ── Main component ────────────────────────────────────────────
 
@@ -389,18 +478,23 @@ pub fn AdminScreen() -> Element {
         async move {
             let base = api_base_url();
             let url = format!("{}/api/admin/check?telegram_id={}", base, telegram_id);
-            let mut req = HTTP_CLIENT.clone().get(&url)
+            let mut req = HTTP_CLIENT
+                .clone()
+                .get(&url)
                 .header("X-Telegram-Init-Data", init_data.clone());
             if !token.is_empty() {
                 req = req.header("X-Admin-Token", token);
             }
-            let resp = req.send().await
+            let resp = req
+                .send()
+                .await
                 .map_err(|e| format!("send to {url}: {e}"))?;
-        let status = resp.status();
-        if !status.is_success() {
-            return Err(format!("http {} from {url}", status.as_u16()));
-        }
-            resp.json::<AdminCheck>().await
+            let status = resp.status();
+            if !status.is_success() {
+                return Err(format!("http {} from {url}", status.as_u16()));
+            }
+            resp.json::<AdminCheck>()
+                .await
                 .map(|c| c.is_admin)
                 .map_err(|e| format!("json: {e}"))
         }
@@ -421,7 +515,11 @@ pub fn AdminScreen() -> Element {
 }
 
 #[component]
-fn AccessDeniedScreen(telegram_id: i64, mut password_token: Signal<String>, mut access_reload: Signal<u32>) -> Element {
+fn AccessDeniedScreen(
+    telegram_id: i64,
+    mut password_token: Signal<String>,
+    mut access_reload: Signal<u32>,
+) -> Element {
     let debug = TelegramApp::init().debug_dump();
     let mut password = use_signal(String::new);
     let mut admin_id = use_signal(String::new);
@@ -440,7 +538,11 @@ fn AccessDeniedScreen(telegram_id: i64, mut password_token: Signal<String>, mut 
                         if let Some(key) = s.key(i).ok().flatten() {
                             if key.starts_with("wwb_") {
                                 let val = s.get_item(&key).ok().flatten().unwrap_or_default();
-                                items.push(format!("{}={}", key, val.chars().take(20).collect::<String>()));
+                                items.push(format!(
+                                    "{}={}",
+                                    key,
+                                    val.chars().take(20).collect::<String>()
+                                ));
                             }
                         }
                     }
@@ -527,6 +629,48 @@ fn AccessDeniedScreen(telegram_id: i64, mut password_token: Signal<String>, mut 
     }
 }
 
+// ── Tab mount wrapper — brief skeleton when switching heavy tabs ─
+
+#[component]
+fn TabMount(tab: Tab, expected: Tab, children: Element) -> Element {
+    let mut ready = use_signal(|| tab != expected);
+    use_future(move || async move {
+        if tab == expected {
+            // Brief yield so the tab bar paints before heavy DOM drops
+            gloo_timers::future::TimeoutFuture::new(40).await;
+            ready.set(true);
+        }
+    });
+    if tab == expected && ready() {
+        rsx! { {children} }
+    } else if tab == expected {
+        rsx! {
+            div { style: "
+                min-height: 200px;
+                display: flex; flex-direction: column;
+                align-items: center; justify-content: center;
+                gap: 12px; padding: 24px;
+            ",
+                div { style: "
+                    width: 32px; height: 32px;
+                    border: 3px solid #2a2a4a;
+                    border-top-color: #39ff14;
+                    border-radius: 50%;
+                    animation: tab-spin 0.8s linear infinite;
+                " }
+                div { style: "font-size: 12px; color: #888;", "Загрузка вкладки…" }
+                style { {r#"
+                    @keyframes tab-spin {
+                        to { transform: rotate(360deg); }
+                    }
+                "#} }
+            }
+        }
+    } else {
+        rsx! {}
+    }
+}
+
 // ── Admin panel with tabs ─────────────────────────────────────
 
 #[component]
@@ -541,6 +685,7 @@ fn AdminPanel(active_tab: Signal<Tab>, mut password_token: Signal<String>) -> El
         let label = label.to_string();
         rsx! { button { style: "{style}", onclick: move |_| active_tab.set(t), "{label}" } }
     };
+    let current = *active_tab.read();
     rsx! {
         div {
             div { style: "display:flex;justify-content:flex-end;margin-bottom:8px;",
@@ -576,20 +721,20 @@ fn AdminPanel(active_tab: Signal<Tab>, mut password_token: Signal<String>) -> El
                 {tab_btn(Tab::Loyalty, "💎 Лояльность")}
                 {tab_btn(Tab::Managers, "👥 Менеджеры")}
             }
-            match *active_tab.read() {
-                Tab::Strains => rsx!(StrainsTab {}),
-                Tab::Accessories => rsx!(AccessoriesTab {}),
-                Tab::Tea => rsx!(TeaTab {}),
-                Tab::Sets => rsx!(SetsTab {}),
-                Tab::AccessorySets => rsx!(AccessorySetsTab {}),
-                Tab::TeaSets => rsx!(TeaSetsTab {}),
-                Tab::Dashboard => rsx!(DashboardTab {}),
-                Tab::Orders => rsx!(OrdersTab {}),
-                Tab::Quests => rsx!(QuestsTab {}),
-                Tab::Treasures => rsx!(TreasuresTab {}),
-                Tab::Garden => rsx!(GardenTab {}),
-                Tab::Loyalty => rsx!(LoyaltyTab {}),
-                Tab::Managers => rsx!(ManagersTab {}),
+            match current {
+                Tab::Strains => rsx!(TabMount { tab: current, expected: Tab::Strains, StrainsTab {} }),
+                Tab::Accessories => rsx!(TabMount { tab: current, expected: Tab::Accessories, AccessoriesTab {} }),
+                Tab::Tea => rsx!(TabMount { tab: current, expected: Tab::Tea, TeaTab {} }),
+                Tab::Sets => rsx!(TabMount { tab: current, expected: Tab::Sets, SetsTab {} }),
+                Tab::AccessorySets => rsx!(TabMount { tab: current, expected: Tab::AccessorySets, AccessorySetsTab {} }),
+                Tab::TeaSets => rsx!(TabMount { tab: current, expected: Tab::TeaSets, TeaSetsTab {} }),
+                Tab::Dashboard => rsx!(TabMount { tab: current, expected: Tab::Dashboard, DashboardTab {} }),
+                Tab::Orders => rsx!(TabMount { tab: current, expected: Tab::Orders, OrdersTab {} }),
+                Tab::Quests => rsx!(TabMount { tab: current, expected: Tab::Quests, QuestsTab {} }),
+                Tab::Treasures => rsx!(TabMount { tab: current, expected: Tab::Treasures, TreasuresTab {} }),
+                Tab::Garden => rsx!(TabMount { tab: current, expected: Tab::Garden, GardenTab {} }),
+                Tab::Loyalty => rsx!(TabMount { tab: current, expected: Tab::Loyalty, LoyaltyTab {} }),
+                Tab::Managers => rsx!(TabMount { tab: current, expected: Tab::Managers, ManagersTab {} }),
             }
         }
     }
@@ -656,7 +801,10 @@ fn StrainsTab() -> Element {
         {
             if let Some(window) = web_sys::window() {
                 if let Ok(Some(storage)) = window.local_storage() {
-                    let _ = storage.set_item("wwb_admin_strains", &serde_json::to_string(&data).unwrap_or_default());
+                    let _ = storage.set_item(
+                        "wwb_admin_strains",
+                        &serde_json::to_string(&data).unwrap_or_default(),
+                    );
                 }
             }
         }
@@ -667,275 +815,294 @@ fn StrainsTab() -> Element {
         let _ = reload.read();
         let init_data = init_data.read().clone();
         async move {
-        let url = format!("{}/api/strains?include_hidden=1", api_base_url());
-        if let Ok(resp) = HTTP_CLIENT.clone()
-            .get(&url)
-            .header("X-Telegram-Init-Data", init_data.clone())
-            .header("X-Admin-Token", admin_token())
-            .header("X-Admin-Telegram-Id", telegram_id.to_string())
-            .send().await
-        {
-            let text = resp.text().await.unwrap_or_default();
-            if let Ok(data) = serde_json::from_str::<StrainsResp>(&text) {
-                cache.set(data.strains);
+            let url = format!("{}/api/strains?include_hidden=1", api_base_url());
+            if let Ok(resp) = HTTP_CLIENT
+                .clone()
+                .get(&url)
+                .header("X-Telegram-Init-Data", init_data.clone())
+                .header("X-Admin-Token", admin_token())
+                .header("X-Admin-Telegram-Id", telegram_id.to_string())
+                .send()
+                .await
+            {
+                let text = resp.text().await.unwrap_or_default();
+                if let Ok(data) = serde_json::from_str::<StrainsResp>(&text) {
+                    cache.set(data.strains);
+                }
             }
+            loading.set(false);
+            Some(())
         }
-        loading.set(false);
-        Some(())
-    }});
+    });
 
     let filtered: Vec<AdminStrain> = {
         let q = search_query.read().to_lowercase();
-        cache.read().iter().filter(|s| {
-            q.is_empty() || s.name.to_lowercase().contains(&q)
-                || s.category.as_deref().unwrap_or("").to_lowercase().contains(&q)
-        }).cloned().collect()
+        cache
+            .read()
+            .iter()
+            .filter(|s| {
+                q.is_empty()
+                    || s.name.to_lowercase().contains(&q)
+                    || s.category
+                        .as_deref()
+                        .unwrap_or("")
+                        .to_lowercase()
+                        .contains(&q)
+            })
+            .cloned()
+            .collect()
     };
 
     rsx! {
-        div {
-            FormCard {
-                title: "Добавить страйн".to_string(),
-                children: rsx!{
-                    input { style: input_style(), placeholder: "Название (RU)", value: "{name}",
-                        oninput: move |e| name.set(e.value()) }
-                    select { style: input_style(), value: "{category}",
-                        oninput: move |e| category.set(e.value()),
-                        option { value: "sativa", "☀️ Sativa" }
-                        option { value: "indica", "🌙 Indica" }
-                        option { value: "hybrid", "⚖️ Hybrid" }
-                    }
-                    input { style: input_style(), placeholder: "Цена ฿/г", value: "{price}", r#type: "number",
-                        oninput: move |e| price.set(e.value()) }
-                    input { style: input_style(), placeholder: "THC %", value: "{thc}", r#type: "number",
-                        oninput: move |e| thc.set(e.value()) }
-                    input { style: input_style(), placeholder: "CBD %", value: "{cbd}", r#type: "number",
-                        oninput: move |e| cbd.set(e.value()) }
-                    input { style: input_style(), placeholder: "Граммы", value: "{grams}", r#type: "number",
-                        oninput: move |e| grams.set(e.value()) }
-                    textarea { style: textarea_style(), placeholder: "Описание (RU)", value: "{description}",
-                        oninput: move |e| description.set(e.value()) }
-                    textarea { style: textarea_style(), placeholder: "Эффект (RU)", value: "{effect}",
-                        oninput: move |e| effect.set(e.value()) }
-                    textarea { style: textarea_style(), placeholder: "Вкусовой профиль (RU)", value: "{flavor_profile}",
-                        oninput: move |e| flavor_profile.set(e.value()) }
-                    ImageUpload { image_url: image_url.read().clone(), on_change: move |url: String| image_url.set(url) }
-                    VideoUpload { video_url: video_url.read().clone(), on_change: move |url: String| video_url.set(url) }
-                    div { style: en_section_style(), "🇬🇧 English" }
-                    input { style: input_style(), placeholder: "Name (EN)", value: "{name_en}",
-                        oninput: move |e| name_en.set(e.value()) }
-                    textarea { style: textarea_style(), placeholder: "Description (EN)", value: "{description_en}",
-                        oninput: move |e| description_en.set(e.value()) }
-                    textarea { style: textarea_style(), placeholder: "Effect (EN)", value: "{effect_en}",
-                        oninput: move |e| effect_en.set(e.value()) }
-                    textarea { style: textarea_style(), placeholder: "Flavor (EN)", value: "{flavor_profile_en}",
-                        oninput: move |e| flavor_profile_en.set(e.value()) }
-                    input { style: input_style(), placeholder: "Type (EN)", value: "{strain_type_en}",
-                        oninput: move |e| strain_type_en.set(e.value()) }
-                    button {
-                        style: if *submitting.read() { submit_btn_disabled_style() } else { submit_btn_style() },
-                        disabled: *submitting.read(),
-                        r#type: "button",
-                        onclick: move |_| {
-                            let n = name().trim().to_string(); let c = category();
-                            let p = match price.read().trim().parse::<f64>() {
-                                Ok(v) if v > 0.0 && v.is_finite() => v,
-                                _ => { status.set("❌ Цена должна быть числом больше 0".into()); return; }
-                            };
-                            let t = thc.read().trim().parse::<f64>().ok().filter(|v| v.is_finite());
-                            let cb = cbd.read().trim().parse::<f64>().ok().filter(|v| v.is_finite());
-                            let g = match grams.read().trim().parse::<f64>() {
-                                Ok(v) if v >= 0.0 && v.is_finite() => v,
-                                _ => { status.set("❌ Граммы должны быть числом ≥ 0".into()); return; }
-                            };
-                            if n.is_empty() { status.set("❌ Название обязательно".into()); return; }
-                            let d = description(); let ef = effect(); let fp = flavor_profile();
-                            let img = image_url(); let vid = video_url();
-                            let ne = name_en(); let de = description_en(); let ee = effect_en();
-                            let fpe = flavor_profile_en(); let ste = strain_type_en();
-                            submitting.set(true);
-                            // ── Optimistic: insert immediately ──
-                            let temp_id = format!("temp-{}", uuid::Uuid::new_v4());
-                            cache.write().insert(0, AdminStrain {
-                                id: temp_id.clone(), name: n.clone(), category: Some(c.clone()),
-                                thc_percent: t, cbd_percent: cb,
-                                effect: if ef.is_empty() { None } else { Some(ef.clone()) },
-                                flavor_profile: if fp.is_empty() { None } else { Some(fp.clone()) },
-                                description: if d.is_empty() { None } else { Some(d.clone()) },
-                                price_per_gram: p, available_grams: Some(g), is_available: true,
-                                image_url: if img.is_empty() { None } else { Some(img.clone()) },
-                                video_url: if vid.is_empty() { None } else { Some(vid.clone()) },
-                                name_en: if ne.is_empty() { None } else { Some(ne.clone()) },
-                                description_en: if de.is_empty() { None } else { Some(de.clone()) },
-                                effect_en: if ee.is_empty() { None } else { Some(ee.clone()) },
-                                flavor_profile_en: if fpe.is_empty() { None } else { Some(fpe.clone()) },
-                                strain_type_en: if ste.is_empty() { None } else { Some(ste.clone()) },
-                            });
-                            status.set("✅ Добавлен!".into());
-                            name.set(String::new()); price.set(String::new());
-                            thc.set(String::new()); cbd.set(String::new()); grams.set(String::new());
-                            description.set(String::new()); effect.set(String::new()); flavor_profile.set(String::new());
-                            image_url.set(String::new()); video_url.set(String::new());
-                            name_en.set(String::new()); description_en.set(String::new());
-                            effect_en.set(String::new()); flavor_profile_en.set(String::new());
-                            strain_type_en.set(String::new());
-                            auto_scroll_to_list();
-                            spawn(async move {
-                                let body = json!({
-                                    "name": n, "category": c, "price_per_gram": p,
-                                    "thc_percent": t, "cbd_percent": cb, "available_grams": g, "is_available": true,
-                                    "effect": if ef.is_empty() { serde_json::Value::Null } else { ef.into() },
-                                    "flavor_profile": if fp.is_empty() { serde_json::Value::Null } else { fp.into() },
-                                    "description": if d.is_empty() { serde_json::Value::Null } else { d.into() },
-                                    "image_url": if img.is_empty() { serde_json::Value::Null } else { img.into() },
-                                    "video_url": if vid.is_empty() { serde_json::Value::Null } else { vid.clone().into() },
-                                    "name_en": if ne.is_empty() { serde_json::Value::Null } else { ne.into() },
-                                    "description_en": if de.is_empty() { serde_json::Value::Null } else { de.into() },
-                                    "effect_en": if ee.is_empty() { serde_json::Value::Null } else { ee.into() },
-                                    "flavor_profile_en": if fpe.is_empty() { serde_json::Value::Null } else { fpe.into() },
-                                    "strain_type_en": if ste.is_empty() { serde_json::Value::Null } else { ste.into() },
-                                });
-                                let url = format!("{}/api/strains", api_base_url());
-                                let res = HTTP_CLIENT.clone().post(&url)
-                                    .header("X-Telegram-Init-Data", init_data.read().clone())
- .header("X-Admin-Token", admin_token())
- .header("X-Admin-Telegram-Id", telegram_id.to_string())
-                                    .json(&body).send().await;
-                                submitting.set(false);
-                                match res {
-                                    Ok(r) if r.status().is_success() => {
-                                        if let Ok(data) = r.json::<serde_json::Value>().await {
-                                            if let Some(real_id) = data["id"].as_str() {
-                                                cache.write().iter_mut().find(|s| s.id == temp_id).map(|s| s.id = real_id.to_string());
-                                            }
-                                        }
-                                        TelegramApp::init().haptic_notification(HapticNotification::Success);
-                                    }
-                                    _ => {
-                                        cache.write().retain(|s| s.id != temp_id);
-                                        status.set("❌ Ошибка добавления".into());
-                                        TelegramApp::init().haptic_notification(HapticNotification::Error);
-                                    }
-                                }
-                            });
-                        },
-                        if *submitting.read() { "⏳..." } else { "➕ Добавить" }
-                    }
-                    {render_status(status)}
-                }
-            }
+           div {
+               FormCard {
+                   title: "Добавить страйн".to_string(),
+                   children: rsx!{
+                       input { style: input_style(), placeholder: "Название (RU)", value: "{name}",
+                           oninput: move |e| name.set(e.value()) }
+                       select { style: input_style(), value: "{category}",
+                           oninput: move |e| category.set(e.value()),
+                           option { value: "sativa", "☀️ Sativa" }
+                           option { value: "indica", "🌙 Indica" }
+                           option { value: "hybrid", "⚖️ Hybrid" }
+                       }
+                       input { style: input_style(), placeholder: "Цена ฿/г", value: "{price}", r#type: "number",
+                           oninput: move |e| price.set(e.value()) }
+                       input { style: input_style(), placeholder: "THC %", value: "{thc}", r#type: "number",
+                           oninput: move |e| thc.set(e.value()) }
+                       input { style: input_style(), placeholder: "CBD %", value: "{cbd}", r#type: "number",
+                           oninput: move |e| cbd.set(e.value()) }
+                       input { style: input_style(), placeholder: "Граммы", value: "{grams}", r#type: "number",
+                           oninput: move |e| grams.set(e.value()) }
+                       textarea { style: textarea_style(), placeholder: "Описание (RU)", value: "{description}",
+                           oninput: move |e| description.set(e.value()) }
+                       textarea { style: textarea_style(), placeholder: "Эффект (RU)", value: "{effect}",
+                           oninput: move |e| effect.set(e.value()) }
+                       textarea { style: textarea_style(), placeholder: "Вкусовой профиль (RU)", value: "{flavor_profile}",
+                           oninput: move |e| flavor_profile.set(e.value()) }
+                       ImageUpload { image_url: image_url.read().clone(), on_change: move |url: String| image_url.set(url) }
+                       VideoUpload { video_url: video_url.read().clone(), on_change: move |url: String| video_url.set(url) }
+                       div { style: en_section_style(), "🇬🇧 English" }
+                       input { style: input_style(), placeholder: "Name (EN)", value: "{name_en}",
+                           oninput: move |e| name_en.set(e.value()) }
+                       textarea { style: textarea_style(), placeholder: "Description (EN)", value: "{description_en}",
+                           oninput: move |e| description_en.set(e.value()) }
+                       textarea { style: textarea_style(), placeholder: "Effect (EN)", value: "{effect_en}",
+                           oninput: move |e| effect_en.set(e.value()) }
+                       textarea { style: textarea_style(), placeholder: "Flavor (EN)", value: "{flavor_profile_en}",
+                           oninput: move |e| flavor_profile_en.set(e.value()) }
+                       input { style: input_style(), placeholder: "Type (EN)", value: "{strain_type_en}",
+                           oninput: move |e| strain_type_en.set(e.value()) }
+                       button {
+                           style: if *submitting.read() { submit_btn_disabled_style() } else { submit_btn_style() },
+                           disabled: *submitting.read(),
+                           r#type: "button",
+                           onclick: move |_| {
+                               let n = name().trim().to_string(); let c = category();
+                               let p = match price.read().trim().parse::<f64>() {
+                                   Ok(v) if v > 0.0 && v.is_finite() => v,
+                                   _ => { status.set("❌ Цена должна быть числом больше 0".into()); return; }
+                               };
+                               let t = thc.read().trim().parse::<f64>().ok().filter(|v| v.is_finite());
+                               let cb = cbd.read().trim().parse::<f64>().ok().filter(|v| v.is_finite());
+                               let g = match grams.read().trim().parse::<f64>() {
+                                   Ok(v) if v >= 0.0 && v.is_finite() => v,
+                                   _ => { status.set("❌ Граммы должны быть числом ≥ 0".into()); return; }
+                               };
+                               if n.is_empty() { status.set("❌ Название обязательно".into()); return; }
+                               let d = description(); let ef = effect(); let fp = flavor_profile();
+                               let img = image_url(); let vid = video_url();
+                               let ne = name_en(); let de = description_en(); let ee = effect_en();
+                               let fpe = flavor_profile_en(); let ste = strain_type_en();
+                               submitting.set(true);
+                               // ── Optimistic: insert immediately ──
+                               let temp_id = format!("temp-{}", uuid::Uuid::new_v4());
+                               cache.write().insert(0, AdminStrain {
+                                   id: temp_id.clone(), name: n.clone(), category: Some(c.clone()),
+                                   thc_percent: t, cbd_percent: cb,
+                                   effect: if ef.is_empty() { None } else { Some(ef.clone()) },
+                                   flavor_profile: if fp.is_empty() { None } else { Some(fp.clone()) },
+                                   description: if d.is_empty() { None } else { Some(d.clone()) },
+                                   price_per_gram: p, available_grams: Some(g), is_available: true,
+                                   image_url: if img.is_empty() { None } else { Some(img.clone()) },
+                                   video_url: if vid.is_empty() { None } else { Some(vid.clone()) },
+                                   name_en: if ne.is_empty() { None } else { Some(ne.clone()) },
+                                   description_en: if de.is_empty() { None } else { Some(de.clone()) },
+                                   effect_en: if ee.is_empty() { None } else { Some(ee.clone()) },
+                                   flavor_profile_en: if fpe.is_empty() { None } else { Some(fpe.clone()) },
+                                   strain_type_en: if ste.is_empty() { None } else { Some(ste.clone()) },
+                                   // TZ #2 marketing flags default-off for new strains; admin
+                                   // turns them on via the EditStrainCard marketing block.
+                                   is_strain_of_day: false, strain_of_day_discount: 0.0,
+                                   discount_percent: 0.0, sale_price: None, sale_active: false,
+                                   sale_until: None, is_best_seller: false,
+                                   is_new_arrival: false, new_until: None, display_order: 0,
+                               });
+                               status.set("✅ Добавлен!".into());
+                               name.set(String::new()); price.set(String::new());
+                               thc.set(String::new()); cbd.set(String::new()); grams.set(String::new());
+                               description.set(String::new()); effect.set(String::new()); flavor_profile.set(String::new());
+                               image_url.set(String::new()); video_url.set(String::new());
+                               name_en.set(String::new()); description_en.set(String::new());
+                               effect_en.set(String::new()); flavor_profile_en.set(String::new());
+                               strain_type_en.set(String::new());
+                               auto_scroll_to_list();
+                               spawn(async move {
+                                   let body = json!({
+                                       "name": n, "category": c, "price_per_gram": p,
+                                       "thc_percent": t, "cbd_percent": cb, "available_grams": g, "is_available": true,
+                                       "effect": if ef.is_empty() { serde_json::Value::Null } else { ef.into() },
+                                       "flavor_profile": if fp.is_empty() { serde_json::Value::Null } else { fp.into() },
+                                       "description": if d.is_empty() { serde_json::Value::Null } else { d.into() },
+                                       "image_url": if img.is_empty() { serde_json::Value::Null } else { img.into() },
+                                       "video_url": if vid.is_empty() { serde_json::Value::Null } else { vid.clone().into() },
+                                       "name_en": if ne.is_empty() { serde_json::Value::Null } else { ne.into() },
+                                       "description_en": if de.is_empty() { serde_json::Value::Null } else { de.into() },
+                                       "effect_en": if ee.is_empty() { serde_json::Value::Null } else { ee.into() },
+                                       "flavor_profile_en": if fpe.is_empty() { serde_json::Value::Null } else { fpe.into() },
+                                       "strain_type_en": if ste.is_empty() { serde_json::Value::Null } else { ste.into() },
+                                   });
+                                   let url = format!("{}/api/strains", api_base_url());
+                                   let res = HTTP_CLIENT.clone().post(&url)
+                                       .header("X-Telegram-Init-Data", init_data.read().clone())
+    .header("X-Admin-Token", admin_token())
+    .header("X-Admin-Telegram-Id", telegram_id.to_string())
+                                       .json(&body).send().await;
+                                   submitting.set(false);
+                                   match res {
+                                       Ok(r) if r.status().is_success() => {
+                                           if let Ok(data) = r.json::<serde_json::Value>().await {
+                                               if let Some(real_id) = data["id"].as_str() {
+                                                   cache.write().iter_mut().find(|s| s.id == temp_id).map(|s| s.id = real_id.to_string());
+                                               }
+                                           }
+                                           TelegramApp::init().haptic_notification(HapticNotification::Success);
+                                       }
+                                       _ => {
+                                           cache.write().retain(|s| s.id != temp_id);
+                                           status.set("❌ Ошибка добавления".into());
+                                           TelegramApp::init().haptic_notification(HapticNotification::Error);
+                                       }
+                                   }
+                               });
+                           },
+                           if *submitting.read() { "⏳..." } else { "➕ Добавить" }
+                       }
+                       {render_status(status)}
+                   }
+               }
 
-            h3 { style: list_title_style(), "Страйны ({filtered.len()})" }
-            {render_search(search_query)}
-            if *loading.read() {
-                div { style: "display:flex;flex-direction:column;gap:8px;",
-                    for _ in 0..4 {
-                        div { style: "background:#1a1a2e;padding:8px 10px;border-radius:6px;display:flex;align-items:center;gap:6px;",
-                            Skeleton { shape: SkeletonShape::Avatar }
-                            div { style: "flex:1;display:flex;flex-direction:column;gap:4px;",
-                                Skeleton { shape: SkeletonShape::Text, width: Some("60%".into()) }
-                                Skeleton { shape: SkeletonShape::TextSm, width: Some("40%".into()) }
-                            }
-                        }
-                    }
-                }
-            } else if filtered.is_empty() {
-                EmptyState {
-                    icon: "🔍",
-                    title: "Ничего не найдено",
-                    description: "Попробуйте изменить запрос поиска",
-                    action: rsx! {
-                        button {
-                            style: "padding:8px 16px;background:#2a2a4a;color:#e8e8e8;border:none;border-radius:4px;font-size:13px;cursor:pointer;",
-                            onclick: move |_| search_query.set(String::new()),
-                            "Очистить поиск"
-                        }
-                    },
-                }
-            } else {
-                div { "data-list": "true", style: "display:flex;flex-direction:column;gap:8px;",
-                    for s in filtered {
-                        if editing_id.read().as_deref() == Some(s.id.as_str()) {
-                            EditStrainCard {
-                                key: "{s.id}",
-                                item: s.clone(),
-                                cache: cache,
-                                on_saved: move |_| editing_id.set(None),
-                                on_cancel: move |_| editing_id.set(None),
-                            }
-                        } else {
-                            ItemRow {
-                                key: "{s.id}",
-                                name: s.name.clone(),
-                                sub: format!("{} • {}฿/г • {}г", s.category.clone().unwrap_or_default(), s.price_per_gram, s.available_grams.unwrap_or(0.0)),
-                                is_available: s.is_available,
-                                image_url: s.image_url.clone(),
-                                video_url: s.video_url.clone(),
-                                on_edit: {
-                                    let id = s.id.clone();
-                                    move |_| editing_id.set(Some(id.clone()))
-                                },
-                                on_toggle: {
-                                    let id = s.id.clone();
-                                    let next_avail = !s.is_available;
-                                    move |_| {
-                                        let id = id.clone();
-                                        cache.write().iter_mut().find(|s| s.id == id).map(|s| s.is_available = next_avail);
-                                        spawn(async move {
-                                            let url = format!("{}/api/strains/{}/availability", api_base_url(), id);
-                                            let res = HTTP_CLIENT.clone().put(&url)
-                                                .header("X-Telegram-Init-Data", init_data.read().clone())
-                                                .header("X-Admin-Token", admin_token())
-                                                .header("X-Admin-Telegram-Id", telegram_id.to_string())
-                                                .json(&json!({ "is_available": next_avail }))
-                                                .send().await;
-                                            match res {
-                                                Ok(r) if r.status().is_success() => { TelegramApp::init().haptic_notification(HapticNotification::Success); }
-                                                _ => {
-                                                    cache.write().iter_mut().find(|s| s.id == id).map(|s| s.is_available = !next_avail);
-                                                    push_toast(toasts, "Не удалось изменить статус страйна".into(), ToastKind::Error);
-                                                    TelegramApp::init().haptic_notification(HapticNotification::Error);
-                                                }
-                                            }
-                                        });
-                                    }
-                                },
-                                on_delete: {
-                                    let id = s.id.clone();
-                                    move |_| delete_target_id.set(Some(id.clone()))
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            DeleteConfirmModal {
-                target: delete_target_id,
-                item_name: "страйн".to_string(),
-                on_confirm: move |id: String| {
-                    let deleted = cache.read().iter().find(|s| s.id == id).cloned();
-                    cache.write().retain(|s| s.id != id);
-                    spawn(async move {
-                        let url = format!("{}/api/strains/{}", api_base_url(), id);
-                        let res = HTTP_CLIENT.clone().delete(&url)
-                            .header("X-Telegram-Init-Data", init_data.read().clone())
-                            .header("X-Admin-Token", admin_token())
-                            .header("X-Admin-Telegram-Id", telegram_id.to_string())
-                            .send().await;
-                        match res {
-                            Ok(r) if r.status().is_success() => { push_toast(toasts, "Страйн удалён".into(), ToastKind::Success); TelegramApp::init().haptic_notification(HapticNotification::Success); }
-                            _ => {
-                                if let Some(item) = deleted { cache.write().push(item); }
-                                push_toast(toasts, "Не удалось удалить страйн".into(), ToastKind::Error);
-                                TelegramApp::init().haptic_notification(HapticNotification::Error);
-                            }
-                        }
-                    });
-                }
-            }
-            {render_toasts(toasts)}
-        }
-    }
+               h3 { style: list_title_style(), "Страйны ({filtered.len()})" }
+               {render_search(search_query)}
+               if *loading.read() {
+                   div { style: "display:flex;flex-direction:column;gap:8px;",
+                       for _ in 0..4 {
+                           div { style: "background:#1a1a2e;padding:8px 10px;border-radius:6px;display:flex;align-items:center;gap:6px;",
+                               Skeleton { shape: SkeletonShape::Avatar }
+                               div { style: "flex:1;display:flex;flex-direction:column;gap:4px;",
+                                   Skeleton { shape: SkeletonShape::Text, width: Some("60%".into()) }
+                                   Skeleton { shape: SkeletonShape::TextSm, width: Some("40%".into()) }
+                               }
+                           }
+                       }
+                   }
+               } else if filtered.is_empty() {
+                   EmptyState {
+                       icon: "🔍",
+                       title: "Ничего не найдено",
+                       description: "Попробуйте изменить запрос поиска",
+                       action: rsx! {
+                           button {
+                               style: "padding:8px 16px;background:#2a2a4a;color:#e8e8e8;border:none;border-radius:4px;font-size:13px;cursor:pointer;",
+                               onclick: move |_| search_query.set(String::new()),
+                               "Очистить поиск"
+                           }
+                       },
+                   }
+               } else {
+                   div { "data-list": "true", style: "display:flex;flex-direction:column;gap:8px;",
+                       for s in filtered {
+                           if editing_id.read().as_deref() == Some(s.id.as_str()) {
+                               EditStrainCard {
+                                   key: "{s.id}",
+                                   item: s.clone(),
+                                   cache: cache,
+                                   on_saved: move |_| editing_id.set(None),
+                                   on_cancel: move |_| editing_id.set(None),
+                               }
+                           } else {
+                               ItemRow {
+                                   key: "{s.id}",
+                                   name: s.name.clone(),
+                                   sub: format!("{} • {}฿/г • {}г", s.category.clone().unwrap_or_default(), s.price_per_gram, s.available_grams.unwrap_or(0.0)),
+                                   is_available: s.is_available,
+                                   image_url: s.image_url.clone(),
+                                   video_url: s.video_url.clone(),
+                                   on_edit: {
+                                       let id = s.id.clone();
+                                       move |_| editing_id.set(Some(id.clone()))
+                                   },
+                                   on_toggle: {
+                                       let id = s.id.clone();
+                                       let next_avail = !s.is_available;
+                                       move |_| {
+                                           let id = id.clone();
+                                           cache.write().iter_mut().find(|s| s.id == id).map(|s| s.is_available = next_avail);
+                                           spawn(async move {
+                                               let url = format!("{}/api/strains/{}/availability", api_base_url(), id);
+                                               let res = HTTP_CLIENT.clone().put(&url)
+                                                   .header("X-Telegram-Init-Data", init_data.read().clone())
+                                                   .header("X-Admin-Token", admin_token())
+                                                   .header("X-Admin-Telegram-Id", telegram_id.to_string())
+                                                   .json(&json!({ "is_available": next_avail }))
+                                                   .send().await;
+                                               match res {
+                                                   Ok(r) if r.status().is_success() => { TelegramApp::init().haptic_notification(HapticNotification::Success); }
+                                                   _ => {
+                                                       cache.write().iter_mut().find(|s| s.id == id).map(|s| s.is_available = !next_avail);
+                                                       push_toast(toasts, "Не удалось изменить статус страйна".into(), ToastKind::Error);
+                                                       TelegramApp::init().haptic_notification(HapticNotification::Error);
+                                                   }
+                                               }
+                                           });
+                                       }
+                                   },
+                                   on_delete: {
+                                       let id = s.id.clone();
+                                       move |_| delete_target_id.set(Some(id.clone()))
+                                   }
+                               }
+                           }
+                       }
+                   }
+               }
+               DeleteConfirmModal {
+                   target: delete_target_id,
+                   item_name: "страйн".to_string(),
+                   on_confirm: move |id: String| {
+                       let deleted = cache.read().iter().find(|s| s.id == id).cloned();
+                       cache.write().retain(|s| s.id != id);
+                       spawn(async move {
+                           let url = format!("{}/api/strains/{}", api_base_url(), id);
+                           let res = HTTP_CLIENT.clone().delete(&url)
+                               .header("X-Telegram-Init-Data", init_data.read().clone())
+                               .header("X-Admin-Token", admin_token())
+                               .header("X-Admin-Telegram-Id", telegram_id.to_string())
+                               .send().await;
+                           match res {
+                               Ok(r) if r.status().is_success() => { push_toast(toasts, "Страйн удалён".into(), ToastKind::Success); TelegramApp::init().haptic_notification(HapticNotification::Success); }
+                               _ => {
+                                   if let Some(item) = deleted { cache.write().push(item); }
+                                   push_toast(toasts, "Не удалось удалить страйн".into(), ToastKind::Error);
+                                   TelegramApp::init().haptic_notification(HapticNotification::Error);
+                               }
+                           }
+                       });
+                   }
+               }
+               {render_toasts(toasts)}
+           }
+       }
 }
 
 // ── Accessories tab (Optimistic UI) ───────────────────────────
@@ -993,7 +1160,10 @@ fn AccessoriesTab() -> Element {
         {
             if let Some(window) = web_sys::window() {
                 if let Ok(Some(storage)) = window.local_storage() {
-                    let _ = storage.set_item("wwb_admin_accessories", &serde_json::to_string(&data).unwrap_or_default());
+                    let _ = storage.set_item(
+                        "wwb_admin_accessories",
+                        &serde_json::to_string(&data).unwrap_or_default(),
+                    );
                 }
             }
         }
@@ -1003,230 +1173,244 @@ fn AccessoriesTab() -> Element {
         let _ = reload.read();
         let init_data = init_data.read().clone();
         async move {
-        let url = format!("{}/api/accessories?include_hidden=1", api_base_url());
-        if let Ok(resp) = HTTP_CLIENT.clone()
-            .get(&url)
-            .header("X-Telegram-Init-Data", init_data.clone())
-            .header("X-Admin-Token", admin_token())
-            .header("X-Admin-Telegram-Id", telegram_id.to_string())
-            .send().await
-        {
-            if let Ok(data) = resp.json::<AccessoriesResp>().await {
-                cache.set(data.accessories);
+            let url = format!("{}/api/accessories?include_hidden=1", api_base_url());
+            if let Ok(resp) = HTTP_CLIENT
+                .clone()
+                .get(&url)
+                .header("X-Telegram-Init-Data", init_data.clone())
+                .header("X-Admin-Token", admin_token())
+                .header("X-Admin-Telegram-Id", telegram_id.to_string())
+                .send()
+                .await
+            {
+                if let Ok(data) = resp.json::<AccessoriesResp>().await {
+                    cache.set(data.accessories);
+                }
             }
+            loading.set(false);
+            Some(())
         }
-        loading.set(false);
-        Some(())
-    }});
+    });
 
     let filtered: Vec<AdminAccessory> = {
         let q = search_query.read().to_lowercase();
-        cache.read().iter().filter(|a| {
-            q.is_empty() || a.name.to_lowercase().contains(&q)
-                || a.category.as_deref().unwrap_or("").to_lowercase().contains(&q)
-        }).cloned().collect()
+        cache
+            .read()
+            .iter()
+            .filter(|a| {
+                q.is_empty()
+                    || a.name.to_lowercase().contains(&q)
+                    || a.category
+                        .as_deref()
+                        .unwrap_or("")
+                        .to_lowercase()
+                        .contains(&q)
+            })
+            .cloned()
+            .collect()
     };
 
     rsx! {
-        div {
-            FormCard {
-                title: "Добавить аксессуар".to_string(),
-                children: rsx!{
-                    input { style: input_style(), placeholder: "Название (RU)", value: "{name}",
-                        oninput: move |e| name.set(e.value()) }
-                    select { style: input_style(), value: "{category}",
-                        oninput: move |e| category.set(e.value()),
-                        option { value: "grinder", "🌀 Grinder" }
-                        option { value: "papers", "📄 Papers" }
-                        option { value: "lighter", "🔥 Lighter" }
-                        option { value: "pipe", "🚬 Pipe" }
-                        option { value: "bong", "💨 Bong" }
-                        option { value: "storage", "📦 Storage" }
-                        option { value: "clothing", "👕 Clothing" }
-                        option { value: "other", "🔧 Other" }
-                    }
-                    input { style: input_style(), placeholder: "Цена ฿", value: "{price}", r#type: "number",
-                        oninput: move |e| price.set(e.value()) }
-                    input { style: input_style(), placeholder: "Кол-во", value: "{stock}", r#type: "number",
-                        oninput: move |e| stock.set(e.value()) }
-                    textarea { style: textarea_style(), placeholder: "Описание (RU)", value: "{description}",
-                        oninput: move |e| description.set(e.value()) }
-                    ImageUpload { image_url: image_url.read().clone(), on_change: move |url: String| image_url.set(url) }
-                    VideoUpload { video_url: video_url.read().clone(), on_change: move |url: String| video_url.set(url) }
-                    div { style: en_section_style(), "🇬🇧 English" }
-                    input { style: input_style(), placeholder: "Name (EN)", value: "{name_en}",
-                        oninput: move |e| name_en.set(e.value()) }
-                    textarea { style: textarea_style(), placeholder: "Description (EN)", value: "{description_en}",
-                        oninput: move |e| description_en.set(e.value()) }
-                    input { style: input_style(), placeholder: "Category (EN)", value: "{category_en}",
-                        oninput: move |e| category_en.set(e.value()) }
-                    button {
-                        style: if *submitting.read() { submit_btn_disabled_style() } else { submit_btn_style() },
-                        disabled: *submitting.read(),
-                        onclick: move |_| {
-                            let n = name(); let c = category(); let p = price.read().parse::<f64>().unwrap_or(0.0);
-                            let s_val = stock.read().parse::<i32>().unwrap_or(0);
-                            let d = description(); let img = image_url(); let vid = video_url();
-                            let ne = name_en(); let de = description_en(); let ce = category_en();
-                            if n.trim().is_empty() || p <= 0.0 || !p.is_finite() { status.set("❌ Name + price".into()); return; }
-                            submitting.set(true);
-                            let temp_id = format!("temp-{}", uuid::Uuid::new_v4());
-                            cache.write().insert(0, AdminAccessory {
-                                id: temp_id.clone(), name: n.clone(), category: Some(c.clone()),
-                                description: if d.is_empty() { None } else { Some(d.clone()) },
-                                price: p, stock: Some(s_val), is_available: true,
-                                image_url: if img.is_empty() { None } else { Some(img.clone()) },
-                                video_url: if vid.is_empty() { None } else { Some(vid.clone()) },
-                                name_en: if ne.is_empty() { None } else { Some(ne.clone()) },
-                                description_en: if de.is_empty() { None } else { Some(de.clone()) },
-                                category_en: if ce.is_empty() { None } else { Some(ce.clone()) },
-                            });
-                            status.set("✅ Добавлен!".into());
-                            name.set(String::new()); price.set(String::new()); stock.set(String::new());
-                            description.set(String::new()); image_url.set(String::new()); video_url.set(String::new());
-                            name_en.set(String::new()); description_en.set(String::new()); category_en.set(String::new());
-                            auto_scroll_to_list();
-                            spawn(async move {
-                                let body = json!({
-                                    "name": n, "category": c, "price": p, "stock": s_val,
-                                    "description": if d.is_empty() { serde_json::Value::Null } else { d.into() },
-                                    "image_url": if img.is_empty() { serde_json::Value::Null } else { img.into() },
-                                    "video_url": if vid.is_empty() { serde_json::Value::Null } else { vid.clone().into() },
-                                    "name_en": if ne.is_empty() { serde_json::Value::Null } else { ne.into() },
-                                    "description_en": if de.is_empty() { serde_json::Value::Null } else { de.into() },
-                                    "category_en": if ce.is_empty() { serde_json::Value::Null } else { ce.into() },
-                                });
-                                let url = format!("{}/api/accessories", api_base_url());
-                                let res = HTTP_CLIENT.clone().post(&url)
-                                    .header("X-Telegram-Init-Data", init_data.read().clone())
- .header("X-Admin-Token", admin_token())
- .header("X-Admin-Telegram-Id", telegram_id.to_string())
-                                    .json(&body).send().await;
-                                submitting.set(false);
-                                match res {
-                                    Ok(r) if r.status().is_success() => {
-                                        if let Ok(data) = r.json::<serde_json::Value>().await {
-                                            if let Some(real_id) = data["id"].as_str() {
-                                                cache.write().iter_mut().find(|a| a.id == temp_id).map(|a| a.id = real_id.to_string());
-                                            }
-                                        }
-                                        TelegramApp::init().haptic_notification(HapticNotification::Success);
-                                    }
-                                    _ => { cache.write().retain(|a| a.id != temp_id); status.set("❌ Error".into()); TelegramApp::init().haptic_notification(HapticNotification::Error); }
-                                }
-                            });
-                        },
-                        if *submitting.read() { "⏳..." } else { "➕ Добавить" }
-                    }
-                    {render_status(status)}
-                }
-            }
-            h3 { style: list_title_style(), "Аксессуары ({filtered.len()})" }
-            {render_search(search_query)}
-            if *loading.read() {
-                div { style: "display:flex;flex-direction:column;gap:8px;",
-                    for _ in 0..4 {
-                        div { style: "background:#1a1a2e;padding:8px 10px;border-radius:6px;display:flex;align-items:center;gap:6px;",
-                            Skeleton { shape: SkeletonShape::Avatar }
-                            div { style: "flex:1;display:flex;flex-direction:column;gap:4px;",
-                                Skeleton { shape: SkeletonShape::Text, width: Some("60%".into()) }
-                                Skeleton { shape: SkeletonShape::TextSm, width: Some("40%".into()) }
-                            }
-                        }
-                    }
-                }
-            } else if filtered.is_empty() {
-                EmptyState {
-                    icon: "🔍",
-                    title: "Ничего не найдено",
-                    description: "Попробуйте изменить запрос поиска",
-                    action: rsx! {
-                        button {
-                            style: "padding:8px 16px;background:#2a2a4a;color:#e8e8e8;border:none;border-radius:4px;font-size:13px;cursor:pointer;",
-                            onclick: move |_| search_query.set(String::new()),
-                            "Очистить поиск"
-                        }
-                    },
-                }
-            } else {
-                div { "data-list": "true", style: "display:flex;flex-direction:column;gap:8px;",
-                    for a in filtered {
-                        if editing_id.read().as_deref() == Some(a.id.as_str()) {
-                            EditAccessoryCard {
-                                key: "{a.id}",
-                                item: a.clone(),
-                                cache: cache,
-                                on_saved: move |_| editing_id.set(None),
-                                on_cancel: move |_| editing_id.set(None),
-                            }
-                        } else {
-                            ItemRow {
-                                key: "{a.id}",
-                                name: a.name.clone(),
-                                sub: format!("{} • {}฿ • {} шт.", a.category.clone().unwrap_or_default(), a.price, a.stock.unwrap_or(0)),
-                                is_available: a.is_available,
-                                image_url: a.image_url.clone(),
-                                video_url: a.video_url.clone(),
-                                on_edit: { let id = a.id.clone(); move |_| editing_id.set(Some(id.clone())) },
-                                on_toggle: {
-                                    let id = a.id.clone(); let next = !a.is_available;
-                                    move |_| {
-                                        let id = id.clone();
-                                        cache.write().iter_mut().find(|a| a.id == id).map(|a| a.is_available = next);
-                                        spawn(async move {
-                                            let url = format!("{}/api/accessories/{}/availability", api_base_url(), id);
-                                            let res = HTTP_CLIENT.clone().put(&url)
-                                                .header("X-Telegram-Init-Data", init_data.read().clone())
-                                                .header("X-Admin-Token", admin_token())
-                                                .header("X-Admin-Telegram-Id", telegram_id.to_string())
-                                                .json(&json!({ "is_available": next })).send().await;
-                                            match res {
-                                                Ok(r) if r.status().is_success() => { TelegramApp::init().haptic_notification(HapticNotification::Success); }
-                                                _ => {
-                                                    cache.write().iter_mut().find(|a| a.id == id).map(|a| a.is_available = !next);
-                                                    push_toast(toasts, "Не удалось изменить статус аксессуара".into(), ToastKind::Error);
-                                                    TelegramApp::init().haptic_notification(HapticNotification::Error);
-                                                }
-                                            }
-                                        });
-                                    }
-                                },
-                                on_delete: {
-                                    let id = a.id.clone();
-                                    move |_| delete_target_id.set(Some(id.clone()))
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            DeleteConfirmModal {
-                target: delete_target_id,
-                item_name: "аксессуар".to_string(),
-                on_confirm: move |id: String| {
-                    let deleted = cache.read().iter().find(|a| a.id == id).cloned();
-                    cache.write().retain(|a| a.id != id);
-                    spawn(async move {
-                        let url = format!("{}/api/accessories/{}", api_base_url(), id);
-                        let res = HTTP_CLIENT.clone().delete(&url)
-                            .header("X-Telegram-Init-Data", init_data.read().clone())
-                            .header("X-Admin-Token", admin_token())
-                            .header("X-Admin-Telegram-Id", telegram_id.to_string())
-                            .send().await;
-                        match res {
-                            Ok(r) if r.status().is_success() => { push_toast(toasts, "Аксессуар удалён".into(), ToastKind::Success); TelegramApp::init().haptic_notification(HapticNotification::Success); }
-                            _ => {
-                                if let Some(item) = deleted { cache.write().push(item); }
-                                push_toast(toasts, "Не удалось удалить аксессуар".into(), ToastKind::Error);
-                                TelegramApp::init().haptic_notification(HapticNotification::Error);
-                            }
-                        }
-                    });
-                }
-            }
-            {render_toasts(toasts)}
-        }
-    }
+           div {
+               FormCard {
+                   title: "Добавить аксессуар".to_string(),
+                   children: rsx!{
+                       input { style: input_style(), placeholder: "Название (RU)", value: "{name}",
+                           oninput: move |e| name.set(e.value()) }
+                       select { style: input_style(), value: "{category}",
+                           oninput: move |e| category.set(e.value()),
+                           option { value: "grinder", "🌀 Grinder" }
+                           option { value: "papers", "📄 Papers" }
+                           option { value: "lighter", "🔥 Lighter" }
+                           option { value: "pipe", "🚬 Pipe" }
+                           option { value: "bong", "💨 Bong" }
+                           option { value: "storage", "📦 Storage" }
+                           option { value: "clothing", "👕 Clothing" }
+                           option { value: "other", "🔧 Other" }
+                       }
+                       input { style: input_style(), placeholder: "Цена ฿", value: "{price}", r#type: "number",
+                           oninput: move |e| price.set(e.value()) }
+                       input { style: input_style(), placeholder: "Кол-во", value: "{stock}", r#type: "number",
+                           oninput: move |e| stock.set(e.value()) }
+                       textarea { style: textarea_style(), placeholder: "Описание (RU)", value: "{description}",
+                           oninput: move |e| description.set(e.value()) }
+                       ImageUpload { image_url: image_url.read().clone(), on_change: move |url: String| image_url.set(url) }
+                       VideoUpload { video_url: video_url.read().clone(), on_change: move |url: String| video_url.set(url) }
+                       div { style: en_section_style(), "🇬🇧 English" }
+                       input { style: input_style(), placeholder: "Name (EN)", value: "{name_en}",
+                           oninput: move |e| name_en.set(e.value()) }
+                       textarea { style: textarea_style(), placeholder: "Description (EN)", value: "{description_en}",
+                           oninput: move |e| description_en.set(e.value()) }
+                       input { style: input_style(), placeholder: "Category (EN)", value: "{category_en}",
+                           oninput: move |e| category_en.set(e.value()) }
+                       button {
+                           style: if *submitting.read() { submit_btn_disabled_style() } else { submit_btn_style() },
+                           disabled: *submitting.read(),
+                           onclick: move |_| {
+                               let n = name(); let c = category(); let p = price.read().parse::<f64>().unwrap_or(0.0);
+                               let s_val = stock.read().parse::<i32>().unwrap_or(0);
+                               if s_val < 0 { status.set("❌ Количество должно быть числом ≥ 0".into()); return; }
+                               let d = description(); let img = image_url(); let vid = video_url();
+                               let ne = name_en(); let de = description_en(); let ce = category_en();
+                               if n.trim().is_empty() || p <= 0.0 || !p.is_finite() { status.set("❌ Name + price".into()); return; }
+                               submitting.set(true);
+                               let temp_id = format!("temp-{}", uuid::Uuid::new_v4());
+                               cache.write().insert(0, AdminAccessory {
+                                   id: temp_id.clone(), name: n.clone(), category: Some(c.clone()),
+                                   description: if d.is_empty() { None } else { Some(d.clone()) },
+                                   price: p, stock: Some(s_val), is_available: true,
+                                   image_url: if img.is_empty() { None } else { Some(img.clone()) },
+                                   video_url: if vid.is_empty() { None } else { Some(vid.clone()) },
+                                   name_en: if ne.is_empty() { None } else { Some(ne.clone()) },
+                                   description_en: if de.is_empty() { None } else { Some(de.clone()) },
+                                   category_en: if ce.is_empty() { None } else { Some(ce.clone()) },
+                               });
+                               status.set("✅ Добавлен!".into());
+                               name.set(String::new()); price.set(String::new()); stock.set(String::new());
+                               description.set(String::new()); image_url.set(String::new()); video_url.set(String::new());
+                               name_en.set(String::new()); description_en.set(String::new()); category_en.set(String::new());
+                               auto_scroll_to_list();
+                               spawn(async move {
+                                   let body = json!({
+                                       "name": n, "category": c, "price": p, "stock": s_val,
+                                       "description": if d.is_empty() { serde_json::Value::Null } else { d.into() },
+                                       "image_url": if img.is_empty() { serde_json::Value::Null } else { img.into() },
+                                       "video_url": if vid.is_empty() { serde_json::Value::Null } else { vid.clone().into() },
+                                       "name_en": if ne.is_empty() { serde_json::Value::Null } else { ne.into() },
+                                       "description_en": if de.is_empty() { serde_json::Value::Null } else { de.into() },
+                                       "category_en": if ce.is_empty() { serde_json::Value::Null } else { ce.into() },
+                                   });
+                                   let url = format!("{}/api/accessories", api_base_url());
+                                   let res = HTTP_CLIENT.clone().post(&url)
+                                       .header("X-Telegram-Init-Data", init_data.read().clone())
+    .header("X-Admin-Token", admin_token())
+    .header("X-Admin-Telegram-Id", telegram_id.to_string())
+                                       .json(&body).send().await;
+                                   submitting.set(false);
+                                   match res {
+                                       Ok(r) if r.status().is_success() => {
+                                           if let Ok(data) = r.json::<serde_json::Value>().await {
+                                               if let Some(real_id) = data["id"].as_str() {
+                                                   cache.write().iter_mut().find(|a| a.id == temp_id).map(|a| a.id = real_id.to_string());
+                                               }
+                                           }
+                                           TelegramApp::init().haptic_notification(HapticNotification::Success);
+                                       }
+                                       _ => { cache.write().retain(|a| a.id != temp_id); status.set("❌ Error".into()); TelegramApp::init().haptic_notification(HapticNotification::Error); }
+                                   }
+                               });
+                           },
+                           if *submitting.read() { "⏳..." } else { "➕ Добавить" }
+                       }
+                       {render_status(status)}
+                   }
+               }
+               h3 { style: list_title_style(), "Аксессуары ({filtered.len()})" }
+               {render_search(search_query)}
+               if *loading.read() {
+                   div { style: "display:flex;flex-direction:column;gap:8px;",
+                       for _ in 0..4 {
+                           div { style: "background:#1a1a2e;padding:8px 10px;border-radius:6px;display:flex;align-items:center;gap:6px;",
+                               Skeleton { shape: SkeletonShape::Avatar }
+                               div { style: "flex:1;display:flex;flex-direction:column;gap:4px;",
+                                   Skeleton { shape: SkeletonShape::Text, width: Some("60%".into()) }
+                                   Skeleton { shape: SkeletonShape::TextSm, width: Some("40%".into()) }
+                               }
+                           }
+                       }
+                   }
+               } else if filtered.is_empty() {
+                   EmptyState {
+                       icon: "🔍",
+                       title: "Ничего не найдено",
+                       description: "Попробуйте изменить запрос поиска",
+                       action: rsx! {
+                           button {
+                               style: "padding:8px 16px;background:#2a2a4a;color:#e8e8e8;border:none;border-radius:4px;font-size:13px;cursor:pointer;",
+                               onclick: move |_| search_query.set(String::new()),
+                               "Очистить поиск"
+                           }
+                       },
+                   }
+               } else {
+                   div { "data-list": "true", style: "display:flex;flex-direction:column;gap:8px;",
+                       for a in filtered {
+                           if editing_id.read().as_deref() == Some(a.id.as_str()) {
+                               EditAccessoryCard {
+                                   key: "{a.id}",
+                                   item: a.clone(),
+                                   cache: cache,
+                                   on_saved: move |_| editing_id.set(None),
+                                   on_cancel: move |_| editing_id.set(None),
+                               }
+                           } else {
+                               ItemRow {
+                                   key: "{a.id}",
+                                   name: a.name.clone(),
+                                   sub: format!("{} • {}฿ • {} шт.", a.category.clone().unwrap_or_default(), a.price, a.stock.unwrap_or(0)),
+                                   is_available: a.is_available,
+                                   image_url: a.image_url.clone(),
+                                   video_url: a.video_url.clone(),
+                                   on_edit: { let id = a.id.clone(); move |_| editing_id.set(Some(id.clone())) },
+                                   on_toggle: {
+                                       let id = a.id.clone(); let next = !a.is_available;
+                                       move |_| {
+                                           let id = id.clone();
+                                           cache.write().iter_mut().find(|a| a.id == id).map(|a| a.is_available = next);
+                                           spawn(async move {
+                                               let url = format!("{}/api/accessories/{}/availability", api_base_url(), id);
+                                               let res = HTTP_CLIENT.clone().put(&url)
+                                                   .header("X-Telegram-Init-Data", init_data.read().clone())
+                                                   .header("X-Admin-Token", admin_token())
+                                                   .header("X-Admin-Telegram-Id", telegram_id.to_string())
+                                                   .json(&json!({ "is_available": next })).send().await;
+                                               match res {
+                                                   Ok(r) if r.status().is_success() => { TelegramApp::init().haptic_notification(HapticNotification::Success); }
+                                                   _ => {
+                                                       cache.write().iter_mut().find(|a| a.id == id).map(|a| a.is_available = !next);
+                                                       push_toast(toasts, "Не удалось изменить статус аксессуара".into(), ToastKind::Error);
+                                                       TelegramApp::init().haptic_notification(HapticNotification::Error);
+                                                   }
+                                               }
+                                           });
+                                       }
+                                   },
+                                   on_delete: {
+                                       let id = a.id.clone();
+                                       move |_| delete_target_id.set(Some(id.clone()))
+                                   }
+                               }
+                           }
+                       }
+                   }
+               }
+               DeleteConfirmModal {
+                   target: delete_target_id,
+                   item_name: "аксессуар".to_string(),
+                   on_confirm: move |id: String| {
+                       let deleted = cache.read().iter().find(|a| a.id == id).cloned();
+                       cache.write().retain(|a| a.id != id);
+                       spawn(async move {
+                           let url = format!("{}/api/accessories/{}", api_base_url(), id);
+                           let res = HTTP_CLIENT.clone().delete(&url)
+                               .header("X-Telegram-Init-Data", init_data.read().clone())
+                               .header("X-Admin-Token", admin_token())
+                               .header("X-Admin-Telegram-Id", telegram_id.to_string())
+                               .send().await;
+                           match res {
+                               Ok(r) if r.status().is_success() => { push_toast(toasts, "Аксессуар удалён".into(), ToastKind::Success); TelegramApp::init().haptic_notification(HapticNotification::Success); }
+                               _ => {
+                                   if let Some(item) = deleted { cache.write().push(item); }
+                                   push_toast(toasts, "Не удалось удалить аксессуар".into(), ToastKind::Error);
+                                   TelegramApp::init().haptic_notification(HapticNotification::Error);
+                               }
+                           }
+                       });
+                   }
+               }
+               {render_toasts(toasts)}
+           }
+       }
 }
 
 // ── Tea tab (Optimistic UI) ───────────────────────────────────
@@ -1284,7 +1468,10 @@ fn TeaTab() -> Element {
         {
             if let Some(window) = web_sys::window() {
                 if let Ok(Some(storage)) = window.local_storage() {
-                    let _ = storage.set_item("wwb_admin_tea", &serde_json::to_string(&data).unwrap_or_default());
+                    let _ = storage.set_item(
+                        "wwb_admin_tea",
+                        &serde_json::to_string(&data).unwrap_or_default(),
+                    );
                 }
             }
         }
@@ -1294,228 +1481,242 @@ fn TeaTab() -> Element {
         let _ = reload.read();
         let init_data = init_data.read().clone();
         async move {
-        let url = format!("{}/api/tea-products?include_hidden=1", api_base_url());
-        if let Ok(resp) = HTTP_CLIENT.clone()
-            .get(&url)
-            .header("X-Telegram-Init-Data", init_data.clone())
-            .header("X-Admin-Token", admin_token())
-            .header("X-Admin-Telegram-Id", telegram_id.to_string())
-            .send().await
-        {
-            if let Ok(data) = resp.json::<TeaResp>().await {
-                cache.set(data.tea_products);
+            let url = format!("{}/api/tea-products?include_hidden=1", api_base_url());
+            if let Ok(resp) = HTTP_CLIENT
+                .clone()
+                .get(&url)
+                .header("X-Telegram-Init-Data", init_data.clone())
+                .header("X-Admin-Token", admin_token())
+                .header("X-Admin-Telegram-Id", telegram_id.to_string())
+                .send()
+                .await
+            {
+                if let Ok(data) = resp.json::<TeaResp>().await {
+                    cache.set(data.tea_products);
+                }
             }
+            loading.set(false);
+            Some(())
         }
-        loading.set(false);
-        Some(())
-    }});
+    });
 
     let filtered: Vec<AdminTea> = {
         let q = search_query.read().to_lowercase();
-        cache.read().iter().filter(|t| {
-            q.is_empty() || t.name.to_lowercase().contains(&q)
-                || t.subcategory.as_deref().unwrap_or("").to_lowercase().contains(&q)
-        }).cloned().collect()
+        cache
+            .read()
+            .iter()
+            .filter(|t| {
+                q.is_empty()
+                    || t.name.to_lowercase().contains(&q)
+                    || t.subcategory
+                        .as_deref()
+                        .unwrap_or("")
+                        .to_lowercase()
+                        .contains(&q)
+            })
+            .cloned()
+            .collect()
     };
 
     rsx! {
-        div {
-            FormCard {
-                title: "Добавить чай".to_string(),
-                children: rsx!{
-                    input { style: input_style(), placeholder: "Название (RU)", value: "{name}",
-                        oninput: move |e| name.set(e.value()) }
-                    select { style: input_style(), value: "{subcategory}",
-                        oninput: move |e| subcategory.set(e.value()),
-                        option { value: "green", "🍃 Green" }
-                        option { value: "black", "🖤 Black" }
-                        option { value: "herbal", "🌿 Herbal" }
-                        option { value: "oolong", "🍂 Oolong" }
-                        option { value: "puer", "🟫 Pu-er" }
-                        option { value: "other", "🍵 Other" }
-                    }
-                    input { style: input_style(), placeholder: "Цена ฿", value: "{price}", r#type: "number",
-                        oninput: move |e| price.set(e.value()) }
-                    input { style: input_style(), placeholder: "Кол-во", value: "{stock}", r#type: "number",
-                        oninput: move |e| stock.set(e.value()) }
-                    textarea { style: textarea_style(), placeholder: "Описание (RU)", value: "{description}",
-                        oninput: move |e| description.set(e.value()) }
-                    ImageUpload { image_url: image_url.read().clone(), on_change: move |url: String| image_url.set(url) }
-                    VideoUpload { video_url: video_url.read().clone(), on_change: move |url: String| video_url.set(url) }
-                    div { style: en_section_style(), "🇬🇧 English" }
-                    input { style: input_style(), placeholder: "Name (EN)", value: "{name_en}",
-                        oninput: move |e| name_en.set(e.value()) }
-                    textarea { style: textarea_style(), placeholder: "Description (EN)", value: "{description_en}",
-                        oninput: move |e| description_en.set(e.value()) }
-                    input { style: input_style(), placeholder: "Subcategory (EN)", value: "{subcategory_en}",
-                        oninput: move |e| subcategory_en.set(e.value()) }
-                    button {
-                        style: if *submitting.read() { submit_btn_disabled_style() } else { submit_btn_style() },
-                        disabled: *submitting.read(),
-                        onclick: move |_| {
-                            let n = name(); let sc = subcategory(); let p = price.read().parse::<f64>().unwrap_or(0.0);
-                            let s_val = stock.read().parse::<i32>().unwrap_or(0);
-                            let d = description(); let img = image_url(); let vid = video_url();
-                            let ne = name_en(); let de = description_en(); let sce = subcategory_en();
-                            if n.trim().is_empty() || p <= 0.0 || !p.is_finite() { status.set("❌ Name + price".into()); return; }
-                            submitting.set(true);
-                            let temp_id = format!("temp-{}", uuid::Uuid::new_v4());
-                            cache.write().insert(0, AdminTea {
-                                id: temp_id.clone(), name: n.clone(), subcategory: Some(sc.clone()),
-                                description: if d.is_empty() { None } else { Some(d.clone()) },
-                                price: p, stock: Some(s_val), is_available: true,
-                                image_url: if img.is_empty() { None } else { Some(img.clone()) },
-                                video_url: if vid.is_empty() { None } else { Some(vid.clone()) },
-                                name_en: if ne.is_empty() { None } else { Some(ne.clone()) },
-                                description_en: if de.is_empty() { None } else { Some(de.clone()) },
-                                subcategory_en: if sce.is_empty() { None } else { Some(sce.clone()) },
-                            });
-                            status.set("✅ Добавлен!".into());
-                            name.set(String::new()); price.set(String::new()); stock.set(String::new());
-                            description.set(String::new()); image_url.set(String::new()); video_url.set(String::new());
-                            name_en.set(String::new()); description_en.set(String::new()); subcategory_en.set(String::new());
-                            auto_scroll_to_list();
-                            spawn(async move {
-                                let body = json!({
-                                    "name": n, "subcategory": sc, "price": p, "stock": s_val,
-                                    "description": if d.is_empty() { serde_json::Value::Null } else { d.into() },
-                                    "image_url": if img.is_empty() { serde_json::Value::Null } else { img.into() },
-                                    "video_url": if vid.is_empty() { serde_json::Value::Null } else { vid.into() },
-                                    "name_en": if ne.is_empty() { serde_json::Value::Null } else { ne.into() },
-                                    "description_en": if de.is_empty() { serde_json::Value::Null } else { de.into() },
-                                    "subcategory_en": if sce.is_empty() { serde_json::Value::Null } else { sce.into() },
-                                });
-                                let url = format!("{}/api/tea-products", api_base_url());
-                                let res = HTTP_CLIENT.clone().post(&url)
-                                    .header("X-Telegram-Init-Data", init_data.read().clone())
- .header("X-Admin-Token", admin_token())
- .header("X-Admin-Telegram-Id", telegram_id.to_string())
-                                    .json(&body).send().await;
-                                submitting.set(false);
-                                match res {
-                                    Ok(r) if r.status().is_success() => {
-                                        if let Ok(data) = r.json::<serde_json::Value>().await {
-                                            if let Some(real_id) = data["id"].as_str() {
-                                                cache.write().iter_mut().find(|t| t.id == temp_id).map(|t| t.id = real_id.to_string());
-                                            }
-                                        }
-                                        TelegramApp::init().haptic_notification(HapticNotification::Success);
-                                    }
-                                    _ => { cache.write().retain(|t| t.id != temp_id); status.set("❌ Error".into()); TelegramApp::init().haptic_notification(HapticNotification::Error); }
-                                }
-                            });
-                        },
-                        if *submitting.read() { "⏳..." } else { "➕ Добавить" }
-                    }
-                    {render_status(status)}
-                }
-            }
-            h3 { style: list_title_style(), "Чай ({filtered.len()})" }
-            {render_search(search_query)}
-            if *loading.read() {
-                div { style: "display:flex;flex-direction:column;gap:8px;",
-                    for _ in 0..4 {
-                        div { style: "background:#1a1a2e;padding:8px 10px;border-radius:6px;display:flex;align-items:center;gap:6px;",
-                            Skeleton { shape: SkeletonShape::Avatar }
-                            div { style: "flex:1;display:flex;flex-direction:column;gap:4px;",
-                                Skeleton { shape: SkeletonShape::Text, width: Some("60%".into()) }
-                                Skeleton { shape: SkeletonShape::TextSm, width: Some("40%".into()) }
-                            }
-                        }
-                    }
-                }
-            } else if filtered.is_empty() {
-                EmptyState {
-                    icon: "🔍",
-                    title: "Ничего не найдено",
-                    description: "Попробуйте изменить запрос поиска",
-                    action: rsx! {
-                        button {
-                            style: "padding:8px 16px;background:#2a2a4a;color:#e8e8e8;border:none;border-radius:4px;font-size:13px;cursor:pointer;",
-                            onclick: move |_| search_query.set(String::new()),
-                            "Очистить поиск"
-                        }
-                    },
-                }
-            } else {
-                div { "data-list": "true", style: "display:flex;flex-direction:column;gap:8px;",
-                    for t in filtered {
-                        if editing_id.read().as_deref() == Some(t.id.as_str()) {
-                            EditTeaCard {
-                                key: "{t.id}",
-                                item: t.clone(),
-                                cache: cache,
-                                on_saved: move |_| editing_id.set(None),
-                                on_cancel: move |_| editing_id.set(None),
-                            }
-                        } else {
-                            ItemRow {
-                                key: "{t.id}",
-                                name: t.name.clone(),
-                                sub: format!("{} • {}฿ • {} шт.", t.subcategory.clone().unwrap_or_default(), t.price, t.stock.unwrap_or(0)),
-                                is_available: t.is_available,
-                                image_url: t.image_url.clone(),
-                                video_url: t.video_url.clone(),
-                                on_edit: { let id = t.id.clone(); move |_| editing_id.set(Some(id.clone())) },
-                                on_toggle: {
-                                    let id = t.id.clone(); let next = !t.is_available;
-                                    move |_| {
-                                        let id = id.clone();
-                                        cache.write().iter_mut().find(|t| t.id == id).map(|t| t.is_available = next);
-                                        spawn(async move {
-                                            let url = format!("{}/api/tea-products/{}/availability", api_base_url(), id);
-                                            let res = HTTP_CLIENT.clone().put(&url)
-                                                .header("X-Telegram-Init-Data", init_data.read().clone())
-                                                .header("X-Admin-Token", admin_token())
-                                                .header("X-Admin-Telegram-Id", telegram_id.to_string())
-                                                .json(&json!({ "is_available": next })).send().await;
-                                            match res {
-                                                Ok(r) if r.status().is_success() => { TelegramApp::init().haptic_notification(HapticNotification::Success); }
-                                                _ => {
-                                                    cache.write().iter_mut().find(|t| t.id == id).map(|t| t.is_available = !next);
-                                                    push_toast(toasts, "Не удалось изменить статус чая".into(), ToastKind::Error);
-                                                    TelegramApp::init().haptic_notification(HapticNotification::Error);
-                                                }
-                                            }
-                                        });
-                                    }
-                                },
-                                on_delete: {
-                                    let id = t.id.clone();
-                                    move |_| delete_target_id.set(Some(id.clone()))
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            DeleteConfirmModal {
-                target: delete_target_id,
-                item_name: "чай".to_string(),
-                on_confirm: move |id: String| {
-                    let deleted = cache.read().iter().find(|t| t.id == id).cloned();
-                    cache.write().retain(|t| t.id != id);
-                    spawn(async move {
-                        let url = format!("{}/api/tea-products/{}", api_base_url(), id);
-                        let res = HTTP_CLIENT.clone().delete(&url)
-                            .header("X-Telegram-Init-Data", init_data.read().clone())
-                            .header("X-Admin-Token", admin_token())
-                            .header("X-Admin-Telegram-Id", telegram_id.to_string())
-                            .send().await;
-                        match res {
-                            Ok(r) if r.status().is_success() => { push_toast(toasts, "Чай удалён".into(), ToastKind::Success); TelegramApp::init().haptic_notification(HapticNotification::Success); }
-                            _ => {
-                                if let Some(item) = deleted { cache.write().push(item); }
-                                push_toast(toasts, "Не удалось удалить чай".into(), ToastKind::Error);
-                                TelegramApp::init().haptic_notification(HapticNotification::Error);
-                            }
-                        }
-                    });
-                }
-            }
-            {render_toasts(toasts)}
-        }
-    }
+           div {
+               FormCard {
+                   title: "Добавить чай".to_string(),
+                   children: rsx!{
+                       input { style: input_style(), placeholder: "Название (RU)", value: "{name}",
+                           oninput: move |e| name.set(e.value()) }
+                       select { style: input_style(), value: "{subcategory}",
+                           oninput: move |e| subcategory.set(e.value()),
+                           option { value: "green", "🍃 Green" }
+                           option { value: "black", "🖤 Black" }
+                           option { value: "herbal", "🌿 Herbal" }
+                           option { value: "oolong", "🍂 Oolong" }
+                           option { value: "puer", "🟫 Pu-er" }
+                           option { value: "other", "🍵 Other" }
+                       }
+                       input { style: input_style(), placeholder: "Цена ฿", value: "{price}", r#type: "number",
+                           oninput: move |e| price.set(e.value()) }
+                       input { style: input_style(), placeholder: "Кол-во", value: "{stock}", r#type: "number",
+                           oninput: move |e| stock.set(e.value()) }
+                       textarea { style: textarea_style(), placeholder: "Описание (RU)", value: "{description}",
+                           oninput: move |e| description.set(e.value()) }
+                       ImageUpload { image_url: image_url.read().clone(), on_change: move |url: String| image_url.set(url) }
+                       VideoUpload { video_url: video_url.read().clone(), on_change: move |url: String| video_url.set(url) }
+                       div { style: en_section_style(), "🇬🇧 English" }
+                       input { style: input_style(), placeholder: "Name (EN)", value: "{name_en}",
+                           oninput: move |e| name_en.set(e.value()) }
+                       textarea { style: textarea_style(), placeholder: "Description (EN)", value: "{description_en}",
+                           oninput: move |e| description_en.set(e.value()) }
+                       input { style: input_style(), placeholder: "Subcategory (EN)", value: "{subcategory_en}",
+                           oninput: move |e| subcategory_en.set(e.value()) }
+                       button {
+                           style: if *submitting.read() { submit_btn_disabled_style() } else { submit_btn_style() },
+                           disabled: *submitting.read(),
+                           onclick: move |_| {
+                               let n = name(); let sc = subcategory(); let p = price.read().parse::<f64>().unwrap_or(0.0);
+                               let s_val = stock.read().parse::<i32>().unwrap_or(0);
+                               if s_val < 0 { status.set("❌ Количество должно быть числом ≥ 0".into()); return; }
+                               let d = description(); let img = image_url(); let vid = video_url();
+                               let ne = name_en(); let de = description_en(); let sce = subcategory_en();
+                               if n.trim().is_empty() || p <= 0.0 || !p.is_finite() { status.set("❌ Name + price".into()); return; }
+                               submitting.set(true);
+                               let temp_id = format!("temp-{}", uuid::Uuid::new_v4());
+                               cache.write().insert(0, AdminTea {
+                                   id: temp_id.clone(), name: n.clone(), subcategory: Some(sc.clone()),
+                                   description: if d.is_empty() { None } else { Some(d.clone()) },
+                                   price: p, stock: Some(s_val), is_available: true,
+                                   image_url: if img.is_empty() { None } else { Some(img.clone()) },
+                                   video_url: if vid.is_empty() { None } else { Some(vid.clone()) },
+                                   name_en: if ne.is_empty() { None } else { Some(ne.clone()) },
+                                   description_en: if de.is_empty() { None } else { Some(de.clone()) },
+                                   subcategory_en: if sce.is_empty() { None } else { Some(sce.clone()) },
+                               });
+                               status.set("✅ Добавлен!".into());
+                               name.set(String::new()); price.set(String::new()); stock.set(String::new());
+                               description.set(String::new()); image_url.set(String::new()); video_url.set(String::new());
+                               name_en.set(String::new()); description_en.set(String::new()); subcategory_en.set(String::new());
+                               auto_scroll_to_list();
+                               spawn(async move {
+                                   let body = json!({
+                                       "name": n, "subcategory": sc, "price": p, "stock": s_val,
+                                       "description": if d.is_empty() { serde_json::Value::Null } else { d.into() },
+                                       "image_url": if img.is_empty() { serde_json::Value::Null } else { img.into() },
+                                       "video_url": if vid.is_empty() { serde_json::Value::Null } else { vid.into() },
+                                       "name_en": if ne.is_empty() { serde_json::Value::Null } else { ne.into() },
+                                       "description_en": if de.is_empty() { serde_json::Value::Null } else { de.into() },
+                                       "subcategory_en": if sce.is_empty() { serde_json::Value::Null } else { sce.into() },
+                                   });
+                                   let url = format!("{}/api/tea-products", api_base_url());
+                                   let res = HTTP_CLIENT.clone().post(&url)
+                                       .header("X-Telegram-Init-Data", init_data.read().clone())
+    .header("X-Admin-Token", admin_token())
+    .header("X-Admin-Telegram-Id", telegram_id.to_string())
+                                       .json(&body).send().await;
+                                   submitting.set(false);
+                                   match res {
+                                       Ok(r) if r.status().is_success() => {
+                                           if let Ok(data) = r.json::<serde_json::Value>().await {
+                                               if let Some(real_id) = data["id"].as_str() {
+                                                   cache.write().iter_mut().find(|t| t.id == temp_id).map(|t| t.id = real_id.to_string());
+                                               }
+                                           }
+                                           TelegramApp::init().haptic_notification(HapticNotification::Success);
+                                       }
+                                       _ => { cache.write().retain(|t| t.id != temp_id); status.set("❌ Error".into()); TelegramApp::init().haptic_notification(HapticNotification::Error); }
+                                   }
+                               });
+                           },
+                           if *submitting.read() { "⏳..." } else { "➕ Добавить" }
+                       }
+                       {render_status(status)}
+                   }
+               }
+               h3 { style: list_title_style(), "Чай ({filtered.len()})" }
+               {render_search(search_query)}
+               if *loading.read() {
+                   div { style: "display:flex;flex-direction:column;gap:8px;",
+                       for _ in 0..4 {
+                           div { style: "background:#1a1a2e;padding:8px 10px;border-radius:6px;display:flex;align-items:center;gap:6px;",
+                               Skeleton { shape: SkeletonShape::Avatar }
+                               div { style: "flex:1;display:flex;flex-direction:column;gap:4px;",
+                                   Skeleton { shape: SkeletonShape::Text, width: Some("60%".into()) }
+                                   Skeleton { shape: SkeletonShape::TextSm, width: Some("40%".into()) }
+                               }
+                           }
+                       }
+                   }
+               } else if filtered.is_empty() {
+                   EmptyState {
+                       icon: "🔍",
+                       title: "Ничего не найдено",
+                       description: "Попробуйте изменить запрос поиска",
+                       action: rsx! {
+                           button {
+                               style: "padding:8px 16px;background:#2a2a4a;color:#e8e8e8;border:none;border-radius:4px;font-size:13px;cursor:pointer;",
+                               onclick: move |_| search_query.set(String::new()),
+                               "Очистить поиск"
+                           }
+                       },
+                   }
+               } else {
+                   div { "data-list": "true", style: "display:flex;flex-direction:column;gap:8px;",
+                       for t in filtered {
+                           if editing_id.read().as_deref() == Some(t.id.as_str()) {
+                               EditTeaCard {
+                                   key: "{t.id}",
+                                   item: t.clone(),
+                                   cache: cache,
+                                   on_saved: move |_| editing_id.set(None),
+                                   on_cancel: move |_| editing_id.set(None),
+                               }
+                           } else {
+                               ItemRow {
+                                   key: "{t.id}",
+                                   name: t.name.clone(),
+                                   sub: format!("{} • {}฿ • {} шт.", t.subcategory.clone().unwrap_or_default(), t.price, t.stock.unwrap_or(0)),
+                                   is_available: t.is_available,
+                                   image_url: t.image_url.clone(),
+                                   video_url: t.video_url.clone(),
+                                   on_edit: { let id = t.id.clone(); move |_| editing_id.set(Some(id.clone())) },
+                                   on_toggle: {
+                                       let id = t.id.clone(); let next = !t.is_available;
+                                       move |_| {
+                                           let id = id.clone();
+                                           cache.write().iter_mut().find(|t| t.id == id).map(|t| t.is_available = next);
+                                           spawn(async move {
+                                               let url = format!("{}/api/tea-products/{}/availability", api_base_url(), id);
+                                               let res = HTTP_CLIENT.clone().put(&url)
+                                                   .header("X-Telegram-Init-Data", init_data.read().clone())
+                                                   .header("X-Admin-Token", admin_token())
+                                                   .header("X-Admin-Telegram-Id", telegram_id.to_string())
+                                                   .json(&json!({ "is_available": next })).send().await;
+                                               match res {
+                                                   Ok(r) if r.status().is_success() => { TelegramApp::init().haptic_notification(HapticNotification::Success); }
+                                                   _ => {
+                                                       cache.write().iter_mut().find(|t| t.id == id).map(|t| t.is_available = !next);
+                                                       push_toast(toasts, "Не удалось изменить статус чая".into(), ToastKind::Error);
+                                                       TelegramApp::init().haptic_notification(HapticNotification::Error);
+                                                   }
+                                               }
+                                           });
+                                       }
+                                   },
+                                   on_delete: {
+                                       let id = t.id.clone();
+                                       move |_| delete_target_id.set(Some(id.clone()))
+                                   }
+                               }
+                           }
+                       }
+                   }
+               }
+               DeleteConfirmModal {
+                   target: delete_target_id,
+                   item_name: "чай".to_string(),
+                   on_confirm: move |id: String| {
+                       let deleted = cache.read().iter().find(|t| t.id == id).cloned();
+                       cache.write().retain(|t| t.id != id);
+                       spawn(async move {
+                           let url = format!("{}/api/tea-products/{}", api_base_url(), id);
+                           let res = HTTP_CLIENT.clone().delete(&url)
+                               .header("X-Telegram-Init-Data", init_data.read().clone())
+                               .header("X-Admin-Token", admin_token())
+                               .header("X-Admin-Telegram-Id", telegram_id.to_string())
+                               .send().await;
+                           match res {
+                               Ok(r) if r.status().is_success() => { push_toast(toasts, "Чай удалён".into(), ToastKind::Success); TelegramApp::init().haptic_notification(HapticNotification::Success); }
+                               _ => {
+                                   if let Some(item) = deleted { cache.write().push(item); }
+                                   push_toast(toasts, "Не удалось удалить чай".into(), ToastKind::Error);
+                                   TelegramApp::init().haptic_notification(HapticNotification::Error);
+                               }
+                           }
+                       });
+                   }
+               }
+               {render_toasts(toasts)}
+           }
+       }
 }
 
 // ── Sets tab (Optimistic UI) ──────────────────────────────────
@@ -1571,7 +1772,10 @@ fn SetsTab() -> Element {
         {
             if let Some(window) = web_sys::window() {
                 if let Ok(Some(storage)) = window.local_storage() {
-                    let _ = storage.set_item("wwb_admin_sets", &serde_json::to_string(&data).unwrap_or_default());
+                    let _ = storage.set_item(
+                        "wwb_admin_sets",
+                        &serde_json::to_string(&data).unwrap_or_default(),
+                    );
                 }
             }
         }
@@ -1582,12 +1786,14 @@ fn SetsTab() -> Element {
         let init_data = init_data.read().clone();
         async move {
             let url = format!("{}/api/sets?include_hidden=1", api_base_url());
-            if let Ok(resp) = HTTP_CLIENT.clone()
+            if let Ok(resp) = HTTP_CLIENT
+                .clone()
                 .get(&url)
                 .header("X-Telegram-Init-Data", init_data.clone())
                 .header("X-Admin-Token", admin_token())
                 .header("X-Admin-Telegram-Id", telegram_id.to_string())
-                .send().await
+                .send()
+                .await
             {
                 if let Ok(data) = resp.json::<SetsResp>().await {
                     cache.set(data.sets);
@@ -1600,9 +1806,12 @@ fn SetsTab() -> Element {
 
     let filtered: Vec<AdminSet> = {
         let q = search_query.read().to_lowercase();
-        cache.read().iter().filter(|s| {
-            q.is_empty() || s.name.to_lowercase().contains(&q)
-        }).cloned().collect()
+        cache
+            .read()
+            .iter()
+            .filter(|s| q.is_empty() || s.name.to_lowercase().contains(&q))
+            .cloned()
+            .collect()
     };
 
     rsx! {
@@ -1749,7 +1958,7 @@ fn SetsTab() -> Element {
                                 name: s.name.clone(),
                                 sub: format!("{} strains • {} accessories • {}฿", s.strain_ids.len(), s.accessory_ids.len(), s.total_price),
                                 is_available: s.is_available,
-                                image_url: s.icon.clone().filter(|i| i.starts_with("http")),
+                                image_url: s.icon.clone().filter(|i| i.starts_with("http://") || i.starts_with("https://") || (i.starts_with("/") && !i.starts_with("//"))),
                                 video_url: s.video_url.clone(),
                                 on_edit: { let id = s.id.clone(); move |_| editing_id.set(Some(id.clone())) },
                                 on_toggle: {
@@ -1924,7 +2133,8 @@ fn AccessorySetsTab() -> Element {
                 if let Ok(Some(storage)) = window.local_storage() {
                     if let Ok(Some(json)) = storage.get_item("wwb_admin_accessory_sets") {
                         if json.len() <= 1_000_000 {
-                            if let Ok(data) = serde_json::from_str::<Vec<AdminAccessorySet>>(&json) {
+                            if let Ok(data) = serde_json::from_str::<Vec<AdminAccessorySet>>(&json)
+                            {
                                 return data;
                             }
                         }
@@ -1966,7 +2176,10 @@ fn AccessorySetsTab() -> Element {
         {
             if let Some(window) = web_sys::window() {
                 if let Ok(Some(storage)) = window.local_storage() {
-                    let _ = storage.set_item("wwb_admin_accessory_sets", &serde_json::to_string(&data).unwrap_or_default());
+                    let _ = storage.set_item(
+                        "wwb_admin_accessory_sets",
+                        &serde_json::to_string(&data).unwrap_or_default(),
+                    );
                 }
             }
         }
@@ -1977,12 +2190,14 @@ fn AccessorySetsTab() -> Element {
         let init_data = init_data.read().clone();
         async move {
             let url = format!("{}/api/accessory-sets?include_hidden=1", api_base_url());
-            if let Ok(resp) = HTTP_CLIENT.clone()
+            if let Ok(resp) = HTTP_CLIENT
+                .clone()
                 .get(&url)
                 .header("X-Telegram-Init-Data", init_data.clone())
                 .header("X-Admin-Token", admin_token())
                 .header("X-Admin-Telegram-Id", telegram_id.to_string())
-                .send().await
+                .send()
+                .await
             {
                 if let Ok(data) = resp.json::<AccessorySetsResp>().await {
                     cache.set(data.accessory_sets);
@@ -1995,9 +2210,12 @@ fn AccessorySetsTab() -> Element {
 
     let filtered: Vec<AdminAccessorySet> = {
         let q = search_query.read().to_lowercase();
-        cache.read().iter().filter(|s| {
-            q.is_empty() || s.name.to_lowercase().contains(&q)
-        }).cloned().collect()
+        cache
+            .read()
+            .iter()
+            .filter(|s| q.is_empty() || s.name.to_lowercase().contains(&q))
+            .cloned()
+            .collect()
     };
 
     rsx! {
@@ -2152,7 +2370,7 @@ fn AccessorySetsTab() -> Element {
                                 name: s.name.clone(),
                                 sub: format!("{} items • {}฿", s.accessories.len(), s.total_price),
                                 is_available: s.is_available,
-                                image_url: s.image_url.clone().filter(|i| i.starts_with("http")).or_else(|| s.icon.clone().filter(|i| i.starts_with("http"))),
+                                image_url: s.image_url.clone().filter(|i| i.starts_with("http://") || i.starts_with("https://") || (i.starts_with("/") && !i.starts_with("//"))).or_else(|| s.icon.clone().filter(|i| i.starts_with("http://") || i.starts_with("https://") || (i.starts_with("/") && !i.starts_with("//")))),
                                 video_url: s.video_url.clone(),
                                 on_edit: { let id = s.id.clone(); move |_| editing_id.set(Some(id.clone())) },
                                 on_toggle: {
@@ -2379,7 +2597,10 @@ fn TeaSetsTab() -> Element {
         {
             if let Some(window) = web_sys::window() {
                 if let Ok(Some(storage)) = window.local_storage() {
-                    let _ = storage.set_item("wwb_admin_tea_sets", &serde_json::to_string(&data).unwrap_or_default());
+                    let _ = storage.set_item(
+                        "wwb_admin_tea_sets",
+                        &serde_json::to_string(&data).unwrap_or_default(),
+                    );
                 }
             }
         }
@@ -2390,12 +2611,14 @@ fn TeaSetsTab() -> Element {
         let init_data = init_data.read().clone();
         async move {
             let url = format!("{}/api/tea-sets?include_hidden=1", api_base_url());
-            if let Ok(resp) = HTTP_CLIENT.clone()
+            if let Ok(resp) = HTTP_CLIENT
+                .clone()
                 .get(&url)
                 .header("X-Telegram-Init-Data", init_data.clone())
                 .header("X-Admin-Token", admin_token())
                 .header("X-Admin-Telegram-Id", telegram_id.to_string())
-                .send().await
+                .send()
+                .await
             {
                 if let Ok(data) = resp.json::<TeaSetsResp>().await {
                     cache.set(data.tea_sets);
@@ -2408,9 +2631,12 @@ fn TeaSetsTab() -> Element {
 
     let filtered: Vec<AdminTeaSet> = {
         let q = search_query.read().to_lowercase();
-        cache.read().iter().filter(|s| {
-            q.is_empty() || s.name.to_lowercase().contains(&q)
-        }).cloned().collect()
+        cache
+            .read()
+            .iter()
+            .filter(|s| q.is_empty() || s.name.to_lowercase().contains(&q))
+            .cloned()
+            .collect()
     };
 
     rsx! {
@@ -2555,7 +2781,7 @@ fn TeaSetsTab() -> Element {
                                 name: s.name.clone(),
                                 sub: format!("{} items • {}฿", s.items.len(), s.total_price),
                                 is_available: s.is_available,
-                                image_url: s.icon.clone().filter(|i| i.starts_with("http")),
+                                image_url: s.icon.clone().filter(|i| i.starts_with("http://") || i.starts_with("https://") || (i.starts_with("/") && !i.starts_with("//"))),
                                 video_url: s.video_url.clone(),
                                 on_edit: { let id = s.id.clone(); move |_| editing_id.set(Some(id.clone())) },
                                 on_toggle: {
@@ -2767,10 +2993,10 @@ fn ImageUpload(image_url: String, on_change: EventHandler<String>) -> Element {
                 }
             }
         }
-        if !image_url.is_empty() {
+        if !image_url.is_empty() && (image_url.starts_with("http://") || image_url.starts_with("https://") || (image_url.starts_with("/") && !image_url.starts_with("//"))) {
             div { style: "margin-top:4px;",
                 img { src: "{image_url}", style: "width:64px;height:64px;object-fit:cover;border-radius:6px;border:1px solid #2a2a4a;cursor:pointer;", onclick: move |_| {
-                    if img_url.starts_with("http://") || img_url.starts_with("https://") || img_url.starts_with('/') {
+                    if img_url.starts_with("http://") || img_url.starts_with("https://") || (img_url.starts_with("/") && !img_url.starts_with("//")) {
                         let _ = web_sys::window().and_then(|w| w.open_with_url_and_target(&img_url, "_blank").ok());
                     }
                 } }
@@ -2904,26 +3130,36 @@ fn FormCard(title: String, children: Element) -> Element {
 }
 
 #[component]
-#[component]
 fn ItemRow(
     name: String,
     sub: String,
     is_available: bool,
     image_url: Option<String>,
-    #[props(default)]
-    video_url: Option<String>,
+    #[props(default)] video_url: Option<String>,
     on_edit: EventHandler<()>,
     on_toggle: EventHandler<()>,
     on_delete: EventHandler<()>,
-    #[props(default)]
-    on_sotd: Option<EventHandler<()>>,
+    #[props(default)] on_sotd: Option<EventHandler<()>>,
 ) -> Element {
-    let badge = if is_available { ("#39ff14", "ВКЛ") } else { ("#666", "ВЫКЛ") };
+    let badge = if is_available {
+        ("#39ff14", "ВКЛ")
+    } else {
+        ("#666", "ВЫКЛ")
+    };
     let toggle_label = if is_available { "👁️" } else { "🚫" };
     let mut show_video = use_signal(|| false);
     let thumb = match image_url.as_deref() {
-        Some(url) if !url.is_empty() => rsx! { img { src: "{url}", style: "width:36px;height:36px;object-fit:cover;border-radius:6px;border:1px solid #2a2a4a;flex-shrink:0;" } },
-        _ => rsx! { div { style: "width:36px;height:36px;background:#2a2a4a;border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:16px;", "📦" } },
+        Some(url)
+            if !url.is_empty()
+                && (url.starts_with("http://")
+                    || url.starts_with("https://")
+                    || (url.starts_with("/") && !url.starts_with("//"))) =>
+        {
+            rsx! { img { src: "{url}", style: "width:36px;height:36px;object-fit:cover;border-radius:6px;border:1px solid #2a2a4a;flex-shrink:0;" } }
+        }
+        _ => {
+            rsx! { div { style: "width:36px;height:36px;background:#2a2a4a;border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:16px;", "📦" } }
+        }
     };
     rsx! {
         div { style: "background:#1a1a2e;padding:8px 10px;border-radius:6px;display:flex;align-items:center;gap:6px;flex-wrap:nowrap;overflow:hidden;",
@@ -2991,7 +3227,11 @@ fn EditStrainCard(
     let telegram_id = use_telegram_id().unwrap_or(0);
     let init_data = use_signal(use_telegram_init_data);
     let mut name = use_signal(|| item.name.clone());
-    let mut category = use_signal(|| item.category.clone().unwrap_or_else(|| "hybrid".to_string()));
+    let mut category = use_signal(|| {
+        item.category
+            .clone()
+            .unwrap_or_else(|| "hybrid".to_string())
+    });
     let mut price = use_signal(|| item.price_per_gram.to_string());
     let mut thc = use_signal(|| item.thc_percent.map(|v| v.to_string()).unwrap_or_default());
     let mut cbd = use_signal(|| item.cbd_percent.map(|v| v.to_string()).unwrap_or_default());
@@ -3006,113 +3246,309 @@ fn EditStrainCard(
     let mut effect_en = use_signal(|| item.effect_en.clone().unwrap_or_default());
     let mut flavor_profile_en = use_signal(|| item.flavor_profile_en.clone().unwrap_or_default());
     let mut strain_type_en = use_signal(|| item.strain_type_en.clone().unwrap_or_default());
+    // TZ #2 marketing signals — pre-seeded from the row, dispatched via the
+    // same `update_strain` body so admin saves once and gets all updates.
+    let mut is_sotd = use_signal(|| item.is_strain_of_day);
+    let mut sotd_discount = use_signal(|| {
+        if item.strain_of_day_discount > 0.0 {
+            item.strain_of_day_discount.to_string()
+        } else {
+            String::new()
+        }
+    });
+    let mut sale_active = use_signal(|| item.sale_active);
+    let mut discount_percent = use_signal(|| {
+        if item.discount_percent > 0.0 {
+            item.discount_percent.to_string()
+        } else {
+            String::new()
+        }
+    });
+    let mut sale_price = use_signal(|| item.sale_price.map(|v| v.to_string()).unwrap_or_default());
+    // sale_until / new_until inputs use HTML <input type="datetime-local">.
+    // That widget gives a value like "2026-07-15T18:30" (no timezone, no
+    // seconds). We append ":00Z" on submit so the server parses it as RFC3339.
+    let mut sale_until = use_signal(|| {
+        item.sale_until
+            .clone()
+            .and_then(|s| s.get(..16).map(str::to_string))
+            .unwrap_or_default()
+    });
+    let mut is_best_seller = use_signal(|| item.is_best_seller);
+    let mut is_new_arrival = use_signal(|| item.is_new_arrival);
+    let mut new_until = use_signal(|| {
+        item.new_until
+            .clone()
+            .and_then(|s| s.get(..16).map(str::to_string))
+            .unwrap_or_default()
+    });
+    let mut display_order = use_signal(|| item.display_order.to_string());
     let mut status = use_signal(String::new);
     let item_id = item.id.clone();
     rsx! {
-        div { "data-editing": "true", style: edit_card_style(),
-            div { style: edit_header_style(), "✏️ Редактирование" }
-            input { style: input_style(), placeholder: "Название", value: "{name}", oninput: move |e| name.set(e.value()) }
-            select { style: input_style(), value: "{category}", oninput: move |e| category.set(e.value()),
-                option { value: "sativa", "☀️ Sativa" } option { value: "indica", "🌙 Indica" } option { value: "hybrid", "⚖️ Hybrid" } }
-            input { style: input_style(), placeholder: "Цена ฿/г", value: "{price}", r#type: "number", oninput: move |e| price.set(e.value()) }
-            input { style: input_style(), placeholder: "THC %", value: "{thc}", r#type: "number", oninput: move |e| thc.set(e.value()) }
-            input { style: input_style(), placeholder: "CBD %", value: "{cbd}", r#type: "number", oninput: move |e| cbd.set(e.value()) }
-            input { style: input_style(), placeholder: "Граммы", value: "{grams}", r#type: "number", oninput: move |e| grams.set(e.value()) }
-            textarea { style: textarea_style(), placeholder: "Описание (RU)", value: "{description}", oninput: move |e| description.set(e.value()) }
-            textarea { style: textarea_style(), placeholder: "Эффект (RU)", value: "{effect}", oninput: move |e| effect.set(e.value()) }
-            textarea { style: textarea_style(), placeholder: "Вкусовой профиль (RU)", value: "{flavor_profile}", oninput: move |e| flavor_profile.set(e.value()) }
-            ImageUpload { image_url: image_url.read().clone(), on_change: move |url: String| image_url.set(url) }
-            VideoUpload { video_url: video_url.read().clone(), on_change: move |url: String| video_url.set(url) }
-            div { style: en_section_style(), "🇬🇧 English" }
-            input { style: input_style(), placeholder: "Name (EN)", value: "{name_en}", oninput: move |e| name_en.set(e.value()) }
-            textarea { style: textarea_style(), placeholder: "Description (EN)", value: "{description_en}", oninput: move |e| description_en.set(e.value()) }
-            textarea { style: textarea_style(), placeholder: "Effect (EN)", value: "{effect_en}", oninput: move |e| effect_en.set(e.value()) }
-            textarea { style: textarea_style(), placeholder: "Flavor (EN)", value: "{flavor_profile_en}", oninput: move |e| flavor_profile_en.set(e.value()) }
-            input { style: input_style(), placeholder: "Type (EN)", value: "{strain_type_en}", oninput: move |e| strain_type_en.set(e.value()) }
-            div { style: "display:flex;gap:8px;",
-                button { style: submit_btn_style(),
-                    onclick: move |_| {
-                        let n = name().trim().to_string();
-                        let c = category();
-                        let p = match price.read().trim().parse::<f64>() {
-                            Ok(v) if v > 0.0 && v.is_finite() => v,
-                            _ => { status.set("❌ Цена должна быть числом больше 0".into()); return; }
-                        };
-                        let t = thc.read().trim().parse::<f64>().ok().filter(|v| v.is_finite());
-                        let cb = cbd.read().trim().parse::<f64>().ok().filter(|v| v.is_finite());
-                        let g = match grams.read().trim().parse::<f64>() {
-                            Ok(v) if v >= 0.0 && v.is_finite() => v,
-                            _ => { status.set("❌ Граммы должны быть числом ≥ 0".into()); return; }
-                        };
-                        if n.is_empty() { status.set("❌ Название обязательно".into()); return; }
-                        let d = description(); let ef = effect(); let fp = flavor_profile(); let img = image_url(); let vid = video_url();
-                        let ne = name_en(); let de = description_en(); let ee = effect_en();
-                        let fpe = flavor_profile_en(); let ste = strain_type_en();
-                        let id = item_id.clone();
-                        let original = cache.read().iter().find(|s| s.id == id).cloned();
-                        // Optimistic update in cache
-                        cache.write().iter_mut().find(|s| s.id == id).map(|s| {
-                            s.name = n.clone(); s.category = Some(c.clone()); s.price_per_gram = p;
-                            s.thc_percent = t; s.cbd_percent = cb;
-                            s.description = if d.is_empty() { None } else { Some(d.clone()) };
-                            s.effect = if ef.is_empty() { None } else { Some(ef.clone()) };
-                            s.flavor_profile = if fp.is_empty() { None } else { Some(fp.clone()) };
-                            s.available_grams = Some(g);
-                            s.image_url = if img.is_empty() { None } else { Some(img.clone()) };
-                            s.video_url = if vid.is_empty() { None } else { Some(vid.clone()) };
-                            s.name_en = if ne.is_empty() { None } else { Some(ne.clone()) };
-                            s.description_en = if de.is_empty() { None } else { Some(de.clone()) };
-                            s.effect_en = if ee.is_empty() { None } else { Some(ee.clone()) };
-                            s.flavor_profile_en = if fpe.is_empty() { None } else { Some(fpe.clone()) };
-                            s.strain_type_en = if ste.is_empty() { None } else { Some(ste.clone()) };
-                        });
-                        spawn(async move {
-                            let body = json!({
-                                "name": n, "category": c, "price_per_gram": p, "available_grams": g,
-                                "thc_percent": t, "cbd_percent": cb,
-                                "description": if d.is_empty() { serde_json::Value::Null } else { d.into() },
-                                "effect": if ef.is_empty() { serde_json::Value::Null } else { ef.into() },
-                                "flavor_profile": if fp.is_empty() { serde_json::Value::Null } else { fp.into() },
-                                "is_available": item.is_available,
-                                "image_url": if img.is_empty() { serde_json::Value::Null } else { img.into() },
-                                "video_url": if vid.is_empty() { serde_json::Value::Null } else { vid.clone().into() },
-                                "name_en": if ne.is_empty() { serde_json::Value::Null } else { ne.into() },
-                                "description_en": if de.is_empty() { serde_json::Value::Null } else { de.into() },
-                                "effect_en": if ee.is_empty() { serde_json::Value::Null } else { ee.into() },
-                                "flavor_profile_en": if fpe.is_empty() { serde_json::Value::Null } else { fpe.into() },
-                                "strain_type_en": if ste.is_empty() { serde_json::Value::Null } else { ste.into() },
-                            });
-                            let url = format!("{}/api/strains/{}", api_base_url(), id);
-                            let res = HTTP_CLIENT.clone().put(&url)
-                                .header("X-Telegram-Init-Data", init_data.read().clone())
- .header("X-Admin-Token", admin_token())
- .header("X-Admin-Telegram-Id", telegram_id.to_string())
-                                .json(&body).send().await;
-                            let _ = &res;
-                            let success = match res {
-                                Ok(r) => r.status().is_success(),
-                                Err(_) => false,
-                            };
-                            if success {
-                                on_saved.call(());
-                                status.set("✅ Сохранено".into());
-                                TelegramApp::init().haptic_notification(HapticNotification::Success);
-                            } else {
-                                TelegramApp::init().haptic_notification(HapticNotification::Error);
-                                if let Some(orig) = original {
-                                    cache.write().iter_mut().find(|s| s.id == id).map(|s| *s = orig);
-                                }
-                                status.set("❌ Не сохранено. Попробуйте снова".into());
-                            }
-                        });
-                    },
-                    "💾 Сохранить"
-                }
-                button { style: cancel_btn_style(), onclick: move |_| on_cancel.call(()), "Отмена" }
-            }
-            {render_status(status)}
-        }
-    }
+           div { "data-editing": "true", style: edit_card_style(),
+               div { style: edit_header_style(), "✏️ Редактирование" }
+               input { style: input_style(), placeholder: "Название", value: "{name}", oninput: move |e| name.set(e.value()) }
+               select { style: input_style(), value: "{category}", oninput: move |e| category.set(e.value()),
+                   option { value: "sativa", "☀️ Sativa" } option { value: "indica", "🌙 Indica" } option { value: "hybrid", "⚖️ Hybrid" } }
+               input { style: input_style(), placeholder: "Цена ฿/г", value: "{price}", r#type: "number", oninput: move |e| price.set(e.value()) }
+               input { style: input_style(), placeholder: "THC %", value: "{thc}", r#type: "number", oninput: move |e| thc.set(e.value()) }
+               input { style: input_style(), placeholder: "CBD %", value: "{cbd}", r#type: "number", oninput: move |e| cbd.set(e.value()) }
+               input { style: input_style(), placeholder: "Граммы", value: "{grams}", r#type: "number", oninput: move |e| grams.set(e.value()) }
+               textarea { style: textarea_style(), placeholder: "Описание (RU)", value: "{description}", oninput: move |e| description.set(e.value()) }
+               textarea { style: textarea_style(), placeholder: "Эффект (RU)", value: "{effect}", oninput: move |e| effect.set(e.value()) }
+               textarea { style: textarea_style(), placeholder: "Вкусовой профиль (RU)", value: "{flavor_profile}", oninput: move |e| flavor_profile.set(e.value()) }
+               ImageUpload { image_url: image_url.read().clone(), on_change: move |url: String| image_url.set(url) }
+               VideoUpload { video_url: video_url.read().clone(), on_change: move |url: String| video_url.set(url) }
+               div { style: en_section_style(), "🇬🇧 English" }
+               input { style: input_style(), placeholder: "Name (EN)", value: "{name_en}", oninput: move |e| name_en.set(e.value()) }
+               textarea { style: textarea_style(), placeholder: "Description (EN)", value: "{description_en}", oninput: move |e| description_en.set(e.value()) }
+               textarea { style: textarea_style(), placeholder: "Effect (EN)", value: "{effect_en}", oninput: move |e| effect_en.set(e.value()) }
+               textarea { style: textarea_style(), placeholder: "Flavor (EN)", value: "{flavor_profile_en}", oninput: move |e| flavor_profile_en.set(e.value()) }
+               input { style: input_style(), placeholder: "Type (EN)", value: "{strain_type_en}", oninput: move |e| strain_type_en.set(e.value()) }
+
+               // ── Marketing controls (TZ #2) ────────────────────────────
+               // All four flags + display order go in one block, submitted
+               // by the same Save button below. Date inputs use datetime-local;
+               // empty = no expiry. The hero blocks in menu_screen pick these
+               // up via priority CASE / `is_active_until`.
+               div { style: en_section_style(), "📣 Маркетинг" }
+               div { style: "display:flex;flex-direction:column;gap:8px;background:#1a1a2e;padding:10px;border-radius:6px;",
+                   // Strain of the Day toggle
+                   div { style: "display:flex;gap:8px;align-items:center;flex-wrap:wrap;",
+                       button {
+                           r#type: "button",
+                           style: if *is_sotd.read() {
+                               "padding:8px 14px;background:#ffe600;color:#000;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;".to_string()
+                           } else {
+                               "padding:8px 14px;background:#2a2a4a;color:#888;border:none;border-radius:6px;font-size:13px;cursor:pointer;".to_string()
+                           },
+                           onclick: move |_| { let next = !*is_sotd.read(); is_sotd.set(next); },
+                           if *is_sotd.read() { "⭐ STRAIN OF DAY ON" } else { "⭐ STRAIN OF DAY off" }
+                       }
+                       input {
+                           style: "padding:8px 10px;background:#0f0f1a;color:#e8e8e8;border:1px solid #2a2a4a;border-radius:4px;font-size:13px;width:90px;",
+                           placeholder: "SOTD %",
+                           r#type: "number",
+                           value: "{sotd_discount}",
+                           oninput: move |e| sotd_discount.set(e.value()),
+                       }
+                   }
+                   // Sale toggle + discount % + sale_price + sale_until
+                   div { style: "display:flex;gap:8px;align-items:center;flex-wrap:wrap;",
+                       button {
+                           r#type: "button",
+                           style: if *sale_active.read() {
+                               "padding:8px 14px;background:#ff4757;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;".to_string()
+                           } else {
+                               "padding:8px 14px;background:#2a2a4a;color:#888;border:none;border-radius:6px;font-size:13px;cursor:pointer;".to_string()
+                           },
+                           onclick: move |_| { let next = !*sale_active.read(); sale_active.set(next); },
+                           if *sale_active.read() { "🔥 SALE ON" } else { "🔥 SALE off" }
+                       }
+                       input {
+                           style: "padding:8px 10px;background:#0f0f1a;color:#e8e8e8;border:1px solid #2a2a4a;border-radius:4px;font-size:13px;width:90px;",
+                           placeholder: "Скидка %",
+                           r#type: "number",
+                           value: "{discount_percent}",
+                           oninput: move |e| discount_percent.set(e.value()),
+                       }
+                       input {
+                           style: "padding:8px 10px;background:#0f0f1a;color:#e8e8e8;border:1px solid #2a2a4a;border-radius:4px;font-size:13px;width:110px;",
+                           placeholder: "Цена ฿",
+                           r#type: "number",
+                           value: "{sale_price}",
+                           oninput: move |e| sale_price.set(e.value()),
+                       }
+                   }
+                   div { style: "display:flex;gap:8px;align-items:center;",
+                       span { style: "font-size:12px;color:#888;min-width:90px;", "Sale до:" }
+                       input {
+                           style: "padding:8px 10px;background:#0f0f1a;color:#e8e8e8;border:1px solid #2a2a4a;border-radius:4px;font-size:13px;flex:1;",
+                           r#type: "datetime-local",
+                           value: "{sale_until}",
+                           oninput: move |e| sale_until.set(e.value()),
+                       }
+                   }
+                   // Best seller
+                   button {
+                       r#type: "button",
+                       style: if *is_best_seller.read() {
+                           "padding:8px 14px;background:#ff9d00;color:#000;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;".to_string()
+                       } else {
+                           "padding:8px 14px;background:#2a2a4a;color:#888;border:none;border-radius:6px;font-size:13px;cursor:pointer;".to_string()
+                       },
+                       onclick: move |_| { let next = !*is_best_seller.read(); is_best_seller.set(next); },
+                       if *is_best_seller.read() { "⭐ BEST SELLER ON" } else { "⭐ BEST SELLER off" }
+                   }
+                   // New arrival + expiry
+                   button {
+                       r#type: "button",
+                       style: if *is_new_arrival.read() {
+                           "padding:8px 14px;background:#00e5ff;color:#000;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;".to_string()
+                       } else {
+                           "padding:8px 14px;background:#2a2a4a;color:#888;border:none;border-radius:6px;font-size:13px;cursor:pointer;".to_string()
+                       },
+                       onclick: move |_| { let next = !*is_new_arrival.read(); is_new_arrival.set(next); },
+                       if *is_new_arrival.read() { "🆕 NEW ARRIVAL ON" } else { "🆕 NEW ARRIVAL off" }
+                   }
+                   div { style: "display:flex;gap:8px;align-items:center;",
+                       span { style: "font-size:12px;color:#888;min-width:90px;", "Новинка до:" }
+                       input {
+                           style: "padding:8px 10px;background:#0f0f1a;color:#e8e8e8;border:1px solid #2a2a4a;border-radius:4px;font-size:13px;flex:1;",
+                           r#type: "datetime-local",
+                           value: "{new_until}",
+                           oninput: move |e| new_until.set(e.value()),
+                       }
+                   }
+                   // Display order — lower number shows first within priority group
+                   div { style: "display:flex;gap:8px;align-items:center;",
+                       span { style: "font-size:12px;color:#888;min-width:90px;", "Порядок:" }
+                       input {
+                           style: "padding:8px 10px;background:#0f0f1a;color:#e8e8e8;border:1px solid #2a2a4a;border-radius:4px;font-size:13px;width:90px;",
+                           r#type: "number",
+                           value: "{display_order}",
+                           oninput: move |e| display_order.set(e.value()),
+                       }
+                   }
+               }
+
+               div { style: "display:flex;gap:8px;",
+                   button { style: submit_btn_style(),
+                       onclick: move |_| {
+                           let n = name().trim().to_string();
+                           let c = category();
+                           let p = match price.read().trim().parse::<f64>() {
+                               Ok(v) if v > 0.0 && v.is_finite() => v,
+                               _ => { status.set("❌ Цена должна быть числом больше 0".into()); return; }
+                           };
+                           let t = thc.read().trim().parse::<f64>().ok().filter(|v| v.is_finite());
+                           let cb = cbd.read().trim().parse::<f64>().ok().filter(|v| v.is_finite());
+                           let g = match grams.read().trim().parse::<f64>() {
+                               Ok(v) if v >= 0.0 && v.is_finite() => v,
+                               _ => { status.set("❌ Граммы должны быть числом ≥ 0".into()); return; }
+                           };
+                           if n.is_empty() { status.set("❌ Название обязательно".into()); return; }
+                           let d = description(); let ef = effect(); let fp = flavor_profile(); let img = image_url(); let vid = video_url();
+                           let ne = name_en(); let de = description_en(); let ee = effect_en();
+                           let fpe = flavor_profile_en(); let ste = strain_type_en();
+                           // Marketing values (TZ #2). datetime-local widget returns
+                           // "YYYY-MM-DDTHH:MM" without timezone — server expects RFC3339,
+                           // so we append ":00Z" only when the field is non-empty.
+                           let sotd_b = *is_sotd.read();
+                           let sotd_pct = sotd_discount.read().trim().parse::<f64>().ok().filter(|v| v.is_finite() && *v >= 0.0).unwrap_or(0.0);
+                           let sale_b = *sale_active.read();
+                           let dp = discount_percent.read().trim().parse::<f64>().ok().filter(|v| v.is_finite() && *v >= 0.0);
+                           let sp = sale_price.read().trim().parse::<f64>().ok().filter(|v| v.is_finite() && *v > 0.0);
+                           let su = sale_until().trim().to_string();
+                           let su_rfc = if su.is_empty() { None } else { Some(format!("{}:00Z", su)) };
+                           let best_b = *is_best_seller.read();
+                           let new_b = *is_new_arrival.read();
+                           let nu = new_until().trim().to_string();
+                           let nu_rfc = if nu.is_empty() { None } else { Some(format!("{}:00Z", nu)) };
+                           let ord = display_order.read().trim().parse::<i32>().ok().unwrap_or(0);
+                           let id = item_id.clone();
+                           let original = cache.read().iter().find(|s| s.id == id).cloned();
+                           // Optimistic update in cache
+                           cache.write().iter_mut().find(|s| s.id == id).map(|s| {
+                               s.name = n.clone(); s.category = Some(c.clone()); s.price_per_gram = p;
+                               s.thc_percent = t; s.cbd_percent = cb;
+                               s.description = if d.is_empty() { None } else { Some(d.clone()) };
+                               s.effect = if ef.is_empty() { None } else { Some(ef.clone()) };
+                               s.flavor_profile = if fp.is_empty() { None } else { Some(fp.clone()) };
+                               s.available_grams = Some(g);
+                               s.image_url = if img.is_empty() { None } else { Some(img.clone()) };
+                               s.video_url = if vid.is_empty() { None } else { Some(vid.clone()) };
+                               s.name_en = if ne.is_empty() { None } else { Some(ne.clone()) };
+                               s.description_en = if de.is_empty() { None } else { Some(de.clone()) };
+                               s.effect_en = if ee.is_empty() { None } else { Some(ee.clone()) };
+                               s.flavor_profile_en = if fpe.is_empty() { None } else { Some(fpe.clone()) };
+                               s.strain_type_en = if ste.is_empty() { None } else { Some(ste.clone()) };
+                               s.is_strain_of_day = sotd_b;
+                               s.strain_of_day_discount = sotd_pct;
+                               s.discount_percent = dp.unwrap_or(0.0);
+                               s.sale_price = sp;
+                               s.sale_active = sale_b;
+                               s.sale_until = su_rfc.clone();
+                               s.is_best_seller = best_b;
+                               s.is_new_arrival = new_b;
+                               s.new_until = nu_rfc.clone();
+                               s.display_order = ord;
+                           });
+                           spawn(async move {
+                               let body = json!({
+                                   "name": n, "category": c, "price_per_gram": p, "available_grams": g,
+                                   "thc_percent": t, "cbd_percent": cb,
+                                   "description": if d.is_empty() { serde_json::Value::Null } else { d.into() },
+                                   "effect": if ef.is_empty() { serde_json::Value::Null } else { ef.into() },
+                                   "flavor_profile": if fp.is_empty() { serde_json::Value::Null } else { fp.into() },
+                                   "is_available": item.is_available,
+                                   "image_url": if img.is_empty() { serde_json::Value::Null } else { img.into() },
+                                   "video_url": if vid.is_empty() { serde_json::Value::Null } else { vid.clone().into() },
+                                   "name_en": if ne.is_empty() { serde_json::Value::Null } else { ne.into() },
+                                   "description_en": if de.is_empty() { serde_json::Value::Null } else { de.into() },
+                                   "effect_en": if ee.is_empty() { serde_json::Value::Null } else { ee.into() },
+                                   "flavor_profile_en": if fpe.is_empty() { serde_json::Value::Null } else { fpe.into() },
+                                   "strain_type_en": if ste.is_empty() { serde_json::Value::Null } else { ste.into() },
+                                   // TZ #2 marketing fields. Send them all every save so the
+                                   // server treats this as an authoritative state snapshot.
+                                   "discount_percent": dp.unwrap_or(0.0),
+                                   "sale_price": sp,
+                                   "sale_active": sale_b,
+                                   "sale_until": su_rfc.clone(),
+                                   "is_best_seller": best_b,
+                                   "is_new_arrival": new_b,
+                                   "new_until": nu_rfc.clone(),
+                                   "display_order": ord,
+                               });
+                               // SOTD toggle goes through its dedicated endpoint
+                               // (preserves the strain_of_day_set_at audit column).
+                               // Fire-and-forget alongside the main update.
+                               if sotd_b != item.is_strain_of_day {
+                                   let sotd_url = format!("{}/api/strains/{}/strain-of-day", api_base_url(), id);
+                                   let sotd_body = if sotd_b {
+                                       json!({ "is_strain_of_day": true, "discount": sotd_pct })
+                                   } else {
+                                       json!({ "is_strain_of_day": false, "discount": 0 })
+                                   };
+                                   let init_for_sotd = init_data.read().clone();
+                                   let _ = HTTP_CLIENT.clone().put(&sotd_url)
+                                       .header("X-Telegram-Init-Data", init_for_sotd)
+                                       .header("X-Admin-Token", admin_token())
+                                       .header("X-Admin-Telegram-Id", telegram_id.to_string())
+                                       .json(&sotd_body).send().await;
+                               }
+                               let url = format!("{}/api/strains/{}", api_base_url(), id);
+                               let res = HTTP_CLIENT.clone().put(&url)
+                                   .header("X-Telegram-Init-Data", init_data.read().clone())
+    .header("X-Admin-Token", admin_token())
+    .header("X-Admin-Telegram-Id", telegram_id.to_string())
+                                   .json(&body).send().await;
+                               let _ = &res;
+                               let success = match res {
+                                   Ok(r) => r.status().is_success(),
+                                   Err(_) => false,
+                               };
+                               if success {
+                                   on_saved.call(());
+                                   status.set("✅ Сохранено".into());
+                                   TelegramApp::init().haptic_notification(HapticNotification::Success);
+                               } else {
+                                   TelegramApp::init().haptic_notification(HapticNotification::Error);
+                                   if let Some(orig) = original {
+                                       cache.write().iter_mut().find(|s| s.id == id).map(|s| *s = orig);
+                                   }
+                                   status.set("❌ Не сохранено. Попробуйте снова".into());
+                               }
+                           });
+                       },
+                       "💾 Сохранить"
+                   }
+                   button { style: cancel_btn_style(), onclick: move |_| on_cancel.call(()), "Отмена" }
+               }
+               {render_status(status)}
+           }
+       }
 }
 
 #[component]
@@ -3137,91 +3573,91 @@ fn EditAccessoryCard(
     let mut status = use_signal(String::new);
     let item_id = item.id.clone();
     rsx! {
-        div { "data-editing": "true", style: edit_card_style(),
-            div { style: edit_header_style(), "✏️ Редактирование" }
-            input { style: input_style(), placeholder: "Название", value: "{name}", oninput: move |e| name.set(e.value()) }
-            select { style: input_style(), value: "{category}", oninput: move |e| category.set(e.value()),
-                option { value: "grinder", "🌀 Grinder" } option { value: "papers", "📄 Papers" }
-                option { value: "lighter", "🔥 Lighter" } option { value: "pipe", "🚬 Pipe" }
-                option { value: "bong", "💨 Bong" } option { value: "storage", "📦 Storage" }
-                option { value: "clothing", "👕 Clothing" } option { value: "other", "🔧 Other" } }
-            input { style: input_style(), placeholder: "Цена ฿", value: "{price}", r#type: "number", oninput: move |e| price.set(e.value()) }
-            input { style: input_style(), placeholder: "Кол-во", value: "{stock}", r#type: "number", oninput: move |e| stock.set(e.value()) }
-            textarea { style: textarea_style(), placeholder: "Описание (RU)", value: "{description}", oninput: move |e| description.set(e.value()) }
-            ImageUpload { image_url: image_url.read().clone(), on_change: move |url: String| image_url.set(url) }
-            VideoUpload { video_url: video_url.read().clone(), on_change: move |url: String| video_url.set(url) }
-            div { style: en_section_style(), "🇬🇧 English" }
-            input { style: input_style(), placeholder: "Name (EN)", value: "{name_en}", oninput: move |e| name_en.set(e.value()) }
-            textarea { style: textarea_style(), placeholder: "Description (EN)", value: "{description_en}", oninput: move |e| description_en.set(e.value()) }
-            input { style: input_style(), placeholder: "Category (EN)", value: "{category_en}", oninput: move |e| category_en.set(e.value()) }
-            div { style: "display:flex;gap:8px;",
-                button { style: submit_btn_style(),
-                    onclick: move |_| {
-                        let n = name().trim().to_string();
-                        let c = category();
-                        let p = match price.read().trim().parse::<f64>() {
-                            Ok(v) if v > 0.0 && v.is_finite() => v,
-                            _ => { status.set("❌ Цена должна быть числом больше 0".into()); return; }
-                        };
-                        let s_str = stock();
-                        let s_val: i32 = match s_str.trim().parse() {
-                            Ok(v) if v >= 0 => v,
-                            _ => { status.set("❌ Количество должно быть числом ≥ 0".into()); return; }
-                        };
-                        if n.is_empty() { status.set("❌ Название обязательно".into()); return; }
-                        let d = description(); let img = image_url(); let vid = video_url();
-                        let ne = name_en(); let de = description_en(); let ce = category_en();
-                        let id = item_id.clone();
-                        let original = cache.read().iter().find(|a| a.id == id).cloned();
-                        cache.write().iter_mut().find(|a| a.id == id).map(|a| {
-                            a.name = n.clone(); a.category = Some(c.clone()); a.price = p; a.stock = Some(s_val);
-                            a.description = if d.is_empty() { None } else { Some(d.clone()) };
-                            a.image_url = if img.is_empty() { None } else { Some(img.clone()) };
-                            a.video_url = if vid.is_empty() { None } else { Some(vid.clone()) };
-                            a.name_en = if ne.is_empty() { None } else { Some(ne.clone()) };
-                            a.description_en = if de.is_empty() { None } else { Some(de.clone()) };
-                            a.category_en = if ce.is_empty() { None } else { Some(ce.clone()) };
-                        });
-                        spawn(async move {
-                            let body = json!({
-                                "name": n, "category": c, "price": p, "stock": s_val, "is_available": item.is_available,
-                                "description": if d.is_empty() { serde_json::Value::Null } else { d.into() },
-                                "image_url": if img.is_empty() { serde_json::Value::Null } else { img.into() },
-                                "video_url": if vid.is_empty() { serde_json::Value::Null } else { vid.into() },
-                                "name_en": if ne.is_empty() { serde_json::Value::Null } else { ne.into() },
-                                "description_en": if de.is_empty() { serde_json::Value::Null } else { de.into() },
-                                "category_en": if ce.is_empty() { serde_json::Value::Null } else { ce.into() },
-                            });
-                            let url = format!("{}/api/accessories/{}", api_base_url(), id);
-                            let res = HTTP_CLIENT.clone().put(&url)
-                                .header("X-Telegram-Init-Data", init_data.read().clone())
- .header("X-Admin-Token", admin_token())
- .header("X-Admin-Telegram-Id", telegram_id.to_string())
-                                .json(&body).send().await;
-                            let success = match res {
-                                Ok(r) => r.status().is_success(),
-                                Err(_) => false,
-                            };
-                            if success {
-                                on_saved.call(());
-                                status.set("✅ Сохранено".into());
-                                TelegramApp::init().haptic_notification(HapticNotification::Success);
-                            } else {
-                                TelegramApp::init().haptic_notification(HapticNotification::Error);
-                                if let Some(orig) = original {
-                                    cache.write().iter_mut().find(|a| a.id == id).map(|a| *a = orig);
-                                }
-                                status.set("❌ Не сохранено. Попробуйте снова".into());
-                            }
-                        });
-                    },
-                    "💾 Сохранить"
-                }
-                button { style: cancel_btn_style(), onclick: move |_| on_cancel.call(()), "Отмена" }
-            }
-            {render_status(status)}
-        }
-    }
+           div { "data-editing": "true", style: edit_card_style(),
+               div { style: edit_header_style(), "✏️ Редактирование" }
+               input { style: input_style(), placeholder: "Название", value: "{name}", oninput: move |e| name.set(e.value()) }
+               select { style: input_style(), value: "{category}", oninput: move |e| category.set(e.value()),
+                   option { value: "grinder", "🌀 Grinder" } option { value: "papers", "📄 Papers" }
+                   option { value: "lighter", "🔥 Lighter" } option { value: "pipe", "🚬 Pipe" }
+                   option { value: "bong", "💨 Bong" } option { value: "storage", "📦 Storage" }
+                   option { value: "clothing", "👕 Clothing" } option { value: "other", "🔧 Other" } }
+               input { style: input_style(), placeholder: "Цена ฿", value: "{price}", r#type: "number", oninput: move |e| price.set(e.value()) }
+               input { style: input_style(), placeholder: "Кол-во", value: "{stock}", r#type: "number", oninput: move |e| stock.set(e.value()) }
+               textarea { style: textarea_style(), placeholder: "Описание (RU)", value: "{description}", oninput: move |e| description.set(e.value()) }
+               ImageUpload { image_url: image_url.read().clone(), on_change: move |url: String| image_url.set(url) }
+               VideoUpload { video_url: video_url.read().clone(), on_change: move |url: String| video_url.set(url) }
+               div { style: en_section_style(), "🇬🇧 English" }
+               input { style: input_style(), placeholder: "Name (EN)", value: "{name_en}", oninput: move |e| name_en.set(e.value()) }
+               textarea { style: textarea_style(), placeholder: "Description (EN)", value: "{description_en}", oninput: move |e| description_en.set(e.value()) }
+               input { style: input_style(), placeholder: "Category (EN)", value: "{category_en}", oninput: move |e| category_en.set(e.value()) }
+               div { style: "display:flex;gap:8px;",
+                   button { style: submit_btn_style(),
+                       onclick: move |_| {
+                           let n = name().trim().to_string();
+                           let c = category();
+                           let p = match price.read().trim().parse::<f64>() {
+                               Ok(v) if v > 0.0 && v.is_finite() => v,
+                               _ => { status.set("❌ Цена должна быть числом больше 0".into()); return; }
+                           };
+                           let s_str = stock();
+                           let s_val: i32 = match s_str.trim().parse() {
+                               Ok(v) if v >= 0 => v,
+                               _ => { status.set("❌ Количество должно быть числом ≥ 0".into()); return; }
+                           };
+                           if n.is_empty() { status.set("❌ Название обязательно".into()); return; }
+                           let d = description(); let img = image_url(); let vid = video_url();
+                           let ne = name_en(); let de = description_en(); let ce = category_en();
+                           let id = item_id.clone();
+                           let original = cache.read().iter().find(|a| a.id == id).cloned();
+                           cache.write().iter_mut().find(|a| a.id == id).map(|a| {
+                               a.name = n.clone(); a.category = Some(c.clone()); a.price = p; a.stock = Some(s_val);
+                               a.description = if d.is_empty() { None } else { Some(d.clone()) };
+                               a.image_url = if img.is_empty() { None } else { Some(img.clone()) };
+                               a.video_url = if vid.is_empty() { None } else { Some(vid.clone()) };
+                               a.name_en = if ne.is_empty() { None } else { Some(ne.clone()) };
+                               a.description_en = if de.is_empty() { None } else { Some(de.clone()) };
+                               a.category_en = if ce.is_empty() { None } else { Some(ce.clone()) };
+                           });
+                           spawn(async move {
+                               let body = json!({
+                                   "name": n, "category": c, "price": p, "stock": s_val, "is_available": item.is_available,
+                                   "description": if d.is_empty() { serde_json::Value::Null } else { d.into() },
+                                   "image_url": if img.is_empty() { serde_json::Value::Null } else { img.into() },
+                                   "video_url": if vid.is_empty() { serde_json::Value::Null } else { vid.into() },
+                                   "name_en": if ne.is_empty() { serde_json::Value::Null } else { ne.into() },
+                                   "description_en": if de.is_empty() { serde_json::Value::Null } else { de.into() },
+                                   "category_en": if ce.is_empty() { serde_json::Value::Null } else { ce.into() },
+                               });
+                               let url = format!("{}/api/accessories/{}", api_base_url(), id);
+                               let res = HTTP_CLIENT.clone().put(&url)
+                                   .header("X-Telegram-Init-Data", init_data.read().clone())
+    .header("X-Admin-Token", admin_token())
+    .header("X-Admin-Telegram-Id", telegram_id.to_string())
+                                   .json(&body).send().await;
+                               let success = match res {
+                                   Ok(r) => r.status().is_success(),
+                                   Err(_) => false,
+                               };
+                               if success {
+                                   on_saved.call(());
+                                   status.set("✅ Сохранено".into());
+                                   TelegramApp::init().haptic_notification(HapticNotification::Success);
+                               } else {
+                                   TelegramApp::init().haptic_notification(HapticNotification::Error);
+                                   if let Some(orig) = original {
+                                       cache.write().iter_mut().find(|a| a.id == id).map(|a| *a = orig);
+                                   }
+                                   status.set("❌ Не сохранено. Попробуйте снова".into());
+                               }
+                           });
+                       },
+                       "💾 Сохранить"
+                   }
+                   button { style: cancel_btn_style(), onclick: move |_| on_cancel.call(()), "Отмена" }
+               }
+               {render_status(status)}
+           }
+       }
 }
 
 #[component]
@@ -3234,7 +3670,11 @@ fn EditTeaCard(
     let telegram_id = use_telegram_id().unwrap_or(0);
     let init_data = use_signal(use_telegram_init_data);
     let mut name = use_signal(|| item.name.clone());
-    let mut subcategory = use_signal(|| item.subcategory.clone().unwrap_or_else(|| "green".to_string()));
+    let mut subcategory = use_signal(|| {
+        item.subcategory
+            .clone()
+            .unwrap_or_else(|| "green".to_string())
+    });
     let mut price = use_signal(|| item.price.to_string());
     let mut stock = use_signal(|| item.stock.map(|s| s.to_string()).unwrap_or_default());
     let mut description = use_signal(|| item.description.clone().unwrap_or_default());
@@ -3246,90 +3686,90 @@ fn EditTeaCard(
     let mut status = use_signal(String::new);
     let item_id = item.id.clone();
     rsx! {
-        div { "data-editing": "true", style: edit_card_style(),
-            div { style: edit_header_style(), "✏️ Редактирование" }
-            input { style: input_style(), placeholder: "Название", value: "{name}", oninput: move |e| name.set(e.value()) }
-            select { style: input_style(), value: "{subcategory}", oninput: move |e| subcategory.set(e.value()),
-                option { value: "green", "🍃 Green" } option { value: "black", "🖤 Black" }
-                option { value: "herbal", "🌿 Herbal" } option { value: "oolong", "🍂 Oolong" }
-                option { value: "puer", "🟫 Pu-er" } option { value: "other", "🍵 Other" } }
-            input { style: input_style(), placeholder: "Цена ฿", value: "{price}", r#type: "number", oninput: move |e| price.set(e.value()) }
-            input { style: input_style(), placeholder: "Кол-во", value: "{stock}", r#type: "number", oninput: move |e| stock.set(e.value()) }
-            textarea { style: textarea_style(), placeholder: "Описание (RU)", value: "{description}", oninput: move |e| description.set(e.value()) }
-            ImageUpload { image_url: image_url.read().clone(), on_change: move |url: String| image_url.set(url) }
-            VideoUpload { video_url: video_url.read().clone(), on_change: move |url: String| video_url.set(url) }
-            div { style: en_section_style(), "🇬🇧 English" }
-            input { style: input_style(), placeholder: "Name (EN)", value: "{name_en}", oninput: move |e| name_en.set(e.value()) }
-            textarea { style: textarea_style(), placeholder: "Description (EN)", value: "{description_en}", oninput: move |e| description_en.set(e.value()) }
-            input { style: input_style(), placeholder: "Subcategory (EN)", value: "{subcategory_en}", oninput: move |e| subcategory_en.set(e.value()) }
-            div { style: "display:flex;gap:8px;",
-                button { style: submit_btn_style(),
-                    onclick: move |_| {
-                        let n = name().trim().to_string();
-                        let sc = subcategory();
-                        let p = match price.read().trim().parse::<f64>() {
-                            Ok(v) if v > 0.0 && v.is_finite() => v,
-                            _ => { status.set("❌ Цена должна быть числом больше 0".into()); return; }
-                        };
-                        let s_str = stock();
-                        let s_val: i32 = match s_str.trim().parse() {
-                            Ok(v) if v >= 0 => v,
-                            _ => { status.set("❌ Количество должно быть числом ≥ 0".into()); return; }
-                        };
-                        if n.is_empty() { status.set("❌ Название обязательно".into()); return; }
-                        let d = description(); let img = image_url(); let vid = video_url();
-                        let ne = name_en(); let de = description_en(); let sce = subcategory_en();
-                        let id = item_id.clone();
-                        let original = cache.read().iter().find(|t| t.id == id).cloned();
-                        cache.write().iter_mut().find(|t| t.id == id).map(|t| {
-                            t.name = n.clone(); t.subcategory = Some(sc.clone()); t.price = p; t.stock = Some(s_val);
-                            t.description = if d.is_empty() { None } else { Some(d.clone()) };
-                            t.image_url = if img.is_empty() { None } else { Some(img.clone()) };
-                            t.video_url = if vid.is_empty() { None } else { Some(vid.clone()) };
-                            t.name_en = if ne.is_empty() { None } else { Some(ne.clone()) };
-                            t.description_en = if de.is_empty() { None } else { Some(de.clone()) };
-                            t.subcategory_en = if sce.is_empty() { None } else { Some(sce.clone()) };
-                        });
-                        spawn(async move {
-                            let body = json!({
-                                "name": n, "subcategory": sc, "price": p, "stock": s_val, "is_available": item.is_available,
-                                "description": if d.is_empty() { serde_json::Value::Null } else { d.into() },
-                                "image_url": if img.is_empty() { serde_json::Value::Null } else { img.into() },
-                                "video_url": if vid.is_empty() { serde_json::Value::Null } else { vid.into() },
-                                "name_en": if ne.is_empty() { serde_json::Value::Null } else { ne.into() },
-                                "description_en": if de.is_empty() { serde_json::Value::Null } else { de.into() },
-                                "subcategory_en": if sce.is_empty() { serde_json::Value::Null } else { sce.into() },
-                            });
-                            let url = format!("{}/api/tea-products/{}", api_base_url(), id);
-                            let res = HTTP_CLIENT.clone().put(&url)
-                                .header("X-Telegram-Init-Data", init_data.read().clone())
- .header("X-Admin-Token", admin_token())
- .header("X-Admin-Telegram-Id", telegram_id.to_string())
-                                .json(&body).send().await;
-                            let success = match res {
-                                Ok(r) => r.status().is_success(),
-                                Err(_) => false,
-                            };
-                            if success {
-                                on_saved.call(());
-                                status.set("✅ Сохранено".into());
-                                TelegramApp::init().haptic_notification(HapticNotification::Success);
-                            } else {
-                                TelegramApp::init().haptic_notification(HapticNotification::Error);
-                                if let Some(orig) = original {
-                                    cache.write().iter_mut().find(|t| t.id == id).map(|t| *t = orig);
-                                }
-                                status.set("❌ Не сохранено. Попробуйте снова".into());
-                            }
-                        });
-                    },
-                    "💾 Сохранить"
-                }
-                button { style: cancel_btn_style(), onclick: move |_| on_cancel.call(()), "Отмена" }
-            }
-            {render_status(status)}
-        }
-    }
+           div { "data-editing": "true", style: edit_card_style(),
+               div { style: edit_header_style(), "✏️ Редактирование" }
+               input { style: input_style(), placeholder: "Название", value: "{name}", oninput: move |e| name.set(e.value()) }
+               select { style: input_style(), value: "{subcategory}", oninput: move |e| subcategory.set(e.value()),
+                   option { value: "green", "🍃 Green" } option { value: "black", "🖤 Black" }
+                   option { value: "herbal", "🌿 Herbal" } option { value: "oolong", "🍂 Oolong" }
+                   option { value: "puer", "🟫 Pu-er" } option { value: "other", "🍵 Other" } }
+               input { style: input_style(), placeholder: "Цена ฿", value: "{price}", r#type: "number", oninput: move |e| price.set(e.value()) }
+               input { style: input_style(), placeholder: "Кол-во", value: "{stock}", r#type: "number", oninput: move |e| stock.set(e.value()) }
+               textarea { style: textarea_style(), placeholder: "Описание (RU)", value: "{description}", oninput: move |e| description.set(e.value()) }
+               ImageUpload { image_url: image_url.read().clone(), on_change: move |url: String| image_url.set(url) }
+               VideoUpload { video_url: video_url.read().clone(), on_change: move |url: String| video_url.set(url) }
+               div { style: en_section_style(), "🇬🇧 English" }
+               input { style: input_style(), placeholder: "Name (EN)", value: "{name_en}", oninput: move |e| name_en.set(e.value()) }
+               textarea { style: textarea_style(), placeholder: "Description (EN)", value: "{description_en}", oninput: move |e| description_en.set(e.value()) }
+               input { style: input_style(), placeholder: "Subcategory (EN)", value: "{subcategory_en}", oninput: move |e| subcategory_en.set(e.value()) }
+               div { style: "display:flex;gap:8px;",
+                   button { style: submit_btn_style(),
+                       onclick: move |_| {
+                           let n = name().trim().to_string();
+                           let sc = subcategory();
+                           let p = match price.read().trim().parse::<f64>() {
+                               Ok(v) if v > 0.0 && v.is_finite() => v,
+                               _ => { status.set("❌ Цена должна быть числом больше 0".into()); return; }
+                           };
+                           let s_str = stock();
+                           let s_val: i32 = match s_str.trim().parse() {
+                               Ok(v) if v >= 0 => v,
+                               _ => { status.set("❌ Количество должно быть числом ≥ 0".into()); return; }
+                           };
+                           if n.is_empty() { status.set("❌ Название обязательно".into()); return; }
+                           let d = description(); let img = image_url(); let vid = video_url();
+                           let ne = name_en(); let de = description_en(); let sce = subcategory_en();
+                           let id = item_id.clone();
+                           let original = cache.read().iter().find(|t| t.id == id).cloned();
+                           cache.write().iter_mut().find(|t| t.id == id).map(|t| {
+                               t.name = n.clone(); t.subcategory = Some(sc.clone()); t.price = p; t.stock = Some(s_val);
+                               t.description = if d.is_empty() { None } else { Some(d.clone()) };
+                               t.image_url = if img.is_empty() { None } else { Some(img.clone()) };
+                               t.video_url = if vid.is_empty() { None } else { Some(vid.clone()) };
+                               t.name_en = if ne.is_empty() { None } else { Some(ne.clone()) };
+                               t.description_en = if de.is_empty() { None } else { Some(de.clone()) };
+                               t.subcategory_en = if sce.is_empty() { None } else { Some(sce.clone()) };
+                           });
+                           spawn(async move {
+                               let body = json!({
+                                   "name": n, "subcategory": sc, "price": p, "stock": s_val, "is_available": item.is_available,
+                                   "description": if d.is_empty() { serde_json::Value::Null } else { d.into() },
+                                   "image_url": if img.is_empty() { serde_json::Value::Null } else { img.into() },
+                                   "video_url": if vid.is_empty() { serde_json::Value::Null } else { vid.into() },
+                                   "name_en": if ne.is_empty() { serde_json::Value::Null } else { ne.into() },
+                                   "description_en": if de.is_empty() { serde_json::Value::Null } else { de.into() },
+                                   "subcategory_en": if sce.is_empty() { serde_json::Value::Null } else { sce.into() },
+                               });
+                               let url = format!("{}/api/tea-products/{}", api_base_url(), id);
+                               let res = HTTP_CLIENT.clone().put(&url)
+                                   .header("X-Telegram-Init-Data", init_data.read().clone())
+    .header("X-Admin-Token", admin_token())
+    .header("X-Admin-Telegram-Id", telegram_id.to_string())
+                                   .json(&body).send().await;
+                               let success = match res {
+                                   Ok(r) => r.status().is_success(),
+                                   Err(_) => false,
+                               };
+                               if success {
+                                   on_saved.call(());
+                                   status.set("✅ Сохранено".into());
+                                   TelegramApp::init().haptic_notification(HapticNotification::Success);
+                               } else {
+                                   TelegramApp::init().haptic_notification(HapticNotification::Error);
+                                   if let Some(orig) = original {
+                                       cache.write().iter_mut().find(|t| t.id == id).map(|t| *t = orig);
+                                   }
+                                   status.set("❌ Не сохранено. Попробуйте снова".into());
+                               }
+                           });
+                       },
+                       "💾 Сохранить"
+                   }
+                   button { style: cancel_btn_style(), onclick: move |_| on_cancel.call(()), "Отмена" }
+               }
+               {render_status(status)}
+           }
+       }
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -3362,24 +3802,32 @@ fn DashboardTab() -> Element {
         let init_data = init_data.read().clone();
         async move {
             let url = format!("{}/api/admin/stats", api_base_url());
-            match HTTP_CLIENT.clone()
+            match HTTP_CLIENT
+                .clone()
                 .get(&url)
                 .header("X-Telegram-Init-Data", init_data)
                 .header("X-Admin-Token", admin_token())
                 .header("X-Admin-Telegram-Id", telegram_id.to_string())
-                .send().await
+                .send()
+                .await
             {
                 Ok(resp) => {
                     if resp.status().is_success() {
                         match resp.json::<AdminStats>().await {
-                            Ok(data) => { stats.set(Some(data)); }
-                            Err(e) => { error.set(format!("Ошибка разбора: {e}")); }
+                            Ok(data) => {
+                                stats.set(Some(data));
+                            }
+                            Err(e) => {
+                                error.set(format!("Ошибка разбора: {e}"));
+                            }
                         }
                     } else {
                         error.set(format!("HTTP {}", resp.status().as_u16()));
                     }
                 }
-                Err(e) => { error.set(format!("Сеть: {e}")); }
+                Err(e) => {
+                    error.set(format!("Сеть: {e}"));
+                }
             }
             loading.set(false);
             Some(())
@@ -3490,7 +3938,9 @@ struct AdminOrderItem {
 }
 
 #[derive(Debug, Deserialize)]
-struct OrdersResp { orders: Vec<AdminOrder> }
+struct OrdersResp {
+    orders: Vec<AdminOrder>,
+}
 
 #[component]
 fn OrderDetailModal(order: AdminOrder, on_close: EventHandler<()>) -> Element {
@@ -3508,8 +3958,20 @@ fn OrderDetailModal(order: AdminOrder, on_close: EventHandler<()>) -> Element {
         "rejected" => "admin-badge danger",
         _ => "admin-badge muted",
     };
-    let suffix: String = order.id.chars().rev().take(4).collect::<Vec<_>>().into_iter().rev().collect();
-    let order_title = format!("Заказ #{}...{}", &order.id.get(0..4).unwrap_or(&order.id), suffix);
+    let suffix: String = order
+        .id
+        .chars()
+        .rev()
+        .take(4)
+        .collect::<Vec<_>>()
+        .into_iter()
+        .rev()
+        .collect();
+    let order_title = format!(
+        "Заказ #{}...{}",
+        &order.id.get(0..4).unwrap_or(&order.id),
+        suffix
+    );
     rsx! {
         div { style: "position:fixed;inset:0;background:rgba(0,0,0,0.8);display:flex;align-items:center;justify-content:center;z-index:2000;padding:16px;",
             onclick: move |_| on_close.call(()),
@@ -3599,7 +4061,9 @@ fn OrdersTab() -> Element {
     let _poll = use_resource(move || {
         let enabled = auto_refresh();
         async move {
-            if !enabled { return Some(()); }
+            if !enabled {
+                return Some(());
+            }
             loop {
                 gloo_timers::future::TimeoutFuture::new(10000).await;
                 tick.set(tick() + 1);
@@ -3617,27 +4081,38 @@ fn OrdersTab() -> Element {
         async move {
             loading.set(true);
             let url = format!("{}/api/orders?limit={}&offset={}", api_base_url(), lim, off);
-            match HTTP_CLIENT.clone()
+            match HTTP_CLIENT
+                .clone()
                 .get(&url)
                 .header("X-Telegram-Init-Data", init_data)
                 .header("X-Admin-Token", admin_token())
                 .header("X-Admin-Telegram-Id", telegram_id.to_string())
-                .send().await
+                .send()
+                .await
             {
                 Ok(resp) if resp.status().is_success() => {
                     if let Ok(data) = resp.json::<OrdersResp>().await {
-                        let new_pending = data.orders.iter().filter(|o| o.status == "pending").count();
+                        let new_pending =
+                            data.orders.iter().filter(|o| o.status == "pending").count();
                         let old_pending = *prev_pending_count.read();
                         if new_pending > old_pending && old_pending > 0 {
                             let diff = new_pending - old_pending;
-                            push_toast(toasts2, format!("🛎️ {} новых заказов!", diff), ToastKind::Info);
+                            push_toast(
+                                toasts2,
+                                format!("🛎️ {} новых заказов!", diff),
+                                ToastKind::Info,
+                            );
                         }
                         prev_pending_count.set(new_pending);
                         orders.set(data.orders);
                     }
                 }
-                Ok(resp) => { error.set(format!("HTTP {}", resp.status().as_u16())); }
-                Err(e) => { error.set(format!("Сеть: {e}")); }
+                Ok(resp) => {
+                    error.set(format!("HTTP {}", resp.status().as_u16()));
+                }
+                Err(e) => {
+                    error.set(format!("Сеть: {e}"));
+                }
             }
             loading.set(false);
             Some(())
@@ -3647,14 +4122,27 @@ fn OrdersTab() -> Element {
     let filtered: Vec<AdminOrder> = {
         let f = filter.read().clone();
         let q = search.read().to_lowercase();
-        orders.read().iter().filter(|o| {
-            let status_ok = f == "all" || o.status == f;
-            let search_ok = q.is_empty()
-                || o.id.to_lowercase().contains(&q)
-                || o.customer_name.as_deref().unwrap_or("").to_lowercase().contains(&q)
-                || o.customer_telegram.as_deref().unwrap_or("").to_lowercase().contains(&q);
-            status_ok && search_ok
-        }).cloned().collect()
+        orders
+            .read()
+            .iter()
+            .filter(|o| {
+                let status_ok = f == "all" || o.status == f;
+                let search_ok = q.is_empty()
+                    || o.id.to_lowercase().contains(&q)
+                    || o.customer_name
+                        .as_deref()
+                        .unwrap_or("")
+                        .to_lowercase()
+                        .contains(&q)
+                    || o.customer_telegram
+                        .as_deref()
+                        .unwrap_or("")
+                        .to_lowercase()
+                        .contains(&q);
+                status_ok && search_ok
+            })
+            .cloned()
+            .collect()
     };
 
     let count_by = |s: &str| -> usize {
@@ -3663,15 +4151,22 @@ fn OrdersTab() -> Element {
     };
 
     let export_csv = move || {
-        let mut csv = "ID,Дата,Статус,Клиент,Телефон,Telegram,Товары,Подытог,Бонусы,Итого\n".to_string();
+        let mut csv =
+            "ID,Дата,Статус,Клиент,Телефон,Telegram,Товары,Подытог,Бонусы,Итого\n".to_string();
         for o in orders.read().iter() {
-            let items_str = o.items.iter().map(|i| {
-                i.strain_name.clone()
-                    .or(i.accessory_name.clone())
-                    .or(i.tea_name.clone())
-                    .or(i.set_name.clone())
-                    .unwrap_or_else(|| "Неизвестно".into())
-            }).collect::<Vec<_>>().join("; ");
+            let items_str = o
+                .items
+                .iter()
+                .map(|i| {
+                    i.strain_name
+                        .clone()
+                        .or(i.accessory_name.clone())
+                        .or(i.tea_name.clone())
+                        .or(i.set_name.clone())
+                        .unwrap_or_else(|| "Неизвестно".into())
+                })
+                .collect::<Vec<_>>()
+                .join("; ");
             let status_ru = match o.status.as_str() {
                 "pending" => "Ожидает",
                 "confirmed" => "Подтверждён",
@@ -3684,7 +4179,10 @@ fn OrdersTab() -> Element {
                 o.id.replace('"', "\"\""),
                 o.created_at.as_deref().unwrap_or(""),
                 status_ru,
-                o.customer_name.as_deref().unwrap_or("").replace('"', "\"\""),
+                o.customer_name
+                    .as_deref()
+                    .unwrap_or("")
+                    .replace('"', "\"\""),
                 o.customer_phone.as_deref().unwrap_or(""),
                 o.customer_telegram.as_deref().unwrap_or(""),
                 items_str.replace('"', "\"\""),
@@ -4002,7 +4500,9 @@ struct AdminQuestPlace {
 }
 
 #[derive(Debug, Deserialize)]
-struct QuestPlacesResp { quest_places: Vec<AdminQuestPlace> }
+struct QuestPlacesResp {
+    quest_places: Vec<AdminQuestPlace>,
+}
 
 #[component]
 fn QuestsTab() -> Element {
@@ -4022,10 +4522,15 @@ fn QuestsTab() -> Element {
         let init_data = init_data.read().clone();
         async move {
             let url = format!("{}/api/quest-places", api_base_url());
-            match HTTP_CLIENT.clone().get(&url).header("X-Telegram-Init-Data", init_data)
+            match HTTP_CLIENT
+                .clone()
+                .get(&url)
+                .header("X-Telegram-Init-Data", init_data)
                 .header("X-Admin-Token", admin_token())
                 .header("X-Admin-Telegram-Id", telegram_id.to_string())
-                .send().await {
+                .send()
+                .await
+            {
                 Ok(resp) if resp.status().is_success() => {
                     if let Ok(data) = resp.json::<QuestPlacesResp>().await {
                         places.set(data.quest_places);
@@ -4089,12 +4594,12 @@ fn QuestsTab() -> Element {
                                 let n = edit_name.read().trim().to_string();
                                 if n.is_empty() { error.set("Название обязательно".into()); return; }
                                 let lat = match edit_lat.read().trim().parse::<f64>() {
-                                    Ok(v) => v,
-                                    Err(_) => { error.set("Неверная широта".into()); return; }
+                                    Ok(v) if v.is_finite() => v,
+                                    _ => { error.set("Неверная широта".into()); return; }
                                 };
                                 let lon = match edit_lon.read().trim().parse::<f64>() {
-                                    Ok(v) => v,
-                                    Err(_) => { error.set("Неверная долгота".into()); return; }
+                                    Ok(v) if v.is_finite() => v,
+                                    _ => { error.set("Неверная долгота".into()); return; }
                                 };
                                 let cat = edit_cat.read().clone();
                                 let desc = edit_desc.read().trim().to_string();
@@ -4256,7 +4761,9 @@ struct AdminTreasureHunt {
 }
 
 #[derive(Debug, Deserialize)]
-struct TreasureHuntsResp { treasure_hunts: Vec<AdminTreasureHunt> }
+struct TreasureHuntsResp {
+    treasure_hunts: Vec<AdminTreasureHunt>,
+}
 
 #[component]
 fn TreasuresTab() -> Element {
@@ -4276,10 +4783,15 @@ fn TreasuresTab() -> Element {
         let init_data = init_data.read().clone();
         async move {
             let url = format!("{}/api/treasure-hunts", api_base_url());
-            match HTTP_CLIENT.clone().get(&url).header("X-Telegram-Init-Data", init_data)
+            match HTTP_CLIENT
+                .clone()
+                .get(&url)
+                .header("X-Telegram-Init-Data", init_data)
                 .header("X-Admin-Token", admin_token())
                 .header("X-Admin-Telegram-Id", telegram_id.to_string())
-                .send().await {
+                .send()
+                .await
+            {
                 Ok(resp) if resp.status().is_success() => {
                     if let Ok(data) = resp.json::<TreasureHuntsResp>().await {
                         hunts.set(data.treasure_hunts);
@@ -4301,7 +4813,8 @@ fn TreasuresTab() -> Element {
         let mut edit_desc = use_signal(|| item.description.clone().unwrap_or_default());
         let mut edit_img = use_signal(|| item.image_url.clone().unwrap_or_default());
         let mut edit_bm_title = use_signal(|| item.black_mark_title.clone());
-        let mut edit_bm_desc = use_signal(|| item.black_mark_description.clone().unwrap_or_default());
+        let mut edit_bm_desc =
+            use_signal(|| item.black_mark_description.clone().unwrap_or_default());
         let mut edit_bm_img = use_signal(|| item.black_mark_image_url.clone().unwrap_or_default());
         let mut edit_start_lat = use_signal(|| item.start_lat.to_string());
         let mut edit_start_lon = use_signal(|| item.start_lon.to_string());
@@ -4354,6 +4867,7 @@ fn TreasuresTab() -> Element {
                                 let bm_img = edit_bm_img.read().trim().to_string();
                                 let start_lat = edit_start_lat.read().trim().parse::<f64>().unwrap_or(0.0);
                                 let start_lon = edit_start_lon.read().trim().parse::<f64>().unwrap_or(0.0);
+                                if !start_lat.is_finite() || !start_lon.is_finite() { error.set("Неверные координаты".into()); return; }
                                 let start_name = edit_start_name.read().trim().to_string();
                                 let iid = item_id.clone();
                                 let is_cr = is_creating;
@@ -4505,7 +5019,9 @@ struct GardenConfig {
     reward_expiration_days: f64,
 }
 
-fn default_true() -> bool { true }
+fn default_true() -> bool {
+    true
+}
 
 #[component]
 fn GardenTab() -> Element {
@@ -4525,10 +5041,15 @@ fn GardenTab() -> Element {
         let init_data = init_data.read().clone();
         async move {
             let url = format!("{}/api/garden/config", api_base_url());
-            match HTTP_CLIENT.clone().get(&url).header("X-Telegram-Init-Data", init_data)
+            match HTTP_CLIENT
+                .clone()
+                .get(&url)
+                .header("X-Telegram-Init-Data", init_data)
                 .header("X-Admin-Token", admin_token())
                 .header("X-Admin-Telegram-Id", telegram_id.to_string())
-                .send().await {
+                .send()
+                .await
+            {
                 Ok(resp) if resp.status().is_success() => {
                     if let Ok(cfg) = resp.json::<GardenConfig>().await {
                         is_enabled.set(cfg.is_enabled);
@@ -4597,6 +5118,7 @@ fn GardenTab() -> Element {
                             let bp = bonus_points.read().trim().parse::<f64>().unwrap_or(100.0);
                             let ed = expire_days.read().trim().parse::<f64>().unwrap_or(7.0);
                             if !disc.is_finite() || !bp.is_finite() || !ed.is_finite() { error.set("Неверные числовые значения".into()); return; }
+                            if disc < 0.0 || bp < 0.0 || ed < 0.0 { error.set("Значения не могут быть отрицательными".into()); return; }
                             let id_data = init_data.read().clone();
                             saving.set(true);
                             error.set(String::new());
@@ -4689,12 +5211,14 @@ fn LoyaltyTab() -> Element {
         async move {
             let base = api_base_url();
             // Fetch config/tiers
-            if let Ok(resp) = HTTP_CLIENT.clone()
+            if let Ok(resp) = HTTP_CLIENT
+                .clone()
                 .get(&format!("{}/api/loyalty/tiers", base))
                 .header("X-Telegram-Init-Data", init_data.clone())
                 .header("X-Admin-Token", admin_token())
                 .header("X-Admin-Telegram-Id", telegram_id.to_string())
-                .send().await
+                .send()
+                .await
             {
                 if resp.status().is_success() {
                     if let Ok(data) = resp.json::<LoyaltyConfigResp>().await {
@@ -4703,12 +5227,14 @@ fn LoyaltyTab() -> Element {
                 }
             }
             // Fetch leaderboard
-            if let Ok(resp) = HTTP_CLIENT.clone()
+            if let Ok(resp) = HTTP_CLIENT
+                .clone()
                 .get(&format!("{}/api/loyalty/leaderboard", base))
                 .header("X-Telegram-Init-Data", init_data.clone())
                 .header("X-Admin-Token", admin_token())
                 .header("X-Admin-Telegram-Id", telegram_id.to_string())
-                .send().await
+                .send()
+                .await
             {
                 if resp.status().is_success() {
                     if let Ok(data) = resp.json::<LeaderboardResp>().await {
@@ -4822,7 +5348,9 @@ struct AdminManager {
 }
 
 #[derive(Debug, Deserialize)]
-struct ManagersResp { managers: Vec<AdminManager> }
+struct ManagersResp {
+    managers: Vec<AdminManager>,
+}
 
 #[component]
 fn ManagersTab() -> Element {
@@ -4845,18 +5373,29 @@ fn ManagersTab() -> Element {
         let init_data = init_data.read().clone();
         async move {
             let url = format!("{}/api/admin/managers", api_base_url());
-            match HTTP_CLIENT.clone().get(&url).header("X-Telegram-Init-Data", init_data)
+            match HTTP_CLIENT
+                .clone()
+                .get(&url)
+                .header("X-Telegram-Init-Data", init_data)
                 .header("X-Admin-Token", admin_token())
                 .header("X-Admin-Telegram-Id", telegram_id.to_string())
-                .send().await {
-                Ok(resp) if resp.status().is_success() => {
-                    match resp.json::<ManagersResp>().await {
-                        Ok(data) => { managers.set(data.managers); }
-                        Err(e) => { error.set(format!("Ошибка разбора: {e}")); }
+                .send()
+                .await
+            {
+                Ok(resp) if resp.status().is_success() => match resp.json::<ManagersResp>().await {
+                    Ok(data) => {
+                        managers.set(data.managers);
                     }
+                    Err(e) => {
+                        error.set(format!("Ошибка разбора: {e}"));
+                    }
+                },
+                Ok(resp) => {
+                    error.set(format!("HTTP {}", resp.status().as_u16()));
                 }
-                Ok(resp) => { error.set(format!("HTTP {}", resp.status().as_u16())); }
-                Err(e) => { error.set(format!("Сеть: {e}")); }
+                Err(e) => {
+                    error.set(format!("Сеть: {e}"));
+                }
             }
             loading.set(false);
             Some(())
@@ -5018,10 +5557,15 @@ fn ManagerDetailModal(props: ManagerDetailModalProps) -> Element {
         let url = format!("{}/api/admin/managers/{}/stats", api_base_url(), manager_id);
         let id_data = init_data2.clone();
         spawn(async move {
-            match HTTP_CLIENT.clone().get(&url).header("X-Telegram-Init-Data", id_data)
+            match HTTP_CLIENT
+                .clone()
+                .get(&url)
+                .header("X-Telegram-Init-Data", id_data)
                 .header("X-Admin-Token", admin_token())
                 .header("X-Admin-Telegram-Id", telegram_id.to_string())
-                .send().await {
+                .send()
+                .await
+            {
                 Ok(r) if r.status().is_success() => {
                     if let Ok(text) = r.text().await {
                         stats_signal.clone().set(text);
@@ -5135,14 +5679,33 @@ fn ManagerDetailModal(props: ManagerDetailModalProps) -> Element {
 
 // ── Styles ────────────────────────────────────────────────────
 
-fn input_style() -> &'static str { "padding:10px 12px;background:#0f0f1a;color:#e8e8e8;border:1px solid #2a2a4a;border-radius:4px;font-size:14px;" }
-fn submit_btn_style() -> &'static str { "padding:12px;background:#39ff14;color:#000;border:none;border-radius:4px;font-weight:700;font-size:14px;cursor:pointer;margin-top:4px;" }
-fn submit_btn_disabled_style() -> &'static str { "padding:12px;background:#666;color:#999;border:none;border-radius:4px;font-weight:700;font-size:14px;cursor:not-allowed;margin-top:4px;" }
-fn upload_btn_style() -> &'static str { "padding:10px 12px;background:#2a2a4a;color:#6699ff;border:1px dashed #6699ff;border-radius:4px;font-size:13px;cursor:pointer;white-space:nowrap;" }
-fn list_title_style() -> &'static str { "color:#888;font-size:13px;margin:16px 0 8px;text-transform:uppercase;letter-spacing:1px;" }
-fn en_section_style() -> &'static str { "padding:6px 0 2px;color:#6699ff;font-size:12px;font-weight:600;border-top:1px solid #2a2a4a;margin-top:4px;" }
-fn cancel_btn_style() -> &'static str { "padding:10px;background:#2a2a4a;color:#e8e8e8;border:none;border-radius:4px;font-weight:600;font-size:13px;cursor:pointer;margin-top:4px;" }
-fn edit_card_style() -> &'static str { "background:#1a1a2e;border:1px solid #6699ff;border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:8px;" }
-fn edit_header_style() -> &'static str { "color:#6699ff;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:1px;" }
-fn textarea_style() -> &'static str { "padding:10px 12px;background:#0f0f1a;color:#e8e8e8;border:1px solid #2a2a4a;border-radius:4px;font-size:14px;min-height:80px;resize:vertical;font-family:inherit;" }
-
+fn input_style() -> &'static str {
+    "padding:10px 12px;background:#0f0f1a;color:#e8e8e8;border:1px solid #2a2a4a;border-radius:4px;font-size:14px;"
+}
+fn submit_btn_style() -> &'static str {
+    "padding:12px;background:#39ff14;color:#000;border:none;border-radius:4px;font-weight:700;font-size:14px;cursor:pointer;margin-top:4px;"
+}
+fn submit_btn_disabled_style() -> &'static str {
+    "padding:12px;background:#666;color:#999;border:none;border-radius:4px;font-weight:700;font-size:14px;cursor:not-allowed;margin-top:4px;"
+}
+fn upload_btn_style() -> &'static str {
+    "padding:10px 12px;background:#2a2a4a;color:#6699ff;border:1px dashed #6699ff;border-radius:4px;font-size:13px;cursor:pointer;white-space:nowrap;"
+}
+fn list_title_style() -> &'static str {
+    "color:#888;font-size:13px;margin:16px 0 8px;text-transform:uppercase;letter-spacing:1px;"
+}
+fn en_section_style() -> &'static str {
+    "padding:6px 0 2px;color:#6699ff;font-size:12px;font-weight:600;border-top:1px solid #2a2a4a;margin-top:4px;"
+}
+fn cancel_btn_style() -> &'static str {
+    "padding:10px;background:#2a2a4a;color:#e8e8e8;border:none;border-radius:4px;font-weight:600;font-size:13px;cursor:pointer;margin-top:4px;"
+}
+fn edit_card_style() -> &'static str {
+    "background:#1a1a2e;border:1px solid #6699ff;border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:8px;"
+}
+fn edit_header_style() -> &'static str {
+    "color:#6699ff;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:1px;"
+}
+fn textarea_style() -> &'static str {
+    "padding:10px 12px;background:#0f0f1a;color:#e8e8e8;border:1px solid #2a2a4a;border-radius:4px;font-size:14px;min-height:80px;resize:vertical;font-family:inherit;"
+}

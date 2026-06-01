@@ -1,14 +1,17 @@
-// Quest screen — static location-quest UI (no backend quest/state endpoint yet).
-use dioxus::prelude::*;
-use web_sys::window;
-use js_sys::eval;
-use crate::trios::quest::get_checkpoints;
+// Quest screen — location-quest UI wired up to backend `/api/quest/scan`.
 use crate::trios::core::Lang;
 use crate::trios::i18n::{
-    t, T_TITLE, T_SUBTITLE, T_SCAN_QR, T_SCAN_QR_DESC,
-    T_CHECKIN_SUCCESS, T_QUEST_COMPLETE, T_REWARD_CLAIM, T_REWARD,
-    T_PURCHASE_MIN, T_STATUS_LOCKED, T_STATUS_ACTIVE, T_STATUS_COMPLETED,
+    t, T_CHECKIN_SUCCESS, T_PURCHASE_MIN, T_QUEST_COMPLETE, T_REWARD, T_REWARD_CLAIM, T_SCAN_QR,
+    T_SCAN_QR_DESC, T_STATUS_ACTIVE, T_STATUS_COMPLETED, T_STATUS_LOCKED, T_SUBTITLE, T_TITLE,
 };
+use crate::trios::quest::get_checkpoints;
+use crate::ui::api::context::api_base_url;
+use crate::ui::components::ErrorBanner;
+use crate::ui::telegram::use_telegram_init_data;
+use dioxus::prelude::*;
+use js_sys::eval;
+use serde_json::json;
+use web_sys::window;
 
 fn checkpoint_emoji(id: u8) -> &'static str {
     match id {
@@ -28,19 +31,98 @@ pub fn Quest() -> Element {
     let scan_result = use_signal(|| String::new());
     let loading = use_signal(|| false);
     let checkpoints = get_checkpoints();
+    let init_data = use_telegram_init_data();
 
     let scan_qr = move |_| {
-        let mut scanning_c = scanning.clone();
-        let mut scan_result_c = scan_result.clone();
+        // Capture signals into the spawned task.
+        let mut scanning_c = scanning;
+        let mut scan_result_c = scan_result;
+        let mut current_checkpoint_c = current_checkpoint;
+        let init_data = init_data.clone();
         spawn(async move {
-            if let Some(_w) = window() {
-                let _ = eval(r#"
-                    if (window.Telegram?.WebApp?.showScanQrPopup) {
-                        window.Telegram.WebApp.showScanQrPopup({text: 'Scan location QR'});
+            if window().is_none() {
+                return;
+            }
+
+            // 1. Reset shared bucket + register a one-shot qrTextReceived
+            //    listener that drops the scanned text into `window.__woody_qr`
+            //    and closes the popup. We unbind the listener immediately so
+            //    consecutive scans don't double-fire.
+            let _ = eval(
+                r#"
+                window.__woody_qr = '';
+                if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.showScanQrPopup) {
+                    var tg = window.Telegram.WebApp;
+                    var handler = function(event) {
+                        var text = (event && (event.data || event.text)) || (typeof event === 'string' ? event : '');
+                        if (text && typeof text === 'string') {
+                            window.__woody_qr = text;
+                            try { tg.closeScanQrPopup(); } catch (e) {}
+                            try { tg.offEvent('qrTextReceived', handler); } catch (e) {}
+                        }
+                    };
+                    tg.onEvent('qrTextReceived', handler);
+                    tg.showScanQrPopup({text: 'Scan location QR'});
+                }
+            "#,
+            );
+            scanning_c.set(true);
+            scan_result_c.set(String::new());
+
+            // 2. Poll `window.__woody_qr` for up to ~60 s (120 × 500 ms).
+            //    Telegram's popup itself caps interaction time; if the user
+            //    bails the bucket stays empty and we exit cleanly.
+            let mut token: Option<String> = None;
+            for _ in 0..120 {
+                gloo_timers::future::TimeoutFuture::new(500).await;
+                if let Ok(v) = eval("window.__woody_qr || ''") {
+                    if let Some(s) = v.as_string() {
+                        if !s.is_empty() {
+                            token = Some(s);
+                            break;
+                        }
                     }
-                "#);
-                scanning_c.set(true);
-                scan_result_c.set("Scan the QR code at the location".to_string());
+                }
+                if !*scanning_c.read() {
+                    break;
+                }
+            }
+            scanning_c.set(false);
+
+            // 3. POST to backend and progress the checkpoint on success.
+            let Some(token) = token else {
+                return;
+            };
+            // Cap inbound QR length to mirror backend's validate (`> 200`).
+            let token = if token.len() > 200 {
+                token.chars().take(200).collect()
+            } else {
+                token
+            };
+            let url = format!("{}/api/quest/scan", api_base_url());
+            let body = json!({ "qr_token": token }).to_string();
+            match crate::ui::api::http::post_json_authed(&url, &init_data, &body).await {
+                Ok(text) => match serde_json::from_str::<serde_json::Value>(&text) {
+                    Ok(val)
+                        if val
+                            .get("success")
+                            .and_then(|v| v.as_bool())
+                            .unwrap_or(false) =>
+                    {
+                        let cur = *current_checkpoint_c.read();
+                        current_checkpoint_c.set(cur.saturating_add(1));
+                        scan_result_c.set("ok".into());
+                    }
+                    Ok(_) => scan_result_c.set("Неверный QR".into()),
+                    Err(_) => scan_result_c.set("Bad response".into()),
+                },
+                Err(e) => {
+                    // Backend returns 404 if location not found, 401 on bad init data.
+                    scan_result_c.set(format!(
+                        "Ошибка: {}",
+                        e.chars().take(60).collect::<String>()
+                    ));
+                }
             }
         });
     };
@@ -59,7 +141,11 @@ pub fn Quest() -> Element {
     let bg = "#0f0f1a";
     let bg_card = "#1a1a2e";
     let cyan = "#00e5ff";
-    let scan_margin = if is_complete { "0".to_string() } else { "20".to_string() };
+    let scan_margin = if is_complete {
+        "0".to_string()
+    } else {
+        "20".to_string()
+    };
 
     rsx! {
         div { style: "min-height: 100vh; background: {bg}; color: #e8e8e8; font-family: 'Press Start 2P', monospace; padding-bottom: 80px;",
@@ -94,7 +180,7 @@ pub fn Quest() -> Element {
                 }
             }
 
-            if !scan_msg.is_empty() {
+            if scan_msg == "ok" {
                 div { style: "
                     max-width: 380px; margin: 0 auto 12px;
                     background: rgba(57,255,20,0.1);
@@ -103,6 +189,11 @@ pub fn Quest() -> Element {
                     padding: 6px 10px; font-size: 18px; color: #39ff14; text-align: center;
                 ",
                     "{t(Lang::Russian, T_CHECKIN_SUCCESS)}"
+                }
+            } else if !scan_msg.is_empty() {
+                ErrorBanner {
+                    message: scan_msg.clone(),
+                    margin: "0 auto 12px".to_string(),
                 }
             }
 

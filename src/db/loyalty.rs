@@ -23,8 +23,19 @@ impl LoyaltyProfile {
     pub fn from_row(row: &Row) -> Self {
         Self {
             telegram_id: row.try_get("telegram_id").unwrap_or(0),
-            total_spent: row.try_get::<_, f64>("total_spent").ok().or_else(|| row.try_get::<_, Option<f64>>("total_spent").ok().flatten()),
-            bonus_balance: row.try_get::<_, f64>("bonus_balance").unwrap_or(0.0),
+            total_spent: row
+                .try_get::<_, f64>("total_spent")
+                .ok()
+                .or_else(|| row.try_get::<_, Option<f64>>("total_spent").ok().flatten())
+                .filter(|v| v.is_finite()),
+            bonus_balance: {
+                let v = row.try_get::<_, f64>("bonus_balance").unwrap_or(0.0);
+                if v.is_finite() {
+                    v.max(0.0)
+                } else {
+                    0.0
+                }
+            },
             tier: row.try_get("tier").unwrap_or_default(),
             referral_code: row.try_get("referral_code").ok().flatten(),
             referred_by: row.try_get("referred_by").ok().flatten(),
@@ -67,7 +78,11 @@ pub struct LoyaltyConfig {
 }
 
 #[allow(dead_code)]
-pub fn calculate_tier(total_spent: f64, order_count: i64, config: &LoyaltyConfig) -> (&'static str, f64) {
+pub fn calculate_tier(
+    total_spent: f64,
+    order_count: i64,
+    config: &LoyaltyConfig,
+) -> (&'static str, f64) {
     let (tier, tier_pct) = if total_spent >= config.gold_threshold {
         ("gold", config.gold_cashback_pct)
     } else if total_spent >= config.silver_threshold {
@@ -77,10 +92,13 @@ pub fn calculate_tier(total_spent: f64, order_count: i64, config: &LoyaltyConfig
     } else {
         ("none", 0.0)
     };
-    let idx = (order_count.saturating_sub(1) as usize).min(config.progressive_cashback.len().saturating_sub(1));
+    let idx = (order_count.saturating_sub(1) as usize)
+        .min(config.progressive_cashback.len().saturating_sub(1));
     let progressive_pct = if order_count > 0 {
         config.progressive_cashback.get(idx).copied().unwrap_or(0.0)
-    } else { 0.0 };
+    } else {
+        0.0
+    };
     (tier, tier_pct.max(progressive_pct))
 }
 

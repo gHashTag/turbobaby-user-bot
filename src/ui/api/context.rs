@@ -1,7 +1,7 @@
 // API Context Provider for Dioxus
+use crate::ui::api::client::ApiClient;
 use dioxus::prelude::*;
 use std::sync::Arc;
-use crate::ui::api::client::ApiClient;
 
 /// Hook to access ApiClient from context
 pub fn use_api_client() -> Arc<ApiClient> {

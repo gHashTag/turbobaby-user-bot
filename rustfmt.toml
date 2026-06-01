@@ -1,0 +1,20 @@
+# Pinned formatting rules for woody-weed-bot.
+#
+# Without this file, `cargo fmt` falls back to whatever rustfmt version the
+# contributor has installed and whatever defaults that version ships. Cycle
+# #49 applied a single baseline format pass; this file freezes the rules so
+# the baseline can't drift back when someone updates rustfmt to 1.10.x and
+# new heuristics kick in.
+#
+# Stable rustfmt (1.9.0+) silently ignores unstable keys — that's why we list
+# only the stable subset here.
+
+edition         = "2021"
+max_width       = 100
+hard_tabs       = false
+tab_spaces      = 4
+newline_style   = "Unix"
+reorder_imports = true
+reorder_modules = true
+use_try_shorthand = false
+remove_nested_parens = true

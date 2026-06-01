@@ -1,11 +1,11 @@
+use crate::trios::core::Lang;
+use crate::trios::i18n::{t, T_LOADING, T_ORDERS_TITLE};
+use crate::ui::api::context::api_base_url;
+use crate::ui::components::bottom_nav::BottomNav;
+use crate::ui::routes::Route;
+use crate::ui::telegram::{use_telegram_id, use_telegram_init_data};
 use dioxus::prelude::*;
 use serde::Deserialize;
-use crate::ui::routes::Route;
-use crate::ui::api::context::api_base_url;
-use crate::trios::core::Lang;
-use crate::trios::i18n::{t, T_ORDERS_TITLE, T_LOADING};
-use crate::ui::components::bottom_nav::BottomNav;
-use crate::ui::telegram::{use_telegram_id, use_telegram_init_data};
 
 #[derive(Debug, Clone, Deserialize)]
 struct ApiOrder {
@@ -35,7 +35,8 @@ struct ApiOrderItem {
 }
 
 fn item_name(item: &ApiOrderItem) -> String {
-    item.strain_name.clone()
+    item.strain_name
+        .clone()
         .or_else(|| item.accessory_name.clone())
         .or_else(|| item.tea_name.clone())
         .or_else(|| item.set_name.clone())
@@ -103,7 +104,7 @@ pub fn OrdersScreen() -> Element {
             }
             let base = api_base_url();
             let url = format!("{}/api/orders/user/{}", base, telegram_id);
-            reqwest::Client::new()
+            crate::ui::api::local_client::LocalClient::new()
                 .get(&url)
                 .header("X-Telegram-Init-Data", init)
                 .send()
@@ -119,7 +120,8 @@ pub fn OrdersScreen() -> Element {
     let filtered = match &*orders_resource.read() {
         Some(Ok(orders)) => {
             let f = active_filter();
-            orders.iter()
+            orders
+                .iter()
                 .filter(|o| f.matches(&o.status))
                 .cloned()
                 .collect::<Vec<_>>()
@@ -129,7 +131,6 @@ pub fn OrdersScreen() -> Element {
 
     let orders_title = t(Lang::Russian, T_ORDERS_TITLE);
     let loading_text = t(Lang::Russian, T_LOADING);
-
 
     rsx! {
         div { style: "
@@ -194,7 +195,8 @@ pub fn OrdersScreen() -> Element {
                                         let (status_color, status_label) = status_style(&o.status);
                                         let date_str = o.created_at.split('T').next().unwrap_or(&o.created_at).to_string();
                                         let shop = o.shop_id.as_deref().unwrap_or("Woody Shop");
-                                        let total_str = format!("฿{}", o.total as i32);
+                                        let total_val = if o.total.is_finite() { o.total.max(0.0) } else { 0.0 };
+                                        let total_str = format!("฿{}", total_val as i32);
                                         let is_cancelled = o.status == "cancelled";
                                         let opacity = if is_cancelled { "0.7" } else { "1" };
                                         let border_color = if is_cancelled { "#2a2a4a" } else { status_color };

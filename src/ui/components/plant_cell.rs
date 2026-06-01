@@ -1,10 +1,10 @@
+use crate::trios::garden::{GrowthStage, Plant};
 use dioxus::prelude::*;
-use crate::trios::garden::{Plant, GrowthStage};
 
 #[component]
 pub fn PlantCell(plant: Plant, on_harvest: EventHandler<String>) -> Element {
     let img_idx = (plant.water_count % 14) + 1;
-    let img_src = format!("/assets/images/game/{}.png", img_idx);
+    let img_src = format!("/assets/game/{}.png", img_idx);
     let emoji = plant.current_stage.emoji();
     let name = plant.current_stage.name();
     let is_ready = plant.is_completed;
@@ -18,7 +18,11 @@ pub fn PlantCell(plant: Plant, on_harvest: EventHandler<String>) -> Element {
         GrowthStage::Lab | GrowthStage::Delivery => "#60a5fa",
         GrowthStage::Final => "#ffd700",
     };
-    let class = if is_ready { "plant-cell harvestable" } else { "plant-cell" };
+    let class = if is_ready {
+        "plant-cell harvestable"
+    } else {
+        "plant-cell"
+    };
 
     rsx! {
         div { class: "{class}",

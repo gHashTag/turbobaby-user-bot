@@ -19,29 +19,29 @@ pub enum BadgeVariant {
 impl BadgeVariant {
     pub fn css_class(&self) -> &'static str {
         match self {
-            Self::Neutral   => "badge badge-neutral",
-            Self::Common    => "badge badge-rarity-common",
-            Self::Rare      => "badge badge-rarity-rare",
-            Self::Epic      => "badge badge-rarity-epic",
+            Self::Neutral => "badge badge-neutral",
+            Self::Common => "badge badge-rarity-common",
+            Self::Rare => "badge badge-rarity-rare",
+            Self::Epic => "badge badge-rarity-epic",
             Self::Legendary => "badge badge-rarity-legendary",
-            Self::Success   => "badge badge-success",
-            Self::Warning   => "badge badge-warning",
-            Self::Info      => "badge badge-info",
-            Self::Error     => "badge badge-error",
+            Self::Success => "badge badge-success",
+            Self::Warning => "badge badge-warning",
+            Self::Info => "badge badge-info",
+            Self::Error => "badge badge-error",
         }
     }
 
     pub fn default_icon(&self) -> &'static str {
         match self {
-            Self::Common    => "⚪",
-            Self::Rare      => "🔵",
-            Self::Epic      => "🟣",
+            Self::Common => "⚪",
+            Self::Rare => "🔵",
+            Self::Epic => "🟣",
             Self::Legendary => "🌟",
-            Self::Success   => "✅",
-            Self::Warning   => "⚠️",
-            Self::Info      => "ℹ️",
-            Self::Error     => "❌",
-            Self::Neutral   => "",
+            Self::Success => "✅",
+            Self::Warning => "⚠️",
+            Self::Info => "ℹ️",
+            Self::Error => "❌",
+            Self::Neutral => "",
         }
     }
 }
@@ -57,9 +57,9 @@ pub enum BadgeSize {
 impl BadgeSize {
     pub fn css_class(&self) -> &'static str {
         match self {
-            Self::Small   => "badge-sm",
+            Self::Small => "badge-sm",
             Self::Default => "",
-            Self::Large   => "badge-lg",
+            Self::Large => "badge-lg",
         }
     }
 }

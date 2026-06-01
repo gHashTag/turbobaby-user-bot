@@ -1,11 +1,11 @@
-use dioxus::prelude::*;
-use serde::{Deserialize, Serialize};
+use crate::trios::core::Lang;
+use crate::trios::i18n::{t, T_ADD_TO_CART, T_LOADING, T_MENU_DESC, T_MENU_TITLE};
+use crate::ui::api::context::api_base_url;
+use crate::ui::components::bottom_nav::BottomNav;
 use crate::ui::routes::Route;
 use crate::ui::state::{Cart, CartItem, CartItemType};
-use crate::ui::api::context::api_base_url;
-use crate::trios::core::Lang;
-use crate::ui::components::bottom_nav::BottomNav;
-use crate::trios::i18n::{t, T_MENU_TITLE, T_MENU_DESC, T_LOADING, T_ADD_TO_CART};
+use dioxus::prelude::*;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 pub struct ApiStrain {
@@ -26,6 +26,40 @@ pub struct ApiStrain {
     is_strain_of_day: bool,
     #[serde(default)]
     strain_of_day_discount: f64,
+    // Marketing flags (migration 028, TZ #2). All serde-default so older API
+    // responses that don't include them keep working.
+    #[serde(default)]
+    discount_percent: f64,
+    #[serde(default)]
+    sale_price: Option<f64>,
+    #[serde(default)]
+    sale_active: bool,
+    #[serde(default)]
+    sale_until: Option<String>,
+    #[serde(default)]
+    is_best_seller: bool,
+    #[serde(default)]
+    is_new_arrival: bool,
+    #[serde(default)]
+    new_until: Option<String>,
+    #[serde(default)]
+    display_order: i32,
+}
+
+/// True if an `_until` expiry timestamp (RFC3339) is in the future or absent.
+/// Mirrors the server-side priority CASE so the customer UI doesn't render
+/// stale "🔥 SALE" badges after the admin's expiry has passed.
+fn is_active_until(until: Option<&str>) -> bool {
+    let Some(s) = until else {
+        return true;
+    };
+    if s.is_empty() {
+        return true;
+    }
+    match chrono::DateTime::parse_from_rfc3339(s) {
+        Ok(t) => t > chrono::Utc::now(),
+        Err(_) => true, // permissive on malformed timestamps
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -56,15 +90,24 @@ fn category_badge_style(cat: &str) -> String {
 }
 
 fn format_price(price: f64) -> String {
-    format!("฿{}", price as i32)
+    let v = if price.is_finite() {
+        price.max(0.0)
+    } else {
+        0.0
+    };
+    format!("฿{}", v as i32)
 }
 
 /// Safe f64 comparison that places NaN at the end.
 fn cmp_f64(a: f64, b: f64) -> std::cmp::Ordering {
     a.partial_cmp(&b).unwrap_or_else(|| {
-        if a.is_nan() && b.is_nan() { std::cmp::Ordering::Equal }
-        else if a.is_nan() { std::cmp::Ordering::Greater }
-        else { std::cmp::Ordering::Less }
+        if a.is_nan() && b.is_nan() {
+            std::cmp::Ordering::Equal
+        } else if a.is_nan() {
+            std::cmp::Ordering::Greater
+        } else {
+            std::cmp::Ordering::Less
+        }
     })
 }
 
@@ -93,14 +136,18 @@ pub fn MenuScreen() -> Element {
             // Fetch from API
             let base = api_base_url();
             let url = format!("{}/api/strains", base);
-            let response = reqwest::Client::new()
+            let response = crate::ui::api::local_client::LocalClient::new()
                 .get(&url)
                 .send()
                 .await
                 .map_err(|e| format!("Network error: {}", e))?;
 
-            let text = response.text().await.map_err(|e| format!("Read text error: {}", e))?;
-            let strains_resp: StrainsResponse = serde_json::from_str(&text).map_err(|e| format!("Parse error: {}", e))?;
+            let text = response
+                .text()
+                .await
+                .map_err(|e| format!("Read text error: {}", e))?;
+            let strains_resp: StrainsResponse =
+                serde_json::from_str(&text).map_err(|e| format!("Parse error: {}", e))?;
 
             Ok(strains_resp.strains)
         }
@@ -216,9 +263,62 @@ pub fn MenuScreen() -> Element {
                                 }
                             }
                         } else {
+                            // TZ #2: pull SOTD + New Arrivals into their own hero
+                            // blocks. The remaining strains keep the regular grid
+                            // below. Render only when filter is "All" so the
+                            // category tabs (Sativa/Indica/Hybrid) still drill in.
+                            let show_hero = filter_val == "All" && sort_val == "default";
+                            let sotd: Option<ApiStrain> = if show_hero {
+                                filtered.iter().find(|s| s.is_strain_of_day).cloned()
+                            } else { None };
+                            let new_arrivals: Vec<ApiStrain> = if show_hero {
+                                filtered.iter()
+                                    .filter(|s| !s.is_strain_of_day
+                                        && s.is_new_arrival
+                                        && is_active_until(s.new_until.as_deref()))
+                                    .cloned()
+                                    .collect()
+                            } else { Vec::new() };
+                            let hero_ids: std::collections::HashSet<String> =
+                                sotd.iter().map(|s| s.id.clone())
+                                    .chain(new_arrivals.iter().map(|s| s.id.clone()))
+                                    .collect();
+                            let rest: Vec<ApiStrain> = filtered.iter()
+                                .filter(|s| !hero_ids.contains(&s.id))
+                                .cloned()
+                                .collect();
                             rsx! {
-                                div { style: "display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:0 16px;",
-                                    {filtered.into_iter().map(|strain| render_strain_card(strain, cart))}
+                                // Hero #1 — Strain of the Day
+                                {sotd.map(|s| {
+                                    let sid = s.id.clone();
+                                    rsx! {
+                                        div { key: "hero-sotd",
+                                            style: "padding:8px 16px 4px;",
+                                            div { style: "font-size:13px;font-weight:800;color:#ffe600;text-shadow:2px 2px 0 #000;letter-spacing:1px;margin-bottom:8px;",
+                                                "🔥 STRAIN OF THE DAY"
+                                            }
+                                            div { key: "{sid}",
+                                                style: "max-width:380px;margin:0 auto;",
+                                                {render_strain_card(s, cart)}
+                                            }
+                                        }
+                                    }
+                                })}
+                                // Hero #2 — New Arrivals
+                                {(!new_arrivals.is_empty()).then(|| rsx! {
+                                    div { key: "hero-new",
+                                        style: "padding:12px 16px 4px;",
+                                        div { style: "font-size:13px;font-weight:800;color:#00e5ff;text-shadow:2px 2px 0 #000;letter-spacing:1px;margin-bottom:8px;",
+                                            "🆕 NEW ARRIVALS"
+                                        }
+                                        div { style: "display:grid;grid-template-columns:1fr 1fr;gap:12px;",
+                                            {new_arrivals.into_iter().map(|s| render_strain_card(s, cart))}
+                                        }
+                                    }
+                                })}
+                                // Rest of the catalog
+                                div { style: "display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:8px 16px 0;",
+                                    {rest.into_iter().map(|s| render_strain_card(s, cart))}
                                 }
                             }
                         }
@@ -254,46 +354,98 @@ fn render_strain_card(strain: ApiStrain, mut cart: Signal<Cart>) -> Element {
     let cat = strain.category.as_deref().unwrap_or("Hybrid");
     let emoji = category_emoji(cat);
     let is_sotd = strain.is_strain_of_day;
-    let discount = strain.strain_of_day_discount;
-    let has_discount = is_sotd && discount > 0.0;
+    let discount = if strain.strain_of_day_discount.is_finite() {
+        strain.strain_of_day_discount.max(0.0)
+    } else {
+        0.0
+    };
+    let price = if strain.price_per_gram.is_finite() {
+        strain.price_per_gram.max(0.0)
+    } else {
+        0.0
+    };
+    // Marketing flags (TZ #2) — gated by expiry window so admin-set timers
+    // actually expire in the UI without a page reload.
+    let sale_live = strain.sale_active && is_active_until(strain.sale_until.as_deref());
+    let new_live = strain.is_new_arrival && is_active_until(strain.new_until.as_deref());
+    let is_best = strain.is_best_seller;
 
-    let border_color = if is_sotd { "#ffe600" } else { "#2a2a4a" };
+    // Effective per-gram price. Precedence MUST match the server's
+    // `effective_strain_price` (api/strains.rs) — divergence here means every
+    // order gets flagged as fraud by the price-authority check.
+    let (effective_price, has_discount) = if is_sotd && discount > 0.0 {
+        ((price * (1.0 - discount / 100.0)).max(0.0), true)
+    } else if sale_live {
+        if let Some(sp) = strain
+            .sale_price
+            .filter(|v| v.is_finite() && *v > 0.0 && *v < price)
+        {
+            (sp.max(0.0), true)
+        } else if strain.discount_percent.is_finite() && strain.discount_percent > 0.0 {
+            (
+                (price * (1.0 - strain.discount_percent / 100.0)).max(0.0),
+                true,
+            )
+        } else {
+            (price, false)
+        }
+    } else {
+        (price, false)
+    };
+
+    // Border tints by the highest-priority flag — same precedence as the
+    // priority CASE that drives sort order.
+    let border_color = if is_sotd {
+        "#ffe600"
+    } else if new_live {
+        "#00e5ff"
+    } else if is_best {
+        "#ff9d00"
+    } else if sale_live {
+        "#ff4757"
+    } else {
+        "#2a2a4a"
+    };
     let card_style = format!(
         "background:#16213e;border:4px solid {};box-shadow:4px 4px 0 #000;overflow:hidden;position:relative;{}",
         border_color,
         if strain.is_available { "".to_string() } else { "opacity:0.6;".to_string() }
     );
 
-    let display_price = if has_discount {
-        let discounted = (strain.price_per_gram * (1.0 - discount / 100.0)).max(0.0);
-        format_price(discounted)
-    } else {
-        format_price(strain.price_per_gram)
-    };
+    let display_price = format_price(effective_price);
+    let original_price = format_price(price);
 
-    let original_price = format_price(strain.price_per_gram);
-
-    let thc_str = strain.thc_percent
+    let thc_str = strain
+        .thc_percent
         .map(|t| format!("THC {:.0}%", t))
         .unwrap_or_default();
-    let cbd_str = strain.cbd_percent
+    let cbd_str = strain
+        .cbd_percent
         .map(|c| format!("CBD {:.1}%", c))
         .unwrap_or_default();
     let effect_str = strain.effect.clone().unwrap_or_default();
     let flavor_str = strain.flavor_profile.clone().unwrap_or_default();
-    let has_real_price = strain.price_per_gram > 0.0;
+    let has_real_price = price > 0.0;
 
     let badge_style = category_badge_style(cat);
     let badge_label = format!("{} {}", emoji, cat);
 
     let img_url = strain.image_url.clone().unwrap_or_default();
     let has_image = !img_url.is_empty()
-        && (img_url.starts_with("http://") || img_url.starts_with("https://") || img_url.starts_with('/'));
+        && (img_url.starts_with("http://")
+            || img_url.starts_with("https://")
+            || (img_url.starts_with("/") && !img_url.starts_with("//")));
     let alt_name = strain.name.clone();
-    let img_url_bust = if !has_image { String::new() } else { format!("{}?v=2", img_url) };
+    let img_url_bust = if !has_image {
+        String::new()
+    } else {
+        format!("{}?v=2", img_url)
+    };
     let video_url = strain.video_url.clone().unwrap_or_default();
     let has_video = !video_url.is_empty()
-        && (video_url.starts_with("http://") || video_url.starts_with("https://") || video_url.starts_with('/'));
+        && (video_url.starts_with("http://")
+            || video_url.starts_with("https://")
+            || (video_url.starts_with("/") && !video_url.starts_with("//")));
     let mut show_video = use_signal(|| false);
 
     rsx! {
@@ -334,13 +486,33 @@ fn render_strain_card(strain: ApiStrain, mut cart: Signal<Cart>) -> Element {
                         span { style: "font-size:48px;", "{emoji}" }
                     }
                 }}
-                {is_sotd.then(|| rsx! {
-                    span { style: "
-                        position:absolute;top:8px;left:8px;
-                        font-size:13px;font-weight:700;background:#ffe600;color:#000;
-                        padding:4px 8px;box-shadow:2px 2px 0 #000;z-index:2;
-                    ", "⭐ SOTD" }
-                })}
+                // TZ #2 badge stack: stacked top-left, ordered by visual priority.
+                div { style: "position:absolute;top:8px;left:8px;display:flex;flex-direction:column;gap:4px;z-index:2;align-items:flex-start;",
+                    {is_sotd.then(|| rsx! {
+                        span { style: "
+                            font-size:13px;font-weight:700;background:#ffe600;color:#000;
+                            padding:4px 8px;box-shadow:2px 2px 0 #000;
+                        ", "⭐ SOTD" }
+                    })}
+                    {new_live.then(|| rsx! {
+                        span { style: "
+                            font-size:13px;font-weight:700;background:#00e5ff;color:#000;
+                            padding:4px 8px;box-shadow:2px 2px 0 #000;
+                        ", "🆕 NEW" }
+                    })}
+                    {is_best.then(|| rsx! {
+                        span { style: "
+                            font-size:13px;font-weight:700;background:#ff9d00;color:#000;
+                            padding:4px 8px;box-shadow:2px 2px 0 #000;
+                        ", "⭐ BEST" }
+                    })}
+                    {sale_live.then(|| rsx! {
+                        span { style: "
+                            font-size:13px;font-weight:700;background:#ff4757;color:#fff;
+                            padding:4px 8px;box-shadow:2px 2px 0 #000;
+                        ", "🔥 SALE" }
+                    })}
+                }
                 {if show_video() {
                     rsx! {
                         div { style: "position:fixed;inset:0;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;z-index:1000;padding:16px;",
@@ -400,11 +572,10 @@ fn render_strain_card(strain: ApiStrain, mut cart: Signal<Cart>) -> Element {
             }
             div { style: "padding:0 12px 12px;",
                 {if strain.is_available {
-                    let unit_price = if has_discount {
-                        (strain.price_per_gram * (1.0 - discount / 100.0)).max(0.0)
-                    } else {
-                        strain.price_per_gram
-                    };
+                    // Reuse the same `effective_price` computed above so the
+                    // cart line price matches the badge / strikethrough math.
+                    let unit_price = effective_price;
+                    let _ = has_discount; // kept for the price-display branch above
                     let s_id = strain.id.clone();
                     let s_name = strain.name.clone();
                     rsx! {

@@ -19,30 +19,30 @@ pub enum CardVariant {
 impl CardVariant {
     pub fn css_class(&self) -> &'static str {
         match self {
-            Self::Default     => "card card-default",
-            Self::Product     => "card card-product",
-            Self::Plant       => "card card-plant",
-            Self::Quest       => "card card-quest",
-            Self::Member      => "card card-member",
-            Self::Glass       => "card card-glass",
-            Self::GlassGreen  => "card card-glass card-glass-green",
+            Self::Default => "card card-default",
+            Self::Product => "card card-product",
+            Self::Plant => "card card-plant",
+            Self::Quest => "card card-quest",
+            Self::Member => "card card-member",
+            Self::Glass => "card card-glass",
+            Self::GlassGreen => "card card-glass card-glass-green",
             Self::GlassPurple => "card card-glass card-glass-purple",
-            Self::GlassGold   => "card card-glass card-glass-gold",
+            Self::GlassGold => "card card-glass card-glass-gold",
         }
     }
 
     // Kept for backward compat
     pub fn as_str(&self) -> &'static str {
         match self {
-            Self::Default     => "default",
-            Self::Product     => "product",
-            Self::Plant       => "plant",
-            Self::Quest       => "quest",
-            Self::Member      => "member",
-            Self::Glass       => "glass",
-            Self::GlassGreen  => "glass-green",
+            Self::Default => "default",
+            Self::Product => "product",
+            Self::Plant => "plant",
+            Self::Quest => "quest",
+            Self::Member => "member",
+            Self::Glass => "glass",
+            Self::GlassGreen => "glass-green",
             Self::GlassPurple => "glass-purple",
-            Self::GlassGold   => "glass-gold",
+            Self::GlassGold => "glass-gold",
         }
     }
 }
@@ -83,11 +83,14 @@ pub fn Card(props: CardProps) -> Element {
                 }
             },
             if let Some(url) = &props.image_url {
-                div { class: "card-image",
-                    img {
-                        src: "{url}?v=2",
-                        alt: "Product image",
-                        loading: "lazy"
+                if !url.is_empty() && (url.starts_with("http://") || url.starts_with("https://") || (url.starts_with("/") && !url.starts_with("//")))
+                {
+                    div { class: "card-image",
+                        img {
+                            src: "{url}?v=2",
+                            alt: "Product image",
+                            loading: "lazy"
+                        }
                     }
                 }
             }

@@ -1,17 +1,19 @@
+use crate::config::Config;
 use anyhow::Result;
 use bytes::Bytes;
-use crate::config::Config;
 
 #[allow(dead_code)]
 pub async fn upload_to_s3(config: &Config, filename: &str, data: Bytes) -> Result<String> {
     use aws_config::{BehaviorVersion, Region};
-    use aws_sdk_s3::{config::Credentials, Client, primitives::ByteStream};
+    use aws_sdk_s3::{config::Credentials, primitives::ByteStream, Client};
 
     let bucket = config.s3_bucket.as_deref().unwrap_or("");
     // Prefer the Railway-private endpoint for the S3 client itself so the
     // upload travels over the internal network. Fall back to the public one
     // when S3_INTERNAL_ENDPOINT is unset.
-    let endpoint = config.s3_internal_endpoint.as_deref()
+    let endpoint = config
+        .s3_internal_endpoint
+        .as_deref()
         .filter(|s| !s.is_empty())
         .or(config.s3_endpoint.as_deref())
         .unwrap_or("");
@@ -43,8 +45,11 @@ pub async fn upload_to_s3(config: &Config, filename: &str, data: Bytes) -> Resul
     let safe_name = {
         let mut s = filename
             .replace("..", "_")
-            .replace(['/', '\\', '\0'], "_");
-        if s.len() > 255 { s.truncate(255); }
+            .replace(['/', '\\', '\0', '?', '#', '%'], "_")
+            .replace(' ', "_");
+        if s.len() > 255 {
+            s.truncate(255);
+        }
         s
     };
     let key = format!("uploads/{}", safe_name);
@@ -53,7 +58,12 @@ pub async fn upload_to_s3(config: &Config, filename: &str, data: Bytes) -> Resul
 
     tracing::info!(
         "s3: PutObject begin bucket={} key={} size={} content_type={} endpoint={} region={}",
-        bucket, key, size, content_type, endpoint, region
+        bucket,
+        key,
+        size,
+        content_type,
+        endpoint,
+        region
     );
 
     // ByteStream::from(Bytes) reuses the underlying buffer — no extra copy
@@ -71,11 +81,20 @@ pub async fn upload_to_s3(config: &Config, filename: &str, data: Bytes) -> Resul
         Ok(out) => {
             tracing::info!(
                 "s3: PutObject ok bucket={} key={} size={} etag={:?}",
-                bucket, key, size, out.e_tag()
+                bucket,
+                key,
+                size,
+                out.e_tag()
             );
         }
         Err(e) => {
-            tracing::error!("s3: PutObject error bucket={} key={} size={} err={:?}", bucket, key, size, e);
+            tracing::error!(
+                "s3: PutObject error bucket={} key={} size={} err={:?}",
+                bucket,
+                key,
+                size,
+                e
+            );
             return Err(e.into());
         }
     }
@@ -94,9 +113,23 @@ fn build_s3_public_url(public_url: &str, bucket: &str, key: &str) -> String {
     }
 }
 
+fn safe_name(filename: &str) -> String {
+    let s = filename
+        .replace("..", "_")
+        .replace(['/', '\\', '\0', '?', '#', '%'], "_")
+        .replace(' ', "_");
+    crate::util::truncate_string(&s, 255)
+}
+
 #[allow(dead_code)]
 fn mime_from_filename(filename: &str) -> &'static str {
-    match filename.rsplit('.').next().unwrap_or("").to_lowercase().as_str() {
+    match filename
+        .rsplit('.')
+        .next()
+        .unwrap_or("")
+        .to_lowercase()
+        .as_str()
+    {
         "jpg" | "jpeg" => "image/jpeg",
         "png" => "image/png",
         "webp" => "image/webp",
@@ -110,7 +143,7 @@ fn mime_from_filename(filename: &str) -> &'static str {
 
 #[cfg(test)]
 mod tests {
-    use super::{mime_from_filename, build_s3_public_url};
+    use super::{build_s3_public_url, mime_from_filename, safe_name};
 
     #[test]
     fn test_mime_from_filename_lowercase() {
@@ -139,7 +172,10 @@ mod tests {
 
     #[test]
     fn test_mime_from_filename_multiple_dots() {
-        assert_eq!(mime_from_filename("archive.tar.gz"), "application/octet-stream");
+        assert_eq!(
+            mime_from_filename("archive.tar.gz"),
+            "application/octet-stream"
+        );
         assert_eq!(mime_from_filename("video.min.mp4"), "video/mp4");
     }
 
@@ -173,5 +209,30 @@ mod tests {
             build_s3_public_url("", "bucket", "uploads/file.jpg"),
             "s3://bucket/uploads/file.jpg"
         );
+    }
+
+    #[test]
+    fn test_safe_name_traversal() {
+        assert!(!safe_name("../../../etc/passwd").contains(".."));
+        assert!(!safe_name("../../../etc/passwd").contains('/'));
+    }
+
+    #[test]
+    fn test_safe_name_query_and_space() {
+        assert_eq!(safe_name("file?name#hash%20.txt"), "file_name_hash_20.txt");
+        assert_eq!(safe_name("my file.jpg"), "my_file.jpg");
+    }
+
+    #[test]
+    fn test_safe_name_long() {
+        let long = "a".repeat(300);
+        assert_eq!(safe_name(&long).len(), 255);
+    }
+
+    #[test]
+    fn test_safe_name_unicode_long() {
+        let long = "🔥".repeat(300);
+        let result = safe_name(&long);
+        assert_eq!(result.chars().count(), 255);
     }
 }

@@ -104,138 +104,185 @@ pub fn supported_langs() -> Vec<&'static str> {
 }
 
 pub fn detect_language(text: &str) -> &'static str {
-    if text.chars().any(|c| ('\u{0400}'..='\u{04FF}').contains(&c)) { return "ru"; }
-    if text.chars().any(|c| ('\u{0E00}'..='\u{0E7F}').contains(&c)) { return "th"; }
-    if text.chars().any(|c| ('\u{4E00}'..='\u{9FFF}').contains(&c)) { return "zh"; }
-    if text.chars().any(|c| ('\u{0600}'..='\u{06FF}').contains(&c)) { return "ar"; }
+    if text
+        .chars()
+        .any(|c| ('\u{0400}'..='\u{04FF}').contains(&c) || ('\u{0500}'..='\u{052F}').contains(&c))
+    {
+        return "ru";
+    }
+    if text.chars().any(|c| ('\u{0E00}'..='\u{0E7F}').contains(&c)) {
+        return "th";
+    }
+    if text.chars().any(|c| ('\u{4E00}'..='\u{9FFF}').contains(&c)) {
+        return "zh";
+    }
+    if text.chars().any(|c| ('\u{0600}'..='\u{06FF}').contains(&c)) {
+        return "ar";
+    }
     "en"
 }
 
-fn ru() -> Locale { Locale {
-    code: "ru".into(), flag: "🇷🇺".into(), name: "Русский".into(),
-    welcome: "Добро пожаловать в Woody Weed! 🪵".into(),
-    start_description: "Лучший кальянный магазин на Ко Пангане".into(),
-    open_menu: "Открыть меню".into(), menu: "🌿 Меню".into(),
-    view_sets: "Наборы".into(), sommelier: "Сомелье".into(),
-    garden: "Сад".into(), accessories: "Аксессуары".into(),
-    quest: "Квест".into(), profile: "Профиль".into(),
-    my_orders: "Мои заказы".into(),
-    joke: "Анекдот".into(), fact: "Факт".into(), help: "Помощь".into(),
-    choose_lang: "🌐 Выберите язык:".into(),
-    lang_changed: "Язык изменён!".into(),
-    joke_thinking: "😜 Придумываю анекдот...".into(),
-    joke_prompt: "Расскажи короткий смешной анекдот про каннабис.".into(),
-    joke_fail_fallback: "😅 Не смог придумать анекдот, попробуй ещё раз!".into(),
-    more_joke: "Ещё анекдот".into(),
-    fact_thinking: "🧠 Ищу интересный факт...".into(),
-    fact_prompt: "Расскажи один интересный научный факт о каннабисе.".into(),
-    fact_fail_fallback: "😅 Не смог найти факт, попробуй ещё раз!".into(),
-    interesting_fact: "Ещё факт".into(),
-    strain_of_day: "Сорт дня".into(),
-    prev_strain: "◀️".into(), next_strain: "▶️".into(),
-    add_to_cart: "🛒 В корзину".into(),
-    order_new_header: "Новый заказ".into(),
-    order_items: "Позиции".into(), order_items_empty: "(пусто)".into(),
-    order_grams: "г".into(), order_pickup: "Самовывоз:".into(),
-    order_source: "Источник:".into(), order_anonymous: "Аноним".into(),
-    order_phone_not_set: "не указан".into(),
-    order_confirm_btn: "Подтвердить".into(), order_reject_btn: "Отклонить".into(),
-    order_complete_btn: "Выполнен".into(),
-    order_confirmed: "Заказ подтверждён".into(), order_rejected: "Заказ отклонён".into(),
-    cashback_earned: "Кэшбэк начислен".into(),
-    tier_upgrade: "Поздравляем! Новый уровень:".into(),
-    cashback_now: "Ваш кэшбэк теперь".into(),
-    referral_bonus: "Ваш друг сделал первую покупку!".into(),
-    sets_for_beginners: "Наборы для начинающих".into(),
-    sets_description: "Готовые наборы для комфортного старта".into(),
-    sommelier_description: "AI-подбор сортов по вашим предпочтениям".into(),
-    start_sommelier: "Начать подбор".into(),
-    help_commands: "/start — начало\n/menu — меню\n/joke — анекдот\n/fact — факт\n/lang — язык".into(),
-    opening_sets: "Открываю наборы...".into(),
-    starting_sommelier: "Запускаю сомелье...".into(),
-    welcome_feature1: "Широкий выбор сортов".into(),
-    welcome_feature2: "AI-сомелье для подбора".into(),
-    welcome_feature3: "Сад и выращивание".into(),
-    welcome_feature4: "Квест по острову".into(),
-    welcome_feature5: "Аксессуары".into(),
-    welcome_feature6: "Программа лояльности".into(),
-    welcome_feature7: "Анекдоты и факты".into(),
-    lang_instruction: "Отвечай на русском языке.".into(),
-    referral_title: "Реферальная программа".into(),
-    referral_your_code: "Ваш реф-код".into(),
-    referral_invited_count: "Приглашено".into(),
-    referral_confirmed: "Подтверждено".into(),
-    referral_pending: "Ожидает".into(),
-    referral_bonus_earned: "Заработано бонусов".into(),
-    referral_share_button: "Поделиться".into(),
-    referral_share_hint: "Поделитесь ссылкой и получите бонус за каждого нового друга!".into(),
-    referral_leaderboard: "Таблица лидеров".into(),
-}}
+fn ru() -> Locale {
+    Locale {
+        code: "ru".into(),
+        flag: "🇷🇺".into(),
+        name: "Русский".into(),
+        welcome: "Добро пожаловать в Woody Weed! 🪵".into(),
+        start_description: "Лучший кальянный магазин на Ко Пангане".into(),
+        open_menu: "Открыть меню".into(),
+        menu: "🌿 Меню".into(),
+        view_sets: "Наборы".into(),
+        sommelier: "Сомелье".into(),
+        garden: "Сад".into(),
+        accessories: "Аксессуары".into(),
+        quest: "Квест".into(),
+        profile: "Профиль".into(),
+        my_orders: "Мои заказы".into(),
+        joke: "Анекдот".into(),
+        fact: "Факт".into(),
+        help: "Помощь".into(),
+        choose_lang: "🌐 Выберите язык:".into(),
+        lang_changed: "Язык изменён!".into(),
+        joke_thinking: "😜 Придумываю анекдот...".into(),
+        joke_prompt: "Расскажи короткий смешной анекдот про каннабис.".into(),
+        joke_fail_fallback: "😅 Не смог придумать анекдот, попробуй ещё раз!".into(),
+        more_joke: "Ещё анекдот".into(),
+        fact_thinking: "🧠 Ищу интересный факт...".into(),
+        fact_prompt: "Расскажи один интересный научный факт о каннабисе.".into(),
+        fact_fail_fallback: "😅 Не смог найти факт, попробуй ещё раз!".into(),
+        interesting_fact: "Ещё факт".into(),
+        strain_of_day: "Сорт дня".into(),
+        prev_strain: "◀️".into(),
+        next_strain: "▶️".into(),
+        add_to_cart: "🛒 В корзину".into(),
+        order_new_header: "Новый заказ".into(),
+        order_items: "Позиции".into(),
+        order_items_empty: "(пусто)".into(),
+        order_grams: "г".into(),
+        order_pickup: "Самовывоз:".into(),
+        order_source: "Источник:".into(),
+        order_anonymous: "Аноним".into(),
+        order_phone_not_set: "не указан".into(),
+        order_confirm_btn: "Подтвердить".into(),
+        order_reject_btn: "Отклонить".into(),
+        order_complete_btn: "Выполнен".into(),
+        order_confirmed: "Заказ подтверждён".into(),
+        order_rejected: "Заказ отклонён".into(),
+        cashback_earned: "Кэшбэк начислен".into(),
+        tier_upgrade: "Поздравляем! Новый уровень:".into(),
+        cashback_now: "Ваш кэшбэк теперь".into(),
+        referral_bonus: "Ваш друг сделал первую покупку!".into(),
+        sets_for_beginners: "Наборы для начинающих".into(),
+        sets_description: "Готовые наборы для комфортного старта".into(),
+        sommelier_description: "AI-подбор сортов по вашим предпочтениям".into(),
+        start_sommelier: "Начать подбор".into(),
+        help_commands: "/start — начало\n/menu — меню\n/joke — анекдот\n/fact — факт\n/lang — язык"
+            .into(),
+        opening_sets: "Открываю наборы...".into(),
+        starting_sommelier: "Запускаю сомелье...".into(),
+        welcome_feature1: "Широкий выбор сортов".into(),
+        welcome_feature2: "AI-сомелье для подбора".into(),
+        welcome_feature3: "Сад и выращивание".into(),
+        welcome_feature4: "Квест по острову".into(),
+        welcome_feature5: "Аксессуары".into(),
+        welcome_feature6: "Программа лояльности".into(),
+        welcome_feature7: "Анекдоты и факты".into(),
+        lang_instruction: "Отвечай на русском языке.".into(),
+        referral_title: "Реферальная программа".into(),
+        referral_your_code: "Ваш реф-код".into(),
+        referral_invited_count: "Приглашено".into(),
+        referral_confirmed: "Подтверждено".into(),
+        referral_pending: "Ожидает".into(),
+        referral_bonus_earned: "Заработано бонусов".into(),
+        referral_share_button: "Поделиться".into(),
+        referral_share_hint: "Поделитесь ссылкой и получите бонус за каждого нового друга!".into(),
+        referral_leaderboard: "Таблица лидеров".into(),
+    }
+}
 
-fn en() -> Locale { Locale {
-    code: "en".into(), flag: "🇬🇧".into(), name: "English".into(),
-    welcome: "Welcome to Woody Weed! 🪵".into(),
-    start_description: "Best cannabis shop on Koh Phangan".into(),
-    open_menu: "Open menu".into(), menu: "🌿 Menu".into(),
-    view_sets: "Sets".into(), sommelier: "Sommelier".into(),
-    garden: "Garden".into(), accessories: "Accessories".into(),
-    quest: "Quest".into(), profile: "Profile".into(),
-    my_orders: "My orders".into(),
-    joke: "Joke".into(), fact: "Fact".into(), help: "Help".into(),
-    choose_lang: "🌐 Choose language:".into(),
-    lang_changed: "Language changed!".into(),
-    joke_thinking: "😜 Thinking of a joke...".into(),
-    joke_prompt: "Tell a short funny cannabis joke.".into(),
-    joke_fail_fallback: "😅 Couldn't think of a joke, try again!".into(),
-    more_joke: "More jokes".into(),
-    fact_thinking: "🧠 Looking for an interesting fact...".into(),
-    fact_prompt: "Tell one interesting scientific fact about cannabis.".into(),
-    fact_fail_fallback: "😅 Couldn't find a fact, try again!".into(),
-    interesting_fact: "More facts".into(),
-    strain_of_day: "Strain of the Day".into(),
-    prev_strain: "◀️".into(), next_strain: "▶️".into(),
-    add_to_cart: "🛒 Add to cart".into(),
-    order_new_header: "New Order".into(),
-    order_items: "Items".into(), order_items_empty: "(empty)".into(),
-    order_grams: "g".into(), order_pickup: "Pickup:".into(),
-    order_source: "Source:".into(), order_anonymous: "Anonymous".into(),
-    order_phone_not_set: "not set".into(),
-    order_confirm_btn: "Confirm".into(), order_reject_btn: "Reject".into(),
-    order_complete_btn: "Complete".into(),
-    order_confirmed: "Order confirmed".into(), order_rejected: "Order rejected".into(),
-    cashback_earned: "Cashback earned".into(),
-    tier_upgrade: "Congratulations! New tier:".into(),
-    cashback_now: "Your cashback is now".into(),
-    referral_bonus: "Your friend made a purchase!".into(),
-    sets_for_beginners: "Sets for beginners".into(),
-    sets_description: "Ready-made sets for a comfortable start".into(),
-    sommelier_description: "AI strain recommendations based on your preferences".into(),
-    start_sommelier: "Start selection".into(),
-    help_commands: "/start — start\n/menu — menu\n/joke — joke\n/fact — fact\n/lang — language".into(),
-    opening_sets: "Opening sets...".into(),
-    starting_sommelier: "Starting sommelier...".into(),
-    welcome_feature1: "Wide strain selection".into(),
-    welcome_feature2: "AI sommelier".into(),
-    welcome_feature3: "Garden & growing".into(),
-    welcome_feature4: "Island quest".into(),
-    welcome_feature5: "Accessories".into(),
-    welcome_feature6: "Loyalty program".into(),
-    welcome_feature7: "Jokes & facts".into(),
-    lang_instruction: "Reply in English.".into(),
-    referral_title: "Referral Program".into(),
-    referral_your_code: "Your ref code".into(),
-    referral_invited_count: "Invited".into(),
-    referral_confirmed: "Confirmed".into(),
-    referral_pending: "Pending".into(),
-    referral_bonus_earned: "Bonus earned".into(),
-    referral_share_button: "Share".into(),
-    referral_share_hint: "Share your link and earn a bonus for every new friend!".into(),
-    referral_leaderboard: "Leaderboard".into(),
-}}
+fn en() -> Locale {
+    Locale {
+        code: "en".into(),
+        flag: "🇬🇧".into(),
+        name: "English".into(),
+        welcome: "Welcome to Woody Weed! 🪵".into(),
+        start_description: "Best cannabis shop on Koh Phangan".into(),
+        open_menu: "Open menu".into(),
+        menu: "🌿 Menu".into(),
+        view_sets: "Sets".into(),
+        sommelier: "Sommelier".into(),
+        garden: "Garden".into(),
+        accessories: "Accessories".into(),
+        quest: "Quest".into(),
+        profile: "Profile".into(),
+        my_orders: "My orders".into(),
+        joke: "Joke".into(),
+        fact: "Fact".into(),
+        help: "Help".into(),
+        choose_lang: "🌐 Choose language:".into(),
+        lang_changed: "Language changed!".into(),
+        joke_thinking: "😜 Thinking of a joke...".into(),
+        joke_prompt: "Tell a short funny cannabis joke.".into(),
+        joke_fail_fallback: "😅 Couldn't think of a joke, try again!".into(),
+        more_joke: "More jokes".into(),
+        fact_thinking: "🧠 Looking for an interesting fact...".into(),
+        fact_prompt: "Tell one interesting scientific fact about cannabis.".into(),
+        fact_fail_fallback: "😅 Couldn't find a fact, try again!".into(),
+        interesting_fact: "More facts".into(),
+        strain_of_day: "Strain of the Day".into(),
+        prev_strain: "◀️".into(),
+        next_strain: "▶️".into(),
+        add_to_cart: "🛒 Add to cart".into(),
+        order_new_header: "New Order".into(),
+        order_items: "Items".into(),
+        order_items_empty: "(empty)".into(),
+        order_grams: "g".into(),
+        order_pickup: "Pickup:".into(),
+        order_source: "Source:".into(),
+        order_anonymous: "Anonymous".into(),
+        order_phone_not_set: "not set".into(),
+        order_confirm_btn: "Confirm".into(),
+        order_reject_btn: "Reject".into(),
+        order_complete_btn: "Complete".into(),
+        order_confirmed: "Order confirmed".into(),
+        order_rejected: "Order rejected".into(),
+        cashback_earned: "Cashback earned".into(),
+        tier_upgrade: "Congratulations! New tier:".into(),
+        cashback_now: "Your cashback is now".into(),
+        referral_bonus: "Your friend made a purchase!".into(),
+        sets_for_beginners: "Sets for beginners".into(),
+        sets_description: "Ready-made sets for a comfortable start".into(),
+        sommelier_description: "AI strain recommendations based on your preferences".into(),
+        start_sommelier: "Start selection".into(),
+        help_commands: "/start — start\n/menu — menu\n/joke — joke\n/fact — fact\n/lang — language"
+            .into(),
+        opening_sets: "Opening sets...".into(),
+        starting_sommelier: "Starting sommelier...".into(),
+        welcome_feature1: "Wide strain selection".into(),
+        welcome_feature2: "AI sommelier".into(),
+        welcome_feature3: "Garden & growing".into(),
+        welcome_feature4: "Island quest".into(),
+        welcome_feature5: "Accessories".into(),
+        welcome_feature6: "Loyalty program".into(),
+        welcome_feature7: "Jokes & facts".into(),
+        lang_instruction: "Reply in English.".into(),
+        referral_title: "Referral Program".into(),
+        referral_your_code: "Your ref code".into(),
+        referral_invited_count: "Invited".into(),
+        referral_confirmed: "Confirmed".into(),
+        referral_pending: "Pending".into(),
+        referral_bonus_earned: "Bonus earned".into(),
+        referral_share_button: "Share".into(),
+        referral_share_hint: "Share your link and earn a bonus for every new friend!".into(),
+        referral_leaderboard: "Leaderboard".into(),
+    }
+}
 
 #[cfg(test)]
 mod tests {
-    use super::{get_locale, map_telegram_lang, detect_language, supported_langs, lang_to_timezone};
+    use super::{
+        detect_language, get_locale, lang_to_timezone, map_telegram_lang, supported_langs,
+    };
 
     #[test]
     fn test_get_locale_ru() {
@@ -297,6 +344,11 @@ mod tests {
     }
 
     #[test]
+    fn test_detect_language_cyrillic_supplement() {
+        assert_eq!(detect_language("\u{0501}"), "ru");
+    }
+
+    #[test]
     fn test_supported_langs() {
         assert_eq!(supported_langs(), vec!["ru", "en"]);
     }
@@ -308,4 +360,3 @@ mod tests {
         assert_eq!(lang_to_timezone("fr"), "Asia/Bangkok");
     }
 }
-

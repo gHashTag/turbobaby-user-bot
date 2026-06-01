@@ -57,11 +57,15 @@ impl Default for Strain {
 impl Strain {
     /// Format THC for display, e.g. "24.0%"
     pub fn thc_display(&self) -> Option<String> {
-        self.thc.map(|v| format!("{v:.1}%"))
+        self.thc
+            .filter(|v| v.is_finite())
+            .map(|v| format!("{v:.1}%"))
     }
     /// Format CBD for display
     pub fn cbd_display(&self) -> Option<String> {
-        self.cbd.map(|v| format!("{v:.1}%"))
+        self.cbd
+            .filter(|v| v.is_finite())
+            .map(|v| format!("{v:.1}%"))
     }
     /// Format price in baht
     pub fn price_display(&self) -> String {

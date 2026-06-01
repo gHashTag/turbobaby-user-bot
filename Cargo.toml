@@ -23,14 +23,13 @@ dioxus = { version = "0.6", default-features = false, features = ["web", "router
 gloo-timers = { version = "0.3", features = ["futures"] }
 gloo-storage = "0.3"
 gloo-events = "0.3"
-reqwest = { version = "0.11", features = ["json"], default-features = false }
+reqwest = { version = "0.11", features = ["json"], default-features = false, optional = true }
 web-sys = { version = "0.3", features = [
     "Window", "Storage", "Navigator", "Clipboard", "Location",
     "Document", "Element", "HtmlElement", "Event", "EventTarget",
     "KeyboardEvent", "MouseEvent", "console", "Url"
 ] }
 wasm-bindgen = "0.2"
-console_error_panic_hook = "0.1"
 wasm-bindgen-futures = "0.4"
 js-sys = "0.3"
 getrandom = { version = "0.2", features = ["js"] }
@@ -56,7 +55,7 @@ rustls-native-certs = { version = "0.8", optional = true }
 aws-config = { version = "1", default-features = false, features = ["rustls"], optional = true }
 aws-sdk-s3 = { version = "1", default-features = false, features = ["rustls"], optional = true }
 aws-smithy-async = { version = "1", features = ["rt-tokio"], optional = true }
-tracing-subscriber = { version = "0.3", features = ["env-filter"], optional = true }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"], optional = true }
 url = { version = "2", optional = true }
 
 bytes = "1"
@@ -79,6 +78,13 @@ thiserror = "1"
 qrcode = { version = "0.14.1", default-features = false, features = ["svg"] }
 urlencoding = "2.1.3"
 
+# WASM-only: gloo-net is a thin web_sys/fetch wrapper, ~300KB smaller than
+# reqwest in the resulting .wasm bundle. Used by the lightweight HTTP helper
+# in `src/ui/api/http.rs`; reqwest is still kept as the migration target
+# proceeds gradually.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+gloo-net = { version = "0.6", features = ["http"] }
+
 [features]
 default = []
 backend = [
@@ -86,6 +92,7 @@ backend = [
     "tokio-postgres", "deadpool-postgres", "postgres-types",
     "tokio-postgres-rustls", "rustls", "rustls-native-certs",
     "sea-orm",
+    "reqwest",
     "aws-config", "aws-sdk-s3", "aws-smithy-async", "tracing-subscriber", "url",
     "axum-prometheus",
     "metrics",
@@ -94,13 +101,6 @@ backend = [
 web = []
 
 [profile.release]
-opt-level = 3
-lto = true
-codegen-units = 1
-strip = true
-
-[profile.wasm-release]
-inherits = "release"
 opt-level = "z"
 lto = true
 codegen-units = 1

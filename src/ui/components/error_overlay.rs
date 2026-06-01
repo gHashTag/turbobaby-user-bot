@@ -1,7 +1,7 @@
 use dioxus::prelude::*;
-use web_sys::Event;
 use wasm_bindgen::prelude::Closure;
 use wasm_bindgen::JsCast;
+use web_sys::Event;
 
 #[derive(Clone, Debug)]
 pub struct JsErrorItem {
@@ -92,21 +92,34 @@ pub fn install_error_handlers(errors: Signal<Vec<JsErrorItem>>) {
             let errors_clone = errors.clone();
             let onerror = Closure::wrap(Box::new(move |event: Event| {
                 let msg = js_sys::Reflect::get(&event, &"message".into())
-                    .ok().and_then(|v| v.as_string()).unwrap_or_else(|| "Unknown error".into());
+                    .ok()
+                    .and_then(|v| v.as_string())
+                    .unwrap_or_else(|| "Unknown error".into());
                 let filename = js_sys::Reflect::get(&event, &"filename".into())
-                    .ok().and_then(|v| v.as_string()).unwrap_or_default();
+                    .ok()
+                    .and_then(|v| v.as_string())
+                    .unwrap_or_default();
                 let lineno = js_sys::Reflect::get(&event, &"lineno".into())
-                    .ok().and_then(|v| v.as_f64()).map(|v| v as u32).unwrap_or(0);
+                    .ok()
+                    .and_then(|v| v.as_f64())
+                    .map(|v| v as u32)
+                    .unwrap_or(0);
                 let colno = js_sys::Reflect::get(&event, &"colno".into())
-                    .ok().and_then(|v| v.as_f64()).map(|v| v as u32).unwrap_or(0);
+                    .ok()
+                    .and_then(|v| v.as_f64())
+                    .map(|v| v as u32)
+                    .unwrap_or(0);
                 let stack = get_stack_from_event(&event);
                 let full_msg = format!("{} at {}:{}:{}", msg, filename, lineno, colno);
-                push_error(errors_clone.clone(), JsErrorItem {
-                    id: js_sys::Date::now() as u64,
-                    message: full_msg,
-                    stack,
-                    source: "window.onerror".into(),
-                });
+                push_error(
+                    errors_clone.clone(),
+                    JsErrorItem {
+                        id: js_sys::Date::now() as u64,
+                        message: full_msg,
+                        stack,
+                        source: "window.onerror".into(),
+                    },
+                );
             }) as Box<dyn FnMut(_)>);
             window.set_onerror(Some(onerror.as_ref().unchecked_ref()));
             onerror.forget();
@@ -115,16 +128,25 @@ pub fn install_error_handlers(errors: Signal<Vec<JsErrorItem>>) {
             let errors_clone = errors.clone();
             let onunhandled = Closure::wrap(Box::new(move |event: Event| {
                 let reason = js_sys::Reflect::get(&event, &"reason".into())
-                    .ok().and_then(|v| v.as_string())
+                    .ok()
+                    .and_then(|v| v.as_string())
                     .unwrap_or_else(|| "Promise rejected".into());
-                push_error(errors_clone.clone(), JsErrorItem {
-                    id: js_sys::Date::now() as u64,
-                    message: reason,
-                    stack: None,
-                    source: "unhandledrejection".into(),
-                });
+                push_error(
+                    errors_clone.clone(),
+                    JsErrorItem {
+                        id: js_sys::Date::now() as u64,
+                        message: reason,
+                        stack: None,
+                        source: "unhandledrejection".into(),
+                    },
+                );
             }) as Box<dyn FnMut(_)>);
-            window.add_event_listener_with_callback("unhandledrejection", onunhandled.as_ref().unchecked_ref()).ok();
+            window
+                .add_event_listener_with_callback(
+                    "unhandledrejection",
+                    onunhandled.as_ref().unchecked_ref(),
+                )
+                .ok();
             onunhandled.forget();
 
             // Note: std::panic::set_hook requires Send+Sync which Signal doesn't
@@ -141,7 +163,8 @@ fn get_stack_from_event(event: &Event) -> Option<String> {
         return None;
     }
     js_sys::Reflect::get(&error, &"stack".into())
-        .ok().and_then(|v| v.as_string())
+        .ok()
+        .and_then(|v| v.as_string())
 }
 
 #[cfg(not(target_arch = "wasm32"))]

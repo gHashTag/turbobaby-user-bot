@@ -2,10 +2,10 @@
 
 pub mod core;
 pub mod garden;
+pub mod i18n;
 pub mod quest;
 pub mod store;
-pub mod i18n;
 pub mod validation;
 
 // Re-export commonly used types
-pub use core::{Error, Result, Lang, TelegramId, QrToken, Timestamp};
+pub use core::{Error, Lang, QrToken, Result, TelegramId, Timestamp};

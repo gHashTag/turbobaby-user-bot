@@ -43,6 +43,16 @@ pub struct Model {
 
     // ── Media columns (022_strains_video_url.sql) ────────────────────
     pub video_url: Option<String>,
+
+    // ── Marketing flags (028_strain_marketing_flags.sql, TZ #2) ──────
+    pub discount_percent: f64,
+    pub sale_price: Option<f64>,
+    pub sale_active: bool,
+    pub sale_until: Option<DateTimeWithTimeZone>,
+    pub is_best_seller: bool,
+    pub is_new_arrival: bool,
+    pub new_until: Option<DateTimeWithTimeZone>,
+    pub display_order: i32,
 }
 
 #[allow(dead_code)] // Standard SeaORM entity pattern

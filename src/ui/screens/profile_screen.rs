@@ -1,16 +1,16 @@
-use dioxus::prelude::*;
-use web_sys;
-use qrcode::QrCode;
-use serde::Deserialize;
-use base64::{Engine as _, engine::general_purpose::STANDARD};
-use crate::ui::routes::Route;
-use crate::ui::state::{Cart, use_language, Language};
-use crate::ui::assets;
-use crate::ui::api::context::api_base_url;
 use crate::trios::core::Lang;
 use crate::trios::i18n::{t, T_PROFILE_TITLE};
+use crate::ui::api::context::api_base_url;
+use crate::ui::assets;
 use crate::ui::components::bottom_nav::BottomNav;
+use crate::ui::routes::Route;
+use crate::ui::state::{use_language, Cart, Language};
 use crate::ui::telegram::{use_telegram_id, use_telegram_init_data};
+use base64::{engine::general_purpose::STANDARD, Engine as _};
+use dioxus::prelude::*;
+use qrcode::QrCode;
+use serde::Deserialize;
+use web_sys;
 
 #[derive(Debug, Clone, Deserialize)]
 struct LoyaltyResponse {
@@ -25,8 +25,6 @@ struct LoyaltyProfileData {
     referral_code: Option<String>,
     referral_count: Option<i32>,
 }
-
-
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum Tier {
@@ -128,10 +126,12 @@ pub fn ProfileScreen() -> Element {
             }
             let base = api_base_url();
             let url = format!("{}/api/loyalty/{}", base, telegram_id);
-            let client = reqwest::Client::new();
-            let resp = client.get(&url)
+            let client = crate::ui::api::local_client::LocalClient::new();
+            let resp = client
+                .get(&url)
                 .header("X-Telegram-Init-Data", init)
-                .send().await;
+                .send()
+                .await;
             match resp {
                 Ok(r) => r.json::<LoyaltyResponse>().await.ok(),
                 Err(_) => None,
@@ -139,29 +139,42 @@ pub fn ProfileScreen() -> Element {
         }
     });
 
-    let loyalty_data = loyalty_resource.read().clone().flatten().and_then(|r| r.profile.clone());
+    let loyalty_data = loyalty_resource
+        .read()
+        .clone()
+        .flatten()
+        .and_then(|r| r.profile.clone());
 
-    let current_tier = loyalty_data.as_ref()
+    let current_tier = loyalty_data
+        .as_ref()
         .and_then(|d| d.tier.as_deref())
         .map(|t| Tier::from_str(t))
         .unwrap_or(Tier::Silver);
 
-    let total_spent = loyalty_data.as_ref()
+    let total_spent = loyalty_data
+        .as_ref()
         .and_then(|d| d.total_spent)
-        .unwrap_or(750.0);
+        .filter(|v| v.is_finite())
+        .unwrap_or(750.0)
+        .max(0.0);
 
-    let bonus_balance = loyalty_data.as_ref()
+    let bonus_balance = loyalty_data
+        .as_ref()
         .and_then(|d| d.bonus_balance)
-        .unwrap_or(150.0);
+        .filter(|v| v.is_finite())
+        .unwrap_or(150.0)
+        .max(0.0);
 
     // Cashback is calculated from tier
     let cashback_pct = current_tier.cashback();
 
-    let referral_code = loyalty_data.as_ref()
+    let referral_code = loyalty_data
+        .as_ref()
         .and_then(|d| d.referral_code.clone())
         .unwrap_or("WOODY-DEMO".to_string());
 
-    let referral_count = loyalty_data.as_ref()
+    let referral_count = loyalty_data
+        .as_ref()
         .and_then(|d| d.referral_count)
         .unwrap_or(3);
 
@@ -172,14 +185,17 @@ pub fn ProfileScreen() -> Element {
     let next_tier = current_tier.next();
     let progress_pct = if let Some(next) = next_tier {
         let threshold = next.threshold();
-        if threshold > 0.0 { ((total_spent / threshold) * 100.0).min(100.0) as i32 } else { 100 }
+        if threshold > 0.0 {
+            ((total_spent / threshold) * 100.0).min(100.0) as i32
+        } else {
+            100
+        }
     } else {
         100
     };
     let remaining = next_tier.map(|t| (t.threshold() - total_spent).max(0.0));
 
     let profile_title = t(Lang::Russian, T_PROFILE_TITLE);
-
 
     rsx! {
         div { style: "

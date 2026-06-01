@@ -1,8 +1,10 @@
 //! Quest data models for Woody Weed app
 
-use serde::{Deserialize, Serialize};
 use crate::trios::core::Lang;
-use crate::trios::i18n::{t, T_TITLE, T_SUBTITLE, T_POINT_1, T_POINT_2, T_POINT_3, T_POINT_4, T_POINT_5};
+use crate::trios::i18n::{
+    t, T_POINT_1, T_POINT_2, T_POINT_3, T_POINT_4, T_POINT_5, T_SUBTITLE, T_TITLE,
+};
+use serde::{Deserialize, Serialize};
 
 /// Unique quest identifier
 pub type QuestId = String;
@@ -164,7 +166,7 @@ impl QuestReward {
 
     /// Total reward value (for comparison)
     pub fn total_value(&self) -> u64 {
-        self.gold + (self.xp as u64)
+        self.gold.saturating_add(self.xp as u64)
     }
 }
 
@@ -365,31 +367,11 @@ pub struct QuestState {
 /// All available checkpoints for the location quest
 pub fn get_checkpoints() -> Vec<QuestCheckpoint> {
     vec![
-        QuestCheckpoint::new(
-            1,
-            T_POINT_1,
-            "quest.checkpoint.1.description",
-        ),
-        QuestCheckpoint::new(
-            2,
-            T_POINT_2,
-            "quest.checkpoint.2.description",
-        ),
-        QuestCheckpoint::new(
-            3,
-            T_POINT_3,
-            "quest.checkpoint.3.description",
-        ),
-        QuestCheckpoint::new(
-            4,
-            T_POINT_4,
-            "quest.checkpoint.4.description",
-        ),
-        QuestCheckpoint::new(
-            5,
-            T_POINT_5,
-            "quest.checkpoint.5.description",
-        ),
+        QuestCheckpoint::new(1, T_POINT_1, "quest.checkpoint.1.description"),
+        QuestCheckpoint::new(2, T_POINT_2, "quest.checkpoint.2.description"),
+        QuestCheckpoint::new(3, T_POINT_3, "quest.checkpoint.3.description"),
+        QuestCheckpoint::new(4, T_POINT_4, "quest.checkpoint.4.description"),
+        QuestCheckpoint::new(5, T_POINT_5, "quest.checkpoint.5.description"),
     ]
 }
 

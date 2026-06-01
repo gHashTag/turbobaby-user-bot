@@ -10,11 +10,41 @@ pub struct TechNode {
 }
 
 pub static TECH_TREE: &[TechNode] = &[
-    TechNode { id: "basic_grow", name: "Basic Growing", cost: 10, requires: &[], unlocked: true },
-    TechNode { id: "soil_boost", name: "Soil Boost", cost: 25, requires: &["basic_grow"], unlocked: false },
-    TechNode { id: "led_lights", name: "LED Lights", cost: 75, requires: &["basic_grow"], unlocked: false },
-    TechNode { id: "auto_water", name: "Auto Watering", cost: 50, requires: &["soil_boost"], unlocked: false },
-    TechNode { id: "master_grower", name: "Master Grower", cost: 200, requires: &["auto_water", "led_lights"], unlocked: false },
+    TechNode {
+        id: "basic_grow",
+        name: "Basic Growing",
+        cost: 10,
+        requires: &[],
+        unlocked: true,
+    },
+    TechNode {
+        id: "soil_boost",
+        name: "Soil Boost",
+        cost: 25,
+        requires: &["basic_grow"],
+        unlocked: false,
+    },
+    TechNode {
+        id: "led_lights",
+        name: "LED Lights",
+        cost: 75,
+        requires: &["basic_grow"],
+        unlocked: false,
+    },
+    TechNode {
+        id: "auto_water",
+        name: "Auto Watering",
+        cost: 50,
+        requires: &["soil_boost"],
+        unlocked: false,
+    },
+    TechNode {
+        id: "master_grower",
+        name: "Master Grower",
+        cost: 200,
+        requires: &["auto_water", "led_lights"],
+        unlocked: false,
+    },
 ];
 
 #[derive(Props, PartialEq, Clone)]
@@ -26,7 +56,11 @@ pub struct TechNodeCardProps {
 
 #[component]
 fn TechNodeCard(props: TechNodeCardProps) -> Element {
-    let _can_unlock = props.tech.requires.iter().all(|r| props.unlocked_ids.contains(r));
+    let _can_unlock = props
+        .tech
+        .requires
+        .iter()
+        .all(|r| props.unlocked_ids.contains(r));
     let can_afford = props.progress_points >= props.tech.cost;
 
     rsx! {
@@ -50,7 +84,11 @@ fn TechNodeCard(props: TechNodeCardProps) -> Element {
 #[component]
 pub fn TechTree() -> Element {
     let progress_points = use_signal(|| 0u32);
-    let unlocked_ids: Vec<&str> = TECH_TREE.iter().filter(|t| t.unlocked).map(|t| t.id).collect();
+    let unlocked_ids: Vec<&str> = TECH_TREE
+        .iter()
+        .filter(|t| t.unlocked)
+        .map(|t| t.id)
+        .collect();
 
     rsx! {
         div { class: "page tech-tree-page",

@@ -78,7 +78,7 @@ fn CartItemRow(props: CartItemRowProps) -> Element {
 
     let img_url = item.image_url.as_deref().unwrap_or("");
     let has_image = !img_url.is_empty()
-        && (img_url.starts_with("http://") || img_url.starts_with("https://") || img_url.starts_with('/'));
+        && (img_url.starts_with("http://") || img_url.starts_with("https://") || (img_url.starts_with("/") && !img_url.starts_with("//")));
 
     rsx! {
         div { class: "cart-item",
@@ -91,7 +91,12 @@ fn CartItemRow(props: CartItemRowProps) -> Element {
             }
             div { class: "cart-item-details",
                 h4 { class: "cart-item-name", "{item.name}" }
-                p { class: "cart-item-price", "{item.price} ₽" }
+                p { class: "cart-item-price",
+                    {
+                        let safe_price = if item.price.is_finite() { item.price.max(0.0) } else { 0.0 };
+                        rsx! { "{safe_price} ₽" }
+                    }
+                }
                 div { class: "cart-item-controls",
                     Button {
                         variant: ButtonVariant::Secondary,

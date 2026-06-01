@@ -1,10 +1,8 @@
+use axum::http::HeaderValue;
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use axum::{
-    http::{HeaderValue},
-};
-use sha2::{Sha256, Digest};
 
 /// Simple in-memory ETag cache for API responses.
 /// Uses SHA-256 truncated to 16 hex chars so the hash is stable across
@@ -24,7 +22,10 @@ impl ETagCache {
     /// Compute stable hash of JSON response (first 64 bits of SHA-256).
     pub fn compute_hash(data: &str) -> String {
         let hash = Sha256::digest(data.as_bytes());
-        format!("{:016x}", u64::from_be_bytes(hash[0..8].try_into().unwrap_or_default()))
+        format!(
+            "{:016x}",
+            u64::from_be_bytes(hash[0..8].try_into().unwrap())
+        )
     }
 
     /// Get cached hash for a key
@@ -35,7 +36,10 @@ impl ETagCache {
     /// Set hash for a key
     pub async fn set(&self, key: &str, data: &str) -> String {
         let hash = Self::compute_hash(data);
-        self.hashes.write().await.insert(key.to_string(), hash.clone());
+        self.hashes
+            .write()
+            .await
+            .insert(key.to_string(), hash.clone());
         hash
     }
 
@@ -83,12 +87,13 @@ pub async fn invalidate_tea_products(cache: &ETagCache) {
 
 /// Create ETag header value
 pub fn make_etag_header(hash: &str) -> HeaderValue {
-    HeaderValue::from_str(&format!("\"{}\"", hash)).unwrap_or_else(|_| HeaderValue::from_static("\"\""))
+    HeaderValue::from_str(&format!("\"{}\"", hash))
+        .unwrap_or_else(|_| HeaderValue::from_static("\"\""))
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{ETagCache, make_etag_header};
+    use super::{make_etag_header, ETagCache};
     use axum::http::HeaderValue;
 
     #[test]

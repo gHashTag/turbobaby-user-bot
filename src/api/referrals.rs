@@ -7,11 +7,9 @@ use axum::{
 use serde::Deserialize;
 use serde_json::{json, Value};
 
-use crate::api::auth::check_not_blocked;
+use crate::api::auth::{check_not_blocked, validate_telegram_id_param};
+use crate::db::referrals::{get_or_create_referral_code, get_referrer_stats, get_top_referrers};
 use crate::AppState;
-use crate::db::referrals::{
-    get_or_create_referral_code, get_referrer_stats, get_top_referrers,
-};
 
 // ──────────────────────────────────────────────────────────────────
 // Route registration
@@ -45,15 +43,22 @@ async fn get_my_referrals(
     State(state): State<AppState>,
     Path(telegram_id): Path<i64>,
 ) -> Result<Json<Value>, StatusCode> {
+    validate_telegram_id_param(telegram_id)?;
     crate::api::auth::check_owner(&headers, &state, telegram_id)?;
     check_not_blocked(&state, telegram_id).await?;
     let code = get_or_create_referral_code(&state.db.pool, telegram_id)
         .await
-        .map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
+        .map_err(|e| {
+            tracing::error!("DB error: {:?}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
 
     let stats = get_referrer_stats(&state.db.pool, telegram_id)
         .await
-        .map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
+        .map_err(|e| {
+            tracing::error!("DB error: {:?}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
 
     let bot_username = &state.config.bot_username;
     let invite_link = format!("https://t.me/{}?start=ref_{}", bot_username, code);
@@ -88,7 +93,10 @@ async fn get_leaderboard(
 
     let top = get_top_referrers(&state.db.pool, period, limit)
         .await
-        .map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
+        .map_err(|e| {
+            tracing::error!("DB error: {:?}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
 
     Ok(Json(json!({
         "period": period,
@@ -98,31 +106,45 @@ async fn get_leaderboard(
 
 #[cfg(test)]
 mod tests {
-    use super::{LeaderboardQuery, validate_leaderboard_query};
+    use super::{validate_leaderboard_query, LeaderboardQuery};
     use axum::http::StatusCode;
 
     #[test]
     fn test_validate_leaderboard_defaults() {
-        let q = LeaderboardQuery { period: None, limit: None };
+        let q = LeaderboardQuery {
+            period: None,
+            limit: None,
+        };
         assert_eq!(validate_leaderboard_query(&q).unwrap(), ("all", 10));
     }
 
     #[test]
     fn test_validate_leaderboard_weekly() {
-        let q = LeaderboardQuery { period: Some("weekly".into()), limit: Some(20) };
+        let q = LeaderboardQuery {
+            period: Some("weekly".into()),
+            limit: Some(20),
+        };
         assert_eq!(validate_leaderboard_query(&q).unwrap(), ("weekly", 20));
     }
 
     #[test]
     fn test_validate_leaderboard_limit_capped() {
-        let q = LeaderboardQuery { period: None, limit: Some(100) };
+        let q = LeaderboardQuery {
+            period: None,
+            limit: Some(100),
+        };
         assert_eq!(validate_leaderboard_query(&q).unwrap(), ("all", 50));
     }
 
     #[test]
     fn test_validate_leaderboard_invalid_period() {
-        let q = LeaderboardQuery { period: Some("daily".into()), limit: None };
-        assert_eq!(validate_leaderboard_query(&q).unwrap_err(), StatusCode::BAD_REQUEST);
+        let q = LeaderboardQuery {
+            period: Some("daily".into()),
+            limit: None,
+        };
+        assert_eq!(
+            validate_leaderboard_query(&q).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
     }
 }
-

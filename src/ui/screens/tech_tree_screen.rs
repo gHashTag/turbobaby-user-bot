@@ -1,6 +1,21 @@
+use crate::ui::api::context::api_base_url;
+use crate::ui::components::{ErrorBanner, Skeleton, SkeletonShape};
 use dioxus::prelude::*;
 use serde::Deserialize;
-use crate::ui::api::context::api_base_url;
+
+/// Pull the admin token from localStorage (mirrors admin_screen.rs).
+/// Non-admins will see an empty token → backend rejects with 401 and the
+/// button click surfaces "not admin" — they shouldn't be clicking anyway,
+/// but the gate is enforced server-side either way.
+fn admin_token() -> String {
+    web_sys::window()
+        .and_then(|w| w.local_storage().ok())
+        .flatten()
+        .and_then(|s| s.get_item("wwb_admin_token").ok())
+        .flatten()
+        .filter(|t| t.len() <= 2048)
+        .unwrap_or_default()
+}
 
 #[derive(Clone, Debug, PartialEq, Deserialize)]
 struct TechNode {
@@ -41,18 +56,37 @@ fn category_color(cat: &str) -> &'static str {
 pub fn TechTreeScreen() -> Element {
     let mut nodes = use_signal(Vec::<TechNode>::new);
     let mut loading = use_signal(|| true);
+    let mut reload_tick = use_signal(|| 0u32);
+    let mut err_msg = use_signal(|| String::new());
 
     let _ = use_resource(move || async move {
-        let base = api_base_url();
-        let client = reqwest::Client::new();
-        if let Ok(resp) = client.get(format!("{}/api/tech-tree/nodes", base)).send().await {
-            if let Ok(text) = resp.text().await {
-                if let Ok(val) = serde_json::from_str::<serde_json::Value>(&text) {
-                    if let Some(arr) = val.get("nodes").and_then(|v| v.as_array()) {
-                        let items: Vec<TechNode> = arr.iter().filter_map(|v| serde_json::from_value(v.clone()).ok()).collect();
-                        nodes.set(items);
-                    }
-                }
+        let _ = reload_tick.read(); // re-fetch when this signal changes
+                                    // Cycle #31: surface network/parse failures via err_msg instead of
+                                    // silently leaving nodes empty (which looked like "tech tree disabled").
+        let url = format!("{}/api/tech-tree/nodes", api_base_url());
+        let result: Result<Vec<TechNode>, String> = async {
+            let text = crate::ui::api::http::fetch_text(&url)
+                .await
+                .map_err(|e| format!("Network: {e}"))?;
+            let val: serde_json::Value =
+                serde_json::from_str(&text).map_err(|e| format!("Parse: {e}"))?;
+            let arr = val
+                .get("nodes")
+                .and_then(|v| v.as_array())
+                .ok_or_else(|| "Server returned no `nodes` array".to_string())?;
+            Ok(arr
+                .iter()
+                .filter_map(|v| serde_json::from_value(v.clone()).ok())
+                .collect())
+        }
+        .await;
+        match result {
+            Ok(items) => {
+                nodes.set(items);
+                err_msg.set(String::new());
+            }
+            Err(e) => {
+                err_msg.set(format!("Не удалось загрузить дерево: {e}"));
             }
         }
         loading.set(false);
@@ -60,9 +94,21 @@ pub fn TechTreeScreen() -> Element {
     });
 
     let total = nodes.read().len();
-    let completed = nodes.read().iter().filter(|n| n.status == "completed").count();
-    let available = nodes.read().iter().filter(|n| n.status == "available").count();
-    let progress_pct = if total > 0 { (completed * 100) / total } else { 0 };
+    let completed = nodes
+        .read()
+        .iter()
+        .filter(|n| n.status == "completed")
+        .count();
+    let available = nodes
+        .read()
+        .iter()
+        .filter(|n| n.status == "available")
+        .count();
+    let progress_pct = if total > 0 {
+        (completed * 100) / total
+    } else {
+        0
+    };
 
     rsx! {
         div { style: "
@@ -91,6 +137,8 @@ pub fn TechTreeScreen() -> Element {
                 }
             }
 
+            ErrorBanner { message: err_msg.read().clone(), margin: "0 0 12px".to_string() }
+
             div { style: "
                 background: #16213e; border: 4px solid #2a2a4a; border-radius: 0;
                 padding: 12px; margin-bottom: 16px; box-shadow: 4px 4px 0 #000;
@@ -101,8 +149,20 @@ pub fn TechTreeScreen() -> Element {
             }
 
             if *loading.read() {
-                div { style: "text-align: center; padding: 40px;",
-                    div { style: "font-size: 13px; color: #00e5ff;", "Loading tech tree..." }
+                div { style: "display: flex; flex-direction: column; gap: 10px;",
+                    for _ in 0..5 {
+                        div { style: "
+                            background: #16213e; border: 4px solid #2a2a4a;
+                            box-shadow: 4px 4px 0 #000; padding: 12px;
+                            display: flex; align-items: center; gap: 12px;
+                        ",
+                            Skeleton { shape: SkeletonShape::Avatar }
+                            div { style: "flex:1; display:flex; flex-direction:column; gap:6px;",
+                                Skeleton { shape: SkeletonShape::Text, width: Some("60%".into()) }
+                                Skeleton { shape: SkeletonShape::TextSm, width: Some("80%".into()) }
+                            }
+                        }
+                    }
                 }
             } else {
                 div { style: "display: flex; flex-direction: column; gap: 10px;",
@@ -155,13 +215,31 @@ pub fn TechTreeScreen() -> Element {
                                     }
                                 }
                                 if is_available {
-                                    button { style: "
-                                        font-size: 14px; font-weight: 700; padding: 5px 8px;
-                                        background: {accent}22; color: {accent};
-                                        border: 4px solid {accent}; border-radius: 0; cursor: pointer;
-                                        box-shadow: 3px 3px 0 #000;
-                                    ",
-                                        "Unlock"
+                                    {
+                                        let node_id = n.id.clone();
+                                        rsx! {
+                                            button { style: "
+                                                font-size: 14px; font-weight: 700; padding: 5px 8px;
+                                                background: {accent}22; color: {accent};
+                                                border: 4px solid {accent}; border-radius: 0; cursor: pointer;
+                                                box-shadow: 3px 3px 0 #000;
+                                            ",
+                                                onclick: move |_| {
+                                                    let id = node_id.clone();
+                                                    spawn(async move {
+                                                        let url = format!("{}/api/tech-tree/nodes/{}/complete", api_base_url(), urlencoding::encode(&id));
+                                                        match crate::ui::api::http::post_admin_token(&url, Some(&admin_token()), "").await {
+                                                            Ok((200..=299, _)) => { reload_tick += 1; }
+                                                            Ok((401, _)) | Ok((403, _)) => err_msg.set("Только для админа".into()),
+                                                            Ok((404, _)) => err_msg.set("Узел не найден".into()),
+                                                            Ok((status, body)) => err_msg.set(format!("HTTP {}: {}", status, body.chars().take(80).collect::<String>())),
+                                                            Err(e) => err_msg.set(format!("Ошибка: {}", e)),
+                                                        }
+                                                    });
+                                                },
+                                                "Unlock"
+                                            }
+                                        }
                                     }
                                 }
                             }

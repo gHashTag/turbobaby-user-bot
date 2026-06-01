@@ -1,29 +1,37 @@
 // Lazy Screen Loader — deferred rendering wrapper
 //
-// Wraps any screen component with a one-frame delay so the browser can
+// Wraps any screen component with a configurable delay so the browser can
 // paint a lightweight skeleton *before* the heavy screen mounts.
-// This prevents jank during route transitions and gives the user instant
-// visual feedback (loading skeleton) while the actual screen initialises.
+// The `heavy` flag increases the delay and yields extra time to the event loop
+// for large screens (Admin, Garden/Game, TechTree) that otherwise cause jank.
 
 use dioxus::prelude::*;
 
 /// Lazy-loading wrapper for screen components.
 ///
 /// On the very first render it shows a shimmer skeleton.
-/// After yielding one animation frame (~16 ms) to the browser it swaps
-/// in the real `children`, giving the perceived effect of lazy loading
-/// without requiring WASM code-splitting (which Rust cannot do yet).
+/// After `delay_ms` (or 80 ms when `heavy` is true) it swaps in the real
+/// `children`, giving the perceived effect of lazy loading without requiring
+/// WASM code-splitting (which Rust cannot do yet).
 #[component]
-pub fn LazyScreen(children: Element) -> Element {
+pub fn LazyScreen(
+    #[props(default = 16)] delay_ms: u32,
+    #[props(default = false)] heavy: bool,
+    children: Element,
+) -> Element {
     let mut ready = use_signal(|| false);
+
+    let actual_delay = if heavy { 80 } else { delay_ms };
 
     // Spawn a micro-delay that yields to the browser's paint cycle.
     // `use_future` runs once on mount (no reactive deps ⇒ no re-runs).
     use_future(move || async move {
-        // One frame ≈ 16 ms.  Using 0 would still yield via the
-        // micro-task queue but an explicit tick is more reliable across
-        // browsers.
-        gloo_timers::future::TimeoutFuture::new(16).await;
+        gloo_timers::future::TimeoutFuture::new(actual_delay).await;
+        if heavy {
+            // Heavy screens get an extra tick so the browser can process
+            // any pending layout/paint work before we drop a large subtree.
+            gloo_timers::future::TimeoutFuture::new(16).await;
+        }
         ready.set(true);
     });
 

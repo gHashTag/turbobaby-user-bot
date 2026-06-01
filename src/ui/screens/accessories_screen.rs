@@ -1,10 +1,10 @@
+use crate::trios::core::Lang;
+use crate::trios::i18n::{t, T_ACC_DESC, T_ACC_TITLE, T_ADD_TO_CART, T_FILTER_ALL};
+use crate::ui::api::context::api_base_url;
+use crate::ui::components::bottom_nav::BottomNav;
+use crate::ui::state::{Cart, CartItem, CartItemType};
 use dioxus::prelude::*;
 use serde::Deserialize;
-use crate::ui::state::{Cart, CartItem, CartItemType};
-use crate::ui::components::bottom_nav::BottomNav;
-use crate::ui::api::context::api_base_url;
-use crate::trios::core::Lang;
-use crate::trios::i18n::{t, T_ACC_TITLE, T_ACC_DESC, T_FILTER_ALL, T_ADD_TO_CART};
 
 #[derive(Debug, Clone, Deserialize)]
 #[allow(dead_code)]
@@ -54,7 +54,8 @@ fn category_badge_style(cat: &str) -> String {
 }
 
 const CATEGORIES: &[&str] = &[
-    "All", "Grinder", "Papers", "Pipe", "Bong", "Storage", "Lighter", "Clothing", "Souvenir", "Other",
+    "All", "Grinder", "Papers", "Pipe", "Bong", "Storage", "Lighter", "Clothing", "Souvenir",
+    "Other",
 ];
 
 #[component]
@@ -70,7 +71,7 @@ pub fn AccessoriesScreen() -> Element {
     let accessories_resource = use_resource(|| async move {
         let base = api_base_url();
         let url = format!("{}/api/accessories", base);
-        reqwest::Client::new()
+        crate::ui::api::local_client::LocalClient::new()
             .get(&url)
             .send()
             .await
@@ -87,8 +88,14 @@ pub fn AccessoriesScreen() -> Element {
             if cat == "All" {
                 accessories.clone()
             } else {
-                accessories.iter()
-                    .filter(|a| a.category.as_deref().unwrap_or("").eq_ignore_ascii_case(&cat))
+                accessories
+                    .iter()
+                    .filter(|a| {
+                        a.category
+                            .as_deref()
+                            .unwrap_or("")
+                            .eq_ignore_ascii_case(&cat)
+                    })
                     .cloned()
                     .collect()
             }
@@ -163,25 +170,41 @@ pub fn AccessoriesScreen() -> Element {
     }
 }
 
-fn render_accessory_card(a: ApiAccessory, mut cart: Signal<Cart>, add_to_cart: &'static str) -> Element {
+fn render_accessory_card(
+    a: ApiAccessory,
+    mut cart: Signal<Cart>,
+    add_to_cart: &'static str,
+) -> Element {
     let cat = a.category.as_deref().unwrap_or("other");
     let emoji = category_emoji(cat);
     let is_available = a.is_available.unwrap_or(true);
-    let stock = a.stock.unwrap_or(999);
+    let stock = a.stock.unwrap_or(999).max(0);
     let show_low_stock = stock > 0 && stock <= 5;
     let show_out_of_stock = stock == 0 || !is_available;
-    let price_str = format!("฿{}", a.price as i32);
+    let a_price = if a.price.is_finite() {
+        a.price.max(0.0)
+    } else {
+        0.0
+    };
+    let price_str = format!("฿{}", a_price as i32);
     let a_name = a.name.clone();
     let a_id = a.id.clone();
-    let a_price = a.price;
-    let opacity = if show_out_of_stock { "opacity:0.6;" } else { "" };
+    let opacity = if show_out_of_stock {
+        "opacity:0.6;"
+    } else {
+        ""
+    };
     let desc = a.description.as_deref().unwrap_or("");
     let img_url = a.image_url.clone().unwrap_or_default();
     let has_image = !img_url.is_empty()
-        && (img_url.starts_with("http://") || img_url.starts_with("https://") || img_url.starts_with('/'));
+        && (img_url.starts_with("http://")
+            || img_url.starts_with("https://")
+            || (img_url.starts_with("/") && !img_url.starts_with("//")));
     let video_url = a.video_url.clone().unwrap_or_default();
     let has_video = !video_url.is_empty()
-        && (video_url.starts_with("http://") || video_url.starts_with("https://") || video_url.starts_with('/'));
+        && (video_url.starts_with("http://")
+            || video_url.starts_with("https://")
+            || (video_url.starts_with("/") && !video_url.starts_with("//")));
     let mut show_video = use_signal(|| false);
     let badge_style = category_badge_style(cat);
     let badge_label = format!("{} {}", emoji, cat);

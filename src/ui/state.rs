@@ -56,7 +56,18 @@ impl Cart {
     }
 
     pub fn recalculate_total(&mut self) {
-        self.total = self.items.iter().map(|i| i.price * i.quantity as f64).sum();
+        self.total = self
+            .items
+            .iter()
+            .map(|i| {
+                let price = if i.price.is_finite() {
+                    i.price.max(0.0)
+                } else {
+                    0.0
+                };
+                price * i.quantity as f64
+            })
+            .sum();
     }
 }
 

@@ -1,0 +1,91 @@
+# Lefthook 2.1.9 — Git hooks for woody-weed-bot.
+#
+# Replaces the hand-written `.githooks/pre-commit`. Mirrors the same checks
+# but runs them through lefthook so each command can fail/skip independently
+# (and `glob:` filters skip `cargo fmt` when no .rs files are staged).
+#
+# Setup for new clones:
+#   brew install lefthook
+#   lefthook install
+#
+# To opt out temporarily: LEFTHOOK=0 git commit ...
+
+# pre-push — defense in depth. block-main in pre-commit prevents *committing*
+# on main, but git also lets you commit on a feature branch and then push it
+# straight to `refs/heads/main`. This hook closes that gap.
+pre-push:
+  commands:
+    block-push-to-main:
+      # Git passes one line per push ref on stdin in the form:
+      #   <local_ref> <local_sha> <remote_ref> <remote_sha>
+      # Read each line, fail if any pushes to refs/heads/main.
+      run: |
+        while read local_ref local_sha remote_ref remote_sha; do
+          if [ "$remote_ref" = "refs/heads/main" ]; then
+            echo ""
+            echo "❌  Pushing directly to \`main\` is blocked."
+            echo "   Open a pull request instead."
+            echo ""
+            exit 1
+          fi
+        done
+
+# commit-msg — enforce Conventional Commits format so the changelog / release
+# tooling can parse the history without manual triage. Migrated from
+# .githooks/commit-msg (cycle #53).
+commit-msg:
+  commands:
+    conventional-commits:
+      # Lefthook substitutes {1} with the first command arg, which for the
+      # commit-msg hook is the path to the commit message file.
+      run: |
+        msg_file="{1}"
+        msg=$(head -n1 "$msg_file")
+        # Allow merge / revert / branch-as-message commits unchanged.
+        if echo "$msg" | grep -qE '^(Merge|Revert|branch)'; then
+          exit 0
+        fi
+        if ! echo "$msg" | grep -qE '^(feat|fix|docs|style|refactor|test|chore|ci|build|perf|wip)(\([^)]+\))?: .+'; then
+          echo ""
+          echo "❌  Commit message does not follow Conventional Commits."
+          echo "   Expected: type(scope): description"
+          echo "   Types: feat | fix | docs | style | refactor | test | chore | ci | build | perf | wip"
+          echo "   Example: feat(menu): add filter by strain type"
+          echo ""
+          exit 1
+        fi
+
+pre-commit:
+  parallel: false
+  commands:
+    block-main:
+      # Mirrors `.githooks/pre-commit`: forbid direct commits to main so all
+      # changes go through PRs. Lefthook prints `tags` and skips silently if
+      # the branch isn't main, so this is a no-op on feature branches.
+      run: |
+        branch="$(git rev-parse --abbrev-ref HEAD)"
+        if [ "$branch" = "main" ]; then
+          echo ""
+          echo "❌  Direct commits to \`main\` are blocked."
+          echo "   Create a feature branch: git checkout -b feat/your-change"
+          echo ""
+          exit 1
+        fi
+
+    fmt:
+      # Glob filter: lefthook skips the entire command if no staged file
+      # matches, so non-Rust commits don't pay the cargo-fmt startup tax.
+      glob: "*.rs"
+      run: cargo fmt -- --check
+      fail_text: |
+        cargo fmt --check failed. Run `cargo fmt` to fix.
+
+    check-backend:
+      run: cargo check --features backend
+      fail_text: |
+        Backend compilation failed. Fix errors before committing.
+
+    check-wasm:
+      run: cargo check --target wasm32-unknown-unknown
+      fail_text: |
+        WASM compilation failed. Fix errors before committing.

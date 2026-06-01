@@ -1,12 +1,15 @@
-use dioxus::prelude::*;
-use serde::Deserialize;
+use crate::trios::core::Lang;
+use crate::trios::i18n::{
+    t, T_ADD_TO_CART, T_HOME_SUBTITLE, T_NAV_ACCESSORIES, T_NAV_GARDEN, T_NAV_MENU, T_NAV_SETS,
+    T_NAV_TEA,
+};
+use crate::ui::api::context::api_base_url;
+use crate::ui::assets;
+use crate::ui::components::bottom_nav::BottomNav;
 use crate::ui::routes::Route;
 use crate::ui::state::{Cart, CartItem, CartItemType};
-use crate::ui::assets;
-use crate::ui::api::context::api_base_url;
-use crate::trios::core::Lang;
-use crate::ui::components::bottom_nav::BottomNav;
-use crate::trios::i18n::{t, T_HOME_SUBTITLE, T_NAV_MENU, T_NAV_SETS, T_NAV_ACCESSORIES, T_NAV_TEA, T_NAV_GARDEN, T_ADD_TO_CART};
+use dioxus::prelude::*;
+use serde::Deserialize;
 
 #[derive(Debug, Clone, Deserialize, PartialEq)]
 struct SotdStrain {
@@ -34,7 +37,12 @@ fn category_emoji(cat: &str) -> &'static str {
 }
 
 fn format_price(price: f64) -> String {
-    format!("฿{}", price as i32)
+    let v = if price.is_finite() {
+        price.max(0.0)
+    } else {
+        0.0
+    };
+    format!("฿{}", v as i32)
 }
 
 #[component]
@@ -52,7 +60,7 @@ pub fn HomeScreen() -> Element {
     let sotd_resource = use_resource(|| async move {
         let base = api_base_url();
         let url = format!("{}/api/strains/strain-of-day", base);
-        reqwest::Client::new()
+        crate::ui::api::local_client::LocalClient::new()
             .get(&url)
             .send()
             .await
@@ -82,18 +90,20 @@ pub fn HomeScreen() -> Element {
                 match &*sotd_resource.read() {
                     Some(Ok(Some(strain))) => {
                         let s = strain.clone();
+                        let discount = if s.strain_of_day_discount.is_finite() { s.strain_of_day_discount.max(0.0) } else { 0.0 };
+                        let price = if s.price_per_gram.is_finite() { s.price_per_gram.max(0.0) } else { 0.0 };
                         let cat = s.category.as_deref().unwrap_or("Hybrid");
                         let emoji = category_emoji(cat);
-                        let has_discount = s.strain_of_day_discount > 0.0;
+                        let has_discount = discount > 0.0;
                         let discount_label = if has_discount {
-                            format!("🔥 {}% OFF", s.strain_of_day_discount as i32)
+                            format!("🔥 {}% OFF", discount as i32)
                         } else {
                             "⭐ SOTD".to_string()
                         };
                         let display_price = if has_discount {
-                            format_price((s.price_per_gram * (1.0 - s.strain_of_day_discount / 100.0)).max(0.0))
+                            format_price((price * (1.0 - discount / 100.0)).max(0.0))
                         } else {
-                            format_price(s.price_per_gram)
+                            format_price(price)
                         };
                         let thc_str = s.thc_percent
                             .map(|t| format!("THC {}%", t as i32))
@@ -102,9 +112,9 @@ pub fn HomeScreen() -> Element {
                         let s_name = s.name.clone();
                         let s_id = s.id.clone();
                         let unit_price = if has_discount {
-                            (s.price_per_gram * (1.0 - s.strain_of_day_discount / 100.0)).max(0.0)
+                            (price * (1.0 - discount / 100.0)).max(0.0)
                         } else {
-                            s.price_per_gram
+                            price
                         };
 
                         rsx! {

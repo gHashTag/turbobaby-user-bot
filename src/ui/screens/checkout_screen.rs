@@ -1,21 +1,31 @@
+use crate::trios::core::Lang;
+use crate::trios::i18n::{
+    t, T_BACK, T_CHECKOUT_TITLE, T_DELIVERY, T_PAYMENT, T_PICKUP_LOCATION, T_PLACE_ORDER, T_TOTAL,
+    T_YOUR_INFO, T_YOUR_ORDER,
+};
+use crate::trios::store::validate_checkout;
+use crate::ui::api::context::api_base_url;
+use crate::ui::routes::Route;
+use crate::ui::state::{Cart, CartItem, CartItemType};
+use crate::ui::telegram::{use_telegram_id, use_telegram_init_data, use_telegram_username};
 use dioxus::prelude::*;
 use serde_json::json;
 use web_sys;
-use crate::ui::routes::Route;
-use crate::ui::state::{Cart, CartItem, CartItemType};
-use crate::ui::api::context::api_base_url;
-use crate::ui::telegram::{use_telegram_id, use_telegram_username, use_telegram_init_data};
-use crate::trios::store::validate_checkout;
-use crate::trios::core::Lang;
-use crate::trios::i18n::{t, T_CHECKOUT_TITLE, T_YOUR_ORDER, T_YOUR_INFO, T_PICKUP_LOCATION, T_DELIVERY, T_PAYMENT, T_PLACE_ORDER, T_BACK, T_TOTAL};
 
 fn to_trios_items(items: &[CartItem]) -> Vec<crate::trios::store::CartItem> {
-    items.iter().map(|i| match i.item_type {
-        CartItemType::Strain => crate::trios::store::CartItem::new_strain(i.id.clone(), i.quantity),
-        CartItemType::Accessory => crate::trios::store::CartItem::new_accessory(i.id.clone(), i.quantity),
-        CartItemType::Tea => crate::trios::store::CartItem::new_tea(i.id.clone(), i.quantity),
-        CartItemType::Set => crate::trios::store::CartItem::new_set(i.id.clone(), i.quantity),
-    }).collect()
+    items
+        .iter()
+        .map(|i| match i.item_type {
+            CartItemType::Strain => {
+                crate::trios::store::CartItem::new_strain(i.id.clone(), i.quantity)
+            }
+            CartItemType::Accessory => {
+                crate::trios::store::CartItem::new_accessory(i.id.clone(), i.quantity)
+            }
+            CartItemType::Tea => crate::trios::store::CartItem::new_tea(i.id.clone(), i.quantity),
+            CartItemType::Set => crate::trios::store::CartItem::new_set(i.id.clone(), i.quantity),
+        })
+        .collect()
 }
 
 #[component]
@@ -30,6 +40,7 @@ pub fn CheckoutScreen() -> Element {
     let mut order_error = use_signal(|| Option::<String>::None);
     let nav = navigator();
     let telegram_id = use_telegram_id();
+    let telegram_username = use_telegram_username();
     let init_data = use_telegram_init_data();
 
     let checkout_title = t(Lang::Russian, T_CHECKOUT_TITLE);
@@ -43,13 +54,16 @@ pub fn CheckoutScreen() -> Element {
     let total_label = t(Lang::Russian, T_TOTAL);
 
     // Единственная реальная точка самовывоза.
-    let shops = [
-        ("🏠 Woody Weed Pecker", "44, 129, Koh Phangan, Surat Thani 84280"),
-    ];
+    let shops = [(
+        "🏠 Woody Weed Pecker",
+        "44, 129, Koh Phangan, Surat Thani 84280",
+    )];
 
     let submit_cart_items = cart_items.clone();
     let submit_order = move |_| {
-        if is_processing() { return; }
+        if is_processing() {
+            return;
+        }
         let trios_items = to_trios_items(&submit_cart_items);
         if let Err(_) = validate_checkout(&customer_name(), &customer_phone(), &trios_items) {
             return;
@@ -58,11 +72,12 @@ pub fn CheckoutScreen() -> Element {
         order_error.set(None);
 
         let base = api_base_url();
-        let client = reqwest::Client::new();
+        let client = crate::ui::api::local_client::LocalClient::new();
         let url = format!("{}/api/orders", base);
 
-        let items_json: Vec<serde_json::Value> = submit_cart_items.iter().map(|item| {
-            match item.item_type {
+        let items_json: Vec<serde_json::Value> = submit_cart_items
+            .iter()
+            .map(|item| match item.item_type {
                 CartItemType::Strain => json!({
                     "strain_id": item.id,
                     "strain_name": item.name,
@@ -83,14 +98,14 @@ pub fn CheckoutScreen() -> Element {
                     "set_name": item.name,
                     "quantity": item.quantity,
                 }),
-            }
-        }).collect();
+            })
+            .collect();
 
         let body = json!({
             "telegram_id": telegram_id,
             "customer_name": customer_name(),
             "customer_phone": customer_phone(),
-            "customer_telegram": use_telegram_username(),
+            "customer_telegram": telegram_username.clone(),
             "items": items_json,
             "subtotal": cart_total,
             "total": cart_total,
@@ -99,11 +114,13 @@ pub fn CheckoutScreen() -> Element {
 
         let init_data_clone = init_data.clone();
         spawn(async move {
-            let res = client.post(&url)
+            let res = client
+                .post(&url)
                 .header("Content-Type", "application/json")
                 .header("X-Telegram-Init-Data", init_data_clone)
                 .json(&body)
-                .send().await;
+                .send()
+                .await;
 
             match res {
                 Ok(resp) if resp.status().is_success() => {
@@ -156,12 +173,18 @@ pub fn CheckoutScreen() -> Element {
                             div { style: "display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 13px;",
                                 span { "{item.name}" }
                                 span { style: "color: #8b8b9e;", "x{item.quantity}" }
-                                span { "฿{(item.price * item.quantity as f64) as i32}" }
+                                {
+                                    let line_price = if item.price.is_finite() { item.price.max(0.0) * item.quantity as f64 } else { 0.0 };
+                                    rsx! { span { "฿{line_price as i32}" } }
+                                }
                             }
                         }
                         div { style: "display: flex; justify-content: space-between; font-size: 15px; font-weight: 800; padding-top: 8px; border-top: 1px solid #2a2a4a; margin-top: 8px;",
                             span { "{total_label}" }
-                            span { style: "font-size: 20px; font-weight: 800; color: #ffe600; text-shadow: 2px 2px 0 #000;", "฿{cart_total as i32}" }
+                            {
+                                let safe_total = if cart_total.is_finite() { cart_total.max(0.0) } else { 0.0 };
+                                rsx! { span { style: "font-size: 20px; font-weight: 800; color: #ffe600; text-shadow: 2px 2px 0 #000;", "฿{safe_total as i32}" } }
+                            }
                         }
                     }
                 }

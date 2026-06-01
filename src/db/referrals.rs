@@ -1,9 +1,9 @@
 use anyhow::{Context, Result};
+use chrono::{DateTime, Utc};
 use deadpool_postgres::Pool;
 use serde::{Deserialize, Serialize};
-use sha2::{Sha256, Digest};
+use sha2::{Digest, Sha256};
 use uuid::Uuid;
-use chrono::{DateTime, Utc};
 
 // ──────────────────────────────────────────────────────────────────
 // Domain types
@@ -118,7 +118,10 @@ pub async fn get_or_create_referral_code(pool: &Pool, telegram_id: i64) -> Resul
         // Otherwise the code was taken by someone else — try next attempt
     }
 
-    anyhow::bail!("Failed to generate unique referral code for telegram_id={}", telegram_id)
+    anyhow::bail!(
+        "Failed to generate unique referral code for telegram_id={}",
+        telegram_id
+    )
 }
 
 // ──────────────────────────────────────────────────────────────────
@@ -193,7 +196,10 @@ pub async fn confirm_referral(pool: &Pool, referred_id: i64, bonus: f64) -> Resu
         .await?;
 
     let (event_id, referrer_id): (Uuid, i64) = match row {
-        Some(r) => (r.try_get("id").unwrap_or_default(), r.try_get("referrer_id").unwrap_or(0)),
+        Some(r) => (
+            r.try_get("id").unwrap_or_default(),
+            r.try_get("referrer_id").unwrap_or(0),
+        ),
         None => {
             tx.commit().await.ok();
             return Ok(()); // nothing pending — silently ok
@@ -206,7 +212,8 @@ pub async fn confirm_referral(pool: &Pool, referred_id: i64, bonus: f64) -> Resu
          SET status = 'confirmed', confirmed_at = NOW(), bonus_paid = $1
          WHERE id = $2",
         &[&bonus, &event_id],
-    ).await?;
+    )
+    .await?;
 
     // Ensure referrer loyalty profile exists
     tx.execute(
@@ -220,24 +227,31 @@ pub async fn confirm_referral(pool: &Pool, referred_id: i64, bonus: f64) -> Resu
         "INSERT INTO bonus_transactions (id, telegram_id, amount, tx_type, description)
          VALUES ($1, $2, $3, 'referral_bonus', 'Referral bonus for new user')",
         &[&tx_id, &referrer_id, &bonus],
-    ).await?;
+    )
+    .await?;
 
-    let updated = tx.execute(
-        "UPDATE loyalty_profiles SET bonus_balance = bonus_balance + $1 WHERE telegram_id = $2",
-        &[&bonus, &referrer_id],
-    ).await?;
+    let updated = tx
+        .execute(
+            "UPDATE loyalty_profiles SET bonus_balance = bonus_balance + $1 WHERE telegram_id = $2",
+            &[&bonus, &referrer_id],
+        )
+        .await?;
     if updated == 0 {
         if let Err(e) = tx.rollback().await {
             tracing::error!("confirm_referral rollback error: {}", e);
         }
-        anyhow::bail!("confirm_referral: loyalty profile missing for referrer_id={}", referrer_id);
+        anyhow::bail!(
+            "confirm_referral: loyalty profile missing for referrer_id={}",
+            referrer_id
+        );
     }
 
     // Increment referral_count
     tx.execute(
         "UPDATE loyalty_profiles SET referral_count = referral_count + 1 WHERE telegram_id = $1",
         &[&referrer_id],
-    ).await?;
+    )
+    .await?;
 
     tx.commit().await.context("commit referral tx")?;
     Ok(())
@@ -268,7 +282,14 @@ pub async fn get_referrer_stats(pool: &Pool, telegram_id: i64) -> Result<Referre
         total_invited: row.try_get::<_, i64>("total_invited").unwrap_or(0),
         confirmed: row.try_get::<_, i64>("confirmed").unwrap_or(0),
         pending: row.try_get::<_, i64>("pending").unwrap_or(0),
-        total_bonus_earned: row.try_get::<_, f64>("total_bonus_earned").unwrap_or(0.0),
+        total_bonus_earned: {
+            let v = row.try_get::<_, f64>("total_bonus_earned").unwrap_or(0.0);
+            if v.is_finite() {
+                v.max(0.0)
+            } else {
+                0.0
+            }
+        },
     })
 }
 
@@ -329,7 +350,14 @@ pub async fn get_top_referrers(pool: &Pool, period: &str, limit: i64) -> Result<
             telegram_id: r.try_get::<_, i64>("telegram_id").unwrap_or(0),
             first_name: r.try_get::<_, String>("first_name").ok(),
             referral_count: r.try_get::<_, i64>("referral_count").unwrap_or(0),
-            total_bonus_earned: r.try_get::<_, f64>("total_bonus_earned").unwrap_or(0.0),
+            total_bonus_earned: {
+                let v = r.try_get::<_, f64>("total_bonus_earned").unwrap_or(0.0);
+                if v.is_finite() {
+                    v.max(0.0)
+                } else {
+                    0.0
+                }
+            },
         })
         .collect())
 }

@@ -1,7 +1,7 @@
 // Strain Card Component for Menu
-use dioxus::prelude::*;
 use crate::ui::api::types::Strain;
 use crate::ui::components::{Button, ButtonVariant};
+use dioxus::prelude::*;
 
 #[derive(Props, PartialEq, Clone)]
 pub struct StrainCardProps {
@@ -34,10 +34,19 @@ pub fn StrainCard(props: StrainCardProps) -> Element {
 
             // Image
             div { class: "strain-image",
-                img {
-                    src: "{props.strain.image_url}?v=2",
-                    alt: "{name}",
-                    loading: "lazy"
+                {
+                    let url = &props.strain.image_url;
+                    if !url.is_empty() && (url.starts_with("http://") || url.starts_with("https://") || (url.starts_with("/") && !url.starts_with("//"))) {
+                        rsx! {
+                            img {
+                                src: "{url}?v=2",
+                                alt: "{name}",
+                                loading: "lazy"
+                            }
+                        }
+                    } else {
+                        rsx! { div { class: "strain-placeholder", "🌿" } }
+                    }
                 }
             }
 

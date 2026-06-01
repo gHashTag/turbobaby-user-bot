@@ -1,8 +1,8 @@
 //! E-commerce core for Trios ecosystem
 
+use crate::trios::core::{Error, Result, Timestamp};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use crate::trios::core::{Error, Result, Timestamp};
 
 /// Cart item
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -154,13 +154,18 @@ impl Cart {
     }
 
     fn recalculate(&mut self) {
-        self.item_count = self.items.iter().map(|i| i.quantity).sum();
+        self.item_count = self
+            .items
+            .iter()
+            .fold(0u32, |acc, i| acc.saturating_add(i.quantity));
         // Note: total_price calculation requires product pricing
         // This is a placeholder - actual calculation needs product data
     }
 
     pub fn get_total_items_count(&self) -> u32 {
-        self.items.iter().map(|i| i.quantity).sum()
+        self.items
+            .iter()
+            .fold(0u32, |acc, i| acc.saturating_add(i.quantity))
     }
 }
 
@@ -268,7 +273,7 @@ pub fn calculate_cart_total(
     prices: &HashMap<String, ProductPrice>,
     happy_hour_discount: Option<u32>,
 ) -> i64 {
-    let mut total = 0;
+    let mut total = 0i64;
 
     for item in items {
         let price = if let Some(set_id) = &item.set_id {
@@ -295,14 +300,15 @@ pub fn calculate_cart_total(
             prices.get(&item.strain_id).map(|p| p.price).unwrap_or(0)
         };
 
-        total += price * item.quantity as i64;
+        let line_total = price.saturating_mul(item.quantity as i64);
+        total = total.saturating_add(line_total);
     }
 
     // Apply happy hour discount if active (cap at 100% to avoid negative totals)
     if let Some(discount) = happy_hour_discount {
         let d = discount.min(100);
         if d > 0 {
-            total = total - (total * d as i64 / 100);
+            total = total.saturating_sub(total.saturating_mul(d as i64) / 100);
         }
     }
 

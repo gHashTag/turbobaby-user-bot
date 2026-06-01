@@ -1,7 +1,7 @@
 //! i18n engine for Trios ecosystem
 
-use std::collections::HashMap;
 use crate::trios::core::Lang;
+use std::collections::HashMap;
 
 /// Translation key
 pub type Key = &'static str;
@@ -404,21 +404,39 @@ pub fn get_translations(lang: Lang) -> Translations {
         T_ERROR_ALREADY_CHECKED,
         T_ERROR_CHECKIN_FAILED,
         // Screen titles
-        T_HOME_TITLE, T_HOME_SUBTITLE,
-        T_MENU_TITLE, T_MENU_DESC,
-        T_SETS_TITLE, T_SETS_DESC,
-        T_ACC_TITLE, T_ACC_DESC,
-        T_TEA_TITLE, T_TEA_DESC,
-        T_SOMM_TITLE, T_SOMM_DESC,
-        T_CART_TITLE, T_CART_EMPTY, T_CART_EMPTY_DESC,
+        T_HOME_TITLE,
+        T_HOME_SUBTITLE,
+        T_MENU_TITLE,
+        T_MENU_DESC,
+        T_SETS_TITLE,
+        T_SETS_DESC,
+        T_ACC_TITLE,
+        T_ACC_DESC,
+        T_TEA_TITLE,
+        T_TEA_DESC,
+        T_SOMM_TITLE,
+        T_SOMM_DESC,
+        T_CART_TITLE,
+        T_CART_EMPTY,
+        T_CART_EMPTY_DESC,
         T_CHECKOUT_TITLE,
         T_ORDERS_TITLE,
         T_PROFILE_TITLE,
-        T_YOUR_ORDER, T_YOUR_INFO,
-        T_PICKUP_LOCATION, T_DELIVERY, T_PAYMENT,
-        T_PLACE_ORDER, T_BACK, T_TOTAL,
-        T_ADD_TO_CART, T_LOADING, T_FILTER_ALL,
-        T_SOMM_MOOD, T_SOMM_TIME, T_SOMM_EXP, T_SOMM_RESULT,
+        T_YOUR_ORDER,
+        T_YOUR_INFO,
+        T_PICKUP_LOCATION,
+        T_DELIVERY,
+        T_PAYMENT,
+        T_PLACE_ORDER,
+        T_BACK,
+        T_TOTAL,
+        T_ADD_TO_CART,
+        T_LOADING,
+        T_FILTER_ALL,
+        T_SOMM_MOOD,
+        T_SOMM_TIME,
+        T_SOMM_EXP,
+        T_SOMM_RESULT,
     ];
 
     for key in keys {

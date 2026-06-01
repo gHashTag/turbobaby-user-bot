@@ -1,6 +1,7 @@
+use crate::ui::api::context::api_base_url;
+use crate::ui::components::{ErrorBanner, Skeleton, SkeletonShape};
 use dioxus::prelude::*;
 use serde::Deserialize;
-use crate::ui::api::context::api_base_url;
 
 #[derive(Clone, Debug, PartialEq, Deserialize)]
 struct Place {
@@ -43,18 +44,35 @@ fn category_color(cat: &str) -> &'static str {
 pub fn ARHuntScreen() -> Element {
     let mut places = use_signal(Vec::<Place>::new);
     let mut loading = use_signal(|| true);
+    let mut err_msg = use_signal(|| String::new());
 
     let _ = use_resource(move || async move {
-        let base = api_base_url();
-        let client = reqwest::Client::new();
-        if let Ok(resp) = client.get(format!("{}/api/quest-places", base)).send().await {
-            if let Ok(text) = resp.text().await {
-                if let Ok(val) = serde_json::from_str::<serde_json::Value>(&text) {
-                    if let Some(arr) = val.get("quest_places").and_then(|v| v.as_array()) {
-                        let items: Vec<Place> = arr.iter().filter_map(|v| serde_json::from_value(v.clone()).ok()).collect();
-                        places.set(items);
-                    }
-                }
+        // Cycle #30: Result-propagated error path so a failed fetch shows
+        // "API недоступен" instead of the misleading "No AR marks yet".
+        let url = format!("{}/api/quest-places", api_base_url());
+        let result: Result<Vec<Place>, String> = async {
+            let text = crate::ui::api::http::fetch_text(&url)
+                .await
+                .map_err(|e| format!("Network: {e}"))?;
+            let val: serde_json::Value =
+                serde_json::from_str(&text).map_err(|e| format!("Parse: {e}"))?;
+            let arr = val
+                .get("quest_places")
+                .and_then(|v| v.as_array())
+                .ok_or_else(|| "Server returned no `quest_places` array".to_string())?;
+            Ok(arr
+                .iter()
+                .filter_map(|v| serde_json::from_value(v.clone()).ok())
+                .collect())
+        }
+        .await;
+        match result {
+            Ok(items) => {
+                places.set(items);
+                err_msg.set(String::new());
+            }
+            Err(e) => {
+                err_msg.set(format!("Не удалось загрузить метки: {e}"));
             }
         }
         loading.set(false);
@@ -80,6 +98,8 @@ pub fn ARHuntScreen() -> Element {
                 }
             }
 
+            ErrorBanner { message: err_msg.read().clone(), margin: "0 0 12px".to_string() }
+
             div { style: "
                 background: #16213e; border: 4px solid #00bcd4; border-radius: 0;
                 padding: 10px; margin-bottom: 12px; text-align: center;
@@ -91,9 +111,19 @@ pub fn ARHuntScreen() -> Element {
             }
 
             if *loading.read() {
-                div { style: "text-align: center; padding: 40px;",
-                    div { style: "font-size: 13px; color: #00bcd4;",
-                        "Loading AR marks..."
+                div { style: "display: flex; flex-direction: column; gap: 10px;",
+                    for _ in 0..4 {
+                        div { style: "
+                            background: #16213e; border: 4px solid #2a2a4a;
+                            box-shadow: 4px 4px 0 #000; padding: 12px;
+                            display: flex; align-items: center; gap: 12px;
+                        ",
+                            Skeleton { shape: SkeletonShape::Avatar }
+                            div { style: "flex:1; display:flex; flex-direction:column; gap:6px;",
+                                Skeleton { shape: SkeletonShape::Text, width: Some("70%".into()) }
+                                Skeleton { shape: SkeletonShape::TextSm, width: Some("45%".into()) }
+                            }
+                        }
                     }
                 }
             } else if total == 0 {

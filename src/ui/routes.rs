@@ -3,30 +3,14 @@
 // Routes wired to pure UI screens (no business logic)
 // All screens are wrapped in LazyScreen for deferred rendering.
 
-use dioxus::prelude::*;
 use crate::ui::components::lazy_screen::LazyScreen;
 use crate::ui::screens::{
-    HomeScreen,
-    MenuScreen,
-    SetsScreen,
-    SommelierScreen,
-    AccessoriesScreen,
-    TeaScreen,
-    CartScreen,
-    CheckoutScreen,
-    SuccessScreen,
-    OrdersScreen,
-    ProfileScreen,
-    GardenScreen,
-    QuestScreen,
-    GameScreen,
-    ReferralsScreen,
-    TreasureHuntScreen,
-    ARHuntScreen,
-    LocationQuestScreen,
-    TechTreeScreen,
-    AdminScreen,
+    ARHuntScreen, AccessoriesScreen, AdminScreen, CartScreen, CheckoutScreen, GameScreen,
+    GardenScreen, HomeScreen, LocationQuestScreen, MenuScreen, OrdersScreen, ProfileScreen,
+    QuestScreen, ReferralsScreen, SetsScreen, SommelierScreen, SuccessScreen, TeaScreen,
+    TechTreeScreen, TreasureHuntScreen,
 };
+use dioxus::prelude::*;
 
 /// Routes component that renders router
 #[component]
@@ -188,7 +172,7 @@ fn Profile() -> Element {
 #[component]
 fn Garden() -> Element {
     rsx! {
-        LazyScreen {
+        LazyScreen { heavy: true,
             GardenScreen {}
         }
     }
@@ -206,7 +190,7 @@ fn Quest(id: String) -> Element {
 #[component]
 fn Game() -> Element {
     rsx! {
-        LazyScreen {
+        LazyScreen { heavy: true,
             GameScreen {}
         }
     }
@@ -224,7 +208,7 @@ fn Referrals() -> Element {
 #[component]
 fn TreasureHunt() -> Element {
     rsx! {
-        LazyScreen {
+        LazyScreen { heavy: true,
             TreasureHuntScreen {}
         }
     }
@@ -233,7 +217,7 @@ fn TreasureHunt() -> Element {
 #[component]
 fn ArHunt() -> Element {
     rsx! {
-        LazyScreen {
+        LazyScreen { heavy: true,
             ARHuntScreen {}
         }
     }
@@ -242,7 +226,7 @@ fn ArHunt() -> Element {
 #[component]
 fn LocationQuest() -> Element {
     rsx! {
-        LazyScreen {
+        LazyScreen { heavy: true,
             LocationQuestScreen {}
         }
     }
@@ -251,7 +235,7 @@ fn LocationQuest() -> Element {
 #[component]
 fn TechTree() -> Element {
     rsx! {
-        LazyScreen {
+        LazyScreen { heavy: true,
             TechTreeScreen {}
         }
     }
@@ -260,7 +244,7 @@ fn TechTree() -> Element {
 #[component]
 fn Admin() -> Element {
     rsx! {
-        LazyScreen {
+        LazyScreen { heavy: true,
             AdminScreen {}
         }
     }
@@ -268,7 +252,11 @@ fn Admin() -> Element {
 
 #[component]
 fn NotFound(route: Vec<String>) -> Element {
-    let path = route.iter().map(|s| s.as_str()).collect::<Vec<&str>>().join("/");
+    let path = route
+        .iter()
+        .map(|s| s.as_str())
+        .collect::<Vec<&str>>()
+        .join("/");
     rsx! {
         div { style: "
             min-height: 100vh;

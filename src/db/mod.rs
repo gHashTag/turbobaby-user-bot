@@ -1,15 +1,15 @@
-pub mod strains;
+pub mod entities;
 pub mod loyalty;
 pub mod orders;
-pub mod users;
 pub mod referrals;
-pub mod entities;
+pub mod strains;
+pub mod users;
 
 pub use strains::*;
 
 use anyhow::{Context, Result};
 use deadpool_postgres::{
-    Config as PgConfig, Connect, Manager, ManagerConfig, Pool, Runtime, tokio_postgres,
+    tokio_postgres, Config as PgConfig, Connect, Manager, ManagerConfig, Pool, Runtime,
 };
 use rustls::ClientConfig;
 use rustls_native_certs::load_native_certs;
@@ -178,7 +178,8 @@ impl Database {
             .connect_timeout(std::time::Duration::from_secs(10))
             .idle_timeout(std::time::Duration::from_secs(300))
             .sqlx_logging(false);
-        let orm = sea_orm::Database::connect(orm_opts).await
+        let orm = sea_orm::Database::connect(orm_opts)
+            .await
             .context("Failed to connect SeaORM")?;
 
         Ok(Self { pool, orm })
@@ -212,53 +213,65 @@ impl Database {
     }
 
     pub async fn set_user_lang(&self, telegram_id: i64, lang: &str) -> Result<()> {
-        let trimmed: String = lang.chars().take(50).collect();
+        let trimmed = crate::util::truncate_string(lang, 50);
         let client = self.pool.get().await?;
-        client.execute(
-            "INSERT INTO user_languages (telegram_id, language) VALUES ($1, $2)
+        client
+            .execute(
+                "INSERT INTO user_languages (telegram_id, language) VALUES ($1, $2)
              ON CONFLICT (telegram_id) DO UPDATE SET language = $2, updated_at = NOW()",
-            &[&telegram_id, &trimmed],
-        ).await?;
+                &[&telegram_id, &trimmed],
+            )
+            .await?;
         Ok(())
     }
 
     pub async fn set_user_timezone(&self, telegram_id: i64, tz: &str) -> Result<()> {
-        let trimmed: String = tz.chars().take(100).collect();
+        let trimmed = crate::util::truncate_string(tz, 100);
         let client = self.pool.get().await?;
-        client.execute(
-            "UPDATE user_languages SET timezone = $2 WHERE telegram_id = $1",
-            &[&telegram_id, &trimmed],
-        ).await?;
+        client
+            .execute(
+                "UPDATE user_languages SET timezone = $2 WHERE telegram_id = $1",
+                &[&telegram_id, &trimmed],
+            )
+            .await?;
         Ok(())
     }
 
     pub async fn save_user_name(&self, telegram_id: i64, first_name: &str) -> Result<()> {
-        let trimmed: String = first_name.chars().take(200).collect();
+        let trimmed = crate::util::truncate_string(first_name, 200);
         let client = self.pool.get().await?;
-        client.execute(
-            "INSERT INTO user_languages (telegram_id, first_name) VALUES ($1, $2)
+        client
+            .execute(
+                "INSERT INTO user_languages (telegram_id, first_name) VALUES ($1, $2)
              ON CONFLICT (telegram_id) DO UPDATE SET first_name = $2",
-            &[&telegram_id, &trimmed],
-        ).await?;
+                &[&telegram_id, &trimmed],
+            )
+            .await?;
         Ok(())
     }
 
     pub async fn mark_user_unblocked(&self, telegram_id: i64) -> Result<()> {
         let client = self.pool.get().await?;
-        client.execute(
-            "UPDATE loyalty_profiles SET is_blocked = false WHERE telegram_id = $1",
-            &[&telegram_id],
-        ).await?;
+        client
+            .execute(
+                "UPDATE loyalty_profiles SET is_blocked = false WHERE telegram_id = $1",
+                &[&telegram_id],
+            )
+            .await?;
         Ok(())
     }
 
     pub async fn is_user_blocked(&self, telegram_id: i64) -> Result<bool> {
         let client = self.pool.get().await?;
-        let row = client.query_opt(
-            "SELECT is_blocked FROM loyalty_profiles WHERE telegram_id = $1",
-            &[&telegram_id],
-        ).await?;
-        Ok(row.map(|r| r.try_get("is_blocked").unwrap_or(false)).unwrap_or(false))
+        let row = client
+            .query_opt(
+                "SELECT is_blocked FROM loyalty_profiles WHERE telegram_id = $1",
+                &[&telegram_id],
+            )
+            .await?;
+        Ok(row
+            .map(|r| r.try_get("is_blocked").unwrap_or(false))
+            .unwrap_or(false))
     }
 
     pub async fn get_strains_of_day(&self) -> Result<Vec<StrainOfDay>> {
@@ -270,7 +283,9 @@ impl Database {
         Ok(rows.iter().map(StrainOfDay::from_row).collect())
     }
 
-    pub fn raw(&self) -> &Pool { &self.pool }
+    pub fn raw(&self) -> &Pool {
+        &self.pool
+    }
 }
 
 /// Убирает из connection-URL параметры, которые sqlx-postgres не понимает
@@ -301,16 +316,29 @@ fn sanitize_pg_url_for_sqlx(url: &str) -> String {
 #[cfg(test)]
 mod url_sanitize_tests {
     use super::sanitize_pg_url_for_sqlx as s;
-    #[test] fn drops_channel_binding() {
-        assert_eq!(s("postgres://u:p@h/d?sslmode=require&channel_binding=require"), "postgres://u:p@h/d?sslmode=require");
+    #[test]
+    fn drops_channel_binding() {
+        assert_eq!(
+            s("postgres://u:p@h/d?sslmode=require&channel_binding=require"),
+            "postgres://u:p@h/d?sslmode=require"
+        );
     }
-    #[test] fn keeps_others() {
-        assert_eq!(s("postgres://u:p@h/d?sslmode=require"), "postgres://u:p@h/d?sslmode=require");
+    #[test]
+    fn keeps_others() {
+        assert_eq!(
+            s("postgres://u:p@h/d?sslmode=require"),
+            "postgres://u:p@h/d?sslmode=require"
+        );
     }
-    #[test] fn no_query() {
+    #[test]
+    fn no_query() {
         assert_eq!(s("postgres://u:p@h/d"), "postgres://u:p@h/d");
     }
-    #[test] fn only_unsupported() {
-        assert_eq!(s("postgres://u:p@h/d?channel_binding=require"), "postgres://u:p@h/d");
+    #[test]
+    fn only_unsupported() {
+        assert_eq!(
+            s("postgres://u:p@h/d?channel_binding=require"),
+            "postgres://u:p@h/d"
+        );
     }
 }

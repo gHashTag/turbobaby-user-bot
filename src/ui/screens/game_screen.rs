@@ -1,6 +1,7 @@
-use dioxus::prelude::*;
-use crate::ui::game::WoodyCatch;
 use crate::ui::components::bottom_nav::BottomNav;
+use crate::ui::components::lazy_screen::LazyScreen;
+use crate::ui::game::WoodyCatch;
+use dioxus::prelude::*;
 
 #[component]
 pub fn GameScreen() -> Element {
@@ -12,7 +13,7 @@ pub fn GameScreen() -> Element {
             align-items: center;
             padding: 8px 8px 80px;
         ",
-            WoodyCatch {}
+            LazyScreen { heavy: true, WoodyCatch {} }
             BottomNav {}
         }
     }

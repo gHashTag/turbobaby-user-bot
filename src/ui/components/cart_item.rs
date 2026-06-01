@@ -1,6 +1,6 @@
-use dioxus::prelude::*;
-use crate::ui::state::CartItem;
 use crate::ui::components::{Button, ButtonVariant};
+use crate::ui::state::CartItem;
+use dioxus::prelude::*;
 
 #[derive(Props, PartialEq, Clone)]
 pub struct CartItemProps {
@@ -11,18 +11,29 @@ pub struct CartItemProps {
 pub fn CartItemComponent(props: CartItemProps) -> Element {
     let item = props.item.clone();
 
+    let img_url = item.image_url.as_deref().unwrap_or("");
+    let has_image = !img_url.is_empty()
+        && (img_url.starts_with("http://")
+            || img_url.starts_with("https://")
+            || (img_url.starts_with("/") && !img_url.starts_with("//")));
+    let safe_price = if item.price.is_finite() {
+        item.price.max(0.0)
+    } else {
+        0.0
+    };
+
     rsx! {
         div { class: "cart-item",
-            if let Some(image_url) = &item.image_url {
+            if has_image {
                 img {
                     class: "cart-item-image",
-                    src: "{image_url}?v=2",
+                    src: "{img_url}?v=2",
                     alt: "{item.name}"
                 }
             }
             div { class: "cart-item-details",
                 h4 { class: "cart-item-name", "{item.name}" }
-                p { class: "cart-item-price", "{item.price} ₽" }
+                p { class: "cart-item-price", "{safe_price} ₽" }
                 div { class: "cart-item-controls",
                     Button {
                         variant: ButtonVariant::Secondary,

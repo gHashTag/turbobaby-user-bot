@@ -7,7 +7,7 @@
 // Replicate the pure code-generation logic for standalone unit tests
 // ──────────────────────────────────────────────────────────────────
 
-use sha2::{Sha256, Digest};
+use sha2::{Digest, Sha256};
 
 const CODE_SALT: &str = "woody-ref-v1";
 const BASE62_CHARS: &[u8] = b"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
@@ -40,26 +40,17 @@ fn code_is_alphanumeric() {
 
 #[test]
 fn same_id_same_code() {
-    assert_eq!(
-        generate_referral_code(42, 0),
-        generate_referral_code(42, 0)
-    );
+    assert_eq!(generate_referral_code(42, 0), generate_referral_code(42, 0));
 }
 
 #[test]
 fn different_ids_different_codes() {
-    assert_ne!(
-        generate_referral_code(1, 0),
-        generate_referral_code(2, 0)
-    );
+    assert_ne!(generate_referral_code(1, 0), generate_referral_code(2, 0));
 }
 
 #[test]
 fn attempt_changes_code() {
-    assert_ne!(
-        generate_referral_code(1, 0),
-        generate_referral_code(1, 1)
-    );
+    assert_ne!(generate_referral_code(1, 0), generate_referral_code(1, 1));
 }
 
 #[test]

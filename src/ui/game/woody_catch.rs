@@ -32,10 +32,30 @@ pub struct BudType {
 }
 
 const BUD_TYPES: [BudType; 4] = [
-    BudType { emoji: "🌿", pts: 10, color: "#22c55e", glow: "rgba(34,197,94,0.6)" },
-    BudType { emoji: "💜", pts: 20, color: "#a855f7", glow: "rgba(168,85,247,0.6)" },
-    BudType { emoji: "⭐", pts: 30, color: "#fbbf24", glow: "rgba(251,191,36,0.6)" },
-    BudType { emoji: "💎", pts: 50, color: "#06b6d4", glow: "rgba(6,182,212,0.8)" },
+    BudType {
+        emoji: "🌿",
+        pts: 10,
+        color: "#22c55e",
+        glow: "rgba(34,197,94,0.6)",
+    },
+    BudType {
+        emoji: "💜",
+        pts: 20,
+        color: "#a855f7",
+        glow: "rgba(168,85,247,0.6)",
+    },
+    BudType {
+        emoji: "⭐",
+        pts: 30,
+        color: "#fbbf24",
+        glow: "rgba(251,191,36,0.6)",
+    },
+    BudType {
+        emoji: "💎",
+        pts: 50,
+        color: "#06b6d4",
+        glow: "rgba(6,182,212,0.8)",
+    },
 ];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -72,17 +92,32 @@ fn rand_type(level: u32) -> u8 {
     let r = rand_f32();
     // Higher levels: slightly more rare drops
     if level > 5 {
-        if r > 0.94 { 3 } else if r > 0.84 { 2 } else if r > 0.68 { 1 } else { 0 }
+        if r > 0.94 {
+            3
+        } else if r > 0.84 {
+            2
+        } else if r > 0.68 {
+            1
+        } else {
+            0
+        }
     } else {
-        if r > 0.96 { 3 } else if r > 0.88 { 2 } else if r > 0.72 { 1 } else { 0 }
+        if r > 0.96 {
+            3
+        } else if r > 0.88 {
+            2
+        } else if r > 0.72 {
+            1
+        } else {
+            0
+        }
     }
 }
 
 /// Attempt to trigger Telegram WebApp haptic feedback
 fn haptic_impact() {
-    let _ = js_sys::eval(
-        "try { Telegram.WebApp.HapticFeedback.impactOccurred('light'); } catch(e) {}"
-    );
+    let _ =
+        js_sys::eval("try { Telegram.WebApp.HapticFeedback.impactOccurred('light'); } catch(e) {}");
 }
 
 // ── Game component ────────────────────────────────────────────────────────────
@@ -90,56 +125,59 @@ fn haptic_impact() {
 #[component]
 pub fn WoodyCatch() -> Element {
     // ── State signals ────────────────────────────────────────────────────────
-    let score     = use_signal(|| 0u32);
-    let lives     = use_signal(|| 3u32);
-    let level     = use_signal(|| 1u32);
-    let combo     = use_signal(|| 0u32);
-    let playing   = use_signal(|| false);
+    let score = use_signal(|| 0u32);
+    let lives = use_signal(|| 3u32);
+    let level = use_signal(|| 1u32);
+    let combo = use_signal(|| 0u32);
+    let playing = use_signal(|| false);
     let game_over = use_signal(|| false);
-    let lane      = use_signal(|| 1u32);  // 0-3
-    let buds      = use_signal(|| Vec::<Bud>::new());
-    let next_id   = use_signal(|| 0u32);
-    let high_score    = use_signal(get_high_score);
+    let lane = use_signal(|| 1u32); // 0-3
+    let buds = use_signal(|| Vec::<Bud>::new());
+    let next_id = use_signal(|| 0u32);
+    let high_score = use_signal(get_high_score);
 
     // Timing: track spawn countdown in ticks (each tick ~16ms)
     let spawn_ticks = use_signal(|| 0u32);
 
     // ── Game loop via use_future ─────────────────────────────────────────────
     {
-        let mut score     = score.clone();
-        let mut lives     = lives.clone();
-        let mut level     = level.clone();
-        let mut combo     = combo.clone();
-        let mut playing   = playing.clone();
+        let mut score = score.clone();
+        let mut lives = lives.clone();
+        let mut level = level.clone();
+        let mut combo = combo.clone();
+        let mut playing = playing.clone();
         let mut game_over = game_over.clone();
-        let lane      = lane.clone();
-        let mut buds      = buds.clone();
-        let mut next_id   = next_id.clone();
+        let lane = lane.clone();
+        let mut buds = buds.clone();
+        let mut next_id = next_id.clone();
         let mut high_score = high_score.clone();
         let mut spawn_ticks = spawn_ticks.clone();
 
         use_future(move || async move {
             loop {
-                TimeoutFuture::new(16).await;  // ~60fps
+                TimeoutFuture::new(16).await; // ~60fps
 
                 if !*playing.read() || *game_over.read() {
                     continue;
                 }
 
-                let cur_level  = *level.read();
-                let cur_lane   = *lane.read() as u8;
-                let cur_combo  = *combo.read();
+                let cur_level = *level.read();
+                let cur_lane = *lane.read() as u8;
+                let cur_combo = *combo.read();
 
                 // ── Spawn logic ──────────────────────────────────────────────
                 // spawn interval: max(900 - level*50, 280) ms → in ticks (÷16)
-                let spawn_interval_ms = (900u32.saturating_sub(cur_level * 50)).max(280);
+                let spawn_interval_ms =
+                    (900u32.saturating_sub(cur_level.saturating_mul(50))).max(280);
                 let spawn_interval_ticks = spawn_interval_ms / 16;
 
-                *spawn_ticks.write() += 1;
+                // Dioxus signals can't hold a Write guard while .read() — snapshot first.
+                let prev_spawn = *spawn_ticks.read();
+                *spawn_ticks.write() = prev_spawn.saturating_add(1);
                 if *spawn_ticks.read() >= spawn_interval_ticks {
                     *spawn_ticks.write() = 0;
                     let id = *next_id.read();
-                    *next_id.write() = id + 1;
+                    *next_id.write() = id.saturating_add(1);
                     let speed = 0.8 + cur_level as f32 * 0.12 + rand_f32() * 0.2;
                     buds.write().push(Bud {
                         id,
@@ -153,7 +191,7 @@ pub fn WoodyCatch() -> Element {
                     // Double-spawn at level > 3
                     if cur_level > 3 && rand_f32() > 0.6 {
                         let id2 = *next_id.read();
-                        *next_id.write() = id2 + 1;
+                        *next_id.write() = id2.saturating_add(1);
                         buds.write().push(Bud {
                             id: id2,
                             lane: rand_lane(),
@@ -169,37 +207,43 @@ pub fn WoodyCatch() -> Element {
                 let mut caught_pts: Option<(u32, &'static str)> = None;
                 let mut missed = false;
 
-                let updated: Vec<Bud> = buds.read().iter().filter_map(|b| {
-                    let ny = b.y + b.speed;
+                let updated: Vec<Bud> = buds
+                    .read()
+                    .iter()
+                    .filter_map(|b| {
+                        let ny = b.y + b.speed;
 
-                    // Catch zone: y in [72, 88] and same lane
-                    if ny >= 72.0 && ny <= 88.0 && b.lane == cur_lane {
-                        let bt = &BUD_TYPES[b.type_idx as usize];
-                        let mult = (1.0 + (cur_combo / 5) as f32 * 0.5).min(3.0);
-                        let earned = (bt.pts as f32 * mult) as u32;
-                        caught_pts = Some((earned, bt.color));
-                        return None; // remove bud
-                    }
+                        // Catch zone: y in [72, 88] and same lane
+                        if ny >= 72.0 && ny <= 88.0 && b.lane == cur_lane {
+                            let type_idx =
+                                (b.type_idx as usize).min(BUD_TYPES.len().saturating_sub(1));
+                            let bt = &BUD_TYPES[type_idx];
+                            let mult = (1.0 + (cur_combo / 5) as f32 * 0.5).min(3.0);
+                            let earned = (bt.pts as f32 * mult) as u32;
+                            caught_pts = Some((earned, bt.color));
+                            return None; // remove bud
+                        }
 
-                    // Past bottom edge
-                    if ny > 102.0 {
-                        missed = true;
-                        return None;
-                    }
+                        // Past bottom edge
+                        if ny > 102.0 {
+                            missed = true;
+                            return None;
+                        }
 
-                    Some(Bud {
-                        y: ny,
-                        rot: b.rot + b.speed * 3.0,
-                        ..b.clone()
+                        Some(Bud {
+                            y: ny,
+                            rot: b.rot + b.speed * 3.0,
+                            ..b.clone()
+                        })
                     })
-                }).collect();
+                    .collect();
 
                 *buds.write() = updated;
 
                 if let Some((earned, _color)) = caught_pts {
                     haptic_impact();
                     *combo.write() += 1;
-                    let new_score = *score.read() + earned;
+                    let new_score = score.read().saturating_add(earned);
                     *score.write() = new_score;
                     *level.write() = new_score / 100 + 1;
                     if new_score > *high_score.read() {
@@ -232,22 +276,29 @@ pub fn WoodyCatch() -> Element {
                     Some(w) => w,
                     None => return None,
                 };
-                let listener = gloo_events::EventListener::new(&win, "keydown", move |e: &web_sys::Event| {
-                    let e: &web_sys::KeyboardEvent = match e.dyn_ref() {
-                        Some(k) => k,
-                        None => return,
-                    };
-                    if !*playing.read() || *game_over.read() { return; }
-                    let key = e.key();
-                    if key == "ArrowLeft" || key == "a" || key == "A" {
-                        let cur = *lane.read();
-                        if cur > 0 { *lane.write() = cur - 1; }
-                    }
-                    if key == "ArrowRight" || key == "d" || key == "D" {
-                        let cur = *lane.read();
-                        if cur < 3 { *lane.write() = cur + 1; }
-                    }
-                });
+                let listener =
+                    gloo_events::EventListener::new(&win, "keydown", move |e: &web_sys::Event| {
+                        let e: &web_sys::KeyboardEvent = match e.dyn_ref() {
+                            Some(k) => k,
+                            None => return,
+                        };
+                        if !*playing.read() || *game_over.read() {
+                            return;
+                        }
+                        let key = e.key();
+                        if key == "ArrowLeft" || key == "a" || key == "A" {
+                            let cur = *lane.read();
+                            if cur > 0 {
+                                *lane.write() = cur - 1;
+                            }
+                        }
+                        if key == "ArrowRight" || key == "d" || key == "D" {
+                            let cur = *lane.read();
+                            if cur < 3 {
+                                *lane.write() = cur + 1;
+                            }
+                        }
+                    });
                 Some(std::rc::Rc::new(listener))
             },
             |_: Option<std::rc::Rc<gloo_events::EventListener>>| {},
@@ -256,37 +307,37 @@ pub fn WoodyCatch() -> Element {
 
     // ── Start / Restart helper (Copy via use_callback so it can be reused) ───
     let start_game = use_callback(move |_: dioxus::prelude::Event<MouseData>| {
-        let mut score       = score;
-        let mut lives       = lives;
-        let mut level       = level;
-        let mut combo       = combo;
-        let mut playing     = playing;
-        let mut game_over   = game_over;
-        let mut lane        = lane;
-        let mut buds        = buds;
+        let mut score = score;
+        let mut lives = lives;
+        let mut level = level;
+        let mut combo = combo;
+        let mut playing = playing;
+        let mut game_over = game_over;
+        let mut lane = lane;
+        let mut buds = buds;
         let mut spawn_ticks = spawn_ticks;
-        *score.write()       = 0;
-        *lives.write()       = 3;
-        *level.write()       = 1;
-        *combo.write()       = 0;
-        *playing.write()     = true;
-        *game_over.write()   = false;
-        *lane.write()        = 1;
+        *score.write() = 0;
+        *lives.write() = 3;
+        *level.write() = 1;
+        *combo.write() = 0;
+        *playing.write() = true;
+        *game_over.write() = false;
+        *lane.write() = 1;
         *spawn_ticks.write() = 0;
         buds.write().clear();
     });
 
     // ── Computed values for render ───────────────────────────────────────────
-    let cur_score  = *score.read();
-    let cur_lives  = *lives.read();
-    let cur_level  = *level.read();
-    let cur_combo  = *combo.read();
-    let cur_lane   = *lane.read();
-    let cur_hs     = *high_score.read();
+    let cur_score = *score.read();
+    let cur_lives = *lives.read();
+    let cur_level = *level.read();
+    let cur_combo = *combo.read();
+    let cur_lane = *lane.read();
+    let cur_hs = *high_score.read();
     let is_playing = *playing.read();
-    let is_over    = *game_over.read();
-    let mult       = (1.0 + (cur_combo / 5) as f32 * 0.5).min(3.0);
-    let buds_list  = buds.read().clone();
+    let is_over = *game_over.read();
+    let mult = (1.0 + (cur_combo / 5) as f32 * 0.5).min(3.0);
+    let buds_list = buds.read().clone();
 
     // ── Render ───────────────────────────────────────────────────────────────
     rsx! {
@@ -406,7 +457,8 @@ pub fn WoodyCatch() -> Element {
                 // ── Falling buds ─────────────────────────────────────────────
                 for bud in buds_list.iter() {
                     {
-                        let bt = &BUD_TYPES[bud.type_idx as usize];
+                        let type_idx = (bud.type_idx as usize).min(BUD_TYPES.len().saturating_sub(1));
+                        let bt = &BUD_TYPES[type_idx];
                         let left_pct = (bud.lane as f32 + 0.5) * 25.0;
                         let top_pct  = bud.y;
                         let rot      = bud.rot;

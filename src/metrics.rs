@@ -33,3 +33,57 @@ pub fn garden_reward_claimed() {
 pub fn qr_scanned(is_final: bool) {
     counter!("qr_scans_total", "final" => is_final.to_string()).increment(1);
 }
+
+/// Increment when the sliding-window rate limiter rejects a request.
+/// `kind` is the throttle bucket (e.g. `"anon_order"`, `"upload"`, `"login"`).
+pub fn rate_limit_blocked(kind: &str) {
+    counter!("rate_limit_blocked_total", "kind" => kind.to_string()).increment(1);
+}
+
+/// Increment when a DB pool `get()` fails — early signal for pool exhaustion
+/// or backend outage. `scope` labels the call site (e.g. `"orders.create"`).
+pub fn db_pool_acquire_failed(scope: &str) {
+    counter!("db_pool_acquire_failed_total", "scope" => scope.to_string()).increment(1);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_order_created_does_not_panic() {
+        order_created();
+    }
+
+    #[test]
+    fn test_quest_created_does_not_panic() {
+        quest_created("place");
+    }
+
+    #[test]
+    fn test_user_registered_does_not_panic() {
+        user_registered();
+    }
+
+    #[test]
+    fn test_garden_reward_claimed_does_not_panic() {
+        garden_reward_claimed();
+    }
+
+    #[test]
+    fn test_qr_scanned_does_not_panic() {
+        qr_scanned(true);
+        qr_scanned(false);
+    }
+
+    #[test]
+    fn test_rate_limit_blocked_does_not_panic() {
+        rate_limit_blocked("anon_order");
+        rate_limit_blocked("upload");
+    }
+
+    #[test]
+    fn test_db_pool_acquire_failed_does_not_panic() {
+        db_pool_acquire_failed("orders.create");
+    }
+}

@@ -12,8 +12,8 @@ use hmac::{Hmac, Mac};
 use sea_orm::EntityTrait;
 use sha2::Sha256;
 
-use crate::AppState;
 use crate::db::entities::loyalty_profile;
+use crate::AppState;
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -39,7 +39,11 @@ pub fn validate_init_data(init_data: &str, bot_token: &str) -> Option<TelegramUs
         tracing::warn!("init_data too long ({} bytes)", init_data.len());
         return None;
     }
-    tracing::debug!("validate_init_data: len={}, hash_present={}", init_data.len(), init_data.contains("hash="));
+    tracing::debug!(
+        "validate_init_data: len={}, hash_present={}",
+        init_data.len(),
+        init_data.contains("hash=")
+    );
     let mut pairs: Vec<(String, String)> = Vec::new();
     for pair in init_data.split('&') {
         let mut parts = pair.splitn(2, '=');
@@ -53,10 +57,7 @@ pub fn validate_init_data(init_data: &str, bot_token: &str) -> Option<TelegramUs
         .find(|(k, _)| k == "hash")
         .map(|(_, v)| v.clone())?;
 
-    let mut data_pairs: Vec<_> = pairs
-        .into_iter()
-        .filter(|(k, _)| k != "hash")
-        .collect();
+    let mut data_pairs: Vec<_> = pairs.into_iter().filter(|(k, _)| k != "hash").collect();
     data_pairs.sort_by(|a, b| a.0.cmp(&b.0));
 
     // Build data_check_string from URL-decoded values (real Telegram behavior)
@@ -97,7 +98,11 @@ pub fn validate_init_data(init_data: &str, bot_token: &str) -> Option<TelegramUs
     let ok_raw = constant_time_eq::constant_time_eq(expected_hash_raw.as_bytes(), hash.as_bytes());
 
     if !ok_decoded && !ok_raw {
-        tracing::warn!("initData HMAC mismatch (decoded={}, raw={})", ok_decoded, ok_raw);
+        tracing::warn!(
+            "initData HMAC mismatch (decoded={}, raw={})",
+            ok_decoded,
+            ok_raw
+        );
         return None;
     }
 
@@ -111,8 +116,12 @@ pub fn validate_init_data(init_data: &str, bot_token: &str) -> Option<TelegramUs
             .duration_since(std::time::UNIX_EPOCH)
             .ok()?
             .as_secs() as i64;
-        if now.saturating_sub(ad) > 86400 {
-            tracing::warn!("initData expired: auth_date={} now={}", ad, now);
+        if ad > now || now - ad > 86400 {
+            tracing::warn!(
+                "initData expired or future-dated: auth_date={} now={}",
+                ad,
+                now
+            );
             return None;
         }
     } else {
@@ -130,31 +139,70 @@ pub fn validate_init_data(init_data: &str, bot_token: &str) -> Option<TelegramUs
     let user: serde_json::Value = serde_json::from_str(&user_decoded).ok()?;
 
     let id = user.get("id")?.as_i64()?;
-    let first_name = user.get("first_name").and_then(|v| v.as_str()).map(|s| s.to_string());
-    let username = user.get("username").and_then(|v| v.as_str()).map(|s| s.to_string());
+    let first_name = user
+        .get("first_name")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+    let username = user
+        .get("username")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
 
-    Some(TelegramUser { id, first_name, username })
+    Some(TelegramUser {
+        id,
+        first_name,
+        username,
+    })
 }
 
 /// Debug version that returns detailed validation info instead of just Option.
-pub fn validate_init_data_debug(init_data: &str, bot_token: &str) -> (bool, String, String, Option<TelegramUser>, Option<String>) {
+pub fn validate_init_data_debug(
+    init_data: &str,
+    bot_token: &str,
+) -> (bool, String, String, Option<TelegramUser>, Option<String>) {
     if init_data.len() > 4096 {
-        return (false, String::new(), String::new(), None, Some("init_data too long".to_string()));
+        return (
+            false,
+            String::new(),
+            String::new(),
+            None,
+            Some("init_data too long".to_string()),
+        );
     }
     let mut pairs: Vec<(String, String)> = Vec::new();
     for pair in init_data.split('&') {
         let mut parts = pair.splitn(2, '=');
         let key = match parts.next() {
             Some(k) => k,
-            None => return (false, String::new(), String::new(), None, Some("empty pair".to_string())),
+            None => {
+                return (
+                    false,
+                    String::new(),
+                    String::new(),
+                    None,
+                    Some("empty pair".to_string()),
+                )
+            }
         };
         let value = parts.next().unwrap_or("");
         pairs.push((key.to_string(), value.to_string()));
     }
 
-    let hash = match pairs.iter().find(|(k, _)| k == "hash").map(|(_, v)| v.clone()) {
+    let hash = match pairs
+        .iter()
+        .find(|(k, _)| k == "hash")
+        .map(|(_, v)| v.clone())
+    {
         Some(h) => h,
-        None => return (false, String::new(), String::new(), None, Some("missing hash".to_string())),
+        None => {
+            return (
+                false,
+                String::new(),
+                String::new(),
+                None,
+                Some("missing hash".to_string()),
+            )
+        }
     };
 
     let mut data_pairs: Vec<_> = pairs.into_iter().filter(|(k, _)| k != "hash").collect();
@@ -178,33 +226,70 @@ pub fn validate_init_data_debug(init_data: &str, bot_token: &str) -> (bool, Stri
 
     let mut secret_mac = match HmacSha256::new_from_slice(b"WebAppData") {
         Ok(m) => m,
-        Err(_) => return (false, data_check_string_decoded.clone(), hash.clone(), None, Some("HMAC init failed".to_string())),
+        Err(_) => {
+            return (
+                false,
+                data_check_string_decoded.clone(),
+                hash.clone(),
+                None,
+                Some("HMAC init failed".to_string()),
+            )
+        }
     };
     secret_mac.update(bot_token.as_bytes());
     let secret_key = secret_mac.finalize().into_bytes();
 
     let mut mac = match HmacSha256::new_from_slice(&secret_key) {
         Ok(m) => m,
-        Err(_) => return (false, data_check_string_decoded.clone(), hash.clone(), None, Some("HMAC init failed".to_string())),
+        Err(_) => {
+            return (
+                false,
+                data_check_string_decoded.clone(),
+                hash.clone(),
+                None,
+                Some("HMAC init failed".to_string()),
+            )
+        }
     };
     mac.update(data_check_string_decoded.as_bytes());
     let expected_hash = hex::encode(mac.finalize().into_bytes());
 
     let mut mac_raw = match HmacSha256::new_from_slice(&secret_key) {
         Ok(m) => m,
-        Err(_) => return (false, data_check_string_raw.clone(), hash.clone(), None, Some("HMAC init failed".to_string())),
+        Err(_) => {
+            return (
+                false,
+                data_check_string_raw.clone(),
+                hash.clone(),
+                None,
+                Some("HMAC init failed".to_string()),
+            )
+        }
     };
     mac_raw.update(data_check_string_raw.as_bytes());
     let expected_hash_raw = hex::encode(mac_raw.finalize().into_bytes());
 
-    let user = data_pairs.iter().find(|(k, _)| k == "user").and_then(|(_, v)| {
-        let decoded = urlencoding::decode(v).ok()?;
-        let user: serde_json::Value = serde_json::from_str(&decoded).ok()?;
-        let id = user.get("id")?.as_i64()?;
-        let first_name = user.get("first_name").and_then(|v| v.as_str()).map(|s| s.to_string());
-        let username = user.get("username").and_then(|v| v.as_str()).map(|s| s.to_string());
-        Some(TelegramUser { id, first_name, username })
-    });
+    let user = data_pairs
+        .iter()
+        .find(|(k, _)| k == "user")
+        .and_then(|(_, v)| {
+            let decoded = urlencoding::decode(v).ok()?;
+            let user: serde_json::Value = serde_json::from_str(&decoded).ok()?;
+            let id = user.get("id")?.as_i64()?;
+            let first_name = user
+                .get("first_name")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+            let username = user
+                .get("username")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+            Some(TelegramUser {
+                id,
+                first_name,
+                username,
+            })
+        });
 
     let ok_decoded = constant_time_eq::constant_time_eq(expected_hash.as_bytes(), hash.as_bytes());
     let ok_raw = constant_time_eq::constant_time_eq(expected_hash_raw.as_bytes(), hash.as_bytes());
@@ -222,9 +307,12 @@ pub fn validate_init_data_debug(init_data: &str, bot_token: &str) -> (bool, Stri
                 .ok()
                 .map(|d| d.as_secs() as i64)
                 .unwrap_or(0);
-            if now.saturating_sub(ad) > 86400 {
+            if ad > now || now.saturating_sub(ad) > 86400 {
                 ok = false;
-                error = Some(format!("initData expired: auth_date={} now={}", ad, now));
+                error = Some(format!(
+                    "initData expired or future-dated: auth_date={} now={}",
+                    ad, now
+                ));
             }
         } else {
             ok = false;
@@ -263,7 +351,10 @@ pub fn check_admin(headers: &HeaderMap, state: &AppState) -> Result<i64, StatusC
     );
 
     // 1. Try Telegram initData validation (production path)
-    if let Some(init_data) = headers.get("X-Telegram-Init-Data").and_then(|v| v.to_str().ok()) {
+    if let Some(init_data) = headers
+        .get("X-Telegram-Init-Data")
+        .and_then(|v| v.to_str().ok())
+    {
         if !init_data.is_empty() {
             if let Some(user) = validate_init_data(init_data, &state.config.bot_token) {
                 if state.config.admin_ids.contains(&user.id) {
@@ -307,7 +398,11 @@ pub fn check_admin(headers: &HeaderMap, state: &AppState) -> Result<i64, StatusC
 
 /// Verify that the Telegram user in `X-Telegram-Init-Data` owns `expected_telegram_id`.
 /// Returns the authenticated telegram_id on success.
-pub fn check_owner(headers: &HeaderMap, state: &AppState, expected_telegram_id: i64) -> Result<i64, StatusCode> {
+pub fn check_owner(
+    headers: &HeaderMap,
+    state: &AppState,
+    expected_telegram_id: i64,
+) -> Result<i64, StatusCode> {
     if let Some(init_data) = headers
         .get("X-Telegram-Init-Data")
         .and_then(|v| v.to_str().ok())
@@ -345,10 +440,26 @@ pub async fn check_not_blocked(state: &AppState, telegram_id: i64) -> Result<(),
         }
         Ok(_) => Ok(()),
         Err(e) => {
-            tracing::error!("check_not_blocked DB error telegram_id={} err={}", telegram_id, e);
+            tracing::error!(
+                "check_not_blocked DB error telegram_id={} err={}",
+                telegram_id,
+                e
+            );
             Err(StatusCode::INTERNAL_SERVER_ERROR)
         }
     }
+}
+
+/// Validates that a Telegram ID extracted from a path/query parameter is positive
+/// and within the safe integer range (i64 ≤ 2^53-1).
+pub fn validate_telegram_id_param(id: i64) -> Result<(), StatusCode> {
+    if id <= 0 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    if id > 9_007_199_254_740_991 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -356,22 +467,37 @@ mod tests {
     use super::*;
 
     fn generate_init_data(bot_token: &str, user_id: i64, first_name: &str) -> String {
-        let user_json = format!(
-            "{{\"id\":{},\"first_name\":\"{}\"}}",
-            user_id, first_name
-        );
+        let user_json = format!("{{\"id\":{},\"first_name\":\"{}\"}}", user_id, first_name);
         let user_json_for_encode = user_json.clone();
         let user_encoded = urlencoding::encode(&user_json_for_encode);
         // Use a fresh auth_date so freshness check passes (within last hour)
         let auth_date = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
-            .as_secs() as i64 - 3600;
+            .as_secs() as i64
+            - 3600;
+        generate_init_data_with_date(
+            bot_token,
+            user_id,
+            first_name,
+            auth_date,
+            &user_json,
+            &user_encoded,
+        )
+    }
+
+    fn generate_init_data_with_date(
+        bot_token: &str,
+        _user_id: i64,
+        _first_name: &str,
+        auth_date: i64,
+        user_json: &str,
+        user_encoded: &str,
+    ) -> String {
         let auth_date_str = auth_date.to_string();
-        // Compute hash over DECODED values (matches real Telegram behavior)
         let mut pairs = [
             ("auth_date".to_string(), auth_date_str.clone()),
-            ("user".to_string(), user_json),
+            ("user".to_string(), user_json.to_string()),
         ];
         pairs.sort_by(|a, b| a.0.cmp(&b.0));
         let data_check_string = pairs
@@ -388,7 +514,6 @@ mod tests {
         mac.update(data_check_string.as_bytes());
         let hash = hex::encode(mac.finalize().into_bytes());
 
-        // Emit the URL-encoded user value in the query string
         format!(
             "auth_date={}&hash={}&user={}",
             auth_date_str, hash, user_encoded
@@ -428,6 +553,52 @@ mod tests {
     }
 
     #[test]
+    fn test_validate_init_data_expired() {
+        let token = "test_bot_token_12345";
+        let user_id: i64 = 8420420131;
+        let user_json = format!("{{\"id\":{},\"first_name\":\"{}\"}}", user_id, "ShopOwner");
+        let user_encoded = urlencoding::encode(&user_json);
+        // auth_date 25 hours in the past
+        let auth_date = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64
+            - 90000;
+        let init_data = generate_init_data_with_date(
+            token,
+            user_id,
+            "ShopOwner",
+            auth_date,
+            &user_json,
+            &user_encoded,
+        );
+        assert!(validate_init_data(&init_data, token).is_none());
+    }
+
+    #[test]
+    fn test_validate_init_data_future_dated() {
+        let token = "test_bot_token_12345";
+        let user_id: i64 = 8420420131;
+        let user_json = format!("{{\"id\":{},\"first_name\":\"{}\"}}", user_id, "ShopOwner");
+        let user_encoded = urlencoding::encode(&user_json);
+        // auth_date 1 hour in the future
+        let auth_date = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64
+            + 3600;
+        let init_data = generate_init_data_with_date(
+            token,
+            user_id,
+            "ShopOwner",
+            auth_date,
+            &user_json,
+            &user_encoded,
+        );
+        assert!(validate_init_data(&init_data, token).is_none());
+    }
+
+    #[test]
     fn test_generate_admin_token_deterministic() {
         let t1 = generate_admin_token("password123", "bot_token");
         let t2 = generate_admin_token("password123", "bot_token");
@@ -451,5 +622,35 @@ mod tests {
     fn test_verify_admin_token_wrong_bot_token() {
         let token = generate_admin_token("secret", "bot");
         assert!(!verify_admin_token(&token, "other_bot", "secret"));
+    }
+
+    #[test]
+    fn test_validate_telegram_id_param_ok() {
+        assert!(validate_telegram_id_param(123456789).is_ok());
+        assert!(validate_telegram_id_param(1).is_ok());
+    }
+
+    #[test]
+    fn test_validate_telegram_id_param_zero() {
+        assert_eq!(
+            validate_telegram_id_param(0).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
+    }
+
+    #[test]
+    fn test_validate_telegram_id_param_negative() {
+        assert_eq!(
+            validate_telegram_id_param(-1).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
+    }
+
+    #[test]
+    fn test_validate_telegram_id_param_too_large() {
+        assert_eq!(
+            validate_telegram_id_param(9_007_199_254_740_992).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
     }
 }

@@ -1,6 +1,8 @@
+use crate::ui::api::context::api_base_url;
+use crate::ui::components::{ErrorBanner, Skeleton, SkeletonShape};
+use crate::ui::routes::Route;
 use dioxus::prelude::*;
 use serde::Deserialize;
-use crate::ui::api::context::api_base_url;
 
 #[derive(Clone, Debug, PartialEq, Deserialize)]
 struct QuestPlace {
@@ -39,20 +41,39 @@ fn category_accent(cat: &str) -> &'static str {
 
 #[component]
 pub fn LocationQuestScreen() -> Element {
+    let nav = navigator();
     let mut places = use_signal(Vec::<QuestPlace>::new);
     let mut loading = use_signal(|| true);
+    let mut err_msg = use_signal(|| String::new());
 
     let _ = use_resource(move || async move {
-        let base = api_base_url();
-        let client = reqwest::Client::new();
-        if let Ok(resp) = client.get(format!("{}/api/quest-places", base)).send().await {
-            if let Ok(text) = resp.text().await {
-                if let Ok(val) = serde_json::from_str::<serde_json::Value>(&text) {
-                    if let Some(arr) = val.get("quest_places").and_then(|v| v.as_array()) {
-                        let items: Vec<QuestPlace> = arr.iter().filter_map(|v| serde_json::from_value(v.clone()).ok()).collect();
-                        places.set(items);
-                    }
-                }
+        // Cycle #31: Result-propagated errors so a network drop produces
+        // a visible "API недоступен" banner instead of a tear-jerking
+        // "no location quests yet" empty state.
+        let url = format!("{}/api/quest-places", api_base_url());
+        let result: Result<Vec<QuestPlace>, String> = async {
+            let text = crate::ui::api::http::fetch_text(&url)
+                .await
+                .map_err(|e| format!("Network: {e}"))?;
+            let val: serde_json::Value =
+                serde_json::from_str(&text).map_err(|e| format!("Parse: {e}"))?;
+            let arr = val
+                .get("quest_places")
+                .and_then(|v| v.as_array())
+                .ok_or_else(|| "Server returned no `quest_places` array".to_string())?;
+            Ok(arr
+                .iter()
+                .filter_map(|v| serde_json::from_value(v.clone()).ok())
+                .collect())
+        }
+        .await;
+        match result {
+            Ok(items) => {
+                places.set(items);
+                err_msg.set(String::new());
+            }
+            Err(e) => {
+                err_msg.set(format!("Не удалось загрузить квесты: {e}"));
             }
         }
         loading.set(false);
@@ -78,10 +99,22 @@ pub fn LocationQuestScreen() -> Element {
                 }
             }
 
+            ErrorBanner { message: err_msg.read().clone(), margin: "0 0 12px".to_string() }
+
             if *loading.read() {
-                div { style: "text-align: center; padding: 40px;",
-                    div { style: "font-size: 13px; color: #4caf50;",
-                        "Loading quests..."
+                div { style: "display: flex; flex-direction: column; gap: 10px;",
+                    for _ in 0..4 {
+                        div { style: "
+                            background: #16213e; border: 4px solid #2a2a4a;
+                            box-shadow: 4px 4px 0 #000; padding: 12px;
+                            display: flex; align-items: center; gap: 12px;
+                        ",
+                            Skeleton { shape: SkeletonShape::Avatar }
+                            div { style: "flex:1; display:flex; flex-direction:column; gap:6px;",
+                                Skeleton { shape: SkeletonShape::Text, width: Some("70%".into()) }
+                                Skeleton { shape: SkeletonShape::TextSm, width: Some("50%".into()) }
+                            }
+                        }
                     }
                 }
             } else if total == 0 {
@@ -117,6 +150,9 @@ pub fn LocationQuestScreen() -> Element {
                         let accent = category_accent(&p.category);
                         let desc = p.description.as_deref().unwrap_or("Explore this location").to_string();
                         let cat = p.category.clone();
+                        // cycle #34: "Go" button gets onclick → navigate to Quest
+                        // screen with this place id, which hosts the scanner.
+                        let place_id = p.id.clone();
                         rsx! {
                             div { key: "{p.id}", style: "
                                 background: #16213e; border: 4px solid {accent}33;
@@ -146,6 +182,7 @@ pub fn LocationQuestScreen() -> Element {
                                         border: 4px solid {accent}; border-radius: 0; cursor: pointer;
                                         box-shadow: 3px 3px 0 #000;
                                     ",
+                                        onclick: move |_| { nav.push(Route::Quest { id: place_id.clone() }); },
                                         "\u{1F4F7} Go"
                                     }
                                 }

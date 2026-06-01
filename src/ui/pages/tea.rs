@@ -71,15 +71,22 @@ fn ProductGrid(teas: Vec<TeaProduct>) -> Element {
 #[component]
 fn TeaCard(tea: TeaProduct) -> Element {
     let available = tea.is_available;
-    let price = format!("{:.0}", tea.price);
+    let price = if tea.price.is_finite() {
+        format!("{:.0}", tea.price.max(0.0))
+    } else {
+        "0".to_string()
+    };
 
+    let img_url = tea.image_url.as_str();
+    let has_image = !img_url.is_empty()
+        && (img_url.starts_with("http://") || img_url.starts_with("https://") || (img_url.starts_with("/") && !img_url.starts_with("//")));
     rsx! {
         div { class: "product-card",
             div { class: "product-image",
-                if tea.image_url.is_empty() {
+                if !has_image {
                     div { class: "product-placeholder", "🍵" }
                 } else {
-                    img { src: "{tea.image_url}?v=2", alt: "{tea.name}", loading: "lazy" }
+                    img { src: "{img_url}?v=2", alt: "{tea.name}", loading: "lazy" }
                 }
                 if !available {
                     div { class: "product-badge", "Out of Stock" }

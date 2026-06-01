@@ -1,6 +1,6 @@
 // Simplified frontend caching with localStorage
-use serde::{Deserialize, Serialize};
 use gloo_storage::{LocalStorage, Storage};
+use serde::{Deserialize, Serialize};
 use std::time::SystemTime;
 
 const CACHE_VERSION: &str = "v1";
@@ -37,8 +37,13 @@ impl CacheManager {
             Err(_) => return None, // Any storage error, skip cache
         };
 
-        if data_str.len() > 5_000_000 { return None; }
-        let cached = match serde_json::from_str::<CachedData<Vec<crate::ui::screens::menu_screen::ApiStrain>>>(&data_str) {
+        if data_str.len() > 5_000_000 {
+            return None;
+        }
+        let cached = match serde_json::from_str::<
+            CachedData<Vec<crate::ui::screens::menu_screen::ApiStrain>>,
+        >(&data_str)
+        {
             Ok(c) => c,
             Err(_) => return None, // JSON parse error, skip cache
         };
@@ -52,7 +57,7 @@ impl CacheManager {
             .unwrap_or_default()
             .as_millis() as u64;
 
-        if now - cached.timestamp_ms < CACHE_TTL_MS {
+        if now.saturating_sub(cached.timestamp_ms) < CACHE_TTL_MS {
             Some(cached.data)
         } else {
             None // Expired
@@ -60,8 +65,11 @@ impl CacheManager {
     }
 
     /// Store strains in cache
-    pub fn set_strains(&self, data: Vec<crate::ui::screens::menu_screen::ApiStrain>, etag: Option<String>)
-    where
+    pub fn set_strains(
+        &self,
+        data: Vec<crate::ui::screens::menu_screen::ApiStrain>,
+        etag: Option<String>,
+    ) where
         crate::ui::screens::menu_screen::ApiStrain: Serialize,
     {
         let cached = CachedData {

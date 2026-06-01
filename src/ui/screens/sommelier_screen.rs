@@ -1,9 +1,9 @@
+use crate::trios::core::Lang;
+use crate::trios::i18n::{t, T_SOMM_DESC, T_SOMM_EXP, T_SOMM_MOOD, T_SOMM_TIME, T_SOMM_TITLE};
+use crate::ui::components::bottom_nav::BottomNav;
+use crate::ui::state::{Cart, CartItem, CartItemType};
 use dioxus::prelude::*;
 use serde::Deserialize;
-use crate::ui::state::{Cart, CartItem, CartItemType};
-use crate::ui::components::bottom_nav::BottomNav;
-use crate::trios::core::Lang;
-use crate::trios::i18n::{t, T_SOMM_TITLE, T_SOMM_DESC, T_SOMM_MOOD, T_SOMM_TIME, T_SOMM_EXP};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum Mood {
@@ -118,11 +118,19 @@ pub fn SommelierScreen() -> Element {
     let somm_exp_label = format!("🎮 {}?", t(Lang::Russian, T_SOMM_EXP));
 
     let recommendations = use_resource(move || async move {
-        if !show_results() { return Ok(SommelierResponse { recommended_sets: None, recommended_strains: None }); }
+        if !show_results() {
+            return Ok(SommelierResponse {
+                recommended_sets: None,
+                recommended_strains: None,
+            });
+        }
         // BUG-FIX: /api/sommelier/recommend backend endpoint does not exist.
         // Return empty gracefully so the UI shows "No recommendations found"
         // instead of a permanent 404 error.
-        Ok::<SommelierResponse, String>(SommelierResponse { recommended_sets: None, recommended_strains: None })
+        Ok::<SommelierResponse, String>(SommelierResponse {
+            recommended_sets: None,
+            recommended_strains: None,
+        })
     });
 
     rsx! {
@@ -266,8 +274,8 @@ pub fn SommelierScreen() -> Element {
                                         let name = set.name.clone();
                                         let icon = set.icon.clone().unwrap_or("🎁".to_string());
                                         let mood = set.target_mood.clone().unwrap_or_default();
-                                        let price = set.total_price.unwrap_or(0.0);
-                                        let discount = set.discount_percent.unwrap_or(0.0);
+                                        let price = set.total_price.filter(|v| v.is_finite()).unwrap_or(0.0).max(0.0);
+                                        let discount = set.discount_percent.filter(|v| v.is_finite()).unwrap_or(0.0).max(0.0);
                                         let final_price = if discount > 0.0 { (price * (1.0 - discount / 100.0)).max(0.0) } else { price };
                                         let price_str = format!("฿{}", final_price as i32);
 
@@ -303,7 +311,7 @@ pub fn SommelierScreen() -> Element {
                                         let match_pct = s.match_percent.unwrap_or(80);
                                         let match_color = if match_pct >= 90 { "#39ff14" } else if match_pct >= 80 { "#00e5ff" } else { "#ffe600" };
                                         let reason = s.match_reason.clone().unwrap_or_default();
-                                        let price = s.price_per_gram.unwrap_or(0.0);
+                                        let price = s.price_per_gram.filter(|v| v.is_finite()).unwrap_or(0.0).max(0.0);
                                         let price_str = format!("฿{}", price as i32);
                                         let s_name = s.name.clone();
                                         let s_id = s.id.clone().unwrap_or_default();

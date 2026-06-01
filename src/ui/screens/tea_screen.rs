@@ -1,10 +1,10 @@
+use crate::trios::core::Lang;
+use crate::trios::i18n::{t, T_ADD_TO_CART, T_FILTER_ALL, T_TEA_DESC, T_TEA_TITLE};
+use crate::ui::api::context::api_base_url;
+use crate::ui::components::bottom_nav::BottomNav;
+use crate::ui::state::{Cart, CartItem, CartItemType};
 use dioxus::prelude::*;
 use serde::Deserialize;
-use crate::ui::state::{Cart, CartItem, CartItemType};
-use crate::ui::components::bottom_nav::BottomNav;
-use crate::ui::api::context::api_base_url;
-use crate::trios::core::Lang;
-use crate::trios::i18n::{t, T_TEA_TITLE, T_TEA_DESC, T_FILTER_ALL, T_ADD_TO_CART};
 
 #[derive(Debug, Clone, Deserialize)]
 #[allow(dead_code)]
@@ -51,7 +51,7 @@ pub fn TeaScreen() -> Element {
     let tea_resource = use_resource(|| async move {
         let base = api_base_url();
         let url = format!("{}/api/tea-products", base);
-        reqwest::Client::new()
+        crate::ui::api::local_client::LocalClient::new()
             .get(&url)
             .send()
             .await
@@ -69,7 +69,12 @@ pub fn TeaScreen() -> Element {
                 teas.clone()
             } else {
                 teas.iter()
-                    .filter(|t| t.subcategory.as_deref().unwrap_or("").eq_ignore_ascii_case(&sub))
+                    .filter(|t| {
+                        t.subcategory
+                            .as_deref()
+                            .unwrap_or("")
+                            .eq_ignore_ascii_case(&sub)
+                    })
                     .cloned()
                     .collect()
             }
@@ -132,13 +137,13 @@ pub fn TeaScreen() -> Element {
                                     let sub = t.subcategory.as_deref().unwrap_or("tea");
                                     let emoji = subcategory_emoji(sub);
                                     let is_available = t.is_available.unwrap_or(true);
-                                    let stock = t.stock.unwrap_or(999);
+                                    let stock = t.stock.unwrap_or(999).max(0);
                                     let show_low_stock = stock > 0 && stock <= 5;
                                     let show_out_of_stock = stock == 0 || !is_available;
-                                    let price_str = format!("฿{}", t.price as i32);
+                                    let t_price = if t.price.is_finite() { t.price.max(0.0) } else { 0.0 };
+                                    let price_str = format!("฿{}", t_price as i32);
                                     let t_name = t.name.clone();
                                     let t_id = t.id.clone();
-                                    let t_price = t.price;
                                     let opacity = if show_out_of_stock { "0.6" } else { "1" };
                                     let desc = t.description.as_deref().unwrap_or("");
 
@@ -155,7 +160,7 @@ pub fn TeaScreen() -> Element {
                                                 font-size: 36px; position: relative;
                                             ",
                                                 if let Some(ref img) = t.image_url {
-                                                    if !img.is_empty() && (img.starts_with("http://") || img.starts_with("https://") || img.starts_with('/')) {
+                                                    if !img.is_empty() && (img.starts_with("http://") || img.starts_with("https://") || (img.starts_with("/") && !img.starts_with("//"))) {
                                                         img { src: "{img}", alt: "{t_name}", style: "width: 100%; height: 100%; object-fit: cover;" }
                                                     } else {
                                                         "{emoji}"
@@ -172,7 +177,7 @@ pub fn TeaScreen() -> Element {
                                                     ", "SOLD OUT" }
                                                 }
                                                 {if let Some(ref vid) = t.video_url {
-                                                    if !vid.is_empty() && (vid.starts_with("http://") || vid.starts_with("https://") || vid.starts_with('/')) {
+                                                    if !vid.is_empty() && (vid.starts_with("http://") || vid.starts_with("https://") || (vid.starts_with("/") && !vid.starts_with("//"))) {
                                                         let vid = vid.clone();
                                                         rsx! {
                                                             a { href: "{vid}", target: "_blank", style: "position:absolute;bottom:4px;right:4px;width:28px;height:28px;border-radius:50%;background:rgba(0,0,0,0.6);border:1px solid #fff;color:#fff;font-size:12px;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:2;text-decoration:none;",

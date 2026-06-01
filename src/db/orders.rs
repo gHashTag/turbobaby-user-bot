@@ -27,12 +27,35 @@ impl Order {
             customer_phone: row.try_get("customer_phone").ok().flatten(),
             customer_telegram: row.try_get("customer_telegram").ok().flatten(),
             items: row.try_get("items").unwrap_or(Value::Null),
-            subtotal: row.try_get::<_, f64>("subtotal").unwrap_or(0.0),
-            bonus_used: row.try_get::<_, f64>("bonus_used").unwrap_or(0.0),
-            total: row.try_get::<_, f64>("total").unwrap_or(0.0),
+            subtotal: {
+                let v = row.try_get::<_, f64>("subtotal").unwrap_or(0.0);
+                if v.is_finite() {
+                    v.max(0.0)
+                } else {
+                    0.0
+                }
+            },
+            bonus_used: {
+                let v = row.try_get::<_, f64>("bonus_used").unwrap_or(0.0);
+                if v.is_finite() {
+                    v.max(0.0)
+                } else {
+                    0.0
+                }
+            },
+            total: {
+                let v = row.try_get::<_, f64>("total").unwrap_or(0.0);
+                if v.is_finite() {
+                    v.max(0.0)
+                } else {
+                    0.0
+                }
+            },
             status: row.try_get("status").unwrap_or_default(),
             shop_id: row.try_get("shop_id").ok().flatten(),
-            created_at: row.try_get("created_at").unwrap_or_else(|_| chrono::Utc::now()),
+            created_at: row
+                .try_get("created_at")
+                .unwrap_or_else(|_| chrono::Utc::now()),
         }
     }
 }
@@ -45,8 +68,8 @@ pub async fn get_user_orders_seaorm(
     orm: &sea_orm::DatabaseConnection,
     telegram_id: i64,
 ) -> Result<Vec<crate::db::entities::order::Model>, sea_orm::DbErr> {
-    use sea_orm::{EntityTrait, QueryFilter, ColumnTrait};
-    use crate::db::entities::order::{Entity, Column};
+    use crate::db::entities::order::{Column, Entity};
+    use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
     Entity::find()
         .filter(Column::TelegramId.eq(telegram_id))
         .all(orm)
@@ -63,14 +86,23 @@ pub async fn complete_order_and_update_loyalty(
     let mut client = pool.get().await?;
     let tx = client.transaction().await?;
 
-    let order_row = tx.query_opt(
-        "SELECT telegram_id, total::float8, status FROM orders WHERE id = $1 FOR UPDATE",
-        &[&order_id],
-    ).await?;
+    let order_row = tx
+        .query_opt(
+            "SELECT telegram_id, total::float8, status FROM orders WHERE id = $1 FOR UPDATE",
+            &[&order_id],
+        )
+        .await?;
 
     let result = if let Some(row) = order_row {
         let cid: Option<i64> = row.try_get("telegram_id").ok().flatten();
-        let total: f64 = row.try_get::<_, f64>("total").unwrap_or(0.0);
+        let total: f64 = {
+            let v = row.try_get::<_, f64>("total").unwrap_or(0.0);
+            if v.is_finite() {
+                v.max(0.0)
+            } else {
+                0.0
+            }
+        };
         let status: String = row.try_get("status").unwrap_or_default();
         if status != "completed" {
             let loyalty_result = if let Some(cid) = cid {
@@ -84,7 +116,8 @@ pub async fn complete_order_and_update_loyalty(
                 tx.execute(
                     "UPDATE orders SET status = 'completed' WHERE id = $1",
                     &[&order_id],
-                ).await?;
+                )
+                .await?;
 
                 tx.execute(
                     "INSERT INTO loyalty_profiles (telegram_id, total_spent, first_purchase_at) VALUES ($1, $2, NOW())
@@ -136,4 +169,53 @@ pub struct OrderItem {
     pub is_accessory: Option<bool>,
     pub is_tea: Option<bool>,
     pub is_tea_set: Option<bool>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::OrderItem;
+
+    #[test]
+    fn test_order_item_serde_roundtrip() {
+        let item = OrderItem {
+            strain_id: Some("s1".into()),
+            strain_name: Some("Indica".into()),
+            accessory_id: None,
+            accessory_name: None,
+            tea_id: None,
+            tea_name: None,
+            set_id: None,
+            set_name: None,
+            quantity: 2.5,
+            is_set: Some(false),
+            is_accessory: None,
+            is_tea: None,
+            is_tea_set: None,
+        };
+        let json = serde_json::to_value(&item).unwrap();
+        let back: OrderItem = serde_json::from_value(json).unwrap();
+        assert_eq!(back.strain_id, Some("s1".into()));
+        assert_eq!(back.quantity, 2.5);
+    }
+
+    #[test]
+    fn test_order_item_defaults() {
+        let item = OrderItem {
+            strain_id: None,
+            strain_name: None,
+            accessory_id: None,
+            accessory_name: None,
+            tea_id: None,
+            tea_name: None,
+            set_id: None,
+            set_name: None,
+            quantity: 1.0,
+            is_set: None,
+            is_accessory: None,
+            is_tea: None,
+            is_tea_set: None,
+        };
+        let json = serde_json::to_value(&item).unwrap();
+        assert!(json.get("strain_id").is_some());
+    }
 }

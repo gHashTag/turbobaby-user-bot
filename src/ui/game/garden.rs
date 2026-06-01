@@ -1,10 +1,11 @@
+use crate::trios::core::Lang;
+use crate::trios::garden::{calculate_progress, GrowthStage, Plant};
+use crate::trios::i18n::{t, T_BTN_WATER, T_GARDEN_SUBTITLE, T_GARDEN_TITLE};
+use crate::ui::api::context::api_base_url;
+use crate::ui::components::ErrorBanner;
+use crate::ui::telegram::{use_telegram_id, use_telegram_init_data};
 use dioxus::prelude::*;
 use gloo_timers::future::TimeoutFuture;
-use crate::trios::garden::{GrowthStage, Plant, calculate_progress};
-use crate::trios::core::Lang;
-use crate::trios::i18n::{t, T_GARDEN_TITLE, T_GARDEN_SUBTITLE, T_BTN_WATER};
-use crate::ui::api::context::api_base_url;
-use crate::ui::telegram::{use_telegram_id, use_telegram_init_data};
 
 #[derive(Debug, Clone, serde::Deserialize)]
 struct ApiPlant {
@@ -67,42 +68,34 @@ struct HarvestPlantResponse {
 
 async fn fetch_plants(telegram_id: i64, init_data: &str) -> Result<Vec<Plant>, String> {
     let base = api_base_url();
-    reqwest::Client::new()
-        .get(format!("{}/api/garden/plants?telegram_id={}", base, telegram_id))
-        .header("X-Telegram-Init-Data", init_data)
-        .send()
-        .await
-        .map_err(|e| e.to_string())?
-        .json::<GardenResponse>()
-        .await
-        .map_err(|e| e.to_string())
+    let url = format!("{}/api/garden/plants?telegram_id={}", base, telegram_id);
+    let text = crate::ui::api::http::fetch_text_authed(&url, init_data).await?;
+    serde_json::from_str::<GardenResponse>(&text)
+        .map_err(|e| format!("Parse error: {e}"))
         .map(|r| r.plants.into_iter().map(Into::into).collect())
 }
 
 async fn water_plant_api(plant_id: &str, init_data: &str) -> Result<WaterPlantResponse, String> {
     let base = api_base_url();
-    reqwest::Client::new()
-        .post(format!("{}/api/garden/plants/{}/water", base, urlencoding::encode(plant_id)))
-        .header("X-Telegram-Init-Data", init_data)
-        .send()
-        .await
-        .map_err(|e| e.to_string())?
-        .json::<WaterPlantResponse>()
-        .await
-        .map_err(|e| e.to_string())
+    let url = format!(
+        "{}/api/garden/plants/{}/water",
+        base,
+        urlencoding::encode(plant_id)
+    );
+    let text = crate::ui::api::http::post_json_authed(&url, init_data, "").await?;
+    serde_json::from_str::<WaterPlantResponse>(&text).map_err(|e| format!("Parse error: {e}"))
 }
 
 async fn harvest_plant_api(plant_id: &str, init_data: &str) -> Result<(), String> {
     let base = api_base_url();
-    let resp: HarvestPlantResponse = reqwest::Client::new()
-        .post(format!("{}/api/garden/plants/{}/harvest", base, urlencoding::encode(plant_id)))
-        .header("X-Telegram-Init-Data", init_data)
-        .send()
-        .await
-        .map_err(|e| e.to_string())?
-        .json()
-        .await
-        .map_err(|e| e.to_string())?;
+    let url = format!(
+        "{}/api/garden/plants/{}/harvest",
+        base,
+        urlencoding::encode(plant_id)
+    );
+    let text = crate::ui::api::http::post_json_authed(&url, init_data, "").await?;
+    let resp: HarvestPlantResponse =
+        serde_json::from_str(&text).map_err(|e| format!("Parse error: {e}"))?;
     if resp.success {
         Ok(())
     } else {
@@ -119,12 +112,12 @@ fn mock_plants() -> Vec<Plant> {
             strain_id: "banana-fritter".into(),
             strain_name: "Banana Fritter".into(),
             current_stage: GrowthStage::BigVeg,
-            planted_at: now - 86400000 * 5,
+            planted_at: now.saturating_sub(86400000 * 5),
             is_completed: false,
             harvested_at: None,
             reward_claimed: false,
             water_count: 5,
-            last_watered_at: Some(now - 120000),
+            last_watered_at: Some(now.saturating_sub(120000)),
         },
         Plant {
             id: "mock-2".into(),
@@ -132,7 +125,7 @@ fn mock_plants() -> Vec<Plant> {
             strain_id: "super-lemon-haze".into(),
             strain_name: "Super Lemon Haze".into(),
             current_stage: GrowthStage::Seed,
-            planted_at: now - 60000,
+            planted_at: now.saturating_sub(60000),
             is_completed: false,
             harvested_at: None,
             reward_claimed: false,
@@ -143,10 +136,11 @@ fn mock_plants() -> Vec<Plant> {
 }
 
 /// Returns the plant growth stage image URL based on stage index (0-13).
-/// Images are at /assets/images/game/{1..14}.png
+/// Images are at /assets/game/{1..14}.png (single canonical path; the
+/// orphan /assets/images/game/ copy was removed in cycle #14).
 fn stage_image_url(stage_index: usize) -> String {
     let n = (stage_index + 1).clamp(1, 14);
-    format!("/assets/images/game/{}.png", n)
+    format!("/assets/game/{}.png", n)
 }
 
 fn stage_color(stage: &GrowthStage) -> &'static str {
@@ -172,8 +166,12 @@ fn progress_bar_gradient(stage: &GrowthStage) -> &'static str {
     match stage {
         GrowthStage::Seed => "#8b5a2b",
         GrowthStage::Sprout | GrowthStage::FirstLeaf => "#39ff14",
-        GrowthStage::YoungBush | GrowthStage::VegStart | GrowthStage::BigVeg => "linear-gradient(90deg, #39ff14, #00e5ff)",
-        GrowthStage::PreFlower | GrowthStage::SmallBuds => "linear-gradient(90deg, #00e5ff, #a855f7)",
+        GrowthStage::YoungBush | GrowthStage::VegStart | GrowthStage::BigVeg => {
+            "linear-gradient(90deg, #39ff14, #00e5ff)"
+        }
+        GrowthStage::PreFlower | GrowthStage::SmallBuds => {
+            "linear-gradient(90deg, #00e5ff, #a855f7)"
+        }
         GrowthStage::BigBuds | GrowthStage::Trimming => "linear-gradient(90deg, #a855f7, #ff6b35)",
         GrowthStage::Curing | GrowthStage::Lab => "linear-gradient(90deg, #ff6b35, #a78bfa)",
         GrowthStage::Delivery | GrowthStage::Final => "linear-gradient(90deg, #a78bfa, #ffd700)",
@@ -192,6 +190,7 @@ pub fn Garden() -> Element {
     {
         let mut plants_c = plants.clone();
         let mut loading_c = loading.clone();
+        let mut error_c = error_msg.clone();
         let tid = telegram_id;
         let init = init_data.clone();
         use_future(move || {
@@ -203,8 +202,15 @@ pub fn Garden() -> Element {
                     return;
                 }
                 match fetch_plants(tid, &value).await {
-                    Ok(p) => { plants_c.set(p); }
-                    Err(_) => { plants_c.set(mock_plants()); }
+                    Ok(p) => {
+                        plants_c.set(p);
+                    }
+                    Err(e) => {
+                        // Surface the real error instead of silently swapping in
+                        // mock data — users were seeing a fake garden whenever
+                        // the API blipped (NN/g "Visibility of system status").
+                        error_c.set(format!("Не удалось загрузить сад: {}", e));
+                    }
                 }
                 loading_c.set(false);
             }
@@ -246,10 +252,9 @@ pub fn Garden() -> Element {
                 }
             }
 
-            if !err.is_empty() {
-                div { style: "max-width: 400px; margin: 0 auto 12px; padding: 6px 10px; background: rgba(255,71,87,0.1); border: 2px solid #ff4757; border-radius: 8px; font-size: 18px; color: #ff4757;",
-                    "{err}"
-                }
+            ErrorBanner {
+                message: err.clone(),
+                margin: "0 auto 12px".to_string(),
             }
 
             if is_loading {
@@ -332,15 +337,18 @@ pub fn Garden() -> Element {
                         };
 
                         let plants_signal_h = plants.clone();
+                        let error_signal_h = error_msg.clone();
                         let pid_for_harvest = pid.clone();
                         let init_harvest = init_for_closures.clone();
                         let harvest_click = move |_| {
                             let mut ps = plants_signal_h.clone();
+                            let mut es = error_signal_h.clone();
                             let plant_id = pid_for_harvest.clone();
                             let init = init_harvest.clone();
                             spawn(async move {
-                                if let Ok(()) = harvest_plant_api(&plant_id, &init).await {
-                                    ps.write().retain(|p| p.id != plant_id);
+                                match harvest_plant_api(&plant_id, &init).await {
+                                    Ok(()) => { ps.write().retain(|p| p.id != plant_id); }
+                                    Err(e) => { es.set(format!("Не удалось собрать урожай: {}", e)); }
                                 }
                             });
                         };

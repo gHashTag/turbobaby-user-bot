@@ -1,0 +1,29 @@
+# Editor-level enforcement of the same rules as rustfmt.toml.
+#
+# Most modern editors honor .editorconfig out of the box, so this catches
+# style drift before `cargo fmt --check` ever runs (the lefthook check then
+# becomes a safety net rather than the only line of defense).
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+[*.{rs,toml}]
+max_line_length = 100
+
+[*.{yml,yaml,json}]
+indent_size = 2
+
+[*.md]
+# Don't strip trailing whitespace in Markdown — two trailing spaces means
+# "hard line break" in CommonMark and would be silently destroyed otherwise.
+trim_trailing_whitespace = false
+
+[Makefile]
+indent_style = tab

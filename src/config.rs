@@ -34,7 +34,8 @@ impl Config {
 
         let bot_token = std::env::var("BOT_TOKEN")
             .context("BOT_TOKEN not set")?
-            .trim().to_string();
+            .trim()
+            .to_string();
 
         // Admin IDs from env; if ADMIN_IDS is set it is the only source of truth.
         // Hard-coded defaults are used ONLY as a fallback when ADMIN_IDS is empty
@@ -70,7 +71,10 @@ impl Config {
         Ok(Self {
             bot_token,
             web_app_url,
-            port: std::env::var("PORT").unwrap_or("3000".into()).parse().unwrap_or(3000),
+            port: std::env::var("PORT")
+                .unwrap_or("3000".into())
+                .parse()
+                .unwrap_or(3000),
             webhook_path: std::env::var("WEBHOOK_PATH").unwrap_or("/webhook".into()),
             app_url: std::env::var("APP_URL").unwrap_or_default(),
             is_production,
@@ -89,7 +93,8 @@ impl Config {
             glm_api_key: std::env::var("GLM_API_KEY").unwrap_or_default(),
             s3_bucket: std::env::var("S3_BUCKET").ok(),
             s3_endpoint: std::env::var("S3_ENDPOINT").ok(),
-            s3_internal_endpoint: std::env::var("S3_INTERNAL_ENDPOINT").ok()
+            s3_internal_endpoint: std::env::var("S3_INTERNAL_ENDPOINT")
+                .ok()
                 .filter(|s| !s.trim().is_empty()),
             s3_public_url: std::env::var("S3_PUBLIC_URL").ok(),
             s3_region: std::env::var("S3_REGION").ok(),

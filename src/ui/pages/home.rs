@@ -18,6 +18,8 @@ pub fn Home() -> Element {
         Some(Some(strain)) => {
             let name = strain.name.clone();
             let img = strain.image_url.clone();
+            let has_image = !img.is_empty()
+                && (img.starts_with("http://") || img.starts_with("https://") || (img.starts_with("/") && !img.starts_with("//")));
             let price = strain.price_display();
             let thc = strain.thc_display();
             let discount = if strain.strain_of_day_discount > 0.0 {
@@ -34,7 +36,11 @@ pub fn Home() -> Element {
                 div { class: "sod-card",
                     div { class: "sod-badge", "⭐ {discount}" }
                     div { class: "sod-image",
-                        img { src: "{img}?v=2", alt: "{name}", loading: "lazy" }
+                        if has_image {
+                            img { src: "{img}?v=2", alt: "{name}", loading: "lazy" }
+                        } else {
+                            div { class: "sod-placeholder", "🌿" }
+                        }
                     }
                     div { class: "sod-content",
                         div { class: "sod-name", "{name}" }

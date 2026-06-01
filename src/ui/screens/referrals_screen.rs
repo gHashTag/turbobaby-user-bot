@@ -1,6 +1,6 @@
 // Referrals screen wrapper
-use dioxus::prelude::*;
 use crate::ui::pages::referrals::Referrals;
+use dioxus::prelude::*;
 
 #[component]
 pub fn ReferralsScreen() -> Element {

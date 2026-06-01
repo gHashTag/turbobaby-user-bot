@@ -56,17 +56,23 @@ impl TelegramApp {
 
     /// Call WebApp.ready()
     pub fn ready(&self) {
-        let _ = document::eval("if(window.Telegram && window.Telegram.WebApp) { window.Telegram.WebApp.ready(); }");
+        let _ = document::eval(
+            "if(window.Telegram && window.Telegram.WebApp) { window.Telegram.WebApp.ready(); }",
+        );
     }
 
     /// Expand Mini App to full height
     pub fn expand(&self) {
-        let _ = document::eval("if(window.Telegram && window.Telegram.WebApp) { window.Telegram.WebApp.expand(); }");
+        let _ = document::eval(
+            "if(window.Telegram && window.Telegram.WebApp) { window.Telegram.WebApp.expand(); }",
+        );
     }
 
     /// Close Mini App
     pub fn close(&self) {
-        let _ = document::eval("if(window.Telegram && window.Telegram.WebApp) { window.Telegram.WebApp.close(); }");
+        let _ = document::eval(
+            "if(window.Telegram && window.Telegram.WebApp) { window.Telegram.WebApp.close(); }",
+        );
     }
 
     /// Escape a string for safe injection into a JavaScript double-quoted string literal.
@@ -166,7 +172,9 @@ impl TelegramApp {
         }catch(e){return '';}})()"#;
         let val = js_sys::eval(js).ok()?;
         let s = val.as_string()?;
-        if s.is_empty() { return None; }
+        if s.is_empty() {
+            return None;
+        }
         s.parse::<i64>().ok().filter(|id| *id != 0)
     }
 
@@ -181,7 +189,9 @@ impl TelegramApp {
         }catch(e){return '';}})()"#;
         let val = js_sys::eval(js).ok()?;
         let s = val.as_string()?;
-        if s.is_empty() { return None; }
+        if s.is_empty() {
+            return None;
+        }
         Some(s)
     }
 
@@ -206,7 +216,10 @@ impl TelegramApp {
             }
             return JSON.stringify(out);
         }catch(e){return 'err:'+String(e);}})()"#;
-        js_sys::eval(js).ok().and_then(|v| v.as_string()).unwrap_or_else(|| "eval_failed".to_string())
+        js_sys::eval(js)
+            .ok()
+            .and_then(|v| v.as_string())
+            .unwrap_or_else(|| "eval_failed".to_string())
     }
 
     /// Get Telegram user data
@@ -243,7 +256,10 @@ impl TelegramApp {
             }
             return "";
         }catch(e){ return "";}})()"#;
-        js_sys::eval(js).ok().and_then(|v| v.as_string()).unwrap_or_default()
+        js_sys::eval(js)
+            .ok()
+            .and_then(|v| v.as_string())
+            .unwrap_or_default()
     }
 }
 

@@ -9,8 +9,6 @@ use crate::ui::app::App;
 #[wasm_bindgen::prelude::wasm_bindgen(start)]
 pub fn run() {
     web_sys::console::log_1(&"[WASM] Step 1: run() called".into());
-    console_error_panic_hook::set_once();
-    web_sys::console::log_1(&"[WASM] Step 2: panic hook set".into());
     #[cfg(target_arch = "wasm32")]
     {
         std::panic::set_hook(Box::new(|info| {
@@ -21,7 +19,10 @@ pub fn run() {
                     if let Some(body) = document.body() {
                         if let Ok(div) = document.create_element("div") {
                             let _ = div.set_attribute("style", "position:fixed;inset:0;background:#000;color:#ff4757;padding:20px;font-family:monospace;white-space:pre-wrap;z-index:99999;overflow:auto;");
-                            let safe_msg = msg.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;");
+                            let safe_msg = msg
+                                .replace('&', "&amp;")
+                                .replace('<', "&lt;")
+                                .replace('>', "&gt;");
                             div.set_inner_html(&format!("<h1 style='color:#ff4757'>🚨 PANIC</h1><pre style='font-size:14px'>{}</pre>", safe_msg));
                             let _ = body.append_child(&div);
                         }
@@ -30,6 +31,7 @@ pub fn run() {
             }
         }));
     }
+    web_sys::console::log_1(&"[WASM] Step 2: panic hook set".into());
     web_sys::console::log_1(&"[WASM] Step 3: launching Dioxus App".into());
     dioxus::launch(App);
     web_sys::console::log_1(&"[WASM] Step 4: App launched".into());

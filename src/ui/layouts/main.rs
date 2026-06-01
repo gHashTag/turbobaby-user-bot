@@ -1,5 +1,5 @@
-use dioxus::prelude::*;
 use crate::ui::components::bottom_nav::BottomNav;
+use dioxus::prelude::*;
 
 #[component]
 pub fn MainLayout(props: MainLayoutProps) -> Element {

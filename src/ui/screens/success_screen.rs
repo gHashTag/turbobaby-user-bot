@@ -1,5 +1,5 @@
-use dioxus::prelude::*;
 use crate::ui::routes::Route;
+use dioxus::prelude::*;
 
 #[component]
 pub fn SuccessScreen(id: String) -> Element {

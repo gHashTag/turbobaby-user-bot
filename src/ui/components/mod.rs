@@ -9,51 +9,53 @@ pub mod button;
 pub mod card;
 pub mod modal;
 
+pub mod cart_item;
 pub mod input;
 pub mod loading;
-pub mod strain_card;
-pub mod cart_item;
-pub mod strain_grid;
 pub mod plant_cell;
+pub mod strain_card;
+pub mod strain_grid;
 
 // ---------------------------------------------------------------------------
 // New design-system components (feat/design-system)
 // ---------------------------------------------------------------------------
 pub mod badge;
-pub mod toast;
-pub mod empty_state;
-pub mod skeleton;
-pub mod progress_bar;
 pub mod chip;
-pub mod rarity_glow;
-pub mod lazy_screen;
+pub mod empty_state;
+pub mod error_banner;
 pub mod error_overlay;
+pub mod lazy_screen;
+pub mod progress_bar;
+pub mod rarity_glow;
+pub mod skeleton;
+pub mod toast;
 
 // ---------------------------------------------------------------------------
 // Re-exports — original
 // ---------------------------------------------------------------------------
-pub use button::{Button, ButtonProps, ButtonVariant, ButtonSize};
+pub use button::{Button, ButtonProps, ButtonSize, ButtonVariant};
 pub use card::{Card, CardProps, CardVariant};
-pub use modal::{Modal, ModalProps, ModalSize};
+pub use cart_item::{CartItemComponent, CartItemProps};
 pub use input::{Input, InputProps, InputType};
 pub use loading::{Loading, LoadingOverlay, LoadingProps, LoadingSize};
+pub use modal::{Modal, ModalProps, ModalSize};
+pub use plant_cell::{EmptyPlotCell, PlantCell};
 pub use strain_card::{StrainCard, StrainCardProps};
-pub use cart_item::{CartItemComponent, CartItemProps};
 pub use strain_grid::{StrainGrid, StrainGridProps};
-pub use plant_cell::{PlantCell, EmptyPlotCell};
 
 // ---------------------------------------------------------------------------
 // Re-exports — new design-system components
 // ---------------------------------------------------------------------------
-pub use badge::{Badge, BadgeProps, BadgeVariant, BadgeSize};
-pub use toast::{Toast, ToastProps, ToastKind, ToastContainer, ToastContainerProps};
+pub use badge::{Badge, BadgeProps, BadgeSize, BadgeVariant};
+pub use chip::{Chip, ChipColor, ChipGroup, ChipGroupProps, ChipProps};
 pub use empty_state::{EmptyState, EmptyStateProps};
-pub use skeleton::{Skeleton, SkeletonProps, SkeletonShape, SkeletonRow, SkeletonRowProps};
-pub use progress_bar::{ProgressBar, ProgressBarProps, ProgressColor, ProgressSize};
-pub use chip::{Chip, ChipProps, ChipColor, ChipGroup, ChipGroupProps};
-pub use rarity_glow::{RarityGlow, RarityGlowProps, Rarity};
+pub use error_banner::{ErrorBanner, ErrorBannerProps};
+pub use error_overlay::{install_error_handlers, ErrorOverlay, JsErrorItem};
 pub use lazy_screen::LazyScreen;
-pub use error_overlay::{ErrorOverlay, JsErrorItem, install_error_handlers};
+pub use progress_bar::{ProgressBar, ProgressBarProps, ProgressColor, ProgressSize};
+pub use rarity_glow::{Rarity, RarityGlow, RarityGlowProps};
+pub use skeleton::{Skeleton, SkeletonProps, SkeletonRow, SkeletonRowProps, SkeletonShape};
+pub use toast::{Toast, ToastContainer, ToastContainerProps, ToastKind, ToastProps};
 
 // Re-export types from state for convenience
 pub use crate::ui::state::CartItem as CartItemType;

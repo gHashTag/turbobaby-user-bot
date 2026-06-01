@@ -1,6 +1,6 @@
-use dioxus::prelude::*;
 use crate::ui::components::bottom_nav::BottomNav;
 use crate::ui::game::quest::Quest;
+use dioxus::prelude::*;
 
 #[component]
 pub fn QuestScreen(id: String) -> Element {

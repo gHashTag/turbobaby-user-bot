@@ -14,10 +14,10 @@ pub enum ProgressColor {
 impl ProgressColor {
     pub fn css_class(&self) -> &'static str {
         match self {
-            Self::Green  => "progress-green",
+            Self::Green => "progress-green",
             Self::Purple => "progress-purple",
-            Self::Gold   => "progress-gold",
-            Self::Neon   => "progress-neon",
+            Self::Gold => "progress-gold",
+            Self::Neon => "progress-neon",
         }
     }
 }
@@ -35,10 +35,10 @@ pub enum ProgressSize {
 impl ProgressSize {
     pub fn css_class(&self) -> &'static str {
         match self {
-            Self::Small   => "progress-sm",
+            Self::Small => "progress-sm",
             Self::Default => "",
-            Self::Large   => "progress-lg",
-            Self::XLarge  => "progress-xl",
+            Self::Large => "progress-lg",
+            Self::XLarge => "progress-xl",
         }
     }
 }

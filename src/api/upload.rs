@@ -6,8 +6,12 @@ use axum::{
 };
 use bytes::{Bytes, BytesMut};
 use serde_json::{json, Value};
+use std::time::Duration;
 
 use crate::api::auth::check_admin;
+use crate::api::rate_limit::{
+    check_and_record, client_ip_from_headers, new_store, SlidingWindowStore,
+};
 use crate::AppState;
 
 pub fn routes() -> Router<AppState> {
@@ -18,6 +22,14 @@ pub fn routes() -> Router<AppState> {
 
 const MAX_UPLOAD_SIZE: usize = 100 * 1024 * 1024; // 100 MB
 const ALLOWED_EXTENSIONS: &[&str] = &["jpg", "jpeg", "png", "gif", "webp", "mp4", "mov", "webm"];
+
+/// Per-IP sliding-window log: 30 uploads / hour. Admin-only endpoint but
+/// rate-limited as defense-in-depth against leaked-token storage exhaustion.
+static UPLOAD_RATE_LIMIT: std::sync::LazyLock<SlidingWindowStore> =
+    std::sync::LazyLock::new(new_store);
+const UPLOAD_RL_WINDOW: Duration = Duration::from_secs(60 * 60);
+const UPLOAD_RL_MAX_ATTEMPTS: usize = 30;
+const UPLOAD_RL_MAX_IPS: usize = 1_000;
 
 type UploadError = (StatusCode, Json<Value>);
 
@@ -67,6 +79,29 @@ async fn upload_file(
     })?;
     tracing::info!("upload: admin auth ok admin_id={}", admin_id);
 
+    // Defense-in-depth rate-limit: even an authenticated admin can't spam.
+    let client_ip = client_ip_from_headers(&headers);
+    if !check_and_record(
+        &UPLOAD_RATE_LIMIT,
+        &client_ip,
+        UPLOAD_RL_WINDOW,
+        UPLOAD_RL_MAX_ATTEMPTS,
+        UPLOAD_RL_MAX_IPS,
+    )
+    .await
+    {
+        crate::metrics::rate_limit_blocked("upload");
+        tracing::warn!(
+            "upload: rate-limit exceeded admin_id={} ip={}",
+            admin_id,
+            client_ip
+        );
+        return Err(err(
+            StatusCode::TOO_MANY_REQUESTS,
+            "upload rate limit exceeded",
+        ));
+    }
+
     // Walk multipart fields. We accept the first non-empty file-like field; log
     // every field we encounter so we can see in Railway logs what the client
     // actually sent if the wrong shape arrives.
@@ -74,7 +109,10 @@ async fn upload_file(
     loop {
         let next = multipart.next_field().await.map_err(|e| {
             tracing::error!("upload: next_field error: {:?}", e);
-            err(StatusCode::BAD_REQUEST, format!("multipart parse error: {}", e))
+            err(
+                StatusCode::BAD_REQUEST,
+                format!("multipart parse error: {}", e),
+            )
         })?;
         let mut field = match next {
             Some(f) => f,
@@ -121,7 +159,11 @@ async fn upload_file(
                 }
                 Ok(None) => break,
                 Err(e) => {
-                    tracing::error!("upload: chunk read error after {} bytes: {:?}", buf.len(), e);
+                    tracing::error!(
+                        "upload: chunk read error after {} bytes: {:?}",
+                        buf.len(),
+                        e
+                    );
                     return Err(err(
                         StatusCode::BAD_REQUEST,
                         format!("chunk read error: {}", e),
@@ -250,40 +292,64 @@ mod tests {
 
     #[test]
     fn test_validate_upload_empty_file() {
-        assert_eq!(validate_filename("photo.jpg", 0).unwrap_err().0, StatusCode::BAD_REQUEST);
+        assert_eq!(
+            validate_filename("photo.jpg", 0).unwrap_err().0,
+            StatusCode::BAD_REQUEST
+        );
     }
 
     #[test]
     fn test_validate_upload_name_too_long() {
         let name = "a".repeat(501) + ".jpg";
-        assert_eq!(validate_filename(&name, 100).unwrap_err().0, StatusCode::BAD_REQUEST);
+        assert_eq!(
+            validate_filename(&name, 100).unwrap_err().0,
+            StatusCode::BAD_REQUEST
+        );
     }
 
     #[test]
     fn test_validate_upload_too_large() {
-        assert_eq!(validate_filename("photo.jpg", MAX_UPLOAD_SIZE + 1).unwrap_err().0, StatusCode::PAYLOAD_TOO_LARGE);
+        assert_eq!(
+            validate_filename("photo.jpg", MAX_UPLOAD_SIZE + 1)
+                .unwrap_err()
+                .0,
+            StatusCode::PAYLOAD_TOO_LARGE
+        );
     }
 
     #[test]
     fn test_validate_upload_disallowed_ext() {
-        assert_eq!(validate_filename("photo.exe", 100).unwrap_err().0, StatusCode::UNSUPPORTED_MEDIA_TYPE);
+        assert_eq!(
+            validate_filename("photo.exe", 100).unwrap_err().0,
+            StatusCode::UNSUPPORTED_MEDIA_TYPE
+        );
     }
 
     #[test]
     fn test_validate_upload_no_ext() {
-        assert_eq!(validate_filename("photo", 100).unwrap_err().0, StatusCode::UNSUPPORTED_MEDIA_TYPE);
+        assert_eq!(
+            validate_filename("photo", 100).unwrap_err().0,
+            StatusCode::UNSUPPORTED_MEDIA_TYPE
+        );
     }
 
     #[test]
     fn test_validate_upload_ext_too_long() {
         let name = format!("photo.{}", "a".repeat(51));
-        assert_eq!(validate_filename(&name, 100).unwrap_err().0, StatusCode::BAD_REQUEST);
+        assert_eq!(
+            validate_filename(&name, 100).unwrap_err().0,
+            StatusCode::BAD_REQUEST
+        );
     }
 
     #[test]
     fn test_allowed_extensions_coverage() {
         for ext in ALLOWED_EXTENSIONS {
-            assert!(validate_filename(&format!("file.{}", ext), 10).is_ok(), "ext {} should be allowed", ext);
+            assert!(
+                validate_filename(&format!("file.{}", ext), 10).is_ok(),
+                "ext {} should be allowed",
+                ext
+            );
         }
     }
 }

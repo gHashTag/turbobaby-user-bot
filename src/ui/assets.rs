@@ -34,11 +34,17 @@ pub mod game {
     pub const SPRITE_14: &str = "/assets/game/14.png";
 }
 
-/// Member card images — served from /assets/member-cards/
+/// Member card images — served from /assets/member-cards/.
+///
+/// `*-member-full.webp` are the full 1536×1024 RGBA cards used as the
+/// background of the profile screen. Cycle #15 replaced the 3 MB lossless
+/// PNG originals with lossy q=80 webp, saving ~8 MB per profile load.
+/// `*-member.webp` are small bud thumbnails (~70 KB) — distinct images,
+/// not lower-res versions of the full cards.
 pub mod member_cards {
-    pub const BRASS: &str = "/assets/member-cards/brass-member.PNG";
-    pub const SILVER: &str = "/assets/member-cards/silver-member.PNG";
-    pub const GOLD: &str = "/assets/member-cards/gold-member.PNG";
+    pub const BRASS: &str = "/assets/member-cards/brass-member-full.webp";
+    pub const SILVER: &str = "/assets/member-cards/silver-member-full.webp";
+    pub const GOLD: &str = "/assets/member-cards/gold-member-full.webp";
     pub const BRONZE_WEBP: &str = "/assets/member-cards/bronze-member.webp";
     pub const SILVER_WEBP: &str = "/assets/member-cards/silver-member.webp";
     pub const GOLD_WEBP: &str = "/assets/member-cards/gold-member.webp";

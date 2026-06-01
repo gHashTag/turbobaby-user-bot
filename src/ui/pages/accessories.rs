@@ -71,15 +71,23 @@ fn ProductGrid(accessories: Vec<Accessory>) -> Element {
 #[component]
 fn AccessoryCard(accessory: Accessory) -> Element {
     let available = accessory.is_available;
-    let price = format!("{:.0}", accessory.price);
+    let price = if accessory.price.is_finite() {
+        format!("{:.0}", accessory.price.max(0.0))
+    } else {
+        "0".to_string()
+    };
+
+    let img_url = accessory.image_url.as_str();
+    let has_image = !img_url.is_empty()
+        && (img_url.starts_with("http://") || img_url.starts_with("https://") || (img_url.starts_with("/") && !img_url.starts_with("//")));
 
     rsx! {
         div { class: "product-card",
             div { class: "product-image",
-                if accessory.image_url.is_empty() {
+                if !has_image {
                     div { class: "product-placeholder", "tool" }
                 } else {
-                    img { src: "{accessory.image_url}?v=2", alt: "{accessory.name}" }
+                    img { src: "{img_url}?v=2", alt: "{accessory.name}" }
                 }
                 if !available {
                     div { class: "product-badge", "Out of Stock" }

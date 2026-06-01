@@ -46,16 +46,19 @@ pub fn Checkout() -> Element {
                         h2 { "Your Order" }
                         div { class: "checkout-items",
                             for item in cart.read().items.iter() {
+                                let line_price = if item.price.is_finite() { item.price.max(0.0) * item.quantity as f64 } else { 0.0 };
                                 div { class: "checkout-item",
                                     span { class: "item-name", "{item.name}" }
                                     span { class: "item-qty", "x{item.quantity}" }
-                                    span { class: "item-price", "{item.price * item.quantity as f64} ₽" }
+                                    span { class: "item-price", "{line_price} ₽" }
                                 }
                             }
                         }
+                        let cart_total = cart.read().total;
+                        let display_total = if cart_total.is_finite() { cart_total.max(0.0) } else { 0.0 };
                         div { class: "checkout-total",
                             span { "Total:" }
-                            span { class: "total-amount", "{cart.read().total} ₽" }
+                            span { class: "total-amount", "{display_total} ₽" }
                         }
                     }
 

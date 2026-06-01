@@ -1,29 +1,44 @@
-pub mod auth;
-pub mod orders;
-pub mod strains;
-pub mod loyalty;
 pub mod admin;
-pub mod upload;
-pub mod catalog;
-pub mod quest;
-pub mod happy_hour;
-pub mod garden;
-pub mod referrals;
-pub mod tech_tree;
-pub mod cart;
+pub mod auth;
 pub mod cache;
+pub mod cart;
+pub mod catalog;
+pub mod garden;
+pub mod happy_hour;
+pub mod loyalty;
 #[cfg(feature = "utoipa")]
 pub mod openapi;
+pub mod orders;
+pub mod quest;
+pub mod rate_limit;
+pub mod referrals;
+pub mod strains;
+pub mod tech_tree;
+pub mod upload;
 
-use axum::{
-    Router,
-    routing::get,
-    response::Json,
-    extract::DefaultBodyLimit,
-};
-use axum::http::StatusCode;
-use serde_json::{json, Value};
 use crate::AppState;
+use axum::http::StatusCode;
+use axum::{extract::DefaultBodyLimit, response::Json, routing::get, Router};
+use serde_json::{json, Value};
+
+/// Extract a required boolean field from a JSON body.
+pub(crate) fn extract_bool(body: &Value, key: &str) -> Result<bool, StatusCode> {
+    body.get(key)
+        .and_then(|v| v.as_bool())
+        .ok_or(StatusCode::BAD_REQUEST)
+}
+
+/// Extract a required discount field (f64, 0..=100, finite) from a JSON body.
+pub(crate) fn extract_discount(body: &Value) -> Result<f64, StatusCode> {
+    let discount = body
+        .get("discount")
+        .and_then(|v| v.as_f64())
+        .ok_or(StatusCode::BAD_REQUEST)?;
+    if !discount.is_finite() || !(0.0..=100.0).contains(&discount) {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    Ok(discount)
+}
 
 /// Validates that a URL is either empty/None or starts with an allowed scheme.
 /// Allowed: http://, https://, /, data:image/, data:video/
@@ -90,8 +105,9 @@ async fn health_handler() -> Json<Value> {
 
 #[cfg(test)]
 mod tests {
-    use super::validate_url;
+    use super::{extract_bool, extract_discount, validate_url};
     use axum::http::StatusCode;
+    use serde_json::json;
 
     #[test]
     fn validate_url_accepts_none() {
@@ -130,27 +146,116 @@ mod tests {
 
     #[test]
     fn validate_url_rejects_javascript() {
-        assert_eq!(validate_url(&Some("javascript:alert(1)".to_string())).unwrap_err(), StatusCode::BAD_REQUEST);
+        assert_eq!(
+            validate_url(&Some("javascript:alert(1)".to_string())).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
     }
 
     #[test]
     fn validate_url_rejects_data_text_html() {
-        assert_eq!(validate_url(&Some("data:text/html,<script>alert(1)</script>".to_string())).unwrap_err(), StatusCode::BAD_REQUEST);
+        assert_eq!(
+            validate_url(&Some(
+                "data:text/html,<script>alert(1)</script>".to_string()
+            ))
+            .unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
     }
 
     #[test]
     fn validate_url_rejects_ftp() {
-        assert_eq!(validate_url(&Some("ftp://evil.com/file.jpg".to_string())).unwrap_err(), StatusCode::BAD_REQUEST);
+        assert_eq!(
+            validate_url(&Some("ftp://evil.com/file.jpg".to_string())).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
     }
 
     #[test]
     fn validate_url_rejects_protocol_relative() {
-        assert_eq!(validate_url(&Some("//evil.com/img.jpg".to_string())).unwrap_err(), StatusCode::BAD_REQUEST);
+        assert_eq!(
+            validate_url(&Some("//evil.com/img.jpg".to_string())).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
     }
 
     #[test]
     fn validate_url_rejects_too_long() {
         let long = "https://x.com/".to_string() + &"a".repeat(3000);
-        assert_eq!(validate_url(&Some(long)).unwrap_err(), StatusCode::BAD_REQUEST);
+        assert_eq!(
+            validate_url(&Some(long)).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
+    }
+
+    #[test]
+    fn test_extract_bool_true() {
+        assert!(extract_bool(&json!({"k": true}), "k").unwrap());
+    }
+
+    #[test]
+    fn test_extract_bool_false() {
+        assert!(!extract_bool(&json!({"k": false}), "k").unwrap());
+    }
+
+    #[test]
+    fn test_extract_bool_missing() {
+        assert_eq!(
+            extract_bool(&json!({}), "k").unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
+    }
+
+    #[test]
+    fn test_extract_bool_not_bool() {
+        assert_eq!(
+            extract_bool(&json!({"k": "true"}), "k").unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
+    }
+
+    #[test]
+    fn test_extract_discount_ok() {
+        assert_eq!(extract_discount(&json!({"discount": 15.0})).unwrap(), 15.0);
+    }
+
+    #[test]
+    fn test_extract_discount_missing() {
+        assert_eq!(
+            extract_discount(&json!({})).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
+    }
+
+    #[test]
+    fn test_extract_discount_not_number() {
+        assert_eq!(
+            extract_discount(&json!({"discount": "ten"})).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
+    }
+
+    #[test]
+    fn test_extract_discount_negative() {
+        assert_eq!(
+            extract_discount(&json!({"discount": -1.0})).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
+    }
+
+    #[test]
+    fn test_extract_discount_too_high() {
+        assert_eq!(
+            extract_discount(&json!({"discount": 101.0})).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
+    }
+
+    #[test]
+    fn test_extract_discount_nan() {
+        assert_eq!(
+            extract_discount(&json!({"discount": f64::NAN})).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
     }
 }

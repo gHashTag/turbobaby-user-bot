@@ -8,9 +8,9 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 use tracing::error;
 
-use crate::api::auth::{check_admin, check_not_blocked};
-use crate::AppState;
+use crate::api::auth::{check_admin, check_not_blocked, validate_telegram_id_param};
 use crate::db::orders::{Order, OrderItem};
+use crate::AppState;
 
 #[derive(Debug, Deserialize)]
 pub struct CreateOrderRequest {
@@ -43,26 +43,46 @@ pub fn routes() -> Router<AppState> {
 
 /// Validates a CreateOrderRequest. Returns the sanitized bonus_used on success.
 fn validate_create_order(req: &CreateOrderRequest) -> Result<f64, StatusCode> {
-    if let Some(ref name) = req.customer_name { if name.len() > 200 { return Err(StatusCode::BAD_REQUEST); } }
-    if let Some(ref phone) = req.customer_phone { if phone.len() > 50 { return Err(StatusCode::BAD_REQUEST); } }
-    if let Some(ref tg) = req.customer_telegram { if tg.len() > 100 { return Err(StatusCode::BAD_REQUEST); } }
-    if let Some(ref shop_id) = req.shop_id { if shop_id.len() > 200 { return Err(StatusCode::BAD_REQUEST); } }
+    if let Some(ref name) = req.customer_name {
+        if name.len() > 200 {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    }
+    if let Some(ref phone) = req.customer_phone {
+        if phone.len() > 50 {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    }
+    if let Some(ref tg) = req.customer_telegram {
+        if tg.len() > 100 {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    }
+    if let Some(ref shop_id) = req.shop_id {
+        if shop_id.len() > 200 {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    }
     if req.items.is_empty() || req.items.len() > 100 {
         return Err(StatusCode::BAD_REQUEST);
     }
     if req.items.iter().any(|i| {
         i.strain_id.as_ref().is_some_and(|n| n.len() > 200)
-        || i.strain_name.as_ref().is_some_and(|n| n.len() > 200)
-        || i.accessory_id.as_ref().is_some_and(|n| n.len() > 200)
-        || i.accessory_name.as_ref().is_some_and(|n| n.len() > 200)
-        || i.tea_id.as_ref().is_some_and(|n| n.len() > 200)
-        || i.tea_name.as_ref().is_some_and(|n| n.len() > 200)
-        || i.set_id.as_ref().is_some_and(|n| n.len() > 200)
-        || i.set_name.as_ref().is_some_and(|n| n.len() > 200)
+            || i.strain_name.as_ref().is_some_and(|n| n.len() > 200)
+            || i.accessory_id.as_ref().is_some_and(|n| n.len() > 200)
+            || i.accessory_name.as_ref().is_some_and(|n| n.len() > 200)
+            || i.tea_id.as_ref().is_some_and(|n| n.len() > 200)
+            || i.tea_name.as_ref().is_some_and(|n| n.len() > 200)
+            || i.set_id.as_ref().is_some_and(|n| n.len() > 200)
+            || i.set_name.as_ref().is_some_and(|n| n.len() > 200)
     }) {
         return Err(StatusCode::BAD_REQUEST);
     }
-    if req.items.iter().any(|i| !i.quantity.is_finite() || i.quantity <= 0.0) {
+    if req
+        .items
+        .iter()
+        .any(|i| !i.quantity.is_finite() || i.quantity <= 0.0)
+    {
         return Err(StatusCode::BAD_REQUEST);
     }
     if !req.total.is_finite() || req.total < 0.0 {
@@ -99,18 +119,29 @@ async fn create_order(
     let bonus_used = validate_create_order(&req)?;
 
     let id = uuid::Uuid::new_v4().to_string();
-    let items_json = serde_json::to_value(&req.items)
-        .map_err(|e| { error!("items serialization failed: {}", e); StatusCode::BAD_REQUEST })?;
+    let items_json = serde_json::to_value(&req.items).map_err(|e| {
+        error!("items serialization failed: {}", e);
+        StatusCode::BAD_REQUEST
+    })?;
 
     // Atomic transaction: rate-limit check, bonus deduction, and insert order together.
-    let mut client = state.db.pool.get().await.map_err(|e| { error!("create_order pool error: {}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
-    let tx = client.transaction().await.map_err(|e| { error!("create_order tx error: {}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
+    let mut client = state.db.pool.get().await.map_err(|e| {
+        error!("create_order pool error: {}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+    let tx = client.transaction().await.map_err(|e| {
+        error!("create_order tx error: {}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
 
     // Serialize order creation per user to close the rate-limit race window.
     if let Some(tid) = req.telegram_id {
         tx.execute("SELECT pg_advisory_xact_lock($1)", &[&tid])
             .await
-            .map_err(|e| { error!("advisory lock error: {}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
+            .map_err(|e| {
+                error!("advisory lock error: {}", e);
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?;
     }
 
     // Rate-limit inside tx to close the race window.
@@ -120,7 +151,9 @@ async fn create_order(
             &[&tid],
         ).await.map_err(|e| { error!("rate-limit check error: {}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
         if recent.is_some() {
-            if let Err(e) = tx.rollback().await { tracing::error!("create_order rollback error: {}", e); }
+            if let Err(e) = tx.rollback().await {
+                tracing::error!("create_order rollback error: {}", e);
+            }
             return Err(StatusCode::TOO_MANY_REQUESTS);
         }
     }
@@ -133,11 +166,15 @@ async fn create_order(
                 &[&bonus_used, &tid],
             ).await.map_err(|e| { error!("bonus deduction error: {}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
             if deducted == 0 {
-                if let Err(e) = tx.rollback().await { tracing::error!("create_order rollback error: {}", e); }
+                if let Err(e) = tx.rollback().await {
+                    tracing::error!("create_order rollback error: {}", e);
+                }
                 return Err(StatusCode::BAD_REQUEST);
             }
         } else {
-            if let Err(e) = tx.rollback().await { tracing::error!("create_order rollback error: {}", e); }
+            if let Err(e) = tx.rollback().await {
+                tracing::error!("create_order rollback error: {}", e);
+            }
             return Err(StatusCode::BAD_REQUEST);
         }
     }
@@ -159,7 +196,18 @@ async fn create_order(
     let order_id = id.clone();
     let items_v = items_json.clone();
     tokio::spawn(async move {
-        notify_admins(&bot, &config, &order_id, &req.customer_name, &req.customer_telegram, &items_v, req.subtotal, bonus_used, req.total).await;
+        notify_admins(
+            &bot,
+            &config,
+            &order_id,
+            &req.customer_name,
+            &req.customer_telegram,
+            &items_v,
+            req.subtotal,
+            bonus_used,
+            req.total,
+        )
+        .await;
     });
 
     Ok(Json(json!({ "success": true, "order_id": id })))
@@ -182,19 +230,27 @@ async fn notify_admins(
     use teloxide::prelude::*;
     use teloxide::types::{InlineKeyboardButton, InlineKeyboardMarkup};
 
-    let items_text = items.as_array().map(|arr| {
-        arr.iter().map(|item| {
-            let name = item["strain_name"].as_str()
-                .or(item["accessory_name"].as_str())
-                .or(item["tea_name"].as_str())
-                .or(item["set_name"].as_str())
-                .unwrap_or("?");
-            let qty = item["quantity"].as_f64().unwrap_or(0.0);
-            format!("  • {} × {}g", html_escape(name), qty)
-        }).collect::<Vec<_>>().join("\n")
-    }).unwrap_or_default();
+    let items_text = items
+        .as_array()
+        .map(|arr| {
+            arr.iter()
+                .map(|item| {
+                    let name = item["strain_name"]
+                        .as_str()
+                        .or(item["accessory_name"].as_str())
+                        .or(item["tea_name"].as_str())
+                        .or(item["set_name"].as_str())
+                        .unwrap_or("?");
+                    let qty = item["quantity"].as_f64().unwrap_or(0.0);
+                    format!("  • {} × {}g", html_escape(name), qty)
+                })
+                .collect::<Vec<_>>()
+                .join("\n")
+        })
+        .unwrap_or_default();
 
-    let source = customer_telegram.as_ref()
+    let source = customer_telegram
+        .as_ref()
         .map(|t| format!("@{}", html_escape(t)))
         .or_else(|| customer_name.as_ref().map(|n| html_escape(n)))
         .unwrap_or_else(|| "Anonymous".into());
@@ -210,12 +266,17 @@ async fn notify_admins(
     ]]);
 
     for admin_id in &config.admin_ids {
-        if let Err(e) = bot.send_message(teloxide::types::ChatId(*admin_id), &text)
+        if let Err(e) = bot
+            .send_message(teloxide::types::ChatId(*admin_id), &text)
             .parse_mode(teloxide::types::ParseMode::Html)
             .reply_markup(btns.clone())
             .await
         {
-            tracing::warn!("notify_admins (order) failed for admin_id={}: {}", admin_id, e);
+            tracing::warn!(
+                "notify_admins (order) failed for admin_id={}: {}",
+                admin_id,
+                e
+            );
         }
     }
 }
@@ -226,9 +287,20 @@ async fn get_orders(
     Query(params): Query<std::collections::HashMap<String, String>>,
 ) -> Result<Json<Value>, StatusCode> {
     check_admin(&headers, &state)?;
-    let limit = params.get("limit").and_then(|v| v.parse::<i64>().ok()).unwrap_or(100).clamp(1, 500);
-    let offset = params.get("offset").and_then(|v| v.parse::<i64>().ok()).unwrap_or(0).max(0);
-    let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
+    let limit = params
+        .get("limit")
+        .and_then(|v| v.parse::<i64>().ok())
+        .unwrap_or(100)
+        .clamp(1, 500);
+    let offset = params
+        .get("offset")
+        .and_then(|v| v.parse::<i64>().ok())
+        .unwrap_or(0)
+        .max(0);
+    let client = state.db.pool.get().await.map_err(|e| {
+        tracing::error!("DB error: {:?}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
     let rows = client.query(
         "SELECT id, telegram_id, customer_name, customer_phone, customer_telegram, items, subtotal::float8, bonus_used::float8, total::float8, status, shop_id, created_at FROM orders ORDER BY created_at DESC LIMIT $1 OFFSET $2",
         &[&limit, &offset],
@@ -242,9 +314,14 @@ async fn get_order(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<Value>, StatusCode> {
-    if id.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
+    if id.len() > 200 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
     check_admin(&headers, &state)?;
-    let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
+    let client = state.db.pool.get().await.map_err(|e| {
+        tracing::error!("DB error: {:?}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
     let row = client.query_opt(
         "SELECT id, telegram_id, customer_name, customer_phone, customer_telegram, items, subtotal::float8, bonus_used::float8, total::float8, status, shop_id, created_at FROM orders WHERE id = $1",
         &[&id],
@@ -255,45 +332,83 @@ async fn get_order(
     }
 }
 
+pub(crate) fn validate_update_order_status(id: &str, status: &str) -> Result<(), StatusCode> {
+    if id.len() > 200 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    if status.len() > 50 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    const VALID_STATUSES: &[&str] = &[
+        "pending",
+        "confirmed",
+        "completed",
+        "rejected",
+        "ready",
+        "cancelled",
+    ];
+    if !VALID_STATUSES.contains(&status) {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    Ok(())
+}
+
 async fn update_order_status(
     headers: HeaderMap,
     State(state): State<AppState>,
     Path(id): Path<String>,
     Json(req): Json<UpdateOrderStatusRequest>,
 ) -> Result<Json<Value>, StatusCode> {
-    if id.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
+    validate_update_order_status(&id, &req.status)?;
     check_admin(&headers, &state)?;
-    if req.status.len() > 50 { return Err(StatusCode::BAD_REQUEST); }
-    const VALID_STATUSES: &[&str] = &["pending", "confirmed", "completed", "rejected", "ready", "cancelled"];
-    if !VALID_STATUSES.contains(&req.status.as_str()) {
-        return Err(StatusCode::BAD_REQUEST);
-    }
-    let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
-    let current_status: Option<String> = client.query_opt("SELECT status FROM orders WHERE id = $1", &[&id])
-        .await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?
+    let client = state.db.pool.get().await.map_err(|e| {
+        tracing::error!("DB error: {:?}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+    let current_status: Option<String> = client
+        .query_opt("SELECT status FROM orders WHERE id = $1", &[&id])
+        .await
+        .map_err(|e| {
+            tracing::error!("DB error: {:?}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?
         .map(|r| r.try_get("status").unwrap_or_default());
     match current_status {
-        Some(ref current) if (current == "completed" || current == "rejected" || current == "cancelled")
-            && req.status != *current => {
-                return Err(StatusCode::BAD_REQUEST);
-            }
+        Some(ref current)
+            if (current == "completed" || current == "rejected" || current == "cancelled")
+                && req.status != *current =>
+        {
+            return Err(StatusCode::BAD_REQUEST);
+        }
         None => return Err(StatusCode::NOT_FOUND),
         _ => {}
     }
 
     if req.status == "completed" {
-        if let Err(e) = crate::db::orders::complete_order_and_update_loyalty(&state.db.pool, &id).await {
-            tracing::error!("update_order_status: complete_order_and_update_loyalty error: {}", e);
+        if let Err(e) =
+            crate::db::orders::complete_order_and_update_loyalty(&state.db.pool, &id).await
+        {
+            tracing::error!(
+                "update_order_status: complete_order_and_update_loyalty error: {}",
+                e
+            );
             return Err(StatusCode::INTERNAL_SERVER_ERROR);
         }
     } else {
-        let mut client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
+        let mut client = state.db.pool.get().await.map_err(|e| {
+            tracing::error!("DB error: {:?}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
         if req.status == "rejected" {
-            let tx = client.transaction().await.map_err(|e| { tracing::error!("DB tx error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
+            let tx = client.transaction().await.map_err(|e| {
+                tracing::error!("DB tx error: {:?}", e);
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?;
             if let Some(r) = tx.query_opt("SELECT telegram_id, bonus_used::float8, status FROM orders WHERE id = $1 FOR UPDATE", &[&id]).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })? {
                 let current_status: String = r.try_get("status").unwrap_or_default();
                 if current_status != "rejected" && current_status != "completed" {
-                    let bonus: f64 = r.try_get::<_, f64>("bonus_used").unwrap_or(0.0);
+                    let bonus_raw: f64 = r.try_get::<_, f64>("bonus_used").unwrap_or(0.0);
+                    let bonus = if bonus_raw.is_finite() { bonus_raw.max(0.0) } else { 0.0 };
                     let tid: Option<i64> = r.try_get("telegram_id").ok().flatten();
                     if bonus > 0.0 {
                         if let Some(tid) = tid {
@@ -309,18 +424,37 @@ async fn update_order_status(
                     }
                 }
             }
-            let rows = tx.execute("UPDATE orders SET status = $1 WHERE id = $2", &[&req.status, &id])
-                .await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
+            let rows = tx
+                .execute(
+                    "UPDATE orders SET status = $1 WHERE id = $2",
+                    &[&req.status, &id],
+                )
+                .await
+                .map_err(|e| {
+                    tracing::error!("DB error: {:?}", e);
+                    StatusCode::INTERNAL_SERVER_ERROR
+                })?;
             if rows == 0 {
                 if let Err(e) = tx.rollback().await {
                     tracing::error!("update_order_status rollback error: {:?}", e);
                 }
                 return Err(StatusCode::NOT_FOUND);
             }
-            tx.commit().await.map_err(|e| { tracing::error!("DB commit error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
+            tx.commit().await.map_err(|e| {
+                tracing::error!("DB commit error: {:?}", e);
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?;
         } else {
-            let rows = client.execute("UPDATE orders SET status = $1 WHERE id = $2", &[&req.status, &id])
-                .await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
+            let rows = client
+                .execute(
+                    "UPDATE orders SET status = $1 WHERE id = $2",
+                    &[&req.status, &id],
+                )
+                .await
+                .map_err(|e| {
+                    tracing::error!("DB error: {:?}", e);
+                    StatusCode::INTERNAL_SERVER_ERROR
+                })?;
             if rows == 0 {
                 return Err(StatusCode::NOT_FOUND);
             }
@@ -334,21 +468,27 @@ async fn get_user_orders(
     State(state): State<AppState>,
     Path(telegram_id): Path<i64>,
 ) -> Result<Json<Value>, StatusCode> {
+    validate_telegram_id_param(telegram_id)?;
     crate::api::auth::check_owner(&headers, &state, telegram_id)?;
     check_not_blocked(&state, telegram_id).await?;
-    let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
+    let client = state.db.pool.get().await.map_err(|e| {
+        tracing::error!("DB error: {:?}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
     let rows = client.query(
         "SELECT id, telegram_id, customer_name, customer_phone, customer_telegram, items, subtotal::float8, bonus_used::float8, total::float8, status, shop_id, created_at FROM orders WHERE telegram_id = $1 ORDER BY created_at DESC LIMIT 50",
         &[&telegram_id],
     ).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
-    Ok(Json(json!({ "orders": rows.iter().map(Order::from_row).collect::<Vec<_>>() })))
+    Ok(Json(
+        json!({ "orders": rows.iter().map(Order::from_row).collect::<Vec<_>>() }),
+    ))
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{CreateOrderRequest, validate_create_order};
-    use axum::http::StatusCode;
+    use super::{validate_create_order, validate_update_order_status, CreateOrderRequest};
     use crate::db::orders::OrderItem;
+    use axum::http::StatusCode;
 
     fn valid_req() -> CreateOrderRequest {
         CreateOrderRequest {
@@ -396,84 +536,116 @@ mod tests {
     fn test_validate_empty_items() {
         let mut req = valid_req();
         req.items = vec![];
-        assert_eq!(validate_create_order(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+        assert_eq!(
+            validate_create_order(&req).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
     }
 
     #[test]
     fn test_validate_too_many_items() {
         let mut req = valid_req();
-        req.items = (0..101).map(|_| OrderItem {
-            strain_id: Some("s".into()),
-            strain_name: Some("X".into()),
-            accessory_id: None,
-            accessory_name: None,
-            tea_id: None,
-            tea_name: None,
-            set_id: None,
-            set_name: None,
-            quantity: 1.0,
-            is_set: None,
-            is_accessory: None,
-            is_tea: None,
-            is_tea_set: None,
-        }).collect();
-        assert_eq!(validate_create_order(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+        req.items = (0..101)
+            .map(|_| OrderItem {
+                strain_id: Some("s".into()),
+                strain_name: Some("X".into()),
+                accessory_id: None,
+                accessory_name: None,
+                tea_id: None,
+                tea_name: None,
+                set_id: None,
+                set_name: None,
+                quantity: 1.0,
+                is_set: None,
+                is_accessory: None,
+                is_tea: None,
+                is_tea_set: None,
+            })
+            .collect();
+        assert_eq!(
+            validate_create_order(&req).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
     }
 
     #[test]
     fn test_validate_name_too_long() {
         let mut req = valid_req();
         req.customer_name = Some("a".repeat(201));
-        assert_eq!(validate_create_order(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+        assert_eq!(
+            validate_create_order(&req).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
     }
 
     #[test]
     fn test_validate_phone_too_long() {
         let mut req = valid_req();
         req.customer_phone = Some("a".repeat(51));
-        assert_eq!(validate_create_order(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+        assert_eq!(
+            validate_create_order(&req).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
     }
 
     #[test]
     fn test_validate_telegram_too_long() {
         let mut req = valid_req();
         req.customer_telegram = Some("a".repeat(101));
-        assert_eq!(validate_create_order(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+        assert_eq!(
+            validate_create_order(&req).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
     }
 
     #[test]
     fn test_validate_shop_id_too_long() {
         let mut req = valid_req();
         req.shop_id = Some("a".repeat(201));
-        assert_eq!(validate_create_order(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+        assert_eq!(
+            validate_create_order(&req).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
     }
 
     #[test]
     fn test_validate_strain_id_too_long() {
         let mut req = valid_req();
         req.items[0].strain_id = Some("a".repeat(201));
-        assert_eq!(validate_create_order(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+        assert_eq!(
+            validate_create_order(&req).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
     }
 
     #[test]
     fn test_validate_negative_total() {
         let mut req = valid_req();
         req.total = -1.0;
-        assert_eq!(validate_create_order(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+        assert_eq!(
+            validate_create_order(&req).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
     }
 
     #[test]
     fn test_validate_nan_total() {
         let mut req = valid_req();
         req.total = f64::NAN;
-        assert_eq!(validate_create_order(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+        assert_eq!(
+            validate_create_order(&req).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
     }
 
     #[test]
     fn test_validate_negative_quantity() {
         let mut req = valid_req();
         req.items[0].quantity = -1.0;
-        assert_eq!(validate_create_order(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+        assert_eq!(
+            validate_create_order(&req).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
     }
 
     #[test]
@@ -482,14 +654,20 @@ mod tests {
         req.bonus_used = Some(101.0);
         req.total = -1.0; // will fail before math check, but let's set valid total
         req.total = 0.0;
-        assert_eq!(validate_create_order(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+        assert_eq!(
+            validate_create_order(&req).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
     }
 
     #[test]
     fn test_validate_total_mismatch() {
         let mut req = valid_req();
         req.total = 95.0; // expected 90.0
-        assert_eq!(validate_create_order(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+        assert_eq!(
+            validate_create_order(&req).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
     }
 
     #[test]
@@ -497,5 +675,34 @@ mod tests {
         let mut req = valid_req();
         req.total = 90.009; // within 0.01 of expected 90.0
         assert_eq!(validate_create_order(&req).unwrap(), 10.0);
+    }
+
+    #[test]
+    fn test_validate_update_order_status_ok() {
+        assert!(validate_update_order_status("abc123", "confirmed").is_ok());
+    }
+
+    #[test]
+    fn test_validate_update_order_status_id_too_long() {
+        assert_eq!(
+            validate_update_order_status(&"a".repeat(201), "confirmed").unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
+    }
+
+    #[test]
+    fn test_validate_update_order_status_too_long() {
+        assert_eq!(
+            validate_update_order_status("abc", &"a".repeat(51)).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
+    }
+
+    #[test]
+    fn test_validate_update_order_status_invalid() {
+        assert_eq!(
+            validate_update_order_status("abc", "shipped").unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
     }
 }

@@ -1,7 +1,7 @@
-use dioxus::prelude::*;
 use crate::ui::api::types::Strain;
 use crate::ui::components::StrainCard;
 use crate::ui::state::{CartItem, CartItemType};
+use dioxus::prelude::*;
 
 #[derive(Props, PartialEq, Clone)]
 pub struct StrainGridProps {

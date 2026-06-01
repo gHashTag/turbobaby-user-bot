@@ -1,0 +1,22 @@
+# Pinned Rust toolchain for woody-weed-bot.
+#
+# Closes the "works on my machine" gap left by cycle #51: rustfmt.toml +
+# .editorconfig fix the *output*, this fixes the *tool* itself. Without it,
+# contributors with nightly or a much older stable may produce subtly
+# different MIR, hit different lints, or fail in CI but pass locally.
+#
+# Channel choice: `stable`, not a hardcoded version. Devs run `rustup update`
+# normally; pinning to `1.96.0` would force everyone to download a specific
+# build for no real-world reproducibility win at this project scale.
+# Bump the minimum via `Cargo.toml`'s `rust-version` field when needed.
+#
+# `components`: rustup auto-installs the listed pieces, so a fresh clone
+# can run `cargo fmt` / `cargo clippy` without an extra setup step.
+# `targets`: pre-pulls the wasm32 std so the lefthook `check-wasm` step
+# doesn't fail on first run with a confusing "target not installed" error.
+
+[toolchain]
+channel    = "stable"
+components = ["rustfmt", "clippy"]
+targets    = ["wasm32-unknown-unknown"]
+profile    = "minimal"

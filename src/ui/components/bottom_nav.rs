@@ -1,5 +1,6 @@
-use dioxus::prelude::*;
+use crate::ui::prefetch;
 use crate::ui::routes::Route;
+use dioxus::prelude::*;
 
 #[component]
 pub fn BottomNav(#[props(default)] cart_count: u32) -> Element {
@@ -18,48 +19,56 @@ pub fn BottomNav(#[props(default)] cart_count: u32) -> Element {
         nav { class: "bottom-nav",
             Link { to: Route::Home {},
                 div { class: if is_home { "nav-item active" } else { "nav-item" },
+                    onmouseenter: move |_| { prefetch::prefetch_route(&Route::Home {}); },
                     span { class: "nav-icon", "🪵" }
                     span { class: "nav-label", "Home" }
                 }
             }
             Link { to: Route::Menu {},
                 div { class: if is_menu { "nav-item active" } else { "nav-item" },
+                    onmouseenter: move |_| { prefetch::prefetch_route(&Route::Menu {}); },
                     span { class: "nav-icon", "🌿" }
                     span { class: "nav-label", "Menu" }
                 }
             }
             Link { to: Route::Sets {},
                 div { class: if is_sets { "nav-item active" } else { "nav-item" },
+                    onmouseenter: move |_| { prefetch::prefetch_route(&Route::Sets {}); },
                     span { class: "nav-icon", "🎁" }
                     span { class: "nav-label", "Sets" }
                 }
             }
             Link { to: Route::Accessories {},
                 div { class: if is_accessories { "nav-item active" } else { "nav-item" },
+                    onmouseenter: move |_| { prefetch::prefetch_route(&Route::Accessories {}); },
                     span { class: "nav-icon", "🛠️" }
                     span { class: "nav-label", "Gear" }
                 }
             }
             Link { to: Route::Tea {},
                 div { class: if is_tea { "nav-item active" } else { "nav-item" },
+                    onmouseenter: move |_| { prefetch::prefetch_route(&Route::Tea {}); },
                     span { class: "nav-icon", "🍵" }
                     span { class: "nav-label", "Tea" }
                 }
             }
             Link { to: Route::Garden {},
                 div { class: if is_garden { "nav-item active" } else { "nav-item" },
+                    onmouseenter: move |_| { prefetch::prefetch_route(&Route::Garden {}); },
                     span { class: "nav-icon", "🌱" }
                     span { class: "nav-label", "Garden" }
                 }
             }
             Link { to: Route::Quest { id: "daily".to_string() },
                 div { class: if is_quest { "nav-item active" } else { "nav-item" },
+                    onmouseenter: move |_| { prefetch::prefetch_route(&Route::Quest { id: "daily".to_string() }); },
                     span { class: "nav-icon", "🗺️" }
                     span { class: "nav-label", "Quest" }
                 }
             }
             Link { to: Route::Cart {},
                 div { class: if is_cart { "nav-item active" } else { "nav-item" }, style: "position: relative;",
+                    onmouseenter: move |_| { prefetch::prefetch_route(&Route::Cart {}); },
                     span { class: "nav-icon", "🛒" }
                     if cart_count > 0 {
                         span { class: "cart-badge",
@@ -71,6 +80,7 @@ pub fn BottomNav(#[props(default)] cart_count: u32) -> Element {
             }
             Link { to: Route::Profile {},
                 div { class: if is_profile { "nav-item active" } else { "nav-item" },
+                    onmouseenter: move |_| { prefetch::prefetch_route(&Route::Profile {}); },
                     span { class: "nav-icon", "👤" }
                     span { class: "nav-label", "Profile" }
                 }

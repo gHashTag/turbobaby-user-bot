@@ -36,7 +36,8 @@ fn ProfileCard(profile: LoyaltyProfile, user_data: Option<serde_json::Value>) ->
     };
 
     let bonus_balance = profile.points as f64;
-    let total_spent = (profile.total_spent * 100.0).round() / 100.0;
+    let total_spent_raw = if profile.total_spent.is_finite() { profile.total_spent.max(0.0) } else { 0.0 };
+    let total_spent = (total_spent_raw * 100.0).round() / 100.0;
 
     rsx! {
         div { class: "profile-container",
@@ -104,23 +105,25 @@ fn ProfileCard(profile: LoyaltyProfile, user_data: Option<serde_json::Value>) ->
 }
 
 fn get_progress_percent(tier: &LoyaltyTier, spent: f64) -> i32 {
+    let safe_spent = if spent.is_finite() { spent.max(0.0) } else { 0.0 };
     let (min, max) = match tier {
         LoyaltyTier::None | LoyaltyTier::Brass | LoyaltyTier::Bronze => (0.0, 5000.0),
         LoyaltyTier::Silver => (5000.0, 20000.0),
         LoyaltyTier::Gold => (20000.0, 100000.0),
     };
-    let progress = ((spent - min) / (max - min) * 100.0).min(100.0).max(0.0);
+    let progress = ((safe_spent - min) / (max - min) * 100.0).min(100.0).max(0.0);
     progress as i32
 }
 
 fn get_next_tier_info(tier: &LoyaltyTier, spent: f64) -> String {
+    let safe_spent = if spent.is_finite() { spent.max(0.0) } else { 0.0 };
     match tier {
         LoyaltyTier::None | LoyaltyTier::Brass | LoyaltyTier::Bronze => {
-            let remaining = (5000.0 - spent).max(0.0) as i64;
+            let remaining = (5000.0 - safe_spent).max(0.0) as i64;
             format!("До Silver: {} ₽", remaining)
         }
         LoyaltyTier::Silver => {
-            let remaining = (20000.0 - spent).max(0.0) as i64;
+            let remaining = (20000.0 - safe_spent).max(0.0) as i64;
             format!("До Gold: {} ₽", remaining)
         }
         LoyaltyTier::Gold => {

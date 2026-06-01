@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 // Admin API routes
-use crate::api::auth::{check_admin, validate_init_data};
+use crate::api::auth::{check_admin, validate_init_data, validate_telegram_id_param};
 use crate::AppState;
 
 /// Global async mutex serializes admin-login attempts so that brute-force
@@ -49,7 +49,10 @@ pub fn routes() -> Router<AppState> {
         .route("/admin/data", get(get_stats))
         .route("/admin/managers", get(get_managers).post(create_manager))
         .route("/admin/managers/:telegram_id/stats", get(get_manager_stats))
-        .route("/admin/managers/:telegram_id", put(update_manager).delete(delete_manager))
+        .route(
+            "/admin/managers/:telegram_id",
+            put(update_manager).delete(delete_manager),
+        )
         .route("/admin/check", get(check_admin_access))
         .route("/admin/login", post(admin_login))
         .route("/admin/ping", get(ping))
@@ -73,13 +76,26 @@ async fn get_stats(
         .unwrap_or(0);
 
     let total_revenue: f64 = client
-        .query_one("SELECT COALESCE(SUM(total)::float8, 0.0) FROM orders WHERE status = 'completed'", &[])
+        .query_one(
+            "SELECT COALESCE(SUM(total)::float8, 0.0) FROM orders WHERE status = 'completed'",
+            &[],
+        )
         .await
-        .map(|r| r.try_get(0).unwrap_or(0.0))
+        .map(|r| {
+            let v: f64 = r.try_get(0).unwrap_or(0.0);
+            if v.is_finite() {
+                v.max(0.0)
+            } else {
+                0.0
+            }
+        })
         .unwrap_or(0.0);
 
     let active_strains: i64 = client
-        .query_one("SELECT COUNT(*) FROM strains WHERE is_available = true", &[])
+        .query_one(
+            "SELECT COUNT(*) FROM strains WHERE is_available = true",
+            &[],
+        )
         .await
         .map(|r| r.try_get(0).unwrap_or(0))
         .unwrap_or(0);
@@ -153,8 +169,8 @@ async fn get_all_users(
         "telegram_id": r.try_get::<_, i64>("telegram_id").unwrap_or(0),
         "first_name": r.try_get::<_, Option<String>>("first_name").ok().flatten(),
         "language": r.try_get::<_, Option<String>>("language").ok().flatten(),
-        "total_spent": r.try_get::<_, Option<f64>>("total_spent").ok().flatten(),
-        "bonus_balance": r.try_get::<_, Option<f64>>("bonus_balance").ok().flatten(),
+        "total_spent": r.try_get::<_, Option<f64>>("total_spent").ok().flatten().filter(|v| v.is_finite()),
+        "bonus_balance": r.try_get::<_, Option<f64>>("bonus_balance").ok().flatten().filter(|v| v.is_finite()),
         "tier": r.try_get::<_, Option<String>>("tier").ok().flatten(),
         "is_blocked": r.try_get::<_, Option<bool>>("is_blocked").ok().flatten(),
     })).collect();
@@ -182,7 +198,7 @@ async fn get_managers(
         "name": r.try_get::<_, Option<String>>("name").ok().flatten(),
         "username": r.try_get::<_, Option<String>>("username").ok().flatten(),
         "ref_code": r.try_get::<_, Option<String>>("ref_code").ok().flatten(),
-        "commission_rate": r.try_get::<_, Option<f64>>("commission_rate").ok().flatten(),
+        "commission_rate": r.try_get::<_, Option<f64>>("commission_rate").ok().flatten().filter(|v| v.is_finite()),
     })).collect();
     Ok(Json(json!({ "managers": managers })))
 }
@@ -192,18 +208,28 @@ async fn get_manager_stats(
     State(state): State<AppState>,
     headers: HeaderMap,
 ) -> Result<Json<Value>, StatusCode> {
+    validate_telegram_id_param(telegram_id)?;
     check_admin(&headers, &state)?;
-    let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
+    let client = state.db.pool.get().await.map_err(|e| {
+        tracing::error!("DB error: {:?}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
     // NOTE: orders.referrer_id column does not exist in current schema — using 0 as placeholder.
     // When the column is added, replace 0::int with the real subquery.
-    let row = client.query_one(
-        "SELECT 
+    let row = client
+        .query_one(
+            "SELECT 
             0::int as orders_count,
             (SELECT COUNT(*) FROM referral_events WHERE referrer_id = $1)::int as referrals_count,
             (SELECT MAX(created_at) FROM referral_events WHERE referrer_id = $1) as last_referral
          ",
-        &[&telegram_id],
-    ).await.map_err(|e| { tracing::error!("manager stats: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?;
+            &[&telegram_id],
+        )
+        .await
+        .map_err(|e| {
+            tracing::error!("manager stats: {e}");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
     Ok(Json(json!({
         "telegram_id": telegram_id,
         "orders_count": row.try_get::<_, i32>("orders_count").unwrap_or(0),
@@ -229,11 +255,32 @@ struct UpdateManagerRequest {
     commission_rate: Option<f64>,
 }
 
-fn validate_manager_fields(name: &Option<String>, username: &Option<String>, ref_code: &Option<String>, commission_rate: Option<f64>) -> Result<(), StatusCode> {
-    if let Some(ref n) = name { if n.len() > 200 { return Err(StatusCode::BAD_REQUEST); } }
-    if let Some(ref u) = username { if u.len() > 200 { return Err(StatusCode::BAD_REQUEST); } }
-    if let Some(ref c) = ref_code { if c.len() > 200 { return Err(StatusCode::BAD_REQUEST); } }
-    if let Some(r) = commission_rate { if !r.is_finite() || !(0.0..=100.0).contains(&r) { return Err(StatusCode::BAD_REQUEST); } }
+fn validate_manager_fields(
+    name: &Option<String>,
+    username: &Option<String>,
+    ref_code: &Option<String>,
+    commission_rate: Option<f64>,
+) -> Result<(), StatusCode> {
+    if let Some(ref n) = name {
+        if n.len() > 200 {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    }
+    if let Some(ref u) = username {
+        if u.len() > 200 {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    }
+    if let Some(ref c) = ref_code {
+        if c.len() > 200 {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    }
+    if let Some(r) = commission_rate {
+        if !r.is_finite() || !(0.0..=100.0).contains(&r) {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    }
     Ok(())
 }
 
@@ -242,14 +289,20 @@ async fn create_manager(
     headers: HeaderMap,
     Json(req): Json<CreateManagerRequest>,
 ) -> Result<Json<Value>, StatusCode> {
+    validate_telegram_id_param(req.telegram_id)?;
     check_admin(&headers, &state)?;
     validate_manager_fields(&req.name, &req.username, &req.ref_code, req.commission_rate)?;
-    let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
+    let client = state.db.pool.get().await.map_err(|e| {
+        tracing::error!("DB error: {:?}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
     client.execute(
         "INSERT INTO managers (telegram_id, name, username, ref_code, commission_rate) VALUES ($1, $2, $3, $4, $5)",
         &[&req.telegram_id, &req.name, &req.username, &req.ref_code, &req.commission_rate],
     ).await.map_err(|e| { tracing::error!("create_manager: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?;
-    Ok(Json(json!({ "success": true, "telegram_id": req.telegram_id })))
+    Ok(Json(
+        json!({ "success": true, "telegram_id": req.telegram_id }),
+    ))
 }
 
 async fn update_manager(
@@ -258,18 +311,34 @@ async fn update_manager(
     headers: HeaderMap,
     Json(req): Json<UpdateManagerRequest>,
 ) -> Result<Json<Value>, StatusCode> {
+    validate_telegram_id_param(telegram_id)?;
     check_admin(&headers, &state)?;
     validate_manager_fields(&req.name, &req.username, &req.ref_code, req.commission_rate)?;
-    let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
-    client.execute(
-        "UPDATE managers SET
+    let client = state.db.pool.get().await.map_err(|e| {
+        tracing::error!("DB error: {:?}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+    client
+        .execute(
+            "UPDATE managers SET
             name = COALESCE($2, name),
             username = COALESCE($3, username),
             ref_code = COALESCE($4, ref_code),
             commission_rate = COALESCE($5, commission_rate)
          WHERE telegram_id = $1",
-        &[&telegram_id, &req.name, &req.username, &req.ref_code, &req.commission_rate],
-    ).await.map_err(|e| { tracing::error!("update_manager: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?;
+            &[
+                &telegram_id,
+                &req.name,
+                &req.username,
+                &req.ref_code,
+                &req.commission_rate,
+            ],
+        )
+        .await
+        .map_err(|e| {
+            tracing::error!("update_manager: {e}");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
     Ok(Json(json!({ "success": true })))
 }
 
@@ -278,10 +347,22 @@ async fn delete_manager(
     State(state): State<AppState>,
     headers: HeaderMap,
 ) -> Result<Json<Value>, StatusCode> {
+    validate_telegram_id_param(telegram_id)?;
     check_admin(&headers, &state)?;
-    let client = state.db.pool.get().await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
-    client.execute("DELETE FROM managers WHERE telegram_id = $1", &[&telegram_id])
-        .await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
+    let client = state.db.pool.get().await.map_err(|e| {
+        tracing::error!("DB error: {:?}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+    client
+        .execute(
+            "DELETE FROM managers WHERE telegram_id = $1",
+            &[&telegram_id],
+        )
+        .await
+        .map_err(|e| {
+            tracing::error!("DB error: {:?}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
     Ok(Json(json!({ "success": true })))
 }
 
@@ -290,12 +371,14 @@ async fn check_admin_access(
     Query(query): Query<AdminCheckQuery>,
     State(state): State<AppState>,
 ) -> Result<Json<Value>, StatusCode> {
+    validate_telegram_id_param(query.telegram_id)?;
     let init_data_opt = headers
         .get("X-Telegram-Init-Data")
         .and_then(|v| v.to_str().ok());
     tracing::debug!(
         "admin/check: telegram_id_query={}, init_data_present={}",
-        query.telegram_id, init_data_opt.is_some()
+        query.telegram_id,
+        init_data_opt.is_some()
     );
 
     // 1. Try Telegram initData HMAC validation
@@ -303,10 +386,16 @@ async fn check_admin_access(
         if !init_data.is_empty() {
             if let Some(user) = validate_init_data(init_data, &state.config.bot_token) {
                 if state.config.admin_ids.contains(&user.id) {
-                    tracing::debug!("admin/check: initData authenticated telegram_id={}", user.id);
+                    tracing::debug!(
+                        "admin/check: initData authenticated telegram_id={}",
+                        user.id
+                    );
                     return Ok(Json(json!({ "is_admin": true, "telegram_id": user.id })));
                 }
-                tracing::warn!("admin/check: initData valid but user not admin telegram_id={}", user.id);
+                tracing::warn!(
+                    "admin/check: initData valid but user not admin telegram_id={}",
+                    user.id
+                );
                 // Don't return here — allow password fallback below
             } else {
                 tracing::warn!("admin/check: invalid initData signature");
@@ -319,8 +408,13 @@ async fn check_admin_access(
     if let Some(token) = token_opt {
         if let Some(ref password) = state.config.admin_password {
             if crate::api::auth::verify_admin_token(token, &state.config.bot_token, password) {
-                tracing::info!("admin/check: token authenticated telegram_id={}", query.telegram_id);
-                return Ok(Json(json!({ "is_admin": true, "telegram_id": query.telegram_id })));
+                tracing::info!(
+                    "admin/check: token authenticated telegram_id={}",
+                    query.telegram_id
+                );
+                return Ok(Json(
+                    json!({ "is_admin": true, "telegram_id": query.telegram_id }),
+                ));
             }
             tracing::warn!("admin/check: token verification failed");
         } else {
@@ -333,7 +427,9 @@ async fn check_admin_access(
 }
 
 fn validate_admin_login(req: &AdminLoginRequest) -> Result<(), StatusCode> {
-    if req.password.len() > 1000 { return Err(StatusCode::BAD_REQUEST); }
+    if req.password.len() > 1000 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
     Ok(())
 }
 
@@ -356,12 +452,11 @@ async fn admin_login(
     };
     if valid {
         if let Some(ref password) = state.config.admin_password {
-            let token = crate::api::auth::generate_admin_token(
-                password,
-                &state.config.bot_token,
-            );
+            let token = crate::api::auth::generate_admin_token(password, &state.config.bot_token);
             let telegram_id = req.telegram_id.unwrap_or(0);
-            return Ok(Json(json!({ "success": true, "token": token, "telegram_id": telegram_id })));
+            return Ok(Json(
+                json!({ "success": true, "token": token, "telegram_id": telegram_id }),
+            ));
         }
     }
     tracing::warn!("admin_login: invalid password attempt");
@@ -392,12 +487,18 @@ async fn debug_validate_init_data(
 
 #[cfg(test)]
 mod tests {
-    use super::{validate_manager_fields, validate_admin_login, AdminLoginRequest};
+    use super::{validate_admin_login, validate_manager_fields, AdminLoginRequest};
     use axum::http::StatusCode;
 
     #[test]
     fn test_validate_manager_fields_ok() {
-        assert!(validate_manager_fields(&Some("Name".into()), &Some("user".into()), &Some("code".into()), Some(10.0)).is_ok());
+        assert!(validate_manager_fields(
+            &Some("Name".into()),
+            &Some("user".into()),
+            &Some("code".into()),
+            Some(10.0)
+        )
+        .is_ok());
     }
 
     #[test]
@@ -407,43 +508,70 @@ mod tests {
 
     #[test]
     fn test_validate_manager_name_too_long() {
-        assert_eq!(validate_manager_fields(&Some("a".repeat(201)), &None, &None, None).unwrap_err(), StatusCode::BAD_REQUEST);
+        assert_eq!(
+            validate_manager_fields(&Some("a".repeat(201)), &None, &None, None).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
     }
 
     #[test]
     fn test_validate_manager_username_too_long() {
-        assert_eq!(validate_manager_fields(&None, &Some("a".repeat(201)), &None, None).unwrap_err(), StatusCode::BAD_REQUEST);
+        assert_eq!(
+            validate_manager_fields(&None, &Some("a".repeat(201)), &None, None).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
     }
 
     #[test]
     fn test_validate_manager_ref_code_too_long() {
-        assert_eq!(validate_manager_fields(&None, &None, &Some("a".repeat(201)), None).unwrap_err(), StatusCode::BAD_REQUEST);
+        assert_eq!(
+            validate_manager_fields(&None, &None, &Some("a".repeat(201)), None).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
     }
 
     #[test]
     fn test_validate_manager_commission_negative() {
-        assert_eq!(validate_manager_fields(&None, &None, &None, Some(-1.0)).unwrap_err(), StatusCode::BAD_REQUEST);
+        assert_eq!(
+            validate_manager_fields(&None, &None, &None, Some(-1.0)).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
     }
 
     #[test]
     fn test_validate_manager_commission_too_high() {
-        assert_eq!(validate_manager_fields(&None, &None, &None, Some(101.0)).unwrap_err(), StatusCode::BAD_REQUEST);
+        assert_eq!(
+            validate_manager_fields(&None, &None, &None, Some(101.0)).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
     }
 
     #[test]
     fn test_validate_manager_commission_nan() {
-        assert_eq!(validate_manager_fields(&None, &None, &None, Some(f64::NAN)).unwrap_err(), StatusCode::BAD_REQUEST);
+        assert_eq!(
+            validate_manager_fields(&None, &None, &None, Some(f64::NAN)).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
     }
 
     #[test]
     fn test_validate_admin_login_ok() {
-        let req = AdminLoginRequest { password: "secret".into(), telegram_id: None };
+        let req = AdminLoginRequest {
+            password: "secret".into(),
+            telegram_id: None,
+        };
         assert!(validate_admin_login(&req).is_ok());
     }
 
     #[test]
     fn test_validate_admin_login_password_too_long() {
-        let req = AdminLoginRequest { password: "a".repeat(1001), telegram_id: None };
-        assert_eq!(validate_admin_login(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+        let req = AdminLoginRequest {
+            password: "a".repeat(1001),
+            telegram_id: None,
+        };
+        assert_eq!(
+            validate_admin_login(&req).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
     }
 }

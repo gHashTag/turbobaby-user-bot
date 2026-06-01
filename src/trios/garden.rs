@@ -1,8 +1,8 @@
 //! Garden mechanics for Trios ecosystem
 
-use serde::{Deserialize, Serialize};
 use crate::trios::core::{Error, Result, Timestamp};
 use crate::trios::validation::validate_water_count;
+use serde::{Deserialize, Serialize};
 
 /// Growth stage of a plant
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -130,7 +130,9 @@ impl Plant {
                 "Plant is already completed".to_string(),
             ));
         }
-        let new_count = self.water_count.checked_add(1)
+        let new_count = self
+            .water_count
+            .checked_add(1)
             .ok_or_else(|| Error::InvalidState("Water count overflow".to_string()))?;
         validate_water_count(new_count)?;
         self.water_count = new_count;

@@ -1,5 +1,8 @@
 //! Garden API endpoints
 
+use crate::api::auth::{check_admin, check_not_blocked, validate_telegram_id_param};
+use crate::trios::garden;
+use crate::AppState;
 use axum::{
     extract::{Path, Query, State},
     http::{HeaderMap, StatusCode},
@@ -8,9 +11,6 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use crate::api::auth::{check_admin, check_not_blocked};
-use crate::AppState;
-use crate::trios::garden;
 
 pub fn routes() -> Router<AppState> {
     Router::new()
@@ -78,79 +78,95 @@ async fn get_user_plants(
     State(state): State<AppState>,
     Query(query): Query<UserPlantsQuery>,
 ) -> Result<Json<Value>, StatusCode> {
+    validate_telegram_id_param(query.telegram_id)?;
     crate::api::auth::check_owner(&headers, &state, query.telegram_id)?;
     check_not_blocked(&state, query.telegram_id).await?;
-    let client = state.db.pool.get().await
-        .map_err(|e| {
-            tracing::error!("Database connection error: {}", e);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
+    let client = state.db.pool.get().await.map_err(|e| {
+        tracing::error!("Database connection error: {}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
 
     let user_id = query.telegram_id.to_string();
 
-    let rows = client.query(
-        "SELECT id, user_id, strain_id, strain_name, current_stage, planted_at,
+    let rows = client
+        .query(
+            "SELECT id, user_id, strain_id, strain_name, current_stage, planted_at,
                 is_completed, harvested_at, reward_claimed, water_count, last_watered_at
          FROM garden_plants
          WHERE user_id = $1
          ORDER BY planted_at DESC LIMIT 200",
-        &[&user_id],
-    ).await.map_err(|e| {
-        tracing::error!("Query error: {}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
+            &[&user_id],
+        )
+        .await
+        .map_err(|e| {
+            tracing::error!("Query error: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
 
     let now = chrono::Utc::now().timestamp_millis();
-    let plants: Vec<PlantResponse> = rows.iter().map(|r| {
-        let plant = garden::Plant {
-            id: r.try_get(0).unwrap_or_default(),
-            user_id: r.try_get(1).unwrap_or_default(),
-            strain_id: r.try_get(2).unwrap_or_default(),
-            strain_name: r.try_get(3).unwrap_or_default(),
-            current_stage: match r.try_get::<_, String>(4).unwrap_or_default().as_str() {
-                "seed" => garden::GrowthStage::Seed,
-                "sprout" => garden::GrowthStage::Sprout,
-                "first_leaf" => garden::GrowthStage::FirstLeaf,
-                "young_bush" => garden::GrowthStage::YoungBush,
-                "veg_start" => garden::GrowthStage::VegStart,
-                "big_veg" => garden::GrowthStage::BigVeg,
-                "pre_flower" => garden::GrowthStage::PreFlower,
-                "small_buds" => garden::GrowthStage::SmallBuds,
-                "big_buds" => garden::GrowthStage::BigBuds,
-                "trimming" => garden::GrowthStage::Trimming,
-                "curing" => garden::GrowthStage::Curing,
-                "lab" => garden::GrowthStage::Lab,
-                "delivery" => garden::GrowthStage::Delivery,
-                _ => garden::GrowthStage::Final,
-            },
-            planted_at: r.try_get(5).unwrap_or(0),
-            is_completed: r.try_get(6).unwrap_or(false),
-            harvested_at: r.try_get(7).ok(),
-            reward_claimed: r.try_get(8).unwrap_or(false),
-            water_count: r.try_get(9).unwrap_or(0),
-            last_watered_at: r.try_get(10).ok(),
-        };
+    let plants: Vec<PlantResponse> = rows
+        .iter()
+        .map(|r| {
+            let plant = garden::Plant {
+                id: r.try_get(0).unwrap_or_default(),
+                user_id: r.try_get(1).unwrap_or_default(),
+                strain_id: r.try_get(2).unwrap_or_default(),
+                strain_name: r.try_get(3).unwrap_or_default(),
+                current_stage: match r.try_get::<_, String>(4).unwrap_or_default().as_str() {
+                    "seed" => garden::GrowthStage::Seed,
+                    "sprout" => garden::GrowthStage::Sprout,
+                    "first_leaf" => garden::GrowthStage::FirstLeaf,
+                    "young_bush" => garden::GrowthStage::YoungBush,
+                    "veg_start" => garden::GrowthStage::VegStart,
+                    "big_veg" => garden::GrowthStage::BigVeg,
+                    "pre_flower" => garden::GrowthStage::PreFlower,
+                    "small_buds" => garden::GrowthStage::SmallBuds,
+                    "big_buds" => garden::GrowthStage::BigBuds,
+                    "trimming" => garden::GrowthStage::Trimming,
+                    "curing" => garden::GrowthStage::Curing,
+                    "lab" => garden::GrowthStage::Lab,
+                    "delivery" => garden::GrowthStage::Delivery,
+                    _ => garden::GrowthStage::Final,
+                },
+                planted_at: r.try_get(5).unwrap_or(0),
+                is_completed: r.try_get(6).unwrap_or(false),
+                harvested_at: r.try_get(7).ok(),
+                reward_claimed: r.try_get(8).unwrap_or(false),
+                water_count: r.try_get(9).unwrap_or(0),
+                last_watered_at: r.try_get(10).ok(),
+            };
 
-        let progress = garden::calculate_progress(&plant, now);
-        PlantResponse {
-            id: plant.id,
-            user_id: plant.user_id,
-            strain_id: plant.strain_id,
-            strain_name: plant.strain_name,
-            current_stage: format!("{:?}", plant.current_stage).to_lowercase(),
-            stage_name: progress.stage_name,
-            stage_emoji: progress.stage_emoji,
-            planted_at: plant.planted_at,
-            is_completed: plant.is_completed,
-            harvested_at: plant.harvested_at,
-            water_count: plant.water_count,
-            progress: progress.total_progress,
-            can_water: progress.can_water,
-            next_water_at: progress.next_water_at,
-        }
-    }).collect();
+            let progress = garden::calculate_progress(&plant, now);
+            PlantResponse {
+                id: plant.id,
+                user_id: plant.user_id,
+                strain_id: plant.strain_id,
+                strain_name: plant.strain_name,
+                current_stage: format!("{:?}", plant.current_stage).to_lowercase(),
+                stage_name: progress.stage_name,
+                stage_emoji: progress.stage_emoji,
+                planted_at: plant.planted_at,
+                is_completed: plant.is_completed,
+                harvested_at: plant.harvested_at,
+                water_count: plant.water_count,
+                progress: progress.total_progress,
+                can_water: progress.can_water,
+                next_water_at: progress.next_water_at,
+            }
+        })
+        .collect();
 
     Ok(Json(json!({ "plants": plants })))
+}
+
+fn validate_plant_seed_request(req: &PlantSeedRequest) -> Result<(), StatusCode> {
+    if req.strain_id.len() > 200 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    if req.strain_name.len() > 200 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    Ok(())
 }
 
 async fn plant_seed(
@@ -158,15 +174,14 @@ async fn plant_seed(
     State(state): State<AppState>,
     Json(req): Json<PlantSeedRequest>,
 ) -> Result<Json<Value>, StatusCode> {
+    validate_telegram_id_param(req.telegram_id)?;
     crate::api::auth::check_owner(&headers, &state, req.telegram_id)?;
     check_not_blocked(&state, req.telegram_id).await?;
-    if req.strain_id.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
-    if req.strain_name.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
-    let mut client = state.db.pool.get().await
-        .map_err(|e| {
-            tracing::error!("Database connection error: {}", e);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
+    validate_plant_seed_request(&req)?;
+    let mut client = state.db.pool.get().await.map_err(|e| {
+        tracing::error!("Database connection error: {}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
 
     let user_id = req.telegram_id.to_string();
 
@@ -178,34 +193,39 @@ async fn plant_seed(
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
     // Serialize plant_seed for this user to prevent race-condition duplicates.
-    let _ = tx.query_one("SELECT pg_advisory_xact_lock(hashtext($1))", &[&user_id,
-    ]).await.map_err(|e| {
-        tracing::error!("Advisory lock error: {}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
+    let _ = tx
+        .query_one("SELECT pg_advisory_xact_lock(hashtext($1))", &[&user_id])
+        .await
+        .map_err(|e| {
+            tracing::error!("Advisory lock error: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
 
-    let inserted = tx.execute(
-        "INSERT INTO garden_plants (id, user_id, strain_id, strain_name, current_stage,
+    let inserted = tx
+        .execute(
+            "INSERT INTO garden_plants (id, user_id, strain_id, strain_name, current_stage,
                                     planted_at, is_completed, water_count, last_watered_at)
          SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9
          WHERE NOT EXISTS (
              SELECT 1 FROM garden_plants WHERE user_id = $2 AND is_completed = false
          )",
-        &[
-            &plant.id,
-            &plant.user_id,
-            &plant.strain_id,
-            &plant.strain_name,
-            &format!("{:?}", plant.current_stage).to_lowercase(),
-            &plant.planted_at,
-            &plant.is_completed,
-            &plant.water_count,
-            &plant.last_watered_at,
-        ],
-    ).await.map_err(|e| {
-        tracing::error!("Insert error: {}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
+            &[
+                &plant.id,
+                &plant.user_id,
+                &plant.strain_id,
+                &plant.strain_name,
+                &format!("{:?}", plant.current_stage).to_lowercase(),
+                &plant.planted_at,
+                &plant.is_completed,
+                &plant.water_count,
+                &plant.last_watered_at,
+            ],
+        )
+        .await
+        .map_err(|e| {
+            tracing::error!("Insert error: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
 
     tx.commit().await.map_err(|e| {
         tracing::error!("Commit error: {}", e);
@@ -230,12 +250,13 @@ async fn water_plant(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<Value>, StatusCode> {
-    if id.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
-    let mut client = state.db.pool.get().await
-        .map_err(|e| {
-            tracing::error!("Database connection error: {}", e);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
+    if id.len() > 200 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    let mut client = state.db.pool.get().await.map_err(|e| {
+        tracing::error!("Database connection error: {}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
 
     let now = chrono::Utc::now().timestamp_millis();
     let tx = client.transaction().await.map_err(|e| {
@@ -243,23 +264,29 @@ async fn water_plant(
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
-    let row = tx.query_opt(
-        "SELECT user_id, current_stage, is_completed, water_count, last_watered_at
+    let row = tx
+        .query_opt(
+            "SELECT user_id, current_stage, is_completed, water_count, last_watered_at
          FROM garden_plants
          WHERE id = $1
          FOR UPDATE",
-        &[&id],
-    ).await.map_err(|e| {
-        tracing::error!("Query error: {}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
+            &[&id],
+        )
+        .await
+        .map_err(|e| {
+            tracing::error!("Query error: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
 
     let Some(r) = row else {
-        return Ok(Json(json!({ "success": false, "error": "Plant not found" })));
+        return Ok(Json(
+            json!({ "success": false, "error": "Plant not found" }),
+        ));
     };
 
     let user_id: String = r.try_get(0).unwrap_or_default();
-    let tid = user_id.parse::<i64>()
+    let tid = user_id
+        .parse::<i64>()
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     crate::api::auth::check_owner(&headers, &state, tid)?;
     check_not_blocked(&state, tid).await?;
@@ -269,11 +296,15 @@ async fn water_plant(
     let last_watered_at: Option<i64> = r.try_get(4).ok();
 
     if is_completed {
-        return Ok(Json(json!({ "success": false, "error": "Plant already completed" })));
+        return Ok(Json(
+            json!({ "success": false, "error": "Plant already completed" }),
+        ));
     }
 
-    let new_count = water_count.checked_add(1)
-        .ok_or(StatusCode::BAD_REQUEST)? as u32;
+    let new_count = water_count
+        .checked_add(1)
+        .ok_or(StatusCode::BAD_REQUEST)?
+        .max(0) as u32;
     let new_stage = if let Some(stage) = garden::GrowthStage::from_index(new_count as usize) {
         format!("{:?}", stage).to_lowercase()
     } else {
@@ -281,20 +312,32 @@ async fn water_plant(
     };
     let new_completed = new_count >= 13;
     let cooldown_ms = garden::WATER_COOLDOWN_MS;
-    let max_last_water = now - cooldown_ms;
+    let max_last_water = now.saturating_sub(cooldown_ms);
 
-    let rows = tx.execute(
-        "UPDATE garden_plants
+    let rows = tx
+        .execute(
+            "UPDATE garden_plants
          SET water_count = $1, current_stage = $2, is_completed = $3, last_watered_at = $4
          WHERE id = $5 AND (last_watered_at IS NULL OR last_watered_at <= $6)",
-        &[&(new_count as i32), &new_stage, &new_completed, &now, &id, &max_last_water],
-    ).await.map_err(|e| {
-        tracing::error!("Update error: {}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
+            &[
+                &(new_count as i32),
+                &new_stage,
+                &new_completed,
+                &now,
+                &id,
+                &max_last_water,
+            ],
+        )
+        .await
+        .map_err(|e| {
+            tracing::error!("Update error: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
 
     if rows == 0 {
-        let next_water_at = last_watered_at.map(|t| t + garden::WATER_COOLDOWN_MS).unwrap_or(now);
+        let next_water_at = last_watered_at
+            .map(|t| t.saturating_add(garden::WATER_COOLDOWN_MS))
+            .unwrap_or(now);
         return Ok(Json(json!({
             "success": false,
             "error": "Cooldown active",
@@ -320,12 +363,13 @@ async fn harvest_plant(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<Value>, StatusCode> {
-    if id.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
-    let mut client = state.db.pool.get().await
-        .map_err(|e| {
-            tracing::error!("Database connection error: {}", e);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
+    if id.len() > 200 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    let mut client = state.db.pool.get().await.map_err(|e| {
+        tracing::error!("Database connection error: {}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
 
     let now = chrono::Utc::now().timestamp_millis();
     let tx = client.transaction().await.map_err(|e| {
@@ -333,23 +377,29 @@ async fn harvest_plant(
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
-    let row = tx.query_opt(
-        "SELECT user_id, strain_id, strain_name, is_completed, harvested_at
+    let row = tx
+        .query_opt(
+            "SELECT user_id, strain_id, strain_name, is_completed, harvested_at
          FROM garden_plants
          WHERE id = $1
          FOR UPDATE",
-        &[&id],
-    ).await.map_err(|e| {
-        tracing::error!("Query error: {}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
+            &[&id],
+        )
+        .await
+        .map_err(|e| {
+            tracing::error!("Query error: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
 
     let Some(r) = row else {
-        return Ok(Json(json!({ "success": false, "error": "Plant not found" })));
+        return Ok(Json(
+            json!({ "success": false, "error": "Plant not found" }),
+        ));
     };
 
     let user_id: String = r.try_get(0).unwrap_or_default();
-    let tid = user_id.parse::<i64>()
+    let tid = user_id
+        .parse::<i64>()
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     crate::api::auth::check_owner(&headers, &state, tid)?;
     check_not_blocked(&state, tid).await?;
@@ -358,11 +408,15 @@ async fn harvest_plant(
     let harvested_at: Option<i64> = r.try_get(4).ok();
 
     if !is_completed {
-        return Ok(Json(json!({ "success": false, "error": "Plant not ready for harvest" })));
+        return Ok(Json(
+            json!({ "success": false, "error": "Plant not ready for harvest" }),
+        ));
     }
 
     if harvested_at.is_some() {
-        return Ok(Json(json!({ "success": false, "error": "Already harvested" })));
+        return Ok(Json(
+            json!({ "success": false, "error": "Already harvested" }),
+        ));
     }
 
     let strain_id: String = r.try_get(1).unwrap_or_default();
@@ -386,7 +440,7 @@ async fn harvest_plant(
         ),
         None => (10, 100, 7),
     };
-    let expires_at = now + (expiration_days as i64 * 24 * 60 * 60 * 1000);
+    let expires_at = now.saturating_add(expiration_days as i64 * 24 * 60 * 60 * 1000);
 
     // Atomically mark plant as harvested — WHERE harvested_at IS NULL prevents race
     let rows = tx.execute(
@@ -398,8 +452,12 @@ async fn harvest_plant(
     })?;
 
     if rows == 0 {
-        if let Err(e) = tx.rollback().await { tracing::error!("garden rollback error: {}", e); }
-        return Ok(Json(json!({ "success": false, "error": "Already harvested" })));
+        if let Err(e) = tx.rollback().await {
+            tracing::error!("garden rollback error: {}", e);
+        }
+        return Ok(Json(
+            json!({ "success": false, "error": "Already harvested" }),
+        ));
     }
 
     // Create reward
@@ -419,7 +477,9 @@ async fn harvest_plant(
             &false,
             &now,
         ],
-    ).await.map_err(|e| {
+    )
+    .await
+    .map_err(|e| {
         tracing::error!("Insert reward error: {}", e);
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
@@ -465,42 +525,48 @@ async fn get_user_rewards(
     State(state): State<AppState>,
     Query(query): Query<UserRewardsQuery>,
 ) -> Result<Json<Value>, StatusCode> {
+    validate_telegram_id_param(query.telegram_id)?;
     crate::api::auth::check_owner(&headers, &state, query.telegram_id)?;
     check_not_blocked(&state, query.telegram_id).await?;
-    let client = state.db.pool.get().await
-        .map_err(|e| {
-            tracing::error!("Database connection error: {}", e);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
+    let client = state.db.pool.get().await.map_err(|e| {
+        tracing::error!("Database connection error: {}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
 
     let user_id = query.telegram_id.to_string();
     let now = chrono::Utc::now().timestamp_millis();
 
-    let rows = client.query(
-        "SELECT id, plant_id, strain_name, discount_percent, bonus_points, expires_at, is_used
+    let rows = client
+        .query(
+            "SELECT id, plant_id, strain_name, discount_percent, bonus_points, expires_at, is_used
          FROM garden_rewards
          WHERE user_id = $1
          ORDER BY created_at DESC LIMIT 200",
-        &[&user_id],
-    ).await.map_err(|e| {
-        tracing::error!("Query error: {}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
+            &[&user_id],
+        )
+        .await
+        .map_err(|e| {
+            tracing::error!("Query error: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
 
-    let rewards: Vec<RewardResponse> = rows.iter().map(|r| {
-        let expires_at: i64 = r.try_get(5).unwrap_or(0);
-        let is_used: bool = r.try_get(6).unwrap_or(false);
-        RewardResponse {
-            id: r.try_get(0).unwrap_or_default(),
-            plant_id: r.try_get(1).unwrap_or_default(),
-            strain_name: r.try_get(2).unwrap_or_default(),
-            discount_percent: r.try_get::<_, i32>(3).unwrap_or(0) as u32,
-            bonus_points: r.try_get::<_, i32>(4).unwrap_or(0) as u32,
-            expires_at,
-            is_used,
-            is_active: !is_used && expires_at > now,
-        }
-    }).collect();
+    let rewards: Vec<RewardResponse> = rows
+        .iter()
+        .map(|r| {
+            let expires_at: i64 = r.try_get(5).unwrap_or(0);
+            let is_used: bool = r.try_get(6).unwrap_or(false);
+            RewardResponse {
+                id: r.try_get(0).unwrap_or_default(),
+                plant_id: r.try_get(1).unwrap_or_default(),
+                strain_name: r.try_get(2).unwrap_or_default(),
+                discount_percent: r.try_get::<_, i32>(3).unwrap_or(0).max(0) as u32,
+                bonus_points: r.try_get::<_, i32>(4).unwrap_or(0).max(0) as u32,
+                expires_at,
+                is_used,
+                is_active: !is_used && expires_at > now,
+            }
+        })
+        .collect();
 
     Ok(Json(json!({ "rewards": rewards })))
 }
@@ -510,32 +576,39 @@ async fn use_reward(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<Value>, StatusCode> {
-    if id.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
-    let mut client = state.db.pool.get().await
-        .map_err(|e| {
-            tracing::error!("Database connection error: {}", e);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
+    if id.len() > 200 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    let mut client = state.db.pool.get().await.map_err(|e| {
+        tracing::error!("Database connection error: {}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
 
     let now = chrono::Utc::now().timestamp_millis();
 
     // Check reward (read-only, can stay outside tx for auth)
-    let row = client.query_opt(
-        "SELECT user_id, is_used, expires_at, discount_percent, bonus_points
+    let row = client
+        .query_opt(
+            "SELECT user_id, is_used, expires_at, discount_percent, bonus_points
          FROM garden_rewards
          WHERE id = $1",
-        &[&id],
-    ).await.map_err(|e| {
-        tracing::error!("Query error: {}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
+            &[&id],
+        )
+        .await
+        .map_err(|e| {
+            tracing::error!("Query error: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
 
     let Some(r) = row else {
-        return Ok(Json(json!({ "success": false, "error": "Reward not found" })));
+        return Ok(Json(
+            json!({ "success": false, "error": "Reward not found" }),
+        ));
     };
 
     let user_id: String = r.try_get(0).unwrap_or_default();
-    let tid = user_id.parse::<i64>()
+    let tid = user_id
+        .parse::<i64>()
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     crate::api::auth::check_owner(&headers, &state, tid)?;
     check_not_blocked(&state, tid).await?;
@@ -544,7 +617,9 @@ async fn use_reward(
     let expires_at: i64 = r.try_get(2).unwrap_or(0);
 
     if is_used {
-        return Ok(Json(json!({ "success": false, "error": "Reward already used" })));
+        return Ok(Json(
+            json!({ "success": false, "error": "Reward already used" }),
+        ));
     }
 
     if expires_at < now {
@@ -560,17 +635,24 @@ async fn use_reward(
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
-    let rows = tx.execute(
-        "UPDATE garden_rewards SET is_used = true WHERE id = $1 AND is_used = false",
-        &[&id],
-    ).await.map_err(|e| {
-        tracing::error!("Mark reward used error: {}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
+    let rows = tx
+        .execute(
+            "UPDATE garden_rewards SET is_used = true WHERE id = $1 AND is_used = false",
+            &[&id],
+        )
+        .await
+        .map_err(|e| {
+            tracing::error!("Mark reward used error: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
 
     if rows == 0 {
-        if let Err(e) = tx.rollback().await { tracing::error!("garden rollback error: {}", e); }
-        return Ok(Json(json!({ "success": false, "error": "Reward already used" })));
+        if let Err(e) = tx.rollback().await {
+            tracing::error!("garden rollback error: {}", e);
+        }
+        return Ok(Json(
+            json!({ "success": false, "error": "Reward already used" }),
+        ));
     }
 
     let bonus_f64 = bonus_points as f64;
@@ -582,17 +664,27 @@ async fn use_reward(
         tracing::error!("Credit bonus upsert error: {}", e);
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
-    let updated = tx.execute(
-        "UPDATE loyalty_profiles SET bonus_balance = bonus_balance + $1 WHERE telegram_id = $2",
-        &[&bonus_f64, &tid],
-    ).await.map_err(|e| {
-        tracing::error!("Credit bonus error: {}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
+    let updated = tx
+        .execute(
+            "UPDATE loyalty_profiles SET bonus_balance = bonus_balance + $1 WHERE telegram_id = $2",
+            &[&bonus_f64, &tid],
+        )
+        .await
+        .map_err(|e| {
+            tracing::error!("Credit bonus error: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
     if updated == 0 {
-        if let Err(e) = tx.rollback().await { tracing::error!("garden rollback error: {}", e); }
-        tracing::error!("use_reward: loyalty profile missing for telegram_id={}", tid);
-        return Ok(Json(json!({ "success": false, "error": "Loyalty profile not found" })));
+        if let Err(e) = tx.rollback().await {
+            tracing::error!("garden rollback error: {}", e);
+        }
+        tracing::error!(
+            "use_reward: loyalty profile missing for telegram_id={}",
+            tid
+        );
+        return Ok(Json(
+            json!({ "success": false, "error": "Loyalty profile not found" }),
+        ));
     }
 
     tx.commit().await.map_err(|e| {
@@ -618,11 +710,10 @@ pub struct ConfigUpdateRequest {
 }
 
 async fn get_config(State(state): State<AppState>) -> Result<Json<Value>, StatusCode> {
-    let client = state.db.pool.get().await
-        .map_err(|e| {
-            tracing::error!("Database connection error: {}", e);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
+    let client = state.db.pool.get().await.map_err(|e| {
+        tracing::error!("Database connection error: {}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
 
     let row = client.query_opt(
         "SELECT is_enabled, reward_discount_percent, reward_bonus_points, reward_expiration_days
@@ -635,14 +726,12 @@ async fn get_config(State(state): State<AppState>) -> Result<Json<Value>, Status
     })?;
 
     let config = match row {
-        Some(r) => {
-            garden::GameConfig {
-                is_enabled: r.try_get(0).unwrap_or(false),
-                reward_discount_percent: r.try_get::<_, i32>(1).unwrap_or(0) as u32,
-                reward_bonus_points: r.try_get::<_, i32>(2).unwrap_or(0) as u32,
-                reward_expiration_days: r.try_get::<_, i32>(3).unwrap_or(0) as u32,
-            }
-        }
+        Some(r) => garden::GameConfig {
+            is_enabled: r.try_get(0).unwrap_or(false),
+            reward_discount_percent: r.try_get::<_, i32>(1).unwrap_or(0).max(0) as u32,
+            reward_bonus_points: r.try_get::<_, i32>(2).unwrap_or(0).max(0) as u32,
+            reward_expiration_days: r.try_get::<_, i32>(3).unwrap_or(0).max(0) as u32,
+        },
         None => garden::GameConfig::default(),
     };
 
@@ -656,13 +745,19 @@ async fn get_config(State(state): State<AppState>) -> Result<Json<Value>, Status
 
 fn validate_garden_config_update(req: &ConfigUpdateRequest) -> Result<(), StatusCode> {
     if let Some(p) = req.reward_discount_percent {
-        if p > 100 { return Err(StatusCode::BAD_REQUEST); }
+        if p > 100 {
+            return Err(StatusCode::BAD_REQUEST);
+        }
     }
     if let Some(p) = req.reward_bonus_points {
-        if p > 1_000_000 { return Err(StatusCode::BAD_REQUEST); }
+        if p > 1_000_000 {
+            return Err(StatusCode::BAD_REQUEST);
+        }
     }
     if let Some(d) = req.reward_expiration_days {
-        if d == 0 || d > 365 { return Err(StatusCode::BAD_REQUEST); }
+        if d == 0 || d > 365 {
+            return Err(StatusCode::BAD_REQUEST);
+        }
     }
     Ok(())
 }
@@ -674,42 +769,47 @@ async fn update_config(
 ) -> Result<Json<Value>, StatusCode> {
     check_admin(&headers, &state)?;
     validate_garden_config_update(&req)?;
-    let client = state.db.pool.get().await
-        .map_err(|e| {
-            tracing::error!("Database connection error: {}", e);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
+    let client = state.db.pool.get().await.map_err(|e| {
+        tracing::error!("Database connection error: {}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
 
     // BUG-5: is_enabled в БД — BOOLEAN, раньше передавался i32 → type mismatch.
     let is_enabled = req.is_enabled;
     let reward_discount_percent = req.reward_discount_percent.map(|p| p as i32);
     let reward_bonus_points = req.reward_bonus_points.map(|p| p as i32);
     let reward_expiration_days = req.reward_expiration_days.map(|d| d as i32);
-    client.execute(
-        "UPDATE garden_config
+    client
+        .execute(
+            "UPDATE garden_config
          SET is_enabled = COALESCE($1, is_enabled),
              reward_discount_percent = COALESCE($2, reward_discount_percent),
              reward_bonus_points = COALESCE($3, reward_bonus_points),
              reward_expiration_days = COALESCE($4, reward_expiration_days),
              updated_at = NOW()
          WHERE id = 1",
-        &[
-            &is_enabled,
-            &reward_discount_percent,
-            &reward_bonus_points,
-            &reward_expiration_days,
-        ],
-    ).await.map_err(|e| {
-        tracing::error!("Update error: {}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
+            &[
+                &is_enabled,
+                &reward_discount_percent,
+                &reward_bonus_points,
+                &reward_expiration_days,
+            ],
+        )
+        .await
+        .map_err(|e| {
+            tracing::error!("Update error: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
 
     Ok(Json(json!({ "success": true })))
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{ConfigUpdateRequest, validate_garden_config_update};
+    use super::{
+        validate_garden_config_update, validate_plant_seed_request, ConfigUpdateRequest,
+        PlantSeedRequest,
+    };
     use axum::http::StatusCode;
 
     #[test]
@@ -742,7 +842,10 @@ mod tests {
             reward_bonus_points: None,
             reward_expiration_days: None,
         };
-        assert_eq!(validate_garden_config_update(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+        assert_eq!(
+            validate_garden_config_update(&req).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
     }
 
     #[test]
@@ -753,7 +856,10 @@ mod tests {
             reward_bonus_points: Some(1_000_001),
             reward_expiration_days: None,
         };
-        assert_eq!(validate_garden_config_update(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+        assert_eq!(
+            validate_garden_config_update(&req).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
     }
 
     #[test]
@@ -764,7 +870,10 @@ mod tests {
             reward_bonus_points: None,
             reward_expiration_days: Some(0),
         };
-        assert_eq!(validate_garden_config_update(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+        assert_eq!(
+            validate_garden_config_update(&req).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
     }
 
     #[test]
@@ -775,6 +884,45 @@ mod tests {
             reward_bonus_points: None,
             reward_expiration_days: Some(366),
         };
-        assert_eq!(validate_garden_config_update(&req).unwrap_err(), StatusCode::BAD_REQUEST);
+        assert_eq!(
+            validate_garden_config_update(&req).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
+    }
+
+    #[test]
+    fn test_validate_plant_seed_ok() {
+        let req = PlantSeedRequest {
+            telegram_id: 1,
+            strain_id: "s1".into(),
+            strain_name: "OG".into(),
+        };
+        assert!(validate_plant_seed_request(&req).is_ok());
+    }
+
+    #[test]
+    fn test_validate_plant_seed_id_too_long() {
+        let req = PlantSeedRequest {
+            telegram_id: 1,
+            strain_id: "a".repeat(201),
+            strain_name: "OG".into(),
+        };
+        assert_eq!(
+            validate_plant_seed_request(&req).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
+    }
+
+    #[test]
+    fn test_validate_plant_seed_name_too_long() {
+        let req = PlantSeedRequest {
+            telegram_id: 1,
+            strain_id: "s1".into(),
+            strain_name: "a".repeat(201),
+        };
+        assert_eq!(
+            validate_plant_seed_request(&req).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
     }
 }

@@ -39,7 +39,7 @@ impl ModalSize {
 #[component]
 pub fn Modal(props: ModalProps) -> Element {
     if !props.open {
-        return rsx! {  };
+        return rsx! {};
     }
 
     let size_class = format!("modal-{}", props.size.as_str());

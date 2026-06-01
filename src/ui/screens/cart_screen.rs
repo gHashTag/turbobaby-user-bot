@@ -1,13 +1,18 @@
 // Cart Screen — Interactive with global Cart signal
-use dioxus::prelude::*;
+use crate::trios::core::Lang;
+use crate::trios::i18n::{t, T_CART_EMPTY, T_CART_EMPTY_DESC, T_CART_TITLE};
+use crate::ui::components::bottom_nav::BottomNav;
 use crate::ui::routes::Route;
 use crate::ui::state::{Cart, CartItem};
-use crate::trios::core::Lang;
-use crate::ui::components::bottom_nav::BottomNav;
-use crate::trios::i18n::{t, T_CART_TITLE, T_CART_EMPTY, T_CART_EMPTY_DESC};
+use dioxus::prelude::*;
 
 fn format_price(price: f64) -> String {
-    format!("฿{}", price as i32)
+    let v = if price.is_finite() {
+        price.max(0.0)
+    } else {
+        0.0
+    };
+    format!("฿{}", v as i32)
 }
 
 #[component]

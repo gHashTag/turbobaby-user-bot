@@ -104,18 +104,65 @@
 <body>
     <div id="preloader">
         <div class="spinner"></div>
-        <div class="loading-text">Загрузка...</div>
+        <div class="loading-text" id="loader-step">Инициализация...</div>
+        <div id="loader-progress" style="margin-top:12px;width:120px;height:3px;background:#2a2a4a;border-radius:2px;overflow:hidden;">
+            <div id="loader-progress-bar" style="width:0%;height:100%;background:#39ff14;transition:width .3s ease;"></div>
+        </div>
     </div>
     <div id="error-box" style="display:none;position:fixed;top:0;left:0;width:100%;max-height:50vh;background:#1a1a2e;color:#e8e8e8;padding:12px;font-family:monospace;font-size:12px;z-index:100000;overflow:auto;border-bottom:2px solid #ff4757;"></div>
     <div id="main"></div>
     <script>
-        // Hide preloader when app mounts
-        window.addEventListener('load', function() {
+        // WASM load tracker — shows granular progress and handles failures
+        (function() {
+            var step = 0;
+            var steps = ['Загрузка JS…', 'Загрузка WASM…', 'Компиляция…', 'Запуск…'];
+            var stepEl = document.getElementById('loader-step');
+            var barEl = document.getElementById('loader-progress-bar');
+            function setProgress(pct, text) {
+                if (barEl) barEl.style.width = pct + '%';
+                if (stepEl && text) stepEl.textContent = text;
+            }
+            setProgress(10, steps[0]);
+
+            window.addEventListener('TrunkApplicationStarted', function() {
+                setProgress(100, 'Готово!');
+                setTimeout(function() {
+                    var preloader = document.getElementById('preloader');
+                    if (preloader) preloader.classList.add('hidden');
+                }, 300);
+            });
+
+            // Advance steps on a timer if Trunk hasn't fired yet
+            var stepTimer = setInterval(function() {
+                step++;
+                if (step < steps.length) {
+                    setProgress(10 + step * 20, steps[step]);
+                }
+                if (step >= steps.length) clearInterval(stepTimer);
+            }, 1500);
+
+            // 10-second fail-safe: if WASM never starts, show diagnostic overlay
             setTimeout(function() {
                 var preloader = document.getElementById('preloader');
-                if (preloader) preloader.classList.add('hidden');
-            }, 500);
-        });
+                if (preloader && !preloader.classList.contains('hidden')) {
+                    var ua = navigator.userAgent || '';
+                    var platform = navigator.platform || '';
+                    var isIOS = /iPad|iPhone|iPod/.test(ua) || (platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+                    var diag = document.createElement('div');
+                    diag.style.cssText = 'position:fixed;inset:0;background:#0f0f1a;color:#e8e8e8;padding:24px;font-family:monospace;font-size:13px;z-index:100000;overflow:auto;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;';
+                    diag.innerHTML = '<h2 style="color:#ff4757;margin-bottom:12px;">⚠️ Не удалось загрузить приложение</h2>' +
+                        '<p style="max-width:320px;margin-bottom:16px;">WASM не запустился за 10 секунд. Это часто на iOS при большом бандле или плохой сети.</p>' +
+                        '<div style="background:#1a1a2e;padding:12px;border-radius:8px;margin-bottom:16px;text-align:left;font-size:11px;max-width:320px;">' +
+                        '<div>platform: ' + platform + '</div>' +
+                        '<div>ios: ' + isIOS + '</div>' +
+                        '<div>userAgent: ' + ua.substring(0,80) + '…</div>' +
+                        '</div>' +
+                        '<button id="reload-btn" style="padding:10px 20px;background:#39ff14;color:#000;border:none;border-radius:6px;font-weight:700;cursor:pointer;">Перезагрузить</button>';
+                    document.body.appendChild(diag);
+                    document.getElementById('reload-btn').onclick = function() { location.reload(); };
+                }
+            }, 10000);
+        })();
     </script>
 </body>
 </html>

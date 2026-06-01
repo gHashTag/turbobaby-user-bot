@@ -1,22 +1,22 @@
 // Backend-only modules (not included in WASM builds)
 #[cfg(not(target_arch = "wasm32"))]
-mod config;
-#[cfg(not(target_arch = "wasm32"))]
-mod db;
-#[cfg(not(target_arch = "wasm32"))]
-mod s3;
-#[cfg(not(target_arch = "wasm32"))]
-mod bot;
+mod ai;
 #[cfg(not(target_arch = "wasm32"))]
 mod api;
 #[cfg(not(target_arch = "wasm32"))]
-mod ai;
+mod bot;
+#[cfg(not(target_arch = "wasm32"))]
+mod config;
+#[cfg(not(target_arch = "wasm32"))]
+mod db;
 #[cfg(not(target_arch = "wasm32"))]
 mod locales;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod metrics;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod notify;
+#[cfg(not(target_arch = "wasm32"))]
+mod s3;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod util;
 
@@ -27,13 +27,27 @@ pub mod trios;
 #[cfg(target_arch = "wasm32")]
 pub mod ui;
 
-
 #[cfg(not(target_arch = "wasm32"))]
 use anyhow::Result;
 #[cfg(not(target_arch = "wasm32"))]
-use axum::{Router, routing::get};
+use axum::http::Request;
+#[cfg(not(target_arch = "wasm32"))]
+// use tower_http::compression::CompressionLayer;
+#[cfg(not(target_arch = "wasm32"))]
+use axum::http::{HeaderMap, HeaderName, HeaderValue, StatusCode};
+#[cfg(not(target_arch = "wasm32"))]
+use axum::middleware::Next;
+#[cfg(not(target_arch = "wasm32"))]
+use axum::response::IntoResponse;
+#[cfg(not(target_arch = "wasm32"))]
+use axum::{routing::get, Router};
+use bytes::Bytes;
 #[cfg(not(target_arch = "wasm32"))]
 use std::net::SocketAddr;
+#[cfg(not(target_arch = "wasm32"))]
+use std::sync::Arc;
+#[cfg(not(target_arch = "wasm32"))]
+use teloxide::dispatching::Dispatcher;
 #[cfg(not(target_arch = "wasm32"))]
 use teloxide::prelude::*;
 #[cfg(not(target_arch = "wasm32"))]
@@ -43,34 +57,18 @@ use tower_http::services::ServeDir;
 #[cfg(not(target_arch = "wasm32"))]
 use tower_http::set_header::SetResponseHeaderLayer;
 #[cfg(not(target_arch = "wasm32"))]
-// use tower_http::compression::CompressionLayer;
-#[cfg(not(target_arch = "wasm32"))]
-use axum::http::{HeaderMap, HeaderName, HeaderValue, StatusCode};
-use bytes::Bytes;
-#[cfg(not(target_arch = "wasm32"))]
-use axum::middleware::Next;
-#[cfg(not(target_arch = "wasm32"))]
-use axum::http::Request;
-#[cfg(not(target_arch = "wasm32"))]
-use axum::response::IntoResponse;
-#[cfg(not(target_arch = "wasm32"))]
 use tracing::info;
-#[cfg(not(target_arch = "wasm32"))]
-use std::sync::Arc;
-#[cfg(not(target_arch = "wasm32"))]
-use teloxide::dispatching::Dispatcher;
 
+#[cfg(not(target_arch = "wasm32"))]
+use crate::api::cache::ETagCache;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::config::Config;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::db::Database;
 #[cfg(not(target_arch = "wasm32"))]
-use crate::api::cache::ETagCache;
+use axum_prometheus::PrometheusMetricLayer;
 #[cfg(not(target_arch = "wasm32"))]
 use teloxide::Bot;
-#[cfg(not(target_arch = "wasm32"))]
-use axum_prometheus::PrometheusMetricLayer;
-
 
 #[cfg(not(target_arch = "wasm32"))]
 /// Application shared state
@@ -109,7 +107,7 @@ async fn alert_5xx_middleware(
             let mut last = LAST_5XX_ALERT.lock().await;
             let now = std::time::Instant::now();
             if let Some(t) = *last {
-                if now.duration_since(t).as_secs() < 60 {
+                if now.saturating_duration_since(t).as_secs() < 60 {
                     false
                 } else {
                     *last = Some(now);
@@ -129,9 +127,7 @@ async fn alert_5xx_middleware(
             tokio::spawn(async move {
                 let text = format!(
                     "\u{1F6A8} 5xx Error on prod\n\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\n\u{1F4CD} {} {}\n\u{1F4A5} HTTP {}",
-                    safe_method.replace('<', "«").replace('>', "»"),
-                    safe_path.replace('<', "«").replace('>', "»"),
-                    status
+                    safe_method, safe_path, status
                 );
                 crate::notify::notify_admins(&bot, &config, &text).await;
             });
@@ -142,7 +138,12 @@ async fn alert_5xx_middleware(
 
 #[cfg(not(target_arch = "wasm32"))]
 fn content_type_for(path: &std::path::Path) -> &'static str {
-    match path.extension().and_then(|e| e.to_str()).map(|s| s.to_lowercase()).as_deref() {
+    match path
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|s| s.to_lowercase())
+        .as_deref()
+    {
         Some("html") => "text/html",
         Some("js") => "text/javascript",
         Some("css") => "text/css",
@@ -157,6 +158,23 @@ fn content_type_for(path: &std::path::Path) -> &'static str {
         Some("mov") => "video/quicktime",
         _ => "application/octet-stream",
     }
+}
+
+fn pick_encoding(headers: &axum::http::HeaderMap) -> Option<&'static str> {
+    let accept = headers
+        .get(axum::http::header::ACCEPT_ENCODING)?
+        .to_str()
+        .ok()?;
+    for part in accept.split(',') {
+        let part = part.trim();
+        if part == "br" {
+            return Some("br");
+        }
+        if part == "gzip" {
+            return Some("gzip");
+        }
+    }
+    None
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -174,9 +192,30 @@ async fn main() -> Result<()> {
     info!("🤖 Starting Woody Bot (Rust)...");
 
     let config = Arc::new(Config::from_env()?);
-    info!("Environment: {}", if config.is_production { "Production" } else { "Development" });
-    info!("Token present: {}", if !config.bot_token.is_empty() { "YES" } else { "NO" });
-    info!("Admin password set: {}", if config.admin_password.is_some() { "YES" } else { "NO" });
+    info!(
+        "Environment: {}",
+        if config.is_production {
+            "Production"
+        } else {
+            "Development"
+        }
+    );
+    info!(
+        "Token present: {}",
+        if !config.bot_token.is_empty() {
+            "YES"
+        } else {
+            "NO"
+        }
+    );
+    info!(
+        "Admin password set: {}",
+        if config.admin_password.is_some() {
+            "YES"
+        } else {
+            "NO"
+        }
+    );
     info!("Admin IDs: {:?}", config.admin_ids);
     info!("Web App URL: {}", config.web_app_url);
 
@@ -184,7 +223,10 @@ async fn main() -> Result<()> {
     db.run_migrations().await?;
     info!("✅ Database connected");
 
-    let ai_client = Arc::new(crate::ai::AiClient::new(config.grok_api_key.clone(), config.glm_api_key.clone()));
+    let ai_client = Arc::new(crate::ai::AiClient::new(
+        config.grok_api_key.clone(),
+        config.glm_api_key.clone(),
+    ));
 
     let bot = Bot::new(&config.bot_token);
     let bot_arc = Arc::new(bot.clone());
@@ -193,8 +235,8 @@ async fn main() -> Result<()> {
     let config_for_bot = config.clone();
     let ai_client_for_bot = ai_client.clone();
     tokio::spawn(async move {
-        use teloxide::update_listeners::Polling;
         use teloxide::types::AllowedUpdate;
+        use teloxide::update_listeners::Polling;
         let handler = bot::create_handler();
         // Явно запрашиваем все нужные типы апдейтов — включая CallbackQuery.
         // Без этого Telegram помнит старый фильтр (напр. только ["message"])
@@ -208,10 +250,15 @@ async fn main() -> Result<()> {
                 AllowedUpdate::MyChatMember,
                 AllowedUpdate::ChatMember,
             ])
-            .delete_webhook().await
+            .delete_webhook()
+            .await
             .build();
         Dispatcher::builder(bot.clone(), handler)
-            .dependencies(dptree::deps![Arc::clone(&db_for_bot), Arc::clone(&config_for_bot), Arc::clone(&ai_client_for_bot)])
+            .dependencies(dptree::deps![
+                Arc::clone(&db_for_bot),
+                Arc::clone(&config_for_bot),
+                Arc::clone(&ai_client_for_bot)
+            ])
             .build()
             .dispatch_with_listener(
                 listener,
@@ -270,23 +317,30 @@ async fn main() -> Result<()> {
     // For `/assets/*` images the URL is stable so 1 day is enough.
     // (Hashed Trunk bundles are served via the SPA fallback with no-store
     // because Telegram WebApp cache-busting takes priority over CDN caching.)
-    let assets_cache_layer = || SetResponseHeaderLayer::if_not_present(
-        axum::http::header::CACHE_CONTROL,
-        HeaderValue::from_static("public, max-age=86400"),
-    );
-    let nosniff_layer = || SetResponseHeaderLayer::if_not_present(
-        axum::http::header::X_CONTENT_TYPE_OPTIONS,
-        HeaderValue::from_static("nosniff"),
-    );
+    let assets_cache_layer = || {
+        SetResponseHeaderLayer::if_not_present(
+            axum::http::header::CACHE_CONTROL,
+            HeaderValue::from_static("public, max-age=86400"),
+        )
+    };
+    let nosniff_layer = || {
+        SetResponseHeaderLayer::if_not_present(
+            axum::http::header::X_CONTENT_TYPE_OPTIONS,
+            HeaderValue::from_static("nosniff"),
+        )
+    };
     // HTML must NEVER be cached — Telegram WebApp aggressively keeps the
     // index.html in cache, which breaks deploys (new WASM hash never
     // fetched). `no-store` forces a re-validate on every load.
-    let html_no_cache_layer = || SetResponseHeaderLayer::overriding(
-        axum::http::header::CACHE_CONTROL,
-        HeaderValue::from_static("no-store, no-cache, must-revalidate, max-age=0"),
-    );
+    let html_no_cache_layer = || {
+        SetResponseHeaderLayer::overriding(
+            axum::http::header::CACHE_CONTROL,
+            HeaderValue::from_static("no-store, no-cache, must-revalidate, max-age=0"),
+        )
+    };
     // CSP for Telegram Mini App: allow self, WASM eval, inline styles, and API/S3 images.
-    let csp_layer = || SetResponseHeaderLayer::if_not_present(
+    let csp_layer = || {
+        SetResponseHeaderLayer::if_not_present(
         axum::http::header::CONTENT_SECURITY_POLICY,
         HeaderValue::from_static(
             "default-src 'self'; \
@@ -298,11 +352,14 @@ async fn main() -> Result<()> {
              font-src 'self' https://fonts.gstatic.com; \
              frame-ancestors https://*.telegram.org"
         ),
-    );
-    let referrer_layer = || SetResponseHeaderLayer::if_not_present(
-        axum::http::header::REFERRER_POLICY,
-        HeaderValue::from_static("strict-origin-when-cross-origin"),
-    );
+    )
+    };
+    let referrer_layer = || {
+        SetResponseHeaderLayer::if_not_present(
+            axum::http::header::REFERRER_POLICY,
+            HeaderValue::from_static("strict-origin-when-cross-origin"),
+        )
+    };
 
     // Load dist files into memory to bypass slow Railway disk I/O
     // for the WASM bundle (~4 MB) and hashed JS/CSS.
@@ -323,26 +380,36 @@ async fn main() -> Result<()> {
         {
             return;
         }
-        let key = path.strip_prefix("dist/").unwrap_or(path)
-            .to_string_lossy().to_string();
+        let key = path
+            .strip_prefix("dist/")
+            .unwrap_or(path)
+            .to_string_lossy()
+            .to_string();
         let raw = match load_file(path) {
             Some(b) => b,
             None => return,
         };
-        let br_path = path.with_extension(
-            format!("{}.{}", path.extension().unwrap_or_default().to_string_lossy(), "br")
-        );
-        let gz_path = path.with_extension(
-            format!("{}.{}", path.extension().unwrap_or_default().to_string_lossy(), "gz")
-        );
+        let br_path = path.with_extension(format!(
+            "{}.{}",
+            path.extension().unwrap_or_default().to_string_lossy(),
+            "br"
+        ));
+        let gz_path = path.with_extension(format!(
+            "{}.{}",
+            path.extension().unwrap_or_default().to_string_lossy(),
+            "gz"
+        ));
         let br = load_file(&br_path);
         let gzip = load_file(&gz_path);
-        cache.insert(key, CachedFile {
-            raw,
-            gzip,
-            br,
-            content_type: content_type_for(path),
-        });
+        cache.insert(
+            key,
+            CachedFile {
+                raw,
+                gzip,
+                br,
+                content_type: content_type_for(path),
+            },
+        );
     }
 
     fn walk_dir(cache: &mut std::collections::HashMap<String, CachedFile>, dir: &std::path::Path) {
@@ -377,18 +444,6 @@ async fn main() -> Result<()> {
     //
     // In-memory fallback handler using the pre-loaded static_cache.
     let static_cache = std::sync::Arc::new(static_cache);
-
-    fn pick_encoding(headers: &axum::http::HeaderMap) -> Option<&'static str> {
-        let accept = headers.get(axum::http::header::ACCEPT_ENCODING)?
-            .to_str().ok()?;
-        if accept.contains("br") {
-            Some("br")
-        } else if accept.contains("gzip") {
-            Some("gzip")
-        } else {
-            None
-        }
-    }
 
     let serve_dist = {
         let static_cache = static_cache.clone();
@@ -510,8 +565,10 @@ async fn main() -> Result<()> {
     #[cfg(not(feature = "utoipa"))]
     let openapi_router: Router = Router::new();
 
-    let api_router = api::router(app_state.clone())
-        .layer(axum::middleware::from_fn_with_state(app_state.clone(), alert_5xx_middleware));
+    let api_router = api::router(app_state.clone()).layer(axum::middleware::from_fn_with_state(
+        app_state.clone(),
+        alert_5xx_middleware,
+    ));
 
     let mut app = Router::new()
         .merge(openapi_router)
@@ -522,14 +579,18 @@ async fn main() -> Result<()> {
 
     // Prometheus /metrics endpoint — gated behind admin auth
     let metrics_auth_state = app_state.clone();
-    app = app.route("/metrics", get(move |headers: HeaderMap| async move {
-        if crate::api::auth::check_admin(&headers, &metrics_auth_state).is_err() {
-            return StatusCode::UNAUTHORIZED.into_response();
-        }
-        metric_handle.render().into_response()
-    }));
+    app = app.route(
+        "/metrics",
+        get(move |headers: HeaderMap| async move {
+            if crate::api::auth::check_admin(&headers, &metrics_auth_state).is_err() {
+                return StatusCode::UNAUTHORIZED.into_response();
+            }
+            metric_handle.render().into_response()
+        }),
+    );
 
-    app = app.layer(prometheus_layer)
+    app = app
+        .layer(prometheus_layer)
         // SPA routes - serve index.html for client-side routing
         .merge(spa_routes)
         // SPA routes - these should be served by the fallback
@@ -545,7 +606,7 @@ async fn main() -> Result<()> {
         .layer(csp_layer())
         .layer(referrer_layer())
         .layer(nosniff_layer());
-        // .layer(compression);
+    // .layer(compression);
 
     let addr = SocketAddr::from(([0, 0, 0, 0], config.port));
     info!("🚀 HTTP server listening on {}", addr);
@@ -565,12 +626,15 @@ async fn shutdown_signal() {
             .await
             .expect("failed to install Ctrl+C handler");
     };
+    #[cfg(unix)]
     let terminate = async {
         tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
             .expect("failed to install signal handler")
             .recv()
             .await;
     };
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
     tokio::select! {
         _ = ctrl_c => {},
         _ = terminate => {},
@@ -631,8 +695,60 @@ mod tests {
 
     #[test]
     fn test_content_type_for_unknown() {
-        assert_eq!(content_type_for(Path::new("data.bin")), "application/octet-stream");
-        assert_eq!(content_type_for(Path::new("noext")), "application/octet-stream");
+        assert_eq!(
+            content_type_for(Path::new("data.bin")),
+            "application/octet-stream"
+        );
+        assert_eq!(
+            content_type_for(Path::new("noext")),
+            "application/octet-stream"
+        );
+    }
+
+    #[test]
+    fn test_pick_encoding_br() {
+        let mut headers = axum::http::HeaderMap::new();
+        headers.insert(
+            axum::http::header::ACCEPT_ENCODING,
+            "br, gzip".parse().unwrap(),
+        );
+        assert_eq!(super::pick_encoding(&headers), Some("br"));
+    }
+
+    #[test]
+    fn test_pick_encoding_gzip() {
+        let mut headers = axum::http::HeaderMap::new();
+        headers.insert(
+            axum::http::header::ACCEPT_ENCODING,
+            "gzip, deflate".parse().unwrap(),
+        );
+        assert_eq!(super::pick_encoding(&headers), Some("gzip"));
+    }
+
+    #[test]
+    fn test_pick_encoding_none() {
+        let mut headers = axum::http::HeaderMap::new();
+        headers.insert(
+            axum::http::header::ACCEPT_ENCODING,
+            "identity".parse().unwrap(),
+        );
+        assert_eq!(super::pick_encoding(&headers), None);
+    }
+
+    #[test]
+    fn test_pick_encoding_no_header() {
+        let headers = axum::http::HeaderMap::new();
+        assert_eq!(super::pick_encoding(&headers), None);
+    }
+
+    #[test]
+    fn test_pick_encoding_no_false_br() {
+        let mut headers = axum::http::HeaderMap::new();
+        headers.insert(
+            axum::http::header::ACCEPT_ENCODING,
+            "abbr, identity".parse().unwrap(),
+        );
+        assert_eq!(super::pick_encoding(&headers), None);
     }
 }
 

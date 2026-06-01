@@ -1,8 +1,9 @@
 // Garden Screen — Plant growing + Woody Catch game
-use dioxus::prelude::*;
 use crate::ui::components::bottom_nav::BottomNav;
+use crate::ui::components::lazy_screen::LazyScreen;
 use crate::ui::game::Garden;
 use crate::ui::game::WoodyCatch;
+use dioxus::prelude::*;
 
 #[component]
 pub fn GardenScreen() -> Element {
@@ -44,7 +45,7 @@ pub fn GardenScreen() -> Element {
             if !is_game {
                 Garden {}
             } else {
-                WoodyCatch {}
+                LazyScreen { heavy: true, WoodyCatch {} }
             }
         }
 

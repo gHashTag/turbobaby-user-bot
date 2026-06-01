@@ -1,11 +1,11 @@
+use crate::trios::core::Lang;
+use crate::trios::i18n::{t, T_ADD_TO_CART, T_FILTER_ALL, T_SETS_DESC, T_SETS_TITLE};
+use crate::ui::api::context::api_base_url;
+use crate::ui::assets;
+use crate::ui::components::bottom_nav::BottomNav;
+use crate::ui::state::{Cart, CartItem, CartItemType};
 use dioxus::prelude::*;
 use serde::Deserialize;
-use crate::ui::state::{Cart, CartItem, CartItemType};
-use crate::ui::components::bottom_nav::BottomNav;
-use crate::ui::assets;
-use crate::ui::api::context::api_base_url;
-use crate::trios::core::Lang;
-use crate::trios::i18n::{t, T_SETS_TITLE, T_SETS_DESC, T_FILTER_ALL, T_ADD_TO_CART};
 
 #[derive(Debug, Clone, Deserialize)]
 #[allow(dead_code)]
@@ -96,7 +96,7 @@ pub fn SetsScreen() -> Element {
     let sets_resource = use_resource(|| async move {
         let base = api_base_url();
         let url = format!("{}/api/sets", base);
-        reqwest::Client::new()
+        crate::ui::api::local_client::LocalClient::new()
             .get(&url)
             .send()
             .await
@@ -234,16 +234,26 @@ fn render_set_card(set: ApiSet, mut cart: Signal<Cart>) -> Element {
     let mood = set.target_mood.as_deref().unwrap_or("party");
     let emoji = mood_emoji(mood);
     let m_color = mood_color(mood);
-    let has_discount = set.discount_percent > 0.0;
-    let discounted_price = if has_discount {
-        (set.total_price * (1.0 - set.discount_percent / 100.0)).max(0.0)
+    let discount = if set.discount_percent.is_finite() {
+        set.discount_percent.max(0.0)
     } else {
-        set.total_price
+        0.0
     };
-    let original_price_str = format!("฿{}", set.total_price as i32);
+    let total_price = if set.total_price.is_finite() {
+        set.total_price.max(0.0)
+    } else {
+        0.0
+    };
+    let has_discount = discount > 0.0;
+    let discounted_price = if has_discount {
+        (total_price * (1.0 - discount / 100.0)).max(0.0)
+    } else {
+        total_price
+    };
+    let original_price_str = format!("฿{}", total_price as i32);
     let price_str = format!("฿{}", discounted_price as i32);
     let discount_badge = if has_discount {
-        format!("{}% OFF", set.discount_percent as i32)
+        format!("{}% OFF", discount as i32)
     } else {
         String::new()
     };
@@ -253,13 +263,21 @@ fn render_set_card(set: ApiSet, mut cart: Signal<Cart>) -> Element {
     let desc = set.description.as_deref().unwrap_or("");
     let time_str = set.time_of_day.as_deref().unwrap_or("");
     let strains_count = set.strains.as_ref().map(|v| v.len()).unwrap_or(0);
-    let strains_label = if strains_count > 0 { format!("{} strains", strains_count) } else { String::new() };
+    let strains_label = if strains_count > 0 {
+        format!("{} strains", strains_count)
+    } else {
+        String::new()
+    };
     let img_url = set.image_url.clone().unwrap_or_default();
     let has_image = !img_url.is_empty()
-        && (img_url.starts_with("http://") || img_url.starts_with("https://") || img_url.starts_with('/'));
+        && (img_url.starts_with("http://")
+            || img_url.starts_with("https://")
+            || (img_url.starts_with("/") && !img_url.starts_with("//")));
     let video_url = set.video_url.clone().unwrap_or_default();
     let has_video = !video_url.is_empty()
-        && (video_url.starts_with("http://") || video_url.starts_with("https://") || video_url.starts_with('/'));
+        && (video_url.starts_with("http://")
+            || video_url.starts_with("https://")
+            || (video_url.starts_with("/") && !video_url.starts_with("//")));
     let mut show_video = use_signal(|| false);
     let is_available = set.is_available.unwrap_or(true);
     let opacity = if is_available { "" } else { "opacity:0.6;" };

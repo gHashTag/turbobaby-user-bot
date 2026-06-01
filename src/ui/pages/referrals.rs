@@ -1,7 +1,7 @@
-use dioxus::prelude::*;
-use serde::Deserialize;
 use crate::ui::api::context::api_base_url;
 use crate::ui::telegram::{use_telegram_id, use_telegram_init_data};
+use dioxus::prelude::*;
+use serde::Deserialize;
 
 #[derive(Debug, Clone, Default, Deserialize, PartialEq)]
 pub struct ReferralStats {
@@ -33,9 +33,10 @@ fn open_telegram_link(url: &str) {
         if let Some(window) = web_sys::window() {
             if let Ok(tg) = js_sys::Reflect::get(&window, &JsValue::from_str("Telegram")) {
                 if let Ok(webapp) = js_sys::Reflect::get(&tg, &JsValue::from_str("WebApp")) {
-                    let func = js_sys::Reflect::get(&webapp, &JsValue::from_str("openTelegramLink"))
-                        .ok()
-                        .and_then(|f| f.dyn_into::<js_sys::Function>().ok());
+                    let func =
+                        js_sys::Reflect::get(&webapp, &JsValue::from_str("openTelegramLink"))
+                            .ok()
+                            .and_then(|f| f.dyn_into::<js_sys::Function>().ok());
                     if let Some(f) = func {
                         let _ = f.call1(&webapp, &JsValue::from_str(url));
                         return;
@@ -46,7 +47,9 @@ fn open_telegram_link(url: &str) {
         }
     }
     #[cfg(not(target_arch = "wasm32"))]
-    { let _ = url; }
+    {
+        let _ = url;
+    }
 }
 
 fn copy_to_clipboard(text: &str) {
@@ -58,7 +61,9 @@ fn copy_to_clipboard(text: &str) {
         }
     }
     #[cfg(not(target_arch = "wasm32"))]
-    { let _ = text; }
+    {
+        let _ = text;
+    }
 }
 
 // Use the urlencoding crate (already in Cargo.toml) for correct URL encoding.
@@ -93,12 +98,13 @@ pub fn Referrals() -> Element {
             }
             spawn(async move {
                 let base = api_base_url();
-                let client = reqwest::Client::new();
+                let client = crate::ui::api::local_client::LocalClient::new();
 
                 if let Ok(resp) = client
-                    .get(format!("{}/api/referrals/me/{}", base, tid))
-                    .header("X-Telegram-Init-Data", &init)
-                    .send().await
+                    .get(&format!("{}/api/referrals/me/{}", base, tid))
+                    .header("X-Telegram-Init-Data", init.as_str())
+                    .send()
+                    .await
                 {
                     if let Ok(text) = resp.text().await {
                         if let Ok(me) = serde_json::from_str::<ReferralMe>(&text) {
@@ -107,7 +113,11 @@ pub fn Referrals() -> Element {
                     }
                 }
 
-                if let Ok(resp) = client.get(format!("{}/api/referrals/leaderboard?limit=10", base)).send().await {
+                if let Ok(resp) = client
+                    .get(&format!("{}/api/referrals/leaderboard?limit=10", base))
+                    .send()
+                    .await
+                {
                     if let Ok(text) = resp.text().await {
                         if let Ok(val) = serde_json::from_str::<serde_json::Value>(&text) {
                             if let Some(arr) = val.get("leaderboard").and_then(|v| v.as_array()) {
@@ -243,7 +253,14 @@ pub fn Referrals() -> Element {
                     {stat_card("\u{1F465}", "Invited", &stats.total_invited.to_string())}
                     {stat_card("\u{2705}", "Confirmed", &stats.confirmed.to_string())}
                     {stat_card("\u{23F3}", "Pending", &stats.pending.to_string())}
-                    {stat_card("\u{1F4B0}", "Bonus", &format!("{:.0} \u{0E3F}", stats.total_bonus_earned))}
+                    // Bare `let` is illegal inside `rsx!` macro; compute the
+                    // sanitized value inline in the format-arg expression instead.
+                    {stat_card("\u{1F4B0}", "Bonus", &format!(
+                        "{:.0} \u{0E3F}",
+                        if stats.total_bonus_earned.is_finite() {
+                            stats.total_bonus_earned.max(0.0)
+                        } else { 0.0 }
+                    ))}
                 }
 
                 div {
@@ -307,6 +324,11 @@ fn leaderboard_row(rank: usize, telegram_id: i64, referral_count: i64, bonus: f6
         _ => "#555",
     };
     let medal = medal.to_string();
+    let safe_bonus = if bonus.is_finite() {
+        bonus.max(0.0)
+    } else {
+        0.0
+    };
     rsx! {
         div {
             style: "
@@ -323,7 +345,7 @@ fn leaderboard_row(rank: usize, telegram_id: i64, referral_count: i64, bonus: f6
                     {format!("ID: \u{2026}{}", telegram_id % 10000)}
                 }
                 div { style: "font-size: 15px; color: #555; margin-top: 2px;",
-                    {format!("{} invited \u{2022} {:.0} \u{0E3F} earned", referral_count, bonus)}
+                    {format!("{} invited \u{2022} {:.0} \u{0E3F} earned", referral_count, safe_bonus)}
                 }
             }
         }

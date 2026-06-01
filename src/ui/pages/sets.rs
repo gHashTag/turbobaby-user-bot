@@ -97,10 +97,18 @@ fn FeaturedSetCard(set: Set) -> Element {
         rsx!()
     };
 
-    let price = format!("{:.0}", set.price);
-    let original_price = if set.discount > 0.0 && set.discount < 100.0 {
-        let original = set.price / (1.0 - set.discount / 100.0);
-        format!("{:.0}", original)
+    let price = if set.price.is_finite() {
+        format!("{:.0}", set.price.max(0.0))
+    } else {
+        "0".to_string()
+    };
+    let original_price = if set.discount > 0.0 && set.discount < 100.0 && set.price.is_finite() {
+        let original = set.price.max(0.0) / (1.0 - set.discount / 100.0);
+        if original.is_finite() {
+            format!("{:.0}", original)
+        } else {
+            String::new()
+        }
     } else {
         String::new()
     };
@@ -115,7 +123,7 @@ fn FeaturedSetCard(set: Set) -> Element {
         div { class: "set-card featured-set",
             {discount_badge}
             div { class: "set-visual",
-                if icon.starts_with("http") || icon.contains('/') {
+                if icon.starts_with("http://") || icon.starts_with("https://") || (icon.starts_with("/") && !icon.starts_with("//")) {
                     img { src: "{icon}?v=2", alt: "{set.name}", loading: "lazy" }
                 } else {
                     div { class: "set-icon", "{icon}" }
@@ -139,10 +147,18 @@ fn FeaturedSetCard(set: Set) -> Element {
 #[component]
 fn SetCard(set: Set) -> Element {
     let available = set.is_available;
-    let price = format!("{:.0}", set.price);
-    let original_price = if set.discount > 0.0 && set.discount < 100.0 {
-        let original = set.price / (1.0 - set.discount / 100.0);
-        format!("{:.0}", original)
+    let price = if set.price.is_finite() {
+        format!("{:.0}", set.price.max(0.0))
+    } else {
+        "0".to_string()
+    };
+    let original_price = if set.discount > 0.0 && set.discount < 100.0 && set.price.is_finite() {
+        let original = set.price.max(0.0) / (1.0 - set.discount / 100.0);
+        if original.is_finite() {
+            format!("{:.0}", original)
+        } else {
+            String::new()
+        }
     } else {
         String::new()
     };
@@ -166,7 +182,7 @@ fn SetCard(set: Set) -> Element {
         div { class: "set-card",
             {discount_badge}
             div { class: "set-visual",
-                if icon.starts_with("http") || icon.contains('/') {
+                if icon.starts_with("http://") || icon.starts_with("https://") || (icon.starts_with("/") && !icon.starts_with("//")) {
                     img { src: "{icon}?v=2", alt: "{set.name}", loading: "lazy" }
                 } else {
                     div { class: "set-icon", "{icon}" }

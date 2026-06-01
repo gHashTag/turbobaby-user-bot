@@ -13,9 +13,9 @@ pub enum ChipColor {
 impl ChipColor {
     pub fn selected_class(&self) -> &'static str {
         match self {
-            Self::Green  => "selected",
+            Self::Green => "selected",
             Self::Purple => "selected chip-purple",
-            Self::Gold   => "selected chip-gold",
+            Self::Gold => "selected chip-gold",
         }
     }
 }

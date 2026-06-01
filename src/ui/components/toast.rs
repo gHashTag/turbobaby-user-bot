@@ -15,27 +15,27 @@ impl ToastKind {
     pub fn css_class(&self) -> &'static str {
         match self {
             Self::Success => "toast toast-success",
-            Self::Error   => "toast toast-error",
+            Self::Error => "toast toast-error",
             Self::Warning => "toast toast-warning",
-            Self::Info    => "toast toast-info",
+            Self::Info => "toast toast-info",
         }
     }
 
     pub fn icon(&self) -> &'static str {
         match self {
             Self::Success => "✅",
-            Self::Error   => "❌",
+            Self::Error => "❌",
             Self::Warning => "⚠️",
-            Self::Info    => "ℹ️",
+            Self::Info => "ℹ️",
         }
     }
 
     pub fn title(&self) -> &'static str {
         match self {
             Self::Success => "Успех",
-            Self::Error   => "Ошибка",
+            Self::Error => "Ошибка",
             Self::Warning => "Внимание",
-            Self::Info    => "Информация",
+            Self::Info => "Информация",
         }
     }
 }

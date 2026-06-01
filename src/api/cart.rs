@@ -7,7 +7,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
-use crate::api::auth::{check_owner, check_not_blocked};
+use crate::api::auth::{check_not_blocked, check_owner, validate_telegram_id_param};
 use crate::AppState;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -43,13 +43,20 @@ fn validate_cart(req: &Cart) -> Result<(), StatusCode> {
     if !req.total.is_finite() || req.total < 0.0 {
         return Err(StatusCode::BAD_REQUEST);
     }
-    if req.items.len() > 100 { return Err(StatusCode::BAD_REQUEST); }
+    if req.items.len() > 100 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
     for item in &req.items {
-        if item.strain_id.len() > 200 { return Err(StatusCode::BAD_REQUEST); }
+        if item.strain_id.len() > 200 {
+            return Err(StatusCode::BAD_REQUEST);
+        }
         if !item.quantity.is_finite() || item.quantity <= 0.0 || item.quantity > 1_000_000.0 {
             return Err(StatusCode::BAD_REQUEST);
         }
-        if !item.price_per_gram.is_finite() || item.price_per_gram < 0.0 || item.price_per_gram > 1_000_000.0 {
+        if !item.price_per_gram.is_finite()
+            || item.price_per_gram < 0.0
+            || item.price_per_gram > 1_000_000.0
+        {
             return Err(StatusCode::BAD_REQUEST);
         }
     }
@@ -82,6 +89,7 @@ async fn get_cart_by_id(
     State(state): State<AppState>,
     Path(telegram_id): Path<i64>,
 ) -> Result<Json<Value>, StatusCode> {
+    validate_telegram_id_param(telegram_id)?;
     check_owner(&headers, &state, telegram_id)?;
     check_not_blocked(&state, telegram_id).await?;
     // Cart data not persisted on backend yet
@@ -90,7 +98,7 @@ async fn get_cart_by_id(
 
 #[cfg(test)]
 mod tests {
-    use super::{Cart, CartItem, validate_cart};
+    use super::{validate_cart, Cart, CartItem};
     use axum::http::StatusCode;
 
     fn valid_cart() -> Cart {
@@ -127,11 +135,13 @@ mod tests {
     #[test]
     fn test_validate_cart_too_many_items() {
         let mut req = valid_cart();
-        req.items = (0..101).map(|i| CartItem {
-            strain_id: format!("strain-{i}"),
-            quantity: 1.0,
-            price_per_gram: 1.0,
-        }).collect();
+        req.items = (0..101)
+            .map(|i| CartItem {
+                strain_id: format!("strain-{i}"),
+                quantity: 1.0,
+                price_per_gram: 1.0,
+            })
+            .collect();
         assert_eq!(validate_cart(&req).unwrap_err(), StatusCode::BAD_REQUEST);
     }
 
