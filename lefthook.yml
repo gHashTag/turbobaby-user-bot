@@ -98,7 +98,12 @@ pre-commit:
     # code that `cargo check` misses) and runs every `db::*` test (55, all
     # pure helpers). Total impact: ~1s incremental, ~5s cold.
     db-defensive-tests:
-      glob: "*.rs"
+      # Run when *.rs or *.sql changes — migration SQL drift is exactly
+      # what the manifest/orphan tests catch, so we can't skip on
+      # SQL-only commits.
+      glob:
+        - "*.rs"
+        - "*.sql"
       run: "cargo test --offline --features backend --bin woody-weed-bot-server --quiet db::"
       fail_text: |
         Defensive db:: tests failed (schema-truth triad or pure helpers).
