@@ -241,13 +241,14 @@ async fn main() -> Result<()> {
     // realistic client retry window — Stripe defaults to 24 h for the same
     // reason. The first tick is skipped so cold-start serialization isn't
     // blocked behind a DELETE.
-    let pool_for_sweep = db.pool.clone();
+    // Cycle #86: sweep functions now take &sea_orm::DatabaseConnection.
+    let orm_for_sweep = db.orm.clone();
     tokio::spawn(async move {
         let mut interval = tokio::time::interval(std::time::Duration::from_secs(3600));
         interval.tick().await; // discard the immediate first tick
         loop {
             interval.tick().await;
-            match crate::db::orders::cleanup_old_idempotency_keys(&pool_for_sweep, 24).await {
+            match crate::db::orders::cleanup_old_idempotency_keys(&orm_for_sweep, 24).await {
                 Ok(deleted) if deleted > 0 => {
                     info!(deleted, "idempotency_keys: TTL sweep removed expired rows");
                 }
@@ -264,13 +265,13 @@ async fn main() -> Result<()> {
     // shows a 24h window but trend reviews ("how many subtotal mismatches
     // this month?") look back further. Daily tick is enough; the table is
     // low-cardinality compared to idempotency keys.
-    let pool_for_fraud_sweep = db.pool.clone();
+    let orm_for_fraud_sweep = db.orm.clone();
     tokio::spawn(async move {
         let mut interval = tokio::time::interval(std::time::Duration::from_secs(86_400));
         interval.tick().await; // discard the immediate first tick
         loop {
             interval.tick().await;
-            match crate::db::orders::cleanup_old_fraud_events(&pool_for_fraud_sweep, 30).await {
+            match crate::db::orders::cleanup_old_fraud_events(&orm_for_fraud_sweep, 30).await {
                 Ok(deleted) if deleted > 0 => {
                     info!(deleted, "fraud_events: TTL sweep removed expired rows");
                 }
@@ -287,13 +288,13 @@ async fn main() -> Result<()> {
     // / compliance records that admins genuinely look back at across
     // quarters ("did we wrongly block user X three months ago?"). Daily
     // tick same as the fraud sweep; both tables are tiny vs idempotency.
-    let pool_for_block_sweep = db.pool.clone();
+    let orm_for_block_sweep = db.orm.clone();
     tokio::spawn(async move {
         let mut interval = tokio::time::interval(std::time::Duration::from_secs(86_400));
         interval.tick().await; // discard the immediate first tick
         loop {
             interval.tick().await;
-            match crate::db::orders::cleanup_old_block_history(&pool_for_block_sweep, 90).await {
+            match crate::db::orders::cleanup_old_block_history(&orm_for_block_sweep, 90).await {
                 Ok(deleted) if deleted > 0 => {
                     info!(deleted, "block_history: TTL sweep removed expired rows");
                 }

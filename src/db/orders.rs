@@ -183,14 +183,22 @@ pub(crate) fn idempotency_sweep_sql(retention_hours: u32) -> String {
 /// Idempotent and safe to run concurrently with `create_order` — Postgres
 /// handles concurrent DELETE/INSERT on the same table cleanly, and the
 /// 24 h cutoff is far older than any in-flight order's retry window.
+///
+/// Cycle #86: signature `&Pool` → `&sea_orm::DatabaseConnection`. The
+/// SQL builder (`idempotency_sweep_sql`) stays — its INTERVAL literal
+/// is unit-tested in the same module and switching the call site to
+/// `Statement::from_string` is the minimal change that preserves the
+/// builder's contract.
 pub async fn cleanup_old_idempotency_keys(
-    pool: &deadpool_postgres::Pool,
+    orm: &sea_orm::DatabaseConnection,
     retention_hours: u32,
-) -> Result<u64, Box<dyn std::error::Error + Send + Sync>> {
-    let client = pool.get().await?;
+) -> Result<u64, sea_orm::DbErr> {
+    use sea_orm::{ConnectionTrait, DbBackend, Statement};
     let sql = idempotency_sweep_sql(retention_hours);
-    let deleted = client.execute(sql.as_str(), &[]).await?;
-    Ok(deleted)
+    let res = orm
+        .execute(Statement::from_string(DbBackend::Postgres, sql))
+        .await?;
+    Ok(res.rows_affected())
 }
 
 // ─── Fraud-event TTL sweep (cycle #63 / A) ───────────────────────────────
@@ -210,14 +218,18 @@ pub(crate) fn fraud_events_sweep_sql(retention_days: u32) -> String {
 
 /// Delete `order_fraud_events` rows older than `retention_days`. Returns
 /// the row count for the spawn-loop's structured log line.
+///
+/// Cycle #86: same migration pattern as [`cleanup_old_idempotency_keys`].
 pub async fn cleanup_old_fraud_events(
-    pool: &deadpool_postgres::Pool,
+    orm: &sea_orm::DatabaseConnection,
     retention_days: u32,
-) -> Result<u64, Box<dyn std::error::Error + Send + Sync>> {
-    let client = pool.get().await?;
+) -> Result<u64, sea_orm::DbErr> {
+    use sea_orm::{ConnectionTrait, DbBackend, Statement};
     let sql = fraud_events_sweep_sql(retention_days);
-    let deleted = client.execute(sql.as_str(), &[]).await?;
-    Ok(deleted)
+    let res = orm
+        .execute(Statement::from_string(DbBackend::Postgres, sql))
+        .await?;
+    Ok(res.rows_affected())
 }
 
 // ─── block_history TTL sweep (cycle #66) ─────────────────────────────────
@@ -238,14 +250,18 @@ pub(crate) fn block_history_sweep_sql(retention_days: u32) -> String {
 
 /// Delete `block_history` rows older than `retention_days`. Returns the
 /// number of rows deleted for the spawn-loop's structured log line.
+///
+/// Cycle #86: same migration pattern as [`cleanup_old_idempotency_keys`].
 pub async fn cleanup_old_block_history(
-    pool: &deadpool_postgres::Pool,
+    orm: &sea_orm::DatabaseConnection,
     retention_days: u32,
-) -> Result<u64, Box<dyn std::error::Error + Send + Sync>> {
-    let client = pool.get().await?;
+) -> Result<u64, sea_orm::DbErr> {
+    use sea_orm::{ConnectionTrait, DbBackend, Statement};
     let sql = block_history_sweep_sql(retention_days);
-    let deleted = client.execute(sql.as_str(), &[]).await?;
-    Ok(deleted)
+    let res = orm
+        .execute(Statement::from_string(DbBackend::Postgres, sql))
+        .await?;
+    Ok(res.rows_affected())
 }
 
 // ─── Fraud-event audit log (cycle #59) ────────────────────────────────────

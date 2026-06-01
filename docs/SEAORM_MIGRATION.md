@@ -111,9 +111,9 @@ Notable wins:
 | #83 ✅ | `api/loyalty.rs` 2 endpoints: `use_bonus` + `add_bonus` (full SeaORM tx) | ~80 | small/medium | **done** — validated tx pattern |
 | #84 ✅ | `db/referrals.rs` full file (6 functions + 1 entity + 6 callsites + tests) | ~290 | medium | **done — file 100% off raw SQL** |
 | #85 ✅ | `orders.rs` Part 1 — reads (`Order::from_row` → `From<Model>` + 3 callsites) | ~70 | small/medium | **done** |
-| #86 (next) | `orders.rs` Part 2 — `create_order` SeaORM tx (large, ~300 lines) | ~300 | large | |
-| #87 | `orders.rs` Part 3 — `update_order_status` + reject refund tx | ~200 | medium/large | |
-| #88 | `orders.rs` Part 4 — fraud_events + block_history audits | ~250 | medium | |
+| #86 ✅ | `orders.rs` Part 4 (sweeps) + memory capture `seaorm-patterns.md` | ~90 | small | **done** — scope-shifted; Part 2 too big for one cycle |
+| #87 (next) | `orders.rs` Part 2 — `create_order` SeaORM tx (large, ~300 lines) | ~300 | large | |
+| #88 | `orders.rs` Part 3 — `update_order_status` + reject refund tx | ~200 | medium/large | |
 | #84-#86 | `src/db/orders.rs` (split into 3-4 cycles by feature) | 1271 | large | |
 
 Total ≈ 6-8 cycles. Each cycle is independently committable; no big-bang.
@@ -303,6 +303,35 @@ Part 2 (next cycle) tackles the big `create_order` transaction —
 loyalty upsert + bonus deduction + idempotency check + order insert +
 fraud event + manager attribution + auto-block. That's where the
 `SeaORM tx` pattern from #83 will really earn its keep.
+
+### Cycle #86 — Part 4 (sweeps) + memory capture (scope shift)
+
+Originally cycle #86 was planned as Part 2 (`create_order` SeaORM tx).
+Reading the function it's 400+ lines with 8 statements, multiple
+conditional branches (bonus deduction only if `bonus_used > 0`, fraud
+event only on 422, etc.), and `SELECT ... FOR UPDATE` on idempotency
+keys. Migrating in a single cycle would have low confidence — the
+scope-estimation table in `memory/seaorm-patterns.md` (written this
+cycle) flags this exactly as "split into multiple cycles".
+
+So #86 took two smaller pieces instead:
+
+* **B (sweeps).** Migrated `cleanup_old_idempotency_keys`,
+  `cleanup_old_fraud_events`, `cleanup_old_block_history`. All three
+  used the same `audit_sweep_sql` builder (cycle #67) + raw
+  `client.execute`. New pattern (#16 in seaorm-patterns):
+  `orm.execute(Statement::from_string(DbBackend::Postgres, sql)).await?
+  .rows_affected()`. Signature `&Pool` → `&sea_orm::DatabaseConnection`,
+  error type `Box<dyn Error>` → `sea_orm::DbErr`. 3 main.rs callers
+  updated mechanically (`db.pool.clone()` → `db.orm.clone()`).
+* **C (memory capture).** Wrote `memory/seaorm-patterns.md` with 20
+  validated patterns + anti-patterns + scope-estimation table + status
+  of every db file. The 8 prior cycles repeatedly mentioned "should
+  capture patterns to memory" but never did; #86 finally did the
+  knowledge transfer so cycle #87 starts from a documented baseline.
+
+`create_order` migration moves to cycle #87 as a single dedicated
+cycle.
 
 ## Why this is worth doing
 
