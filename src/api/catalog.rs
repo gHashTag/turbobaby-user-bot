@@ -79,7 +79,7 @@ pub struct AccessoryRequest {
 
 fn accessory_row(r: &sea_orm::QueryResult) -> Value {
     let price = {
-        let v = r.try_get::<f64>("", "price").unwrap_or(0.0);
+        let v: f64 = crate::try_get_warn!(r, "price", 0.0);
         if v.is_finite() {
             v.max(0.0)
         } else {
@@ -333,7 +333,7 @@ fn accessory_set_row(r: &sea_orm::QueryResult) -> Value {
         .try_get::<Vec<String>>("", "accessories")
         .unwrap_or_default();
     let total_price = {
-        let v = r.try_get::<f64>("", "total_price").unwrap_or(0.0);
+        let v: f64 = crate::try_get_warn!(r, "total_price", 0.0);
         if v.is_finite() {
             v.max(0.0)
         } else {
@@ -341,7 +341,7 @@ fn accessory_set_row(r: &sea_orm::QueryResult) -> Value {
         }
     };
     let discount_percent = {
-        let v = r.try_get::<f64>("", "discount_percent").unwrap_or(0.0);
+        let v: f64 = crate::try_get_warn!(r, "discount_percent", 0.0);
         if v.is_finite() {
             v.max(0.0)
         } else {
@@ -580,7 +580,7 @@ pub struct TeaProductRequest {
 
 fn tea_product_row(r: &sea_orm::QueryResult) -> Value {
     let price = {
-        let v = r.try_get::<f64>("", "price").unwrap_or(0.0);
+        let v: f64 = crate::try_get_warn!(r, "price", 0.0);
         if v.is_finite() {
             v.max(0.0)
         } else {
@@ -830,13 +830,13 @@ pub struct TeaSetRequest {
 
 fn tea_set_row(r: &sea_orm::QueryResult) -> Value {
     let tea_items: Vec<String> = r.try_get::<Vec<String>>("", "items").unwrap_or_default();
-    let total_price = r.try_get::<f64>("", "total_price").unwrap_or(0.0);
+    let total_price: f64 = crate::try_get_warn!(r, "total_price", 0.0);
     let total_price = if total_price.is_finite() {
         total_price.max(0.0)
     } else {
         0.0
     };
-    let discount_percent = r.try_get::<f64>("", "discount_percent").unwrap_or(0.0);
+    let discount_percent: f64 = crate::try_get_warn!(r, "discount_percent", 0.0);
     let discount_percent = if discount_percent.is_finite() {
         discount_percent.max(0.0)
     } else {
@@ -1070,13 +1070,13 @@ fn set_row(r: &sea_orm::QueryResult) -> Value {
     let accessory_ids: Vec<String> = r
         .try_get::<Vec<String>>("", "accessory_ids")
         .unwrap_or_default();
-    let total_price = r.try_get::<f64>("", "total_price").unwrap_or(0.0);
+    let total_price: f64 = crate::try_get_warn!(r, "total_price", 0.0);
     let total_price = if total_price.is_finite() {
         total_price.max(0.0)
     } else {
         0.0
     };
-    let discount_percent = r.try_get::<f64>("", "discount_percent").unwrap_or(0.0);
+    let discount_percent: f64 = crate::try_get_warn!(r, "discount_percent", 0.0);
     let discount_percent = if discount_percent.is_finite() {
         discount_percent.max(0.0)
     } else {
@@ -1138,13 +1138,13 @@ async fn get_sets(
         let accessories: Vec<String> = r
             .try_get::<Vec<String>>("", "accessories")
             .unwrap_or_default();
-        let total_price = r.try_get::<f64>("", "total_price").unwrap_or(0.0);
+        let total_price: f64 = crate::try_get_warn!(r, "total_price", 0.0);
         let total_price = if total_price.is_finite() {
             total_price.max(0.0)
         } else {
             0.0
         };
-        let discount_percent = r.try_get::<f64>("", "discount_percent").unwrap_or(0.0);
+        let discount_percent: f64 = crate::try_get_warn!(r, "discount_percent", 0.0);
         let discount_percent = if discount_percent.is_finite() {
             discount_percent.max(0.0)
         } else {
@@ -1170,13 +1170,13 @@ async fn get_sets(
 
     for r in tea_sets.iter() {
         let tea_items: Vec<String> = r.try_get::<Vec<String>>("", "items").unwrap_or_default();
-        let total_price = r.try_get::<f64>("", "total_price").unwrap_or(0.0);
+        let total_price: f64 = crate::try_get_warn!(r, "total_price", 0.0);
         let total_price = if total_price.is_finite() {
             total_price.max(0.0)
         } else {
             0.0
         };
-        let discount_percent = r.try_get::<f64>("", "discount_percent").unwrap_or(0.0);
+        let discount_percent: f64 = crate::try_get_warn!(r, "discount_percent", 0.0);
         let discount_percent = if discount_percent.is_finite() {
             discount_percent.max(0.0)
         } else {

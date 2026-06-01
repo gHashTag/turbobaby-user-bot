@@ -1,5 +1,6 @@
 pub mod entities;
 pub mod loyalty;
+pub mod macros;
 pub mod orders;
 pub mod referrals;
 pub mod strains;

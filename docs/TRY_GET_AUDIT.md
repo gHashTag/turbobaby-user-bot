@@ -103,7 +103,8 @@ Admin tooling + referral lookups. Low-volume, admin-visible.
 ## Priority queue for follow-up cycles
 
 * **Cycle #98 ✅ done:** Fixed the 4 🔴 callsites. `api/orders.rs` price-auth (acc/tea/sets) closures now `.map(|r| Result<(...), DbErr>).collect::<Result<Vec<_>, _>>()?` — schema drift on price columns 500s instead of letting fabricated orders pass server-side authority. `api/loyalty.rs::get_loyalty_tiers` propagates errors on `points_multiplier` / `min_points` / `discount_percent` (financial fields); strings/arrays stay default-on-missing (cosmetic).
-* **Cycle #99 (lower priority):** Audit the 🟡 callsites where default of `0` / `false` / `""` could be visually misleading in admin views. Add `tracing::warn!` when a NOT NULL read returns the default (proxies as "schema drift detected").
+* **Cycle #100 ✅ done:** Added `try_get_warn!` macro (`src/db/macros.rs`, target `db.schema_drift`). Wired 15 🟡 financial-display callsites: 12 in `api/catalog.rs` (price/total_price/discount_percent across 5 row helpers), 3 in `db/orders.rs` (revenue/total_orders/unique_buyers in `order_stats_24h`), 2 in `db/referrals.rs` (`total_bonus_earned` in get_referrer_stats + get_top_referrers). Drift now surfaces in logs grep-able by `db.schema_drift`. The earlier audit count of 93 was an undercount — actual `try_get.*unwrap_or` corpus is 187 sites; the macro can be wired to the remaining ones incrementally without changing behaviour.
+* **Cycle #101 (proposed):** Wire macro to remaining 🟡 callsites with **visible defaults** (`tech_tree.rs` xp/priority — 24 sites, `quest.rs` lat/lon/is_final — 11 sites). Skip strings/arrays/bools where `""`/empty/`false` are semantically OK on NULLable.
 * **Defer:** 🟢 callsites — that's expected NULL-able behaviour. No fix.
 
 ## How to validate this audit

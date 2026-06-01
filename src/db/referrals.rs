@@ -403,7 +403,7 @@ pub async fn get_referrer_stats(
         confirmed: row.try_get::<i64>("", "confirmed").unwrap_or(0),
         pending: row.try_get::<i64>("", "pending").unwrap_or(0),
         total_bonus_earned: {
-            let v = row.try_get::<f64>("", "total_bonus_earned").unwrap_or(0.0);
+            let v: f64 = crate::try_get_warn!(row, "total_bonus_earned", 0.0);
             if v.is_finite() {
                 v.max(0.0)
             } else {
@@ -477,7 +477,7 @@ pub async fn get_top_referrers(
             first_name: r.try_get::<String>("", "first_name").ok(),
             referral_count: r.try_get::<i64>("", "referral_count").unwrap_or(0),
             total_bonus_earned: {
-                let v = r.try_get::<f64>("", "total_bonus_earned").unwrap_or(0.0);
+                let v: f64 = crate::try_get_warn!(r, "total_bonus_earned", 0.0);
                 if v.is_finite() {
                     v.max(0.0)
                 } else {
