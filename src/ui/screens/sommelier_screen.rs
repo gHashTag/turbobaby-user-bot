@@ -1,4 +1,3 @@
-use crate::trios::core::Lang;
 use crate::trios::i18n::{t, T_SOMM_DESC, T_SOMM_EXP, T_SOMM_MOOD, T_SOMM_TIME, T_SOMM_TITLE};
 use crate::ui::components::bottom_nav::BottomNav;
 use crate::ui::state::{Cart, CartItem, CartItemType};
@@ -111,11 +110,11 @@ pub fn SommelierScreen() -> Element {
     let mut selected_exp = use_signal(|| Experience::Medium);
     let mut show_results = use_signal(|| false);
 
-    let somm_title = t(Lang::Russian, T_SOMM_TITLE);
-    let somm_desc = t(Lang::Russian, T_SOMM_DESC);
-    let somm_mood_label = format!("🤔 {}?", t(Lang::Russian, T_SOMM_MOOD));
-    let somm_time_label = format!("🕐 {}?", t(Lang::Russian, T_SOMM_TIME));
-    let somm_exp_label = format!("🎮 {}?", t(Lang::Russian, T_SOMM_EXP));
+    let somm_title = t(crate::ui::lang::current_lang(), T_SOMM_TITLE);
+    let somm_desc = t(crate::ui::lang::current_lang(), T_SOMM_DESC);
+    let somm_mood_label = format!("🤔 {}?", t(crate::ui::lang::current_lang(), T_SOMM_MOOD));
+    let somm_time_label = format!("🕐 {}?", t(crate::ui::lang::current_lang(), T_SOMM_TIME));
+    let somm_exp_label = format!("🎮 {}?", t(crate::ui::lang::current_lang(), T_SOMM_EXP));
 
     let recommendations = use_resource(move || async move {
         if !show_results() {

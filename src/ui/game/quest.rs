@@ -1,5 +1,4 @@
 // Quest screen — location-quest UI wired up to backend `/api/quest/scan`.
-use crate::trios::core::Lang;
 use crate::trios::i18n::{
     t, T_CHECKIN_SUCCESS, T_PURCHASE_MIN, T_QUEST_COMPLETE, T_REWARD, T_REWARD_CLAIM, T_SCAN_QR,
     T_SCAN_QR_DESC, T_STATUS_ACTIVE, T_STATUS_COMPLETED, T_STATUS_LOCKED, T_SUBTITLE, T_TITLE,
@@ -133,10 +132,10 @@ pub fn Quest() -> Element {
     let scan_msg = scan_result.read().clone();
     let is_complete = cur_cp >= checkpoints.len() as u8;
 
-    let quest_title = t(Lang::Russian, T_TITLE).to_string();
-    let quest_subtitle = t(Lang::Russian, T_SUBTITLE).to_string();
-    let scan_qr_text = t(Lang::Russian, T_SCAN_QR).to_string();
-    let scan_desc = t(Lang::Russian, T_SCAN_QR_DESC).to_string();
+    let quest_title = t(crate::ui::lang::current_lang(), T_TITLE).to_string();
+    let quest_subtitle = t(crate::ui::lang::current_lang(), T_SUBTITLE).to_string();
+    let scan_qr_text = t(crate::ui::lang::current_lang(), T_SCAN_QR).to_string();
+    let scan_desc = t(crate::ui::lang::current_lang(), T_SCAN_QR_DESC).to_string();
 
     let bg = "#0f0f1a";
     let bg_card = "#1a1a2e";
@@ -169,13 +168,13 @@ pub fn Quest() -> Element {
                 ",
                     div { style: "font-size: 48px; margin-bottom: 12px;", "🏆" }
                     div { style: "font-size: 14px; color: #ffd700; margin-bottom: 8px;",
-                        "{t(Lang::Russian, T_QUEST_COMPLETE)}"
+                        "{t(crate::ui::lang::current_lang(), T_QUEST_COMPLETE)}"
                     }
                     div { style: "font-size: 12px; color: #e8e8e8; margin-bottom: 4px;",
-                        "{t(Lang::Russian, T_REWARD_CLAIM)}"
+                        "{t(crate::ui::lang::current_lang(), T_REWARD_CLAIM)}"
                     }
                     div { style: "font-size: 16px; color: #39ff14;",
-                        "{t(Lang::Russian, T_REWARD)}"
+                        "{t(crate::ui::lang::current_lang(), T_REWARD)}"
                     }
                 }
             }
@@ -188,7 +187,7 @@ pub fn Quest() -> Element {
                     border-radius: 8px;
                     padding: 6px 10px; font-size: 18px; color: #39ff14; text-align: center;
                 ",
-                    "{t(Lang::Russian, T_CHECKIN_SUCCESS)}"
+                    "{t(crate::ui::lang::current_lang(), T_CHECKIN_SUCCESS)}"
                 }
             } else if !scan_msg.is_empty() {
                 ErrorBanner {
@@ -224,15 +223,15 @@ pub fn Quest() -> Element {
                         let is_current = cp_num == cur_cp + 1 && !is_complete;
                         let _is_locked = cp_num > cur_cp + 1;
 
-                        let title = cp.title(Lang::Russian).to_string();
+                        let title = cp.title(crate::ui::lang::current_lang()).to_string();
                         let emoji = checkpoint_emoji(cp.id);
 
                         let (border_color, status_text, status_color, status_bg, opacity) = if is_done {
-                            ("#39ff14", t(Lang::Russian, T_STATUS_COMPLETED), "#39ff14", "rgba(57,255,20,0.2)", "1")
+                            ("#39ff14", t(crate::ui::lang::current_lang(), T_STATUS_COMPLETED), "#39ff14", "rgba(57,255,20,0.2)", "1")
                         } else if is_current {
-                            (cyan, t(Lang::Russian, T_STATUS_ACTIVE), cyan, "rgba(0,229,255,0.2)", "1")
+                            (cyan, t(crate::ui::lang::current_lang(), T_STATUS_ACTIVE), cyan, "rgba(0,229,255,0.2)", "1")
                         } else {
-                            ("rgba(255,255,255,0.1)", t(Lang::Russian, T_STATUS_LOCKED), "#666", "rgba(255,255,255,0.05)", "0.5")
+                            ("rgba(255,255,255,0.1)", t(crate::ui::lang::current_lang(), T_STATUS_LOCKED), "#666", "rgba(255,255,255,0.05)", "0.5")
                         };
 
                         let progress_pct = if is_done { "100%" } else if is_current { "50%" } else { "0%" };
@@ -282,7 +281,7 @@ pub fn Quest() -> Element {
                         if is_scanning { "⏳ Scanning..." } else { "📷 {scan_qr_text}" }
                     }
                     div { style: "font-size: 18px; color: #555; text-align: center; margin-top: 8px;",
-                        "{t(Lang::Russian, T_PURCHASE_MIN)}"
+                        "{t(crate::ui::lang::current_lang(), T_PURCHASE_MIN)}"
                     }
                 }
             }

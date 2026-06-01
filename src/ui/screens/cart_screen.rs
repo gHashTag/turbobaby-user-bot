@@ -1,5 +1,4 @@
 // Cart Screen — Interactive with global Cart signal
-use crate::trios::core::Lang;
 use crate::trios::i18n::{t, T_CART_EMPTY, T_CART_EMPTY_DESC, T_CART_TITLE};
 use crate::ui::components::bottom_nav::BottomNav;
 use crate::ui::routes::Route;
@@ -21,9 +20,9 @@ pub fn CartScreen() -> Element {
     let items = cart.read().items.clone();
     let total = cart.read().total;
     let item_count: u32 = items.iter().map(|i| i.quantity).sum();
-    let cart_title = t(Lang::Russian, T_CART_TITLE);
-    let cart_empty = t(Lang::Russian, T_CART_EMPTY);
-    let cart_empty_desc = t(Lang::Russian, T_CART_EMPTY_DESC);
+    let cart_title = t(crate::ui::lang::current_lang(), T_CART_TITLE);
+    let cart_empty = t(crate::ui::lang::current_lang(), T_CART_EMPTY);
+    let cart_empty_desc = t(crate::ui::lang::current_lang(), T_CART_EMPTY_DESC);
 
     rsx! {
         div { style: "

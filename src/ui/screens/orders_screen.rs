@@ -1,4 +1,3 @@
-use crate::trios::core::Lang;
 use crate::trios::i18n::{t, T_LOADING, T_ORDERS_TITLE};
 use crate::ui::api::context::api_base_url;
 use crate::ui::components::bottom_nav::BottomNav;
@@ -129,8 +128,8 @@ pub fn OrdersScreen() -> Element {
         _ => Vec::new(),
     };
 
-    let orders_title = t(Lang::Russian, T_ORDERS_TITLE);
-    let loading_text = t(Lang::Russian, T_LOADING);
+    let orders_title = t(crate::ui::lang::current_lang(), T_ORDERS_TITLE);
+    let loading_text = t(crate::ui::lang::current_lang(), T_LOADING);
 
     rsx! {
         div { style: "

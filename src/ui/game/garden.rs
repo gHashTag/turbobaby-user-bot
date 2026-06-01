@@ -1,4 +1,3 @@
-use crate::trios::core::Lang;
 use crate::trios::garden::{calculate_progress, GrowthStage, Plant};
 use crate::trios::i18n::{t, T_BTN_WATER, T_GARDEN_SUBTITLE, T_GARDEN_TITLE};
 use crate::ui::api::context::api_base_url;
@@ -236,9 +235,9 @@ pub fn Garden() -> Element {
     let bg = "#0f0f1a";
     let bg_card = "#1a1a2e";
     let border_subtle = "rgba(255,255,255,0.1)";
-    let title_text = t(Lang::Russian, T_GARDEN_TITLE);
-    let subtitle_text = t(Lang::Russian, T_GARDEN_SUBTITLE);
-    let water_text = t(Lang::Russian, T_BTN_WATER);
+    let title_text = t(crate::ui::lang::current_lang(), T_GARDEN_TITLE);
+    let subtitle_text = t(crate::ui::lang::current_lang(), T_GARDEN_SUBTITLE);
+    let water_text = t(crate::ui::lang::current_lang(), T_BTN_WATER);
 
     rsx! {
         div { style: "min-height: 100vh; background: {bg}; color: #e8e8e8; font-family: 'Press Start 2P', monospace; padding-bottom: 80px;",

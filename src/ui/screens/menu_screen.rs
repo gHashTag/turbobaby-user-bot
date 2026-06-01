@@ -1,4 +1,3 @@
-use crate::trios::core::Lang;
 use crate::trios::i18n::{t, T_ADD_TO_CART, T_LOADING, T_MENU_DESC, T_MENU_TITLE};
 use crate::ui::api::context::api_base_url;
 use crate::ui::components::bottom_nav::BottomNav;
@@ -119,9 +118,9 @@ pub fn MenuScreen() -> Element {
     let cart = use_context::<Signal<Cart>>();
     let cart_count: u32 = cart.read().items.iter().map(|i| i.quantity).sum();
 
-    let menu_title = t(Lang::Russian, T_MENU_TITLE).to_string();
-    let menu_desc = t(Lang::Russian, T_MENU_DESC).to_string();
-    let loading_label = t(Lang::Russian, T_LOADING).to_string();
+    let menu_title = t(crate::ui::lang::current_lang(), T_MENU_TITLE).to_string();
+    let menu_desc = t(crate::ui::lang::current_lang(), T_MENU_DESC).to_string();
+    let loading_label = t(crate::ui::lang::current_lang(), T_LOADING).to_string();
 
     let strains_resource: Resource<Result<Vec<ApiStrain>, String>> = use_resource(move || {
         async move {
@@ -342,7 +341,7 @@ pub fn MenuScreen() -> Element {
 }
 
 fn render_strain_card(strain: ApiStrain, mut cart: Signal<Cart>) -> Element {
-    let add_to_cart_label = t(Lang::Russian, T_ADD_TO_CART).to_string();
+    let add_to_cart_label = t(crate::ui::lang::current_lang(), T_ADD_TO_CART).to_string();
     let cat = strain.category.as_deref().unwrap_or("Hybrid");
     let emoji = category_emoji(cat);
     let is_sotd = strain.is_strain_of_day;

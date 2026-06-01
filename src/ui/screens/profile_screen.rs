@@ -1,4 +1,3 @@
-use crate::trios::core::Lang;
 use crate::trios::i18n::{t, T_PROFILE_TITLE};
 use crate::ui::api::context::api_base_url;
 use crate::ui::assets;
@@ -195,7 +194,7 @@ pub fn ProfileScreen() -> Element {
     };
     let remaining = next_tier.map(|t| (t.threshold() - total_spent).max(0.0));
 
-    let profile_title = t(Lang::Russian, T_PROFILE_TITLE);
+    let profile_title = t(crate::ui::lang::current_lang(), T_PROFILE_TITLE);
 
     rsx! {
         div { style: "
@@ -281,7 +280,7 @@ pub fn ProfileScreen() -> Element {
                         format!("data:image/svg+xml;base64,{}", STANDARD.encode(svg_str.as_bytes()))
                     })
                     .unwrap_or_default();
-                let _qr_title = t(Lang::Russian, T_PROFILE_TITLE);
+                let _qr_title = t(crate::ui::lang::current_lang(), T_PROFILE_TITLE);
                 let ref_link = format!("https://t.me/Woody_WeedPecker_bot?start=ref_{}", referral_code);
                 let ref_link_copy = ref_link.clone();
                 let ref_link_share = ref_link.clone();

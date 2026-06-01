@@ -1,4 +1,3 @@
-use crate::trios::core::Lang;
 use crate::trios::i18n::{
     t, T_ADD_TO_CART, T_HOME_SUBTITLE, T_NAV_ACCESSORIES, T_NAV_GARDEN, T_NAV_MENU, T_NAV_SETS,
     T_NAV_TEA,
@@ -49,13 +48,13 @@ fn format_price(price: f64) -> String {
 pub fn HomeScreen() -> Element {
     let mut cart = use_context::<Signal<Cart>>();
     let cart_count: u32 = cart.read().items.iter().map(|i| i.quantity).sum();
-    let home_subtitle = t(Lang::Russian, T_HOME_SUBTITLE).to_string();
-    let nav_menu = t(Lang::Russian, T_NAV_MENU).to_string();
-    let nav_sets = t(Lang::Russian, T_NAV_SETS).to_string();
-    let nav_accessories = t(Lang::Russian, T_NAV_ACCESSORIES).to_string();
-    let nav_tea = t(Lang::Russian, T_NAV_TEA).to_string();
-    let nav_garden = t(Lang::Russian, T_NAV_GARDEN).to_string();
-    let add_to_cart_label = t(Lang::Russian, T_ADD_TO_CART).to_string();
+    let home_subtitle = t(crate::ui::lang::current_lang(), T_HOME_SUBTITLE).to_string();
+    let nav_menu = t(crate::ui::lang::current_lang(), T_NAV_MENU).to_string();
+    let nav_sets = t(crate::ui::lang::current_lang(), T_NAV_SETS).to_string();
+    let nav_accessories = t(crate::ui::lang::current_lang(), T_NAV_ACCESSORIES).to_string();
+    let nav_tea = t(crate::ui::lang::current_lang(), T_NAV_TEA).to_string();
+    let nav_garden = t(crate::ui::lang::current_lang(), T_NAV_GARDEN).to_string();
+    let add_to_cart_label = t(crate::ui::lang::current_lang(), T_ADD_TO_CART).to_string();
 
     let sotd_resource = use_resource(|| async move {
         let base = api_base_url();

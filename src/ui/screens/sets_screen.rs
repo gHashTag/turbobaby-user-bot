@@ -1,4 +1,3 @@
-use crate::trios::core::Lang;
 use crate::trios::i18n::{t, T_ADD_TO_CART, T_FILTER_ALL, T_SETS_DESC, T_SETS_TITLE};
 use crate::ui::api::context::api_base_url;
 use crate::ui::assets;
@@ -66,7 +65,7 @@ enum MoodFilter {
 impl MoodFilter {
     fn label(&self) -> &'static str {
         match self {
-            Self::All => t(Lang::Russian, T_FILTER_ALL),
+            Self::All => t(crate::ui::lang::current_lang(), T_FILTER_ALL),
             Self::Energy => "⚡ Energy",
             Self::Party => "🎉 Party",
             Self::Heavy => "🏋️ Heavy",
@@ -89,9 +88,9 @@ pub fn SetsScreen() -> Element {
     let cart = use_context::<Signal<Cart>>();
     let mut mood_filter = use_signal(|| MoodFilter::All);
 
-    let sets_title = t(Lang::Russian, T_SETS_TITLE);
-    let sets_desc = t(Lang::Russian, T_SETS_DESC);
-    let _add_to_cart = t(Lang::Russian, T_ADD_TO_CART);
+    let sets_title = t(crate::ui::lang::current_lang(), T_SETS_TITLE);
+    let sets_desc = t(crate::ui::lang::current_lang(), T_SETS_DESC);
+    let _add_to_cart = t(crate::ui::lang::current_lang(), T_ADD_TO_CART);
 
     let sets_resource = use_resource(|| async move {
         let base = api_base_url();
@@ -230,7 +229,7 @@ pub fn SetsScreen() -> Element {
 }
 
 fn render_set_card(set: ApiSet, mut cart: Signal<Cart>) -> Element {
-    let add_to_cart = t(Lang::Russian, T_ADD_TO_CART).to_string();
+    let add_to_cart = t(crate::ui::lang::current_lang(), T_ADD_TO_CART).to_string();
     let mood = set.target_mood.as_deref().unwrap_or("party");
     let emoji = mood_emoji(mood);
     let m_color = mood_color(mood);

@@ -1,4 +1,3 @@
-use crate::trios::core::Lang;
 use crate::trios::i18n::{t, T_ACC_DESC, T_ACC_TITLE, T_ADD_TO_CART, T_FILTER_ALL};
 use crate::ui::api::context::api_base_url;
 use crate::ui::components::bottom_nav::BottomNav;
@@ -63,10 +62,10 @@ pub fn AccessoriesScreen() -> Element {
     let cart = use_context::<Signal<Cart>>();
     let mut active_category = use_signal(|| "All".to_string());
 
-    let acc_title = t(Lang::Russian, T_ACC_TITLE);
-    let acc_desc = t(Lang::Russian, T_ACC_DESC);
-    let filter_all = t(Lang::Russian, T_FILTER_ALL);
-    let add_to_cart = t(Lang::Russian, T_ADD_TO_CART);
+    let acc_title = t(crate::ui::lang::current_lang(), T_ACC_TITLE);
+    let acc_desc = t(crate::ui::lang::current_lang(), T_ACC_DESC);
+    let filter_all = t(crate::ui::lang::current_lang(), T_FILTER_ALL);
+    let add_to_cart = t(crate::ui::lang::current_lang(), T_ADD_TO_CART);
 
     let accessories_resource = use_resource(|| async move {
         let base = api_base_url();

@@ -1,4 +1,3 @@
-use crate::trios::core::Lang;
 use crate::trios::i18n::{t, T_ADD_TO_CART, T_FILTER_ALL, T_TEA_DESC, T_TEA_TITLE};
 use crate::ui::api::context::api_base_url;
 use crate::ui::components::bottom_nav::BottomNav;
@@ -43,10 +42,10 @@ pub fn TeaScreen() -> Element {
     let mut cart = use_context::<Signal<Cart>>();
     let mut active_sub = use_signal(|| "All".to_string());
 
-    let tea_title = t(Lang::Russian, T_TEA_TITLE);
-    let tea_desc = t(Lang::Russian, T_TEA_DESC);
-    let filter_all = t(Lang::Russian, T_FILTER_ALL);
-    let add_to_cart = t(Lang::Russian, T_ADD_TO_CART);
+    let tea_title = t(crate::ui::lang::current_lang(), T_TEA_TITLE);
+    let tea_desc = t(crate::ui::lang::current_lang(), T_TEA_DESC);
+    let filter_all = t(crate::ui::lang::current_lang(), T_FILTER_ALL);
+    let add_to_cart = t(crate::ui::lang::current_lang(), T_ADD_TO_CART);
 
     let tea_resource = use_resource(|| async move {
         let base = api_base_url();

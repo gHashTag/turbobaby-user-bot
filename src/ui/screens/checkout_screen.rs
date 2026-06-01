@@ -1,4 +1,3 @@
-use crate::trios::core::Lang;
 use crate::trios::i18n::{
     t, T_BACK, T_CHECKOUT_TITLE, T_DELIVERY, T_PAYMENT, T_PICKUP_LOCATION, T_PLACE_ORDER, T_TOTAL,
     T_YOUR_INFO, T_YOUR_ORDER,
@@ -48,26 +47,20 @@ pub fn CheckoutScreen() -> Element {
     let telegram_username = use_telegram_username();
     let init_data = use_telegram_init_data();
 
-    // Cycle #70 / #71: pick up rendering locale from `?lang=xx` (URL
-    // override) and the Telegram WebApp's `initDataUnsafe.user.language_code`
-    // (passive fallback). On mobile users rarely tweak the URL — the
-    // Telegram-client locale is the realistic source. `pick_lang` enforces
-    // precedence: query → telegram → Lang::Russian default.
-    let url_query: Option<String> = web_sys::window()
-        .and_then(|w| w.location().search().ok())
-        .filter(|s| !s.is_empty());
-    let tg_lang_code: Option<String> = crate::ui::telegram::TelegramApp::init().get_language_code();
-    let lang = crate::trios::core::pick_lang(url_query.as_deref(), tg_lang_code.as_deref());
+    // Cycle #73 / A: lang is now resolved once at WASM startup
+    // (lib.rs::run via pick_lang) and stored in OnceLock; just read it.
+    // No more per-screen inline pick_lang dance.
+    let lang = crate::ui::lang::current_lang();
 
-    let checkout_title = t(Lang::Russian, T_CHECKOUT_TITLE);
-    let your_order = t(Lang::Russian, T_YOUR_ORDER);
-    let your_info = format!("👤 {}", t(Lang::Russian, T_YOUR_INFO));
-    let pickup_location = t(Lang::Russian, T_PICKUP_LOCATION);
-    let delivery = t(Lang::Russian, T_DELIVERY);
-    let payment = t(Lang::Russian, T_PAYMENT);
-    let place_order = t(Lang::Russian, T_PLACE_ORDER);
-    let back = t(Lang::Russian, T_BACK);
-    let total_label = t(Lang::Russian, T_TOTAL);
+    let checkout_title = t(crate::ui::lang::current_lang(), T_CHECKOUT_TITLE);
+    let your_order = t(crate::ui::lang::current_lang(), T_YOUR_ORDER);
+    let your_info = format!("👤 {}", t(crate::ui::lang::current_lang(), T_YOUR_INFO));
+    let pickup_location = t(crate::ui::lang::current_lang(), T_PICKUP_LOCATION);
+    let delivery = t(crate::ui::lang::current_lang(), T_DELIVERY);
+    let payment = t(crate::ui::lang::current_lang(), T_PAYMENT);
+    let place_order = t(crate::ui::lang::current_lang(), T_PLACE_ORDER);
+    let back = t(crate::ui::lang::current_lang(), T_BACK);
+    let total_label = t(crate::ui::lang::current_lang(), T_TOTAL);
 
     // Единственная реальная точка самовывоза.
     let shops = [(
