@@ -238,19 +238,19 @@ pub struct TreasureHuntRequest {
 }
 
 async fn get_treasure_hunts(State(state): State<AppState>) -> Result<Json<Value>, StatusCode> {
-    let client = state.db.pool.get().await.map_err(|e| {
-        tracing::error!("DB error: {:?}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-    let rows = client.query(
-        "SELECT id, name, description, image_url, black_mark_title, black_mark_description, black_mark_image_url, is_active, starts_at, ends_at, start_lat::float8, start_lon::float8, start_name FROM treasure_hunts WHERE is_active = true ORDER BY created_at DESC LIMIT 2000",
-        &[],
-    ).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
+    // Cycle #93: SeaORM via Statement. SeaORM's `try_get("", "col")`
+    // takes column *name*, not positional index — switch from `try_get(N)`
+    // to `try_get("", "col_name")`.
+    use sea_orm::{ConnectionTrait, DbBackend, Statement};
+    let rows = state.db.orm.query_all(Statement::from_string(
+        DbBackend::Postgres,
+        "SELECT id, name, description, image_url, black_mark_title, black_mark_description, black_mark_image_url, is_active, starts_at, ends_at, start_lat::float8, start_lon::float8, start_name FROM treasure_hunts WHERE is_active = true ORDER BY created_at DESC LIMIT 2000".to_string(),
+    )).await.map_err(|e| { tracing::error!("get_treasure_hunts: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?;
     let items: Vec<Value> = rows
         .iter()
         .map(|r| {
             let start_lat = {
-                let v = r.try_get::<_, f64>(10).unwrap_or(0.0);
+                let v = r.try_get::<f64>("", "start_lat").unwrap_or(0.0);
                 if v.is_finite() {
                     v.max(0.0)
                 } else {
@@ -258,7 +258,7 @@ async fn get_treasure_hunts(State(state): State<AppState>) -> Result<Json<Value>
                 }
             };
             let start_lon = {
-                let v = r.try_get::<_, f64>(11).unwrap_or(0.0);
+                let v = r.try_get::<f64>("", "start_lon").unwrap_or(0.0);
                 if v.is_finite() {
                     v.max(0.0)
                 } else {
@@ -266,19 +266,19 @@ async fn get_treasure_hunts(State(state): State<AppState>) -> Result<Json<Value>
                 }
             };
             json!({
-                "id": r.try_get::<_, String>(0).unwrap_or_default(),
-                "name": r.try_get::<_, String>(1).unwrap_or_default(),
-                "description": r.try_get::<_, String>(2).ok(),
-                "image_url": r.try_get::<_, String>(3).ok(),
-                "black_mark_title": r.try_get::<_, String>(4).unwrap_or_default(),
-                "black_mark_description": r.try_get::<_, String>(5).ok(),
-                "black_mark_image_url": r.try_get::<_, String>(6).ok(),
-                "is_active": r.try_get::<_, bool>(7).unwrap_or(false),
-                "starts_at": r.try_get::<_, String>(8).ok(),
-                "ends_at": r.try_get::<_, String>(9).ok(),
+                "id": r.try_get::<String>("", "id").unwrap_or_default(),
+                "name": r.try_get::<String>("", "name").unwrap_or_default(),
+                "description": r.try_get::<String>("", "description").ok(),
+                "image_url": r.try_get::<String>("", "image_url").ok(),
+                "black_mark_title": r.try_get::<String>("", "black_mark_title").unwrap_or_default(),
+                "black_mark_description": r.try_get::<String>("", "black_mark_description").ok(),
+                "black_mark_image_url": r.try_get::<String>("", "black_mark_image_url").ok(),
+                "is_active": r.try_get::<bool>("", "is_active").unwrap_or(false),
+                "starts_at": r.try_get::<String>("", "starts_at").ok(),
+                "ends_at": r.try_get::<String>("", "ends_at").ok(),
                 "start_lat": start_lat,
                 "start_lon": start_lon,
-                "start_name": r.try_get::<_, String>(12).unwrap_or_default(),
+                "start_name": r.try_get::<String>("", "start_name").unwrap_or_default(),
             })
         })
         .collect();
@@ -449,25 +449,22 @@ async fn get_quest_locations(
     State(state): State<AppState>,
     Query(_params): Query<QuestLocationParams>,
 ) -> Result<Json<Value>, StatusCode> {
-    let client = state.db.pool.get().await.map_err(|e| {
-        tracing::error!("DB error: {:?}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-    let rows = client.query(
-        "SELECT id, name, description, category, map_url, is_active, is_final FROM location_quest_locations WHERE is_active = true ORDER BY id LIMIT 2000",
-        &[],
-    ).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
+    use sea_orm::{ConnectionTrait, DbBackend, Statement};
+    let rows = state.db.orm.query_all(Statement::from_string(
+        DbBackend::Postgres,
+        "SELECT id, name, description, category, map_url, is_active, is_final FROM location_quest_locations WHERE is_active = true ORDER BY id LIMIT 2000".to_string(),
+    )).await.map_err(|e| { tracing::error!("get_quest_locations: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?;
     let items: Vec<Value> = rows
         .iter()
         .map(|r| {
             json!({
-                "id": r.try_get::<_, i32>(0).unwrap_or(0),
-                "name": r.try_get::<_, String>(1).unwrap_or_default(),
-                "description": r.try_get::<_, String>(2).ok(),
-                "category": r.try_get::<_, String>(3).ok(),
-                "map_url": r.try_get::<_, String>(4).ok(),
-                "is_active": r.try_get::<_, bool>(5).unwrap_or(true),
-                "is_final": r.try_get::<_, bool>(6).unwrap_or(false),
+                "id": r.try_get::<i32>("", "id").unwrap_or(0),
+                "name": r.try_get::<String>("", "name").unwrap_or_default(),
+                "description": r.try_get::<String>("", "description").ok(),
+                "category": r.try_get::<String>("", "category").ok(),
+                "map_url": r.try_get::<String>("", "map_url").ok(),
+                "is_active": r.try_get::<bool>("", "is_active").unwrap_or(true),
+                "is_final": r.try_get::<bool>("", "is_final").unwrap_or(false),
             })
         })
         .collect();
@@ -499,16 +496,27 @@ async fn create_quest_location(
 ) -> Result<Json<Value>, StatusCode> {
     check_admin(&headers, &state)?;
     validate_quest_location_request(&req)?;
-    let client = state.db.pool.get().await.map_err(|e| {
-        tracing::error!("DB error: {:?}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-    let row = client.query_one(
+    // Cycle #93: SeaORM via Statement with `RETURNING id`. The id is
+    // BIGSERIAL — auto-generated by Postgres, returned by the statement.
+    use sea_orm::{ConnectionTrait, DbBackend, Statement};
+    let row = state.db.orm.query_one(Statement::from_sql_and_values(
+        DbBackend::Postgres,
         "INSERT INTO location_quest_locations (name, description, category, map_url, is_active, is_final) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id",
-        &[&req.name, &req.description.unwrap_or_default(), &req.category.unwrap_or_else(|| "location".to_string()), &req.map_url.unwrap_or_default(), &req.is_active.unwrap_or(true), &req.is_final.unwrap_or(false)],
-    ).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
+        [
+            req.name.into(),
+            req.description.unwrap_or_default().into(),
+            req.category.unwrap_or_else(|| "location".to_string()).into(),
+            req.map_url.unwrap_or_default().into(),
+            req.is_active.unwrap_or(true).into(),
+            req.is_final.unwrap_or(false).into(),
+        ],
+    )).await.map_err(|e| { tracing::error!("create_quest_location: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?
+        .ok_or_else(|| {
+            tracing::error!("create_quest_location: RETURNING produced no row");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
     Ok(Json(
-        json!({ "success": true, "id": row.try_get::<_, i32>(0).unwrap_or(0) }),
+        json!({ "success": true, "id": row.try_get::<i32>("", "id").unwrap_or(0) }),
     ))
 }
 
@@ -520,14 +528,20 @@ async fn update_quest_location(
 ) -> Result<Json<Value>, StatusCode> {
     check_admin(&headers, &state)?;
     validate_quest_location_request(&req)?;
-    let client = state.db.pool.get().await.map_err(|e| {
-        tracing::error!("DB error: {:?}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-    client.execute(
+    use sea_orm::{ConnectionTrait, DbBackend, Statement};
+    state.db.orm.execute(Statement::from_sql_and_values(
+        DbBackend::Postgres,
         "UPDATE location_quest_locations SET name=$1, description=$2, category=$3, map_url=$4, is_active=$5, is_final=$6 WHERE id=$7",
-        &[&req.name, &req.description.unwrap_or_default(), &req.category.unwrap_or_else(|| "location".to_string()), &req.map_url.unwrap_or_default(), &req.is_active.unwrap_or(true), &req.is_final.unwrap_or(false), &id],
-    ).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
+        [
+            req.name.into(),
+            req.description.unwrap_or_default().into(),
+            req.category.unwrap_or_else(|| "location".to_string()).into(),
+            req.map_url.unwrap_or_default().into(),
+            req.is_active.unwrap_or(true).into(),
+            req.is_final.unwrap_or(false).into(),
+            id.into(),
+        ],
+    )).await.map_err(|e| { tracing::error!("update_quest_location: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?;
     Ok(Json(json!({ "success": true })))
 }
 
@@ -557,18 +571,16 @@ async fn scan_quest_qr(
     check_not_blocked(&state, user.id).await?;
 
     let qr_token = extract_qr_token(&body)?;
-    let client = state.db.pool.get().await.map_err(|e| {
-        tracing::error!("DB error: {:?}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-    let row = client.query_opt(
+    use sea_orm::{ConnectionTrait, DbBackend, Statement};
+    let row = state.db.orm.query_one(Statement::from_sql_and_values(
+        DbBackend::Postgres,
         "SELECT id, name, is_final FROM location_quest_locations WHERE qr_token = $1 AND is_active = true LIMIT 1",
-        &[&qr_token],
-    ).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
+        [qr_token.into()],
+    )).await.map_err(|e| { tracing::error!("scan_quest_qr: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?;
     match row {
         Some(r) => {
-            let location_name: String = r.try_get(1).unwrap_or_default();
-            let is_final: bool = r.try_get(2).unwrap_or(false);
+            let location_name: String = r.try_get("", "name").unwrap_or_default();
+            let is_final: bool = r.try_get("", "is_final").unwrap_or(false);
             crate::metrics::qr_scanned(is_final);
             // Notify admins about QR scan
             let bot = state.bot.clone();
@@ -591,7 +603,7 @@ async fn scan_quest_qr(
             Ok(Json(json!({
                 "success": true,
                 "location": {
-                    "id": r.try_get::<_, i32>(0).unwrap_or(0),
+                    "id": r.try_get::<i32>("", "id").unwrap_or(0),
                     "name": location_name,
                     "is_final": is_final,
                 }

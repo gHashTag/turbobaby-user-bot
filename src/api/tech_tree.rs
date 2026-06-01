@@ -18,20 +18,22 @@ pub fn routes() -> Router<AppState> {
 }
 
 async fn get_tech_nodes(State(state): State<AppState>) -> Result<Json<Value>, StatusCode> {
-    let client = state.db.pool.get().await.map_err(|e| {
-        tracing::error!("DB error: {:?}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-    let rows = client
-        .query(
+    // Cycle #93: SeaORM via Statement (pattern #15). No tech_node entity —
+    // 13-column wide row read into ad-hoc JSON.
+    use sea_orm::{ConnectionTrait, DbBackend, Statement};
+    let rows = state
+        .db
+        .orm
+        .query_all(Statement::from_string(
+            DbBackend::Postgres,
             "SELECT id, name, description, category, icon, status, xp_required, xp_reward, \
                 dependencies, unlocks, features, estimated_hours, priority \
-         FROM tech_nodes ORDER BY priority ASC, xp_required ASC LIMIT 2000",
-            &[],
-        )
+         FROM tech_nodes ORDER BY priority ASC, xp_required ASC LIMIT 2000"
+                .to_string(),
+        ))
         .await
         .map_err(|e| {
-            tracing::error!("DB error: {:?}", e);
+            tracing::error!("get_tech_nodes: {e}");
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
@@ -39,19 +41,19 @@ async fn get_tech_nodes(State(state): State<AppState>) -> Result<Json<Value>, St
         .iter()
         .map(|r| {
             json!({
-                "id":              r.try_get::<_, String>("id").unwrap_or_default(),
-                "name":            r.try_get::<_, String>("name").unwrap_or_default(),
-                "description":     r.try_get::<_, String>("description").unwrap_or_default(),
-                "category":        r.try_get::<_, String>("category").unwrap_or_default(),
-                "icon":            r.try_get::<_, String>("icon").unwrap_or_default(),
-                "status":          r.try_get::<_, String>("status").unwrap_or_default(),
-                "xp_required":     r.try_get::<_, i32>("xp_required").unwrap_or(0),
-                "xp_reward":       r.try_get::<_, i32>("xp_reward").unwrap_or(0),
-                "dependencies":    r.try_get::<_, Vec<String>>("dependencies").unwrap_or_default(),
-                "unlocks":         r.try_get::<_, Vec<String>>("unlocks").unwrap_or_default(),
-                "features":        r.try_get::<_, Vec<String>>("features").unwrap_or_default(),
-                "estimated_hours": r.try_get::<_, i32>("estimated_hours").unwrap_or(0),
-                "priority":        r.try_get::<_, i32>("priority").unwrap_or(0),
+                "id":              r.try_get::<String>("", "id").unwrap_or_default(),
+                "name":            r.try_get::<String>("", "name").unwrap_or_default(),
+                "description":     r.try_get::<String>("", "description").unwrap_or_default(),
+                "category":        r.try_get::<String>("", "category").unwrap_or_default(),
+                "icon":            r.try_get::<String>("", "icon").unwrap_or_default(),
+                "status":          r.try_get::<String>("", "status").unwrap_or_default(),
+                "xp_required":     r.try_get::<i32>("", "xp_required").unwrap_or(0),
+                "xp_reward":       r.try_get::<i32>("", "xp_reward").unwrap_or(0),
+                "dependencies":    r.try_get::<Vec<String>>("", "dependencies").unwrap_or_default(),
+                "unlocks":         r.try_get::<Vec<String>>("", "unlocks").unwrap_or_default(),
+                "features":        r.try_get::<Vec<String>>("", "features").unwrap_or_default(),
+                "estimated_hours": r.try_get::<i32>("", "estimated_hours").unwrap_or(0),
+                "priority":        r.try_get::<i32>("", "priority").unwrap_or(0),
             })
         })
         .collect();
@@ -71,39 +73,39 @@ async fn get_tech_node(
     Path(id): Path<String>,
 ) -> Result<Json<Value>, StatusCode> {
     validate_id(&id)?;
-    let client = state.db.pool.get().await.map_err(|e| {
-        tracing::error!("DB error: {:?}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-    let row = client
-        .query_opt(
+    use sea_orm::{ConnectionTrait, DbBackend, Statement};
+    let row = state
+        .db
+        .orm
+        .query_one(Statement::from_sql_and_values(
+            DbBackend::Postgres,
             "SELECT id, name, description, category, icon, status, xp_required, xp_reward, \
                 dependencies, unlocks, features, estimated_hours, priority \
          FROM tech_nodes WHERE id = $1",
-            &[&id],
-        )
+            [id.clone().into()],
+        ))
         .await
         .map_err(|e| {
-            tracing::error!("DB error: {:?}", e);
+            tracing::error!("get_tech_node: {e}");
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
     match row {
         Some(r) => Ok(Json(json!({
             "node": {
-                "id":              r.try_get::<_, String>("id").unwrap_or_default(),
-                "name":            r.try_get::<_, String>("name").unwrap_or_default(),
-                "description":     r.try_get::<_, String>("description").unwrap_or_default(),
-                "category":        r.try_get::<_, String>("category").unwrap_or_default(),
-                "icon":            r.try_get::<_, String>("icon").unwrap_or_default(),
-                "status":          r.try_get::<_, String>("status").unwrap_or_default(),
-                "xp_required":     r.try_get::<_, i32>("xp_required").unwrap_or(0),
-                "xp_reward":       r.try_get::<_, i32>("xp_reward").unwrap_or(0),
-                "dependencies":    r.try_get::<_, Vec<String>>("dependencies").unwrap_or_default(),
-                "unlocks":         r.try_get::<_, Vec<String>>("unlocks").unwrap_or_default(),
-                "features":        r.try_get::<_, Vec<String>>("features").unwrap_or_default(),
-                "estimated_hours": r.try_get::<_, i32>("estimated_hours").unwrap_or(0),
-                "priority":        r.try_get::<_, i32>("priority").unwrap_or(0),
+                "id":              r.try_get::<String>("", "id").unwrap_or_default(),
+                "name":            r.try_get::<String>("", "name").unwrap_or_default(),
+                "description":     r.try_get::<String>("", "description").unwrap_or_default(),
+                "category":        r.try_get::<String>("", "category").unwrap_or_default(),
+                "icon":            r.try_get::<String>("", "icon").unwrap_or_default(),
+                "status":          r.try_get::<String>("", "status").unwrap_or_default(),
+                "xp_required":     r.try_get::<i32>("", "xp_required").unwrap_or(0),
+                "xp_reward":       r.try_get::<i32>("", "xp_reward").unwrap_or(0),
+                "dependencies":    r.try_get::<Vec<String>>("", "dependencies").unwrap_or_default(),
+                "unlocks":         r.try_get::<Vec<String>>("", "unlocks").unwrap_or_default(),
+                "features":        r.try_get::<Vec<String>>("", "features").unwrap_or_default(),
+                "estimated_hours": r.try_get::<i32>("", "estimated_hours").unwrap_or(0),
+                "priority":        r.try_get::<i32>("", "priority").unwrap_or(0),
             }
         }))),
         None => Err(StatusCode::NOT_FOUND),
@@ -124,38 +126,45 @@ async fn complete_tech_node(
     check_admin(&headers, &state)?;
     validate_id(&id)?;
 
-    let mut client = state.db.pool.get().await.map_err(|e| {
-        crate::metrics::db_pool_acquire_failed("tech_tree.complete");
-        tracing::error!("DB error: {:?}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-    let tx = client.transaction().await.map_err(|e| {
-        tracing::error!("tx error: {:?}", e);
+    // Cycle #93: SeaORM tx. The cascade UPDATE references a CTE-shaped
+    // condition (`NOT EXISTS … unnest(dependencies)`) that no typed
+    // builder supports — raw Statement throughout. Two-statement tx with
+    // explicit "already completed vs not found" disambiguation.
+    use sea_orm::{ConnectionTrait, DbBackend, Statement, TransactionTrait};
+    let tx = state.db.orm.begin().await.map_err(|e| {
+        tracing::error!("tech_tree complete tx.begin: {e}");
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
-    // 1. Flip THIS node to completed. 0 rows → unknown id (404).
+    // 1. Flip THIS node to completed. 0 rows → unknown id OR already completed.
     let updated = tx
-        .execute(
+        .execute(Statement::from_sql_and_values(
+            DbBackend::Postgres,
             "UPDATE tech_nodes SET status = 'completed' WHERE id = $1 AND status <> 'completed'",
-            &[&id],
-        )
+            [id.clone().into()],
+        ))
         .await
         .map_err(|e| {
-            tracing::error!("update error: {:?}", e);
+            tracing::error!("tech_tree complete update: {e}");
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
-    if updated == 0 {
-        // Either no such node OR already completed. Look it up to distinguish.
+    if updated.rows_affected() == 0 {
+        // Distinguish "not found" from "already completed". tx drops on
+        // early return → auto-rollback (releases any held locks).
         let exists = tx
-            .query_opt("SELECT 1 FROM tech_nodes WHERE id = $1", &[&id])
+            .query_one(Statement::from_sql_and_values(
+                DbBackend::Postgres,
+                "SELECT 1 AS one FROM tech_nodes WHERE id = $1",
+                [id.clone().into()],
+            ))
             .await
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
             .is_some();
-        if let Err(e) = tx.rollback().await {
-            tracing::error!("rollback error: {:?}", e);
-        }
         return if exists {
+            // Commit to release locks cleanly before returning.
+            if let Err(e) = tx.commit().await {
+                tracing::warn!("tech_tree complete: no-op commit failed: {}", e);
+            }
             Ok(Json(
                 json!({ "success": true, "unlocked": 0, "note": "already completed" }),
             ))
@@ -166,7 +175,8 @@ async fn complete_tech_node(
 
     // 2. Cascade: any locked node whose every dep is now completed becomes available.
     let unlocked = tx
-        .execute(
+        .execute(Statement::from_string(
+            DbBackend::Postgres,
             "UPDATE tech_nodes SET status = 'available' \
              WHERE status = 'locked' \
                AND NOT EXISTS ( \
@@ -174,17 +184,18 @@ async fn complete_tech_node(
                    WHERE NOT EXISTS ( \
                        SELECT 1 FROM tech_nodes t WHERE t.id = dep AND t.status = 'completed' \
                    ) \
-               )",
-            &[],
-        )
+               )"
+            .to_string(),
+        ))
         .await
         .map_err(|e| {
-            tracing::error!("cascade error: {:?}", e);
+            tracing::error!("tech_tree cascade: {e}");
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
+    let unlocked = unlocked.rows_affected();
 
     tx.commit().await.map_err(|e| {
-        tracing::error!("commit error: {:?}", e);
+        tracing::error!("tech_tree complete commit: {e}");
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
@@ -197,19 +208,19 @@ async fn complete_tech_node(
 }
 
 async fn get_achievements(State(state): State<AppState>) -> Result<Json<Value>, StatusCode> {
-    let client = state.db.pool.get().await.map_err(|e| {
-        tracing::error!("DB error: {:?}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-    let rows = client
-        .query(
+    use sea_orm::{ConnectionTrait, DbBackend, Statement};
+    let rows = state
+        .db
+        .orm
+        .query_all(Statement::from_string(
+            DbBackend::Postgres,
             "SELECT id, name, description, icon, xp_reward, requirement, category \
-         FROM achievements ORDER BY xp_reward ASC LIMIT 2000",
-            &[],
-        )
+         FROM achievements ORDER BY xp_reward ASC LIMIT 2000"
+                .to_string(),
+        ))
         .await
         .map_err(|e| {
-            tracing::error!("DB error: {:?}", e);
+            tracing::error!("get_achievements: {e}");
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
@@ -217,13 +228,13 @@ async fn get_achievements(State(state): State<AppState>) -> Result<Json<Value>, 
         .iter()
         .map(|r| {
             json!({
-                "id":          r.try_get::<_, String>("id").unwrap_or_default(),
-                "name":        r.try_get::<_, String>("name").unwrap_or_default(),
-                "description": r.try_get::<_, String>("description").unwrap_or_default(),
-                "icon":        r.try_get::<_, String>("icon").unwrap_or_default(),
-                "xp_reward":   r.try_get::<_, i32>("xp_reward").unwrap_or(0),
-                "requirement": r.try_get::<_, String>("requirement").unwrap_or_default(),
-                "category":    r.try_get::<_, String>("category").unwrap_or_default(),
+                "id":          r.try_get::<String>("", "id").unwrap_or_default(),
+                "name":        r.try_get::<String>("", "name").unwrap_or_default(),
+                "description": r.try_get::<String>("", "description").unwrap_or_default(),
+                "icon":        r.try_get::<String>("", "icon").unwrap_or_default(),
+                "xp_reward":   r.try_get::<i32>("", "xp_reward").unwrap_or(0),
+                "requirement": r.try_get::<String>("", "requirement").unwrap_or_default(),
+                "category":    r.try_get::<String>("", "category").unwrap_or_default(),
             })
         })
         .collect();
