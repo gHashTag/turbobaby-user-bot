@@ -132,6 +132,32 @@ fn sanitize_pct(v: f64) -> f64 {
     }
 }
 
+// ── Other catalogs (cycle #58 / C). Accessories and tea products have a
+//    flat `price` column (no discount machinery). Sets — `sets`,
+//    `accessory_sets`, `tea_sets` — share `(total_price, discount_percent)`.
+//    All three set tables use UUID primary keys with no overlap, so the
+//    server-side lookup can UNION them into a single map.
+
+/// Sanitised per-unit price for an accessory row. Just clamps non-finite /
+/// negative values to 0 — accessories have no sale flags.
+pub fn effective_accessory_price(price: f64) -> f64 {
+    sanitize_money(price)
+}
+
+/// Tea products use the same flat-price model as accessories.
+pub fn effective_tea_price(price: f64) -> f64 {
+    sanitize_money(price)
+}
+
+/// Apply a percentage discount to a set's pre-set `total_price`. Shared by
+/// the three set tables (`sets`, `accessory_sets`, `tea_sets`) — schema is
+/// identical and customer-facing pricing is, too.
+pub fn effective_set_price(total_price: f64, discount_percent: f64) -> f64 {
+    let base = sanitize_money(total_price);
+    let pct = sanitize_pct(discount_percent);
+    (base * (1.0 - pct / 100.0)).max(0.0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -297,5 +323,41 @@ mod tests {
         f.discount_percent = 150.0;
         let priced = effective_strain_price(&f, now_utc());
         assert_eq!(priced.price, 0.0);
+    }
+
+    // ── Other catalogs ────────────────────────────────────────────
+
+    #[test]
+    fn accessory_price_sanitises_negatives_and_nan() {
+        assert!((effective_accessory_price(150.0) - 150.0).abs() < 1e-9);
+        assert_eq!(effective_accessory_price(-5.0), 0.0);
+        assert_eq!(effective_accessory_price(f64::NAN), 0.0);
+    }
+
+    #[test]
+    fn tea_price_uses_same_sanitisation_as_accessory() {
+        // The two helpers are intentionally separate symbols (admin reading
+        // call sites benefits from explicit catalog naming) but must behave
+        // identically — pin that here.
+        for &v in &[0.0, 50.0, -1.0, f64::INFINITY] {
+            assert_eq!(effective_accessory_price(v), effective_tea_price(v));
+        }
+    }
+
+    #[test]
+    fn set_price_applies_percentage_discount() {
+        // 500 baht with 20% off = 400.
+        assert!((effective_set_price(500.0, 20.0) - 400.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn set_price_clamps_oversized_discount_to_zero_floor() {
+        // Admin typo: enters 200%. Price clamps to 0, never goes negative.
+        assert_eq!(effective_set_price(500.0, 200.0), 0.0);
+    }
+
+    #[test]
+    fn set_price_handles_zero_discount() {
+        assert!((effective_set_price(500.0, 0.0) - 500.0).abs() < 1e-9);
     }
 }

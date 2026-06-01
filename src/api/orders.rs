@@ -11,7 +11,10 @@ use tracing::error;
 use crate::api::auth::{check_admin, check_not_blocked, validate_telegram_id_param};
 use crate::db::orders::{Order, OrderItem};
 use crate::db::strains::Strain;
-use crate::trios::pricing::{effective_strain_price, MarketingFlags};
+use crate::trios::pricing::{
+    effective_accessory_price, effective_set_price, effective_strain_price, effective_tea_price,
+    MarketingFlags,
+};
 use crate::AppState;
 use std::collections::HashMap;
 
@@ -208,6 +211,155 @@ pub fn check_strain_subtotal(
     SubtotalCheck::Ok
 }
 
+/// Catalog lookups for `check_full_subtotal` (cycle #58 / C). Built once per
+/// order from the four catalog SELECTs and handed in by reference.
+#[derive(Debug, Default)]
+pub struct PriceCatalog<'a> {
+    pub strains: HashMap<&'a str, &'a Strain>,
+    /// `id → (price, is_available)`.
+    pub accessories: HashMap<&'a str, (f64, bool)>,
+    pub tea_products: HashMap<&'a str, (f64, bool)>,
+    /// `id → (total_price, discount_percent, is_available)` — same shape for
+    /// `sets`, `accessory_sets`, and `tea_sets` (UUID primary keys don't
+    /// collide across the three tables, so one map covers them all).
+    pub sets: HashMap<&'a str, (f64, f64, bool)>,
+}
+
+/// Result of the full server-side price-authority check (cycle #58 / C).
+/// Strict equality across all four catalogs combined.
+#[derive(Debug, PartialEq)]
+pub enum FullSubtotalCheck {
+    Ok,
+    /// `catalog` is one of `"strains" | "accessories" | "tea_products" | "sets"`
+    /// so audit logs can pinpoint which catalog the missing id belongs to.
+    UnknownItem {
+        catalog: &'static str,
+        id: String,
+    },
+    /// Item exists but `is_available = false` — admin turned it off since
+    /// the customer last fetched the menu. Distinct from `UnknownItem` so
+    /// the warn-vs-info severity in audit logs reflects fraud likelihood.
+    Unavailable {
+        catalog: &'static str,
+        id: String,
+    },
+    /// Server-computed subtotal differs from client-claimed by more than
+    /// `tolerance`. Internal-only — do **not** echo `expected` to the
+    /// client (anti price-probing).
+    Mismatch {
+        claimed: f64,
+        expected: f64,
+    },
+    /// Line item is missing every `*_id` — malformed payload.
+    Malformed,
+}
+
+/// Server-authoritative subtotal check for every catalog: strain, accessory,
+/// tea product, set. Pure helper — caller fetches the rows in advance.
+///
+/// Routing precedence (first match per item):
+///   1. `strain_id`     → strains (uses `trios::pricing::effective_strain_price`)
+///   2. `accessory_id`  → accessories
+///   3. `tea_id`        → tea_products
+///   4. `set_id`        → sets / accessory_sets / tea_sets (unified by UUID)
+///
+/// Strict equality required: a mixed order with an unauthorised price on any
+/// line item fails the check even if other lines compensate.
+pub fn check_full_subtotal(
+    items: &[OrderItem],
+    catalog: &PriceCatalog<'_>,
+    claimed_subtotal: f64,
+    tolerance: f64,
+    now: chrono::DateTime<chrono::Utc>,
+) -> FullSubtotalCheck {
+    let mut sum = 0.0_f64;
+    for item in items {
+        let qty = if item.quantity.is_finite() {
+            item.quantity.max(0.0)
+        } else {
+            0.0
+        };
+        let unit = if let Some(sid) = item.strain_id.as_deref() {
+            let Some(strain) = catalog.strains.get(sid) else {
+                return FullSubtotalCheck::UnknownItem {
+                    catalog: "strains",
+                    id: sid.into(),
+                };
+            };
+            if !strain.is_available {
+                return FullSubtotalCheck::Unavailable {
+                    catalog: "strains",
+                    id: sid.into(),
+                };
+            }
+            let flags = MarketingFlags {
+                price_per_gram: strain.price_per_gram,
+                is_strain_of_day: strain.is_strain_of_day,
+                strain_of_day_discount: strain.strain_of_day_discount,
+                sale_active: strain.sale_active,
+                sale_until: strain.sale_until.as_deref(),
+                sale_price: strain.sale_price,
+                discount_percent: strain.discount_percent,
+                is_new_arrival: strain.is_new_arrival,
+                new_until: strain.new_until.as_deref(),
+            };
+            effective_strain_price(&flags, now).price
+        } else if let Some(aid) = item.accessory_id.as_deref() {
+            let Some(&(price, avail)) = catalog.accessories.get(aid) else {
+                return FullSubtotalCheck::UnknownItem {
+                    catalog: "accessories",
+                    id: aid.into(),
+                };
+            };
+            if !avail {
+                return FullSubtotalCheck::Unavailable {
+                    catalog: "accessories",
+                    id: aid.into(),
+                };
+            }
+            effective_accessory_price(price)
+        } else if let Some(tid) = item.tea_id.as_deref() {
+            let Some(&(price, avail)) = catalog.tea_products.get(tid) else {
+                return FullSubtotalCheck::UnknownItem {
+                    catalog: "tea_products",
+                    id: tid.into(),
+                };
+            };
+            if !avail {
+                return FullSubtotalCheck::Unavailable {
+                    catalog: "tea_products",
+                    id: tid.into(),
+                };
+            }
+            effective_tea_price(price)
+        } else if let Some(sid) = item.set_id.as_deref() {
+            let Some(&(tp, dp, avail)) = catalog.sets.get(sid) else {
+                return FullSubtotalCheck::UnknownItem {
+                    catalog: "sets",
+                    id: sid.into(),
+                };
+            };
+            if !avail {
+                return FullSubtotalCheck::Unavailable {
+                    catalog: "sets",
+                    id: sid.into(),
+                };
+            }
+            effective_set_price(tp, dp)
+        } else {
+            return FullSubtotalCheck::Malformed;
+        };
+        sum += unit * qty;
+    }
+    if (sum - claimed_subtotal).abs() > tolerance {
+        return FullSubtotalCheck::Mismatch {
+            claimed: claimed_subtotal,
+            expected: sum,
+        };
+    }
+    FullSubtotalCheck::Ok
+}
+
 async fn create_order(
     headers: HeaderMap,
     State(state): State<AppState>,
@@ -237,23 +389,37 @@ async fn create_order(
 
     let bonus_used = validate_create_order(&req)?;
 
-    // Cycle #56: server-side price authority for strain items. Without this
-    // the client could declare `subtotal: 1.0` for any cart and the server
-    // happily inserted it. Uses `trios::pricing` (cycle #55) so the math is
-    // identical to the customer-facing menu — divergence would otherwise
-    // flag every legitimate order as fraud.
+    // Cycle #58 / C: full server-side price authority across every catalog
+    // (strains + accessories + tea + sets). Cycle #56 covered strains only;
+    // this closes the remaining mixed-order trust path. `trios::pricing`
+    // (cycle #55) keeps the math identical to the customer-facing menu so
+    // legitimate orders never get flagged as fraud.
     let strain_ids: Vec<String> = req
         .items
         .iter()
         .filter_map(|i| i.strain_id.clone())
         .collect();
-    if !strain_ids.is_empty() {
+    let accessory_ids: Vec<String> = req
+        .items
+        .iter()
+        .filter_map(|i| i.accessory_id.clone())
+        .collect();
+    let tea_ids: Vec<String> = req.items.iter().filter_map(|i| i.tea_id.clone()).collect();
+    let set_ids: Vec<String> = req.items.iter().filter_map(|i| i.set_id.clone()).collect();
+    if !strain_ids.is_empty()
+        || !accessory_ids.is_empty()
+        || !tea_ids.is_empty()
+        || !set_ids.is_empty()
+    {
         let lookup_client = state.db.pool.get().await.map_err(|e| {
             error!("price-auth pool error: {}", e);
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
-        let rows = lookup_client
-            .query(
+        let mut catalog: PriceCatalog<'_> = PriceCatalog::default();
+        // Strains — full SELECT to pick up all marketing flags (cycle #56).
+        let strains: Vec<Strain> =
+            if !strain_ids.is_empty() {
+                let rows = lookup_client.query(
                 "SELECT id, name, category, thc_percent::float8, cbd_percent::float8, effect, \
                     flavor_profile, description, price_per_gram::float8, available_grams::float8, \
                     image_url, video_url, is_available, is_strain_of_day, \
@@ -261,49 +427,139 @@ async fn create_order(
                     flavor_profile_en, strain_type_en, discount_percent::float8, \
                     sale_price::float8, sale_active, sale_until, is_best_seller, \
                     is_new_arrival, new_until, display_order \
-             FROM strains WHERE id = ANY($1)",
+                 FROM strains WHERE id = ANY($1)",
                 &[&strain_ids],
-            )
-            .await
-            .map_err(|e| {
+            ).await.map_err(|e| {
                 error!("price-auth strain lookup: {}", e);
                 StatusCode::INTERNAL_SERVER_ERROR
             })?;
-        let strains: Vec<Strain> = rows.iter().map(Strain::from_row).collect();
-        let strain_map: HashMap<&str, &Strain> =
-            strains.iter().map(|s| (s.id.as_str(), s)).collect();
-        match check_strain_subtotal(
-            &req.items,
-            &strain_map,
-            req.subtotal,
-            0.01,
-            chrono::Utc::now(),
-        ) {
-            SubtotalCheck::Ok => {}
-            SubtotalCheck::UnknownStrain(sid) => {
+                rows.iter().map(Strain::from_row).collect()
+            } else {
+                Vec::new()
+            };
+        for s in &strains {
+            catalog.strains.insert(s.id.as_str(), s);
+        }
+        // Accessories — flat (price, is_available).
+        let acc_rows: Vec<(String, f64, bool)> = if !accessory_ids.is_empty() {
+            let rows = lookup_client.query(
+                "SELECT id, price::float8 AS price, is_available FROM accessories WHERE id = ANY($1)",
+                &[&accessory_ids],
+            ).await.map_err(|e| {
+                error!("price-auth accessory lookup: {}", e);
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?;
+            rows.iter()
+                .map(|r| {
+                    (
+                        r.try_get::<_, String>("id").unwrap_or_default(),
+                        r.try_get::<_, f64>("price").unwrap_or(0.0),
+                        r.try_get::<_, bool>("is_available").unwrap_or(false),
+                    )
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
+        for (id, p, a) in &acc_rows {
+            catalog.accessories.insert(id.as_str(), (*p, *a));
+        }
+        // Tea products — same schema as accessories.
+        let tea_rows: Vec<(String, f64, bool)> = if !tea_ids.is_empty() {
+            let rows = lookup_client.query(
+                "SELECT id, price::float8 AS price, is_available FROM tea_products WHERE id = ANY($1)",
+                &[&tea_ids],
+            ).await.map_err(|e| {
+                error!("price-auth tea lookup: {}", e);
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?;
+            rows.iter()
+                .map(|r| {
+                    (
+                        r.try_get::<_, String>("id").unwrap_or_default(),
+                        r.try_get::<_, f64>("price").unwrap_or(0.0),
+                        r.try_get::<_, bool>("is_available").unwrap_or(false),
+                    )
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
+        for (id, p, a) in &tea_rows {
+            catalog.tea_products.insert(id.as_str(), (*p, *a));
+        }
+        // Sets — UNION across three tables (`sets`, `accessory_sets`,
+        // `tea_sets`). Same `(total_price, discount_percent)` shape; UUID
+        // PKs across the three don't collide.
+        let set_rows: Vec<(String, f64, f64, bool)> = if !set_ids.is_empty() {
+            let rows = lookup_client.query(
+                "SELECT id, total_price::float8 AS tp, discount_percent::float8 AS dp, is_available \
+                 FROM sets WHERE id = ANY($1) \
+                 UNION ALL \
+                 SELECT id, total_price::float8 AS tp, discount_percent::float8 AS dp, is_available \
+                 FROM accessory_sets WHERE id = ANY($1) \
+                 UNION ALL \
+                 SELECT id, total_price::float8 AS tp, discount_percent::float8 AS dp, is_available \
+                 FROM tea_sets WHERE id = ANY($1)",
+                &[&set_ids],
+            ).await.map_err(|e| {
+                error!("price-auth sets lookup: {}", e);
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?;
+            rows.iter()
+                .map(|r| {
+                    (
+                        r.try_get::<_, String>("id").unwrap_or_default(),
+                        r.try_get::<_, f64>("tp").unwrap_or(0.0),
+                        r.try_get::<_, f64>("dp").unwrap_or(0.0),
+                        r.try_get::<_, bool>("is_available").unwrap_or(false),
+                    )
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
+        for (id, tp, dp, a) in &set_rows {
+            catalog.sets.insert(id.as_str(), (*tp, *dp, *a));
+        }
+
+        match check_full_subtotal(&req.items, &catalog, req.subtotal, 0.01, chrono::Utc::now()) {
+            FullSubtotalCheck::Ok => {}
+            FullSubtotalCheck::UnknownItem { catalog: cat, id } => {
                 tracing::warn!(
                     telegram_id = req.telegram_id.unwrap_or(0),
-                    unknown_strain_id = %sid,
-                    "create_order: order references missing strain"
+                    missing_catalog = cat,
+                    missing_id = %id,
+                    "create_order: order references missing catalog item"
                 );
                 return Err(StatusCode::UNPROCESSABLE_ENTITY);
             }
-            SubtotalCheck::StrainExceedsSubtotal { strain, claimed } => {
-                tracing::warn!(
+            FullSubtotalCheck::Unavailable { catalog: cat, id } => {
+                // Stale cart vs admin turning the item off — log at info, not
+                // warn, so fraud alerts don't drown in the everyday case.
+                tracing::info!(
                     telegram_id = req.telegram_id.unwrap_or(0),
-                    strain_subtotal = strain,
-                    claimed_subtotal = claimed,
-                    "create_order: strain portion exceeds claimed subtotal — possible tampering"
+                    unavailable_catalog = cat,
+                    unavailable_id = %id,
+                    "create_order: order references item marked unavailable"
                 );
                 return Err(StatusCode::UNPROCESSABLE_ENTITY);
             }
-            SubtotalCheck::StrainOnlyMismatch { claimed, expected } => {
+            FullSubtotalCheck::Mismatch { claimed, expected } => {
                 tracing::warn!(
                     telegram_id = req.telegram_id.unwrap_or(0),
                     claimed_subtotal = claimed,
                     expected_subtotal = expected,
                     items = req.items.len(),
                     "create_order: subtotal mismatch — possible client tampering"
+                );
+                return Err(StatusCode::UNPROCESSABLE_ENTITY);
+            }
+            FullSubtotalCheck::Malformed => {
+                tracing::warn!(
+                    telegram_id = req.telegram_id.unwrap_or(0),
+                    items = req.items.len(),
+                    "create_order: malformed line item — no *_id field set"
                 );
                 return Err(StatusCode::UNPROCESSABLE_ENTITY);
             }
@@ -732,8 +988,9 @@ async fn get_user_orders(
 #[cfg(test)]
 mod tests {
     use super::{
-        check_strain_subtotal, is_valid_idempotency_key, validate_create_order,
-        validate_update_order_status, CreateOrderRequest, SubtotalCheck,
+        check_full_subtotal, check_strain_subtotal, is_valid_idempotency_key,
+        validate_create_order, validate_update_order_status, CreateOrderRequest, FullSubtotalCheck,
+        PriceCatalog, SubtotalCheck,
     };
 
     // ── Idempotency-key validator (cycle #57) ────────────────────────────
@@ -965,6 +1222,153 @@ mod tests {
                 "expected StrainOnlyMismatch from expired sale, got {:?}",
                 other
             ),
+        }
+    }
+
+    // ── check_full_subtotal — every catalog (cycle #58 / C) ──────────
+
+    fn accessory_item_with(id: &str, qty: f64) -> OrderItem {
+        OrderItem {
+            strain_id: None,
+            strain_name: None,
+            accessory_id: Some(id.into()),
+            accessory_name: Some(id.into()),
+            tea_id: None,
+            tea_name: None,
+            set_id: None,
+            set_name: None,
+            quantity: qty,
+            is_set: None,
+            is_accessory: Some(true),
+            is_tea: None,
+            is_tea_set: None,
+        }
+    }
+
+    fn tea_item_with(id: &str, qty: f64) -> OrderItem {
+        OrderItem {
+            strain_id: None,
+            strain_name: None,
+            accessory_id: None,
+            accessory_name: None,
+            tea_id: Some(id.into()),
+            tea_name: Some(id.into()),
+            set_id: None,
+            set_name: None,
+            quantity: qty,
+            is_set: None,
+            is_accessory: None,
+            is_tea: Some(true),
+            is_tea_set: None,
+        }
+    }
+
+    fn set_item_with(id: &str, qty: f64) -> OrderItem {
+        OrderItem {
+            strain_id: None,
+            strain_name: None,
+            accessory_id: None,
+            accessory_name: None,
+            tea_id: None,
+            tea_name: None,
+            set_id: Some(id.into()),
+            set_name: Some(id.into()),
+            quantity: qty,
+            is_set: Some(true),
+            is_accessory: None,
+            is_tea: None,
+            is_tea_set: None,
+        }
+    }
+
+    #[test]
+    fn full_check_sums_all_four_catalogs() {
+        let s = strain("s1", 100.0);
+        let mut cat = PriceCatalog::default();
+        cat.strains.insert(s.id.as_str(), &s);
+        cat.accessories.insert("a1", (250.0, true));
+        cat.tea_products.insert("t1", (80.0, true));
+        cat.sets.insert("set1", (1000.0, 10.0, true)); // 900
+        let items = vec![
+            strain_item("s1", 2.0),         // 200
+            accessory_item_with("a1", 1.0), // 250
+            tea_item_with("t1", 3.0),       // 240
+            set_item_with("set1", 1.0),     // 900
+        ];
+        // 200 + 250 + 240 + 900 = 1590
+        assert_eq!(
+            check_full_subtotal(&items, &cat, 1590.0, 0.01, now_utc()),
+            FullSubtotalCheck::Ok
+        );
+    }
+
+    #[test]
+    fn full_check_flags_unavailable_accessory() {
+        let mut cat = PriceCatalog::default();
+        cat.accessories.insert("a1", (250.0, false));
+        let items = vec![accessory_item_with("a1", 1.0)];
+        match check_full_subtotal(&items, &cat, 250.0, 0.01, now_utc()) {
+            FullSubtotalCheck::Unavailable { catalog: c, id } => {
+                assert_eq!(c, "accessories");
+                assert_eq!(id, "a1");
+            }
+            other => panic!("expected Unavailable(accessories), got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn full_check_flags_unknown_set() {
+        let cat = PriceCatalog::default();
+        let items = vec![set_item_with("missing", 1.0)];
+        match check_full_subtotal(&items, &cat, 999.0, 0.01, now_utc()) {
+            FullSubtotalCheck::UnknownItem { catalog: c, id } => {
+                assert_eq!(c, "sets");
+                assert_eq!(id, "missing");
+            }
+            other => panic!("expected UnknownItem(sets), got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn full_check_strain_precedence_wins_over_accessory_id() {
+        // Defensive: if a malicious client sets BOTH `strain_id` and
+        // `accessory_id` on the same item to shadow an expensive strain
+        // with a cheap accessory, the strain path must win.
+        let s = strain("s1", 1000.0);
+        let mut cat = PriceCatalog::default();
+        cat.strains.insert(s.id.as_str(), &s);
+        cat.accessories.insert("a1", (1.0, true));
+        let mut item = strain_item("s1", 1.0);
+        item.accessory_id = Some("a1".into());
+        assert_eq!(
+            check_full_subtotal(&[item], &cat, 1000.0, 0.01, now_utc()),
+            FullSubtotalCheck::Ok
+        );
+    }
+
+    #[test]
+    fn full_check_mismatch_reports_expected_and_claimed() {
+        let mut cat = PriceCatalog::default();
+        cat.accessories.insert("a1", (250.0, true));
+        let items = vec![accessory_item_with("a1", 1.0)];
+        // Client claims 1 baht
+        match check_full_subtotal(&items, &cat, 1.0, 0.01, now_utc()) {
+            FullSubtotalCheck::Mismatch { claimed, expected } => {
+                assert!((claimed - 1.0).abs() < 1e-9);
+                assert!((expected - 250.0).abs() < 1e-9);
+            }
+            other => panic!("expected Mismatch, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn full_check_malformed_when_no_ids() {
+        let cat = PriceCatalog::default();
+        let mut item = strain_item("s1", 1.0);
+        item.strain_id = None; // every *_id is None now
+        match check_full_subtotal(&[item], &cat, 0.0, 0.01, now_utc()) {
+            FullSubtotalCheck::Malformed => {}
+            other => panic!("expected Malformed, got {:?}", other),
         }
     }
 

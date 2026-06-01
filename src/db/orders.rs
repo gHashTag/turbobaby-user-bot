@@ -171,9 +171,59 @@ pub struct OrderItem {
     pub is_tea_set: Option<bool>,
 }
 
+// ─── Idempotency-key TTL sweep (cycle #58 / A) ────────────────────────────
+//
+// migration 029 (`order_idempotency_keys`) is append-only. Without a sweep
+// the table grows unbounded; Stripe / AWS / GCP all use a 24 h window for
+// the same reason. Real client retry windows are far shorter than that —
+// 24 h is the safe default. The pure SQL builder is extracted so a typo in
+// the INTERVAL literal cannot slip through to production unnoticed.
+
+/// Build the `DELETE` SQL fragment for the idempotency-key TTL sweep.
+/// Extracted as a pure function so the literal is unit-testable; otherwise
+/// a typo in `INTERVAL '24 hours'` would only show up in production.
+pub(crate) fn idempotency_sweep_sql(retention_hours: u32) -> String {
+    format!(
+        "DELETE FROM order_idempotency_keys \
+         WHERE created_at < NOW() - INTERVAL '{} hours'",
+        retention_hours
+    )
+}
+
+/// Delete `order_idempotency_keys` rows older than `retention_hours`.
+/// Returns the number of rows deleted (for metrics / structured logs).
+///
+/// Idempotent and safe to run concurrently with `create_order` — Postgres
+/// handles concurrent DELETE/INSERT on the same table cleanly, and the
+/// 24 h cutoff is far older than any in-flight order's retry window.
+pub async fn cleanup_old_idempotency_keys(
+    pool: &deadpool_postgres::Pool,
+    retention_hours: u32,
+) -> Result<u64, Box<dyn std::error::Error + Send + Sync>> {
+    let client = pool.get().await?;
+    let sql = idempotency_sweep_sql(retention_hours);
+    let deleted = client.execute(sql.as_str(), &[]).await?;
+    Ok(deleted)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::OrderItem;
+    use super::{idempotency_sweep_sql, OrderItem};
+
+    #[test]
+    fn idempotency_sweep_uses_correct_interval_literal() {
+        let sql = idempotency_sweep_sql(24);
+        assert!(sql.contains("DELETE FROM order_idempotency_keys"));
+        assert!(sql.contains("INTERVAL '24 hours'"));
+    }
+
+    #[test]
+    fn idempotency_sweep_accepts_arbitrary_retention() {
+        // Cycle ships with 24h, but the builder must work for any value
+        // (staging / tests may want a shorter window).
+        let sql = idempotency_sweep_sql(1);
+        assert!(sql.contains("INTERVAL '1 hours'"));
+    }
 
     #[test]
     fn test_order_item_serde_roundtrip() {

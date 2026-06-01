@@ -234,6 +234,31 @@ async fn main() -> Result<()> {
     let db_for_bot = db.clone();
     let config_for_bot = config.clone();
     let ai_client_for_bot = ai_client.clone();
+
+    // Background TTL sweep for `order_idempotency_keys` (cycle #58 / A).
+    // The table is append-only inside create_order (migration 029, cycle
+    // #57); without periodic cleanup it grows unbounded. 24 h covers any
+    // realistic client retry window — Stripe defaults to 24 h for the same
+    // reason. The first tick is skipped so cold-start serialization isn't
+    // blocked behind a DELETE.
+    let pool_for_sweep = db.pool.clone();
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(3600));
+        interval.tick().await; // discard the immediate first tick
+        loop {
+            interval.tick().await;
+            match crate::db::orders::cleanup_old_idempotency_keys(&pool_for_sweep, 24).await {
+                Ok(deleted) if deleted > 0 => {
+                    info!(deleted, "idempotency_keys: TTL sweep removed expired rows");
+                }
+                Ok(_) => {}
+                Err(e) => {
+                    tracing::warn!("idempotency_keys: TTL sweep failed: {}", e);
+                }
+            }
+        }
+    });
+
     tokio::spawn(async move {
         use teloxide::types::AllowedUpdate;
         use teloxide::update_listeners::Polling;
