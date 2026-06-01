@@ -140,45 +140,90 @@ async fn add_bonus(
     check_admin(&headers, &state)?;
     validate_add_bonus_request(&req)?;
     let tx_id = uuid::Uuid::new_v4().to_string();
-    let mut client = state.db.pool.get().await.map_err(|e| {
-        tracing::error!("DB error: {:?}", e);
+    // Cycle #83: full SeaORM transaction. Three statements that must
+    // commit atomically:
+    //   1. Ensure loyalty_profile exists (upsert no-op on conflict).
+    //   2. Append to bonus_transactions ledger.
+    //   3. Bump the balance.
+    // `DatabaseTransaction` implements `ConnectionTrait` so the same
+    // entity API works as on `DatabaseConnection`; pass `&tx` to every
+    // `.exec(...)`. Errors before commit auto-rollback when `tx` drops,
+    // so we don't write an explicit `.rollback()` arm — only commit on
+    // the happy path.
+    use crate::db::entities::{
+        bonus_transaction::{ActiveModel as BonusTxAm, Entity as BonusTxEntity},
+        loyalty_profile::{ActiveModel as LpAm, Column as LpCol, Entity as LoyaltyProfileEntity},
+    };
+    use sea_orm::sea_query::OnConflict;
+    use sea_orm::{ActiveValue::Set, ColumnTrait, EntityTrait, QueryFilter, TransactionTrait};
+
+    let tx = state.db.orm.begin().await.map_err(|e| {
+        tracing::error!("add_bonus tx.begin error: {:?}", e);
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
-    let tx = client.transaction().await.map_err(|e| {
-        tracing::error!("DB tx error: {:?}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-    // Ensure loyalty profile exists before crediting bonus
-    tx.execute(
-        "INSERT INTO loyalty_profiles (telegram_id, bonus_balance, total_spent) VALUES ($1, 0, 0) ON CONFLICT (telegram_id) DO NOTHING",
-        &[&telegram_id],
-    ).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
-    tx.execute(
-        "INSERT INTO bonus_transactions (id, telegram_id, amount, tx_type, description, related_order_id) VALUES ($1,$2,$3,$4,$5,$6)",
-        &[&tx_id, &telegram_id, &req.amount, &req.tx_type, &req.description, &req.related_order_id],
-    ).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
-    let updated = tx
-        .execute(
-            "UPDATE loyalty_profiles SET bonus_balance = bonus_balance + $1 WHERE telegram_id = $2",
-            &[&req.amount, &telegram_id],
+
+    // 1. Upsert loyalty_profile (no-op if it exists).
+    let lp_am = LpAm {
+        telegram_id: Set(telegram_id),
+        bonus_balance: Set(Some(0.0)),
+        total_spent: Set(Some(0.0)),
+        ..Default::default()
+    };
+    LoyaltyProfileEntity::insert(lp_am)
+        .on_conflict(
+            OnConflict::column(LpCol::TelegramId)
+                .do_nothing()
+                .to_owned(),
         )
+        .do_nothing()
+        .exec(&tx)
         .await
         .map_err(|e| {
-            tracing::error!("DB error: {:?}", e);
+            tracing::error!("add_bonus loyalty_profile upsert: {:?}", e);
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
-    if updated == 0 {
-        if let Err(e) = tx.rollback().await {
-            tracing::error!("loyalty rollback error: {}", e);
-        }
+
+    // 2. Append bonus_transactions ledger row.
+    let bt_am = BonusTxAm {
+        id: Set(tx_id.clone()),
+        telegram_id: Set(telegram_id),
+        amount: Set(req.amount),
+        tx_type: Set(req.tx_type.clone()),
+        description: Set(req.description.clone()),
+        related_order_id: Set(req.related_order_id.clone()),
+        ..Default::default()
+    };
+    BonusTxEntity::insert(bt_am).exec(&tx).await.map_err(|e| {
+        tracing::error!("add_bonus bonus_transaction insert: {:?}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    // 3. Bump bonus_balance with column-expr update (filter ensures the
+    // row exists; step 1 made sure of that, so 0-row would be a serious
+    // race).
+    let updated = LoyaltyProfileEntity::update_many()
+        .col_expr(
+            LpCol::BonusBalance,
+            sea_orm::sea_query::Expr::cust_with_values("bonus_balance + $1", [req.amount]),
+        )
+        .filter(LpCol::TelegramId.eq(telegram_id))
+        .exec(&tx)
+        .await
+        .map_err(|e| {
+            tracing::error!("add_bonus balance bump: {:?}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+    if updated.rows_affected == 0 {
         tracing::error!(
-            "add_bonus: loyalty profile missing for telegram_id={}",
+            "add_bonus: loyalty profile missing for telegram_id={} after upsert (race?)",
             telegram_id
         );
+        // tx drops → auto-rollback.
         return Err(StatusCode::INTERNAL_SERVER_ERROR);
     }
+
     tx.commit().await.map_err(|e| {
-        tracing::error!("DB commit error: {:?}", e);
+        tracing::error!("add_bonus commit: {:?}", e);
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
     Ok(Json(json!({ "success": true, "tx_id": tx_id })))
@@ -201,15 +246,33 @@ async fn use_bonus(
     check_admin(&headers, &state)?;
     let amount = body["amount"].as_f64().unwrap_or(0.0);
     validate_use_bonus_amount(amount)?;
-    let client = state.db.pool.get().await.map_err(|e| {
-        tracing::error!("DB error: {:?}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-    let result = client.execute(
-        "UPDATE loyalty_profiles SET bonus_balance = GREATEST(0, bonus_balance - $1) WHERE telegram_id = $2 AND bonus_balance >= $1",
-        &[&amount, &telegram_id],
-    ).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
-    if result == 0 {
+    // Cycle #83: SeaORM. The UPDATE has *two* clauses that need to
+    // survive intact: the `GREATEST(0, bonus_balance - $1)` clamp and
+    // the `WHERE bonus_balance >= $1` guard. The guard makes the whole
+    // statement atomically idempotent — a concurrent caller that drained
+    // the balance leaves us with `rows_affected == 0` and we return 400.
+    //
+    // SeaORM patterns used:
+    //   - `Expr::cust_with_values("GREATEST(0, bonus_balance - $1)", [amount])`
+    //     for the column update with a raw expr (no native clamp helper).
+    //   - `.filter(Column.eq(...).and(Column.gte(...)))` for the
+    //     concurrent-safe guard.
+    use crate::db::entities::loyalty_profile::{Column as LpCol, Entity as LoyaltyProfileEntity};
+    use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
+    let result = LoyaltyProfileEntity::update_many()
+        .col_expr(
+            LpCol::BonusBalance,
+            sea_orm::sea_query::Expr::cust_with_values("GREATEST(0, bonus_balance - $1)", [amount]),
+        )
+        .filter(LpCol::TelegramId.eq(telegram_id))
+        .filter(LpCol::BonusBalance.gte(amount))
+        .exec(&state.db.orm)
+        .await
+        .map_err(|e| {
+            tracing::error!("use_bonus SeaORM error: {:?}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+    if result.rows_affected == 0 {
         return Err(StatusCode::BAD_REQUEST);
     }
     Ok(Json(json!({ "success": true })))

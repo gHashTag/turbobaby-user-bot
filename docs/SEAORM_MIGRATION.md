@@ -108,7 +108,8 @@ Notable wins:
 | #80 ✅ | `db/strains.rs` reads (Strain::from_row → From<Model>) + 4 callsites | ~150 | small/medium | **done** |
 | #81 ✅ | `api/strains.rs` writes (create + update + delete + toggle + SOTD) | ~140 | medium | **done — file 100% off raw SQL** |
 | #82 ✅ | `db/loyalty.rs` cleanup + 2 new entities + `api/happy_hour.rs` migration | ~80 net | small/medium | **done** — see below for scope shift |
-| #83 (next) | `src/db/referrals.rs` (split into 2 cycles if needed, includes bonus_transactions INSERT) | 417 | medium/large | |
+| #83 ✅ | `api/loyalty.rs` 2 endpoints: `use_bonus` + `add_bonus` (full SeaORM tx) | ~80 | small/medium | **done** — validated tx pattern |
+| #84 (next) | `src/db/referrals.rs` (split into 2 cycles if needed, includes the deferred bonus_transactions INSERT from #82) | 417 | medium/large | |
 | #84-#86 | `src/db/orders.rs` (split into 3-4 cycles by feature) | 1271 | large | |
 
 Total ≈ 6-8 cycles. Each cycle is independently committable; no big-bang.
@@ -203,6 +204,36 @@ Lesson learned: per-file scoping in the migration plan assumes the file
 *has* the queries it owns. When the queries are scattered across the
 API layer, the cycle should target the queries, not the file. Cycles
 #83+ likely face the same shift.
+
+### Cycle #83 — two new patterns
+
+* **Column-expression UPDATE with placeholder values**: when the SQL
+  did `bonus_balance + $1` or `GREATEST(0, bonus_balance - $1)`, use
+  `sea_orm::sea_query::Expr::cust_with_values("bonus_balance + $1", [v])`
+  rather than `Expr::value(v)`. The latter would try to write the value
+  *as* the new column contents; `cust_with_values` is the raw-SQL
+  escape hatch that lets us reference the existing column on the right
+  side of the assignment.
+* **Full SeaORM transaction** (`begin → ops → commit`): `state.db.orm
+  .begin().await?` returns a `DatabaseTransaction` that implements
+  `ConnectionTrait`, so every entity API (`Entity::insert(am).exec(&tx)`,
+  `update_many().exec(&tx)`, etc.) works against it identically. **Drop
+  auto-rolls back**: no need to write an explicit `.rollback()` arm
+  — when the function returns `Err(...)` before `tx.commit()`, the tx
+  drops and Postgres rolls back. Only commit on the happy path.
+
+The cycle migrated 2 endpoints in `api/loyalty.rs` (`use_bonus` —
+single column-expr update with concurrent-safe `WHERE balance >= $1`
+guard; `add_bonus` — 3-statement self-contained transaction). Confirms
+the SeaORM tx pattern works for the rest of the loyalty domain and
+unblocks cycle #84's referrals migration (which has the bigger
+`confirm_referral` tx deferred from #82).
+
+8 of the 10 scattered loyalty queries are still on tokio_postgres
+*because they're inside other modules' transactions* (orders.rs create-
+order tx, garden.rs reward-use tx, callbacks.rs order-reject refund tx).
+Migrating one statement out of those tx would split the boundary —
+defer until those whole transactions migrate in cycles #84-#86.
 
 ## Why this is worth doing
 
