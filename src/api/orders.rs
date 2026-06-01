@@ -108,6 +108,19 @@ fn validate_create_order(req: &CreateOrderRequest) -> Result<f64, StatusCode> {
     Ok(bonus_used)
 }
 
+/// True if `k` is a syntactically acceptable `X-Idempotency-Key` value.
+/// Accepts 1-100 ASCII alphanumeric / `-` / `_` characters — fits UUIDs
+/// (`xxxxxxxx-xxxx-...`), nanoids, and short random strings. Rejects spaces,
+/// control bytes, slashes, quotes, and anything that could smuggle SQL or
+/// header-injection. Defence is shallow but cheap, and a malformed key is
+/// almost always a buggy client rather than a legitimate one.
+pub fn is_valid_idempotency_key(k: &str) -> bool {
+    !k.is_empty()
+        && k.len() <= 100
+        && k.chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+}
+
 /// Outcome of the server-side strain-subtotal check (cycle #56). Distinct
 /// variants so audit logs can tell stale-cart / typo / fraud apart.
 #[derive(Debug, PartialEq)]
@@ -200,6 +213,22 @@ async fn create_order(
     State(state): State<AppState>,
     Json(req): Json<CreateOrderRequest>,
 ) -> Result<Json<Value>, StatusCode> {
+    // Cycle #57: X-Idempotency-Key (Stripe/AWS-style replay protection).
+    // Optional — old clients without the header keep working — but when
+    // present, two POSTs with the same key produce one order and the
+    // second call returns the original order_id. Closes the Two Generals
+    // window where a network blip mid-response causes a duplicate retry.
+    let idem_key: Option<String> = headers
+        .get("x-idempotency-key")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+    if let Some(ref k) = idem_key {
+        if !is_valid_idempotency_key(k) {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    }
+
     // If telegram_id is provided, verify ownership and blocked status.
     if let Some(tid) = req.telegram_id {
         crate::api::auth::check_owner(&headers, &state, tid)?;
@@ -297,6 +326,44 @@ async fn create_order(
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
+    // Idempotency check (must run BEFORE the 1-min rate limit). Two parallel
+    // POSTs with the same key serialise on the per-key advisory lock; the
+    // loser then sees the existing row and replays the cached order_id
+    // instead of being told "you're rate-limited".
+    if let Some(ref k) = idem_key {
+        tx.execute("SELECT pg_advisory_xact_lock(hashtext($1)::bigint)", &[k])
+            .await
+            .map_err(|e| {
+                error!("idempotency lock: {}", e);
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?;
+        let row = tx
+            .query_opt(
+                "SELECT order_id FROM order_idempotency_keys WHERE key = $1",
+                &[k],
+            )
+            .await
+            .map_err(|e| {
+                error!("idempotency SELECT: {}", e);
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?;
+        if let Some(row) = row {
+            let existing_id: String = row.get(0);
+            if let Err(e) = tx.commit().await {
+                tracing::error!("idempotency replay commit: {}", e);
+            }
+            tracing::info!(
+                order_id = %existing_id,
+                "create_order: idempotent replay"
+            );
+            return Ok(Json(json!({
+                "success": true,
+                "order_id": existing_id,
+                "idempotent_replay": true
+            })));
+        }
+    }
+
     // Serialize order creation per user to close the rate-limit race window.
     if let Some(tid) = req.telegram_id {
         tx.execute("SELECT pg_advisory_xact_lock($1)", &[&tid])
@@ -346,6 +413,21 @@ async fn create_order(
         "INSERT INTO orders (id, telegram_id, customer_name, customer_phone, customer_telegram, items, subtotal, bonus_used, total, status, shop_id) VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::float8, $8::float8, $9::float8, 'pending', $10)",
         &[&id, &req.telegram_id, &req.customer_name, &req.customer_phone, &req.customer_telegram, &items_json, &req.subtotal, &bonus_used, &req.total, &req.shop_id],
     ).await.map_err(|e| { error!("create_order insert error: {}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
+
+    // Record the idempotency key inside the same tx so retries after this
+    // commit see the cached order_id. The earlier advisory lock guarantees
+    // no other tx can hold a different (key, order_id) for this `k`.
+    if let Some(ref k) = idem_key {
+        tx.execute(
+            "INSERT INTO order_idempotency_keys (key, order_id, telegram_id) VALUES ($1, $2, $3)",
+            &[k, &id, &req.telegram_id],
+        )
+        .await
+        .map_err(|e| {
+            error!("idempotency INSERT: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+    }
 
     if let Err(e) = tx.commit().await {
         error!("create_order commit error: {}", e);
@@ -650,9 +732,53 @@ async fn get_user_orders(
 #[cfg(test)]
 mod tests {
     use super::{
-        check_strain_subtotal, validate_create_order, validate_update_order_status,
-        CreateOrderRequest, SubtotalCheck,
+        check_strain_subtotal, is_valid_idempotency_key, validate_create_order,
+        validate_update_order_status, CreateOrderRequest, SubtotalCheck,
     };
+
+    // ── Idempotency-key validator (cycle #57) ────────────────────────────
+
+    #[test]
+    fn idempotency_key_accepts_uuid_v4_shape() {
+        assert!(is_valid_idempotency_key(
+            "550e8400-e29b-41d4-a716-446655440000"
+        ));
+    }
+
+    #[test]
+    fn idempotency_key_accepts_nanoid_style() {
+        assert!(is_valid_idempotency_key("V1StGXR8_Z5jdHi6B-myT"));
+    }
+
+    #[test]
+    fn idempotency_key_rejects_empty() {
+        assert!(!is_valid_idempotency_key(""));
+    }
+
+    #[test]
+    fn idempotency_key_rejects_too_long() {
+        assert!(!is_valid_idempotency_key(&"a".repeat(101)));
+    }
+
+    #[test]
+    fn idempotency_key_rejects_whitespace_inside() {
+        assert!(!is_valid_idempotency_key("has space"));
+    }
+
+    #[test]
+    fn idempotency_key_rejects_control_bytes() {
+        assert!(!is_valid_idempotency_key("line\nbreak"));
+        assert!(!is_valid_idempotency_key("tab\there"));
+    }
+
+    #[test]
+    fn idempotency_key_rejects_header_or_sql_injection_chars() {
+        assert!(!is_valid_idempotency_key("path/inject"));
+        assert!(!is_valid_idempotency_key("sql'inject"));
+        assert!(!is_valid_idempotency_key("hdr:inject"));
+        assert!(!is_valid_idempotency_key("\"quoted\""));
+    }
+
     use crate::db::orders::OrderItem;
     use crate::db::strains::Strain;
     use axum::http::StatusCode;

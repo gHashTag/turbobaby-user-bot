@@ -38,6 +38,11 @@ pub fn CheckoutScreen() -> Element {
     let mut shop_selected = use_signal(|| 0usize);
     let mut is_processing = use_signal(|| false);
     let mut order_error = use_signal(|| Option::<String>::None);
+    // Cycle #57: stable idempotency key per logical submit. Lazy-init on the
+    // first click and reused for retries within this mount so server
+    // collapses them into one order (migration 029). Navigating away or
+    // unmounting the screen resets — exactly the boundary we want.
+    let mut idempotency_key = use_signal(|| Option::<String>::None);
     let nav = navigator();
     let telegram_id = use_telegram_id();
     let telegram_username = use_telegram_username();
@@ -74,6 +79,17 @@ pub fn CheckoutScreen() -> Element {
         let base = api_base_url();
         let client = crate::ui::api::local_client::LocalClient::new();
         let url = format!("{}/api/orders", base);
+
+        // Generate or reuse the idempotency key (cycle #57). The signal stays
+        // alive across spawned tasks because Dioxus signals are rooted in the
+        // component, not the closure.
+        let key = {
+            let mut k = idempotency_key.write();
+            if k.is_none() {
+                *k = Some(uuid::Uuid::new_v4().to_string());
+            }
+            k.clone().unwrap()
+        };
 
         let items_json: Vec<serde_json::Value> = submit_cart_items
             .iter()
@@ -118,6 +134,7 @@ pub fn CheckoutScreen() -> Element {
                 .post(&url)
                 .header("Content-Type", "application/json")
                 .header("X-Telegram-Init-Data", init_data_clone)
+                .header("X-Idempotency-Key", key)
                 .json(&body)
                 .send()
                 .await;
