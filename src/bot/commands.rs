@@ -1,11 +1,12 @@
 use std::sync::Arc;
 use teloxide::{
     prelude::*,
-    types::{InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo},
+    types::{InlineKeyboardButton, InlineKeyboardMarkup},
     utils::command::BotCommands,
 };
 
-use crate::bot::{AI_COOLDOWN, AI_RATE_LIMIT};
+// Cycle #76: button helpers consolidated to bot/mod.rs.
+use crate::bot::{callback_btn, web_app_btn, AI_COOLDOWN, AI_RATE_LIMIT};
 use crate::{
     ai::{get_random_fact_prompt, get_random_joke_prompt},
     config::Config,
@@ -52,23 +53,6 @@ pub enum Command {
 }
 
 use crate::util::html_escape;
-
-fn web_app_btn(text: &str, url: &str) -> InlineKeyboardButton {
-    match url.parse() {
-        Ok(u) => InlineKeyboardButton::web_app(text, WebAppInfo { url: u }),
-        Err(e) => {
-            tracing::error!("Invalid web_app URL '{}': {}", url, e);
-            InlineKeyboardButton::url(
-                text,
-                "https://t.me".parse().expect("static URL is always valid"),
-            )
-        }
-    }
-}
-
-fn callback_btn(text: &str, data: &str) -> InlineKeyboardButton {
-    InlineKeyboardButton::callback(text, data)
-}
 
 pub fn build_app_url(base_url: &str, lang: &str, page: Option<&str>) -> String {
     let mut url = format!("{}?lang={}", base_url, lang);

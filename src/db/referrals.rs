@@ -201,8 +201,17 @@ pub async fn confirm_referral(pool: &Pool, referred_id: i64, bonus: f64) -> Resu
             r.try_get("referrer_id").unwrap_or(0),
         ),
         None => {
-            tx.commit().await.ok();
-            return Ok(()); // nothing pending — silently ok
+            // Cycle #76: was `.ok()` — pool/connection issues here were
+            // invisible. Empty-tx commit has no data effects to lose, but
+            // a failure still signals real infra trouble worth seeing.
+            if let Err(e) = tx.commit().await {
+                tracing::warn!(
+                    "referrals.confirm_referral: empty-tx commit failed for referred_id={}: {}",
+                    referred_id,
+                    e
+                );
+            }
+            return Ok(()); // nothing pending — semantically a no-op
         }
     };
 

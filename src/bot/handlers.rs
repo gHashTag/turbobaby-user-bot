@@ -1,12 +1,10 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use teloxide::{
-    prelude::*,
-    types::{InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo},
-};
+use teloxide::{prelude::*, types::InlineKeyboardMarkup};
 
 use crate::bot::commands::build_app_url;
-use crate::bot::{AI_COOLDOWN, AI_RATE_LIMIT};
+// Cycle #76: button helpers consolidated to bot/mod.rs.
+use crate::bot::{url_btn, web_app_btn, AI_COOLDOWN, AI_RATE_LIMIT};
 use crate::util::html_escape;
 use crate::{config::Config, db::Database, locales::*};
 
@@ -16,31 +14,6 @@ fn should_ignore_message(text: &str) -> bool {
 
 fn is_web_app_data_too_large(len: usize, max: usize) -> bool {
     len > max
-}
-
-fn web_app_btn(text: &str, url: &str) -> InlineKeyboardButton {
-    match url.parse() {
-        Ok(u) => InlineKeyboardButton::web_app(text, WebAppInfo { url: u }),
-        Err(e) => {
-            tracing::error!("Invalid web_app URL '{}': {}", url, e);
-            InlineKeyboardButton::url(
-                text,
-                "https://t.me".parse().expect("static URL is always valid"),
-            )
-        }
-    }
-}
-fn url_btn(text: &str, url: &str) -> InlineKeyboardButton {
-    match url.parse() {
-        Ok(u) => InlineKeyboardButton::url(text, u),
-        Err(e) => {
-            tracing::error!("Invalid URL '{}': {}", url, e);
-            InlineKeyboardButton::url(
-                text,
-                "https://t.me".parse().expect("static URL is always valid"),
-            )
-        }
-    }
 }
 
 pub async fn handle_text(

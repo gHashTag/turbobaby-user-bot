@@ -2,11 +2,12 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use teloxide::{
     prelude::*,
-    types::{InlineKeyboardButton, InlineKeyboardMarkup, MaybeInaccessibleMessage, WebAppInfo},
+    types::{InlineKeyboardButton, InlineKeyboardMarkup, MaybeInaccessibleMessage},
 };
 
 use crate::bot::commands::{build_app_url, calculate_discounted_price};
-use crate::bot::{AI_COOLDOWN, AI_RATE_LIMIT};
+// Cycle #76: button helpers consolidated to bot/mod.rs.
+use crate::bot::{callback_btn, web_app_btn, AI_COOLDOWN, AI_RATE_LIMIT};
 use crate::db::referrals as ref_db;
 use crate::{
     ai::{get_random_fact_prompt, get_random_joke_prompt},
@@ -31,22 +32,6 @@ pub fn can_confirm_order(status: &str) -> bool {
 
 pub fn should_refund_bonus(status: &str) -> bool {
     status != "rejected" && status != "completed"
-}
-
-fn web_app_btn(text: &str, url: &str) -> InlineKeyboardButton {
-    match url.parse() {
-        Ok(u) => InlineKeyboardButton::web_app(text, WebAppInfo { url: u }),
-        Err(e) => {
-            tracing::error!("Invalid web_app URL '{}': {}", url, e);
-            InlineKeyboardButton::url(
-                text,
-                "https://t.me".parse().expect("static URL is always valid"),
-            )
-        }
-    }
-}
-fn callback_btn(text: &str, data: &str) -> InlineKeyboardButton {
-    InlineKeyboardButton::callback(text, data)
 }
 
 pub async fn handle_callback(
@@ -207,7 +192,19 @@ pub async fn handle_callback(
 
         d if d.starts_with("set_lang_") => {
             let new_lang = &d["set_lang_".len()..];
-            db.set_user_lang(user_id, new_lang).await.ok();
+            // Cycle #76: was `.ok()` — user toggled language and UI said
+            // "changed" even when the DB write failed silently, leaving
+            // the user with their old locale on next session. We still
+            // don't surface the error to the user (UI flow assumes
+            // success), but ops needs visibility.
+            if let Err(e) = db.set_user_lang(user_id, new_lang).await {
+                tracing::warn!(
+                    "callbacks: set_user_lang failed for user_id={} new_lang={}: {}",
+                    user_id,
+                    new_lang,
+                    e
+                );
+            }
             let new_locale = get_locale(new_lang);
             bot.answer_callback_query(q.id)
                 .text(&new_locale.lang_changed)
@@ -439,13 +436,35 @@ pub async fn handle_callback(
             if is_first {
                 if let Some(cid) = customer_telegram_id {
                     let pool = &db.pool;
-                    let db_client = pool.get().await.ok();
+                    // Cycle #76: was `.ok()` — pool exhaustion / DB down
+                    // would silently skip the bonus credit. Customer pays,
+                    // referrer never gets paid, no log.
+                    let db_client = match pool.get().await {
+                        Ok(c) => Some(c),
+                        Err(e) => {
+                            tracing::warn!(
+                                "callbacks: pool.get failed during referral confirm for cid={}: {}",
+                                cid,
+                                e
+                            );
+                            None
+                        }
+                    };
                     if let Some(db_client) = db_client {
                         // Get referral bonus amount from loyalty_config
-                        let bonus_row = db_client.query_opt(
+                        let bonus_row = match db_client.query_opt(
                             "SELECT config->>'referral_bonus' AS bonus FROM loyalty_config WHERE id = 1",
                             &[],
-                        ).await.ok().flatten();
+                        ).await {
+                            Ok(row) => row,
+                            Err(e) => {
+                                tracing::warn!(
+                                    "callbacks: loyalty_config bonus read failed: {}",
+                                    e
+                                );
+                                None
+                            }
+                        };
                         let bonus: f64 = bonus_row
                             .and_then(|r| r.try_get::<_, Option<String>>("bonus").ok().flatten())
                             .and_then(|s| s.parse().ok())
@@ -459,10 +478,21 @@ pub async fn handle_callback(
                             );
                         } else {
                             // Notify referrer only after successful bonus credit
-                            let event_row = db_client.query_opt(
+                            // Cycle #76: differentiate "no row" from "query failed".
+                            let event_row = match db_client.query_opt(
                                 "SELECT referrer_id FROM referral_events WHERE referred_id = $1",
                                 &[&cid],
-                            ).await.ok().flatten();
+                            ).await {
+                                Ok(row) => row,
+                                Err(e) => {
+                                    tracing::warn!(
+                                        "callbacks: referral_events lookup failed for cid={}: {}",
+                                        cid,
+                                        e
+                                    );
+                                    None
+                                }
+                            };
                             if let Some(ev) = event_row {
                                 let referrer_id: i64 = ev.try_get("referrer_id").unwrap_or(0);
                                 if referrer_id != 0 {
