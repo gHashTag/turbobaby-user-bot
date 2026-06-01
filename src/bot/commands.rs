@@ -45,6 +45,8 @@ pub enum Command {
     Refstats,
     #[command(description = "Admin panel (owners only)")]
     Admin,
+    #[command(description = "Unblock user by telegram_id (admin)")]
+    Unblock(String),
 }
 
 use crate::util::html_escape;
@@ -571,6 +573,64 @@ pub async fn handle_command(
                 )
                 .parse_mode(teloxide::types::ParseMode::Html)
                 .await?;
+            }
+        }
+
+        Command::Unblock(arg) => {
+            // Cycle #61: counterpart to the auto-block from cycle #60.
+            // Admin-only. Parses a positive telegram_id, flips
+            // loyalty_profiles.is_blocked to false, replies with a
+            // distinguishable message for flipped vs. was-not-blocked
+            // (so admin doesn't think the command was a no-op for typos).
+            if !config.admin_ids.contains(&user_id) {
+                return Ok(());
+            }
+            let target = match crate::db::orders::parse_unblock_arg(&arg) {
+                Some(tid) => tid,
+                None => {
+                    bot.send_message(
+                        msg.chat.id,
+                        "❌ Usage: /unblock &lt;telegram_id&gt; (positive integer)",
+                    )
+                    .parse_mode(teloxide::types::ParseMode::Html)
+                    .await?;
+                    return Ok(());
+                }
+            };
+            match crate::db::orders::manual_unblock(&db.pool, target).await {
+                Ok(true) => {
+                    tracing::info!(
+                        admin = user_id,
+                        target = target,
+                        "/unblock: manual override applied"
+                    );
+                    bot.send_message(
+                        msg.chat.id,
+                        format!("✅ User <code>{}</code> unblocked", target),
+                    )
+                    .parse_mode(teloxide::types::ParseMode::Html)
+                    .await?;
+                }
+                Ok(false) => {
+                    bot.send_message(
+                        msg.chat.id,
+                        format!(
+                            "ℹ️ User <code>{}</code> was not blocked (or has no loyalty profile)",
+                            target
+                        ),
+                    )
+                    .parse_mode(teloxide::types::ParseMode::Html)
+                    .await?;
+                }
+                Err(e) => {
+                    tracing::error!("/unblock DB error for target={}: {}", target, e);
+                    bot.send_message(
+                        msg.chat.id,
+                        format!("❌ DB error while unblocking <code>{}</code>", target),
+                    )
+                    .parse_mode(teloxide::types::ParseMode::Html)
+                    .await?;
+                }
             }
         }
     }

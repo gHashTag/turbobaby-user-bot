@@ -291,6 +291,52 @@ pub async fn record_fraud_event(
     Ok(())
 }
 
+/// Parse a `/unblock <arg>` argument into a positive telegram_id.
+///
+/// Pure helper extracted so the parsing rules can be exhaustively tested
+/// (off-by-one, leading whitespace, dot decimals, `0` and negative) without
+/// needing a Telegram bot harness. The handler then dispatches to
+/// [`manual_unblock`] using the returned `i64`.
+///
+/// Returns `None` for empty, non-numeric, zero, or negative inputs.
+/// Negative is rejected explicitly so a future SQL rewrite like
+/// `WHERE telegram_id > $1` can't accidentally unblock the entire user
+/// base when admin types `/unblock -1`.
+pub fn parse_unblock_arg(arg: &str) -> Option<i64> {
+    let trimmed = arg.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    let parsed: i64 = trimmed.parse().ok()?;
+    if parsed <= 0 {
+        return None;
+    }
+    Some(parsed)
+}
+
+/// Manually clear `is_blocked` for `telegram_id`. Counterpart to the
+/// automatic blocker in [`auto_block_for_fraud`] — admins drive this via
+/// the `/unblock` bot command (cycle #61).
+///
+/// Returns `Ok(true)` if the row was actually flipped, `Ok(false)` if the
+/// user was not blocked (or has no profile). The `AND is_blocked = true`
+/// guard means an admin can spam `/unblock 123` without each call writing
+/// a fresh `is_blocked = false` UPDATE.
+pub async fn manual_unblock(
+    pool: &deadpool_postgres::Pool,
+    telegram_id: i64,
+) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
+    let client = pool.get().await?;
+    let rows = client
+        .execute(
+            "UPDATE loyalty_profiles SET is_blocked = FALSE \
+             WHERE telegram_id = $1 AND is_blocked = TRUE",
+            &[&telegram_id],
+        )
+        .await?;
+    Ok(rows > 0)
+}
+
 /// If the user has accumulated >= `FRAUD_AUTO_BLOCK_THRESHOLD`
 /// `subtotal_mismatch` events in the last `FRAUD_AUTO_BLOCK_LOOKBACK_HOURS`,
 /// flip `loyalty_profiles.is_blocked = true`. After that the existing
@@ -457,6 +503,44 @@ mod tests {
         // even negative (i64 overflow / type confusion). Neither must block.
         assert!(!should_auto_block_for_fraud(0));
         assert!(!should_auto_block_for_fraud(-1));
+    }
+
+    // ── /unblock parser (cycle #61) ──────────────────────────────────────
+
+    use super::parse_unblock_arg;
+
+    #[test]
+    fn unblock_parser_accepts_plain_int() {
+        assert_eq!(parse_unblock_arg("1234567890"), Some(1234567890));
+    }
+
+    #[test]
+    fn unblock_parser_trims_whitespace() {
+        // Telegram's command parser keeps leading/trailing whitespace on
+        // String args — the parser must canonicalize.
+        assert_eq!(parse_unblock_arg("  42  "), Some(42));
+    }
+
+    #[test]
+    fn unblock_parser_rejects_empty() {
+        assert_eq!(parse_unblock_arg(""), None);
+        assert_eq!(parse_unblock_arg("   "), None);
+    }
+
+    #[test]
+    fn unblock_parser_rejects_non_numeric() {
+        assert_eq!(parse_unblock_arg("abc"), None);
+        assert_eq!(parse_unblock_arg("12abc"), None);
+        assert_eq!(parse_unblock_arg("1.5"), None);
+    }
+
+    #[test]
+    fn unblock_parser_rejects_zero_and_negative() {
+        // Negative explicitly rejected so a future SQL rewrite like
+        // `WHERE telegram_id > $1` can't unblock the whole base by accident
+        // when admin types `/unblock -1`.
+        assert_eq!(parse_unblock_arg("0"), None);
+        assert_eq!(parse_unblock_arg("-42"), None);
     }
 
     #[test]
