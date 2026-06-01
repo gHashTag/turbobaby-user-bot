@@ -47,6 +47,8 @@ pub enum Command {
     Admin,
     #[command(description = "Unblock user by telegram_id (admin)")]
     Unblock(String),
+    #[command(description = "List currently blocked users (admin)")]
+    Blocks,
 }
 
 use crate::util::html_escape;
@@ -574,6 +576,26 @@ pub async fn handle_command(
                 .parse_mode(teloxide::types::ParseMode::Html)
                 .await?;
             }
+        }
+
+        Command::Blocks => {
+            // Cycle #62: visibility companion to /unblock. Without it admin
+            // has to grep stdout for the warn! line from auto_block_for_fraud
+            // to find out who is currently blocked.
+            if !config.admin_ids.contains(&user_id) {
+                return Ok(());
+            }
+            let limit = crate::db::orders::BLOCKED_USERS_LIST_LIMIT;
+            let text = match crate::db::orders::query_blocked_users(&db.pool, limit).await {
+                Ok(rows) => crate::db::orders::format_blocks_message(&rows, rows.len()),
+                Err(e) => {
+                    tracing::error!("/blocks DB error: {}", e);
+                    "❌ DB error querying blocked users".to_string()
+                }
+            };
+            bot.send_message(msg.chat.id, text)
+                .parse_mode(teloxide::types::ParseMode::Html)
+                .await?;
         }
 
         Command::Unblock(arg) => {

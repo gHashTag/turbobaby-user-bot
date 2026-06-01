@@ -314,6 +314,106 @@ pub fn parse_unblock_arg(arg: &str) -> Option<i64> {
     Some(parsed)
 }
 
+/// One row from `query_blocked_users` — currently-blocked user plus the
+/// most recent fraud event we have on file for them (when any).
+#[derive(Debug, Clone, PartialEq)]
+pub struct BlockedUserRow {
+    pub telegram_id: i64,
+    /// `created_at` of the most recent `order_fraud_events` row for this
+    /// user. `None` when blocked by hand (e.g. SQL or pre-cycle-#60 setups)
+    /// — the audit table simply has no row to point at.
+    pub last_fraud_at: Option<chrono::DateTime<chrono::Utc>>,
+    /// Code from that same row. Lets admin see "what got them blocked"
+    /// at a glance — usually `subtotal_mismatch`.
+    pub last_fraud_code: Option<String>,
+}
+
+/// Cap on how many rows `/blocks` lists in one Telegram message. 50 keeps
+/// the message well under Telegram's 4096-char limit even with long codes.
+pub const BLOCKED_USERS_LIST_LIMIT: i64 = 50;
+
+/// Fetch currently-blocked users enriched with the most recent fraud-event
+/// context for each. Single round-trip — `LEFT JOIN LATERAL` lets the
+/// planner index-scan `idx_fraud_events_created_at` per user instead of
+/// doing a window scan across the whole table.
+pub async fn query_blocked_users(
+    pool: &deadpool_postgres::Pool,
+    limit: i64,
+) -> Result<Vec<BlockedUserRow>, Box<dyn std::error::Error + Send + Sync>> {
+    let client = pool.get().await?;
+    let rows = client
+        .query(
+            "SELECT lp.telegram_id, \
+                    fe.created_at AS last_fraud_at, \
+                    fe.code       AS last_fraud_code \
+             FROM loyalty_profiles lp \
+             LEFT JOIN LATERAL ( \
+                 SELECT created_at, code \
+                 FROM order_fraud_events \
+                 WHERE telegram_id = lp.telegram_id \
+                 ORDER BY created_at DESC LIMIT 1 \
+             ) fe ON TRUE \
+             WHERE lp.is_blocked = TRUE \
+             ORDER BY fe.created_at DESC NULLS LAST, lp.telegram_id \
+             LIMIT $1",
+            &[&limit],
+        )
+        .await?;
+    let mut out = Vec::with_capacity(rows.len());
+    for r in &rows {
+        out.push(BlockedUserRow {
+            telegram_id: r.try_get("telegram_id").unwrap_or(0),
+            last_fraud_at: r
+                .try_get::<_, Option<chrono::DateTime<chrono::Utc>>>("last_fraud_at")
+                .ok()
+                .flatten(),
+            last_fraud_code: r
+                .try_get::<_, Option<String>>("last_fraud_code")
+                .ok()
+                .flatten(),
+        });
+    }
+    Ok(out)
+}
+
+/// Format the `/blocks` response as Telegram-flavored HTML. Pure helper —
+/// testable without a Telegram client or a DB. Caller wraps in
+/// `parse_mode(Html)`.
+///
+/// `total_count` may exceed `rows.len()` when the query was truncated to
+/// `BLOCKED_USERS_LIST_LIMIT`; in that case a tail line tells admin how
+/// many entries didn't fit so they don't think the list is complete.
+pub fn format_blocks_message(rows: &[BlockedUserRow], total_count: usize) -> String {
+    use crate::util::html_escape;
+    if rows.is_empty() {
+        return "🛡 <b>Blocked users</b>\n━━━━━━━━━━━━━━━━\n✅ <i>none</i>".to_string();
+    }
+    let mut s = String::from("🛡 <b>Blocked users</b>\n━━━━━━━━━━━━━━━━\n");
+    for r in rows {
+        let when = r
+            .last_fraud_at
+            .map(|t| t.format("%Y-%m-%d %H:%M UTC").to_string())
+            .unwrap_or_else(|| "—".to_string());
+        let code = r
+            .last_fraud_code
+            .as_deref()
+            .map(html_escape)
+            .unwrap_or_else(|| "—".to_string());
+        s.push_str(&format!(
+            "👤 <code>{}</code> · {}\n   📝 {}\n",
+            r.telegram_id, when, code,
+        ));
+    }
+    if total_count > rows.len() {
+        s.push_str(&format!(
+            "\n…and <b>{}</b> more (use SQL for full list)",
+            total_count - rows.len()
+        ));
+    }
+    s.push_str("\n<i>Unblock with /unblock &lt;telegram_id&gt;</i>");
+    s
+}
+
 /// Manually clear `is_blocked` for `telegram_id`. Counterpart to the
 /// automatic blocker in [`auto_block_for_fraud`] — admins drive this via
 /// the `/unblock` bot command (cycle #61).
@@ -532,6 +632,72 @@ mod tests {
         assert_eq!(parse_unblock_arg("abc"), None);
         assert_eq!(parse_unblock_arg("12abc"), None);
         assert_eq!(parse_unblock_arg("1.5"), None);
+    }
+
+    // ── /blocks formatter (cycle #62) ────────────────────────────────────
+
+    use super::{format_blocks_message, BlockedUserRow};
+
+    #[test]
+    fn blocks_format_empty_says_none() {
+        let s = format_blocks_message(&[], 0);
+        assert!(s.contains("Blocked users"));
+        assert!(s.contains("none"));
+        // Empty list shouldn't show the /unblock hint — there's nothing to act on.
+        assert!(!s.contains("/unblock"));
+    }
+
+    #[test]
+    fn blocks_format_single_user_shows_id_and_code() {
+        let rows = vec![BlockedUserRow {
+            telegram_id: 12345,
+            last_fraud_at: None,
+            last_fraud_code: Some("subtotal_mismatch".into()),
+        }];
+        let s = format_blocks_message(&rows, 1);
+        assert!(s.contains("12345"));
+        assert!(s.contains("subtotal_mismatch"));
+        // Hint at the unblock command — admins forget the syntax.
+        assert!(s.contains("/unblock"));
+    }
+
+    #[test]
+    fn blocks_format_escapes_html_in_code() {
+        // Defensive: `code` is server-written today but the format must be
+        // safe if a future cycle lets it carry free-text reasons.
+        let rows = vec![BlockedUserRow {
+            telegram_id: 1,
+            last_fraud_at: None,
+            last_fraud_code: Some("<script>alert(1)</script>".into()),
+        }];
+        let s = format_blocks_message(&rows, 1);
+        assert!(!s.contains("<script>"));
+        assert!(s.contains("&lt;script&gt;"));
+    }
+
+    #[test]
+    fn blocks_format_shows_truncation_hint_when_more_exist() {
+        let rows = vec![BlockedUserRow {
+            telegram_id: 1,
+            last_fraud_at: None,
+            last_fraud_code: None,
+        }];
+        let s = format_blocks_message(&rows, 75);
+        // 75 total, 1 shown → 74 more
+        assert!(s.contains("74"));
+        assert!(s.contains("more"));
+    }
+
+    #[test]
+    fn blocks_format_omits_truncation_when_count_matches() {
+        let rows = vec![BlockedUserRow {
+            telegram_id: 1,
+            last_fraud_at: None,
+            last_fraud_code: None,
+        }];
+        let s = format_blocks_message(&rows, 1);
+        // When shown == total, no "more" hint.
+        assert!(!s.contains("more"));
     }
 
     #[test]
