@@ -49,23 +49,23 @@ async fn get_high_score(
     check_owner(&headers, &state, telegram_id)?;
     check_not_blocked(&state, telegram_id).await?;
 
-    let client = state.db.pool.get().await.map_err(|e| {
-        crate::metrics::db_pool_acquire_failed("game.high_score.get");
-        tracing::error!("game high_score pool: {}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-    let row = client
-        .query_opt(
+    // Cycle #91: SeaORM via raw Statement. No `game_high_score` entity —
+    // single-callsite read, full-shape entity wouldn't earn its keep
+    // (per docs/API_MIGRATION_PLAN.md classification rules).
+    use sea_orm::{ConnectionTrait, DbBackend, Statement};
+    let row = state.db.orm
+        .query_one(Statement::from_sql_and_values(
+            DbBackend::Postgres,
             "SELECT high_score FROM game_high_scores WHERE telegram_id = $1",
-            &[&telegram_id],
-        )
+            [telegram_id.into()],
+        ))
         .await
         .map_err(|e| {
             tracing::error!("game high_score query: {}", e);
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
     let score: i64 = row
-        .and_then(|r| r.try_get::<_, i32>("high_score").ok())
+        .and_then(|r| r.try_get::<i32>("", "high_score").ok())
         .map(|v| v as i64)
         .unwrap_or(0);
     Ok(Json(json!({ "high_score": score })))
@@ -83,17 +83,17 @@ async fn post_high_score(
     check_owner(&headers, &state, req.telegram_id)?;
     check_not_blocked(&state, req.telegram_id).await?;
 
-    let client = state.db.pool.get().await.map_err(|e| {
-        crate::metrics::db_pool_acquire_failed("game.high_score.post");
-        tracing::error!("game high_score pool: {}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
+    use sea_orm::{ConnectionTrait, DbBackend, Statement};
     // Truncate to i32 (PG INTEGER) safely; we already capped above.
     let score_i32: i32 = req.score as i32;
-    // ON CONFLICT … GREATEST keeps the row's existing value when it's higher,
-    // so a stale POST from another tab can never lower someone's best.
-    client
-        .execute(
+    // Cycle #91: ON CONFLICT … GREATEST + conditional CASE timestamp
+    // → raw Statement. SeaORM `OnConflict::value(Expr::cust)` could
+    // express the GREATEST part but the CASE-WHEN for updated_at would
+    // be a second `value()` call duplicating the comparison — raw SQL
+    // is cleaner here.
+    state.db.orm
+        .execute(Statement::from_sql_and_values(
+            DbBackend::Postgres,
             "INSERT INTO game_high_scores (telegram_id, high_score, updated_at) \
              VALUES ($1, $2, NOW()) \
              ON CONFLICT (telegram_id) DO UPDATE SET \
@@ -102,8 +102,8 @@ async fn post_high_score(
                      WHEN EXCLUDED.high_score > game_high_scores.high_score THEN NOW() \
                      ELSE game_high_scores.updated_at \
                  END",
-            &[&req.telegram_id, &score_i32],
-        )
+            [req.telegram_id.into(), score_i32.into()],
+        ))
         .await
         .map_err(|e| {
             tracing::error!("game high_score upsert: {}", e);
@@ -111,15 +111,16 @@ async fn post_high_score(
         })?;
 
     // Read back actual stored value (may be the previous higher score).
-    let stored = client
-        .query_opt(
+    let stored = state.db.orm
+        .query_one(Statement::from_sql_and_values(
+            DbBackend::Postgres,
             "SELECT high_score FROM game_high_scores WHERE telegram_id = $1",
-            &[&req.telegram_id],
-        )
+            [req.telegram_id.into()],
+        ))
         .await
         .ok()
         .flatten()
-        .and_then(|r| r.try_get::<_, i32>("high_score").ok())
+        .and_then(|r| r.try_get::<i32>("", "high_score").ok())
         .map(|v| v as i64)
         .unwrap_or(score_i32 as i64);
     Ok(Json(json!({ "success": true, "high_score": stored })))
@@ -139,21 +140,21 @@ async fn get_leaderboard(
     State(state): State<AppState>,
     Query(params): Query<HashMap<String, String>>,
 ) -> Result<Json<Value>, StatusCode> {
-    let client = state.db.pool.get().await.map_err(|e| {
-        crate::metrics::db_pool_acquire_failed("game.leaderboard");
-        tracing::error!("game leaderboard pool: {}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-    let rows = client
-        .query(
+    // Cycle #91: SeaORM via Statement. LEFT JOIN + window function
+    // (`ROW_NUMBER() OVER (...)`) fits pattern #15 — no typed builder
+    // for window functions in SeaORM 1.1.
+    use sea_orm::{ConnectionTrait, DbBackend, Statement};
+    let rows = state.db.orm
+        .query_all(Statement::from_string(
+            DbBackend::Postgres,
             "SELECT g.telegram_id, g.high_score, ul.first_name \
              FROM game_high_scores g \
              LEFT JOIN user_languages ul ON g.telegram_id = ul.telegram_id \
              WHERE g.high_score > 0 \
              ORDER BY g.high_score DESC, g.updated_at ASC \
-             LIMIT 20",
-            &[],
-        )
+             LIMIT 20"
+                .to_string(),
+        ))
         .await
         .map_err(|e| {
             tracing::error!("game leaderboard query: {}", e);
@@ -164,11 +165,11 @@ async fn get_leaderboard(
         .iter()
         .enumerate()
         .map(|(i, r)| {
-            let telegram_id: i64 = r.try_get("telegram_id").unwrap_or(0);
-            let score: i32 = r.try_get("high_score").unwrap_or(0);
+            let telegram_id: i64 = r.try_get("", "telegram_id").unwrap_or(0);
+            let score: i32 = r.try_get("", "high_score").unwrap_or(0);
             // first_name may be null in user_languages; default to "Anonymous"
             let name: String = r
-                .try_get::<_, Option<String>>("first_name")
+                .try_get::<Option<String>>("", "first_name")
                 .ok()
                 .flatten()
                 .filter(|s| !s.trim().is_empty())
@@ -189,20 +190,21 @@ async fn get_leaderboard(
     let mut own_score: Option<i32> = None;
     if let Some(tid) = params.get("telegram_id").and_then(|s| s.parse::<i64>().ok()) {
         // Skip blocked-user check on purpose: the leaderboard is public.
-        if let Ok(Some(rank_row)) = client
-            .query_opt(
+        if let Ok(Some(rank_row)) = state.db.orm
+            .query_one(Statement::from_sql_and_values(
+                DbBackend::Postgres,
                 "WITH ranked AS ( \
                     SELECT telegram_id, high_score, \
                            ROW_NUMBER() OVER (ORDER BY high_score DESC, updated_at ASC) AS rn \
                     FROM game_high_scores WHERE high_score > 0 \
                  ) \
                  SELECT rn, high_score FROM ranked WHERE telegram_id = $1",
-                &[&tid],
-            )
+                [tid.into()],
+            ))
             .await
         {
-            own_rank = rank_row.try_get::<_, i64>("rn").ok();
-            own_score = rank_row.try_get::<_, i32>("high_score").ok();
+            own_rank = rank_row.try_get::<i64>("", "rn").ok();
+            own_score = rank_row.try_get::<i32>("", "high_score").ok();
         }
     }
 

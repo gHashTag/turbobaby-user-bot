@@ -444,80 +444,73 @@ pub async fn handle_callback(
             // If first order, confirm referral and notify referrer
             if is_first {
                 if let Some(cid) = customer_telegram_id {
-                    let pool = &db.pool;
-                    // Cycle #76: was `.ok()` — pool exhaustion / DB down
-                    // would silently skip the bonus credit. Customer pays,
-                    // referrer never gets paid, no log.
-                    let db_client = match pool.get().await {
-                        Ok(c) => Some(c),
+                    // Cycle #91: migrated off `&db.pool` to `&db.orm`. Both
+                    // reads (loyalty_config bonus + referral_events lookup)
+                    // are JSONB / single-row SELECTs — raw `Statement`
+                    // (pattern #15) is the right level here.
+                    use sea_orm::{ConnectionTrait, DbBackend, Statement};
+                    // Get referral bonus amount from loyalty_config.
+                    let bonus_row = match db.orm.query_one(Statement::from_string(
+                        DbBackend::Postgres,
+                        "SELECT config->>'referral_bonus' AS bonus FROM loyalty_config WHERE id = 1".to_string(),
+                    )).await {
+                        Ok(row) => row,
                         Err(e) => {
                             tracing::warn!(
-                                "callbacks: pool.get failed during referral confirm for cid={}: {}",
-                                cid,
+                                "callbacks: loyalty_config bonus read failed: {}",
                                 e
                             );
                             None
                         }
                     };
-                    if let Some(db_client) = db_client {
-                        // Get referral bonus amount from loyalty_config
-                        let bonus_row = match db_client.query_opt(
-                            "SELECT config->>'referral_bonus' AS bonus FROM loyalty_config WHERE id = 1",
-                            &[],
-                        ).await {
+                    let bonus: f64 = bonus_row
+                        .and_then(|r| r.try_get::<Option<String>>("", "bonus").ok().flatten())
+                        .and_then(|s| s.parse().ok())
+                        .unwrap_or(200.0);
+
+                    if let Err(e) = ref_db::confirm_referral(&db.orm, cid, bonus).await {
+                        tracing::error!(
+                            "callback: confirm_referral failed for referred_id={}: {}",
+                            cid,
+                            e
+                        );
+                    } else {
+                        // Notify referrer only after successful bonus credit
+                        // Cycle #76: differentiate "no row" from "query failed".
+                        let event_row = match db
+                            .orm
+                            .query_one(Statement::from_sql_and_values(
+                                DbBackend::Postgres,
+                                "SELECT referrer_id FROM referral_events WHERE referred_id = $1",
+                                [cid.into()],
+                            ))
+                            .await
+                        {
                             Ok(row) => row,
                             Err(e) => {
                                 tracing::warn!(
-                                    "callbacks: loyalty_config bonus read failed: {}",
+                                    "callbacks: referral_events lookup failed for cid={}: {}",
+                                    cid,
                                     e
                                 );
                                 None
                             }
                         };
-                        let bonus: f64 = bonus_row
-                            .and_then(|r| r.try_get::<_, Option<String>>("bonus").ok().flatten())
-                            .and_then(|s| s.parse().ok())
-                            .unwrap_or(200.0);
-
-                        if let Err(e) = ref_db::confirm_referral(&db.orm, cid, bonus).await {
-                            tracing::error!(
-                                "callback: confirm_referral failed for referred_id={}: {}",
-                                cid,
-                                e
-                            );
-                        } else {
-                            // Notify referrer only after successful bonus credit
-                            // Cycle #76: differentiate "no row" from "query failed".
-                            let event_row = match db_client.query_opt(
-                                "SELECT referrer_id FROM referral_events WHERE referred_id = $1",
-                                &[&cid],
-                            ).await {
-                                Ok(row) => row,
-                                Err(e) => {
+                        if let Some(ev) = event_row {
+                            let referrer_id: i64 = ev.try_get("", "referrer_id").unwrap_or(0);
+                            if referrer_id != 0 {
+                                if let Err(e) = bot
+                                    .send_message(
+                                        teloxide::types::ChatId(referrer_id),
+                                        format!("🎉 {} +{:.0} ฿", locale.referral_bonus, bonus),
+                                    )
+                                    .await
+                                {
                                     tracing::warn!(
-                                        "callbacks: referral_events lookup failed for cid={}: {}",
-                                        cid,
+                                        "referral bonus notify failed for referrer_id={}: {}",
+                                        referrer_id,
                                         e
                                     );
-                                    None
-                                }
-                            };
-                            if let Some(ev) = event_row {
-                                let referrer_id: i64 = ev.try_get("referrer_id").unwrap_or(0);
-                                if referrer_id != 0 {
-                                    if let Err(e) = bot
-                                        .send_message(
-                                            teloxide::types::ChatId(referrer_id),
-                                            format!("🎉 {} +{:.0} ฿", locale.referral_bonus, bonus),
-                                        )
-                                        .await
-                                    {
-                                        tracing::warn!(
-                                            "referral bonus notify failed for referrer_id={}: {}",
-                                            referrer_id,
-                                            e
-                                        );
-                                    }
                                 }
                             }
                         }
