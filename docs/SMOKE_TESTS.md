@@ -213,15 +213,19 @@ blocked` (the `WHERE is_blocked = TRUE` guard makes it a no-op).
 
 ## 10. `/engage` panels in one glance
 
-`/engage` from an admin account renders two side-by-side panels for the
-last 24 h:
+`/engage` from an admin account renders **three** side-by-side panels for
+the last 24 h (since cycle #68):
 
 * **📦 Orders (24h)** — total, revenue, unique buyers, avg order,
   pending-right-now. Helpful when ops wants to size the workload.
 * **🛡 Fraud signals (24h)** — 4 code counters + top offender id.
+* **🚫 Blocks (24h)** — auto-blocks count, manual unblocks count,
+  top admin actor.
 
-When the windows are quiet (cold start, low traffic), both panels render
-without `inf` / `NaN` and the fraud one shows `✅ none`.
+All three queries run in parallel via `tokio::join!`. When a window is
+quiet, the corresponding panel collapses to `✅ none`; populated panels
+render without `inf` / `NaN`. A failing DB query shows `<i>failed to
+query DB</i>` in just that panel — the others still render normally.
 
 ## 11. Fraud-events TTL sweep — 30-day retention
 
@@ -238,6 +242,49 @@ SELECT * FROM order_fraud_events WHERE telegram_id = 1
 -- log: info! "fraud_events: TTL sweep removed expired rows" deleted=1
 ```
 
+## 12. Block-history TTL sweep — 90-day retention
+
+Cycle #66 added the third audit-table sweep. Retention is longer (90 days)
+because block decisions are compliance records that admins look back at
+across quarters, not just the /engage 24h window.
+
+```sql
+INSERT INTO block_history
+  (telegram_id, action, reason, created_at)
+VALUES
+  (1, 'auto_block', 'subtotal_mismatch_threshold', NOW() - INTERVAL '91 days');
+
+-- Wait ≤24h for the daily sweep tick, then:
+SELECT * FROM block_history WHERE telegram_id = 1
+  AND created_at < NOW() - INTERVAL '90 days';
+-- expected: 0 rows
+-- log: info! "block_history: TTL sweep removed expired rows" deleted=1
+```
+
+## 13. Friendly localised error messages (cycle #65 + #69)
+
+A blocked user submitting an order receives a friendly Russian sentence,
+not "HTTP 403". To verify the localisation table is wired:
+
+```sh
+# Cause a 403 (assumes user with $TID is auto-blocked from §7):
+curl -is -X POST http://localhost:8080/api/orders \
+  -H 'Content-Type: application/json' \
+  -H "X-Telegram-Init-Data: $INIT" \
+  -d '{"telegram_id":'"$TID"',
+       "items":[{"strain_id":"'"$STRAIN_ID"'","strain_name":"x","quantity":1}],
+       "subtotal":'"$REAL_PRICE"',"total":'"$REAL_PRICE"'}' \
+  | head -1
+# expected: HTTP/1.1 403 Forbidden
+```
+
+Then open the WebApp checkout in Telegram (or browser with init_data)
+and submit. The red banner should show:
+
+> ❌ Аккаунт временно ограничен. Свяжитесь с поддержкой, чтобы продолжить заказы.
+
+NOT "HTTP 403" or "Ошибка сервера: 403".
+
 ## Checklist
 
 - [ ] §1 happy path returns `order_id`
@@ -249,5 +296,7 @@ SELECT * FROM order_fraud_events WHERE telegram_id = 1
 - [ ] §7 3 mismatches lock the user; 4th legitimate request → 403
 - [ ] §8 `/blocks` shows the blocked user with last fraud context
 - [ ] §9 `/unblock <id>` flips the flag; subsequent order goes through
-- [ ] §10 `/engage` renders Orders + Fraud panels without `NaN`/`inf`
+- [ ] §10 `/engage` renders Orders + Fraud + Blocks panels without `NaN`/`inf`
 - [ ] §11 stale `order_fraud_events` row deleted by daily sweep
+- [ ] §12 stale `block_history` row deleted by daily sweep
+- [ ] §13 blocked user sees friendly "Аккаунт ограничен" banner, not "HTTP 403"

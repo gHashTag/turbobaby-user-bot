@@ -55,6 +55,87 @@ impl std::fmt::Display for Lang {
     }
 }
 
+/// Parse `?lang=xx` (or `&lang=xx`) out of a URL query string and resolve
+/// it via [`Lang::from_str`]. Returns `None` if the param is missing,
+/// empty, or unrecognised — callers can then apply their own default.
+///
+/// Pure helper, used by the WASM checkout screen (cycle #70 / C) to
+/// pick up `Lang` from the Telegram WebApp launch URL without forcing
+/// every component to thread a Signal<Lang> through context. The full
+/// Lang signal migration is bigger than one cycle's worth.
+pub fn detect_lang_from_query(query: &str) -> Option<Lang> {
+    // Strip leading "?" if the caller passed window.location.search verbatim.
+    let q = query.strip_prefix('?').unwrap_or(query);
+    for pair in q.split('&') {
+        let mut parts = pair.splitn(2, '=');
+        if parts.next() == Some("lang") {
+            if let Some(value) = parts.next() {
+                if !value.is_empty() {
+                    return value.parse::<Lang>().ok();
+                }
+            }
+        }
+    }
+    None
+}
+
+#[cfg(test)]
+mod detect_lang_tests {
+    use super::*;
+
+    #[test]
+    fn detect_lang_picks_up_ru() {
+        assert_eq!(detect_lang_from_query("?lang=ru"), Some(Lang::Russian));
+    }
+
+    #[test]
+    fn detect_lang_picks_up_en_with_other_params() {
+        // Real query strings carry several keys — make sure we don't
+        // accidentally match `?initData=...&lang=en` as if `lang` were
+        // a substring of `initData`.
+        assert_eq!(
+            detect_lang_from_query("?initData=abc&lang=en&theme=dark"),
+            Some(Lang::English),
+        );
+    }
+
+    #[test]
+    fn detect_lang_strips_leading_question_mark_optional() {
+        // window.location.search keeps the "?", but a caller composing
+        // the query string by hand might omit it. Both must work.
+        assert_eq!(detect_lang_from_query("lang=th"), Some(Lang::Thai));
+        assert_eq!(detect_lang_from_query("?lang=th"), Some(Lang::Thai));
+    }
+
+    #[test]
+    fn detect_lang_returns_none_when_param_missing() {
+        assert_eq!(detect_lang_from_query("?initData=xyz"), None);
+        assert_eq!(detect_lang_from_query(""), None);
+    }
+
+    #[test]
+    fn detect_lang_returns_none_for_empty_value() {
+        // `?lang=` (no value) is a malformed param — bail rather than
+        // pick a silent default and confuse the caller.
+        assert_eq!(detect_lang_from_query("?lang="), None);
+    }
+
+    #[test]
+    fn detect_lang_returns_none_for_unknown_code() {
+        // Lang::from_str doesn't know "klingon" — propagate the None so
+        // the caller falls back to its own default (typically Russian).
+        assert_eq!(detect_lang_from_query("?lang=klingon"), None);
+    }
+
+    #[test]
+    fn detect_lang_doesnt_mismatch_lookalike_keys() {
+        // "language=en" must NOT match: the key is exactly "lang".
+        // Splitn(2, '=') splits "language" -> ("language", "en"), so the
+        // first-token check correctly rejects it.
+        assert_eq!(detect_lang_from_query("?language=en"), None);
+    }
+}
+
 /// Result type alias
 pub type Result<T> = std::result::Result<T, Error>;
 

@@ -48,6 +48,16 @@ pub fn CheckoutScreen() -> Element {
     let telegram_username = use_telegram_username();
     let init_data = use_telegram_init_data();
 
+    // Cycle #70 / C: pick up `?lang=xx` from the WebApp launch URL so the
+    // friendly_order_error banner localises when the Telegram client passes
+    // a non-Russian locale. Falls back to Russian (current production default).
+    // The rest of the screen still uses hardcoded Lang::Russian — a full
+    // Signal<Lang> migration touches ~20 callsites and is its own cycle.
+    let lang = web_sys::window()
+        .and_then(|w| w.location().search().ok())
+        .and_then(|q| crate::trios::core::detect_lang_from_query(&q))
+        .unwrap_or(Lang::Russian);
+
     let checkout_title = t(Lang::Russian, T_CHECKOUT_TITLE);
     let your_order = t(Lang::Russian, T_YOUR_ORDER);
     let your_info = format!("👤 {}", t(Lang::Russian, T_YOUR_INFO));
@@ -154,14 +164,11 @@ pub fn CheckoutScreen() -> Element {
                 }
                 Ok(resp) => {
                     let status = resp.status().as_u16();
-                    // Cycle #65 + #69: friendly per-status message localised
-                    // via trios::i18n. Auto-blocked users (403) see "Аккаунт
-                    // ограничен. Свяжитесь с поддержкой" instead of a raw
-                    // status code they can't act on. Lang::Russian for now
-                    // — when EN/TH locales ship, swap to use_signal-driven Lang.
+                    // Cycle #65/#69 friendly per-status; cycle #70 sources
+                    // `lang` from `?lang=xx` so a non-RU Telegram client gets
+                    // localised "Account restricted" instead of Cyrillic.
                     order_error.set(Some(crate::trios::checkout_errors::friendly_order_error(
-                        Lang::Russian,
-                        status,
+                        lang, status,
                     )));
                 }
                 Err(e) => {

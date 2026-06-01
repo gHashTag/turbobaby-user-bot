@@ -877,6 +877,69 @@ mod tests {
     }
 
     #[test]
+    fn audit_sweep_sql_holds_canonical_shape_across_combinations() {
+        // Property-style test: for every (table, interval) drawn from a
+        // matrix of realistic inputs, the output must satisfy four
+        // invariants. Catches a "cleaned up the format!()" regression
+        // that any single example test might miss because it pinned only
+        // one specific combination.
+        let tables = [
+            "order_idempotency_keys",
+            "order_fraud_events",
+            "block_history",
+            "audit_log", // hypothetical future table
+            "t",         // shortest legal name
+            "really_long_table_name_for_some_reason",
+        ];
+        let intervals = [
+            "1 hours", "24 hours", "30 days", "90 days", "1 minute", "365 days",
+        ];
+        for &table in &tables {
+            for &interval in &intervals {
+                let sql = audit_sweep_sql(table, interval);
+                // Invariant 1: starts with the canonical DELETE keyword.
+                assert!(
+                    sql.starts_with("DELETE FROM "),
+                    "({}, {}) must start with DELETE FROM: {}",
+                    table,
+                    interval,
+                    sql,
+                );
+                // Invariant 2: table name interpolated verbatim immediately
+                // after FROM (catches table-name truncation / quoting bugs).
+                assert!(
+                    sql.contains(&format!("DELETE FROM {} WHERE", table)),
+                    "({}, {}) must place table right after FROM: {}",
+                    table,
+                    interval,
+                    sql,
+                );
+                // Invariant 3: interval literal interpolated verbatim inside
+                // single quotes after INTERVAL.
+                assert!(
+                    sql.contains(&format!("INTERVAL '{}'", interval)),
+                    "({}, {}) must interpolate interval in 'quotes': {}",
+                    table,
+                    interval,
+                    sql,
+                );
+                // Invariant 4: standard time anchor — `NOW()` not CURRENT_TIMESTAMP
+                // or anything else. Pin the wire-level choice.
+                assert!(
+                    sql.contains("created_at < NOW()"),
+                    "({}, {}) must compare against NOW(): {}",
+                    table,
+                    interval,
+                    sql,
+                );
+            }
+        }
+        // Coverage assertion: matrix size matches expectation so a
+        // future shrink to e.g. one input doesn't silently weaken the test.
+        assert_eq!(tables.len() * intervals.len(), 36);
+    }
+
+    #[test]
     fn idempotency_sweep_uses_correct_interval_literal() {
         let sql = idempotency_sweep_sql(24);
         assert!(sql.contains("DELETE FROM order_idempotency_keys"));
