@@ -77,4 +77,22 @@ mod tests {
     fn test_truncate_string_empty() {
         assert_eq!(truncate_string("", 10), "");
     }
+
+    #[test]
+    fn test_truncate_string_does_not_panic_at_codepoint_boundary() {
+        // Regression guard for cycle #75. `String::truncate(N)` (which we
+        // are *not* using here) panics when N falls mid-codepoint. We
+        // pick max_len values that would land inside a UTF-8 sequence
+        // for the given input — emoji are 4 bytes, cyrillic are 2.
+        // truncate_string counts chars, so these must all succeed.
+        let emoji = "🔥".repeat(20); // 80 bytes
+        for n in [1, 3, 5, 7, 11, 15, 19, 20, 21] {
+            // would panic at every non-multiple-of-4 byte index
+            let _ = truncate_string(&emoji, n);
+        }
+        let cyrillic = "ё".repeat(20); // 40 bytes
+        for n in [1, 3, 5, 7, 9, 11, 13, 19, 20, 21] {
+            let _ = truncate_string(&cyrillic, n);
+        }
+    }
 }

@@ -70,10 +70,27 @@ const MAX_ERRORS: usize = 50;
 const MAX_MSG_LEN: usize = 2000;
 const MAX_STACK_LEN: usize = 5000;
 
+/// Truncate to at most `max_chars` Unicode scalar values. UTF-8-safe —
+/// unlike `String::truncate(N)` which panics if byte N lands inside a
+/// multi-byte sequence. `crate::util::truncate_string` is the backend-side
+/// twin; this is the WASM-side copy because `util` is `#[cfg(not(wasm))]`.
+fn truncate_chars(s: &str, max_chars: usize) -> String {
+    if s.chars().count() <= max_chars {
+        s.to_string()
+    } else {
+        s.chars().take(max_chars).collect()
+    }
+}
+
 fn push_error(mut errors: Signal<Vec<JsErrorItem>>, mut item: JsErrorItem) {
-    item.message.truncate(MAX_MSG_LEN);
+    // Cycle #75: was `String::truncate(N)` — panics when byte N lands
+    // mid-codepoint. JS error messages and stack traces routinely
+    // contain non-ASCII (cyrillic property names, emoji in user data),
+    // so a runtime error overlay that itself panics on its own input
+    // is exactly the worst failure mode.
+    item.message = truncate_chars(&item.message, MAX_MSG_LEN);
     if let Some(ref mut s) = item.stack {
-        s.truncate(MAX_STACK_LEN);
+        *s = truncate_chars(s, MAX_STACK_LEN);
     }
     let mut vec = errors.write();
     vec.push(item);

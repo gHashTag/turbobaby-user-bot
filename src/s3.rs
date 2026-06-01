@@ -42,17 +42,11 @@ pub async fn upload_to_s3(config: &Config, filename: &str, data: Bytes) -> Resul
         .build();
 
     let client = Client::from_conf(s3_config);
-    let safe_name = {
-        let mut s = filename
-            .replace("..", "_")
-            .replace(['/', '\\', '\0', '?', '#', '%'], "_")
-            .replace(' ', "_");
-        if s.len() > 255 {
-            s.truncate(255);
-        }
-        s
-    };
-    let key = format!("uploads/{}", safe_name);
+    // Cycle #75: was inline duplicate that used `s.truncate(255)` —
+    // panics if byte 255 lands mid-codepoint (cyrillic, emoji file
+    // names trigger it). Module-level `safe_name` routes through
+    // `util::truncate_string` which counts chars, not bytes.
+    let key = format!("uploads/{}", safe_name(filename));
     let size = data.len();
     let content_type = mime_from_filename(filename);
 
@@ -113,6 +107,9 @@ fn build_s3_public_url(public_url: &str, bucket: &str, key: &str) -> String {
     }
 }
 
+/// Sanitise an upload filename: strip path separators, traversal, query/
+/// fragment/percent, and clamp to 255 *chars* (not bytes) so a long
+/// cyrillic or emoji name doesn't panic mid-codepoint.
 fn safe_name(filename: &str) -> String {
     let s = filename
         .replace("..", "_")
@@ -234,5 +231,32 @@ mod tests {
         let long = "🔥".repeat(300);
         let result = safe_name(&long);
         assert_eq!(result.chars().count(), 255);
+    }
+
+    #[test]
+    fn test_safe_name_cyrillic_boundary_does_not_panic() {
+        // Regression for cycle #75: the inline `s.truncate(255)` panicked
+        // when byte 255 landed mid-codepoint. Cyrillic chars are 2 bytes
+        // in UTF-8, so a 200-char Russian filename is 400 bytes — when
+        // truncating to 255 *bytes*, byte 255 falls inside a codepoint.
+        // After the fix `safe_name` routes through `truncate_string`,
+        // which counts chars; this call must succeed and the result must
+        // contain only valid UTF-8 (which is invariant for `String` but
+        // we still assert char count for documentation).
+        let name = "файл".repeat(200); // 4 chars × 200 = 800 chars / 1600 bytes
+        let result = safe_name(&name);
+        assert!(result.chars().count() <= 255);
+        // Sanity: result still recognisable as cyrillic.
+        assert!(result.starts_with("файл"));
+    }
+
+    #[test]
+    fn test_safe_name_emoji_boundary_does_not_panic() {
+        // Emoji are 4 bytes in UTF-8 — 255 / 4 = 63 remainder 3, so byte
+        // 255 always falls mid-codepoint for a long enough emoji run.
+        // Pre-fix, this would have panicked via the old inline path.
+        let name = "🔥".repeat(100);
+        let result = safe_name(&name);
+        assert!(result.chars().count() <= 255);
     }
 }
