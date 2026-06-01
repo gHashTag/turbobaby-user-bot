@@ -107,8 +107,8 @@ Notable wins:
 | #79 ✅ | `src/db/mod.rs` (Database user methods) | 60 | small — validated pattern | **done** |
 | #80 ✅ | `db/strains.rs` reads (Strain::from_row → From<Model>) + 4 callsites | ~150 | small/medium | **done** |
 | #81 ✅ | `api/strains.rs` writes (create + update + delete + toggle + SOTD) | ~140 | medium | **done — file 100% off raw SQL** |
-| #82 (next) | `src/db/loyalty.rs` | 182 | medium | |
-| #83 | `src/db/referrals.rs` (split into 2 cycles if needed) | 417 | medium/large | |
+| #82 ✅ | `db/loyalty.rs` cleanup + 2 new entities + `api/happy_hour.rs` migration | ~80 net | small/medium | **done** — see below for scope shift |
+| #83 (next) | `src/db/referrals.rs` (split into 2 cycles if needed, includes bonus_transactions INSERT) | 417 | medium/large | |
 | #84-#86 | `src/db/orders.rs` (split into 3-4 cycles by feature) | 1271 | large | |
 
 Total ≈ 6-8 cycles. Each cycle is independently committable; no big-bang.
@@ -166,6 +166,43 @@ Three more shapes validated for writes:
   type elision via the existing `From` impl.
 
 `api/strains.rs` is now 100% off raw SQL.
+
+### Cycle #82 scope shift
+
+The original plan said "migrate `src/db/loyalty.rs` (182 lines)". On
+inspection, the file turned out to be almost entirely *dead* wire-shape
+types (`LoyaltyProfile`, `BonusTransaction`, `LoyaltyConfig` — none used
+outside the file's own tests). The actual loyalty SQL queries live in
+`api/happy_hour.rs`, `db/referrals.rs`, `api/orders.rs`, `api/garden.rs`,
+`api/admin.rs` — scattered, not centralised.
+
+Cycle #82 adapted:
+
+1. **Generated two entities**: `entities/loyalty_config.rs` (JSONB
+   singleton with `id=1` PK) and `entities/bonus_transaction.rs` (append-
+   only ledger). Hand-written from the migration SQL because regenerating
+   would clobber neighbouring tweaks; these are simple enough that the
+   manual write took 10 lines each.
+2. **Migrated `api/happy_hour.rs`**: `SELECT config FROM loyalty_config
+   LIMIT 1` → `LoyaltyConfigEntity::find_by_id(1).one(&db.orm)`. The
+   JSONB column auto-deserialises to `serde_json::Value`. Single-row
+   singletons are the cleanest possible SeaORM pattern.
+3. **Cleaned up `db/loyalty.rs`**: dropped the three dead wire-shape
+   structs (`LoyaltyProfile`, `BonusTransaction`, `LoyaltyConfig`),
+   simplified `calculate_tier` to take its four scalar inputs directly
+   (no longer needs the `LoyaltyConfig` indirection). Tests rewritten to
+   pass thresholds as constants. File shrank 183 → 122 lines.
+4. **Deferred**: `db/referrals.rs::confirm_referral` has a 4-statement
+   tokio_postgres transaction that includes a `bonus_transactions`
+   INSERT. Migrating just one INSERT would split the transaction
+   boundary (regression). The whole `confirm_referral` belongs to cycle
+   #83's `referrals.rs` pass, which will use a SeaORM
+   `DatabaseConnection::begin().await?` transaction.
+
+Lesson learned: per-file scoping in the migration plan assumes the file
+*has* the queries it owns. When the queries are scattered across the
+API layer, the cycle should target the queries, not the file. Cycles
+#83+ likely face the same shift.
 
 ## Why this is worth doing
 

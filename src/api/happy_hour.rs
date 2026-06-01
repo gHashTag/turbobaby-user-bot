@@ -23,23 +23,24 @@ fn compute_happy_hour(config: &Value, current_hour: i64) -> (bool, bool, f64, i6
 }
 
 async fn get_happy_hour(State(state): State<AppState>) -> Result<Json<Value>, StatusCode> {
-    let client = state.db.pool.get().await.map_err(|e| {
-        tracing::error!("DB error: {:?}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-    let row = client
-        .query_opt("SELECT config FROM loyalty_config LIMIT 1", &[])
+    // Cycle #82: SeaORM. The `loyalty_config` table holds a singleton row
+    // (id=1) with a JSONB blob; `find_by_id(1)` is enough — no LIMIT
+    // needed.
+    use crate::db::entities::loyalty_config::Entity as LoyaltyConfigEntity;
+    use sea_orm::EntityTrait;
+    let model = LoyaltyConfigEntity::find_by_id(1)
+        .one(&state.db.orm)
         .await
         .map_err(|e| {
-            tracing::error!("DB error: {:?}", e);
+            tracing::error!("get_happy_hour SeaORM error: {:?}", e);
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
-    match row {
-        Some(r) => {
-            let config: serde_json::Value = r.try_get(0).unwrap_or(Value::Null);
+    match model {
+        Some(m) => {
             let current_hour = chrono::Local::now().hour() as i64;
-            let (enabled, active, discount, start, end) = compute_happy_hour(&config, current_hour);
+            let (enabled, active, discount, start, end) =
+                compute_happy_hour(&m.config, current_hour);
             Ok(Json(json!({
                 "enabled": enabled,
                 "active": active,
