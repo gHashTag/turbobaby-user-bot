@@ -171,22 +171,37 @@ pub struct OrderItem {
     pub is_tea_set: Option<bool>,
 }
 
-// ─── Idempotency-key TTL sweep (cycle #58 / A) ────────────────────────────
+// ─── Audit-table TTL sweeps (cycles #58 / #63 / #66) ──────────────────────
 //
-// migration 029 (`order_idempotency_keys`) is append-only. Without a sweep
-// the table grows unbounded; Stripe / AWS / GCP all use a 24 h window for
-// the same reason. Real client retry windows are far shorter than that —
-// 24 h is the safe default. The pure SQL builder is extracted so a typo in
-// the INTERVAL literal cannot slip through to production unnoticed.
+// The three append-only audit tables — order_idempotency_keys (24 h),
+// order_fraud_events (30 d), block_history (90 d) — each got their own
+// near-identical sweep builder. After the third copy (cycle #66) the
+// rule-of-three (Fowler, "Refactoring" §3.4) said: extract. The generic
+// helper below is the only place the actual DELETE template lives. Each
+// specific builder remains as a thin alias so call-sites stay
+// self-documenting at their use point.
+
+/// Build the canonical `DELETE` SQL fragment for any append-only audit
+/// table swept by `created_at`. Pure, unit-testable.
+///
+/// **Security note:** `table` is interpolated as a SQL identifier (cannot
+/// be parameterised). Callers MUST pass a static `&str` literal —
+/// internal-only at the time of writing. `interval_clause` is the body
+/// of `INTERVAL '...'` (e.g. `"24 hours"`, `"30 days"`).
+pub(crate) fn audit_sweep_sql(table: &str, interval_clause: &str) -> String {
+    format!(
+        "DELETE FROM {} WHERE created_at < NOW() - INTERVAL '{}'",
+        table, interval_clause
+    )
+}
 
 /// Build the `DELETE` SQL fragment for the idempotency-key TTL sweep.
-/// Extracted as a pure function so the literal is unit-testable; otherwise
-/// a typo in `INTERVAL '24 hours'` would only show up in production.
+/// Thin alias over [`audit_sweep_sql`] so the existing tests + callers
+/// keep their idempotency-specific naming.
 pub(crate) fn idempotency_sweep_sql(retention_hours: u32) -> String {
-    format!(
-        "DELETE FROM order_idempotency_keys \
-         WHERE created_at < NOW() - INTERVAL '{} hours'",
-        retention_hours
+    audit_sweep_sql(
+        "order_idempotency_keys",
+        &format!("{} hours", retention_hours),
     )
 }
 
@@ -216,12 +231,9 @@ pub async fn cleanup_old_idempotency_keys(
 // so the INTERVAL literal is unit-testable.
 
 /// Build the `DELETE` SQL fragment for the fraud-event TTL sweep.
+/// Thin alias over [`audit_sweep_sql`].
 pub(crate) fn fraud_events_sweep_sql(retention_days: u32) -> String {
-    format!(
-        "DELETE FROM order_fraud_events \
-         WHERE created_at < NOW() - INTERVAL '{} days'",
-        retention_days
-    )
+    audit_sweep_sql("order_fraud_events", &format!("{} days", retention_days))
 }
 
 /// Delete `order_fraud_events` rows older than `retention_days`. Returns
@@ -247,13 +259,9 @@ pub async fn cleanup_old_fraud_events(
 // three months ago?"). Beyond 90 days a row is more noise than signal.
 
 /// Build the `DELETE` SQL fragment for the block-history TTL sweep.
-/// Extracted pure so the INTERVAL literal is unit-testable.
+/// Thin alias over [`audit_sweep_sql`].
 pub(crate) fn block_history_sweep_sql(retention_days: u32) -> String {
-    format!(
-        "DELETE FROM block_history \
-         WHERE created_at < NOW() - INTERVAL '{} days'",
-        retention_days
-    )
+    audit_sweep_sql("block_history", &format!("{} days", retention_days))
 }
 
 /// Delete `block_history` rows older than `retention_days`. Returns the
@@ -750,7 +758,38 @@ pub async fn fraud_stats_24h(
 
 #[cfg(test)]
 mod tests {
-    use super::{idempotency_sweep_sql, OrderItem};
+    use super::{audit_sweep_sql, idempotency_sweep_sql, OrderItem};
+
+    // ── audit_sweep_sql (cycle #67) ─────────────────────────────────────
+    //
+    // All three table-specific builders now delegate here. Pin the output
+    // shape exactly so a "harmless cleanup" of the format! string can't
+    // silently change what Postgres sees.
+
+    #[test]
+    fn audit_sweep_sql_produces_canonical_delete() {
+        // Exact-equality (not `contains`) so byte-level format drift is
+        // caught immediately.
+        assert_eq!(
+            audit_sweep_sql("any_table", "5 minutes"),
+            "DELETE FROM any_table WHERE created_at < NOW() - INTERVAL '5 minutes'",
+        );
+    }
+
+    #[test]
+    fn audit_sweep_sql_interpolates_table_and_interval_in_order() {
+        // Belt-and-braces: assert the table name appears BEFORE the
+        // INTERVAL clause, so a `format!` arg swap (table↔interval) won't
+        // ship a syntactically-valid but semantically-wrong query.
+        let sql = audit_sweep_sql("foo", "1 days");
+        let table_pos = sql.find("FROM foo").expect("table after FROM");
+        let interval_pos = sql.find("INTERVAL").expect("INTERVAL clause");
+        assert!(
+            table_pos < interval_pos,
+            "table must appear before INTERVAL: {}",
+            sql
+        );
+    }
 
     #[test]
     fn idempotency_sweep_uses_correct_interval_literal() {
