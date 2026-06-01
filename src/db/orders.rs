@@ -236,6 +236,38 @@ pub async fn cleanup_old_fraud_events(
     Ok(deleted)
 }
 
+// ─── block_history TTL sweep (cycle #66) ─────────────────────────────────
+//
+// `block_history` is the third append-only audit table (after
+// `order_idempotency_keys` from cycle #58/A and `order_fraud_events` from
+// cycle #63/A). Same shape as both: pure SQL builder, async cleanup, daily
+// tokio::spawn loop. Retention is the longest of the three — 90 days —
+// because block decisions are operational/compliance records that admins
+// genuinely look back at across quarters ("did we wrongly block user X
+// three months ago?"). Beyond 90 days a row is more noise than signal.
+
+/// Build the `DELETE` SQL fragment for the block-history TTL sweep.
+/// Extracted pure so the INTERVAL literal is unit-testable.
+pub(crate) fn block_history_sweep_sql(retention_days: u32) -> String {
+    format!(
+        "DELETE FROM block_history \
+         WHERE created_at < NOW() - INTERVAL '{} days'",
+        retention_days
+    )
+}
+
+/// Delete `block_history` rows older than `retention_days`. Returns the
+/// number of rows deleted for the spawn-loop's structured log line.
+pub async fn cleanup_old_block_history(
+    pool: &deadpool_postgres::Pool,
+    retention_days: u32,
+) -> Result<u64, Box<dyn std::error::Error + Send + Sync>> {
+    let client = pool.get().await?;
+    let sql = block_history_sweep_sql(retention_days);
+    let deleted = client.execute(sql.as_str(), &[]).await?;
+    Ok(deleted)
+}
+
 // ─── Fraud-event audit log (cycle #59) ────────────────────────────────────
 //
 // Every 422 reject in `create_order` emits a structured `tracing::warn!`,
@@ -748,6 +780,25 @@ mod tests {
     fn fraud_sweep_accepts_arbitrary_retention() {
         let sql = fraud_events_sweep_sql(7);
         assert!(sql.contains("INTERVAL '7 days'"));
+    }
+
+    use super::block_history_sweep_sql;
+
+    #[test]
+    fn block_history_sweep_uses_correct_interval_literal() {
+        // Production ships with 90 — assert the literal lands intact so a
+        // typo in the format!() arg can't reach prod.
+        let sql = block_history_sweep_sql(90);
+        assert!(sql.contains("DELETE FROM block_history"));
+        assert!(sql.contains("INTERVAL '90 days'"));
+    }
+
+    #[test]
+    fn block_history_sweep_accepts_arbitrary_retention() {
+        // Different from production default, on purpose: catches "retention
+        // hardcoded to 90 inside the builder" regressions.
+        let sql = block_history_sweep_sql(14);
+        assert!(sql.contains("INTERVAL '14 days'"));
     }
 
     // ── /engage orders panel (cycle #63 / B) ─────────────────────────────

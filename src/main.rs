@@ -282,6 +282,29 @@ async fn main() -> Result<()> {
         }
     });
 
+    // Background TTL sweep for `block_history` (cycle #66). Append-only
+    // since cycle #64. 90-day retention — block decisions are operational
+    // / compliance records that admins genuinely look back at across
+    // quarters ("did we wrongly block user X three months ago?"). Daily
+    // tick same as the fraud sweep; both tables are tiny vs idempotency.
+    let pool_for_block_sweep = db.pool.clone();
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(86_400));
+        interval.tick().await; // discard the immediate first tick
+        loop {
+            interval.tick().await;
+            match crate::db::orders::cleanup_old_block_history(&pool_for_block_sweep, 90).await {
+                Ok(deleted) if deleted > 0 => {
+                    info!(deleted, "block_history: TTL sweep removed expired rows");
+                }
+                Ok(_) => {}
+                Err(e) => {
+                    tracing::warn!("block_history: TTL sweep failed: {}", e);
+                }
+            }
+        }
+    });
+
     tokio::spawn(async move {
         use teloxide::types::AllowedUpdate;
         use teloxide::update_listeners::Polling;
