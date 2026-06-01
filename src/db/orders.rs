@@ -206,6 +206,36 @@ pub async fn cleanup_old_idempotency_keys(
     Ok(deleted)
 }
 
+// ─── Fraud-event TTL sweep (cycle #63 / A) ───────────────────────────────
+//
+// `order_fraud_events` is append-only (cycle #59). 30-day retention is
+// longer than the idempotency table's 24h because trend / pattern review
+// often goes back weeks (Pareto offenders, repeat tampering, etc.), but
+// after 30 days the data is more noise than signal — admin acts on the
+// /engage 24h window. Same pure-builder pattern as the idempotency sweep
+// so the INTERVAL literal is unit-testable.
+
+/// Build the `DELETE` SQL fragment for the fraud-event TTL sweep.
+pub(crate) fn fraud_events_sweep_sql(retention_days: u32) -> String {
+    format!(
+        "DELETE FROM order_fraud_events \
+         WHERE created_at < NOW() - INTERVAL '{} days'",
+        retention_days
+    )
+}
+
+/// Delete `order_fraud_events` rows older than `retention_days`. Returns
+/// the row count for the spawn-loop's structured log line.
+pub async fn cleanup_old_fraud_events(
+    pool: &deadpool_postgres::Pool,
+    retention_days: u32,
+) -> Result<u64, Box<dyn std::error::Error + Send + Sync>> {
+    let client = pool.get().await?;
+    let sql = fraud_events_sweep_sql(retention_days);
+    let deleted = client.execute(sql.as_str(), &[]).await?;
+    Ok(deleted)
+}
+
 // ─── Fraud-event audit log (cycle #59) ────────────────────────────────────
 //
 // Every 422 reject in `create_order` emits a structured `tracing::warn!`,
@@ -496,6 +526,82 @@ async fn auto_block_for_fraud(
     Ok(rows > 0)
 }
 
+/// 24-hour aggregate for the `/engage` orders block (cycle #63 / B).
+#[derive(Debug, Default, Clone)]
+pub struct OrderStats24h {
+    pub total_orders: i64,
+    /// Sum of `total` across all 24h orders. Float because the column is
+    /// `DOUBLE PRECISION`; admin rendering rounds to a baht integer.
+    pub revenue: f64,
+    pub unique_buyers: i64,
+    /// `total_orders > 0` ? `revenue / total_orders` : 0. Pre-computed so
+    /// the render side doesn't have to deal with div-by-zero.
+    pub avg_order_value: f64,
+    /// Currently `pending` orders — admin's "right now" backlog signal.
+    /// Includes orders older than 24h.
+    pub pending_total: i64,
+}
+
+/// One round-trip aggregate over `orders` for the last 24h, plus a tail
+/// `pending_total` for the right-now view. Uses partial indexes already on
+/// `created_at` and `status`; cheap even on large `orders` tables.
+pub async fn order_stats_24h(
+    pool: &deadpool_postgres::Pool,
+) -> Result<OrderStats24h, Box<dyn std::error::Error + Send + Sync>> {
+    let client = pool.get().await?;
+    let row = client
+        .query_one(
+            "SELECT \
+                COUNT(*)::bigint                                    AS total_orders, \
+                COALESCE(SUM(total::float8), 0)::float8             AS revenue, \
+                COUNT(DISTINCT telegram_id)                         \
+                    FILTER (WHERE telegram_id IS NOT NULL)::bigint  AS unique_buyers \
+             FROM orders WHERE created_at > NOW() - INTERVAL '24 hours'",
+            &[],
+        )
+        .await?;
+    let total_orders: i64 = row.try_get("total_orders").unwrap_or(0);
+    let revenue: f64 = row.try_get("revenue").unwrap_or(0.0);
+    let unique_buyers: i64 = row.try_get("unique_buyers").unwrap_or(0);
+
+    let avg_order_value = if total_orders > 0 && revenue.is_finite() {
+        revenue / total_orders as f64
+    } else {
+        0.0
+    };
+
+    let pending_row = client
+        .query_one(
+            "SELECT COUNT(*)::bigint AS pending FROM orders WHERE status = 'pending'",
+            &[],
+        )
+        .await?;
+    let pending_total: i64 = pending_row.try_get("pending").unwrap_or(0);
+
+    Ok(OrderStats24h {
+        total_orders,
+        revenue,
+        unique_buyers,
+        avg_order_value,
+        pending_total,
+    })
+}
+
+/// Pure helper: render the `/engage` orders block as Telegram HTML.
+/// Caller wraps in `parse_mode(Html)`. Extracted from the bot handler so
+/// the layout is unit-testable.
+pub fn format_order_stats(s: &OrderStats24h) -> String {
+    format!(
+        "<b>📦 Orders (24h)</b>\n\
+         🛒 Total: <b>{}</b>\n\
+         💰 Revenue: <b>{:.0} ฿</b>\n\
+         👥 Unique buyers: <b>{}</b>\n\
+         📊 Avg order: <b>{:.0} ฿</b>\n\
+         ⏳ Pending right now: <b>{}</b>",
+        s.total_orders, s.revenue, s.unique_buyers, s.avg_order_value, s.pending_total,
+    )
+}
+
 /// 24-hour aggregate for the `/engage` fraud panel. Keep this struct narrow:
 /// /engage's text rendering reads each field once.
 #[derive(Debug, Default, Clone)]
@@ -572,6 +678,58 @@ mod tests {
         // (staging / tests may want a shorter window).
         let sql = idempotency_sweep_sql(1);
         assert!(sql.contains("INTERVAL '1 hours'"));
+    }
+
+    use super::fraud_events_sweep_sql;
+
+    #[test]
+    fn fraud_sweep_uses_correct_interval_literal() {
+        let sql = fraud_events_sweep_sql(30);
+        assert!(sql.contains("DELETE FROM order_fraud_events"));
+        assert!(sql.contains("INTERVAL '30 days'"));
+    }
+
+    #[test]
+    fn fraud_sweep_accepts_arbitrary_retention() {
+        let sql = fraud_events_sweep_sql(7);
+        assert!(sql.contains("INTERVAL '7 days'"));
+    }
+
+    // ── /engage orders panel (cycle #63 / B) ─────────────────────────────
+
+    use super::{format_order_stats, OrderStats24h};
+
+    #[test]
+    fn order_stats_format_renders_all_fields() {
+        let s = OrderStats24h {
+            total_orders: 12,
+            revenue: 6_900.0,
+            unique_buyers: 7,
+            avg_order_value: 575.0,
+            pending_total: 2,
+        };
+        let out = format_order_stats(&s);
+        // Each value lands in the rendered text exactly once.
+        assert!(out.contains("12"));
+        assert!(out.contains("6900"));
+        assert!(out.contains("7"));
+        assert!(out.contains("575"));
+        assert!(out.contains("2"));
+        // Headers stay so /engage layout is recognisable across cycles.
+        assert!(out.contains("Orders (24h)"));
+        assert!(out.contains("Revenue"));
+        assert!(out.contains("Pending right now"));
+    }
+
+    #[test]
+    fn order_stats_format_handles_empty_window() {
+        // Cold start / quiet day: zero everything. Should still render
+        // cleanly without `inf`/`NaN` (avg division-by-zero guard).
+        let s = OrderStats24h::default();
+        let out = format_order_stats(&s);
+        assert!(!out.contains("inf"));
+        assert!(!out.contains("NaN"));
+        assert!(out.contains("0"));
     }
 
     // ── Auto-block threshold (cycle #60) ─────────────────────────────────

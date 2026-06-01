@@ -447,18 +447,29 @@ pub async fn handle_command(
         }
 
         Command::Engage => {
-            // Cycle #59: replaces the "not yet implemented" stub with a
-            // real fraud-detection panel over the last 24h. Currently
-            // surfaces only the audit table; future cycles can add order /
-            // revenue / DB-pool widgets next to it.
+            // Cycle #59 added the fraud panel; cycle #63 / B added orders /
+            // revenue / pending above it so admin sees both signal and load
+            // in one message. Both queries run in parallel via tokio::join!
+            // because they hit independent tables (no contention).
             if !config.admin_ids.contains(&user_id) {
                 return Ok(());
             }
-            let text = match crate::db::orders::fraud_stats_24h(&db.pool).await {
+            let (order_res, fraud_res) = tokio::join!(
+                crate::db::orders::order_stats_24h(&db.pool),
+                crate::db::orders::fraud_stats_24h(&db.pool),
+            );
+            let order_block = match order_res {
+                Ok(o) => crate::db::orders::format_order_stats(&o),
+                Err(e) => {
+                    tracing::error!("engage order_stats query failed: {}", e);
+                    "<b>📦 Orders (24h)</b>\n<i>failed to query DB</i>".to_string()
+                }
+            };
+            let fraud_block = match fraud_res {
                 Ok(s) => {
                     let total = s.subtotal_mismatch + s.unknown_item + s.unavailable + s.malformed;
-                    let fraud_block = if total == 0 {
-                        String::from("\n<b>🛡 Fraud signals (24h)</b>\n✅ <i>none</i>")
+                    if total == 0 {
+                        String::from("<b>🛡 Fraud signals (24h)</b>\n✅ <i>none</i>")
                     } else {
                         let top = s
                             .top_offender
@@ -472,7 +483,7 @@ pub async fn handle_command(
                             })
                             .unwrap_or_else(|| "—".to_string());
                         format!(
-                            "\n<b>🛡 Fraud signals (24h)</b>\n\
+                            "<b>🛡 Fraud signals (24h)</b>\n\
                              🚨 Subtotal mismatch: <b>{}</b>\n\
                              🚨 Unknown item: <b>{}</b>\n\
                              ⚠️ Unavailable item: <b>{}</b>\n\
@@ -480,17 +491,17 @@ pub async fn handle_command(
                              👤 Top offender: {}",
                             s.subtotal_mismatch, s.unknown_item, s.unavailable, s.malformed, top,
                         )
-                    };
-                    format!(
-                        "📬 <b>Engage — last 24h</b>\n━━━━━━━━━━━━━━━━{}",
-                        fraud_block
-                    )
+                    }
                 }
                 Err(e) => {
                     tracing::error!("engage fraud_stats query failed: {}", e);
-                    "📬 Engage stats: <i>failed to query DB</i>".to_string()
+                    "<b>🛡 Fraud signals (24h)</b>\n<i>failed to query DB</i>".to_string()
                 }
             };
+            let text = format!(
+                "📬 <b>Engage — last 24h</b>\n━━━━━━━━━━━━━━━━\n{}\n\n{}",
+                order_block, fraud_block,
+            );
             bot.send_message(msg.chat.id, text)
                 .parse_mode(teloxide::types::ParseMode::Html)
                 .await?;

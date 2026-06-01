@@ -259,6 +259,29 @@ async fn main() -> Result<()> {
         }
     });
 
+    // Background TTL sweep for `order_fraud_events` (cycle #63 / A).
+    // Append-only since cycle #59. 30-day retention — admin /engage panel
+    // shows a 24h window but trend reviews ("how many subtotal mismatches
+    // this month?") look back further. Daily tick is enough; the table is
+    // low-cardinality compared to idempotency keys.
+    let pool_for_fraud_sweep = db.pool.clone();
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(86_400));
+        interval.tick().await; // discard the immediate first tick
+        loop {
+            interval.tick().await;
+            match crate::db::orders::cleanup_old_fraud_events(&pool_for_fraud_sweep, 30).await {
+                Ok(deleted) if deleted > 0 => {
+                    info!(deleted, "fraud_events: TTL sweep removed expired rows");
+                }
+                Ok(_) => {}
+                Err(e) => {
+                    tracing::warn!("fraud_events: TTL sweep failed: {}", e);
+                }
+            }
+        }
+    });
+
     tokio::spawn(async move {
         use teloxide::types::AllowedUpdate;
         use teloxide::update_listeners::Polling;
