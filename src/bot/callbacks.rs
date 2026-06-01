@@ -297,86 +297,90 @@ pub async fn handle_callback(
                 return Ok(());
             }
             let order_id = &d["confirm_".len()..];
-            let db_ok = match db.pool.get().await {
-                Ok(mut client) => {
-                    match client.transaction().await {
-                        Ok(tx) => {
-                            let ok = match tx
-                                .query_opt(
-                                    "SELECT status FROM orders WHERE id = $1 FOR UPDATE",
-                                    &[&order_id],
-                                )
-                                .await
-                            {
-                                Ok(Some(row)) => {
-                                    let status: String = row.try_get("status").unwrap_or_default();
-                                    if can_confirm_order(&status) {
-                                        match tx.execute("UPDATE orders SET status = 'confirmed' WHERE id = $1", &[&order_id]).await {
-                                            Ok(rows) => {
-                                                tracing::info!("callback: confirm order_id={} updated {} rows", order_id, rows);
-                                                true
-                                            }
-                                            Err(e) => {
-                                                tracing::error!("callback: confirm order_id={} UPDATE error: {}", order_id, e);
-                                                false
-                                            }
+            // Cycle #96: SeaORM tx. FOR UPDATE row lock + conditional
+            // status flip + commit. Drop = auto-rollback on early-return.
+            let db_ok = {
+                use sea_orm::{ConnectionTrait, DbBackend, Statement, TransactionTrait};
+                match db.orm.begin().await {
+                    Ok(tx) => {
+                        let ok = match tx
+                            .query_one(Statement::from_sql_and_values(
+                                DbBackend::Postgres,
+                                "SELECT status FROM orders WHERE id = $1 FOR UPDATE",
+                                [order_id.into()],
+                            ))
+                            .await
+                        {
+                            Ok(Some(row)) => {
+                                let status: String = row.try_get("", "status").unwrap_or_default();
+                                if can_confirm_order(&status) {
+                                    match tx
+                                        .execute(Statement::from_sql_and_values(
+                                            DbBackend::Postgres,
+                                            "UPDATE orders SET status = 'confirmed' WHERE id = $1",
+                                            [order_id.into()],
+                                        ))
+                                        .await
+                                    {
+                                        Ok(res) => {
+                                            tracing::info!(
+                                                "callback: confirm order_id={} updated {} rows",
+                                                order_id,
+                                                res.rows_affected()
+                                            );
+                                            true
                                         }
-                                    } else {
-                                        tracing::warn!("callback: confirm order_id={} skipped, current status={}", order_id, status);
-                                        false
+                                        Err(e) => {
+                                            tracing::error!(
+                                                "callback: confirm order_id={} UPDATE error: {}",
+                                                order_id,
+                                                e
+                                            );
+                                            false
+                                        }
                                     }
-                                }
-                                Ok(None) => {
-                                    tracing::warn!(
-                                        "callback: confirm order_id={} not found",
-                                        order_id
-                                    );
-                                    false
-                                }
-                                Err(e) => {
-                                    tracing::error!(
-                                        "callback: confirm order_id={} SELECT error: {}",
-                                        order_id,
-                                        e
-                                    );
-                                    false
-                                }
-                            };
-                            if ok {
-                                if let Err(e) = tx.commit().await {
-                                    tracing::error!(
-                                        "callback: confirm commit error order_id={} err={}",
-                                        order_id,
-                                        e
-                                    );
-                                    false
                                 } else {
-                                    true
-                                }
-                            } else {
-                                if let Err(e) = tx.rollback().await {
-                                    tracing::error!(
-                                        "callback: confirm rollback error order_id={} err={}",
+                                    tracing::warn!(
+                                        "callback: confirm order_id={} skipped, current status={}",
                                         order_id,
-                                        e
+                                        status
                                     );
+                                    false
                                 }
+                            }
+                            Ok(None) => {
+                                tracing::warn!("callback: confirm order_id={} not found", order_id);
                                 false
                             }
-                        }
-                        Err(e) => {
-                            tracing::error!(
-                                "callback: confirm order_id={} tx error: {}",
-                                order_id,
-                                e
-                            );
+                            Err(e) => {
+                                tracing::error!(
+                                    "callback: confirm order_id={} SELECT error: {}",
+                                    order_id,
+                                    e
+                                );
+                                false
+                            }
+                        };
+                        if ok {
+                            if let Err(e) = tx.commit().await {
+                                tracing::error!(
+                                    "callback: confirm commit error order_id={} err={}",
+                                    order_id,
+                                    e
+                                );
+                                false
+                            } else {
+                                true
+                            }
+                        } else {
+                            // tx drops → auto-rollback.
                             false
                         }
                     }
-                }
-                Err(e) => {
-                    tracing::error!("callback: confirm order_id={} pool error: {}", order_id, e);
-                    false
+                    Err(e) => {
+                        tracing::error!("callback: confirm order_id={} tx error: {}", order_id, e);
+                        false
+                    }
                 }
             };
             if db_ok {
@@ -556,94 +560,89 @@ pub async fn handle_callback(
             bot.answer_callback_query(q.id)
                 .text(format!("❌ {}", locale.order_rejected))
                 .await?;
-            match db.pool.get().await {
-                Ok(mut client) => {
-                    match client.transaction().await {
-                        Ok(tx) => {
-                            // Refund bonus atomically if this is the first rejection.
-                            let mut refund_ok = true;
-                            if let Ok(Some(r)) = tx.query_opt("SELECT telegram_id, bonus_used::float8, status FROM orders WHERE id = $1 FOR UPDATE", &[&_order_id]).await {
-                                let current_status: String = r.try_get("status").unwrap_or_default();
-                                if should_refund_bonus(&current_status) {
-                                    let bonus_raw: f64 = r.try_get::<_, f64>("bonus_used").unwrap_or(0.0);
-                                    let bonus = if bonus_raw.is_finite() { bonus_raw.max(0.0) } else { 0.0 };
-                                    let tid: Option<i64> = r.try_get("telegram_id").ok().flatten();
-                                    if bonus > 0.0 {
-                                        if let Some(tid) = tid {
-                                            if let Err(e) = tx.execute(
-                                                "INSERT INTO loyalty_profiles (telegram_id, bonus_balance, total_spent) VALUES ($1, 0, 0) ON CONFLICT (telegram_id) DO NOTHING",
-                                                &[&tid],
-                                            ).await {
-                                                tracing::error!("callback: reject bonus upsert error: {}", e);
+            // Cycle #96: SeaORM tx for the reject + bonus-refund path.
+            // Drop = auto-rollback on every error branch.
+            {
+                use sea_orm::{ConnectionTrait, DbBackend, Statement, TransactionTrait};
+                match db.orm.begin().await {
+                    Ok(tx) => {
+                        // Refund bonus atomically if this is the first rejection.
+                        let mut refund_ok = true;
+                        if let Ok(Some(r)) = tx.query_one(Statement::from_sql_and_values(
+                            DbBackend::Postgres,
+                            "SELECT telegram_id, bonus_used::float8 AS bonus_used, status FROM orders WHERE id = $1 FOR UPDATE",
+                            [_order_id.into()],
+                        )).await {
+                            let current_status: String = r.try_get("", "status").unwrap_or_default();
+                            if should_refund_bonus(&current_status) {
+                                let bonus_raw: f64 = r.try_get::<f64>("", "bonus_used").unwrap_or(0.0);
+                                let bonus = if bonus_raw.is_finite() { bonus_raw.max(0.0) } else { 0.0 };
+                                let tid: Option<i64> = r.try_get("", "telegram_id").ok().flatten();
+                                if bonus > 0.0 {
+                                    if let Some(tid) = tid {
+                                        if let Err(e) = tx.execute(Statement::from_sql_and_values(
+                                            DbBackend::Postgres,
+                                            "INSERT INTO loyalty_profiles (telegram_id, bonus_balance, total_spent) VALUES ($1, 0, 0) ON CONFLICT (telegram_id) DO NOTHING",
+                                            [tid.into()],
+                                        )).await {
+                                            tracing::error!("callback: reject bonus upsert error: {}", e);
+                                            refund_ok = false;
+                                        }
+                                        if refund_ok {
+                                            if let Err(e) = tx.execute(Statement::from_sql_and_values(
+                                                DbBackend::Postgres,
+                                                "UPDATE loyalty_profiles SET bonus_balance = bonus_balance + $1 WHERE telegram_id = $2",
+                                                [bonus.into(), tid.into()],
+                                            )).await {
+                                                tracing::error!("callback: reject bonus refund error: {}", e);
                                                 refund_ok = false;
-                                            }
-                                            if refund_ok {
-                                                if let Err(e) = tx.execute(
-                                                    "UPDATE loyalty_profiles SET bonus_balance = bonus_balance + $1 WHERE telegram_id = $2",
-                                                    &[&bonus, &tid],
-                                                ).await {
-                                                    tracing::error!("callback: reject bonus refund error: {}", e);
-                                                    refund_ok = false;
-                                                }
                                             }
                                         }
                                     }
                                 }
                             }
-                            if refund_ok {
-                                match tx
-                                    .execute(
-                                        "UPDATE orders SET status = 'rejected' WHERE id = $1",
-                                        &[&_order_id],
-                                    )
-                                    .await
-                                {
-                                    Ok(rows) => {
-                                        if let Err(e) = tx.commit().await {
-                                            tracing::error!(
-                                                "callback: reject commit error order_id={} err={}",
-                                                _order_id,
-                                                e
-                                            );
-                                        } else {
-                                            tracing::info!(
-                                                "callback: reject order_id={} updated {} rows",
-                                                _order_id,
-                                                rows
-                                            );
-                                        }
-                                    }
-                                    Err(e) => {
-                                        if let Err(rollback_err) = tx.rollback().await {
-                                            tracing::error!("callback: reject rollback error order_id={} err={}", _order_id, rollback_err);
-                                        }
+                        }
+                        if refund_ok {
+                            match tx
+                                .execute(Statement::from_sql_and_values(
+                                    DbBackend::Postgres,
+                                    "UPDATE orders SET status = 'rejected' WHERE id = $1",
+                                    [_order_id.into()],
+                                ))
+                                .await
+                            {
+                                Ok(res) => {
+                                    if let Err(e) = tx.commit().await {
                                         tracing::error!(
-                                            "callback: reject order_id={} DB error: {}",
+                                            "callback: reject commit error order_id={} err={}",
                                             _order_id,
                                             e
                                         );
+                                    } else {
+                                        tracing::info!(
+                                            "callback: reject order_id={} updated {} rows",
+                                            _order_id,
+                                            res.rows_affected()
+                                        );
                                     }
                                 }
-                            } else {
-                                if let Err(e) = tx.rollback().await {
+                                Err(e) => {
+                                    // tx drops → auto-rollback.
                                     tracing::error!(
-                                        "callback: reject rollback error order_id={} err={}",
+                                        "callback: reject order_id={} DB error: {}",
                                         _order_id,
                                         e
                                     );
                                 }
-                                tracing::error!("callback: reject order_id={} rolled back due to bonus refund failure", _order_id);
                             }
+                        } else {
+                            // tx drops → auto-rollback.
+                            tracing::error!("callback: reject order_id={} rolled back due to bonus refund failure", _order_id);
                         }
-                        Err(e) => tracing::error!(
-                            "callback: reject order_id={} tx error: {}",
-                            _order_id,
-                            e
-                        ),
                     }
-                }
-                Err(e) => {
-                    tracing::error!("callback: reject order_id={} pool error: {}", _order_id, e)
+                    Err(e) => {
+                        tracing::error!("callback: reject order_id={} tx error: {}", _order_id, e)
+                    }
                 }
             }
             if let Some(msg) = q.message.as_ref().and_then(|m| match m {

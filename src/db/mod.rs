@@ -8,17 +8,6 @@ pub mod users;
 pub use strains::*;
 
 use anyhow::{Context, Result};
-use deadpool_postgres::{
-    tokio_postgres, Config as PgConfig, Connect, Manager, ManagerConfig, Pool, Runtime,
-};
-use rustls::ClientConfig;
-use rustls_native_certs::load_native_certs;
-use tokio_postgres_rustls::MakeRustlsConnect;
-use url::Url;
-
-use std::future::Future;
-use std::pin::Pin;
-use tokio::task::JoinHandle;
 
 const MIGRATION_SQL: &str = concat!(
     include_str!("../../migrations/001_initial.sql"),
@@ -48,128 +37,27 @@ const MIGRATION_SQL: &str = concat!(
     include_str!("../../migrations/025_orders_telegram_nullable.sql"),
 );
 
-type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
-
-struct NoTlsConnect;
-
-impl Connect for NoTlsConnect {
-    fn connect(
-        &self,
-        pg_config: &tokio_postgres::Config,
-    ) -> BoxFuture<'_, Result<(tokio_postgres::Client, JoinHandle<()>), tokio_postgres::Error>>
-    {
-        let pg_config = pg_config.clone();
-        Box::pin(async move {
-            let (client, connection) = pg_config.connect(tokio_postgres::NoTls).await?;
-            let conn_task = tokio::spawn(async move {
-                if let Err(e) = connection.await {
-                    tracing::warn!("Connection error: {}", e);
-                }
-            });
-            Ok((client, conn_task))
-        })
-    }
-}
-
-struct RustlsConnect {
-    tls: MakeRustlsConnect,
-}
-
-impl Connect for RustlsConnect {
-    fn connect(
-        &self,
-        pg_config: &tokio_postgres::Config,
-    ) -> BoxFuture<'_, Result<(tokio_postgres::Client, JoinHandle<()>), tokio_postgres::Error>>
-    {
-        let tls = self.tls.clone();
-        let pg_config = pg_config.clone();
-        Box::pin(async move {
-            let (client, connection) = pg_config.connect(tls).await?;
-            let conn_task = tokio::spawn(async move {
-                if let Err(e) = connection.await {
-                    tracing::warn!("Connection error: {}", e);
-                }
-            });
-            Ok((client, conn_task))
-        })
-    }
-}
-
+/// Cycle #96: after the 17-cycle SeaORM migration finished, this is the
+/// single connection handle to Postgres. Previously held a parallel
+/// `deadpool_postgres::Pool` next to the SeaORM `DatabaseConnection`;
+/// every callsite is now SeaORM, so the pool field, its rustls/tls
+/// adapters, and the `deadpool_postgres` / `tokio_postgres` /
+/// `tokio_postgres_rustls` / `postgres_types` deps are gone.
+///
+/// SeaORM wraps sqlx internally; sqlx manages the underlying pool with
+/// its own TLS via `runtime-tokio-rustls`, so we don't see any of that
+/// machinery here.
 pub struct Database {
-    pub pool: Pool,
-    // SeaORM connection живёт параллельно с deadpool. Используется в новых/переписанных эндпоинтах.
     pub orm: sea_orm::DatabaseConnection,
 }
 
 impl Database {
     pub async fn connect(database_url: &str) -> Result<Self> {
-        let url = Url::parse(database_url).context("Invalid DATABASE_URL")?;
-
-        let ssl_mode = url
-            .query_pairs()
-            .find(|(k, _)| k == "sslmode")
-            .map(|(_, v)| v.to_string())
-            .unwrap_or_else(|| "disable".to_string());
-
-        let mut cfg = PgConfig::new();
-        cfg.host = url.host_str().map(|s| s.to_string());
-        cfg.port = url.port();
-        cfg.dbname = Some(url.path().trim_start_matches('/').to_string());
-        cfg.user = Some(url.username().to_string());
-        cfg.password = url.password().map(|s| s.to_string());
-        cfg.ssl_mode = Some(if ssl_mode == "disable" {
-            deadpool_postgres::SslMode::Disable
-        } else {
-            deadpool_postgres::SslMode::Require
-        });
-        cfg.keepalives = Some(true);
-        cfg.keepalives_idle = Some(std::time::Duration::from_secs(300));
-
-        // Clean recycling runs DISCARD ALL on each returned connection,
-        // dropping all cached prepared statements. This is required so that
-        // ALTER TYPE migrations don't leave stale plans (Postgres error
-        // SQLSTATE 0A000 "cached plan must not change result type").
-        let manager_cfg = ManagerConfig {
-            recycling_method: deadpool_postgres::RecyclingMethod::Clean,
-        };
-
-        let pg_config = cfg
-            .get_pg_config()
-            .map_err(|e| anyhow::anyhow!("Invalid pg config: {}", e))?;
-
-        let manager = if ssl_mode == "disable" {
-            Manager::from_connect(pg_config, NoTlsConnect, manager_cfg)
-        } else {
-            let mut roots = rustls::RootCertStore::empty();
-            for cert in load_native_certs().certs {
-                roots.add(cert)?;
-            }
-            let tls_config = ClientConfig::builder()
-                .with_root_certificates(roots)
-                .with_no_client_auth();
-            let tls = MakeRustlsConnect::new(tls_config);
-            Manager::from_connect(pg_config, RustlsConnect { tls }, manager_cfg)
-        };
-
-        cfg.pool = Some(deadpool_postgres::PoolConfig {
-            max_size: 16,
-            timeouts: deadpool_postgres::Timeouts::wait_millis(30000),
-            ..Default::default()
-        });
-        let pool_config = cfg.get_pool_config();
-        let pool = Pool::builder(manager)
-            .config(pool_config)
-            .runtime(Runtime::Tokio1)
-            .build()
-            .map_err(|e| anyhow::anyhow!("Failed to build pool: {}", e))?;
-
-        let _ = pool.get().await.context("Failed to connect to database")?;
-
-        // Поднимаем SeaORM-подключение по той же DATABASE_URL.
-        // SeaORM использует sqlx внутри, ssl-режим в URL (sslmode=require) обрабатывается автоматически.
-        //
-        // Чистим неподдерживаемые sqlx-postgres параметры (например channel_binding=require
-        // у Neon/Supabase PG16+) чтобы не плодить WARN в логах. Сам TLS работает через sslmode.
+        // SeaORM connects via sqlx; sslmode=require in the URL is handled
+        // automatically. The `channel_binding=require` knob that Neon /
+        // Supabase PG16+ sometimes adds isn't a sqlx-postgres param, so
+        // we strip it to avoid noisy WARNs (TLS itself still works via
+        // sslmode).
         let sanitized_url = sanitize_pg_url_for_sqlx(database_url);
         let mut orm_opts = sea_orm::ConnectOptions::new(sanitized_url);
         orm_opts
@@ -182,21 +70,22 @@ impl Database {
             .await
             .context("Failed to connect SeaORM")?;
 
-        Ok(Self { pool, orm })
+        Ok(Self { orm })
     }
 
     pub async fn run_migrations(&self) -> Result<()> {
-        // Use a one-shot raw tokio_postgres connection (no deadpool, no
-        // statement cache) so that ALTER TABLE ... TYPE in migration 012
-        // doesn't poison the long-lived pool with stale prepared plans
-        // (Postgres SQLSTATE 0A000 "cached plan must not change result type").
-        let client = self.pool.get().await?;
-        client.batch_execute(MIGRATION_SQL).await?;
-        drop(client);
-        // After migrations, evict all currently-idle connections from the
-        // pool. New requests will get fresh connections that re-prepare
-        // statements against the post-migration schema.
-        self.pool.retain(|_, _| false);
+        // Cycle #96: was `pool.get().batch_execute(MIGRATION_SQL)` with a
+        // post-run `pool.retain` to evict cached prepared statements
+        // (defence against the tokio_postgres SQLSTATE 0A000 "cached plan
+        // must not change result type" issue triggered by ALTER TYPE in
+        // migration 012). sqlx (which SeaORM uses) handles prepared
+        // statements differently and isn't subject to that bug, so we
+        // just run the SQL and move on.
+        use sea_orm::ConnectionTrait;
+        self.orm
+            .execute_unprepared(MIGRATION_SQL)
+            .await
+            .context("run_migrations: execute_unprepared")?;
         Ok(())
     }
 
@@ -343,10 +232,6 @@ impl Database {
             .await
             .context("get_strains_of_day SeaORM")?;
         Ok(models.into_iter().map(StrainOfDay::from).collect())
-    }
-
-    pub fn raw(&self) -> &Pool {
-        &self.pool
     }
 }
 

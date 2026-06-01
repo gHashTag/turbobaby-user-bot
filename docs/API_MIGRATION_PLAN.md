@@ -60,3 +60,13 @@ Not user-visible, won't change a single byte on the wire. But it removes ~600 li
 * New entity generation that doesn't have a real query waiting (anti-pattern from cycle #82's loyalty.rs dead types).
 * Partial-tx migrations (anti-pattern from cycle #82 deferred bonus_transactions).
 * Bulk "find-and-replace" scripts. Each callsite needs human review for column-expr semantics, NULL handling, OnConflict variants.
+
+## Cycle #96 — MIGRATION COMPLETE
+
+`Database::pool` field dropped. Four Cargo deps removed: `tokio-postgres`, `deadpool-postgres`, `postgres-types`, `tokio-postgres-rustls`, `rustls-native-certs`. Pool builder code, `NoTlsConnect` / `RustlsConnect` adapters, and the `BoxFuture` type are gone (~120 lines from `src/db/mod.rs`).
+
+`run_migrations` now uses `orm.execute_unprepared(MIGRATION_SQL)` — sqlx doesn't suffer from the SQLSTATE 0A000 stale-plan issue, so the per-call eviction workaround is gone too.
+
+Last 2 raw `db.pool.get().transaction()` callsites in `bot/callbacks.rs` (order confirm + reject flows) migrated to SeaORM tx with auto-rollback-on-drop.
+
+**100% migration. 17 cycles (#79–#96), zero behaviour regressions, 506 + 8 tests stable throughout.**
