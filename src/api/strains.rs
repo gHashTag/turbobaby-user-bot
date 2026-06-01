@@ -286,52 +286,47 @@ async fn create_strain(
     let is_best_seller = req.is_best_seller.unwrap_or(false);
     let is_new_arrival = req.is_new_arrival.unwrap_or(false);
     let display_order = req.display_order.unwrap_or(0);
-    let client = state.db.pool.get().await.map_err(|e| {
-        tracing::error!("DB error: {:?}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-    client
-        .execute(
-            "INSERT INTO strains (id, name, category, thc_percent, cbd_percent, effect, \
-                              flavor_profile, description, price_per_gram, available_grams, \
-                              image_url, video_url, is_available, name_en, description_en, \
-                              effect_en, flavor_profile_en, strain_type_en, \
-                              discount_percent, sale_price, sale_active, sale_until, \
-                              is_best_seller, is_new_arrival, new_until, display_order) \
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18, \
-                 $19,$20,$21,$22,$23,$24,$25,$26)",
-            &[
-                &id,
-                &req.name,
-                &req.category,
-                &req.thc_percent,
-                &req.cbd_percent,
-                &req.effect,
-                &req.flavor_profile,
-                &req.description,
-                &req.price_per_gram,
-                &req.available_grams,
-                &req.image_url,
-                &req.video_url,
-                &req.is_available.unwrap_or(true),
-                &req.name_en,
-                &req.description_en,
-                &req.effect_en,
-                &req.flavor_profile_en,
-                &req.strain_type_en,
-                &discount_percent,
-                &req.sale_price,
-                &sale_active,
-                &sale_until,
-                &is_best_seller,
-                &is_new_arrival,
-                &new_until,
-                &display_order,
-            ],
-        )
+    // Cycle #81: SeaORM insert via ActiveModel. The fields *not* Set here
+    // (`created_at`, `is_strain_of_day`, `strain_of_day_discount`,
+    // `strain_of_day_set_at`) get the DB DEFAULT — same as the raw SQL
+    // which only listed the 26 editable columns and let the DB fill the
+    // SOTD audit-only columns.
+    use crate::db::entities::strain::{ActiveModel, Entity as StrainEntity};
+    use sea_orm::{ActiveValue::Set, EntityTrait};
+    let model = ActiveModel {
+        id: Set(id.clone()),
+        name: Set(req.name.clone()),
+        category: Set(req.category.clone()),
+        thc_percent: Set(req.thc_percent),
+        cbd_percent: Set(req.cbd_percent),
+        effect: Set(req.effect.clone()),
+        flavor_profile: Set(req.flavor_profile.clone()),
+        description: Set(req.description.clone()),
+        price_per_gram: Set(req.price_per_gram),
+        available_grams: Set(req.available_grams),
+        image_url: Set(req.image_url.clone()),
+        video_url: Set(req.video_url.clone()),
+        is_available: Set(req.is_available.unwrap_or(true)),
+        name_en: Set(req.name_en.clone()),
+        description_en: Set(req.description_en.clone()),
+        effect_en: Set(req.effect_en.clone()),
+        flavor_profile_en: Set(req.flavor_profile_en.clone()),
+        strain_type_en: Set(req.strain_type_en.clone()),
+        discount_percent: Set(discount_percent),
+        sale_price: Set(req.sale_price),
+        sale_active: Set(sale_active),
+        sale_until: Set(sale_until.map(|t| t.into())),
+        is_best_seller: Set(is_best_seller),
+        is_new_arrival: Set(is_new_arrival),
+        new_until: Set(new_until.map(|t| t.into())),
+        display_order: Set(display_order),
+        ..Default::default()
+    };
+    StrainEntity::insert(model)
+        .exec(&state.db.orm)
         .await
         .map_err(|e| {
-            tracing::error!("create_strain error: {:?}", e);
+            tracing::error!("create_strain SeaORM error: {:?}", e);
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
     invalidate_strains(&state.cache).await;
@@ -356,55 +351,50 @@ async fn update_strain(
     let is_best_seller = req.is_best_seller.unwrap_or(false);
     let is_new_arrival = req.is_new_arrival.unwrap_or(false);
     let display_order = req.display_order.unwrap_or(0);
-    let client = state.db.pool.get().await.map_err(|e| {
-        tracing::error!("update_strain pool error: {:?}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-    let rows = client
-        .execute(
-            "UPDATE strains SET \
-            name=$1, category=$2, thc_percent=$3, cbd_percent=$4, effect=$5, \
-            flavor_profile=$6, description=$7, price_per_gram=$8, available_grams=$9, \
-            image_url=$10, video_url=$11, name_en=$12, description_en=$13, effect_en=$14, \
-            flavor_profile_en=$15, strain_type_en=$16, is_available=$17, \
-            discount_percent=$18, sale_price=$19, sale_active=$20, sale_until=$21, \
-            is_best_seller=$22, is_new_arrival=$23, new_until=$24, display_order=$25 \
-         WHERE id=$26",
-            &[
-                &req.name,
-                &req.category,
-                &req.thc_percent,
-                &req.cbd_percent,
-                &req.effect,
-                &req.flavor_profile,
-                &req.description,
-                &req.price_per_gram,
-                &req.available_grams,
-                &req.image_url,
-                &req.video_url,
-                &req.name_en,
-                &req.description_en,
-                &req.effect_en,
-                &req.flavor_profile_en,
-                &req.strain_type_en,
-                &req.is_available.unwrap_or(true),
-                &discount_percent,
-                &req.sale_price,
-                &sale_active,
-                &sale_until,
-                &is_best_seller,
-                &is_new_arrival,
-                &new_until,
-                &display_order,
-                &id,
-            ],
-        )
+    // Cycle #81: SeaORM update via ActiveModel. Set every editable column
+    // explicitly — unset (Default) columns are skipped, but the request
+    // contract is "PUT replaces every field", so we Set them all. Convert
+    // `Option<DateTime<Utc>>` to `Option<DateTimeWithTimeZone>` via `Into`.
+    use crate::db::entities::strain::{ActiveModel, Column as StrainCol, Entity as StrainEntity};
+    use sea_orm::{ActiveValue::Set, ColumnTrait, EntityTrait, QueryFilter};
+    let model = ActiveModel {
+        name: Set(req.name.clone()),
+        category: Set(req.category.clone()),
+        thc_percent: Set(req.thc_percent),
+        cbd_percent: Set(req.cbd_percent),
+        effect: Set(req.effect.clone()),
+        flavor_profile: Set(req.flavor_profile.clone()),
+        description: Set(req.description.clone()),
+        price_per_gram: Set(req.price_per_gram),
+        available_grams: Set(req.available_grams),
+        image_url: Set(req.image_url.clone()),
+        video_url: Set(req.video_url.clone()),
+        name_en: Set(req.name_en.clone()),
+        description_en: Set(req.description_en.clone()),
+        effect_en: Set(req.effect_en.clone()),
+        flavor_profile_en: Set(req.flavor_profile_en.clone()),
+        strain_type_en: Set(req.strain_type_en.clone()),
+        is_available: Set(req.is_available.unwrap_or(true)),
+        discount_percent: Set(discount_percent),
+        sale_price: Set(req.sale_price),
+        sale_active: Set(sale_active),
+        sale_until: Set(sale_until.map(|t| t.into())),
+        is_best_seller: Set(is_best_seller),
+        is_new_arrival: Set(is_new_arrival),
+        new_until: Set(new_until.map(|t| t.into())),
+        display_order: Set(display_order),
+        ..Default::default()
+    };
+    let result = StrainEntity::update_many()
+        .set(model)
+        .filter(StrainCol::Id.eq(id.clone()))
+        .exec(&state.db.orm)
         .await
         .map_err(|e| {
-            tracing::error!("update_strain SQL error for id={}: {:?}", id, e);
+            tracing::error!("update_strain SeaORM error for id={}: {:?}", id, e);
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
-    if rows == 0 {
+    if result.rows_affected == 0 {
         tracing::warn!("update_strain: no rows affected for id={}", id);
         return Err(StatusCode::NOT_FOUND);
     }
@@ -422,15 +412,16 @@ async fn delete_strain(
         return Err(StatusCode::BAD_REQUEST);
     }
     check_admin(&headers, &state)?;
-    let client = state.db.pool.get().await.map_err(|e| {
-        tracing::error!("delete_strain pool error: {:?}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-    client
-        .execute("DELETE FROM strains WHERE id = $1", &[&id])
+    // Cycle #81: SeaORM. `delete_by_id` returns a `DeleteResult` whose
+    // `rows_affected` we deliberately ignore — the raw SQL was the same
+    // (no NOT_FOUND for a missing row on DELETE).
+    use crate::db::entities::strain::Entity as StrainEntity;
+    use sea_orm::EntityTrait;
+    StrainEntity::delete_by_id(id)
+        .exec(&state.db.orm)
         .await
         .map_err(|e| {
-            tracing::error!("delete_strain error: {:?}", e);
+            tracing::error!("delete_strain SeaORM error: {:?}", e);
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
     invalidate_strains(&state.cache).await;
@@ -448,18 +439,19 @@ async fn toggle_availability(
     }
     check_admin(&headers, &state)?;
     let available = crate::api::extract_bool(&body, "is_available")?;
-    let client = state.db.pool.get().await.map_err(|e| {
-        tracing::error!("DB error: {:?}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-    client
-        .execute(
-            "UPDATE strains SET is_available = $1 WHERE id = $2",
-            &[&available, &id],
+    // Cycle #81: SeaORM update_many. No-row tolerant (matches raw SQL).
+    use crate::db::entities::strain::{Column as StrainCol, Entity as StrainEntity};
+    use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
+    StrainEntity::update_many()
+        .col_expr(
+            StrainCol::IsAvailable,
+            sea_orm::sea_query::Expr::value(available),
         )
+        .filter(StrainCol::Id.eq(id))
+        .exec(&state.db.orm)
         .await
         .map_err(|e| {
-            tracing::error!("DB error: {:?}", e);
+            tracing::error!("toggle_availability SeaORM error: {:?}", e);
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
     invalidate_strains(&state.cache).await;
@@ -493,33 +485,45 @@ async fn set_strain_of_day(
         .map_err(|e| (e, Json(json!({ "error": "invalid is_strain_of_day" }))))?;
     let discount = crate::api::extract_discount(&body)
         .map_err(|e| (e, Json(json!({ "error": "invalid discount" }))))?;
-    let client = state.db.pool.get().await.map_err(|e| {
-        tracing::error!("SOTD pool error: {:?}", e);
+    // Cycle #81: SeaORM. Two branches:
+    //   enable  — set is_strain_of_day=true, discount, set_at=NOW()
+    //   disable — set is_strain_of_day=false (leave discount/set_at as audit history)
+    use crate::db::entities::strain::{Column as StrainCol, Entity as StrainEntity};
+    use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
+    let result = if enabled {
+        StrainEntity::update_many()
+            .col_expr(
+                StrainCol::IsStrainOfDay,
+                sea_orm::sea_query::Expr::value(true),
+            )
+            .col_expr(
+                StrainCol::StrainOfDayDiscount,
+                sea_orm::sea_query::Expr::value(discount),
+            )
+            .col_expr(
+                StrainCol::StrainOfDaySetAt,
+                sea_orm::sea_query::Expr::cust("NOW()"),
+            )
+            .filter(StrainCol::Id.eq(id.clone()))
+            .exec(&state.db.orm)
+            .await
+    } else {
+        StrainEntity::update_many()
+            .col_expr(
+                StrainCol::IsStrainOfDay,
+                sea_orm::sea_query::Expr::value(false),
+            )
+            .filter(StrainCol::Id.eq(id.clone()))
+            .exec(&state.db.orm)
+            .await
+    };
+    result.map_err(|e| {
+        tracing::error!("SOTD SeaORM error for id={}: {:?}", id, e);
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({ "error": "database error" })),
+            Json(json!({ "error": "update failed" })),
         )
     })?;
-    if enabled {
-        client.execute("UPDATE strains SET is_strain_of_day = true, strain_of_day_discount = $1, strain_of_day_set_at = NOW() WHERE id = $2", &[&discount, &id]).await.map_err(|e| {
-            tracing::error!("SOTD update error for id={}: {:?}", id, e);
-            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": "update failed" })))
-        })?;
-    } else {
-        client
-            .execute(
-                "UPDATE strains SET is_strain_of_day = false WHERE id = $1",
-                &[&id],
-            )
-            .await
-            .map_err(|e| {
-                tracing::error!("SOTD disable error for id={}: {:?}", id, e);
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(json!({ "error": "disable failed" })),
-                )
-            })?;
-    }
     invalidate_strains(&state.cache).await;
     Ok(Json(json!({ "success": true, "id": id })))
 }

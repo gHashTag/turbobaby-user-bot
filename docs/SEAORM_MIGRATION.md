@@ -106,8 +106,8 @@ Notable wins:
 |-------|------|----------------------|------------------|--------|
 | #79 ✅ | `src/db/mod.rs` (Database user methods) | 60 | small — validated pattern | **done** |
 | #80 ✅ | `db/strains.rs` reads (Strain::from_row → From<Model>) + 4 callsites | ~150 | small/medium | **done** |
-| #81 (next) | `api/strains.rs` write-side (PUT/POST/DELETE) + marketing flags | ~130 | medium | |
-| #82 | `src/db/loyalty.rs` | 182 | medium | |
+| #81 ✅ | `api/strains.rs` writes (create + update + delete + toggle + SOTD) | ~140 | medium | **done — file 100% off raw SQL** |
+| #82 (next) | `src/db/loyalty.rs` | 182 | medium | |
 | #83 | `src/db/referrals.rs` (split into 2 cycles if needed) | 417 | medium/large | |
 | #84-#86 | `src/db/orders.rs` (split into 3-4 cycles by feature) | 1271 | large | |
 
@@ -143,6 +143,29 @@ Also obsoleted a defensive comment about SQLSTATE 0A000 cached-plan
 issues. SeaORM/sqlx don't share `tokio_postgres`'s prepared-statement
 cache shape and aren't subject to that ALTER TYPE bug, so the
 per-call statement-marker workaround disappeared cleanly.
+
+### Cycle #81 additions
+
+Three more shapes validated for writes:
+
+* **INSERT via `ActiveModel { col: Set(v), ..Default::default() }`** —
+  `Entity::insert(am).exec(&db.orm)`. Unset fields fall back to the DB
+  DEFAULT clause; this preserved the prior "raw SQL only listed editable
+  columns, let DB fill audit-only ones" semantics.
+* **UPDATE many cols + NOT_FOUND**: `update_many().set(active_model).filter(pk.eq(id))`
+  returns a `result.rows_affected` u64 that lets us return 404 on
+  zero-row UPDATE — the only sane way to detect a missing row through
+  `update_many` (the singular `update` would error if the row doesn't
+  exist, but the request shape needs the row-count distinction).
+* **DELETE**: `Entity::delete_by_id(id).exec(&db.orm)`. No rows-affected
+  check — matches the raw `DELETE WHERE id = $1` which never returned
+  NOT_FOUND.
+* **Datetime conversion at boundaries**: when storing a
+  `Option<chrono::DateTime<chrono::Utc>>` into a SeaORM
+  `Option<DateTimeWithTimeZone>` column, `.map(|t| t.into())` does the
+  type elision via the existing `From` impl.
+
+`api/strains.rs` is now 100% off raw SQL.
 
 ## Why this is worth doing
 
