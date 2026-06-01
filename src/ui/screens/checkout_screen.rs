@@ -154,7 +154,12 @@ pub fn CheckoutScreen() -> Element {
                 }
                 Ok(resp) => {
                     let status = resp.status().as_u16();
-                    order_error.set(Some(format!("Ошибка сервера: {}", status)));
+                    // Cycle #65: friendly per-status message so an auto-blocked
+                    // user (403) sees "Аккаунт ограничен. Свяжитесь с
+                    // поддержкой" instead of a raw status code they can't act on.
+                    order_error.set(Some(crate::trios::checkout_errors::friendly_order_error(
+                        status,
+                    )));
                 }
                 Err(e) => {
                     order_error.set(Some(format!("Ошибка сети: {}", e)));
