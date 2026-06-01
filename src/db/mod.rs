@@ -200,78 +200,133 @@ impl Database {
         Ok(())
     }
 
+    /// Cycle #79: migrated from raw `tokio_postgres` to SeaORM entity
+    /// (see docs/SEAORM_MIGRATION.md). Returns `None` for both "no row"
+    /// and "query error" — matches the prior `.ok()??` semantics.
     pub async fn get_user_lang(&self, telegram_id: i64) -> Option<String> {
-        let client = self.pool.get().await.ok()?;
-        let row = client
-            .query_opt(
-                "SELECT language FROM user_languages WHERE telegram_id = $1",
-                &[&telegram_id],
-            )
+        use sea_orm::EntityTrait;
+        match entities::user::Entity::find_by_id(telegram_id)
+            .one(&self.orm)
             .await
-            .ok()??;
-        row.try_get("language").ok()
+        {
+            Ok(Some(m)) => Some(m.language),
+            Ok(None) => None,
+            Err(e) => {
+                tracing::warn!(
+                    "db.get_user_lang: SeaORM query failed for telegram_id={}: {}",
+                    telegram_id,
+                    e
+                );
+                None
+            }
+        }
     }
 
+    /// Cycle #79: migrated to SeaORM upsert. `ON CONFLICT DO UPDATE`
+    /// translates to `OnConflict::column(...).update_columns(...)`. The
+    /// `updated_at = NOW()` happens via the table's DEFAULT NOW() on
+    /// insert path; for the update path we set it explicitly through
+    /// the entity since SeaORM doesn't carry DB-side `updated_at` triggers.
     pub async fn set_user_lang(&self, telegram_id: i64, lang: &str) -> Result<()> {
+        use sea_orm::sea_query::OnConflict;
+        use sea_orm::{ActiveValue::Set, EntityTrait};
         let trimmed = crate::util::truncate_string(lang, 50);
-        let client = self.pool.get().await?;
-        client
-            .execute(
-                "INSERT INTO user_languages (telegram_id, language) VALUES ($1, $2)
-             ON CONFLICT (telegram_id) DO UPDATE SET language = $2, updated_at = NOW()",
-                &[&telegram_id, &trimmed],
+        let am = entities::user::ActiveModel {
+            telegram_id: Set(telegram_id),
+            language: Set(trimmed.clone()),
+            updated_at: Set(Some(chrono::Utc::now().into())),
+            ..Default::default()
+        };
+        entities::user::Entity::insert(am)
+            .on_conflict(
+                OnConflict::column(entities::user::Column::TelegramId)
+                    .update_columns([
+                        entities::user::Column::Language,
+                        entities::user::Column::UpdatedAt,
+                    ])
+                    .to_owned(),
             )
-            .await?;
+            .exec(&self.orm)
+            .await
+            .context("set_user_lang upsert")?;
         Ok(())
     }
 
+    /// Cycle #79: SeaORM update via `Entity::update_many` + filter. The
+    /// raw-SQL version was a bare UPDATE that no-ops when the row doesn't
+    /// exist; SeaORM's `update` would error in that case, so we use
+    /// `update_many` which silently affects zero rows for the no-row path
+    /// — same semantics as before.
     pub async fn set_user_timezone(&self, telegram_id: i64, tz: &str) -> Result<()> {
+        use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
         let trimmed = crate::util::truncate_string(tz, 100);
-        let client = self.pool.get().await?;
-        client
-            .execute(
-                "UPDATE user_languages SET timezone = $2 WHERE telegram_id = $1",
-                &[&telegram_id, &trimmed],
+        entities::user::Entity::update_many()
+            .col_expr(
+                entities::user::Column::Timezone,
+                sea_orm::sea_query::Expr::value(trimmed),
             )
-            .await?;
+            .filter(entities::user::Column::TelegramId.eq(telegram_id))
+            .exec(&self.orm)
+            .await
+            .context("set_user_timezone")?;
         Ok(())
     }
 
+    /// Cycle #79: SeaORM upsert (see [`Self::set_user_lang`] for pattern).
+    /// Note: the original raw SQL didn't bump `updated_at` for this path,
+    /// preserved here for behaviour parity — the upsert only writes
+    /// `first_name`.
     pub async fn save_user_name(&self, telegram_id: i64, first_name: &str) -> Result<()> {
+        use sea_orm::sea_query::OnConflict;
+        use sea_orm::{ActiveValue::Set, EntityTrait};
         let trimmed = crate::util::truncate_string(first_name, 200);
-        let client = self.pool.get().await?;
-        client
-            .execute(
-                "INSERT INTO user_languages (telegram_id, first_name) VALUES ($1, $2)
-             ON CONFLICT (telegram_id) DO UPDATE SET first_name = $2",
-                &[&telegram_id, &trimmed],
+        let am = entities::user::ActiveModel {
+            telegram_id: Set(telegram_id),
+            first_name: Set(Some(trimmed.clone())),
+            // `language` column is NOT NULL with default 'en' — Set::default
+            // skips it on insert, letting the DB default fire.
+            ..Default::default()
+        };
+        entities::user::Entity::insert(am)
+            .on_conflict(
+                OnConflict::column(entities::user::Column::TelegramId)
+                    .update_columns([entities::user::Column::FirstName])
+                    .to_owned(),
             )
-            .await?;
+            .exec(&self.orm)
+            .await
+            .context("save_user_name upsert")?;
         Ok(())
     }
 
+    /// Cycle #79: SeaORM update on `loyalty_profiles`. Same no-row tolerance
+    /// as the raw SQL via `update_many`.
     pub async fn mark_user_unblocked(&self, telegram_id: i64) -> Result<()> {
-        let client = self.pool.get().await?;
-        client
-            .execute(
-                "UPDATE loyalty_profiles SET is_blocked = false WHERE telegram_id = $1",
-                &[&telegram_id],
+        use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
+        entities::loyalty_profile::Entity::update_many()
+            .col_expr(
+                entities::loyalty_profile::Column::IsBlocked,
+                sea_orm::sea_query::Expr::value(false),
             )
-            .await?;
+            .filter(entities::loyalty_profile::Column::TelegramId.eq(telegram_id))
+            .exec(&self.orm)
+            .await
+            .context("mark_user_unblocked")?;
         Ok(())
     }
 
+    /// Cycle #79: migrated to SeaORM. Returns `false` when there's no
+    /// loyalty_profiles row (first-time visitor) — matches prior
+    /// `unwrap_or(false)` behaviour. Real query failures still bubble up
+    /// via `Result` so callers can distinguish "not blocked" from "DB
+    /// broken".
     pub async fn is_user_blocked(&self, telegram_id: i64) -> Result<bool> {
-        let client = self.pool.get().await?;
-        let row = client
-            .query_opt(
-                "SELECT is_blocked FROM loyalty_profiles WHERE telegram_id = $1",
-                &[&telegram_id],
-            )
-            .await?;
-        Ok(row
-            .map(|r| r.try_get("is_blocked").unwrap_or(false))
-            .unwrap_or(false))
+        use sea_orm::EntityTrait;
+        let row = entities::loyalty_profile::Entity::find_by_id(telegram_id)
+            .one(&self.orm)
+            .await
+            .context("is_user_blocked: SeaORM query")?;
+        Ok(row.map(|m| m.is_blocked).unwrap_or(false))
     }
 
     pub async fn get_strains_of_day(&self) -> Result<Vec<StrainOfDay>> {

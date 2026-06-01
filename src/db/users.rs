@@ -1,20 +1,8 @@
-// User helpers are now in db/mod.rs via Database impl
-// This file kept for module structure
-
-// Wave 5: SeaORM Entity API path. Старый tokio-postgres код в db/mod.rs — будем удалять в Wave 6+.
-
-/// Returns the language preference for a user via SeaORM Entity API.
-/// Looks up the `user_languages` table by `telegram_id` primary key.
-#[allow(dead_code)]
-pub async fn get_user_lang_seaorm(
-    orm: &sea_orm::DatabaseConnection,
-    telegram_id: i64,
-) -> Option<String> {
-    use sea_orm::EntityTrait;
-    crate::db::entities::user::Entity::find_by_id(telegram_id)
-        .one(orm)
-        .await
-        .ok()
-        .flatten()
-        .map(|m| m.language)
-}
+// Historically held tokio_postgres helpers and a SeaORM wrapper that
+// duplicated the canonical `Database::get_user_lang` from `db/mod.rs`.
+//
+// Cycle #79 migrated the canonical methods on `Database` (get_user_lang,
+// set_user_lang, set_user_timezone, save_user_name, mark_user_unblocked,
+// is_user_blocked) to SeaORM directly, so the wrapper is no longer
+// needed. Module kept for module-structure consistency only — future
+// per-user logic that doesn't naturally hang off `Database` lives here.

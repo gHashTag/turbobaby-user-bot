@@ -102,16 +102,26 @@ Notable wins:
 
 ## Suggested cycle pacing
 
-| Cycle | File | Expected lines moved | Estimated effort |
-|-------|------|----------------------|------------------|
-| #79 (next) | `src/db/users.rs` | 20 | small — validate pattern |
-| #80 | `src/db/strains.rs` (read-side first) | ~120 | small/medium |
-| #81 | `src/db/strains.rs` (write-side + marketing flags) | ~130 | medium |
-| #82 | `src/db/loyalty.rs` | 182 | medium |
-| #83 | `src/db/referrals.rs` (split into 2 cycles if needed) | 417 | medium/large |
-| #84-#86 | `src/db/orders.rs` (split into 3-4 cycles by feature) | 1271 | large |
+| Cycle | File | Expected lines moved | Estimated effort | Status |
+|-------|------|----------------------|------------------|--------|
+| #79 ✅ | `src/db/mod.rs` (Database user methods) | 60 | small — validated pattern | **done** |
+| #80 (next) | `src/db/strains.rs` (read-side first) | ~120 | small/medium | |
+| #81 | `src/db/strains.rs` (write-side + marketing flags) | ~130 | medium | |
+| #82 | `src/db/loyalty.rs` | 182 | medium | |
+| #83 | `src/db/referrals.rs` (split into 2 cycles if needed) | 417 | medium/large | |
+| #84-#86 | `src/db/orders.rs` (split into 3-4 cycles by feature) | 1271 | large | |
 
 Total ≈ 6-8 cycles. Each cycle is independently committable; no big-bang.
+
+### Validated pattern (cycle #79)
+
+The 6 user-related methods on `Database` migrated cleanly:
+
+* **Reads (find_by_id)**: `Entity::find_by_id(pk).one(&self.orm).await?.map(|m| m.field)`. Failure path: convert `Result<Option<Model>>` to whatever the caller's signature expects; for the legacy `Option<String>` return shape, log+drop the Err.
+* **Upserts (ON CONFLICT)**: `Entity::insert(am).on_conflict(OnConflict::column(pk).update_columns([...]).to_owned()).exec(&self.orm)`. Build `ActiveModel` with `Set(value)` for written columns and `..Default::default()` for everything else — that lets the DB DEFAULT clause fire on insert path.
+* **Updates (no-row tolerant)**: `Entity::update_many().col_expr(col, Expr::value(v)).filter(pk.eq(id)).exec(&self.orm)`. Use `update_many` instead of `update` to silently no-op when the row doesn't exist — matches the raw-SQL `UPDATE ... WHERE id = $1` semantics.
+
+The 60-line migration touched zero callsites — all consumers go through `Database::method(...)` so the implementation swap is invisible.
 
 ## Why this is worth doing
 
