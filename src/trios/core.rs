@@ -136,6 +136,51 @@ mod detect_lang_tests {
     }
 }
 
+/// Best-effort `Lang` lookup for a Telegram-supplied or URL-supplied locale
+/// string (cycle #72).
+///
+/// Steps, in order:
+///   1. Lowercase.
+///   2. Strip any region suffix after `-` or `_` (BCP 47 / Telegram dialect
+///      forms like `en-US`, `pt_BR` → bare primary subtag).
+///   3. Direct [`Lang::from_str`] — covers every code we natively support.
+///   4. **Neighbor map** — for primary subtags we don't translate yet,
+///      pick the closest known locale instead of falling back to the
+///      project default. The mappings reflect both linguistic distance
+///      and the practical Telegram audience:
+///        * `uk` (Ukrainian), `be` (Belarusian), `kk` (Kazakh) → `ru`
+///        * `pt` (Portuguese), `it` (Italian), `nl` (Dutch),
+///          `ko` (Korean), `ja` (Japanese), `ar` (Arabic), `vi`
+///          (Vietnamese), `pl` (Polish) → `en`
+///   5. Otherwise `None` — caller picks its own default (typically RU).
+///
+/// Pure helper. The neighbor table is intentionally conservative — adding
+/// a mapping is a one-line change. The goal is to make `pick_lang` do
+/// something *useful* for the long tail of Telegram locales without
+/// claiming to render in every language.
+pub fn normalize_lang_code(code: &str) -> Option<Lang> {
+    let lower = code.trim().to_lowercase();
+    if lower.is_empty() {
+        return None;
+    }
+    // BCP 47 / dialect: pick the primary subtag before `-` or `_`.
+    let primary = lower
+        .split(|c: char| c == '-' || c == '_')
+        .next()
+        .unwrap_or(lower.as_str());
+
+    if let Ok(lang) = primary.parse::<Lang>() {
+        return Some(lang);
+    }
+
+    // Neighbor map for primary subtags we don't translate natively yet.
+    match primary {
+        "uk" | "be" | "kk" => Some(Lang::Russian),
+        "pt" | "it" | "nl" | "ko" | "ja" | "ar" | "vi" | "pl" => Some(Lang::English),
+        _ => None,
+    }
+}
+
 /// Pick the rendering `Lang` for a screen by composing two source signals:
 /// an explicit `?lang=xx` URL override and the Telegram WebApp's user
 /// `language_code`. Pure — both args are owned `Option<&str>`.
@@ -159,13 +204,121 @@ pub fn pick_lang(query: Option<&str>, tg_lang_code: Option<&str>) -> Lang {
         }
     }
     if let Some(code) = tg_lang_code {
-        // Telegram sends short codes like "ru", "en", "zh". `from_str`
-        // already lowercases and matches them.
-        if let Ok(lang) = code.parse::<Lang>() {
+        // Telegram sends bare ISO 639-1 codes (`ru`, `en`, `th`) plus the
+        // occasional dialect (`pt-BR`, `en-US`). `normalize_lang_code`
+        // handles both, falls back to a nearest-neighbor map for codes we
+        // don't render natively yet (uk→ru, pt→en, …).
+        if let Some(lang) = normalize_lang_code(code) {
             return lang;
         }
     }
     Lang::Russian
+}
+
+#[cfg(test)]
+mod normalize_lang_code_tests {
+    use super::*;
+
+    // Direct native matches must keep working.
+
+    #[test]
+    fn direct_supported_codes_round_trip() {
+        for (code, expected) in [
+            ("ru", Lang::Russian),
+            ("en", Lang::English),
+            ("th", Lang::Thai),
+            ("zh", Lang::Chinese),
+            ("he", Lang::Hebrew),
+            ("de", Lang::German),
+            ("fr", Lang::French),
+            ("es", Lang::Spanish),
+        ] {
+            assert_eq!(
+                normalize_lang_code(code),
+                Some(expected),
+                "direct {} → {:?} round-trip failed",
+                code,
+                expected,
+            );
+        }
+    }
+
+    #[test]
+    fn case_insensitive_primary_match() {
+        // Telegram tends to ship lowercase but BCP 47 says "case-insensitive".
+        assert_eq!(normalize_lang_code("EN"), Some(Lang::English));
+        assert_eq!(normalize_lang_code("Ru"), Some(Lang::Russian));
+    }
+
+    #[test]
+    fn strips_region_suffix_after_dash() {
+        // BCP 47 form. en-US / pt-BR are the realistic Telegram dialects.
+        assert_eq!(normalize_lang_code("en-US"), Some(Lang::English));
+        assert_eq!(normalize_lang_code("en-GB"), Some(Lang::English));
+    }
+
+    #[test]
+    fn strips_region_suffix_after_underscore() {
+        // POSIX-style locale form (some user agents normalise differently).
+        assert_eq!(normalize_lang_code("ru_RU"), Some(Lang::Russian));
+        assert_eq!(normalize_lang_code("th_TH"), Some(Lang::Thai));
+    }
+
+    // Neighbor mappings — sociolinguistic falls.
+
+    #[test]
+    fn slavic_neighbors_map_to_russian() {
+        // Ukrainian, Belarusian, Kazakh — Telegram audience overlap with RU
+        // is significant; serving them Cyrillic copy is closer than EN.
+        assert_eq!(normalize_lang_code("uk"), Some(Lang::Russian));
+        assert_eq!(normalize_lang_code("be"), Some(Lang::Russian));
+        assert_eq!(normalize_lang_code("kk"), Some(Lang::Russian));
+    }
+
+    #[test]
+    fn romance_and_other_long_tail_codes_map_to_english() {
+        // Portuguese, Italian, Dutch, Korean, Japanese, Arabic, Vietnamese,
+        // Polish — no native copy yet. English is the safest universal.
+        for code in ["pt", "it", "nl", "ko", "ja", "ar", "vi", "pl"] {
+            assert_eq!(
+                normalize_lang_code(code),
+                Some(Lang::English),
+                "{} should fall back to English",
+                code,
+            );
+        }
+    }
+
+    #[test]
+    fn neighbor_lookup_also_strips_region() {
+        // pt-BR primary is "pt" → English; un-mapped dialect must still
+        // resolve through the same neighbor path.
+        assert_eq!(normalize_lang_code("pt-BR"), Some(Lang::English));
+        assert_eq!(normalize_lang_code("uk-UA"), Some(Lang::Russian));
+    }
+
+    // Unknown / malformed inputs.
+
+    #[test]
+    fn truly_unknown_code_returns_none() {
+        // `klingon` isn't in any branch — caller falls back to its own default.
+        assert_eq!(normalize_lang_code("klingon"), None);
+        assert_eq!(normalize_lang_code("zz"), None);
+    }
+
+    #[test]
+    fn empty_or_whitespace_returns_none() {
+        assert_eq!(normalize_lang_code(""), None);
+        assert_eq!(normalize_lang_code("   "), None);
+    }
+
+    #[test]
+    fn unknown_primary_with_known_region_still_returns_none() {
+        // `xx-US` — primary is unknown and we don't peek at the region.
+        // Returning None forces caller's explicit default, which is safer
+        // than silently picking English because of an unrelated region tag.
+        assert_eq!(normalize_lang_code("xx-US"), None);
+    }
 }
 
 #[cfg(test)]
@@ -205,6 +358,18 @@ mod pick_lang_tests {
         // Telegram could send any locale code; we only know a subset.
         // Don't pick a silent wrong locale — default to RU.
         assert_eq!(pick_lang(None, Some("klingon")), Lang::Russian,);
+    }
+
+    #[test]
+    fn telegram_neighbor_code_flows_through_pick_lang() {
+        // Cycle #72 wired normalize_lang_code into pick_lang. A Ukrainian
+        // Telegram user without a `?lang=` override should now see Russian
+        // copy (closest neighbor) instead of the project default — same
+        // outcome on the surface, but the *reason* matters for tracing
+        // future regressions. Explicit `pt-BR → English` is the other end
+        // of the spectrum and worth pinning separately.
+        assert_eq!(pick_lang(None, Some("uk")), Lang::Russian);
+        assert_eq!(pick_lang(None, Some("pt-BR")), Lang::English);
     }
 
     #[test]
