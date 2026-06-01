@@ -113,7 +113,9 @@ Notable wins:
 | #85 ✅ | `orders.rs` Part 1 — reads (`Order::from_row` → `From<Model>` + 3 callsites) | ~70 | small/medium | **done** |
 | #86 ✅ | `orders.rs` Part 4 (sweeps) + memory capture `seaorm-patterns.md` | ~90 | small | **done** — scope-shifted; Part 2 too big for one cycle |
 | #87 ✅ | `orders.rs` Part 2 — `create_order` SeaORM tx (7 stmts incl. advisory locks) | ~140 | large | **done** |
-| #88 (next) | `orders.rs` Part 3 — `update_order_status` + reject refund tx | ~200 | medium/large | |
+| #88 ✅ | `orders.rs` Part 3 — `update_order_status` (3 branches) + `complete_order_and_update_loyalty` (4-stmt tx) | ~280 | medium/large | **done** |
+| #89 (next) | accessory/tea/set entities + price-auth lookups in `create_order` | ~150 | medium | |
+| #90 | record_fraud_event + scattered helpers (query_blocked_users, manual_unblock, record_block_history) | ~200 | medium | |
 | #84-#86 | `src/db/orders.rs` (split into 3-4 cycles by feature) | 1271 | large | |
 
 Total ≈ 6-8 cycles. Each cycle is independently committable; no big-bang.
@@ -365,6 +367,50 @@ this is the right escape hatch.
 Cycle #88 still tackles the `update_order_status` tx (refund-on-reject)
 and the fraud_event INSERTs. After that, `db/orders.rs` write-side is
 complete.
+
+### Cycle #88 — `update_order_status` (3 branches) + `complete_order_and_update_loyalty`
+
+Last major txs in `orders.rs`. Both migrated in one cycle because the
+patterns are now well-validated (cycles #83-#87) and the two flows are
+tightly coupled: `update_order_status` delegates to
+`complete_order_and_update_loyalty` for the happy path.
+
+**`update_order_status`** (api/orders.rs handler) — three branches:
+* `completed` → delegates to `db::orders::complete_order_and_update_loyalty(&db.orm, …)`.
+* `rejected` → SeaORM tx: `find_by_id().lock_exclusive().one(&tx)` for
+  the row-level FOR UPDATE, conditional bonus refund via
+  `OnConflict::do_nothing` + column-expr `update_many` (patterns #9 +
+  #11), then status flip via `update_many`.
+* anything else → bare `update_many` with `rows_affected == 0 → 404`.
+
+Removed the pattern of reading status outside the tx and then locking
+inside — the cycle-#88 version reads once before deciding which branch
+to take, and the tx itself FOR UPDATE-locks once it knows. Slight
+duplication but clearer flow.
+
+**`complete_order_and_update_loyalty`** (db/orders.rs helper) — 4-stmt
+SeaORM tx:
+1. `find_by_id(order_id).lock_exclusive().one(&tx)` — race guard.
+2. Raw `Statement` for the `SELECT COUNT(*)` of prior completions
+   (pattern #15; aggregate with `!=` clause doesn't justify a typed
+   helper).
+3. `update_many().col_expr(Status, Expr::value("completed"))` — the flip.
+4. `LpEntity::insert(am).on_conflict(...value(TotalSpent, Expr::cust_with_values("COALESCE(...) + $1", [...]))...).exec(&tx)` —
+   upsert with column-expression preserved value (pattern #10 — first
+   used in cycle #84 for `record_referral`).
+5. Raw `Statement` for the tier-CASE-WHEN subquery against
+   `loyalty_config`.
+
+Signature `&Pool` → `&sea_orm::DatabaseConnection`. Two callers updated:
+* `api/orders.rs::update_order_status` (the `completed` branch).
+* `bot/callbacks.rs:434` (admin confirm flow).
+
+After this cycle, the only remaining raw-SQL in `db/orders.rs` is the
+audit-table helpers (`record_fraud_event`, `record_block_history`,
+`query_blocked_users`, `manual_unblock`, `order_stats_24h`,
+`block_stats_24h`, `fraud_stats_24h`) — those are stat aggregations and
+audit INSERTs that mostly use raw Statement already. Cycle #90 cleans
+them up.
 
 ## Why this is worth doing
 

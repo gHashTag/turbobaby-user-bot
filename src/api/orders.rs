@@ -974,32 +974,43 @@ async fn update_order_status(
 ) -> Result<Json<Value>, StatusCode> {
     validate_update_order_status(&id, &req.status)?;
     check_admin(&headers, &state)?;
-    let client = state.db.pool.get().await.map_err(|e| {
-        tracing::error!("DB error: {:?}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-    let current_status: Option<String> = client
-        .query_opt("SELECT status FROM orders WHERE id = $1", &[&id])
+    // Cycle #88: full SeaORM. Three branches:
+    //   1. status==completed → delegate to complete_order_and_update_loyalty (SeaORM tx).
+    //   2. status==rejected → SeaORM tx that FOR UPDATE-locks the order, refunds
+    //      bonus_used if the order was still live, then flips status.
+    //   3. anything else → simple update_many with NOT_FOUND.
+    // The initial "is this order in a terminal state already?" guard reads
+    // the row outside the tx (it'd be a wasted lock for the 99% case where
+    // the status is pending/confirmed).
+    use crate::db::entities::{
+        loyalty_profile::{ActiveModel as LpAm, Column as LpCol, Entity as LpEntity},
+        order::{Column as OrderCol, Entity as OrderEntity},
+    };
+    use sea_orm::sea_query::OnConflict;
+    use sea_orm::{
+        ActiveValue::Set, ColumnTrait, EntityTrait, QueryFilter, QuerySelect, TransactionTrait,
+    };
+
+    let current = OrderEntity::find_by_id(id.clone())
+        .one(&state.db.orm)
         .await
         .map_err(|e| {
-            tracing::error!("DB error: {:?}", e);
+            tracing::error!("update_order_status read: {:?}", e);
             StatusCode::INTERNAL_SERVER_ERROR
-        })?
-        .map(|r| r.try_get("status").unwrap_or_default());
-    match current_status {
-        Some(ref current)
-            if (current == "completed" || current == "rejected" || current == "cancelled")
-                && req.status != *current =>
-        {
-            return Err(StatusCode::BAD_REQUEST);
-        }
-        None => return Err(StatusCode::NOT_FOUND),
-        _ => {}
+        })?;
+    let Some(current) = current else {
+        return Err(StatusCode::NOT_FOUND);
+    };
+    let cur_status = current.status.as_str();
+    if (cur_status == "completed" || cur_status == "rejected" || cur_status == "cancelled")
+        && req.status != cur_status
+    {
+        return Err(StatusCode::BAD_REQUEST);
     }
 
     if req.status == "completed" {
         if let Err(e) =
-            crate::db::orders::complete_order_and_update_loyalty(&state.db.pool, &id).await
+            crate::db::orders::complete_order_and_update_loyalty(&state.db.orm, &id).await
         {
             tracing::error!(
                 "update_order_status: complete_order_and_update_loyalty error: {}",
@@ -1007,70 +1018,112 @@ async fn update_order_status(
             );
             return Err(StatusCode::INTERNAL_SERVER_ERROR);
         }
-    } else {
-        let mut client = state.db.pool.get().await.map_err(|e| {
-            tracing::error!("DB error: {:?}", e);
+    } else if req.status == "rejected" {
+        // Reject path: refund bonus_used if any, then flip status. The
+        // FOR UPDATE on the order row serialises against concurrent admin
+        // actions and against the create_order tx's idempotency path.
+        let tx = state.db.orm.begin().await.map_err(|e| {
+            tracing::error!("reject tx.begin: {:?}", e);
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
-        if req.status == "rejected" {
-            let tx = client.transaction().await.map_err(|e| {
-                tracing::error!("DB tx error: {:?}", e);
+        let locked = OrderEntity::find_by_id(id.clone())
+            .lock_exclusive()
+            .one(&tx)
+            .await
+            .map_err(|e| {
+                tracing::error!("reject FOR UPDATE read: {:?}", e);
                 StatusCode::INTERNAL_SERVER_ERROR
             })?;
-            if let Some(r) = tx.query_opt("SELECT telegram_id, bonus_used::float8, status FROM orders WHERE id = $1 FOR UPDATE", &[&id]).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })? {
-                let current_status: String = r.try_get("status").unwrap_or_default();
-                if current_status != "rejected" && current_status != "completed" {
-                    let bonus_raw: f64 = r.try_get::<_, f64>("bonus_used").unwrap_or(0.0);
-                    let bonus = if bonus_raw.is_finite() { bonus_raw.max(0.0) } else { 0.0 };
-                    let tid: Option<i64> = r.try_get("telegram_id").ok().flatten();
-                    if bonus > 0.0 {
-                        if let Some(tid) = tid {
-                            tx.execute(
-                                "INSERT INTO loyalty_profiles (telegram_id, bonus_balance, total_spent) VALUES ($1, 0, 0) ON CONFLICT (telegram_id) DO NOTHING",
-                                &[&tid],
-                            ).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
-                            tx.execute(
-                                "UPDATE loyalty_profiles SET bonus_balance = bonus_balance + $1 WHERE telegram_id = $2",
-                                &[&bonus, &tid],
-                            ).await.map_err(|e| { tracing::error!("DB error: {:?}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
-                        }
+        if let Some(o) = locked {
+            // Refund only if the order isn't already in a terminal state.
+            // (cycle #76 `should_refund_bonus` helper lives in bot/callbacks
+            // for the duplicate refund path there.)
+            if o.status != "rejected" && o.status != "completed" {
+                let bonus = if o.bonus_used.is_finite() {
+                    o.bonus_used.max(0.0)
+                } else {
+                    0.0
+                };
+                if bonus > 0.0 {
+                    if let Some(tid) = o.telegram_id {
+                        // Ensure loyalty_profile exists (idempotent).
+                        let lp_seed = LpAm {
+                            telegram_id: Set(tid),
+                            bonus_balance: Set(Some(0.0)),
+                            total_spent: Set(Some(0.0)),
+                            ..Default::default()
+                        };
+                        LpEntity::insert(lp_seed)
+                            .on_conflict(
+                                OnConflict::column(LpCol::TelegramId)
+                                    .do_nothing()
+                                    .to_owned(),
+                            )
+                            .do_nothing()
+                            .exec(&tx)
+                            .await
+                            .map_err(|e| {
+                                tracing::error!("reject loyalty seed: {:?}", e);
+                                StatusCode::INTERNAL_SERVER_ERROR
+                            })?;
+                        // Bump bonus_balance (column-expr; pattern #11).
+                        LpEntity::update_many()
+                            .col_expr(
+                                LpCol::BonusBalance,
+                                sea_orm::sea_query::Expr::cust_with_values(
+                                    "bonus_balance + $1",
+                                    [bonus],
+                                ),
+                            )
+                            .filter(LpCol::TelegramId.eq(tid))
+                            .exec(&tx)
+                            .await
+                            .map_err(|e| {
+                                tracing::error!("reject bonus refund: {:?}", e);
+                                StatusCode::INTERNAL_SERVER_ERROR
+                            })?;
                     }
                 }
             }
-            let rows = tx
-                .execute(
-                    "UPDATE orders SET status = $1 WHERE id = $2",
-                    &[&req.status, &id],
-                )
-                .await
-                .map_err(|e| {
-                    tracing::error!("DB error: {:?}", e);
-                    StatusCode::INTERNAL_SERVER_ERROR
-                })?;
-            if rows == 0 {
-                if let Err(e) = tx.rollback().await {
-                    tracing::error!("update_order_status rollback error: {:?}", e);
-                }
-                return Err(StatusCode::NOT_FOUND);
-            }
-            tx.commit().await.map_err(|e| {
-                tracing::error!("DB commit error: {:?}", e);
+        }
+        // Flip status (no-op tolerant: if the row vanished between the
+        // initial read and the tx, return 404).
+        let updated = OrderEntity::update_many()
+            .col_expr(
+                OrderCol::Status,
+                sea_orm::sea_query::Expr::value(req.status.clone()),
+            )
+            .filter(OrderCol::Id.eq(id.clone()))
+            .exec(&tx)
+            .await
+            .map_err(|e| {
+                tracing::error!("reject status update: {:?}", e);
                 StatusCode::INTERNAL_SERVER_ERROR
             })?;
-        } else {
-            let rows = client
-                .execute(
-                    "UPDATE orders SET status = $1 WHERE id = $2",
-                    &[&req.status, &id],
-                )
-                .await
-                .map_err(|e| {
-                    tracing::error!("DB error: {:?}", e);
-                    StatusCode::INTERNAL_SERVER_ERROR
-                })?;
-            if rows == 0 {
-                return Err(StatusCode::NOT_FOUND);
-            }
+        if updated.rows_affected == 0 {
+            // tx drops → auto-rollback.
+            return Err(StatusCode::NOT_FOUND);
+        }
+        tx.commit().await.map_err(|e| {
+            tracing::error!("reject commit: {:?}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+    } else {
+        // Non-terminal transition: simple update_many.
+        let updated = OrderEntity::update_many()
+            .col_expr(
+                OrderCol::Status,
+                sea_orm::sea_query::Expr::value(req.status.clone()),
+            )
+            .filter(OrderCol::Id.eq(id.clone()))
+            .exec(&state.db.orm)
+            .await
+            .map_err(|e| {
+                tracing::error!("status update: {:?}", e);
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?;
+        if updated.rows_affected == 0 {
+            return Err(StatusCode::NOT_FOUND);
         }
     }
     Ok(Json(json!({ "success": true })))

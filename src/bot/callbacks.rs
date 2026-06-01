@@ -431,7 +431,7 @@ pub async fn handle_callback(
 
             // Atomically complete order, update loyalty profile, and recalculate tier
             let (is_first, customer_telegram_id) =
-                match crate::db::orders::complete_order_and_update_loyalty(&db.pool, order_id).await
+                match crate::db::orders::complete_order_and_update_loyalty(&db.orm, order_id).await
                 {
                     Ok(Some((cid, first))) => (first, Some(cid)),
                     Ok(None) => (false, None),

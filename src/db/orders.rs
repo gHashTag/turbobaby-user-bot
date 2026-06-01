@@ -51,79 +51,135 @@ impl From<crate::db::entities::order::Model> for Order {
 /// Atomically mark an order as completed and update the customer's loyalty profile.
 /// Returns `Some((telegram_id, is_first_order))` if the order was newly completed,
 /// or `None` if it was already completed (idempotent).
+///
+/// Cycle #88: migrated to SeaORM transaction. The flow stays identical —
+/// FOR UPDATE the order row (race guard against concurrent admin actions),
+/// count prior completions for `is_first`, flip status, accumulate
+/// total_spent on loyalty_profiles via upsert, recompute tier with a
+/// CASE-WHEN that consults loyalty_config thresholds. Drop = auto-rollback;
+/// only `commit()` on the happy path.
 pub async fn complete_order_and_update_loyalty(
-    pool: &deadpool_postgres::Pool,
+    orm: &sea_orm::DatabaseConnection,
     order_id: &str,
-) -> Result<Option<(i64, bool)>, Box<dyn std::error::Error + Send + Sync>> {
-    let mut client = pool.get().await?;
-    let tx = client.transaction().await?;
-
-    let order_row = tx
-        .query_opt(
-            "SELECT telegram_id, total::float8, status FROM orders WHERE id = $1 FOR UPDATE",
-            &[&order_id],
-        )
-        .await?;
-
-    let result = if let Some(row) = order_row {
-        let cid: Option<i64> = row.try_get("telegram_id").ok().flatten();
-        let total: f64 = {
-            let v = row.try_get::<_, f64>("total").unwrap_or(0.0);
-            if v.is_finite() {
-                v.max(0.0)
-            } else {
-                0.0
-            }
-        };
-        let status: String = row.try_get("status").unwrap_or_default();
-        if status != "completed" {
-            let loyalty_result = if let Some(cid) = cid {
-                // Count BEFORE updating so is_first is accurate
-                let count_before = tx.query_one(
-                    "SELECT COUNT(*) as cnt FROM orders WHERE telegram_id = $1 AND status = 'completed' AND id != $2",
-                    &[&cid, &order_id],
-                ).await?.try_get::<_, i64>("cnt").unwrap_or(0);
-                let is_first = count_before == 0;
-
-                tx.execute(
-                    "UPDATE orders SET status = 'completed' WHERE id = $1",
-                    &[&order_id],
-                )
-                .await?;
-
-                tx.execute(
-                    "INSERT INTO loyalty_profiles (telegram_id, total_spent, first_purchase_at) VALUES ($1, $2, NOW())
-                     ON CONFLICT (telegram_id) DO UPDATE SET
-                       total_spent = COALESCE(loyalty_profiles.total_spent, 0) + EXCLUDED.total_spent,
-                       first_purchase_at = COALESCE(loyalty_profiles.first_purchase_at, NOW())",
-                    &[&cid, &total],
-                ).await?;
-
-                tx.execute(
-                    "UPDATE loyalty_profiles SET tier = CASE
-                        WHEN loyalty_profiles.total_spent >= (SELECT (config->>'gold_threshold')::float8 FROM loyalty_config WHERE id = 1 LIMIT 1) THEN 'gold'
-                        WHEN loyalty_profiles.total_spent >= (SELECT (config->>'silver_threshold')::float8 FROM loyalty_config WHERE id = 1 LIMIT 1) THEN 'silver'
-                        WHEN loyalty_profiles.total_spent >= (SELECT (config->>'bronze_threshold')::float8 FROM loyalty_config WHERE id = 1 LIMIT 1) THEN 'bronze'
-                        ELSE 'none'
-                     END
-                     WHERE telegram_id = $1",
-                    &[&cid],
-                ).await?;
-
-                Some((cid, is_first))
-            } else {
-                None
-            };
-            loyalty_result
-        } else {
-            None
-        }
-    } else {
-        None
+) -> Result<Option<(i64, bool)>, sea_orm::DbErr> {
+    use crate::db::entities::{
+        loyalty_profile::{ActiveModel as LpAm, Column as LpCol, Entity as LpEntity},
+        order::{Column as OrderCol, Entity as OrderEntity},
+    };
+    use sea_orm::sea_query::OnConflict;
+    use sea_orm::{
+        ActiveValue::Set, ColumnTrait, ConnectionTrait, DbBackend, EntityTrait, QueryFilter,
+        QuerySelect, Statement, TransactionTrait,
     };
 
+    let tx = orm.begin().await?;
+
+    // 1. Lock the order row (FOR UPDATE) and read its current state.
+    let order = OrderEntity::find_by_id(order_id.to_string())
+        .lock_exclusive()
+        .one(&tx)
+        .await?;
+
+    let Some(order) = order else {
+        tx.commit().await?;
+        return Ok(None);
+    };
+    if order.status == "completed" {
+        // Idempotent: already completed.
+        tx.commit().await?;
+        return Ok(None);
+    }
+    let Some(cid) = order.telegram_id else {
+        // No customer attribution — flip status but no loyalty side-effect.
+        OrderEntity::update_many()
+            .col_expr(
+                OrderCol::Status,
+                sea_orm::sea_query::Expr::value("completed"),
+            )
+            .filter(OrderCol::Id.eq(order_id))
+            .exec(&tx)
+            .await?;
+        tx.commit().await?;
+        return Ok(None);
+    };
+    let total = if order.total.is_finite() {
+        order.total.max(0.0)
+    } else {
+        0.0
+    };
+
+    // 2. Count prior completions BEFORE the flip — gives the correct
+    //    `is_first_order` even under concurrent admin actions (the FOR
+    //    UPDATE earlier serialises this).
+    let count_row = tx
+        .query_one(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            "SELECT COUNT(*) AS cnt FROM orders WHERE telegram_id = $1 AND status = 'completed' AND id != $2",
+            [cid.into(), order_id.into()],
+        ))
+        .await?
+        .ok_or_else(|| sea_orm::DbErr::Custom("COUNT(*) returned no rows".into()))?;
+    let count_before: i64 = count_row.try_get("", "cnt").unwrap_or(0);
+    let is_first = count_before == 0;
+
+    // 3. Flip the order to completed.
+    OrderEntity::update_many()
+        .col_expr(
+            OrderCol::Status,
+            sea_orm::sea_query::Expr::value("completed"),
+        )
+        .filter(OrderCol::Id.eq(order_id))
+        .exec(&tx)
+        .await?;
+
+    // 4. Accumulate total_spent + first_purchase_at on the loyalty profile.
+    //    `total_spent = COALESCE(existing, 0) + new_total` via column-expr
+    //    UPDATE inside the OnConflict clause (pattern #10 in seaorm-patterns).
+    let lp_am = LpAm {
+        telegram_id: Set(cid),
+        total_spent: Set(Some(total)),
+        first_purchase_at: Set(Some(chrono::Utc::now().into())),
+        ..Default::default()
+    };
+    LpEntity::insert(lp_am)
+        .on_conflict(
+            OnConflict::column(LpCol::TelegramId)
+                .value(
+                    LpCol::TotalSpent,
+                    sea_orm::sea_query::Expr::cust_with_values(
+                        "COALESCE(loyalty_profiles.total_spent, 0) + $1",
+                        [total],
+                    ),
+                )
+                .value(
+                    LpCol::FirstPurchaseAt,
+                    sea_orm::sea_query::Expr::cust(
+                        "COALESCE(loyalty_profiles.first_purchase_at, NOW())",
+                    ),
+                )
+                .to_owned(),
+        )
+        .exec(&tx)
+        .await?;
+
+    // 5. Recompute tier from the loyalty_config JSONB thresholds. The
+    //    CASE-WHEN-subquery shape is too custom for the typed builder; raw
+    //    Statement (pattern #15) keeps the original logic intact.
+    tx.execute(Statement::from_sql_and_values(
+        DbBackend::Postgres,
+        "UPDATE loyalty_profiles SET tier = CASE \
+            WHEN loyalty_profiles.total_spent >= (SELECT (config->>'gold_threshold')::float8 FROM loyalty_config WHERE id = 1 LIMIT 1) THEN 'gold' \
+            WHEN loyalty_profiles.total_spent >= (SELECT (config->>'silver_threshold')::float8 FROM loyalty_config WHERE id = 1 LIMIT 1) THEN 'silver' \
+            WHEN loyalty_profiles.total_spent >= (SELECT (config->>'bronze_threshold')::float8 FROM loyalty_config WHERE id = 1 LIMIT 1) THEN 'bronze' \
+            ELSE 'none' \
+         END \
+         WHERE telegram_id = $1",
+        [cid.into()],
+    ))
+    .await?;
+
     tx.commit().await?;
-    Ok(result)
+    Ok(Some((cid, is_first)))
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
