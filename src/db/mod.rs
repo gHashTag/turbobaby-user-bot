@@ -313,6 +313,130 @@ mod migration_manifest_tests {
     }
 }
 
+/// Cycle #102: companion to `migration_manifest_tests` — catches the
+/// *other* drift direction. The manifest test ensures every migration
+/// file gets applied; this one ensures every entity column actually
+/// has a migration that creates or adds it.
+///
+/// Implementation: substring match in concatenated migration corpus.
+/// Catches the common drift cases (column renamed in SQL but entity
+/// still expects the old name, or column dropped). Misses pathological
+/// cases like "same column name lives in a different table than the
+/// entity expects" — a real SQL parser would catch those, but the
+/// cost (full parser or pg_query dependency) doesn't justify the rare
+/// catch.
+///
+/// SeaORM field-name → column-name mapping is implicit snake_case.
+/// We don't use `#[sea_orm(column_name = "...")]` overrides anywhere
+/// (verified at audit time), so Rust field name = SQL column name 1:1.
+#[cfg(test)]
+mod entity_schema_consistency_tests {
+    /// Extracts the `pub <field>:` names between `pub struct Model {`
+    /// and the closing `}` of the struct.
+    fn entity_fields(source: &str) -> Vec<String> {
+        let mut in_model = false;
+        let mut out = Vec::new();
+        for line in source.lines() {
+            let trimmed = line.trim();
+            if trimmed.starts_with("pub struct Model") {
+                in_model = true;
+                continue;
+            }
+            if in_model && trimmed == "}" {
+                break;
+            }
+            if !in_model {
+                continue;
+            }
+            if let Some(rest) = trimmed.strip_prefix("pub ") {
+                if let Some(colon) = rest.find(':') {
+                    let name = &rest[..colon];
+                    if name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+                        && !name.is_empty()
+                    {
+                        out.push(name.to_string());
+                    }
+                }
+            }
+        }
+        out
+    }
+
+    fn read_migrations_corpus() -> String {
+        let manifest = env!("CARGO_MANIFEST_DIR");
+        let mig_dir = std::path::Path::new(manifest).join("migrations");
+        let mut entries: Vec<_> = std::fs::read_dir(&mig_dir)
+            .expect("migrations/ readable")
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_name().to_str().is_some_and(|n| n.ends_with(".sql")))
+            .collect();
+        entries.sort_by_key(|e| e.file_name());
+        let mut buf = String::new();
+        for e in entries {
+            buf.push_str(&std::fs::read_to_string(e.path()).expect("read migration"));
+            buf.push('\n');
+        }
+        buf
+    }
+
+    /// Word-boundary check: returns `true` if `needle` appears in `haystack`
+    /// as a full identifier (surrounded by non-identifier characters or
+    /// string boundaries).
+    fn contains_word(haystack: &str, needle: &str) -> bool {
+        let mut start = 0;
+        while let Some(pos) = haystack[start..].find(needle) {
+            let abs = start + pos;
+            let before_ok = abs == 0
+                || !haystack.as_bytes()[abs - 1].is_ascii_alphanumeric()
+                    && haystack.as_bytes()[abs - 1] != b'_';
+            let end = abs + needle.len();
+            let after_ok = end >= haystack.len()
+                || !haystack.as_bytes()[end].is_ascii_alphanumeric()
+                    && haystack.as_bytes()[end] != b'_';
+            if before_ok && after_ok {
+                return true;
+            }
+            start = abs + needle.len();
+        }
+        false
+    }
+
+    #[test]
+    fn every_entity_field_appears_in_some_migration() {
+        let manifest = env!("CARGO_MANIFEST_DIR");
+        let entities_dir = std::path::Path::new(manifest).join("src/db/entities");
+        let corpus = read_migrations_corpus();
+
+        let mut errors = Vec::new();
+        let mut checked = 0_usize;
+        for entry in std::fs::read_dir(&entities_dir).expect("entities/ readable") {
+            let entry = entry.expect("entry");
+            let name = entry.file_name().into_string().unwrap();
+            if !name.ends_with(".rs") || name == "mod.rs" {
+                continue;
+            }
+            let src = std::fs::read_to_string(entry.path()).expect("read entity");
+            let fields = entity_fields(&src);
+            for f in &fields {
+                if !contains_word(&corpus, f) {
+                    errors.push(format!(
+                        "{}: Model field `{}` not found in any migration",
+                        name, f
+                    ));
+                }
+            }
+            checked += fields.len();
+        }
+        assert!(checked > 0, "no fields were checked — parser broken?");
+        assert!(
+            errors.is_empty(),
+            "entity/schema drift ({} field(s) missing from migrations):\n  {}",
+            errors.len(),
+            errors.join("\n  ")
+        );
+    }
+}
+
 #[cfg(test)]
 mod url_sanitize_tests {
     use super::sanitize_pg_url_for_sqlx as s;
