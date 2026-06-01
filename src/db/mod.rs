@@ -36,6 +36,12 @@ const MIGRATION_SQL: &str = concat!(
     include_str!("../../migrations/023_managers_commission_rate.sql"),
     include_str!("../../migrations/024_catalog_video_url.sql"),
     include_str!("../../migrations/025_orders_telegram_nullable.sql"),
+    include_str!("../../migrations/026_garden_backfill_from_orders.sql"),
+    include_str!("../../migrations/027_game_high_scores.sql"),
+    include_str!("../../migrations/028_strain_marketing_flags.sql"),
+    include_str!("../../migrations/029_order_idempotency_keys.sql"),
+    include_str!("../../migrations/030_order_fraud_events.sql"),
+    include_str!("../../migrations/031_block_history.sql"),
 );
 
 /// Cycle #96: after the 17-cycle SeaORM migration finished, this is the
@@ -258,6 +264,52 @@ fn sanitize_pg_url_for_sqlx(url: &str) -> String {
         base.to_string()
     } else {
         format!("{}?{}", base, kept.join("&"))
+    }
+}
+
+/// Cycle #101: catches "migration file added on disk but forgotten in the
+/// `MIGRATION_SQL` concat" — the exact bug found that prompted this test
+/// (migrations 026-031 existed for ~6 release cycles but were never run
+/// at startup; entities/code that depended on them only worked because
+/// someone ran the SQL manually against prod).
+///
+/// The test walks `migrations/` at compile time via `include_str!` of
+/// its own source: every `*.sql` in the directory must appear in the
+/// module source above. Pure-string check, no DB needed.
+#[cfg(test)]
+mod migration_manifest_tests {
+    /// We embed the source of this module at compile time and grep it
+    /// for `include_str!("../../migrations/<file>.sql")` references.
+    /// Equivalent to running the check at build time but lives in the
+    /// regular test suite for visibility.
+    const THIS_FILE: &str = include_str!("mod.rs");
+
+    #[test]
+    fn every_migration_file_is_included() {
+        let manifest_dir = env!("CARGO_MANIFEST_DIR");
+        let mig_dir = std::path::Path::new(manifest_dir).join("migrations");
+        let mut on_disk: Vec<String> = std::fs::read_dir(&mig_dir)
+            .expect("migrations/ readable")
+            .filter_map(|e| e.ok())
+            .filter_map(|e| e.file_name().into_string().ok())
+            .filter(|n| n.ends_with(".sql"))
+            .collect();
+        on_disk.sort();
+
+        let missing: Vec<&str> = on_disk
+            .iter()
+            .filter(|name| {
+                let needle = format!("../../migrations/{}", name);
+                !THIS_FILE.contains(&needle)
+            })
+            .map(String::as_str)
+            .collect();
+
+        assert!(
+            missing.is_empty(),
+            "migration files on disk but missing from MIGRATION_SQL in src/db/mod.rs: {:?}",
+            missing
+        );
     }
 }
 
