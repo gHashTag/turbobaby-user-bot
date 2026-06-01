@@ -4,6 +4,7 @@ pub mod garden_config;
 pub mod loyalty_config;
 pub mod loyalty_profile;
 pub mod order;
+pub mod order_idempotency_key;
 pub mod quest_place;
 pub mod referral_event;
 pub mod strain;

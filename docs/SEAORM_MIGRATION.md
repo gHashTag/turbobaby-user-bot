@@ -112,8 +112,8 @@ Notable wins:
 | #84 ✅ | `db/referrals.rs` full file (6 functions + 1 entity + 6 callsites + tests) | ~290 | medium | **done — file 100% off raw SQL** |
 | #85 ✅ | `orders.rs` Part 1 — reads (`Order::from_row` → `From<Model>` + 3 callsites) | ~70 | small/medium | **done** |
 | #86 ✅ | `orders.rs` Part 4 (sweeps) + memory capture `seaorm-patterns.md` | ~90 | small | **done** — scope-shifted; Part 2 too big for one cycle |
-| #87 (next) | `orders.rs` Part 2 — `create_order` SeaORM tx (large, ~300 lines) | ~300 | large | |
-| #88 | `orders.rs` Part 3 — `update_order_status` + reject refund tx | ~200 | medium/large | |
+| #87 ✅ | `orders.rs` Part 2 — `create_order` SeaORM tx (7 stmts incl. advisory locks) | ~140 | large | **done** |
+| #88 (next) | `orders.rs` Part 3 — `update_order_status` + reject refund tx | ~200 | medium/large | |
 | #84-#86 | `src/db/orders.rs` (split into 3-4 cycles by feature) | 1271 | large | |
 
 Total ≈ 6-8 cycles. Each cycle is independently committable; no big-bang.
@@ -332,6 +332,39 @@ So #86 took two smaller pieces instead:
 
 `create_order` migration moves to cycle #87 as a single dedicated
 cycle.
+
+### Cycle #87 — `create_order` SeaORM tx (7 statements)
+
+Biggest single tx in the project. The body shrank from 113 raw-SQL lines
+to ~155 typed SeaORM lines (slightly bigger source but compile-time-safe
+column refs and explicit ActiveModel inserts). Patterns used in
+combination (look in `memory/seaorm-patterns.md` for each):
+* #13 — tx via `begin().await? / commit().await?` / drop-rollback.
+* #11/#12 — `Expr::cust_with_values("GREATEST(0, bonus_balance - $1)", [v])`
+  for the column-expr bonus deduction with concurrent-safe guard
+  (`Balance.gte(amount)` filter).
+* #5 — `ActiveModel { col: Set(v), ..Default::default() }.insert(&tx)`
+  for the order row and the idempotency_keys row.
+* #16 — raw `Statement::from_sql_and_values` for `pg_advisory_xact_lock(...)`
+  (no entity model for session primitives) and the 1-min rate-limit
+  `SELECT 1 FROM orders WHERE created_at > NOW() - INTERVAL '1 minute'`
+  (small bounded scan, doesn't justify an entity helper).
+
+New entity: `order_idempotency_key` (migrations/029). 4 columns, used
+twice in the tx — once for the SELECT replay check, once for the INSERT
+that completes the tx.
+
+Pattern that emerged this cycle (added to `memory/seaorm-patterns.md`
+as #21 after-the-fact): **Postgres advisory locks via raw `Statement`
+inside a SeaORM `DatabaseTransaction`** — pass `&tx` to
+`tx.execute(Statement::from_sql_and_values(...))`. The `ConnectionTrait`
+impl on `DatabaseTransaction` accepts raw statements identically to
+`DatabaseConnection`. Advisory-lock primitives don't have a typed API;
+this is the right escape hatch.
+
+Cycle #88 still tackles the `update_order_status` tx (refund-on-reject)
+and the fraud_event INSERTs. After that, `db/orders.rs` write-side is
+complete.
 
 ## Why this is worth doing
 

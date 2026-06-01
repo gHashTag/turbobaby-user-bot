@@ -630,13 +630,22 @@ async fn create_order(
         StatusCode::BAD_REQUEST
     })?;
 
-    // Atomic transaction: rate-limit check, bonus deduction, and insert order together.
-    let mut client = state.db.pool.get().await.map_err(|e| {
-        error!("create_order pool error: {}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-    let tx = client.transaction().await.map_err(|e| {
-        error!("create_order tx error: {}", e);
+    // Cycle #87: SeaORM transaction. 7-statement tx mixes entity API
+    // (loyalty UPDATE, order INSERT, idempotency_keys CRUD) with raw
+    // `Statement::from_sql_and_values` for Postgres advisory locks
+    // (`pg_advisory_xact_lock`) — there's no entity model for those,
+    // they're session-scoped primitives that release on commit/rollback.
+    use crate::db::entities::{
+        loyalty_profile::{Column as LpCol, Entity as LoyaltyProfileEntity},
+        order::{ActiveModel as OrderAm, Entity as OrderEntity},
+        order_idempotency_key::{ActiveModel as IdemAm, Entity as IdemEntity},
+    };
+    use sea_orm::{
+        ActiveValue::Set, ColumnTrait, ConnectionTrait, DbBackend, EntityTrait, QueryFilter,
+        Statement, TransactionTrait,
+    };
+    let tx = state.db.orm.begin().await.map_err(|e| {
+        error!("create_order tx.begin error: {}", e);
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
@@ -645,24 +654,25 @@ async fn create_order(
     // loser then sees the existing row and replays the cached order_id
     // instead of being told "you're rate-limited".
     if let Some(ref k) = idem_key {
-        tx.execute("SELECT pg_advisory_xact_lock(hashtext($1)::bigint)", &[k])
-            .await
-            .map_err(|e| {
-                error!("idempotency lock: {}", e);
-                StatusCode::INTERNAL_SERVER_ERROR
-            })?;
-        let row = tx
-            .query_opt(
-                "SELECT order_id FROM order_idempotency_keys WHERE key = $1",
-                &[k],
-            )
+        tx.execute(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            "SELECT pg_advisory_xact_lock(hashtext($1)::bigint)",
+            [k.clone().into()],
+        ))
+        .await
+        .map_err(|e| {
+            error!("idempotency lock: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+        let existing = IdemEntity::find_by_id(k.clone())
+            .one(&tx)
             .await
             .map_err(|e| {
                 error!("idempotency SELECT: {}", e);
                 StatusCode::INTERNAL_SERVER_ERROR
             })?;
-        if let Some(row) = row {
-            let existing_id: String = row.get(0);
+        if let Some(row) = existing {
+            let existing_id = row.order_id;
             if let Err(e) = tx.commit().await {
                 tracing::error!("idempotency replay commit: {}", e);
             }
@@ -680,64 +690,100 @@ async fn create_order(
 
     // Serialize order creation per user to close the rate-limit race window.
     if let Some(tid) = req.telegram_id {
-        tx.execute("SELECT pg_advisory_xact_lock($1)", &[&tid])
-            .await
-            .map_err(|e| {
-                error!("advisory lock error: {}", e);
-                StatusCode::INTERNAL_SERVER_ERROR
-            })?;
+        tx.execute(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            "SELECT pg_advisory_xact_lock($1)",
+            [tid.into()],
+        ))
+        .await
+        .map_err(|e| {
+            error!("advisory lock error: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
     }
 
-    // Rate-limit inside tx to close the race window.
+    // Rate-limit inside tx to close the race window. The 1-minute window
+    // and the `LIMIT 1` make this a small bounded scan; no need for an
+    // entity helper.
     if let Some(tid) = req.telegram_id {
-        let recent = tx.query_opt(
-            "SELECT 1 FROM orders WHERE telegram_id = $1 AND created_at > NOW() - INTERVAL '1 minute' LIMIT 1",
-            &[&tid],
-        ).await.map_err(|e| { error!("rate-limit check error: {}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
+        let recent = tx
+            .query_one(Statement::from_sql_and_values(
+                DbBackend::Postgres,
+                "SELECT 1 AS one FROM orders WHERE telegram_id = $1 AND created_at > NOW() - INTERVAL '1 minute' LIMIT 1",
+                [tid.into()],
+            ))
+            .await
+            .map_err(|e| {
+                error!("rate-limit check error: {}", e);
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?;
         if recent.is_some() {
-            if let Err(e) = tx.rollback().await {
-                tracing::error!("create_order rollback error: {}", e);
-            }
+            // tx drops → auto-rollback
             return Err(StatusCode::TOO_MANY_REQUESTS);
         }
     }
 
-    // Atomic bonus deduction: UPDATE with built-in balance guard.
+    // Atomic bonus deduction: UPDATE with built-in balance guard
+    // (pattern #12 in memory/seaorm-patterns.md).
     if bonus_used > 0.0 {
         if let Some(tid) = req.telegram_id {
-            let deducted = tx.execute(
-                "UPDATE loyalty_profiles SET bonus_balance = GREATEST(0, bonus_balance - $1) WHERE telegram_id = $2 AND bonus_balance >= $1",
-                &[&bonus_used, &tid],
-            ).await.map_err(|e| { error!("bonus deduction error: {}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
-            if deducted == 0 {
-                if let Err(e) = tx.rollback().await {
-                    tracing::error!("create_order rollback error: {}", e);
-                }
+            let deducted = LoyaltyProfileEntity::update_many()
+                .col_expr(
+                    LpCol::BonusBalance,
+                    sea_orm::sea_query::Expr::cust_with_values(
+                        "GREATEST(0, bonus_balance - $1)",
+                        [bonus_used],
+                    ),
+                )
+                .filter(LpCol::TelegramId.eq(tid))
+                .filter(LpCol::BonusBalance.gte(bonus_used))
+                .exec(&tx)
+                .await
+                .map_err(|e| {
+                    error!("bonus deduction error: {}", e);
+                    StatusCode::INTERNAL_SERVER_ERROR
+                })?;
+            if deducted.rows_affected == 0 {
+                // tx drops → auto-rollback
                 return Err(StatusCode::BAD_REQUEST);
             }
         } else {
-            if let Err(e) = tx.rollback().await {
-                tracing::error!("create_order rollback error: {}", e);
-            }
+            // tx drops → auto-rollback
             return Err(StatusCode::BAD_REQUEST);
         }
     }
 
-    tx.execute(
-        "INSERT INTO orders (id, telegram_id, customer_name, customer_phone, customer_telegram, items, subtotal, bonus_used, total, status, shop_id) VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::float8, $8::float8, $9::float8, 'pending', $10)",
-        &[&id, &req.telegram_id, &req.customer_name, &req.customer_phone, &req.customer_telegram, &items_json, &req.subtotal, &bonus_used, &req.total, &req.shop_id],
-    ).await.map_err(|e| { error!("create_order insert error: {}", e); StatusCode::INTERNAL_SERVER_ERROR })?;
+    // Order INSERT via ActiveModel.
+    let order_am = OrderAm {
+        id: Set(id.clone()),
+        telegram_id: Set(req.telegram_id),
+        customer_name: Set(req.customer_name.clone()),
+        customer_phone: Set(req.customer_phone.clone()),
+        customer_telegram: Set(req.customer_telegram.clone()),
+        items: Set(items_json.clone()),
+        subtotal: Set(req.subtotal),
+        bonus_used: Set(bonus_used),
+        total: Set(req.total),
+        status: Set("pending".to_string()),
+        shop_id: Set(req.shop_id.clone()),
+        ..Default::default()
+    };
+    OrderEntity::insert(order_am).exec(&tx).await.map_err(|e| {
+        error!("create_order insert error: {}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
 
     // Record the idempotency key inside the same tx so retries after this
     // commit see the cached order_id. The earlier advisory lock guarantees
     // no other tx can hold a different (key, order_id) for this `k`.
     if let Some(ref k) = idem_key {
-        tx.execute(
-            "INSERT INTO order_idempotency_keys (key, order_id, telegram_id) VALUES ($1, $2, $3)",
-            &[k, &id, &req.telegram_id],
-        )
-        .await
-        .map_err(|e| {
+        let idem_am = IdemAm {
+            key: Set(k.clone()),
+            order_id: Set(id.clone()),
+            telegram_id: Set(req.telegram_id),
+            ..Default::default()
+        };
+        IdemEntity::insert(idem_am).exec(&tx).await.map_err(|e| {
             error!("idempotency INSERT: {}", e);
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
