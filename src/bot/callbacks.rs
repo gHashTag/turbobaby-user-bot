@@ -7,7 +7,7 @@ use teloxide::{
 
 use crate::bot::commands::{build_app_url, calculate_discounted_price};
 // Cycle #76: button helpers consolidated to bot/mod.rs.
-use crate::bot::{callback_btn, web_app_btn, AI_COOLDOWN, AI_RATE_LIMIT};
+use crate::bot::{callback_btn, tg_fire_and_forget, web_app_btn, AI_COOLDOWN, AI_RATE_LIMIT};
 use crate::db::referrals as ref_db;
 use crate::{
     ai::{get_random_fact_prompt, get_random_joke_prompt},
@@ -124,13 +124,16 @@ pub async fn handle_callback(
                     let text = joke
                         .map(|j| format!("😜 {}", html_escape(&j)))
                         .unwrap_or(locale.joke_fail_fallback.clone());
-                    bot.edit_message_text(msg.chat.id, msg.id, &text)
-                        .reply_markup(InlineKeyboardMarkup::new(vec![vec![callback_btn(
-                            &format!("🔄 {}", locale.more_joke),
-                            "more_joke",
-                        )]]))
-                        .await
-                        .ok();
+                    tg_fire_and_forget(
+                        bot.edit_message_text(msg.chat.id, msg.id, &text)
+                            .reply_markup(InlineKeyboardMarkup::new(vec![vec![callback_btn(
+                                &format!("🔄 {}", locale.more_joke),
+                                "more_joke",
+                            )]]))
+                            .send(),
+                        "edit_message_text:joke_final",
+                    )
+                    .await;
                 }
             }
         }
@@ -156,13 +159,16 @@ pub async fn handle_callback(
                     let text = fact
                         .map(|f| format!("🧠 {}", html_escape(&f)))
                         .unwrap_or(locale.fact_fail_fallback.clone());
-                    bot.edit_message_text(msg.chat.id, msg.id, &text)
-                        .reply_markup(InlineKeyboardMarkup::new(vec![vec![callback_btn(
-                            &format!("🔄 {}", locale.interesting_fact),
-                            "more_fact",
-                        )]]))
-                        .await
-                        .ok();
+                    tg_fire_and_forget(
+                        bot.edit_message_text(msg.chat.id, msg.id, &text)
+                            .reply_markup(InlineKeyboardMarkup::new(vec![vec![callback_btn(
+                                &format!("🔄 {}", locale.interesting_fact),
+                                "more_fact",
+                            )]]))
+                            .send(),
+                        "edit_message_text:fact_final",
+                    )
+                    .await;
                 }
             }
         }
@@ -183,10 +189,13 @@ pub async fn handle_callback(
                 MaybeInaccessibleMessage::Regular(msg) => Some(msg),
                 MaybeInaccessibleMessage::Inaccessible(_) => None,
             }) {
-                bot.send_message(msg.chat.id, &locale.choose_lang)
-                    .reply_markup(InlineKeyboardMarkup::new(btns))
-                    .await
-                    .ok();
+                tg_fire_and_forget(
+                    bot.send_message(msg.chat.id, &locale.choose_lang)
+                        .reply_markup(InlineKeyboardMarkup::new(btns))
+                        .send(),
+                    "send_message:choose_lang",
+                )
+                .await;
             }
         }
 

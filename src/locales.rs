@@ -91,14 +91,6 @@ pub fn map_telegram_lang(lang: Option<&str>) -> String {
     }
 }
 
-#[allow(dead_code)]
-pub fn lang_to_timezone(lang: &str) -> &'static str {
-    match lang {
-        "ru" => "Europe/Moscow",
-        _ => "Asia/Bangkok",
-    }
-}
-
 pub fn supported_langs() -> Vec<&'static str> {
     vec!["ru", "en"]
 }
@@ -280,9 +272,7 @@ fn en() -> Locale {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        detect_language, get_locale, lang_to_timezone, map_telegram_lang, supported_langs,
-    };
+    use super::{detect_language, get_locale, map_telegram_lang, supported_langs};
 
     #[test]
     fn test_get_locale_ru() {
@@ -351,12 +341,5 @@ mod tests {
     #[test]
     fn test_supported_langs() {
         assert_eq!(supported_langs(), vec!["ru", "en"]);
-    }
-
-    #[test]
-    fn test_lang_to_timezone() {
-        assert_eq!(lang_to_timezone("ru"), "Europe/Moscow");
-        assert_eq!(lang_to_timezone("en"), "Asia/Bangkok");
-        assert_eq!(lang_to_timezone("fr"), "Asia/Bangkok");
     }
 }

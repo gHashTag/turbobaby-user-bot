@@ -132,7 +132,6 @@ impl AiClient {
     }
 
     #[cfg(test)]
-    #[allow(dead_code)]
     pub fn test_client() -> Self {
         Self::new(String::new(), String::new())
     }

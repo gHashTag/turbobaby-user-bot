@@ -2,7 +2,6 @@ use crate::config::Config;
 use anyhow::Result;
 use bytes::Bytes;
 
-#[allow(dead_code)]
 pub async fn upload_to_s3(config: &Config, filename: &str, data: Bytes) -> Result<String> {
     use aws_config::{BehaviorVersion, Region};
     use aws_sdk_s3::{config::Credentials, primitives::ByteStream, Client};
@@ -118,7 +117,6 @@ fn safe_name(filename: &str) -> String {
     crate::util::truncate_string(&s, 255)
 }
 
-#[allow(dead_code)]
 fn mime_from_filename(filename: &str) -> &'static str {
     match filename
         .rsplit('.')

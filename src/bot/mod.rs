@@ -45,6 +45,33 @@ pub(crate) fn url_btn(text: &str, url: &str) -> InlineKeyboardButton {
     }
 }
 
+/// Wrap a Telegram API call that's allowed to fail silently. Rate-limit
+/// (HTTP 429) and "message too old to edit" failures are routine — those
+/// are dropped without noise. Everything else gets a `debug!` log so ops
+/// can see real connectivity / permissions issues that previously got
+/// swallowed by `.await.ok()`.
+///
+/// Cycle #78: was 15+ bare `.ok()` callsites on `edit_message_text` /
+/// `delete_message` etc. Replacing every one is invasive; this helper
+/// targets the highest-signal ones where the user sees the failure (e.g.
+/// "Joke fail" stuck on screen because the final edit was rejected).
+pub(crate) async fn tg_fire_and_forget<T, E: std::fmt::Display>(
+    fut: impl std::future::Future<Output = std::result::Result<T, E>>,
+    ctx: &'static str,
+) {
+    if let Err(e) = fut.await {
+        let s = e.to_string();
+        let is_expected = s.contains("Too Many Requests")
+            || s.contains("retry_after")
+            || s.contains("message is not modified")
+            || s.contains("message to edit not found")
+            || s.contains("message to delete not found");
+        if !is_expected {
+            tracing::debug!("tg: {} failed: {}", ctx, s);
+        }
+    }
+}
+
 pub fn create_handler() -> UpdateHandler<teloxide::RequestError> {
     dptree::entry()
         .branch(

@@ -126,6 +126,13 @@ pub fn is_valid_idempotency_key(k: &str) -> bool {
 
 /// Outcome of the server-side strain-subtotal check (cycle #56). Distinct
 /// variants so audit logs can tell stale-cart / typo / fraud apart.
+///
+/// Cycle #78: superseded in production by [`check_full_subtotal`] which
+/// covers every catalog (strains + accessories + tea + sets). The
+/// strain-only helper is kept as a focused unit-test target for the
+/// strain-portion logic — useful when adding a new strain-pricing edge
+/// case without paying the cost of building a full mixed-cart fixture.
+#[allow(dead_code)]
 #[derive(Debug, PartialEq)]
 pub enum SubtotalCheck {
     /// Server-computed strain portion matches the client-claimed subtotal
@@ -156,6 +163,7 @@ pub enum SubtotalCheck {
 ///   the claimed subtotal. Accessory / tea / set price authority is a
 ///   separate cycle; until then, trust the client for those.
 /// * Unknown strain id: short-circuit with `UnknownStrain`.
+#[allow(dead_code)]
 pub fn check_strain_subtotal(
     items: &[OrderItem],
     strain_map: &HashMap<&str, &Strain>,
