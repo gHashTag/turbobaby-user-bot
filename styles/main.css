@@ -467,6 +467,35 @@ body {
   font-size: 13px; padding: 4px 8px; font-weight: 700;
   box-shadow: 2px 2px 0 #000;
 }
+
+/* TZ #2 marketing badges (cycle #132) — colours mirror the inline
+   badges in src/ui/screens/menu_screen.rs::render_strain_card so the
+   shared `StrainCard` component's visual matches the home menu. */
+.new-badge {
+  display: inline-block; background: #00e5ff; color: #000;
+  font-size: 13px; padding: 4px 8px; font-weight: 700;
+  box-shadow: 2px 2px 0 #000;
+}
+.best-badge {
+  display: inline-block; background: #ff9d00; color: #000;
+  font-size: 13px; padding: 4px 8px; font-weight: 700;
+  box-shadow: 2px 2px 0 #000;
+}
+.sale-badge {
+  display: inline-block; background: #ff4757; color: #fff;
+  font-size: 13px; padding: 4px 8px; font-weight: 700;
+  box-shadow: 2px 2px 0 #000;
+}
+/* Sale-price strikethrough vs new-price emphasis. */
+.strain-price .price-old {
+  text-decoration: line-through;
+  color: #888;
+  margin-right: 8px;
+}
+.strain-price .price-sale {
+  color: #ff4757;
+  font-weight: 800;
+}
 .sod-card {
   background: var(--card);
   border: 4px solid var(--green);
