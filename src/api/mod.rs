@@ -295,13 +295,14 @@ mod tests {
 /// Cycle #143: defensive test catching the "added a routes file but
 /// forgot to wire it" bug class.
 ///
-/// Cycle #143 audit discovered `src/api/game.rs` (244 lines, last
-/// touched in cycle #91) defines `pub fn routes()` for Woody Catch
-/// high-score persistence — but `pub mod game` is missing from this
-/// file, so it isn't even compiled. The orphan-table defense in
-/// `src/db/mod.rs::orphan_table_tests` missed it because the table
-/// name `game_high_scores` still appears as a string literal in the
-/// uncompiled file, fooling the textual reference check.
+/// Cycle #143 audit discovered a 244-line file in `src/api/` that
+/// defined `pub fn routes()` for high-score persistence but was
+/// orphaned since cycle #91 — `pub mod` was missing from this file,
+/// so it never compiled. The orphan-table defense in
+/// `src/db/mod.rs::orphan_table_tests` missed the companion table
+/// because its name still appeared as a string literal in the
+/// uncompiled file, fooling the textual reference check. Cycle #144
+/// deleted the file and migrated the table name to ALLOWED_ORPHANS.
 ///
 /// This test walks `src/api/*.rs`, finds every file with
 /// `pub fn routes(`, and asserts each is both `pub mod`'d and
@@ -312,25 +313,12 @@ mod tests {
 mod route_wiring_tests {
     /// Modules with `pub fn routes()` deferred from production wiring.
     /// Each entry must name who deferred it and why.
-    const ALLOWED_UNWIRED_ROUTES: &[&str] = &[
-        // Cycle #143: `src/api/game.rs` declares Woody Catch high-score
-        // routes but has been orphaned since cycle #91:
-        //   - `pub mod game` is missing from src/api/mod.rs
-        //   - `.merge(game::routes())` is missing from api_routes()
-        //   - the UI (src/ui/game/woody_catch.rs) stores scores in
-        //     browser localStorage only — no client hits these routes.
-        // The `game_high_scores` table (migration 027) still exists.
-        // Decide one of:
-        //   (a) wire backend + UI for cross-device persistence
-        //   (b) delete src/api/game.rs and either drop migration 027
-        //       or move `game_high_scores` to ALLOWED_ORPHANS in
-        //       src/db/mod.rs
-        // Until that decision lands, this entry documents the
-        // intentional orphan and the textual `game_high_scores`
-        // reference inside game.rs is what keeps the orphan-table
-        // schema-truth test green.
-        "game",
-    ];
+    ///
+    /// Cycle #144 emptied this list — the prior entry was deleted
+    /// along with its file, and its companion table was migrated to
+    /// `src/db/mod.rs::ALLOWED_ORPHANS`. New entries should be rare
+    /// and short-lived; prefer wiring or deleting over allowlisting.
+    const ALLOWED_UNWIRED_ROUTES: &[&str] = &[];
 
     fn module_name_from_path(path: &std::path::Path) -> Option<String> {
         let stem = path.file_stem()?.to_str()?;
