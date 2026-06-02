@@ -178,6 +178,60 @@ pub async fn complete_order_and_update_loyalty(
     ))
     .await?;
 
+    // 6. Cycle #168: seed a garden plant if this order contains a
+    //    strain AND the user has no active plant. Closes the gap
+    //    flagged by user-report — the Garden UI says "Order a strain
+    //    to get your first seed!" but `complete_order_and_update_loyalty`
+    //    never seeded plants for orders completed AFTER the cycle-#15
+    //    one-shot backfill (migration 026) ran. The backfill SQL was
+    //    documented as a forward-design but the matching forward
+    //    write was never landed.
+    //
+    //    Match migration 026's shape:
+    //      * pick the FIRST strain item in `order.items` (a JSONB array)
+    //      * stage = 'seed', water_count = 0
+    //      * INSERT ... WHERE NOT EXISTS (active plant) — preserves
+    //        the cycle-#94 one-active-plant-at-a-time invariant
+    //
+    //    Side-effect contract: an order with no strain items (pure
+    //    accessory/tea/set orders) doesn't plant — same as the
+    //    backfill, intentional.
+    let strain_seed: Option<(String, String)> = order.items.as_array().and_then(|arr| {
+        arr.iter().find_map(|it| {
+            let sid = it.get("strain_id")?.as_str()?;
+            if sid.is_empty() {
+                return None;
+            }
+            let sname = it
+                .get("strain_name")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            Some((sid.to_string(), sname))
+        })
+    });
+    if let Some((strain_id, strain_name)) = strain_seed {
+        let plant_id = uuid::Uuid::new_v4().to_string();
+        let planted_at = chrono::Utc::now().timestamp_millis();
+        tx.execute(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            "INSERT INTO garden_plants \
+                  (id, user_id, strain_id, strain_name, current_stage, planted_at, is_completed, water_count) \
+             SELECT $1, $2, $3, $4, 'seed', $5, false, 0 \
+             WHERE NOT EXISTS ( \
+                 SELECT 1 FROM garden_plants WHERE user_id = $2 AND is_completed = false \
+             )",
+            [
+                plant_id.into(),
+                cid.to_string().into(),
+                strain_id.into(),
+                strain_name.into(),
+                planted_at.into(),
+            ],
+        ))
+        .await?;
+    }
+
     tx.commit().await?;
     Ok(Some((cid, is_first)))
 }
