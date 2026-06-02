@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, Result};
 
 #[derive(Debug, Clone)]
 pub struct Config {
@@ -32,10 +32,22 @@ impl Config {
     pub fn from_env() -> Result<Self> {
         dotenvy::dotenv().ok();
 
-        let bot_token = std::env::var("BOT_TOKEN")
-            .context("BOT_TOKEN not set")?
-            .trim()
-            .to_string();
+        // Cycle #122: collect *all* missing required env vars before
+        // returning, instead of failing one-at-a-time. A first-time
+        // deploy with neither BOT_TOKEN nor DATABASE_URL set used to
+        // require fix → restart → fix → restart; now one error lists
+        // everything.
+        let required = collect_required_env(&["BOT_TOKEN", "DATABASE_URL"], |name| {
+            std::env::var(name).ok()
+        })
+        .map_err(|missing| {
+            anyhow!(
+                "missing required env var(s): {} — set all of them and retry",
+                missing.join(", ")
+            )
+        })?;
+        let bot_token = required[0].clone();
+        let database_url = required[1].clone();
 
         // Admin IDs from env; if ADMIN_IDS is set it is the only source of truth.
         // Hard-coded defaults are used ONLY as a fallback when ADMIN_IDS is empty
@@ -85,7 +97,7 @@ impl Config {
                     trimmed.to_string()
                 }
             },
-            database_url: std::env::var("DATABASE_URL").context("DATABASE_URL not set")?,
+            database_url,
             grok_api_key: std::env::var("GROK_API_KEY").unwrap_or_default(),
             glm_api_key: std::env::var("GLM_API_KEY").unwrap_or_default(),
             s3_bucket: std::env::var("S3_BUCKET").ok(),
@@ -104,6 +116,38 @@ impl Config {
 
     pub fn s3_enabled(&self) -> bool {
         self.s3_bucket.is_some() && self.s3_endpoint.is_some()
+    }
+}
+
+/// Cycle #122: read every name in `names` from the supplied env-reader
+/// closure, collecting **all** missing values before returning. Allows
+/// `Config::from_env` to report every missing required var in one go
+/// instead of the fix-restart-fix-restart cycle the previous
+/// `.context("X not set")?` produced.
+///
+/// `reader` is a closure (not direct `std::env::var`) so the helper is
+/// unit-testable without touching the process environment.
+///
+/// `Ok(values)`: all names had non-empty (after-trim) values, returned
+/// in the same order as `names`.
+/// `Err(missing)`: list of names whose value was absent or whitespace-
+/// only.
+pub fn collect_required_env<F>(names: &[&str], reader: F) -> Result<Vec<String>, Vec<String>>
+where
+    F: Fn(&str) -> Option<String>,
+{
+    let mut values = Vec::with_capacity(names.len());
+    let mut missing = Vec::new();
+    for &name in names {
+        match reader(name) {
+            Some(v) if !v.trim().is_empty() => values.push(v.trim().to_string()),
+            _ => missing.push(name.to_string()),
+        }
+    }
+    if missing.is_empty() {
+        Ok(values)
+    } else {
+        Err(missing)
     }
 }
 
@@ -134,7 +178,64 @@ pub fn parse_port_env(raw: Option<String>) -> Result<u16> {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_port_env, Config};
+    use super::{collect_required_env, parse_port_env, Config};
+    use std::collections::HashMap;
+
+    // ── collect_required_env (cycle #122) ───────────────────────────
+
+    /// Build a closure that reads from a HashMap — lets each test pin
+    /// the env state exactly without touching the process env.
+    fn map_reader(pairs: &[(&str, &str)]) -> impl Fn(&str) -> Option<String> + use<> {
+        let map: HashMap<String, String> = pairs
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect();
+        move |name: &str| map.get(name).cloned()
+    }
+
+    #[test]
+    fn collect_required_env_all_present_returns_values_in_order() {
+        let reader = map_reader(&[("BOT_TOKEN", "abc"), ("DATABASE_URL", "postgres://x")]);
+        let v = collect_required_env(&["BOT_TOKEN", "DATABASE_URL"], reader).unwrap();
+        assert_eq!(v, vec!["abc", "postgres://x"]);
+    }
+
+    #[test]
+    fn collect_required_env_missing_one_is_listed() {
+        let reader = map_reader(&[("BOT_TOKEN", "abc")]);
+        let err = collect_required_env(&["BOT_TOKEN", "DATABASE_URL"], reader).unwrap_err();
+        assert_eq!(err, vec!["DATABASE_URL"]);
+    }
+
+    #[test]
+    fn collect_required_env_missing_multiple_listed_together() {
+        // This is the cycle-#122 motivator: previously you'd fix one,
+        // restart, fix the next. Now both are reported once.
+        let reader = map_reader(&[]);
+        let err = collect_required_env(&["BOT_TOKEN", "DATABASE_URL"], reader).unwrap_err();
+        assert_eq!(err, vec!["BOT_TOKEN", "DATABASE_URL"]);
+    }
+
+    #[test]
+    fn collect_required_env_empty_string_counts_as_missing() {
+        let reader = map_reader(&[("BOT_TOKEN", ""), ("DATABASE_URL", "ok")]);
+        let err = collect_required_env(&["BOT_TOKEN", "DATABASE_URL"], reader).unwrap_err();
+        assert_eq!(err, vec!["BOT_TOKEN"]);
+    }
+
+    #[test]
+    fn collect_required_env_whitespace_only_counts_as_missing() {
+        let reader = map_reader(&[("BOT_TOKEN", "   "), ("DATABASE_URL", "ok")]);
+        let err = collect_required_env(&["BOT_TOKEN", "DATABASE_URL"], reader).unwrap_err();
+        assert_eq!(err, vec!["BOT_TOKEN"]);
+    }
+
+    #[test]
+    fn collect_required_env_trims_returned_values() {
+        let reader = map_reader(&[("BOT_TOKEN", "  abc  "), ("DATABASE_URL", "postgres://x")]);
+        let v = collect_required_env(&["BOT_TOKEN", "DATABASE_URL"], reader).unwrap();
+        assert_eq!(v, vec!["abc", "postgres://x"]);
+    }
 
     // ── parse_port_env (cycle #118) ─────────────────────────────────
 
