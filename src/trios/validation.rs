@@ -163,6 +163,47 @@ pub fn parse_finite_float_in_range(
     Ok(v)
 }
 
+/// Cycle #148: defensive clamp for an f64 read from the DB into a JSON
+/// response. Returns `v` if finite and within `[min, max]`, otherwise
+/// `default`. Originally lived in `src/api/quest.rs` (cycle #147);
+/// promoted here so other read paths can reuse the same primitive.
+///
+/// The cycle-#147 motivator: prior to cycle #147 the lat/lon read
+/// path in `api/quest.rs` used `if v.is_finite() { v.max(0.0) }`,
+/// silently corrupting legitimately-negative coordinates (e.g.
+/// Wellington `-41.29`) to 0.0 — the read-path mirror of the
+/// write-path Gulf-of-Guinea bug that `parse_finite_float_in_range`
+/// fixed in cycle #137.
+pub fn clamp_finite_in_range(v: f64, min: f64, max: f64, default: f64) -> f64 {
+    if v.is_finite() && v >= min && v <= max {
+        v
+    } else {
+        default
+    }
+}
+
+/// Cycle #148: companion to `clamp_finite_in_range` for the common
+/// "non-negative, no upper bound" case. Equivalent to the inline
+/// `if v.is_finite() { v.max(0.0) } else { 0.0 }` pattern repeated
+/// across catalog row mappers (`api/catalog.rs`), order stats
+/// (`db/orders.rs`), and referral stats (`db/referrals.rs`).
+///
+/// Behaviour:
+/// - finite, ≥ 0 → returned as-is
+/// - finite, < 0 → 0.0 (the underlying domain — prices, revenue,
+///   bonus balances — has no meaningful negative reading)
+/// - NaN / ±Infinity → 0.0
+///
+/// Migrating those callsites to this helper is opportunistic; the
+/// inline form is correct, just verbose.
+pub fn clamp_finite_non_negative(v: f64) -> f64 {
+    if v.is_finite() && v >= 0.0 {
+        v
+    } else {
+        0.0
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -320,5 +361,76 @@ mod tests {
         // Inclusive on boundaries.
         assert_eq!(parse_int_in_range("0", "stock", 0, 1000).unwrap(), 0);
         assert_eq!(parse_int_in_range("1000", "stock", 0, 1000).unwrap(), 1000);
+    }
+
+    // ── clamp_finite_in_range (cycle #148, moved from api/quest.rs) ──
+
+    #[test]
+    fn clamp_passes_finite_in_range() {
+        assert_eq!(clamp_finite_in_range(55.0, -90.0, 90.0, 0.0), 55.0);
+        assert_eq!(clamp_finite_in_range(-45.5, -90.0, 90.0, 0.0), -45.5);
+    }
+
+    #[test]
+    fn clamp_inclusive_boundaries() {
+        assert_eq!(clamp_finite_in_range(90.0, -90.0, 90.0, 0.0), 90.0);
+        assert_eq!(clamp_finite_in_range(-90.0, -90.0, 90.0, 0.0), -90.0);
+        assert_eq!(clamp_finite_in_range(180.0, -180.0, 180.0, 0.0), 180.0);
+        assert_eq!(clamp_finite_in_range(-180.0, -180.0, 180.0, 0.0), -180.0);
+    }
+
+    #[test]
+    fn clamp_replaces_nan_and_infinity() {
+        assert_eq!(clamp_finite_in_range(f64::NAN, -90.0, 90.0, 0.0), 0.0);
+        assert_eq!(clamp_finite_in_range(f64::INFINITY, -90.0, 90.0, 0.0), 0.0);
+        assert_eq!(
+            clamp_finite_in_range(f64::NEG_INFINITY, -90.0, 90.0, 0.0),
+            0.0
+        );
+    }
+
+    #[test]
+    fn clamp_replaces_out_of_range() {
+        assert_eq!(clamp_finite_in_range(90.1, -90.0, 90.0, 0.0), 0.0);
+        assert_eq!(clamp_finite_in_range(-90.1, -90.0, 90.0, 0.0), 0.0);
+        assert_eq!(clamp_finite_in_range(180.1, -180.0, 180.0, 0.0), 0.0);
+        assert_eq!(clamp_finite_in_range(-180.1, -180.0, 180.0, 0.0), 0.0);
+    }
+
+    #[test]
+    fn clamp_southern_hemisphere_no_longer_corrupted() {
+        // Cycle #147 motivator regression test.
+        let wellington_lat = -41.29;
+        let wellington_lon = 174.78;
+        assert_eq!(
+            clamp_finite_in_range(wellington_lat, -90.0, 90.0, 0.0),
+            wellington_lat,
+        );
+        assert_eq!(
+            clamp_finite_in_range(wellington_lon, -180.0, 180.0, 0.0),
+            wellington_lon,
+        );
+    }
+
+    // ── clamp_finite_non_negative (cycle #148) ───────────────────────
+
+    #[test]
+    fn non_negative_passes_finite_positive() {
+        assert_eq!(clamp_finite_non_negative(0.0), 0.0);
+        assert_eq!(clamp_finite_non_negative(0.01), 0.01);
+        assert_eq!(clamp_finite_non_negative(1_000_000.0), 1_000_000.0);
+    }
+
+    #[test]
+    fn non_negative_clamps_negative() {
+        assert_eq!(clamp_finite_non_negative(-0.01), 0.0);
+        assert_eq!(clamp_finite_non_negative(-1_000_000.0), 0.0);
+    }
+
+    #[test]
+    fn non_negative_replaces_nan_and_infinity() {
+        assert_eq!(clamp_finite_non_negative(f64::NAN), 0.0);
+        assert_eq!(clamp_finite_non_negative(f64::INFINITY), 0.0);
+        assert_eq!(clamp_finite_non_negative(f64::NEG_INFINITY), 0.0);
     }
 }
