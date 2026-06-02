@@ -108,6 +108,31 @@ pub fn validate_location_id(id: u32) -> Result<u32> {
     Ok(id)
 }
 
+/// Cycle #139: integer companion to `parse_finite_float_in_range`.
+/// Same shape — empty / malformed / out-of-range -> labelled `Err`,
+/// valid `i32` in `[min, max]` -> `Ok(v)`. Used for admin-form stock
+/// fields where a typo previously fell to `.unwrap_or(0)` and the
+/// downstream check would only catch the `< 0` case, missing
+/// "user typed `abc`".
+pub fn parse_int_in_range(
+    raw: &str,
+    label: &str,
+    min: i32,
+    max: i32,
+) -> std::result::Result<i32, String> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return Err(format!("{}: empty", label));
+    }
+    let v: i32 = trimmed
+        .parse()
+        .map_err(|_| format!("{}: not a number ({:?})", label, raw))?;
+    if v < min || v > max {
+        return Err(format!("{}: out of range {}..={}", label, min, max));
+    }
+    Ok(v)
+}
+
 /// Cycle #137: parse a user-typed float, rejecting empty, malformed,
 /// NaN, ±Infinity, and out-of-range values. Used by the admin form
 /// for treasure-hunt lat/lon where the pre-#137 `.unwrap_or(0.0)`
@@ -258,5 +283,42 @@ mod tests {
         // The fix isn't "reject 0", it's "require explicit typing of 0".
         let v = parse_finite_float_in_range("0", "lat", -90.0, 90.0).unwrap();
         assert_eq!(v, 0.0);
+    }
+
+    // ── parse_int_in_range (cycle #139) ──────────────────────────────
+
+    #[test]
+    fn parse_int_accepts_valid() {
+        assert_eq!(parse_int_in_range("42", "stock", 0, 1000).unwrap(), 42);
+        assert_eq!(parse_int_in_range("  -5  ", "x", -10, 10).unwrap(), -5);
+    }
+
+    #[test]
+    fn parse_int_rejects_empty() {
+        assert!(parse_int_in_range("", "stock", 0, 1000)
+            .unwrap_err()
+            .contains("empty"));
+        assert!(parse_int_in_range("   ", "stock", 0, 1000).is_err());
+    }
+
+    #[test]
+    fn parse_int_rejects_non_numeric() {
+        let e = parse_int_in_range("abc", "stock", 0, 1000).unwrap_err();
+        assert!(e.contains("not a number"));
+    }
+
+    #[test]
+    fn parse_int_rejects_float() {
+        // 10.5 is not an i32.
+        assert!(parse_int_in_range("10.5", "stock", 0, 1000).is_err());
+    }
+
+    #[test]
+    fn parse_int_rejects_out_of_range() {
+        assert!(parse_int_in_range("-1", "stock", 0, 1000).is_err());
+        assert!(parse_int_in_range("1001", "stock", 0, 1000).is_err());
+        // Inclusive on boundaries.
+        assert_eq!(parse_int_in_range("0", "stock", 0, 1000).unwrap(), 0);
+        assert_eq!(parse_int_in_range("1000", "stock", 0, 1000).unwrap(), 1000);
     }
 }

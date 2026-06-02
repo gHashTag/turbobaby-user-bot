@@ -1438,12 +1438,26 @@ fn AccessoriesTab() -> Element {
                            style: if *submitting.read() { submit_btn_disabled_style() } else { submit_btn_style() },
                            disabled: *submitting.read(),
                            onclick: move |_| {
-                               let n = name(); let c = category(); let p = price.read().parse::<f64>().unwrap_or(0.0);
-                               let s_val = stock.read().parse::<i32>().unwrap_or(0);
-                               if s_val < 0 { status.set("❌ Количество должно быть числом ≥ 0".into()); return; }
+                               let n = name(); let c = category();
+                               if n.trim().is_empty() { status.set("❌ Имя обязательно".into()); return; }
+                               // Cycle #139: strict parse for price + stock. Pre-#139
+                               // a typo silently became 0/0 — only the downstream
+                               // `p <= 0.0` guard caught it, and the toast said only
+                               // "❌ Name + price" without naming the bad field.
+                               let p = match crate::trios::validation::parse_finite_float_in_range(
+                                   &price.read(), "Цена", 0.01, 1_000_000.0,
+                               ) {
+                                   Ok(v) => v,
+                                   Err(msg) => { status.set(format!("❌ {}", msg)); return; }
+                               };
+                               let s_val = match crate::trios::validation::parse_int_in_range(
+                                   &stock.read(), "Количество", 0, 1_000_000,
+                               ) {
+                                   Ok(v) => v,
+                                   Err(msg) => { status.set(format!("❌ {}", msg)); return; }
+                               };
                                let d = description(); let img = image_url(); let vid = video_url();
                                let ne = name_en(); let de = description_en(); let ce = category_en();
-                               if n.trim().is_empty() || p <= 0.0 || !p.is_finite() { status.set("❌ Name + price".into()); return; }
                                submitting.set(true);
                                let temp_id = format!("temp-{}", uuid::Uuid::new_v4());
                                cache.write().insert(0, AdminAccessory {
@@ -1744,12 +1758,25 @@ fn TeaTab() -> Element {
                            style: if *submitting.read() { submit_btn_disabled_style() } else { submit_btn_style() },
                            disabled: *submitting.read(),
                            onclick: move |_| {
-                               let n = name(); let sc = subcategory(); let p = price.read().parse::<f64>().unwrap_or(0.0);
-                               let s_val = stock.read().parse::<i32>().unwrap_or(0);
-                               if s_val < 0 { status.set("❌ Количество должно быть числом ≥ 0".into()); return; }
+                               let n = name(); let sc = subcategory();
+                               if n.trim().is_empty() { status.set("❌ Имя обязательно".into()); return; }
+                               // Cycle #139: strict parse for price + stock (mirrors
+                               // the accessory form). Specific field error replaces
+                               // the generic "Name + price" toast.
+                               let p = match crate::trios::validation::parse_finite_float_in_range(
+                                   &price.read(), "Цена", 0.01, 1_000_000.0,
+                               ) {
+                                   Ok(v) => v,
+                                   Err(msg) => { status.set(format!("❌ {}", msg)); return; }
+                               };
+                               let s_val = match crate::trios::validation::parse_int_in_range(
+                                   &stock.read(), "Количество", 0, 1_000_000,
+                               ) {
+                                   Ok(v) => v,
+                                   Err(msg) => { status.set(format!("❌ {}", msg)); return; }
+                               };
                                let d = description(); let img = image_url(); let vid = video_url();
                                let ne = name_en(); let de = description_en(); let sce = subcategory_en();
-                               if n.trim().is_empty() || p <= 0.0 || !p.is_finite() { status.set("❌ Name + price".into()); return; }
                                submitting.set(true);
                                let temp_id = format!("temp-{}", uuid::Uuid::new_v4());
                                cache.write().insert(0, AdminTea {
