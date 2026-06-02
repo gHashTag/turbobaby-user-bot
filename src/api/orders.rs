@@ -9,6 +9,9 @@ use serde_json::{json, Value};
 use tracing::error;
 
 use crate::api::auth::{check_admin, check_not_blocked, validate_telegram_id_param};
+use crate::api::rate_limit::{
+    check_and_record, client_ip_from_headers, new_store, SlidingWindowStore,
+};
 use crate::db::orders::{Order, OrderItem};
 use crate::db::strains::Strain;
 use crate::trios::pricing::{
@@ -17,6 +20,31 @@ use crate::trios::pricing::{
 };
 use crate::AppState;
 use std::collections::HashMap;
+use std::time::Duration;
+
+/// Cycle #105: per-IP rate-limit for anonymous order creation.
+///
+/// Authenticated orders (with `telegram_id`) already get serialised by
+/// `pg_advisory_xact_lock($tid)` + a 1-min DB-driven `LIMIT 1` check
+/// (line ~739 in `create_order`). Anonymous orders bypass both —
+/// `tid.is_none()` means no advisory lock target and no DB rate-limit.
+/// Without this guard an attacker could spray anonymous orders to fill
+/// the `orders` table.
+///
+/// The `rate_limit_blocked("anon_order")` metric was declared in
+/// `src/metrics.rs:39` at audit time but never wired (the existing
+/// `client_ip_from_headers` + `check_and_record` were only used by
+/// `api/upload.rs`). This static + the gate in `create_order` close
+/// that gap.
+///
+/// Limit: 3 anonymous orders per minute per IP — generous for normal
+/// browser-direct paths, tight enough to bound spray damage. 10k IPs
+/// tracked at peak before the per-key eviction kicks in (~600KB).
+static ANON_ORDER_RATE_LIMIT: std::sync::LazyLock<SlidingWindowStore> =
+    std::sync::LazyLock::new(new_store);
+const ANON_ORDER_RL_WINDOW: Duration = Duration::from_secs(60);
+const ANON_ORDER_RL_MAX_ATTEMPTS: usize = 3;
+const ANON_ORDER_RL_MAX_IPS: usize = 10_000;
 
 #[derive(Debug, Deserialize)]
 pub struct CreateOrderRequest {
@@ -386,6 +414,27 @@ async fn create_order(
     if let Some(ref k) = idem_key {
         if !is_valid_idempotency_key(k) {
             return Err(StatusCode::BAD_REQUEST);
+        }
+    }
+
+    // Cycle #105: anonymous-order IP rate-limit. Authenticated orders
+    // are protected later by per-tid advisory lock + DB-driven 1-min
+    // window; anonymous orders had no abuse guard at all. Cheap and
+    // in-memory, runs before any DB cost.
+    if req.telegram_id.is_none() {
+        let client_ip = client_ip_from_headers(&headers);
+        if !check_and_record(
+            &ANON_ORDER_RATE_LIMIT,
+            &client_ip,
+            ANON_ORDER_RL_WINDOW,
+            ANON_ORDER_RL_MAX_ATTEMPTS,
+            ANON_ORDER_RL_MAX_IPS,
+        )
+        .await
+        {
+            crate::metrics::rate_limit_blocked("anon_order");
+            tracing::warn!("create_order: anon rate-limit exceeded ip={}", client_ip);
+            return Err(StatusCode::TOO_MANY_REQUESTS);
         }
     }
 
@@ -1190,9 +1239,10 @@ async fn get_user_orders(
 #[cfg(test)]
 mod tests {
     use super::{
-        check_full_subtotal, check_strain_subtotal, is_valid_idempotency_key,
-        validate_create_order, validate_update_order_status, CreateOrderRequest, FullSubtotalCheck,
-        PriceCatalog, SubtotalCheck,
+        check_and_record, check_full_subtotal, check_strain_subtotal, is_valid_idempotency_key,
+        new_store, validate_create_order, validate_update_order_status, CreateOrderRequest,
+        FullSubtotalCheck, PriceCatalog, SubtotalCheck, ANON_ORDER_RL_MAX_ATTEMPTS,
+        ANON_ORDER_RL_MAX_IPS, ANON_ORDER_RL_WINDOW,
     };
 
     // ── Idempotency-key validator (cycle #57) ────────────────────────────
@@ -1787,6 +1837,81 @@ mod tests {
         assert_eq!(
             validate_update_order_status("abc", "shipped").unwrap_err(),
             StatusCode::BAD_REQUEST
+        );
+    }
+
+    /// Cycle #105: verifies the per-IP anonymous-order rate limit
+    /// actually enforces the configured cap. Uses an isolated store so
+    /// the global `ANON_ORDER_RATE_LIMIT` isn't perturbed by test order.
+    #[tokio::test]
+    async fn anon_order_rate_limit_blocks_after_max_attempts() {
+        let store = new_store();
+        let ip = "203.0.113.42";
+        // First N attempts pass.
+        for i in 0..ANON_ORDER_RL_MAX_ATTEMPTS {
+            assert!(
+                check_and_record(
+                    &store,
+                    ip,
+                    ANON_ORDER_RL_WINDOW,
+                    ANON_ORDER_RL_MAX_ATTEMPTS,
+                    ANON_ORDER_RL_MAX_IPS,
+                )
+                .await,
+                "attempt {} should pass under the cap",
+                i
+            );
+        }
+        // (N+1)th is blocked.
+        assert!(
+            !check_and_record(
+                &store,
+                ip,
+                ANON_ORDER_RL_WINDOW,
+                ANON_ORDER_RL_MAX_ATTEMPTS,
+                ANON_ORDER_RL_MAX_IPS,
+            )
+            .await,
+            "attempt past the cap should be rate-limited"
+        );
+    }
+
+    #[tokio::test]
+    async fn anon_order_rate_limit_isolates_per_ip() {
+        let store = new_store();
+        // Exhaust IP-A.
+        for _ in 0..ANON_ORDER_RL_MAX_ATTEMPTS {
+            assert!(
+                check_and_record(
+                    &store,
+                    "203.0.113.1",
+                    ANON_ORDER_RL_WINDOW,
+                    ANON_ORDER_RL_MAX_ATTEMPTS,
+                    ANON_ORDER_RL_MAX_IPS,
+                )
+                .await
+            );
+        }
+        assert!(
+            !check_and_record(
+                &store,
+                "203.0.113.1",
+                ANON_ORDER_RL_WINDOW,
+                ANON_ORDER_RL_MAX_ATTEMPTS,
+                ANON_ORDER_RL_MAX_IPS,
+            )
+            .await
+        );
+        // IP-B is unaffected.
+        assert!(
+            check_and_record(
+                &store,
+                "203.0.113.2",
+                ANON_ORDER_RL_WINDOW,
+                ANON_ORDER_RL_MAX_ATTEMPTS,
+                ANON_ORDER_RL_MAX_IPS,
+            )
+            .await
         );
     }
 }
