@@ -112,17 +112,29 @@ fn validate_create_order(req: &CreateOrderRequest) -> Result<f64, StatusCode> {
     }) {
         return Err(StatusCode::BAD_REQUEST);
     }
+    // Cycle #152: upper bounds. Pre-cycle the per-item quantity was
+    // only `> 0`, so a request with `quantity = 1e18` would pass the
+    // boundary validator. The server-side price authority would then
+    // recompute subtotal at the same inflated number (DB price ×
+    // quantity), the comparison passes, and a `1e20 ฿` order lands
+    // in the DB + admin chat. Cap per-item quantity at 10_000 (10kg
+    // of weed is already implausible for a single line, but bulk-tea
+    // orders could plausibly be hundreds of boxes — pick a domain
+    // ceiling that's far above any real order). Cap subtotal/total
+    // at 100M ฿ — the theoretical max for 100 items × 1M ฿/item.
+    const MAX_ITEM_QUANTITY: f64 = 10_000.0;
+    const MAX_ORDER_TOTAL: f64 = 100_000_000.0;
     if req
         .items
         .iter()
-        .any(|i| !i.quantity.is_finite() || i.quantity <= 0.0)
+        .any(|i| !i.quantity.is_finite() || i.quantity <= 0.0 || i.quantity > MAX_ITEM_QUANTITY)
     {
         return Err(StatusCode::BAD_REQUEST);
     }
-    if !req.total.is_finite() || req.total < 0.0 {
+    if !req.total.is_finite() || req.total < 0.0 || req.total > MAX_ORDER_TOTAL {
         return Err(StatusCode::BAD_REQUEST);
     }
-    if !req.subtotal.is_finite() || req.subtotal < 0.0 {
+    if !req.subtotal.is_finite() || req.subtotal < 0.0 || req.subtotal > MAX_ORDER_TOTAL {
         return Err(StatusCode::BAD_REQUEST);
     }
     let bonus_used = req.bonus_used.unwrap_or(0.0).max(0.0);
@@ -1912,6 +1924,93 @@ mod tests {
                 ANON_ORDER_RL_MAX_IPS,
             )
             .await
+        );
+    }
+
+    // ── validate_create_order upper-bound tests (cycle #152) ─────────────
+
+    fn valid_order_request() -> CreateOrderRequest {
+        CreateOrderRequest {
+            telegram_id: Some(42),
+            customer_name: None,
+            customer_phone: None,
+            customer_telegram: None,
+            items: vec![strain_item("s1", 1.0)],
+            subtotal: 100.0,
+            bonus_used: Some(0.0),
+            total: 100.0,
+            shop_id: None,
+        }
+    }
+
+    #[test]
+    fn validate_create_order_baseline_ok() {
+        assert!(validate_create_order(&valid_order_request()).is_ok());
+    }
+
+    #[test]
+    fn validate_create_order_rejects_quantity_above_max() {
+        let mut req = valid_order_request();
+        req.items[0].quantity = 10_000.01;
+        req.subtotal = 1_000_001.0;
+        req.total = 1_000_001.0;
+        assert_eq!(
+            validate_create_order(&req).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
+    }
+
+    #[test]
+    fn validate_create_order_accepts_quantity_at_max() {
+        let mut req = valid_order_request();
+        req.items[0].quantity = 10_000.0;
+        // subtotal/total don't matter here — the helper only checks
+        // their bounds and the (subtotal - bonus = total) cross-check.
+        req.subtotal = 100.0;
+        req.total = 100.0;
+        assert!(validate_create_order(&req).is_ok());
+    }
+
+    #[test]
+    fn validate_create_order_rejects_subtotal_above_max() {
+        let mut req = valid_order_request();
+        req.subtotal = 100_000_000.01;
+        req.total = 100_000_000.01;
+        assert_eq!(
+            validate_create_order(&req).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
+    }
+
+    #[test]
+    fn validate_create_order_rejects_total_above_max() {
+        let mut req = valid_order_request();
+        // Force just total above the cap while keeping subtotal valid.
+        // The (subtotal - bonus ≈ total) cross-check fires before the
+        // upper-bound check if the inequality isn't satisfied, so make
+        // bonus_used absorb the gap.
+        req.subtotal = 100.0;
+        req.bonus_used = Some(0.0);
+        req.total = 100_000_000.01;
+        assert_eq!(
+            validate_create_order(&req).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
+    }
+
+    #[test]
+    fn validate_create_order_rejects_inflated_quantity_attack() {
+        // The cycle-#152 motivator: a malicious client sends
+        // `quantity = 1e18` matched by a `subtotal` that the
+        // server-side price-authority check could be tricked into
+        // accepting. Boundary validator catches it.
+        let mut req = valid_order_request();
+        req.items[0].quantity = 1e18;
+        req.subtotal = 1e20;
+        req.total = 1e20;
+        assert_eq!(
+            validate_create_order(&req).unwrap_err(),
+            StatusCode::BAD_REQUEST
         );
     }
 }
