@@ -7,6 +7,12 @@ edition = "2021"
 # to skip the unlicensed-crate check on our workspace member.
 publish = false
 
+[package.metadata.cargo-machete]
+# Cycle #119: `getrandom` is a direct dep only to thread the `js`
+# feature into the transitive chain. machete can't see feature-only
+# usage so it flags it as unused.
+ignored = ["getrandom"]
+
 [[bin]]
 name = "woody-weed-bot"
 path = "src/web.rs"
@@ -35,6 +41,11 @@ web-sys = { version = "0.3", features = [
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
 js-sys = "0.3"
+# Cycle #119: declared as a direct dep purely to enable the `js`
+# feature flag so the transitive `rand` -> `rand_core` -> `getrandom`
+# chain has a browser entropy source on the WASM target. No
+# `use getrandom::*` in src/ — `cargo machete` flags it; documented
+# below in `[package.metadata.cargo-machete]`.
 getrandom = { version = "0.2", features = ["js"] }
 
 # OpenAPI documentation (backend only)
@@ -45,7 +56,10 @@ teloxide = { version = "0.17", features = ["macros", "webhooks-axum", "rustls"],
 axum = { version = "0.7", features = ["multipart"], optional = true }
 axum-prometheus = { version = "0.7", optional = true }
 metrics = { version = "0.23", optional = true }
-tower = { version = "0.4", optional = true }
+# Cycle #119: `tower` direct dep dropped — only `tower_http::*` is
+# actually `use`d (cors, fs, trace, set-header). tower 0.4 still flows
+# in transitively via axum-prometheus and tower-http themselves, so
+# the binary is unchanged.
 tower-http = { version = "0.5", features = ["cors", "fs", "trace", "set-header", "compression-br", "compression-gzip", "compression-zstd"], optional = true }
 tokio = { version = "1", features = ["full"], optional = true }
 # Cycle #96: tokio-postgres / deadpool-postgres / postgres-types /
@@ -61,7 +75,9 @@ aws-config = { version = "1", default-features = false, features = ["rustls"], o
 aws-sdk-s3 = { version = "1", default-features = false, features = ["rustls"], optional = true }
 aws-smithy-async = { version = "1", features = ["rt-tokio"], optional = true }
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"], optional = true }
-url = { version = "2", optional = true }
+# Cycle #119: `url` direct dep dropped — no `use url::*` anywhere in
+# src/. Still flows in transitively via aws-config / aws-sdk-s3 /
+# reqwest / sea-orm / dioxus-router, so the binary is unchanged.
 
 bytes = "1"
 
@@ -93,11 +109,11 @@ gloo-net = { version = "0.6", features = ["http"] }
 [features]
 default = []
 backend = [
-    "teloxide", "axum", "tower", "tower-http", "tokio",
+    "teloxide", "axum", "tower-http", "tokio",
     "rustls",
     "sea-orm",
     "reqwest",
-    "aws-config", "aws-sdk-s3", "aws-smithy-async", "tracing-subscriber", "url",
+    "aws-config", "aws-sdk-s3", "aws-smithy-async", "tracing-subscriber",
     "axum-prometheus",
     "metrics",
     "utoipa"
