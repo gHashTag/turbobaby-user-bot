@@ -38,6 +38,15 @@ use woody_weed_bot::AppState;
 /// Build a test `AppState` + `Router` against `DATABASE_URL`. Returns
 /// `None` if env var unset — callers should `return` rather than fail.
 pub async fn make_app() -> Option<Router> {
+    let (app, _db) = make_app_with_db().await?;
+    Some(app)
+}
+
+/// Variant that returns the `Database` handle alongside the `Router`
+/// so DB-level assertions (e.g. "exactly one ledger row exists")
+/// don't need to spin up a second connection. The handle is the
+/// SAME `Arc<Database>` plumbed through the `AppState`.
+pub async fn make_app_with_db() -> Option<(Router, Arc<Database>)> {
     let database_url = std::env::var("DATABASE_URL").ok()?;
 
     let config = Arc::new(test_config(&database_url));
@@ -47,17 +56,18 @@ pub async fn make_app() -> Option<Router> {
     db.run_migrations()
         .await
         .expect("integration test: run_migrations failed");
+    let db = Arc::new(db);
     let bot = Arc::new(Bot::new("dummy_test_token"));
     let cache = Arc::new(ETagCache::new());
 
     let state = AppState {
-        db: Arc::new(db),
+        db: db.clone(),
         config,
         bot,
         cache,
     };
 
-    Some(woody_weed_bot::api::router(state))
+    Some((woody_weed_bot::api::router(state), db))
 }
 
 /// Minimal `Config` for tests. All required fields populated; secrets
