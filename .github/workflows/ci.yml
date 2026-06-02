@@ -36,3 +36,21 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y pkg-config musl-tools
       - run: cargo build --release --target x86_64-unknown-linux-musl --features backend --bin woody-weed-bot-server
+
+  # Cycle #107: dependency vulnerability scan. Ignores are documented
+  # in docs/SECURITY_AUDIT.md with rationale per advisory. A NEW
+  # advisory not in the ignore list fails the job — forcing either a
+  # real fix or an explicit policy decision (add to ignores + doc).
+  audit:
+    name: Cargo Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo install --locked cargo-audit
+      - run: |
+          cargo audit \
+            --ignore RUSTSEC-2023-0071 \
+            --ignore RUSTSEC-2026-0098 \
+            --ignore RUSTSEC-2026-0099 \
+            --ignore RUSTSEC-2026-0104
