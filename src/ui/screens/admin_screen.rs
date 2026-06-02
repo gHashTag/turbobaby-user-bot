@@ -1040,21 +1040,39 @@ fn StrainsTab() -> Element {
                                    span { style: "font-weight:700;color:#ffe600;",
                                        "✓ {selected_count} выбрано"
                                    }
-                                   {[("⭐ BEST", "is_best_seller"), ("🆕 NEW", "is_new_arrival"), ("🔥 SALE", "sale_active")].iter().map(|(label, flag)| {
+                                   // Cycle #135: six bulk buttons — ON/OFF for each
+                                   // of the three promo flags. Same endpoint, value
+                                   // differs. ON = orange (action colour), OFF = dark
+                                   // grey (de-emphasised — "rare" path).
+                                   {[
+                                       ("⭐ BEST", "is_best_seller", true),
+                                       ("🆕 NEW",  "is_new_arrival", true),
+                                       ("🔥 SALE", "sale_active",    true),
+                                       ("⭐ BEST", "is_best_seller", false),
+                                       ("🆕 NEW",  "is_new_arrival", false),
+                                       ("🔥 SALE", "sale_active",    false),
+                                   ].iter().map(|(label, flag, value)| {
                                        let flag = *flag;
                                        let label = *label;
+                                       let value = *value;
                                        let init_for_bulk = init_data.read().clone();
+                                       let btn_style = if value {
+                                           "padding:6px 12px;background:#ff9d00;color:#000;border:none;border-radius:4px;font-size:13px;font-weight:700;cursor:pointer;"
+                                       } else {
+                                           "padding:6px 12px;background:#2a2a4a;color:#bbb;border:none;border-radius:4px;font-size:13px;font-weight:600;cursor:pointer;"
+                                       };
+                                       let suffix = if value { "ON" } else { "OFF" };
                                        rsx! {
                                            button {
-                                               key: "{flag}",
-                                               style: "padding:6px 12px;background:#ff9d00;color:#000;border:none;border-radius:4px;font-size:13px;font-weight:700;cursor:pointer;",
+                                               key: "{flag}-{suffix}",
+                                               style: "{btn_style}",
                                                onclick: move |_| {
                                                    let ids: Vec<String> = selected_ids.read().iter().cloned().collect();
                                                    if ids.is_empty() { return; }
                                                    let init = init_for_bulk.clone();
                                                    let mut reload_s = reload;
                                                    let mut selected_s = selected_ids;
-                                                   let body = json!({ "ids": ids, flag: true });
+                                                   let body = json!({ "ids": ids, flag: value });
                                                    spawn(async move {
                                                        let url = format!("{}/api/strains/bulk-marketing", api_base_url());
                                                        let res = HTTP_CLIENT.clone().post(&url)
@@ -1069,7 +1087,7 @@ fn StrainsTab() -> Element {
                                                        }
                                                    });
                                                },
-                                               "{label} ON"
+                                               "{label} {suffix}"
                                            }
                                        }
                                    })}
