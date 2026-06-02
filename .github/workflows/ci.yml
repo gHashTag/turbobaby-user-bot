@@ -63,3 +63,16 @@ jobs:
             --ignore RUSTSEC-2026-0098 \
             --ignore RUSTSEC-2026-0099 \
             --ignore RUSTSEC-2026-0104
+
+  # Cycle #115: license / ban / source / advisory policy enforcement.
+  # Companion to `audit` above — `cargo audit` covers vulnerability
+  # advisories, `cargo deny` adds license allowlist, multi-version
+  # dup detection, and unknown-registry refusal. Config in deny.toml.
+  deny:
+    name: Cargo Deny
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo install --locked cargo-deny
+      - run: cargo deny check

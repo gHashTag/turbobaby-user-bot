@@ -1,0 +1,64 @@
+# cargo-deny config — cycle #115.
+#
+# Companion to docs/SECURITY_AUDIT.md (cycle #107) and the CI `audit`
+# job. `cargo audit` checks RustSec advisories; `cargo deny` adds
+# license, ban, and source policies on top.
+#
+# Run locally:
+#   cargo deny check
+#
+# CI runs the same; any new violation fails the job. To intentionally
+# accept a new license / advisory / source, edit this file with an
+# inline comment explaining why.
+
+[graph]
+# wasm32 builds have a slightly different dep tree (no aws/tokio).
+# The license/ban surface we care about is the backend ELF, so we
+# default to the backend dep set. WASM is a subset.
+all-features = false
+no-default-features = false
+
+[advisories]
+# Mirror the four ignores from .github/workflows/ci.yml (cycle #107).
+# Each is documented in docs/SECURITY_AUDIT.md with the dependency
+# chain, exploit-reachability analysis, and an upgrade path.
+ignore = [
+    { id = "RUSTSEC-2023-0071", reason = "rsa Marvin Attack reached only via sqlx-mysql; we use sqlx-postgres exclusively" },
+    { id = "RUSTSEC-2026-0098", reason = "rustls-webpki name-constraint flaw; aws-sdk-s3 legacy TLS chain, AWS-issued certs only" },
+    { id = "RUSTSEC-2026-0099", reason = "rustls-webpki wildcard constraint; same aws-sdk-s3 chain, same mitigation" },
+    { id = "RUSTSEC-2026-0104", reason = "rustls-webpki CRL parsing panic; we never enable CRL verification" },
+]
+
+[licenses]
+# OSI-approved permissive licenses that appear in the current dep
+# tree (cycle #115 audit). Conservative: copyleft (GPL/AGPL/LGPL)
+# and proprietary licenses are NOT here, so a future dep using one
+# would fail the check.
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "Unicode-3.0",
+    "Zlib",
+    "CC0-1.0",
+]
+confidence-threshold = 0.8
+
+[licenses.private]
+# Our crate (woody-weed-bot) is private and unpublished — ignore the
+# missing license field on it. External deps are still checked.
+ignore = true
+
+[bans]
+# rustls 0.21 vs 0.23 split (cycle #107) is the known multi-version
+# state. Warn-only — we know about it, fix is blocked on aws-sdk-s3
+# upstream. New duplicates should still surface as warnings.
+multiple-versions = "warn"
+wildcards = "deny"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

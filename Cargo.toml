@@ -3,6 +3,9 @@
 name = "woody-weed-bot"
 version = "0.1.0"
 edition = "2021"
+# Cycle #115: not published to crates.io. cargo-deny respects this
+# to skip the unlicensed-crate check on our workspace member.
+publish = false
 
 [[bin]]
 name = "woody-weed-bot"
