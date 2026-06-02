@@ -691,6 +691,107 @@ mod orphan_table_tests {
     }
 }
 
+/// Cycle #157C: defensive test against unclamped `LIMIT $N` SQL.
+///
+/// Pre-cycle-#156 `validate_leaderboard_query` capped `?limit=` from
+/// above but not from below — `LIMIT -1` hit PostgreSQL with `ERROR:
+/// LIMIT must not be negative`. The fix landed in the validator, but
+/// nothing in the codebase ensures a *new* raw-SQL `LIMIT $N` site
+/// gets the same clamp.
+///
+/// Walk `src/db/*.rs` for `LIMIT $\d` substrings, assert the count
+/// equals the audited set. A new raw-SQL paginator fails this test
+/// at pre-commit time, forcing the contributor to either add the
+/// site to `AUDITED_LIMIT_SITES` (with rationale) or migrate the
+/// new caller's clamp.
+///
+/// Same shape as `orphan_table_tests`, `route_wiring_tests`,
+/// `entity_wiring_tests`, `metric_wiring_tests` — schema-truth
+/// defenses keep growing one axis at a time.
+#[cfg(test)]
+mod limit_clamp_audit {
+    /// Each entry: `(file_basename, count_of_LIMIT_$_in_file, why_the_clamp_is_safe)`.
+    /// As of cycle #157C, all sites are either bound to a hard-coded
+    /// constant or routed through a validator that clamps the limit
+    /// into a known-safe range.
+    const AUDITED_LIMIT_SITES: &[(&str, usize, &str)] = &[
+        // cycle #89: limit is `BLOCKED_USERS_LIST_LIMIT = 50` — hard-coded
+        // const in `query_blocked_users`. No client input flows through.
+        ("orders.rs", 1, "BLOCKED_USERS_LIST_LIMIT (const)"),
+        // cycle #156: limit is routed through `validate_leaderboard_query`
+        // which clamps into [1, 50]. Three branches in `get_top_referrers`
+        // for weekly / monthly / all-time SQL — same clamped param.
+        ("referrals.rs", 3, "clamped via validate_leaderboard_query"),
+    ];
+
+    fn count_limit_sites(src: &str) -> usize {
+        // Match `LIMIT $1`, `LIMIT $2`, etc. — any `LIMIT $<digit>`.
+        let mut count = 0;
+        let bytes = src.as_bytes();
+        let needle = b"LIMIT $";
+        let mut i = 0;
+        while i + needle.len() < bytes.len() {
+            if &bytes[i..i + needle.len()] == needle && bytes[i + needle.len()].is_ascii_digit() {
+                count += 1;
+                i += needle.len();
+            } else {
+                i += 1;
+            }
+        }
+        count
+    }
+
+    #[test]
+    fn audited_limit_sites_match_codebase() {
+        let manifest = env!("CARGO_MANIFEST_DIR");
+        let db_dir = std::path::Path::new(manifest).join("src/db");
+        let mut found: std::collections::BTreeMap<String, usize> =
+            std::collections::BTreeMap::new();
+        for entry in std::fs::read_dir(&db_dir)
+            .expect("src/db readable")
+            .flatten()
+        {
+            let path = entry.path();
+            if path.extension().and_then(|s| s.to_str()) != Some("rs") {
+                continue;
+            }
+            let Some(stem) = path.file_name().and_then(|s| s.to_str()) else {
+                continue;
+            };
+            // Skip mod.rs — this audit module's own rationale comments
+            // contain the literal `LIMIT $` substring that would otherwise
+            // fool the count. Same self-reference hazard as the cycle-#103
+            // orphan_table_tests / cycle-#143 route_wiring_tests handle.
+            if stem == "mod.rs" {
+                continue;
+            }
+            let Ok(src) = std::fs::read_to_string(&path) else {
+                continue;
+            };
+            let n = count_limit_sites(&src);
+            if n > 0 {
+                found.insert(stem.to_string(), n);
+            }
+        }
+
+        // Expected counts from the allowlist.
+        let mut expected: std::collections::BTreeMap<String, usize> =
+            std::collections::BTreeMap::new();
+        for (file, n, _) in AUDITED_LIMIT_SITES {
+            expected.insert((*file).to_string(), *n);
+        }
+
+        assert_eq!(
+            found, expected,
+            "raw `LIMIT $N` SQL site count drifted from the cycle-#157C audit.\n\
+             If you added a new paginator: confirm the binding `limit` is either a\n\
+             hard-coded const or routed through a validator that clamps the value\n\
+             into a non-negative range, then update AUDITED_LIMIT_SITES.\n\
+             If you removed one: just trim the entry."
+        );
+    }
+}
+
 /// Cycle #146: defensive test against orphan SeaORM entities.
 ///
 /// Each `src/db/entities/<name>.rs` declares a `pub struct Model` plus
