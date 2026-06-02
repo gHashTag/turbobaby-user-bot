@@ -119,6 +119,16 @@ async fn get_profile(
     }
 }
 
+/// Cycle #151: upper bound for grant amount. Originally only `< 0`
+/// was rejected, so an admin typo of "100000000" instead of "100"
+/// would credit the user an absurd balance — irreversible without
+/// a second admin issuing a counter-grant. 1_000_000 ฿ is the price
+/// ceiling for any single product in the catalog (per
+/// `validate_accessory_request` etc.), so capping single bonus grants
+/// at the same number lets large legitimate refunds through while
+/// catching the "extra zeros" class of mistake.
+const ADD_BONUS_MAX_AMOUNT: f64 = 1_000_000.0;
+
 fn validate_add_bonus_request(req: &AddBonusRequest) -> Result<(), StatusCode> {
     if req.tx_type.len() > 50 {
         return Err(StatusCode::BAD_REQUEST);
@@ -133,7 +143,7 @@ fn validate_add_bonus_request(req: &AddBonusRequest) -> Result<(), StatusCode> {
             return Err(StatusCode::BAD_REQUEST);
         }
     }
-    if !req.amount.is_finite() || req.amount < 0.0 {
+    if !req.amount.is_finite() || req.amount < 0.0 || req.amount > ADD_BONUS_MAX_AMOUNT {
         return Err(StatusCode::BAD_REQUEST);
     }
     Ok(())
@@ -239,7 +249,13 @@ async fn add_bonus(
 }
 
 pub(crate) fn validate_use_bonus_amount(amount: f64) -> Result<(), StatusCode> {
-    if !amount.is_finite() || amount <= 0.0 {
+    // Cycle #151: same ceiling as add_bonus. Use-bonus is naturally
+    // bounded by the customer's actual balance (the SQL `WHERE
+    // bonus_balance >= $1` no-ops on insufficient funds), so this
+    // upper bound is mainly defensive against an inflated `amount`
+    // landing in audit logs or fraud detection heuristics with values
+    // like 1e308 that would skew tier-recompute downstream.
+    if !amount.is_finite() || amount <= 0.0 || amount > ADD_BONUS_MAX_AMOUNT {
         return Err(StatusCode::BAD_REQUEST);
     }
     Ok(())
@@ -469,6 +485,36 @@ mod tests {
         );
     }
 
+    // Cycle #151: upper bound. The "extra zeros" typo case.
+    #[test]
+    fn test_validate_add_bonus_amount_too_large() {
+        let mut req = valid_bonus_req();
+        req.amount = 1_000_000.01;
+        assert_eq!(
+            validate_add_bonus_request(&req).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
+    }
+
+    #[test]
+    fn test_validate_add_bonus_amount_at_max_ok() {
+        // The boundary is inclusive — exactly 1_000_000 ฿ allowed
+        // because that's the same ceiling as a single catalog item.
+        let mut req = valid_bonus_req();
+        req.amount = 1_000_000.0;
+        assert!(validate_add_bonus_request(&req).is_ok());
+    }
+
+    #[test]
+    fn test_validate_add_bonus_amount_infinity() {
+        let mut req = valid_bonus_req();
+        req.amount = f64::INFINITY;
+        assert_eq!(
+            validate_add_bonus_request(&req).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
+    }
+
     #[test]
     fn test_validate_loyalty_config_ok() {
         let body = json!({
@@ -556,6 +602,28 @@ mod tests {
     fn test_validate_use_bonus_amount_nan() {
         assert_eq!(
             validate_use_bonus_amount(f64::NAN).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
+    }
+
+    // Cycle #151: upper bound for use-bonus too.
+    #[test]
+    fn test_validate_use_bonus_amount_too_large() {
+        assert_eq!(
+            validate_use_bonus_amount(1_000_000.01).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
+    }
+
+    #[test]
+    fn test_validate_use_bonus_amount_at_max_ok() {
+        assert!(validate_use_bonus_amount(1_000_000.0).is_ok());
+    }
+
+    #[test]
+    fn test_validate_use_bonus_amount_infinity() {
+        assert_eq!(
+            validate_use_bonus_amount(f64::INFINITY).unwrap_err(),
             StatusCode::BAD_REQUEST
         );
     }
