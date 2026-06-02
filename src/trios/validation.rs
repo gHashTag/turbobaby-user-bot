@@ -108,6 +108,36 @@ pub fn validate_location_id(id: u32) -> Result<u32> {
     Ok(id)
 }
 
+/// Cycle #137: parse a user-typed float, rejecting empty, malformed,
+/// NaN, ±Infinity, and out-of-range values. Used by the admin form
+/// for treasure-hunt lat/lon where the pre-#137 `.unwrap_or(0.0)`
+/// silently routed every typo to "(0, 0) — Gulf of Guinea".
+///
+/// `label` shows up in the error so the toast can name the field.
+/// `min..=max` is inclusive (lat ±90, lon ±180 for geo; arbitrary
+/// for other numeric fields).
+pub fn parse_finite_float_in_range(
+    raw: &str,
+    label: &str,
+    min: f64,
+    max: f64,
+) -> std::result::Result<f64, String> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return Err(format!("{}: empty", label));
+    }
+    let v: f64 = trimmed
+        .parse()
+        .map_err(|_| format!("{}: not a number ({:?})", label, raw))?;
+    if !v.is_finite() {
+        return Err(format!("{}: must be finite", label));
+    }
+    if v < min || v > max {
+        return Err(format!("{}: out of range {}..={}", label, min, max));
+    }
+    Ok(v)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -164,5 +194,69 @@ mod tests {
         assert_eq!(validate_checkpoint_order(5).unwrap(), 5);
         assert!(validate_checkpoint_order(0).is_err());
         assert!(validate_checkpoint_order(101).is_err());
+    }
+
+    // ── parse_finite_float_in_range (cycle #137) ─────────────────────
+
+    #[test]
+    fn parse_float_accepts_valid_lat() {
+        let v = parse_finite_float_in_range("9.7245", "lat", -90.0, 90.0).unwrap();
+        assert!((v - 9.7245).abs() < 1e-9);
+    }
+
+    #[test]
+    fn parse_float_accepts_trimmed_input() {
+        let v = parse_finite_float_in_range("  -45.5  ", "lat", -90.0, 90.0).unwrap();
+        assert!((v - -45.5).abs() < 1e-9);
+    }
+
+    #[test]
+    fn parse_float_rejects_empty() {
+        let e = parse_finite_float_in_range("", "lat", -90.0, 90.0).unwrap_err();
+        assert!(e.contains("empty"));
+    }
+
+    #[test]
+    fn parse_float_rejects_whitespace_only() {
+        assert!(parse_finite_float_in_range("   ", "lat", -90.0, 90.0).is_err());
+    }
+
+    #[test]
+    fn parse_float_rejects_non_numeric() {
+        // The cycle-#137 motivator: pre-fix this would unwrap_or(0.0) and
+        // ship "Gulf of Guinea" coordinates.
+        let e = parse_finite_float_in_range("abc", "lat", -90.0, 90.0).unwrap_err();
+        assert!(e.contains("not a number"));
+    }
+
+    #[test]
+    fn parse_float_rejects_nan_and_infinity() {
+        assert!(parse_finite_float_in_range("NaN", "x", -100.0, 100.0).is_err());
+        assert!(parse_finite_float_in_range("inf", "x", -100.0, 100.0).is_err());
+        assert!(parse_finite_float_in_range("-inf", "x", -100.0, 100.0).is_err());
+    }
+
+    #[test]
+    fn parse_float_rejects_out_of_range() {
+        // Boundary just outside.
+        assert!(parse_finite_float_in_range("91", "lat", -90.0, 90.0).is_err());
+        assert!(parse_finite_float_in_range("-181", "lon", -180.0, 180.0).is_err());
+        // Inclusive on the boundary.
+        assert_eq!(
+            parse_finite_float_in_range("90", "lat", -90.0, 90.0).unwrap(),
+            90.0
+        );
+        assert_eq!(
+            parse_finite_float_in_range("-180", "lon", -180.0, 180.0).unwrap(),
+            -180.0
+        );
+    }
+
+    #[test]
+    fn parse_float_zero_is_valid_in_range() {
+        // 0 is a real coordinate (Gulf of Guinea, prime meridian).
+        // The fix isn't "reject 0", it's "require explicit typing of 0".
+        let v = parse_finite_float_in_range("0", "lat", -90.0, 90.0).unwrap();
+        assert_eq!(v, 0.0);
     }
 }

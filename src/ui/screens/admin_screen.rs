@@ -5055,9 +5055,21 @@ fn TreasuresTab() -> Element {
                                 let img = edit_img.read().trim().to_string();
                                 let bm_desc = edit_bm_desc.read().trim().to_string();
                                 let bm_img = edit_bm_img.read().trim().to_string();
-                                let start_lat = edit_start_lat.read().trim().parse::<f64>().unwrap_or(0.0);
-                                let start_lon = edit_start_lon.read().trim().parse::<f64>().unwrap_or(0.0);
-                                if !start_lat.is_finite() || !start_lon.is_finite() { error.set("Неверные координаты".into()); return; }
+                                // Cycle #137: strict parse — empty / typo / out-of-range
+                                // would silently `unwrap_or(0.0)` previously and ship
+                                // "Gulf of Guinea" coordinates.
+                                let start_lat = match crate::trios::validation::parse_finite_float_in_range(
+                                    &edit_start_lat.read(), "Широта", -90.0, 90.0,
+                                ) {
+                                    Ok(v) => v,
+                                    Err(msg) => { error.set(msg); return; }
+                                };
+                                let start_lon = match crate::trios::validation::parse_finite_float_in_range(
+                                    &edit_start_lon.read(), "Долгота", -180.0, 180.0,
+                                ) {
+                                    Ok(v) => v,
+                                    Err(msg) => { error.set(msg); return; }
+                                };
                                 let start_name = edit_start_name.read().trim().to_string();
                                 let iid = item_id.clone();
                                 let is_cr = is_creating;
