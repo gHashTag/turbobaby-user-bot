@@ -58,6 +58,7 @@ If a check feels wrong, **don't disable it** — the cycle history
 - [`docs/BROWSER_SMOKE.md`](docs/BROWSER_SMOKE.md) — browser smoke test procedure, cycle #114
 - [`docs/SMOKE_TESTS.md`](docs/SMOKE_TESTS.md) — manual smoke checklist (orders, fraud, blocks, etc.)
 - [`docs/DESIGN_SYSTEM.md`](docs/DESIGN_SYSTEM.md) — UI tokens / variants
+- [`docs/TZ2_MARKETING.md`](docs/TZ2_MARKETING.md) — ТЗ #2 marketing flags status (8 cycles, #130–#138)
 
 ## Commit message format
 
