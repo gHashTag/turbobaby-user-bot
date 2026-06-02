@@ -1,8 +1,10 @@
 //! SeaORM entity for the `loyalty_config` singleton row.
 //!
-//! Schema (from migrations/001_initial.sql):
-//!   id INTEGER PRIMARY KEY DEFAULT 1
-//!   config JSONB NOT NULL DEFAULT '{}'
+//! Schema:
+//!   id INTEGER PRIMARY KEY DEFAULT 1               (001_initial.sql)
+//!   config JSONB NOT NULL DEFAULT '{}'             (001_initial.sql)
+//!   marketing_badges_hidden BOOLEAN NOT NULL DEFAULT FALSE
+//!                                                  (032_loyalty_config_marketing_badges_hidden.sql)
 //!
 //! Holds the global loyalty configuration as a JSON blob: tier thresholds,
 //! cashback percents, happy-hour window, referral bonus amount, etc. Always
@@ -19,6 +21,12 @@ pub struct Model {
     pub id: i32,
     #[sea_orm(column_type = "Json")]
     pub config: serde_json::Value,
+    /// Cycle #136: TЗ #2 §5 — admin-controlled "hide all promo badges"
+    /// flag. Toggled by `PUT /api/admin/marketing-display`. The
+    /// `state.config.hide_marketing_badges` env override (cycle
+    /// #133-B) still wins when set, as an ops kill switch.
+    #[serde(default)]
+    pub marketing_badges_hidden: bool,
 }
 
 #[allow(dead_code)] // Standard SeaORM entity pattern

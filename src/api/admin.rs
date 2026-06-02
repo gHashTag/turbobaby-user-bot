@@ -60,6 +60,14 @@ pub fn routes() -> Router<AppState> {
         .route("/admin/login", post(admin_login))
         .route("/admin/ping", get(ping))
         .route("/debug/validate-initdata", post(debug_validate_init_data))
+        // Cycle #136: TЗ #2 §5 self-service marketing-badge toggle.
+        // GET returns the current `loyalty_config.marketing_badges_hidden`;
+        // PUT { hidden: bool } updates it. Closes the "без участия
+        // программиста" gap that #133-B's env-only flag left open.
+        .route(
+            "/admin/marketing-display",
+            get(get_marketing_display).put(set_marketing_display),
+        )
 }
 
 async fn get_stats(
@@ -491,6 +499,85 @@ async fn admin_login(
 
 async fn ping() -> Result<Json<Value>, StatusCode> {
     Ok(Json(json!({"status": "pong"})))
+}
+
+/// Cycle #136: read the current "hide marketing badges" toggle state.
+/// Returns both inputs so the UI can show whether the env override is
+/// forcing the value (admin click won't help in that case).
+async fn get_marketing_display(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+) -> Result<Json<Value>, StatusCode> {
+    check_admin(&headers, &state)?;
+    use crate::db::entities::loyalty_config;
+    use sea_orm::EntityTrait;
+    let db_value = match loyalty_config::Entity::find_by_id(1)
+        .one(&state.db.orm)
+        .await
+    {
+        Ok(Some(m)) => m.marketing_badges_hidden,
+        Ok(None) => false,
+        Err(e) => {
+            tracing::error!("get_marketing_display: read failed: {}", e);
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    };
+    Ok(Json(json!({
+        "hidden": db_value || state.config.hide_marketing_badges,
+        "db_hidden": db_value,
+        "env_override": state.config.hide_marketing_badges,
+    })))
+}
+
+/// Cycle #136: PUT { hidden: bool } — update the DB toggle. The env
+/// override is intentionally not reachable from here (ops would set
+/// `HIDE_MARKETING_BADGES` in the deployment).
+async fn set_marketing_display(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    Json(body): Json<Value>,
+) -> Result<Json<Value>, StatusCode> {
+    check_admin(&headers, &state)?;
+    let hidden = body
+        .get("hidden")
+        .and_then(|v| v.as_bool())
+        .ok_or(StatusCode::BAD_REQUEST)?;
+    use crate::db::entities::loyalty_config::{ActiveModel, Column, Entity as Lc};
+    use sea_orm::{ActiveValue::Set, ColumnTrait, EntityTrait, QueryFilter};
+    let result = Lc::update_many()
+        .col_expr(
+            Column::MarketingBadgesHidden,
+            sea_orm::sea_query::Expr::value(hidden),
+        )
+        .filter(Column::Id.eq(1))
+        .exec(&state.db.orm)
+        .await
+        .map_err(|e| {
+            tracing::error!("set_marketing_display: update failed: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+    // No-row case: row id=1 doesn't exist yet. Insert it.
+    if result.rows_affected == 0 {
+        let am = ActiveModel {
+            id: Set(1),
+            config: Set(serde_json::json!({})),
+            marketing_badges_hidden: Set(hidden),
+        };
+        Lc::insert(am).exec(&state.db.orm).await.map_err(|e| {
+            tracing::error!("set_marketing_display: seed insert failed: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+    }
+    // Strain catalog cache needs to flip with the toggle so customers
+    // see the change on next /api/strains immediately, not after a
+    // 60-second TTL.
+    crate::api::cache::invalidate_strains(&state.cache).await;
+    tracing::info!(
+        "marketing-display set: hidden={} (env_override={})",
+        hidden,
+        state.config.hide_marketing_badges
+    );
+    Ok(Json(json!({ "success": true, "hidden": hidden })))
 }
 
 async fn debug_validate_init_data(

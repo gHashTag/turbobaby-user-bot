@@ -795,6 +795,39 @@ fn StrainsTab() -> Element {
     let mut selected_ids: Signal<std::collections::HashSet<String>> =
         use_signal(std::collections::HashSet::new);
 
+    // Cycle #136: TЗ #2 §5 self-service — current state of the
+    // "hide marketing badges" admin toggle. `None` until first fetch
+    // completes (`use_effect` below). `Some(true)` means badges are
+    // hidden on the customer menu right now.
+    let badges_hidden: Signal<Option<bool>> = use_signal(|| None);
+
+    {
+        let init_for_fetch = init_data.read().clone();
+        use_effect(move || {
+            let init = init_for_fetch.clone();
+            let mut state = badges_hidden;
+            spawn(async move {
+                let url = format!("{}/api/admin/marketing-display", api_base_url());
+                if let Ok(r) = HTTP_CLIENT
+                    .clone()
+                    .get(&url)
+                    .header("X-Telegram-Init-Data", init)
+                    .header("X-Admin-Token", admin_token())
+                    .send()
+                    .await
+                {
+                    if r.status().is_success() {
+                        if let Ok(data) = r.json::<serde_json::Value>().await {
+                            if let Some(v) = data.get("hidden").and_then(|x| x.as_bool()) {
+                                state.set(Some(v));
+                            }
+                        }
+                    }
+                }
+            });
+        });
+    }
+
     use_effect(move || {
         if editing_id.read().is_some() {
             let _ = js_sys::eval("setTimeout(()=>{var el=document.querySelector('[data-editing]');if(el)el.scrollIntoView({behavior:'smooth',block:'center'});},100);");
@@ -1000,6 +1033,55 @@ fn StrainsTab() -> Element {
                }
 
                h3 { style: list_title_style(), "Страйны ({filtered.len()})" }
+               // Cycle #136: TЗ #2 §5 admin-UI toggle for hiding promo
+               // badges (Sale / Best / New) on the customer menu.
+               // Reads /api/admin/marketing-display on mount and lets
+               // the admin flip the state without env / redeploy.
+               {
+                   let current = *badges_hidden.read();
+                   match current {
+                       None => rsx! {
+                           div { style: "margin:6px 0;font-size:12px;color:#888;",
+                               "Загрузка состояния меток…"
+                           }
+                       },
+                       Some(hidden) => {
+                           let init_for_toggle = init_data.read().clone();
+                           let label = if hidden {
+                               "🚫 Метки скрыты — показать"
+                           } else {
+                               "👁 Метки видны — скрыть"
+                           };
+                           let style = if hidden {
+                               "padding:6px 12px;background:#2a2a4a;color:#bbb;border:1px solid #444;border-radius:4px;font-size:13px;cursor:pointer;margin:6px 0;"
+                           } else {
+                               "padding:6px 12px;background:#1a3a1a;color:#9efb9e;border:1px solid #2a5a2a;border-radius:4px;font-size:13px;cursor:pointer;margin:6px 0;"
+                           };
+                           rsx! {
+                               button {
+                                   style: "{style}",
+                                   onclick: move |_| {
+                                       let next = !hidden;
+                                       let init = init_for_toggle.clone();
+                                       let mut state = badges_hidden;
+                                       spawn(async move {
+                                           let url = format!("{}/api/admin/marketing-display", api_base_url());
+                                           let res = HTTP_CLIENT.clone().put(&url)
+                                               .header("X-Telegram-Init-Data", init)
+                                               .header("X-Admin-Token", admin_token())
+                                               .json(&json!({ "hidden": next }))
+                                               .send().await;
+                                           if matches!(res, Ok(ref r) if r.status().is_success()) {
+                                               state.set(Some(next));
+                                           }
+                                       });
+                                   },
+                                   "{label}"
+                               }
+                           }
+                       }
+                   }
+               }
                {render_search(search_query)}
                if *loading.read() {
                    div { style: "display:flex;flex-direction:column;gap:8px;",

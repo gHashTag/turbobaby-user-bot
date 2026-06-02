@@ -376,6 +376,10 @@ async fn update_loyalty_config(
     let am = LcAm {
         id: Set(1),
         config: Set(body),
+        // Cycle #136: leave marketing_badges_hidden unset on the
+        // loyalty-config PUT path — it has its own dedicated
+        // endpoint (PUT /api/admin/marketing-display).
+        ..Default::default()
     };
     LcEntity::insert(am)
         .on_conflict(

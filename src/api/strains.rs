@@ -127,12 +127,16 @@ async fn get_strains(
     tracing::debug!("get_strains: returned {} rows", models.len());
 
     let mut strains: Vec<Strain> = models.into_iter().map(Strain::from).collect();
-    // Cycle #133-B: TZ #2 section 5 — when `HIDE_MARKETING_BADGES=1`,
-    // strip Sale / Best Seller / New Arrival flags off customer-facing
-    // rows. SOTD stays — it's not a "promo" in the ТЗ taxonomy.
-    // Admin endpoints (`include_hidden=1`) bypass this so admin can
-    // still see real state and toggle individual flags off.
-    if !include_hidden && state.config.hide_marketing_badges {
+    // Cycle #133-B + #136: TZ #2 section 5 — strip Sale / Best Seller /
+    // New Arrival flags off customer-facing rows when the admin has
+    // turned the global toggle on. Two inputs feed the decision:
+    //   * env `HIDE_MARKETING_BADGES=1` — ops kill switch (#133-B)
+    //   * DB `loyalty_config.marketing_badges_hidden` — admin self-
+    //     service toggle via PUT /api/admin/marketing-display (#136)
+    // Either being on hides the badges. SOTD stays — it's the headline
+    // feature, not a promo. Admin endpoints (`include_hidden=1`)
+    // bypass everything so admins still see real flag state.
+    if !include_hidden && marketing_badges_hidden(&state).await {
         for s in strains.iter_mut() {
             mask_marketing_flags(s);
         }
@@ -275,6 +279,33 @@ fn validate_strain_request(req: &CreateStrainRequest) -> Result<(), StatusCode> 
 /// Parse RFC3339 timestamp string → `Option<chrono::DateTime<chrono::Utc>>`.
 /// Empty or missing → None; malformed → Err(400 BAD_REQUEST). Used by the
 /// admin TZ #2 marketing UI to set sale/new arrival expiry windows.
+/// Cycle #136: resolve the "hide marketing badges" decision by
+/// OR-ing the env override (cycle #133-B) and the DB toggle. Env
+/// stays so ops can flip it without touching the DB; DB makes admin
+/// self-service possible without touching env / redeploying.
+///
+/// Reads `loyalty_config` row id=1. If the read fails, defaults to
+/// `false` (display badges) so a DB hiccup never accidentally hides
+/// promos.
+async fn marketing_badges_hidden(state: &AppState) -> bool {
+    if state.config.hide_marketing_badges {
+        return true;
+    }
+    use crate::db::entities::loyalty_config;
+    use sea_orm::EntityTrait;
+    match loyalty_config::Entity::find_by_id(1)
+        .one(&state.db.orm)
+        .await
+    {
+        Ok(Some(m)) => m.marketing_badges_hidden,
+        Ok(None) => false,
+        Err(e) => {
+            tracing::warn!("marketing_badges_hidden: loyalty_config read failed: {}", e);
+            false
+        }
+    }
+}
+
 /// Cycle #133-B: zero out the three "promo" marketing flags so the
 /// customer UI renders no Sale / Best Seller / New Arrival badges.
 /// SOTD is kept intact — it's the headline daily feature, not a
