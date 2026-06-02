@@ -451,6 +451,7 @@ fn validate_admin_login(req: &AdminLoginRequest) -> Result<(), StatusCode> {
 }
 
 async fn admin_login(
+    headers: HeaderMap,
     State(state): State<AppState>,
     Json(req): Json<AdminLoginRequest>,
 ) -> Result<Json<Value>, StatusCode> {
@@ -477,7 +478,14 @@ async fn admin_login(
         }
     }
     tracing::warn!("admin_login: invalid password attempt");
-    tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+    // Cycle #126: was `tokio::time::sleep(3s)` which held one tokio task
+    // per failed attempt — easy to exhaust under coordinated probing.
+    // Replaced with the cycle #106 sliding-window-log rate-limit (same
+    // ADMIN_AUTH_RATE_LIMIT store as `check_admin` so attempts across
+    // both paths count against the same per-IP bucket). After 10 fails
+    // in 5 min from one IP, returns 429 immediately — strictly stronger
+    // defence than the per-request slowdown.
+    crate::api::auth::record_failed_admin_attempt(&headers)?;
     Err(StatusCode::UNAUTHORIZED)
 }
 

@@ -411,11 +411,18 @@ pub fn check_admin(headers: &HeaderMap, state: &AppState) -> Result<i64, StatusC
     }
 
     tracing::warn!("admin request without valid auth (initData or token)");
+    record_failed_admin_attempt(headers)?;
+    Err(StatusCode::UNAUTHORIZED)
+}
 
-    // Cycle #106: rate-limit failed admin auth attempts per-IP. Records
-    // this attempt; if the IP has crossed the threshold within the
-    // window, return 429 instead of 401 so brute-force gets blocked
-    // and the metric reflects it.
+/// Cycle #126: shared rate-limit hook for admin-auth failure paths.
+/// Originally inlined in `check_admin` (cycle #106). Extracted so
+/// `admin_login` can call the same `ADMIN_AUTH_RATE_LIMIT` store —
+/// brute-force across either path now counts against the same per-IP
+/// bucket. Returns `Ok(())` if the caller may proceed (with whatever
+/// 401/403 status fits its semantics) or `Err(429)` if the IP has
+/// crossed the threshold.
+pub fn record_failed_admin_attempt(headers: &HeaderMap) -> Result<(), StatusCode> {
     let client_ip = crate::api::rate_limit::client_ip_from_headers(headers);
     let allowed = crate::api::rate_limit::check_and_record_sync(
         &ADMIN_AUTH_RATE_LIMIT,
@@ -426,13 +433,10 @@ pub fn check_admin(headers: &HeaderMap, state: &AppState) -> Result<i64, StatusC
     );
     if !allowed {
         crate::metrics::rate_limit_blocked("admin_auth");
-        tracing::warn!(
-            "admin auth: rate-limit exceeded for ip={} (returning 429 instead of 401)",
-            client_ip
-        );
+        tracing::warn!("admin auth: rate-limit exceeded for ip={}", client_ip);
         return Err(StatusCode::TOO_MANY_REQUESTS);
     }
-    Err(StatusCode::UNAUTHORIZED)
+    Ok(())
 }
 
 /// Verify that the Telegram user in `X-Telegram-Init-Data` owns `expected_telegram_id`.
