@@ -315,6 +315,35 @@ fn validate_treasure_hunt_request(req: &TreasureHuntRequest) -> Result<(), Statu
     }
     crate::api::validate_url(&req.image_url)?;
     crate::api::validate_url(&req.black_mark_image_url)?;
+
+    // Cycle #154: timestamp format + ordering. Pre-cycle, `starts_at`
+    // and `ends_at` were `Option<String>` passed straight to
+    // PostgreSQL via `unwrap_or_default().into()`. Two consequences:
+    //   1. Any malformed timestamp produced a PG 500 instead of a
+    //      clean 400 at the boundary.
+    //   2. `starts_at >= ends_at` was silently accepted — a hunt
+    //      that ends before it starts has no active window, so the
+    //      `is_active` flag is the only thing keeping it visible.
+    //      Confusing and irreversible without admin SQL.
+    // Empty string is treated as "not provided" (same as `None`)
+    // because the existing `create_treasure_hunt` / `update_treasure_hunt`
+    // do `unwrap_or_default()` and the empty-string → PG NULL
+    // round-trip is the established convention here.
+    let parse = |opt: &Option<String>| -> Result<Option<chrono::DateTime<chrono::FixedOffset>>, StatusCode> {
+        match opt.as_deref() {
+            None | Some("") => Ok(None),
+            Some(s) => chrono::DateTime::parse_from_rfc3339(s)
+                .map(Some)
+                .map_err(|_| StatusCode::BAD_REQUEST),
+        }
+    };
+    let start = parse(&req.starts_at)?;
+    let end = parse(&req.ends_at)?;
+    if let (Some(s), Some(e)) = (start, end) {
+        if s >= e {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    }
     Ok(())
 }
 
@@ -856,6 +885,88 @@ mod tests {
             validate_treasure_hunt_request(&req).unwrap_err(),
             StatusCode::BAD_REQUEST
         );
+    }
+
+    // ── treasure_hunt timestamp tests (cycle #154) ───────────────────
+
+    #[test]
+    fn test_validate_treasure_hunt_both_timestamps_none_ok() {
+        // Pre-cycle baseline: both Option::None is valid.
+        let mut req = valid_treasure_hunt();
+        req.starts_at = None;
+        req.ends_at = None;
+        assert!(validate_treasure_hunt_request(&req).is_ok());
+    }
+
+    #[test]
+    fn test_validate_treasure_hunt_proper_ordering_ok() {
+        let mut req = valid_treasure_hunt();
+        req.starts_at = Some("2026-06-01T00:00:00Z".into());
+        req.ends_at = Some("2026-07-01T00:00:00Z".into());
+        assert!(validate_treasure_hunt_request(&req).is_ok());
+    }
+
+    #[test]
+    fn test_validate_treasure_hunt_start_after_end_rejected() {
+        // The motivator: admin types end_date for `starts_at` and
+        // start_date for `ends_at`. Pre-cycle the hunt was created
+        // with no active window and only `is_active=true` kept it
+        // visible.
+        let mut req = valid_treasure_hunt();
+        req.starts_at = Some("2026-07-01T00:00:00Z".into());
+        req.ends_at = Some("2026-06-01T00:00:00Z".into());
+        assert_eq!(
+            validate_treasure_hunt_request(&req).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
+    }
+
+    #[test]
+    fn test_validate_treasure_hunt_equal_timestamps_rejected() {
+        // Equal start/end means the active window has zero duration.
+        let mut req = valid_treasure_hunt();
+        let same = "2026-06-01T00:00:00Z".to_string();
+        req.starts_at = Some(same.clone());
+        req.ends_at = Some(same);
+        assert_eq!(
+            validate_treasure_hunt_request(&req).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
+    }
+
+    #[test]
+    fn test_validate_treasure_hunt_malformed_starts_at_rejected() {
+        let mut req = valid_treasure_hunt();
+        req.starts_at = Some("not-a-timestamp".into());
+        req.ends_at = Some("2026-07-01T00:00:00Z".into());
+        assert_eq!(
+            validate_treasure_hunt_request(&req).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
+    }
+
+    #[test]
+    fn test_validate_treasure_hunt_only_one_timestamp_ok() {
+        // Either-or is fine: starts-only means "active from … forever";
+        // ends-only means "active until …". Ordering check no-ops.
+        let mut req = valid_treasure_hunt();
+        req.starts_at = Some("2026-06-01T00:00:00Z".into());
+        req.ends_at = None;
+        assert!(validate_treasure_hunt_request(&req).is_ok());
+        req.starts_at = None;
+        req.ends_at = Some("2026-07-01T00:00:00Z".into());
+        assert!(validate_treasure_hunt_request(&req).is_ok());
+    }
+
+    #[test]
+    fn test_validate_treasure_hunt_empty_string_treated_as_none() {
+        // Match the existing `unwrap_or_default()` convention in
+        // `create_treasure_hunt` / `update_treasure_hunt`: empty
+        // string round-trips to NULL.
+        let mut req = valid_treasure_hunt();
+        req.starts_at = Some("".into());
+        req.ends_at = Some("".into());
+        assert!(validate_treasure_hunt_request(&req).is_ok());
     }
 
     fn valid_quest_location() -> QuestLocationRequest {
