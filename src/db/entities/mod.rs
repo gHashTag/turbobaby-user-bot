@@ -3,6 +3,7 @@ pub mod block_history;
 pub mod bonus_transaction;
 pub mod garden_config;
 pub mod loyalty_config;
+pub mod loyalty_idempotency_key;
 pub mod loyalty_profile;
 pub mod order;
 pub mod order_fraud_event;

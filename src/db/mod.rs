@@ -43,6 +43,7 @@ const MIGRATION_SQL: &str = concat!(
     include_str!("../../migrations/030_order_fraud_events.sql"),
     include_str!("../../migrations/031_block_history.sql"),
     include_str!("../../migrations/032_loyalty_config_marketing_badges_hidden.sql"),
+    include_str!("../../migrations/033_loyalty_idempotency_keys.sql"),
 );
 
 /// Cycle #96: after the 17-cycle SeaORM migration finished, this is the
@@ -829,6 +830,12 @@ mod entity_wiring_tests {
         // schema later costs more than the 53-line allowlist tax).
         "quest_place",
         "treasure_hunt",
+        // Cycle #158 phase 1: declared as the foundation for retry-safety
+        // on `add_bonus` / `use_bonus` (memory: idempotency-loyalty-deferred).
+        // Phase 2 (next cycle) wires this into the handlers; until then
+        // the migration runs idempotently and the entity sits unused.
+        // Remove this entry as part of the phase-2 commit.
+        "loyalty_idempotency_key",
     ];
 
     /// Strip `//` line comments before the textual contains check;
