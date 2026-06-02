@@ -60,7 +60,7 @@ pub fn App() -> Element {
     let errors = use_context::<Signal<Vec<JsErrorItem>>>();
 
     use_effect(move || {
-        install_error_handlers(errors.clone());
+        install_error_handlers(errors);
     });
 
     rsx! {

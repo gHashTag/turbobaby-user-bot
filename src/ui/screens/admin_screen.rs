@@ -583,9 +583,9 @@ fn AccessDeniedScreen(
                         if id_parsed == 0 { error.set("Некорректный Telegram ID".into()); return; }
                         logging_in.set(true);
                         error.set(String::new());
-                        let mut token_signal = password_token.clone();
-                        let mut error2 = error.clone();
-                        let mut logging_in2 = logging_in.clone();
+                        let mut token_signal = password_token;
+                        let mut error2 = error;
+                        let mut logging_in2 = logging_in;
                         spawn(async move {
                             let url = format!("{}/api/admin/login", api_base_url());
                             let res = HTTP_CLIENT.clone().post(&url)
@@ -3201,7 +3201,7 @@ fn ItemRow(
             button { style: "flex-shrink:0;min-width:44px;min-height:44px;padding:8px 10px;background:#2a2a4a;color:#e8e8e8;border:none;border-radius:4px;font-size:16px;cursor:pointer;line-height:1;display:flex;align-items:center;justify-content:center;",
                 onclick: move |e: Event<MouseData>| { e.stop_propagation(); on_toggle.call(()); }, "{toggle_label}" }
             {if let Some(handler) = on_sotd {
-                let handler = handler.clone();
+                let handler = handler;
                 rsx! {
                     button { style: "flex-shrink:0;min-width:44px;min-height:44px;padding:8px 10px;background:#2a2a1a;color:#ffe600;border:none;border-radius:4px;font-size:16px;cursor:pointer;line-height:1;display:flex;align-items:center;justify-content:center;",
                         onclick: move |e: Event<MouseData>| { e.stop_propagation(); handler.call(()); }, "🌟" }
@@ -4077,7 +4077,7 @@ fn OrdersTab() -> Element {
         let lim = *limit.read();
         let _r = *reload.read();
         let _t = *tick.read();
-        let toasts2 = toasts.clone();
+        let toasts2 = toasts;
         async move {
             loading.set(true);
             let url = format!("{}/api/orders?limit={}&offset={}", api_base_url(), lim, off);
@@ -4285,8 +4285,8 @@ fn OrdersTab() -> Element {
                             let status = order.status.clone();
                             let status2 = order.status.clone();
                             let status3 = order.status.clone();
-                            let init_data2 = init_data.clone();
-                            let init_data3 = init_data.clone();
+                            let init_data2 = init_data;
+                            let init_data3 = init_data;
                             let status_label_str = match order.status.as_str() {
                                 "pending" => "⏳ Ожидает".to_string(),
                                 "confirmed" => "✓ Подтверждён".to_string(),
@@ -4340,9 +4340,9 @@ fn OrdersTab() -> Element {
                                                     let oid = order_id.clone();
                                                     let id2 = init_data2.read().clone();
                                                     updating_id.set(Some(oid.clone()));
-                                                    let mut orders2 = orders.clone();
-                                                    let mut updating2 = updating_id.clone();
-                                                    let toasts2 = toasts.clone();
+                                                    let mut orders2 = orders;
+                                                    let mut updating2 = updating_id;
+                                                    let toasts2 = toasts;
                                                     spawn(async move {
                                                         let url = format!("{}/api/orders/{}/status", api_base_url(), oid);
                                                         let res = HTTP_CLIENT.clone().put(&url)
@@ -4372,9 +4372,9 @@ fn OrdersTab() -> Element {
                                                     let oid = order_id2.clone();
                                                     let id3 = init_data3.read().clone();
                                                     updating_id.set(Some(oid.clone()));
-                                                    let mut orders3 = orders.clone();
-                                                    let mut updating3 = updating_id.clone();
-                                                    let toasts3 = toasts.clone();
+                                                    let mut orders3 = orders;
+                                                    let mut updating3 = updating_id;
+                                                    let toasts3 = toasts;
                                                     spawn(async move {
                                                         let url = format!("{}/api/orders/{}/status", api_base_url(), oid);
                                                         let res = HTTP_CLIENT.clone().put(&url)
@@ -4402,8 +4402,8 @@ fn OrdersTab() -> Element {
                                                 onclick: move |_| {
                                                     let oid = order_id3.clone();
                                                     let id_c = init_data.read().clone();
-                                                    let mut orders_c = orders.clone();
-                                                    let toasts_c = toasts.clone();
+                                                    let mut orders_c = orders;
+                                                    let toasts_c = toasts;
                                                     spawn(async move {
                                                         let url = format!("{}/api/orders/{}/status", api_base_url(), oid);
                                                         let res = HTTP_CLIENT.clone().put(&url)
@@ -4609,11 +4609,11 @@ fn QuestsTab() -> Element {
                                 let id_data = init_data.read().clone();
                                 saving.set(true);
                                 error.set(String::new());
-                                let _places2 = places.clone();
-                                let mut editing2 = editing.clone();
-                                let mut saving2 = saving.clone();
-                                let toasts2 = toasts.clone();
-                                let mut reload2 = reload.clone();
+                                let _places2 = places;
+                                let mut editing2 = editing;
+                                let mut saving2 = saving;
+                                let toasts2 = toasts;
+                                let mut reload2 = reload;
                                 spawn(async move {
                                     let body = json!({
                                         "name": n.clone(), "category": cat,
@@ -4683,8 +4683,8 @@ fn QuestsTab() -> Element {
                             let _p3 = place.clone();
                             let p_id = place.id.clone();
                             let id_del = init_data.read().clone();
-                            let toasts2 = toasts.clone();
-                            let _reload2 = reload.clone();
+                            let toasts2 = toasts;
+                            let _reload2 = reload;
                             rsx! {
                                 div { class: "admin-row",
                                     div { class: "admin-row-main",
@@ -4702,8 +4702,8 @@ fn QuestsTab() -> Element {
                                             onclick: move |_| {
                                                 let pid = p_id.clone();
                                                 let id_d = id_del.clone();
-                                                let mut places3 = places.clone();
-                                                let toasts3 = toasts2.clone();
+                                                let mut places3 = places;
+                                                let toasts3 = toasts2;
                                                 spawn(async move {
                                                     let url = format!("{}/api/quest-places/{}", api_base_url(), pid);
                                                     let res = HTTP_CLIENT.clone().delete(&url)
@@ -4874,10 +4874,10 @@ fn TreasuresTab() -> Element {
                                 let id_data = init_data.read().clone();
                                 saving.set(true);
                                 error.set(String::new());
-                                let mut editing2 = editing.clone();
-                                let mut saving2 = saving.clone();
-                                let toasts2 = toasts.clone();
-                                let mut reload2 = reload.clone();
+                                let mut editing2 = editing;
+                                let mut saving2 = saving;
+                                let toasts2 = toasts;
+                                let mut reload2 = reload;
                                 spawn(async move {
                                     let body = json!({
                                         "name": n,
@@ -4950,8 +4950,8 @@ fn TreasuresTab() -> Element {
                             let h2 = hunt.clone();
                             let h_id = hunt.id.clone();
                             let id_del = init_data.read().clone();
-                            let toasts2 = toasts.clone();
-                            let _reload2 = reload.clone();
+                            let toasts2 = toasts;
+                            let _reload2 = reload;
                             rsx! {
                                 div { class: "admin-row",
                                     div { class: "admin-row-main",
@@ -4974,8 +4974,8 @@ fn TreasuresTab() -> Element {
                                         onclick: move |_| {
                                             let hid = h_id.clone();
                                             let id_d = id_del.clone();
-                                            let mut hunts2 = hunts.clone();
-                                            let toasts3 = toasts2.clone();
+                                            let mut hunts2 = hunts;
+                                            let toasts3 = toasts2;
                                             spawn(async move {
                                                 let url = format!("{}/api/treasure-hunts/{}", api_base_url(), hid);
                                                 let res = HTTP_CLIENT.clone().delete(&url)
@@ -5122,9 +5122,9 @@ fn GardenTab() -> Element {
                             let id_data = init_data.read().clone();
                             saving.set(true);
                             error.set(String::new());
-                            let mut saving2 = saving.clone();
-                            let toasts2 = toasts.clone();
-                            let mut error2 = error.clone();
+                            let mut saving2 = saving;
+                            let toasts2 = toasts;
+                            let mut error2 = error;
                             spawn(async move {
                                 let body = json!({
                                     "is_enabled": enabled,
@@ -5444,12 +5444,12 @@ fn ManagersTab() -> Element {
                             if !commission.is_finite() { push_toast(toasts, "Неверное значение комиссии".into(), ToastKind::Error); return; }
                             let id_data = init_data.read().clone();
                             submitting.set(true);
-                            let mut submitting2 = submitting.clone();
-                            let mut show_form2 = show_form.clone();
-                            let toasts2 = toasts.clone();
-                            let mut reload2 = reload.clone();
-                            let mut form_tg_id2 = form_tg_id.clone();
-                            let mut form_name2 = form_name.clone();
+                            let mut submitting2 = submitting;
+                            let mut show_form2 = show_form;
+                            let toasts2 = toasts;
+                            let mut reload2 = reload;
+                            let mut form_tg_id2 = form_tg_id;
+                            let mut form_name2 = form_name;
                             spawn(async move {
                                 let body = json!({
                                     "telegram_id": tg_id,
@@ -5551,7 +5551,7 @@ fn ManagerDetailModal(props: ManagerDetailModalProps) -> Element {
     let init_data = props.init_data.clone();
 
     // Fetch stats (endpoint may not exist yet — OK)
-    let stats_signal = stats_text.clone();
+    let stats_signal = stats_text;
     let init_data2 = init_data.clone();
     use_effect(move || {
         let url = format!("{}/api/admin/managers/{}/stats", api_base_url(), manager_id);
@@ -5645,8 +5645,8 @@ fn ManagerDetailModal(props: ManagerDetailModalProps) -> Element {
                                     let ref_code = edit_ref_code.read().trim().to_string();
                                     let id_data = init_data.clone();
                                     saving.set(true);
-                                    let mut saving2 = saving.clone();
-                                    let mut editing2 = editing.clone();
+                                    let mut saving2 = saving;
+                                    let mut editing2 = editing;
                                     spawn(async move {
                                         let body = json!({
                                             "name": if name.is_empty() { serde_json::Value::Null } else { name.into() },

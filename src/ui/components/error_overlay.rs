@@ -106,7 +106,7 @@ pub fn install_error_handlers(errors: Signal<Vec<JsErrorItem>>) {
     {
         if let Some(window) = web_sys::window() {
             // window.onerror
-            let errors_clone = errors.clone();
+            let errors_clone = errors;
             let onerror = Closure::wrap(Box::new(move |event: Event| {
                 let msg = js_sys::Reflect::get(&event, &"message".into())
                     .ok()
@@ -129,7 +129,7 @@ pub fn install_error_handlers(errors: Signal<Vec<JsErrorItem>>) {
                 let stack = get_stack_from_event(&event);
                 let full_msg = format!("{} at {}:{}:{}", msg, filename, lineno, colno);
                 push_error(
-                    errors_clone.clone(),
+                    errors_clone,
                     JsErrorItem {
                         id: js_sys::Date::now() as u64,
                         message: full_msg,
@@ -142,14 +142,14 @@ pub fn install_error_handlers(errors: Signal<Vec<JsErrorItem>>) {
             onerror.forget();
 
             // unhandledrejection
-            let errors_clone = errors.clone();
+            let errors_clone = errors;
             let onunhandled = Closure::wrap(Box::new(move |event: Event| {
                 let reason = js_sys::Reflect::get(&event, &"reason".into())
                     .ok()
                     .and_then(|v| v.as_string())
                     .unwrap_or_else(|| "Promise rejected".into());
                 push_error(
-                    errors_clone.clone(),
+                    errors_clone,
                     JsErrorItem {
                         id: js_sys::Date::now() as u64,
                         message: reason,

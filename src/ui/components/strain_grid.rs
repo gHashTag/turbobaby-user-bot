@@ -18,7 +18,7 @@ pub fn StrainGrid(props: StrainGridProps) -> Element {
                 StrainCard {
                     strain: item.clone(),
                     on_add_to_cart: {
-                        let mut cart = cart.clone();
+                        let mut cart = cart;
                         move |s: Strain| {
                             let cart_item = CartItem {
                                 id: s.id.clone(),

@@ -187,9 +187,9 @@ pub fn Garden() -> Element {
     let init_data = use_telegram_init_data();
 
     {
-        let mut plants_c = plants.clone();
-        let mut loading_c = loading.clone();
-        let mut error_c = error_msg.clone();
+        let mut plants_c = plants;
+        let mut loading_c = loading;
+        let mut error_c = error_msg;
         let tid = telegram_id;
         let init = init_data.clone();
         use_future(move || {
@@ -217,7 +217,7 @@ pub fn Garden() -> Element {
     }
 
     {
-        let mut now_c = now_ms.clone();
+        let mut now_c = now_ms;
         use_future(move || async move {
             loop {
                 TimeoutFuture::new(5000).await;
@@ -303,13 +303,13 @@ pub fn Garden() -> Element {
 
                         let wt = water_text.to_string();
 
-                        let plants_signal = plants.clone();
-                        let error_signal = error_msg.clone();
+                        let plants_signal = plants;
+                        let error_signal = error_msg;
                         let pid_for_water = pid.clone();
                         let init_water = init_for_closures.clone();
                         let water_click = move |_| {
-                            let mut ps = plants_signal.clone();
-                            let mut es = error_signal.clone();
+                            let mut ps = plants_signal;
+                            let mut es = error_signal;
                             let plant_id = pid_for_water.clone();
                             let init = init_water.clone();
                             spawn(async move {
@@ -335,13 +335,13 @@ pub fn Garden() -> Element {
                             });
                         };
 
-                        let plants_signal_h = plants.clone();
-                        let error_signal_h = error_msg.clone();
+                        let plants_signal_h = plants;
+                        let error_signal_h = error_msg;
                         let pid_for_harvest = pid.clone();
                         let init_harvest = init_for_closures.clone();
                         let harvest_click = move |_| {
-                            let mut ps = plants_signal_h.clone();
-                            let mut es = error_signal_h.clone();
+                            let mut ps = plants_signal_h;
+                            let mut es = error_signal_h;
                             let plant_id = pid_for_harvest.clone();
                             let init = init_harvest.clone();
                             spawn(async move {

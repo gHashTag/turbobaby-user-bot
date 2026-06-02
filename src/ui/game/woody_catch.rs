@@ -141,17 +141,17 @@ pub fn WoodyCatch() -> Element {
 
     // ── Game loop via use_future ─────────────────────────────────────────────
     {
-        let mut score = score.clone();
-        let mut lives = lives.clone();
-        let mut level = level.clone();
-        let mut combo = combo.clone();
-        let mut playing = playing.clone();
-        let mut game_over = game_over.clone();
-        let lane = lane.clone();
-        let mut buds = buds.clone();
-        let mut next_id = next_id.clone();
-        let mut high_score = high_score.clone();
-        let mut spawn_ticks = spawn_ticks.clone();
+        let mut score = score;
+        let mut lives = lives;
+        let mut level = level;
+        let mut combo = combo;
+        let mut playing = playing;
+        let mut game_over = game_over;
+        let lane = lane;
+        let mut buds = buds;
+        let mut next_id = next_id;
+        let mut high_score = high_score;
+        let mut spawn_ticks = spawn_ticks;
 
         use_future(move || async move {
             loop {
@@ -267,9 +267,9 @@ pub fn WoodyCatch() -> Element {
 
     // ── Keyboard handler (RAII via gloo-events, auto-removed on unmount) ─────
     {
-        let mut lane = lane.clone();
-        let playing = playing.clone();
-        let game_over = game_over.clone();
+        let mut lane = lane;
+        let playing = playing;
+        let game_over = game_over;
         use_hook_with_cleanup(
             move || {
                 let win = match window() {
@@ -418,7 +418,7 @@ pub fn WoodyCatch() -> Element {
                 // ── Lane columns ────────────────────────────────────────────
                 for i in 0u32..4u32 {
                     {
-                        let mut lane_sig = lane.clone();
+                        let mut lane_sig = lane;
                         let start_game_click = start_game;
                         let is_active_lane = cur_lane == i;
                         let border_style = if i < 3 { "1px solid rgba(255,255,255,0.03)" } else { "none" };
@@ -518,7 +518,7 @@ pub fn WoodyCatch() -> Element {
                                 pointer-events: all; color: white;
                             ",
                             onclick: {
-                                let mut lane = lane.clone();
+                                let mut lane = lane;
                                 move |_| {
                                     let cur = *lane.read();
                                     if cur > 0 { *lane.write() = cur - 1; }
@@ -534,7 +534,7 @@ pub fn WoodyCatch() -> Element {
                                 pointer-events: all; color: white;
                             ",
                             onclick: {
-                                let mut lane = lane.clone();
+                                let mut lane = lane;
                                 move |_| {
                                     let cur = *lane.read();
                                     if cur < 3 { *lane.write() = cur + 1; }
