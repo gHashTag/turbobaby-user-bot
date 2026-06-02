@@ -104,7 +104,13 @@ pub fn IdPicker(props: IdPickerProps) -> Element {
                         value: "{search}",
                         oninput: move |e| search.set(e.value()),
                     }
-                    // Selected pills (clickable to deselect).
+                    // Selected pills (clickable to deselect). A pill
+                    // whose id doesn't resolve in the current catalog
+                    // (e.g. the underlying strain was deleted after the
+                    // set was created) is rendered with a warning style
+                    // so the admin notices and can decide whether to
+                    // remove the stale reference or repopulate the
+                    // catalog.
                     if selected_count > 0 {
                         div {
                             style: "
@@ -113,29 +119,46 @@ pub fn IdPicker(props: IdPickerProps) -> Element {
                             ",
                             for sid in selected.read().clone().into_iter() {
                                 {
-                                    let label_for_id = options
+                                    let resolved = options
                                         .iter()
                                         .find(|(id, _)| id == &sid)
-                                        .map(|(_, lbl)| lbl.clone())
-                                        .unwrap_or_else(|| sid.clone());
+                                        .map(|(_, lbl)| lbl.clone());
+                                    let is_stale = resolved.is_none();
+                                    let label_for_id = resolved.unwrap_or_else(|| sid.clone());
+                                    let (bg, color, border, prefix, title) = if is_stale {
+                                        (
+                                            "#ff475715",
+                                            "#ff8a92",
+                                            "#ff4757",
+                                            "⚠️ ",
+                                            format!("ID '{}' не найден в каталоге — возможно элемент удалён", sid),
+                                        )
+                                    } else {
+                                        (
+                                            "#39ff1415",
+                                            "#39ff14",
+                                            "#39ff14",
+                                            "",
+                                            String::new(),
+                                        )
+                                    };
+                                    let pill_style = format!(
+                                        "padding:3px 8px;background:{};color:{};\
+                                         border:1px solid {};border-radius:12px;\
+                                         font-size:11px;cursor:pointer;",
+                                        bg, color, border
+                                    );
                                     let sid_for_remove = sid.clone();
                                     rsx! {
                                         button {
                                             key: "pill-{sid}",
-                                            style: "
-                                                padding:3px 8px;
-                                                background:#39ff1415;
-                                                color:#39ff14;
-                                                border:1px solid #39ff14;
-                                                border-radius:12px;
-                                                font-size:11px;
-                                                cursor:pointer;
-                                            ",
+                                            style: "{pill_style}",
+                                            title: "{title}",
                                             onclick: move |_| {
                                                 let mut s = selected.write();
                                                 s.retain(|x| x != &sid_for_remove);
                                             },
-                                            "{label_for_id} ×"
+                                            "{prefix}{label_for_id} ×"
                                         }
                                     }
                                 }
