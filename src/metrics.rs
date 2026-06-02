@@ -40,16 +40,25 @@ pub fn rate_limit_blocked(kind: &str) {
     counter!("rate_limit_blocked_total", "kind" => kind.to_string()).increment(1);
 }
 
-/// Cycle #141: per-kind counter for auth gate rejections in `check_owner`.
+/// Cycle #141: per-kind counter for auth gate rejections.
+/// Cycle #142: extended to cover the admin gate and block list.
 ///
 /// `kind`:
-/// - `"owner_mismatch"` — initData is HMAC-valid but `user.id` ≠ path id.
+/// - `"owner_mismatch"` — initData HMAC-valid but `user.id` ≠ path id.
 ///   A spike here is the signature of someone probing for IDOR.
-/// - `"missing_init_data"` — header absent or empty.
-/// - `"invalid_init_data"` — HMAC mismatch, replay, or malformed payload.
+/// - `"missing_init_data"` — `check_owner` header absent or empty.
+/// - `"invalid_init_data"` — `check_owner` HMAC mismatch, replay, or
+///   malformed payload.
+/// - `"admin_no_valid_auth"` — `check_admin` exhausted both initData
+///   and X-Admin-Token paths. Combined with `rate_limit_blocked{kind="admin_auth"}`
+///   this distinguishes brute-force throttled vs. just-misconfigured.
+/// - `"user_blocked"` — `check_not_blocked` rejected a known-bad
+///   actor coming back post-block. A non-trivial rate here suggests
+///   the block list is doing real work.
 ///
-/// Distinguishing the three lets an alert separate "buggy client" from
-/// "active attacker" without trawling logs.
+/// Distinguishing the kinds lets an alert separate "buggy client" from
+/// "active attacker" from "background block-list noise" without
+/// trawling logs.
 pub fn auth_failure(kind: &str) {
     counter!("auth_failures_total", "kind" => kind.to_string()).increment(1);
 }

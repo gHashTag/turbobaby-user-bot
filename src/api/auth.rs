@@ -411,6 +411,7 @@ pub fn check_admin(headers: &HeaderMap, state: &AppState) -> Result<i64, StatusC
     }
 
     tracing::warn!("admin request without valid auth (initData or token)");
+    crate::metrics::auth_failure("admin_no_valid_auth");
     record_failed_admin_attempt(headers)?;
     Err(StatusCode::UNAUTHORIZED)
 }
@@ -485,6 +486,7 @@ pub async fn check_not_blocked(state: &AppState, telegram_id: i64) -> Result<(),
     match result {
         Ok(Some(profile)) if profile.is_blocked => {
             tracing::warn!("blocked user attempted action telegram_id={}", telegram_id);
+            crate::metrics::auth_failure("user_blocked");
             Err(StatusCode::FORBIDDEN)
         }
         Ok(_) => Ok(()),
