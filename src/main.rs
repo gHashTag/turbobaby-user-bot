@@ -177,6 +177,40 @@ fn pick_encoding(headers: &axum::http::HeaderMap) -> Option<&'static str> {
     None
 }
 
+/// Cycle #120: resolve the tracing-subscriber filter from `RUST_LOG`,
+/// defaulting to `info` when the env var is absent.
+///
+/// The pre-#120 code (`EnvFilter::from_default_env()`) silently emitted
+/// an OFF-level filter when `RUST_LOG` was unset — *every* log dropped,
+/// including the startup banner and fraud-event warnings. Containers
+/// in production rarely have `RUST_LOG` set explicitly (Railway, Docker,
+/// k8s), so this was a black-hole logging mode hiding in plain sight.
+///
+/// Behaviour:
+///   * `Some(s)` with valid directives → use them as-is.
+///   * `Some(s)` malformed             → fall back to `"info"` (lossy).
+///   * `None` (env unset)              → `"info"`.
+///
+/// Take `Option<String>` so the helper is unit-testable without touching
+/// the process env.
+#[cfg(not(target_arch = "wasm32"))]
+fn resolve_log_filter(raw: Option<String>) -> tracing_subscriber::EnvFilter {
+    use tracing_subscriber::EnvFilter;
+    const DEFAULT: &str = "info";
+    match raw.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+        Some(s) => EnvFilter::try_new(s).unwrap_or_else(|e| {
+            // Can't log yet — the subscriber is what we're building.
+            // eprintln so the malformed directive doesn't get swallowed.
+            eprintln!(
+                "warn: RUST_LOG directive {:?} is malformed ({}); using default {:?}",
+                s, e, DEFAULT
+            );
+            EnvFilter::new(DEFAULT)
+        }),
+        None => EnvFilter::new(DEFAULT),
+    }
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -186,7 +220,7 @@ async fn main() -> Result<()> {
         .expect("Failed to install rustls crypto provider");
 
     tracing_subscriber::fmt()
-        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .with_env_filter(resolve_log_filter(std::env::var("RUST_LOG").ok()))
         .init();
 
     info!("🤖 Starting Woody Bot (Rust)...");
@@ -821,6 +855,52 @@ mod tests {
             "abbr, identity".parse().unwrap(),
         );
         assert_eq!(super::pick_encoding(&headers), None);
+    }
+
+    // ── resolve_log_filter (cycle #120) ─────────────────────────────
+    //
+    // The pre-#120 code dropped *every* log when RUST_LOG was unset.
+    // These tests pin the new behaviour: unset/empty -> info default,
+    // valid directive used as-is, malformed -> fallback. Re-running
+    // them on a tracing-subscriber upgrade is cheap insurance.
+
+    #[test]
+    fn resolve_log_filter_none_uses_info_default() {
+        let f = super::resolve_log_filter(None);
+        // EnvFilter's Display includes the directives.
+        let s = format!("{}", f);
+        assert!(s.contains("info"), "expected 'info' in {:?}", s);
+    }
+
+    #[test]
+    fn resolve_log_filter_empty_string_uses_default() {
+        let f = super::resolve_log_filter(Some(String::new()));
+        assert!(format!("{}", f).contains("info"));
+    }
+
+    #[test]
+    fn resolve_log_filter_whitespace_uses_default() {
+        let f = super::resolve_log_filter(Some("   ".into()));
+        assert!(format!("{}", f).contains("info"));
+    }
+
+    #[test]
+    fn resolve_log_filter_valid_directive_passes_through() {
+        let f = super::resolve_log_filter(Some("debug,sea_orm=warn".into()));
+        let s = format!("{}", f);
+        assert!(s.contains("debug"), "expected 'debug' in {:?}", s);
+        assert!(
+            s.contains("sea_orm=warn"),
+            "expected 'sea_orm=warn' in {:?}",
+            s
+        );
+    }
+
+    #[test]
+    fn resolve_log_filter_malformed_falls_back() {
+        // A directive with an invalid level keyword.
+        let f = super::resolve_log_filter(Some("this_is=not_a_level".into()));
+        assert!(format!("{}", f).contains("info"));
     }
 }
 
