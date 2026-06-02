@@ -23,7 +23,7 @@ static HTTP_CLIENT: LazyLock<crate::ui::api::local_client::LocalClient> =
     LazyLock::new(crate::ui::api::local_client::LocalClient::new);
 use crate::ui::api::context::api_base_url;
 use crate::ui::components::{
-    EmptyState, Modal, Skeleton, SkeletonShape, Toast, ToastContainer, ToastKind,
+    EmptyState, IdPicker, Modal, Skeleton, SkeletonShape, Toast, ToastContainer, ToastKind,
 };
 use crate::ui::telegram::{
     use_telegram_id, use_telegram_init_data, HapticNotification, TelegramApp,
@@ -1972,8 +1972,11 @@ fn SetsTab() -> Element {
     let mut icon = use_signal(String::new);
     let mut image_url = use_signal(String::new);
     let mut video_url = use_signal(String::new);
-    let mut strain_ids = use_signal(String::new);
-    let mut accessory_ids = use_signal(String::new);
+    // Phase 3 / next cycle: IDs are now signals of Vec<String> rather
+    // than comma-separated text. The IdPicker component mutates these
+    // in-place via checkbox toggles.
+    let mut strain_ids: Signal<Vec<String>> = use_signal(Vec::new);
+    let mut accessory_ids: Signal<Vec<String>> = use_signal(Vec::new);
     let mut total_price = use_signal(String::new);
     let mut discount_percent = use_signal(String::new);
     let mut is_deal_of_day = use_signal(|| false);
@@ -1984,6 +1987,58 @@ fn SetsTab() -> Element {
     let mut search_query = use_signal(String::new);
     let reload = use_signal(|| 0u32);
     let toasts: Signal<Vec<ToastItem>> = use_signal(Vec::new);
+
+    // Catalog fetches for the IdPicker — separate from the main sets
+    // cache because they read different endpoints. Both are admin
+    // views (include_hidden=1) so the picker can target unavailable
+    // items if needed.
+    let mut strain_catalog: Signal<Vec<(String, String)>> = use_signal(Vec::new);
+    let mut accessory_catalog: Signal<Vec<(String, String)>> = use_signal(Vec::new);
+    let _ = use_resource(move || {
+        let init_data = init_data.read().clone();
+        async move {
+            let url = format!("{}/api/strains?include_hidden=1", api_base_url());
+            if let Ok(resp) = HTTP_CLIENT
+                .clone()
+                .get(&url)
+                .header("X-Telegram-Init-Data", init_data.clone())
+                .header("X-Admin-Token", admin_token())
+                .header("X-Admin-Telegram-Id", telegram_id.to_string())
+                .send()
+                .await
+            {
+                if let Ok(data) = resp.json::<StrainsResp>().await {
+                    strain_catalog.set(data.strains.into_iter().map(|s| (s.id, s.name)).collect());
+                }
+            }
+            Some(())
+        }
+    });
+    let _ = use_resource(move || {
+        let init_data = init_data.read().clone();
+        async move {
+            let url = format!("{}/api/accessories?include_hidden=1", api_base_url());
+            if let Ok(resp) = HTTP_CLIENT
+                .clone()
+                .get(&url)
+                .header("X-Telegram-Init-Data", init_data.clone())
+                .header("X-Admin-Token", admin_token())
+                .header("X-Admin-Telegram-Id", telegram_id.to_string())
+                .send()
+                .await
+            {
+                if let Ok(data) = resp.json::<AccessoriesResp>().await {
+                    accessory_catalog.set(
+                        data.accessories
+                            .into_iter()
+                            .map(|a| (a.id, a.name))
+                            .collect(),
+                    );
+                }
+            }
+            Some(())
+        }
+    });
 
     use_effect(move || {
         if editing_id.read().is_some() {
@@ -2052,10 +2107,16 @@ fn SetsTab() -> Element {
                         oninput: move |e| icon.set(e.value()) }
                     ImageUpload { image_url: image_url.read().clone(), on_change: move |url: String| image_url.set(url) }
                     VideoUpload { video_url: video_url.read().clone(), on_change: move |url: String| video_url.set(url) }
-                    textarea { style: textarea_style(), placeholder: "Strain IDs (через запятую)", value: "{strain_ids}",
-                        oninput: move |e| strain_ids.set(e.value()) }
-                    textarea { style: textarea_style(), placeholder: "Accessory IDs (через запятую)", value: "{accessory_ids}",
-                        oninput: move |e| accessory_ids.set(e.value()) }
+                    IdPicker {
+                        label: "Сорта".to_string(),
+                        options: strain_catalog.read().clone(),
+                        selected: strain_ids,
+                    }
+                    IdPicker {
+                        label: "Аксессуары".to_string(),
+                        options: accessory_catalog.read().clone(),
+                        selected: accessory_ids,
+                    }
                     input { style: input_style(), placeholder: "Цена ฿", value: "{total_price}", r#type: "number",
                         oninput: move |e| total_price.set(e.value()) }
                     input { style: input_style(), placeholder: "Скидка %", value: "{discount_percent}", r#type: "number",
@@ -2079,8 +2140,8 @@ fn SetsTab() -> Element {
                                 _ => { status.set("❌ Скидка должна быть числом".into()); return; }
                             };
                             if n.is_empty() { status.set("❌ Название обязательно".into()); return; }
-                            let s_ids: Vec<String> = strain_ids().split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
-                            let a_ids: Vec<String> = accessory_ids().split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
+                            let s_ids: Vec<String> = strain_ids.read().clone();
+                            let a_ids: Vec<String> = accessory_ids.read().clone();
                             let desc = description();
                             let ic = icon(); let img = image_url(); let vid = video_url();
                             let deal = is_deal_of_day();
@@ -2099,7 +2160,7 @@ fn SetsTab() -> Element {
                             status.set("✅ Добавлен!".into());
                             name.set(String::new()); description.set(String::new()); icon.set(String::new());
                             image_url.set(String::new()); video_url.set(String::new());
-                            strain_ids.set(String::new()); accessory_ids.set(String::new());
+                            strain_ids.set(Vec::new()); accessory_ids.set(Vec::new());
                             total_price.set(String::new()); discount_percent.set(String::new());
                             is_deal_of_day.set(false);
                             auto_scroll_to_list();
@@ -2183,6 +2244,8 @@ fn SetsTab() -> Element {
                                 key: "{s.id}",
                                 item: s.clone(),
                                 cache: cache,
+                                strain_catalog: strain_catalog.read().clone(),
+                                accessory_catalog: accessory_catalog.read().clone(),
                                 on_saved: move |_| editing_id.set(None),
                                 on_cancel: move |_| editing_id.set(None),
                             }
@@ -2257,6 +2320,8 @@ fn SetsTab() -> Element {
 fn EditSetCard(
     item: AdminSet,
     cache: Signal<Vec<AdminSet>>,
+    strain_catalog: Vec<(String, String)>,
+    accessory_catalog: Vec<(String, String)>,
     on_saved: EventHandler<()>,
     on_cancel: EventHandler<()>,
 ) -> Element {
@@ -2267,8 +2332,8 @@ fn EditSetCard(
     let mut icon = use_signal(|| item.icon.clone().unwrap_or_default());
     let mut image_url = use_signal(|| item.image_url.clone().unwrap_or_default());
     let mut video_url = use_signal(|| item.video_url.clone().unwrap_or_default());
-    let mut strain_ids = use_signal(|| item.strain_ids.join(", "));
-    let mut accessory_ids = use_signal(|| item.accessory_ids.join(", "));
+    let strain_ids: Signal<Vec<String>> = use_signal(|| item.strain_ids.clone());
+    let accessory_ids: Signal<Vec<String>> = use_signal(|| item.accessory_ids.clone());
     let mut total_price = use_signal(|| item.total_price.to_string());
     let mut discount_percent = use_signal(|| item.discount_percent.to_string());
     let mut is_deal_of_day = use_signal(|| item.is_deal_of_day);
@@ -2282,8 +2347,16 @@ fn EditSetCard(
             input { style: input_style(), placeholder: "Иконка", value: "{icon}", oninput: move |e| icon.set(e.value()) }
             ImageUpload { image_url: image_url.read().clone(), on_change: move |url: String| image_url.set(url) }
             VideoUpload { video_url: video_url.read().clone(), on_change: move |url: String| video_url.set(url) }
-            textarea { style: textarea_style(), placeholder: "Strain IDs (через запятую)", value: "{strain_ids}", oninput: move |e| strain_ids.set(e.value()) }
-            textarea { style: textarea_style(), placeholder: "Accessory IDs (через запятую)", value: "{accessory_ids}", oninput: move |e| accessory_ids.set(e.value()) }
+            IdPicker {
+                label: "Сорта".to_string(),
+                options: strain_catalog,
+                selected: strain_ids,
+            }
+            IdPicker {
+                label: "Аксессуары".to_string(),
+                options: accessory_catalog,
+                selected: accessory_ids,
+            }
             input { style: input_style(), placeholder: "Цена ฿", value: "{total_price}", r#type: "number", oninput: move |e| total_price.set(e.value()) }
             input { style: input_style(), placeholder: "Скидка %", value: "{discount_percent}", r#type: "number", oninput: move |e| discount_percent.set(e.value()) }
             label { style: "display:flex;align-items:center;gap:8px;font-size:13px;color:#888;",
@@ -2306,8 +2379,8 @@ fn EditSetCard(
                         if n.is_empty() { status.set("❌ Название обязательно".into()); return; }
                         let desc = description();
                         let ic = icon(); let img = image_url(); let vid = video_url();
-                        let s_ids: Vec<String> = strain_ids().split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
-                        let a_ids: Vec<String> = accessory_ids().split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
+                        let s_ids: Vec<String> = strain_ids.read().clone();
+                        let a_ids: Vec<String> = accessory_ids.read().clone();
                         let deal = is_deal_of_day();
                         let id = item_id.clone();
                         let original = cache.read().iter().find(|s| s.id == id).cloned();
