@@ -718,6 +718,15 @@ pub async fn order_stats_24h(
         .ok_or_else(|| sea_orm::DbErr::Custom("order_stats_24h: aggregate row missing".into()))?;
     let total_orders: i64 = crate::try_get_warn!(row, "total_orders", 0_i64);
     let revenue: f64 = crate::try_get_warn!(row, "revenue", 0.0);
+    // Cycle #147: clamp at read time. `SUM(total::float8)` could in
+    // principle return NaN if a `total` row got NaN-poisoned, and the
+    // `/engage` admin panel would then render "Revenue: NaN ฿".
+    // `avg_order_value` was already guarded; `revenue` itself wasn't.
+    let revenue = if revenue.is_finite() {
+        revenue.max(0.0)
+    } else {
+        0.0
+    };
     let unique_buyers: i64 = crate::try_get_warn!(row, "unique_buyers", 0_i64);
 
     let avg_order_value = if total_orders > 0 && revenue.is_finite() {

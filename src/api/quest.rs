@@ -34,6 +34,21 @@ async fn test_endpoint() -> Json<Value> {
     Json(json!({ "test": "ok", "timestamp": chrono::Utc::now().timestamp() }))
 }
 
+/// Cycle #147: defensive clamp for f64 read from the DB into a JSON
+/// response. Returns `v` if finite and within `[min, max]`, otherwise
+/// `default`. Used at the lat/lon read sites below, where the prior
+/// inline `if v.is_finite() { v.max(0.0) }` silently corrupted any
+/// legitimately-negative coordinate (e.g. Wellington `-45.5`) to 0.0 —
+/// the read-path mirror of the write-path Gulf-of-Guinea bug that
+/// `parse_finite_float_in_range` (cycle #137) fixed.
+fn clamp_finite_in_range(v: f64, min: f64, max: f64, default: f64) -> f64 {
+    if v.is_finite() && v >= min && v <= max {
+        v
+    } else {
+        default
+    }
+}
+
 // ── Quest Places ──────────────────────────────────────────────
 
 #[derive(Debug, Deserialize)]
@@ -70,22 +85,17 @@ async fn get_quest_places(State(state): State<AppState>) -> Result<Json<Value>, 
     let items: Vec<Value> = rows
         .iter()
         .map(|r| {
-            let lat = {
-                let v = r.try_get::<f64>("", "lat").unwrap_or(0.0);
-                if v.is_finite() {
-                    v.max(0.0)
-                } else {
-                    0.0
-                }
-            };
-            let lon = {
-                let v = r.try_get::<f64>("", "lon").unwrap_or(0.0);
-                if v.is_finite() {
-                    v.max(0.0)
-                } else {
-                    0.0
-                }
-            };
+            // Cycle #147: range-clamp via `clamp_finite_in_range`,
+            // not `.max(0)`. See helper doc for the Gulf-of-Guinea
+            // bug context.
+            let lat =
+                clamp_finite_in_range(r.try_get::<f64>("", "lat").unwrap_or(0.0), -90.0, 90.0, 0.0);
+            let lon = clamp_finite_in_range(
+                r.try_get::<f64>("", "lon").unwrap_or(0.0),
+                -180.0,
+                180.0,
+                0.0,
+            );
             json!({
                 "id":          r.try_get::<String>("", "id").unwrap_or_default(),
                 "name":        r.try_get::<String>("", "name").unwrap_or_default(),
@@ -249,22 +259,19 @@ async fn get_treasure_hunts(State(state): State<AppState>) -> Result<Json<Value>
     let items: Vec<Value> = rows
         .iter()
         .map(|r| {
-            let start_lat = {
-                let v = r.try_get::<f64>("", "start_lat").unwrap_or(0.0);
-                if v.is_finite() {
-                    v.max(0.0)
-                } else {
-                    0.0
-                }
-            };
-            let start_lon = {
-                let v = r.try_get::<f64>("", "start_lon").unwrap_or(0.0);
-                if v.is_finite() {
-                    v.max(0.0)
-                } else {
-                    0.0
-                }
-            };
+            // Cycle #147: range-clamp via `clamp_finite_in_range`.
+            let start_lat = clamp_finite_in_range(
+                r.try_get::<f64>("", "start_lat").unwrap_or(0.0),
+                -90.0,
+                90.0,
+                0.0,
+            );
+            let start_lon = clamp_finite_in_range(
+                r.try_get::<f64>("", "start_lon").unwrap_or(0.0),
+                -180.0,
+                180.0,
+                0.0,
+            );
             json!({
                 "id": r.try_get::<String>("", "id").unwrap_or_default(),
                 "name": r.try_get::<String>("", "name").unwrap_or_default(),
@@ -686,11 +693,65 @@ async fn notify_treasure_hunt_admins(
 #[cfg(test)]
 mod tests {
     use super::{
-        extract_qr_token, validate_quest_location_request, validate_quest_place_request,
-        validate_treasure_hunt_request, QuestLocationRequest, QuestPlaceRequest,
-        TreasureHuntRequest,
+        clamp_finite_in_range, extract_qr_token, validate_quest_location_request,
+        validate_quest_place_request, validate_treasure_hunt_request, QuestLocationRequest,
+        QuestPlaceRequest, TreasureHuntRequest,
     };
     use axum::http::StatusCode;
+
+    // ── clamp_finite_in_range (cycle #147) ────────────────────────────
+
+    #[test]
+    fn clamp_passes_finite_in_range() {
+        assert_eq!(clamp_finite_in_range(55.0, -90.0, 90.0, 0.0), 55.0);
+        assert_eq!(clamp_finite_in_range(-45.5, -90.0, 90.0, 0.0), -45.5);
+    }
+
+    #[test]
+    fn clamp_inclusive_boundaries() {
+        assert_eq!(clamp_finite_in_range(90.0, -90.0, 90.0, 0.0), 90.0);
+        assert_eq!(clamp_finite_in_range(-90.0, -90.0, 90.0, 0.0), -90.0);
+        assert_eq!(clamp_finite_in_range(180.0, -180.0, 180.0, 0.0), 180.0);
+        assert_eq!(clamp_finite_in_range(-180.0, -180.0, 180.0, 0.0), -180.0);
+    }
+
+    #[test]
+    fn clamp_replaces_nan_and_infinity() {
+        assert_eq!(clamp_finite_in_range(f64::NAN, -90.0, 90.0, 0.0), 0.0);
+        assert_eq!(clamp_finite_in_range(f64::INFINITY, -90.0, 90.0, 0.0), 0.0);
+        assert_eq!(
+            clamp_finite_in_range(f64::NEG_INFINITY, -90.0, 90.0, 0.0),
+            0.0
+        );
+    }
+
+    #[test]
+    fn clamp_replaces_out_of_range() {
+        // Just outside boundaries.
+        assert_eq!(clamp_finite_in_range(90.1, -90.0, 90.0, 0.0), 0.0);
+        assert_eq!(clamp_finite_in_range(-90.1, -90.0, 90.0, 0.0), 0.0);
+        assert_eq!(clamp_finite_in_range(180.1, -180.0, 180.0, 0.0), 0.0);
+        assert_eq!(clamp_finite_in_range(-180.1, -180.0, 180.0, 0.0), 0.0);
+    }
+
+    #[test]
+    fn clamp_southern_hemisphere_no_longer_corrupted() {
+        // The cycle-#147 motivator: pre-fix the lat read defaulted
+        // Wellington (-45.5) to 0.0 — the same Gulf-of-Guinea
+        // corruption cycle #137 fixed on the write path.
+        let wellington_lat = -41.29;
+        let wellington_lon = 174.78;
+        assert_eq!(
+            clamp_finite_in_range(wellington_lat, -90.0, 90.0, 0.0),
+            wellington_lat,
+        );
+        assert_eq!(
+            clamp_finite_in_range(wellington_lon, -180.0, 180.0, 0.0),
+            wellington_lon,
+        );
+    }
+
+    // ──────────────────────────────────────────────────────────────────
 
     fn valid_quest_place() -> QuestPlaceRequest {
         QuestPlaceRequest {
