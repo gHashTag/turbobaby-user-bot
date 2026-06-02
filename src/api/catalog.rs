@@ -214,6 +214,11 @@ fn validate_accessory_request(req: &AccessoryRequest) -> Result<(), StatusCode> 
     if !req.price.is_finite() || req.price < 0.0 || req.price > 1_000_000.0 {
         return Err(StatusCode::BAD_REQUEST);
     }
+    if let Some(s) = req.stock {
+        if !(0..=1_000_000).contains(&s) {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    }
     crate::api::validate_url(&req.image_url)?;
     crate::api::validate_url(&req.video_url)?;
     Ok(())
@@ -715,6 +720,11 @@ fn validate_tea_product_request(req: &TeaProductRequest) -> Result<(), StatusCod
     }
     if !req.price.is_finite() || req.price < 0.0 || req.price > 1_000_000.0 {
         return Err(StatusCode::BAD_REQUEST);
+    }
+    if let Some(s) = req.stock {
+        if !(0..=1_000_000).contains(&s) {
+            return Err(StatusCode::BAD_REQUEST);
+        }
     }
     crate::api::validate_url(&req.image_url)?;
     crate::api::validate_url(&req.video_url)?;
@@ -1453,6 +1463,45 @@ mod tests {
         );
     }
 
+    // Cycle #140: server-side stock guard. The cycle #139 UI parser
+    // bounds stock to 0..=1_000_000; a direct API POST must hit the
+    // same gate or negative/garbage stock lands in the DB.
+    #[test]
+    fn test_validate_accessory_stock_negative() {
+        let mut req = valid_accessory();
+        req.stock = Some(-1);
+        assert_eq!(
+            validate_accessory_request(&req).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
+    }
+
+    #[test]
+    fn test_validate_accessory_stock_too_high() {
+        let mut req = valid_accessory();
+        req.stock = Some(1_000_001);
+        assert_eq!(
+            validate_accessory_request(&req).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
+    }
+
+    #[test]
+    fn test_validate_accessory_stock_none_ok() {
+        let mut req = valid_accessory();
+        req.stock = None;
+        assert!(validate_accessory_request(&req).is_ok());
+    }
+
+    #[test]
+    fn test_validate_accessory_stock_boundaries_ok() {
+        let mut req = valid_accessory();
+        req.stock = Some(0);
+        assert!(validate_accessory_request(&req).is_ok());
+        req.stock = Some(1_000_000);
+        assert!(validate_accessory_request(&req).is_ok());
+    }
+
     fn valid_tea() -> TeaProductRequest {
         TeaProductRequest {
             name: "Green Tea".into(),
@@ -1502,6 +1551,34 @@ mod tests {
             validate_tea_product_request(&req).unwrap_err(),
             StatusCode::BAD_REQUEST
         );
+    }
+
+    // Cycle #140: server-side stock guard for tea products.
+    #[test]
+    fn test_validate_tea_stock_negative() {
+        let mut req = valid_tea();
+        req.stock = Some(-1);
+        assert_eq!(
+            validate_tea_product_request(&req).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
+    }
+
+    #[test]
+    fn test_validate_tea_stock_too_high() {
+        let mut req = valid_tea();
+        req.stock = Some(1_000_001);
+        assert_eq!(
+            validate_tea_product_request(&req).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
+    }
+
+    #[test]
+    fn test_validate_tea_stock_none_ok() {
+        let mut req = valid_tea();
+        req.stock = None;
+        assert!(validate_tea_product_request(&req).is_ok());
     }
 
     fn valid_accessory_set() -> AccessorySetRequest {
