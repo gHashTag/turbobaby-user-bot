@@ -788,6 +788,13 @@ fn StrainsTab() -> Element {
     let reload = use_signal(|| 0u32);
     let toasts: Signal<Vec<ToastItem>> = use_signal(Vec::new);
 
+    // Cycle #134: bulk-marketing selection state. `selected_ids` is
+    // the set of strain ids currently checked in the list; the bulk
+    // action bar above the list fires POST /api/strains/bulk-marketing
+    // for each toggle. Selection cleared after a successful apply.
+    let mut selected_ids: Signal<std::collections::HashSet<String>> =
+        use_signal(std::collections::HashSet::new);
+
     use_effect(move || {
         if editing_id.read().is_some() {
             let _ = js_sys::eval("setTimeout(()=>{var el=document.querySelector('[data-editing]');if(el)el.scrollIntoView({behavior:'smooth',block:'center'});},100);");
@@ -1020,6 +1027,65 @@ fn StrainsTab() -> Element {
                        },
                    }
                } else {
+                   // Cycle #134: bulk-marketing action bar. Renders when any
+                   // strain is selected. Three "ON" buttons (BEST / NEW /
+                   // SALE) — turning a flag OFF in bulk is rarer; admins
+                   // do that via per-strain edit. Disabled while a bulk
+                   // request is in flight to prevent N concurrent POSTs.
+                   {
+                       let selected_count = selected_ids.read().len();
+                       if selected_count > 0 {
+                           rsx! {
+                               div { style: "background:#1a1a2e;border:2px solid #ffe600;border-radius:6px;padding:10px 12px;margin-bottom:8px;display:flex;flex-wrap:wrap;align-items:center;gap:8px;",
+                                   span { style: "font-weight:700;color:#ffe600;",
+                                       "✓ {selected_count} выбрано"
+                                   }
+                                   {[("⭐ BEST", "is_best_seller"), ("🆕 NEW", "is_new_arrival"), ("🔥 SALE", "sale_active")].iter().map(|(label, flag)| {
+                                       let flag = *flag;
+                                       let label = *label;
+                                       let init_for_bulk = init_data.read().clone();
+                                       rsx! {
+                                           button {
+                                               key: "{flag}",
+                                               style: "padding:6px 12px;background:#ff9d00;color:#000;border:none;border-radius:4px;font-size:13px;font-weight:700;cursor:pointer;",
+                                               onclick: move |_| {
+                                                   let ids: Vec<String> = selected_ids.read().iter().cloned().collect();
+                                                   if ids.is_empty() { return; }
+                                                   let init = init_for_bulk.clone();
+                                                   let mut reload_s = reload;
+                                                   let mut selected_s = selected_ids;
+                                                   let body = json!({ "ids": ids, flag: true });
+                                                   spawn(async move {
+                                                       let url = format!("{}/api/strains/bulk-marketing", api_base_url());
+                                                       let res = HTTP_CLIENT.clone().post(&url)
+                                                           .header("X-Telegram-Init-Data", init)
+                                                           .header("X-Admin-Token", admin_token())
+                                                           .json(&body)
+                                                           .send().await;
+                                                       if matches!(res, Ok(ref r) if r.status().is_success()) {
+                                                           selected_s.set(std::collections::HashSet::new());
+                                                           let n = reload_s.read().wrapping_add(1);
+                                                           reload_s.set(n);
+                                                       }
+                                                   });
+                                               },
+                                               "{label} ON"
+                                           }
+                                       }
+                                   })}
+                                   button {
+                                       style: "padding:6px 12px;background:transparent;color:#888;border:1px solid #2a2a4a;border-radius:4px;font-size:13px;cursor:pointer;",
+                                       onclick: move |_| {
+                                           selected_ids.set(std::collections::HashSet::new());
+                                       },
+                                       "Очистить"
+                                   }
+                               }
+                           }
+                       } else {
+                           rsx! {}
+                       }
+                   }
                    div { "data-list": "true", style: "display:flex;flex-direction:column;gap:8px;",
                        for s in filtered {
                            if editing_id.read().as_deref() == Some(s.id.as_str()) {
@@ -1031,7 +1097,28 @@ fn StrainsTab() -> Element {
                                    on_cancel: move |_| editing_id.set(None),
                                }
                            } else {
-                               ItemRow {
+                               // Cycle #134: wrap row with selection checkbox.
+                               {
+                                   let row_id = s.id.clone();
+                                   let row_id_for_checkbox = row_id.clone();
+                                   let is_checked = selected_ids.read().contains(&row_id);
+                                   rsx! {
+                                       div { key: "wrap-{row_id}", style: "display:flex;align-items:center;gap:8px;",
+                                           input {
+                                               r#type: "checkbox",
+                                               style: "width:18px;height:18px;cursor:pointer;flex-shrink:0;",
+                                               checked: is_checked,
+                                               onchange: move |e| {
+                                                   let mut set = selected_ids.write();
+                                                   if e.value() == "true" {
+                                                       set.insert(row_id_for_checkbox.clone());
+                                                   } else {
+                                                       set.remove(&row_id_for_checkbox);
+                                                   }
+                                               },
+                                           }
+                                           div { style: "flex:1;",
+                                               ItemRow {
                                    key: "{s.id}",
                                    name: s.name.clone(),
                                    sub: format!("{} • {}฿/г • {}г", s.category.clone().unwrap_or_default(), s.price_per_gram, s.available_grams.unwrap_or(0.0)),
@@ -1072,6 +1159,10 @@ fn StrainsTab() -> Element {
                                        move |_| delete_target_id.set(Some(id.clone()))
                                    }
                                }
+                                           } // close inner div { style:"flex:1;" }
+                                       } // close outer wrap div { key:"wrap-..." }
+                                   } // close rsx! macro
+                               } // close { let row_id...; rsx!{...} } block expression
                            }
                        }
                    }
