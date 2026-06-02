@@ -141,9 +141,11 @@ impl TelegramApp {
     }
 
     /// Get Telegram user ID from WebApp.
+    ///
     /// Tries two sources in order:
     ///   1. `window.Telegram.WebApp.initDataUnsafe.user.id`
     ///   2. parse user from `window.Telegram.WebApp.initData` (URL-encoded)
+    ///
     /// Returns `None` if Telegram WebApp is not available (e.g. plain browser).
     /// NOTE: `?tgid=` query fallback removed to prevent URL-based impersonation.
     pub fn get_user_id(&self) -> Option<i64> {

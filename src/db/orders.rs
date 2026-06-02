@@ -784,7 +784,7 @@ pub async fn block_stats_24h(
     };
     // Top admin actor — scoped to manual `unblock` rows because
     // `auto_block` events have NULL `actor_admin_id` by design.
-    if let Ok(top) = orm
+    if let Ok(Some(top)) = orm
         .query_one(Statement::from_sql_and_values(
             DbBackend::Postgres,
             "SELECT actor_admin_id::text AS aid, COUNT(*)::bigint AS n \
@@ -797,10 +797,8 @@ pub async fn block_stats_24h(
         ))
         .await
     {
-        if let Some(top) = top {
-            s.top_actor_admin = top.try_get::<Option<String>>("", "aid").ok().flatten();
-            s.top_actor_count = top.try_get("", "n").unwrap_or(0);
-        }
+        s.top_actor_admin = top.try_get::<Option<String>>("", "aid").ok().flatten();
+        s.top_actor_count = top.try_get("", "n").unwrap_or(0);
     }
     Ok(s)
 }
@@ -893,7 +891,7 @@ pub async fn fraud_stats_24h(
         top_offender_count: 0,
     };
     // Top offender — separate cheap query because it's bounded LIMIT 1.
-    if let Ok(top) = orm
+    if let Ok(Some(top)) = orm
         .query_one(Statement::from_string(
             DbBackend::Postgres,
             "SELECT telegram_id::text AS tid, COUNT(*)::bigint AS n \
@@ -905,10 +903,8 @@ pub async fn fraud_stats_24h(
         ))
         .await
     {
-        if let Some(top) = top {
-            s.top_offender = top.try_get::<Option<String>>("", "tid").ok().flatten();
-            s.top_offender_count = top.try_get("", "n").unwrap_or(0);
-        }
+        s.top_offender = top.try_get::<Option<String>>("", "tid").ok().flatten();
+        s.top_offender_count = top.try_get("", "n").unwrap_or(0);
     }
     Ok(s)
 }

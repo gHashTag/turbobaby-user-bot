@@ -11,8 +11,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+          targets: wasm32-unknown-unknown
       - run: cargo check --features backend
       - run: cargo test --features backend
+      # Cycle #113: after the #110-#112 cleanup got both targets to zero
+      # clippy warnings (165 -> 0 on WASM, 4 -> 0 on backend), gate
+      # future PRs to keep them clean. `-D warnings` fails the build on
+      # any new lint.
+      - run: cargo clippy --features backend --bin woody-weed-bot-server -- -D warnings
+      - run: cargo clippy --target wasm32-unknown-unknown --lib -- -D warnings
 
   build-wasm:
     name: Build WASM (Release)

@@ -104,11 +104,7 @@ pub fn TechTreeScreen() -> Element {
         .iter()
         .filter(|n| n.status == "available")
         .count();
-    let progress_pct = if total > 0 {
-        (completed * 100) / total
-    } else {
-        0
-    };
+    let progress_pct = (completed * 100).checked_div(total).unwrap_or(0);
 
     rsx! {
         div { style: "

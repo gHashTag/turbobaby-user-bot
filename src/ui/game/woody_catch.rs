@@ -147,7 +147,6 @@ pub fn WoodyCatch() -> Element {
         let mut combo = combo;
         let mut playing = playing;
         let mut game_over = game_over;
-        let lane = lane;
         let mut buds = buds;
         let mut next_id = next_id;
         let mut high_score = high_score;
@@ -268,8 +267,6 @@ pub fn WoodyCatch() -> Element {
     // ── Keyboard handler (RAII via gloo-events, auto-removed on unmount) ─────
     {
         let mut lane = lane;
-        let playing = playing;
-        let game_over = game_over;
         use_hook_with_cleanup(
             move || {
                 let win = match window() {

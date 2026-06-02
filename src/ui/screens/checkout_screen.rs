@@ -74,7 +74,7 @@ pub fn CheckoutScreen() -> Element {
             return;
         }
         let trios_items = to_trios_items(&submit_cart_items);
-        if let Err(_) = validate_checkout(&customer_name(), &customer_phone(), &trios_items) {
+        if validate_checkout(&customer_name(), &customer_phone(), &trios_items).is_err() {
             return;
         }
         is_processing.set(true);

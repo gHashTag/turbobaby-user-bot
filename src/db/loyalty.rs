@@ -14,7 +14,11 @@
 //! needs (thresholds and the progressive list) so it doesn't drag in
 //! an entity dependency for callers that just want the math.
 
-#[allow(dead_code)] // Used by cashback flows once they wire it up; pure helper.
+// 9 args is intentional — collapsing into a config struct would force every
+// caller (today: tests; tomorrow: cashback flow when wired) to build that
+// struct just to call a pure function. Defer the refactor until a real
+// caller appears.
+#[allow(dead_code, clippy::too_many_arguments)] // Used by cashback flows once they wire it up; pure helper.
 pub fn calculate_tier(
     total_spent: f64,
     order_count: i64,

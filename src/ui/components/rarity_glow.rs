@@ -32,8 +32,11 @@ impl Rarity {
         }
     }
 
-    /// Parse from a string (e.g. "rare")
-    pub fn from_str(s: &str) -> Self {
+    /// Parse from a string (e.g. "rare") — infallible (unknown variants
+    /// fall back to `Common`). Named distinctly from `FromStr::from_str`
+    /// since that trait returns `Result<Self, E>` and we deliberately
+    /// don't surface errors here.
+    pub fn from_str_lossy(s: &str) -> Self {
         match s.to_lowercase().as_str() {
             "rare" => Self::Rare,
             "epic" => Self::Epic,
