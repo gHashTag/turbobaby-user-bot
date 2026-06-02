@@ -372,6 +372,28 @@ fn validate_loyalty_config_body(body: &Value) -> Result<(), StatusCode> {
             return Err(StatusCode::BAD_REQUEST);
         }
     }
+
+    // Cycle #153: tier-threshold ordering invariant. The
+    // tier-recompute SQL in `complete_order_and_update_loyalty`
+    // evaluates `CASE WHEN total_spent >= gold THEN 'gold' WHEN
+    // total_spent >= silver THEN 'silver' WHEN total_spent >= bronze
+    // THEN 'bronze' ELSE 'none' END` top-down, so the thresholds
+    // MUST satisfy `gold > silver > bronze`. Without this guard, an
+    // admin typo `gold=100, silver=1000` would give the 'gold' tier
+    // to every user who spent ≥100 ฿ — accidental mass tier
+    // inflation that's silently irreversible (the SQL just keeps
+    // running with the broken ordering until somebody fixes it).
+    //
+    // Allow equality between bronze and 0 — a config with bronze=0
+    // means "any spend qualifies for bronze," a legitimate setting.
+    // Equality between tiers is rejected: it implies an empty band
+    // (e.g. silver==gold means nobody can ever be silver).
+    let gold = body["gold_threshold"].as_f64().unwrap_or(0.0);
+    let silver = body["silver_threshold"].as_f64().unwrap_or(0.0);
+    let bronze = body["bronze_threshold"].as_f64().unwrap_or(0.0);
+    if !(gold > silver && silver > bronze) {
+        return Err(StatusCode::BAD_REQUEST);
+    }
     Ok(())
 }
 
@@ -547,6 +569,80 @@ mod tests {
             validate_loyalty_config_body(&body).unwrap_err(),
             StatusCode::BAD_REQUEST
         );
+    }
+
+    // Cycle #153: tier ordering invariant tests. gold > silver > bronze
+    // must hold or the CASE-WHEN tier-recompute SQL assigns wrong tiers.
+
+    #[test]
+    fn test_validate_loyalty_config_rejects_silver_above_gold() {
+        // The motivator: admin types thresholds in the wrong order.
+        // Pre-cycle-#153 this passed, then every user >= 100 ฿ got 'gold'.
+        let body = json!({
+            "gold_threshold": 100.0,
+            "silver_threshold": 1000.0,
+            "bronze_threshold": 50.0,
+            "referral_bonus": 50.0
+        });
+        assert_eq!(
+            validate_loyalty_config_body(&body).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
+    }
+
+    #[test]
+    fn test_validate_loyalty_config_rejects_bronze_above_silver() {
+        let body = json!({
+            "gold_threshold": 1000.0,
+            "silver_threshold": 100.0,
+            "bronze_threshold": 500.0,
+            "referral_bonus": 50.0
+        });
+        assert_eq!(
+            validate_loyalty_config_body(&body).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
+    }
+
+    #[test]
+    fn test_validate_loyalty_config_rejects_silver_equals_gold() {
+        // Equal bands collapse — nobody can ever be in the lower tier.
+        let body = json!({
+            "gold_threshold": 500.0,
+            "silver_threshold": 500.0,
+            "bronze_threshold": 100.0,
+            "referral_bonus": 50.0
+        });
+        assert_eq!(
+            validate_loyalty_config_body(&body).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
+    }
+
+    #[test]
+    fn test_validate_loyalty_config_rejects_bronze_equals_silver() {
+        let body = json!({
+            "gold_threshold": 1000.0,
+            "silver_threshold": 100.0,
+            "bronze_threshold": 100.0,
+            "referral_bonus": 50.0
+        });
+        assert_eq!(
+            validate_loyalty_config_body(&body).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
+    }
+
+    #[test]
+    fn test_validate_loyalty_config_accepts_bronze_zero() {
+        // bronze=0 is a legitimate "anyone qualifies for bronze" setting.
+        let body = json!({
+            "gold_threshold": 1000.0,
+            "silver_threshold": 500.0,
+            "bronze_threshold": 0.0,
+            "referral_bonus": 50.0
+        });
+        assert!(validate_loyalty_config_body(&body).is_ok());
     }
 
     #[test]
