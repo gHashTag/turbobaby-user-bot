@@ -18,8 +18,48 @@ pub fn StrainCard(props: StrainCardProps) -> Element {
     let strain_for_callback = props.strain.clone();
     let thc_text = props.strain.thc_display();
     let cbd_text = props.strain.cbd_display();
-    let price_text = props.strain.price_display();
     let name = props.strain.name.clone();
+
+    // Cycle #131: marketing flag rendering, mirroring menu_screen.rs's
+    // render_strain_card. Pre-#131 only the SOTD badge rendered — Sale,
+    // Best, New Arrival were dropped silently. The wire `Strain` now
+    // carries all seven TZ #2 fields.
+    let sale_live = props.strain.sale_active
+        && crate::trios::pricing::is_active_until(
+            props.strain.sale_until.as_deref(),
+            chrono::Utc::now(),
+        );
+    let new_live = props.strain.is_new_arrival
+        && crate::trios::pricing::is_active_until(
+            props.strain.new_until.as_deref(),
+            chrono::Utc::now(),
+        );
+    let is_best = props.strain.is_best_seller;
+
+    // Effective price via the shared trios::pricing helper — same math
+    // as the server-side price-authority check, so a sale customer's
+    // total can't drift between UI and backend.
+    let priced = crate::trios::pricing::effective_strain_price(
+        &crate::trios::pricing::MarketingFlags {
+            price_per_gram: props.strain.price,
+            is_strain_of_day,
+            strain_of_day_discount: props.strain.strain_of_day_discount,
+            sale_active: props.strain.sale_active,
+            sale_until: props.strain.sale_until.as_deref(),
+            sale_price: props.strain.sale_price,
+            discount_percent: props.strain.discount_percent,
+            is_new_arrival: props.strain.is_new_arrival,
+            new_until: props.strain.new_until.as_deref(),
+        },
+        chrono::Utc::now(),
+    );
+    let has_discount = priced.has_discount;
+    let original_price = props.strain.price;
+    let effective_price_text = if priced.price > 0.0 {
+        format!("{:.0} ฿/g", priced.price)
+    } else {
+        "Price on request".to_string()
+    };
 
     rsx! {
         div {
@@ -27,9 +67,18 @@ pub fn StrainCard(props: StrainCardProps) -> Element {
             class: if is_strain_of_day { "strain-of-day" } else { "" },
             class: if !is_available { "unavailable" } else { "" },
 
-            // Badge for strain of day
+            // TZ #2 badge stack — same precedence as menu_screen.
             if is_strain_of_day {
                 div { class: "sod-badge", "🌟 Strain of Day" }
+            }
+            if new_live {
+                div { class: "new-badge", "🆕 New Arrival" }
+            }
+            if is_best {
+                div { class: "best-badge", "⭐ Best Seller" }
+            }
+            if sale_live {
+                div { class: "sale-badge", "🔥 Sale" }
             }
 
             // Image
@@ -68,8 +117,19 @@ pub fn StrainCard(props: StrainCardProps) -> Element {
                     p { class: "strain-effect", "✨ {effect}" }
                 }
                 p { class: "strain-description", "{props.strain.description}" }
+                // TZ #2: strikethrough original price + new effective
+                // price when any discount applies. Otherwise just the
+                // single price.
                 div { class: "strain-price",
-                    span { class: "price", "{price_text}" }
+                    if has_discount && original_price > 0.0 {
+                        span { class: "price-old",
+                            style: "text-decoration:line-through;color:#888;margin-right:8px;",
+                            "{original_price:.0} ฿/g"
+                        }
+                        span { class: "price price-sale", "{effective_price_text}" }
+                    } else {
+                        span { class: "price", "{effective_price_text}" }
+                    }
                 }
             }
 

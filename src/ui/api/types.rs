@@ -30,6 +30,26 @@ pub struct Strain {
     pub effect: Option<String>,
     #[serde(default)]
     pub flavor_profile: Option<String>,
+
+    // ── TZ #2 marketing flags (cycle #131) ───────────────────────────
+    // Server-side `db::strains::Strain` serialises these on every
+    // /api/strains response; the wire type just wasn't reading them
+    // until now. All `#[serde(default)]` so older API responses keep
+    // deserialising.
+    #[serde(default)]
+    pub discount_percent: f64,
+    #[serde(default)]
+    pub sale_price: Option<f64>,
+    #[serde(default)]
+    pub sale_active: bool,
+    #[serde(default)]
+    pub sale_until: Option<String>,
+    #[serde(default)]
+    pub is_best_seller: bool,
+    #[serde(default)]
+    pub is_new_arrival: bool,
+    #[serde(default)]
+    pub new_until: Option<String>,
 }
 
 impl Default for Strain {
@@ -50,6 +70,13 @@ impl Default for Strain {
             strain_of_day_discount: 0.0,
             effect: None,
             flavor_profile: None,
+            discount_percent: 0.0,
+            sale_price: None,
+            sale_active: false,
+            sale_until: None,
+            is_best_seller: false,
+            is_new_arrival: false,
+            new_until: None,
         }
     }
 }
