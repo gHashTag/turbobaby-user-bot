@@ -1,9 +1,11 @@
+use crate::trios::core::Lang;
 use crate::trios::i18n::{t, T_PROFILE_TITLE};
 use crate::ui::api::context::api_base_url;
 use crate::ui::assets;
 use crate::ui::components::bottom_nav::BottomNav;
+use crate::ui::lang::{current_lang, set_app_lang};
 use crate::ui::routes::Route;
-use crate::ui::state::{use_language, Cart, Language};
+use crate::ui::state::Cart;
 use crate::ui::telegram::{use_telegram_id, use_telegram_init_data};
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use dioxus::prelude::*;
@@ -532,11 +534,17 @@ pub fn ProfileScreen() -> Element {
                 div { style: "font-size: 13px; color: #8b8b9e; margin-bottom: 10px;",
                     "\u{1F310} Language / \u{042F}\u{0437}\u{044B}\u{043A}"
                 },
-                { let mut lang = use_language();
-                    let current = *lang.read();
+                {
+                    // Cycle (this commit): switcher now writes to the
+                    // shared `crate::ui::lang::APP_LANG` GlobalSignal
+                    // via `set_app_lang`. Pre-cycle this wrote to a
+                    // separate `Signal<Language>` that no other screen
+                    // observed, so EN clicks did nothing visible
+                    // outside this card (user-reported bug).
+                    let current = current_lang();
                     let langs = vec![
-                        (Language::Russian, "\u{1F1F7}\u{1F1FA}", "RU"),
-                        (Language::English, "\u{1F1EC}\u{1F1E7}", "EN"),
+                        (Lang::Russian, "\u{1F1F7}\u{1F1FA}", "RU"),
+                        (Lang::English, "\u{1F1EC}\u{1F1E7}", "EN"),
                     ];
                     rsx! {
                         div { style: "display: flex; gap: 8px;",
@@ -555,18 +563,7 @@ pub fn ProfileScreen() -> Element {
                                                 background: {bg}; color: {color};
                                                 border: 4px solid {border}; border-radius: 20px; cursor: pointer;
                                             ",
-                                            onclick: move |_| {
-                                                lang.set(l_c);
-                                                #[cfg(target_arch = "wasm32")]
-                                                {
-                                                    if let Some(window) = web_sys::window() {
-                                                        let _ = window.local_storage()
-                                                            .ok()
-                                                            .flatten()
-                                                            .map(|s| s.set_item("wwb_lang", code));
-                                                    }
-                                                }
-                                            },
+                                            onclick: move |_| set_app_lang(l_c),
                                             "{flag} {code}"
                                         }
                                     }

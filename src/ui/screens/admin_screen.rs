@@ -184,6 +184,9 @@ struct AdminSet {
     is_available: bool,
     #[serde(default)]
     is_deal_of_day: bool,
+    /// Migration 034: image upload symmetric with AccessorySet.
+    #[serde(default)]
+    image_url: Option<String>,
     #[serde(default)]
     video_url: Option<String>,
 }
@@ -228,6 +231,9 @@ struct AdminTeaSet {
     is_available: bool,
     name_en: Option<String>,
     description_en: Option<String>,
+    /// Migration 034: image upload symmetric with AccessorySet.
+    #[serde(default)]
+    image_url: Option<String>,
     #[serde(default)]
     video_url: Option<String>,
 }
@@ -1964,6 +1970,7 @@ fn SetsTab() -> Element {
     let mut name = use_signal(String::new);
     let mut description = use_signal(String::new);
     let mut icon = use_signal(String::new);
+    let mut image_url = use_signal(String::new);
     let mut video_url = use_signal(String::new);
     let mut strain_ids = use_signal(String::new);
     let mut accessory_ids = use_signal(String::new);
@@ -2043,6 +2050,7 @@ fn SetsTab() -> Element {
                         oninput: move |e| description.set(e.value()) }
                     input { style: input_style(), placeholder: "Иконка (emoji или URL)", value: "{icon}",
                         oninput: move |e| icon.set(e.value()) }
+                    ImageUpload { image_url: image_url.read().clone(), on_change: move |url: String| image_url.set(url) }
                     VideoUpload { video_url: video_url.read().clone(), on_change: move |url: String| video_url.set(url) }
                     textarea { style: textarea_style(), placeholder: "Strain IDs (через запятую)", value: "{strain_ids}",
                         oninput: move |e| strain_ids.set(e.value()) }
@@ -2074,7 +2082,7 @@ fn SetsTab() -> Element {
                             let s_ids: Vec<String> = strain_ids().split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
                             let a_ids: Vec<String> = accessory_ids().split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
                             let desc = description();
-                            let ic = icon(); let vid = video_url();
+                            let ic = icon(); let img = image_url(); let vid = video_url();
                             let deal = is_deal_of_day();
                             submitting.set(true);
                             let temp_id = format!("temp-{}", uuid::Uuid::new_v4());
@@ -2082,6 +2090,7 @@ fn SetsTab() -> Element {
                                 id: temp_id.clone(), name: n.clone(),
                                 description: if desc.is_empty() { None } else { Some(desc.clone()) },
                                 icon: if ic.is_empty() { None } else { Some(ic.clone()) },
+                                image_url: if img.is_empty() { None } else { Some(img.clone()) },
                                 video_url: if vid.is_empty() { None } else { Some(vid.clone()) },
                                 strain_ids: s_ids.clone(), accessory_ids: a_ids.clone(),
                                 total_price: p, discount_percent: d,
@@ -2089,7 +2098,7 @@ fn SetsTab() -> Element {
                             });
                             status.set("✅ Добавлен!".into());
                             name.set(String::new()); description.set(String::new()); icon.set(String::new());
-                            video_url.set(String::new());
+                            image_url.set(String::new()); video_url.set(String::new());
                             strain_ids.set(String::new()); accessory_ids.set(String::new());
                             total_price.set(String::new()); discount_percent.set(String::new());
                             is_deal_of_day.set(false);
@@ -2099,6 +2108,7 @@ fn SetsTab() -> Element {
                                     "name": n, "total_price": p, "discount_percent": d,
                                     "description": if desc.is_empty() { serde_json::Value::Null } else { desc.into() },
                                     "icon": if ic.is_empty() { serde_json::Value::Null } else { ic.into() },
+                                    "image_url": if img.is_empty() { serde_json::Value::Null } else { img.into() },
                                     "video_url": if vid.is_empty() { serde_json::Value::Null } else { vid.into() },
                                     "strain_ids": s_ids, "accessory_ids": a_ids,
                                     "is_deal_of_day": deal,
@@ -2145,6 +2155,12 @@ fn SetsTab() -> Element {
                             }
                         }
                     }
+                }
+            } else if cache.read().is_empty() && search_query.read().is_empty() {
+                EmptyState {
+                    icon: "📦",
+                    title: "Пока ничего нет",
+                    description: "Заполните форму выше — кнопка «➕ Добавить» создаст первую запись.",
                 }
             } else if filtered.is_empty() {
                 EmptyState {
@@ -2249,6 +2265,7 @@ fn EditSetCard(
     let mut name = use_signal(|| item.name.clone());
     let mut description = use_signal(|| item.description.clone().unwrap_or_default());
     let mut icon = use_signal(|| item.icon.clone().unwrap_or_default());
+    let mut image_url = use_signal(|| item.image_url.clone().unwrap_or_default());
     let mut video_url = use_signal(|| item.video_url.clone().unwrap_or_default());
     let mut strain_ids = use_signal(|| item.strain_ids.join(", "));
     let mut accessory_ids = use_signal(|| item.accessory_ids.join(", "));
@@ -2263,6 +2280,7 @@ fn EditSetCard(
             input { style: input_style(), placeholder: "Название", value: "{name}", oninput: move |e| name.set(e.value()) }
             textarea { style: textarea_style(), placeholder: "Описание", value: "{description}", oninput: move |e| description.set(e.value()) }
             input { style: input_style(), placeholder: "Иконка", value: "{icon}", oninput: move |e| icon.set(e.value()) }
+            ImageUpload { image_url: image_url.read().clone(), on_change: move |url: String| image_url.set(url) }
             VideoUpload { video_url: video_url.read().clone(), on_change: move |url: String| video_url.set(url) }
             textarea { style: textarea_style(), placeholder: "Strain IDs (через запятую)", value: "{strain_ids}", oninput: move |e| strain_ids.set(e.value()) }
             textarea { style: textarea_style(), placeholder: "Accessory IDs (через запятую)", value: "{accessory_ids}", oninput: move |e| accessory_ids.set(e.value()) }
@@ -2287,7 +2305,7 @@ fn EditSetCard(
                         };
                         if n.is_empty() { status.set("❌ Название обязательно".into()); return; }
                         let desc = description();
-                        let ic = icon(); let vid = video_url();
+                        let ic = icon(); let img = image_url(); let vid = video_url();
                         let s_ids: Vec<String> = strain_ids().split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
                         let a_ids: Vec<String> = accessory_ids().split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
                         let deal = is_deal_of_day();
@@ -2297,6 +2315,7 @@ fn EditSetCard(
                             s.name = n.clone();
                             s.description = if desc.is_empty() { None } else { Some(desc.clone()) };
                             s.icon = if ic.is_empty() { None } else { Some(ic.clone()) };
+                            s.image_url = if img.is_empty() { None } else { Some(img.clone()) };
                             s.video_url = if vid.is_empty() { None } else { Some(vid.clone()) };
                             s.strain_ids = s_ids.clone();
                             s.accessory_ids = a_ids.clone();
@@ -2309,6 +2328,7 @@ fn EditSetCard(
                                 "name": n, "total_price": p, "discount_percent": d,
                                 "description": if desc.is_empty() { serde_json::Value::Null } else { desc.into() },
                                 "icon": if ic.is_empty() { serde_json::Value::Null } else { ic.into() },
+                                "image_url": if img.is_empty() { serde_json::Value::Null } else { img.into() },
                                 "video_url": if vid.is_empty() { serde_json::Value::Null } else { vid.into() },
                                 "strain_ids": s_ids, "accessory_ids": a_ids,
                                 "is_deal_of_day": deal,
@@ -2558,6 +2578,12 @@ fn AccessorySetsTab() -> Element {
                         }
                     }
                 }
+            } else if cache.read().is_empty() && search_query.read().is_empty() {
+                EmptyState {
+                    icon: "📦",
+                    title: "Пока ничего нет",
+                    description: "Заполните форму выше — кнопка «➕ Добавить» создаст первую запись.",
+                }
             } else if filtered.is_empty() {
                 EmptyState {
                     icon: "🔍",
@@ -2789,6 +2815,7 @@ fn TeaSetsTab() -> Element {
     let mut name = use_signal(String::new);
     let mut description = use_signal(String::new);
     let mut icon = use_signal(String::new);
+    let mut image_url = use_signal(String::new);
     let mut video_url = use_signal(String::new);
     let mut items = use_signal(String::new);
     let mut total_price = use_signal(String::new);
@@ -2868,6 +2895,7 @@ fn TeaSetsTab() -> Element {
                         oninput: move |e| description.set(e.value()) }
                     input { style: input_style(), placeholder: "Иконка (emoji или URL)", value: "{icon}",
                         oninput: move |e| icon.set(e.value()) }
+                    ImageUpload { image_url: image_url.read().clone(), on_change: move |url: String| image_url.set(url) }
                     VideoUpload { video_url: video_url.read().clone(), on_change: move |url: String| video_url.set(url) }
                     textarea { style: textarea_style(), placeholder: "Tea item IDs (через запятую)", value: "{items}",
                         oninput: move |e| items.set(e.value()) }
@@ -2896,7 +2924,7 @@ fn TeaSetsTab() -> Element {
                             if n.is_empty() { status.set("❌ Название обязательно".into()); return; }
                             let tea_items: Vec<String> = items().split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
                             let desc = description();
-                            let ic = icon(); let vid = video_url();
+                            let ic = icon(); let img = image_url(); let vid = video_url();
                             let ne = name_en(); let de = description_en();
                             submitting.set(true);
                             let temp_id = format!("temp-{}", uuid::Uuid::new_v4());
@@ -2904,6 +2932,7 @@ fn TeaSetsTab() -> Element {
                                 id: temp_id.clone(), name: n.clone(),
                                 description: if desc.is_empty() { None } else { Some(desc.clone()) },
                                 icon: if ic.is_empty() { None } else { Some(ic.clone()) },
+                                image_url: if img.is_empty() { None } else { Some(img.clone()) },
                                 video_url: if vid.is_empty() { None } else { Some(vid.clone()) },
                                 items: tea_items.clone(),
                                 total_price: p, discount_percent: d,
@@ -2912,7 +2941,8 @@ fn TeaSetsTab() -> Element {
                                 description_en: if de.is_empty() { None } else { Some(de.clone()) },
                             });
                             status.set("✅ Добавлен!".into());
-                            name.set(String::new()); description.set(String::new()); icon.set(String::new()); video_url.set(String::new());
+                            name.set(String::new()); description.set(String::new()); icon.set(String::new());
+                            image_url.set(String::new()); video_url.set(String::new());
                             items.set(String::new()); total_price.set(String::new()); discount_percent.set(String::new());
                             name_en.set(String::new()); description_en.set(String::new());
                             auto_scroll_to_list();
@@ -2921,6 +2951,7 @@ fn TeaSetsTab() -> Element {
                                     "name": n, "total_price": p, "discount_percent": d,
                                     "description": if desc.is_empty() { serde_json::Value::Null } else { desc.into() },
                                     "icon": if ic.is_empty() { serde_json::Value::Null } else { ic.into() },
+                                    "image_url": if img.is_empty() { serde_json::Value::Null } else { img.into() },
                                     "video_url": if vid.is_empty() { serde_json::Value::Null } else { vid.into() },
                                     "items": tea_items,
                                     "name_en": if ne.is_empty() { serde_json::Value::Null } else { ne.into() },
@@ -2968,6 +2999,12 @@ fn TeaSetsTab() -> Element {
                             }
                         }
                     }
+                }
+            } else if cache.read().is_empty() && search_query.read().is_empty() {
+                EmptyState {
+                    icon: "📦",
+                    title: "Пока ничего нет",
+                    description: "Заполните форму выше — кнопка «➕ Добавить» создаст первую запись.",
                 }
             } else if filtered.is_empty() {
                 EmptyState {
@@ -3072,6 +3109,7 @@ fn EditTeaSetCard(
     let mut name = use_signal(|| item.name.clone());
     let mut description = use_signal(|| item.description.clone().unwrap_or_default());
     let mut icon = use_signal(|| item.icon.clone().unwrap_or_default());
+    let mut image_url = use_signal(|| item.image_url.clone().unwrap_or_default());
     let mut video_url = use_signal(|| item.video_url.clone().unwrap_or_default());
     let mut items = use_signal(|| item.items.join(", "));
     let mut total_price = use_signal(|| item.total_price.to_string());
@@ -3086,6 +3124,7 @@ fn EditTeaSetCard(
             input { style: input_style(), placeholder: "Название (RU)", value: "{name}", oninput: move |e| name.set(e.value()) }
             textarea { style: textarea_style(), placeholder: "Описание (RU)", value: "{description}", oninput: move |e| description.set(e.value()) }
             input { style: input_style(), placeholder: "Иконка", value: "{icon}", oninput: move |e| icon.set(e.value()) }
+            ImageUpload { image_url: image_url.read().clone(), on_change: move |url: String| image_url.set(url) }
             VideoUpload { video_url: video_url.read().clone(), on_change: move |url: String| video_url.set(url) }
             textarea { style: textarea_style(), placeholder: "Tea item IDs (через запятую)", value: "{items}", oninput: move |e| items.set(e.value()) }
             input { style: input_style(), placeholder: "Цена ฿", value: "{total_price}", r#type: "number", oninput: move |e| total_price.set(e.value()) }
@@ -3108,7 +3147,7 @@ fn EditTeaSetCard(
                         if n.is_empty() { status.set("❌ Название обязательно".into()); return; }
                         let tea_items: Vec<String> = items().split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
                         let desc = description();
-                        let ic = icon(); let vid = video_url();
+                        let ic = icon(); let img = image_url(); let vid = video_url();
                         let ne = name_en(); let de = description_en();
                         let id = item_id.clone();
                         let original = cache.read().iter().find(|s| s.id == id).cloned();
@@ -3116,6 +3155,7 @@ fn EditTeaSetCard(
                             s.name = n.clone();
                             s.description = if desc.is_empty() { None } else { Some(desc.clone()) };
                             s.icon = if ic.is_empty() { None } else { Some(ic.clone()) };
+                            s.image_url = if img.is_empty() { None } else { Some(img.clone()) };
                             s.video_url = if vid.is_empty() { None } else { Some(vid.clone()) };
                             s.items = tea_items.clone();
                             s.total_price = p;
@@ -3128,6 +3168,7 @@ fn EditTeaSetCard(
                                 "name": n, "total_price": p, "discount_percent": d,
                                 "description": if desc.is_empty() { serde_json::Value::Null } else { desc.into() },
                                 "icon": if ic.is_empty() { serde_json::Value::Null } else { ic.into() },
+                                "image_url": if img.is_empty() { serde_json::Value::Null } else { img.into() },
                                 "video_url": if vid.is_empty() { serde_json::Value::Null } else { vid.into() },
                                 "items": tea_items,
                                 "name_en": if ne.is_empty() { serde_json::Value::Null } else { ne.into() },

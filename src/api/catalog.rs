@@ -843,6 +843,10 @@ pub struct TeaSetRequest {
     pub items: Option<Vec<String>>,
     pub total_price: f64,
     pub discount_percent: Option<f64>,
+    /// Migration 034: symmetric with `AccessorySetRequest.image_url`.
+    /// Tea Sets had only an emoji/URL `icon` string before. Falls
+    /// back to `icon` for legacy rows where this is NULL.
+    pub image_url: Option<String>,
     pub video_url: Option<String>,
     #[allow(dead_code)]
     pub is_available: Option<bool>,
@@ -876,6 +880,7 @@ fn tea_set_row(r: &sea_orm::QueryResult) -> Value {
         "is_available": r.try_get::<bool>("", "is_available").unwrap_or(false),
         "name_en": r.try_get::<Option<String>>("", "name_en").ok().flatten(),
         "description_en": r.try_get::<Option<String>>("", "description_en").ok().flatten(),
+        "image_url": r.try_get::<Option<String>>("", "image_url").ok().flatten(),
         "video_url": r.try_get::<Option<String>>("", "video_url").ok().flatten(),
     })
 }
@@ -894,9 +899,9 @@ async fn get_tea_sets(
         crate::api::auth::check_admin(&headers, &state)?;
     }
     let sql = if include_hidden {
-        "SELECT id, name, description, icon, items, total_price::float8 AS total_price, discount_percent::float8 AS discount_percent, is_available, name_en, description_en, video_url FROM tea_sets ORDER BY name LIMIT 5000"
+        "SELECT id, name, description, icon, items, total_price::float8 AS total_price, discount_percent::float8 AS discount_percent, is_available, name_en, description_en, image_url, video_url FROM tea_sets ORDER BY name LIMIT 5000"
     } else {
-        "SELECT id, name, description, icon, items, total_price::float8 AS total_price, discount_percent::float8 AS discount_percent, is_available, name_en, description_en, video_url FROM tea_sets WHERE is_available = TRUE ORDER BY name LIMIT 2000"
+        "SELECT id, name, description, icon, items, total_price::float8 AS total_price, discount_percent::float8 AS discount_percent, is_available, name_en, description_en, image_url, video_url FROM tea_sets WHERE is_available = TRUE ORDER BY name LIMIT 2000"
     };
     let rows = state
         .db
@@ -969,7 +974,7 @@ async fn create_tea_set(
     use sea_orm::{ConnectionTrait, DbBackend, Statement};
     state.db.orm.execute(Statement::from_sql_and_values(
         DbBackend::Postgres,
-        "INSERT INTO tea_sets (id, name, description, icon, items, total_price, discount_percent, name_en, description_en, video_url) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)",
+        "INSERT INTO tea_sets (id, name, description, icon, items, total_price, discount_percent, name_en, description_en, image_url, video_url) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)",
         [
             id.clone().into(),
             req.name.into(),
@@ -980,6 +985,7 @@ async fn create_tea_set(
             req.discount_percent.unwrap_or(0.0).into(),
             req.name_en.into(),
             req.description_en.into(),
+            req.image_url.filter(|s| !s.is_empty()).into(),
             req.video_url.into(),
         ],
     )).await.map_err(|e| { tracing::error!("create_tea_set: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?;
@@ -1004,7 +1010,7 @@ async fn update_tea_set(
     use sea_orm::{ConnectionTrait, DbBackend, Statement};
     state.db.orm.execute(Statement::from_sql_and_values(
         DbBackend::Postgres,
-        "UPDATE tea_sets SET name=$1, description=$2, icon=$3, items=$4, total_price=$5, discount_percent=$6, name_en=$7, description_en=$8, video_url=$9, is_available=$10 WHERE id=$11",
+        "UPDATE tea_sets SET name=$1, description=$2, icon=$3, items=$4, total_price=$5, discount_percent=$6, name_en=$7, description_en=$8, image_url=$9, video_url=$10, is_available=$11 WHERE id=$12",
         [
             req.name.into(),
             req.description.unwrap_or_default().into(),
@@ -1014,6 +1020,7 @@ async fn update_tea_set(
             req.discount_percent.unwrap_or(0.0).into(),
             req.name_en.into(),
             req.description_en.into(),
+            req.image_url.filter(|s| !s.is_empty()).into(),
             req.video_url.into(),
             req.is_available.unwrap_or(true).into(),
             id.into(),
@@ -1087,6 +1094,10 @@ pub struct SetRequest {
     pub accessory_ids: Option<Vec<String>>,
     pub total_price: f64,
     pub discount_percent: Option<f64>,
+    /// Migration 034: added so the general Sets tab can attach an
+    /// image like Accessory Sets already did. Falls back to `icon`
+    /// for legacy rows where this column is NULL.
+    pub image_url: Option<String>,
     pub video_url: Option<String>,
     #[allow(dead_code)]
     pub is_available: Option<bool>,
@@ -1123,6 +1134,7 @@ fn set_row(r: &sea_orm::QueryResult) -> Value {
         "discount_percent": discount_percent,
         "is_available": r.try_get::<bool>("", "is_available").unwrap_or(false),
         "is_deal_of_day": r.try_get::<bool>("", "is_deal_of_day").unwrap_or(false),
+        "image_url": r.try_get::<Option<String>>("", "image_url").ok().flatten(),
         "video_url": r.try_get::<Option<String>>("", "video_url").ok().flatten(),
     })
 }
@@ -1145,7 +1157,7 @@ async fn get_sets(
         // Use a single compatible query that works with or without accessory_ids column.
         let rows = state.db.orm.query_all(Statement::from_string(
             DbBackend::Postgres,
-            "SELECT id, name, description, icon, strain_ids, COALESCE(accessory_ids, NULL::text[]) AS accessory_ids, total_price::float8 AS total_price, discount_percent::float8 AS discount_percent, is_available, COALESCE(is_deal_of_day, false) AS is_deal_of_day, video_url FROM sets ORDER BY name LIMIT 5000".to_string(),
+            "SELECT id, name, description, icon, strain_ids, COALESCE(accessory_ids, NULL::text[]) AS accessory_ids, total_price::float8 AS total_price, discount_percent::float8 AS discount_percent, is_available, COALESCE(is_deal_of_day, false) AS is_deal_of_day, image_url, video_url FROM sets ORDER BY name LIMIT 5000".to_string(),
         )).await.map_err(|e| { tracing::error!("get_sets admin: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?;
         let items: Vec<Value> = rows.iter().map(set_row).collect();
         return Ok(Json(json!({ "sets": items })));
@@ -1287,7 +1299,7 @@ async fn create_set(
     use sea_orm::{ConnectionTrait, DbBackend, Statement};
     state.db.orm.execute(Statement::from_sql_and_values(
         DbBackend::Postgres,
-        "INSERT INTO sets (id, name, description, icon, strain_ids, accessory_ids, total_price, discount_percent, is_deal_of_day, video_url) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)",
+        "INSERT INTO sets (id, name, description, icon, strain_ids, accessory_ids, total_price, discount_percent, is_deal_of_day, image_url, video_url) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)",
         [
             id.clone().into(),
             req.name.into(),
@@ -1298,6 +1310,7 @@ async fn create_set(
             req.total_price.into(),
             req.discount_percent.unwrap_or(0.0).into(),
             req.is_deal_of_day.unwrap_or(false).into(),
+            req.image_url.filter(|s| !s.is_empty()).into(),
             req.video_url.into(),
         ],
     )).await.map_err(|e| { tracing::error!("create_set: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?;
@@ -1323,7 +1336,7 @@ async fn update_set(
     use sea_orm::{ConnectionTrait, DbBackend, Statement};
     state.db.orm.execute(Statement::from_sql_and_values(
         DbBackend::Postgres,
-        "UPDATE sets SET name=$1, description=$2, icon=$3, strain_ids=$4, accessory_ids=$5, total_price=$6, discount_percent=$7, is_deal_of_day=$8, video_url=$9, is_available=$10 WHERE id=$11",
+        "UPDATE sets SET name=$1, description=$2, icon=$3, strain_ids=$4, accessory_ids=$5, total_price=$6, discount_percent=$7, is_deal_of_day=$8, image_url=$9, video_url=$10, is_available=$11 WHERE id=$12",
         [
             req.name.into(),
             req.description.unwrap_or_default().into(),
@@ -1333,6 +1346,7 @@ async fn update_set(
             req.total_price.into(),
             req.discount_percent.unwrap_or(0.0).into(),
             req.is_deal_of_day.unwrap_or(false).into(),
+            req.image_url.filter(|s| !s.is_empty()).into(),
             req.video_url.into(),
             req.is_available.unwrap_or(true).into(),
             id.into(),
@@ -1673,6 +1687,7 @@ mod tests {
             items: Some(vec!["t1".into()]),
             total_price: 100.0,
             discount_percent: Some(10.0),
+            image_url: None,
             video_url: None,
             is_available: Some(true),
             name_en: Some("Tea Set".into()),
@@ -1714,6 +1729,7 @@ mod tests {
             accessory_ids: Some(vec!["a1".into()]),
             total_price: 100.0,
             discount_percent: Some(10.0),
+            image_url: None,
             video_url: None,
             is_available: Some(true),
             is_deal_of_day: Some(false),
