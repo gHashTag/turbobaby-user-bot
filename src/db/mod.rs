@@ -594,7 +594,13 @@ mod orphan_table_tests {
                     .is_some_and(|s| s == "rs")
                 {
                     if let Ok(s) = std::fs::read_to_string(&path) {
-                        buf.push_str(&s);
+                        // Strip line comments so a table name appearing
+                        // in documentation prose elsewhere in the tree
+                        // doesn't fool `contains_word` into thinking
+                        // the table is wired (cycle #145, after #144
+                        // hit this with `game_high_scores` mentioned in
+                        // a cycle-#143 doc-comment in src/api/mod.rs).
+                        buf.push_str(&strip_line_comments(&s));
                         buf.push('\n');
                     }
                 }
@@ -602,6 +608,25 @@ mod orphan_table_tests {
         }
         walk(&src, &self_path, &mut buf);
         buf
+    }
+
+    /// Strip `//` line comments. Block `/* … */` comments aren't used
+    /// anywhere this corpus walks; if that changes, broaden this.
+    /// Mirrors `src/api/mod.rs::route_wiring_tests::strip_line_comments`
+    /// — duplicated rather than shared because the existing pattern
+    /// in this file duplicates `contains_word` for the same reason
+    /// (each `#[cfg(test)]` module is self-contained).
+    fn strip_line_comments(src: &str) -> String {
+        let mut out = String::with_capacity(src.len());
+        for line in src.lines() {
+            let cut = match line.find("//") {
+                Some(i) => &line[..i],
+                None => line,
+            };
+            out.push_str(cut);
+            out.push('\n');
+        }
+        out
     }
 
     fn contains_word(haystack: &str, needle: &str) -> bool {

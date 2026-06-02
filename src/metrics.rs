@@ -162,6 +162,24 @@ mod metric_wiring_tests {
         out
     }
 
+    /// Strip `//` line comments so a sample like `metrics::foo(` in
+    /// a doc-comment doesn't fool the textual `contains` check below
+    /// into thinking the helper is wired. Mirrors the same defense in
+    /// `src/db/mod.rs::orphan_table_tests` and
+    /// `src/api/mod.rs::route_wiring_tests` (cycle #145).
+    fn strip_line_comments(src: &str) -> String {
+        let mut out = String::with_capacity(src.len());
+        for line in src.lines() {
+            let cut = match line.find("//") {
+                Some(i) => &line[..i],
+                None => line,
+            };
+            out.push_str(cut);
+            out.push('\n');
+        }
+        out
+    }
+
     fn code_corpus_excluding_metrics() -> String {
         let manifest = env!("CARGO_MANIFEST_DIR");
         let src = std::path::Path::new(manifest).join("src");
@@ -183,7 +201,7 @@ mod metric_wiring_tests {
                     .is_some_and(|s| s == "rs")
                 {
                     if let Ok(s) = std::fs::read_to_string(&path) {
-                        buf.push_str(&s);
+                        buf.push_str(&strip_line_comments(&s));
                         buf.push('\n');
                     }
                 }
