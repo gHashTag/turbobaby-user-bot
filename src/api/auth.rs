@@ -460,12 +460,18 @@ pub fn check_owner(
                         user.id,
                         expected_telegram_id
                     );
+                    crate::metrics::auth_failure("owner_mismatch");
                     return Err(StatusCode::FORBIDDEN);
                 }
+            } else {
+                tracing::warn!("owner check failed: invalid initData");
+                crate::metrics::auth_failure("invalid_init_data");
+                return Err(StatusCode::UNAUTHORIZED);
             }
         }
     }
-    tracing::warn!("owner check failed: missing or invalid initData");
+    tracing::warn!("owner check failed: missing initData");
+    crate::metrics::auth_failure("missing_init_data");
     Err(StatusCode::UNAUTHORIZED)
 }
 

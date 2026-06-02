@@ -40,6 +40,20 @@ pub fn rate_limit_blocked(kind: &str) {
     counter!("rate_limit_blocked_total", "kind" => kind.to_string()).increment(1);
 }
 
+/// Cycle #141: per-kind counter for auth gate rejections in `check_owner`.
+///
+/// `kind`:
+/// - `"owner_mismatch"` — initData is HMAC-valid but `user.id` ≠ path id.
+///   A spike here is the signature of someone probing for IDOR.
+/// - `"missing_init_data"` — header absent or empty.
+/// - `"invalid_init_data"` — HMAC mismatch, replay, or malformed payload.
+///
+/// Distinguishing the three lets an alert separate "buggy client" from
+/// "active attacker" without trawling logs.
+pub fn auth_failure(kind: &str) {
+    counter!("auth_failures_total", "kind" => kind.to_string()).increment(1);
+}
+
 // Cycle #108: `db_pool_acquire_failed(scope: &str)` was declared here
 // to report `pool.get()` failures from the deadpool_postgres path.
 // Cycle #96 dropped that pool when the SeaORM migration finished, so
@@ -84,6 +98,13 @@ mod tests {
     fn test_rate_limit_blocked_does_not_panic() {
         rate_limit_blocked("anon_order");
         rate_limit_blocked("upload");
+    }
+
+    #[test]
+    fn test_auth_failure_does_not_panic() {
+        auth_failure("owner_mismatch");
+        auth_failure("missing_init_data");
+        auth_failure("invalid_init_data");
     }
 }
 
