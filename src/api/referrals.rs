@@ -80,7 +80,15 @@ fn validate_leaderboard_query(params: &LeaderboardQuery) -> Result<(&str, i64), 
     if !matches!(period, "weekly" | "monthly" | "all") {
         return Err(StatusCode::BAD_REQUEST);
     }
-    let limit = params.limit.unwrap_or(10).min(50);
+    // Cycle #156: `limit` was previously `.min(50)` only — capped
+    // from above but not from below. A negative value (e.g. `?limit=-1`)
+    // passed through to PostgreSQL's `LIMIT $1`, which rejects with
+    // `ERROR: LIMIT must not be negative` → 500 instead of a clean
+    // 400 at the boundary. Mirror the existing silent-cap convention
+    // for the lower bound: clamp into `[1, 50]`. 0 is also silently
+    // clamped to 1 — returning zero rows for a leaderboard request
+    // is more confusing than returning at least one entry.
+    let limit = params.limit.unwrap_or(10).clamp(1, 50);
     Ok((period, limit))
 }
 
@@ -146,5 +154,38 @@ mod tests {
             validate_leaderboard_query(&q).unwrap_err(),
             StatusCode::BAD_REQUEST
         );
+    }
+
+    // ── cycle #156 lower-bound clamp ─────────────────────────────────
+
+    #[test]
+    fn test_validate_leaderboard_negative_limit_clamped_to_one() {
+        // Pre-cycle #156 this would pass through to `LIMIT -1`, which
+        // PostgreSQL rejects with a 500 — the validator now clamps.
+        let q = LeaderboardQuery {
+            period: None,
+            limit: Some(-1),
+        };
+        assert_eq!(validate_leaderboard_query(&q).unwrap(), ("all", 1));
+    }
+
+    #[test]
+    fn test_validate_leaderboard_zero_limit_clamped_to_one() {
+        let q = LeaderboardQuery {
+            period: None,
+            limit: Some(0),
+        };
+        assert_eq!(validate_leaderboard_query(&q).unwrap(), ("all", 1));
+    }
+
+    #[test]
+    fn test_validate_leaderboard_i64_min_does_not_panic() {
+        // `.clamp(1, 50)` on `i64::MIN` must not panic — domain-bound
+        // input from an adversarial client shouldn't crash the handler.
+        let q = LeaderboardQuery {
+            period: None,
+            limit: Some(i64::MIN),
+        };
+        assert_eq!(validate_leaderboard_query(&q).unwrap(), ("all", 1));
     }
 }
