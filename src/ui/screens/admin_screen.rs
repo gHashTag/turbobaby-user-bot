@@ -2461,7 +2461,9 @@ fn AccessorySetsTab() -> Element {
     let mut icon = use_signal(String::new);
     let mut image_url = use_signal(String::new);
     let mut video_url = use_signal(String::new);
-    let mut accessories = use_signal(String::new);
+    // Cycle (this commit): textarea-of-comma-separated-IDs replaced by
+    // IdPicker checkbox list — same pattern as SetsTab.
+    let mut accessories: Signal<Vec<String>> = use_signal(Vec::new);
     let mut total_price = use_signal(String::new);
     let mut discount_percent = use_signal(String::new);
     let mut is_deal_of_day = use_signal(|| false);
@@ -2474,6 +2476,34 @@ fn AccessorySetsTab() -> Element {
     let mut search_query = use_signal(String::new);
     let reload = use_signal(|| 0u32);
     let toasts: Signal<Vec<ToastItem>> = use_signal(Vec::new);
+
+    // Catalog fetch for the IdPicker — accessories admin endpoint.
+    let mut accessory_catalog: Signal<Vec<(String, String)>> = use_signal(Vec::new);
+    let _ = use_resource(move || {
+        let init_data = init_data.read().clone();
+        async move {
+            let url = format!("{}/api/accessories?include_hidden=1", api_base_url());
+            if let Ok(resp) = HTTP_CLIENT
+                .clone()
+                .get(&url)
+                .header("X-Telegram-Init-Data", init_data.clone())
+                .header("X-Admin-Token", admin_token())
+                .header("X-Admin-Telegram-Id", telegram_id.to_string())
+                .send()
+                .await
+            {
+                if let Ok(data) = resp.json::<AccessoriesResp>().await {
+                    accessory_catalog.set(
+                        data.accessories
+                            .into_iter()
+                            .map(|a| (a.id, a.name))
+                            .collect(),
+                    );
+                }
+            }
+            Some(())
+        }
+    });
 
     use_effect(move || {
         if editing_id.read().is_some() {
@@ -2542,8 +2572,11 @@ fn AccessorySetsTab() -> Element {
                         oninput: move |e| icon.set(e.value()) }
                     ImageUpload { image_url: image_url.read().clone(), on_change: move |url: String| image_url.set(url) }
                     VideoUpload { video_url: video_url.read().clone(), on_change: move |url: String| video_url.set(url) }
-                    textarea { style: textarea_style(), placeholder: "Accessory IDs (через запятую)", value: "{accessories}",
-                        oninput: move |e| accessories.set(e.value()) }
+                    IdPicker {
+                        label: "Аксессуары".to_string(),
+                        options: accessory_catalog.read().clone(),
+                        selected: accessories,
+                    }
                     input { style: input_style(), placeholder: "Цена ฿", value: "{total_price}", r#type: "number",
                         oninput: move |e| total_price.set(e.value()) }
                     input { style: input_style(), placeholder: "Скидка %", value: "{discount_percent}", r#type: "number",
@@ -2572,7 +2605,7 @@ fn AccessorySetsTab() -> Element {
                                 _ => { status.set("❌ Скидка должна быть числом".into()); return; }
                             };
                             if n.is_empty() { status.set("❌ Название обязательно".into()); return; }
-                            let accs: Vec<String> = accessories().split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
+                            let accs: Vec<String> = accessories.read().clone();
                             let desc = description();
                             let ic = icon(); let img = image_url(); let vid = video_url();
                             let deal = is_deal_of_day();
@@ -2593,7 +2626,7 @@ fn AccessorySetsTab() -> Element {
                             });
                             status.set("✅ Добавлен!".into());
                             name.set(String::new()); description.set(String::new()); icon.set(String::new()); image_url.set(String::new()); video_url.set(String::new());
-                            accessories.set(String::new()); total_price.set(String::new()); discount_percent.set(String::new());
+                            accessories.set(Vec::new()); total_price.set(String::new()); discount_percent.set(String::new());
                             is_deal_of_day.set(false); name_en.set(String::new()); description_en.set(String::new());
                             auto_scroll_to_list();
                             spawn(async move {
@@ -2678,6 +2711,7 @@ fn AccessorySetsTab() -> Element {
                                 key: "{s.id}",
                                 item: s.clone(),
                                 cache: cache,
+                                accessory_catalog: accessory_catalog.read().clone(),
                                 on_saved: move |_| editing_id.set(None),
                                 on_cancel: move |_| editing_id.set(None),
                             }
@@ -2752,6 +2786,7 @@ fn AccessorySetsTab() -> Element {
 fn EditAccessorySetCard(
     item: AdminAccessorySet,
     cache: Signal<Vec<AdminAccessorySet>>,
+    accessory_catalog: Vec<(String, String)>,
     on_saved: EventHandler<()>,
     on_cancel: EventHandler<()>,
 ) -> Element {
@@ -2762,7 +2797,7 @@ fn EditAccessorySetCard(
     let mut icon = use_signal(|| item.icon.clone().unwrap_or_default());
     let mut image_url = use_signal(|| item.image_url.clone().unwrap_or_default());
     let mut video_url = use_signal(|| item.video_url.clone().unwrap_or_default());
-    let mut accessories = use_signal(|| item.accessories.join(", "));
+    let accessories: Signal<Vec<String>> = use_signal(|| item.accessories.clone());
     let mut total_price = use_signal(|| item.total_price.to_string());
     let mut discount_percent = use_signal(|| item.discount_percent.to_string());
     let mut is_deal_of_day = use_signal(|| item.is_deal_of_day);
@@ -2778,7 +2813,11 @@ fn EditAccessorySetCard(
             input { style: input_style(), placeholder: "Иконка", value: "{icon}", oninput: move |e| icon.set(e.value()) }
             ImageUpload { image_url: image_url.read().clone(), on_change: move |url: String| image_url.set(url) }
             VideoUpload { video_url: video_url.read().clone(), on_change: move |url: String| video_url.set(url) }
-            textarea { style: textarea_style(), placeholder: "Accessory IDs (через запятую)", value: "{accessories}", oninput: move |e| accessories.set(e.value()) }
+            IdPicker {
+                label: "Аксессуары".to_string(),
+                options: accessory_catalog,
+                selected: accessories,
+            }
             input { style: input_style(), placeholder: "Цена ฿", value: "{total_price}", r#type: "number", oninput: move |e| total_price.set(e.value()) }
             input { style: input_style(), placeholder: "Скидка %", value: "{discount_percent}", r#type: "number", oninput: move |e| discount_percent.set(e.value()) }
             label { style: "display:flex;align-items:center;gap:8px;font-size:13px;color:#888;",
@@ -2802,7 +2841,7 @@ fn EditAccessorySetCard(
                             _ => { status.set("❌ Скидка должна быть числом".into()); return; }
                         };
                         if n.is_empty() { status.set("❌ Название обязательно".into()); return; }
-                        let accs: Vec<String> = accessories().split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
+                        let accs: Vec<String> = accessories.read().clone();
                         let desc = description();
                         let ic = icon(); let img = image_url(); let vid = video_url();
                         let deal = is_deal_of_day();
@@ -2890,7 +2929,8 @@ fn TeaSetsTab() -> Element {
     let mut icon = use_signal(String::new);
     let mut image_url = use_signal(String::new);
     let mut video_url = use_signal(String::new);
-    let mut items = use_signal(String::new);
+    // Cycle (this commit): same upgrade as SetsTab/AccessorySetsTab.
+    let mut items: Signal<Vec<String>> = use_signal(Vec::new);
     let mut total_price = use_signal(String::new);
     let mut discount_percent = use_signal(String::new);
     let mut name_en = use_signal(String::new);
@@ -2902,6 +2942,34 @@ fn TeaSetsTab() -> Element {
     let mut search_query = use_signal(String::new);
     let reload = use_signal(|| 0u32);
     let toasts: Signal<Vec<ToastItem>> = use_signal(Vec::new);
+
+    // Catalog fetch for the IdPicker — tea-products admin endpoint.
+    let mut tea_catalog: Signal<Vec<(String, String)>> = use_signal(Vec::new);
+    let _ = use_resource(move || {
+        let init_data = init_data.read().clone();
+        async move {
+            let url = format!("{}/api/tea-products?include_hidden=1", api_base_url());
+            if let Ok(resp) = HTTP_CLIENT
+                .clone()
+                .get(&url)
+                .header("X-Telegram-Init-Data", init_data.clone())
+                .header("X-Admin-Token", admin_token())
+                .header("X-Admin-Telegram-Id", telegram_id.to_string())
+                .send()
+                .await
+            {
+                if let Ok(data) = resp.json::<TeaResp>().await {
+                    tea_catalog.set(
+                        data.tea_products
+                            .into_iter()
+                            .map(|t| (t.id, t.name))
+                            .collect(),
+                    );
+                }
+            }
+            Some(())
+        }
+    });
 
     use_effect(move || {
         if editing_id.read().is_some() {
@@ -2970,8 +3038,11 @@ fn TeaSetsTab() -> Element {
                         oninput: move |e| icon.set(e.value()) }
                     ImageUpload { image_url: image_url.read().clone(), on_change: move |url: String| image_url.set(url) }
                     VideoUpload { video_url: video_url.read().clone(), on_change: move |url: String| video_url.set(url) }
-                    textarea { style: textarea_style(), placeholder: "Tea item IDs (через запятую)", value: "{items}",
-                        oninput: move |e| items.set(e.value()) }
+                    IdPicker {
+                        label: "Чай".to_string(),
+                        options: tea_catalog.read().clone(),
+                        selected: items,
+                    }
                     input { style: input_style(), placeholder: "Цена ฿", value: "{total_price}", r#type: "number",
                         oninput: move |e| total_price.set(e.value()) }
                     input { style: input_style(), placeholder: "Скидка %", value: "{discount_percent}", r#type: "number",
@@ -2995,7 +3066,7 @@ fn TeaSetsTab() -> Element {
                                 _ => { status.set("❌ Скидка должна быть числом".into()); return; }
                             };
                             if n.is_empty() { status.set("❌ Название обязательно".into()); return; }
-                            let tea_items: Vec<String> = items().split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
+                            let tea_items: Vec<String> = items.read().clone();
                             let desc = description();
                             let ic = icon(); let img = image_url(); let vid = video_url();
                             let ne = name_en(); let de = description_en();
@@ -3016,7 +3087,7 @@ fn TeaSetsTab() -> Element {
                             status.set("✅ Добавлен!".into());
                             name.set(String::new()); description.set(String::new()); icon.set(String::new());
                             image_url.set(String::new()); video_url.set(String::new());
-                            items.set(String::new()); total_price.set(String::new()); discount_percent.set(String::new());
+                            items.set(Vec::new()); total_price.set(String::new()); discount_percent.set(String::new());
                             name_en.set(String::new()); description_en.set(String::new());
                             auto_scroll_to_list();
                             spawn(async move {
@@ -3100,6 +3171,7 @@ fn TeaSetsTab() -> Element {
                                 key: "{s.id}",
                                 item: s.clone(),
                                 cache: cache,
+                                tea_catalog: tea_catalog.read().clone(),
                                 on_saved: move |_| editing_id.set(None),
                                 on_cancel: move |_| editing_id.set(None),
                             }
@@ -3174,6 +3246,7 @@ fn TeaSetsTab() -> Element {
 fn EditTeaSetCard(
     item: AdminTeaSet,
     cache: Signal<Vec<AdminTeaSet>>,
+    tea_catalog: Vec<(String, String)>,
     on_saved: EventHandler<()>,
     on_cancel: EventHandler<()>,
 ) -> Element {
@@ -3184,7 +3257,7 @@ fn EditTeaSetCard(
     let mut icon = use_signal(|| item.icon.clone().unwrap_or_default());
     let mut image_url = use_signal(|| item.image_url.clone().unwrap_or_default());
     let mut video_url = use_signal(|| item.video_url.clone().unwrap_or_default());
-    let mut items = use_signal(|| item.items.join(", "));
+    let items: Signal<Vec<String>> = use_signal(|| item.items.clone());
     let mut total_price = use_signal(|| item.total_price.to_string());
     let mut discount_percent = use_signal(|| item.discount_percent.to_string());
     let mut name_en = use_signal(|| item.name_en.clone().unwrap_or_default());
@@ -3199,7 +3272,11 @@ fn EditTeaSetCard(
             input { style: input_style(), placeholder: "Иконка", value: "{icon}", oninput: move |e| icon.set(e.value()) }
             ImageUpload { image_url: image_url.read().clone(), on_change: move |url: String| image_url.set(url) }
             VideoUpload { video_url: video_url.read().clone(), on_change: move |url: String| video_url.set(url) }
-            textarea { style: textarea_style(), placeholder: "Tea item IDs (через запятую)", value: "{items}", oninput: move |e| items.set(e.value()) }
+            IdPicker {
+                label: "Чай".to_string(),
+                options: tea_catalog,
+                selected: items,
+            }
             input { style: input_style(), placeholder: "Цена ฿", value: "{total_price}", r#type: "number", oninput: move |e| total_price.set(e.value()) }
             input { style: input_style(), placeholder: "Скидка %", value: "{discount_percent}", r#type: "number", oninput: move |e| discount_percent.set(e.value()) }
             div { style: en_section_style(), "🇬🇧 English" }
@@ -3218,7 +3295,7 @@ fn EditTeaSetCard(
                             _ => { status.set("❌ Скидка должна быть числом".into()); return; }
                         };
                         if n.is_empty() { status.set("❌ Название обязательно".into()); return; }
-                        let tea_items: Vec<String> = items().split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
+                        let tea_items: Vec<String> = items.read().clone();
                         let desc = description();
                         let ic = icon(); let img = image_url(); let vid = video_url();
                         let ne = name_en(); let de = description_en();
