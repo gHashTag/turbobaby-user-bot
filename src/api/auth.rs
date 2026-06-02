@@ -339,6 +339,24 @@ pub fn verify_admin_token(token: &str, bot_token: &str, expected_password: &str)
     constant_time_eq::constant_time_eq(token.as_bytes(), expected.as_bytes())
 }
 
+/// Cycle #106: per-IP sliding-window-log rate-limit for failed admin
+/// auth attempts. Both auth paths (Telegram initData and X-Admin-Token
+/// password) were brute-forceable without bound — initData is HMAC so
+/// the keyspace makes brute-force infeasible, but a weak admin password
+/// could be cracked at HTTP speed. 10 failed attempts per 5 minutes per
+/// IP gives generous slack for typos while bounding brute-force to
+/// ~120 attempts/hour (a 35-bit password still takes 32+ years).
+///
+/// Uses the sync variant (`std::sync::Mutex`) so this stays in the
+/// existing sync `check_admin` signature — wrapping the 57 call-sites
+/// in `.await` adds churn without algorithmic value (the critical
+/// section is microseconds, no await inside the lock).
+static ADMIN_AUTH_RATE_LIMIT: std::sync::LazyLock<crate::api::rate_limit::SyncSlidingWindowStore> =
+    std::sync::LazyLock::new(crate::api::rate_limit::new_sync_store);
+const ADMIN_AUTH_RL_WINDOW: std::time::Duration = std::time::Duration::from_secs(5 * 60);
+const ADMIN_AUTH_RL_MAX_ATTEMPTS: usize = 10;
+const ADMIN_AUTH_RL_MAX_IPS: usize = 10_000;
+
 pub fn check_admin(headers: &HeaderMap, state: &AppState) -> Result<i64, StatusCode> {
     // Debug-level diagnostics only; admin_ids values are sensitive and never logged.
     tracing::debug!(
@@ -393,6 +411,27 @@ pub fn check_admin(headers: &HeaderMap, state: &AppState) -> Result<i64, StatusC
     }
 
     tracing::warn!("admin request without valid auth (initData or token)");
+
+    // Cycle #106: rate-limit failed admin auth attempts per-IP. Records
+    // this attempt; if the IP has crossed the threshold within the
+    // window, return 429 instead of 401 so brute-force gets blocked
+    // and the metric reflects it.
+    let client_ip = crate::api::rate_limit::client_ip_from_headers(headers);
+    let allowed = crate::api::rate_limit::check_and_record_sync(
+        &ADMIN_AUTH_RATE_LIMIT,
+        &client_ip,
+        ADMIN_AUTH_RL_WINDOW,
+        ADMIN_AUTH_RL_MAX_ATTEMPTS,
+        ADMIN_AUTH_RL_MAX_IPS,
+    );
+    if !allowed {
+        crate::metrics::rate_limit_blocked("admin_auth");
+        tracing::warn!(
+            "admin auth: rate-limit exceeded for ip={} (returning 429 instead of 401)",
+            client_ip
+        );
+        return Err(StatusCode::TOO_MANY_REQUESTS);
+    }
     Err(StatusCode::UNAUTHORIZED)
 }
 

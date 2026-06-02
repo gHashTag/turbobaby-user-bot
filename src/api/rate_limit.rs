@@ -85,6 +85,61 @@ pub async fn check_and_record(
     true
 }
 
+// ────────────────────────────────────────────────────────────────────
+// Cycle #106: synchronous variant.
+//
+// The async `check_and_record` above is for handlers that are already
+// async (upload, anonymous orders). `check_admin` in `src/api/auth.rs`
+// is sync and called from 57 callsites; making it async would force a
+// cascade of `.await` edits with no real benefit (the rate-limit
+// critical section is microseconds — locking briefly inside a sync fn
+// is fine).
+//
+// Identical algorithm; the only difference is `std::sync::Mutex` and
+// no `.await`. Holding a std::sync::Mutex across `.await` is unsafe,
+// but here we lock, do the math, push, drop — no await ever.
+// ────────────────────────────────────────────────────────────────────
+
+pub type SyncSlidingWindowStore = std::sync::Mutex<HashMap<String, VecDeque<Instant>>>;
+
+pub fn new_sync_store() -> SyncSlidingWindowStore {
+    std::sync::Mutex::new(HashMap::new())
+}
+
+pub fn check_and_record_sync(
+    store: &SyncSlidingWindowStore,
+    key: &str,
+    window: Duration,
+    max_attempts: usize,
+    max_keys: usize,
+) -> bool {
+    let now = Instant::now();
+    // PoisonError shouldn't happen in practice (the critical section is
+    // panic-free — only HashMap ops and VecDeque pushes) but treat a
+    // poisoned mutex as "let the request through" to avoid wedging
+    // admin access if something weird happens upstream.
+    let mut map = match store.lock() {
+        Ok(g) => g,
+        Err(p) => p.into_inner(),
+    };
+
+    if map.len() >= max_keys {
+        map.retain(|_, log| {
+            prune_window(log, now, window);
+            !log.is_empty()
+        });
+    }
+
+    let log = map.entry(key.to_string()).or_default();
+    prune_window(log, now, window);
+
+    if log.len() >= max_attempts {
+        return false;
+    }
+    log.push_back(now);
+    true
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -198,6 +253,47 @@ mod tests {
         assert!(check_and_record(&store, "fresh-key", w, 100, 5).await);
         let map = store.lock().await;
         // After eviction we should have ≤ 1 active key (the fresh one).
+        assert!(map.len() <= 5);
+    }
+
+    // ── Sync variant (cycle #106) ──────────────────────────────────────
+
+    #[test]
+    fn sync_allows_up_to_limit_then_blocks() {
+        let store = new_sync_store();
+        let w = Duration::from_secs(60);
+        for i in 0..5 {
+            assert!(
+                check_and_record_sync(&store, "test-sync-a", w, 5, 100),
+                "attempt {} should pass",
+                i
+            );
+        }
+        assert!(!check_and_record_sync(&store, "test-sync-a", w, 5, 100));
+    }
+
+    #[test]
+    fn sync_isolates_per_key() {
+        let store = new_sync_store();
+        let w = Duration::from_secs(60);
+        for _ in 0..5 {
+            assert!(check_and_record_sync(&store, "k1", w, 5, 100));
+        }
+        assert!(!check_and_record_sync(&store, "k1", w, 5, 100));
+        // Independent key unaffected.
+        assert!(check_and_record_sync(&store, "k2", w, 5, 100));
+    }
+
+    #[test]
+    fn sync_evicts_expired_keys_when_over_cap() {
+        let store = new_sync_store();
+        let w = Duration::from_millis(1);
+        for i in 0..5 {
+            check_and_record_sync(&store, &format!("evict-{}", i), w, 100, 5);
+        }
+        std::thread::sleep(Duration::from_millis(5));
+        assert!(check_and_record_sync(&store, "fresh-key", w, 100, 5));
+        let map = store.lock().unwrap();
         assert!(map.len() <= 5);
     }
 }
