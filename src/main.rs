@@ -1244,21 +1244,30 @@ mod css_class_consistency_tests {
 /// emitted no warnings even though *nothing outside the cycle*
 /// touched them.
 ///
-/// Walks `src/ui/**/mod.rs`, parses `pub mod X;` lines, and asserts
-/// each `X` is mentioned by name in at least one `.rs` file outside
-/// its own subtree (= `<dir>/X.rs` for single-file modules or
-/// `<dir>/X/` for folder modules). The declaring `mod.rs` itself is
-/// excluded since the `pub mod X;` line lives there.
+/// Walks every `mod.rs` / `lib.rs` / `main.rs` under `src/`, parses
+/// `pub mod X;` lines, and asserts each `X` is mentioned by name in
+/// at least one `.rs` file outside its own subtree (= `<dir>/X.rs`
+/// for single-file modules or `<dir>/X/` for folder modules). The
+/// declaring file is included in the cross-ref scan with only the
+/// literal `pub mod X;` line stripped, so re-export patterns like
+/// `pub use X::Item;` legitimately count as wiring.
 ///
 /// Tolerant by construction: matches by word boundary, so a 3-letter
 /// module name could in principle false-positive on comment text.
-/// Allowlist `ALLOWED_UNWIRED_UI_MODS` for the rare case of a
+/// Allowlist `ALLOWED_UNWIRED_MODS` for the rare case of a
 /// deliberately-unused module.
 #[cfg(test)]
-mod ui_module_wiring_tests {
+mod module_wiring_tests {
     use std::path::{Path, PathBuf};
 
-    const ALLOWED_UNWIRED_UI_MODS: &[&str] = &[];
+    const ALLOWED_UNWIRED_MODS: &[&str] = &[
+        // `src/db/macros.rs` exports `try_get_warn!` via `#[macro_export]`,
+        // which routes the macro to the crate root (`crate::try_get_warn!`)
+        // rather than `crate::db::macros::try_get_warn!`. The module name
+        // therefore never appears in any callsite even though the macro is
+        // used 20+ times across the backend.
+        "macros",
+    ];
 
     fn collect_rs_files(root: &Path, out: &mut Vec<PathBuf>) {
         let entries = match std::fs::read_dir(root) {
@@ -1275,17 +1284,22 @@ mod ui_module_wiring_tests {
         }
     }
 
-    /// Returns `(declaring_mod_rs, module_name, subtree_root)` for
-    /// every `pub mod X;` under `src/ui/`. `subtree_root` is the
-    /// `.rs` file for single-file modules or the directory for
-    /// folder modules; either form is excluded from the cross-ref
-    /// scan.
-    fn ui_pub_mod_decls() -> Vec<(PathBuf, String, PathBuf)> {
+    /// Returns `(declaring_file, module_name, subtree_root)` for
+    /// every `pub mod X;` under `src/` declared in a `mod.rs`,
+    /// `lib.rs`, or `main.rs` (the three Rust-idiomatic homes for
+    /// module-tree declarations). `subtree_root` is the `.rs` file
+    /// for single-file modules or the directory for folder modules.
+    fn all_pub_mod_decls() -> Vec<(PathBuf, String, PathBuf)> {
         let manifest = env!("CARGO_MANIFEST_DIR");
-        let ui_root = Path::new(manifest).join("src/ui");
+        let src_root = Path::new(manifest).join("src");
         let mut mod_files = Vec::new();
-        collect_rs_files(&ui_root, &mut mod_files);
-        mod_files.retain(|p| p.file_name().and_then(|s| s.to_str()) == Some("mod.rs"));
+        collect_rs_files(&src_root, &mut mod_files);
+        mod_files.retain(|p| {
+            matches!(
+                p.file_name().and_then(|s| s.to_str()),
+                Some("mod.rs" | "lib.rs" | "main.rs")
+            )
+        });
 
         let mut decls = Vec::new();
         for mod_path in &mod_files {
@@ -1377,8 +1391,8 @@ mod ui_module_wiring_tests {
     }
 
     #[test]
-    fn every_ui_pub_mod_has_an_external_reference() {
-        let decls = ui_pub_mod_decls();
+    fn every_pub_mod_has_an_external_reference() {
+        let decls = all_pub_mod_decls();
         assert!(!decls.is_empty(), "no pub mod declarations parsed");
 
         let manifest = env!("CARGO_MANIFEST_DIR");
@@ -1388,7 +1402,7 @@ mod ui_module_wiring_tests {
 
         let mut unwired = Vec::new();
         for (decl_mod, name, subtree) in &decls {
-            if ALLOWED_UNWIRED_UI_MODS.contains(&name.as_str()) {
+            if ALLOWED_UNWIRED_MODS.contains(&name.as_str()) {
                 continue;
             }
             let mut found = false;
@@ -1419,9 +1433,9 @@ mod ui_module_wiring_tests {
 
         assert!(
             unwired.is_empty(),
-            "UI modules declared but never referenced outside their own subtree ({}): {:?}\n\
+            "Modules declared but never referenced outside their own subtree ({}): {:?}\n\
              Either delete the module and its `pub mod` declaration, or list \
-             the name in ALLOWED_UNWIRED_UI_MODS with a rationale.",
+             the name in ALLOWED_UNWIRED_MODS with a rationale.",
             unwired.len(),
             unwired
         );
