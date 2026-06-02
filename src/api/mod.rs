@@ -17,8 +17,10 @@ pub mod tech_tree;
 pub mod upload;
 
 use crate::AppState;
+use axum::extract::State;
 use axum::http::StatusCode;
 use axum::{extract::DefaultBodyLimit, response::Json, routing::get, Router};
+use sea_orm::{ConnectionTrait, Statement};
 use serde_json::{json, Value};
 
 /// Extract a required boolean field from a JSON body.
@@ -67,13 +69,14 @@ pub fn validate_url(url: &Option<String>) -> Result<(), StatusCode> {
 }
 
 pub fn router(state: crate::AppState) -> Router {
-    Router::new()
+    Router::<AppState>::new()
         .route("/health", get(health_handler))
-        .nest("/api", api_routes(state.clone()))
+        .nest("/api", api_routes())
+        .with_state(state)
 }
 
-fn api_routes(state: AppState) -> Router {
-    let mut router = Router::new()
+fn api_routes() -> Router<AppState> {
+    let mut router = Router::<AppState>::new()
         .route("/ping", get(ping_handler))
         .merge(orders::routes())
         .merge(strains::routes())
@@ -92,15 +95,44 @@ fn api_routes(state: AppState) -> Router {
     router = router.layer(DefaultBodyLimit::max(2 * 1024 * 1024));
     router = router.merge(upload::routes());
 
-    router.with_state(state)
+    router
 }
 
+/// `/api/ping` — dumb liveness probe. Returns 200 as long as the
+/// process is alive. Use this for "should the orchestrator restart
+/// me?" decisions — restart only on no-response / non-200.
 async fn ping_handler() -> Json<Value> {
     Json(json!({"status": "ok", "service": "woody-weed-bot"}))
 }
 
-async fn health_handler() -> Json<Value> {
-    Json(json!({ "status": "ok", "service": "woody-weed-bot" }))
+/// `/health` — readiness probe. Returns 200 only when the backend
+/// can actually serve traffic (DB reachable). Returns 503 on DB
+/// failure so the orchestrator stops routing requests to a container
+/// whose DB connection has gone away.
+///
+/// Cycle #117: prior to this, `/health` was a copy of `/ping` — Railway
+/// would mark the container healthy even when the DB was unreachable,
+/// silently routing customer traffic into 500s. The `SELECT 1` ping
+/// uses the same SeaORM connection pool the app uses, so a pool
+/// exhaustion or DB outage surfaces as a 503 here too.
+async fn health_handler(State(state): State<AppState>) -> Result<Json<Value>, StatusCode> {
+    match state
+        .db
+        .orm
+        .execute(Statement::from_string(
+            sea_orm::DatabaseBackend::Postgres,
+            "SELECT 1".to_string(),
+        ))
+        .await
+    {
+        Ok(_) => Ok(Json(
+            json!({"status": "ok", "service": "woody-weed-bot", "db": "ok"}),
+        )),
+        Err(e) => {
+            tracing::warn!("/health: DB ping failed: {}", e);
+            Err(StatusCode::SERVICE_UNAVAILABLE)
+        }
+    }
 }
 
 #[cfg(test)]

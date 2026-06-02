@@ -2,7 +2,11 @@
 builder = "DOCKERFILE"
 
 [deploy]
-healthcheckPath = "/api/admin/ping"
+# Cycle #117: was `/api/admin/ping` which always returns 200 regardless
+# of backend state. `/health` now pings the DB (SELECT 1) and returns
+# 503 on failure so Railway stops routing traffic to a container whose
+# DB is unreachable. See src/api/mod.rs::health_handler for the impl.
+healthcheckPath = "/health"
 healthcheckTimeout = 300
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 10
