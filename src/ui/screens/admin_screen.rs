@@ -973,7 +973,7 @@ fn StrainsTab() -> Element {
                                        Ok(r) if r.status().is_success() => {
                                            if let Ok(data) = r.json::<serde_json::Value>().await {
                                                if let Some(real_id) = data["id"].as_str() {
-                                                   cache.write().iter_mut().find(|s| s.id == temp_id).map(|s| s.id = real_id.to_string());
+                                                   if let Some(s) = cache.write().iter_mut().find(|s| s.id == temp_id) { s.id = real_id.to_string(); }
                                                }
                                            }
                                            TelegramApp::init().haptic_notification(HapticNotification::Success);
@@ -1047,7 +1047,7 @@ fn StrainsTab() -> Element {
                                        let next_avail = !s.is_available;
                                        move |_| {
                                            let id = id.clone();
-                                           cache.write().iter_mut().find(|s| s.id == id).map(|s| s.is_available = next_avail);
+                                           if let Some(s) = cache.write().iter_mut().find(|s| s.id == id) { s.is_available = next_avail; }
                                            spawn(async move {
                                                let url = format!("{}/api/strains/{}/availability", api_base_url(), id);
                                                let res = HTTP_CLIENT.clone().put(&url)
@@ -1059,7 +1059,7 @@ fn StrainsTab() -> Element {
                                                match res {
                                                    Ok(r) if r.status().is_success() => { TelegramApp::init().haptic_notification(HapticNotification::Success); }
                                                    _ => {
-                                                       cache.write().iter_mut().find(|s| s.id == id).map(|s| s.is_available = !next_avail);
+                                                       if let Some(s) = cache.write().iter_mut().find(|s| s.id == id) { s.is_available = !next_avail; }
                                                        push_toast(toasts, "Не удалось изменить статус страйна".into(), ToastKind::Error);
                                                        TelegramApp::init().haptic_notification(HapticNotification::Error);
                                                    }
@@ -1291,7 +1291,7 @@ fn AccessoriesTab() -> Element {
                                        Ok(r) if r.status().is_success() => {
                                            if let Ok(data) = r.json::<serde_json::Value>().await {
                                                if let Some(real_id) = data["id"].as_str() {
-                                                   cache.write().iter_mut().find(|a| a.id == temp_id).map(|a| a.id = real_id.to_string());
+                                                   if let Some(a) = cache.write().iter_mut().find(|a| a.id == temp_id) { a.id = real_id.to_string(); }
                                                }
                                            }
                                            TelegramApp::init().haptic_notification(HapticNotification::Success);
@@ -1356,7 +1356,7 @@ fn AccessoriesTab() -> Element {
                                        let id = a.id.clone(); let next = !a.is_available;
                                        move |_| {
                                            let id = id.clone();
-                                           cache.write().iter_mut().find(|a| a.id == id).map(|a| a.is_available = next);
+                                           if let Some(a) = cache.write().iter_mut().find(|a| a.id == id) { a.is_available = next; }
                                            spawn(async move {
                                                let url = format!("{}/api/accessories/{}/availability", api_base_url(), id);
                                                let res = HTTP_CLIENT.clone().put(&url)
@@ -1367,7 +1367,7 @@ fn AccessoriesTab() -> Element {
                                                match res {
                                                    Ok(r) if r.status().is_success() => { TelegramApp::init().haptic_notification(HapticNotification::Success); }
                                                    _ => {
-                                                       cache.write().iter_mut().find(|a| a.id == id).map(|a| a.is_available = !next);
+                                                       if let Some(a) = cache.write().iter_mut().find(|a| a.id == id) { a.is_available = !next; }
                                                        push_toast(toasts, "Не удалось изменить статус аксессуара".into(), ToastKind::Error);
                                                        TelegramApp::init().haptic_notification(HapticNotification::Error);
                                                    }
@@ -1597,7 +1597,7 @@ fn TeaTab() -> Element {
                                        Ok(r) if r.status().is_success() => {
                                            if let Ok(data) = r.json::<serde_json::Value>().await {
                                                if let Some(real_id) = data["id"].as_str() {
-                                                   cache.write().iter_mut().find(|t| t.id == temp_id).map(|t| t.id = real_id.to_string());
+                                                   if let Some(t) = cache.write().iter_mut().find(|t| t.id == temp_id) { t.id = real_id.to_string(); }
                                                }
                                            }
                                            TelegramApp::init().haptic_notification(HapticNotification::Success);
@@ -1662,7 +1662,7 @@ fn TeaTab() -> Element {
                                        let id = t.id.clone(); let next = !t.is_available;
                                        move |_| {
                                            let id = id.clone();
-                                           cache.write().iter_mut().find(|t| t.id == id).map(|t| t.is_available = next);
+                                           if let Some(t) = cache.write().iter_mut().find(|t| t.id == id) { t.is_available = next; }
                                            spawn(async move {
                                                let url = format!("{}/api/tea-products/{}/availability", api_base_url(), id);
                                                let res = HTTP_CLIENT.clone().put(&url)
@@ -1673,7 +1673,7 @@ fn TeaTab() -> Element {
                                                match res {
                                                    Ok(r) if r.status().is_success() => { TelegramApp::init().haptic_notification(HapticNotification::Success); }
                                                    _ => {
-                                                       cache.write().iter_mut().find(|t| t.id == id).map(|t| t.is_available = !next);
+                                                       if let Some(t) = cache.write().iter_mut().find(|t| t.id == id) { t.is_available = !next; }
                                                        push_toast(toasts, "Не удалось изменить статус чая".into(), ToastKind::Error);
                                                        TelegramApp::init().haptic_notification(HapticNotification::Error);
                                                    }
@@ -1896,7 +1896,7 @@ fn SetsTab() -> Element {
                                     Ok(r) if r.status().is_success() => {
                                         if let Ok(data) = r.json::<serde_json::Value>().await {
                                             if let Some(real_id) = data["id"].as_str() {
-                                                cache.write().iter_mut().find(|s| s.id == temp_id).map(|s| s.id = real_id.to_string());
+                                                if let Some(s) = cache.write().iter_mut().find(|s| s.id == temp_id) { s.id = real_id.to_string(); }
                                             }
                                         }
                                         TelegramApp::init().haptic_notification(HapticNotification::Success);
@@ -1965,7 +1965,7 @@ fn SetsTab() -> Element {
                                     let id = s.id.clone(); let next = !s.is_available;
                                     move |_| {
                                         let id = id.clone();
-                                        cache.write().iter_mut().find(|s| s.id == id).map(|s| s.is_available = next);
+                                        if let Some(s) = cache.write().iter_mut().find(|s| s.id == id) { s.is_available = next; }
                                         spawn(async move {
                                             let url = format!("{}/api/sets/{}/availability", api_base_url(), id);
                                             let res = HTTP_CLIENT.clone().put(&url)
@@ -1976,7 +1976,7 @@ fn SetsTab() -> Element {
                                             match res {
                                                 Ok(r) if r.status().is_success() => { TelegramApp::init().haptic_notification(HapticNotification::Success); }
                                                 _ => {
-                                                    cache.write().iter_mut().find(|s| s.id == id).map(|s| s.is_available = !next);
+                                                    if let Some(s) = cache.write().iter_mut().find(|s| s.id == id) { s.is_available = !next; }
                                                     push_toast(toasts, "Не удалось изменить статус сета".into(), ToastKind::Error);
                                                     TelegramApp::init().haptic_notification(HapticNotification::Error);
                                                 }
@@ -2075,7 +2075,7 @@ fn EditSetCard(
                         let deal = is_deal_of_day();
                         let id = item_id.clone();
                         let original = cache.read().iter().find(|s| s.id == id).cloned();
-                        cache.write().iter_mut().find(|s| s.id == id).map(|s| {
+                        if let Some(s) = cache.write().iter_mut().find(|s| s.id == id) {
                             s.name = n.clone();
                             s.description = if desc.is_empty() { None } else { Some(desc.clone()) };
                             s.icon = if ic.is_empty() { None } else { Some(ic.clone()) };
@@ -2085,7 +2085,7 @@ fn EditSetCard(
                             s.total_price = p;
                             s.discount_percent = d;
                             s.is_deal_of_day = deal;
-                        });
+                        }
                         spawn(async move {
                             let body = json!({
                                 "name": n, "total_price": p, "discount_percent": d,
@@ -2106,7 +2106,7 @@ fn EditSetCard(
                                 TelegramApp::init().haptic_notification(HapticNotification::Success);
                             } else {
                                 TelegramApp::init().haptic_notification(HapticNotification::Error);
-                                if let Some(orig) = original { cache.write().iter_mut().find(|s| s.id == id).map(|s| *s = orig); }
+                                if let Some(orig) = original { if let Some(s) = cache.write().iter_mut().find(|s| s.id == id) { *s = orig; } }
                                 status.set("❌ Не сохранено. Попробуйте снова".into());
                             }
                         });
@@ -2308,7 +2308,7 @@ fn AccessorySetsTab() -> Element {
                                     Ok(r) if r.status().is_success() => {
                                         if let Ok(data) = r.json::<serde_json::Value>().await {
                                             if let Some(real_id) = data["id"].as_str() {
-                                                cache.write().iter_mut().find(|s| s.id == temp_id).map(|s| s.id = real_id.to_string());
+                                                if let Some(s) = cache.write().iter_mut().find(|s| s.id == temp_id) { s.id = real_id.to_string(); }
                                             }
                                         }
                                         TelegramApp::init().haptic_notification(HapticNotification::Success);
@@ -2377,7 +2377,7 @@ fn AccessorySetsTab() -> Element {
                                     let id = s.id.clone(); let next = !s.is_available;
                                     move |_| {
                                         let id = id.clone();
-                                        cache.write().iter_mut().find(|s| s.id == id).map(|s| s.is_available = next);
+                                        if let Some(s) = cache.write().iter_mut().find(|s| s.id == id) { s.is_available = next; }
                                         spawn(async move {
                                             let url = format!("{}/api/accessory-sets/{}/availability", api_base_url(), id);
                                             let res = HTTP_CLIENT.clone().put(&url)
@@ -2388,7 +2388,7 @@ fn AccessorySetsTab() -> Element {
                                             match res {
                                                 Ok(r) if r.status().is_success() => { TelegramApp::init().haptic_notification(HapticNotification::Success); }
                                                 _ => {
-                                                    cache.write().iter_mut().find(|s| s.id == id).map(|s| s.is_available = !next);
+                                                    if let Some(s) = cache.write().iter_mut().find(|s| s.id == id) { s.is_available = !next; }
                                                     push_toast(toasts, "Не удалось изменить статус".into(), ToastKind::Error);
                                                     TelegramApp::init().haptic_notification(HapticNotification::Error);
                                                 }
@@ -2492,7 +2492,7 @@ fn EditAccessorySetCard(
                         let ne = name_en(); let de = description_en();
                         let id = item_id.clone();
                         let original = cache.read().iter().find(|s| s.id == id).cloned();
-                        cache.write().iter_mut().find(|s| s.id == id).map(|s| {
+                        if let Some(s) = cache.write().iter_mut().find(|s| s.id == id) {
                             s.name = n.clone();
                             s.description = if desc.is_empty() { None } else { Some(desc.clone()) };
                             s.icon = if ic.is_empty() { None } else { Some(ic.clone()) };
@@ -2504,7 +2504,7 @@ fn EditAccessorySetCard(
                             s.is_deal_of_day = deal;
                             s.name_en = if ne.is_empty() { None } else { Some(ne.clone()) };
                             s.description_en = if de.is_empty() { None } else { Some(de.clone()) };
-                        });
+                        }
                         spawn(async move {
                             let body = json!({
                                 "name": n, "total_price": p, "discount_percent": d,
@@ -2530,7 +2530,7 @@ fn EditAccessorySetCard(
                                 TelegramApp::init().haptic_notification(HapticNotification::Success);
                             } else {
                                 TelegramApp::init().haptic_notification(HapticNotification::Error);
-                                if let Some(orig) = original { cache.write().iter_mut().find(|s| s.id == id).map(|s| *s = orig); }
+                                if let Some(orig) = original { if let Some(s) = cache.write().iter_mut().find(|s| s.id == id) { *s = orig; } }
                                 status.set("❌ Не сохранено. Попробуйте снова".into());
                             }
                         });
@@ -2719,7 +2719,7 @@ fn TeaSetsTab() -> Element {
                                     Ok(r) if r.status().is_success() => {
                                         if let Ok(data) = r.json::<serde_json::Value>().await {
                                             if let Some(real_id) = data["id"].as_str() {
-                                                cache.write().iter_mut().find(|s| s.id == temp_id).map(|s| s.id = real_id.to_string());
+                                                if let Some(s) = cache.write().iter_mut().find(|s| s.id == temp_id) { s.id = real_id.to_string(); }
                                             }
                                         }
                                         TelegramApp::init().haptic_notification(HapticNotification::Success);
@@ -2788,7 +2788,7 @@ fn TeaSetsTab() -> Element {
                                     let id = s.id.clone(); let next = !s.is_available;
                                     move |_| {
                                         let id = id.clone();
-                                        cache.write().iter_mut().find(|s| s.id == id).map(|s| s.is_available = next);
+                                        if let Some(s) = cache.write().iter_mut().find(|s| s.id == id) { s.is_available = next; }
                                         spawn(async move {
                                             let url = format!("{}/api/tea-sets/{}/availability", api_base_url(), id);
                                             let res = HTTP_CLIENT.clone().put(&url)
@@ -2799,7 +2799,7 @@ fn TeaSetsTab() -> Element {
                                             match res {
                                                 Ok(r) if r.status().is_success() => { TelegramApp::init().haptic_notification(HapticNotification::Success); }
                                                 _ => {
-                                                    cache.write().iter_mut().find(|s| s.id == id).map(|s| s.is_available = !next);
+                                                    if let Some(s) = cache.write().iter_mut().find(|s| s.id == id) { s.is_available = !next; }
                                                     push_toast(toasts, "Не удалось изменить статус".into(), ToastKind::Error);
                                                     TelegramApp::init().haptic_notification(HapticNotification::Error);
                                                 }
@@ -2894,7 +2894,7 @@ fn EditTeaSetCard(
                         let ne = name_en(); let de = description_en();
                         let id = item_id.clone();
                         let original = cache.read().iter().find(|s| s.id == id).cloned();
-                        cache.write().iter_mut().find(|s| s.id == id).map(|s| {
+                        if let Some(s) = cache.write().iter_mut().find(|s| s.id == id) {
                             s.name = n.clone();
                             s.description = if desc.is_empty() { None } else { Some(desc.clone()) };
                             s.icon = if ic.is_empty() { None } else { Some(ic.clone()) };
@@ -2904,7 +2904,7 @@ fn EditTeaSetCard(
                             s.discount_percent = d;
                             s.name_en = if ne.is_empty() { None } else { Some(ne.clone()) };
                             s.description_en = if de.is_empty() { None } else { Some(de.clone()) };
-                        });
+                        }
                         spawn(async move {
                             let body = json!({
                                 "name": n, "total_price": p, "discount_percent": d,
@@ -2928,7 +2928,7 @@ fn EditTeaSetCard(
                                 TelegramApp::init().haptic_notification(HapticNotification::Success);
                             } else {
                                 TelegramApp::init().haptic_notification(HapticNotification::Error);
-                                if let Some(orig) = original { cache.write().iter_mut().find(|s| s.id == id).map(|s| *s = orig); }
+                                if let Some(orig) = original { if let Some(s) = cache.write().iter_mut().find(|s| s.id == id) { *s = orig; } }
                                 status.set("❌ Не сохранено. Попробуйте снова".into());
                             }
                         });
@@ -3450,7 +3450,7 @@ fn EditStrainCard(
                            let id = item_id.clone();
                            let original = cache.read().iter().find(|s| s.id == id).cloned();
                            // Optimistic update in cache
-                           cache.write().iter_mut().find(|s| s.id == id).map(|s| {
+                           if let Some(s) = cache.write().iter_mut().find(|s| s.id == id) {
                                s.name = n.clone(); s.category = Some(c.clone()); s.price_per_gram = p;
                                s.thc_percent = t; s.cbd_percent = cb;
                                s.description = if d.is_empty() { None } else { Some(d.clone()) };
@@ -3474,7 +3474,7 @@ fn EditStrainCard(
                                s.is_new_arrival = new_b;
                                s.new_until = nu_rfc.clone();
                                s.display_order = ord;
-                           });
+                           }
                            spawn(async move {
                                let body = json!({
                                    "name": n, "category": c, "price_per_gram": p, "available_grams": g,
@@ -3536,7 +3536,7 @@ fn EditStrainCard(
                                } else {
                                    TelegramApp::init().haptic_notification(HapticNotification::Error);
                                    if let Some(orig) = original {
-                                       cache.write().iter_mut().find(|s| s.id == id).map(|s| *s = orig);
+                                       if let Some(s) = cache.write().iter_mut().find(|s| s.id == id) { *s = orig; }
                                    }
                                    status.set("❌ Не сохранено. Попробуйте снова".into());
                                }
@@ -3609,7 +3609,7 @@ fn EditAccessoryCard(
                            let ne = name_en(); let de = description_en(); let ce = category_en();
                            let id = item_id.clone();
                            let original = cache.read().iter().find(|a| a.id == id).cloned();
-                           cache.write().iter_mut().find(|a| a.id == id).map(|a| {
+                           if let Some(a) = cache.write().iter_mut().find(|a| a.id == id) {
                                a.name = n.clone(); a.category = Some(c.clone()); a.price = p; a.stock = Some(s_val);
                                a.description = if d.is_empty() { None } else { Some(d.clone()) };
                                a.image_url = if img.is_empty() { None } else { Some(img.clone()) };
@@ -3617,7 +3617,7 @@ fn EditAccessoryCard(
                                a.name_en = if ne.is_empty() { None } else { Some(ne.clone()) };
                                a.description_en = if de.is_empty() { None } else { Some(de.clone()) };
                                a.category_en = if ce.is_empty() { None } else { Some(ce.clone()) };
-                           });
+                           }
                            spawn(async move {
                                let body = json!({
                                    "name": n, "category": c, "price": p, "stock": s_val, "is_available": item.is_available,
@@ -3645,7 +3645,7 @@ fn EditAccessoryCard(
                                } else {
                                    TelegramApp::init().haptic_notification(HapticNotification::Error);
                                    if let Some(orig) = original {
-                                       cache.write().iter_mut().find(|a| a.id == id).map(|a| *a = orig);
+                                       if let Some(a) = cache.write().iter_mut().find(|a| a.id == id) { *a = orig; }
                                    }
                                    status.set("❌ Не сохранено. Попробуйте снова".into());
                                }
@@ -3721,7 +3721,7 @@ fn EditTeaCard(
                            let ne = name_en(); let de = description_en(); let sce = subcategory_en();
                            let id = item_id.clone();
                            let original = cache.read().iter().find(|t| t.id == id).cloned();
-                           cache.write().iter_mut().find(|t| t.id == id).map(|t| {
+                           if let Some(t) = cache.write().iter_mut().find(|t| t.id == id) {
                                t.name = n.clone(); t.subcategory = Some(sc.clone()); t.price = p; t.stock = Some(s_val);
                                t.description = if d.is_empty() { None } else { Some(d.clone()) };
                                t.image_url = if img.is_empty() { None } else { Some(img.clone()) };
@@ -3729,7 +3729,7 @@ fn EditTeaCard(
                                t.name_en = if ne.is_empty() { None } else { Some(ne.clone()) };
                                t.description_en = if de.is_empty() { None } else { Some(de.clone()) };
                                t.subcategory_en = if sce.is_empty() { None } else { Some(sce.clone()) };
-                           });
+                           }
                            spawn(async move {
                                let body = json!({
                                    "name": n, "subcategory": sc, "price": p, "stock": s_val, "is_available": item.is_available,
@@ -3757,7 +3757,7 @@ fn EditTeaCard(
                                } else {
                                    TelegramApp::init().haptic_notification(HapticNotification::Error);
                                    if let Some(orig) = original {
-                                       cache.write().iter_mut().find(|t| t.id == id).map(|t| *t = orig);
+                                       if let Some(t) = cache.write().iter_mut().find(|t| t.id == id) { *t = orig; }
                                    }
                                    status.set("❌ Не сохранено. Попробуйте снова".into());
                                }
@@ -4354,7 +4354,7 @@ fn OrdersTab() -> Element {
                                                         updating2.set(None);
                                                         match res {
                                                             Ok(r) if r.status().is_success() => {
-                                                                orders2.write().iter_mut().find(|o| o.id == oid).map(|o| o.status = "confirmed".into());
+                                                                if let Some(o) = orders2.write().iter_mut().find(|o| o.id == oid) { o.status = "confirmed".into(); }
                                                                 push_toast(toasts2, "✓ Заказ подтверждён".into(), ToastKind::Success);
                                                             }
                                                             _ => { push_toast(toasts2, "Ошибка подтверждения".into(), ToastKind::Error); }
@@ -4386,7 +4386,7 @@ fn OrdersTab() -> Element {
                                                         updating3.set(None);
                                                         match res {
                                                             Ok(r) if r.status().is_success() => {
-                                                                orders3.write().iter_mut().find(|o| o.id == oid).map(|o| o.status = "completed".into());
+                                                                if let Some(o) = orders3.write().iter_mut().find(|o| o.id == oid) { o.status = "completed".into(); }
                                                                 push_toast(toasts3, "✅ Заказ выполнен".into(), ToastKind::Success);
                                                             }
                                                             _ => { push_toast(toasts3, "Ошибка выполнения".into(), ToastKind::Error); }
@@ -4414,7 +4414,7 @@ fn OrdersTab() -> Element {
                                                             .send().await;
                                                         match res {
                                                             Ok(r) if r.status().is_success() => {
-                                                                orders_c.write().iter_mut().find(|o| o.id == oid).map(|o| o.status = "rejected".into());
+                                                                if let Some(o) = orders_c.write().iter_mut().find(|o| o.id == oid) { o.status = "rejected".into(); }
                                                                 push_toast(toasts_c, "Заказ отменён".into(), ToastKind::Success);
                                                             }
                                                             _ => { push_toast(toasts_c, "Ошибка отмены".into(), ToastKind::Error); }
