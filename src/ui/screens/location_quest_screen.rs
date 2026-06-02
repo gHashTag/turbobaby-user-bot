@@ -44,7 +44,7 @@ pub fn LocationQuestScreen() -> Element {
     let nav = navigator();
     let mut places = use_signal(Vec::<QuestPlace>::new);
     let mut loading = use_signal(|| true);
-    let mut err_msg = use_signal(|| String::new());
+    let mut err_msg = use_signal(String::new);
 
     let _ = use_resource(move || async move {
         // Cycle #31: Result-propagated errors so a network drop produces

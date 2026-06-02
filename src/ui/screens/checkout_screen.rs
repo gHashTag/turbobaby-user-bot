@@ -32,8 +32,8 @@ pub fn CheckoutScreen() -> Element {
     let mut cart = use_context::<Signal<Cart>>();
     let cart_items = cart.read().items.clone();
     let cart_total = cart.read().total;
-    let mut customer_name = use_signal(|| String::new());
-    let mut customer_phone = use_signal(|| String::new());
+    let mut customer_name = use_signal(String::new);
+    let mut customer_phone = use_signal(String::new);
     let mut shop_selected = use_signal(|| 0usize);
     let mut is_processing = use_signal(|| false);
     let mut order_error = use_signal(|| Option::<String>::None);

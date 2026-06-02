@@ -164,10 +164,7 @@ pub fn normalize_lang_code(code: &str) -> Option<Lang> {
         return None;
     }
     // BCP 47 / dialect: pick the primary subtag before `-` or `_`.
-    let primary = lower
-        .split(|c: char| c == '-' || c == '_')
-        .next()
-        .unwrap_or(lower.as_str());
+    let primary = lower.split(['-', '_']).next().unwrap_or(lower.as_str());
 
     if let Ok(lang) = primary.parse::<Lang>() {
         return Some(lang);

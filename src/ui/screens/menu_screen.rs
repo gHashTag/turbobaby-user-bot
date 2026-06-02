@@ -255,7 +255,7 @@ pub fn MenuScreen() -> Element {
                         match sort_val.as_str() {
                             "price-asc" => filtered.sort_by(|a,b| cmp_f64(a.price_per_gram, b.price_per_gram)),
                             "price-desc" => filtered.sort_by(|a,b| cmp_f64(b.price_per_gram, a.price_per_gram)),
-                            "name" => filtered.sort_by(|a,b| a.name.to_lowercase().cmp(&b.name.to_lowercase())),
+                            "name" => filtered.sort_by_key(|a| a.name.to_lowercase()),
                             "thc" => filtered.sort_by(|a,b| cmp_f64(b.thc_percent.unwrap_or(0.0), a.thc_percent.unwrap_or(0.0))),
                             _ => {
                                 filtered.sort_by(|a,b| {

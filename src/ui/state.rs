@@ -78,9 +78,10 @@ impl Default for Cart {
 }
 
 /// Application language
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 pub enum Language {
     Russian,
+    #[default]
     English,
     Thai,
     Chinese,
@@ -118,12 +119,6 @@ impl Language {
     }
 }
 
-impl Default for Language {
-    fn default() -> Self {
-        Self::English
-    }
-}
-
 /// Hook to access cart state
 pub fn use_cart_state() -> Signal<Cart> {
     use_context::<Signal<Cart>>()
@@ -132,7 +127,7 @@ pub fn use_cart_state() -> Signal<Cart> {
 /// Provider component for cart state
 #[component]
 pub fn CartStateProvider(children: Element) -> Element {
-    let cart = use_memo(|| Cart::new());
+    let cart = use_memo(Cart::new);
     provide_context(cart);
     rsx! {
         { children }

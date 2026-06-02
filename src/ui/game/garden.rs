@@ -181,7 +181,7 @@ fn progress_bar_gradient(stage: &GrowthStage) -> &'static str {
 pub fn Garden() -> Element {
     let plants = use_signal(Vec::<Plant>::new);
     let loading = use_signal(|| true);
-    let error_msg = use_signal(|| String::new());
+    let error_msg = use_signal(String::new);
     let now_ms = use_signal(|| chrono::Utc::now().timestamp_millis());
     let telegram_id = use_telegram_id().unwrap_or(0);
     let init_data = use_telegram_init_data();

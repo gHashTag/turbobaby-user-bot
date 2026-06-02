@@ -74,7 +74,7 @@ fn urlencoding_simple(s: &str) -> String {
 #[component]
 pub fn Referrals() -> Element {
     let telegram_id = use_telegram_id().unwrap_or(0i64);
-    let referral_me = use_signal(|| ReferralMe::default());
+    let referral_me = use_signal(ReferralMe::default);
     let leaderboard = use_signal(Vec::<TopReferrer>::new);
     let loading = use_signal(|| true);
     let mut copied = use_signal(|| false);
@@ -90,7 +90,7 @@ pub fn Referrals() -> Element {
             if tid == 0 {
                 me_c.set(ReferralMe {
                     code: "N/A".into(),
-                    invite_link: format!("https://t.me/Woody_WeedPecker_bot?start=ref_NA"),
+                    invite_link: "https://t.me/Woody_WeedPecker_bot?start=ref_NA".to_string(),
                     stats: ReferralStats::default(),
                 });
                 loading_c.set(false);

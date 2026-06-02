@@ -44,7 +44,7 @@ fn category_color(cat: &str) -> &'static str {
 pub fn ARHuntScreen() -> Element {
     let mut places = use_signal(Vec::<Place>::new);
     let mut loading = use_signal(|| true);
-    let mut err_msg = use_signal(|| String::new());
+    let mut err_msg = use_signal(String::new);
 
     let _ = use_resource(move || async move {
         // Cycle #30: Result-propagated error path so a failed fetch shows

@@ -132,7 +132,7 @@ pub fn WoodyCatch() -> Element {
     let playing = use_signal(|| false);
     let game_over = use_signal(|| false);
     let lane = use_signal(|| 1u32); // 0-3
-    let buds = use_signal(|| Vec::<Bud>::new());
+    let buds = use_signal(Vec::<Bud>::new);
     let next_id = use_signal(|| 0u32);
     let high_score = use_signal(get_high_score);
 
@@ -214,7 +214,7 @@ pub fn WoodyCatch() -> Element {
                         let ny = b.y + b.speed;
 
                         // Catch zone: y in [72, 88] and same lane
-                        if ny >= 72.0 && ny <= 88.0 && b.lane == cur_lane {
+                        if (72.0..=88.0).contains(&ny) && b.lane == cur_lane {
                             let type_idx =
                                 (b.type_idx as usize).min(BUD_TYPES.len().saturating_sub(1));
                             let bt = &BUD_TYPES[type_idx];

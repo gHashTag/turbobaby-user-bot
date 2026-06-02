@@ -147,7 +147,7 @@ pub fn ProfileScreen() -> Element {
     let current_tier = loyalty_data
         .as_ref()
         .and_then(|d| d.tier.as_deref())
-        .map(|t| Tier::from_str(t))
+        .map(Tier::from_str)
         .unwrap_or(Tier::Silver);
 
     let total_spent = loyalty_data

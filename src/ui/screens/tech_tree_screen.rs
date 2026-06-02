@@ -57,7 +57,7 @@ pub fn TechTreeScreen() -> Element {
     let mut nodes = use_signal(Vec::<TechNode>::new);
     let mut loading = use_signal(|| true);
     let mut reload_tick = use_signal(|| 0u32);
-    let mut err_msg = use_signal(|| String::new());
+    let mut err_msg = use_signal(String::new);
 
     let _ = use_resource(move || async move {
         let _ = reload_tick.read(); // re-fetch when this signal changes

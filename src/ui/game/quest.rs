@@ -27,7 +27,7 @@ fn checkpoint_emoji(id: u8) -> &'static str {
 pub fn Quest() -> Element {
     let current_checkpoint = use_signal(|| 0u8);
     let scanning = use_signal(|| false);
-    let scan_result = use_signal(|| String::new());
+    let scan_result = use_signal(String::new);
     let loading = use_signal(|| false);
     let checkpoints = get_checkpoints();
     let init_data = use_telegram_init_data();

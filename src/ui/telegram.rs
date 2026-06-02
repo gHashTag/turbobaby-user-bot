@@ -310,8 +310,8 @@ pub fn use_telegram_init_data() -> String {
 #[component]
 pub fn TelegramProvider(children: Element) -> Element {
     let _telegram = use_telegram();
-    let _ = _telegram.ready();
-    let _ = _telegram.expand();
+    _telegram.ready();
+    _telegram.expand();
 
     rsx! {
         { children }
