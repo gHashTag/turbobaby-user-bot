@@ -512,9 +512,13 @@ async fn harvest_plant(
     let notify_discount = discount_percent;
     let notify_bonus = bonus_points;
     tokio::spawn(async move {
+        // Cycle #149: notify_admins now sends with parse_mode=Html, so
+        // user-controlled fields must be escaped at the format site.
+        // `strain_name` is admin-controlled (catalog), but admins still
+        // could enter "Critical <Mass>" — escape to be safe.
         let text = format!(
             "\u{1F33F} Garden reward \u{0432}\u{044B}\u{0434}\u{0430}\u{043D}\n\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\n\u{1F194} {}\n\u{1F381} {} ({}% / {}pts)",
-            user_id, strain_name, notify_discount, notify_bonus
+            user_id, crate::util::html_escape(&strain_name), notify_discount, notify_bonus
         );
         crate::notify::notify_admins(&bot, &config, &text).await;
     });

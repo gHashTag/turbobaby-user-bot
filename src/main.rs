@@ -125,9 +125,14 @@ async fn alert_5xx_middleware(
             let safe_method: String = method.chars().take(20).collect();
             let safe_path: String = path.chars().take(200).collect();
             tokio::spawn(async move {
+                // Cycle #149: notify_admins sends with parse_mode=Html now.
+                // `safe_path` is request-URI-derived; could contain `<` or
+                // `&` (path traversal probes, malformed URIs). Escape.
                 let text = format!(
                     "\u{1F6A8} 5xx Error on prod\n\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\n\u{1F4CD} {} {}\n\u{1F4A5} HTTP {}",
-                    safe_method, safe_path, status
+                    crate::util::html_escape(&safe_method),
+                    crate::util::html_escape(&safe_path),
+                    status
                 );
                 crate::notify::notify_admins(&bot, &config, &text).await;
             });
