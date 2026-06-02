@@ -360,8 +360,13 @@ async fn create_treasure_hunt(
     let bm_desc = req.black_mark_description.unwrap_or_default();
     let bm_image = req.black_mark_image_url.unwrap_or_default();
     let is_active = req.is_active.unwrap_or(true);
-    let starts_at = req.starts_at.unwrap_or_default();
-    let ends_at = req.ends_at.unwrap_or_default();
+    // Cycle #155: bind `starts_at`/`ends_at` as Option<String>. The
+    // pre-cycle `unwrap_or_default()` produced an empty-string for
+    // None, which PostgreSQL TIMESTAMPTZ parsing rejected with a 500.
+    // Treat None and `Some("")` identically (matches the cycle-#154
+    // validator convention) and let sea_orm bind None → SQL NULL.
+    let starts_at = req.starts_at.filter(|s| !s.is_empty());
+    let ends_at = req.ends_at.filter(|s| !s.is_empty());
     // BUG-4 fix via SeaORM: start_lat/start_lon могут быть NUMERIC.
     use sea_orm::{ConnectionTrait, DbBackend, Statement};
     let stmt = Statement::from_sql_and_values(
@@ -417,8 +422,11 @@ async fn update_treasure_hunt(
     let bm_desc = req.black_mark_description.unwrap_or_default();
     let bm_image = req.black_mark_image_url.unwrap_or_default();
     let is_active = req.is_active.unwrap_or(true);
-    let starts_at = req.starts_at.unwrap_or_default();
-    let ends_at = req.ends_at.unwrap_or_default();
+    // Cycle #155: mirror of the create_treasure_hunt fix — bind
+    // Option<String> so None / empty → SQL NULL instead of an
+    // empty-string that PG TIMESTAMPTZ rejects.
+    let starts_at = req.starts_at.filter(|s| !s.is_empty());
+    let ends_at = req.ends_at.filter(|s| !s.is_empty());
     let stmt = Statement::from_sql_and_values(
         DbBackend::Postgres,
         "UPDATE treasure_hunts SET name=$1, description=$2, image_url=$3, black_mark_title=$4, black_mark_description=$5, black_mark_image_url=$6, is_active=$7, starts_at=$8, ends_at=$9, start_lat=$10::float8, start_lon=$11::float8, start_name=$12 WHERE id=$13",
