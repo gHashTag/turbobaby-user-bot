@@ -96,7 +96,10 @@ mod tests {
 ///
 /// This test walks `src/metrics.rs` to find every `pub fn <name>`,
 /// then greps `src/**/*.rs` (excluding `src/metrics.rs` itself) for a
-/// `metrics::<name>(` or `crate::metrics::<name>(` reference. Any
+/// `metrics::<name>(` or `crate::metrics::<name>(` reference. **Sound
+/// only because no file in this crate does `use crate::metrics::<name>`
+/// — every call site uses the fully-qualified path.** Verified at cycle
+/// #109 audit time. If that convention changes, broaden the match. Any
 /// helper with zero call sites fails the test — forcing the
 /// add-helper-and-wire-it dance to land in a single commit.
 ///

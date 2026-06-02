@@ -90,22 +90,29 @@ pre-commit:
       fail_text: |
         WASM compilation failed. Fix errors before committing.
 
-    # Cycle #104: the schema-truth test triad (#101 migration manifest, #102
-    # entity columns, #103 orphan tables) is cheap (file IO + grep, no DB,
-    # no network) — sub-second after the first compile — but was previously
-    # CI-only. A dev could break a defensive test and only learn about it
-    # post-push. This step compiles the test harness (catching broken test
-    # code that `cargo check` misses) and runs every `db::*` test (55, all
-    # pure helpers). Total impact: ~1s incremental, ~5s cold.
-    db-defensive-tests:
+    # Cycles #104 + #109: pre-commit catches for cheap defensive tests.
+    # Currently covers two structural-drift suites:
+    #   - `db::*` — schema-truth triad (#101 manifest, #102 entity
+    #     columns, #103 orphan tables) + pure db helpers (55 tests)
+    #   - `metrics::metric_wiring` — declared-but-unwired metric audit
+    #     (#108, 1 test)
+    # All are pure (file IO + grep, no DB, no network) and sub-second
+    # after the first compile. Without this hook a dev could break a
+    # defensive test and only learn about it from CI post-push. This
+    # step also compiles the test harness, catching broken test code
+    # that `cargo check` alone misses. Total impact: ~1s incremental,
+    # ~5s cold. To add another module, append its filter to the `--`
+    # arg list (libtest treats positional args as an OR-of-substring
+    # filters; `cargo test` itself only takes one TESTNAME).
+    defensive-tests:
       # Run when *.rs or *.sql changes — migration SQL drift is exactly
       # what the manifest/orphan tests catch, so we can't skip on
       # SQL-only commits.
       glob:
         - "*.rs"
         - "*.sql"
-      run: "cargo test --offline --features backend --bin woody-weed-bot-server --quiet db::"
+      run: "cargo test --offline --features backend --bin woody-weed-bot-server --quiet -- db:: metrics::metric_wiring"
       fail_text: |
-        Defensive db:: tests failed (schema-truth triad or pure helpers).
-        Run `cargo test --features backend --bin woody-weed-bot-server db::`
+        Defensive tests failed (schema-truth triad / metric wiring / pure helpers).
+        Run `cargo test --features backend --bin woody-weed-bot-server -- db:: metrics::metric_wiring`
         locally to see the failure details.
