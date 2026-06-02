@@ -58,6 +58,42 @@ pub struct Database {
     pub orm: sea_orm::DatabaseConnection,
 }
 
+/// Cycle #123: parse `DB_POOL_MAX` env var with strict semantics —
+/// `None` (unset) returns the default 10; `Some(s)` requires a valid
+/// `u32 >= 1` or errors out. Mirrors `config::parse_port_env` from
+/// cycle #118 — same shape, same failure-loud principle so a typo
+/// like `DB_POOL_MAX="ten"` doesn't silently fall back.
+///
+/// Capped at the SeaORM/sqlx-postgres natural upper bound (u32::MAX
+/// for the type, but in practice Railway's free PG plan caps at 60
+/// connections shared across all clients; values >50 are almost
+/// certainly mistakes). We don't enforce that cap here because what
+/// "too high" means depends on the PG plan — surface the warning in
+/// docs instead.
+pub fn parse_db_pool_max_env(raw: Option<String>) -> Result<u32> {
+    const DEFAULT: u32 = 10;
+    match raw {
+        None => Ok(DEFAULT),
+        Some(s) => {
+            let trimmed = s.trim();
+            if trimmed.is_empty() {
+                return Ok(DEFAULT);
+            }
+            let n: u32 = trimmed.parse().map_err(|e| {
+                anyhow::anyhow!(
+                    "DB_POOL_MAX must be a non-negative integer, got {:?}: {}",
+                    s,
+                    e
+                )
+            })?;
+            if n == 0 {
+                anyhow::bail!("DB_POOL_MAX must be >= 1, got 0 (would deadlock the first query)");
+            }
+            Ok(n)
+        }
+    }
+}
+
 impl Database {
     pub async fn connect(database_url: &str) -> Result<Self> {
         // SeaORM connects via sqlx; sslmode=require in the URL is handled
@@ -67,8 +103,15 @@ impl Database {
         // sslmode).
         let sanitized_url = sanitize_pg_url_for_sqlx(database_url);
         let mut orm_opts = sea_orm::ConnectOptions::new(sanitized_url);
+
+        // Cycle #123: max_connections is env-tunable. Default 10 fits
+        // both small Railway free-tier deployments (PG limit 60, so a
+        // single container leaves ample headroom for migrations +
+        // additional replicas) and local dev. Set DB_POOL_MAX to bump
+        // when running with more replicas or higher concurrency.
+        let pool_max = parse_db_pool_max_env(std::env::var("DB_POOL_MAX").ok())?;
         orm_opts
-            .max_connections(10)
+            .max_connections(pool_max)
             .min_connections(1)
             .connect_timeout(std::time::Duration::from_secs(10))
             .idle_timeout(std::time::Duration::from_secs(300))
@@ -632,6 +675,52 @@ mod url_sanitize_tests {
         assert_eq!(
             s("postgres://u:p@h/d?channel_binding=require"),
             "postgres://u:p@h/d"
+        );
+    }
+}
+
+/// Cycle #123: tests for `parse_db_pool_max_env`. Closure-free helper
+/// (takes `Option<String>` directly) since the input shape is the same
+/// as `parse_port_env` — match every branch, including the >0 invariant.
+#[cfg(test)]
+mod db_pool_max_tests {
+    use super::parse_db_pool_max_env as p;
+
+    #[test]
+    fn unset_returns_default_10() {
+        assert_eq!(p(None).unwrap(), 10);
+    }
+
+    #[test]
+    fn empty_or_whitespace_returns_default() {
+        assert_eq!(p(Some("".into())).unwrap(), 10);
+        assert_eq!(p(Some("   ".into())).unwrap(), 10);
+    }
+
+    #[test]
+    fn valid_value_parses() {
+        assert_eq!(p(Some("20".into())).unwrap(), 20);
+        assert_eq!(p(Some("1".into())).unwrap(), 1);
+        assert_eq!(p(Some(" 50 ".into())).unwrap(), 50);
+    }
+
+    #[test]
+    fn malformed_errors() {
+        // Word, float, negative — none of these are u32.
+        assert!(p(Some("ten".into())).is_err());
+        assert!(p(Some("10.5".into())).is_err());
+        assert!(p(Some("-1".into())).is_err());
+    }
+
+    #[test]
+    fn zero_errors() {
+        // 0 would deadlock the first query — explicit reject so the
+        // operator sees the cause, not a mysterious hang.
+        let e = p(Some("0".into())).unwrap_err().to_string();
+        assert!(
+            e.contains("must be >= 1"),
+            "expected '>= 1' in error, got: {}",
+            e
         );
     }
 }
