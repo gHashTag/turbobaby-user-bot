@@ -14,9 +14,12 @@ use serde_json::{json, Value};
 
 pub fn routes() -> Router<AppState> {
     Router::new()
-        // User plants
+        // User plants — `POST /garden/plants` (plant_seed handler)
+        // removed in cycle #169. Seeding is now an automatic
+        // side-effect of `complete_order_and_update_loyalty` (cycle
+        // #168); the manual endpoint had zero callers across the UI
+        // and backend.
         .route("/garden/plants", get(get_user_plants))
-        .route("/garden/plants", post(plant_seed))
         .route("/garden/plants/:id/water", post(water_plant))
         .route("/garden/plants/:id/harvest", post(harvest_plant))
         // Rewards
@@ -34,12 +37,10 @@ pub struct UserPlantsQuery {
     pub telegram_id: i64,
 }
 
-#[derive(Debug, Deserialize)]
-pub struct PlantSeedRequest {
-    pub telegram_id: i64,
-    pub strain_id: String,
-    pub strain_name: String,
-}
+// Cycle #169: `PlantSeedRequest` removed alongside the handler.
+// Forward-write of garden_plants is done inside
+// `complete_order_and_update_loyalty` (cycle #168) using the order's
+// own `items` JSONB — no separate request type needed.
 
 #[derive(Debug, Serialize)]
 pub struct PlantResponse {
@@ -167,97 +168,10 @@ async fn get_user_plants(
     Ok(Json(json!({ "plants": plants })))
 }
 
-fn validate_plant_seed_request(req: &PlantSeedRequest) -> Result<(), StatusCode> {
-    if req.strain_id.len() > 200 {
-        return Err(StatusCode::BAD_REQUEST);
-    }
-    if req.strain_name.len() > 200 {
-        return Err(StatusCode::BAD_REQUEST);
-    }
-    Ok(())
-}
-
-async fn plant_seed(
-    headers: HeaderMap,
-    State(state): State<AppState>,
-    Json(req): Json<PlantSeedRequest>,
-) -> Result<Json<Value>, StatusCode> {
-    validate_telegram_id_param(req.telegram_id)?;
-    crate::api::auth::check_owner(&headers, &state, req.telegram_id)?;
-    check_not_blocked(&state, req.telegram_id).await?;
-    validate_plant_seed_request(&req)?;
-
-    // Cycle #94: SeaORM tx. Advisory lock via raw Statement (pattern #21),
-    // then conditional INSERT WHERE NOT EXISTS via raw Statement
-    // (`SELECT ... WHERE NOT EXISTS (subquery)` syntax not in typed builder).
-    use sea_orm::{ConnectionTrait, DbBackend, Statement, TransactionTrait};
-
-    let user_id = req.telegram_id.to_string();
-
-    let plant = garden::Plant::new(user_id.clone(), req.strain_id, req.strain_name);
-    let plant_id = plant.id.clone();
-
-    let tx = state.db.orm.begin().await.map_err(|e| {
-        tracing::error!("plant_seed tx.begin: {e}");
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-    // Serialize plant_seed for this user to prevent race-condition duplicates.
-    tx.execute(Statement::from_sql_and_values(
-        DbBackend::Postgres,
-        "SELECT pg_advisory_xact_lock(hashtext($1))",
-        [user_id.clone().into()],
-    ))
-    .await
-    .map_err(|e| {
-        tracing::error!("plant_seed advisory lock: {e}");
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-
-    let stage = format!("{:?}", plant.current_stage).to_lowercase();
-    let inserted = tx
-        .execute(Statement::from_sql_and_values(
-            DbBackend::Postgres,
-            "INSERT INTO garden_plants (id, user_id, strain_id, strain_name, current_stage, \
-                                    planted_at, is_completed, water_count, last_watered_at) \
-             SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9 \
-             WHERE NOT EXISTS ( \
-                 SELECT 1 FROM garden_plants WHERE user_id = $2 AND is_completed = false \
-             )",
-            [
-                plant.id.into(),
-                plant.user_id.into(),
-                plant.strain_id.into(),
-                plant.strain_name.into(),
-                stage.into(),
-                plant.planted_at.into(),
-                plant.is_completed.into(),
-                plant.water_count.into(),
-                plant.last_watered_at.into(),
-            ],
-        ))
-        .await
-        .map_err(|e| {
-            tracing::error!("plant_seed insert: {e}");
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
-
-    tx.commit().await.map_err(|e| {
-        tracing::error!("plant_seed commit: {e}");
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-
-    if inserted.rows_affected() == 0 {
-        return Ok(Json(json!({
-            "success": false,
-            "error": "You already have an active plant"
-        })));
-    }
-
-    Ok(Json(json!({
-        "success": true,
-        "plant_id": plant_id
-    })))
-}
+// Cycle #169: `plant_seed` handler + `validate_plant_seed_request`
+// validator removed. The forward-write of `garden_plants` is now
+// the cycle-#168 side-effect of `complete_order_and_update_loyalty`
+// — the manual endpoint had zero callers in the UI or backend.
 
 async fn water_plant(
     headers: HeaderMap,
@@ -856,10 +770,7 @@ async fn update_config(
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        validate_garden_config_update, validate_plant_seed_request, ConfigUpdateRequest,
-        PlantSeedRequest,
-    };
+    use super::{validate_garden_config_update, ConfigUpdateRequest};
     use axum::http::StatusCode;
 
     #[test]
@@ -940,39 +851,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_validate_plant_seed_ok() {
-        let req = PlantSeedRequest {
-            telegram_id: 1,
-            strain_id: "s1".into(),
-            strain_name: "OG".into(),
-        };
-        assert!(validate_plant_seed_request(&req).is_ok());
-    }
-
-    #[test]
-    fn test_validate_plant_seed_id_too_long() {
-        let req = PlantSeedRequest {
-            telegram_id: 1,
-            strain_id: "a".repeat(201),
-            strain_name: "OG".into(),
-        };
-        assert_eq!(
-            validate_plant_seed_request(&req).unwrap_err(),
-            StatusCode::BAD_REQUEST
-        );
-    }
-
-    #[test]
-    fn test_validate_plant_seed_name_too_long() {
-        let req = PlantSeedRequest {
-            telegram_id: 1,
-            strain_id: "s1".into(),
-            strain_name: "a".repeat(201),
-        };
-        assert_eq!(
-            validate_plant_seed_request(&req).unwrap_err(),
-            StatusCode::BAD_REQUEST
-        );
-    }
+    // Cycle #169: plant_seed validator tests removed alongside the
+    // handler. The forward-write of garden_plants happens inside
+    // `complete_order_and_update_loyalty` (cycle #168) and is
+    // covered by `tests/integration_garden_seed.rs`.
 }
