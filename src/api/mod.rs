@@ -291,3 +291,164 @@ mod tests {
         );
     }
 }
+
+/// Cycle #143: defensive test catching the "added a routes file but
+/// forgot to wire it" bug class.
+///
+/// Cycle #143 audit discovered `src/api/game.rs` (244 lines, last
+/// touched in cycle #91) defines `pub fn routes()` for Woody Catch
+/// high-score persistence — but `pub mod game` is missing from this
+/// file, so it isn't even compiled. The orphan-table defense in
+/// `src/db/mod.rs::orphan_table_tests` missed it because the table
+/// name `game_high_scores` still appears as a string literal in the
+/// uncompiled file, fooling the textual reference check.
+///
+/// This test walks `src/api/*.rs`, finds every file with
+/// `pub fn routes(`, and asserts each is both `pub mod`'d and
+/// `.merge()`'d in this file (`src/api/mod.rs`). Modules pending a
+/// wire-or-delete decision go in `ALLOWED_UNWIRED_ROUTES` with
+/// rationale.
+#[cfg(test)]
+mod route_wiring_tests {
+    /// Modules with `pub fn routes()` deferred from production wiring.
+    /// Each entry must name who deferred it and why.
+    const ALLOWED_UNWIRED_ROUTES: &[&str] = &[
+        // Cycle #143: `src/api/game.rs` declares Woody Catch high-score
+        // routes but has been orphaned since cycle #91:
+        //   - `pub mod game` is missing from src/api/mod.rs
+        //   - `.merge(game::routes())` is missing from api_routes()
+        //   - the UI (src/ui/game/woody_catch.rs) stores scores in
+        //     browser localStorage only — no client hits these routes.
+        // The `game_high_scores` table (migration 027) still exists.
+        // Decide one of:
+        //   (a) wire backend + UI for cross-device persistence
+        //   (b) delete src/api/game.rs and either drop migration 027
+        //       or move `game_high_scores` to ALLOWED_ORPHANS in
+        //       src/db/mod.rs
+        // Until that decision lands, this entry documents the
+        // intentional orphan and the textual `game_high_scores`
+        // reference inside game.rs is what keeps the orphan-table
+        // schema-truth test green.
+        "game",
+    ];
+
+    fn module_name_from_path(path: &std::path::Path) -> Option<String> {
+        let stem = path.file_stem()?.to_str()?;
+        if stem == "mod" {
+            return None;
+        }
+        Some(stem.to_string())
+    }
+
+    /// Strip `//` line comments so a sample like `.merge(game::routes())`
+    /// inside the allowlist rationale doesn't fool the textual contains
+    /// check. (Block `/* … */` comments aren't used in this file; if
+    /// that changes, broaden this.)
+    fn strip_line_comments(src: &str) -> String {
+        let mut out = String::with_capacity(src.len());
+        for line in src.lines() {
+            let cut = match line.find("//") {
+                Some(i) => &line[..i],
+                None => line,
+            };
+            out.push_str(cut);
+            out.push('\n');
+        }
+        out
+    }
+
+    fn modules_with_pub_fn_routes() -> Vec<String> {
+        let manifest = env!("CARGO_MANIFEST_DIR");
+        let api_dir = std::path::Path::new(manifest).join("src/api");
+        let mut out = Vec::new();
+        for entry in std::fs::read_dir(&api_dir)
+            .expect("src/api readable")
+            .flatten()
+        {
+            let path = entry.path();
+            if path.extension().and_then(|s| s.to_str()) != Some("rs") {
+                continue;
+            }
+            let Some(module) = module_name_from_path(&path) else {
+                continue;
+            };
+            let Ok(src) = std::fs::read_to_string(&path) else {
+                continue;
+            };
+            let has_routes = src
+                .lines()
+                .any(|l| l.trim_start().starts_with("pub fn routes("));
+            if has_routes {
+                out.push(module);
+            }
+        }
+        out
+    }
+
+    #[test]
+    fn every_routes_fn_is_declared_and_merged() {
+        let manifest = env!("CARGO_MANIFEST_DIR");
+        let mod_path = std::path::Path::new(manifest).join("src/api/mod.rs");
+        let raw = std::fs::read_to_string(&mod_path).expect("read src/api/mod.rs");
+        let mod_src = strip_line_comments(&raw);
+
+        let mut missing_pub_mod = Vec::new();
+        let mut missing_merge = Vec::new();
+
+        for module in modules_with_pub_fn_routes() {
+            if ALLOWED_UNWIRED_ROUTES.contains(&module.as_str()) {
+                continue;
+            }
+            // Match `pub mod <name>;` allowing `#[cfg(...)] pub mod <name>;`
+            // by only requiring the substring.
+            let pub_mod_needle = format!("pub mod {};", module);
+            let merge_needle = format!(".merge({}::routes())", module);
+            if !mod_src.contains(&pub_mod_needle) {
+                missing_pub_mod.push(module.clone());
+            }
+            if !mod_src.contains(&merge_needle) {
+                missing_merge.push(module);
+            }
+        }
+
+        assert!(
+            missing_pub_mod.is_empty(),
+            "src/api/*.rs files have `pub fn routes()` but no `pub mod` declaration in src/api/mod.rs: {:?}\n\
+             Either add `pub mod <name>;` to src/api/mod.rs or add to ALLOWED_UNWIRED_ROUTES with rationale.",
+            missing_pub_mod,
+        );
+
+        assert!(
+            missing_merge.is_empty(),
+            "src/api/*.rs files have `pub fn routes()` but are not `.merge()`'d into api_routes(): {:?}\n\
+             Either add `.merge(<name>::routes())` in api_routes() or add to ALLOWED_UNWIRED_ROUTES with rationale.",
+            missing_merge,
+        );
+    }
+
+    #[test]
+    fn allowlist_does_not_contain_wired_modules() {
+        // Stale allowlist entries shouldn't accumulate. If a module is
+        // wired into api_routes(), removing it from the allowlist
+        // should be part of the same change.
+        let manifest = env!("CARGO_MANIFEST_DIR");
+        let mod_path = std::path::Path::new(manifest).join("src/api/mod.rs");
+        let raw = std::fs::read_to_string(&mod_path).expect("read src/api/mod.rs");
+        let mod_src = strip_line_comments(&raw);
+
+        let stale: Vec<&&str> = ALLOWED_UNWIRED_ROUTES
+            .iter()
+            .filter(|name| {
+                let merge_needle = format!(".merge({}::routes())", name);
+                mod_src.contains(&merge_needle)
+            })
+            .collect();
+
+        assert!(
+            stale.is_empty(),
+            "ALLOWED_UNWIRED_ROUTES contains modules that are now merged in api_routes(): {:?}\n\
+             Remove these entries from the allowlist.",
+            stale,
+        );
+    }
+}
