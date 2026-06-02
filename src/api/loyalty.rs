@@ -452,6 +452,39 @@ async fn use_bonus(
         return Err(StatusCode::BAD_REQUEST);
     }
 
+    // Cycle #161: deduction ledger row. Pre-cycle the
+    // `bonus_transactions` ledger was grant-only — `add_bonus` wrote
+    // rows with positive amounts, but `use_bonus` just decremented
+    // `loyalty_profiles.bonus_balance` with no audit trail. That
+    // made the bookkeeping equation `SUM(amount) WHERE telegram_id=N
+    // == bonus_balance` violate as soon as anyone spent bonus, and
+    // fraud-investigation queries like "show me every credit/debit
+    // for this user" could only see half the story.
+    //
+    // The cycle-#160 synthetic `tx_id` UUID was forward-designed for
+    // exactly this — use it as the ledger row's id so the
+    // idempotency-replay path and the audit log share the same
+    // identifier. `amount` is stored negative (the entity's schema
+    // doc-comment explicitly says "positive = credit, negative =
+    // debit"); `tx_type = "admin_deduction"` distinguishes from
+    // existing values like "referral_bonus" and from admin grants.
+    use crate::db::entities::bonus_transaction::{
+        ActiveModel as BonusTxAm, Entity as BonusTxEntity,
+    };
+    let bt_am = BonusTxAm {
+        id: Set(tx_id.clone()),
+        telegram_id: Set(telegram_id),
+        amount: Set(-amount),
+        tx_type: Set("admin_deduction".to_string()),
+        description: Set(Some(format!("use_bonus by admin"))),
+        related_order_id: Set(None),
+        ..Default::default()
+    };
+    BonusTxEntity::insert(bt_am).exec(&tx).await.map_err(|e| {
+        tracing::error!("use_bonus deduction ledger insert: {:?}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
     // Cycle #160: record the idempotency key inside the same tx, so
     // retries after this commit replay the cached tx_id.
     if let Some(ref k) = idem_key {
