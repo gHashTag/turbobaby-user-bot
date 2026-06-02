@@ -433,6 +433,19 @@ fn validate_accessory_set_request(req: &AccessorySetRequest) -> Result<(), Statu
             return Err(StatusCode::BAD_REQUEST);
         }
     }
+    // Cycle #157A: per-element ID length. `validate_create_order`
+    // already checks `i.accessory_id.len() > 200` for order items;
+    // the set validators were missing the symmetric check, so a
+    // 100×1MB accessory-IDs list would fit within the 2MB body
+    // limit but still amplify 100MB of writes into the accessories
+    // TEXT[] column. List-length check was previously at the
+    // handler-call site (line 450); moved into the validator for
+    // symmetry with the rest of this file.
+    if let Some(ref ids) = req.accessories {
+        if ids.len() > 100 || ids.iter().any(|id| id.len() > 200) {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    }
     crate::api::validate_url(&req.image_url)?;
     crate::api::validate_url(&req.video_url)?;
     Ok(())
@@ -930,6 +943,13 @@ fn validate_tea_set_request(req: &TeaSetRequest) -> Result<(), StatusCode> {
             return Err(StatusCode::BAD_REQUEST);
         }
     }
+    // Cycle #157A: per-element ID length for tea_items. See
+    // `validate_accessory_set_request` rationale.
+    if let Some(ref ids) = req.items {
+        if ids.len() > 100 || ids.iter().any(|id| id.len() > 200) {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    }
     crate::api::validate_url(&req.video_url)?;
     Ok(())
 }
@@ -1232,6 +1252,18 @@ fn validate_set_request(req: &SetRequest) -> Result<(), StatusCode> {
     }
     if let Some(d) = req.discount_percent {
         if !d.is_finite() || !(0.0..=100.0).contains(&d) {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    }
+    // Cycle #157A: per-element ID length for strain_ids + accessory_ids.
+    // See `validate_accessory_set_request` rationale.
+    if let Some(ref ids) = req.strain_ids {
+        if ids.len() > 100 || ids.iter().any(|id| id.len() > 200) {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    }
+    if let Some(ref ids) = req.accessory_ids {
+        if ids.len() > 100 || ids.iter().any(|id| id.len() > 200) {
             return Err(StatusCode::BAD_REQUEST);
         }
     }
@@ -1707,6 +1739,58 @@ mod tests {
     fn test_validate_set_total_price_too_high() {
         let mut req = valid_set();
         req.total_price = 2_000_000.0;
+        assert_eq!(
+            validate_set_request(&req).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
+    }
+
+    // ── per-element ID length checks (cycle #157A) ──────────────────
+
+    #[test]
+    fn test_validate_accessory_set_id_too_long() {
+        let mut req = valid_accessory_set();
+        req.accessories = Some(vec!["a".repeat(201)]);
+        assert_eq!(
+            validate_accessory_set_request(&req).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
+    }
+
+    #[test]
+    fn test_validate_accessory_set_too_many_ids() {
+        let mut req = valid_accessory_set();
+        req.accessories = Some((0..101).map(|i| format!("a{}", i)).collect());
+        assert_eq!(
+            validate_accessory_set_request(&req).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
+    }
+
+    #[test]
+    fn test_validate_tea_set_id_too_long() {
+        let mut req = valid_tea_set();
+        req.items = Some(vec!["t".repeat(201)]);
+        assert_eq!(
+            validate_tea_set_request(&req).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
+    }
+
+    #[test]
+    fn test_validate_set_strain_id_too_long() {
+        let mut req = valid_set();
+        req.strain_ids = Some(vec!["s".repeat(201)]);
+        assert_eq!(
+            validate_set_request(&req).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
+    }
+
+    #[test]
+    fn test_validate_set_accessory_id_too_long() {
+        let mut req = valid_set();
+        req.accessory_ids = Some(vec!["a".repeat(201)]);
         assert_eq!(
             validate_set_request(&req).unwrap_err(),
             StatusCode::BAD_REQUEST
