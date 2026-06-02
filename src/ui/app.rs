@@ -5,7 +5,7 @@
 use crate::ui::api::context::ApiClientProvider;
 use crate::ui::components::{install_error_handlers, ErrorOverlay, JsErrorItem};
 use crate::ui::routes::Routes;
-use crate::ui::state::{Cart, LanguageProvider};
+use crate::ui::state::Cart;
 use crate::ui::telegram::TelegramProvider;
 use dioxus::prelude::*;
 use web_sys;
@@ -66,10 +66,8 @@ pub fn App() -> Element {
     rsx! {
         TelegramProvider {
             ApiClientProvider {
-                LanguageProvider {
-                    ErrorOverlay {}
-                    Routes {}
-                }
+                ErrorOverlay {}
+                Routes {}
             }
         }
     }

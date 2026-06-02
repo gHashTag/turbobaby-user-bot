@@ -77,47 +77,13 @@ impl Default for Cart {
     }
 }
 
-/// Application language
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
-pub enum Language {
-    Russian,
-    #[default]
-    English,
-    Thai,
-    Chinese,
-    Hebrew,
-    German,
-    French,
-    Spanish,
-}
-
-impl Language {
-    pub fn code(&self) -> &'static str {
-        match self {
-            Self::Russian => "ru",
-            Self::English => "en",
-            Self::Thai => "th",
-            Self::Chinese => "zh",
-            Self::Hebrew => "he",
-            Self::German => "de",
-            Self::French => "fr",
-            Self::Spanish => "es",
-        }
-    }
-
-    pub fn flag(&self) -> &'static str {
-        match self {
-            Self::Russian => "🇷🇺",
-            Self::English => "🇬🇧",
-            Self::Thai => "🇹🇭",
-            Self::Chinese => "🇨🇳",
-            Self::Hebrew => "🇮🇱",
-            Self::German => "🇩🇪",
-            Self::French => "🇫🇷",
-            Self::Spanish => "🇪🇸",
-        }
-    }
-}
+// Cycle (this commit): the parallel `Language` enum +
+// `LanguageProvider` + `use_language()` system was removed. The
+// canonical rendering language now lives in `crate::ui::lang`
+// (cycle that wired the GlobalSignal) and the canonical `Lang` type
+// is `crate::trios::core::Lang`. This block had a separate enum, a
+// separate provider, and a separate hook that nothing read except
+// the (also-removed) `src/ui/i18n/` parallel translation module.
 
 /// Hook to access cart state
 pub fn use_cart_state() -> Signal<Cart> {
@@ -154,19 +120,4 @@ pub fn set_route(route: &str) {
 /// Hook to get current route
 pub fn use_current_route() -> Signal<String> {
     use_context::<Signal<String>>()
-}
-
-/// Provider component for language state
-#[component]
-pub fn LanguageProvider(children: Element) -> Element {
-    let lang = use_signal(Language::default);
-    provide_context(lang);
-    rsx! {
-        { children }
-    }
-}
-
-/// Hook to get language
-pub fn use_language() -> Signal<Language> {
-    use_context::<Signal<Language>>()
 }

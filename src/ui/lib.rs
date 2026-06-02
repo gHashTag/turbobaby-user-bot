@@ -18,7 +18,6 @@ pub mod components;
 pub mod layouts;
 pub mod pages;
 pub mod game;
-pub mod i18n;
 pub mod theme;
 pub mod test_simple;
 
