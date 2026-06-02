@@ -696,4 +696,65 @@ mod tests {
             StatusCode::BAD_REQUEST
         );
     }
+
+    // ── record_failed_admin_attempt (cycle #127) ─────────────────────
+    //
+    // The helper uses a global static (`ADMIN_AUTH_RATE_LIMIT`), which
+    // tests *normally* would have to reset between runs. Instead each
+    // test uses a UUID-derived "virtual IP" string in `x-forwarded-for`
+    // so its rate-limit bucket is isolated by construction — no shared
+    // state, no flakiness from test ordering.
+
+    /// Build a HeaderMap whose client-IP-from-headers result is `ip`.
+    fn headers_with_ip(ip: &str) -> HeaderMap {
+        let mut h = HeaderMap::new();
+        h.insert("x-forwarded-for", ip.parse().expect("valid header value"));
+        h
+    }
+
+    #[test]
+    fn record_failed_admin_attempt_allows_under_cap_then_blocks() {
+        let ip = format!("test-127-{}", uuid::Uuid::new_v4());
+        let headers = headers_with_ip(&ip);
+
+        // First ADMIN_AUTH_RL_MAX_ATTEMPTS (10) calls must succeed.
+        for i in 0..super::ADMIN_AUTH_RL_MAX_ATTEMPTS {
+            assert!(
+                super::record_failed_admin_attempt(&headers).is_ok(),
+                "attempt {} should pass under the cap",
+                i + 1
+            );
+        }
+
+        // The (N+1)th must return 429.
+        let result = super::record_failed_admin_attempt(&headers);
+        assert_eq!(
+            result.unwrap_err(),
+            StatusCode::TOO_MANY_REQUESTS,
+            "attempt past the cap must return 429"
+        );
+    }
+
+    #[test]
+    fn record_failed_admin_attempt_isolates_per_ip() {
+        let ip_a = format!("test-127-{}", uuid::Uuid::new_v4());
+        let ip_b = format!("test-127-{}", uuid::Uuid::new_v4());
+        let headers_a = headers_with_ip(&ip_a);
+        let headers_b = headers_with_ip(&ip_b);
+
+        // Exhaust IP A.
+        for _ in 0..super::ADMIN_AUTH_RL_MAX_ATTEMPTS {
+            assert!(super::record_failed_admin_attempt(&headers_a).is_ok());
+        }
+        assert_eq!(
+            super::record_failed_admin_attempt(&headers_a).unwrap_err(),
+            StatusCode::TOO_MANY_REQUESTS
+        );
+
+        // IP B is independent — its first call must succeed.
+        assert!(
+            super::record_failed_admin_attempt(&headers_b).is_ok(),
+            "IP B should not be affected by IP A's exhaustion"
+        );
+    }
 }
