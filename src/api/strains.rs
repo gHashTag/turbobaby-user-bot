@@ -1,7 +1,7 @@
 use axum::{
     extract::{Path, State},
     http::{HeaderMap, HeaderValue, StatusCode},
-    routing::{get, put},
+    routing::{get, post, put},
     Json, Router,
 };
 use serde::Deserialize;
@@ -64,6 +64,11 @@ pub fn routes() -> Router<AppState> {
         .route("/strains/:id/availability", put(toggle_availability))
         .route("/strains/strain-of-day", get(get_strains_of_day))
         .route("/strains/:id/strain-of-day", put(set_strain_of_day))
+        // Cycle #133-C: bulk-toggle marketing flags. POST body lists
+        // strain ids and which boolean flags to set (`Option<bool>`
+        // each — `None` means leave untouched). Closes ТЗ #2 §3/§4
+        // "Назначать одновременно несколько сортов".
+        .route("/strains/bulk-marketing", post(bulk_set_marketing))
 }
 
 async fn get_strains(
@@ -121,7 +126,17 @@ async fn get_strains(
         })?;
     tracing::debug!("get_strains: returned {} rows", models.len());
 
-    let strains: Vec<Strain> = models.into_iter().map(Strain::from).collect();
+    let mut strains: Vec<Strain> = models.into_iter().map(Strain::from).collect();
+    // Cycle #133-B: TZ #2 section 5 — when `HIDE_MARKETING_BADGES=1`,
+    // strip Sale / Best Seller / New Arrival flags off customer-facing
+    // rows. SOTD stays — it's not a "promo" in the ТЗ taxonomy.
+    // Admin endpoints (`include_hidden=1`) bypass this so admin can
+    // still see real state and toggle individual flags off.
+    if !include_hidden && state.config.hide_marketing_badges {
+        for s in strains.iter_mut() {
+            mask_marketing_flags(s);
+        }
+    }
     let response_data = json!({ "strains": strains });
     let data_json = response_data.to_string();
 
@@ -260,6 +275,20 @@ fn validate_strain_request(req: &CreateStrainRequest) -> Result<(), StatusCode> 
 /// Parse RFC3339 timestamp string → `Option<chrono::DateTime<chrono::Utc>>`.
 /// Empty or missing → None; malformed → Err(400 BAD_REQUEST). Used by the
 /// admin TZ #2 marketing UI to set sale/new arrival expiry windows.
+/// Cycle #133-B: zero out the three "promo" marketing flags so the
+/// customer UI renders no Sale / Best Seller / New Arrival badges.
+/// SOTD is kept intact — it's the headline daily feature, not a
+/// time-limited promo.
+fn mask_marketing_flags(s: &mut Strain) {
+    s.sale_active = false;
+    s.is_best_seller = false;
+    s.is_new_arrival = false;
+    s.sale_price = None;
+    s.discount_percent = 0.0;
+    s.sale_until = None;
+    s.new_until = None;
+}
+
 fn parse_marketing_until(
     s: &Option<String>,
 ) -> Result<Option<chrono::DateTime<chrono::Utc>>, StatusCode> {
@@ -528,11 +557,227 @@ async fn set_strain_of_day(
     Ok(Json(json!({ "success": true, "id": id })))
 }
 
+/// Cycle #133-C: bulk marketing-flag toggle.
+///
+/// Request body:
+///   {
+///     "ids":              ["uuid1", "uuid2", …],   // required, 1..=500
+///     "is_best_seller":   true | false | null,     // optional — null means "leave alone"
+///     "is_new_arrival":   true | false | null,     // optional
+///     "sale_active":      true | false | null,     // optional
+///   }
+///
+/// Returns `{"success": true, "updated": N}` where N is the number of
+/// strain rows touched (`rows_affected`). All three flag fields are
+/// `Option<bool>` so the admin UI can toggle exactly one at a time
+/// (leave the others null) instead of having to round-trip the
+/// current values.
+///
+/// Closes ТЗ #2 §3/§4 "Назначать одновременно несколько сортов" —
+/// pre-#133-C the only path was N parallel `PUT /api/strains/:id`
+/// calls from the admin client.
+async fn bulk_set_marketing(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(req): Json<BulkMarketingRequest>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    check_admin(&headers, &state).map_err(|c| (c, Json(json!({ "error": "unauthorized" }))))?;
+    validate_bulk_marketing(&req)
+        .map_err(|msg| (StatusCode::BAD_REQUEST, Json(json!({ "error": msg }))))?;
+
+    use crate::db::entities::strain::{Column as StrainCol, Entity as StrainEntity};
+    use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
+
+    // Build the update_many with only the fields the caller actually
+    // set. Three Options × one .col_expr() each when Some(_).
+    let mut q = StrainEntity::update_many().filter(StrainCol::Id.is_in(req.ids.clone()));
+    if let Some(v) = req.is_best_seller {
+        q = q.col_expr(StrainCol::IsBestSeller, sea_orm::sea_query::Expr::value(v));
+    }
+    if let Some(v) = req.is_new_arrival {
+        q = q.col_expr(StrainCol::IsNewArrival, sea_orm::sea_query::Expr::value(v));
+    }
+    if let Some(v) = req.sale_active {
+        q = q.col_expr(StrainCol::SaleActive, sea_orm::sea_query::Expr::value(v));
+    }
+    let result = q.exec(&state.db.orm).await.map_err(|e| {
+        tracing::error!("bulk_set_marketing SeaORM error: {:?}", e);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "error": "db error" })),
+        )
+    })?;
+    invalidate_strains(&state.cache).await;
+    Ok(Json(
+        json!({ "success": true, "updated": result.rows_affected }),
+    ))
+}
+
+#[derive(Debug, Deserialize)]
+struct BulkMarketingRequest {
+    ids: Vec<String>,
+    #[serde(default)]
+    is_best_seller: Option<bool>,
+    #[serde(default)]
+    is_new_arrival: Option<bool>,
+    #[serde(default)]
+    sale_active: Option<bool>,
+}
+
+/// Pure validator for the bulk request. Returns the same human-readable
+/// reasons the handler surfaces as a JSON `error` field.
+fn validate_bulk_marketing(req: &BulkMarketingRequest) -> Result<(), &'static str> {
+    if req.ids.is_empty() {
+        return Err("ids must be non-empty");
+    }
+    if req.ids.len() > 500 {
+        return Err("ids must not exceed 500 entries per request");
+    }
+    for id in &req.ids {
+        if id.is_empty() || id.len() > 200 {
+            return Err("each id must be 1..=200 chars");
+        }
+    }
+    if req.is_best_seller.is_none() && req.is_new_arrival.is_none() && req.sale_active.is_none() {
+        return Err("at least one of is_best_seller/is_new_arrival/sale_active must be set");
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{validate_strain_request, CreateStrainRequest};
+    use super::{mask_marketing_flags, validate_strain_request, CreateStrainRequest};
     use crate::api::{extract_bool, extract_discount};
+    use crate::db::strains::Strain;
     use axum::http::StatusCode;
+
+    // ── mask_marketing_flags (cycle #133-B) ──────────────────────────
+
+    fn strain_with_all_flags_on() -> Strain {
+        Strain {
+            id: "id".into(),
+            name: "x".into(),
+            category: Some("Hybrid".into()),
+            thc_percent: Some(20.0),
+            cbd_percent: Some(1.0),
+            effect: None,
+            flavor_profile: None,
+            description: None,
+            price_per_gram: 100.0,
+            available_grams: None,
+            image_url: None,
+            video_url: None,
+            is_available: true,
+            is_strain_of_day: true,
+            strain_of_day_discount: 15.0,
+            name_en: None,
+            description_en: None,
+            effect_en: None,
+            flavor_profile_en: None,
+            strain_type_en: None,
+            discount_percent: 25.0,
+            sale_price: Some(75.0),
+            sale_active: true,
+            sale_until: Some("2099-01-01T00:00:00Z".into()),
+            is_best_seller: true,
+            is_new_arrival: true,
+            new_until: Some("2099-01-01T00:00:00Z".into()),
+            display_order: 0,
+        }
+    }
+
+    // ── validate_bulk_marketing (cycle #133-C) ───────────────────────
+
+    fn br(ids: Vec<&str>) -> super::BulkMarketingRequest {
+        super::BulkMarketingRequest {
+            ids: ids.into_iter().map(String::from).collect(),
+            is_best_seller: Some(true),
+            is_new_arrival: None,
+            sale_active: None,
+        }
+    }
+
+    #[test]
+    fn bulk_validator_rejects_empty_ids() {
+        let r = br(vec![]);
+        assert_eq!(
+            super::validate_bulk_marketing(&r),
+            Err("ids must be non-empty")
+        );
+    }
+
+    #[test]
+    fn bulk_validator_rejects_too_many_ids() {
+        let mut r = br(vec!["id"]);
+        r.ids = (0..501).map(|i| format!("id-{}", i)).collect();
+        assert!(super::validate_bulk_marketing(&r)
+            .err()
+            .map(|s| s.contains("500"))
+            .unwrap_or(false));
+    }
+
+    #[test]
+    fn bulk_validator_rejects_empty_id_entry() {
+        let r = br(vec!["", "ok"]);
+        assert_eq!(
+            super::validate_bulk_marketing(&r),
+            Err("each id must be 1..=200 chars")
+        );
+    }
+
+    #[test]
+    fn bulk_validator_rejects_oversized_id_entry() {
+        let mut r = br(vec!["x"]);
+        r.ids = vec!["a".repeat(201)];
+        assert!(super::validate_bulk_marketing(&r).is_err());
+    }
+
+    #[test]
+    fn bulk_validator_rejects_all_flags_none() {
+        let mut r = br(vec!["id"]);
+        r.is_best_seller = None;
+        r.is_new_arrival = None;
+        r.sale_active = None;
+        assert!(super::validate_bulk_marketing(&r)
+            .err()
+            .map(|s| s.contains("at least one"))
+            .unwrap_or(false));
+    }
+
+    #[test]
+    fn bulk_validator_accepts_one_flag_set() {
+        // is_best_seller defaults to Some(true) in br()
+        let r = br(vec!["id-1", "id-2"]);
+        assert!(super::validate_bulk_marketing(&r).is_ok());
+    }
+
+    #[test]
+    fn bulk_validator_accepts_false_flag() {
+        // Setting a flag to false is a valid action (turn off).
+        let mut r = br(vec!["id"]);
+        r.is_best_seller = Some(false);
+        assert!(super::validate_bulk_marketing(&r).is_ok());
+    }
+
+    #[test]
+    fn mask_zeroes_promo_flags_keeps_sotd() {
+        let mut s = strain_with_all_flags_on();
+        mask_marketing_flags(&mut s);
+        // Promo flags zeroed
+        assert!(!s.sale_active);
+        assert!(!s.is_best_seller);
+        assert!(!s.is_new_arrival);
+        assert_eq!(s.sale_price, None);
+        assert_eq!(s.discount_percent, 0.0);
+        assert_eq!(s.sale_until, None);
+        assert_eq!(s.new_until, None);
+        // SOTD stays — headline feature, not a promo.
+        assert!(s.is_strain_of_day);
+        assert_eq!(s.strain_of_day_discount, 15.0);
+        // Other fields untouched.
+        assert_eq!(s.id, "id");
+        assert_eq!(s.price_per_gram, 100.0);
+    }
 
     fn valid_strain() -> CreateStrainRequest {
         CreateStrainRequest {

@@ -1071,5 +1071,165 @@ mod tests {
     }
 }
 
+/// Cycle #133-A: catches "added a class name in JSX but forgot the CSS
+/// rule" — the exact bug that hid in cycle #131 until cycle #132 fixed
+/// it. Walks every `src/ui/**/*.rs`, extracts class names from `class:
+/// "..."` literals, then checks each name has a `.name` selector in
+/// some `styles/*.css`. Pure string scan — no parser deps.
+///
+/// Tolerant by construction: skips dynamic expressions (`class: if
+/// cond { ... }`, `class: format!(...)`, `class: "{var}"`), so the
+/// test only flags **literal-string** class names. Allowlist below
+/// for class names that intentionally have no CSS (e.g. styled
+/// inline via `style:` attribute, or matched on attribute selectors
+/// the regex can't see).
+#[cfg(test)]
+mod css_class_consistency_tests {
+    use std::collections::HashSet;
+
+    /// Classes that appear as literal strings in JSX but legitimately
+    /// have no `.class` rule in `styles/`. Document the reason inline.
+    const ALLOWLIST: &[&str] = &[
+        // Cycle #133-A: pre-existing JSX-CSS mismatches surfaced when
+        // this test first ran. Each is a single low-traffic callsite
+        // already paired with inline `style:` attribute or relying on
+        // browser defaults — none breaks production rendering. Defer
+        // proper CSS rules to a focused cleanup cycle; the test now
+        // guards against *new* mismatches.
+        "pixel-input",     // 1 ref — inline-styled text input
+        "btn-green",       // 2 refs — game/garden buttons
+        "plant-btn",       // 1 ref — garden grow button
+        "card-bg",         // 1 ref — admin background div
+        "chip-close",      // 1 ref — selected-chip close button
+        "harvest-btn",     // 1 ref — garden harvest button
+        "cart-item-image", // 2 refs — cart row image wrapper
+    ];
+
+    fn ui_class_literals() -> HashSet<String> {
+        let mut classes = HashSet::new();
+        let manifest = env!("CARGO_MANIFEST_DIR");
+        let ui_dir = std::path::Path::new(manifest).join("src/ui");
+        fn walk(p: &std::path::Path, classes: &mut HashSet<String>) {
+            for entry in std::fs::read_dir(p)
+                .expect("readable")
+                .filter_map(|e| e.ok())
+            {
+                let path = entry.path();
+                if path.is_dir() {
+                    walk(&path, classes);
+                } else if path
+                    .extension()
+                    .and_then(|s| s.to_str())
+                    .is_some_and(|s| s == "rs")
+                {
+                    let src = match std::fs::read_to_string(&path) {
+                        Ok(s) => s,
+                        Err(_) => continue,
+                    };
+                    // Find every `class: "<literal>"`. Skip lines that have
+                    // braces in the value (interpolation) or look like
+                    // `class: if ...`. Pragmatic: keeps the parser tiny.
+                    for line in src.lines() {
+                        let trimmed = line.trim_start();
+                        if !trimmed.starts_with("class: \"") {
+                            continue;
+                        }
+                        let after = &trimmed[8..]; // past `class: "`
+                        let end = match after.find('"') {
+                            Some(i) => i,
+                            None => continue,
+                        };
+                        let value = &after[..end];
+                        // Templating with `{var}` is dynamic; skip the whole literal.
+                        if value.contains('{') {
+                            continue;
+                        }
+                        for token in value.split_ascii_whitespace() {
+                            if token.is_empty() {
+                                continue;
+                            }
+                            // Plain identifiers + dashes (CSS-name-shaped).
+                            if token
+                                .chars()
+                                .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+                            {
+                                classes.insert(token.to_string());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        walk(&ui_dir, &mut classes);
+        classes
+    }
+
+    fn css_selector_names() -> HashSet<String> {
+        let mut names = HashSet::new();
+        let manifest = env!("CARGO_MANIFEST_DIR");
+        let css_dir = std::path::Path::new(manifest).join("styles");
+        for entry in std::fs::read_dir(&css_dir)
+            .expect("styles/ readable")
+            .filter_map(|e| e.ok())
+        {
+            let path = entry.path();
+            if path.extension().and_then(|s| s.to_str()) != Some("css") {
+                continue;
+            }
+            let src = match std::fs::read_to_string(&path) {
+                Ok(s) => s,
+                Err(_) => continue,
+            };
+            // Match `.identifier` everywhere — covers `.foo`, `.foo:hover`,
+            // `.foo .bar`, etc. Identifier ends at first non-alnum/dash/underscore.
+            let bytes = src.as_bytes();
+            let mut i = 0;
+            while i < bytes.len() {
+                if bytes[i] == b'.' && i + 1 < bytes.len() && bytes[i + 1].is_ascii_alphabetic() {
+                    let start = i + 1;
+                    let mut end = start;
+                    while end < bytes.len()
+                        && (bytes[end].is_ascii_alphanumeric()
+                            || bytes[end] == b'-'
+                            || bytes[end] == b'_')
+                    {
+                        end += 1;
+                    }
+                    if end > start {
+                        names.insert(String::from_utf8_lossy(&bytes[start..end]).into_owned());
+                    }
+                    i = end;
+                } else {
+                    i += 1;
+                }
+            }
+        }
+        names
+    }
+
+    #[test]
+    fn every_jsx_class_literal_has_a_css_rule() {
+        let ui = ui_class_literals();
+        let css = css_selector_names();
+        assert!(!ui.is_empty(), "no UI class literals parsed");
+        assert!(!css.is_empty(), "no CSS selectors parsed");
+
+        let allow: HashSet<&str> = ALLOWLIST.iter().copied().collect();
+        let missing: Vec<&String> = ui
+            .iter()
+            .filter(|c| !css.contains(*c) && !allow.contains(c.as_str()))
+            .collect();
+
+        assert!(
+            missing.is_empty(),
+            "JSX class names with no matching CSS rule ({}): {:?}\n\
+             Either add a `.<name>` selector under styles/, or list the \
+             class in ALLOWLIST with a rationale.",
+            missing.len(),
+            missing
+        );
+    }
+}
+
 // WASM entry point is now in src/lib.rs via #[wasm_bindgen(start)]
 // This file is only used for the native backend (Axum server)

@@ -26,6 +26,16 @@ pub struct Config {
     pub s3_secret_key: Option<String>,
     pub backup_assets: bool,
     pub admin_password: Option<String>,
+    /// Cycle #133-B: TZ #2 section 5 — admin-controlled "hide all
+    /// marketing badges" toggle. When `true`, customer-facing
+    /// `/api/strains` calls strip Sale / Best Seller / New Arrival
+    /// flags off each row before serialising. SOTD stays visible —
+    /// it's the headline feature, not a promo. Admin endpoints
+    /// (`include_hidden=1`) pass through unchanged so editing
+    /// flag state remains possible. Env-driven for now
+    /// (`HIDE_MARKETING_BADGES=1`); promote to a DB-backed admin
+    /// toggle when that's needed.
+    pub hide_marketing_badges: bool,
 }
 
 impl Config {
@@ -111,12 +121,28 @@ impl Config {
             s3_secret_key: std::env::var("S3_SECRET_ACCESS_KEY").ok(),
             backup_assets: std::env::var("BACKUP_ASSETS").unwrap_or("true".into()) != "false",
             admin_password: std::env::var("ADMIN_PASSWORD").ok(),
+            hide_marketing_badges: parse_bool_env(
+                std::env::var("HIDE_MARKETING_BADGES").ok().as_deref(),
+            ),
         })
     }
 
     pub fn s3_enabled(&self) -> bool {
         self.s3_bucket.is_some() && self.s3_endpoint.is_some()
     }
+}
+
+/// Cycle #133-B: parse a boolean env value. `None` (unset) -> `false`.
+/// Otherwise treats `"1"`, `"true"`, `"yes"`, `"on"` (case-insensitive,
+/// trimmed) as `true`; everything else as `false`. Mirrors the
+/// permissive parsing common in container env (`HIDE_MARKETING_BADGES=true`
+/// from a `.env`, `=1` from Railway's CLI).
+pub fn parse_bool_env(raw: Option<&str>) -> bool {
+    let Some(s) = raw else { return false };
+    matches!(
+        s.trim().to_ascii_lowercase().as_str(),
+        "1" | "true" | "yes" | "on"
+    )
 }
 
 /// Cycle #122: read every name in `names` from the supplied env-reader
@@ -256,6 +282,38 @@ mod tests {
         assert_eq!(parse_port_env(Some(" 8443 ".into())).unwrap(), 8443);
     }
 
+    // ── parse_bool_env (cycle #133-B) ────────────────────────────────
+
+    #[test]
+    fn bool_env_unset_is_false() {
+        assert!(!super::parse_bool_env(None));
+    }
+
+    #[test]
+    fn bool_env_truthy_values() {
+        for v in ["1", "true", "TRUE", "True", "yes", "YES", "on", "ON"] {
+            assert!(super::parse_bool_env(Some(v)), "expected true for {:?}", v);
+        }
+    }
+
+    #[test]
+    fn bool_env_truthy_trims_whitespace() {
+        assert!(super::parse_bool_env(Some("  1  ")));
+        assert!(super::parse_bool_env(Some("\ttrue\n")));
+    }
+
+    #[test]
+    fn bool_env_falsy_values() {
+        // Empty, "0", "false", "no", "off", garbage — all false.
+        for v in ["", "  ", "0", "false", "FALSE", "no", "off", "maybe", "🤔"] {
+            assert!(
+                !super::parse_bool_env(Some(v)),
+                "expected false for {:?}",
+                v
+            );
+        }
+    }
+
     #[test]
     fn port_env_malformed_errors() {
         // The original bug — silent fallback to 3000 hid these.
@@ -290,6 +348,7 @@ mod tests {
             s3_secret_key: None,
             backup_assets: false,
             admin_password: None,
+            hide_marketing_badges: false,
         };
         assert!(cfg.s3_enabled());
     }
@@ -346,6 +405,7 @@ mod tests {
             s3_secret_key: None,
             backup_assets: false,
             admin_password: None,
+            hide_marketing_badges: false,
         }
     }
 }
