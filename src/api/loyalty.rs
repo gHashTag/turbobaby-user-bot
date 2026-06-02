@@ -347,16 +347,31 @@ async fn use_bonus(
     check_admin(&headers, &state)?;
     let amount = body["amount"].as_f64().unwrap_or(0.0);
     validate_use_bonus_amount(amount)?;
-    // Cycle #159: idempotency not yet wired here (deferred phase 2b).
-    // `use_bonus` currently has built-in SQL atomicity via
-    // `WHERE bonus_balance >= $1` — a retry of a successful deduction
-    // returns 400 instead of the original 200. That's a confusing UX
-    // (ambiguous between "insufficient funds now" and "already
-    // deducted") but not a correctness bug. Adding idempotency would
-    // require wrapping the single UPDATE in a transaction + writing
-    // a ledger row for the deduction (currently absent) — bigger
-    // than this cycle's scope. Tracked in
-    // memory/idempotency-loyalty-deferred.md.
+
+    // Cycle #160 (phase 2b of cycle #157B). Mirror of the cycle-#159
+    // add_bonus idempotency wiring. Use-bonus has built-in SQL
+    // atomicity via `WHERE bonus_balance >= $1` (concurrent retries
+    // can't double-deduct — only one succeeds), but a network-blip
+    // retry of an already-successful deduction returned 400 (not
+    // 200), confusing clients about whether the original call took.
+    // With X-Idempotency-Key, the retry now replays the original
+    // 200 OK.
+    let idem_key: Option<String> = headers
+        .get("x-idempotency-key")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+    if let Some(ref k) = idem_key {
+        if !crate::api::orders::is_valid_idempotency_key(k) {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    }
+    // Synthetic tx_id — use_bonus doesn't write a ledger row today,
+    // so this exists purely as a stable receipt for the caller and
+    // the value cached in `loyalty_idempotency_keys.tx_id`. If a
+    // future cycle adds a deduction ledger, this becomes the row id.
+    let tx_id = uuid::Uuid::new_v4().to_string();
+
     // Cycle #83: SeaORM. The UPDATE has *two* clauses that need to
     // survive intact: the `GREATEST(0, bonus_balance - $1)` clamp and
     // the `WHERE bonus_balance >= $1` guard. The guard makes the whole
@@ -368,8 +383,54 @@ async fn use_bonus(
     //     for the column update with a raw expr (no native clamp helper).
     //   - `.filter(Column.eq(...).and(Column.gte(...)))` for the
     //     concurrent-safe guard.
-    use crate::db::entities::loyalty_profile::{Column as LpCol, Entity as LoyaltyProfileEntity};
-    use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
+    use crate::db::entities::{
+        loyalty_idempotency_key::{ActiveModel as LoyaltyIdemAm, Entity as LoyaltyIdemEntity},
+        loyalty_profile::{Column as LpCol, Entity as LoyaltyProfileEntity},
+    };
+    use sea_orm::{
+        ActiveValue::Set, ColumnTrait, ConnectionTrait, DbBackend, EntityTrait, QueryFilter,
+        Statement, TransactionTrait,
+    };
+
+    let tx = state.db.orm.begin().await.map_err(|e| {
+        tracing::error!("use_bonus tx.begin error: {:?}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    // Cycle #160: idempotency check — advisory-lock the key, look it
+    // up. Existing row → return cached tx_id; absent → fall through.
+    if let Some(ref k) = idem_key {
+        tx.execute(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            "SELECT pg_advisory_xact_lock(hashtext($1)::bigint)",
+            [k.clone().into()],
+        ))
+        .await
+        .map_err(|e| {
+            tracing::error!("use_bonus idempotency lock: {:?}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+        let existing = LoyaltyIdemEntity::find_by_id(k.clone())
+            .one(&tx)
+            .await
+            .map_err(|e| {
+                tracing::error!("use_bonus idempotency SELECT: {:?}", e);
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?;
+        if let Some(row) = existing {
+            let cached_tx_id = row.tx_id;
+            if let Err(e) = tx.commit().await {
+                tracing::error!("use_bonus idempotency replay commit: {:?}", e);
+            }
+            tracing::info!(tx_id = %cached_tx_id, "use_bonus: idempotent replay");
+            return Ok(Json(json!({
+                "success": true,
+                "tx_id": cached_tx_id,
+                "idempotent_replay": true,
+            })));
+        }
+    }
+
     let result = LoyaltyProfileEntity::update_many()
         .col_expr(
             LpCol::BonusBalance,
@@ -377,16 +438,43 @@ async fn use_bonus(
         )
         .filter(LpCol::TelegramId.eq(telegram_id))
         .filter(LpCol::BonusBalance.gte(amount))
-        .exec(&state.db.orm)
+        .exec(&tx)
         .await
         .map_err(|e| {
             tracing::error!("use_bonus SeaORM error: {:?}", e);
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
     if result.rows_affected == 0 {
+        // Insufficient funds (or concurrent retry that hit the WHERE
+        // guard after another caller drained it). tx drops →
+        // auto-rollback; no idempotency record written, so the
+        // caller's next retry will see the same 400 — correct.
         return Err(StatusCode::BAD_REQUEST);
     }
-    Ok(Json(json!({ "success": true })))
+
+    // Cycle #160: record the idempotency key inside the same tx, so
+    // retries after this commit replay the cached tx_id.
+    if let Some(ref k) = idem_key {
+        let idem_am = LoyaltyIdemAm {
+            key: Set(k.clone()),
+            tx_id: Set(tx_id.clone()),
+            telegram_id: Set(telegram_id),
+            ..Default::default()
+        };
+        LoyaltyIdemEntity::insert(idem_am)
+            .exec(&tx)
+            .await
+            .map_err(|e| {
+                tracing::error!("use_bonus idempotency INSERT: {:?}", e);
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?;
+    }
+
+    tx.commit().await.map_err(|e| {
+        tracing::error!("use_bonus commit: {:?}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+    Ok(Json(json!({ "success": true, "tx_id": tx_id })))
 }
 
 async fn get_leaderboard(State(state): State<AppState>) -> Result<Json<Value>, StatusCode> {
