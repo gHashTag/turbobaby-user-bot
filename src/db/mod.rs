@@ -691,6 +691,209 @@ mod orphan_table_tests {
     }
 }
 
+/// Cycle #146: defensive test against orphan SeaORM entities.
+///
+/// Each `src/db/entities/<name>.rs` declares a `pub struct Model` plus
+/// supporting `Entity`/`Column`/`ActiveModel` types. A `pub mod <name>;`
+/// in `src/db/entities/mod.rs` compiles the file, but the compiler
+/// won't complain if no production code ever imports it — the entity
+/// just sits in the tree, growing dead with the schema.
+///
+/// Same shape as the four other schema-truth defenses
+/// (`orphan_table_tests`, `metric_wiring_tests`, `route_wiring_tests`,
+/// CSS-class-tests): walk the source corpus textually, find every
+/// entity module, assert the name appears as an identifier outside
+/// `src/db/entities/` and outside this file. Stale allowlist entries
+/// fail the companion test.
+#[cfg(test)]
+mod entity_wiring_tests {
+    /// Entities defined under `src/db/entities/` but intentionally
+    /// not yet wired into production code. Each entry MUST carry a
+    /// rationale comment.
+    const ALLOWED_UNWIRED_ENTITIES: &[&str] = &[
+        // Cycle #146: declared under `src/db/entities/` as pre-work
+        // for the SeaORM migration (docs/API_MIGRATION_PLAN.md, cycle
+        // #91), but the quest handlers in `src/api/quest.rs` still
+        // use raw `Statement::from_sql_and_values(...)` instead of the
+        // SeaORM entity API. The entity files (24 and 29 lines) cost
+        // nothing — they don't even compile their `Entity` type into
+        // any code path. Two ways to resolve:
+        //   (a) migrate quest.rs handlers to SeaORM and remove these
+        //       entries — the migration plan favours this path.
+        //   (b) delete the entity files + `pub mod` declarations in
+        //       `src/db/entities/mod.rs` if SeaORM migration is
+        //       abandoned for quest endpoints.
+        // Until that decision lands, leaving the entities in tree is
+        // strictly safer than deleting them (re-deriving from the
+        // schema later costs more than the 53-line allowlist tax).
+        "quest_place",
+        "treasure_hunt",
+    ];
+
+    /// Strip `//` line comments before the textual contains check;
+    /// otherwise a doc-comment mentioning an entity name in this file
+    /// or elsewhere creates a false-positive reference. Mirrors the
+    /// helper installed in cycle #145 across the other source-walk
+    /// defenses.
+    fn strip_line_comments(src: &str) -> String {
+        let mut out = String::with_capacity(src.len());
+        for line in src.lines() {
+            let cut = match line.find("//") {
+                Some(i) => &line[..i],
+                None => line,
+            };
+            out.push_str(cut);
+            out.push('\n');
+        }
+        out
+    }
+
+    fn entity_modules() -> Vec<String> {
+        let manifest = env!("CARGO_MANIFEST_DIR");
+        let dir = std::path::Path::new(manifest).join("src/db/entities");
+        let mut out = Vec::new();
+        for entry in std::fs::read_dir(&dir)
+            .expect("src/db/entities readable")
+            .flatten()
+        {
+            let path = entry.path();
+            if path.extension().and_then(|s| s.to_str()) != Some("rs") {
+                continue;
+            }
+            let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else {
+                continue;
+            };
+            if stem == "mod" {
+                continue;
+            }
+            let Ok(src) = std::fs::read_to_string(&path) else {
+                continue;
+            };
+            // Sanity: only count files that actually define an entity.
+            // A future contributor might drop a helper module under
+            // entities/ that has no `Model` — not an entity, skip.
+            if src.contains("pub struct Model") {
+                out.push(stem.to_string());
+            }
+        }
+        out
+    }
+
+    fn corpus_excluding_entities_and_self() -> String {
+        let manifest = env!("CARGO_MANIFEST_DIR");
+        let src = std::path::Path::new(manifest).join("src");
+        let entities_dir = std::path::Path::new(manifest).join("src/db/entities");
+        // Exclude `src/db/mod.rs` (where the allowlist + rationale
+        // live — a textual mention here would create a false positive
+        // for itself even after `strip_line_comments`, e.g. a literal
+        // entity name inside a string).
+        let self_path = std::path::Path::new(manifest).join("src/db/mod.rs");
+        let mut buf = String::new();
+        fn walk(
+            p: &std::path::Path,
+            entities_dir: &std::path::Path,
+            self_path: &std::path::Path,
+            buf: &mut String,
+        ) {
+            for entry in std::fs::read_dir(p)
+                .expect("readable")
+                .filter_map(|e| e.ok())
+            {
+                let path = entry.path();
+                if path == *self_path {
+                    continue;
+                }
+                if path.is_dir() {
+                    if path == *entities_dir {
+                        continue;
+                    }
+                    walk(&path, entities_dir, self_path, buf);
+                } else if path
+                    .extension()
+                    .and_then(|s| s.to_str())
+                    .is_some_and(|s| s == "rs")
+                {
+                    if let Ok(s) = std::fs::read_to_string(&path) {
+                        buf.push_str(&s);
+                        buf.push('\n');
+                    }
+                }
+            }
+        }
+        walk(&src, &entities_dir, &self_path, &mut buf);
+        buf
+    }
+
+    /// Same word-boundary helper used by `orphan_table_tests`; the
+    /// codebase convention is per-module-duplication of small test
+    /// helpers (see also `contains_word` already living twice in this
+    /// file).
+    fn contains_word(haystack: &str, needle: &str) -> bool {
+        let mut start = 0;
+        while let Some(pos) = haystack[start..].find(needle) {
+            let abs = start + pos;
+            let before_ok = abs == 0
+                || (!haystack.as_bytes()[abs - 1].is_ascii_alphanumeric()
+                    && haystack.as_bytes()[abs - 1] != b'_');
+            let end = abs + needle.len();
+            let after_ok = end >= haystack.len()
+                || (!haystack.as_bytes()[end].is_ascii_alphanumeric()
+                    && haystack.as_bytes()[end] != b'_');
+            if before_ok && after_ok {
+                return true;
+            }
+            start = abs + needle.len();
+        }
+        false
+    }
+
+    #[test]
+    fn every_entity_module_is_referenced() {
+        let entities = entity_modules();
+        assert!(
+            !entities.is_empty(),
+            "no entity files found — parser broken or directory layout changed?"
+        );
+        let raw = corpus_excluding_entities_and_self();
+        let corpus = strip_line_comments(&raw);
+
+        let mut unused = Vec::new();
+        for name in &entities {
+            if ALLOWED_UNWIRED_ENTITIES.iter().any(|a| *a == name.as_str()) {
+                continue;
+            }
+            if !contains_word(&corpus, name) {
+                unused.push(name.clone());
+            }
+        }
+        assert!(
+            unused.is_empty(),
+            "SeaORM entities defined in src/db/entities/ but never referenced \
+             from production code ({}): {:?}\n\
+             Either wire them up, delete the file, or add to \
+             ALLOWED_UNWIRED_ENTITIES with rationale.",
+            unused.len(),
+            unused,
+        );
+    }
+
+    #[test]
+    fn allowlist_entries_are_still_unused() {
+        let raw = corpus_excluding_entities_and_self();
+        let corpus = strip_line_comments(&raw);
+        let stale: Vec<&&str> = ALLOWED_UNWIRED_ENTITIES
+            .iter()
+            .filter(|name| contains_word(&corpus, name))
+            .collect();
+        assert!(
+            stale.is_empty(),
+            "ALLOWED_UNWIRED_ENTITIES contains entities now referenced in src/: {:?}\n\
+             Remove these — the wiring check will start covering them.",
+            stale,
+        );
+    }
+}
+
 #[cfg(test)]
 mod url_sanitize_tests {
     use super::sanitize_pg_url_for_sqlx as s;
