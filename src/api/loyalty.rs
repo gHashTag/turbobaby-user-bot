@@ -158,6 +158,23 @@ async fn add_bonus(
     validate_telegram_id_param(telegram_id)?;
     check_admin(&headers, &state)?;
     validate_add_bonus_request(&req)?;
+
+    // Cycle #159: X-Idempotency-Key (phase 2 of #157B; schema landed
+    // #158). Optional — clients without the header keep working —
+    // but when present, two POSTs with the same key produce one
+    // bonus transaction and the second call returns the cached
+    // tx_id. Mirrors `create_order`'s cycle-#57 implementation.
+    let idem_key: Option<String> = headers
+        .get("x-idempotency-key")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+    if let Some(ref k) = idem_key {
+        if !crate::api::orders::is_valid_idempotency_key(k) {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    }
+
     let tx_id = uuid::Uuid::new_v4().to_string();
     // Cycle #83: full SeaORM transaction. Three statements that must
     // commit atomically:
@@ -171,15 +188,54 @@ async fn add_bonus(
     // the happy path.
     use crate::db::entities::{
         bonus_transaction::{ActiveModel as BonusTxAm, Entity as BonusTxEntity},
+        loyalty_idempotency_key::{ActiveModel as LoyaltyIdemAm, Entity as LoyaltyIdemEntity},
         loyalty_profile::{ActiveModel as LpAm, Column as LpCol, Entity as LoyaltyProfileEntity},
     };
     use sea_orm::sea_query::OnConflict;
-    use sea_orm::{ActiveValue::Set, ColumnTrait, EntityTrait, QueryFilter, TransactionTrait};
+    use sea_orm::{
+        ActiveValue::Set, ColumnTrait, ConnectionTrait, DbBackend, EntityTrait, QueryFilter,
+        Statement, TransactionTrait,
+    };
 
     let tx = state.db.orm.begin().await.map_err(|e| {
         tracing::error!("add_bonus tx.begin error: {:?}", e);
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
+
+    // Cycle #159: idempotency check. Advisory-lock the key, look it
+    // up in `loyalty_idempotency_keys`. Existing row → return cached
+    // tx_id; absent → fall through and INSERT the key at commit time.
+    if let Some(ref k) = idem_key {
+        tx.execute(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            "SELECT pg_advisory_xact_lock(hashtext($1)::bigint)",
+            [k.clone().into()],
+        ))
+        .await
+        .map_err(|e| {
+            tracing::error!("add_bonus idempotency lock: {:?}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+        let existing = LoyaltyIdemEntity::find_by_id(k.clone())
+            .one(&tx)
+            .await
+            .map_err(|e| {
+                tracing::error!("add_bonus idempotency SELECT: {:?}", e);
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?;
+        if let Some(row) = existing {
+            let cached_tx_id = row.tx_id;
+            if let Err(e) = tx.commit().await {
+                tracing::error!("add_bonus idempotency replay commit: {:?}", e);
+            }
+            tracing::info!(tx_id = %cached_tx_id, "add_bonus: idempotent replay");
+            return Ok(Json(json!({
+                "success": true,
+                "tx_id": cached_tx_id,
+                "idempotent_replay": true,
+            })));
+        }
+    }
 
     // 1. Upsert loyalty_profile (no-op if it exists).
     let lp_am = LpAm {
@@ -241,6 +297,26 @@ async fn add_bonus(
         return Err(StatusCode::INTERNAL_SERVER_ERROR);
     }
 
+    // Cycle #159: record the idempotency key inside the same tx so
+    // retries after this commit replay the cached tx_id. The earlier
+    // advisory lock guarantees no concurrent tx holds a different
+    // (key, tx_id) pair.
+    if let Some(ref k) = idem_key {
+        let idem_am = LoyaltyIdemAm {
+            key: Set(k.clone()),
+            tx_id: Set(tx_id.clone()),
+            telegram_id: Set(telegram_id),
+            ..Default::default()
+        };
+        LoyaltyIdemEntity::insert(idem_am)
+            .exec(&tx)
+            .await
+            .map_err(|e| {
+                tracing::error!("add_bonus idempotency INSERT: {:?}", e);
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?;
+    }
+
     tx.commit().await.map_err(|e| {
         tracing::error!("add_bonus commit: {:?}", e);
         StatusCode::INTERNAL_SERVER_ERROR
@@ -271,6 +347,16 @@ async fn use_bonus(
     check_admin(&headers, &state)?;
     let amount = body["amount"].as_f64().unwrap_or(0.0);
     validate_use_bonus_amount(amount)?;
+    // Cycle #159: idempotency not yet wired here (deferred phase 2b).
+    // `use_bonus` currently has built-in SQL atomicity via
+    // `WHERE bonus_balance >= $1` — a retry of a successful deduction
+    // returns 400 instead of the original 200. That's a confusing UX
+    // (ambiguous between "insufficient funds now" and "already
+    // deducted") but not a correctness bug. Adding idempotency would
+    // require wrapping the single UPDATE in a transaction + writing
+    // a ledger row for the deduction (currently absent) — bigger
+    // than this cycle's scope. Tracked in
+    // memory/idempotency-loyalty-deferred.md.
     // Cycle #83: SeaORM. The UPDATE has *two* clauses that need to
     // survive intact: the `GREATEST(0, bonus_balance - $1)` clamp and
     // the `WHERE bonus_balance >= $1` guard. The guard makes the whole
