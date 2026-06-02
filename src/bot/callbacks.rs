@@ -1,5 +1,4 @@
 use std::sync::Arc;
-use std::time::{Duration, Instant};
 use teloxide::{
     prelude::*,
     types::{InlineKeyboardButton, InlineKeyboardMarkup, MaybeInaccessibleMessage},
@@ -7,7 +6,8 @@ use teloxide::{
 
 use crate::bot::commands::{build_app_url, calculate_discounted_price};
 // Cycle #76: button helpers consolidated to bot/mod.rs.
-use crate::bot::{callback_btn, tg_fire_and_forget, web_app_btn, AI_COOLDOWN, AI_RATE_LIMIT};
+// Cycle #129: AI_RATE_LIMIT replaced by `ai_rate_limit_allow` helper.
+use crate::bot::{ai_rate_limit_allow, callback_btn, tg_fire_and_forget, web_app_btn};
 use crate::db::referrals as ref_db;
 use crate::{
     ai::{get_random_fact_prompt, get_random_joke_prompt},
@@ -86,21 +86,8 @@ pub async fn handle_callback(
     let locale = get_locale(&lang);
     let base = &config.web_app_url;
 
-    // AI rate-limit for callbacks
-    let mut ai_allowed = true;
-    {
-        let now = Instant::now();
-        let mut map = AI_RATE_LIMIT.lock().await;
-        map.retain(|_, last| now.saturating_duration_since(*last) < Duration::from_secs(300));
-        if let Some(last) = map.get(&user_id) {
-            if now.saturating_duration_since(*last) < AI_COOLDOWN {
-                ai_allowed = false;
-            }
-        }
-        if ai_allowed {
-            map.insert(user_id, now);
-        }
-    }
+    // AI rate-limit for callbacks — cycle #129 shared helper.
+    let ai_allowed = ai_rate_limit_allow(user_id);
 
     match data.as_str() {
         "start_joke" | "more_joke" => {

@@ -6,7 +6,8 @@ use teloxide::{
 };
 
 // Cycle #76: button helpers consolidated to bot/mod.rs.
-use crate::bot::{callback_btn, web_app_btn, AI_COOLDOWN, AI_RATE_LIMIT};
+// Cycle #129: AI_RATE_LIMIT replaced by `ai_rate_limit_allow` helper.
+use crate::bot::{ai_rate_limit_allow, callback_btn, web_app_btn};
 use crate::{
     ai::{get_random_fact_prompt, get_random_joke_prompt},
     config::Config,
@@ -15,7 +16,6 @@ use crate::{
     locales::*,
     notify::notify_admins,
 };
-use std::time::{Duration, Instant};
 
 #[derive(BotCommands, Clone)]
 #[command(rename_rule = "lowercase", description = "Woody Bot commands:")]
@@ -327,18 +327,8 @@ pub async fn handle_command(
         }
 
         Command::Joke => {
-            {
-                let now = Instant::now();
-                let mut map = AI_RATE_LIMIT.lock().await;
-                map.retain(|_, last| {
-                    now.saturating_duration_since(*last) < Duration::from_secs(300)
-                });
-                if let Some(last) = map.get(&user_id) {
-                    if now.saturating_duration_since(*last) < AI_COOLDOWN {
-                        return Ok(());
-                    }
-                }
-                map.insert(user_id, now);
+            if !ai_rate_limit_allow(user_id) {
+                return Ok(());
             }
             let thinking = bot.send_message(msg.chat.id, &locale.joke_thinking).await?;
             let prompt = get_random_joke_prompt(&locale.joke_prompt, None);
@@ -360,18 +350,8 @@ pub async fn handle_command(
         }
 
         Command::Fact => {
-            {
-                let now = Instant::now();
-                let mut map = AI_RATE_LIMIT.lock().await;
-                map.retain(|_, last| {
-                    now.saturating_duration_since(*last) < Duration::from_secs(300)
-                });
-                if let Some(last) = map.get(&user_id) {
-                    if now.saturating_duration_since(*last) < AI_COOLDOWN {
-                        return Ok(());
-                    }
-                }
-                map.insert(user_id, now);
+            if !ai_rate_limit_allow(user_id) {
+                return Ok(());
             }
             let thinking = bot.send_message(msg.chat.id, &locale.fact_thinking).await?;
             let prompt = get_random_fact_prompt(&locale.fact_prompt);

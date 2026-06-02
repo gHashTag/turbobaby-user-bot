@@ -1,10 +1,11 @@
 use std::sync::Arc;
-use std::time::{Duration, Instant};
 use teloxide::{prelude::*, types::InlineKeyboardMarkup};
 
 use crate::bot::commands::build_app_url;
 // Cycle #76: button helpers consolidated to bot/mod.rs.
-use crate::bot::{url_btn, web_app_btn, AI_COOLDOWN, AI_RATE_LIMIT};
+// Cycle #129: AI_RATE_LIMIT static replaced with `ai_rate_limit_allow`
+// helper backed by the shared SyncSlidingWindowStore primitive.
+use crate::bot::{ai_rate_limit_allow, url_btn, web_app_btn};
 use crate::util::html_escape;
 use crate::{config::Config, db::Database, locales::*};
 
@@ -47,18 +48,10 @@ pub async fn handle_text(
     let lang = detect_language(&text);
     let locale = get_locale(lang);
 
-    // AI rate-limit: 1 request per 5 seconds per user
-    {
-        let now = Instant::now();
-        let mut map = AI_RATE_LIMIT.lock().await;
-        map.retain(|_, last| now.saturating_duration_since(*last) < Duration::from_secs(300));
-        if let Some(last) = map.get(&user_id) {
-            if now.saturating_duration_since(*last) < AI_COOLDOWN {
-                tracing::warn!("AI rate limit hit for user_id={}", user_id);
-                return Ok(());
-            }
-        }
-        map.insert(user_id, now);
+    // AI rate-limit: 1 request per 5 seconds per user (cycle #129).
+    if !ai_rate_limit_allow(user_id) {
+        tracing::warn!("AI rate limit hit for user_id={}", user_id);
+        return Ok(());
     }
 
     let user = msg.from.as_ref();
