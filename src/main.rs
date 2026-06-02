@@ -941,6 +941,94 @@ mod tests {
         assert!(format!("{}", f).contains("info"));
     }
 
+    // ── spawn_ttl_sweep (cycle #125) ────────────────────────────────
+    //
+    // Uses tokio's paused time so we don't actually wait 60+ seconds.
+    // The cleanup closure ignores its `DatabaseConnection` argument and
+    // just increments a counter. We assert: (a) the first interval tick
+    // is discarded (cold-start serialisation contract from #63),
+    // (b) subsequent ticks fire `cleanup`. Concrete tick counts under
+    // paused time are tokio-impl-defined; the test only pins the
+    // weaker invariant "cleanup ran at least once after advancing
+    // past the first interval".
+
+    #[tokio::test(start_paused = true)]
+    async fn spawn_ttl_sweep_invokes_cleanup_after_interval() {
+        use std::sync::atomic::{AtomicU32, Ordering};
+        use std::sync::Arc;
+
+        let counter = Arc::new(AtomicU32::new(0));
+        let c = counter.clone();
+
+        super::spawn_ttl_sweep(
+            sea_orm::DatabaseConnection::Disconnected,
+            "test_sweep",
+            1, // 1-second interval — paused time makes this instant
+            move |_orm| {
+                let c = c.clone();
+                async move {
+                    c.fetch_add(1, Ordering::SeqCst);
+                    Ok::<u64, sea_orm::DbErr>(0)
+                }
+            },
+        );
+
+        // Let the spawned task reach its first `tick().await` (the
+        // discarded one) and the second one (the first real cleanup
+        // tick).
+        for _ in 0..5 {
+            tokio::time::advance(std::time::Duration::from_millis(500)).await;
+            tokio::task::yield_now().await;
+        }
+
+        assert!(
+            counter.load(Ordering::SeqCst) >= 1,
+            "cleanup never ran after 2.5s of paused-time advance — \
+             interval/spawn wiring is broken"
+        );
+    }
+
+    /// `Err` from cleanup must not poison the loop — subsequent ticks
+    /// should still fire. Without this, a transient DB hiccup would
+    /// silently stop all retention sweeps until the next bot restart.
+    #[tokio::test(start_paused = true)]
+    async fn spawn_ttl_sweep_keeps_ticking_after_cleanup_error() {
+        use std::sync::atomic::{AtomicU32, Ordering};
+        use std::sync::Arc;
+
+        let counter = Arc::new(AtomicU32::new(0));
+        let c = counter.clone();
+
+        super::spawn_ttl_sweep(
+            sea_orm::DatabaseConnection::Disconnected,
+            "fail_then_recover",
+            1,
+            move |_orm| {
+                let c = c.clone();
+                async move {
+                    let n = c.fetch_add(1, Ordering::SeqCst);
+                    if n == 0 {
+                        // First call fails — does the loop survive?
+                        Err(sea_orm::DbErr::Custom("simulated transient".into()))
+                    } else {
+                        Ok::<u64, sea_orm::DbErr>(0)
+                    }
+                }
+            },
+        );
+
+        for _ in 0..10 {
+            tokio::time::advance(std::time::Duration::from_millis(500)).await;
+            tokio::task::yield_now().await;
+        }
+
+        assert!(
+            counter.load(Ordering::SeqCst) >= 2,
+            "loop stopped after first Err — expected >= 2 invocations, got {}",
+            counter.load(Ordering::SeqCst)
+        );
+    }
+
     // ── is_production_env (cycle #121) ──────────────────────────────
 
     #[test]

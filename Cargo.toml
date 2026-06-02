@@ -61,7 +61,11 @@ metrics = { version = "0.23", optional = true }
 # in transitively via axum-prometheus and tower-http themselves, so
 # the binary is unchanged.
 tower-http = { version = "0.5", features = ["cors", "fs", "trace", "set-header", "compression-br", "compression-gzip", "compression-zstd"], optional = true }
-tokio = { version = "1", features = ["full"], optional = true }
+# Cycle #125: `test-util` enables `tokio::test(start_paused = true)` and
+# `tokio::time::advance` for testing time-driven loops (spawn_ttl_sweep).
+# The feature is cfg-gated to `#[cfg(test)]` internally so the production
+# binary doesn't grow.
+tokio = { version = "1", features = ["full", "test-util"], optional = true }
 # Cycle #96: tokio-postgres / deadpool-postgres / postgres-types /
 # tokio-postgres-rustls dropped after the 17-cycle SeaORM migration
 # (#79–#96). SeaORM uses sqlx-postgres internally with its own pool;
