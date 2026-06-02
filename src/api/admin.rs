@@ -11,11 +11,14 @@ use serde_json::{json, Value};
 use crate::api::auth::{check_admin, validate_init_data, validate_telegram_id_param};
 use crate::AppState;
 
-/// Global async mutex serializes admin-login attempts so that brute-force
-/// parallel requests are throttled to one every ~3 s.
-/// Uses tokio::sync::Mutex to avoid blocking the async runtime thread.
-static LOGIN_LOCK: std::sync::LazyLock<tokio::sync::Mutex<()>> =
-    std::sync::LazyLock::new(|| tokio::sync::Mutex::new(()));
+// Cycle #128: removed LOGIN_LOCK static. It was introduced to pair
+// with a per-attempt `tokio::time::sleep(3s)` that cycle #126 deleted,
+// so the mutex's stated purpose ("throttle to one every ~3s") evaporated
+// with the sleep. The cycle #106 + #126 per-IP rate-limit (10/5min via
+// `record_failed_admin_attempt`) is the right place for brute-force
+// defence — it works per-IP, doesn't penalise legitimate parallel
+// admins on different IPs, and doesn't hold a global mutex across an
+// HMAC verify.
 
 #[derive(Deserialize)]
 struct AdminCheckQuery {
@@ -456,17 +459,14 @@ async fn admin_login(
     Json(req): Json<AdminLoginRequest>,
 ) -> Result<Json<Value>, StatusCode> {
     validate_admin_login(&req)?;
-    let valid = {
-        let _guard = LOGIN_LOCK.lock().await;
-        if let Some(ref password) = state.config.admin_password {
-            crate::api::auth::verify_admin_token(
-                &crate::api::auth::generate_admin_token(&req.password, &state.config.bot_token),
-                &state.config.bot_token,
-                password,
-            )
-        } else {
-            false
-        }
+    let valid = if let Some(ref password) = state.config.admin_password {
+        crate::api::auth::verify_admin_token(
+            &crate::api::auth::generate_admin_token(&req.password, &state.config.bot_token),
+            &state.config.bot_token,
+            password,
+        )
+    } else {
+        false
     };
     if valid {
         if let Some(ref password) = state.config.admin_password {
