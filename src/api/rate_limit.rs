@@ -13,10 +13,10 @@ use std::collections::{HashMap, VecDeque};
 use std::time::{Duration, Instant};
 
 /// Per-key timestamp log: one VecDeque<Instant> per IP / user / etc.
-pub type SlidingWindowStore = tokio::sync::Mutex<HashMap<String, VecDeque<Instant>>>;
+pub(crate) type SlidingWindowStore = tokio::sync::Mutex<HashMap<String, VecDeque<Instant>>>;
 
 /// Helper to instantiate an empty store inside a `LazyLock`.
-pub fn new_store() -> SlidingWindowStore {
+pub(crate) fn new_store() -> SlidingWindowStore {
     tokio::sync::Mutex::new(HashMap::new())
 }
 
@@ -25,7 +25,7 @@ pub fn new_store() -> SlidingWindowStore {
 /// client. Falls back to `X-Real-IP`, then `"unknown"` so requests with no
 /// proxy headers still share a single bucket (worst case: anonymous bucket
 /// throttles aggregate, never opens an unbounded hole).
-pub fn client_ip_from_headers(headers: &HeaderMap) -> String {
+pub(crate) fn client_ip_from_headers(headers: &HeaderMap) -> String {
     if let Some(xff) = headers.get("x-forwarded-for").and_then(|v| v.to_str().ok()) {
         if let Some(first) = xff.split(',').next() {
             let ip = first.trim();
@@ -44,7 +44,7 @@ pub fn client_ip_from_headers(headers: &HeaderMap) -> String {
 }
 
 /// Drop timestamps older than `now - window` from the front of the log.
-pub fn prune_window(log: &mut VecDeque<Instant>, now: Instant, window: Duration) {
+pub(crate) fn prune_window(log: &mut VecDeque<Instant>, now: Instant, window: Duration) {
     while let Some(&t) = log.front() {
         if now.saturating_duration_since(t) >= window {
             log.pop_front();
@@ -58,7 +58,7 @@ pub fn prune_window(log: &mut VecDeque<Instant>, now: Instant, window: Duration)
 /// the attempt atomically. Returns `true` when allowed, `false` when over the
 /// limit. When the store grows past `max_keys`, fully-expired entries are
 /// evicted before insert to bound memory under spray attacks.
-pub async fn check_and_record(
+pub(crate) async fn check_and_record(
     store: &SlidingWindowStore,
     key: &str,
     window: Duration,
@@ -100,13 +100,13 @@ pub async fn check_and_record(
 // but here we lock, do the math, push, drop — no await ever.
 // ────────────────────────────────────────────────────────────────────
 
-pub type SyncSlidingWindowStore = std::sync::Mutex<HashMap<String, VecDeque<Instant>>>;
+pub(crate) type SyncSlidingWindowStore = std::sync::Mutex<HashMap<String, VecDeque<Instant>>>;
 
-pub fn new_sync_store() -> SyncSlidingWindowStore {
+pub(crate) fn new_sync_store() -> SyncSlidingWindowStore {
     std::sync::Mutex::new(HashMap::new())
 }
 
-pub fn check_and_record_sync(
+pub(crate) fn check_and_record_sync(
     store: &SyncSlidingWindowStore,
     key: &str,
     window: Duration,

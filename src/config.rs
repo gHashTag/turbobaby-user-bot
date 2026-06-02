@@ -137,7 +137,7 @@ impl Config {
 /// trimmed) as `true`; everything else as `false`. Mirrors the
 /// permissive parsing common in container env (`HIDE_MARKETING_BADGES=true`
 /// from a `.env`, `=1` from Railway's CLI).
-pub fn parse_bool_env(raw: Option<&str>) -> bool {
+pub(crate) fn parse_bool_env(raw: Option<&str>) -> bool {
     let Some(s) = raw else { return false };
     matches!(
         s.trim().to_ascii_lowercase().as_str(),
@@ -158,7 +158,7 @@ pub fn parse_bool_env(raw: Option<&str>) -> bool {
 /// in the same order as `names`.
 /// `Err(missing)`: list of names whose value was absent or whitespace-
 /// only.
-pub fn collect_required_env<F>(names: &[&str], reader: F) -> Result<Vec<String>, Vec<String>>
+pub(crate) fn collect_required_env<F>(names: &[&str], reader: F) -> Result<Vec<String>, Vec<String>>
 where
     F: Fn(&str) -> Option<String>,
 {
@@ -185,7 +185,7 @@ where
 /// `"PORT=eight-thousand"`, defaulting to 3000 without surfacing the
 /// typo — at best confusing, at worst the bot listens on the wrong
 /// port and traffic gets blackholed.
-pub fn parse_port_env(raw: Option<String>) -> Result<u16> {
+pub(crate) fn parse_port_env(raw: Option<String>) -> Result<u16> {
     match raw {
         None => Ok(3000),
         Some(s) => {

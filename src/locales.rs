@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Locale {
+pub(crate) struct Locale {
     pub code: String,
     pub flag: String,
     pub name: String,
@@ -77,25 +77,25 @@ pub struct Locale {
     pub referral_leaderboard: String,
 }
 
-pub fn get_locale(lang: &str) -> Locale {
+pub(crate) fn get_locale(lang: &str) -> Locale {
     match lang {
         "ru" => ru(),
         _ => en(),
     }
 }
 
-pub fn map_telegram_lang(lang: Option<&str>) -> String {
+pub(crate) fn map_telegram_lang(lang: Option<&str>) -> String {
     match lang {
         Some("ru") | Some("be") | Some("uk") => "ru".into(),
         _ => "en".into(),
     }
 }
 
-pub fn supported_langs() -> Vec<&'static str> {
+pub(crate) fn supported_langs() -> Vec<&'static str> {
     vec!["ru", "en"]
 }
 
-pub fn detect_language(text: &str) -> &'static str {
+pub(crate) fn detect_language(text: &str) -> &'static str {
     if text
         .chars()
         .any(|c| ('\u{0400}'..='\u{04FF}').contains(&c) || ('\u{0500}'..='\u{052F}').contains(&c))

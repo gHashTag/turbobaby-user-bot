@@ -68,30 +68,30 @@ impl Default for ETagCache {
 }
 
 /// Update ETag cache after data modification
-pub async fn invalidate_strains(cache: &ETagCache) {
+pub(crate) async fn invalidate_strains(cache: &ETagCache) {
     cache.hashes.write().await.remove("strains");
 }
 
 // Используется в будущих cache invalidation путях
 #[allow(dead_code)]
-pub async fn invalidate_accessories(cache: &ETagCache) {
+pub(crate) async fn invalidate_accessories(cache: &ETagCache) {
     cache.hashes.write().await.remove("accessories");
 }
 
 // Используется в будущих cache invalidation путях
 #[allow(dead_code)]
-pub async fn invalidate_sets(cache: &ETagCache) {
+pub(crate) async fn invalidate_sets(cache: &ETagCache) {
     cache.hashes.write().await.remove("sets");
 }
 
 // Используется в будущих cache invalidation путях
 #[allow(dead_code)]
-pub async fn invalidate_tea_products(cache: &ETagCache) {
+pub(crate) async fn invalidate_tea_products(cache: &ETagCache) {
     cache.hashes.write().await.remove("tea_products");
 }
 
 /// Create ETag header value
-pub fn make_etag_header(hash: &str) -> HeaderValue {
+pub(crate) fn make_etag_header(hash: &str) -> HeaderValue {
     HeaderValue::from_str(&format!("\"{}\"", hash))
         .unwrap_or_else(|_| HeaderValue::from_static("\"\""))
 }

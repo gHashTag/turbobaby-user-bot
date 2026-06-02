@@ -55,7 +55,7 @@ const FACT_TOPICS: &[&str] = &[
     "Thai cannabis traditions and local strains",
 ];
 
-pub fn get_random_joke_prompt(base_prompt: &str, order_context: Option<&str>) -> String {
+pub(crate) fn get_random_joke_prompt(base_prompt: &str, order_context: Option<&str>) -> String {
     let style = JOKE_STYLES[rand::thread_rng().gen_range(0..JOKE_STYLES.len())];
     let ctx = order_context
         .map(|c| format!(" Customer context: {}.", c))
@@ -66,7 +66,7 @@ pub fn get_random_joke_prompt(base_prompt: &str, order_context: Option<&str>) ->
     )
 }
 
-pub fn get_random_fact_prompt(base_prompt: &str) -> String {
+pub(crate) fn get_random_fact_prompt(base_prompt: &str) -> String {
     let topic = FACT_TOPICS[rand::thread_rng().gen_range(0..FACT_TOPICS.len())];
     format!(
         "{} Topic: {}. Don't repeat common facts, be surprising!",
@@ -75,7 +75,7 @@ pub fn get_random_fact_prompt(base_prompt: &str) -> String {
 }
 
 /// Strip common prompt-injection markers from user text before sending to LLM.
-pub fn sanitize_user_text(text: &str) -> String {
+pub(crate) fn sanitize_user_text(text: &str) -> String {
     let lower = text.to_lowercase();
     let dangerous = [
         "###",
