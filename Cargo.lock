@@ -4986,6 +4986,10 @@ version = "0.4.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b8fa9be0de6cf49e536ce1851f987bd21a43b771b09473c3549a6c853db37c1c"
 dependencies = [
+ "futures-core",
+ "futures-util",
+ "pin-project",
+ "pin-project-lite",
  "tower-layer",
  "tower-service",
  "tracing",
@@ -5880,6 +5884,7 @@ dependencies = [
  "gloo-timers",
  "hex",
  "hmac 0.12.1",
+ "http-body-util",
  "js-sys",
  "metrics",
  "qrcode",
@@ -5893,6 +5898,7 @@ dependencies = [
  "teloxide",
  "thiserror 1.0.69",
  "tokio",
+ "tower 0.4.13",
  "tower-http 0.5.2",
  "tracing",
  "tracing-subscriber",

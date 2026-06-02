@@ -124,6 +124,15 @@ backend = [
 ]
 web = []
 
+# Cycle #162: dev-only deps for integration tests under `tests/`.
+# `tower::ServiceExt::oneshot` is the canonical way to exercise an Axum
+# `Router` without spinning up a real TCP listener. Cycle #119 removed
+# `tower` as a runtime dep (only `tower_http::*` was used); this is a
+# separate dev-only re-introduction.
+[dev-dependencies]
+tower = { version = "0.4", features = ["util"] }
+http-body-util = "0.1"
+
 [profile.release]
 opt-level = "z"
 lto = true
