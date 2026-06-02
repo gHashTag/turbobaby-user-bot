@@ -177,6 +177,23 @@ fn pick_encoding(headers: &axum::http::HeaderMap) -> Option<&'static str> {
     None
 }
 
+/// Cycle #121: detect whether we're running in a production-shaped
+/// environment, *before* the tracing subscriber is initialised. Mirror
+/// the logic in `Config::from_env` (which sets `is_production` the
+/// same way) since this check has to run earlier — before `Config`
+/// is parsed.
+///
+/// "Production" here is purely a logging-format switch: JSON output
+/// for prod (aggregator-friendly: Railway / Datadog / Grafana Loki
+/// can structure each line), human-readable text for everything else.
+///
+/// Takes the two env values directly so the helper is testable
+/// without touching the process env.
+#[cfg(not(target_arch = "wasm32"))]
+fn is_production_env(node_env: Option<&str>, railway_env: Option<&str>) -> bool {
+    node_env == Some("production") || railway_env.is_some()
+}
+
 /// Cycle #120: resolve the tracing-subscriber filter from `RUST_LOG`,
 /// defaulting to `info` when the env var is absent.
 ///
@@ -219,9 +236,26 @@ async fn main() -> Result<()> {
         .install_default()
         .expect("Failed to install rustls crypto provider");
 
-    tracing_subscriber::fmt()
-        .with_env_filter(resolve_log_filter(std::env::var("RUST_LOG").ok()))
-        .init();
+    // Cycle #121: pick log format based on env BEFORE the subscriber is
+    // built. `Config::from_env` resolves the same `is_production` flag
+    // later, but the subscriber must exist by then to capture its logs.
+    // Duplicating the read (rather than threading state) is the lesser
+    // evil; the helper is unit-tested so the two paths can't drift.
+    let node_env = std::env::var("NODE_ENV").ok();
+    let railway_env = std::env::var("RAILWAY_ENVIRONMENT").ok();
+    let env_filter = resolve_log_filter(std::env::var("RUST_LOG").ok());
+    if is_production_env(node_env.as_deref(), railway_env.as_deref()) {
+        // JSON: one object per event, parseable by Loki / Datadog /
+        // Railway's log viewer. No ANSI colours, no human formatting.
+        tracing_subscriber::fmt()
+            .with_env_filter(env_filter)
+            .json()
+            .init();
+    } else {
+        // Human-readable: ANSI colours + indented spans. The default
+        // for `cargo run` and local dev.
+        tracing_subscriber::fmt().with_env_filter(env_filter).init();
+    }
 
     info!("🤖 Starting Woody Bot (Rust)...");
 
@@ -901,6 +935,47 @@ mod tests {
         // A directive with an invalid level keyword.
         let f = super::resolve_log_filter(Some("this_is=not_a_level".into()));
         assert!(format!("{}", f).contains("info"));
+    }
+
+    // ── is_production_env (cycle #121) ──────────────────────────────
+
+    #[test]
+    fn is_production_env_neither_set() {
+        assert!(!super::is_production_env(None, None));
+    }
+
+    #[test]
+    fn is_production_env_node_env_production() {
+        assert!(super::is_production_env(Some("production"), None));
+    }
+
+    #[test]
+    fn is_production_env_node_env_other_values_are_dev() {
+        // Mirror Config::from_env — only the literal "production" trips
+        // the prod flag. "prod", "PROD", "Production" all stay dev.
+        assert!(!super::is_production_env(Some("prod"), None));
+        assert!(!super::is_production_env(Some(""), None));
+        assert!(!super::is_production_env(Some("development"), None));
+    }
+
+    #[test]
+    fn is_production_env_any_railway_env_is_prod() {
+        // Railway sets RAILWAY_ENVIRONMENT to the env name ("production",
+        // "staging", etc.). Any non-None value is enough — we don't
+        // discriminate between Railway environments here.
+        assert!(super::is_production_env(None, Some("production")));
+        assert!(super::is_production_env(None, Some("staging")));
+        assert!(super::is_production_env(None, Some("")));
+    }
+
+    #[test]
+    fn is_production_env_either_signal_enough() {
+        // OR semantics — either env var being prod-shaped flips the flag.
+        assert!(super::is_production_env(
+            Some("production"),
+            Some("staging")
+        ));
+        assert!(super::is_production_env(Some("development"), Some("any")));
     }
 }
 
