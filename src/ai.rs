@@ -131,11 +131,6 @@ impl AiClient {
         }
     }
 
-    #[cfg(test)]
-    pub fn test_client() -> Self {
-        Self::new(String::new(), String::new())
-    }
-
     /// Ask Grok (primary) with GLM fallback
     pub async fn ask_grok(
         &self,

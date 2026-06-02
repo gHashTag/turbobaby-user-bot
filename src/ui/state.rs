@@ -77,14 +77,6 @@ impl Default for Cart {
     }
 }
 
-// Cycle (this commit): the parallel `Language` enum +
-// `LanguageProvider` + `use_language()` system was removed. The
-// canonical rendering language now lives in `crate::ui::lang`
-// (cycle that wired the GlobalSignal) and the canonical `Lang` type
-// is `crate::trios::core::Lang`. This block had a separate enum, a
-// separate provider, and a separate hook that nothing read except
-// the (also-removed) `src/ui/i18n/` parallel translation module.
-
 /// Hook to access cart state
 pub fn use_cart_state() -> Signal<Cart> {
     use_context::<Signal<Cart>>()

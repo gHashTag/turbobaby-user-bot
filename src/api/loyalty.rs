@@ -476,7 +476,7 @@ async fn use_bonus(
         telegram_id: Set(telegram_id),
         amount: Set(-amount),
         tx_type: Set("admin_deduction".to_string()),
-        description: Set(Some(format!("use_bonus by admin"))),
+        description: Set(Some("use_bonus by admin".to_string())),
         related_order_id: Set(None),
         ..Default::default()
     };
