@@ -177,6 +177,49 @@ fn pick_encoding(headers: &axum::http::HeaderMap) -> Option<&'static str> {
     None
 }
 
+/// Cycle #124: shared loop body for daily-ish DB retention sweeps.
+///
+/// Pre-#124 there were three near-identical `tokio::spawn` blocks in
+/// `main` for `cleanup_old_idempotency_keys` (#63), `cleanup_old_fraud_events`
+/// (#63), and `cleanup_old_block_history` (#66). Each clone the ORM
+/// handle, build a tokio interval, skip the first tick (so cold-start
+/// serialisation isn't blocked behind a DELETE), then loop on the
+/// cleanup with the same Ok-0 / Ok-N / Err logging.
+///
+/// All three cleanup helpers share the signature
+/// `async fn(&DatabaseConnection, u32) -> Result<u64, DbErr>`, so the
+/// helper takes a closure that re-binds the retention constant per
+/// callsite. The closure receives an owned `DatabaseConnection`
+/// (cheap — it's an `Arc`-of-pool under the hood) so the body can
+/// `.await` without borrowing across yield points.
+#[cfg(not(target_arch = "wasm32"))]
+fn spawn_ttl_sweep<F, Fut>(
+    orm: sea_orm::DatabaseConnection,
+    label: &'static str,
+    interval_secs: u64,
+    mut cleanup: F,
+) where
+    F: FnMut(sea_orm::DatabaseConnection) -> Fut + Send + 'static,
+    Fut: std::future::Future<Output = Result<u64, sea_orm::DbErr>> + Send,
+{
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(interval_secs));
+        interval.tick().await; // discard the immediate first tick
+        loop {
+            interval.tick().await;
+            match cleanup(orm.clone()).await {
+                Ok(0) => {}
+                Ok(deleted) => {
+                    info!(deleted, "{}: TTL sweep removed expired rows", label);
+                }
+                Err(e) => {
+                    tracing::warn!("{}: TTL sweep failed: {}", label, e);
+                }
+            }
+        }
+    });
+}
+
 /// Cycle #121: detect whether we're running in a production-shaped
 /// environment, *before* the tracing subscriber is initialised. Mirror
 /// the logic in `Config::from_env` (which sets `is_production` the
@@ -309,23 +352,12 @@ async fn main() -> Result<()> {
     // realistic client retry window — Stripe defaults to 24 h for the same
     // reason. The first tick is skipped so cold-start serialization isn't
     // blocked behind a DELETE.
-    // Cycle #86: sweep functions now take &sea_orm::DatabaseConnection.
-    let orm_for_sweep = db.orm.clone();
-    tokio::spawn(async move {
-        let mut interval = tokio::time::interval(std::time::Duration::from_secs(3600));
-        interval.tick().await; // discard the immediate first tick
-        loop {
-            interval.tick().await;
-            match crate::db::orders::cleanup_old_idempotency_keys(&orm_for_sweep, 24).await {
-                Ok(deleted) if deleted > 0 => {
-                    info!(deleted, "idempotency_keys: TTL sweep removed expired rows");
-                }
-                Ok(_) => {}
-                Err(e) => {
-                    tracing::warn!("idempotency_keys: TTL sweep failed: {}", e);
-                }
-            }
-        }
+    //
+    // Cycle #124: all three sweeps go through `spawn_ttl_sweep`. Retention
+    // constants are pinned per-callsite so a future "let's keep idempotency
+    // keys for a week" tweak only touches the relevant closure.
+    spawn_ttl_sweep(db.orm.clone(), "idempotency_keys", 3600, |orm| async move {
+        crate::db::orders::cleanup_old_idempotency_keys(&orm, 24).await
     });
 
     // Background TTL sweep for `order_fraud_events` (cycle #63 / A).
@@ -333,22 +365,8 @@ async fn main() -> Result<()> {
     // shows a 24h window but trend reviews ("how many subtotal mismatches
     // this month?") look back further. Daily tick is enough; the table is
     // low-cardinality compared to idempotency keys.
-    let orm_for_fraud_sweep = db.orm.clone();
-    tokio::spawn(async move {
-        let mut interval = tokio::time::interval(std::time::Duration::from_secs(86_400));
-        interval.tick().await; // discard the immediate first tick
-        loop {
-            interval.tick().await;
-            match crate::db::orders::cleanup_old_fraud_events(&orm_for_fraud_sweep, 30).await {
-                Ok(deleted) if deleted > 0 => {
-                    info!(deleted, "fraud_events: TTL sweep removed expired rows");
-                }
-                Ok(_) => {}
-                Err(e) => {
-                    tracing::warn!("fraud_events: TTL sweep failed: {}", e);
-                }
-            }
-        }
+    spawn_ttl_sweep(db.orm.clone(), "fraud_events", 86_400, |orm| async move {
+        crate::db::orders::cleanup_old_fraud_events(&orm, 30).await
     });
 
     // Background TTL sweep for `block_history` (cycle #66). Append-only
@@ -356,22 +374,8 @@ async fn main() -> Result<()> {
     // / compliance records that admins genuinely look back at across
     // quarters ("did we wrongly block user X three months ago?"). Daily
     // tick same as the fraud sweep; both tables are tiny vs idempotency.
-    let orm_for_block_sweep = db.orm.clone();
-    tokio::spawn(async move {
-        let mut interval = tokio::time::interval(std::time::Duration::from_secs(86_400));
-        interval.tick().await; // discard the immediate first tick
-        loop {
-            interval.tick().await;
-            match crate::db::orders::cleanup_old_block_history(&orm_for_block_sweep, 90).await {
-                Ok(deleted) if deleted > 0 => {
-                    info!(deleted, "block_history: TTL sweep removed expired rows");
-                }
-                Ok(_) => {}
-                Err(e) => {
-                    tracing::warn!("block_history: TTL sweep failed: {}", e);
-                }
-            }
-        }
+    spawn_ttl_sweep(db.orm.clone(), "block_history", 86_400, |orm| async move {
+        crate::db::orders::cleanup_old_block_history(&orm, 90).await
     });
 
     tokio::spawn(async move {
