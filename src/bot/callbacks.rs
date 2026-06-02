@@ -8,7 +8,6 @@ use crate::bot::commands::{build_app_url, calculate_discounted_price};
 // Cycle #76: button helpers consolidated to bot/mod.rs.
 // Cycle #129: AI_RATE_LIMIT replaced by `ai_rate_limit_allow` helper.
 use crate::bot::{ai_rate_limit_allow, callback_btn, tg_fire_and_forget, web_app_btn};
-use crate::db::referrals as ref_db;
 use crate::{
     ai::{get_random_fact_prompt, get_random_joke_prompt},
     config::Config,
@@ -425,90 +424,79 @@ pub async fn handle_callback(
                 .text("📦 Completed!")
                 .await?;
 
-            // Atomically complete order, update loyalty profile, and recalculate tier
-            let (is_first, customer_telegram_id) =
+            // Atomically complete order, update loyalty profile,
+            // recalculate tier, plant garden seed, and credit
+            // referral bonus (cycle #171 lifted the referral credit
+            // INTO complete_order_and_update_loyalty — this callsite
+            // only owns the user-facing Telegram notification now).
+            let completion =
                 match crate::db::orders::complete_order_and_update_loyalty(&db.orm, order_id).await
                 {
-                    Ok(Some((cid, first))) => (first, Some(cid)),
-                    Ok(None) => (false, None),
+                    Ok(Some(c)) => c,
+                    Ok(None) => {
+                        // No customer attribution or already completed — nothing more to do.
+                        if let Some(msg) = q.message.as_ref().and_then(|m| match m {
+                            teloxide::types::MaybeInaccessibleMessage::Regular(msg) => Some(msg),
+                            _ => None,
+                        }) {
+                            bot.edit_message_reply_markup(msg.chat.id, msg.id)
+                                .reply_markup(InlineKeyboardMarkup::new::<
+                                    Vec<Vec<InlineKeyboardButton>>,
+                                >(vec![]))
+                                .await
+                                .ok();
+                        }
+                        return Ok(());
+                    }
                     Err(e) => {
                         tracing::error!("callback: complete_order_and_update_loyalty error: {}", e);
                         return Ok(());
                     }
                 };
 
-            // If first order, confirm referral and notify referrer
-            if is_first {
-                if let Some(cid) = customer_telegram_id {
-                    // Cycle #91: migrated off `&db.pool` to `&db.orm`. Both
-                    // reads (loyalty_config bonus + referral_events lookup)
-                    // are JSONB / single-row SELECTs — raw `Statement`
-                    // (pattern #15) is the right level here.
-                    use sea_orm::{ConnectionTrait, DbBackend, Statement};
-                    // Get referral bonus amount from loyalty_config.
-                    let bonus_row = match db.orm.query_one(Statement::from_string(
+            // Notify referrer if the bonus was credited inside the
+            // completion function. Cycle #171: the lookup + credit
+            // happens in db/orders.rs; this branch only fires when
+            // the credit succeeded (Some(bonus)).
+            if let Some(bonus) = completion.referral_bonus_credited {
+                use sea_orm::{ConnectionTrait, DbBackend, Statement};
+                // Look up referrer_id from referral_events for the
+                // notification target. Cycle #76: differentiate
+                // "no row" from "query failed".
+                let event_row = match db
+                    .orm
+                    .query_one(Statement::from_sql_and_values(
                         DbBackend::Postgres,
-                        "SELECT config->>'referral_bonus' AS bonus FROM loyalty_config WHERE id = 1".to_string(),
-                    )).await {
-                        Ok(row) => row,
-                        Err(e) => {
-                            tracing::warn!(
-                                "callbacks: loyalty_config bonus read failed: {}",
-                                e
-                            );
-                            None
-                        }
-                    };
-                    let bonus: f64 = bonus_row
-                        .and_then(|r| r.try_get::<Option<String>>("", "bonus").ok().flatten())
-                        .and_then(|s| s.parse().ok())
-                        .unwrap_or(200.0);
-
-                    if let Err(e) = ref_db::confirm_referral(&db.orm, cid, bonus).await {
-                        tracing::error!(
-                            "callback: confirm_referral failed for referred_id={}: {}",
-                            cid,
+                        "SELECT referrer_id FROM referral_events WHERE referred_id = $1",
+                        [completion.customer_telegram_id.into()],
+                    ))
+                    .await
+                {
+                    Ok(row) => row,
+                    Err(e) => {
+                        tracing::warn!(
+                            "callbacks: referral_events lookup failed for cid={}: {}",
+                            completion.customer_telegram_id,
                             e
                         );
-                    } else {
-                        // Notify referrer only after successful bonus credit
-                        // Cycle #76: differentiate "no row" from "query failed".
-                        let event_row = match db
-                            .orm
-                            .query_one(Statement::from_sql_and_values(
-                                DbBackend::Postgres,
-                                "SELECT referrer_id FROM referral_events WHERE referred_id = $1",
-                                [cid.into()],
-                            ))
+                        None
+                    }
+                };
+                if let Some(ev) = event_row {
+                    let referrer_id: i64 = ev.try_get("", "referrer_id").unwrap_or(0);
+                    if referrer_id != 0 {
+                        if let Err(e) = bot
+                            .send_message(
+                                teloxide::types::ChatId(referrer_id),
+                                format!("🎉 {} +{:.0} ฿", locale.referral_bonus, bonus),
+                            )
                             .await
                         {
-                            Ok(row) => row,
-                            Err(e) => {
-                                tracing::warn!(
-                                    "callbacks: referral_events lookup failed for cid={}: {}",
-                                    cid,
-                                    e
-                                );
-                                None
-                            }
-                        };
-                        if let Some(ev) = event_row {
-                            let referrer_id: i64 = ev.try_get("", "referrer_id").unwrap_or(0);
-                            if referrer_id != 0 {
-                                if let Err(e) = bot
-                                    .send_message(
-                                        teloxide::types::ChatId(referrer_id),
-                                        format!("🎉 {} +{:.0} ฿", locale.referral_bonus, bonus),
-                                    )
-                                    .await
-                                {
-                                    tracing::warn!(
-                                        "referral bonus notify failed for referrer_id={}: {}",
-                                        referrer_id,
-                                        e
-                                    );
-                                }
-                            }
+                            tracing::warn!(
+                                "referral bonus notify failed for referrer_id={}: {}",
+                                referrer_id,
+                                e
+                            );
                         }
                     }
                 }

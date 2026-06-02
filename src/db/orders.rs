@@ -58,10 +58,31 @@ impl From<crate::db::entities::order::Model> for Order {
 /// total_spent on loyalty_profiles via upsert, recompute tier with a
 /// CASE-WHEN that consults loyalty_config thresholds. Drop = auto-rollback;
 /// only `commit()` on the happy path.
+/// Outcome of a successful order completion. Returned so callers can
+/// drive user-facing side effects (Telegram notifications, etc.)
+/// without re-running DB lookups the completion function already did.
+#[derive(Debug, Clone)]
+pub struct OrderCompletion {
+    pub customer_telegram_id: i64,
+    /// Currently unread — kept for analytics / future-caller hooks
+    /// (e.g. "first-order welcome bonus" or signup-completion
+    /// metrics). The cycle-#171 callers use
+    /// `referral_bonus_credited.is_some()` as a stricter predicate
+    /// for the referral-notification path.
+    #[allow(dead_code)]
+    pub is_first_order: bool,
+    /// `Some(amount)` if this was a first order from a referred user
+    /// AND `confirm_referral` succeeded. `None` if not-first,
+    /// not-referred, or the credit failed (logged inside the
+    /// function; callers receive `None` and skip downstream side
+    /// effects like referrer notifications).
+    pub referral_bonus_credited: Option<f64>,
+}
+
 pub async fn complete_order_and_update_loyalty(
     orm: &sea_orm::DatabaseConnection,
     order_id: &str,
-) -> Result<Option<(i64, bool)>, sea_orm::DbErr> {
+) -> Result<Option<OrderCompletion>, sea_orm::DbErr> {
     use crate::db::entities::{
         loyalty_profile::{ActiveModel as LpAm, Column as LpCol, Entity as LpEntity},
         order::{Column as OrderCol, Entity as OrderEntity},
@@ -233,7 +254,60 @@ pub async fn complete_order_and_update_loyalty(
     }
 
     tx.commit().await?;
-    Ok(Some((cid, is_first)))
+
+    // 7. Cycle #171: referral bonus credit, lifted from the two
+    //    completion callers into the canonical completion function.
+    //    Pre-cycle, only the bot-callback path (`bot/callbacks.rs`)
+    //    called `confirm_referral` — cycle #170 mirrored it in
+    //    `update_order_status`, but a future third completion path
+    //    (payment webhook, batch completion, etc.) could miss it
+    //    again. Lifting closes the bug class.
+    //
+    //    Side-effect chain: read referral_bonus from loyalty_config,
+    //    call confirm_referral (which credits the referrer's
+    //    bonus_balance + writes a `bonus_transactions` ledger row
+    //    + sets `referral_events.status = 'paid'`). Outside the
+    //    completion tx — confirm_referral has its own transaction
+    //    semantics and a failure here shouldn't roll back the order
+    //    completion (the order is already committed; referrals can
+    //    be reconciled).
+    let referral_bonus_credited: Option<f64> = if is_first {
+        let bonus = match orm
+            .query_one(Statement::from_string(
+                DbBackend::Postgres,
+                "SELECT config->>'referral_bonus' AS bonus FROM loyalty_config WHERE id = 1"
+                    .to_string(),
+            ))
+            .await
+        {
+            Ok(Some(row)) => row
+                .try_get::<Option<String>>("", "bonus")
+                .ok()
+                .flatten()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(200.0),
+            Ok(None) | Err(_) => 200.0,
+        };
+        match crate::db::referrals::confirm_referral(orm, cid, bonus).await {
+            Ok(_) => Some(bonus),
+            Err(e) => {
+                tracing::error!(
+                    "complete_order: confirm_referral failed for cid={}: {:?}",
+                    cid,
+                    e
+                );
+                None
+            }
+        }
+    } else {
+        None
+    };
+
+    Ok(Some(OrderCompletion {
+        customer_telegram_id: cid,
+        is_first_order: is_first,
+        referral_bonus_credited,
+    }))
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

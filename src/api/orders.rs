@@ -1101,61 +1101,20 @@ async fn update_order_status(
     }
 
     if req.status == "completed" {
-        // Cycle #170: capture the `(customer_telegram_id, is_first)`
-        // pair from complete_order_and_update_loyalty so the referral
-        // bonus path can fire on the WebApp completion path too.
-        // Pre-cycle, only the bot-callback completion (`bot/callbacks.rs`)
-        // ran `confirm_referral` after a first order — admin completing
-        // an order via `PUT /api/orders/:id/status` from the WebApp
-        // panel silently dropped the referrer's bonus. Same cycle-#168
-        // asymmetric-completion-path bug class.
-        let completion = crate::db::orders::complete_order_and_update_loyalty(&state.db.orm, &id)
-            .await
-            .map_err(|e| {
-                tracing::error!(
-                    "update_order_status: complete_order_and_update_loyalty error: {}",
-                    e
-                );
-                StatusCode::INTERNAL_SERVER_ERROR
-            })?;
-        if let Some((cid, is_first)) = completion {
-            if is_first {
-                // Mirror the bot-callback flow at callbacks.rs:441-472.
-                // Look up referral_bonus from loyalty_config (JSONB
-                // string → f64; default 200.0 matches the bot path
-                // fallback) and call ref_db::confirm_referral.
-                use sea_orm::{ConnectionTrait, DbBackend, Statement};
-                let bonus = match state
-                    .db
-                    .orm
-                    .query_one(Statement::from_string(
-                        DbBackend::Postgres,
-                        "SELECT config->>'referral_bonus' AS bonus FROM loyalty_config WHERE id = 1"
-                            .to_string(),
-                    ))
-                    .await
-                {
-                    Ok(Some(row)) => row
-                        .try_get::<Option<String>>("", "bonus")
-                        .ok()
-                        .flatten()
-                        .and_then(|s| s.parse().ok())
-                        .unwrap_or(200.0),
-                    Ok(None) | Err(_) => 200.0,
-                };
-                if let Err(e) =
-                    crate::db::referrals::confirm_referral(&state.db.orm, cid, bonus).await
-                {
-                    // Log but don't fail the request — the order is
-                    // already completed; the referral can be reconciled
-                    // manually. Matches the bot-path failure semantics.
-                    tracing::error!(
-                        "update_order_status: confirm_referral failed for cid={}: {}",
-                        cid,
-                        e
-                    );
-                }
-            }
+        // Cycle #171: `complete_order_and_update_loyalty` is now the
+        // canonical completion point — loyalty tier (cycle #88) +
+        // garden seed (cycle #168) + referral bonus (cycle #170
+        // added it duplicated here; #171 lifted into the function).
+        // This call site owns no completion side effects. Future
+        // completion paths get the full chain for free.
+        if let Err(e) =
+            crate::db::orders::complete_order_and_update_loyalty(&state.db.orm, &id).await
+        {
+            tracing::error!(
+                "update_order_status: complete_order_and_update_loyalty error: {}",
+                e
+            );
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
         }
     } else if req.status == "rejected" {
         // Reject path: refund bonus_used if any, then flip status. The

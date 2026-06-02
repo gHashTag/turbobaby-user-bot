@@ -129,14 +129,17 @@ async fn complete_order_seeds_garden_plant_for_strain_orders() {
         before
     );
 
-    // Trigger the production path.
+    // Trigger the production path. Cycle #171 changed the return
+    // type from `(i64, bool)` to `OrderCompletion`.
     let result = complete_order_and_update_loyalty(&db.orm, &order_id)
         .await
         .expect("complete_order_and_update_loyalty");
-    assert!(result.is_some(), "must return Some((tid, is_first))");
-    let (tid, is_first) = result.unwrap();
-    assert_eq!(tid, telegram_id);
-    assert!(is_first, "first order for this user → is_first=true");
+    let completion = result.expect("must return Some(OrderCompletion)");
+    assert_eq!(completion.customer_telegram_id, telegram_id);
+    assert!(
+        completion.is_first_order,
+        "first order for this user → is_first_order=true"
+    );
 
     // Post-condition: exactly one plant row for this user, with the
     // right strain.
