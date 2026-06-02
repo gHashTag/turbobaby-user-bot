@@ -638,8 +638,12 @@ async fn notify_quest_place_admins(
     );
 
     for admin_id in &config.admin_ids {
+        // Cycle #150: parse_mode=Html so the html_escape'd `name`,
+        // `category`, `description` above render `&lt;` as `<` (not
+        // literal `&lt;`). Same fix shape as cycle #149's notify_admins.
         if let Err(e) = bot
             .send_message(teloxide::types::ChatId(*admin_id), &text)
+            .parse_mode(teloxide::types::ParseMode::Html)
             .await
         {
             tracing::warn!(
@@ -668,8 +672,10 @@ async fn notify_treasure_hunt_admins(
     );
 
     for admin_id in &config.admin_ids {
+        // Cycle #150: parse_mode=Html — same as notify_quest_place_admins.
         if let Err(e) = bot
             .send_message(teloxide::types::ChatId(*admin_id), &text)
+            .parse_mode(teloxide::types::ParseMode::Html)
             .await
         {
             tracing::warn!(

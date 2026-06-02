@@ -337,7 +337,10 @@ pub async fn handle_command(
                 .await;
             bot.delete_message(msg.chat.id, thinking.id).await.ok();
             if let Some(j) = joke {
+                // Cycle #150: parse_mode=Html so the html_escape'd `j`
+                // renders `&lt;` as `<` rather than literal `&lt;` text.
                 bot.send_message(msg.chat.id, format!("😜 {}", html_escape(&j)))
+                    .parse_mode(teloxide::types::ParseMode::Html)
                     .reply_markup(InlineKeyboardMarkup::new(vec![vec![callback_btn(
                         &format!("🔄 {}", locale.more_joke),
                         "more_joke",
@@ -360,7 +363,9 @@ pub async fn handle_command(
                 .await;
             bot.delete_message(msg.chat.id, thinking.id).await.ok();
             if let Some(f) = fact {
+                // Cycle #150: parse_mode=Html — same fix as /joke above.
                 bot.send_message(msg.chat.id, format!("🧠 {}", html_escape(&f)))
+                    .parse_mode(teloxide::types::ParseMode::Html)
                     .reply_markup(InlineKeyboardMarkup::new(vec![vec![callback_btn(
                         &format!("🔄 {}", locale.interesting_fact),
                         "more_fact",

@@ -111,8 +111,11 @@ pub async fn handle_callback(
                     let text = joke
                         .map(|j| format!("😜 {}", html_escape(&j)))
                         .unwrap_or(locale.joke_fail_fallback.clone());
+                    // Cycle #150: parse_mode=Html so html_escape'd `j`
+                    // renders correctly (was literal `&lt;` etc.).
                     tg_fire_and_forget(
                         bot.edit_message_text(msg.chat.id, msg.id, &text)
+                            .parse_mode(teloxide::types::ParseMode::Html)
                             .reply_markup(InlineKeyboardMarkup::new(vec![vec![callback_btn(
                                 &format!("🔄 {}", locale.more_joke),
                                 "more_joke",
@@ -146,8 +149,10 @@ pub async fn handle_callback(
                     let text = fact
                         .map(|f| format!("🧠 {}", html_escape(&f)))
                         .unwrap_or(locale.fact_fail_fallback.clone());
+                    // Cycle #150: parse_mode=Html — same fix as more_joke.
                     tg_fire_and_forget(
                         bot.edit_message_text(msg.chat.id, msg.id, &text)
+                            .parse_mode(teloxide::types::ParseMode::Html)
                             .reply_markup(InlineKeyboardMarkup::new(vec![vec![callback_btn(
                                 &format!("🔄 {}", locale.interesting_fact),
                                 "more_fact",
