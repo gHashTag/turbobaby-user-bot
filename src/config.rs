@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 
 #[derive(Debug, Clone)]
 pub struct Config {
@@ -71,10 +71,7 @@ impl Config {
         Ok(Self {
             bot_token,
             web_app_url,
-            port: std::env::var("PORT")
-                .unwrap_or("3000".into())
-                .parse()
-                .unwrap_or(3000),
+            port: parse_port_env(std::env::var("PORT").ok())?,
             webhook_path: std::env::var("WEBHOOK_PATH").unwrap_or("/webhook".into()),
             app_url: std::env::var("APP_URL").unwrap_or_default(),
             is_production,
@@ -110,9 +107,64 @@ impl Config {
     }
 }
 
+/// Cycle #118: parse `PORT` env var with **strict** semantics — `None`
+/// (env var unset) returns the default 3000, but `Some(s)` requires a
+/// valid u16 or errors out. The previous `.unwrap_or("3000".into()).parse().unwrap_or(3000)`
+/// double-fallback silently swallowed malformed values like
+/// `"PORT=8443 "` (trailing space, ascii not parseable to u16) or
+/// `"PORT=eight-thousand"`, defaulting to 3000 without surfacing the
+/// typo — at best confusing, at worst the bot listens on the wrong
+/// port and traffic gets blackholed.
+pub fn parse_port_env(raw: Option<String>) -> Result<u16> {
+    match raw {
+        None => Ok(3000),
+        Some(s) => {
+            let trimmed = s.trim();
+            // Empty PORT="" is treated like unset, matching the previous
+            // tolerant behaviour for users who null-out an inherited var.
+            if trimmed.is_empty() {
+                return Ok(3000);
+            }
+            trimmed
+                .parse::<u16>()
+                .map_err(|e| anyhow!("PORT env var must be a u16 (0..=65535), got {:?}: {}", s, e))
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::Config;
+    use super::{parse_port_env, Config};
+
+    // ── parse_port_env (cycle #118) ─────────────────────────────────
+
+    #[test]
+    fn port_env_absent_defaults_to_3000() {
+        assert_eq!(parse_port_env(None).unwrap(), 3000);
+    }
+
+    #[test]
+    fn port_env_empty_defaults_to_3000() {
+        assert_eq!(parse_port_env(Some("".into())).unwrap(), 3000);
+        assert_eq!(parse_port_env(Some("   ".into())).unwrap(), 3000);
+    }
+
+    #[test]
+    fn port_env_valid_parses() {
+        assert_eq!(parse_port_env(Some("8443".into())).unwrap(), 8443);
+        assert_eq!(parse_port_env(Some(" 8443 ".into())).unwrap(), 8443);
+    }
+
+    #[test]
+    fn port_env_malformed_errors() {
+        // The original bug — silent fallback to 3000 hid these.
+        assert!(parse_port_env(Some("eight-thousand".into())).is_err());
+        assert!(parse_port_env(Some("3000abc".into())).is_err());
+        // Out of u16 range
+        assert!(parse_port_env(Some("99999".into())).is_err());
+        // Negative
+        assert!(parse_port_env(Some("-1".into())).is_err());
+    }
 
     #[test]
     fn test_s3_enabled_both_set() {
