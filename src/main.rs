@@ -1236,5 +1236,197 @@ mod css_class_consistency_tests {
     }
 }
 
+/// Catches "added `pub mod X;` to wire up a new screen, then renamed
+/// or replaced its only caller, leaving an entire dead parallel
+/// module branch the compiler can't see". Concrete prior-art: cycle
+/// #173 deleted `src/ui/lib.rs` + 6 sibling test-scaffold files that
+/// formed a closed reference cycle — every item was `pub`, so rustc
+/// emitted no warnings even though *nothing outside the cycle*
+/// touched them.
+///
+/// Walks `src/ui/**/mod.rs`, parses `pub mod X;` lines, and asserts
+/// each `X` is mentioned by name in at least one `.rs` file outside
+/// its own subtree (= `<dir>/X.rs` for single-file modules or
+/// `<dir>/X/` for folder modules). The declaring `mod.rs` itself is
+/// excluded since the `pub mod X;` line lives there.
+///
+/// Tolerant by construction: matches by word boundary, so a 3-letter
+/// module name could in principle false-positive on comment text.
+/// Allowlist `ALLOWED_UNWIRED_UI_MODS` for the rare case of a
+/// deliberately-unused module.
+#[cfg(test)]
+mod ui_module_wiring_tests {
+    use std::path::{Path, PathBuf};
+
+    const ALLOWED_UNWIRED_UI_MODS: &[&str] = &[];
+
+    fn collect_rs_files(root: &Path, out: &mut Vec<PathBuf>) {
+        let entries = match std::fs::read_dir(root) {
+            Ok(e) => e,
+            Err(_) => return,
+        };
+        for entry in entries.filter_map(|e| e.ok()) {
+            let path = entry.path();
+            if path.is_dir() {
+                collect_rs_files(&path, out);
+            } else if path.extension().and_then(|s| s.to_str()) == Some("rs") {
+                out.push(path);
+            }
+        }
+    }
+
+    /// Returns `(declaring_mod_rs, module_name, subtree_root)` for
+    /// every `pub mod X;` under `src/ui/`. `subtree_root` is the
+    /// `.rs` file for single-file modules or the directory for
+    /// folder modules; either form is excluded from the cross-ref
+    /// scan.
+    fn ui_pub_mod_decls() -> Vec<(PathBuf, String, PathBuf)> {
+        let manifest = env!("CARGO_MANIFEST_DIR");
+        let ui_root = Path::new(manifest).join("src/ui");
+        let mut mod_files = Vec::new();
+        collect_rs_files(&ui_root, &mut mod_files);
+        mod_files.retain(|p| p.file_name().and_then(|s| s.to_str()) == Some("mod.rs"));
+
+        let mut decls = Vec::new();
+        for mod_path in &mod_files {
+            let src = match std::fs::read_to_string(mod_path) {
+                Ok(s) => s,
+                Err(_) => continue,
+            };
+            let parent = match mod_path.parent() {
+                Some(p) => p,
+                None => continue,
+            };
+            for line in src.lines() {
+                let trimmed = line.trim_start();
+                // Strip a `//` line comment so commented-out
+                // declarations don't trigger.
+                let code = match trimmed.find("//") {
+                    Some(i) => &trimmed[..i],
+                    None => trimmed,
+                };
+                let code = code.trim();
+                let rest = match code.strip_prefix("pub mod ") {
+                    Some(r) => r,
+                    None => continue,
+                };
+                let name = match rest.split([';', ' ', '{']).next() {
+                    Some(n) if !n.is_empty() => n.trim(),
+                    _ => continue,
+                };
+                let file_form = parent.join(format!("{name}.rs"));
+                let dir_form = parent.join(name);
+                let subtree = if file_form.is_file() {
+                    file_form
+                } else if dir_form.is_dir() {
+                    dir_form
+                } else {
+                    continue;
+                };
+                decls.push((mod_path.clone(), name.to_string(), subtree));
+            }
+        }
+        decls
+    }
+
+    fn is_under(path: &Path, root: &Path) -> bool {
+        path.starts_with(root)
+    }
+
+    fn file_mentions_word(src: &str, word: &str) -> bool {
+        let bytes = src.as_bytes();
+        let needle = word.as_bytes();
+        let mut i = 0;
+        while i + needle.len() <= bytes.len() {
+            if &bytes[i..i + needle.len()] == needle {
+                let before_ok = i == 0 || {
+                    let c = bytes[i - 1];
+                    !(c.is_ascii_alphanumeric() || c == b'_')
+                };
+                let after_idx = i + needle.len();
+                let after_ok = after_idx >= bytes.len() || {
+                    let c = bytes[after_idx];
+                    !(c.is_ascii_alphanumeric() || c == b'_')
+                };
+                if before_ok && after_ok {
+                    return true;
+                }
+            }
+            i += 1;
+        }
+        false
+    }
+
+    /// Read a file, but strip the `pub mod NAME;` declaration line for
+    /// the module under test. Other lines (including `pub use NAME::*;`
+    /// re-exports) survive, so re-exports count as wiring evidence.
+    fn read_without_decl(path: &Path, name: &str) -> Option<String> {
+        let src = std::fs::read_to_string(path).ok()?;
+        let needle_a = format!("pub mod {name};");
+        let needle_b = format!("pub mod {name}{{");
+        let needle_c = format!("mod {name};");
+        let filtered = src
+            .lines()
+            .filter(|line| {
+                let t = line.trim_start();
+                !(t.starts_with(&needle_a) || t.starts_with(&needle_b) || t.starts_with(&needle_c))
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        Some(filtered)
+    }
+
+    #[test]
+    fn every_ui_pub_mod_has_an_external_reference() {
+        let decls = ui_pub_mod_decls();
+        assert!(!decls.is_empty(), "no pub mod declarations parsed");
+
+        let manifest = env!("CARGO_MANIFEST_DIR");
+        let src_root = Path::new(manifest).join("src");
+        let mut all_rs = Vec::new();
+        collect_rs_files(&src_root, &mut all_rs);
+
+        let mut unwired = Vec::new();
+        for (decl_mod, name, subtree) in &decls {
+            if ALLOWED_UNWIRED_UI_MODS.contains(&name.as_str()) {
+                continue;
+            }
+            let mut found = false;
+            for file in &all_rs {
+                if is_under(file, subtree) {
+                    continue;
+                }
+                let src = if file == decl_mod {
+                    match read_without_decl(file, name) {
+                        Some(s) => s,
+                        None => continue,
+                    }
+                } else {
+                    match std::fs::read_to_string(file) {
+                        Ok(s) => s,
+                        Err(_) => continue,
+                    }
+                };
+                if file_mentions_word(&src, name) {
+                    found = true;
+                    break;
+                }
+            }
+            if !found {
+                unwired.push(format!("{} (declared in {})", name, decl_mod.display()));
+            }
+        }
+
+        assert!(
+            unwired.is_empty(),
+            "UI modules declared but never referenced outside their own subtree ({}): {:?}\n\
+             Either delete the module and its `pub mod` declaration, or list \
+             the name in ALLOWED_UNWIRED_UI_MODS with a rationale.",
+            unwired.len(),
+            unwired
+        );
+    }
+}
+
 // WASM entry point is now in src/lib.rs via #[wasm_bindgen(start)]
 // This file is only used for the native backend (Axum server)
