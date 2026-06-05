@@ -1809,8 +1809,11 @@ mod schema_drift_tests {
 
     /// Find `"SELECT c1, c2, ... FROM <table> ..."` literals (any
     /// line shape — Rust line-continuation is honoured) in a Rust
-    /// source file. Returns `(table, [cols])` per occurrence.
-    fn find_select_sites_in(src: &str) -> Vec<(String, Vec<String>)> {
+    /// source file. Returns `(tables, [cols])` per occurrence — the
+    /// `tables` Vec is `[primary, ...joined]` for JOIN queries, or
+    /// just `[primary]` otherwise. A column is considered valid if
+    /// it appears in *any* of those tables' schemas.
+    fn find_select_sites_in(src: &str) -> Vec<(Vec<String>, Vec<String>)> {
         find_sql_literals_starting_with(src, &["\"SELECT "])
             .into_iter()
             .filter_map(|s| parse_select(&s))
@@ -1820,7 +1823,7 @@ mod schema_drift_tests {
     /// Parse a SQL string of shape `SELECT <cols> FROM <table> [...]`.
     /// Returns `None` for any shape we don't fully understand (multi-FROM,
     /// CTEs, subqueries in SELECT list).
-    fn parse_select(sql: &str) -> Option<(String, Vec<String>)> {
+    fn parse_select(sql: &str) -> Option<(Vec<String>, Vec<String>)> {
         let upper = sql.to_ascii_uppercase();
         if !upper.starts_with("SELECT ") {
             return None;
@@ -1847,7 +1850,7 @@ mod schema_drift_tests {
         let from_at = from_at?;
         let cols_str = &after_select[..from_at];
         let after_from = &after_select[from_at + " FROM ".len()..];
-        // Table name is the first identifier after FROM.
+        // Primary table: first identifier after FROM.
         let tb_bytes = after_from.as_bytes();
         let mut j = 0;
         while j < tb_bytes.len() && (tb_bytes[j].is_ascii_alphanumeric() || tb_bytes[j] == b'_') {
@@ -1856,13 +1859,51 @@ mod schema_drift_tests {
         if j == 0 {
             return None;
         }
-        let table = after_from[..j].to_lowercase();
-        // Bail if there's a JOIN after the table — multi-table queries
-        // are out of scope for this simple parser.
-        let upper_rest = &upper_after[from_at + " FROM ".len() + j..].to_ascii_uppercase();
-        if upper_rest.contains(" JOIN ") {
+        let primary_table = after_from[..j].to_lowercase();
+        let mut tables = vec![primary_table];
+
+        // Extract JOIN target tables from the rest of the FROM-clause.
+        // LATERAL subqueries hide their column origins behind an alias
+        // we can't resolve cheaply — bail out so we don't generate
+        // false positives.
+        let upper_rest = upper_after[from_at + " FROM ".len() + j..].to_ascii_uppercase();
+        if upper_rest.contains(" LATERAL ") {
             return None;
         }
+        // Find every `JOIN <ident>` in the rest. Walk the original-case
+        // rest in parallel so we capture the table name verbatim.
+        let orig_rest = &after_from[j..];
+        let upper_rest_bytes = upper_rest.as_bytes();
+        let orig_rest_bytes = orig_rest.as_bytes();
+        let mut p = 0;
+        while p + 5 < upper_rest_bytes.len() {
+            if &upper_rest_bytes[p..p + 5] == b"JOIN " {
+                let mut q = p + 5;
+                // Skip whitespace
+                while q < orig_rest_bytes.len() && orig_rest_bytes[q].is_ascii_whitespace() {
+                    q += 1;
+                }
+                // Read identifier
+                let id_start = q;
+                while q < orig_rest_bytes.len()
+                    && (orig_rest_bytes[q].is_ascii_alphanumeric() || orig_rest_bytes[q] == b'_')
+                {
+                    q += 1;
+                }
+                if q > id_start {
+                    let t = orig_rest[id_start..q].to_lowercase();
+                    // Skip on (a subquery start — shouldn't happen
+                    // post-LATERAL bail-out but defensive).
+                    if t != "lateral" && !t.is_empty() {
+                        tables.push(t);
+                    }
+                }
+                p = q;
+                continue;
+            }
+            p += 1;
+        }
+
         // Split cols_str by top-level commas.
         let mut cols = Vec::new();
         let cb = cols_str.as_bytes();
@@ -1886,7 +1927,7 @@ mod schema_drift_tests {
                 start = k + 1;
             }
         }
-        Some((table, cols))
+        Some((tables, cols))
     }
 
     /// Find `"INSERT INTO <table> (c1, c2, ...) VALUES ..."` literals
@@ -2124,16 +2165,24 @@ mod schema_drift_tests {
                 Ok(s) => s,
                 Err(_) => continue,
             };
-            for (table, cols) in find_select_sites_in(&src) {
+            for (tables, cols) in find_select_sites_in(&src) {
                 sites_seen += 1;
-                let table_schema = match schema.get(&table) {
-                    Some(s) => s,
-                    None => continue,
-                };
+                // Build the union of every joined table's columns. If
+                // *any* table is unknown to the schema parser, skip
+                // the whole site — we'd produce false positives.
+                if tables.iter().any(|t| !schema.contains_key(t)) {
+                    continue;
+                }
+                let union: HashSet<&String> = tables
+                    .iter()
+                    .filter_map(|t| schema.get(t))
+                    .flatten()
+                    .collect();
+                let tables_label = tables.join(",");
                 for col in &cols {
-                    if !table_schema.contains(col) && !allowed.contains(col.as_str()) {
+                    if !union.contains(col) && !allowed.contains(col.as_str()) {
                         missing.push(format!(
-                            "{}: SELECT {col} FROM {table} — column not in migration schema",
+                            "{}: SELECT {col} FROM {tables_label} — column not in any joined table's migration schema",
                             file.display()
                         ));
                     }
