@@ -10,7 +10,7 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 use std::collections::HashMap;
 
-pub fn routes() -> Router<AppState> {
+pub(crate) fn routes() -> Router<AppState> {
     Router::new()
         // Accessories
         .route("/accessories", get(get_accessories))
@@ -61,7 +61,7 @@ pub fn routes() -> Router<AppState> {
 // ── Accessories ──────────────────────────────────────────────
 
 #[derive(Debug, Deserialize)]
-pub struct AccessoryRequest {
+pub(crate) struct AccessoryRequest {
     pub name: String,
     pub category: Option<String>,
     pub description: Option<String>,
@@ -316,7 +316,7 @@ async fn delete_accessory(
 // ── Accessory Sets ────────────────────────────────────────────
 
 #[derive(Debug, Deserialize)]
-pub struct AccessorySetRequest {
+pub(crate) struct AccessorySetRequest {
     pub name: String,
     pub description: Option<String>,
     pub icon: Option<String>,
@@ -580,7 +580,7 @@ async fn toggle_accessory_set_availability(
 // ── Tea Products ──────────────────────────────────────────────
 
 #[derive(Debug, Deserialize)]
-pub struct TeaProductRequest {
+pub(crate) struct TeaProductRequest {
     pub name: String,
     pub subcategory: Option<String>,
     pub description: Option<String>,
@@ -836,7 +836,7 @@ async fn delete_tea_product(
 // ── Tea Sets ──────────────────────────────────────────────────
 
 #[derive(Debug, Deserialize)]
-pub struct TeaSetRequest {
+pub(crate) struct TeaSetRequest {
     pub name: String,
     pub description: Option<String>,
     pub icon: Option<String>,
@@ -1086,7 +1086,7 @@ async fn toggle_tea_set_availability(
 // ── Sets (strain sets from `sets` table) ─────────────────────
 
 #[derive(Debug, Deserialize)]
-pub struct SetRequest {
+pub(crate) struct SetRequest {
     pub name: String,
     pub description: Option<String>,
     pub icon: Option<String>,

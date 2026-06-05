@@ -27,7 +27,7 @@ use tracing::Instrument;
 /// `req.extensions().get::<RequestId>()` to enrich their own logs.
 #[derive(Clone, Debug)]
 #[allow(dead_code)] // public field is part of the extension contract
-pub struct RequestId(pub String);
+pub(crate) struct RequestId(pub String);
 
 const REQUEST_ID_HEADER: HeaderName = HeaderName::from_static("x-request-id");
 /// Cap: a request_id longer than this is almost certainly garbage / hostile.
@@ -60,7 +60,7 @@ fn extract_or_generate(headers: &axum::http::HeaderMap) -> String {
 /// Axum middleware: attach a request id to every request and surface it on
 /// the response. Wrap the downstream `next.run(req)` in an `info_span!` so
 /// every log inside the handler chain inherits the id.
-pub async fn request_id_middleware(mut req: Request<Body>, next: Next) -> Response {
+pub(crate) async fn request_id_middleware(mut req: Request<Body>, next: Next) -> Response {
     let request_id = extract_or_generate(req.headers());
     req.extensions_mut().insert(RequestId(request_id.clone()));
 

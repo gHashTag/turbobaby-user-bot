@@ -11,20 +11,20 @@ use crate::api::auth::{check_not_blocked, check_owner, validate_telegram_id_para
 use crate::AppState;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct CartItem {
+pub(crate) struct CartItem {
     pub strain_id: String,
     pub quantity: f64,
     pub price_per_gram: f64,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct Cart {
+pub(crate) struct Cart {
     pub telegram_id: i64,
     pub items: Vec<CartItem>,
     pub total: f64,
 }
 
-pub fn routes() -> Router<AppState> {
+pub(crate) fn routes() -> Router<AppState> {
     Router::new()
         .route("/cart", get(get_cart).post(save_cart).delete(clear_cart))
         .route("/cart/:telegram_id", get(get_cart_by_id))

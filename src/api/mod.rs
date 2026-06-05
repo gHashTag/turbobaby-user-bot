@@ -44,7 +44,7 @@ pub(crate) fn extract_discount(body: &Value) -> Result<f64, StatusCode> {
 
 /// Validates that a URL is either empty/None or starts with an allowed scheme.
 /// Allowed: http://, https://, /, data:image/, data:video/
-pub fn validate_url(url: &Option<String>) -> Result<(), StatusCode> {
+pub(crate) fn validate_url(url: &Option<String>) -> Result<(), StatusCode> {
     if let Some(ref u) = url {
         if u.is_empty() {
             return Ok(());

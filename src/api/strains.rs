@@ -13,7 +13,7 @@ use crate::db::strains::Strain;
 use crate::AppState;
 
 #[derive(Debug, Deserialize)]
-pub struct CreateStrainRequest {
+pub(crate) struct CreateStrainRequest {
     pub name: String,
     pub category: Option<String>,
     pub thc_percent: Option<f64>,
@@ -54,7 +54,7 @@ pub struct CreateStrainRequest {
     pub display_order: Option<i32>,
 }
 
-pub fn routes() -> Router<AppState> {
+pub(crate) fn routes() -> Router<AppState> {
     Router::new()
         .route("/strains", get(get_strains).post(create_strain))
         .route(

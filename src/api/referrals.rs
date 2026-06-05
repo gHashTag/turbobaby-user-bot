@@ -15,7 +15,7 @@ use crate::AppState;
 // Route registration
 // ──────────────────────────────────────────────────────────────────
 
-pub fn routes() -> Router<AppState> {
+pub(crate) fn routes() -> Router<AppState> {
     Router::new()
         .route("/referrals/me/:telegram_id", get(get_my_referrals))
         .route("/referrals/leaderboard", get(get_leaderboard))
@@ -26,7 +26,7 @@ pub fn routes() -> Router<AppState> {
 // ──────────────────────────────────────────────────────────────────
 
 #[derive(Debug, Deserialize)]
-pub struct LeaderboardQuery {
+pub(crate) struct LeaderboardQuery {
     pub period: Option<String>,
     pub limit: Option<i64>,
 }

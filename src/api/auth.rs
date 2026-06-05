@@ -18,7 +18,7 @@ use crate::AppState;
 type HmacSha256 = Hmac<Sha256>;
 
 #[derive(Debug)]
-pub struct TelegramUser {
+pub(crate) struct TelegramUser {
     pub id: i64,
     pub first_name: Option<String>,
     pub username: Option<String>,
@@ -34,7 +34,7 @@ pub struct TelegramUser {
 /// 5. secret_key = HMAC_SHA256(key="WebAppData", msg=BOT_TOKEN)
 /// 6. expected_hash = HMAC_SHA256(key=secret_key, msg=data_check_string) in hex
 /// 7. Compare expected_hash with received `hash` (constant-time)
-pub fn validate_init_data(init_data: &str, bot_token: &str) -> Option<TelegramUser> {
+pub(crate) fn validate_init_data(init_data: &str, bot_token: &str) -> Option<TelegramUser> {
     if init_data.len() > 4096 {
         tracing::warn!("init_data too long ({} bytes)", init_data.len());
         return None;
@@ -156,7 +156,7 @@ pub fn validate_init_data(init_data: &str, bot_token: &str) -> Option<TelegramUs
 }
 
 /// Debug version that returns detailed validation info instead of just Option.
-pub fn validate_init_data_debug(
+pub(crate) fn validate_init_data_debug(
     init_data: &str,
     bot_token: &str,
 ) -> (bool, String, String, Option<TelegramUser>, Option<String>) {
@@ -323,7 +323,7 @@ pub fn validate_init_data_debug(
     (ok, data_check_string_decoded, hash, user, error)
 }
 
-pub fn generate_admin_token(password: &str, bot_token: &str) -> String {
+pub(crate) fn generate_admin_token(password: &str, bot_token: &str) -> String {
     let mut mac = match HmacSha256::new_from_slice(b"WoodyWeedBotAdmin") {
         Ok(m) => m,
         Err(_) => return String::new(),
@@ -334,7 +334,7 @@ pub fn generate_admin_token(password: &str, bot_token: &str) -> String {
     hex::encode(mac.finalize().into_bytes())
 }
 
-pub fn verify_admin_token(token: &str, bot_token: &str, expected_password: &str) -> bool {
+pub(crate) fn verify_admin_token(token: &str, bot_token: &str, expected_password: &str) -> bool {
     let expected = generate_admin_token(expected_password, bot_token);
     constant_time_eq::constant_time_eq(token.as_bytes(), expected.as_bytes())
 }
@@ -357,7 +357,7 @@ const ADMIN_AUTH_RL_WINDOW: std::time::Duration = std::time::Duration::from_secs
 const ADMIN_AUTH_RL_MAX_ATTEMPTS: usize = 10;
 const ADMIN_AUTH_RL_MAX_IPS: usize = 10_000;
 
-pub fn check_admin(headers: &HeaderMap, state: &AppState) -> Result<i64, StatusCode> {
+pub(crate) fn check_admin(headers: &HeaderMap, state: &AppState) -> Result<i64, StatusCode> {
     // Debug-level diagnostics only; admin_ids values are sensitive and never logged.
     tracing::debug!(
         "CHECK_ADMIN: bot_token_len={} admin_count={} admin_password_set={} init_data_present={} token_present={}",
@@ -423,7 +423,7 @@ pub fn check_admin(headers: &HeaderMap, state: &AppState) -> Result<i64, StatusC
 /// bucket. Returns `Ok(())` if the caller may proceed (with whatever
 /// 401/403 status fits its semantics) or `Err(429)` if the IP has
 /// crossed the threshold.
-pub fn record_failed_admin_attempt(headers: &HeaderMap) -> Result<(), StatusCode> {
+pub(crate) fn record_failed_admin_attempt(headers: &HeaderMap) -> Result<(), StatusCode> {
     let client_ip = crate::api::rate_limit::client_ip_from_headers(headers);
     let allowed = crate::api::rate_limit::check_and_record_sync(
         &ADMIN_AUTH_RATE_LIMIT,
@@ -442,7 +442,7 @@ pub fn record_failed_admin_attempt(headers: &HeaderMap) -> Result<(), StatusCode
 
 /// Verify that the Telegram user in `X-Telegram-Init-Data` owns `expected_telegram_id`.
 /// Returns the authenticated telegram_id on success.
-pub fn check_owner(
+pub(crate) fn check_owner(
     headers: &HeaderMap,
     state: &AppState,
     expected_telegram_id: i64,
@@ -478,7 +478,10 @@ pub fn check_owner(
 
 /// Returns `Ok(())` if the user is not blocked.
 /// Returns `Err(StatusCode::FORBIDDEN)` if the user is blocked or DB lookup fails.
-pub async fn check_not_blocked(state: &AppState, telegram_id: i64) -> Result<(), StatusCode> {
+pub(crate) async fn check_not_blocked(
+    state: &AppState,
+    telegram_id: i64,
+) -> Result<(), StatusCode> {
     let result = loyalty_profile::Entity::find_by_id(telegram_id)
         .one(&state.db.orm)
         .await;
@@ -503,7 +506,7 @@ pub async fn check_not_blocked(state: &AppState, telegram_id: i64) -> Result<(),
 
 /// Validates that a Telegram ID extracted from a path/query parameter is positive
 /// and within the safe integer range (i64 ≤ 2^53-1).
-pub fn validate_telegram_id_param(id: i64) -> Result<(), StatusCode> {
+pub(crate) fn validate_telegram_id_param(id: i64) -> Result<(), StatusCode> {
     if id <= 0 {
         return Err(StatusCode::BAD_REQUEST);
     }

@@ -10,7 +10,7 @@ use axum::{
 use serde::Deserialize;
 use serde_json::{json, Value};
 
-pub fn routes() -> Router<AppState> {
+pub(crate) fn routes() -> Router<AppState> {
     Router::new()
         // Test endpoint
         .route("/api/test", get(test_endpoint))
@@ -43,7 +43,7 @@ async fn test_endpoint() -> Json<Value> {
 // ── Quest Places ──────────────────────────────────────────────
 
 #[derive(Debug, Deserialize)]
-pub struct QuestPlaceRequest {
+pub(crate) struct QuestPlaceRequest {
     pub name: String,
     pub category: Option<String>,
     pub lat: f64,
@@ -220,7 +220,7 @@ async fn delete_quest_place(
 // ── Treasure Hunts ────────────────────────────────────────────
 
 #[derive(Debug, Deserialize)]
-pub struct TreasureHuntRequest {
+pub(crate) struct TreasureHuntRequest {
     pub name: String,
     pub description: Option<String>,
     pub image_url: Option<String>,
@@ -464,13 +464,13 @@ async fn delete_treasure_hunt(
 // ── Location Quest Locations ──────────────────────────────────
 
 #[derive(Debug, Deserialize)]
-pub struct QuestLocationParams {
+pub(crate) struct QuestLocationParams {
     #[allow(dead_code)]
     pub telegram_id: Option<i64>,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct QuestLocationRequest {
+pub(crate) struct QuestLocationRequest {
     pub name: String,
     pub description: Option<String>,
     pub category: Option<String>,

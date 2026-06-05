@@ -14,7 +14,7 @@ use crate::api::rate_limit::{
 };
 use crate::AppState;
 
-pub fn routes() -> Router<AppState> {
+pub(crate) fn routes() -> Router<AppState> {
     Router::new()
         .route("/upload", post(upload_file))
         .layer(DefaultBodyLimit::max(110 * 1024 * 1024))

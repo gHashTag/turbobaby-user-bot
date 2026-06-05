@@ -9,7 +9,7 @@ use serde_json::{json, Value};
 use crate::api::auth::check_admin;
 use crate::AppState;
 
-pub fn routes() -> Router<AppState> {
+pub(crate) fn routes() -> Router<AppState> {
     Router::new()
         .route("/tech-tree/nodes", get(get_tech_nodes))
         .route("/tech-tree/nodes/:id", get(get_tech_node))

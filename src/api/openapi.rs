@@ -11,7 +11,7 @@ use utoipa::OpenApi;
     ),
     tag = "loyalty"
 )]
-pub async fn get_leaderboard_doc() {}
+pub(crate) async fn get_leaderboard_doc() {}
 
 /// GET /api/loyalty/{telegram_id}
 #[utoipa::path(
@@ -27,7 +27,7 @@ pub async fn get_leaderboard_doc() {}
     ),
     tag = "loyalty"
 )]
-pub async fn get_loyalty_profile_doc() {}
+pub(crate) async fn get_loyalty_profile_doc() {}
 
 /// GET /api/sets
 #[utoipa::path(
@@ -42,7 +42,7 @@ pub async fn get_loyalty_profile_doc() {}
     ),
     tag = "catalog"
 )]
-pub async fn get_sets_doc() {}
+pub(crate) async fn get_sets_doc() {}
 
 /// GET /api/quest-places
 #[utoipa::path(
@@ -54,7 +54,7 @@ pub async fn get_sets_doc() {}
     ),
     tag = "quests"
 )]
-pub async fn get_quest_places_doc() {}
+pub(crate) async fn get_quest_places_doc() {}
 
 /// GET /api/treasure-hunts
 #[utoipa::path(
@@ -66,7 +66,7 @@ pub async fn get_quest_places_doc() {}
     ),
     tag = "quests"
 )]
-pub async fn get_treasure_hunts_doc() {}
+pub(crate) async fn get_treasure_hunts_doc() {}
 
 /// POST /api/orders
 #[utoipa::path(
@@ -83,7 +83,7 @@ pub async fn get_treasure_hunts_doc() {}
     ),
     tag = "orders"
 )]
-pub async fn create_order_doc() {}
+pub(crate) async fn create_order_doc() {}
 
 /// GET /api/admin/managers
 #[utoipa::path(
@@ -100,7 +100,7 @@ pub async fn create_order_doc() {}
     tag = "admin",
     security(("AdminKey" = []))
 )]
-pub async fn get_managers_doc() {}
+pub(crate) async fn get_managers_doc() {}
 
 /// GET /api/loyalty/tiers
 #[utoipa::path(
@@ -112,7 +112,7 @@ pub async fn get_managers_doc() {}
     ),
     tag = "loyalty"
 )]
-pub async fn get_loyalty_tiers_doc() {}
+pub(crate) async fn get_loyalty_tiers_doc() {}
 
 #[derive(OpenApi)]
 #[openapi(
@@ -148,4 +148,4 @@ pub async fn get_loyalty_tiers_doc() {}
         (url = "http://localhost:3000", description = "Local development"),
     ),
 )]
-pub struct ApiDoc;
+pub(crate) struct ApiDoc;

@@ -12,7 +12,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
-pub fn routes() -> Router<AppState> {
+pub(crate) fn routes() -> Router<AppState> {
     Router::new()
         // User plants — `POST /garden/plants` (plant_seed handler)
         // removed in cycle #169. Seeding is now an automatic
@@ -33,7 +33,7 @@ pub fn routes() -> Router<AppState> {
 // ── Request/Response Types ────────────────────────────────────────
 
 #[derive(Debug, Deserialize)]
-pub struct UserPlantsQuery {
+pub(crate) struct UserPlantsQuery {
     pub telegram_id: i64,
 }
 
@@ -43,7 +43,7 @@ pub struct UserPlantsQuery {
 // own `items` JSONB — no separate request type needed.
 
 #[derive(Debug, Serialize)]
-pub struct PlantResponse {
+pub(crate) struct PlantResponse {
     pub id: String,
     pub user_id: String,
     pub strain_id: String,
@@ -61,7 +61,7 @@ pub struct PlantResponse {
 }
 
 #[derive(Debug, Serialize)]
-pub struct RewardResponse {
+pub(crate) struct RewardResponse {
     pub id: String,
     pub plant_id: String,
     pub strain_name: String,
@@ -451,7 +451,7 @@ async fn harvest_plant(
 // ── Reward Endpoints ─────────────────────────────────────────────
 
 #[derive(Debug, Deserialize)]
-pub struct UserRewardsQuery {
+pub(crate) struct UserRewardsQuery {
     pub telegram_id: i64,
 }
 
@@ -657,7 +657,7 @@ async fn use_reward(
 // ── Config Endpoints ─────────────────────────────────────────────
 
 #[derive(Debug, Deserialize)]
-pub struct ConfigUpdateRequest {
+pub(crate) struct ConfigUpdateRequest {
     pub is_enabled: Option<bool>,
     pub reward_discount_percent: Option<u32>,
     pub reward_bonus_points: Option<u32>,

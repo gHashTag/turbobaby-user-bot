@@ -11,14 +11,14 @@ use crate::api::auth::{check_admin, check_not_blocked, validate_telegram_id_para
 use crate::AppState;
 
 #[derive(Debug, Deserialize)]
-pub struct AddBonusRequest {
+pub(crate) struct AddBonusRequest {
     pub amount: f64,
     pub tx_type: String,
     pub description: Option<String>,
     pub related_order_id: Option<String>,
 }
 
-pub fn routes() -> Router<AppState> {
+pub(crate) fn routes() -> Router<AppState> {
     Router::new()
         .route("/loyalty/tiers", get(get_loyalty_tiers))
         .route("/loyalty/:telegram_id", get(get_profile))

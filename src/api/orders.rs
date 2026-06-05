@@ -47,7 +47,7 @@ const ANON_ORDER_RL_MAX_ATTEMPTS: usize = 3;
 const ANON_ORDER_RL_MAX_IPS: usize = 10_000;
 
 #[derive(Debug, Deserialize)]
-pub struct CreateOrderRequest {
+pub(crate) struct CreateOrderRequest {
     pub telegram_id: Option<i64>,
     pub customer_name: Option<String>,
     pub customer_phone: Option<String>,
@@ -60,13 +60,13 @@ pub struct CreateOrderRequest {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct UpdateOrderStatusRequest {
+pub(crate) struct UpdateOrderStatusRequest {
     pub status: String,
     #[allow(dead_code)]
     pub admin_telegram_id: Option<i64>,
 }
 
-pub fn routes() -> Router<AppState> {
+pub(crate) fn routes() -> Router<AppState> {
     Router::new()
         .route("/orders", post(create_order))
         .route("/orders", get(get_orders))
@@ -157,7 +157,7 @@ fn validate_create_order(req: &CreateOrderRequest) -> Result<f64, StatusCode> {
 /// control bytes, slashes, quotes, and anything that could smuggle SQL or
 /// header-injection. Defence is shallow but cheap, and a malformed key is
 /// almost always a buggy client rather than a legitimate one.
-pub fn is_valid_idempotency_key(k: &str) -> bool {
+pub(crate) fn is_valid_idempotency_key(k: &str) -> bool {
     !k.is_empty()
         && k.len() <= 100
         && k.chars()
@@ -174,7 +174,7 @@ pub fn is_valid_idempotency_key(k: &str) -> bool {
 /// case without paying the cost of building a full mixed-cart fixture.
 #[allow(dead_code)]
 #[derive(Debug, PartialEq)]
-pub enum SubtotalCheck {
+pub(crate) enum SubtotalCheck {
     /// Server-computed strain portion matches the client-claimed subtotal
     /// within tolerance (strain-only orders) or fits within it (mixed orders).
     Ok,
@@ -204,7 +204,7 @@ pub enum SubtotalCheck {
 ///   separate cycle; until then, trust the client for those.
 /// * Unknown strain id: short-circuit with `UnknownStrain`.
 #[allow(dead_code)]
-pub fn check_strain_subtotal(
+pub(crate) fn check_strain_subtotal(
     items: &[OrderItem],
     strain_map: &HashMap<&str, &Strain>,
     claimed_subtotal: f64,
@@ -262,7 +262,7 @@ pub fn check_strain_subtotal(
 /// Catalog lookups for `check_full_subtotal` (cycle #58 / C). Built once per
 /// order from the four catalog SELECTs and handed in by reference.
 #[derive(Debug, Default)]
-pub struct PriceCatalog<'a> {
+pub(crate) struct PriceCatalog<'a> {
     pub strains: HashMap<&'a str, &'a Strain>,
     /// `id → (price, is_available)`.
     pub accessories: HashMap<&'a str, (f64, bool)>,
@@ -276,7 +276,7 @@ pub struct PriceCatalog<'a> {
 /// Result of the full server-side price-authority check (cycle #58 / C).
 /// Strict equality across all four catalogs combined.
 #[derive(Debug, PartialEq)]
-pub enum FullSubtotalCheck {
+pub(crate) enum FullSubtotalCheck {
     Ok,
     /// `catalog` is one of `"strains" | "accessories" | "tea_products" | "sets"`
     /// so audit logs can pinpoint which catalog the missing id belongs to.
@@ -313,7 +313,7 @@ pub enum FullSubtotalCheck {
 ///
 /// Strict equality required: a mixed order with an unauthorised price on any
 /// line item fails the check even if other lines compensate.
-pub fn check_full_subtotal(
+pub(crate) fn check_full_subtotal(
     items: &[OrderItem],
     catalog: &PriceCatalog<'_>,
     claimed_subtotal: f64,

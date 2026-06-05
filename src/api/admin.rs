@@ -45,7 +45,7 @@ struct ValidateInitDataResponse {
     error: Option<String>,
 }
 
-pub fn routes() -> Router<AppState> {
+pub(crate) fn routes() -> Router<AppState> {
     Router::new()
         .route("/admin/users", get(get_all_users))
         .route("/admin/stats", get(get_stats))

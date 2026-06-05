@@ -3,7 +3,7 @@ use axum::{extract::State, http::StatusCode, routing::get, Json, Router};
 use chrono::Timelike;
 use serde_json::{json, Value};
 
-pub fn routes() -> Router<AppState> {
+pub(crate) fn routes() -> Router<AppState> {
     Router::new().route("/happy-hour", get(get_happy_hour))
 }
 
