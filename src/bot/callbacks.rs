@@ -1,3 +1,6 @@
+// Bin-vs-lib asymmetry: see src/ai.rs's note.
+#![allow(dead_code)]
+
 use std::sync::Arc;
 use teloxide::{
     prelude::*,
@@ -17,23 +20,23 @@ use crate::{
 
 use crate::util::html_escape;
 
-pub fn is_callback_data_valid(data: &str) -> bool {
+pub(crate) fn is_callback_data_valid(data: &str) -> bool {
     data.len() <= 200
 }
 
-pub fn parse_pagination_index(data: &str) -> Option<usize> {
+pub(crate) fn parse_pagination_index(data: &str) -> Option<usize> {
     data.split('_').next_back().and_then(|s| s.parse().ok())
 }
 
-pub fn can_confirm_order(status: &str) -> bool {
+pub(crate) fn can_confirm_order(status: &str) -> bool {
     status == "pending" || status == "confirmed"
 }
 
-pub fn should_refund_bonus(status: &str) -> bool {
+pub(crate) fn should_refund_bonus(status: &str) -> bool {
     status != "rejected" && status != "completed"
 }
 
-pub async fn handle_callback(
+pub(crate) async fn handle_callback(
     bot: Bot,
     q: CallbackQuery,
     db: Arc<Database>,

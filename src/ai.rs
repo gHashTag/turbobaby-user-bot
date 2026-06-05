@@ -1,3 +1,12 @@
+// Structural bin-vs-lib asymmetry: this module's items are reachable
+// only from main.rs's `AiClient::new(...)` call. When the lib target
+// compiles under `--features backend`, it sees `pub mod ai;` but never
+// constructs an AiClient — so `pub(crate)` visibility tightening would
+// trip the dead_code lint lib-side. This blanket allow is the price of
+// keeping the API surface tight while supporting both compilation
+// units. Item-level attributes would be 7+ duplicates.
+#![allow(dead_code)]
+
 use anyhow::Result;
 use rand::Rng;
 use reqwest::Client;
@@ -113,14 +122,14 @@ pub(crate) fn sanitize_user_text(text: &str) -> String {
     text.to_string()
 }
 
-pub struct AiClient {
+pub(crate) struct AiClient {
     client: Client,
     grok_api_key: String,
     glm_api_key: String,
 }
 
 impl AiClient {
-    pub fn new(grok_api_key: String, glm_api_key: String) -> Self {
+    pub(crate) fn new(grok_api_key: String, glm_api_key: String) -> Self {
         Self {
             client: Client::builder()
                 .timeout(std::time::Duration::from_secs(30))
@@ -132,7 +141,7 @@ impl AiClient {
     }
 
     /// Ask Grok (primary) with GLM fallback
-    pub async fn ask_grok(
+    pub(crate) async fn ask_grok(
         &self,
         prompt: &str,
         persona: &str,

@@ -1,3 +1,6 @@
+// Bin-vs-lib asymmetry: see src/ai.rs's note.
+#![allow(dead_code)]
+
 use std::sync::Arc;
 use teloxide::{prelude::*, types::InlineKeyboardMarkup};
 
@@ -17,7 +20,7 @@ fn is_web_app_data_too_large(len: usize, max: usize) -> bool {
     len > max
 }
 
-pub async fn handle_text(
+pub(crate) async fn handle_text(
     bot: Bot,
     msg: Message,
     db: Arc<Database>,
@@ -111,7 +114,7 @@ pub async fn handle_text(
     Ok(())
 }
 
-pub async fn handle_web_app_data(
+pub(crate) async fn handle_web_app_data(
     _bot: Bot,
     msg: Message,
     db: Arc<Database>,

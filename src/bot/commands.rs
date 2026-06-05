@@ -1,3 +1,6 @@
+// Bin-vs-lib asymmetry: see src/ai.rs's note.
+#![allow(dead_code)]
+
 use std::sync::Arc;
 use teloxide::{
     prelude::*,
@@ -19,7 +22,7 @@ use crate::{
 
 #[derive(BotCommands, Clone)]
 #[command(rename_rule = "lowercase", description = "Woody Bot commands:")]
-pub enum Command {
+pub(crate) enum Command {
     #[command(description = "Start")]
     Start(String),
     #[command(description = "Menu")]
@@ -54,7 +57,7 @@ pub enum Command {
 
 use crate::util::html_escape;
 
-pub fn build_app_url(base_url: &str, lang: &str, page: Option<&str>) -> String {
+pub(crate) fn build_app_url(base_url: &str, lang: &str, page: Option<&str>) -> String {
     let mut url = format!("{}?lang={}", base_url, lang);
     if let Some(p) = page {
         url.push_str(&format!("&page={}", p));
@@ -77,7 +80,7 @@ pub(crate) fn calculate_discounted_price(price_per_gram: f64, discount_percent: 
         .round()
 }
 
-pub async fn handle_command(
+pub(crate) async fn handle_command(
     bot: Bot,
     msg: Message,
     cmd: Command,

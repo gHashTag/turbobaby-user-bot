@@ -1,3 +1,8 @@
+// Bin-vs-lib asymmetry: see src/ai.rs's note. Bot handlers reach
+// main.rs's bot::create_handler() only via the bin's tokio runtime;
+// the lib never instantiates them.
+#![allow(dead_code)]
+
 pub mod callbacks;
 pub mod commands;
 pub mod handlers;
@@ -17,14 +22,15 @@ use std::time::Duration;
 /// original behaviour exactly. The library's `max_keys` eviction
 /// replaces the manual `retain` 5-minute sweep; the practical
 /// memory bound is comparable (we cap at 10_000 active users).
-pub static BOT_AI_RATE_LIMIT: std::sync::LazyLock<crate::api::rate_limit::SyncSlidingWindowStore> =
-    std::sync::LazyLock::new(crate::api::rate_limit::new_sync_store);
-pub const AI_COOLDOWN: Duration = Duration::from_secs(5);
+pub(crate) static BOT_AI_RATE_LIMIT: std::sync::LazyLock<
+    crate::api::rate_limit::SyncSlidingWindowStore,
+> = std::sync::LazyLock::new(crate::api::rate_limit::new_sync_store);
+pub(crate) const AI_COOLDOWN: Duration = Duration::from_secs(5);
 const BOT_AI_RL_MAX_KEYS: usize = 10_000;
 
 /// Returns `true` if the user is allowed to make an AI request now,
 /// `false` if they hit the cooldown. Records the attempt on `true`.
-pub fn ai_rate_limit_allow(user_id: i64) -> bool {
+pub(crate) fn ai_rate_limit_allow(user_id: i64) -> bool {
     crate::api::rate_limit::check_and_record_sync(
         &BOT_AI_RATE_LIMIT,
         &user_id.to_string(),
@@ -143,7 +149,7 @@ pub(crate) async fn tg_fire_and_forget<T, E: std::fmt::Display>(
     }
 }
 
-pub fn create_handler() -> UpdateHandler<teloxide::RequestError> {
+pub(crate) fn create_handler() -> UpdateHandler<teloxide::RequestError> {
     dptree::entry()
         .branch(
             Update::filter_message()
