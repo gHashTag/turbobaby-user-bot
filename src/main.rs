@@ -1442,5 +1442,447 @@ mod module_wiring_tests {
     }
 }
 
+/// Catches the exact prod-incident class shipped in commit c8c9546:
+/// `src/api/catalog.rs::get_sets` referenced `tea_sets.image_url` in a
+/// `SELECT` query, but no migration ever added that column — every
+/// public menu page load died with `column tea_sets.image_url does not
+/// exist` → 500. The compiler can't see schema drift; this test does
+/// the cross-check at build time.
+///
+/// Walks `migrations/*.sql` to build `{table → columns}` ground truth
+/// from `CREATE TABLE` bodies and `ALTER TABLE ADD COLUMN` statements,
+/// then scans `src/**/*.rs` for simple-shape `"SELECT c1, c2, ..., cn
+/// FROM <table> ..."` string literals and asserts each column appears
+/// in the table's schema. Complex SQL (multi-line, joins,
+/// subqueries) is skipped — the parser only handles the
+/// single-line-FROM shape that covers the failure mode we just shipped.
+#[cfg(test)]
+mod schema_drift_tests {
+    use std::collections::{HashMap, HashSet};
+    use std::path::{Path, PathBuf};
+
+    /// Column tokens that legitimately appear in SELECT lists but
+    /// aren't real schema columns (computed aliases, RETURNING-style
+    /// expressions, subquery shapes). Document the reason inline.
+    const ALLOWED_COMPUTED_COLUMNS: &[&str] = &[
+        // Aggregate aliases — these are output names, not source
+        // columns. Most appear inside `COUNT(*) AS X` and the parser
+        // attributes the alias to the FROM table by mistake.
+        "count", "total",
+        // Computed/JSON expressions that look like identifiers to the
+        // tokenizer but aren't column names.
+        "now",
+    ];
+
+    fn collect_files_with_ext(root: &Path, ext: &str, out: &mut Vec<PathBuf>) {
+        let entries = match std::fs::read_dir(root) {
+            Ok(e) => e,
+            Err(_) => return,
+        };
+        for entry in entries.filter_map(|e| e.ok()) {
+            let path = entry.path();
+            if path.is_dir() {
+                collect_files_with_ext(&path, ext, out);
+            } else if path.extension().and_then(|s| s.to_str()) == Some(ext) {
+                out.push(path);
+            }
+        }
+    }
+
+    /// Identifier ends at any byte that is not `[A-Za-z0-9_]`.
+    fn read_ident(bytes: &[u8], start: usize) -> &[u8] {
+        let mut end = start;
+        while end < bytes.len() && (bytes[end].is_ascii_alphanumeric() || bytes[end] == b'_') {
+            end += 1;
+        }
+        &bytes[start..end]
+    }
+
+    /// Skip ASCII whitespace and return next non-whitespace byte index.
+    fn skip_ws(bytes: &[u8], start: usize) -> usize {
+        let mut i = start;
+        while i < bytes.len() && bytes[i].is_ascii_whitespace() {
+            i += 1;
+        }
+        i
+    }
+
+    /// Parse migrations into `{table → columns}`. Recognises:
+    ///   - `CREATE TABLE [IF NOT EXISTS] name ( col TYPE [, ...] );`
+    ///   - `ALTER TABLE name ADD COLUMN [IF NOT EXISTS] col TYPE`
+    ///
+    /// Tolerant: skips column-defs whose first token isn't an
+    /// identifier (e.g. `PRIMARY KEY (...)`, `CONSTRAINT ...`),
+    /// handles the parenthesis nesting inside `CHECK (...)` clauses
+    /// by counting depth.
+    fn parse_migration_schema() -> HashMap<String, HashSet<String>> {
+        let manifest = env!("CARGO_MANIFEST_DIR");
+        let migrations_dir = Path::new(manifest).join("migrations");
+        let mut files = Vec::new();
+        collect_files_with_ext(&migrations_dir, "sql", &mut files);
+        files.sort();
+
+        let mut schema: HashMap<String, HashSet<String>> = HashMap::new();
+
+        for f in &files {
+            let src = match std::fs::read_to_string(f) {
+                Ok(s) => s,
+                Err(_) => continue,
+            };
+            // Strip `-- line comments` so they don't fool the tokenizer.
+            let stripped: String = src
+                .lines()
+                .map(|line| line.split("--").next().unwrap_or(""))
+                .collect::<Vec<_>>()
+                .join("\n");
+            let upper = stripped.to_ascii_uppercase();
+            let bytes = stripped.as_bytes();
+            let upper_bytes = upper.as_bytes();
+            let mut i = 0;
+            while i < bytes.len() {
+                if upper_bytes[i..].starts_with(b"CREATE TABLE") {
+                    let mut j = i + b"CREATE TABLE".len();
+                    j = skip_ws(bytes, j);
+                    if upper_bytes[j..].starts_with(b"IF NOT EXISTS") {
+                        j += b"IF NOT EXISTS".len();
+                        j = skip_ws(bytes, j);
+                    }
+                    let name = read_ident(bytes, j);
+                    if name.is_empty() {
+                        i = j + 1;
+                        continue;
+                    }
+                    let table = String::from_utf8_lossy(name).to_lowercase();
+                    j += name.len();
+                    j = skip_ws(bytes, j);
+                    if j >= bytes.len() || bytes[j] != b'(' {
+                        i = j + 1;
+                        continue;
+                    }
+                    // Walk the `(...)` body counting parens; split on
+                    // top-level commas only.
+                    let body_start = j + 1;
+                    let mut depth = 1;
+                    let mut k = body_start;
+                    while k < bytes.len() && depth > 0 {
+                        match bytes[k] {
+                            b'(' => depth += 1,
+                            b')' => depth -= 1,
+                            _ => {}
+                        }
+                        if depth == 0 {
+                            break;
+                        }
+                        k += 1;
+                    }
+                    let body = &bytes[body_start..k];
+                    let mut p = 0;
+                    let mut d = 0;
+                    let mut chunk_start = 0;
+                    while p <= body.len() {
+                        let at_end = p == body.len();
+                        let c = if at_end { b',' } else { body[p] };
+                        if !at_end {
+                            match c {
+                                b'(' => d += 1,
+                                b')' => d -= 1,
+                                _ => {}
+                            }
+                        }
+                        if (c == b',' && d == 0) || at_end {
+                            let chunk = &body[chunk_start..p];
+                            let trimmed_start = chunk
+                                .iter()
+                                .position(|b| !b.is_ascii_whitespace())
+                                .unwrap_or(chunk.len());
+                            let col = read_ident(chunk, trimmed_start);
+                            if !col.is_empty() {
+                                let col_str = String::from_utf8_lossy(col).to_lowercase();
+                                // Skip non-column lines like
+                                // PRIMARY/FOREIGN/CONSTRAINT/UNIQUE/CHECK.
+                                let kw = matches!(
+                                    col_str.as_str(),
+                                    "primary"
+                                        | "foreign"
+                                        | "constraint"
+                                        | "unique"
+                                        | "check"
+                                        | "exclude"
+                                );
+                                if !kw {
+                                    schema.entry(table.clone()).or_default().insert(col_str);
+                                }
+                            }
+                            chunk_start = p + 1;
+                        }
+                        p += 1;
+                    }
+                    i = k + 1;
+                    continue;
+                }
+                if upper_bytes[i..].starts_with(b"ALTER TABLE") {
+                    let mut j = i + b"ALTER TABLE".len();
+                    j = skip_ws(bytes, j);
+                    let name = read_ident(bytes, j);
+                    if name.is_empty() {
+                        i = j + 1;
+                        continue;
+                    }
+                    let table = String::from_utf8_lossy(name).to_lowercase();
+                    j += name.len();
+                    j = skip_ws(bytes, j);
+                    if upper_bytes[j..].starts_with(b"ADD COLUMN") {
+                        j += b"ADD COLUMN".len();
+                        j = skip_ws(bytes, j);
+                        if upper_bytes[j..].starts_with(b"IF NOT EXISTS") {
+                            j += b"IF NOT EXISTS".len();
+                            j = skip_ws(bytes, j);
+                        }
+                        let col = read_ident(bytes, j);
+                        if !col.is_empty() {
+                            let col_str = String::from_utf8_lossy(col).to_lowercase();
+                            schema.entry(table).or_default().insert(col_str);
+                        }
+                        i = j + 1;
+                        continue;
+                    }
+                }
+                i += 1;
+            }
+        }
+        schema
+    }
+
+    /// Normalise a SELECT-list token to the column name it
+    /// ultimately reads from the FROM table.
+    ///
+    /// `total_price::float8 AS total_price` → `total_price`
+    /// `COALESCE(accessory_ids, NULL::text[]) AS accessory_ids` → `accessory_ids`
+    /// `MAX(id)` → `id`
+    /// `t.col` → `col`
+    /// `*` → empty (skipped)
+    fn normalise_column(raw: &str) -> Option<String> {
+        let s = raw.trim();
+        if s.is_empty() || s == "*" {
+            return None;
+        }
+        // Strip everything after ` AS ` (case-insensitive).
+        let upper = s.to_ascii_uppercase();
+        let before_as = match upper.find(" AS ") {
+            Some(i) => &s[..i],
+            None => s,
+        };
+        let s = before_as.trim();
+        // If wrapped in a function call like FOO(arg, ...), recurse
+        // into the first arg only.
+        if let Some(open) = s.find('(') {
+            // Use the part inside the outermost parens, up to the first
+            // top-level comma.
+            let after = &s[open + 1..];
+            let mut depth = 1;
+            let mut end = 0;
+            for (i, b) in after.bytes().enumerate() {
+                match b {
+                    b'(' => depth += 1,
+                    b')' => {
+                        depth -= 1;
+                        if depth == 0 {
+                            end = i;
+                            break;
+                        }
+                    }
+                    b',' if depth == 1 => {
+                        end = i;
+                        break;
+                    }
+                    _ => {}
+                }
+            }
+            if end > 0 {
+                return normalise_column(&after[..end]);
+            }
+            return None;
+        }
+        // Strip `::type` cast suffix.
+        let s = match s.find("::") {
+            Some(i) => &s[..i],
+            None => s,
+        };
+        let s = s.trim();
+        // Strip `table.` prefix.
+        let s = match s.rfind('.') {
+            Some(i) => &s[i + 1..],
+            None => s,
+        };
+        // Must be a bare identifier now. Column names can't start
+        // with a digit, so this also filters out `SELECT 1 FROM ...`
+        // existence checks.
+        let first = s.chars().next()?;
+        if !(first.is_ascii_alphabetic() || first == '_') {
+            return None;
+        }
+        if !s.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+            return None;
+        }
+        Some(s.to_lowercase())
+    }
+
+    /// Find single-line `"SELECT c1, c2, ... FROM <table> ..."` literals
+    /// in a Rust source file. Returns `(table, [cols])` per occurrence.
+    fn find_select_sites_in(src: &str) -> Vec<(String, Vec<String>)> {
+        let mut sites = Vec::new();
+        let needle = "\"SELECT ";
+        let bytes = src.as_bytes();
+        let mut i = 0;
+        while i + needle.len() < bytes.len() {
+            if &bytes[i..i + needle.len()] == needle.as_bytes() {
+                // Find closing quote on the same logical line.
+                let after = &bytes[i + 1..];
+                let end_rel = after.iter().position(|&b| b == b'"' || b == b'\n');
+                if let Some(off) = end_rel {
+                    if after[off] == b'"' {
+                        let sql_bytes = &after[..off];
+                        let sql = String::from_utf8_lossy(sql_bytes).to_string();
+                        if let Some((table, cols)) = parse_select(&sql) {
+                            sites.push((table, cols));
+                        }
+                        i += 1 + off + 1;
+                        continue;
+                    }
+                }
+                i += needle.len();
+                continue;
+            }
+            i += 1;
+        }
+        sites
+    }
+
+    /// Parse a SQL string of shape `SELECT <cols> FROM <table> [...]`.
+    /// Returns `None` for any shape we don't fully understand (multi-FROM,
+    /// CTEs, subqueries in SELECT list).
+    fn parse_select(sql: &str) -> Option<(String, Vec<String>)> {
+        let upper = sql.to_ascii_uppercase();
+        if !upper.starts_with("SELECT ") {
+            return None;
+        }
+        let after_select = &sql["SELECT ".len()..];
+        let upper_after = &upper["SELECT ".len()..];
+        // Find ` FROM ` at top level (depth 0). Bail on subselects.
+        let mut depth = 0i32;
+        let mut from_at = None;
+        let bytes = upper_after.as_bytes();
+        let mut i = 0;
+        while i < bytes.len() {
+            match bytes[i] {
+                b'(' => depth += 1,
+                b')' => depth -= 1,
+                _ => {}
+            }
+            if depth == 0 && bytes[i..].starts_with(b" FROM ") {
+                from_at = Some(i);
+                break;
+            }
+            i += 1;
+        }
+        let from_at = from_at?;
+        let cols_str = &after_select[..from_at];
+        let after_from = &after_select[from_at + " FROM ".len()..];
+        // Table name is the first identifier after FROM.
+        let tb_bytes = after_from.as_bytes();
+        let mut j = 0;
+        while j < tb_bytes.len() && (tb_bytes[j].is_ascii_alphanumeric() || tb_bytes[j] == b'_') {
+            j += 1;
+        }
+        if j == 0 {
+            return None;
+        }
+        let table = after_from[..j].to_lowercase();
+        // Bail if there's a JOIN after the table — multi-table queries
+        // are out of scope for this simple parser.
+        let upper_rest = &upper_after[from_at + " FROM ".len() + j..].to_ascii_uppercase();
+        if upper_rest.contains(" JOIN ") {
+            return None;
+        }
+        // Split cols_str by top-level commas.
+        let mut cols = Vec::new();
+        let cb = cols_str.as_bytes();
+        let mut d = 0i32;
+        let mut start = 0;
+        for k in 0..=cb.len() {
+            let at_end = k == cb.len();
+            let c = if at_end { b',' } else { cb[k] };
+            if !at_end {
+                match c {
+                    b'(' => d += 1,
+                    b')' => d -= 1,
+                    _ => {}
+                }
+            }
+            if (c == b',' && d == 0) || at_end {
+                let chunk = &cols_str[start..k];
+                if let Some(col) = normalise_column(chunk) {
+                    cols.push(col);
+                }
+                start = k + 1;
+            }
+        }
+        Some((table, cols))
+    }
+
+    #[test]
+    fn every_selected_column_is_in_the_migration_schema() {
+        let schema = parse_migration_schema();
+        assert!(
+            !schema.is_empty(),
+            "parsed empty migration schema — parser is broken"
+        );
+
+        let manifest = env!("CARGO_MANIFEST_DIR");
+        let src_root = Path::new(manifest).join("src");
+        let mut rs_files = Vec::new();
+        collect_files_with_ext(&src_root, "rs", &mut rs_files);
+
+        let allowed: HashSet<&str> = ALLOWED_COMPUTED_COLUMNS.iter().copied().collect();
+        let mut missing: Vec<String> = Vec::new();
+        let mut sites_seen = 0usize;
+
+        for file in &rs_files {
+            let src = match std::fs::read_to_string(file) {
+                Ok(s) => s,
+                Err(_) => continue,
+            };
+            for (table, cols) in find_select_sites_in(&src) {
+                sites_seen += 1;
+                let table_schema = match schema.get(&table) {
+                    Some(s) => s,
+                    None => continue,
+                };
+                for col in &cols {
+                    if !table_schema.contains(col) && !allowed.contains(col.as_str()) {
+                        missing.push(format!(
+                            "{}: SELECT {col} FROM {table} — column not in migration schema",
+                            file.display()
+                        ));
+                    }
+                }
+            }
+        }
+
+        assert!(
+            sites_seen > 0,
+            "no SELECT sites parsed — the SQL-scan side is broken"
+        );
+        assert!(
+            missing.is_empty(),
+            "Columns SELECTed from a table but not declared in any migration ({}): {:?}\n\
+             Either add a migration creating the column, or list it in \
+             ALLOWED_COMPUTED_COLUMNS with a rationale.",
+            missing.len(),
+            missing
+        );
+    }
+}
+
 // WASM entry point is now in src/lib.rs via #[wasm_bindgen(start)]
 // This file is only used for the native backend (Axum server)
