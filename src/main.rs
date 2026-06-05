@@ -1830,6 +1830,257 @@ mod schema_drift_tests {
         Some((table, cols))
     }
 
+    /// Find single-line `"INSERT INTO <table> (c1, c2, ...) VALUES ..."`
+    /// literals. Returns `(table, [cols])` per occurrence.
+    fn find_insert_sites_in(src: &str) -> Vec<(String, Vec<String>)> {
+        let mut sites = Vec::new();
+        let needle = "\"INSERT INTO ";
+        let bytes = src.as_bytes();
+        let mut i = 0;
+        while i + needle.len() < bytes.len() {
+            if &bytes[i..i + needle.len()] == needle.as_bytes() {
+                let after = &bytes[i + 1..];
+                let end_rel = after.iter().position(|&b| b == b'"' || b == b'\n');
+                if let Some(off) = end_rel {
+                    if after[off] == b'"' {
+                        let sql = String::from_utf8_lossy(&after[..off]).to_string();
+                        if let Some((table, cols)) = parse_insert(&sql) {
+                            sites.push((table, cols));
+                        }
+                        i += 1 + off + 1;
+                        continue;
+                    }
+                }
+                i += needle.len();
+                continue;
+            }
+            i += 1;
+        }
+        sites
+    }
+
+    /// Find single-line `"UPDATE <table> SET c1=v, c2=v, ... [WHERE ...]"`
+    /// literals. Returns `(table, [cols])` per occurrence.
+    fn find_update_sites_in(src: &str) -> Vec<(String, Vec<String>)> {
+        let mut sites = Vec::new();
+        let needle = "\"UPDATE ";
+        let bytes = src.as_bytes();
+        let mut i = 0;
+        while i + needle.len() < bytes.len() {
+            if &bytes[i..i + needle.len()] == needle.as_bytes() {
+                let after = &bytes[i + 1..];
+                let end_rel = after.iter().position(|&b| b == b'"' || b == b'\n');
+                if let Some(off) = end_rel {
+                    if after[off] == b'"' {
+                        let sql = String::from_utf8_lossy(&after[..off]).to_string();
+                        if let Some((table, cols)) = parse_update(&sql) {
+                            sites.push((table, cols));
+                        }
+                        i += 1 + off + 1;
+                        continue;
+                    }
+                }
+                i += needle.len();
+                continue;
+            }
+            i += 1;
+        }
+        sites
+    }
+
+    /// Parse `INSERT INTO <table> (c1, c2, ...) VALUES (...)`.
+    /// Returns `None` for any shape we don't fully understand.
+    fn parse_insert(sql: &str) -> Option<(String, Vec<String>)> {
+        if !sql.to_ascii_uppercase().starts_with("INSERT INTO ") {
+            return None;
+        }
+        let after = &sql["INSERT INTO ".len()..];
+        let table_end = after
+            .bytes()
+            .position(|b| !(b.is_ascii_alphanumeric() || b == b'_'))?;
+        if table_end == 0 {
+            return None;
+        }
+        let table = after[..table_end].to_lowercase();
+        let rest = after[table_end..].trim_start();
+        if !rest.starts_with('(') {
+            return None;
+        }
+        let cols_body = &rest[1..];
+        // Find matching ')' counting depth (the column list can't
+        // contain nested parens in practice, but be safe).
+        let mut depth = 1i32;
+        let mut close = 0;
+        for (k, b) in cols_body.bytes().enumerate() {
+            match b {
+                b'(' => depth += 1,
+                b')' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        close = k;
+                        break;
+                    }
+                }
+                _ => {}
+            }
+        }
+        if close == 0 {
+            return None;
+        }
+        let cols_str = &cols_body[..close];
+        let cols: Vec<String> = cols_str
+            .split(',')
+            .filter_map(|c| normalise_column(c.trim()))
+            .collect();
+        Some((table, cols))
+    }
+
+    /// Parse `UPDATE <table> SET c1 = v1, c2 = v2, ... [WHERE ...]`.
+    /// Returns `None` for any shape we don't fully understand.
+    fn parse_update(sql: &str) -> Option<(String, Vec<String>)> {
+        let upper = sql.to_ascii_uppercase();
+        if !upper.starts_with("UPDATE ") {
+            return None;
+        }
+        let after = &sql["UPDATE ".len()..];
+        let table_end = after
+            .bytes()
+            .position(|b| !(b.is_ascii_alphanumeric() || b == b'_'))?;
+        if table_end == 0 {
+            return None;
+        }
+        let table = after[..table_end].to_lowercase();
+        let rest = after[table_end..].trim_start();
+        let upper_rest = rest.to_ascii_uppercase();
+        if !upper_rest.starts_with("SET ") {
+            return None;
+        }
+        let set_clause = &rest["SET ".len()..];
+        // End the SET clause at ` WHERE ` / ` RETURNING ` / end-of-string.
+        let upper_set = set_clause.to_ascii_uppercase();
+        let mut set_end = set_clause.len();
+        for kw in [" WHERE ", " RETURNING "] {
+            if let Some(p) = upper_set.find(kw) {
+                if p < set_end {
+                    set_end = p;
+                }
+            }
+        }
+        let set_body = &set_clause[..set_end];
+        // Split top-level comma; for each "col = val" chunk grab
+        // the column. Parens-depth-aware to survive `col = func(a, b)`.
+        let mut cols = Vec::new();
+        let bytes = set_body.as_bytes();
+        let mut depth = 0i32;
+        let mut chunk_start = 0;
+        let mut i2 = 0;
+        while i2 <= bytes.len() {
+            let at_end = i2 == bytes.len();
+            let c = if at_end { b',' } else { bytes[i2] };
+            if !at_end {
+                match c {
+                    b'(' => depth += 1,
+                    b')' => depth -= 1,
+                    _ => {}
+                }
+            }
+            if (c == b',' && depth == 0) || at_end {
+                let chunk = &set_body[chunk_start..i2];
+                if let Some(eq) = chunk.find('=') {
+                    let col_str = chunk[..eq].trim();
+                    if let Some(col) = normalise_column(col_str) {
+                        cols.push(col);
+                    }
+                }
+                chunk_start = i2 + 1;
+            }
+            i2 += 1;
+        }
+        Some((table, cols))
+    }
+
+    #[test]
+    fn every_inserted_column_is_in_the_migration_schema() {
+        let schema = parse_migration_schema();
+        assert!(!schema.is_empty(), "parsed empty migration schema");
+        let manifest = env!("CARGO_MANIFEST_DIR");
+        let src_root = Path::new(manifest).join("src");
+        let mut rs_files = Vec::new();
+        collect_files_with_ext(&src_root, "rs", &mut rs_files);
+        let allowed: HashSet<&str> = ALLOWED_COMPUTED_COLUMNS.iter().copied().collect();
+        let mut missing: Vec<String> = Vec::new();
+        let mut sites_seen = 0usize;
+        for file in &rs_files {
+            let src = match std::fs::read_to_string(file) {
+                Ok(s) => s,
+                Err(_) => continue,
+            };
+            for (table, cols) in find_insert_sites_in(&src) {
+                sites_seen += 1;
+                let table_schema = match schema.get(&table) {
+                    Some(s) => s,
+                    None => continue,
+                };
+                for col in &cols {
+                    if !table_schema.contains(col) && !allowed.contains(col.as_str()) {
+                        missing.push(format!(
+                            "{}: INSERT INTO {table} ({col}) — column not in migration schema",
+                            file.display()
+                        ));
+                    }
+                }
+            }
+        }
+        assert!(sites_seen > 0, "no INSERT sites parsed");
+        assert!(
+            missing.is_empty(),
+            "Columns INSERTed into a table but not declared in any migration ({}): {:?}",
+            missing.len(),
+            missing
+        );
+    }
+
+    #[test]
+    fn every_updated_column_is_in_the_migration_schema() {
+        let schema = parse_migration_schema();
+        assert!(!schema.is_empty(), "parsed empty migration schema");
+        let manifest = env!("CARGO_MANIFEST_DIR");
+        let src_root = Path::new(manifest).join("src");
+        let mut rs_files = Vec::new();
+        collect_files_with_ext(&src_root, "rs", &mut rs_files);
+        let allowed: HashSet<&str> = ALLOWED_COMPUTED_COLUMNS.iter().copied().collect();
+        let mut missing: Vec<String> = Vec::new();
+        let mut sites_seen = 0usize;
+        for file in &rs_files {
+            let src = match std::fs::read_to_string(file) {
+                Ok(s) => s,
+                Err(_) => continue,
+            };
+            for (table, cols) in find_update_sites_in(&src) {
+                sites_seen += 1;
+                let table_schema = match schema.get(&table) {
+                    Some(s) => s,
+                    None => continue,
+                };
+                for col in &cols {
+                    if !table_schema.contains(col) && !allowed.contains(col.as_str()) {
+                        missing.push(format!(
+                            "{}: UPDATE {table} SET {col}=... — column not in migration schema",
+                            file.display()
+                        ));
+                    }
+                }
+            }
+        }
+        assert!(sites_seen > 0, "no UPDATE sites parsed");
+        assert!(
+            missing.is_empty(),
+            "Columns UPDATEd in a table but not declared in any migration ({}): {:?}",
+            missing.len(),
+            missing
+        );
+    }
+
     #[test]
     fn every_selected_column_is_in_the_migration_schema() {
         let schema = parse_migration_schema();
