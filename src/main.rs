@@ -2205,5 +2205,105 @@ mod schema_drift_tests {
     }
 }
 
+/// Ratchet on the count of `pub` items in `src/**/*.rs`. Most `pub`
+/// items in this crate are crate-internal (would be flagged by
+/// `rustc -W unreachable_pub`); ideally they'd be `pub(crate)` to
+/// keep the internal API surface honest.
+///
+/// We can't enable `unreachable_pub = "warn"` globally because CI's
+/// `clippy -- -D warnings` would turn 189 pre-existing items into
+/// errors. Sweep cleanup is also impractical (the bot subtree
+/// cascade — `pub struct AiClient` → `pub fn handle_*` etc. — runs
+/// into bin-vs-lib `dead_code` lint asymmetry the moment you tighten
+/// visibility under `cargo check --features backend`).
+///
+/// Instead this test snapshots the current heuristic count and
+/// fails if it *grows*. Reduces unscored debt one tightening at a
+/// time without forcing big-bang sweeps. New PRs that introduce
+/// crate-internal items must use `pub(crate)` from the start.
+///
+/// The count is a heuristic — it matches `^\s*pub (fn|struct|enum|
+/// static|const|async|trait|type)` — so it includes some items that
+/// are legitimately reachable. The exact number isn't important; the
+/// monotonic trend (≤ baseline) is.
+#[cfg(test)]
+mod pub_surface_ratchet_tests {
+    use std::path::{Path, PathBuf};
+
+    /// Baseline captured on 2026-06-06 (commit c0abc7c). Lower it
+    /// when you convert items to `pub(crate)`. Raise only with a
+    /// rationale (new genuinely-external API surface).
+    const PUB_BASELINE: usize = 713;
+
+    /// Same kinds as the regex above. Matches lines whose first
+    /// non-whitespace tokens are `pub <kind>` where `<kind>` ∈ set.
+    const PUB_KINDS: &[&str] = &[
+        "fn ", "struct ", "enum ", "static ", "const ", "async ", "trait ", "type ",
+    ];
+
+    fn collect_rs(root: &Path, out: &mut Vec<PathBuf>) {
+        let entries = match std::fs::read_dir(root) {
+            Ok(e) => e,
+            Err(_) => return,
+        };
+        for entry in entries.filter_map(|e| e.ok()) {
+            let path = entry.path();
+            if path.is_dir() {
+                collect_rs(&path, out);
+            } else if path.extension().and_then(|s| s.to_str()) == Some("rs") {
+                out.push(path);
+            }
+        }
+    }
+
+    fn count_pub_items_in(src: &str) -> usize {
+        src.lines()
+            .filter(|line| {
+                let t = line.trim_start();
+                // Skip line-comments and docstrings — they don't
+                // declare items.
+                if t.starts_with("//") || t.starts_with("///") {
+                    return false;
+                }
+                if let Some(rest) = t.strip_prefix("pub ") {
+                    // Allow `pub(crate)` / `pub(super)` / `pub(in path)`
+                    // (these are *not* unreachable_pub offenders).
+                    if rest.starts_with('(') {
+                        return false;
+                    }
+                    PUB_KINDS.iter().any(|kw| rest.starts_with(kw))
+                } else {
+                    false
+                }
+            })
+            .count()
+    }
+
+    #[test]
+    fn pub_item_count_does_not_grow_beyond_baseline() {
+        let manifest = env!("CARGO_MANIFEST_DIR");
+        let src_root = Path::new(manifest).join("src");
+        let mut files = Vec::new();
+        collect_rs(&src_root, &mut files);
+
+        let mut total = 0usize;
+        for f in &files {
+            if let Ok(src) = std::fs::read_to_string(f) {
+                total += count_pub_items_in(&src);
+            }
+        }
+
+        assert!(
+            total <= PUB_BASELINE,
+            "Crate-internal `pub` item count grew: {} > baseline {}. \
+             Either use `pub(crate)` for the new items, or update \
+             PUB_BASELINE with a rationale (new external API surface). \
+             See pub_surface_ratchet_tests for the heuristic.",
+            total,
+            PUB_BASELINE
+        );
+    }
+}
+
 // WASM entry point is now in src/lib.rs via #[wasm_bindgen(start)]
 // This file is only used for the native backend (Axum server)
