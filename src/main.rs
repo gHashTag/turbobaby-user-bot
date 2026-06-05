@@ -1727,35 +1727,94 @@ mod schema_drift_tests {
         Some(s.to_lowercase())
     }
 
-    /// Find single-line `"SELECT c1, c2, ... FROM <table> ..."` literals
-    /// in a Rust source file. Returns `(table, [cols])` per occurrence.
-    fn find_select_sites_in(src: &str) -> Vec<(String, Vec<String>)> {
-        let mut sites = Vec::new();
-        let needle = "\"SELECT ";
-        let bytes = src.as_bytes();
-        let mut i = 0;
-        while i + needle.len() < bytes.len() {
-            if &bytes[i..i + needle.len()] == needle.as_bytes() {
-                // Find closing quote on the same logical line.
-                let after = &bytes[i + 1..];
-                let end_rel = after.iter().position(|&b| b == b'"' || b == b'\n');
-                if let Some(off) = end_rel {
-                    if after[off] == b'"' {
-                        let sql_bytes = &after[..off];
-                        let sql = String::from_utf8_lossy(sql_bytes).to_string();
-                        if let Some((table, cols)) = parse_select(&sql) {
-                            sites.push((table, cols));
+    /// Read a Rust string literal starting at `start_after_quote`, i.e.
+    /// the byte index right after the opening `"`. Returns the logical
+    /// string content and the index just past the closing `"`.
+    ///
+    /// Handles Rust's `\<newline>` line continuation (the `\`, the
+    /// newline, and leading whitespace on the next physical line are
+    /// stripped). Other escape sequences are passed through as the
+    /// escaped character (sufficient for SQL extraction — we don't
+    /// care about `\t` vs literal tab semantics).
+    ///
+    /// Returns `None` on a non-terminated string (ran off end of file).
+    fn read_rust_str(bytes: &[u8], start_after_quote: usize) -> Option<(String, usize)> {
+        let mut out = String::new();
+        let mut i = start_after_quote;
+        while i < bytes.len() {
+            match bytes[i] {
+                b'"' => return Some((out, i + 1)),
+                b'\\' => {
+                    let nx = *bytes.get(i + 1)?;
+                    if nx == b'\n' {
+                        i += 2;
+                        while i < bytes.len() && (bytes[i] == b' ' || bytes[i] == b'\t') {
+                            i += 1;
                         }
-                        i += 1 + off + 1;
                         continue;
                     }
+                    let ch = match nx {
+                        b'n' => '\n',
+                        b't' => '\t',
+                        b'r' => '\r',
+                        other => other as char,
+                    };
+                    out.push(ch);
+                    i += 2;
                 }
-                i += needle.len();
+                b => {
+                    out.push(b as char);
+                    i += 1;
+                }
+            }
+        }
+        None
+    }
+
+    /// Scan a Rust source file for string literals starting with one
+    /// of `needles` (which must include the opening `"`) and return
+    /// the logical (continuation-stripped) content of each.
+    fn find_sql_literals_starting_with<'a>(src: &str, needles: &'a [&'a str]) -> Vec<String> {
+        let mut out = Vec::new();
+        let bytes = src.as_bytes();
+        let mut i = 0;
+        while i < bytes.len() {
+            let mut matched = None;
+            for n in needles {
+                if i + n.len() <= bytes.len() && &bytes[i..i + n.len()] == n.as_bytes() {
+                    matched = Some(*n);
+                    break;
+                }
+            }
+            if let Some(n) = matched {
+                // Position is at opening `"`; read the full literal.
+                let start_after_quote = i + 1;
+                if let Some((content, end)) = read_rust_str(bytes, start_after_quote) {
+                    // Strip the part before the SQL keyword (just the `"`
+                    // is missing now since we positioned past it).
+                    // The needle includes opening `"`, so first char of
+                    // `content` should be the SQL keyword.
+                    out.push(content);
+                    i = end;
+                    continue;
+                }
+                i += n.len();
                 continue;
             }
             i += 1;
         }
-        sites
+        let _ = needles; // silence the unused-lifetime warn in older toolchains
+        out
+    }
+
+    /// Find `"SELECT c1, c2, ... FROM <table> ..."` literals (any
+    /// line shape — Rust line-continuation is honoured) in a Rust
+    /// source file. Returns `(table, [cols])` per occurrence.
+    fn find_select_sites_in(src: &str) -> Vec<(String, Vec<String>)> {
+        find_sql_literals_starting_with(src, &["\"SELECT "])
+            .into_iter()
+            .filter_map(|s| parse_select(&s))
+            .collect()
     }
 
     /// Parse a SQL string of shape `SELECT <cols> FROM <table> [...]`.
@@ -1830,62 +1889,24 @@ mod schema_drift_tests {
         Some((table, cols))
     }
 
-    /// Find single-line `"INSERT INTO <table> (c1, c2, ...) VALUES ..."`
-    /// literals. Returns `(table, [cols])` per occurrence.
+    /// Find `"INSERT INTO <table> (c1, c2, ...) VALUES ..."` literals
+    /// (multi-line via `\<newline>` continuation supported). Returns
+    /// `(table, [cols])` per occurrence.
     fn find_insert_sites_in(src: &str) -> Vec<(String, Vec<String>)> {
-        let mut sites = Vec::new();
-        let needle = "\"INSERT INTO ";
-        let bytes = src.as_bytes();
-        let mut i = 0;
-        while i + needle.len() < bytes.len() {
-            if &bytes[i..i + needle.len()] == needle.as_bytes() {
-                let after = &bytes[i + 1..];
-                let end_rel = after.iter().position(|&b| b == b'"' || b == b'\n');
-                if let Some(off) = end_rel {
-                    if after[off] == b'"' {
-                        let sql = String::from_utf8_lossy(&after[..off]).to_string();
-                        if let Some((table, cols)) = parse_insert(&sql) {
-                            sites.push((table, cols));
-                        }
-                        i += 1 + off + 1;
-                        continue;
-                    }
-                }
-                i += needle.len();
-                continue;
-            }
-            i += 1;
-        }
-        sites
+        find_sql_literals_starting_with(src, &["\"INSERT INTO "])
+            .into_iter()
+            .filter_map(|s| parse_insert(&s))
+            .collect()
     }
 
-    /// Find single-line `"UPDATE <table> SET c1=v, c2=v, ... [WHERE ...]"`
-    /// literals. Returns `(table, [cols])` per occurrence.
+    /// Find `"UPDATE <table> SET c1=v, c2=v, ... [WHERE ...]"` literals
+    /// (multi-line via `\<newline>` continuation supported). Returns
+    /// `(table, [cols])` per occurrence.
     fn find_update_sites_in(src: &str) -> Vec<(String, Vec<String>)> {
-        let mut sites = Vec::new();
-        let needle = "\"UPDATE ";
-        let bytes = src.as_bytes();
-        let mut i = 0;
-        while i + needle.len() < bytes.len() {
-            if &bytes[i..i + needle.len()] == needle.as_bytes() {
-                let after = &bytes[i + 1..];
-                let end_rel = after.iter().position(|&b| b == b'"' || b == b'\n');
-                if let Some(off) = end_rel {
-                    if after[off] == b'"' {
-                        let sql = String::from_utf8_lossy(&after[..off]).to_string();
-                        if let Some((table, cols)) = parse_update(&sql) {
-                            sites.push((table, cols));
-                        }
-                        i += 1 + off + 1;
-                        continue;
-                    }
-                }
-                i += needle.len();
-                continue;
-            }
-            i += 1;
-        }
-        sites
+        find_sql_literals_starting_with(src, &["\"UPDATE "])
+            .into_iter()
+            .filter_map(|s| parse_update(&s))
+            .collect()
     }
 
     /// Parse `INSERT INTO <table> (c1, c2, ...) VALUES (...)`.
