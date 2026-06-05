@@ -2233,7 +2233,7 @@ mod pub_surface_ratchet_tests {
     /// Baseline captured on 2026-06-06 (commit c0abc7c). Lower it
     /// when you convert items to `pub(crate)`. Raise only with a
     /// rationale (new genuinely-external API surface).
-    const PUB_BASELINE: usize = 713;
+    const PUB_BASELINE: usize = 678;
 
     /// Same kinds as the regex above. Matches lines whose first
     /// non-whitespace tokens are `pub <kind>` where `<kind>` ∈ set.

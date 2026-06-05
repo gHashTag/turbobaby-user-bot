@@ -73,7 +73,7 @@ pub struct Database {
 /// certainly mistakes). We don't enforce that cap here because what
 /// "too high" means depends on the PG plan — surface the warning in
 /// docs instead.
-pub fn parse_db_pool_max_env(raw: Option<String>) -> Result<u32> {
+pub(crate) fn parse_db_pool_max_env(raw: Option<String>) -> Result<u32> {
     const DEFAULT: u32 = 10;
     match raw {
         None => Ok(DEFAULT),

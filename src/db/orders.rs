@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Order {
+pub(crate) struct Order {
     pub id: String,
     pub telegram_id: Option<i64>,
     pub customer_name: Option<String>,
@@ -62,7 +62,7 @@ impl From<crate::db::entities::order::Model> for Order {
 /// drive user-facing side effects (Telegram notifications, etc.)
 /// without re-running DB lookups the completion function already did.
 #[derive(Debug, Clone)]
-pub struct OrderCompletion {
+pub(crate) struct OrderCompletion {
     pub customer_telegram_id: i64,
     /// Currently unread — kept for analytics / future-caller hooks
     /// (e.g. "first-order welcome bonus" or signup-completion
@@ -79,7 +79,7 @@ pub struct OrderCompletion {
     pub referral_bonus_credited: Option<f64>,
 }
 
-pub async fn complete_order_and_update_loyalty(
+pub(crate) async fn complete_order_and_update_loyalty(
     orm: &sea_orm::DatabaseConnection,
     order_id: &str,
 ) -> Result<Option<OrderCompletion>, sea_orm::DbErr> {
@@ -344,7 +344,7 @@ pub struct OrderItem {
 /// be parameterised). Callers MUST pass a static `&str` literal —
 /// internal-only at the time of writing. `interval_clause` is the body
 /// of `INTERVAL '...'` (e.g. `"24 hours"`, `"30 days"`).
-pub(crate) fn audit_sweep_sql(table: &str, interval_clause: &str) -> String {
+pub fn audit_sweep_sql(table: &str, interval_clause: &str) -> String {
     format!(
         "DELETE FROM {} WHERE created_at < NOW() - INTERVAL '{}'",
         table, interval_clause
@@ -354,7 +354,7 @@ pub(crate) fn audit_sweep_sql(table: &str, interval_clause: &str) -> String {
 /// Build the `DELETE` SQL fragment for the idempotency-key TTL sweep.
 /// Thin alias over [`audit_sweep_sql`] so the existing tests + callers
 /// keep their idempotency-specific naming.
-pub(crate) fn idempotency_sweep_sql(retention_hours: u32) -> String {
+pub fn idempotency_sweep_sql(retention_hours: u32) -> String {
     audit_sweep_sql(
         "order_idempotency_keys",
         &format!("{} hours", retention_hours),
@@ -396,7 +396,7 @@ pub async fn cleanup_old_idempotency_keys(
 
 /// Build the `DELETE` SQL fragment for the fraud-event TTL sweep.
 /// Thin alias over [`audit_sweep_sql`].
-pub(crate) fn fraud_events_sweep_sql(retention_days: u32) -> String {
+pub fn fraud_events_sweep_sql(retention_days: u32) -> String {
     audit_sweep_sql("order_fraud_events", &format!("{} days", retention_days))
 }
 
@@ -428,7 +428,7 @@ pub async fn cleanup_old_fraud_events(
 
 /// Build the `DELETE` SQL fragment for the block-history TTL sweep.
 /// Thin alias over [`audit_sweep_sql`].
-pub(crate) fn block_history_sweep_sql(retention_days: u32) -> String {
+pub fn block_history_sweep_sql(retention_days: u32) -> String {
     audit_sweep_sql("block_history", &format!("{} days", retention_days))
 }
 
@@ -460,26 +460,26 @@ pub async fn cleanup_old_block_history(
 
 /// Stable codes for `order_fraud_events.code`. They mirror the JSON error
 /// codes the client UI may eventually parse for friendly messages.
-pub const FRAUD_CODE_SUBTOTAL_MISMATCH: &str = "subtotal_mismatch";
-pub const FRAUD_CODE_UNKNOWN_ITEM: &str = "unknown_item";
-pub const FRAUD_CODE_UNAVAILABLE: &str = "unavailable";
-pub const FRAUD_CODE_MALFORMED: &str = "malformed";
+pub(crate) const FRAUD_CODE_SUBTOTAL_MISMATCH: &str = "subtotal_mismatch";
+pub(crate) const FRAUD_CODE_UNKNOWN_ITEM: &str = "unknown_item";
+pub(crate) const FRAUD_CODE_UNAVAILABLE: &str = "unavailable";
+pub(crate) const FRAUD_CODE_MALFORMED: &str = "malformed";
 
 /// Number of `subtotal_mismatch` events in the lookback window that triggers
 /// an automatic block (cycle #60). 3 is conservative: a real shopper hitting
 /// stale-cart prices would clear and retry, not produce 3+ price tampering
 /// events in a day. 1–2 might be a buggy client or race condition; 3+ is a
 /// sustained pattern that warrants an automatic stop-the-bleeding action.
-pub const FRAUD_AUTO_BLOCK_THRESHOLD: i64 = 3;
+pub(crate) const FRAUD_AUTO_BLOCK_THRESHOLD: i64 = 3;
 /// Lookback window for the auto-block decision. 24 h matches the rest of
 /// the audit pipeline (/engage panel, idempotency TTL).
-pub const FRAUD_AUTO_BLOCK_LOOKBACK_HOURS: i32 = 24;
+pub(crate) const FRAUD_AUTO_BLOCK_LOOKBACK_HOURS: i32 = 24;
 
 /// Pure decision: should the auto-blocker engage given the count of
 /// `subtotal_mismatch` events seen for this user in the lookback window?
 /// Extracted as a standalone function so the threshold semantics are
 /// table-tested instead of buried inside an async DB-bound function.
-pub fn should_auto_block_for_fraud(subtotal_mismatch_events_24h: i64) -> bool {
+pub(crate) fn should_auto_block_for_fraud(subtotal_mismatch_events_24h: i64) -> bool {
     subtotal_mismatch_events_24h >= FRAUD_AUTO_BLOCK_THRESHOLD
 }
 
@@ -492,7 +492,7 @@ pub fn should_auto_block_for_fraud(subtotal_mismatch_events_24h: i64) -> bool {
 /// runs serially (not spawned) so a race between two concurrent mismatches
 /// can't both decide independently to skip the block — Postgres
 /// `pg_advisory_xact_lock` inside the helper serialises them.
-pub async fn record_fraud_event(
+pub(crate) async fn record_fraud_event(
     orm: &sea_orm::DatabaseConnection,
     telegram_id: Option<i64>,
     code: &str,
@@ -542,7 +542,7 @@ pub async fn record_fraud_event(
 /// Negative is rejected explicitly so a future SQL rewrite like
 /// `WHERE telegram_id > $1` can't accidentally unblock the entire user
 /// base when admin types `/unblock -1`.
-pub fn parse_unblock_arg(arg: &str) -> Option<i64> {
+pub(crate) fn parse_unblock_arg(arg: &str) -> Option<i64> {
     let trimmed = arg.trim();
     if trimmed.is_empty() {
         return None;
@@ -557,7 +557,7 @@ pub fn parse_unblock_arg(arg: &str) -> Option<i64> {
 /// One row from `query_blocked_users` — currently-blocked user plus the
 /// most recent fraud event we have on file for them (when any).
 #[derive(Debug, Clone, PartialEq)]
-pub struct BlockedUserRow {
+pub(crate) struct BlockedUserRow {
     pub telegram_id: i64,
     /// `created_at` of the most recent `order_fraud_events` row for this
     /// user. `None` when blocked by hand (e.g. SQL or pre-cycle-#60 setups)
@@ -570,13 +570,13 @@ pub struct BlockedUserRow {
 
 /// Cap on how many rows `/blocks` lists in one Telegram message. 50 keeps
 /// the message well under Telegram's 4096-char limit even with long codes.
-pub const BLOCKED_USERS_LIST_LIMIT: i64 = 50;
+pub(crate) const BLOCKED_USERS_LIST_LIMIT: i64 = 50;
 
 /// Fetch currently-blocked users enriched with the most recent fraud-event
 /// context for each. Single round-trip — `LEFT JOIN LATERAL` lets the
 /// planner index-scan `idx_fraud_events_created_at` per user instead of
 /// doing a window scan across the whole table.
-pub async fn query_blocked_users(
+pub(crate) async fn query_blocked_users(
     orm: &sea_orm::DatabaseConnection,
     limit: i64,
 ) -> Result<Vec<BlockedUserRow>, sea_orm::DbErr> {
@@ -626,7 +626,7 @@ pub async fn query_blocked_users(
 /// `total_count` may exceed `rows.len()` when the query was truncated to
 /// `BLOCKED_USERS_LIST_LIMIT`; in that case a tail line tells admin how
 /// many entries didn't fit so they don't think the list is complete.
-pub fn format_blocks_message(rows: &[BlockedUserRow], total_count: usize) -> String {
+pub(crate) fn format_blocks_message(rows: &[BlockedUserRow], total_count: usize) -> String {
     use crate::util::html_escape;
     if rows.is_empty() {
         return "🛡 <b>Blocked users</b>\n━━━━━━━━━━━━━━━━\n✅ <i>none</i>".to_string();
@@ -670,13 +670,13 @@ pub fn format_blocks_message(rows: &[BlockedUserRow], total_count: usize) -> Str
 /// Stable values for `block_history.action`. Kept here next to the writers
 /// so a future cycle that adds a new transition (e.g. admin manual block)
 /// has a single source of truth.
-pub const BLOCK_ACTION_AUTO: &str = "auto_block";
-pub const BLOCK_ACTION_UNBLOCK: &str = "unblock";
+pub(crate) const BLOCK_ACTION_AUTO: &str = "auto_block";
+pub(crate) const BLOCK_ACTION_UNBLOCK: &str = "unblock";
 
 /// Append one row to `block_history`. Returns `Result<(), _>` so callers can
 /// log a warning on failure, but the caller MUST swallow — losing an audit
 /// row is preferable to blocking the underlying block / unblock action.
-pub async fn record_block_history(
+pub(crate) async fn record_block_history(
     orm: &sea_orm::DatabaseConnection,
     telegram_id: i64,
     action: &str,
@@ -704,7 +704,7 @@ pub async fn record_block_history(
 /// user was not blocked (or has no profile). The `AND is_blocked = true`
 /// guard means an admin can spam `/unblock 123` without each call writing
 /// a fresh `is_blocked = false` UPDATE.
-pub async fn manual_unblock(
+pub(crate) async fn manual_unblock(
     orm: &sea_orm::DatabaseConnection,
     telegram_id: i64,
 ) -> Result<bool, sea_orm::DbErr> {
@@ -810,7 +810,7 @@ async fn auto_block_for_fraud(
 
 /// 24-hour aggregate for the `/engage` orders block (cycle #63 / B).
 #[derive(Debug, Default, Clone)]
-pub struct OrderStats24h {
+pub(crate) struct OrderStats24h {
     pub total_orders: i64,
     /// Sum of `total` across all 24h orders. Float because the column is
     /// `DOUBLE PRECISION`; admin rendering rounds to a baht integer.
@@ -827,7 +827,7 @@ pub struct OrderStats24h {
 /// One round-trip aggregate over `orders` for the last 24h, plus a tail
 /// `pending_total` for the right-now view. Uses partial indexes already on
 /// `created_at` and `status`; cheap even on large `orders` tables.
-pub async fn order_stats_24h(
+pub(crate) async fn order_stats_24h(
     orm: &sea_orm::DatabaseConnection,
 ) -> Result<OrderStats24h, sea_orm::DbErr> {
     use sea_orm::{ConnectionTrait, DbBackend, Statement};
@@ -881,7 +881,7 @@ pub async fn order_stats_24h(
 /// Mirrors the shape of `OrderStats24h` / `FraudStats24h` so the bot
 /// handler can stack all three panels symmetrically.
 #[derive(Debug, Default, Clone)]
-pub struct BlockStats24h {
+pub(crate) struct BlockStats24h {
     pub auto_blocks: i64,
     pub unblocks: i64,
     /// Admin who issued the most `/unblock` commands in the window, as
@@ -894,7 +894,7 @@ pub struct BlockStats24h {
 /// One round-trip aggregate over `block_history` for the last 24h.
 /// Uses `COUNT(*) FILTER (WHERE action = ...)` so the per-action counts
 /// come from a single index scan over `(created_at)`.
-pub async fn block_stats_24h(
+pub(crate) async fn block_stats_24h(
     orm: &sea_orm::DatabaseConnection,
 ) -> Result<BlockStats24h, sea_orm::DbErr> {
     use sea_orm::{ConnectionTrait, DbBackend, Statement};
@@ -940,7 +940,7 @@ pub async fn block_stats_24h(
 /// Symmetric with `format_order_stats` / fraud rendering inside the
 /// engage handler. Empty window → ✅ none so admin doesn't see a panel
 /// full of zeros every quiet day.
-pub fn format_block_stats(s: &BlockStats24h) -> String {
+pub(crate) fn format_block_stats(s: &BlockStats24h) -> String {
     use crate::util::html_escape;
     if s.auto_blocks == 0 && s.unblocks == 0 {
         return "<b>🚫 Blocks (24h)</b>\n✅ <i>none</i>".to_string();
@@ -968,7 +968,7 @@ pub fn format_block_stats(s: &BlockStats24h) -> String {
 /// Pure helper: render the `/engage` orders block as Telegram HTML.
 /// Caller wraps in `parse_mode(Html)`. Extracted from the bot handler so
 /// the layout is unit-testable.
-pub fn format_order_stats(s: &OrderStats24h) -> String {
+pub(crate) fn format_order_stats(s: &OrderStats24h) -> String {
     format!(
         "<b>📦 Orders (24h)</b>\n\
          🛒 Total: <b>{}</b>\n\
@@ -983,7 +983,7 @@ pub fn format_order_stats(s: &OrderStats24h) -> String {
 /// 24-hour aggregate for the `/engage` fraud panel. Keep this struct narrow:
 /// /engage's text rendering reads each field once.
 #[derive(Debug, Default, Clone)]
-pub struct FraudStats24h {
+pub(crate) struct FraudStats24h {
     pub subtotal_mismatch: i64,
     pub unknown_item: i64,
     pub unavailable: i64,
@@ -996,7 +996,7 @@ pub struct FraudStats24h {
 }
 
 /// One round-trip aggregate over `order_fraud_events` for the last 24h.
-pub async fn fraud_stats_24h(
+pub(crate) async fn fraud_stats_24h(
     orm: &sea_orm::DatabaseConnection,
 ) -> Result<FraudStats24h, sea_orm::DbErr> {
     use sea_orm::{ConnectionTrait, DbBackend, Statement};

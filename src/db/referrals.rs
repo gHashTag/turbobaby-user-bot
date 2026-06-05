@@ -13,7 +13,7 @@ use uuid::Uuid;
 // just an `#[allow(dead_code)]` annotation hiding the rot.
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ReferrerStats {
+pub(crate) struct ReferrerStats {
     pub total_invited: i64,
     pub confirmed: i64,
     pub pending: i64,
@@ -21,7 +21,7 @@ pub struct ReferrerStats {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TopReferrer {
+pub(crate) struct TopReferrer {
     pub telegram_id: i64,
     pub first_name: Option<String>,
     pub referral_count: i64,
@@ -40,7 +40,7 @@ const BASE62_CHARS: &[u8] = b"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmn
 
 /// Generate an 8-character base-62 referral code derived from telegram_id + salt.
 /// The `attempt` parameter is incremented on collision to produce a different code.
-pub fn generate_referral_code(telegram_id: i64, attempt: u32) -> String {
+pub(crate) fn generate_referral_code(telegram_id: i64, attempt: u32) -> String {
     let input = format!("{}{}{}", telegram_id, CODE_SALT, attempt);
     let mut hasher = Sha256::new();
     hasher.update(input.as_bytes());
@@ -57,7 +57,7 @@ pub fn generate_referral_code(telegram_id: i64, attempt: u32) -> String {
 /// Retries on collision (up to 10 attempts).
 ///
 /// Cycle #84: SeaORM. Same retry loop, just talking through the ORM.
-pub async fn get_or_create_referral_code(
+pub(crate) async fn get_or_create_referral_code(
     orm: &sea_orm::DatabaseConnection,
     telegram_id: i64,
 ) -> Result<String> {
@@ -145,7 +145,7 @@ pub async fn get_or_create_referral_code(
 /// Find the telegram_id of the owner of `code` (looks in loyalty_profiles.referral_code).
 ///
 /// Cycle #84: SeaORM. Single read, no schema changes.
-pub async fn find_referrer_by_code(
+pub(crate) async fn find_referrer_by_code(
     orm: &sea_orm::DatabaseConnection,
     code: &str,
 ) -> Result<Option<i64>> {
@@ -167,7 +167,7 @@ pub async fn find_referrer_by_code(
 /// `referred_by` upsert preserves a pre-existing referrer attribution
 /// (first-touch wins); we express that via raw `Expr::cust_with_values`
 /// since SeaORM's `OnConflict::update_columns` would overwrite.
-pub async fn record_referral(
+pub(crate) async fn record_referral(
     orm: &sea_orm::DatabaseConnection,
     referrer_id: i64,
     referred_id: i64,
@@ -241,7 +241,7 @@ pub async fn record_referral(
 /// race guard is preserved via `QuerySelect::lock_exclusive()`. All five
 /// statements run inside `db.begin().await?` and commit atomically; early
 /// `Err` returns auto-rollback via `DatabaseTransaction::drop`.
-pub async fn confirm_referral(
+pub(crate) async fn confirm_referral(
     orm: &sea_orm::DatabaseConnection,
     referred_id: i64,
     bonus: f64,
@@ -377,7 +377,7 @@ pub async fn confirm_referral(
 /// uses `COUNT(*) FILTER (WHERE ...)` aggregates which SeaORM's typed
 /// builder API doesn't express idiomatically — raw SQL is the right
 /// trade-off here (same approach as `api/loyalty.rs::get_leaderboard`).
-pub async fn get_referrer_stats(
+pub(crate) async fn get_referrer_stats(
     orm: &sea_orm::DatabaseConnection,
     telegram_id: i64,
 ) -> Result<ReferrerStats> {
@@ -418,7 +418,7 @@ pub async fn get_referrer_stats(
 ///
 /// Cycle #84: SeaORM via `Statement::from_sql_and_values`. GROUP BY +
 /// aggregates + LEFT JOIN — same reasoning as [`get_referrer_stats`].
-pub async fn get_top_referrers(
+pub(crate) async fn get_top_referrers(
     orm: &sea_orm::DatabaseConnection,
     period: &str,
     limit: i64,

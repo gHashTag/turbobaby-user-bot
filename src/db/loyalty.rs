@@ -19,7 +19,7 @@
 // struct just to call a pure function. Defer the refactor until a real
 // caller appears.
 #[allow(dead_code, clippy::too_many_arguments)] // Used by cashback flows once they wire it up; pure helper.
-pub fn calculate_tier(
+pub(crate) fn calculate_tier(
     total_spent: f64,
     order_count: i64,
     bronze_threshold: f64,
