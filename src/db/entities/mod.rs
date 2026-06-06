@@ -1,15 +1,33 @@
 // SeaORM entities. Минимальный набор: подключаем по мере перевода эндпоинтов.
-pub(crate) mod block_history;
-pub(crate) mod bonus_transaction;
-pub(crate) mod garden_config;
-pub(crate) mod loyalty_config;
-pub(crate) mod loyalty_idempotency_key;
-pub(crate) mod loyalty_profile;
-pub(crate) mod order;
-pub(crate) mod order_fraud_event;
-pub(crate) mod order_idempotency_key;
-pub(crate) mod quest_place;
-pub(crate) mod referral_event;
-pub(crate) mod strain;
-pub(crate) mod treasure_hunt;
-pub(crate) mod user;
+// Each entity module is `pub mod` so integration tests reach
+// `woody_weed_bot::db::entities::*`. Each individual entity file
+// has its own `#![allow(unreachable_pub)]` (SeaORM macros generate
+// pub items unconditionally).
+#[allow(unreachable_pub)]
+pub mod block_history;
+#[allow(unreachable_pub)]
+pub mod bonus_transaction;
+#[allow(unreachable_pub)]
+pub mod garden_config;
+#[allow(unreachable_pub)]
+pub mod loyalty_config;
+#[allow(unreachable_pub)]
+pub mod loyalty_idempotency_key;
+#[allow(unreachable_pub)]
+pub mod loyalty_profile;
+#[allow(unreachable_pub)]
+pub mod order;
+#[allow(unreachable_pub)]
+pub mod order_fraud_event;
+#[allow(unreachable_pub)]
+pub mod order_idempotency_key;
+#[allow(unreachable_pub)]
+pub mod quest_place;
+#[allow(unreachable_pub)]
+pub mod referral_event;
+#[allow(unreachable_pub)]
+pub mod strain;
+#[allow(unreachable_pub)]
+pub mod treasure_hunt;
+#[allow(unreachable_pub)]
+pub mod user;

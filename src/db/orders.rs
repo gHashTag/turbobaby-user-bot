@@ -69,7 +69,8 @@ impl From<crate::db::entities::order::Model> for Order {
 /// drive user-facing side effects (Telegram notifications, etc.)
 /// without re-running DB lookups the completion function already did.
 #[derive(Debug, Clone)]
-pub(crate) struct OrderCompletion {
+#[allow(unreachable_pub)] // Returned by `complete_order_and_update_loyalty` which integration tests use.
+pub struct OrderCompletion {
     pub customer_telegram_id: i64,
     /// Currently unread — kept for analytics / future-caller hooks
     /// (e.g. "first-order welcome bonus" or signup-completion
@@ -86,7 +87,8 @@ pub(crate) struct OrderCompletion {
     pub referral_bonus_credited: Option<f64>,
 }
 
-pub(crate) async fn complete_order_and_update_loyalty(
+#[allow(unreachable_pub)] // Used by tests/integration_use_bonus.rs to set up scenarios.
+pub async fn complete_order_and_update_loyalty(
     orm: &sea_orm::DatabaseConnection,
     order_id: &str,
 ) -> Result<Option<OrderCompletion>, sea_orm::DbErr> {
@@ -318,6 +320,7 @@ pub(crate) async fn complete_order_and_update_loyalty(
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(unreachable_pub)] // Used as a field of pub structs in src/api/*.rs request bodies; pub(crate) would cascade.
 pub struct OrderItem {
     pub strain_id: Option<String>,
     pub strain_name: Option<String>,

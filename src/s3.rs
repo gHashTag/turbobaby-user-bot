@@ -2,7 +2,7 @@ use crate::config::Config;
 use anyhow::Result;
 use bytes::Bytes;
 
-pub async fn upload_to_s3(config: &Config, filename: &str, data: Bytes) -> Result<String> {
+pub(crate) async fn upload_to_s3(config: &Config, filename: &str, data: Bytes) -> Result<String> {
     use aws_config::{BehaviorVersion, Region};
     use aws_sdk_s3::{config::Credentials, primitives::ByteStream, Client};
 

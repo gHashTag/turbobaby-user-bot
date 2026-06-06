@@ -1,6 +1,12 @@
 pub(crate) mod admin;
-pub(crate) mod auth;
-pub(crate) mod cache;
+// Integration tests in `tests/*.rs` reach in as external consumers
+// of the lib crate, so these two must stay `pub mod`. The bin crate
+// (src/main.rs has private `mod api;`) still sees them as
+// unreachable, hence the targeted allow.
+#[allow(unreachable_pub)]
+pub mod auth;
+#[allow(unreachable_pub)]
+pub mod cache;
 pub(crate) mod cart;
 pub(crate) mod catalog;
 pub(crate) mod garden;
@@ -68,6 +74,7 @@ pub(crate) fn validate_url(url: &Option<String>) -> Result<(), StatusCode> {
     Ok(())
 }
 
+#[allow(unreachable_pub)] // Top-level entry called from main.rs's Axum boot — pub(crate) is the same in practice but loses the "API entry" signal at the call site.
 pub fn router(state: crate::AppState) -> Router {
     Router::<AppState>::new()
         .route("/health", get(health_handler))

@@ -13,6 +13,16 @@ publish = false
 # usage so it flags it as unused.
 ignored = ["getrandom"]
 
+[lints.rust]
+# Compiler-enforced visibility hygiene. Cycle ~#190: after four cycles
+# of pub→pub(crate) tightening (db, api, bot+ai, pub-mod) brought the
+# count from 189 to 0 (with 17 documented #[allow] attributes on items
+# that are structurally pub: SeaORM Models, cross-boundary types,
+# main.rs entry points), enabling this lint freezes the status quo so
+# new pub items must use pub(crate) from the start. CI's
+# `clippy -- -D warnings` upgrades violations to errors.
+unreachable_pub = "warn"
+
 [[bin]]
 name = "woody-weed-bot"
 path = "src/web.rs"

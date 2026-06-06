@@ -1,11 +1,19 @@
-pub(crate) mod entities;
+// Integration tests in `tests/*.rs` import `entities` and `orders`
+// as external lib consumers — they must stay `pub mod`. The bin
+// crate still flags them as unreachable_pub (it has private
+// `mod db;`), hence the allow.
+#[allow(unreachable_pub)]
+pub mod entities;
 pub(crate) mod loyalty;
 pub(crate) mod macros;
-pub(crate) mod orders;
+#[allow(unreachable_pub)]
+pub mod orders;
 pub(crate) mod referrals;
 pub(crate) mod strains;
 pub(crate) mod users;
 
+#[allow(unreachable_pub)]
+// Glob re-export of crate-internal types (used as `crate::db::Strain` etc.); flavour-tightening would force renames everywhere.
 pub use strains::*;
 
 use anyhow::{Context, Result};

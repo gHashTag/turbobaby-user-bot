@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(unreachable_pub)] // Used as a field of pub structs in src/api/*.rs request/response bodies; pub(crate) would cascade.
 pub struct Strain {
     pub id: String,
     pub name: String,

@@ -323,7 +323,8 @@ pub(crate) fn validate_init_data_debug(
     (ok, data_check_string_decoded, hash, user, error)
 }
 
-pub(crate) fn generate_admin_token(password: &str, bot_token: &str) -> String {
+#[allow(unreachable_pub)] // Used by tests/integration_*.rs to mint admin tokens.
+pub fn generate_admin_token(password: &str, bot_token: &str) -> String {
     let mut mac = match HmacSha256::new_from_slice(b"WoodyWeedBotAdmin") {
         Ok(m) => m,
         Err(_) => return String::new(),
