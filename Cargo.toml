@@ -40,6 +40,14 @@ unwrap_used = "warn"
 # url_btn}) all carry such an allow attribute with the structural
 # reason. New callsites must follow suit or refactor to ? / match.
 expect_used = "warn"
+# Block `println!` / `eprintln!` / `print!` / `eprint!` / `dbg!()` in
+# production code. The crate is `tracing`-based — structured logs with
+# levels, filters, and exporters. The one legitimate eprintln! lives
+# in `resolve_log_filter` (main.rs ~L262) because the tracing
+# subscriber is what's being built there; it carries an inline allow.
+print_stdout = "warn"
+print_stderr = "warn"
+dbg_macro = "warn"
 
 [[bin]]
 name = "woody-weed-bot"

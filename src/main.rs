@@ -259,6 +259,7 @@ fn is_production_env(node_env: Option<&str>, railway_env: Option<&str>) -> bool 
 /// Take `Option<String>` so the helper is unit-testable without touching
 /// the process env.
 #[cfg(not(target_arch = "wasm32"))]
+#[allow(clippy::print_stderr)] // Tracing subscriber isn't built yet at this callsite; eprintln is the only way to surface a malformed RUST_LOG.
 fn resolve_log_filter(raw: Option<String>) -> tracing_subscriber::EnvFilter {
     use tracing_subscriber::EnvFilter;
     const DEFAULT: &str = "info";
