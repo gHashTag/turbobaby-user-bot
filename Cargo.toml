@@ -23,6 +23,17 @@ ignored = ["getrandom"]
 # `clippy -- -D warnings` upgrades violations to errors.
 unreachable_pub = "warn"
 
+[lints.clippy]
+# Block new `.unwrap()` in production code. Audit done in cycle after
+# eb82068: prod-side backend code has zero unwrap() calls; the 6
+# remaining `.expect("rationale")` callsites are panic-on-bug idioms
+# (parse a static URL, install rustls provider, tokio signal handlers)
+# and are kept. The bin and wasm-lib clippy invocations both run with
+# `-D warnings` in CI, so any new `.unwrap()` in production code
+# becomes a hard compile error. Test code is unaffected (the bin/lib
+# clippy targets don't compile tests).
+unwrap_used = "warn"
+
 [[bin]]
 name = "woody-weed-bot"
 path = "src/web.rs"
