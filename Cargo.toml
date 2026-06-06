@@ -48,6 +48,12 @@ expect_used = "warn"
 print_stdout = "warn"
 print_stderr = "warn"
 dbg_macro = "warn"
+# Block `panic!(...)` in production code. Completes the panic-
+# resilience triad alongside `unwrap_used` and `expect_used`. Survey
+# at this cycle: zero callsites in prod (bin + wasm-lib both clean),
+# so enabling the lint just locks the status quo. Tests use panic!
+# freely; the bin/lib clippy targets don't compile tests.
+panic = "warn"
 
 [[bin]]
 name = "woody-weed-bot"
