@@ -1,8 +1,3 @@
-// Bin-vs-lib asymmetry: see src/ai.rs's note. Bot handlers reach
-// main.rs's bot::create_handler() only via the bin's tokio runtime;
-// the lib never instantiates them.
-#![allow(dead_code)]
-
 pub(crate) mod callbacks;
 pub(crate) mod commands;
 pub(crate) mod handlers;
@@ -151,6 +146,7 @@ pub(crate) async fn tg_fire_and_forget<T, E: std::fmt::Display>(
     }
 }
 
+#[allow(dead_code)] // Called only from main.rs (bin); lib has no user.
 pub(crate) fn create_handler() -> UpdateHandler<teloxide::RequestError> {
     dptree::entry()
         .branch(

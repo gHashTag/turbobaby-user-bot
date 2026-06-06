@@ -1,5 +1,4 @@
 // Bin-vs-lib asymmetry: see src/ai.rs's note.
-#![allow(dead_code)]
 
 use std::sync::Arc;
 use teloxide::{
