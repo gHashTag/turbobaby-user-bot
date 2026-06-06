@@ -1320,7 +1320,15 @@ mod module_wiring_tests {
                     None => trimmed,
                 };
                 let code = code.trim();
-                let rest = match code.strip_prefix("pub mod ") {
+                // Accept `pub mod NAME;`, `pub(crate) mod NAME;`,
+                // `pub(super) mod NAME;`, and plain `mod NAME;`. The
+                // visibility flavour doesn't change wiring semantics
+                // — only the *existence* of the declaration matters.
+                let rest = code
+                    .strip_prefix("pub mod ")
+                    .or_else(|| code.strip_prefix("pub(crate) mod "))
+                    .or_else(|| code.strip_prefix("pub(super) mod "));
+                let rest = match rest {
                     Some(r) => r,
                     None => continue,
                 };
@@ -1376,14 +1384,26 @@ mod module_wiring_tests {
     /// re-exports) survive, so re-exports count as wiring evidence.
     fn read_without_decl(path: &Path, name: &str) -> Option<String> {
         let src = std::fs::read_to_string(path).ok()?;
-        let needle_a = format!("pub mod {name};");
-        let needle_b = format!("pub mod {name}{{");
-        let needle_c = format!("mod {name};");
+        // Strip any module declaration of `name`, regardless of its
+        // visibility flavour. Order matters for `starts_with` — list
+        // the longer prefixes first so e.g. `pub(crate) mod` isn't
+        // misread as `mod` (which would leave `(crate) mod NAME;` in
+        // the rest and not strip the line).
+        let needles: [String; 8] = [
+            format!("pub(crate) mod {name};"),
+            format!("pub(crate) mod {name}{{"),
+            format!("pub(super) mod {name};"),
+            format!("pub(super) mod {name}{{"),
+            format!("pub mod {name};"),
+            format!("pub mod {name}{{"),
+            format!("mod {name};"),
+            format!("mod {name}{{"),
+        ];
         let filtered = src
             .lines()
             .filter(|line| {
                 let t = line.trim_start();
-                !(t.starts_with(&needle_a) || t.starts_with(&needle_b) || t.starts_with(&needle_c))
+                !needles.iter().any(|n| t.starts_with(n))
             })
             .collect::<Vec<_>>()
             .join("\n");
@@ -2233,7 +2253,7 @@ mod pub_surface_ratchet_tests {
     /// Baseline captured on 2026-06-06 (commit c0abc7c). Lower it
     /// when you convert items to `pub(crate)`. Raise only with a
     /// rationale (new genuinely-external API surface).
-    const PUB_BASELINE: usize = 600;
+    const PUB_BASELINE: usize = 593;
 
     /// Same kinds as the regex above. Matches lines whose first
     /// non-whitespace tokens are `pub <kind>` where `<kind>` ∈ set.

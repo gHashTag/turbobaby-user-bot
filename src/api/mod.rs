@@ -1,20 +1,20 @@
-pub mod admin;
-pub mod auth;
-pub mod cache;
-pub mod cart;
-pub mod catalog;
-pub mod garden;
-pub mod happy_hour;
-pub mod loyalty;
+pub(crate) mod admin;
+pub(crate) mod auth;
+pub(crate) mod cache;
+pub(crate) mod cart;
+pub(crate) mod catalog;
+pub(crate) mod garden;
+pub(crate) mod happy_hour;
+pub(crate) mod loyalty;
 #[cfg(feature = "utoipa")]
-pub mod openapi;
-pub mod orders;
-pub mod quest;
-pub mod rate_limit;
-pub mod referrals;
-pub mod strains;
-pub mod tech_tree;
-pub mod upload;
+pub(crate) mod openapi;
+pub(crate) mod orders;
+pub(crate) mod quest;
+pub(crate) mod rate_limit;
+pub(crate) mod referrals;
+pub(crate) mod strains;
+pub(crate) mod tech_tree;
+pub(crate) mod upload;
 
 use crate::AppState;
 use axum::extract::State;

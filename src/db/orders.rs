@@ -1,3 +1,10 @@
+// Bin-vs-lib asymmetry: the TTL sweep functions (cleanup_old_*,
+// *_sweep_sql) are reachable only from main.rs's spawn_ttl_sweep
+// loop. The lib never schedules them, so under `cargo check --features
+// backend` the lib build flags them as dead. Same pattern as
+// src/ai.rs's #![allow(dead_code)].
+#![allow(dead_code)]
+
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -344,7 +351,7 @@ pub struct OrderItem {
 /// be parameterised). Callers MUST pass a static `&str` literal —
 /// internal-only at the time of writing. `interval_clause` is the body
 /// of `INTERVAL '...'` (e.g. `"24 hours"`, `"30 days"`).
-pub fn audit_sweep_sql(table: &str, interval_clause: &str) -> String {
+pub(crate) fn audit_sweep_sql(table: &str, interval_clause: &str) -> String {
     format!(
         "DELETE FROM {} WHERE created_at < NOW() - INTERVAL '{}'",
         table, interval_clause
@@ -354,7 +361,7 @@ pub fn audit_sweep_sql(table: &str, interval_clause: &str) -> String {
 /// Build the `DELETE` SQL fragment for the idempotency-key TTL sweep.
 /// Thin alias over [`audit_sweep_sql`] so the existing tests + callers
 /// keep their idempotency-specific naming.
-pub fn idempotency_sweep_sql(retention_hours: u32) -> String {
+pub(crate) fn idempotency_sweep_sql(retention_hours: u32) -> String {
     audit_sweep_sql(
         "order_idempotency_keys",
         &format!("{} hours", retention_hours),
@@ -373,7 +380,7 @@ pub fn idempotency_sweep_sql(retention_hours: u32) -> String {
 /// is unit-tested in the same module and switching the call site to
 /// `Statement::from_string` is the minimal change that preserves the
 /// builder's contract.
-pub async fn cleanup_old_idempotency_keys(
+pub(crate) async fn cleanup_old_idempotency_keys(
     orm: &sea_orm::DatabaseConnection,
     retention_hours: u32,
 ) -> Result<u64, sea_orm::DbErr> {
@@ -396,7 +403,7 @@ pub async fn cleanup_old_idempotency_keys(
 
 /// Build the `DELETE` SQL fragment for the fraud-event TTL sweep.
 /// Thin alias over [`audit_sweep_sql`].
-pub fn fraud_events_sweep_sql(retention_days: u32) -> String {
+pub(crate) fn fraud_events_sweep_sql(retention_days: u32) -> String {
     audit_sweep_sql("order_fraud_events", &format!("{} days", retention_days))
 }
 
@@ -404,7 +411,7 @@ pub fn fraud_events_sweep_sql(retention_days: u32) -> String {
 /// the row count for the spawn-loop's structured log line.
 ///
 /// Cycle #86: same migration pattern as [`cleanup_old_idempotency_keys`].
-pub async fn cleanup_old_fraud_events(
+pub(crate) async fn cleanup_old_fraud_events(
     orm: &sea_orm::DatabaseConnection,
     retention_days: u32,
 ) -> Result<u64, sea_orm::DbErr> {
@@ -428,7 +435,7 @@ pub async fn cleanup_old_fraud_events(
 
 /// Build the `DELETE` SQL fragment for the block-history TTL sweep.
 /// Thin alias over [`audit_sweep_sql`].
-pub fn block_history_sweep_sql(retention_days: u32) -> String {
+pub(crate) fn block_history_sweep_sql(retention_days: u32) -> String {
     audit_sweep_sql("block_history", &format!("{} days", retention_days))
 }
 
@@ -436,7 +443,7 @@ pub fn block_history_sweep_sql(retention_days: u32) -> String {
 /// number of rows deleted for the spawn-loop's structured log line.
 ///
 /// Cycle #86: same migration pattern as [`cleanup_old_idempotency_keys`].
-pub async fn cleanup_old_block_history(
+pub(crate) async fn cleanup_old_block_history(
     orm: &sea_orm::DatabaseConnection,
     retention_days: u32,
 ) -> Result<u64, sea_orm::DbErr> {

@@ -3,9 +3,9 @@
 // the lib never instantiates them.
 #![allow(dead_code)]
 
-pub mod callbacks;
-pub mod commands;
-pub mod handlers;
+pub(crate) mod callbacks;
+pub(crate) mod commands;
+pub(crate) mod handlers;
 
 use std::time::Duration;
 

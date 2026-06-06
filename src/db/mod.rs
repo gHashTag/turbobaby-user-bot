@@ -1,10 +1,10 @@
-pub mod entities;
-pub mod loyalty;
-pub mod macros;
-pub mod orders;
-pub mod referrals;
-pub mod strains;
-pub mod users;
+pub(crate) mod entities;
+pub(crate) mod loyalty;
+pub(crate) mod macros;
+pub(crate) mod orders;
+pub(crate) mod referrals;
+pub(crate) mod strains;
+pub(crate) mod users;
 
 pub use strains::*;
 
