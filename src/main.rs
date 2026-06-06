@@ -278,6 +278,7 @@ fn resolve_log_filter(raw: Option<String>) -> tracing_subscriber::EnvFilter {
 
 #[cfg(not(target_arch = "wasm32"))]
 #[tokio::main]
+#[allow(clippy::expect_used)] // Boot-time initialisation: rustls provider install must succeed or the process can't serve any TLS.
 async fn main() -> Result<()> {
     // Must be called before ANY rustls usage
     rustls::crypto::ring::default_provider()
@@ -769,6 +770,7 @@ async fn main() -> Result<()> {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
+#[allow(clippy::expect_used)] // tokio signal handlers are infallible in practice; panic-on-bug is the conventional pattern.
 async fn shutdown_signal() {
     let ctrl_c = async {
         tokio::signal::ctrl_c()

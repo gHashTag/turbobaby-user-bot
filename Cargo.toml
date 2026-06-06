@@ -33,6 +33,13 @@ unreachable_pub = "warn"
 # becomes a hard compile error. Test code is unaffected (the bin/lib
 # clippy targets don't compile tests).
 unwrap_used = "warn"
+# Block new `.expect()` in production code unless explicitly opted into
+# via `#[allow(clippy::expect_used)]` with a rationale comment. The 5
+# functions in this crate that use .expect() (cache.rs::compute_hash,
+# main.rs::main, main.rs::shutdown_signal, bot/mod.rs::{web_app_btn,
+# url_btn}) all carry such an allow attribute with the structural
+# reason. New callsites must follow suit or refactor to ? / match.
+expect_used = "warn"
 
 [[bin]]
 name = "woody-weed-bot"

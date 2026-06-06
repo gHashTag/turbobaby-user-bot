@@ -92,6 +92,7 @@ use teloxide::dispatching::UpdateHandler;
 use teloxide::prelude::*;
 use teloxide::types::{InlineKeyboardButton, WebAppInfo};
 
+#[allow(clippy::expect_used)] // Fallback URL `https://t.me` is a static literal; parse is infallible.
 pub(crate) fn web_app_btn(text: &str, url: &str) -> InlineKeyboardButton {
     match url.parse() {
         Ok(u) => InlineKeyboardButton::web_app(text, WebAppInfo { url: u }),
@@ -109,6 +110,7 @@ pub(crate) fn callback_btn(text: &str, data: &str) -> InlineKeyboardButton {
     InlineKeyboardButton::callback(text, data)
 }
 
+#[allow(clippy::expect_used)] // Fallback URL `https://t.me` is a static literal; parse is infallible.
 pub(crate) fn url_btn(text: &str, url: &str) -> InlineKeyboardButton {
     match url.parse() {
         Ok(u) => InlineKeyboardButton::url(text, u),

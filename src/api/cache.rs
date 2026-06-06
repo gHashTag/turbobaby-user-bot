@@ -20,6 +20,7 @@ impl ETagCache {
     }
 
     /// Compute stable hash of JSON response (first 64 bits of SHA-256).
+    #[allow(clippy::expect_used)] // SHA-256 digest is 32 bytes; [..8] always succeeds. Documented invariant in body.
     pub fn compute_hash(data: &str) -> String {
         let hash = Sha256::digest(data.as_bytes());
         // Cycle #77: self-documenting expect — SHA-256 digest is fixed

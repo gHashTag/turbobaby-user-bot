@@ -420,6 +420,7 @@ pub enum Error {
 
 // Manually implement Clone since std::io::Error and serde_json::Error don't implement it
 impl Clone for Error {
+    #[allow(clippy::expect_used)] // Parsing empty string as JSON is provably an error; .expect_err is infallible.
     fn clone(&self) -> Self {
         match self {
             Error::InvalidState(s) => Error::InvalidState(s.clone()),
