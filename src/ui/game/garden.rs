@@ -1,5 +1,8 @@
 use crate::trios::garden::{calculate_progress, GrowthStage, Plant};
-use crate::trios::i18n::{t, T_BTN_WATER, T_GARDEN_SUBTITLE, T_GARDEN_TITLE};
+use crate::trios::i18n::{
+    t, T_BTN_WATER, T_GARDEN_EMPTY_CTA, T_GARDEN_EMPTY_LABEL, T_GARDEN_LOADING, T_GARDEN_SUBTITLE,
+    T_GARDEN_TITLE,
+};
 use crate::ui::api::context::api_base_url;
 use crate::ui::components::ErrorBanner;
 use crate::ui::telegram::{use_telegram_id, use_telegram_init_data};
@@ -238,6 +241,9 @@ pub fn Garden() -> Element {
     let title_text = t(crate::ui::lang::current_lang(), T_GARDEN_TITLE);
     let subtitle_text = t(crate::ui::lang::current_lang(), T_GARDEN_SUBTITLE);
     let water_text = t(crate::ui::lang::current_lang(), T_BTN_WATER);
+    let loading_text = t(crate::ui::lang::current_lang(), T_GARDEN_LOADING);
+    let empty_label = t(crate::ui::lang::current_lang(), T_GARDEN_EMPTY_LABEL);
+    let empty_cta = t(crate::ui::lang::current_lang(), T_GARDEN_EMPTY_CTA);
 
     rsx! {
         div { style: "min-height: 100vh; background: {bg}; color: #e8e8e8; font-family: 'Press Start 2P', monospace; padding-bottom: 80px;",
@@ -259,13 +265,13 @@ pub fn Garden() -> Element {
             if is_loading {
                 div { style: "text-align: center; padding: 60px 20px;",
                     div { style: "font-size: 36px; margin-bottom: 12px;", "🌱" }
-                    p { style: "font-size: 12px; color: #8b8b9e;", "Loading your garden..." }
+                    p { style: "font-size: 12px; color: #8b8b9e;", "{loading_text}" }
                 }
             } else if plant_list.is_empty() {
                 div { style: "text-align: center; padding: 60px 20px;",
                     div { style: "font-size: 48px; margin-bottom: 16px;", "🌱" }
-                    p { style: "font-size: 11px; color: #8b8b9e; margin-bottom: 8px;", "No plants yet" }
-                    p { style: "font-size: 18px; color: #555577;", "Order a strain to get your first seed!" }
+                    p { style: "font-size: 11px; color: #8b8b9e; margin-bottom: 8px;", "{empty_label}" }
+                    p { style: "font-size: 18px; color: #555577;", "{empty_cta}" }
                 }
             } else {
                 div { style: "max-width: 400px; margin: 0 auto; padding: 0 16px;",

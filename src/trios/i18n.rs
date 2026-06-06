@@ -23,6 +23,9 @@ pub const T_NAV_PROFILE: Key = "nav.profile";
 /// Garden translations
 pub const T_GARDEN_TITLE: Key = "garden.title";
 pub const T_GARDEN_SUBTITLE: Key = "garden.subtitle";
+pub const T_GARDEN_EMPTY_LABEL: Key = "garden.empty_label";
+pub const T_GARDEN_EMPTY_CTA: Key = "garden.empty_cta";
+pub const T_GARDEN_LOADING: Key = "garden.loading";
 
 /// Telegram button translations
 pub const T_BTN_CART: Key = "btn.cart";
@@ -163,6 +166,9 @@ fn get_ru_translation(key: Key) -> Value {
         // Garden
         T_GARDEN_TITLE => "Мой сад",
         T_GARDEN_SUBTITLE => "Выращивайте и собирайте урожай",
+        T_GARDEN_EMPTY_LABEL => "Пока нет растений",
+        T_GARDEN_EMPTY_CTA => "Закажите сорт, чтобы получить первое семечко!",
+        T_GARDEN_LOADING => "Загружаем ваш сад...",
         // Telegram buttons
         T_BTN_CART => "Корзина",
         T_BTN_CHECKOUT => "Оформить",
@@ -275,6 +281,9 @@ fn get_en_translation(key: Key) -> Value {
         // Garden
         T_GARDEN_TITLE => "My Garden",
         T_GARDEN_SUBTITLE => "Grow and harvest your plants",
+        T_GARDEN_EMPTY_LABEL => "No plants yet",
+        T_GARDEN_EMPTY_CTA => "Order a strain to get your first seed!",
+        T_GARDEN_LOADING => "Loading your garden...",
         // Telegram buttons
         T_BTN_CART => "Cart",
         T_BTN_CHECKOUT => "Checkout",
@@ -404,6 +413,9 @@ pub fn get_translations(lang: Lang) -> Translations {
         // Garden
         T_GARDEN_TITLE,
         T_GARDEN_SUBTITLE,
+        T_GARDEN_EMPTY_LABEL,
+        T_GARDEN_EMPTY_CTA,
+        T_GARDEN_LOADING,
         // Telegram buttons
         T_BTN_CART,
         T_BTN_CHECKOUT,
