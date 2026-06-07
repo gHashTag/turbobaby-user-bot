@@ -16,14 +16,13 @@
     
 <script type="module">
 import init, * as bindings from '/woody-weed-bot-ab9ef109ebb923d3.js?v=2';
-const wasm = await init({ module_or_path: '/woody-weed-bot-ab9ef109ebb923d3_bg.wasm?v=2' });
-
-
-window.wasmBindings = bindings;
-
-
-dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
-
+try {
+    const wasm = await init({ module_or_path: '/woody-weed-bot-ab9ef109ebb923d3_bg.wasm?v=2' });
+    window.wasmBindings = bindings;
+    dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
+} catch (e) {
+    window.onerror('WASM init failed: ' + (e.message || e), '', 0, 0, e);
+}
 </script>
     <style>
         #preloader {
@@ -152,7 +151,9 @@ dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
                 if (step >= steps.length) clearInterval(stepTimer);
             }, 1500);
 
-            // 10-second fail-safe: if WASM never starts, show diagnostic overlay
+            // 30-second fail-safe: WASM compilation on macOS WebKit for a 2.7MB
+            // binary can take 15–25s on older hardware. Cycle #169: raised from
+            // 10s after production reports of premature timeout on MacIntel.
             setTimeout(function() {
                 var preloader = document.getElementById('preloader');
                 if (preloader && !preloader.classList.contains('hidden')) {
@@ -162,7 +163,7 @@ dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
                     var diag = document.createElement('div');
                     diag.style.cssText = 'position:fixed;inset:0;background:#0f0f1a;color:#e8e8e8;padding:24px;font-family:monospace;font-size:13px;z-index:100000;overflow:auto;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;';
                     diag.innerHTML = '<h2 style="color:#ff4757;margin-bottom:12px;">⚠️ Не удалось загрузить приложение</h2>' +
-                        '<p style="max-width:320px;margin-bottom:16px;">WASM не запустился за 10 секунд. Это часто на iOS при большом бандле или плохой сети.</p>' +
+                        '<p style="max-width:320px;margin-bottom:16px;">WASM не запустился за 30 секунд. Попробуй перезагрузить или проверь соединение.</p>' +
                         '<div style="background:#1a1a2e;padding:12px;border-radius:8px;margin-bottom:16px;text-align:left;font-size:11px;max-width:320px;">' +
                         '<div>platform: ' + platform + '</div>' +
                         '<div>ios: ' + isIOS + '</div>' +
@@ -172,7 +173,7 @@ dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
                     document.body.appendChild(diag);
                     document.getElementById('reload-btn').onclick = function() { location.reload(); };
                 }
-            }, 10000);
+            }, 30000);
         })();
     </script>
 </body>
