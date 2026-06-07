@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Woody Weed Bot</title>
+    <link rel="icon" href="/assets/favicon.svg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/variables-f989da88235f4738.css"/>
+    <link rel="stylesheet" href="/main-6a598ee03be5b42f.css"/>
+    <link rel="stylesheet" href="/admin-1a8278f17259b522.css"/>
+    
+    
+<script type="module">
+import init, * as bindings from '/woody-weed-bot-d47dced941a8065c.js';
+const wasm = await init({ module_or_path: '/woody-weed-bot-d47dced941a8065c_bg.wasm' });
+
+
+window.wasmBindings = bindings;
+
+
+dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
+
+</script>
+    <style>
+        #preloader {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: #0f0f1a;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        }
+        #preloader.hidden { display: none; }
+        .spinner {
+            width: 50px; height: 50px;
+            border: 4px solid #2a2a4a;
+            border-top-color: #39ff14;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .loading-text {
+            margin-top: 16px;
+            color: #39ff14;
+            font-size: 14px;
+            font-weight: 600;
+        }
+    </style>
+    <script>
+    // Error catcher — shows errors on screen before WASM loads
+    window.__errors = [];
+    window.onerror = function(msg, url, line, col, err) {
+        window.__errors.push({msg: msg, url: url, line: line, col: col, stack: err && err.stack});
+        var box = document.getElementById('error-box');
+        if (box) box.style.display = 'block';
+        updateErrorBox();
+        return false;
+    };
+    window.onunhandledrejection = function(e) {
+        window.__errors.push({msg: 'Unhandled: ' + e.reason, stack: ''});
+        var box = document.getElementById('error-box');
+        if (box) box.style.display = 'block';
+        updateErrorBox();
+    };
+    function updateErrorBox() {
+        var box = document.getElementById('error-box');
+        if (!box) return;
+        box.innerHTML = '<h3 style="color:#ff4757;margin:0 0 8px">🚨 Errors (' + window.__errors.length + ')</h3>' +
+            window.__errors.map(function(e) {
+                return '<div style="margin-bottom:8px;font-size:12px;border-bottom:1px solid #333;padding-bottom:4px">' +
+                    '<div style="color:#ff4757">' + (e.msg || 'Unknown') + '</div>' +
+                    '<div style="color:#888;font-size:10px">' + (e.url||'') + ':' + (e.line||'') + '</div>' +
+                    '<pre style="color:#aaa;font-size:10px;margin:4px 0;white-space:pre-wrap">' + (e.stack||'').substring(0,500) + '</pre></div>';
+            }).join('');
+    }
+    // 3D Comet Card tilt effect (matching old React bot exactly)
+    document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('mousemove', function(e) {
+            if (!e || !e.target) { return; }
+            var target = e.target;
+            // Find closest element with .comet-card class
+            while (target && target !== document) {
+                if (target.classList && target.classList.contains('comet-card')) {
+                    var card = target;
+                    var rect = card.getBoundingClientRect();
+                    var x = (e.clientX - rect.left) / rect.width - 0.5;
+                    var y = (e.clientY - rect.top) / rect.height - 0.5;
+                    card.style.transform = 'perspective(800px) rotateY(' + (x * 12) + 'deg) rotateX(' + (-y * 12) + 'deg) scale3d(1.02, 1.02, 1.02)';
+                    return;
+                }
+                target = target.parentNode;
+            }
+        });
+        document.addEventListener('mouseleave', function(e) {
+            if (!e || !e.target) { return; }
+            var target = e.target;
+            while (target && target !== document) {
+                if (target.classList && target.classList.contains('comet-card')) {
+                    target.style.transform = '';
+                    return;
+                }
+                target = target.parentNode;
+            }
+        }, true);
+    });
+    </script>
+<link rel="modulepreload" href="/woody-weed-bot-d47dced941a8065c.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-web-bf44d47c344f35d0/src/js/eval.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-interpreter-js-53424282ea002554/src/js/common.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-interpreter-js-53424282ea002554/src/js/hydrate.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-cli-config-24e80746d3c500cd/inline0.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-interpreter-js-53424282ea002554/inline0.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-web-bf44d47c344f35d0/inline0.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-web-bf44d47c344f35d0/inline1.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-interpreter-js-53424282ea002554/src/js/patch_console.js" crossorigin="anonymous"><link rel="preload" href="/woody-weed-bot-d47dced941a8065c_bg.wasm" crossorigin="anonymous" as="fetch" type="application/wasm"></head>
+<body>
+    <div id="preloader">
+        <div class="spinner"></div>
+        <div class="loading-text" id="loader-step">Инициализация...</div>
+        <div id="loader-progress" style="margin-top:12px;width:120px;height:3px;background:#2a2a4a;border-radius:2px;overflow:hidden;">
+            <div id="loader-progress-bar" style="width:0%;height:100%;background:#39ff14;transition:width .3s ease;"></div>
+        </div>
+    </div>
+    <div id="error-box" style="display:none;position:fixed;top:0;left:0;width:100%;max-height:50vh;background:#1a1a2e;color:#e8e8e8;padding:12px;font-family:monospace;font-size:12px;z-index:100000;overflow:auto;border-bottom:2px solid #ff4757;"></div>
+    <div id="main"></div>
+    <script>
+        // WASM load tracker — shows granular progress and handles failures
+        (function() {
+            var step = 0;
+            var steps = ['Загрузка JS…', 'Загрузка WASM…', 'Компиляция…', 'Запуск…'];
+            var stepEl = document.getElementById('loader-step');
+            var barEl = document.getElementById('loader-progress-bar');
+            function setProgress(pct, text) {
+                if (barEl) barEl.style.width = pct + '%';
+                if (stepEl && text) stepEl.textContent = text;
+            }
+            setProgress(10, steps[0]);
+
+            window.addEventListener('TrunkApplicationStarted', function() {
+                setProgress(100, 'Готово!');
+                setTimeout(function() {
+                    var preloader = document.getElementById('preloader');
+                    if (preloader) preloader.classList.add('hidden');
+                }, 300);
+            });
+
+            // Advance steps on a timer if Trunk hasn't fired yet
+            var stepTimer = setInterval(function() {
+                step++;
+                if (step < steps.length) {
+                    setProgress(10 + step * 20, steps[step]);
+                }
+                if (step >= steps.length) clearInterval(stepTimer);
+            }, 1500);
+
+            // 10-second fail-safe: if WASM never starts, show diagnostic overlay
+            setTimeout(function() {
+                var preloader = document.getElementById('preloader');
+                if (preloader && !preloader.classList.contains('hidden')) {
+                    var ua = navigator.userAgent || '';
+                    var platform = navigator.platform || '';
+                    var isIOS = /iPad|iPhone|iPod/.test(ua) || (platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+                    var diag = document.createElement('div');
+                    diag.style.cssText = 'position:fixed;inset:0;background:#0f0f1a;color:#e8e8e8;padding:24px;font-family:monospace;font-size:13px;z-index:100000;overflow:auto;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;';
+                    diag.innerHTML = '<h2 style="color:#ff4757;margin-bottom:12px;">⚠️ Не удалось загрузить приложение</h2>' +
+                        '<p style="max-width:320px;margin-bottom:16px;">WASM не запустился за 10 секунд. Это часто на iOS при большом бандле или плохой сети.</p>' +
+                        '<div style="background:#1a1a2e;padding:12px;border-radius:8px;margin-bottom:16px;text-align:left;font-size:11px;max-width:320px;">' +
+                        '<div>platform: ' + platform + '</div>' +
+                        '<div>ios: ' + isIOS + '</div>' +
+                        '<div>userAgent: ' + ua.substring(0,80) + '…</div>' +
+                        '</div>' +
+                        '<button id="reload-btn" style="padding:10px 20px;background:#39ff14;color:#000;border:none;border-radius:6px;font-weight:700;cursor:pointer;">Перезагрузить</button>';
+                    document.body.appendChild(diag);
+                    document.getElementById('reload-btn').onclick = function() { location.reload(); };
+                }
+            }, 10000);
+        })();
+    </script>
+</body>
+</html>

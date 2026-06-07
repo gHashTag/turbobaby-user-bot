@@ -5,8 +5,10 @@ target/
 .cargo/
 .claude/
 
-# Trunk build output (now built inside Docker)
-dist/
+# Trunk build output (built locally for Railway static serving; Docker path keeps
+dist/ but we commit it so Railway serves the pre-built WASM without a Docker stage)
+# NOTE: if you switch back to Dockerfile-only builds, re-ignore dist/
+# dist/
 logs/
 *.log
 # E2E test artifacts
