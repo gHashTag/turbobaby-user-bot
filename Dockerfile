@@ -33,8 +33,13 @@ RUN apk add --no-cache ca-certificates curl
 # Backend binary
 COPY --from=backend /app/target/x86_64-unknown-linux-musl/release/woody-weed-bot-server ./
 
+# Force Railway to rebuild the COPY layer — busts Docker cache when dist changes.
+ARG DIST_CACHE_BUST=1
+ENV DIST_CACHE_BUST=$DIST_CACHE_BUST
+
 # Freshly built WASM frontend (pre-built in CI or committed to repo)
 COPY dist ./dist
+RUN ls -la dist/woody-weed-bot-*.js dist/woody-weed-bot-*.wasm 2>/dev/null || echo "WASM bundles not found in dist/"
 
 # Static assets (CSS, images) — also referenced from /assets in code
 COPY styles ./styles
