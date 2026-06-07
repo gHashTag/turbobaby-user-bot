@@ -1,6 +1,6 @@
 target/
-dist/
-node_modules/
+# dist/ is now committed and copied into the final image (ci/docker stage removed)
+# node_modules/
 .git/
 .gitignore
 .env
