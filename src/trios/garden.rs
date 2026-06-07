@@ -88,6 +88,48 @@ impl GrowthStage {
             _ => None,
         }
     }
+
+    /// Stable snake_case name for DB storage. Must match `from_db_name` and
+    /// the `serde(rename_all = "snake_case")` contract exactly.
+    pub fn db_name(&self) -> &'static str {
+        match self {
+            Self::Seed => "seed",
+            Self::Sprout => "sprout",
+            Self::FirstLeaf => "first_leaf",
+            Self::YoungBush => "young_bush",
+            Self::VegStart => "veg_start",
+            Self::BigVeg => "big_veg",
+            Self::PreFlower => "pre_flower",
+            Self::SmallBuds => "small_buds",
+            Self::BigBuds => "big_buds",
+            Self::Trimming => "trimming",
+            Self::Curing => "curing",
+            Self::Lab => "lab",
+            Self::Delivery => "delivery",
+            Self::Final => "final",
+        }
+    }
+
+    /// Parse from the DB snake_case name.
+    pub fn from_db_name(name: &str) -> Option<Self> {
+        match name {
+            "seed" => Some(Self::Seed),
+            "sprout" => Some(Self::Sprout),
+            "first_leaf" => Some(Self::FirstLeaf),
+            "young_bush" => Some(Self::YoungBush),
+            "veg_start" => Some(Self::VegStart),
+            "big_veg" => Some(Self::BigVeg),
+            "pre_flower" => Some(Self::PreFlower),
+            "small_buds" => Some(Self::SmallBuds),
+            "big_buds" => Some(Self::BigBuds),
+            "trimming" => Some(Self::Trimming),
+            "curing" => Some(Self::Curing),
+            "lab" => Some(Self::Lab),
+            "delivery" => Some(Self::Delivery),
+            "final" => Some(Self::Final),
+            _ => None,
+        }
+    }
 }
 
 /// User's plant
@@ -276,6 +318,11 @@ pub fn calculate_progress(plant: &Plant, now: Timestamp) -> PlantProgress {
     } else {
         next_water_at.saturating_sub(now)
     };
+    let time_to_harvest = if is_ready_to_harvest {
+        0
+    } else {
+        ((TOTAL_WATER_STAGES - 1 - water_count) as i64).saturating_mul(WATER_COOLDOWN_MS)
+    };
 
     PlantProgress {
         stage,
@@ -284,7 +331,7 @@ pub fn calculate_progress(plant: &Plant, now: Timestamp) -> PlantProgress {
         progress: total_progress.min(100),
         total_progress: total_progress.min(100),
         time_to_next_stage,
-        time_to_harvest: 0,
+        time_to_harvest,
         is_ready_to_harvest,
         stage_index,
         can_water,
@@ -565,5 +612,66 @@ mod tests {
         assert!(config.is_enabled);
         assert_eq!(config.reward_discount_percent, 10);
         assert_eq!(config.reward_bonus_points, 100);
+    }
+
+    #[test]
+    fn test_growth_stage_db_name_roundtrip() {
+        let stages = [
+            GrowthStage::Seed,
+            GrowthStage::Sprout,
+            GrowthStage::FirstLeaf,
+            GrowthStage::YoungBush,
+            GrowthStage::VegStart,
+            GrowthStage::BigVeg,
+            GrowthStage::PreFlower,
+            GrowthStage::SmallBuds,
+            GrowthStage::BigBuds,
+            GrowthStage::Trimming,
+            GrowthStage::Curing,
+            GrowthStage::Lab,
+            GrowthStage::Delivery,
+            GrowthStage::Final,
+        ];
+        for stage in stages {
+            let name = stage.db_name();
+            let parsed = GrowthStage::from_db_name(name).unwrap();
+            assert_eq!(stage, parsed, "db_name roundtrip failed for {:?}", stage);
+        }
+    }
+
+    #[test]
+    fn test_growth_stage_db_name_snake_case() {
+        assert_eq!(GrowthStage::FirstLeaf.db_name(), "first_leaf");
+        assert_eq!(GrowthStage::YoungBush.db_name(), "young_bush");
+        assert_eq!(GrowthStage::PreFlower.db_name(), "pre_flower");
+        assert_eq!(GrowthStage::SmallBuds.db_name(), "small_buds");
+        assert_eq!(GrowthStage::BigBuds.db_name(), "big_buds");
+    }
+
+    #[test]
+    fn test_growth_stage_from_db_name_unknown() {
+        assert_eq!(GrowthStage::from_db_name("unknown"), None);
+        assert_eq!(GrowthStage::from_db_name("firstleaf"), None); // no underscore
+    }
+
+    #[test]
+    fn test_calculate_progress_time_to_harvest() {
+        let mut plant = Plant::new(
+            "user123".to_string(),
+            "strain456".to_string(),
+            "OG Kush".to_string(),
+        );
+        let now = chrono::Utc::now().timestamp_millis();
+        let progress = calculate_progress(&plant, now);
+        // 13 stages total, water_count=0 → 13 waters remaining
+        assert_eq!(
+            progress.time_to_harvest,
+            13 * WATER_COOLDOWN_MS,
+            "time_to_harvest should account for remaining waters"
+        );
+
+        plant.water_count = 10;
+        let progress = calculate_progress(&plant, now);
+        assert_eq!(progress.time_to_harvest, 3 * WATER_COOLDOWN_MS);
     }
 }

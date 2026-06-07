@@ -54,6 +54,7 @@ pub(crate) struct PlantResponse {
     pub planted_at: i64,
     pub is_completed: bool,
     pub harvested_at: Option<i64>,
+    pub reward_claimed: bool,
     pub water_count: u32,
     pub progress: u8,
     pub can_water: bool,
@@ -98,7 +99,7 @@ async fn get_user_plants(
             "SELECT id, user_id, strain_id, strain_name, current_stage, planted_at, \
                 is_completed, harvested_at, reward_claimed, water_count, last_watered_at \
          FROM garden_plants \
-         WHERE user_id = $1 \
+         WHERE user_id = $1 AND is_completed = false \
          ORDER BY planted_at DESC LIMIT 200",
             [user_id.clone().into()],
         ))
@@ -112,31 +113,15 @@ async fn get_user_plants(
     let plants: Vec<PlantResponse> = rows
         .iter()
         .map(|r| {
+            let db_stage = r.try_get::<String>("", "current_stage").unwrap_or_default();
+            let current_stage =
+                garden::GrowthStage::from_db_name(&db_stage).unwrap_or(garden::GrowthStage::Final);
             let plant = garden::Plant {
                 id: r.try_get("", "id").unwrap_or_default(),
                 user_id: r.try_get("", "user_id").unwrap_or_default(),
                 strain_id: r.try_get("", "strain_id").unwrap_or_default(),
                 strain_name: r.try_get("", "strain_name").unwrap_or_default(),
-                current_stage: match r
-                    .try_get::<String>("", "current_stage")
-                    .unwrap_or_default()
-                    .as_str()
-                {
-                    "seed" => garden::GrowthStage::Seed,
-                    "sprout" => garden::GrowthStage::Sprout,
-                    "first_leaf" => garden::GrowthStage::FirstLeaf,
-                    "young_bush" => garden::GrowthStage::YoungBush,
-                    "veg_start" => garden::GrowthStage::VegStart,
-                    "big_veg" => garden::GrowthStage::BigVeg,
-                    "pre_flower" => garden::GrowthStage::PreFlower,
-                    "small_buds" => garden::GrowthStage::SmallBuds,
-                    "big_buds" => garden::GrowthStage::BigBuds,
-                    "trimming" => garden::GrowthStage::Trimming,
-                    "curing" => garden::GrowthStage::Curing,
-                    "lab" => garden::GrowthStage::Lab,
-                    "delivery" => garden::GrowthStage::Delivery,
-                    _ => garden::GrowthStage::Final,
-                },
+                current_stage,
                 planted_at: r.try_get("", "planted_at").unwrap_or(0),
                 is_completed: r.try_get("", "is_completed").unwrap_or(false),
                 harvested_at: r.try_get("", "harvested_at").ok(),
@@ -151,12 +136,13 @@ async fn get_user_plants(
                 user_id: plant.user_id,
                 strain_id: plant.strain_id,
                 strain_name: plant.strain_name,
-                current_stage: format!("{:?}", plant.current_stage).to_lowercase(),
+                current_stage: plant.current_stage.db_name().to_string(),
                 stage_name: progress.stage_name,
                 stage_emoji: progress.stage_emoji,
                 planted_at: plant.planted_at,
                 is_completed: plant.is_completed,
                 harvested_at: plant.harvested_at,
+                reward_claimed: plant.reward_claimed,
                 water_count: plant.water_count,
                 progress: progress.total_progress,
                 can_water: progress.can_water,
@@ -230,15 +216,19 @@ async fn water_plant(
         ));
     }
 
+    if water_count >= 13 {
+        return Ok(Json(
+            json!({ "success": false, "error": "Plant already at final stage" }),
+        ));
+    }
     let new_count = water_count
         .checked_add(1)
         .ok_or(StatusCode::BAD_REQUEST)?
         .max(0) as u32;
-    let new_stage = if let Some(stage) = garden::GrowthStage::from_index(new_count as usize) {
-        format!("{:?}", stage).to_lowercase()
-    } else {
-        r.try_get::<String>("", "current_stage").unwrap_or_default()
-    };
+    let new_stage = garden::GrowthStage::from_index(new_count as usize)
+        .unwrap_or(garden::GrowthStage::Final)
+        .db_name()
+        .to_string();
     let new_completed = new_count >= 13;
     let cooldown_ms = garden::WATER_COOLDOWN_MS;
     let max_last_water = now.saturating_sub(cooldown_ms);
@@ -378,7 +368,7 @@ async fn harvest_plant(
     // Atomically mark plant as harvested — WHERE harvested_at IS NULL prevents race
     let rows = tx.execute(Statement::from_sql_and_values(
         DbBackend::Postgres,
-        "UPDATE garden_plants SET harvested_at = $1, reward_claimed = true WHERE id = $2 AND harvested_at IS NULL",
+        "UPDATE garden_plants SET harvested_at = $1, reward_claimed = true WHERE id = $2 AND harvested_at IS NULL AND reward_claimed = false",
         [now.into(), id.clone().into()],
     )).await.map_err(|e| {
         tracing::error!("harvest_plant update: {e}");
