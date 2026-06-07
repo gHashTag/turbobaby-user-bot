@@ -53,6 +53,7 @@ const MIGRATION_SQL: &str = concat!(
     include_str!("../../migrations/032_loyalty_config_marketing_badges_hidden.sql"),
     include_str!("../../migrations/033_loyalty_idempotency_keys.sql"),
     include_str!("../../migrations/034_sets_image_url.sql"),
+    include_str!("../../migrations/035_referral_code_telegram_id.sql"),
 );
 
 /// Cycle #96: after the 17-cycle SeaORM migration finished, this is the

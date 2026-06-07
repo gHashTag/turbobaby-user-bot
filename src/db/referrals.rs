@@ -1,6 +1,5 @@
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 // ──────────────────────────────────────────────────────────────────
@@ -34,29 +33,15 @@ pub(crate) struct TopReferrer {
 
 /// Salt used when generating referral codes — not a secret, just prevents
 /// trivial enumeration of sequential IDs.
-const CODE_SALT: &str = "woody-ref-v1";
-
-const BASE62_CHARS: &[u8] = b"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
-
-/// Generate an 8-character base-62 referral code derived from telegram_id + salt.
-/// The `attempt` parameter is incremented on collision to produce a different code.
-pub(crate) fn generate_referral_code(telegram_id: i64, attempt: u32) -> String {
-    let input = format!("{}{}{}", telegram_id, CODE_SALT, attempt);
-    let mut hasher = Sha256::new();
-    hasher.update(input.as_bytes());
-    let hash = hasher.finalize();
-
-    // Take first 8 bytes and map each byte to a base-62 character
-    hash.iter()
-        .take(8)
-        .map(|&b| BASE62_CHARS[(b as usize) % 62] as char)
-        .collect()
+/// Cycle #169: referral code is the raw telegram_id so deep-links are
+/// human-readable and survive any bot-name changes.
+pub(crate) fn referral_code_for(telegram_id: i64) -> String {
+    telegram_id.to_string()
 }
 
-/// Get existing referral code for `telegram_id`, or generate and persist a new one.
-/// Retries on collision (up to 10 attempts).
-///
-/// Cycle #84: SeaORM. Same retry loop, just talking through the ORM.
+/// Get existing referral code for `telegram_id`, or persist the canonical
+/// one (`telegram_id` as string). The code is unique because telegram_id
+/// itself is unique.
 pub(crate) async fn get_or_create_referral_code(
     orm: &sea_orm::DatabaseConnection,
     telegram_id: i64,
@@ -67,6 +52,8 @@ pub(crate) async fn get_or_create_referral_code(
     use sea_orm::sea_query::OnConflict;
     use sea_orm::{ActiveValue::Set, ColumnTrait, EntityTrait, QueryFilter};
 
+    let code = referral_code_for(telegram_id);
+
     // Check existing code first.
     if let Some(m) = LoyaltyProfileEntity::find_by_id(telegram_id)
         .filter(LpCol::ReferralCode.is_not_null())
@@ -74,68 +61,28 @@ pub(crate) async fn get_or_create_referral_code(
         .await
         .context("read existing referral_code")?
     {
-        if let Some(code) = m.referral_code {
-            return Ok(code);
+        if let Some(existing) = m.referral_code {
+            return Ok(existing);
         }
     }
 
-    // Ensure profile row exists.
+    // Upsert: seed row + write code in one path.
     let seed = LpAm {
         telegram_id: Set(telegram_id),
+        referral_code: Set(Some(code.clone())),
         ..Default::default()
     };
     LoyaltyProfileEntity::insert(seed)
         .on_conflict(
             OnConflict::column(LpCol::TelegramId)
-                .do_nothing()
+                .update_columns([LpCol::ReferralCode])
                 .to_owned(),
         )
-        .do_nothing()
         .exec(orm)
         .await
-        .context("seed loyalty_profile for referral_code")?;
+        .context("upsert loyalty_profile with referral_code")?;
 
-    // Try up to 10 times to find a unique code. The UPDATE filters on
-    // `referral_code IS NULL` so the *first* successful attempt wins
-    // against concurrent callers for the same telegram_id; the UNIQUE
-    // constraint on referral_code rejects code collisions across users.
-    for attempt in 0u32..10 {
-        let code = generate_referral_code(telegram_id, attempt);
-
-        let updated = LoyaltyProfileEntity::update_many()
-            .col_expr(
-                LpCol::ReferralCode,
-                sea_orm::sea_query::Expr::value(code.clone()),
-            )
-            .filter(LpCol::TelegramId.eq(telegram_id))
-            .filter(LpCol::ReferralCode.is_null())
-            .exec(orm)
-            .await
-            .context("write generated referral_code")?;
-
-        if updated.rows_affected > 0 {
-            return Ok(code);
-        }
-
-        // Either our row already has a code (concurrent winner) or the
-        // generated code collided with another user's. Check first.
-        if let Some(m) = LoyaltyProfileEntity::find_by_id(telegram_id)
-            .filter(LpCol::ReferralCode.is_not_null())
-            .one(orm)
-            .await
-            .context("re-read referral_code after collision")?
-        {
-            if let Some(code) = m.referral_code {
-                return Ok(code);
-            }
-        }
-        // Otherwise the code was taken by someone else — try next attempt.
-    }
-
-    anyhow::bail!(
-        "Failed to generate unique referral code for telegram_id={}",
-        telegram_id
-    )
+    Ok(code)
 }
 
 // ──────────────────────────────────────────────────────────────────
@@ -497,38 +444,16 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_generate_referral_code_length() {
-        let code = generate_referral_code(123456789, 0);
-        assert_eq!(code.len(), 8, "code must be exactly 8 chars");
+    fn test_referral_code_is_telegram_id() {
+        assert_eq!(referral_code_for(123456789), "123456789");
+        assert_eq!(referral_code_for(42), "42");
+        assert_eq!(referral_code_for(0), "0");
     }
 
     #[test]
-    fn test_generate_referral_code_charset() {
-        let code = generate_referral_code(987654321, 0);
-        assert!(
-            code.chars().all(|c| c.is_ascii_alphanumeric()),
-            "code must be alphanumeric base-62"
-        );
-    }
-
-    #[test]
-    fn test_generate_referral_code_deterministic() {
-        let a = generate_referral_code(42, 0);
-        let b = generate_referral_code(42, 0);
-        assert_eq!(a, b, "same inputs → same code");
-    }
-
-    #[test]
-    fn test_generate_referral_code_different_ids() {
-        let a = generate_referral_code(1, 0);
-        let b = generate_referral_code(2, 0);
-        assert_ne!(a, b, "different ids → different codes");
-    }
-
-    #[test]
-    fn test_generate_referral_code_attempt_changes_code() {
-        let a = generate_referral_code(1, 0);
-        let b = generate_referral_code(1, 1);
-        assert_ne!(a, b, "different attempts → different codes");
+    fn test_referral_code_negative_id() {
+        // Negative IDs are invalid in practice, but the function must still
+        // produce a stable string so `find_referrer_by_code` can match.
+        assert_eq!(referral_code_for(-1), "-1");
     }
 }
