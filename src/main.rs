@@ -637,8 +637,22 @@ async fn main() -> Result<()> {
                         );
                     }
                     // Cache control: only exact hashed assets are immutable; HTML/fallback must never be cached
-                    let cache_header = if exact.is_some() && path.contains('-') {
-                        "public, max-age=31536000, immutable"
+                    // Cycle #169: path.contains('-') was too broad — snippet dirs like
+                    // dioxus-web-bf44d47c344f35d0 contain '-', so inline1.js got
+                    // immutable even though its name is stable across builds. This
+                    // caused stale snippet exports (get_select_data) to be cached
+                    // forever in Safari/WebView. Immutable now requires the hash
+                    // to be in the file name itself, not just the parent dir.
+                    let cache_header = if exact.is_some() {
+                        let file_name = std::path::Path::new(path)
+                            .file_name()
+                            .and_then(|n| n.to_str())
+                            .unwrap_or("");
+                        if file_name.contains('-') {
+                            "public, max-age=31536000, immutable"
+                        } else {
+                            "no-store, no-cache, must-revalidate, max-age=0"
+                        }
                     } else {
                         "no-store, no-cache, must-revalidate, max-age=0"
                     };

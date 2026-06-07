@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://telegram.org/js/telegram-web-app.js?v=2"></script>
     <meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <title>Woody Weed Bot</title>
@@ -15,8 +15,8 @@
     
     
 <script type="module">
-import init, * as bindings from '/woody-weed-bot-ab9ef109ebb923d3.js';
-const wasm = await init({ module_or_path: '/woody-weed-bot-ab9ef109ebb923d3_bg.wasm' });
+import init, * as bindings from '/woody-weed-bot-ab9ef109ebb923d3.js?v=2';
+const wasm = await init({ module_or_path: '/woody-weed-bot-ab9ef109ebb923d3_bg.wasm?v=2' });
 
 
 window.wasmBindings = bindings;
@@ -111,7 +111,7 @@ dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
         }, true);
     });
     </script>
-<link rel="modulepreload" href="/woody-weed-bot-ab9ef109ebb923d3.js"><link rel="modulepreload" href="/snippets/dioxus-cli-config-24e80746d3c500cd/inline0.js"><link rel="modulepreload" href="/snippets/dioxus-interpreter-js-53424282ea002554/src/js/hydrate.js"><link rel="modulepreload" href="/snippets/dioxus-web-bf44d47c344f35d0/src/js/eval.js"><link rel="modulepreload" href="/snippets/dioxus-web-bf44d47c344f35d0/inline1.js"><link rel="modulepreload" href="/snippets/dioxus-web-bf44d47c344f35d0/inline0.js"><link rel="modulepreload" href="/snippets/dioxus-interpreter-js-53424282ea002554/src/js/patch_console.js"><link rel="modulepreload" href="/snippets/dioxus-interpreter-js-53424282ea002554/inline0.js"><link rel="modulepreload" href="/snippets/dioxus-interpreter-js-53424282ea002554/src/js/common.js"><link rel="preload" href="/woody-weed-bot-ab9ef109ebb923d3_bg.wasm" as="fetch" type="application/wasm"></head>
+<link rel="modulepreload" href="/woody-weed-bot-ab9ef109ebb923d3.js?v=2"><link rel="modulepreload" href="/snippets/dioxus-cli-config-24e80746d3c500cd/inline0.js?v=2"><link rel="modulepreload" href="/snippets/dioxus-interpreter-js-53424282ea002554/src/js/hydrate.js?v=2"><link rel="modulepreload" href="/snippets/dioxus-web-bf44d47c344f35d0/src/js/eval.js?v=2"><link rel="modulepreload" href="/snippets/dioxus-web-bf44d47c344f35d0/inline1.js?v=2"><link rel="modulepreload" href="/snippets/dioxus-web-bf44d47c344f35d0/inline0.js?v=2"><link rel="modulepreload" href="/snippets/dioxus-interpreter-js-53424282ea002554/src/js/patch_console.js?v=2"><link rel="modulepreload" href="/snippets/dioxus-interpreter-js-53424282ea002554/inline0.js?v=2"><link rel="modulepreload" href="/snippets/dioxus-interpreter-js-53424282ea002554/src/js/common.js?v=2"><link rel="preload" href="/woody-weed-bot-ab9ef109ebb923d3_bg.wasm?v=2" as="fetch" type="application/wasm"></head>
 <body>
     <div id="preloader">
         <div class="spinner"></div>
