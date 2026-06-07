@@ -681,7 +681,27 @@ async fn main() -> Result<()> {
     };
 
     // SPA routes that should return index.html for client-side routing
+    // Cycle #169: root redirect — Telegram WebView caches index.html by URL.
+    // Without a query-param change, Safari/WebView never revalidates. We
+    // redirect / → /?v=2 so even the BotFather menu button opens a fresh
+    // cache key. Once v=2 is present, serve index.html normally.
+    let spa_handler_v2 = {
+        let static_cache = static_cache.clone();
+        move |uri: axum::http::Uri| async move {
+            if uri.query().map(|q| q.contains("v=2")).unwrap_or(false) {
+                let html = if let Some(file) = static_cache.get("index.html") {
+                    String::from_utf8_lossy(&file.raw).to_string()
+                } else {
+                    "<h1>App not found</h1>".to_string()
+                };
+                axum::response::Html(html).into_response()
+            } else {
+                axum::response::Redirect::to("/?v=2").into_response()
+            }
+        }
+    };
     let spa_routes = Router::new()
+        .route("/", get(spa_handler_v2))
         .route("/menu", get(spa_handler.clone()))
         .route("/sets", get(spa_handler.clone()))
         .route("/sommelier", get(spa_handler.clone()))
