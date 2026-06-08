@@ -807,13 +807,15 @@ async fn force_seed(
         ));
     }
 
-    // 2. Find the earliest completed order with a catalog item.
+    // 2. Find the earliest confirmed/completed order with a catalog item.
+    // Cycle #169G: expanded from 'completed' to ('completed','confirmed','ready')
+    // because admins sometimes forget to press "Complete" after confirming.
     let order_row = state
         .db
         .orm
         .query_one(Statement::from_sql_and_values(
             DbBackend::Postgres,
-            "SELECT id, items FROM orders WHERE telegram_id = $1 AND status = 'completed' ORDER BY created_at ASC LIMIT 1",
+            "SELECT id, items FROM orders WHERE telegram_id = $1 AND status IN ('completed','confirmed','ready') ORDER BY created_at ASC LIMIT 1",
             [tid.into()],
         ))
         .await
