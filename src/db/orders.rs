@@ -221,16 +221,41 @@ pub async fn complete_order_and_update_loyalty(
     //    backfill, intentional.
     let strain_seed: Option<(String, String)> = order.items.as_array().and_then(|arr| {
         arr.iter().find_map(|it| {
-            let sid = it.get("strain_id")?.as_str()?;
-            if sid.is_empty() {
-                return None;
-            }
-            let sname = it
-                .get("strain_name")
+            // Primary: explicit strain item
+            if let Some(sid) = it
+                .get("strain_id")
                 .and_then(|v| v.as_str())
-                .unwrap_or("")
-                .to_string();
-            Some((sid.to_string(), sname))
+                .filter(|s| !s.is_empty())
+            {
+                let sname = it
+                    .get("strain_name")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                return Some((sid.to_string(), sname));
+            }
+            // Fallback: any catalog item seeds a plant (sets, accessories, tea).
+            // Cycle #169A: closes the gap where users ordering sets/accessories
+            // saw "Order a strain to get your first seed!" and were confused.
+            for (id_key, name_key) in [
+                ("set_id", "set_name"),
+                ("accessory_id", "accessory_name"),
+                ("tea_id", "tea_name"),
+            ] {
+                if let Some(id) = it
+                    .get(id_key)
+                    .and_then(|v| v.as_str())
+                    .filter(|s| !s.is_empty())
+                {
+                    let name = it
+                        .get(name_key)
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    return Some((id.to_string(), name));
+                }
+            }
+            None
         })
     });
     if let Some((strain_id, strain_name)) = strain_seed {
