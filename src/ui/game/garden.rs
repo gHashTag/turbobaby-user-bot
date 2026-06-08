@@ -18,6 +18,7 @@ struct ApiPlant {
     water_count: u32,
     is_completed: bool,
     planted_at: i64,
+    #[serde(default)]
     last_watered_at: Option<i64>,
     reward_claimed: bool,
 }

@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <script src="https://telegram.org/js/telegram-web-app.js?v=3"></script>
+    <script src="https://telegram.org/js/telegram-web-app.js?v=4"></script>
     <meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <title>Woody Weed Bot</title>
@@ -9,20 +9,31 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/variables-f989da88235f4738.css"/>
-    <link rel="stylesheet" href="/main-6a598ee03be5b42f.css"/>
-    <link rel="stylesheet" href="/admin-1a8278f17259b522.css"/>
+    <link rel="stylesheet" href="/variables-f989da88235f4738.css?v=4"/>
+    <link rel="stylesheet" href="/main-6a598ee03be5b42f.css?v=4"/>
+    <link rel="stylesheet" href="/admin-1a8278f17259b522.css?v=4"/>
     
     
 <script type="module">
-import init, * as bindings from '/woody-weed-bot-47997a8b41cd588f.js?v=3?v=3';
+import init, * as bindings from '/woody-weed-bot-6b59b0f8dfc158f9.js';
+let wasm;
 try {
-    const wasm = await init({ module_or_path: '/woody-weed-bot-47997a8b41cd588f_bg.wasm?v=3?v=3' });
-    window.wasmBindings = bindings;
-    dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
+    wasm = await Promise.race([
+        init({ module_or_path: '/woody-weed-bot-6b59b0f8dfc158f9_bg.wasm?v=4' }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('WASM load timeout')), 30000))
+    ]);
 } catch (e) {
-    window.onerror('WASM init failed: ' + (e.message || e), '', 0, 0, e);
+    console.error('WASM init failed:', e);
+    document.getElementById('preloader').innerHTML = '<div style="color:#ff4757;text-align:center;padding:20px;">⚠️ Не удалось загрузить приложение. Попробуйте перезапустить.</div>';
+    throw e;
 }
+
+
+
+window.wasmBindings = bindings;
+
+
+dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
 
 </script>
     <style>
@@ -111,7 +122,7 @@ try {
         }, true);
     });
     </script>
-<link rel="modulepreload" href="/woody-weed-bot-47997a8b41cd588f.js?v=3" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-web-bf44d47c344f35d0/inline0.js?v=3?v=3" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-interpreter-js-53424282ea002554/src/js/common.js?v=3?v=3" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-interpreter-js-53424282ea002554/src/js/hydrate.js?v=3?v=3" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-interpreter-js-53424282ea002554/inline0.js?v=3?v=3" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-web-bf44d47c344f35d0/inline1.js?v=3?v=3" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-web-bf44d47c344f35d0/src/js/eval.js?v=3?v=3" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-interpreter-js-53424282ea002554/src/js/patch_console.js?v=3?v=3" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-cli-config-24e80746d3c500cd/inline0.js?v=3?v=3" crossorigin="anonymous"><link rel="prefetch" href="/woody-weed-bot-47997a8b41cd588f_bg.wasm?v=3"></head>
+<link rel="modulepreload" href="/woody-weed-bot-6b59b0f8dfc158f9.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-web-bf44d47c344f35d0/inline1.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-web-bf44d47c344f35d0/inline0.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-interpreter-js-53424282ea002554/src/js/patch_console.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-web-bf44d47c344f35d0/src/js/eval.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-interpreter-js-53424282ea002554/src/js/common.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-interpreter-js-53424282ea002554/src/js/hydrate.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-interpreter-js-53424282ea002554/inline0.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-cli-config-24e80746d3c500cd/inline0.js" crossorigin="anonymous"><link rel="preload" href="/woody-weed-bot-6b59b0f8dfc158f9_bg.wasm" crossorigin="anonymous" as="fetch" type="application/wasm"></head>
 <body>
     <div id="preloader">
         <div class="spinner"></div>
