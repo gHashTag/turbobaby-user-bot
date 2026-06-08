@@ -64,7 +64,7 @@ pub(crate) fn build_app_url(base_url: &str, lang: &str, page: Option<&str>) -> S
     // Cycle #169: force Telegram WebView to bypass its aggressive cache
     // after a WASM deploy. Without this, Safari/WebView serves a stale
     // index.html even when the server sends Cache-Control: no-store.
-    url.push_str("&v=2");
+    url.push_str("&v=3");
     url
 }
 
@@ -677,7 +677,7 @@ mod tests {
     fn test_build_app_url_basic() {
         assert_eq!(
             build_app_url("https://app.com", "en", None),
-            "https://app.com?lang=en&v=2"
+            "https://app.com?lang=en&v=3"
         );
     }
 
@@ -685,7 +685,7 @@ mod tests {
     fn test_build_app_url_with_page() {
         assert_eq!(
             build_app_url("https://app.com", "ru", Some("admin")),
-            "https://app.com?lang=ru&page=admin&v=2"
+            "https://app.com?lang=ru&page=admin&v=3"
         );
     }
 
@@ -693,7 +693,7 @@ mod tests {
     fn test_build_app_url_trailing_slash() {
         assert_eq!(
             build_app_url("https://app.com/", "th", None),
-            "https://app.com/?lang=th&v=2"
+            "https://app.com/?lang=th&v=3"
         );
     }
 
