@@ -54,6 +54,8 @@ const MIGRATION_SQL: &str = concat!(
     include_str!("../../migrations/033_loyalty_idempotency_keys.sql"),
     include_str!("../../migrations/034_sets_image_url.sql"),
     include_str!("../../migrations/035_referral_code_telegram_id.sql"),
+    include_str!("../../migrations/036_garden_backfill_non_strain_orders.sql"),
+    include_str!("../../migrations/037_garden_universal_backfill.sql"),
 );
 
 /// Cycle #96: after the 17-cycle SeaORM migration finished, this is the
