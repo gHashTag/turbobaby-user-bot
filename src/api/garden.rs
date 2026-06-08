@@ -28,6 +28,7 @@ pub(crate) fn routes() -> Router<AppState> {
         // Config
         .route("/garden/config", get(get_config))
         .route("/garden/config", put(update_config))
+        .route("/garden/force-seed", post(force_seed))
 }
 
 // ── Request/Response Types ────────────────────────────────────────
@@ -756,6 +757,128 @@ async fn update_config(
         })?;
 
     Ok(Json(json!({ "success": true })))
+}
+
+// Cycle #169F: emergency self-service seeding endpoint. Users whose
+// completed orders somehow failed to trigger the automatic garden
+// seeding (e.g. migration gaps, zero telegram_id in orders, etc.) can
+// hit this endpoint and receive a seed immediately.
+#[derive(Debug, Deserialize)]
+pub(crate) struct ForceSeedRequest {
+    pub telegram_id: i64,
+}
+
+async fn force_seed(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    Json(req): Json<ForceSeedRequest>,
+) -> Result<Json<Value>, StatusCode> {
+    validate_telegram_id_param(req.telegram_id)?;
+    crate::api::auth::check_owner(&headers, &state, req.telegram_id)?;
+    check_not_blocked(&state, req.telegram_id).await?;
+
+    use sea_orm::{ConnectionTrait, DbBackend, Statement};
+
+    let tid = req.telegram_id;
+    let user_id = tid.to_string();
+
+    // 1. Guard: already has an active plant?
+    let has_active = state
+        .db
+        .orm
+        .query_one(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            "SELECT 1 FROM garden_plants WHERE user_id = $1 AND is_completed = false LIMIT 1",
+            [user_id.clone().into()],
+        ))
+        .await
+        .map_err(|e| {
+            tracing::error!("force_seed: active plant check failed: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+    if has_active.is_some() {
+        return Ok(Json(json!({ "success": false, "error": "already_has_plant" })));
+    }
+
+    // 2. Find the earliest completed order with a catalog item.
+    let order_row = state
+        .db
+        .orm
+        .query_one(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            "SELECT id, items FROM orders WHERE telegram_id = $1 AND status = 'completed' ORDER BY created_at ASC LIMIT 1",
+            [tid.into()],
+        ))
+        .await
+        .map_err(|e| {
+            tracing::error!("force_seed: order lookup failed: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    let Some(order_row) = order_row else {
+        return Ok(Json(json!({ "success": false, "error": "no_completed_orders" })));
+    };
+
+    let items: serde_json::Value = order_row
+        .try_get("", "items")
+        .unwrap_or(serde_json::Value::Null);
+
+    let first_item = items.as_array().and_then(|arr| {
+        arr.iter().find(|it| {
+            it.get("strain_id").and_then(|v| v.as_str()).map(|s| !s.is_empty()).unwrap_or(false)
+                || it.get("set_id").and_then(|v| v.as_str()).map(|s| !s.is_empty()).unwrap_or(false)
+                || it.get("accessory_id").and_then(|v| v.as_str()).map(|s| !s.is_empty()).unwrap_or(false)
+                || it.get("tea_id").and_then(|v| v.as_str()).map(|s| !s.is_empty()).unwrap_or(false)
+        })
+    });
+
+    let Some(item) = first_item else {
+        return Ok(Json(json!({ "success": false, "error": "no_catalog_items" })));
+    };
+
+    let (strain_id, strain_name) = if let Some(sid) = item.get("strain_id").and_then(|v| v.as_str()).filter(|s| !s.is_empty()) {
+        let sname = item.get("strain_name").and_then(|v| v.as_str()).unwrap_or("");
+        (sid.to_string(), sname.to_string())
+    } else if let Some(sid) = item.get("set_id").and_then(|v| v.as_str()).filter(|s| !s.is_empty()) {
+        let sname = item.get("set_name").and_then(|v| v.as_str()).unwrap_or("");
+        (sid.to_string(), sname.to_string())
+    } else if let Some(sid) = item.get("accessory_id").and_then(|v| v.as_str()).filter(|s| !s.is_empty()) {
+        let sname = item.get("accessory_name").and_then(|v| v.as_str()).unwrap_or("");
+        (sid.to_string(), sname.to_string())
+    } else if let Some(sid) = item.get("tea_id").and_then(|v| v.as_str()).filter(|s| !s.is_empty()) {
+        let sname = item.get("tea_name").and_then(|v| v.as_str()).unwrap_or("");
+        (sid.to_string(), sname.to_string())
+    } else {
+        return Ok(Json(json!({ "success": false, "error": "no_catalog_items" })));
+    };
+
+    // 3. Plant the seed
+    let plant_id = uuid::Uuid::new_v4().to_string();
+    let planted_at = chrono::Utc::now().timestamp_millis();
+    state
+        .db
+        .orm
+        .execute(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            "INSERT INTO garden_plants \
+                  (id, user_id, strain_id, strain_name, current_stage, planted_at, is_completed, water_count) \
+             VALUES ($1, $2, $3, $4, 'seed', $5, false, 0)",
+            [
+                plant_id.into(),
+                user_id.into(),
+                strain_id.into(),
+                strain_name.into(),
+                planted_at.into(),
+            ],
+        ))
+        .await
+        .map_err(|e| {
+            tracing::error!("force_seed: insert failed: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    tracing::info!(telegram_id = tid, "force_seed: emergency seed planted");
+    Ok(Json(json!({ "success": true, "plant_id": plant_id, "strain_name": strain_name })))
 }
 
 #[cfg(test)]
