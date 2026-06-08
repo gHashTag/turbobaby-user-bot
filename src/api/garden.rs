@@ -60,6 +60,7 @@ pub(crate) struct PlantResponse {
     pub progress: u8,
     pub can_water: bool,
     pub next_water_at: i64,
+    pub last_watered_at: Option<i64>,
 }
 
 #[derive(Debug, Serialize)]
@@ -91,6 +92,7 @@ async fn get_user_plants(
     use sea_orm::{ConnectionTrait, DbBackend, Statement};
 
     let user_id = query.telegram_id.to_string();
+    tracing::info!(user_id = %user_id, "get_user_plants query start");
 
     let rows = state
         .db
@@ -106,9 +108,11 @@ async fn get_user_plants(
         ))
         .await
         .map_err(|e| {
-            tracing::error!("get_user_plants: {e}");
+            tracing::error!(user_id = %user_id, error = %e, "get_user_plants query failed");
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
+
+    tracing::info!(user_id = %user_id, row_count = rows.len(), "get_user_plants query done");
 
     let now = chrono::Utc::now().timestamp_millis();
     let plants: Vec<PlantResponse> = rows
@@ -148,6 +152,7 @@ async fn get_user_plants(
                 progress: progress.total_progress,
                 can_water: progress.can_water,
                 next_water_at: progress.next_water_at,
+                last_watered_at: plant.last_watered_at,
             }
         })
         .collect();
@@ -797,7 +802,9 @@ async fn force_seed(
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
     if has_active.is_some() {
-        return Ok(Json(json!({ "success": false, "error": "already_has_plant" })));
+        return Ok(Json(
+            json!({ "success": false, "error": "already_has_plant" }),
+        ));
     }
 
     // 2. Find the earliest completed order with a catalog item.
@@ -816,7 +823,9 @@ async fn force_seed(
         })?;
 
     let Some(order_row) = order_row else {
-        return Ok(Json(json!({ "success": false, "error": "no_completed_orders" })));
+        return Ok(Json(
+            json!({ "success": false, "error": "no_completed_orders" }),
+        ));
     };
 
     let items: serde_json::Value = order_row
@@ -825,31 +834,72 @@ async fn force_seed(
 
     let first_item = items.as_array().and_then(|arr| {
         arr.iter().find(|it| {
-            it.get("strain_id").and_then(|v| v.as_str()).map(|s| !s.is_empty()).unwrap_or(false)
-                || it.get("set_id").and_then(|v| v.as_str()).map(|s| !s.is_empty()).unwrap_or(false)
-                || it.get("accessory_id").and_then(|v| v.as_str()).map(|s| !s.is_empty()).unwrap_or(false)
-                || it.get("tea_id").and_then(|v| v.as_str()).map(|s| !s.is_empty()).unwrap_or(false)
+            it.get("strain_id")
+                .and_then(|v| v.as_str())
+                .map(|s| !s.is_empty())
+                .unwrap_or(false)
+                || it
+                    .get("set_id")
+                    .and_then(|v| v.as_str())
+                    .map(|s| !s.is_empty())
+                    .unwrap_or(false)
+                || it
+                    .get("accessory_id")
+                    .and_then(|v| v.as_str())
+                    .map(|s| !s.is_empty())
+                    .unwrap_or(false)
+                || it
+                    .get("tea_id")
+                    .and_then(|v| v.as_str())
+                    .map(|s| !s.is_empty())
+                    .unwrap_or(false)
         })
     });
 
     let Some(item) = first_item else {
-        return Ok(Json(json!({ "success": false, "error": "no_catalog_items" })));
+        return Ok(Json(
+            json!({ "success": false, "error": "no_catalog_items" }),
+        ));
     };
 
-    let (strain_id, strain_name) = if let Some(sid) = item.get("strain_id").and_then(|v| v.as_str()).filter(|s| !s.is_empty()) {
-        let sname = item.get("strain_name").and_then(|v| v.as_str()).unwrap_or("");
+    let (strain_id, strain_name) = if let Some(sid) = item
+        .get("strain_id")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())
+    {
+        let sname = item
+            .get("strain_name")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
         (sid.to_string(), sname.to_string())
-    } else if let Some(sid) = item.get("set_id").and_then(|v| v.as_str()).filter(|s| !s.is_empty()) {
+    } else if let Some(sid) = item
+        .get("set_id")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())
+    {
         let sname = item.get("set_name").and_then(|v| v.as_str()).unwrap_or("");
         (sid.to_string(), sname.to_string())
-    } else if let Some(sid) = item.get("accessory_id").and_then(|v| v.as_str()).filter(|s| !s.is_empty()) {
-        let sname = item.get("accessory_name").and_then(|v| v.as_str()).unwrap_or("");
+    } else if let Some(sid) = item
+        .get("accessory_id")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())
+    {
+        let sname = item
+            .get("accessory_name")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
         (sid.to_string(), sname.to_string())
-    } else if let Some(sid) = item.get("tea_id").and_then(|v| v.as_str()).filter(|s| !s.is_empty()) {
+    } else if let Some(sid) = item
+        .get("tea_id")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())
+    {
         let sname = item.get("tea_name").and_then(|v| v.as_str()).unwrap_or("");
         (sid.to_string(), sname.to_string())
     } else {
-        return Ok(Json(json!({ "success": false, "error": "no_catalog_items" })));
+        return Ok(Json(
+            json!({ "success": false, "error": "no_catalog_items" }),
+        ));
     };
 
     // 3. Plant the seed
@@ -864,10 +914,10 @@ async fn force_seed(
                   (id, user_id, strain_id, strain_name, current_stage, planted_at, is_completed, water_count) \
              VALUES ($1, $2, $3, $4, 'seed', $5, false, 0)",
             [
-                plant_id.into(),
+                plant_id.clone().into(),
                 user_id.into(),
                 strain_id.into(),
-                strain_name.into(),
+                strain_name.clone().into(),
                 planted_at.into(),
             ],
         ))
@@ -878,7 +928,9 @@ async fn force_seed(
         })?;
 
     tracing::info!(telegram_id = tid, "force_seed: emergency seed planted");
-    Ok(Json(json!({ "success": true, "plant_id": plant_id, "strain_name": strain_name })))
+    Ok(Json(
+        json!({ "success": true, "plant_id": plant_id, "strain_name": strain_name }),
+    ))
 }
 
 #[cfg(test)]
