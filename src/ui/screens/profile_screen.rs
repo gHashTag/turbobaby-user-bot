@@ -169,10 +169,14 @@ pub fn ProfileScreen() -> Element {
     // Cashback is calculated from tier
     let cashback_pct = current_tier.cashback();
 
+    // Cycle #169E: fallback to raw telegram_id instead of stale "WOODY-DEMO"
+    // placeholder so the referral deep-link always carries the user's
+    // actual identifier even if the loyalty_profile row hasn't been
+    // seeded with a referral_code yet.
     let referral_code = loyalty_data
         .as_ref()
         .and_then(|d| d.referral_code.clone())
-        .unwrap_or("WOODY-DEMO".to_string());
+        .unwrap_or_else(|| telegram_id.to_string());
 
     let referral_count = loyalty_data
         .as_ref()
