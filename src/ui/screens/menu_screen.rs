@@ -469,6 +469,7 @@ fn render_strain_card(strain: ApiStrain, mut cart: Signal<Cart>) -> Element {
                         video {
                             style: "width:100%;height:100%;object-fit:cover;display:block;",
                             src: "{video_url}",
+                            "type": "video/mp4",
                             autoplay: true,
                             muted: true,
                             loop: true,
@@ -482,6 +483,10 @@ fn render_strain_card(strain: ApiStrain, mut cart: Signal<Cart>) -> Element {
                             // poster shows the product image until the first video
                             // frame is painted, so there is never an empty box.
                             poster: if has_image { "{img_url}" } else { "" },
+                            // cross-origin videos (S3/Railway bucket) need the
+                            // crossorigin attribute so the browser sends CORS headers
+                            // and allows the video element to paint frames.
+                            crossorigin: "anonymous",
                             onclick: move |e: Event<MouseData>| { e.stop_propagation(); show_video.set(true); }
                         }
                     }

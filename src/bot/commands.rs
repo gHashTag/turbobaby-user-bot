@@ -149,8 +149,11 @@ pub(crate) async fn handle_command(
                 return Ok(());
             }
 
-            // Ensure profile
-            // db.get_or_create_loyalty_profile(user_id).await.ok();
+            // Ensure profile + referral code exist (idempotent).
+            // Cycle #169F: loyalty_profile rows without a referral_code caused
+            // the WebApp profile screen to show the stale placeholder
+            // "WOODY-DEMO". Eager seeding on /start closes the gap.
+            let _ = ref_db::get_or_create_referral_code(&db.orm, user_id).await;
 
             // Notify admins about new users
             if is_new_user {
