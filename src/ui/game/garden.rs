@@ -78,6 +78,14 @@ async fn fetch_plants(telegram_id: i64, init_data: &str) -> Result<Vec<Plant>, S
         .map(|r| r.plants.into_iter().map(Into::into).collect())
 }
 
+async fn force_seed_api(telegram_id: i64, init_data: &str) -> Result<serde_json::Value, String> {
+    let base = api_base_url();
+    let url = format!("{}/api/garden/force-seed", base);
+    let body = format!("{{\"telegram_id\":{}}}", telegram_id);
+    let text = crate::ui::api::http::post_json_authed(&url, init_data, &body).await?;
+    serde_json::from_str::<serde_json::Value>(&text).map_err(|e| format!("Parse error: {e}"))
+}
+
 async fn water_plant_api(plant_id: &str, init_data: &str) -> Result<WaterPlantResponse, String> {
     let base = api_base_url();
     let url = format!(
@@ -205,8 +213,36 @@ pub fn Garden() -> Element {
                     return;
                 }
                 match fetch_plants(tid, &value).await {
-                    Ok(p) => {
+                    Ok(p) if !p.is_empty() => {
                         plants_c.set(p);
+                    }
+                    Ok(_) => {
+                        // Empty garden — try auto-seed (cycle #169G safety net).
+                        match force_seed_api(tid, &value).await {
+                            Ok(resp) => {
+                                if resp
+                                    .get("success")
+                                    .and_then(|v| v.as_bool())
+                                    .unwrap_or(false)
+                                {
+                                    // Retry fetch after successful seeding
+                                    match fetch_plants(tid, &value).await {
+                                        Ok(p2) => plants_c.set(p2),
+                                        Err(e2) => error_c
+                                            .set(format!("Сад пуст после авто-посадки: {}", e2)),
+                                    }
+                                } else {
+                                    let err = resp
+                                        .get("error")
+                                        .and_then(|v| v.as_str())
+                                        .unwrap_or("Не удалось получить семечко");
+                                    error_c.set(err.to_string());
+                                }
+                            }
+                            Err(e) => {
+                                error_c.set(format!("Авто-посадка не удалась: {}", e));
+                            }
+                        }
                     }
                     Err(e) => {
                         // Surface the real error instead of silently swapping in
