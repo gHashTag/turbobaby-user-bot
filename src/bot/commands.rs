@@ -57,15 +57,12 @@ pub(crate) enum Command {
 use crate::util::html_escape;
 
 pub(crate) fn build_app_url(base_url: &str, lang: &str, page: Option<&str>) -> String {
-    let mut url = format!("{}?lang={}", base_url, lang);
-    if let Some(p) = page {
-        url.push_str(&format!("&page={}", p));
-    }
-    // Cycle #169: force Telegram WebView to bypass its aggressive cache
-    // after a WASM deploy. Without this, Safari/WebView serves a stale
-    // index.html even when the server sends Cache-Control: no-store.
-    url.push_str("&v=3");
-    url
+    let base = base_url.trim_end_matches('/');
+    let path = match page {
+        Some(p) => format!("{}/{}", base, p),
+        None => base.to_string(),
+    };
+    format!("{}?lang={}&v=4", path, lang)
 }
 
 fn build_admin_url(base_url: &str) -> String {
@@ -680,7 +677,7 @@ mod tests {
     fn test_build_app_url_basic() {
         assert_eq!(
             build_app_url("https://app.com", "en", None),
-            "https://app.com?lang=en&v=3"
+            "https://app.com?lang=en&v=4"
         );
     }
 
@@ -688,7 +685,7 @@ mod tests {
     fn test_build_app_url_with_page() {
         assert_eq!(
             build_app_url("https://app.com", "ru", Some("admin")),
-            "https://app.com?lang=ru&page=admin&v=3"
+            "https://app.com/admin?lang=ru&v=4"
         );
     }
 
@@ -696,7 +693,7 @@ mod tests {
     fn test_build_app_url_trailing_slash() {
         assert_eq!(
             build_app_url("https://app.com/", "th", None),
-            "https://app.com/?lang=th&v=3"
+            "https://app.com?lang=th&v=4"
         );
     }
 

@@ -1,0 +1,67 @@
+/* Woody Weed Bot — Design System (1:1 со старым React-ботом woody-woodpecker) */
+:root {
+  /* Палитра */
+  --bg: #0f0f1a;
+  --bg2: #1a1a2e;
+  --card: #16213e;
+  --border: #2a2a4a;
+  --text: #e8e8e8;
+  --text2: #888;
+  --green: #39ff14;
+  --cyan: #00e5ff;
+  --yellow: #ffe600;
+  --purple: #b388ff;
+  --red: #ff4757;
+  --blue: #4d9fff;
+  --pixel-shadow: 4px 4px 0 #000;
+  --safe-bottom: env(safe-area-inset-bottom, 0);
+
+  /* Фоновые оттенки для админки */
+  --bg-secondary: var(--bg2);
+  --bg-tertiary: #20203a;
+
+  /* Spacing scale */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 20px;
+  --space-2xl: 24px;
+
+  /* Radii */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-full: 50%;
+
+  /* Shadows */
+  --shadow-sm: 0 4px 12px rgba(0, 0, 0, 0.1);
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.1);
+  --shadow-glow-green: 0 0 10px rgba(57, 255, 20, 0.2);
+  --shadow-glow-cyan: 0 0 10px rgba(0, 229, 255, 0.2);
+
+  /* Gradients */
+  --gradient-primary: linear-gradient(135deg, var(--green), var(--cyan));
+  --gradient-secondary: linear-gradient(135deg, var(--bg2), var(--bg2));
+  --gradient-success: linear-gradient(135deg, var(--green), var(--cyan));
+  --gradient-sativa: linear-gradient(135deg, rgba(255, 230, 0, 0.2), transparent);
+  --gradient-indica: linear-gradient(135deg, rgba(179, 136, 255, 0.2), transparent);
+  --gradient-hybrid: linear-gradient(135deg, rgba(57, 255, 20, 0.2), transparent);
+  --gradient-disabled: linear-gradient(135deg, rgba(255, 255, 255, 0.1), transparent);
+
+  /* Typography */
+  --font-size-sm: 13px;
+  --font-size-base: 15px;
+  --font-size-lg: 18px;
+  --font-size-xl: 24px;
+
+  /* Motion */
+  --transition-fast: 0.15s;
+  --transition-normal: 0.3s;
+
+  /* Z-index */
+  --z-nav: 1000;
+  --z-modal: 2000;
+}

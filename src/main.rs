@@ -668,24 +668,12 @@ async fn main() -> Result<()> {
         }
     };
 
-    // SPA handler that serves index.html from memory (avoids slow Railway disk I/O)
+    // SPA handler: Telegram WebView (iOS WKWebView) aggressively caches
+    // HTML responses and ignores Cache-Control headers. A query-param
+    // redirect (?v=4) busts the cache for every SPA route — not just /.
+    // When v=4 is present we serve index.html; otherwise redirect to
+    // the same path with ?v=4 appended.
     let spa_handler = {
-        let static_cache = static_cache.clone();
-        move || async move {
-            if let Some(file) = static_cache.get("index.html") {
-                axum::response::Html(String::from_utf8_lossy(&file.raw).to_string())
-            } else {
-                axum::response::Html("<h1>App not found</h1>".to_string())
-            }
-        }
-    };
-
-    // SPA routes that should return index.html for client-side routing
-    // Cycle #169: root redirect — Telegram WebView caches index.html by URL.
-    // Without a query-param change, Safari/WebView never revalidates. We
-    // redirect / → /?v=4 so even the BotFather menu button opens a fresh
-    // cache key. Once v=4 is present, serve index.html normally.
-    let spa_handler_v2 = {
         let static_cache = static_cache.clone();
         move |uri: axum::http::Uri| async move {
             if uri.query().map(|q| q.contains("v=4")).unwrap_or(false) {
@@ -696,12 +684,16 @@ async fn main() -> Result<()> {
                 };
                 axum::response::Html(html).into_response()
             } else {
-                axum::response::Redirect::to("/?v=4").into_response()
+                let path = uri.path();
+                let existing = uri.query().unwrap_or("");
+                let sep = if existing.is_empty() { "" } else { "&" };
+                axum::response::Redirect::to(&format!("{}?{}{}v=4", path, existing, sep))
+                    .into_response()
             }
         }
     };
     let spa_routes = Router::new()
-        .route("/", get(spa_handler_v2))
+        .route("/", get(spa_handler.clone()))
         .route("/menu", get(spa_handler.clone()))
         .route("/sets", get(spa_handler.clone()))
         .route("/sommelier", get(spa_handler.clone()))
