@@ -436,13 +436,15 @@ async fn check_admin_access(
     if let Some(token) = token_opt {
         if let Some(ref password) = state.config.admin_password {
             if crate::api::auth::verify_admin_token(token, &state.config.bot_token, password) {
-                tracing::info!(
-                    "admin/check: token authenticated telegram_id={}",
-                    query.telegram_id
-                );
-                return Ok(Json(
-                    json!({ "is_admin": true, "telegram_id": query.telegram_id }),
-                ));
+                // Password-token auth is NOT tied to a specific telegram_id (the
+                // password is shared). Report `0` — the same sentinel `check_admin`
+                // returns for the token path — instead of echoing the client-supplied
+                // `query.telegram_id`, which is unverified input and must never be
+                // presented as the authenticated identity. (The frontend only reads
+                // `is_admin`; this keeps the API contract honest for any future
+                // consumer that might trust the `telegram_id` field.)
+                tracing::info!("admin/check: token authenticated (no specific telegram_id)");
+                return Ok(Json(json!({ "is_admin": true, "telegram_id": 0 })));
             }
             tracing::warn!("admin/check: token verification failed");
         } else {
