@@ -278,7 +278,11 @@ pub fn TeaScreen() -> Element {
                     tea.subcategory.as_deref().unwrap_or("tea"),
                     tea.subcategory_en.as_deref(),
                 ).to_uppercase();
-                let price_str = format!("฿{}", (if tea.price.is_finite() { tea.price.max(0.0) } else { 0.0 }) as i32);
+                let t_price = if tea.price.is_finite() { tea.price.max(0.0) } else { 0.0 };
+                let price_str = format!("฿{}", t_price as i32);
+                let add_id = tea.id.clone();
+                let add_name = crate::ui::lang::localized(&tea.name, tea.name_en.as_deref());
+                let avail = tea.is_available.unwrap_or(true) && tea.stock.unwrap_or(999) > 0;
                 rsx! {
                     ProductDetailModal {
                         name: crate::ui::lang::localized(&tea.name, tea.name_en.as_deref()),
@@ -289,6 +293,19 @@ pub fn TeaScreen() -> Element {
                         ),
                         category_badge: Some(sub),
                         price_line: Some(price_str),
+                        can_add: avail,
+                        add_to_cart_label: Some(format!("{add_to_cart}")),
+                        on_add_to_cart: move |_| {
+                            cart.write().add_item(CartItem {
+                                id: add_id.clone(),
+                                name: add_name.clone(),
+                                price: t_price,
+                                quantity: 1,
+                                image_url: None,
+                                item_type: CartItemType::Tea,
+                            });
+                            crate::ui::telegram::TelegramApp::init().haptic_notification(crate::ui::telegram::HapticNotification::Success);
+                        },
                         on_close: move |_| selected_tea.set(None),
                     }
                 }

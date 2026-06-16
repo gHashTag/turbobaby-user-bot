@@ -318,14 +318,33 @@ fn render_accessory_card(
                     }
                 }}
             }
-            {detail_open().then(|| rsx! {
-                ProductDetailModal {
-                    name: crate::ui::lang::localized(&a.name, a.name_en.as_deref()),
-                    image_url: a.image_url.clone(),
-                    description: desc_full.clone(),
-                    category_badge: Some(badge_label.clone()),
-                    price_line: Some(price_str.clone()),
-                    on_close: move |_| detail_open.set(false),
+            {detail_open().then(|| {
+                let add_id = a.id.clone();
+                let add_name = crate::ui::lang::localized(&a.name, a.name_en.as_deref());
+                let add_price = a_price;
+                let avail = !show_out_of_stock;
+                rsx! {
+                    ProductDetailModal {
+                        name: crate::ui::lang::localized(&a.name, a.name_en.as_deref()),
+                        image_url: a.image_url.clone(),
+                        description: desc_full.clone(),
+                        category_badge: Some(badge_label.clone()),
+                        price_line: Some(price_str.clone()),
+                        can_add: avail,
+                        add_to_cart_label: Some(format!("{add_to_cart} 🛒")),
+                        on_add_to_cart: move |_| {
+                            cart.write().add_item(CartItem {
+                                id: add_id.clone(),
+                                name: add_name.clone(),
+                                price: add_price,
+                                quantity: 1,
+                                image_url: None,
+                                item_type: CartItemType::Accessory,
+                            });
+                            crate::ui::telegram::TelegramApp::init().haptic_notification(crate::ui::telegram::HapticNotification::Success);
+                        },
+                        on_close: move |_| detail_open.set(false),
+                    }
                 }
             })}
         }

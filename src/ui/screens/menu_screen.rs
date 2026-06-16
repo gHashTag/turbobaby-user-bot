@@ -645,18 +645,38 @@ fn render_strain_card(strain: ApiStrain, mut cart: Signal<Cart>) -> Element {
                     }
                 }}
             }
-            {detail_open().then(|| rsx! {
-                ProductDetailModal {
-                    name: name_disp.clone(),
-                    image_url: strain.image_url.clone(),
-                    description: desc_str.clone(),
-                    category_badge: Some(badge_label.clone()),
-                    thc: (!thc_str.is_empty()).then(|| thc_str.clone()),
-                    cbd: (!cbd_str.is_empty()).then(|| cbd_str.clone()),
-                    effect: (!effect_str.is_empty()).then(|| effect_str.clone()),
-                    flavor: (!flavor_str.is_empty()).then(|| flavor_str.clone()),
-                    price_line: has_real_price.then(|| format!("{display_price}/g")),
-                    on_close: move |_| detail_open.set(false),
+            {detail_open().then(|| {
+                let add_id = strain.id.clone();
+                let add_name = name_disp.clone();
+                let add_price = effective_price;
+                let add_label = add_to_cart_label.clone();
+                let avail = strain.is_available && has_real_price;
+                rsx! {
+                    ProductDetailModal {
+                        name: name_disp.clone(),
+                        image_url: strain.image_url.clone(),
+                        description: desc_str.clone(),
+                        category_badge: Some(badge_label.clone()),
+                        thc: (!thc_str.is_empty()).then(|| thc_str.clone()),
+                        cbd: (!cbd_str.is_empty()).then(|| cbd_str.clone()),
+                        effect: (!effect_str.is_empty()).then(|| effect_str.clone()),
+                        flavor: (!flavor_str.is_empty()).then(|| flavor_str.clone()),
+                        price_line: has_real_price.then(|| format!("{display_price}/g")),
+                        can_add: avail,
+                        add_to_cart_label: Some(format!("{add_label} 🛒")),
+                        on_add_to_cart: move |_| {
+                            cart.write().add_item(CartItem {
+                                id: add_id.clone(),
+                                name: add_name.clone(),
+                                price: add_price,
+                                quantity: 1,
+                                image_url: None,
+                                item_type: CartItemType::Strain,
+                            });
+                            crate::ui::telegram::TelegramApp::init().haptic_notification(crate::ui::telegram::HapticNotification::Success);
+                        },
+                        on_close: move |_| detail_open.set(false),
+                    }
                 }
             })}
         }

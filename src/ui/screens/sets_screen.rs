@@ -394,14 +394,33 @@ fn render_set_card(set: ApiSet, mut cart: Signal<Cart>) -> Element {
                     }
                 }}
             }
-            {detail_open().then(|| rsx! {
-                ProductDetailModal {
-                    name: crate::ui::lang::localized(&set.name, set.name_en.as_deref()),
-                    image_url: set.image_url.clone(),
-                    description: desc_full.clone(),
-                    category_badge: Some(mood_badge.clone()),
-                    price_line: Some(price_str.clone()),
-                    on_close: move |_| detail_open.set(false),
+            {detail_open().then(|| {
+                let add_id = set.id.clone();
+                let add_name = crate::ui::lang::localized(&set.name, set.name_en.as_deref());
+                let add_price = discounted_price;
+                let avail = is_available;
+                rsx! {
+                    ProductDetailModal {
+                        name: crate::ui::lang::localized(&set.name, set.name_en.as_deref()),
+                        image_url: set.image_url.clone(),
+                        description: desc_full.clone(),
+                        category_badge: Some(mood_badge.clone()),
+                        price_line: Some(price_str.clone()),
+                        can_add: avail,
+                        add_to_cart_label: Some(add_to_cart.clone()),
+                        on_add_to_cart: move |_| {
+                            cart.write().add_item(CartItem {
+                                id: add_id.clone(),
+                                name: add_name.clone(),
+                                price: add_price,
+                                quantity: 1,
+                                image_url: None,
+                                item_type: CartItemType::Set,
+                            });
+                            crate::ui::telegram::TelegramApp::init().haptic_notification(crate::ui::telegram::HapticNotification::Success);
+                        },
+                        on_close: move |_| detail_open.set(false),
+                    }
                 }
             })}
         }

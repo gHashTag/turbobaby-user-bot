@@ -43,6 +43,17 @@ pub struct ProductDetailModalProps {
     /// Preformatted price line, e.g. "฿350/g" or "฿1200".
     #[props(default)]
     pub price_line: Option<String>,
+    /// When true (default), show an "add to cart" button that calls
+    /// `on_add_to_cart` then closes the modal. Pass `false` for sold-out
+    /// items so the modal stays informational.
+    #[props(default = true)]
+    pub can_add: bool,
+    /// Localized label for the add-to-cart button. Defaults to RU.
+    #[props(default)]
+    pub add_to_cart_label: Option<String>,
+    /// Called when the user taps the add-to-cart button (caller pushes the
+    /// item into the cart). The modal closes itself afterwards.
+    pub on_add_to_cart: EventHandler<()>,
     /// Called when the user taps the backdrop or the close button.
     pub on_close: EventHandler<()>,
 }
@@ -58,6 +69,12 @@ fn is_usable_src(url: &str) -> bool {
 #[component]
 pub fn ProductDetailModal(props: ProductDetailModalProps) -> Element {
     let on_close = props.on_close;
+    let on_add_to_cart = props.on_add_to_cart;
+    let can_add = props.can_add;
+    let add_label = props
+        .add_to_cart_label
+        .clone()
+        .unwrap_or_else(|| "В корзину 🛒".to_string());
     let img = props.image_url.clone().unwrap_or_default();
     let has_image = is_usable_src(&img);
     let name = props.name.clone();
@@ -122,6 +139,14 @@ pub fn ProductDetailModal(props: ProductDetailModalProps) -> Element {
 
                     {props.price_line.as_ref().filter(|s| !s.is_empty()).map(|p| rsx! {
                         div { style: "font-size:22px;font-weight:800;color:#ffe600;text-shadow:2px 2px 0 #000;margin-bottom:12px;", "{p}" }
+                    })}
+
+                    {can_add.then(|| rsx! {
+                        button {
+                            style: "font-size:14px;font-weight:700;width:100%;padding:12px 20px;margin-bottom:8px;background:#39ff14;color:#000;border:4px solid #2d9e0f;box-shadow:3px 3px 0 #000;cursor:pointer;",
+                            onclick: move |e: Event<MouseData>| { e.stop_propagation(); on_add_to_cart.call(()); on_close.call(()); },
+                            "{add_label}"
+                        }
                     })}
 
                     button {
