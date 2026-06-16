@@ -948,6 +948,74 @@ mod tests {
         );
     }
 
+    /// Ordered, de-duplicated `*_id` keys delimited by `q` (e.g. `"` for Rust
+    /// string literals, `'` for SQL `->>'..'`), scanning `hay` left to right.
+    fn ordered_id_keys(hay: &str, q: char) -> Vec<String> {
+        let bytes = hay.as_bytes();
+        let mut out: Vec<String> = Vec::new();
+        let mut i = 0;
+        while i < bytes.len() {
+            if bytes[i] as char == q {
+                // read identifier until the closing quote
+                let start = i + 1;
+                let mut j = start;
+                while j < bytes.len() && (bytes[j].is_ascii_lowercase() || bytes[j] == b'_') {
+                    j += 1;
+                }
+                if j < bytes.len() && bytes[j] as char == q && j > start {
+                    let tok = &hay[start..j];
+                    if tok.ends_with("_id") && !out.iter().any(|k| k == tok) {
+                        out.push(tok.to_string());
+                    }
+                    i = j + 1;
+                    continue;
+                }
+            }
+            i += 1;
+        }
+        out
+    }
+
+    /// The Rust `first_seedable_item` precedence and the SQL universal-backfill
+    /// (migration 037) must agree on **which** catalog id keys seed a plant and
+    /// in **what order** — otherwise a new catalog type wired into one but not
+    /// the other means live force_seed and the batch backfill disagree. The
+    /// 026→036→037 hotfix history is exactly this kind of drift.
+    #[test]
+    fn seed_keys_match_sql_backfill_037() {
+        let manifest = env!("CARGO_MANIFEST_DIR");
+
+        // Rust: scope to the `first_seedable_item` fn body (avoids the
+        // `strain_id` column name inside force_seed's INSERT string).
+        let rs = std::fs::read_to_string(std::path::Path::new(manifest).join("src/api/garden.rs"))
+            .expect("read garden.rs");
+        let fn_start = rs.find("fn first_seedable_item").expect("fn present");
+        let fn_end = rs[fn_start..]
+            .find("async fn force_seed")
+            .map(|o| fn_start + o)
+            .unwrap_or(rs.len());
+        let rust_keys = ordered_id_keys(&rs[fn_start..fn_end], '"');
+
+        // SQL: `->>'<key>'` JSON extractions in migration 037.
+        let sql = std::fs::read_to_string(
+            std::path::Path::new(manifest).join("migrations/037_garden_universal_backfill.sql"),
+        )
+        .expect("read 037");
+        let sql_keys = ordered_id_keys(&sql, '\'');
+
+        assert_eq!(
+            rust_keys,
+            vec!["strain_id", "set_id", "accessory_id", "tea_id"],
+            "first_seedable_item key set/order changed — update the SQL backfill + this test"
+        );
+        assert_eq!(
+            rust_keys, sql_keys,
+            "garden seed precedence DRIFT: first_seedable_item (Rust) = {rust_keys:?} but \
+             migration 037 (SQL) = {sql_keys:?}. A catalog type was wired into one path \
+             but not the other."
+        );
+    }
+
     #[test]
     fn seedable_prefers_strain_within_an_item() {
         // An item carrying several ids resolves by precedence strain > set >
