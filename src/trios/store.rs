@@ -488,6 +488,66 @@ mod tests {
         assert_eq!(total, 1600); // 2*1000 - 20%
     }
 
+    /// Financial invariant guard: a happy-hour discount must always keep the
+    /// total within `[0, subtotal]`, be exactly 0 at 100%, and be monotonically
+    /// non-increasing as the discount grows. The None/20% tests above only pin
+    /// two points; this locks in the *shape* of the discount curve so a future
+    /// edit to the formula (wrong operator, off-by-one, swapping to
+    /// non-saturating arithmetic that could panic/overflow, or rounding the
+    /// wrong way) is caught.
+    ///
+    /// Note on over-100%: today the bound is double-protected — `discount` is
+    /// `u32` (can't be negative) and `saturating_sub` floors at 0 — so even
+    /// without the explicit `.min(100)` the total stays ≥ 0. The clamp is
+    /// defense-in-depth/clarity; this test asserts the observable behavior, not
+    /// that the clamp is the sole guard.
+    #[test]
+    fn test_calculate_cart_total_discount_is_clamped_to_100_percent() {
+        let items = vec![CartItem::new_strain("strain1".to_string(), 2)];
+        let mut prices = HashMap::new();
+        prices.insert(
+            "strain1".to_string(),
+            ProductPrice {
+                id: "strain1".to_string(),
+                price: 1000,
+                discount_percent: None,
+            },
+        );
+        let subtotal = 2000; // 2 * 1000
+
+        // Exactly 100% → free, never negative.
+        assert_eq!(
+            calculate_cart_total(&items, &prices, Some(100)),
+            0,
+            "100% discount must zero the total exactly"
+        );
+
+        // Over 100% (misconfig) must still clamp to 0 — never go negative.
+        for over in [101u32, 150, 200, 1000, u32::MAX] {
+            let total = calculate_cart_total(&items, &prices, Some(over));
+            assert_eq!(
+                total, 0,
+                "discount {over}% must clamp to a 0 total, never negative (got {total})"
+            );
+        }
+
+        // Bounds hold across the whole legal range: 0 <= total <= subtotal,
+        // and the result is monotonically non-increasing in the discount.
+        let mut prev = subtotal;
+        for d in 0u32..=100 {
+            let total = calculate_cart_total(&items, &prices, Some(d));
+            assert!(
+                (0..=subtotal).contains(&total),
+                "total {total} out of [0,{subtotal}] for discount {d}%"
+            );
+            assert!(
+                total <= prev,
+                "total must not increase as discount grows ({d}%: {total} > prev {prev})"
+            );
+            prev = total;
+        }
+    }
+
     #[test]
     fn test_validate_checkout_valid() {
         let items = vec![CartItem::new_strain("strain1".to_string(), 1)];
