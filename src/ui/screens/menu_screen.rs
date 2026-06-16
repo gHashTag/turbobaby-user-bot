@@ -664,12 +664,12 @@ fn render_strain_card(strain: ApiStrain, mut cart: Signal<Cart>) -> Element {
                         price_line: has_real_price.then(|| format!("{display_price}/g")),
                         can_add: avail,
                         add_to_cart_label: Some(format!("{add_label} 🛒")),
-                        on_add_to_cart: move |_| {
+                        on_add_to_cart: move |q: u32| {
                             cart.write().add_item(CartItem {
                                 id: add_id.clone(),
                                 name: add_name.clone(),
                                 price: add_price,
-                                quantity: 1,
+                                quantity: q,
                                 image_url: None,
                                 item_type: CartItemType::Strain,
                             });

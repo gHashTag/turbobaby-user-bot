@@ -51,9 +51,10 @@ pub struct ProductDetailModalProps {
     /// Localized label for the add-to-cart button. Defaults to RU.
     #[props(default)]
     pub add_to_cart_label: Option<String>,
-    /// Called when the user taps the add-to-cart button (caller pushes the
-    /// item into the cart). The modal closes itself afterwards.
-    pub on_add_to_cart: EventHandler<()>,
+    /// Called when the user taps the add-to-cart button with the chosen
+    /// quantity (caller pushes the item into the cart). The modal closes
+    /// itself afterwards.
+    pub on_add_to_cart: EventHandler<u32>,
     /// Called when the user taps the backdrop or the close button.
     pub on_close: EventHandler<()>,
 }
@@ -80,6 +81,8 @@ pub fn ProductDetailModal(props: ProductDetailModalProps) -> Element {
     let name = props.name.clone();
     let alt = props.name.clone();
     let description = props.description.clone();
+    // Quantity selector state (1..=99). Only meaningful when `can_add`.
+    let mut qty = use_signal(|| 1u32);
 
     rsx! {
         div {
@@ -142,9 +145,23 @@ pub fn ProductDetailModal(props: ProductDetailModalProps) -> Element {
                     })}
 
                     {can_add.then(|| rsx! {
+                        // Quantity stepper: − [n] +, clamped to 1..=99.
+                        div { style: "display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:10px;",
+                            button {
+                                style: "width:44px;height:44px;font-size:22px;font-weight:800;background:#2a2a4a;color:#e8e8e8;border:4px solid #1a1a2e;box-shadow:2px 2px 0 #000;cursor:pointer;line-height:1;",
+                                onclick: move |e: Event<MouseData>| { e.stop_propagation(); qty.set(qty().saturating_sub(1).max(1)); },
+                                "−"
+                            }
+                            span { style: "font-size:20px;font-weight:800;color:#fff;min-width:40px;text-align:center;", "{qty}" }
+                            button {
+                                style: "width:44px;height:44px;font-size:22px;font-weight:800;background:#2a2a4a;color:#e8e8e8;border:4px solid #1a1a2e;box-shadow:2px 2px 0 #000;cursor:pointer;line-height:1;",
+                                onclick: move |e: Event<MouseData>| { e.stop_propagation(); qty.set((qty() + 1).min(99)); },
+                                "+"
+                            }
+                        }
                         button {
                             style: "font-size:14px;font-weight:700;width:100%;padding:12px 20px;margin-bottom:8px;background:#39ff14;color:#000;border:4px solid #2d9e0f;box-shadow:3px 3px 0 #000;cursor:pointer;",
-                            onclick: move |e: Event<MouseData>| { e.stop_propagation(); on_add_to_cart.call(()); on_close.call(()); },
+                            onclick: move |e: Event<MouseData>| { e.stop_propagation(); on_add_to_cart.call(qty()); on_close.call(()); },
                             "{add_label}"
                         }
                     })}

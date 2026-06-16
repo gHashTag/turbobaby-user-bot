@@ -295,12 +295,12 @@ pub fn TeaScreen() -> Element {
                         price_line: Some(price_str),
                         can_add: avail,
                         add_to_cart_label: Some(format!("{add_to_cart}")),
-                        on_add_to_cart: move |_| {
+                        on_add_to_cart: move |q: u32| {
                             cart.write().add_item(CartItem {
                                 id: add_id.clone(),
                                 name: add_name.clone(),
                                 price: t_price,
-                                quantity: 1,
+                                quantity: q,
                                 image_url: None,
                                 item_type: CartItemType::Tea,
                             });
