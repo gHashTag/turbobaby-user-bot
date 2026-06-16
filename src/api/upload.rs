@@ -38,19 +38,14 @@ fn err(status: StatusCode, msg: impl Into<String>) -> UploadError {
     (status, Json(json!({ "error": msg })))
 }
 
-fn validate_filename(filename: &str, size: usize) -> Result<(), UploadError> {
+/// Body-independent checks (filename length + extension allowlist). These
+/// depend only on `field.file_name()`, so the handler runs them BEFORE
+/// streaming the body — a disallowed/oversized-name upload is then rejected
+/// without first buffering up to MAX_UPLOAD_SIZE (100 MB) into memory
+/// (fail-fast / resource-exhaustion hardening).
+fn validate_extension(filename: &str) -> Result<(), UploadError> {
     if filename.len() > 500 {
         return Err(err(StatusCode::BAD_REQUEST, "filename too long"));
-    }
-    if size == 0 {
-        return Err(err(StatusCode::BAD_REQUEST, "empty file"));
-    }
-    if size > MAX_UPLOAD_SIZE {
-        tracing::warn!("upload file too large: {} bytes", size);
-        return Err(err(
-            StatusCode::PAYLOAD_TOO_LARGE,
-            format!("file too large: {} bytes (max {})", size, MAX_UPLOAD_SIZE),
-        ));
     }
     let ext = filename.rsplit('.').next().unwrap_or("").to_lowercase();
     if ext.len() > 50 {
@@ -61,6 +56,21 @@ fn validate_filename(filename: &str, size: usize) -> Result<(), UploadError> {
         return Err(err(
             StatusCode::UNSUPPORTED_MEDIA_TYPE,
             format!("disallowed extension: .{}", ext),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_filename(filename: &str, size: usize) -> Result<(), UploadError> {
+    validate_extension(filename)?;
+    if size == 0 {
+        return Err(err(StatusCode::BAD_REQUEST, "empty file"));
+    }
+    if size > MAX_UPLOAD_SIZE {
+        tracing::warn!("upload file too large: {} bytes", size);
+        return Err(err(
+            StatusCode::PAYLOAD_TOO_LARGE,
+            format!("file too large: {} bytes (max {})", size, MAX_UPLOAD_SIZE),
         ));
     }
     Ok(())
@@ -131,6 +141,10 @@ async fn upload_file(
             while let Ok(Some(_)) = field.chunk().await {}
             continue;
         }
+
+        // Fail-fast: reject a bad filename/extension BEFORE buffering the body,
+        // so a disallowed upload never consumes up to MAX_UPLOAD_SIZE of memory.
+        validate_extension(&filename)?;
 
         // Stream chunks into a single contiguous buffer. We avoid
         // `field.bytes()` because it internally collects the whole body via
@@ -282,12 +296,34 @@ async fn upload_file(
 
 #[cfg(test)]
 mod tests {
-    use super::{validate_filename, ALLOWED_EXTENSIONS, MAX_UPLOAD_SIZE};
+    use super::{validate_extension, validate_filename, ALLOWED_EXTENSIONS, MAX_UPLOAD_SIZE};
     use axum::http::StatusCode;
 
     #[test]
     fn test_validate_upload_ok() {
         assert!(validate_filename("photo.jpg", 100).is_ok());
+    }
+
+    #[test]
+    fn test_validate_extension_fail_fast() {
+        // Body-independent gate (no size): allowed passes, disallowed is
+        // rejected with the right status (so the handler can bail before
+        // buffering the body).
+        assert!(validate_extension("photo.png").is_ok());
+        assert_eq!(
+            validate_extension("malware.exe").unwrap_err().0,
+            StatusCode::UNSUPPORTED_MEDIA_TYPE
+        );
+        assert_eq!(
+            validate_extension("noext").unwrap_err().0,
+            StatusCode::UNSUPPORTED_MEDIA_TYPE
+        );
+        assert_eq!(
+            validate_extension(&("a".repeat(501) + ".png"))
+                .unwrap_err()
+                .0,
+            StatusCode::BAD_REQUEST
+        );
     }
 
     #[test]
