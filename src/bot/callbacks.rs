@@ -305,7 +305,20 @@ pub(crate) async fn handle_callback(
                             .await
                         {
                             Ok(Some(row)) => {
-                                let status: String = row.try_get("", "status").unwrap_or_default();
+                                // Read the gating status loudly. `can_confirm_order("")`
+                                // is already false (safe no-op), but surface a corrupt
+                                // read instead of swallowing it as "not confirmable".
+                                let status: String = match row.try_get::<String>("", "status") {
+                                    Ok(s) => s,
+                                    Err(e) => {
+                                        tracing::error!(
+                                            "callback: confirm corrupt status read order_id={} err={}",
+                                            order_id,
+                                            e
+                                        );
+                                        String::new()
+                                    }
+                                };
                                 if can_confirm_order(&status) {
                                     match tx
                                         .execute(Statement::from_sql_and_values(
@@ -555,8 +568,25 @@ pub(crate) async fn handle_callback(
                             "SELECT telegram_id, bonus_used::float8 AS bonus_used, status FROM orders WHERE id = $1 FOR UPDATE",
                             [_order_id.into()],
                         )).await {
-                            let current_status: String = r.try_get("", "status").unwrap_or_default();
-                            if should_refund_bonus(&current_status) {
+                            // Fail loud: `should_refund_bonus("")` is TRUE, so a
+                            // silent `.unwrap_or_default()` on a corrupt status read
+                            // would fire a bonus refund (and flip to rejected) on an
+                            // UNKNOWN order state — risking a double refund on an
+                            // already-rejected order. On a read error, refuse: don't
+                            // refund and don't flip (refund_ok=false aborts the tx).
+                            let current_status: String = match r.try_get::<String>("", "status") {
+                                Ok(s) => s,
+                                Err(e) => {
+                                    tracing::error!(
+                                        "callback: reject corrupt status read order_id={} err={}",
+                                        _order_id,
+                                        e
+                                    );
+                                    refund_ok = false;
+                                    String::new()
+                                }
+                            };
+                            if refund_ok && should_refund_bonus(&current_status) {
                                 let bonus_raw: f64 = r.try_get::<f64>("", "bonus_used").unwrap_or(0.0);
                                 let bonus = if bonus_raw.is_finite() { bonus_raw.max(0.0) } else { 0.0 };
                                 let tid: Option<i64> = r.try_get("", "telegram_id").ok().flatten();
@@ -724,6 +754,20 @@ mod tests {
 
     #[test]
     fn test_should_refund_bonus_completed() {
+        assert!(!should_refund_bonus("completed"));
+    }
+
+    /// Hazard guard: `should_refund_bonus` returns TRUE for an empty/unknown
+    /// status (it only excludes the two terminal states). That is exactly why
+    /// the reject handler must read the order status FAIL-LOUD — a silent
+    /// `.unwrap_or_default()` here would fire a refund (and a status flip) on an
+    /// unknown order state, risking a double refund on an already-rejected order.
+    #[test]
+    fn should_refund_bonus_is_dangerously_true_for_unknown_status() {
+        assert!(should_refund_bonus(""));
+        assert!(should_refund_bonus("pending"));
+        // The only safe-by-default values are the terminal ones:
+        assert!(!should_refund_bonus("rejected"));
         assert!(!should_refund_bonus("completed"));
     }
 }
