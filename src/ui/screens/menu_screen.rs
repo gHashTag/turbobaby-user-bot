@@ -12,11 +12,17 @@ use serde::{Deserialize, Serialize};
 pub struct ApiStrain {
     id: String,
     name: String,
+    #[serde(default)]
+    name_en: Option<String>,
     category: Option<String>,
     thc_percent: Option<f64>,
     cbd_percent: Option<f64>,
     effect: Option<String>,
+    #[serde(default)]
+    effect_en: Option<String>,
     flavor_profile: Option<String>,
+    #[serde(default)]
+    flavor_profile_en: Option<String>,
     description: Option<String>,
     #[serde(default)]
     description_en: Option<String>,
@@ -440,8 +446,15 @@ fn render_strain_card(strain: ApiStrain, mut cart: Signal<Cart>) -> Element {
         .cbd_percent
         .map(|c| format!("CBD {:.1}%", c))
         .unwrap_or_default();
-    let effect_str = strain.effect.clone().unwrap_or_default();
-    let flavor_str = strain.flavor_profile.clone().unwrap_or_default();
+    let effect_str = crate::ui::lang::localized(
+        &strain.effect.clone().unwrap_or_default(),
+        strain.effect_en.as_deref(),
+    );
+    let flavor_str = crate::ui::lang::localized(
+        &strain.flavor_profile.clone().unwrap_or_default(),
+        strain.flavor_profile_en.as_deref(),
+    );
+    let name_disp = crate::ui::lang::localized(&strain.name, strain.name_en.as_deref());
     let has_real_price = price > 0.0;
 
     let badge_style = category_badge_style(cat);
@@ -452,7 +465,7 @@ fn render_strain_card(strain: ApiStrain, mut cart: Signal<Cart>) -> Element {
         && (img_url.starts_with("http://")
             || img_url.starts_with("https://")
             || (img_url.starts_with("/") && !img_url.starts_with("//")));
-    let alt_name = strain.name.clone();
+    let alt_name = name_disp.clone();
     let desc_str = crate::ui::lang::localized(
         &strain.description.clone().unwrap_or_default(),
         strain.description_en.as_deref(),
@@ -547,7 +560,7 @@ fn render_strain_card(strain: ApiStrain, mut cart: Signal<Cart>) -> Element {
             }
             div { style: "padding:12px;",
                 div { style: "font-size:17px;font-weight:700;margin-bottom:6px;color:#fff;line-height:1.2;text-shadow:2px 2px 0 #000;",
-                    "{strain.name}"
+                    "{name_disp}"
                 }
                 div { style: "display:flex;gap:6px;align-items:center;margin-bottom:6px;flex-wrap:wrap;",
                     span { style: badge_style, "{badge_label}" }
@@ -593,7 +606,7 @@ fn render_strain_card(strain: ApiStrain, mut cart: Signal<Cart>) -> Element {
                     let unit_price = effective_price;
                     let _ = has_discount; // kept for the price-display branch above
                     let s_id = strain.id.clone();
-                    let s_name = strain.name.clone();
+                    let s_name = name_disp.clone();
                     rsx! {
                         button {
                             style: "
@@ -634,7 +647,7 @@ fn render_strain_card(strain: ApiStrain, mut cart: Signal<Cart>) -> Element {
             }
             {detail_open().then(|| rsx! {
                 ProductDetailModal {
-                    name: strain.name.clone(),
+                    name: name_disp.clone(),
                     image_url: strain.image_url.clone(),
                     description: desc_str.clone(),
                     category_badge: Some(badge_label.clone()),

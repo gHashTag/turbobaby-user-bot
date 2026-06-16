@@ -12,7 +12,11 @@ use serde::Deserialize;
 struct ApiAccessory {
     id: String,
     name: String,
+    #[serde(default)]
+    name_en: Option<String>,
     category: Option<String>,
+    #[serde(default)]
+    category_en: Option<String>,
     description: Option<String>,
     #[serde(default)]
     description_en: Option<String>,
@@ -190,7 +194,7 @@ fn render_accessory_card(
         0.0
     };
     let price_str = format!("฿{}", a_price as i32);
-    let a_name = a.name.clone();
+    let a_name = crate::ui::lang::localized(&a.name, a.name_en.as_deref());
     let a_id = a.id.clone();
     let opacity = if show_out_of_stock {
         "opacity:0.6;"
@@ -213,7 +217,8 @@ fn render_accessory_card(
             || (video_url.starts_with("/") && !video_url.starts_with("//")));
     let mut show_video = use_signal(|| false);
     let badge_style = category_badge_style(cat);
-    let badge_label = format!("{} {}", emoji, cat);
+    let cat_disp = crate::ui::lang::localized(cat, a.category_en.as_deref());
+    let badge_label = format!("{} {}", emoji, cat_disp);
 
     let card_style = format!(
         "background:#16213e;border:4px solid #2a2a4a;box-shadow:4px 4px 0 #000;overflow:hidden;position:relative;cursor:pointer;{}",
@@ -316,7 +321,7 @@ fn render_accessory_card(
             }
             {detail_open().then(|| rsx! {
                 ProductDetailModal {
-                    name: a.name.clone(),
+                    name: crate::ui::lang::localized(&a.name, a.name_en.as_deref()),
                     image_url: a.image_url.clone(),
                     description: desc_full.clone(),
                     category_badge: Some(badge_label.clone()),

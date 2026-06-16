@@ -11,7 +11,11 @@ use serde::Deserialize;
 struct ApiTea {
     id: String,
     name: String,
+    #[serde(default)]
+    name_en: Option<String>,
     subcategory: Option<String>,
+    #[serde(default)]
+    subcategory_en: Option<String>,
     description: Option<String>,
     #[serde(default)]
     description_en: Option<String>,
@@ -148,7 +152,8 @@ pub fn TeaScreen() -> Element {
                                     let show_out_of_stock = stock == 0 || !is_available;
                                     let t_price = if t.price.is_finite() { t.price.max(0.0) } else { 0.0 };
                                     let price_str = format!("฿{}", t_price as i32);
-                                    let t_name = t.name.clone();
+                                    let t_name = crate::ui::lang::localized(&t.name, t.name_en.as_deref());
+                                    let sub_disp = crate::ui::lang::localized(sub, t.subcategory_en.as_deref());
                                     let t_id = t.id.clone();
                                     let opacity = if show_out_of_stock { "0.6" } else { "1" };
                                     let desc = crate::ui::lang::localized(
@@ -198,7 +203,7 @@ pub fn TeaScreen() -> Element {
                                                 } else { rsx!{ "" } }}
                                             }
                                             div { style: "padding: 8px;",
-                                                div { style: "font-size: 13px; font-weight: 700; color: #b388ff; margin-bottom: 2px; text-transform: uppercase;", "{sub}" }
+                                                div { style: "font-size: 13px; font-weight: 700; color: #b388ff; margin-bottom: 2px; text-transform: uppercase;", "{sub_disp}" }
                                                 div { style: "font-size: 17px; font-weight: 700; margin-bottom: 2px;", "{t_name}" }
                                                 if !desc.is_empty() {
                                                     div { style: "font-size: 13px; color: #8b8b9e; margin-bottom: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;", "{desc}" }
@@ -270,11 +275,14 @@ pub fn TeaScreen() -> Element {
             }
 
             {selected_tea().map(|tea| {
-                let sub = tea.subcategory.as_deref().unwrap_or("tea").to_uppercase();
+                let sub = crate::ui::lang::localized(
+                    tea.subcategory.as_deref().unwrap_or("tea"),
+                    tea.subcategory_en.as_deref(),
+                ).to_uppercase();
                 let price_str = format!("฿{}", (if tea.price.is_finite() { tea.price.max(0.0) } else { 0.0 }) as i32);
                 rsx! {
                     ProductDetailModal {
-                        name: tea.name.clone(),
+                        name: crate::ui::lang::localized(&tea.name, tea.name_en.as_deref()),
                         image_url: tea.image_url.clone(),
                         description: crate::ui::lang::localized(
                             tea.description.as_deref().unwrap_or(""),
