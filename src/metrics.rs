@@ -3,11 +3,21 @@
 /// Uses the `metrics` crate which is already wired under the hood by
 /// `axum-prometheus`.  All counters declared here are automatically
 /// included in the `/metrics` Prometheus scrape endpoint.
-use metrics::counter;
+use metrics::{counter, gauge};
 
 /// Increment when a new order is successfully persisted in `create_order`.
 pub fn order_created() {
     counter!("orders_created_total").increment(1);
+}
+
+/// Set once at startup to the number of expected catalog columns missing from
+/// the live DB (see `Database::missing_critical_columns`). Non-zero means prod
+/// is behind on migrations and catalog endpoints (e.g. `/api/sets`) will
+/// degrade/500. A **gauge** (not counter) so it reflects current state and
+/// clears to 0 once migrations are applied and the service redeploys. Alert on
+/// `schema_missing_columns > 0` — the same Prometheus path as the 5xx alerts.
+pub fn schema_missing_columns(n: u64) {
+    gauge!("schema_missing_columns").set(n as f64);
 }
 
 /// Increment when a quest entity is created.

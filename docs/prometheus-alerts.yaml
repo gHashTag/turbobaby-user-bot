@@ -148,3 +148,23 @@ groups:
         annotations:
           summary: "p99 latency > 1s on {{ $labels.path }}"
           description: "5-min p99 latency exceeded 1 second sustained for 10 minutes."
+
+  # ── Schema drift (DB behind on migrations) ──────────────────────────
+  - name: woody_weed_bot_schema
+    rules:
+      - alert: WoodyWeedBotSchemaDrift
+        # Set once at startup by Database::missing_critical_columns(): the
+        # number of expected catalog columns absent from the live DB. > 0
+        # means prod is behind on migrations — catalog endpoints (e.g.
+        # /api/sets) degrade/500 until migrations are applied + redeployed.
+        # This is the alert that would have caught the 2026-06 /api/sets 500
+        # at deploy time instead of via a user-reported 5xx.
+        expr: |
+          schema_missing_columns > 0
+        for: 2m
+        labels:
+          severity: ticket
+          component: schema
+        annotations:
+          summary: "Live DB missing {{ $value }} expected catalog column(s)"
+          description: "Prod DB is behind on migrations. Check startup logs for the named columns (SCHEMA SELF-CHECK), apply migrations, and redeploy. Catalog endpoints degrade gracefully meanwhile."

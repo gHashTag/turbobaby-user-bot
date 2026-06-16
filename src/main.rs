@@ -343,6 +343,11 @@ async fn main() -> Result<()> {
     // migrations BY NAME at startup, instead of waiting for the first 500
     // (cf. the recurring GET /api/sets incident). Non-fatal.
     let missing_cols = db.missing_critical_columns().await;
+    // Publish as a Prometheus gauge so the existing monitoring (same path as
+    // the 5xx alerts) can fire on `schema_missing_columns > 0` — not just a
+    // log line someone has to be looking at. Set even when 0 so the series
+    // exists and "recovered" is observable.
+    crate::metrics::schema_missing_columns(missing_cols.len() as u64);
     if missing_cols.is_empty() {
         info!("✅ Database connected");
     } else {
