@@ -3069,5 +3069,91 @@ mod grafana_dashboard_tests {
     }
 }
 
+/// Architectural fitness function for the HTTP security-header layers wired in
+/// `run_server`. Security headers are easy to lose to ordinary refactor churn
+/// (OWASP/MDN: "validate header values, not just presence" + "catch config
+/// drift when headers get removed during deployments"). These source-scanning
+/// guards lock in the headers we already ship so a future edit can't silently
+/// drop CSP / nosniff / Referrer-Policy or add a framing header that would
+/// break the Telegram WebView embed.
+#[cfg(test)]
+mod security_headers_tests {
+    use std::path::Path;
+
+    /// Production code of main.rs only — excludes the `#[cfg(test)]` modules,
+    /// which mention the layer names in assertion strings and would otherwise
+    /// inflate the call-site counts below (masking a real regression).
+    fn prod_src() -> String {
+        let manifest = env!("CARGO_MANIFEST_DIR");
+        let full = std::fs::read_to_string(Path::new(manifest).join("src/main.rs"))
+            .expect("read src/main.rs");
+        let cut = full.find("#[cfg(test)]").unwrap_or(full.len());
+        full[..cut].to_string()
+    }
+
+    /// Every defensive header layer must stay defined with its correct header
+    /// name + value (value, not just presence).
+    #[test]
+    fn security_header_layers_are_defined_with_correct_values() {
+        let src = prod_src();
+        // X-Content-Type-Options: nosniff — anti MIME-sniffing; pairs with the
+        // upload magic-byte check so a polyglot can't be re-sniffed as HTML/JS.
+        assert!(
+            src.contains("X_CONTENT_TYPE_OPTIONS") && src.contains("\"nosniff\""),
+            "nosniff layer missing: X-Content-Type-Options must be set to \"nosniff\""
+        );
+        // Content-Security-Policy with a frame-ancestors directive.
+        assert!(src.contains("CONTENT_SECURITY_POLICY"), "CSP layer missing");
+        assert!(
+            src.contains("frame-ancestors"),
+            "CSP must include a frame-ancestors directive: it is the clickjacking \
+             control (supersedes X-Frame-Options) and the only framing header that \
+             can allow the Telegram WebView origin"
+        );
+        // Referrer-Policy.
+        assert!(
+            src.contains("REFERRER_POLICY"),
+            "Referrer-Policy layer missing"
+        );
+    }
+
+    /// The three headers must be applied on the global `app` chain AND their
+    /// scoped routers (SPA / static) — so the SPA, static assets, and the
+    /// fallback all receive them, not just hand-picked routes. Each layer
+    /// therefore has exactly two call sites; dropping one means a router lost
+    /// its security headers.
+    #[test]
+    fn security_headers_applied_on_global_and_scoped_routers() {
+        let src = prod_src();
+        for layer in ["csp_layer()", "referrer_layer()", "nosniff_layer()"] {
+            let count = src.matches(layer).count();
+            assert!(
+                count >= 2,
+                "{layer} should be applied on the global app chain AND its scoped \
+                 router (found {count} call site(s)); a single call means a router \
+                 lost its security headers"
+            );
+        }
+    }
+
+    /// Clickjacking defense must stay on CSP `frame-ancestors`, NOT
+    /// `X-Frame-Options`. XFO's only embed-allow value (`ALLOW-FROM`) is dead in
+    /// modern browsers, so XFO here could only be `DENY`/`SAMEORIGIN` — either
+    /// would break the Telegram Mini App iframe while `frame-ancestors` already
+    /// covers modern browsers. Guard against a "helpful" framing header that
+    /// silently locks Telegram out.
+    #[test]
+    fn no_x_frame_options_that_would_break_telegram_embed() {
+        let src = prod_src();
+        assert!(
+            !src.contains("X_FRAME_OPTIONS") && !src.contains("x-frame-options"),
+            "X-Frame-Options must NOT be set: its embed-allow value ALLOW-FROM is \
+             obsolete, so it can only DENY/SAMEORIGIN — either would break the \
+             Telegram Mini App iframe. CSP frame-ancestors (already present) is the \
+             clickjacking control here."
+        );
+    }
+}
+
 // WASM entry point is now in src/lib.rs via #[wasm_bindgen(start)]
 // This file is only used for the native backend (Axum server)
