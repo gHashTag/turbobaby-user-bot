@@ -1396,7 +1396,9 @@ mod touch_target_tests {
 /// alt makes the image invisible to screen-reader users. In our rsx, `img {`
 /// elements declare `alt:` right after `src:`, so a short forward window is
 /// enough. Pure string scan — mirrors `css_class_consistency_tests`; runs on
-/// host. Measurable WCAG subset only — does not judge alt *quality*.
+/// host. `every_img_has_alt` checks presence; `img_alt_is_meaningful` adds a
+/// basic quality heuristic (rejects filename-as-alt and generic placeholders)
+/// — still not a full quality audit (decorative-vs-informative needs a human).
 #[cfg(test)]
 mod img_alt_tests {
     #[test]
@@ -1447,6 +1449,95 @@ mod img_alt_tests {
              `alt: \"…\"` (or `alt: \"\"` if purely decorative):\n  {}",
             missing.len(),
             missing.join("\n  ")
+        );
+    }
+
+    /// Beyond presence (WCAG 1.1.1 wants an *equivalent*, not just any text):
+    /// reject obviously low-quality literal `alt` — the `alt="image1.jpg"`
+    /// failure mode that passes "has alt" yet tells a screen-reader user
+    /// nothing. Only literal alts are judged; interpolated `alt: "{name}"` is
+    /// dynamic and skipped. `alt: ""` (decorative) is allowed. Heuristic, not
+    /// a full audit — informative-vs-decorative still needs a human.
+    #[test]
+    fn img_alt_is_meaningful() {
+        // Exact-match generic placeholders (case-insensitive) + filename exts.
+        const GENERIC: &[&str] = &[
+            "image",
+            "img",
+            "photo",
+            "picture",
+            "thumbnail",
+            "alt",
+            "untitled",
+            "placeholder",
+        ];
+        const IMG_EXT: &[&str] = &[".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg", ".avif"];
+
+        let manifest = env!("CARGO_MANIFEST_DIR");
+        let ui = std::path::Path::new(manifest).join("src/ui");
+        let mut bad = Vec::new();
+        let mut checked = 0usize;
+
+        fn walk(p: &std::path::Path, f: &mut dyn FnMut(&std::path::Path, &str)) {
+            for e in std::fs::read_dir(p)
+                .expect("readable")
+                .filter_map(|e| e.ok())
+            {
+                let path = e.path();
+                if path.is_dir() {
+                    walk(&path, f);
+                } else if path.extension().and_then(|s| s.to_str()) == Some("rs") {
+                    if let Ok(src) = std::fs::read_to_string(&path) {
+                        f(&path, &src);
+                    }
+                }
+            }
+        }
+
+        walk(&ui, &mut |path, src| {
+            for (i, line) in src.lines().enumerate() {
+                let Some(p) = line.find("alt:") else {
+                    continue;
+                };
+                let after = &line[p + "alt:".len()..];
+                let Some(q1) = after.find('"') else {
+                    continue;
+                };
+                let rest = &after[q1 + 1..];
+                let Some(q2) = rest.find('"') else {
+                    continue;
+                };
+                let val = &rest[..q2];
+                if val.contains('{') {
+                    continue; // interpolated → dynamic, can't judge statically
+                }
+                let lower = val.trim().to_lowercase();
+                if lower.is_empty() {
+                    continue; // alt="" decorative — allowed
+                }
+                checked += 1;
+                let file = path.file_name().and_then(|s| s.to_str()).unwrap_or("?");
+                if GENERIC.contains(&lower.as_str()) {
+                    bad.push(format!(
+                        "{file}:{}: alt=\"{val}\" — generic placeholder",
+                        i + 1
+                    ));
+                } else if IMG_EXT.iter().any(|e| lower.ends_with(e)) {
+                    bad.push(format!(
+                        "{file}:{}: alt=\"{val}\" — looks like a filename",
+                        i + 1
+                    ));
+                }
+            }
+        });
+
+        assert!(checked > 0, "no literal alt values parsed — parser broken?");
+        assert!(
+            bad.is_empty(),
+            "{} low-quality alt value(s) (WCAG 1.1.1 wants a meaningful equivalent, \
+             not a filename/placeholder):\n  {}",
+            bad.len(),
+            bad.join("\n  ")
         );
     }
 }
