@@ -144,17 +144,29 @@ pub fn ProductDetailModal(props: ProductDetailModalProps) -> Element {
                         div { style: "font-size:22px;font-weight:800;color:#ffe600;text-shadow:2px 2px 0 #000;margin-bottom:12px;", "{p}" }
                     })}
 
-                    {can_add.then(|| rsx! {
-                        // Quantity stepper: − [n] +, clamped to 1..=99.
+                    {can_add.then(|| {
+                        // Quantity stepper: − [n] +, clamped to 1..=99. Buttons
+                        // are *disabled* (not hidden) at the bounds — Baymard's
+                        // "disable, don't hide" guidance.
+                        let cur = qty();
+                        let at_min = cur <= 1;
+                        let at_max = cur >= 99;
+                        let min_op = if at_min { "0.35" } else { "1" };
+                        let min_cur = if at_min { "not-allowed" } else { "pointer" };
+                        let max_op = if at_max { "0.35" } else { "1" };
+                        let max_cur = if at_max { "not-allowed" } else { "pointer" };
+                        rsx! {
                         div { style: "display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:10px;",
                             button {
-                                style: "width:44px;height:44px;font-size:22px;font-weight:800;background:#2a2a4a;color:#e8e8e8;border:4px solid #1a1a2e;box-shadow:2px 2px 0 #000;cursor:pointer;line-height:1;",
+                                style: "width:44px;height:44px;font-size:22px;font-weight:800;background:#2a2a4a;color:#e8e8e8;border:4px solid #1a1a2e;box-shadow:2px 2px 0 #000;line-height:1;opacity:{min_op};cursor:{min_cur};",
+                                disabled: at_min,
                                 onclick: move |e: Event<MouseData>| { e.stop_propagation(); qty.set(qty().saturating_sub(1).max(1)); },
                                 "−"
                             }
-                            span { style: "font-size:20px;font-weight:800;color:#fff;min-width:40px;text-align:center;", "{qty}" }
+                            span { style: "font-size:20px;font-weight:800;color:#fff;min-width:40px;text-align:center;", "{cur}" }
                             button {
-                                style: "width:44px;height:44px;font-size:22px;font-weight:800;background:#2a2a4a;color:#e8e8e8;border:4px solid #1a1a2e;box-shadow:2px 2px 0 #000;cursor:pointer;line-height:1;",
+                                style: "width:44px;height:44px;font-size:22px;font-weight:800;background:#2a2a4a;color:#e8e8e8;border:4px solid #1a1a2e;box-shadow:2px 2px 0 #000;line-height:1;opacity:{max_op};cursor:{max_cur};",
+                                disabled: at_max,
                                 onclick: move |e: Event<MouseData>| { e.stop_propagation(); qty.set((qty() + 1).min(99)); },
                                 "+"
                             }
@@ -163,6 +175,7 @@ pub fn ProductDetailModal(props: ProductDetailModalProps) -> Element {
                             style: "font-size:14px;font-weight:700;width:100%;padding:12px 20px;margin-bottom:8px;background:#39ff14;color:#000;border:4px solid #2d9e0f;box-shadow:3px 3px 0 #000;cursor:pointer;",
                             onclick: move |e: Event<MouseData>| { e.stop_propagation(); on_add_to_cart.call(qty()); on_close.call(()); },
                             "{add_label}"
+                        }
                         }
                     })}
 

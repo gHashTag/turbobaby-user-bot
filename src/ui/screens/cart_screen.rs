@@ -139,7 +139,7 @@ fn cart_item_row(item: CartItem) -> Element {
             div { style: "display: flex; align-items: center; gap: 6px;",
                 button {
                     style: "
-                        width: 30px; height: 30px;
+                        width: 44px; height: 44px;
                         border: 4px solid #2a2a4a; background: #16213e;
                         color: #e8e8e8; border-radius: 0; cursor: pointer;
                         font-size: 16px; display: flex; align-items: center; justify-content: center;
@@ -165,7 +165,7 @@ fn cart_item_row(item: CartItem) -> Element {
                 span { style: "font-size: 15px; min-width: 18px; text-align: center;", "{qty}" }
                 button {
                     style: "
-                        width: 30px; height: 30px;
+                        width: 44px; height: 44px;
                         border: 4px solid #2a2a4a; background: #16213e;
                         color: #e8e8e8; border-radius: 0; cursor: pointer;
                         font-size: 16px; display: flex; align-items: center; justify-content: center;
