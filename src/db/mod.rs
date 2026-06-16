@@ -58,6 +58,40 @@ const MIGRATION_SQL: &str = concat!(
     include_str!("../../migrations/037_garden_universal_backfill.sql"),
 );
 
+/// Columns the catalog endpoints SELECT that were added by *later* migrations
+/// (016/019/024/034) — exactly the ones that go missing when a prod migration
+/// run doesn't reach them, 500-ing `GET /api/sets`. Base columns from 002 are
+/// omitted (they exist whenever the table does). Used by the startup schema
+/// self-check ([`Database::missing_critical_columns`]).
+const CRITICAL_COLUMNS: &[(&str, &[&str])] = &[
+    (
+        "accessory_sets",
+        &["image_url", "video_url", "name_en", "description_en"],
+    ),
+    (
+        "tea_sets",
+        &["image_url", "video_url", "name_en", "description_en"],
+    ),
+    ("sets", &["image_url", "video_url"]),
+];
+
+/// Pure diff: which `expected` (table, column) pairs are absent from `present`
+/// (the live `information_schema` snapshot). Returned as `"table.column"`.
+fn missing_columns(
+    expected: &[(&str, &[&str])],
+    present: &std::collections::HashSet<(String, String)>,
+) -> Vec<String> {
+    let mut missing = Vec::new();
+    for (table, cols) in expected {
+        for col in *cols {
+            if !present.contains(&((*table).to_string(), (*col).to_string())) {
+                missing.push(format!("{table}.{col}"));
+            }
+        }
+    }
+    missing
+}
+
 /// Cycle #96: after the 17-cycle SeaORM migration finished, this is the
 /// single connection handle to Postgres. Previously held a parallel
 /// `deadpool_postgres::Pool` next to the SeaORM `DatabaseConnection`;
@@ -151,6 +185,47 @@ impl Database {
             .await
             .context("run_migrations: execute_unprepared")?;
         Ok(())
+    }
+
+    /// Best-effort schema self-check run once at startup (after migrations).
+    ///
+    /// `GET /api/sets` 500'd on prod twice (2026-06-05, 2026-06-16) because a
+    /// migration that adds a column to a set-table didn't apply on prod — a
+    /// state invisible to `schema_drift_tests` (which only proves code↔
+    /// migrations agree, not that prod *ran* them). This queries the LIVE
+    /// `information_schema` and returns any [`CRITICAL_COLUMNS`] entry the
+    /// database is actually missing, so startup can log it loudly by name
+    /// instead of waiting for the first 500. Never blocks startup: a query
+    /// error yields an empty list.
+    pub async fn missing_critical_columns(&self) -> Vec<String> {
+        use sea_orm::{ConnectionTrait, DbBackend, Statement};
+        let rows = match self
+            .orm
+            .query_all(Statement::from_string(
+                DbBackend::Postgres,
+                "SELECT table_name, column_name FROM information_schema.columns \
+                 WHERE table_schema = 'public' \
+                   AND table_name IN ('accessory_sets', 'tea_sets', 'sets')"
+                    .to_string(),
+            ))
+            .await
+        {
+            Ok(r) => r,
+            Err(e) => {
+                tracing::error!("schema self-check: information_schema query failed: {e}");
+                return Vec::new();
+            }
+        };
+        let present: std::collections::HashSet<(String, String)> = rows
+            .iter()
+            .filter_map(|r| {
+                Some((
+                    r.try_get::<String>("", "table_name").ok()?,
+                    r.try_get::<String>("", "column_name").ok()?,
+                ))
+            })
+            .collect();
+        missing_columns(CRITICAL_COLUMNS, &present)
     }
 
     /// Cycle #79: migrated from raw `tokio_postgres` to SeaORM entity
@@ -396,6 +471,58 @@ mod migration_manifest_tests {
 /// the invariant "every migration file is wired into the embedded runner" so a
 /// dropped `include_str!` fails at `cargo test` time, not in production. Same
 /// category as `entity_schema_consistency_tests` and the UI wiring defense.
+#[cfg(test)]
+mod schema_self_check_tests {
+    use super::{missing_columns, CRITICAL_COLUMNS};
+    use std::collections::HashSet;
+
+    fn present(pairs: &[(&str, &str)]) -> HashSet<(String, String)> {
+        pairs
+            .iter()
+            .map(|(t, c)| (t.to_string(), c.to_string()))
+            .collect()
+    }
+
+    #[test]
+    fn reports_missing_column() {
+        // accessory_sets has image_url but not video_url → only video_url missing.
+        let p = present(&[("accessory_sets", "image_url")]);
+        let m = missing_columns(&[("accessory_sets", &["image_url", "video_url"])], &p);
+        assert_eq!(m, vec!["accessory_sets.video_url".to_string()]);
+    }
+
+    #[test]
+    fn empty_when_all_present() {
+        let p = present(&[("sets", "image_url"), ("sets", "video_url")]);
+        let m = missing_columns(&[("sets", &["image_url", "video_url"])], &p);
+        assert!(m.is_empty());
+    }
+
+    #[test]
+    fn all_missing_when_table_absent() {
+        // The exact /api/sets failure mode: a set-table never got its later
+        // columns → every expected column reported.
+        let m = missing_columns(
+            &[("tea_sets", &["name_en", "description_en"])],
+            &present(&[]),
+        );
+        assert_eq!(m, vec!["tea_sets.name_en", "tea_sets.description_en"]);
+    }
+
+    #[test]
+    fn critical_columns_list_is_sane() {
+        // Guard the const itself: non-empty, only the set-tables, no dupes.
+        assert!(!CRITICAL_COLUMNS.is_empty());
+        for (table, cols) in CRITICAL_COLUMNS {
+            assert!(
+                matches!(*table, "accessory_sets" | "tea_sets" | "sets"),
+                "unexpected table in CRITICAL_COLUMNS: {table}"
+            );
+            assert!(!cols.is_empty(), "{table} has no columns listed");
+        }
+    }
+}
+
 #[cfg(test)]
 mod migration_wiring_tests {
     use std::collections::BTreeSet;

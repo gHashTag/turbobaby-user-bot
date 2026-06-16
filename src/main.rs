@@ -339,7 +339,21 @@ async fn main() -> Result<()> {
 
     let db = Arc::new(Database::connect(&config.database_url).await?);
     db.run_migrations().await?;
-    info!("✅ Database connected");
+    // Best-effort schema self-check: surface a prod DB that's behind on
+    // migrations BY NAME at startup, instead of waiting for the first 500
+    // (cf. the recurring GET /api/sets incident). Non-fatal.
+    let missing_cols = db.missing_critical_columns().await;
+    if missing_cols.is_empty() {
+        info!("✅ Database connected");
+    } else {
+        tracing::error!(
+            "🚨 SCHEMA SELF-CHECK: live DB is missing {} expected column(s) — \
+             catalog endpoints will degrade/500 until migrations are applied: {:?}",
+            missing_cols.len(),
+            missing_cols
+        );
+        info!("✅ Database connected (with schema warnings above)");
+    }
 
     let ai_client = Arc::new(crate::ai::AiClient::new(
         config.grok_api_key.clone(),
