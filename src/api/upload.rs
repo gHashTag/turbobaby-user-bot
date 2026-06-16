@@ -76,6 +76,28 @@ fn validate_filename(filename: &str, size: usize) -> Result<(), UploadError> {
     Ok(())
 }
 
+/// Verify the file's leading bytes (magic number) match the claimed extension.
+/// OWASP advises against trusting the extension alone — it's attacker-supplied
+/// and an `.png` can carry arbitrary bytes. Covers exactly the
+/// `ALLOWED_EXTENSIONS` media types; returns false for too-short or mismatched
+/// content (the caller then rejects). The signatures here are mandatory per
+/// each format's spec, so a spec-compliant file is never a false negative.
+fn content_matches_extension(data: &[u8], ext: &str) -> bool {
+    let starts = |sig: &[u8]| data.len() >= sig.len() && &data[..sig.len()] == sig;
+    match ext {
+        "jpg" | "jpeg" => starts(&[0xFF, 0xD8, 0xFF]),
+        "png" => starts(&[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]),
+        "gif" => starts(b"GIF87a") || starts(b"GIF89a"),
+        "webp" => data.len() >= 12 && &data[0..4] == b"RIFF" && &data[8..12] == b"WEBP",
+        // ISO Base Media File Format (mp4/mov): `ftyp` box at byte offset 4.
+        "mp4" | "mov" => data.len() >= 12 && &data[4..8] == b"ftyp",
+        // Matroska / WebM: EBML header.
+        "webm" => starts(&[0x1A, 0x45, 0xDF, 0xA3]),
+        // Unknown ext can't reach here (allow-list gates it); fail closed.
+        _ => false,
+    }
+}
+
 async fn upload_file(
     headers: HeaderMap,
     State(state): State<AppState>,
@@ -208,6 +230,16 @@ async fn upload_file(
     validate_filename(&filename, buf.len())?;
     let ext = filename.rsplit('.').next().unwrap_or("").to_lowercase();
 
+    // OWASP: don't trust the extension alone — verify the magic bytes match,
+    // so a renamed non-media file (or polyglot) can't be stored as an image.
+    if !content_matches_extension(&buf, &ext) {
+        tracing::warn!("upload: content does not match .{} signature", ext);
+        return Err(err(
+            StatusCode::UNSUPPORTED_MEDIA_TYPE,
+            format!("file content does not match .{} type", ext),
+        ));
+    }
+
     let short_id = uuid::Uuid::new_v4().to_string();
     let safe_name = format!("{}.{}", short_id.get(0..8).unwrap_or(&short_id), ext);
 
@@ -296,8 +328,45 @@ async fn upload_file(
 
 #[cfg(test)]
 mod tests {
-    use super::{validate_extension, validate_filename, ALLOWED_EXTENSIONS, MAX_UPLOAD_SIZE};
+    use super::{
+        content_matches_extension, validate_extension, validate_filename, ALLOWED_EXTENSIONS,
+        MAX_UPLOAD_SIZE,
+    };
     use axum::http::StatusCode;
+
+    #[test]
+    fn test_content_matches_extension_valid_signatures() {
+        assert!(content_matches_extension(
+            &[0xFF, 0xD8, 0xFF, 0xE0, 0x00],
+            "jpg"
+        ));
+        assert!(content_matches_extension(&[0xFF, 0xD8, 0xFF], "jpeg"));
+        assert!(content_matches_extension(
+            &[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00],
+            "png"
+        ));
+        assert!(content_matches_extension(b"GIF89a....", "gif"));
+        assert!(content_matches_extension(b"RIFF\0\0\0\0WEBPxx", "webp"));
+        assert!(content_matches_extension(b"\0\0\0\x20ftypmp42", "mp4"));
+        assert!(content_matches_extension(b"\0\0\0\x14ftypqt  ", "mov"));
+        assert!(content_matches_extension(
+            &[0x1A, 0x45, 0xDF, 0xA3, 0x00],
+            "webm"
+        ));
+    }
+
+    #[test]
+    fn test_content_matches_extension_mismatch_and_short() {
+        // A renamed text/exe file with a .png name must be rejected.
+        assert!(!content_matches_extension(b"MZ\x90\x00 not a png", "png"));
+        assert!(!content_matches_extension(b"<svg>...</svg>", "png"));
+        // Wrong-but-real signature for the claimed ext.
+        assert!(!content_matches_extension(&[0xFF, 0xD8, 0xFF], "png"));
+        // Too short to carry the signature.
+        assert!(!content_matches_extension(&[0xFF], "jpg"));
+        assert!(!content_matches_extension(b"RIFF", "webp"));
+        assert!(!content_matches_extension(b"", "gif"));
+    }
 
     #[test]
     fn test_validate_upload_ok() {
