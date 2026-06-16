@@ -24,6 +24,7 @@ static HTTP_CLIENT: LazyLock<crate::ui::api::local_client::LocalClient> =
 use crate::ui::api::context::api_base_url;
 use crate::ui::components::{
     EmptyState, IdPicker, Modal, Skeleton, SkeletonShape, Toast, ToastContainer, ToastKind,
+    VideoModal,
 };
 use crate::ui::telegram::{
     use_telegram_id, use_telegram_init_data, HapticNotification, TelegramApp,
@@ -3584,23 +3585,9 @@ fn ItemRow(
                 rsx! {
                     button { style: "flex-shrink:0;min-width:44px;min-height:44px;padding:8px 10px;background:#1a2a3a;color:#4fc3f7;border:none;border-radius:4px;font-size:16px;cursor:pointer;line-height:1;display:flex;align-items:center;justify-content:center;",
                         onclick: move |e: Event<MouseData>| { e.stop_propagation(); show_video.set(true); }, "▶️" }
-                    {if show_video() {
-                        rsx! {
-                            div { style: "position:fixed;inset:0;background:rgba(0,0,0,0.8);display:flex;align-items:center;justify-content:center;z-index:1000;padding:16px;",
-                                onclick: move |_| show_video.set(false),
-                                div { style: "background:#1a1a2e;padding:16px;border-radius:8px;max-width:90vw;max-height:80vh;display:flex;flex-direction:column;align-items:center;gap:8px;",
-                                    onclick: move |e: Event<MouseData>| e.stop_propagation(),
-                                    video { style: "max-width:100%;max-height:60vh;border-radius:6px;", controls: true,
-                                        source { src: "{url}", r#type: "video/mp4" }
-                                    }
-                                    button { style: "padding:8px 16px;background:#2a2a4a;color:#e8e8e8;border:none;border-radius:4px;cursor:pointer;",
-                                        onclick: move |_| show_video.set(false), "Закрыть" }
-                                }
-                            }
-                        }
-                    } else {
-                        rsx! {}
-                    }}
+                    {show_video().then(|| rsx! {
+                        VideoModal { url: url.clone(), on_close: move |_| show_video.set(false) }
+                    })}
                 }
             } else {
                 rsx! {}

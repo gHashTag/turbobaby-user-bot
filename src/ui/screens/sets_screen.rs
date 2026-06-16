@@ -3,6 +3,7 @@ use crate::ui::api::context::api_base_url;
 use crate::ui::assets;
 use crate::ui::components::bottom_nav::BottomNav;
 use crate::ui::components::product_detail_modal::ProductDetailModal;
+use crate::ui::components::video_modal::VideoModal;
 use crate::ui::state::{Cart, CartItem, CartItemType};
 use dioxus::prelude::*;
 use serde::Deserialize;
@@ -319,15 +320,7 @@ fn render_set_card(set: ApiSet, mut cart: Signal<Cart>) -> Element {
                         onclick: move |e: Event<MouseData>| { e.stop_propagation(); show_video.set(true); }, "▶️" }
                 }
                 if show_video() {
-                    div { style: "position:fixed;inset:0;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;z-index:1000;padding:16px;",
-                        onclick: move |_| show_video.set(false),
-                        div { style: "background:#1a1a2e;padding:16px;border-radius:8px;max-width:90vw;max-height:80vh;display:flex;flex-direction:column;align-items:center;gap:8px;",
-                            onclick: move |e: Event<MouseData>| e.stop_propagation(),
-                            video { style: "max-width:100%;max-height:60vh;border-radius:6px;", controls: true, src: "{video_url}" }
-                            button { style: "padding:8px 16px;background:#2a2a4a;color:#e8e8e8;border:none;border-radius:4px;cursor:pointer;",
-                                onclick: move |_| show_video.set(false), "Закрыть" }
-                        }
-                    }
+                    VideoModal { url: video_url.clone(), on_close: move |_| show_video.set(false) }
                 }
             }
             div { style: "padding:14px;",

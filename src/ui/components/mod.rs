@@ -16,6 +16,7 @@ pub mod plant_cell;
 pub mod product_detail_modal;
 pub mod strain_card;
 pub mod strain_grid;
+pub mod video_modal;
 
 // ---------------------------------------------------------------------------
 // New design-system components (feat/design-system)
@@ -45,6 +46,7 @@ pub use plant_cell::{EmptyPlotCell, PlantCell};
 pub use product_detail_modal::{ProductDetailModal, ProductDetailModalProps};
 pub use strain_card::{StrainCard, StrainCardProps};
 pub use strain_grid::{StrainGrid, StrainGridProps};
+pub use video_modal::{VideoModal, VideoModalProps};
 
 // ---------------------------------------------------------------------------
 // Re-exports — new design-system components
