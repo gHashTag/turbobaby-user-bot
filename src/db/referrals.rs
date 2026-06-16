@@ -106,6 +106,12 @@ pub(crate) async fn find_referrer_by_code(
     Ok(m.map(|m| m.telegram_id))
 }
 
+/// A user can never be their own referrer. Pure predicate so the
+/// data-layer invariant is unit-testable without a DB connection.
+pub(crate) fn is_self_referral(referrer_id: i64, referred_id: i64) -> bool {
+    referrer_id == referred_id
+}
+
 /// Record a new pending referral event.
 /// Returns the new event UUID.
 ///
@@ -121,6 +127,16 @@ pub(crate) async fn record_referral(
     code: &str,
     source: Option<&str>,
 ) -> Result<Uuid> {
+    // Defense-in-depth: reject self-referral at the data layer. The only
+    // current caller (bot `/start ref_…` in commands.rs) already guards
+    // `referrer_id != user_id`, but the invariant belongs here too —
+    // otherwise a future caller (admin tool, new endpoint) could create a
+    // self-referral pending event that `confirm_referral` would later pay
+    // out as a bonus to the user's own balance (financial fraud). Mirrors
+    // `confirm_referral`'s own `bail!` input guards below.
+    if is_self_referral(referrer_id, referred_id) {
+        anyhow::bail!("self-referral rejected: referrer_id == referred_id ({referrer_id})");
+    }
     use crate::db::entities::{
         loyalty_profile::{ActiveModel as LpAm, Column as LpCol, Entity as LoyaltyProfileEntity},
         referral_event::{
@@ -455,5 +471,18 @@ mod tests {
         // Negative IDs are invalid in practice, but the function must still
         // produce a stable string so `find_referrer_by_code` can match.
         assert_eq!(referral_code_for(-1), "-1");
+    }
+
+    #[test]
+    fn test_is_self_referral_detects_same_id() {
+        assert!(is_self_referral(12345, 12345));
+        assert!(is_self_referral(0, 0));
+        assert!(is_self_referral(-1, -1));
+    }
+
+    #[test]
+    fn test_is_self_referral_allows_distinct_ids() {
+        assert!(!is_self_referral(12345, 67890));
+        assert!(!is_self_referral(1, -1));
     }
 }
