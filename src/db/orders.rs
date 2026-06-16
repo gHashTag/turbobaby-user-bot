@@ -142,7 +142,11 @@ pub async fn complete_order_and_update_loyalty(
         ))
         .await?
         .ok_or_else(|| sea_orm::DbErr::Custom("COUNT(*) returned no rows".into()))?;
-    let count_before: i64 = count_row.try_get("", "cnt").unwrap_or(0);
+    // Fail loud: a silent `.unwrap_or(0)` here would mark an *existing*
+    // customer's order as their first on any read error, wrongly granting
+    // first-order tier promotion + referral-bonus eligibility. The fn already
+    // returns DbErr, so propagate.
+    let count_before: i64 = count_row.try_get("", "cnt")?;
     let is_first = count_before == 0;
 
     // 3. Flip the order to completed.
@@ -790,7 +794,11 @@ async fn auto_block_for_fraud(
         ))
         .await?
         .ok_or_else(|| sea_orm::DbErr::Custom("auto_block_for_fraud: COUNT no rows".into()))?;
-    let count: i64 = row.try_get("", "n").unwrap_or(0);
+    // Fail loud: a silent `.unwrap_or(0)` here would read as "0 fraud events"
+    // on any error → the auto-block gate silently disables itself (fail-open
+    // security hole), letting a fraudster past the threshold. The fn returns
+    // DbErr, so propagate and let the caller decide.
+    let count: i64 = row.try_get("", "n")?;
     if !should_auto_block_for_fraud(count) {
         return Ok(false);
     }
