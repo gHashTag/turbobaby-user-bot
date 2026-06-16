@@ -3005,6 +3005,68 @@ mod grafana_dashboard_tests {
             unknown.join("\n  ")
         );
     }
+
+    /// Recursively collect every `datasource.uid` string in the dashboard.
+    fn collect_datasource_uids(v: &serde_json::Value, out: &mut Vec<String>) {
+        match v {
+            serde_json::Value::Object(map) => {
+                if let Some(uid) = map
+                    .get("datasource")
+                    .and_then(|d| d.get("uid"))
+                    .and_then(|u| u.as_str())
+                {
+                    out.push(uid.to_string());
+                }
+                for (_, child) in map {
+                    collect_datasource_uids(child, out);
+                }
+            }
+            serde_json::Value::Array(arr) => {
+                for child in arr {
+                    collect_datasource_uids(child, out);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// Portability guard (dashboards-as-code): every `datasource.uid` must be
+    /// the templated `${prometheus}` input or the built-in `-- Grafana --`
+    /// (used by the builtIn annotations) — never a hardcoded instance-specific
+    /// uid, which is the classic "pasted a panel from another dashboard" bug
+    /// that breaks on import. Also keeps the top-level `id` null so Grafana
+    /// assigns its own on import (avoids id collisions across instances).
+    #[test]
+    fn dashboard_is_portable() {
+        const ALLOWED_UIDS: &[&str] = &["${prometheus}", "-- Grafana --"];
+        let manifest = env!("CARGO_MANIFEST_DIR");
+        let raw =
+            std::fs::read_to_string(Path::new(manifest).join("monitoring/grafana-dashboard.json"))
+                .expect("read grafana-dashboard.json");
+        let dash: serde_json::Value = serde_json::from_str(&raw).expect("valid JSON");
+
+        assert!(
+            dash.get("id").map(|v| v.is_null()).unwrap_or(true),
+            "dashboard top-level `id` must be null (Grafana assigns it on import) — got {:?}",
+            dash.get("id")
+        );
+
+        let mut uids = Vec::new();
+        collect_datasource_uids(&dash, &mut uids);
+        assert!(
+            !uids.is_empty(),
+            "no datasource uids found — parser broken?"
+        );
+        let rogue: Vec<&String> = uids
+            .iter()
+            .filter(|u| !ALLOWED_UIDS.contains(&u.as_str()))
+            .collect();
+        assert!(
+            rogue.is_empty(),
+            "datasource uid(s) not in {ALLOWED_UIDS:?} (hardcoded/foreign datasource breaks \
+             import — use the ${{prometheus}} template): {rogue:?}"
+        );
+    }
 }
 
 // WASM entry point is now in src/lib.rs via #[wasm_bindgen(start)]
