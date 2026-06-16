@@ -27,14 +27,12 @@ struct TechNode {
     status: String,
     xp_required: i64,
     xp_reward: i64,
-    #[allow(dead_code)]
+    // Read by the derived `PartialEq` even with no direct callsite, so the
+    // per-field `#[allow(dead_code)]` they carried was redundant (Wave #10).
     dependencies: Vec<String>,
-    #[allow(dead_code)]
     unlocks: Vec<String>,
     features: Vec<String>,
-    #[allow(dead_code)]
     estimated_hours: i64,
-    #[allow(dead_code)]
     priority: i64,
 }
 

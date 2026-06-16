@@ -16,19 +16,15 @@ struct ApiOrder {
     shop_id: Option<String>,
 }
 
+// Product `*_id` fields are present in the API response but the orders
+// list only renders the product *name* (see `item_name`). serde ignores
+// the unmodeled `*_id` keys, so we simply don't declare them — keeping a
+// `#[allow(dead_code)]` field per id was dead weight (Wave #10).
 #[derive(Debug, Clone, Deserialize)]
 struct ApiOrderItem {
-    #[allow(dead_code)]
-    strain_id: Option<String>,
     strain_name: Option<String>,
-    #[allow(dead_code)]
-    accessory_id: Option<String>,
     accessory_name: Option<String>,
-    #[allow(dead_code)]
-    tea_id: Option<String>,
     tea_name: Option<String>,
-    #[allow(dead_code)]
-    set_id: Option<String>,
     set_name: Option<String>,
     quantity: f64,
 }

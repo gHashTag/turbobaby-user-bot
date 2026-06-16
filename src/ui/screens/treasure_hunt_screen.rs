@@ -8,9 +8,9 @@ use serde::Deserialize;
 struct Hunt {
     id: String,
     name: String,
-    #[allow(dead_code)]
+    // Read by the derived `PartialEq`, so these per-field
+    // `#[allow(dead_code)]` were redundant (Wave #10).
     description: Option<String>,
-    #[allow(dead_code)]
     image_url: Option<String>,
     is_active: bool,
     start_name: String,
