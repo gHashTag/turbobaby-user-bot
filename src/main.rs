@@ -1265,6 +1265,103 @@ mod css_class_consistency_tests {
     }
 }
 
+/// Wave loop: catches a bilingual catalog field that is **fetched but
+/// never shown** — declared on a UI screen DTO (`*_en` / `*_localized`)
+/// yet never read, so the English/localized text the API sends silently
+/// never reaches the user. The screen DTOs carry `#[allow(dead_code)]`
+/// (some serde fields are intentionally unused), which suppresses rustc's
+/// own dead-field warning — so a dropped `localized()` wiring goes unseen.
+/// Concrete prior-art: `ApiSet.description_localized` was declared but the
+/// API never emitted it and nothing read it (found + removed this Wave).
+///
+/// Invariant: every `*_en` / `*_localized` field declared in any
+/// `src/ui/screens/*.rs` must be referenced at least once beyond its own
+/// declaration. Pure string scan — mirrors `css_class_consistency_tests`.
+#[cfg(test)]
+mod bilingual_field_wiring_tests {
+    /// Count word-boundary occurrences of `ident` in `hay`.
+    fn count_ident(hay: &str, ident: &str) -> usize {
+        let mut n = 0;
+        let bytes = hay.as_bytes();
+        let mut start = 0;
+        while let Some(pos) = hay[start..].find(ident) {
+            let abs = start + pos;
+            let before_ok =
+                abs == 0 || (!bytes[abs - 1].is_ascii_alphanumeric() && bytes[abs - 1] != b'_');
+            let end = abs + ident.len();
+            let after_ok =
+                end >= bytes.len() || (!bytes[end].is_ascii_alphanumeric() && bytes[end] != b'_');
+            if before_ok && after_ok {
+                n += 1;
+            }
+            start = abs + ident.len();
+        }
+        n
+    }
+
+    /// `Some(field_name)` if `line` declares/initializes a field whose name
+    /// ends in `_en` or `_localized` (e.g. `name_en: Option<String>,` or
+    /// `description_en: if ... { .. }`). Splits on the first `:` and checks
+    /// the left side is a bare identifier with the bilingual suffix.
+    fn bilingual_field(line: &str) -> Option<String> {
+        let t = line.trim();
+        let colon = t.find(':')?;
+        let name = &t[..colon];
+        if name.is_empty() || !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+            return None;
+        }
+        if name.ends_with("_en") || name.ends_with("_localized") {
+            Some(name.to_string())
+        } else {
+            None
+        }
+    }
+
+    #[test]
+    fn every_bilingual_field_is_consumed() {
+        let manifest = env!("CARGO_MANIFEST_DIR");
+        let dir = std::path::Path::new(manifest).join("src/ui/screens");
+        let mut dead = Vec::new();
+        let mut checked = 0usize;
+
+        for entry in std::fs::read_dir(&dir)
+            .expect("src/ui/screens readable")
+            .filter_map(|e| e.ok())
+        {
+            let path = entry.path();
+            if path.extension().and_then(|s| s.to_str()) != Some("rs") {
+                continue;
+            }
+            let src = match std::fs::read_to_string(&path) {
+                Ok(s) => s,
+                Err(_) => continue,
+            };
+            let file = path.file_name().and_then(|s| s.to_str()).unwrap_or("?");
+
+            // Collect candidate field names, then require each to appear
+            // more than once in the file (declaration + at least one use).
+            let mut names: Vec<String> = src.lines().filter_map(bilingual_field).collect();
+            names.sort();
+            names.dedup();
+            for name in names {
+                checked += 1;
+                if count_ident(&src, &name) < 2 {
+                    dead.push(format!("{file}: `{name}` declared but never consumed"));
+                }
+            }
+        }
+
+        assert!(checked > 0, "no bilingual fields parsed — parser broken?");
+        assert!(
+            dead.is_empty(),
+            "{} bilingual field(s) fetched but never shown — wire them through \
+             `lang::localized()` or remove the dead field:\n  {}",
+            dead.len(),
+            dead.join("\n  ")
+        );
+    }
+}
+
 /// Catches "added `pub mod X;` to wire up a new screen, then renamed
 /// or replaced its only caller, leaving an entire dead parallel
 /// module branch the compiler can't see". Concrete prior-art: cycle

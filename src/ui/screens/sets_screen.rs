@@ -18,8 +18,6 @@ struct ApiSet {
     description: Option<String>,
     #[serde(default)]
     description_en: Option<String>,
-    #[serde(default)]
-    description_localized: Option<std::collections::HashMap<String, String>>,
     icon: Option<String>,
     strains: Option<Vec<String>>,
     total_price: f64,
