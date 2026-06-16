@@ -2535,6 +2535,52 @@ mod schema_drift_tests {
             missing
         );
     }
+
+    /// `db::CRITICAL_COLUMNS` (the startup schema self-check list) is hand-
+    /// maintained — tie it to the source of truth so it can't silently drift.
+    /// Every entry must (1) be declared in a migration for its table, and
+    /// (2) actually be SELECTed from that table by the catalog code. Otherwise
+    /// the self-check would alert on a phantom column, or a SELECT could start
+    /// depending on a column the self-check never verifies. Closes W-48.
+    #[test]
+    fn critical_columns_match_migrations_and_selects() {
+        let schema = parse_migration_schema();
+        let manifest = env!("CARGO_MANIFEST_DIR");
+        let catalog = std::fs::read_to_string(Path::new(manifest).join("src/api/catalog.rs"))
+            .expect("read catalog.rs");
+        let selects = find_select_sites_in(&catalog);
+        assert!(
+            !selects.is_empty(),
+            "no SELECT sites parsed from catalog.rs"
+        );
+
+        let mut errors = Vec::new();
+        for &(table, cols) in crate::db::CRITICAL_COLUMNS {
+            for &col in cols {
+                // (1) real migration column for this table
+                match schema.get(table) {
+                    Some(m) if m.contains(col) => {}
+                    _ => errors.push(format!("{table}.{col}: not declared in any migration")),
+                }
+                // (2) actually SELECTed from this table by the catalog code
+                let selected = selects.iter().any(|(tabs, scols)| {
+                    tabs.iter().any(|t| t.as_str() == table)
+                        && scols.iter().any(|c| c.as_str() == col)
+                });
+                if !selected {
+                    errors.push(format!(
+                        "{table}.{col}: in CRITICAL_COLUMNS but no catalog SELECT fetches it"
+                    ));
+                }
+            }
+        }
+        assert!(
+            errors.is_empty(),
+            "CRITICAL_COLUMNS drifted from migrations/SELECTs ({}): {:?}",
+            errors.len(),
+            errors
+        );
+    }
 }
 
 // WASM entry point is now in src/lib.rs via #[wasm_bindgen(start)]

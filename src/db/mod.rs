@@ -63,7 +63,7 @@ const MIGRATION_SQL: &str = concat!(
 /// run doesn't reach them, 500-ing `GET /api/sets`. Base columns from 002 are
 /// omitted (they exist whenever the table does). Used by the startup schema
 /// self-check ([`Database::missing_critical_columns`]).
-const CRITICAL_COLUMNS: &[(&str, &[&str])] = &[
+pub(crate) const CRITICAL_COLUMNS: &[(&str, &[&str])] = &[
     (
         "accessory_sets",
         &["image_url", "video_url", "name_en", "description_en"],
