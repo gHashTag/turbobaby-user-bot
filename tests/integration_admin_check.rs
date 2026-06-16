@@ -29,6 +29,30 @@ use axum::http::{Request, StatusCode};
 use http_body_util::BodyExt;
 use tower::ServiceExt;
 
+/// Hermetic (no DB): the harness safety guard must accept local/test DSNs and
+/// reject remote production-looking ones — so `cargo test -- --ignored` with a
+/// prod `DATABASE_URL` exported in the shell can't migrate/mutate production.
+#[test]
+fn harness_rejects_production_dsn() {
+    // Safe: local hosts, or a test-named database.
+    assert!(common::is_safe_test_dsn(
+        "postgresql://postgres@localhost:5432/woody_wave_test"
+    ));
+    assert!(common::is_safe_test_dsn(
+        "postgres://u:p@127.0.0.1/anything"
+    ));
+    assert!(common::is_safe_test_dsn(
+        "postgres://u:p@db.example.com/myapp_test"
+    ));
+    // Unsafe: remote production DSN (e.g. Railway), non-test db name.
+    assert!(!common::is_safe_test_dsn(
+        "postgresql://postgres:secret@trolley.proxy.rlwy.net:52162/railway"
+    ));
+    assert!(!common::is_safe_test_dsn(
+        "postgres://u:p@prod.example.com:5432/production"
+    ));
+}
+
 #[tokio::test]
 #[ignore = "needs DATABASE_URL env var; run with --ignored"]
 async fn admin_check_without_auth_is_unauthorized() {

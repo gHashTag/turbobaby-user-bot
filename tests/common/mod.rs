@@ -49,6 +49,18 @@ pub async fn make_app() -> Option<Router> {
 pub async fn make_app_with_db() -> Option<(Router, Arc<Database>)> {
     let database_url = std::env::var("DATABASE_URL").ok()?;
 
+    // SAFETY GUARD: this harness runs `run_migrations()` and the suite writes
+    // rows. If `DATABASE_URL` happens to point at a shared/production database
+    // (a real footgun — prod DSNs are commonly exported into the shell), the
+    // tests would migrate and mutate production data. Refuse unless the DSN is
+    // clearly a local or explicitly test-named database.
+    assert!(
+        is_safe_test_dsn(&database_url),
+        "refusing to run integration tests against DATABASE_URL={database_url:?} — it is not a \
+         local/test database. The harness migrates and writes rows; point it at a THROWAWAY DB \
+         (host localhost/127.0.0.1, or a database name containing \"test\")."
+    );
+
     let config = Arc::new(test_config(&database_url));
     let db = Database::connect(&database_url)
         .await
@@ -68,6 +80,24 @@ pub async fn make_app_with_db() -> Option<(Router, Arc<Database>)> {
     };
 
     Some((woody_weed_bot::api::router(state), db))
+}
+
+/// Pure guard: is this DSN safe for a destructive integration-test run?
+/// Allows local hosts (localhost/127.0.0.1/::1) or any database whose name
+/// contains "test". Blocks remote production-looking DSNs. Pure so it can be
+/// unit-tested without a DB.
+pub fn is_safe_test_dsn(url: &str) -> bool {
+    let lower = url.to_ascii_lowercase();
+    let host_is_local =
+        lower.contains("@localhost") || lower.contains("@127.0.0.1") || lower.contains("@[::1]");
+    // database name = the path segment after the last '/', ignoring any ?query.
+    let db_is_test = lower
+        .rsplit('/')
+        .next()
+        .map(|tail| tail.split('?').next().unwrap_or(tail))
+        .map(|db| db.contains("test"))
+        .unwrap_or(false);
+    host_is_local || db_is_test
 }
 
 /// Minimal `Config` for tests. All required fields populated; secrets
