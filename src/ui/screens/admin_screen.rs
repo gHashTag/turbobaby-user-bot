@@ -3398,6 +3398,7 @@ fn ImageUpload(image_url: String, on_change: EventHandler<String>) -> Element {
                 "❌ {error_msg}"
                 button {
                     style: "margin-left:8px;background:transparent;color:#ff6b7a;border:1px solid #ff4757;border-radius:3px;font-size:11px;padding:1px 6px;cursor:pointer;",
+                    "aria-label": "Закрыть",
                     onclick: move |_| error_msg.set(String::new()),
                     "✕"
                 }
@@ -3449,6 +3450,7 @@ fn VideoUpload(video_url: String, on_change: EventHandler<String>) -> Element {
                 "❌ {error_msg}"
                 button {
                     style: "margin-left:8px;background:transparent;color:#ff6b7a;border:1px solid #ff4757;border-radius:3px;font-size:11px;padding:1px 6px;cursor:pointer;",
+                    "aria-label": "Закрыть",
                     onclick: move |_| error_msg.set(String::new()),
                     "✕"
                 }
@@ -3484,6 +3486,7 @@ fn render_status(mut status: Signal<String>) -> Element {
                         style: "padding:10px;background:{color}10;color:{color};font-size:13px;border-radius:4px;border:1px solid {color}30;display:flex;justify-content:space-between;align-items:center;margin-top:4px;",
                         span { "{msg}" }
                         button { style: "background:none;border:none;color:{color};cursor:pointer;font-size:16px;padding:0 4px;",
+                            "aria-label": "Закрыть",
                             onclick: move |_| status.set(String::new()), "✕" }
                     }
                 }
@@ -3584,6 +3587,7 @@ fn ItemRow(
                 let url = url.clone();
                 rsx! {
                     button { style: "flex-shrink:0;min-width:44px;min-height:44px;padding:8px 10px;background:#1a2a3a;color:#4fc3f7;border:none;border-radius:4px;font-size:16px;cursor:pointer;line-height:1;display:flex;align-items:center;justify-content:center;",
+                        "aria-label": "Смотреть видео",
                         onclick: move |e: Event<MouseData>| { e.stop_propagation(); show_video.set(true); }, "▶️" }
                     {show_video().then(|| rsx! {
                         VideoModal { url: url.clone(), on_close: move |_| show_video.set(false) }
@@ -3593,18 +3597,22 @@ fn ItemRow(
                 rsx! {}
             }}
             button { style: "flex-shrink:0;min-width:44px;min-height:44px;padding:8px 10px;background:#2a2a4a;color:#e8e8e8;border:none;border-radius:4px;font-size:16px;cursor:pointer;line-height:1;display:flex;align-items:center;justify-content:center;",
+                "aria-label": "Редактировать",
                 onclick: move |e: Event<MouseData>| { e.stop_propagation(); on_edit.call(()); }, "✏️" }
             button { style: "flex-shrink:0;min-width:44px;min-height:44px;padding:8px 10px;background:#2a2a4a;color:#e8e8e8;border:none;border-radius:4px;font-size:16px;cursor:pointer;line-height:1;display:flex;align-items:center;justify-content:center;",
+                "aria-label": "Переключить видимость",
                 onclick: move |e: Event<MouseData>| { e.stop_propagation(); on_toggle.call(()); }, "{toggle_label}" }
             {if let Some(handler) = on_sotd {
                 rsx! {
                     button { style: "flex-shrink:0;min-width:44px;min-height:44px;padding:8px 10px;background:#2a2a1a;color:#ffe600;border:none;border-radius:4px;font-size:16px;cursor:pointer;line-height:1;display:flex;align-items:center;justify-content:center;",
+                        "aria-label": "Сорт дня",
                         onclick: move |e: Event<MouseData>| { e.stop_propagation(); handler.call(()); }, "🌟" }
                 }
             } else {
                 rsx! {}
             }}
             button { style: "flex-shrink:0;min-width:44px;min-height:44px;padding:8px 10px;background:#3a1a1a;color:#ff8888;border:none;border-radius:4px;font-size:16px;cursor:pointer;line-height:1;display:flex;align-items:center;justify-content:center;",
+                "aria-label": "Удалить",
                 onclick: move |e: Event<MouseData>| { e.stop_propagation(); on_delete.call(()); }, "🗑" }
         }
     }
@@ -4374,7 +4382,7 @@ fn OrderDetailModal(order: AdminOrder, on_close: EventHandler<()>) -> Element {
                 onclick: move |e: Event<MouseData>| e.stop_propagation(),
                 div { style: "display:flex;justify-content:space-between;align-items:center;",
                     h3 { style: "margin:0;color:#39ff14;font-size:17px;", "{order_title}" }
-                    button { style: "background:none;border:none;color:#888;font-size:20px;cursor:pointer;", onclick: move |_| on_close.call(()), "✕" }
+                    button { style: "background:none;border:none;color:#888;font-size:20px;cursor:pointer;", "aria-label": "Закрыть", onclick: move |_| on_close.call(()), "✕" }
                 }
                 div { style: "display:flex;align-items:center;gap:8px;",
                     span { class: "{status_cls}", "{status_label}" }
@@ -5090,6 +5098,7 @@ fn QuestsTab() -> Element {
                                     }
                                     div { class: "admin-row-actions",
                                         button { class: "admin-btn secondary admin-btn-sm",
+                                            "aria-label": "Редактировать",
                                             onclick: move |_| { is_new.set(false); editing.set(Some(p2.clone())); },
                                             "✏️"
                                         }
@@ -5374,6 +5383,7 @@ fn TreasuresTab() -> Element {
                                     }
                                     div { class: "admin-row-actions",
                                         button { class: "admin-btn secondary admin-btn-sm",
+                                            "aria-label": "Редактировать",
                                             onclick: move |_| { is_new.set(false); editing.set(Some(h2.clone())); },
                                             "✏️"
                                         }
@@ -5995,6 +6005,7 @@ fn ManagerDetailModal(props: ManagerDetailModalProps) -> Element {
                     span { class: "admin-modal-title", "👤 Карточка менеджера" }
                     button {
                         class: "admin-modal-close",
+                        "aria-label": "Закрыть",
                         onclick: move |_| { props.on_close.call(()); },
                         "✖"
                     }
