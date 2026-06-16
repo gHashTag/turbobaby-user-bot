@@ -39,12 +39,29 @@
     "list": [
       {
         "builtIn": 1,
-        "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
         "enable": true,
         "hide": true,
         "iconColor": "rgba(0, 211, 255, 1)",
         "name": "Annotations & Alerts",
         "type": "dashboard"
+      },
+      {
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${prometheus}"
+        },
+        "enable": true,
+        "hide": false,
+        "iconColor": "green",
+        "name": "Deploys",
+        "expr": "build_info",
+        "step": "60s",
+        "titleFormat": "Deploy {{version}}",
+        "tagKeys": "build"
       }
     ]
   },
@@ -60,10 +77,16 @@
       "type": "timeseries",
       "title": "HTTP Request Rate",
       "description": "Incoming HTTP requests per second, broken down by method and endpoint.",
-      "datasource": { "type": "prometheus", "uid": "${prometheus}" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prometheus}"
+      },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "${prometheus}" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus}"
+          },
           "expr": "rate(axum_http_requests_total[5m])",
           "legendFormat": "{{method}} {{endpoint}}",
           "refId": "A"
@@ -71,7 +94,9 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "palette-classic" },
+          "color": {
+            "mode": "palette-classic"
+          },
           "custom": {
             "lineWidth": 2,
             "fillOpacity": 10,
@@ -82,20 +107,37 @@
         "overrides": []
       },
       "options": {
-        "legend": { "displayMode": "list", "placement": "bottom" },
-        "tooltip": { "mode": "multi", "sort": "desc" }
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
       },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 }
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      }
     },
     {
       "id": 2,
       "type": "timeseries",
       "title": "HTTP Error Rate (5xx)",
       "description": "5xx server errors per second — indicates backend failures.",
-      "datasource": { "type": "prometheus", "uid": "${prometheus}" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prometheus}"
+      },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "${prometheus}" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus}"
+          },
           "expr": "rate(axum_http_requests_total{status=~\"5..\"}[5m])",
           "legendFormat": "{{method}} {{endpoint}} ({{status}})",
           "refId": "A"
@@ -103,7 +145,10 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "color": { "fixedColor": "red", "mode": "fixed" },
+          "color": {
+            "fixedColor": "red",
+            "mode": "fixed"
+          },
           "custom": {
             "lineWidth": 2,
             "fillOpacity": 20,
@@ -114,26 +159,46 @@
         "overrides": []
       },
       "options": {
-        "legend": { "displayMode": "list", "placement": "bottom" },
-        "tooltip": { "mode": "multi", "sort": "desc" }
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
       },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 }
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      }
     },
     {
       "id": 3,
       "type": "timeseries",
       "title": "HTTP Latency P95",
       "description": "95th percentile HTTP response latency across all endpoints.",
-      "datasource": { "type": "prometheus", "uid": "${prometheus}" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prometheus}"
+      },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "${prometheus}" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus}"
+          },
           "expr": "histogram_quantile(0.95, rate(axum_http_requests_duration_seconds_bucket[5m]))",
           "legendFormat": "p95 latency",
           "refId": "A"
         },
         {
-          "datasource": { "type": "prometheus", "uid": "${prometheus}" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus}"
+          },
           "expr": "histogram_quantile(0.50, rate(axum_http_requests_duration_seconds_bucket[5m]))",
           "legendFormat": "p50 latency",
           "refId": "B"
@@ -141,7 +206,9 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "palette-classic" },
+          "color": {
+            "mode": "palette-classic"
+          },
           "custom": {
             "lineWidth": 2,
             "fillOpacity": 10,
@@ -151,29 +218,55 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 0.5 },
-              { "color": "red", "value": 2.0 }
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 0.5
+              },
+              {
+                "color": "red",
+                "value": 2.0
+              }
             ]
           }
         },
         "overrides": []
       },
       "options": {
-        "legend": { "displayMode": "list", "placement": "bottom" },
-        "tooltip": { "mode": "multi", "sort": "desc" }
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
       },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 }
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      }
     },
     {
       "id": 4,
       "type": "timeseries",
       "title": "Orders Created",
       "description": "Rate of new orders created per second.",
-      "datasource": { "type": "prometheus", "uid": "${prometheus}" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prometheus}"
+      },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "${prometheus}" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus}"
+          },
           "expr": "rate(orders_created_total[5m])",
           "legendFormat": "orders/s",
           "refId": "A"
@@ -181,7 +274,10 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "color": { "fixedColor": "green", "mode": "fixed" },
+          "color": {
+            "fixedColor": "green",
+            "mode": "fixed"
+          },
           "custom": {
             "lineWidth": 2,
             "fillOpacity": 15,
@@ -192,20 +288,36 @@
         "overrides": []
       },
       "options": {
-        "legend": { "displayMode": "list", "placement": "bottom" },
-        "tooltip": { "mode": "single" }
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single"
+        }
       },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 }
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      }
     },
     {
       "id": 5,
       "type": "timeseries",
       "title": "Quests Created",
       "description": "Rate of quests created, broken down by kind (quest_place, treasure_hunt, etc.).",
-      "datasource": { "type": "prometheus", "uid": "${prometheus}" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prometheus}"
+      },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "${prometheus}" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus}"
+          },
           "expr": "sum by (kind) (rate(quests_created_total[5m]))",
           "legendFormat": "{{kind}}",
           "refId": "A"
@@ -213,7 +325,9 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "palette-classic" },
+          "color": {
+            "mode": "palette-classic"
+          },
           "custom": {
             "lineWidth": 2,
             "fillOpacity": 10,
@@ -224,20 +338,37 @@
         "overrides": []
       },
       "options": {
-        "legend": { "displayMode": "list", "placement": "bottom" },
-        "tooltip": { "mode": "multi", "sort": "desc" }
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
       },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 }
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
+      }
     },
     {
       "id": 6,
       "type": "timeseries",
       "title": "Users Registered",
       "description": "Rate of new user registrations per hour.",
-      "datasource": { "type": "prometheus", "uid": "${prometheus}" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prometheus}"
+      },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "${prometheus}" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus}"
+          },
           "expr": "rate(users_registered_total[1h])",
           "legendFormat": "registrations/s",
           "refId": "A"
@@ -245,7 +376,10 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "color": { "fixedColor": "blue", "mode": "fixed" },
+          "color": {
+            "fixedColor": "blue",
+            "mode": "fixed"
+          },
           "custom": {
             "lineWidth": 2,
             "fillOpacity": 15,
@@ -256,20 +390,36 @@
         "overrides": []
       },
       "options": {
-        "legend": { "displayMode": "list", "placement": "bottom" },
-        "tooltip": { "mode": "single" }
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single"
+        }
       },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 }
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 16
+      }
     },
     {
       "id": 7,
       "type": "timeseries",
       "title": "QR Scans",
       "description": "Rate of QR code scans — split by outcome (final location reached or not).",
-      "datasource": { "type": "prometheus", "uid": "${prometheus}" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prometheus}"
+      },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "${prometheus}" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus}"
+          },
           "expr": "sum by (final) (rate(qr_scans_total[5m]))",
           "legendFormat": "final={{final}}",
           "refId": "A"
@@ -277,7 +427,9 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "palette-classic" },
+          "color": {
+            "mode": "palette-classic"
+          },
           "custom": {
             "lineWidth": 2,
             "fillOpacity": 10,
@@ -288,20 +440,37 @@
         "overrides": []
       },
       "options": {
-        "legend": { "displayMode": "list", "placement": "bottom" },
-        "tooltip": { "mode": "multi", "sort": "desc" }
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
       },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 }
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 24
+      }
     },
     {
       "id": 8,
       "type": "gauge",
       "title": "Pending HTTP Requests",
       "description": "Number of HTTP requests currently being processed (in-flight).",
-      "datasource": { "type": "prometheus", "uid": "${prometheus}" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prometheus}"
+      },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "${prometheus}" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus}"
+          },
           "expr": "axum_http_requests_pending",
           "legendFormat": "pending",
           "refId": "A"
@@ -315,9 +484,18 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 50 },
-              { "color": "red", "value": 200 }
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 50
+              },
+              {
+                "color": "red",
+                "value": 200
+              }
             ]
           },
           "unit": "short",
@@ -327,7 +505,9 @@
       },
       "options": {
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -335,11 +515,176 @@
         "showThresholdLabels": false,
         "showThresholdMarkers": true
       },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 }
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 24
+      }
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "Deployed Build (build_info)",
+      "description": "Which version/commit each replica is running. Use to confirm a fix actually shipped, and as the join source for per-version breakdowns.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prometheus}"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus}"
+          },
+          "expr": "build_info",
+          "legendFormat": "{{version}} · {{build}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "showPoints": "never"
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 32
+      }
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Capabilities (1 = enabled)",
+      "description": "Per-capability state from Config::disabled_capabilities. 0 means the feature is off due to missing config in that environment.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prometheus}"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus}"
+          },
+          "expr": "capability_enabled",
+          "legendFormat": "{{capability}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "showPoints": "never"
+          },
+          "min": 0,
+          "max": 1,
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 32
+      }
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "5xx rate by deploy version",
+      "description": "Server-error rate joined to build_info version — a regression introduced by a specific release diverges here. expr: rate(5xx) * on(instance) group_left(version) build_info.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prometheus}"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheus}"
+          },
+          "expr": "sum by (version) (rate(axum_http_requests_total{status=~\"5..\"}[5m]) * on(instance) group_left(version) build_info)",
+          "legendFormat": "{{version}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "showPoints": "never"
+          },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 32
+      }
     }
   ],
   "schemaVersion": 38,
-  "tags": ["woody-weed-bot", "rust", "axum", "telegram"],
+  "tags": [
+    "woody-weed-bot",
+    "rust",
+    "axum",
+    "telegram"
+  ],
   "templating": {
     "list": [
       {
@@ -357,7 +702,10 @@
       }
     ]
   },
-  "time": { "from": "now-6h", "to": "now" },
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
   "timepicker": {},
   "timezone": "browser",
   "title": "Woody Weed Bot — Production Metrics",
