@@ -2802,5 +2802,210 @@ mod schema_drift_tests {
     }
 }
 
+/// Wave loop: dashboards-as-code lint. `monitoring/grafana-dashboard.json`
+/// is hand-maintained and references metric names by string in PromQL — if a
+/// metric is renamed/removed in `src/metrics.rs` (or mistyped), the panel
+/// silently shows "No data" and nobody notices until an incident. This test
+/// parses the dashboard, extracts the metric name from every panel/annotation
+/// `expr`, and asserts each is real: declared in `src/metrics.rs`, an
+/// `axum_*` built-in (axum-prometheus), or a `wwb:` recording rule. Pure scan;
+/// runs on host. (Static check — can't verify the metric is actually emitted
+/// at runtime, only that the name is one the code knows about.)
+#[cfg(test)]
+mod grafana_dashboard_tests {
+    use std::collections::HashSet;
+    use std::path::Path;
+
+    /// Extract metric-name tokens from a PromQL expression. Skips `{…}` label
+    /// matchers, `[…]` durations, the label lists of grouping modifiers
+    /// (`by`/`on`/`group_left`/…), and PromQL functions/keywords.
+    fn metric_names(expr: &str) -> Vec<String> {
+        const MODIFIERS: &[&str] = &[
+            "by",
+            "without",
+            "on",
+            "ignoring",
+            "group_left",
+            "group_right",
+        ];
+        const FUNCS: &[&str] = &[
+            "rate",
+            "irate",
+            "increase",
+            "delta",
+            "idelta",
+            "deriv",
+            "predict_linear",
+            "sum",
+            "avg",
+            "min",
+            "max",
+            "count",
+            "count_values",
+            "stddev",
+            "stdvar",
+            "topk",
+            "bottomk",
+            "quantile",
+            "histogram_quantile",
+            "label_replace",
+            "label_join",
+            "abs",
+            "ceil",
+            "floor",
+            "round",
+            "clamp",
+            "clamp_max",
+            "clamp_min",
+            "time",
+            "timestamp",
+            "vector",
+            "scalar",
+            "absent",
+            "absent_over_time",
+            "changes",
+            "resets",
+            "sort",
+            "sort_desc",
+            "and",
+            "or",
+            "unless",
+            "bool",
+            "offset",
+            "inf",
+            "nan",
+            "atan2",
+        ];
+        let bytes = expr.as_bytes();
+        let mut out = Vec::new();
+        let mut i = 0;
+        let mut skip_next_paren = false;
+        while i < bytes.len() {
+            let c = bytes[i];
+            if c == b'{' || c == b'[' {
+                let close = if c == b'{' { b'}' } else { b']' };
+                while i < bytes.len() && bytes[i] != close {
+                    i += 1;
+                }
+                i += 1;
+                continue;
+            }
+            if c == b'(' && skip_next_paren {
+                let mut depth = 0i32;
+                while i < bytes.len() {
+                    match bytes[i] {
+                        b'(' => depth += 1,
+                        b')' => {
+                            depth -= 1;
+                            if depth == 0 {
+                                i += 1;
+                                break;
+                            }
+                        }
+                        _ => {}
+                    }
+                    i += 1;
+                }
+                skip_next_paren = false;
+                continue;
+            }
+            if c.is_ascii_alphabetic() || c == b'_' || c == b':' {
+                let start = i;
+                while i < bytes.len()
+                    && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_' || bytes[i] == b':')
+                {
+                    i += 1;
+                }
+                let ident = &expr[start..i];
+                if MODIFIERS.contains(&ident) {
+                    skip_next_paren = true;
+                } else if !FUNCS.contains(&ident) {
+                    out.push(ident.to_string());
+                }
+                continue;
+            }
+            i += 1;
+        }
+        out
+    }
+
+    /// Custom metric names declared via `counter!("…")` / `gauge!("…")` in
+    /// `src/metrics.rs`.
+    fn declared_metrics(manifest: &str) -> HashSet<String> {
+        let src = std::fs::read_to_string(Path::new(manifest).join("src/metrics.rs"))
+            .expect("read src/metrics.rs");
+        let mut set = HashSet::new();
+        for marker in ["counter!(\"", "gauge!(\""] {
+            let mut from = 0;
+            while let Some(rel) = src[from..].find(marker) {
+                let s = from + rel + marker.len();
+                if let Some(end) = src[s..].find('"') {
+                    set.insert(src[s..s + end].to_string());
+                    from = s + end;
+                } else {
+                    break;
+                }
+            }
+        }
+        set
+    }
+
+    #[test]
+    fn dashboard_exprs_reference_real_metrics() {
+        let manifest = env!("CARGO_MANIFEST_DIR");
+        let raw =
+            std::fs::read_to_string(Path::new(manifest).join("monitoring/grafana-dashboard.json"))
+                .expect("read grafana-dashboard.json");
+        let dash: serde_json::Value =
+            serde_json::from_str(&raw).expect("grafana-dashboard.json must be valid JSON");
+
+        // Collect every `expr` under panels[].targets[] and annotations.list[].
+        let mut exprs: Vec<String> = Vec::new();
+        if let Some(panels) = dash.get("panels").and_then(|p| p.as_array()) {
+            for p in panels {
+                if let Some(ts) = p.get("targets").and_then(|t| t.as_array()) {
+                    for t in ts {
+                        if let Some(e) = t.get("expr").and_then(|e| e.as_str()) {
+                            exprs.push(e.to_string());
+                        }
+                    }
+                }
+            }
+        }
+        if let Some(list) = dash
+            .get("annotations")
+            .and_then(|a| a.get("list"))
+            .and_then(|l| l.as_array())
+        {
+            for a in list {
+                if let Some(e) = a.get("expr").and_then(|e| e.as_str()) {
+                    exprs.push(e.to_string());
+                }
+            }
+        }
+        assert!(!exprs.is_empty(), "no exprs parsed from dashboard");
+
+        let declared = declared_metrics(manifest);
+        let mut unknown = Vec::new();
+        for expr in &exprs {
+            for name in metric_names(expr) {
+                let known = declared.contains(&name)
+                    || name.starts_with("axum_") // axum-prometheus built-ins
+                    || name.starts_with("wwb:"); // recording rules
+                if !known {
+                    unknown.push(format!("{name}  (in: {expr})"));
+                }
+            }
+        }
+        assert!(
+            unknown.is_empty(),
+            "{} dashboard metric reference(s) not declared in src/metrics.rs (nor axum_*/wwb:): \
+             rename/restore the metric or fix the panel:\n  {}",
+            unknown.len(),
+            unknown.join("\n  ")
+        );
+    }
+}
+
 // WASM entry point is now in src/lib.rs via #[wasm_bindgen(start)]
 // This file is only used for the native backend (Axum server)
