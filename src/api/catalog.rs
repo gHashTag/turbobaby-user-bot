@@ -1163,16 +1163,23 @@ async fn get_sets(
         return Ok(Json(json!({ "sets": items })));
     }
 
-    // Public mode: combine accessory_sets + tea_sets (backwards compat)
+    // Public mode: combine accessory_sets + tea_sets (backwards compat).
+    //
+    // Resilience (prod 500 on 2026-06-05 and again on 2026-06-16): a missing
+    // column / unapplied migration on one set-table used to 500 the entire
+    // endpoint, blanking the /sets page. Each source now degrades to an empty
+    // list on error (logged) so the page still renders whatever it can —
+    // graceful degradation instead of a hard 500. The error log preserves the
+    // root cause for ops.
     let accessory_sets = state.db.orm.query_all(Statement::from_string(
         DbBackend::Postgres,
         "SELECT id, name, description, icon, accessories, total_price::float8 AS total_price, discount_percent::float8 AS discount_percent, is_available, is_deal_of_day, name_en, description_en, image_url, video_url FROM accessory_sets WHERE is_available = TRUE LIMIT 2000".to_string(),
-    )).await.map_err(|e| { tracing::error!("get_sets accessory_sets: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?;
+    )).await.unwrap_or_else(|e| { tracing::error!("get_sets accessory_sets (degraded to empty): {e}"); Vec::new() });
 
     let tea_sets = state.db.orm.query_all(Statement::from_string(
         DbBackend::Postgres,
         "SELECT id, name, description, icon, items, total_price::float8 AS total_price, discount_percent::float8 AS discount_percent, is_available, name_en, description_en, image_url, video_url FROM tea_sets WHERE is_available = TRUE LIMIT 2000".to_string(),
-    )).await.map_err(|e| { tracing::error!("get_sets tea_sets: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?;
+    )).await.unwrap_or_else(|e| { tracing::error!("get_sets tea_sets (degraded to empty): {e}"); Vec::new() });
 
     let mut items: Vec<serde_json::Value> = Vec::new();
 
