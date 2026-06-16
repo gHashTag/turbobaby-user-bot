@@ -773,6 +773,41 @@ pub(crate) struct ForceSeedRequest {
     pub telegram_id: i64,
 }
 
+/// Pick the first plantable catalog item from an order's `items` JSON array,
+/// returned as `(id, name)`. Precedence within an item: strain → set →
+/// accessory → tea (mirrors the garden backfill migrations 026/036/037).
+///
+/// This is the exact logic behind the seed-backfill firefighting: migration
+/// 036 ("non_strain_orders") and 037 ("universal_backfill") existed because
+/// early code only planted from `strain_id`, leaving accessory/tea/set-only
+/// orders with no plant. Kept pure (no DB) so the precedence + the
+/// non-strain cases are locked down by unit tests.
+fn first_seedable_item(items: &serde_json::Value) -> Option<(String, String)> {
+    const KEYS: [(&str, &str); 4] = [
+        ("strain_id", "strain_name"),
+        ("set_id", "set_name"),
+        ("accessory_id", "accessory_name"),
+        ("tea_id", "tea_name"),
+    ];
+    for it in items.as_array()? {
+        for (id_key, name_key) in KEYS {
+            if let Some(id) = it
+                .get(id_key)
+                .and_then(|v| v.as_str())
+                .filter(|s| !s.is_empty())
+            {
+                let name = it
+                    .get(name_key)
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                return Some((id.to_string(), name));
+            }
+        }
+    }
+    None
+}
+
 async fn force_seed(
     headers: HeaderMap,
     State(state): State<AppState>,
@@ -834,71 +869,7 @@ async fn force_seed(
         .try_get("", "items")
         .unwrap_or(serde_json::Value::Null);
 
-    let first_item = items.as_array().and_then(|arr| {
-        arr.iter().find(|it| {
-            it.get("strain_id")
-                .and_then(|v| v.as_str())
-                .map(|s| !s.is_empty())
-                .unwrap_or(false)
-                || it
-                    .get("set_id")
-                    .and_then(|v| v.as_str())
-                    .map(|s| !s.is_empty())
-                    .unwrap_or(false)
-                || it
-                    .get("accessory_id")
-                    .and_then(|v| v.as_str())
-                    .map(|s| !s.is_empty())
-                    .unwrap_or(false)
-                || it
-                    .get("tea_id")
-                    .and_then(|v| v.as_str())
-                    .map(|s| !s.is_empty())
-                    .unwrap_or(false)
-        })
-    });
-
-    let Some(item) = first_item else {
-        return Ok(Json(
-            json!({ "success": false, "error": "no_catalog_items" }),
-        ));
-    };
-
-    let (strain_id, strain_name) = if let Some(sid) = item
-        .get("strain_id")
-        .and_then(|v| v.as_str())
-        .filter(|s| !s.is_empty())
-    {
-        let sname = item
-            .get("strain_name")
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
-        (sid.to_string(), sname.to_string())
-    } else if let Some(sid) = item
-        .get("set_id")
-        .and_then(|v| v.as_str())
-        .filter(|s| !s.is_empty())
-    {
-        let sname = item.get("set_name").and_then(|v| v.as_str()).unwrap_or("");
-        (sid.to_string(), sname.to_string())
-    } else if let Some(sid) = item
-        .get("accessory_id")
-        .and_then(|v| v.as_str())
-        .filter(|s| !s.is_empty())
-    {
-        let sname = item
-            .get("accessory_name")
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
-        (sid.to_string(), sname.to_string())
-    } else if let Some(sid) = item
-        .get("tea_id")
-        .and_then(|v| v.as_str())
-        .filter(|s| !s.is_empty())
-    {
-        let sname = item.get("tea_name").and_then(|v| v.as_str()).unwrap_or("");
-        (sid.to_string(), sname.to_string())
-    } else {
+    let Some((strain_id, strain_name)) = first_seedable_item(&items) else {
         return Ok(Json(
             json!({ "success": false, "error": "no_catalog_items" }),
         ));
@@ -937,8 +908,90 @@ async fn force_seed(
 
 #[cfg(test)]
 mod tests {
-    use super::{validate_garden_config_update, ConfigUpdateRequest};
+    use super::{first_seedable_item, validate_garden_config_update, ConfigUpdateRequest};
     use axum::http::StatusCode;
+    use serde_json::json;
+
+    // Regression guard for the garden seed-backfill firefighting (migrations
+    // 026/036/037, force_seed): which order item becomes the planted seed.
+
+    #[test]
+    fn seedable_picks_strain() {
+        let items = json!([{ "strain_id": "s1", "strain_name": "OG Kush", "quantity": 1 }]);
+        assert_eq!(
+            first_seedable_item(&items),
+            Some(("s1".to_string(), "OG Kush".to_string()))
+        );
+    }
+
+    #[test]
+    fn seedable_accessory_only_order_still_plants() {
+        // The exact 036 bug class: an accessory-only order used to seed nothing.
+        let items = json!([{ "accessory_id": "a1", "accessory_name": "Grinder" }]);
+        assert_eq!(
+            first_seedable_item(&items),
+            Some(("a1".to_string(), "Grinder".to_string()))
+        );
+    }
+
+    #[test]
+    fn seedable_tea_and_set_only_orders_plant() {
+        let tea = json!([{ "tea_id": "t1", "tea_name": "Chamomile" }]);
+        assert_eq!(
+            first_seedable_item(&tea),
+            Some(("t1".to_string(), "Chamomile".to_string()))
+        );
+        let set = json!([{ "set_id": "set1", "set_name": "Party Pack" }]);
+        assert_eq!(
+            first_seedable_item(&set),
+            Some(("set1".to_string(), "Party Pack".to_string()))
+        );
+    }
+
+    #[test]
+    fn seedable_prefers_strain_within_an_item() {
+        // An item carrying several ids resolves by precedence strain > set >
+        // accessory > tea.
+        let items = json!([{
+            "tea_id": "t1", "tea_name": "Tea",
+            "accessory_id": "a1", "accessory_name": "Acc",
+            "strain_id": "s1", "strain_name": "Strain"
+        }]);
+        assert_eq!(
+            first_seedable_item(&items),
+            Some(("s1".to_string(), "Strain".to_string()))
+        );
+    }
+
+    #[test]
+    fn seedable_skips_items_without_catalog_ids() {
+        // Empty-string ids and id-less rows are skipped; first real id wins.
+        let items = json!([
+            { "strain_id": "", "note": "blank" },
+            { "quantity": 2 },
+            { "tea_id": "t9", "tea_name": "Mint" }
+        ]);
+        assert_eq!(
+            first_seedable_item(&items),
+            Some(("t9".to_string(), "Mint".to_string()))
+        );
+    }
+
+    #[test]
+    fn seedable_none_when_no_catalog_items() {
+        assert_eq!(first_seedable_item(&json!([])), None);
+        assert_eq!(first_seedable_item(&json!([{ "quantity": 1 }])), None);
+        assert_eq!(first_seedable_item(&serde_json::Value::Null), None);
+    }
+
+    #[test]
+    fn seedable_missing_name_yields_empty_string() {
+        let items = json!([{ "strain_id": "s1" }]);
+        assert_eq!(
+            first_seedable_item(&items),
+            Some(("s1".to_string(), String::new()))
+        );
+    }
 
     #[test]
     fn test_validate_garden_config_ok() {
