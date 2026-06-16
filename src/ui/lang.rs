@@ -61,6 +61,21 @@ pub fn current_lang() -> Lang {
     }
 }
 
+/// Pick a localized string for the current rendering language.
+///
+/// The catalog stores Russian as the primary text plus an optional English
+/// (`*_en`) variant (migration 016). `t()` already maps every non-Russian
+/// language to English, so we mirror that here: for any non-Russian UI
+/// language, prefer the English text when it is present and non-blank;
+/// otherwise fall back to the Russian primary. Keeps data-driven copy
+/// (product descriptions etc.) consistent with the static UI strings.
+pub fn localized(ru: &str, en: Option<&str>) -> String {
+    match en {
+        Some(e) if current_lang() != Lang::Russian && !e.trim().is_empty() => e.to_string(),
+        _ => ru.to_string(),
+    }
+}
+
 /// Switch the app's rendering language at runtime. Called from the
 /// profile-screen language picker. Must run from inside a Dioxus
 /// component / event handler (writes require a runtime). Persists to

@@ -13,6 +13,8 @@ struct ApiTea {
     name: String,
     subcategory: Option<String>,
     description: Option<String>,
+    #[serde(default)]
+    description_en: Option<String>,
     price: f64,
     stock: Option<i32>,
     image_url: Option<String>,
@@ -149,7 +151,10 @@ pub fn TeaScreen() -> Element {
                                     let t_name = t.name.clone();
                                     let t_id = t.id.clone();
                                     let opacity = if show_out_of_stock { "0.6" } else { "1" };
-                                    let desc = t.description.as_deref().unwrap_or("");
+                                    let desc = crate::ui::lang::localized(
+                                        t.description.as_deref().unwrap_or(""),
+                                        t.description_en.as_deref(),
+                                    );
                                     let t_click = t.clone();
 
                                     rsx! {
@@ -271,7 +276,10 @@ pub fn TeaScreen() -> Element {
                     ProductDetailModal {
                         name: tea.name.clone(),
                         image_url: tea.image_url.clone(),
-                        description: tea.description.clone().unwrap_or_default(),
+                        description: crate::ui::lang::localized(
+                            tea.description.as_deref().unwrap_or(""),
+                            tea.description_en.as_deref(),
+                        ),
                         category_badge: Some(sub),
                         price_line: Some(price_str),
                         on_close: move |_| selected_tea.set(None),

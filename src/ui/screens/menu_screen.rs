@@ -18,6 +18,8 @@ pub struct ApiStrain {
     effect: Option<String>,
     flavor_profile: Option<String>,
     description: Option<String>,
+    #[serde(default)]
+    description_en: Option<String>,
     price_per_gram: f64,
     available_grams: Option<f64>,
     image_url: Option<String>,
@@ -451,7 +453,10 @@ fn render_strain_card(strain: ApiStrain, mut cart: Signal<Cart>) -> Element {
             || img_url.starts_with("https://")
             || (img_url.starts_with("/") && !img_url.starts_with("//")));
     let alt_name = strain.name.clone();
-    let desc_str = strain.description.clone().unwrap_or_default();
+    let desc_str = crate::ui::lang::localized(
+        &strain.description.clone().unwrap_or_default(),
+        strain.description_en.as_deref(),
+    );
     let img_url_bust = if !has_image {
         String::new()
     } else {

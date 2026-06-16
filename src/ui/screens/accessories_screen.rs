@@ -14,6 +14,8 @@ struct ApiAccessory {
     name: String,
     category: Option<String>,
     description: Option<String>,
+    #[serde(default)]
+    description_en: Option<String>,
     price: f64,
     stock: Option<i32>,
     image_url: Option<String>,
@@ -195,7 +197,10 @@ fn render_accessory_card(
     } else {
         ""
     };
-    let desc = a.description.as_deref().unwrap_or("");
+    let desc = crate::ui::lang::localized(
+        a.description.as_deref().unwrap_or(""),
+        a.description_en.as_deref(),
+    );
     let img_url = a.image_url.clone().unwrap_or_default();
     let has_image = !img_url.is_empty()
         && (img_url.starts_with("http://")
