@@ -130,6 +130,34 @@ impl Config {
     pub fn s3_enabled(&self) -> bool {
         self.s3_bucket.is_some() && self.s3_endpoint.is_some()
     }
+
+    /// True when at least one AI provider key is configured — i.e. the
+    /// sommelier / Grok features can actually call out. Both empty ⇒ disabled.
+    pub fn ai_enabled(&self) -> bool {
+        !self.grok_api_key.trim().is_empty() || !self.glm_api_key.trim().is_empty()
+    }
+
+    /// Optional capabilities that are OFF because their config is absent.
+    /// Logged at startup so ops sees "AI disabled (no key)" up front instead
+    /// of discovering it from a failed user request (the AI client only warns
+    /// per-call). These are NOT faults — an environment may intentionally run
+    /// without AI or S3 — so the caller logs a warning, not an alert.
+    pub fn disabled_capabilities(&self) -> Vec<&'static str> {
+        disabled_capabilities_from(self.ai_enabled(), self.s3_enabled())
+    }
+}
+
+/// Pure core of [`Config::disabled_capabilities`] — split out so the mapping
+/// is unit-testable without constructing a full `Config`.
+fn disabled_capabilities_from(ai_enabled: bool, s3_enabled: bool) -> Vec<&'static str> {
+    let mut off = Vec::new();
+    if !ai_enabled {
+        off.push("AI sommelier (GROK_API_KEY + GLM_API_KEY both unset)");
+    }
+    if !s3_enabled {
+        off.push("S3 media uploads (S3_BUCKET / S3_ENDPOINT unset)");
+    }
+    off
 }
 
 /// Cycle #133-B: parse a boolean env value. `None` (unset) -> `false`.
@@ -204,8 +232,32 @@ pub(crate) fn parse_port_env(raw: Option<String>) -> Result<u16> {
 
 #[cfg(test)]
 mod tests {
-    use super::{collect_required_env, parse_port_env, Config};
+    use super::{collect_required_env, disabled_capabilities_from, parse_port_env, Config};
     use std::collections::HashMap;
+
+    #[test]
+    fn capabilities_all_enabled_is_empty() {
+        assert!(disabled_capabilities_from(true, true).is_empty());
+    }
+
+    #[test]
+    fn capabilities_ai_off_reported() {
+        let off = disabled_capabilities_from(false, true);
+        assert_eq!(off.len(), 1);
+        assert!(off[0].contains("AI"));
+    }
+
+    #[test]
+    fn capabilities_s3_off_reported() {
+        let off = disabled_capabilities_from(true, false);
+        assert_eq!(off.len(), 1);
+        assert!(off[0].contains("S3"));
+    }
+
+    #[test]
+    fn capabilities_both_off_reported() {
+        assert_eq!(disabled_capabilities_from(false, false).len(), 2);
+    }
 
     // ── collect_required_env (cycle #122) ───────────────────────────
 

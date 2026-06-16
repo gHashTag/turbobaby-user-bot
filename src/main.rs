@@ -336,6 +336,12 @@ async fn main() -> Result<()> {
     );
     info!("Admin IDs: {:?}", config.admin_ids);
     info!("Web App URL: {}", config.web_app_url);
+    // Surface optional capabilities that are OFF due to missing config, at
+    // startup — so "why is the sommelier dead / uploads broken on prod?" is
+    // answerable from the boot log, not a failed user request. Not faults.
+    for cap in config.disabled_capabilities() {
+        tracing::warn!("⚠️  capability disabled (missing config): {cap}");
+    }
 
     let db = Arc::new(Database::connect(&config.database_url).await?);
     db.run_migrations().await?;
