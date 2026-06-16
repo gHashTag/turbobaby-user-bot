@@ -3155,5 +3155,114 @@ mod security_headers_tests {
     }
 }
 
+/// Architectural fitness function locking in the W-72/W-74 "silent-default"
+/// sweep (Waves #38-#40). A handful of financial / security / state-mutation
+/// functions read sensitive DB columns; a silent `.unwrap_or(...)` / `.max(0)`
+/// on those reads previously caused real bugs — money credited as 0, a plant
+/// reset to Seed, the fraud auto-block gate failing open. Those reads must
+/// FAIL LOUD (propagate the DbErr). This guards exactly those hot functions
+/// against regression — deliberately NOT a codebase-wide column ban, which
+/// would be noisy (most `try_get` defaults are legitimate display/optional
+/// reads).
+#[cfg(test)]
+mod sensitive_read_fail_loud_tests {
+    use std::path::Path;
+
+    /// (file, fn name) of mutations that must read sensitive columns fail-loud.
+    const SENSITIVE_FNS: &[(&str, &str)] = &[
+        ("src/api/garden.rs", "use_reward"),
+        ("src/api/garden.rs", "water_plant"),
+        ("src/db/orders.rs", "complete_order_and_update_loyalty"),
+        ("src/db/orders.rs", "auto_block_for_fraud"),
+    ];
+
+    /// Columns whose silent default corrupts money / game-state / a security
+    /// gate. Cosmetic/id/string columns (user_id, name, …) are intentionally
+    /// absent — a default there is fine.
+    // Precise column names from the actual W-72/W-74 bug sites. Deliberately
+    // NOT coarse tokens like "bonus"/"count"/"total" — those match intentional
+    // config-default reads (e.g. `config->>'referral_bonus' AS bonus` defaults
+    // to the product value when unset) and would false-positive. "cnt"/"n" are
+    // the `COUNT(*) AS …` aliases that were failing open.
+    const SENSITIVE_COLS: &[&str] = &[
+        "water_count",
+        "is_completed",
+        "is_used",
+        "reward_claimed",
+        "bonus_points",
+        "discount_percent",
+        "expires_at",
+        "bonus_balance",
+        "cnt",
+        "n",
+    ];
+
+    /// Body of `fn NAME { … }` via brace matching (mirrors icon_button_aria's
+    /// `button_blocks` parser style).
+    fn fn_body<'a>(src: &'a str, name: &str) -> &'a str {
+        let sig = format!("fn {name}(");
+        let start = src
+            .find(&sig)
+            .unwrap_or_else(|| panic!("fn {name} not found"));
+        let open = start + src[start..].find('{').expect("fn body open brace");
+        let bytes = src.as_bytes();
+        let mut depth = 0usize;
+        for i in open..bytes.len() {
+            match bytes[i] {
+                b'{' => depth += 1,
+                b'}' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        return &src[open..=i];
+                    }
+                }
+                _ => {}
+            }
+        }
+        panic!("unbalanced braces in fn {name}");
+    }
+
+    #[test]
+    fn sensitive_mutations_never_silently_default_a_sensitive_read() {
+        let manifest = env!("CARGO_MANIFEST_DIR");
+        let mut violations = Vec::new();
+        for (file, name) in SENSITIVE_FNS {
+            let src = std::fs::read_to_string(Path::new(manifest).join(file))
+                .unwrap_or_else(|_| panic!("read {file}"));
+            let body = fn_body(&src, name);
+            let mut from = 0;
+            while let Some(rel) = body[from..].find("try_get") {
+                let s = from + rel;
+                let stmt_end = body[s..].find(';').map(|e| s + e).unwrap_or(body.len());
+                let stmt = &body[s..stmt_end];
+                // Column literal = 2nd quoted string inside `try_get("", "COL")`.
+                let quotes: Vec<usize> = stmt.match_indices('"').map(|(i, _)| i).collect();
+                let col = if quotes.len() >= 4 {
+                    &stmt[quotes[2] + 1..quotes[3]]
+                } else {
+                    ""
+                };
+                let silent = stmt.contains("unwrap_or") || stmt.contains("max(0)");
+                if silent && SENSITIVE_COLS.contains(&col) {
+                    violations.push(format!(
+                        "{file}::{name} — try_get(\"{col}\") with a silent default"
+                    ));
+                }
+                from = s + "try_get".len();
+            }
+        }
+        assert!(
+            violations.is_empty(),
+            "Sensitive financial/security mutations must FAIL LOUD on sensitive \
+             column reads (propagate the DbErr via `?` / `map_err`), never silently \
+             default — silent defaults caused the W-72/W-74 bug class (money credited \
+             as 0, plant reset to Seed, fraud auto-block failing open). Either fail \
+             loud, or (if the read is genuinely safe) move the column off \
+             SENSITIVE_COLS with a justification. Offenders:\n  {}",
+            violations.join("\n  ")
+        );
+    }
+}
+
 // WASM entry point is now in src/lib.rs via #[wasm_bindgen(start)]
 // This file is only used for the native backend (Axum server)

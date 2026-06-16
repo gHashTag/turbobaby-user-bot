@@ -212,8 +212,19 @@ async fn water_plant(
     crate::api::auth::check_owner(&headers, &state, tid)?;
     check_not_blocked(&state, tid).await?;
 
-    let is_completed: bool = r.try_get("", "is_completed").unwrap_or(false);
-    let water_count: i32 = r.try_get("", "water_count").unwrap_or(0);
+    // Fail loud on the state reads: this is a state mutation. Wave #38 made a
+    // corrupt *value* (negative count) fail via next_water_step, but a read
+    // *error* on `water_count` would still `.unwrap_or(0)` → silently reset the
+    // plant to Seed; a read error on `is_completed` would let a finished plant
+    // be re-watered. Propagate the DbErr (tx auto-rolls back on the `?`).
+    let is_completed: bool = r.try_get("", "is_completed").map_err(|e| {
+        tracing::error!("water_plant: corrupt is_completed: {e}");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+    let water_count: i32 = r.try_get("", "water_count").map_err(|e| {
+        tracing::error!("water_plant: corrupt water_count: {e}");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
     let last_watered_at: Option<i64> = r.try_get("", "last_watered_at").ok();
 
     if is_completed {
