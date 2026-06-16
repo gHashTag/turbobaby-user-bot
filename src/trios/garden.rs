@@ -273,6 +273,52 @@ pub struct PlantProgress {
 pub const WATER_COOLDOWN_MS: i64 = 5 * 60 * 1000;
 /// Total water stages
 pub const TOTAL_WATER_STAGES: usize = 14;
+/// The water_count of a fully-grown plant (last valid index, 0-based).
+pub const FINAL_WATER_COUNT: i32 = TOTAL_WATER_STAGES as i32 - 1; // 13
+
+/// Outcome of validating a raw persisted `water_count` at the point of a
+/// water action. The HTTP path (`api/garden.rs::water_plant`) advances a
+/// plant with raw SQL instead of going through [`Plant::water`], so it needs
+/// the same validation here. Pure + total so it is unit-testable without a DB.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum WaterStep {
+    /// Watering is allowed — persist these values.
+    Advance {
+        new_count: u32,
+        stage: &'static str,
+        completed: bool,
+    },
+    /// Plant is already at the final stage — friendly no-op rejection.
+    AtFinalStage,
+    /// Persisted count is outside the valid `0..=FINAL_WATER_COUNT` range
+    /// (data corruption / bad migration). Callers must FAIL LOUD rather than
+    /// silently clamp it (which would reset the plant to Seed and hide the rot).
+    Corrupt,
+}
+
+/// Pure decision for "advance one watering" given the *persisted* count.
+/// Mirrors [`Plant::water`]'s validation for the raw-SQL API boundary.
+pub fn next_water_step(water_count: i32) -> WaterStep {
+    if !(0..=FINAL_WATER_COUNT).contains(&water_count) {
+        // < 0 or > 13 → corrupt persisted state. Do NOT clamp.
+        return WaterStep::Corrupt;
+    }
+    if water_count == FINAL_WATER_COUNT {
+        return WaterStep::AtFinalStage;
+    }
+    // water_count is now 0..=12, so +1 is 1..=13 — no overflow, always a
+    // valid stage index.
+    let new_count = (water_count + 1) as u32;
+    let stage = GrowthStage::from_index(new_count as usize)
+        .unwrap_or(GrowthStage::Final)
+        .db_name();
+    let completed = new_count as i32 >= FINAL_WATER_COUNT;
+    WaterStep::Advance {
+        new_count,
+        stage,
+        completed,
+    }
+}
 
 /// Calculate plant progress
 pub fn calculate_progress(plant: &Plant, now: Timestamp) -> PlantProgress {
@@ -382,6 +428,80 @@ pub fn filter_completed_plants(plants: &[Plant]) -> Vec<&Plant> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_next_water_step_advances_from_seed() {
+        match next_water_step(0) {
+            WaterStep::Advance {
+                new_count,
+                stage,
+                completed,
+            } => {
+                assert_eq!(new_count, 1);
+                assert_eq!(stage, "sprout");
+                assert!(!completed);
+            }
+            other => panic!("expected Advance, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_next_water_step_last_advance_completes() {
+        // 12 → 13 is the final watering; must mark completed.
+        match next_water_step(FINAL_WATER_COUNT - 1) {
+            WaterStep::Advance {
+                new_count,
+                stage,
+                completed,
+            } => {
+                assert_eq!(new_count, FINAL_WATER_COUNT as u32);
+                assert_eq!(stage, "final");
+                assert!(completed);
+            }
+            other => panic!("expected completing Advance, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_next_water_step_at_final_stage_is_noop() {
+        assert_eq!(next_water_step(FINAL_WATER_COUNT), WaterStep::AtFinalStage);
+    }
+
+    #[test]
+    fn test_next_water_step_negative_is_corrupt_not_clamped() {
+        // Regression: the API used to `.max(0)` a negative count, silently
+        // resetting the plant to Seed. Corruption must be rejected, not hidden.
+        assert_eq!(next_water_step(-1), WaterStep::Corrupt);
+        assert_eq!(next_water_step(-5), WaterStep::Corrupt);
+        assert_eq!(next_water_step(i32::MIN), WaterStep::Corrupt);
+    }
+
+    #[test]
+    fn test_next_water_step_above_final_is_corrupt_not_final() {
+        // Out-of-range high counts are corruption, distinct from the friendly
+        // AtFinalStage no-op at exactly 13.
+        assert_eq!(next_water_step(FINAL_WATER_COUNT + 1), WaterStep::Corrupt);
+        assert_eq!(next_water_step(50), WaterStep::Corrupt);
+        assert_eq!(next_water_step(i32::MAX), WaterStep::Corrupt);
+    }
+
+    #[test]
+    fn test_next_water_step_every_valid_count_maps_to_a_real_stage() {
+        // For all advanceable counts (0..=12) the produced stage must be a
+        // real, round-trippable db_name — never the unwrap_or(Final) fallback
+        // masking an out-of-range index.
+        for wc in 0..FINAL_WATER_COUNT {
+            match next_water_step(wc) {
+                WaterStep::Advance { stage, .. } => {
+                    assert!(
+                        GrowthStage::from_db_name(stage).is_some(),
+                        "count {wc} produced unknown stage {stage:?}"
+                    );
+                }
+                other => panic!("count {wc} should Advance, got {other:?}"),
+            }
+        }
+    }
 
     #[test]
     fn test_plant_new() {

@@ -222,20 +222,30 @@ async fn water_plant(
         ));
     }
 
-    if water_count >= 13 {
-        return Ok(Json(
-            json!({ "success": false, "error": "Plant already at final stage" }),
-        ));
-    }
-    let new_count = water_count
-        .checked_add(1)
-        .ok_or(StatusCode::BAD_REQUEST)?
-        .max(0) as u32;
-    let new_stage = garden::GrowthStage::from_index(new_count as usize)
-        .unwrap_or(garden::GrowthStage::Final)
-        .db_name()
-        .to_string();
-    let new_completed = new_count >= 13;
+    // Validate the persisted count via the pure core (mirrors Plant::water).
+    // A corrupt (negative / out-of-range) count must fail loud, NOT be silently
+    // clamped to Seed — silent clamping would hide data rot and reset the
+    // player's plant. `>= 13` is a friendly "already final" no-op.
+    let (new_count, new_stage, new_completed) = match garden::next_water_step(water_count) {
+        garden::WaterStep::Advance {
+            new_count,
+            stage,
+            completed,
+        } => (new_count, stage.to_string(), completed),
+        garden::WaterStep::AtFinalStage => {
+            return Ok(Json(
+                json!({ "success": false, "error": "Plant already at final stage" }),
+            ));
+        }
+        garden::WaterStep::Corrupt => {
+            tracing::error!(
+                "water_plant: corrupt water_count={} for plant id={} — refusing to clamp",
+                water_count,
+                id
+            );
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    };
     let cooldown_ms = garden::WATER_COOLDOWN_MS;
     let max_last_water = now.saturating_sub(cooldown_ms);
 
