@@ -386,6 +386,100 @@ mod migration_manifest_tests {
 /// SeaORM field-name → column-name mapping is implicit snake_case.
 /// We don't use `#[sea_orm(column_name = "...")]` overrides anywhere
 /// (verified at audit time), so Rust field name = SQL column name 1:1.
+/// Cycle (Wave loop): `MIGRATION_SQL` above is a hand-maintained
+/// `concat!(include_str!(...))` list. Twice already a migration file landed
+/// in `migrations/` but was forgotten in that list — so the table/column it
+/// created never existed on a fresh DB, surfacing as a runtime 500 long
+/// after merge (commit 114de7d "wire 036 and 037 into MIGRATION_SQL").
+///
+/// This is an *architectural fitness function* (Ford/Parsons/Kua): it encodes
+/// the invariant "every migration file is wired into the embedded runner" so a
+/// dropped `include_str!` fails at `cargo test` time, not in production. Same
+/// category as `entity_schema_consistency_tests` and the UI wiring defense.
+#[cfg(test)]
+mod migration_wiring_tests {
+    use std::collections::BTreeSet;
+
+    /// All `NNN_*.sql` filenames present on disk under `migrations/`.
+    fn migration_files() -> Vec<String> {
+        let manifest = env!("CARGO_MANIFEST_DIR");
+        let mig_dir = std::path::Path::new(manifest).join("migrations");
+        let mut names: Vec<String> = std::fs::read_dir(&mig_dir)
+            .expect("migrations/ readable")
+            .filter_map(|e| e.ok())
+            .filter_map(|e| e.file_name().into_string().ok())
+            .filter(|n| n.ends_with(".sql"))
+            .collect();
+        names.sort();
+        names
+    }
+
+    /// Source of `src/db/mod.rs` — where the `MIGRATION_SQL` concat lives.
+    fn mod_rs_source() -> String {
+        let manifest = env!("CARGO_MANIFEST_DIR");
+        let path = std::path::Path::new(manifest).join("src/db/mod.rs");
+        std::fs::read_to_string(path).expect("read src/db/mod.rs")
+    }
+
+    /// Every migration file on disk must be referenced by an `include_str!`
+    /// inside `MIGRATION_SQL`. A file with no matching `include_str!` is dead
+    /// schema that will never run on a fresh database.
+    #[test]
+    fn every_migration_file_is_wired_into_migration_sql() {
+        let src = mod_rs_source();
+        let files = migration_files();
+        assert!(
+            !files.is_empty(),
+            "no migration files found — parser broken?"
+        );
+
+        let mut missing = Vec::new();
+        for name in &files {
+            // Matches the canonical `include_str!("../../migrations/NNN_x.sql")`.
+            let needle = format!("migrations/{name}\"");
+            if !src.contains(&needle) {
+                missing.push(name.clone());
+            }
+        }
+        assert!(
+            missing.is_empty(),
+            "{} migration file(s) on disk are NOT wired into MIGRATION_SQL \
+             (add `include_str!(\"../../migrations/<name>\")` in src/db/mod.rs):\n  {}",
+            missing.len(),
+            missing.join("\n  ")
+        );
+    }
+
+    /// Migration numeric prefixes must form a gap-free, duplicate-free run
+    /// starting at 001. A gap (036 present, 035 missing) or a duplicate
+    /// (`036_a.sql` + `036_b.sql`) means two devs branched off the same number
+    /// or a file was deleted — both produce non-deterministic apply order.
+    #[test]
+    fn migration_numbers_are_sequential_and_unique() {
+        let files = migration_files();
+        let mut nums = BTreeSet::new();
+        let mut dupes = Vec::new();
+        for name in &files {
+            let prefix: String = name.chars().take_while(|c| c.is_ascii_digit()).collect();
+            let n: u32 = prefix
+                .parse()
+                .unwrap_or_else(|_| panic!("migration `{name}` has no numeric prefix"));
+            if !nums.insert(n) {
+                dupes.push(n);
+            }
+        }
+        assert!(dupes.is_empty(), "duplicate migration number(s): {dupes:?}");
+
+        let max = *nums.iter().next_back().expect("at least one migration");
+        let gaps: Vec<u32> = (1..=max).filter(|n| !nums.contains(n)).collect();
+        assert!(
+            gaps.is_empty(),
+            "gap(s) in migration numbering (missing): {gaps:?} — files run in \
+             filename order, a gap usually means a deleted or misnamed migration"
+        );
+    }
+}
+
 #[cfg(test)]
 mod entity_schema_consistency_tests {
     /// Extracts the `pub <field>:` names between `pub struct Model {`
