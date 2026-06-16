@@ -501,7 +501,7 @@ async fn get_user_rewards(
                 bonus_points: r.try_get::<i32>("", "bonus_points").unwrap_or(0).max(0) as u32,
                 expires_at,
                 is_used,
-                is_active: !is_used && expires_at > now,
+                is_active: garden::reward_is_active(is_used, expires_at, now),
             }
         })
         .collect();
@@ -562,8 +562,28 @@ async fn use_reward(
     crate::api::auth::check_owner(&headers, &state, tid)?;
     check_not_blocked(&state, tid).await?;
 
-    let is_used: bool = r.try_get("", "is_used").unwrap_or(false);
-    let expires_at: i64 = r.try_get("", "expires_at").unwrap_or(0);
+    // FAIL LOUD on the reward-row reads: this is a financial mutation. A silent
+    // `.unwrap_or(0)` on `bonus_points`/`discount_percent` would let the user
+    // consume the reward (marked is_used) while being credited nothing — silent
+    // value loss with no downstream guard. Propagate the DbErr → 500 (the tx
+    // hasn't started yet, so nothing is consumed). Mirrors loyalty.rs, which
+    // propagates try_get errors on financial fields.
+    fn read_err(field: &'static str) -> impl Fn(sea_orm::DbErr) -> StatusCode {
+        move |e: sea_orm::DbErr| {
+            tracing::error!("use_reward: corrupt reward field {field}: {e}");
+            StatusCode::INTERNAL_SERVER_ERROR
+        }
+    }
+    let is_used: bool = r.try_get("", "is_used").map_err(read_err("is_used"))?;
+    let expires_at: i64 = r
+        .try_get("", "expires_at")
+        .map_err(read_err("expires_at"))?;
+    let discount_percent: i32 = r
+        .try_get("", "discount_percent")
+        .map_err(read_err("discount_percent"))?;
+    let bonus_points: i32 = r
+        .try_get("", "bonus_points")
+        .map_err(read_err("bonus_points"))?;
 
     if is_used {
         return Ok(Json(
@@ -571,12 +591,11 @@ async fn use_reward(
         ));
     }
 
-    if expires_at < now {
+    // `<= now`: a reward at exactly its expiry is expired — unified with the
+    // rewards-list `reward_is_active` boundary (which uses `expires_at > now`).
+    if !garden::reward_is_active(is_used, expires_at, now) {
         return Ok(Json(json!({ "success": false, "error": "Reward expired" })));
     }
-
-    let discount_percent: i32 = r.try_get("", "discount_percent").unwrap_or(0);
-    let bonus_points: i32 = r.try_get("", "bonus_points").unwrap_or(0);
 
     // Atomically mark used and credit bonus inside a transaction.
     let tx = state.db.orm.begin().await.map_err(|e| {

@@ -320,6 +320,15 @@ pub fn next_water_step(water_count: i32) -> WaterStep {
     }
 }
 
+/// A harvest reward is redeemable iff it has not been used and has not expired.
+/// `expires_at` and `now` are epoch millis. Single source of truth for the
+/// redemption gate — used by both the rewards list (`is_active`) and the
+/// redeem path, which previously disagreed on the boundary (`> now` vs
+/// `< now`, differing at exactly `expires_at == now`).
+pub fn reward_is_active(is_used: bool, expires_at: i64, now: i64) -> bool {
+    !is_used && expires_at > now
+}
+
 /// Calculate plant progress
 pub fn calculate_progress(plant: &Plant, now: Timestamp) -> PlantProgress {
     if plant.is_completed {
@@ -428,6 +437,19 @@ pub fn filter_completed_plants(plants: &[Plant]) -> Vec<&Plant> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_reward_is_active_boundary_and_states() {
+        let now = 1_000_000i64;
+        // Active: not used, expiry strictly in the future.
+        assert!(reward_is_active(false, now + 1, now));
+        // Exactly at expiry → NOT active (boundary unified across both paths).
+        assert!(!reward_is_active(false, now, now));
+        // Past expiry → not active.
+        assert!(!reward_is_active(false, now - 1, now));
+        // Used → never active, even if not expired.
+        assert!(!reward_is_active(true, now + 10_000, now));
+    }
 
     #[test]
     fn test_next_water_step_advances_from_seed() {
