@@ -5103,6 +5103,7 @@ fn QuestsTab() -> Element {
                                             "✏️"
                                         }
                                         button { class: "admin-btn danger admin-btn-sm",
+                                            "aria-label": "Удалить",
                                             onclick: move |_| {
                                                 let pid = p_id.clone();
                                                 let id_d = id_del.clone();
@@ -5388,6 +5389,7 @@ fn TreasuresTab() -> Element {
                                             "✏️"
                                         }
                                         button { class: "admin-btn danger admin-btn-sm",
+                                        "aria-label": "Удалить",
                                         onclick: move |_| {
                                             let hid = h_id.clone();
                                             let id_d = id_del.clone();

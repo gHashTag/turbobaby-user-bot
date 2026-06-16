@@ -1284,6 +1284,121 @@ mod css_class_consistency_tests {
     }
 }
 
+/// Wave loop: an icon-only `<button>` (its visible content is just a symbol
+/// glyph) announces as bare "button" to a screen reader — a WCAG 4.1.2
+/// (Name, Role, Value) failure. Waves #18/#23 added `aria-label` to every
+/// such control by hand; this turns that discipline into a regression guard:
+/// any `button { … }` whose child is a known icon glyph must carry an
+/// `aria-label` (or `aria-labelledby`/`title`). The glyph allowlist keeps it
+/// reliable (no fragile "is this text an icon?" inference). Pure brace/string-
+/// aware scan; runs on host. Quality of the label is still a human's job.
+#[cfg(test)]
+mod icon_button_aria_tests {
+    /// Quoted button children that are icon-only (no accessible name without
+    /// an explicit label). Emoji + the U+2715/2716 multiplication-x closes.
+    const ICON_GLYPHS: &[&str] = &["▶️", "✕", "✖", "🗑", "✏️", "🌟", "👁️", "🚫"];
+
+    /// Extract each `button { … }` block with string-/closure-aware brace
+    /// matching (skips `{`/`}` inside `"…"` rsx interpolation and counts the
+    /// braces of `move |..| { .. }` closures correctly).
+    fn button_blocks(src: &str) -> Vec<String> {
+        let bytes = src.as_bytes();
+        let mut blocks = Vec::new();
+        let mut i = 0;
+        while let Some(rel) = src[i..].find("button {") {
+            let open = i + rel + "button ".len(); // index of '{'
+            let mut depth = 0i32;
+            let mut in_str = false;
+            let mut k = open;
+            while k < bytes.len() {
+                let c = bytes[k];
+                if in_str {
+                    if c == b'"' && bytes[k - 1] != b'\\' {
+                        in_str = false;
+                    }
+                } else {
+                    match c {
+                        b'"' => in_str = true,
+                        b'{' => depth += 1,
+                        b'}' => {
+                            depth -= 1;
+                            if depth == 0 {
+                                k += 1;
+                                break;
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                k += 1;
+            }
+            blocks.push(src[open..k].to_string());
+            i = k.max(open + 1);
+        }
+        blocks
+    }
+
+    #[test]
+    fn icon_only_buttons_have_accessible_name() {
+        let manifest = env!("CARGO_MANIFEST_DIR");
+        let ui = std::path::Path::new(manifest).join("src/ui");
+        let mut offenders = Vec::new();
+        let mut icon_buttons_seen = 0usize;
+
+        fn walk(p: &std::path::Path, f: &mut dyn FnMut(&std::path::Path, &str)) {
+            for e in std::fs::read_dir(p)
+                .expect("readable")
+                .filter_map(|e| e.ok())
+            {
+                let path = e.path();
+                if path.is_dir() {
+                    walk(&path, f);
+                } else if path.extension().and_then(|s| s.to_str()) == Some("rs") {
+                    if let Ok(src) = std::fs::read_to_string(&path) {
+                        f(&path, &src);
+                    }
+                }
+            }
+        }
+
+        walk(&ui, &mut |path, src| {
+            for block in button_blocks(src) {
+                let has_icon = ICON_GLYPHS
+                    .iter()
+                    .any(|g| block.contains(&format!("\"{g}\"")));
+                if !has_icon {
+                    continue;
+                }
+                icon_buttons_seen += 1;
+                let named = block.contains("aria-label")
+                    || block.contains("aria-labelledby")
+                    || block.contains("title:");
+                if !named {
+                    let file = path.file_name().and_then(|s| s.to_str()).unwrap_or("?");
+                    let glyph = ICON_GLYPHS
+                        .iter()
+                        .find(|g| block.contains(&format!("\"{g}\"")))
+                        .copied()
+                        .unwrap_or("?");
+                    offenders.push(format!("{file}: icon button \"{glyph}\" has no aria-label"));
+                }
+            }
+        });
+
+        assert!(
+            icon_buttons_seen > 0,
+            "no icon buttons parsed — button_blocks/glyph set broken?"
+        );
+        assert!(
+            offenders.is_empty(),
+            "{} icon-only button(s) without an accessible name (WCAG 4.1.2) — \
+             add `\"aria-label\": \"…\"`:\n  {}",
+            offenders.len(),
+            offenders.join("\n  ")
+        );
+    }
+}
+
 /// Wave loop: keeps interactive controls finger-sized. A clickable element
 /// (`cursor:pointer`) that pins an explicit `width`/`height` below 44 CSS px
 /// is a Fitts's-Law / WCAG 2.5.5 (AAA, 44px) / Apple-HIG (44pt) violation —
