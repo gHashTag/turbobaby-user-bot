@@ -13,7 +13,11 @@ use serde::Deserialize;
 struct ApiSet {
     id: String,
     name: String,
+    #[serde(default)]
+    name_en: Option<String>,
     description: Option<String>,
+    #[serde(default)]
+    description_en: Option<String>,
     #[serde(default)]
     description_localized: Option<std::collections::HashMap<String, String>>,
     icon: Option<String>,
@@ -258,10 +262,13 @@ fn render_set_card(set: ApiSet, mut cart: Signal<Cart>) -> Element {
     } else {
         String::new()
     };
-    let set_name = set.name.clone();
+    let set_name = crate::ui::lang::localized(&set.name, set.name_en.as_deref());
     let set_id = set.id.clone();
     let icon = set.icon.as_deref().unwrap_or("🎁");
-    let desc = set.description.as_deref().unwrap_or("");
+    let desc = crate::ui::lang::localized(
+        set.description.as_deref().unwrap_or(""),
+        set.description_en.as_deref(),
+    );
     let time_str = set.time_of_day.as_deref().unwrap_or("");
     let strains_count = set.strains.as_ref().map(|v| v.len()).unwrap_or(0);
     let strains_label = if strains_count > 0 {
@@ -392,7 +399,7 @@ fn render_set_card(set: ApiSet, mut cart: Signal<Cart>) -> Element {
             }
             {detail_open().then(|| rsx! {
                 ProductDetailModal {
-                    name: set.name.clone(),
+                    name: crate::ui::lang::localized(&set.name, set.name_en.as_deref()),
                     image_url: set.image_url.clone(),
                     description: desc_full.clone(),
                     category_badge: Some(mood_badge.clone()),
