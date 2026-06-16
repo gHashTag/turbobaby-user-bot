@@ -320,7 +320,7 @@ fn render_set_card(set: ApiSet, mut cart: Signal<Cart>) -> Element {
                     ", "{discount_badge}" }
                 }
                 if has_video {
-                    button { style: "position:absolute;bottom:8px;right:8px;width:32px;height:32px;border-radius:50%;background:rgba(0,0,0,0.6);border:1px solid #fff;color:#fff;font-size:14px;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:2;",
+                    button { style: "position:absolute;bottom:8px;right:8px;width:44px;height:44px;border-radius:50%;background:rgba(0,0,0,0.6);border:1px solid #fff;color:#fff;font-size:16px;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:2;",
                         onclick: move |e: Event<MouseData>| { e.stop_propagation(); show_video.set(true); }, "▶️" }
                 }
                 if show_video() {

@@ -252,7 +252,7 @@ fn render_accessory_card(
                     ", "SOLD OUT" }
                 })}
                 {has_video.then(|| rsx! {
-                    button { style: "position:absolute;bottom:8px;right:8px;width:36px;height:36px;border-radius:50%;background:rgba(0,0,0,0.6);border:1px solid #fff;color:#fff;font-size:16px;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:2;",
+                    button { style: "position:absolute;bottom:8px;right:8px;width:44px;height:44px;border-radius:50%;background:rgba(0,0,0,0.6);border:1px solid #fff;color:#fff;font-size:16px;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:2;",
                         onclick: move |e: Event<MouseData>| { e.stop_propagation(); show_video.set(true); }, "▶️" }
                 })}
                 {show_video().then(|| rsx! {

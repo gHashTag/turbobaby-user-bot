@@ -94,7 +94,7 @@ pub fn ProductDetailModal(props: ProductDetailModalProps) -> Element {
 
                 // Close (✕) — top-right, always reachable while scrolling.
                 button {
-                    style: "position:absolute;top:8px;right:8px;width:32px;height:32px;border-radius:50%;background:rgba(0,0,0,0.6);border:1px solid #fff;color:#fff;font-size:16px;line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:2;",
+                    style: "position:absolute;top:8px;right:8px;width:44px;height:44px;border-radius:50%;background:rgba(0,0,0,0.6);border:1px solid #fff;color:#fff;font-size:18px;line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:2;",
                     onclick: move |e: Event<MouseData>| { e.stop_propagation(); on_close.call(()); },
                     "✕"
                 }

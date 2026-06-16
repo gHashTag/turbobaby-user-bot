@@ -1265,6 +1265,113 @@ mod css_class_consistency_tests {
     }
 }
 
+/// Wave loop: keeps interactive controls finger-sized. A clickable element
+/// (`cursor:pointer`) that pins an explicit `width`/`height` below 44 CSS px
+/// is a Fitts's-Law / WCAG 2.5.5 (AAA, 44px) / Apple-HIG (44pt) violation —
+/// on a mobile Telegram Mini App that means doubled mis-tap rates (the cart
+/// stepper sat at 30px and the catalog video buttons at 28–36px before this
+/// sweep). Padding-sized controls aren't checked (they set no fixed
+/// dimension). Pure string scan — mirrors `css_class_consistency_tests`.
+#[cfg(test)]
+mod touch_target_tests {
+    use std::collections::HashSet;
+
+    const MIN_PX: u32 = 44;
+
+    /// Normalized (whitespace-stripped) styles for intentionally-small
+    /// clickable targets. Document the reason inline.
+    const ALLOWLIST: &[&str] = &[
+        // Admin bulk-select native checkbox — native form controls are
+        // conventionally smaller and covered by WCAG 2.5.8's spacing exception.
+        "width:18px;height:18px;cursor:pointer;flex-shrink:0;",
+    ];
+
+    /// Returns `Some((dim, px))` if a `width`/`height` declaration (exact key,
+    /// so `min-`/`max-` are ignored) pins a px value below `MIN_PX`.
+    fn dim_under_min(style_norm: &str) -> Option<(&'static str, u32)> {
+        for decl in style_norm.split(';') {
+            let Some((k, v)) = decl.split_once(':') else {
+                continue;
+            };
+            let dim = match k {
+                "width" => "width",
+                "height" => "height",
+                _ => continue,
+            };
+            if let Some(px) = v.strip_suffix("px").and_then(|n| n.parse::<u32>().ok()) {
+                if px < MIN_PX {
+                    return Some((dim, px));
+                }
+            }
+        }
+        None
+    }
+
+    fn walk(p: &std::path::Path, f: &mut dyn FnMut(&std::path::Path, &str)) {
+        for e in std::fs::read_dir(p)
+            .expect("readable")
+            .filter_map(|e| e.ok())
+        {
+            let path = e.path();
+            if path.is_dir() {
+                walk(&path, f);
+            } else if path.extension().and_then(|s| s.to_str()) == Some("rs") {
+                if let Ok(src) = std::fs::read_to_string(&path) {
+                    f(&path, &src);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn clickable_targets_meet_min_size() {
+        let manifest = env!("CARGO_MANIFEST_DIR");
+        let ui = std::path::Path::new(manifest).join("src/ui");
+        let allow: HashSet<&str> = ALLOWLIST.iter().copied().collect();
+        let mut violations = Vec::new();
+        let mut checked = 0usize;
+
+        walk(&ui, &mut |path, src| {
+            // Extract each `style: "..."` literal (no escaped quotes inside).
+            let mut i = 0;
+            while let Some(rel) = src[i..].find("style:") {
+                let after = i + rel + "style:".len();
+                let Some(qrel) = src[after..].find('"') else {
+                    break;
+                };
+                let q = after + qrel;
+                let Some(erel) = src[q + 1..].find('"') else {
+                    break;
+                };
+                let end = q + 1 + erel;
+                let norm: String = src[q + 1..end]
+                    .chars()
+                    .filter(|c| !c.is_whitespace())
+                    .collect();
+                i = end + 1;
+                if !norm.contains("cursor:pointer") || allow.contains(norm.as_str()) {
+                    continue;
+                }
+                checked += 1;
+                if let Some((dim, px)) = dim_under_min(&norm) {
+                    let file = path.file_name().and_then(|s| s.to_str()).unwrap_or("?");
+                    violations.push(format!("{file}: clickable {dim}:{px}px < {MIN_PX}px"));
+                }
+            }
+        });
+
+        assert!(checked > 0, "no clickable styles parsed — parser broken?");
+        assert!(
+            violations.is_empty(),
+            "{} clickable target(s) below {MIN_PX}px (Fitts's Law / WCAG 2.5.5) — \
+             enlarge to >= 44px or add the normalized style to ALLOWLIST with a \
+             rationale:\n  {}",
+            violations.len(),
+            violations.join("\n  ")
+        );
+    }
+}
+
 /// Wave loop: catches a bilingual catalog field that is **fetched but
 /// never shown** — declared on a UI screen DTO (`*_en` / `*_localized`)
 /// yet never read, so the English/localized text the API sends silently
