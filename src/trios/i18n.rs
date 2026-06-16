@@ -578,4 +578,60 @@ mod tests {
         assert!(has_translation(Lang::English, T_TITLE));
         assert!(!has_translation(Lang::English, "nonexistent_key"));
     }
+
+    /// Architectural fitness function (Wave loop): every `pub const T_*: Key`
+    /// declared in this file MUST have a translation arm in BOTH
+    /// `get_ru_translation` and `get_en_translation`. A key with no arm falls
+    /// through to `_ => key` and silently renders its raw dotted key
+    /// (e.g. "nav.home") in the UI — a class of bug that no compiler warns
+    /// about because the const is still "used" via the match's catch-all.
+    ///
+    /// We parse the source rather than maintain a second list (which would
+    /// itself drift). The string *value* of each const is the lookup key, so
+    /// `has_translation(lang, value)` exercises the real `t()` path.
+    #[test]
+    fn every_translation_key_is_translated_in_ru_and_en() {
+        let manifest = env!("CARGO_MANIFEST_DIR");
+        let path = std::path::Path::new(manifest).join("src/trios/i18n.rs");
+        let src = std::fs::read_to_string(path).expect("read src/trios/i18n.rs");
+
+        // Extract the string literal from each `pub const T_*: Key = "value";`.
+        let mut keys: Vec<String> = Vec::new();
+        for line in src.lines() {
+            let line = line.trim();
+            if !line.starts_with("pub const T_") || !line.contains(": Key") {
+                continue;
+            }
+            if let (Some(open), Some(_)) = (line.find('"'), line.rfind('"')) {
+                if let Some(close) = line[open + 1..].find('"') {
+                    keys.push(line[open + 1..open + 1 + close].to_string());
+                }
+            }
+        }
+        assert!(
+            keys.len() >= 90,
+            "parsed only {} translation keys — parser likely broken",
+            keys.len()
+        );
+
+        let mut missing = Vec::new();
+        for k in &keys {
+            // `Key` is `&'static str`; leak the parsed value so it satisfies
+            // the signature. One-shot, test-process only.
+            let leaked: &'static str = Box::leak(k.clone().into_boxed_str());
+            if !has_translation(Lang::Russian, leaked) {
+                missing.push(format!("{k} (ru)"));
+            }
+            if !has_translation(Lang::English, leaked) {
+                missing.push(format!("{k} (en)"));
+            }
+        }
+        assert!(
+            missing.is_empty(),
+            "{} translation key(s) have no arm and fall through to `_ => key` \
+             (add them to get_ru_translation / get_en_translation):\n  {}",
+            missing.len(),
+            missing.join("\n  ")
+        );
+    }
 }
