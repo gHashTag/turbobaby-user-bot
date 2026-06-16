@@ -34,6 +34,15 @@ pub fn capability_enabled(name: &str, enabled: bool) {
     });
 }
 
+/// Classic Prometheus **info-metric**: `build_info{version,build} 1`, set once
+/// at startup. The value is always 1; the deploy identity lives in the labels.
+/// Lets a dashboard/alert answer "which commit is prod running?" and join
+/// other metrics to a deploy via PromQL — e.g. to confirm the /api/sets fix
+/// actually shipped. Low cardinality (one series per deploy).
+pub fn build_info(version: &str, build: &str) {
+    gauge!("build_info", "version" => version.to_string(), "build" => build.to_string()).set(1.0);
+}
+
 /// Increment when a quest entity is created.
 ///
 /// `kind` should be `"place"` (quest_places) or `"treasure"` (treasure_hunts).

@@ -346,6 +346,9 @@ async fn main() -> Result<()> {
     // gauge so Grafana shows the enabled/disabled matrix across envs/replicas.
     crate::metrics::capability_enabled("ai", config.ai_enabled());
     crate::metrics::capability_enabled("s3", config.s3_enabled());
+    // Deploy identity as a Prometheus info-metric — lets ops/PromQL confirm
+    // which commit prod is actually running (e.g. whether a fix shipped).
+    crate::metrics::build_info(env!("CARGO_PKG_VERSION"), env!("BUILD_VERSION"));
 
     let db = Arc::new(Database::connect(&config.database_url).await?);
     db.run_migrations().await?;
