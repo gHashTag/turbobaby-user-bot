@@ -95,6 +95,7 @@ pub fn ProductDetailModal(props: ProductDetailModalProps) -> Element {
                 // Close (✕) — top-right, always reachable while scrolling.
                 button {
                     style: "position:absolute;top:8px;right:8px;width:44px;height:44px;border-radius:50%;background:rgba(0,0,0,0.6);border:1px solid #fff;color:#fff;font-size:18px;line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:2;",
+                    "aria-label": "Закрыть",
                     onclick: move |e: Event<MouseData>| { e.stop_propagation(); on_close.call(()); },
                     "✕"
                 }
@@ -159,6 +160,7 @@ pub fn ProductDetailModal(props: ProductDetailModalProps) -> Element {
                         div { style: "display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:10px;",
                             button {
                                 style: "width:44px;height:44px;font-size:22px;font-weight:800;background:#2a2a4a;color:#e8e8e8;border:4px solid #1a1a2e;box-shadow:2px 2px 0 #000;line-height:1;opacity:{min_op};cursor:{min_cur};",
+                                "aria-label": "Убавить количество",
                                 disabled: at_min,
                                 onclick: move |e: Event<MouseData>| { e.stop_propagation(); qty.set(qty().saturating_sub(1).max(1)); },
                                 "−"
@@ -166,6 +168,7 @@ pub fn ProductDetailModal(props: ProductDetailModalProps) -> Element {
                             span { style: "font-size:20px;font-weight:800;color:#fff;min-width:40px;text-align:center;", "{cur}" }
                             button {
                                 style: "width:44px;height:44px;font-size:22px;font-weight:800;background:#2a2a4a;color:#e8e8e8;border:4px solid #1a1a2e;box-shadow:2px 2px 0 #000;line-height:1;opacity:{max_op};cursor:{max_cur};",
+                                "aria-label": "Добавить количество",
                                 disabled: at_max,
                                 onclick: move |e: Event<MouseData>| { e.stop_propagation(); qty.set((qty() + 1).min(99)); },
                                 "+"

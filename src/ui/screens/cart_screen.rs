@@ -146,6 +146,7 @@ fn cart_item_row(item: CartItem) -> Element {
                         box-shadow: 3px 3px 0 #000;
                         transition: transform 0.1s, box-shadow 0.1s;
                     ",
+                    "aria-label": "Убавить количество",
                     onclick: move |_| {
                         let mut c = cart.write();
                         if let Some(item) = c.items.iter_mut().find(|i| i.id == item_id_for_minus) {

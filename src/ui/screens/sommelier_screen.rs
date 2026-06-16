@@ -299,6 +299,7 @@ pub fn SommelierScreen() -> Element {
                                                             border: 4px solid #2d9e0f; border-radius: 0; cursor: pointer;
                                                             box-shadow: 3px 3px 0 #000;
                                                         ",
+                                                        "aria-label": "В корзину",
                                                         onclick: move |_| {
                                                             let mut c = cart.write();
                                                             c.add_item(CartItem {
@@ -387,6 +388,7 @@ pub fn SommelierScreen() -> Element {
                                                             border: 4px solid #2d9e0f; border-radius: 0; cursor: pointer;
                                                             box-shadow: 3px 3px 0 #000;
                                                         ",
+                                                        "aria-label": "В корзину",
                                                         onclick: move |_| {
                                                             let mut c = cart.write();
                                                             c.add_item(CartItem {
