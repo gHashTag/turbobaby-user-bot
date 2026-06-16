@@ -20,6 +20,20 @@ pub fn schema_missing_columns(n: u64) {
     gauge!("schema_missing_columns").set(n as f64);
 }
 
+/// Set once at startup per optional capability (e.g. `"ai"`, `"s3"`) to 1
+/// (enabled) or 0 (disabled by missing config). A labelled **gauge** so a
+/// Grafana panel can show which features are live across environments and
+/// replicas over time — the dashboard counterpart to the startup warning in
+/// `Config::disabled_capabilities`. Info signal, not an alert (a capability
+/// may be intentionally off in some environments).
+pub fn capability_enabled(name: &str, enabled: bool) {
+    gauge!("capability_enabled", "capability" => name.to_string()).set(if enabled {
+        1.0
+    } else {
+        0.0
+    });
+}
+
 /// Increment when a quest entity is created.
 ///
 /// `kind` should be `"place"` (quest_places) or `"treasure"` (treasure_hunts).

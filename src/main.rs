@@ -342,6 +342,10 @@ async fn main() -> Result<()> {
     for cap in config.disabled_capabilities() {
         tracing::warn!("⚠️  capability disabled (missing config): {cap}");
     }
+    // Dashboard counterpart: expose each capability's state as a labelled
+    // gauge so Grafana shows the enabled/disabled matrix across envs/replicas.
+    crate::metrics::capability_enabled("ai", config.ai_enabled());
+    crate::metrics::capability_enabled("s3", config.s3_enabled());
 
     let db = Arc::new(Database::connect(&config.database_url).await?);
     db.run_migrations().await?;
