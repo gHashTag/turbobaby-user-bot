@@ -308,7 +308,7 @@ fn render_set_card(set: ApiSet, mut cart: Signal<Cart>) -> Element {
                 font-size:40px;position:relative;overflow:hidden;
             ",
                 if has_image {
-                    img { src: "{img_url}", style: "width:100%;height:100%;object-fit:cover;position:absolute;inset:0;" }
+                    img { src: "{img_url}", alt: "{set_name}", style: "width:100%;height:100%;object-fit:cover;position:absolute;inset:0;" }
                 } else {
                     "{icon}"
                 }

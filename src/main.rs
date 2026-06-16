@@ -1372,6 +1372,66 @@ mod touch_target_tests {
     }
 }
 
+/// Wave loop: every `<img>` needs an `alt` (WCAG 1.1.1 Non-text Content) —
+/// descriptive for informative images, `alt=""` for decorative. A missing
+/// alt makes the image invisible to screen-reader users. In our rsx, `img {`
+/// elements declare `alt:` right after `src:`, so a short forward window is
+/// enough. Pure string scan — mirrors `css_class_consistency_tests`; runs on
+/// host. Measurable WCAG subset only — does not judge alt *quality*.
+#[cfg(test)]
+mod img_alt_tests {
+    #[test]
+    fn every_img_has_alt() {
+        let manifest = env!("CARGO_MANIFEST_DIR");
+        let ui = std::path::Path::new(manifest).join("src/ui");
+        let mut missing = Vec::new();
+        let mut checked = 0usize;
+
+        fn walk(p: &std::path::Path, f: &mut dyn FnMut(&std::path::Path, &str)) {
+            for e in std::fs::read_dir(p)
+                .expect("readable")
+                .filter_map(|e| e.ok())
+            {
+                let path = e.path();
+                if path.is_dir() {
+                    walk(&path, f);
+                } else if path.extension().and_then(|s| s.to_str()) == Some("rs") {
+                    if let Ok(src) = std::fs::read_to_string(&path) {
+                        f(&path, &src);
+                    }
+                }
+            }
+        }
+
+        walk(&ui, &mut |path, src| {
+            let lines: Vec<&str> = src.lines().collect();
+            for (i, line) in lines.iter().enumerate() {
+                if !line.contains("img {") {
+                    continue;
+                }
+                checked += 1;
+                // alt is declared at the top of the element; an 8-line window
+                // covers both single-line and multi-line `img { ... }` forms.
+                let end = (i + 8).min(lines.len());
+                let window = lines[i..end].join("\n");
+                if !window.contains("alt:") {
+                    let file = path.file_name().and_then(|s| s.to_str()).unwrap_or("?");
+                    missing.push(format!("{file}:{}", i + 1));
+                }
+            }
+        });
+
+        assert!(checked > 0, "no img elements parsed — parser broken?");
+        assert!(
+            missing.is_empty(),
+            "{} <img> without an alt attribute (WCAG 1.1.1) — add a descriptive \
+             `alt: \"…\"` (or `alt: \"\"` if purely decorative):\n  {}",
+            missing.len(),
+            missing.join("\n  ")
+        );
+    }
+}
+
 /// Wave loop: catches a bilingual catalog field that is **fetched but
 /// never shown** — declared on a UI screen DTO (`*_en` / `*_localized`)
 /// yet never read, so the English/localized text the API sends silently

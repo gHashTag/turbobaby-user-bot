@@ -243,6 +243,7 @@ pub fn ProfileScreen() -> Element {
                                     if is_unlocked {
                                         img {
                                             src: "{tier.bud_image()}",
+                                            alt: "{tier.label()}",
                                             style: "max-width: 100%; max-height: 100%; object-fit: contain; filter: drop-shadow(0 0 4px {tier.color()}80);"
                                         }
                                     } else {
@@ -517,6 +518,7 @@ pub fn ProfileScreen() -> Element {
                                     div { style: "display: flex; justify-content: center; margin-bottom: 6px; height: 32px; align-items: center;",
                                         img {
                                             src: "{tier.bud_image()}",
+                                            alt: "{tier.label()}",
                                             style: "max-width: 100%; max-height: 100%; object-fit: contain; filter: drop-shadow(0 0 4px {tier.color()}80);"
                                         }
                                     }

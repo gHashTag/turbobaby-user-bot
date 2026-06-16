@@ -404,6 +404,7 @@ pub fn Garden() -> Element {
                                 div { style: "position: relative; width: 100%; aspect-ratio: 1/1; overflow: hidden; background: #111;",
                                     img {
                                         src: "{img_url}",
+                                        alt: "Растение",
                                         style: "width: 100%; height: 100%; object-fit: cover;",
                                     }
                                     // Gradient overlay at bottom

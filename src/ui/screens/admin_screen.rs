@@ -3405,7 +3405,7 @@ fn ImageUpload(image_url: String, on_change: EventHandler<String>) -> Element {
         }
         if !image_url.is_empty() && (image_url.starts_with("http://") || image_url.starts_with("https://") || (image_url.starts_with("/") && !image_url.starts_with("//"))) {
             div { style: "margin-top:4px;",
-                img { src: "{image_url}", style: "width:64px;height:64px;object-fit:cover;border-radius:6px;border:1px solid #2a2a4a;cursor:pointer;", onclick: move |_| {
+                img { src: "{image_url}", alt: "Превью", style: "width:64px;height:64px;object-fit:cover;border-radius:6px;border:1px solid #2a2a4a;cursor:pointer;", onclick: move |_| {
                     if img_url.starts_with("http://") || img_url.starts_with("https://") || (img_url.starts_with("/") && !img_url.starts_with("//")) {
                         let _ = web_sys::window().and_then(|w| w.open_with_url_and_target(&img_url, "_blank").ok());
                     }
@@ -3565,7 +3565,7 @@ fn ItemRow(
                     || url.starts_with("https://")
                     || (url.starts_with("/") && !url.starts_with("//"))) =>
         {
-            rsx! { img { src: "{url}", style: "width:36px;height:36px;object-fit:cover;border-radius:6px;border:1px solid #2a2a4a;flex-shrink:0;" } }
+            rsx! { img { src: "{url}", alt: "{name}", style: "width:36px;height:36px;object-fit:cover;border-radius:6px;border:1px solid #2a2a4a;flex-shrink:0;" } }
         }
         _ => {
             rsx! { div { style: "width:36px;height:36px;background:#2a2a4a;border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:16px;", "📦" } }
