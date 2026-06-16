@@ -7,7 +7,6 @@ use dioxus::prelude::*;
 use serde::Deserialize;
 
 #[derive(Debug, Clone, Deserialize)]
-#[allow(dead_code)]
 struct ApiTea {
     id: String,
     name: String,

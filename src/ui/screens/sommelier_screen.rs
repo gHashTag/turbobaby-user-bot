@@ -62,7 +62,6 @@ impl Experience {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-#[allow(dead_code)]
 struct RecommendedStrain {
     id: Option<String>,
     name: String,
@@ -77,7 +76,6 @@ struct RecommendedStrain {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-#[allow(dead_code)]
 struct RecommendedSet {
     id: Option<String>,
     name: String,
@@ -277,6 +275,8 @@ pub fn SommelierScreen() -> Element {
                                         let discount = set.discount_percent.filter(|v| v.is_finite()).unwrap_or(0.0).max(0.0);
                                         let final_price = if discount > 0.0 { (price * (1.0 - discount / 100.0)).max(0.0) } else { price };
                                         let price_str = format!("฿{}", final_price as i32);
+                                        let set_id = set.id.clone().unwrap_or_default();
+                                        let set_name = name.clone();
 
                                         elements.push(rsx! {
                                             div { style: "
@@ -290,6 +290,29 @@ pub fn SommelierScreen() -> Element {
                                                     div { style: "font-size: 17px; font-weight: 700; margin-bottom: 4px;", "{name}" }
                                                     div { style: "font-size: 13px; color: #b388ff; margin-bottom: 6px;", "{mood}" }
                                                     span { style: "font-size: 20px; font-weight: 800; color: #ffe600; text-shadow: 2px 2px 0 #000;", "{price_str}" }
+                                                }
+                                                if !set_id.is_empty() && final_price > 0.0 {
+                                                    button {
+                                                        style: "
+                                                            font-size: 14px; font-weight: 700; padding: 6px 8px;
+                                                            background: #39ff14; color: #000;
+                                                            border: 4px solid #2d9e0f; border-radius: 0; cursor: pointer;
+                                                            box-shadow: 3px 3px 0 #000;
+                                                        ",
+                                                        onclick: move |_| {
+                                                            let mut c = cart.write();
+                                                            c.add_item(CartItem {
+                                                                id: set_id.clone(),
+                                                                name: set_name.clone(),
+                                                                price: final_price,
+                                                                quantity: 1,
+                                                                image_url: None,
+                                                                item_type: CartItemType::Set,
+                                                            });
+                                                            crate::ui::telegram::TelegramApp::init().haptic_notification(crate::ui::telegram::HapticNotification::Success);
+                                                        },
+                                                        "+🛒"
+                                                    }
                                                 }
                                             }
                                         });
@@ -307,6 +330,12 @@ pub fn SommelierScreen() -> Element {
                                         let cat = s.category.as_deref().unwrap_or("Hybrid");
                                         let emoji = category_emoji(cat);
                                         let thc_str = s.thc_percent.map(|t| format!("{}% THC", t as i32)).unwrap_or_default();
+                                        let effect = s.effect.clone().unwrap_or_default();
+                                        let flavor = s.flavor_profile.clone().unwrap_or_default();
+                                        let img = s.image_url.clone().unwrap_or_default();
+                                        let has_img = !img.is_empty()
+                                            && (img.starts_with("http://") || img.starts_with("https://")
+                                                || (img.starts_with('/') && !img.starts_with("//")));
                                         let match_pct = s.match_percent.unwrap_or(80);
                                         let match_color = if match_pct >= 90 { "#39ff14" } else if match_pct >= 80 { "#00e5ff" } else { "#ffe600" };
                                         let reason = s.match_reason.clone().unwrap_or_default();
@@ -323,10 +352,25 @@ pub fn SommelierScreen() -> Element {
                                                 display: flex; gap: 12px; align-items: center;
                                                 box-shadow: 4px 4px 0 #000;
                                             ",
-                                                div { style: "font-size: 28px; min-width: 40px; text-align: center;", "{emoji}" }
+                                                if has_img {
+                                                    img {
+                                                        src: "{img}",
+                                                        alt: "{s_name}",
+                                                        loading: "lazy",
+                                                        style: "width: 48px; height: 48px; min-width: 48px; object-fit: cover; border: 2px solid #2a2a4a;"
+                                                    }
+                                                } else {
+                                                    div { style: "font-size: 28px; min-width: 40px; text-align: center;", "{emoji}" }
+                                                }
                                                 div { style: "flex: 1;",
                                                     div { style: "font-size: 17px; font-weight: 700; margin-bottom: 4px;", "{s_name}" }
                                                     div { style: "font-size: 13px; color: #00e5ff; margin-bottom: 2px;", "{cat} • {thc_str}" }
+                                                    if !effect.is_empty() {
+                                                        div { style: "font-size: 13px; color: #aaa; margin-bottom: 2px;", "{effect}" }
+                                                    }
+                                                    if !flavor.is_empty() {
+                                                        div { style: "font-size: 13px; color: #888; margin-bottom: 2px;", "🍃 {flavor}" }
+                                                    }
                                                     if !reason.is_empty() {
                                                         div { style: "font-size: 13px; color: #8b8b9e; margin-bottom: 6px;", "{reason}" }
                                                     }

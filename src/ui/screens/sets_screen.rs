@@ -9,7 +9,6 @@ use dioxus::prelude::*;
 use serde::Deserialize;
 
 #[derive(Debug, Clone, Deserialize)]
-#[allow(dead_code)]
 struct ApiSet {
     id: String,
     name: String,
