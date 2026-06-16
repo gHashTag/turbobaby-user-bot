@@ -98,34 +98,23 @@ pub fn read_stored_lang() -> Option<Lang> {
 
 /// Map a `Lang` variant to its short two-letter code used in
 /// `localStorage` and (where the path supports it) URL queries.
+///
+/// Delegates to the canonical `core::Lang::as_str` — previously this was
+/// a hand-copied `match` that mirrored it. Two copies of the same
+/// Lang↔code table drift the moment one is edited (rename a code in one
+/// place and the localStorage round-trip silently breaks). One source of
+/// truth now; `lang_code_matches_core_as_str` guards it.
 fn lang_code(lang: Lang) -> &'static str {
-    match lang {
-        Lang::Russian => "ru",
-        Lang::English => "en",
-        Lang::Thai => "th",
-        Lang::Chinese => "zh",
-        Lang::Hebrew => "he",
-        Lang::German => "de",
-        Lang::French => "fr",
-        Lang::Spanish => "es",
-    }
+    lang.as_str()
 }
 
 /// Inverse of `lang_code` — used by `read_stored_lang` to decode
-/// `localStorage` values written by `set_app_lang`.
+/// `localStorage` values written by `set_app_lang`. Delegates to
+/// `core::Lang::from_str` (which also tolerates the full English name,
+/// harmless for the 2-letter codes localStorage actually stores).
 #[cfg(target_arch = "wasm32")]
 fn lang_from_code(code: &str) -> Option<Lang> {
-    match code {
-        "ru" => Some(Lang::Russian),
-        "en" => Some(Lang::English),
-        "th" => Some(Lang::Thai),
-        "zh" => Some(Lang::Chinese),
-        "he" => Some(Lang::Hebrew),
-        "de" => Some(Lang::German),
-        "fr" => Some(Lang::French),
-        "es" => Some(Lang::Spanish),
-        _ => None,
-    }
+    code.parse::<Lang>().ok()
 }
 
 #[cfg(test)]
@@ -152,24 +141,38 @@ mod tests {
         ));
     }
 
+    const ALL_LANGS: [Lang; 8] = [
+        Lang::Russian,
+        Lang::English,
+        Lang::Thai,
+        Lang::Chinese,
+        Lang::Hebrew,
+        Lang::German,
+        Lang::French,
+        Lang::Spanish,
+    ];
+
     #[test]
     fn lang_code_roundtrip_via_canonical_codes() {
-        for l in [
-            Lang::Russian,
-            Lang::English,
-            Lang::Thai,
-            Lang::Chinese,
-            Lang::Hebrew,
-            Lang::German,
-            Lang::French,
-            Lang::Spanish,
-        ] {
+        for l in ALL_LANGS {
             let code = lang_code(l);
-            // We can't call lang_from_code outside wasm builds, but
-            // the codes themselves should be the standard 2-letter
-            // ISO 639-1 forms.
+            // Codes are the standard 2-letter ISO 639-1 forms.
             assert_eq!(code.len(), 2);
             assert!(code.chars().all(|c| c.is_ascii_lowercase()));
+            // The code must round-trip back to the same variant through
+            // the canonical `core::Lang::from_str` (what `lang_from_code`
+            // now delegates to). Runs on host — no wasm gate needed.
+            assert_eq!(code.parse::<Lang>().ok(), Some(l), "roundtrip {l:?}");
+        }
+    }
+
+    /// `lang_code` must stay identical to the canonical `core::Lang::as_str`.
+    /// If they ever diverge, the UI would write one code to localStorage and
+    /// the rest of the stack would interpret it as another language.
+    #[test]
+    fn lang_code_matches_core_as_str() {
+        for l in ALL_LANGS {
+            assert_eq!(lang_code(l), l.as_str(), "{l:?}");
         }
     }
 }
