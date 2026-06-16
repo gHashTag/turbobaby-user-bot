@@ -492,17 +492,23 @@ async fn get_quest_locations(
     let items: Vec<Value> = rows
         .iter()
         .map(|r| {
-            json!({
-                "id": r.try_get::<i32>("", "id").unwrap_or(0),
+            // id is a NOT NULL PK; a read error means real schema drift — fail
+            // loud rather than emitting a fake id=0 list entry the client clicks.
+            let id: i32 = r.try_get("", "id").map_err(|e| {
+                tracing::error!("get_quest_locations: corrupt id: {e}");
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?;
+            Ok(json!({
+                "id": id,
                 "name": r.try_get::<String>("", "name").unwrap_or_default(),
                 "description": r.try_get::<String>("", "description").ok(),
                 "category": r.try_get::<String>("", "category").ok(),
                 "map_url": r.try_get::<String>("", "map_url").ok(),
                 "is_active": r.try_get::<bool>("", "is_active").unwrap_or(true),
                 "is_final": r.try_get::<bool>("", "is_final").unwrap_or(false),
-            })
+            }))
         })
-        .collect();
+        .collect::<Result<Vec<Value>, StatusCode>>()?;
     Ok(Json(json!({ "locations": items })))
 }
 
@@ -550,9 +556,15 @@ async fn create_quest_location(
             tracing::error!("create_quest_location: RETURNING produced no row");
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
-    Ok(Json(
-        json!({ "success": true, "id": row.try_get::<i32>("", "id").unwrap_or(0) }),
-    ))
+    // Fail loud: the freshly INSERTed `id` (NOT NULL PK from RETURNING) is the
+    // identifier the client uses to reference the new location. A silent
+    // `.unwrap_or(0)` would return `{"success": true, "id": 0}` on a read error
+    // — a fabricated id the client would then act on. Propagate instead.
+    let id: i32 = row.try_get("", "id").map_err(|e| {
+        tracing::error!("create_quest_location: corrupt RETURNING id: {e}");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+    Ok(Json(json!({ "success": true, "id": id })))
 }
 
 async fn update_quest_location(
@@ -635,10 +647,15 @@ async fn scan_quest_qr(
                 );
                 crate::notify::notify_admins(&bot, &config, &text).await;
             });
+            // Fail loud on the location id the client receives + acts on.
+            let id: i32 = r.try_get("", "id").map_err(|e| {
+                tracing::error!("scan_quest_qr: corrupt location id: {e}");
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?;
             Ok(Json(json!({
                 "success": true,
                 "location": {
-                    "id": r.try_get::<i32>("", "id").unwrap_or(0),
+                    "id": id,
                     "name": location_name,
                     "is_final": is_final,
                 }
