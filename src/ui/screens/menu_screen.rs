@@ -1,6 +1,7 @@
 use crate::trios::i18n::{t, T_ADD_TO_CART, T_LOADING, T_MENU_DESC, T_MENU_TITLE};
 use crate::ui::api::context::api_base_url;
 use crate::ui::components::bottom_nav::BottomNav;
+use crate::ui::components::product_detail_modal::ProductDetailModal;
 use crate::ui::routes::Route;
 use crate::ui::state::{Cart, CartItem, CartItemType};
 use dioxus::prelude::*;
@@ -420,7 +421,7 @@ fn render_strain_card(strain: ApiStrain, mut cart: Signal<Cart>) -> Element {
         "#2a2a4a"
     };
     let card_style = format!(
-        "background:#16213e;border:4px solid {};box-shadow:4px 4px 0 #000;overflow:hidden;position:relative;{}",
+        "background:#16213e;border:4px solid {};box-shadow:4px 4px 0 #000;overflow:hidden;position:relative;cursor:pointer;{}",
         border_color,
         if strain.is_available { "".to_string() } else { "opacity:0.6;".to_string() }
     );
@@ -449,6 +450,7 @@ fn render_strain_card(strain: ApiStrain, mut cart: Signal<Cart>) -> Element {
             || img_url.starts_with("https://")
             || (img_url.starts_with("/") && !img_url.starts_with("//")));
     let alt_name = strain.name.clone();
+    let desc_str = strain.description.clone().unwrap_or_default();
     let img_url_bust = if !has_image {
         String::new()
     } else {
@@ -460,9 +462,11 @@ fn render_strain_card(strain: ApiStrain, mut cart: Signal<Cart>) -> Element {
             || video_url.starts_with("https://")
             || (video_url.starts_with("/") && !video_url.starts_with("//")));
     let mut show_video = use_signal(|| false);
+    let mut detail_open = use_signal(|| false);
 
     rsx! {
         div { key: strain.id.clone(), class: "comet-card", style: card_style,
+            onclick: move |_| detail_open.set(true),
             div { style: "width:100%;aspect-ratio:2/3;background:linear-gradient(135deg,#1a1a2e,#16213e);display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;",
                 {if has_video {
                     rsx! {
@@ -606,7 +610,8 @@ fn render_strain_card(strain: ApiStrain, mut cart: Signal<Cart>) -> Element {
                                 box-shadow:3px 3px 0 #000;
                                 cursor:pointer;
                             ",
-                            onclick: move |_| {
+                            onclick: move |e: Event<MouseData>| {
+                                e.stop_propagation();
                                 cart.write().add_item(CartItem {
                                     id: s_id.clone(),
                                     name: s_name.clone(),
@@ -633,6 +638,20 @@ fn render_strain_card(strain: ApiStrain, mut cart: Signal<Cart>) -> Element {
                     }
                 }}
             }
+            {detail_open().then(|| rsx! {
+                ProductDetailModal {
+                    name: strain.name.clone(),
+                    image_url: strain.image_url.clone(),
+                    description: desc_str.clone(),
+                    category_badge: Some(badge_label.clone()),
+                    thc: (!thc_str.is_empty()).then(|| thc_str.clone()),
+                    cbd: (!cbd_str.is_empty()).then(|| cbd_str.clone()),
+                    effect: (!effect_str.is_empty()).then(|| effect_str.clone()),
+                    flavor: (!flavor_str.is_empty()).then(|| flavor_str.clone()),
+                    price_line: has_real_price.then(|| format!("{display_price}/g")),
+                    on_close: move |_| detail_open.set(false),
+                }
+            })}
         }
     }
 }

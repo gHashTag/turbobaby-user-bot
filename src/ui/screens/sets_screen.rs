@@ -2,6 +2,7 @@ use crate::trios::i18n::{t, T_ADD_TO_CART, T_FILTER_ALL, T_SETS_DESC, T_SETS_TIT
 use crate::ui::api::context::api_base_url;
 use crate::ui::assets;
 use crate::ui::components::bottom_nav::BottomNav;
+use crate::ui::components::product_detail_modal::ProductDetailModal;
 use crate::ui::state::{Cart, CartItem, CartItemType};
 use dioxus::prelude::*;
 use serde::Deserialize;
@@ -278,6 +279,9 @@ fn render_set_card(set: ApiSet, mut cart: Signal<Cart>) -> Element {
             || video_url.starts_with("https://")
             || (video_url.starts_with("/") && !video_url.starts_with("//")));
     let mut show_video = use_signal(|| false);
+    let mut detail_open = use_signal(|| false);
+    let desc_full = desc.to_string();
+    let mood_badge = format!("{emoji} {mood}");
     let is_available = set.is_available.unwrap_or(true);
     let opacity = if is_available { "" } else { "opacity:0.6;" };
 
@@ -288,8 +292,10 @@ fn render_set_card(set: ApiSet, mut cart: Signal<Cart>) -> Element {
             box-shadow:4px 4px 0 #000;
             overflow:hidden;
             position:relative;
+            cursor:pointer;
             {opacity}
         ",
+            onclick: move |_| detail_open.set(true),
             div { style: "
                 height:100px;
                 background:linear-gradient(135deg,#1a1a2e,#16213e);
@@ -362,7 +368,8 @@ fn render_set_card(set: ApiSet, mut cart: Signal<Cart>) -> Element {
                                 box-shadow:3px 3px 0 #000;
                                 cursor:pointer;
                             ",
-                            onclick: move |_| {
+                            onclick: move |e: Event<MouseData>| {
+                                e.stop_propagation();
                                 let mut c = cart.write();
                                 c.add_item(CartItem {
                                     id: set_id.clone(),
@@ -390,6 +397,16 @@ fn render_set_card(set: ApiSet, mut cart: Signal<Cart>) -> Element {
                     }
                 }}
             }
+            {detail_open().then(|| rsx! {
+                ProductDetailModal {
+                    name: set.name.clone(),
+                    image_url: set.image_url.clone(),
+                    description: desc_full.clone(),
+                    category_badge: Some(mood_badge.clone()),
+                    price_line: Some(price_str.clone()),
+                    on_close: move |_| detail_open.set(false),
+                }
+            })}
         }
     }
 }

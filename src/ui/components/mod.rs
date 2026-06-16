@@ -13,6 +13,7 @@ pub mod cart_item;
 pub mod input;
 pub mod loading;
 pub mod plant_cell;
+pub mod product_detail_modal;
 pub mod strain_card;
 pub mod strain_grid;
 
@@ -41,6 +42,7 @@ pub use input::{Input, InputProps, InputType};
 pub use loading::{Loading, LoadingOverlay, LoadingProps, LoadingSize};
 pub use modal::{Modal, ModalProps, ModalSize};
 pub use plant_cell::{EmptyPlotCell, PlantCell};
+pub use product_detail_modal::{ProductDetailModal, ProductDetailModalProps};
 pub use strain_card::{StrainCard, StrainCardProps};
 pub use strain_grid::{StrainGrid, StrainGridProps};
 

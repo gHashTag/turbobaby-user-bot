@@ -1,6 +1,7 @@
 use crate::trios::i18n::{t, T_ACC_DESC, T_ACC_TITLE, T_ADD_TO_CART, T_FILTER_ALL};
 use crate::ui::api::context::api_base_url;
 use crate::ui::components::bottom_nav::BottomNav;
+use crate::ui::components::product_detail_modal::ProductDetailModal;
 use crate::ui::state::{Cart, CartItem, CartItemType};
 use dioxus::prelude::*;
 use serde::Deserialize;
@@ -209,12 +210,15 @@ fn render_accessory_card(
     let badge_label = format!("{} {}", emoji, cat);
 
     let card_style = format!(
-        "background:#16213e;border:4px solid #2a2a4a;box-shadow:4px 4px 0 #000;overflow:hidden;position:relative;{}",
+        "background:#16213e;border:4px solid #2a2a4a;box-shadow:4px 4px 0 #000;overflow:hidden;position:relative;cursor:pointer;{}",
         opacity
     );
+    let mut detail_open = use_signal(|| false);
+    let desc_full = desc.to_string();
 
     rsx! {
         div { key: a.id.clone(), class: "comet-card", style: card_style,
+            onclick: move |_| detail_open.set(true),
             div { style: "width:100%;aspect-ratio:2/3;background:linear-gradient(135deg,#1a1a2e,#16213e);display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;",
                 {if has_image {
                     rsx! {
@@ -288,7 +292,8 @@ fn render_accessory_card(
                                 box-shadow:3px 3px 0 #000;
                                 cursor:pointer;
                             ",
-                            onclick: move |_| {
+                            onclick: move |e: Event<MouseData>| {
+                                e.stop_propagation();
                                 cart.write().add_item(CartItem {
                                     id: a_id.clone(),
                                     name: a_name.clone(),
@@ -315,6 +320,16 @@ fn render_accessory_card(
                     }
                 }}
             }
+            {detail_open().then(|| rsx! {
+                ProductDetailModal {
+                    name: a.name.clone(),
+                    image_url: a.image_url.clone(),
+                    description: desc_full.clone(),
+                    category_badge: Some(badge_label.clone()),
+                    price_line: Some(price_str.clone()),
+                    on_close: move |_| detail_open.set(false),
+                }
+            })}
         }
     }
 }

@@ -1,6 +1,7 @@
 use crate::trios::i18n::{t, T_ADD_TO_CART, T_FILTER_ALL, T_TEA_DESC, T_TEA_TITLE};
 use crate::ui::api::context::api_base_url;
 use crate::ui::components::bottom_nav::BottomNav;
+use crate::ui::components::product_detail_modal::ProductDetailModal;
 use crate::ui::state::{Cart, CartItem, CartItemType};
 use dioxus::prelude::*;
 use serde::Deserialize;
@@ -41,6 +42,10 @@ const SUBCATEGORIES: &[&str] = &["All", "Tea", "Dessert", "Teaware"];
 pub fn TeaScreen() -> Element {
     let mut cart = use_context::<Signal<Cart>>();
     let mut active_sub = use_signal(|| "All".to_string());
+    // Tapping a tea card opens a detail popup with the full description.
+    // Held at screen level (one modal) because the cards render inline in a
+    // `for` loop, where a per-card `use_signal` would violate hook ordering.
+    let mut selected_tea = use_signal(|| None::<ApiTea>);
 
     let tea_title = t(crate::ui::lang::current_lang(), T_TEA_TITLE);
     let tea_desc = t(crate::ui::lang::current_lang(), T_TEA_DESC);
@@ -145,13 +150,15 @@ pub fn TeaScreen() -> Element {
                                     let t_id = t.id.clone();
                                     let opacity = if show_out_of_stock { "0.6" } else { "1" };
                                     let desc = t.description.as_deref().unwrap_or("");
+                                    let t_click = t.clone();
 
                                     rsx! {
                                         div { style: "
                                             background: #16213e; border: 4px solid #2a2a4a;
                                             border-radius: 0; overflow: hidden; box-shadow: 4px 4px 0 #000;
-                                            opacity: {opacity};
+                                            opacity: {opacity}; cursor: pointer;
                                         ",
+                                            onclick: move |_| selected_tea.set(Some(t_click.clone())),
                                             div { style: "
                                                 height: 100px;
                                                 background: linear-gradient(135deg, #16213e, #16213e);
@@ -212,7 +219,8 @@ pub fn TeaScreen() -> Element {
                                                             box-shadow: 3px 3px 0 #000;
                                                             transition: transform 0.1s, box-shadow 0.1s;
                                                         ",
-                                                        onclick: move |_| {
+                                                        onclick: move |e: Event<MouseData>| {
+                                                            e.stop_propagation();
                                                             let mut c = cart.write();
                                                             c.add_item(CartItem {
                                                                 id: t_id.clone(),
@@ -255,6 +263,21 @@ pub fn TeaScreen() -> Element {
                     },
                 }
             }
+
+            {selected_tea().map(|tea| {
+                let sub = tea.subcategory.as_deref().unwrap_or("tea").to_uppercase();
+                let price_str = format!("฿{}", (if tea.price.is_finite() { tea.price.max(0.0) } else { 0.0 }) as i32);
+                rsx! {
+                    ProductDetailModal {
+                        name: tea.name.clone(),
+                        image_url: tea.image_url.clone(),
+                        description: tea.description.clone().unwrap_or_default(),
+                        category_badge: Some(sub),
+                        price_line: Some(price_str),
+                        on_close: move |_| selected_tea.set(None),
+                    }
+                }
+            })}
 
             BottomNav {}
         }
