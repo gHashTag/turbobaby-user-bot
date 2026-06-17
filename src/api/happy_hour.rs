@@ -7,6 +7,25 @@ pub(crate) fn routes() -> Router<AppState> {
     Router::new().route("/happy-hour", get(get_happy_hour))
 }
 
+/// The shop is on Koh Phangan (Asia/Bangkok, UTC+7, no DST). Happy-hour
+/// `start`/`end` are SHOP-LOCAL hours, so "now" must be derived in this fixed
+/// offset — NOT the server's local zone. Railway runs UTC, where
+/// `chrono::Local::now()` returns the UTC hour and shifts the window by 7h
+/// (e.g. a 18:00–21:00 happy hour would read as active 11:00–14:00 UTC).
+const SHOP_UTC_OFFSET_SECS: i32 = 7 * 3600;
+
+/// Pure: the hour-of-day (0..=23) of a UTC instant as seen at `offset_secs`.
+fn hour_in_offset(utc: chrono::DateTime<chrono::Utc>, offset_secs: i32) -> i64 {
+    use chrono::Offset;
+    let off = chrono::FixedOffset::east_opt(offset_secs).unwrap_or_else(|| chrono::Utc.fix());
+    utc.with_timezone(&off).hour() as i64
+}
+
+/// Current hour-of-day in the shop's timezone.
+fn shop_hour_now() -> i64 {
+    hour_in_offset(chrono::Utc::now(), SHOP_UTC_OFFSET_SECS)
+}
+
 fn compute_happy_hour(config: &Value, current_hour: i64) -> (bool, bool, f64, i64, i64) {
     let happy_hour = &config["happy_hour"];
     let enabled = happy_hour["enabled"].as_bool().unwrap_or(false);
@@ -38,7 +57,7 @@ async fn get_happy_hour(State(state): State<AppState>) -> Result<Json<Value>, St
 
     match model {
         Some(m) => {
-            let current_hour = chrono::Local::now().hour() as i64;
+            let current_hour = shop_hour_now();
             let (enabled, active, discount, start, end) =
                 compute_happy_hour(&m.config, current_hour);
             Ok(Json(json!({
@@ -61,8 +80,33 @@ async fn get_happy_hour(State(state): State<AppState>) -> Result<Json<Value>, St
 
 #[cfg(test)]
 mod tests {
-    use super::compute_happy_hour;
+    use super::{compute_happy_hour, hour_in_offset, SHOP_UTC_OFFSET_SECS};
     use serde_json::json;
+
+    #[test]
+    fn test_hour_in_offset_bangkok_shift() {
+        use chrono::TimeZone;
+        // 11:30 UTC == 18:30 in Bangkok (UTC+7). The old `Local::now()` on a
+        // UTC server would have returned 11 here, missing the 18:00 happy hour.
+        let utc = chrono::Utc
+            .with_ymd_and_hms(2026, 6, 16, 11, 30, 0)
+            .unwrap();
+        assert_eq!(hour_in_offset(utc, SHOP_UTC_OFFSET_SECS), 18);
+    }
+
+    #[test]
+    fn test_hour_in_offset_wraps_past_midnight() {
+        use chrono::TimeZone;
+        // 20:00 UTC + 7h = 03:00 next day in Bangkok.
+        let utc = chrono::Utc.with_ymd_and_hms(2026, 6, 16, 20, 0, 0).unwrap();
+        assert_eq!(hour_in_offset(utc, SHOP_UTC_OFFSET_SECS), 3);
+    }
+
+    #[test]
+    fn test_hour_in_offset_in_range() {
+        let h = hour_in_offset(chrono::Utc::now(), SHOP_UTC_OFFSET_SECS);
+        assert!((0..=23).contains(&h));
+    }
 
     #[test]
     fn test_compute_happy_hour_active() {
