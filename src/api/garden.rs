@@ -832,40 +832,9 @@ pub(crate) struct ForceSeedRequest {
     pub telegram_id: i64,
 }
 
-/// Pick the first plantable catalog item from an order's `items` JSON array,
-/// returned as `(id, name)`. Precedence within an item: strain → set →
-/// accessory → tea (mirrors the garden backfill migrations 026/036/037).
-///
-/// This is the exact logic behind the seed-backfill firefighting: migration
-/// 036 ("non_strain_orders") and 037 ("universal_backfill") existed because
-/// early code only planted from `strain_id`, leaving accessory/tea/set-only
-/// orders with no plant. Kept pure (no DB) so the precedence + the
-/// non-strain cases are locked down by unit tests.
-fn first_seedable_item(items: &serde_json::Value) -> Option<(String, String)> {
-    const KEYS: [(&str, &str); 4] = [
-        ("strain_id", "strain_name"),
-        ("set_id", "set_name"),
-        ("accessory_id", "accessory_name"),
-        ("tea_id", "tea_name"),
-    ];
-    for it in items.as_array()? {
-        for (id_key, name_key) in KEYS {
-            if let Some(id) = it
-                .get(id_key)
-                .and_then(|v| v.as_str())
-                .filter(|s| !s.is_empty())
-            {
-                let name = it
-                    .get(name_key)
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("")
-                    .to_string();
-                return Some((id.to_string(), name));
-            }
-        }
-    }
-    None
-}
+// `first_seedable_item` moved to the pure core `trios::garden` (cycle: Wave #66
+// clone-dedup) so the order-completion side-effect and `force_seed` share one
+// SSOT for seed precedence. Call `garden::first_seedable_item`.
 
 async fn force_seed(
     headers: HeaderMap,
@@ -928,7 +897,7 @@ async fn force_seed(
         .try_get("", "items")
         .unwrap_or(serde_json::Value::Null);
 
-    let Some((strain_id, strain_name)) = first_seedable_item(&items) else {
+    let Some((strain_id, strain_name)) = garden::first_seedable_item(&items) else {
         return Ok(Json(
             json!({ "success": false, "error": "no_catalog_items" }),
         ));
@@ -967,7 +936,8 @@ async fn force_seed(
 
 #[cfg(test)]
 mod tests {
-    use super::{first_seedable_item, validate_garden_config_update, ConfigUpdateRequest};
+    use super::{validate_garden_config_update, ConfigUpdateRequest};
+    use crate::trios::garden::first_seedable_item;
     use axum::http::StatusCode;
     use serde_json::json;
 
@@ -1044,13 +1014,15 @@ mod tests {
     fn seed_keys_match_sql_backfill_037() {
         let manifest = env!("CARGO_MANIFEST_DIR");
 
-        // Rust: scope to the `first_seedable_item` fn body (avoids the
-        // `strain_id` column name inside force_seed's INSERT string).
-        let rs = std::fs::read_to_string(std::path::Path::new(manifest).join("src/api/garden.rs"))
-            .expect("read garden.rs");
+        // Rust: scope to the `first_seedable_item` fn body in the pure core
+        // `trios::garden` (Wave #66 moved it there as the shared SSOT for the
+        // two write paths). Scope ends at the next pure fn.
+        let rs =
+            std::fs::read_to_string(std::path::Path::new(manifest).join("src/trios/garden.rs"))
+                .expect("read trios/garden.rs");
         let fn_start = rs.find("fn first_seedable_item").expect("fn present");
         let fn_end = rs[fn_start..]
-            .find("async fn force_seed")
+            .find("fn filter_active_rewards")
             .map(|o| fn_start + o)
             .unwrap_or(rs.len());
         let rust_keys = ordered_id_keys(&rs[fn_start..fn_end], '"');

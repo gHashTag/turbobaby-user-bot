@@ -462,6 +462,44 @@ pub fn sanitize_reward_config(
     }
 }
 
+/// Pick the first plantable catalog item from an order's `items` JSON array,
+/// returned as `(id, name)`. Precedence within an item: strain → set →
+/// accessory → tea (mirrors the garden backfill migrations 026/036/037).
+///
+/// Single source of truth for "which order item becomes the seed". BOTH the
+/// order-completion side-effect (`db::orders::complete_order_and_update_loyalty`)
+/// and the self-service `api::garden::force_seed` endpoint call this — keeping
+/// the precedence identical across the two write paths and the SQL backfill.
+/// The 026→036→037 hotfix history is exactly the drift this prevents (early
+/// code planted only from `strain_id`, stranding accessory/tea/set-only orders).
+/// Kept pure (no DB) so the precedence + non-strain cases are unit-tested, and
+/// the key order is locked against migration 037 by `seed_keys_match_sql_backfill_037`.
+pub fn first_seedable_item(items: &serde_json::Value) -> Option<(String, String)> {
+    const KEYS: [(&str, &str); 4] = [
+        ("strain_id", "strain_name"),
+        ("set_id", "set_name"),
+        ("accessory_id", "accessory_name"),
+        ("tea_id", "tea_name"),
+    ];
+    for it in items.as_array()? {
+        for (id_key, name_key) in KEYS {
+            if let Some(id) = it
+                .get(id_key)
+                .and_then(|v| v.as_str())
+                .filter(|s| !s.is_empty())
+            {
+                let name = it
+                    .get(name_key)
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                return Some((id.to_string(), name));
+            }
+        }
+    }
+    None
+}
+
 /// Filter active rewards
 pub fn filter_active_rewards(rewards: &[PlantReward], now: Timestamp) -> Vec<&PlantReward> {
     rewards.iter().filter(|r| r.is_active(now)).collect()

@@ -223,45 +223,14 @@ pub async fn complete_order_and_update_loyalty(
     //    Side-effect contract: an order with no strain items (pure
     //    accessory/tea/set orders) doesn't plant — same as the
     //    backfill, intentional.
-    let strain_seed: Option<(String, String)> = order.items.as_array().and_then(|arr| {
-        arr.iter().find_map(|it| {
-            // Primary: explicit strain item
-            if let Some(sid) = it
-                .get("strain_id")
-                .and_then(|v| v.as_str())
-                .filter(|s| !s.is_empty())
-            {
-                let sname = it
-                    .get("strain_name")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("")
-                    .to_string();
-                return Some((sid.to_string(), sname));
-            }
-            // Fallback: any catalog item seeds a plant (sets, accessories, tea).
-            // Cycle #169A: closes the gap where users ordering sets/accessories
-            // saw "Order a strain to get your first seed!" and were confused.
-            for (id_key, name_key) in [
-                ("set_id", "set_name"),
-                ("accessory_id", "accessory_name"),
-                ("tea_id", "tea_name"),
-            ] {
-                if let Some(id) = it
-                    .get(id_key)
-                    .and_then(|v| v.as_str())
-                    .filter(|s| !s.is_empty())
-                {
-                    let name = it
-                        .get(name_key)
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("")
-                        .to_string();
-                    return Some((id.to_string(), name));
-                }
-            }
-            None
-        })
-    });
+    // Wave #66: seed precedence is one SSOT now. This was a line-for-line
+    // logical clone of `first_seedable_item` (the `force_seed` endpoint) and
+    // migration 037's SQL backfill — three copies of "which order item becomes
+    // the seed", each drifting independently (that's the 026→036→037 hotfix
+    // history). Call the pure core so the completion side-effect, force_seed,
+    // and the backfill can't diverge again. Precedence strain→set→accessory→tea
+    // within an item is locked vs SQL 037 by `seed_keys_match_sql_backfill_037`.
+    let strain_seed = crate::trios::garden::first_seedable_item(&order.items);
     if let Some((strain_id, strain_name)) = strain_seed {
         let plant_id = uuid::Uuid::new_v4().to_string();
         let planted_at = chrono::Utc::now().timestamp_millis();
