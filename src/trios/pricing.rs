@@ -165,7 +165,24 @@ pub fn effective_set_price(total_price: f64, discount_percent: f64) -> f64 {
 /// Single source of truth: the customer UI previously had three identical
 /// `format_price` clones (menu/cart/home) that each narrowed to `i32`.
 pub fn format_baht(amount: f64) -> String {
-    format!("฿{}", sanitize_money(amount) as i64)
+    format!("฿{}", group_thousands(sanitize_money(amount) as i64))
+}
+
+/// Group a non-negative integer's digits in threes with `,` (e.g.
+/// `3000000` -> `3,000,000`). `sanitize_money` guarantees the input is `>= 0`,
+/// so no sign handling is needed. THB display uses the comma group separator.
+fn group_thousands(n: i64) -> String {
+    let digits = n.max(0).to_string();
+    let bytes = digits.as_bytes();
+    let len = bytes.len();
+    let mut out = String::with_capacity(len + len / 3);
+    for (i, b) in bytes.iter().enumerate() {
+        if i > 0 && (len - i) % 3 == 0 {
+            out.push(',');
+        }
+        out.push(*b as char);
+    }
+    out
 }
 
 #[cfg(test)]
@@ -192,7 +209,24 @@ mod tests {
         // A total above i32::MAX (~2.1B) must render its real value, not the
         // saturated 2147483647 the old `as i32` clones produced.
         let big = 3_000_000_000.0_f64; // > i32::MAX
-        assert_eq!(format_baht(big), "฿3000000000");
+        assert_eq!(format_baht(big), "฿3,000,000,000");
+    }
+
+    #[test]
+    fn test_format_baht_groups_thousands() {
+        assert_eq!(format_baht(0.0), "฿0");
+        assert_eq!(format_baht(999.0), "฿999");
+        assert_eq!(format_baht(1000.0), "฿1,000");
+        assert_eq!(format_baht(12345.0), "฿12,345");
+        assert_eq!(format_baht(1_234_567.0), "฿1,234,567");
+    }
+
+    #[test]
+    fn test_group_thousands_boundaries() {
+        assert_eq!(group_thousands(0), "0");
+        assert_eq!(group_thousands(100), "100");
+        assert_eq!(group_thousands(1000), "1,000");
+        assert_eq!(group_thousands(1_000_000), "1,000,000");
     }
 
     fn base_flags<'a>() -> MarketingFlags<'a> {
