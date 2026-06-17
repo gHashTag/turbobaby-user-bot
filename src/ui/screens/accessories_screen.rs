@@ -192,7 +192,7 @@ fn render_accessory_card(
     } else {
         0.0
     };
-    let price_str = format!("฿{}", a_price as i32);
+    let price_str = crate::trios::pricing::format_baht(a_price);
     let a_name = crate::ui::lang::localized(&a.name, a.name_en.as_deref());
     let a_id = a.id.clone();
     let opacity = if show_out_of_stock {

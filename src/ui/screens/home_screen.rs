@@ -36,12 +36,8 @@ fn category_emoji(cat: &str) -> &'static str {
 }
 
 fn format_price(price: f64) -> String {
-    let v = if price.is_finite() {
-        price.max(0.0)
-    } else {
-        0.0
-    };
-    format!("฿{}", v as i32)
+    // Single source of truth (was identical in menu/cart, narrowing to i32).
+    crate::trios::pricing::format_baht(price)
 }
 
 #[component]

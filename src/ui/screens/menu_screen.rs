@@ -91,12 +91,9 @@ fn category_badge_style(cat: &str) -> String {
 }
 
 fn format_price(price: f64) -> String {
-    let v = if price.is_finite() {
-        price.max(0.0)
-    } else {
-        0.0
-    };
-    format!("฿{}", v as i32)
+    // Delegates to the single source of truth (was an identical clone in
+    // cart_screen + home_screen, all narrowing to i32). See trios::pricing.
+    crate::trios::pricing::format_baht(price)
 }
 
 /// Safe f64 comparison that places NaN at the end.

@@ -6,12 +6,8 @@ use crate::ui::state::{Cart, CartItem};
 use dioxus::prelude::*;
 
 fn format_price(price: f64) -> String {
-    let v = if price.is_finite() {
-        price.max(0.0)
-    } else {
-        0.0
-    };
-    format!("฿{}", v as i32)
+    // Single source of truth (was identical in menu/home, narrowing to i32).
+    crate::trios::pricing::format_baht(price)
 }
 
 #[component]

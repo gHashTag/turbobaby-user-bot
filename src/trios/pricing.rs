@@ -158,12 +158,41 @@ pub fn effective_set_price(total_price: f64, discount_percent: f64) -> f64 {
     (base * (1.0 - pct / 100.0)).max(0.0)
 }
 
+/// Format a money amount (THB) for customer display: clamp NaN/inf/negative to
+/// 0, drop the fractional part (whole-baht display), prefix `฿`. Casts to `i64`
+/// (not `i32`) so a large-but-valid total can't saturate at ~2.1B — prices and
+/// totals are `i64` in the domain (`ProductPrice.price`, `calculate_cart_total`).
+/// Single source of truth: the customer UI previously had three identical
+/// `format_price` clones (menu/cart/home) that each narrowed to `i32`.
+pub fn format_baht(amount: f64) -> String {
+    format!("฿{}", sanitize_money(amount) as i64)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     fn now_utc() -> DateTime<Utc> {
         Utc::now()
+    }
+
+    #[test]
+    fn test_format_baht_basic_and_clamps() {
+        assert_eq!(format_baht(350.0), "฿350");
+        assert_eq!(format_baht(350.99), "฿350"); // whole-baht (truncates)
+        assert_eq!(format_baht(0.0), "฿0");
+        // NaN / inf / negative clamp to 0.
+        assert_eq!(format_baht(f64::NAN), "฿0");
+        assert_eq!(format_baht(f64::INFINITY), "฿0");
+        assert_eq!(format_baht(-5.0), "฿0");
+    }
+
+    #[test]
+    fn test_format_baht_large_value_does_not_saturate_like_i32() {
+        // A total above i32::MAX (~2.1B) must render its real value, not the
+        // saturated 2147483647 the old `as i32` clones produced.
+        let big = 3_000_000_000.0_f64; // > i32::MAX
+        assert_eq!(format_baht(big), "฿3000000000");
     }
 
     fn base_flags<'a>() -> MarketingFlags<'a> {
