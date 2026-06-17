@@ -381,7 +381,7 @@ async fn harvest_plant(
         tracing::error!("harvest_plant config: {e}");
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
-    let (discount_percent, bonus_points, expiration_days) = match config_row {
+    let (raw_discount, raw_bonus, raw_days) = match config_row {
         Some(r) => (
             r.try_get::<i32>("", "reward_discount_percent")
                 .unwrap_or(10),
@@ -390,6 +390,25 @@ async fn harvest_plant(
         ),
         None => (10, 100, 7),
     };
+    // Sanitize before these become a financial reward: a corrupt/negative config
+    // value (only possible via DB tampering — the admin API is u32) must never
+    // subtract from a user's bonus_balance via use_reward. Fail loud (log), not
+    // silent. See trios::garden::sanitize_reward_config.
+    let sane = garden::sanitize_reward_config(raw_discount, raw_bonus, raw_days);
+    if sane.corrupted {
+        tracing::error!(
+            "harvest_plant: garden_config out of range (discount={raw_discount}, \
+             bonus={raw_bonus}, days={raw_days}) — clamped to ({}, {}, {}); check garden_config row",
+            sane.discount_percent,
+            sane.bonus_points,
+            sane.expiration_days,
+        );
+    }
+    let (discount_percent, bonus_points, expiration_days) = (
+        sane.discount_percent,
+        sane.bonus_points,
+        sane.expiration_days,
+    );
     let expires_at = now.saturating_add(expiration_days as i64 * 24 * 60 * 60 * 1000);
 
     // Atomically mark plant as harvested — WHERE harvested_at IS NULL prevents race

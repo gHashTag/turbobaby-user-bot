@@ -421,6 +421,47 @@ impl Default for GameConfig {
     }
 }
 
+/// Reward config values sanitized into the valid domain, plus whether any value
+/// was out of range (so the caller can log the corruption LOUDLY).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SanitizedRewardConfig {
+    pub discount_percent: i32,
+    pub bonus_points: i32,
+    pub expiration_days: i32,
+    /// true when at least one input was outside its valid range and got clamped.
+    pub corrupted: bool,
+}
+
+/// Clamp garden reward config — read from `garden_config` at harvest time — into
+/// the SAME domain the admin update validator enforces (discount 0..=100, bonus
+/// 0..=1_000_000, days 1..=365).
+///
+/// The admin API accepts only `u32` (`ConfigUpdateRequest`), so a negative value
+/// here cannot arrive through the API — it means DB corruption or a bad
+/// migration. That matters because `harvest_plant` writes `bonus_points` into a
+/// `garden_rewards` row that `use_reward` later CREDITS to `bonus_balance`
+/// (`bonus_balance + $1`): a negative would silently *subtract* from a user's
+/// balance, and a negative discount would invert into a surcharge. `get_config`
+/// already clamps `.max(0)` for display — this gives the harvest (financial)
+/// path the same defense, and reports `corrupted` so the caller logs it instead
+/// of swallowing it silently (fail loud, degrade safe). See
+/// [[fail-loud-not-silent-clamp]] / [[triage-subagent-finding-then-harden]].
+pub fn sanitize_reward_config(
+    discount_percent: i32,
+    bonus_points: i32,
+    expiration_days: i32,
+) -> SanitizedRewardConfig {
+    let d = discount_percent.clamp(0, 100);
+    let b = bonus_points.clamp(0, 1_000_000);
+    let days = expiration_days.clamp(1, 365);
+    SanitizedRewardConfig {
+        discount_percent: d,
+        bonus_points: b,
+        expiration_days: days,
+        corrupted: d != discount_percent || b != bonus_points || days != expiration_days,
+    }
+}
+
 /// Filter active rewards
 pub fn filter_active_rewards(rewards: &[PlantReward], now: Timestamp) -> Vec<&PlantReward> {
     rewards.iter().filter(|r| r.is_active(now)).collect()
@@ -456,6 +497,52 @@ mod tests {
         assert!(!reward_is_active(false, now - 1, now));
         // Used → never active, even if not expired.
         assert!(!reward_is_active(true, now + 10_000, now));
+    }
+
+    #[test]
+    fn test_sanitize_reward_config_passes_valid_values_unchanged() {
+        let s = sanitize_reward_config(10, 100, 7);
+        assert_eq!(s.discount_percent, 10);
+        assert_eq!(s.bonus_points, 100);
+        assert_eq!(s.expiration_days, 7);
+        assert!(!s.corrupted);
+        // Domain boundaries are valid, not corrupt.
+        let edge = sanitize_reward_config(100, 1_000_000, 365);
+        assert_eq!(edge.discount_percent, 100);
+        assert_eq!(edge.bonus_points, 1_000_000);
+        assert_eq!(edge.expiration_days, 365);
+        assert!(!edge.corrupted);
+        let edge_lo = sanitize_reward_config(0, 0, 1);
+        assert!(!edge_lo.corrupted);
+    }
+
+    #[test]
+    fn test_sanitize_reward_config_negative_bonus_cannot_subtract_from_balance() {
+        // A negative bonus from a tampered config would otherwise SUBTRACT from a
+        // user's bonus_balance in use_reward — clamp to 0 and flag corruption.
+        let s = sanitize_reward_config(-50, -200, -3);
+        assert_eq!(s.discount_percent, 0);
+        assert_eq!(
+            s.bonus_points, 0,
+            "negative bonus must never credit-negative"
+        );
+        assert_eq!(s.expiration_days, 1);
+        assert!(s.corrupted);
+    }
+
+    #[test]
+    fn test_sanitize_reward_config_clamps_over_range_and_flags() {
+        let s = sanitize_reward_config(150, 9_999_999, 4000);
+        assert_eq!(s.discount_percent, 100);
+        assert_eq!(s.bonus_points, 1_000_000);
+        assert_eq!(s.expiration_days, 365);
+        assert!(s.corrupted);
+        // i32 extremes must not panic and must clamp.
+        let ext = sanitize_reward_config(i32::MIN, i32::MAX, i32::MIN);
+        assert_eq!(ext.discount_percent, 0);
+        assert_eq!(ext.bonus_points, 1_000_000);
+        assert_eq!(ext.expiration_days, 1);
+        assert!(ext.corrupted);
     }
 
     #[test]
