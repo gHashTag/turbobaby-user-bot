@@ -1,0 +1,52 @@
+# cargo-audit configuration — RustSec advisory triage.
+#
+# These advisories are CONSCIOUSLY ACCEPTED (not silently ignored) after the
+# Wave #63 reachability triage. Each is transitive (we did not add the crate),
+# low practical risk for THIS app's usage, and blocked from a clean fix by an
+# upstream dependency that needs a tested bump (tracked as W-97).
+#
+# Keeping this list lets CI run `cargo audit --deny warnings` to catch any NEW
+# advisory while these specific, triaged ones don't red-line every build.
+#
+# REVISIT each entry when:
+#   * the AWS SDK TLS stack moves off rustls 0.21 / rustls-webpki 0.101
+#     (W-97 — switch aws-config/aws-sdk-s3 to the rustls 0.23 client + run an
+#     S3 integration test to confirm the TLS handshake), then DELETE the
+#     rustls-webpki entries here and re-run `cargo audit`.
+#   * sea-orm-macros / teloxide drop proc-macro-error2.
+#
+# Do NOT add new entries without a written justification + an owner + a plan.
+
+[advisories]
+ignore = [
+    # rustls-webpki 0.101.7 (transitive: aws-config/aws-sdk-s3 `rustls` feature
+    # -> aws-smithy-http-client 1.1.x -> hyper-rustls 0.24 -> rustls 0.21).
+    # The app's own + sea-orm + teloxide stacks already use rustls 0.23 /
+    # rustls-webpki 0.103.13 (fixed). The vulnerable 0.101 is exercised ONLY by
+    # the OPTIONAL S3 client (Config::s3_enabled()) connecting to a configured,
+    # trusted S3 endpoint.
+    #
+    # RUSTSEC-2026-0104 — reachable panic in CRL parsing. NOT REACHABLE here:
+    # the code uses no CRL (grep CertificateRevocation/crl in src/ = none); the
+    # default rustls client does not load CRLs.
+    "RUSTSEC-2026-0104",
+    # RUSTSEC-2026-0098 / 0099 — name-constraint cert acceptance bugs. Weakens
+    # cert validation; exploiting requires a MITM presenting a crafted cert with
+    # name constraints for the trusted S3 endpoint — low practical risk for a
+    # client TLS connection to a known host. Fixed by the W-97 rustls 0.23 bump.
+    "RUSTSEC-2026-0098",
+    "RUSTSEC-2026-0099",
+    # RUSTSEC-2026-0173 — proc-macro-error2 unmaintained (WARNING, not a vuln).
+    # Build-time proc-macro only (transitive: sea-orm-macros, teloxide aquamarine).
+    # No runtime exposure; nothing to do until those upstreams swap it out.
+    "RUSTSEC-2026-0173",
+    # RUSTSEC-2023-0071 — rsa 0.9.10 "Marvin Attack" RSA timing sidechannel
+    # (medium 5.9). NO upstream fix exists. Transitive via sqlx-mysql 0.8.6,
+    # which is pulled by sqlx-macros-core (sqlx's compile-time query support
+    # depends on all driver crates). This app is POSTGRES-ONLY (sea-orm
+    # `sqlx-postgres`, no MySQL connection is ever opened), so the MySQL-auth
+    # RSA code path is never exercised at runtime — not reachable. Re-evaluate
+    # if a MySQL connection is ever added, or if rsa ships a fix / sqlx drops the
+    # transitive mysql driver.
+    "RUSTSEC-2023-0071",
+]

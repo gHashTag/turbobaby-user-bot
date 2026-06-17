@@ -3,6 +3,11 @@ target/
 .env
 .DS_Store
 .cargo/
+# …but track the cargo-audit RustSec triage config (version-controlled
+# security decisions, auto-read by `cargo audit`).
+!.cargo/
+.cargo/*
+!.cargo/audit.toml
 .claude/
 
 # Trunk build output (built locally for Railway static serving; Docker path keeps
