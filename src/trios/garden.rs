@@ -276,6 +276,13 @@ pub const TOTAL_WATER_STAGES: usize = 14;
 /// The water_count of a fully-grown plant (last valid index, 0-based).
 pub const FINAL_WATER_COUNT: i32 = TOTAL_WATER_STAGES as i32 - 1; // 13
 
+/// Cooldown after a harvest before the user may seed a NEW plant (24 hours).
+/// Bug fix: a new garden discount was obtainable far too often — the only gate
+/// was "one active plant at a time", with no pause between harvesting one plant
+/// and seeding the next, so rewards could be chained back-to-back. Gating new
+/// seeds on the user's most recent `harvested_at` caps discounts at ~once/day.
+pub const POST_HARVEST_COOLDOWN_MS: i64 = 24 * 60 * 60 * 1000;
+
 /// Outcome of validating a raw persisted `water_count` at the point of a
 /// water action. The HTTP path (`api/garden.rs::water_plant`) advances a
 /// plant with raw SQL instead of going through [`Plant::water`], so it needs

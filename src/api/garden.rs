@@ -870,6 +870,32 @@ async fn force_seed(
         ));
     }
 
+    // 1b. Guard: harvested within the cooldown? Bug fix (discounts too frequent)
+    // — cap new garden discounts at ~once per day. Mirrors the same gate added to
+    // the order-completion seed path (db::orders) so neither route can re-seed
+    // back-to-back after a harvest.
+    let now_ms = chrono::Utc::now().timestamp_millis();
+    let cooldown_floor = now_ms.saturating_sub(garden::POST_HARVEST_COOLDOWN_MS);
+    let recent_harvest = state
+        .db
+        .orm
+        .query_one(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            "SELECT 1 FROM garden_plants \
+             WHERE user_id = $1 AND harvested_at IS NOT NULL AND harvested_at > $2 LIMIT 1",
+            [user_id.clone().into(), cooldown_floor.into()],
+        ))
+        .await
+        .map_err(|e| {
+            tracing::error!("force_seed: harvest cooldown check failed: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+    if recent_harvest.is_some() {
+        return Ok(Json(
+            json!({ "success": false, "error": "harvest_cooldown" }),
+        ));
+    }
+
     // 2. Find the earliest confirmed/completed order with a catalog item.
     // Cycle #169G: expanded from 'completed' to ('completed','confirmed','ready')
     // because admins sometimes forget to press "Complete" after confirming.

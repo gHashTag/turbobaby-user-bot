@@ -234,6 +234,12 @@ pub async fn complete_order_and_update_loyalty(
     if let Some((strain_id, strain_name)) = strain_seed {
         let plant_id = uuid::Uuid::new_v4().to_string();
         let planted_at = chrono::Utc::now().timestamp_millis();
+        // Bug fix (discounts too frequent): also refuse to seed within
+        // POST_HARVEST_COOLDOWN_MS of the user's most recent harvest, so a new
+        // garden discount can't be earned more than ~once per day. The existing
+        // "no active plant" guard alone allowed back-to-back reward cycles.
+        let harvest_cooldown_floor =
+            planted_at.saturating_sub(crate::trios::garden::POST_HARVEST_COOLDOWN_MS);
         tx.execute(Statement::from_sql_and_values(
             DbBackend::Postgres,
             "INSERT INTO garden_plants \
@@ -241,6 +247,10 @@ pub async fn complete_order_and_update_loyalty(
              SELECT $1, $2, $3, $4, 'seed', $5, false, 0 \
              WHERE NOT EXISTS ( \
                  SELECT 1 FROM garden_plants WHERE user_id = $2 AND is_completed = false \
+             ) \
+             AND NOT EXISTS ( \
+                 SELECT 1 FROM garden_plants \
+                 WHERE user_id = $2 AND harvested_at IS NOT NULL AND harvested_at > $6 \
              )",
             [
                 plant_id.into(),
@@ -248,6 +258,7 @@ pub async fn complete_order_and_update_loyalty(
                 strain_id.into(),
                 strain_name.into(),
                 planted_at.into(),
+                harvest_cooldown_floor.into(),
             ],
         ))
         .await?;
