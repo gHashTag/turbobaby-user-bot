@@ -141,6 +141,24 @@ pub(crate) fn sanitize_user_text(text: &str) -> String {
     text.to_string()
 }
 
+/// Max chars for the user prompt / the persona before the external AI call.
+/// Generous for the prompt (the bot DM already caps to 1500); short for the
+/// persona, which is just a display name.
+const MAX_AI_PROMPT_CHARS: usize = 2000;
+const MAX_AI_PERSONA_CHARS: usize = 100;
+
+/// Build the system prompt, capping the (user-controlled) persona at the
+/// paid-API boundary. Pure + testable without an API key.
+fn build_system_prompt(persona: &str, lang_instruction: &str) -> String {
+    let safe_persona =
+        crate::util::truncate_string(&sanitize_user_text(persona), MAX_AI_PERSONA_CHARS);
+    format!(
+        "You are Woody, a friendly cannabis shop assistant on Koh Phangan, Thailand. \
+         Persona: {}. {}. Keep responses under 200 words.",
+        safe_persona, lang_instruction
+    )
+}
+
 pub(crate) struct AiClient {
     client: Client,
     grok_api_key: String,
@@ -173,12 +191,13 @@ impl AiClient {
                 "I can't process that request. Let's talk about our strains! 🌿".to_string(),
             );
         }
-        let safe_persona = sanitize_user_text(persona);
-        let system = format!(
-            "You are Woody, a friendly cannabis shop assistant on Koh Phangan, Thailand. \
-             Persona: {}. {}. Keep responses under 200 words.",
-            safe_persona, lang_instruction
-        );
+        // Defense-in-depth: cap length at the paid-API boundary, independent of
+        // callers. The bot DM caps the prompt to 1500 (handlers.rs), but other
+        // call sites and the user-controlled `persona` (a Telegram first_name)
+        // are not capped — an oversized prompt/persona inflates the request sent
+        // to Grok/GLM (token cost / abuse).
+        let clean_prompt = crate::util::truncate_string(&clean_prompt, MAX_AI_PROMPT_CHARS);
+        let system = build_system_prompt(persona, lang_instruction);
 
         // Try Grok first
         if !self.grok_api_key.is_empty() {
@@ -270,7 +289,31 @@ impl AiClient {
 
 #[cfg(test)]
 mod tests {
-    use super::sanitize_user_text;
+    use super::{build_system_prompt, sanitize_user_text, MAX_AI_PERSONA_CHARS};
+
+    #[test]
+    fn test_build_system_prompt_caps_oversized_persona() {
+        let huge = "n".repeat(5000);
+        let sys = build_system_prompt(&huge, "Reply in English");
+        // The whole system prompt must stay bounded — the persona can't blow up
+        // the request sent to the paid AI API.
+        assert!(
+            sys.len() < 400,
+            "system prompt must stay small even with a huge persona, got {} chars",
+            sys.len()
+        );
+        // It still contains a (truncated) run of the persona + the lang line.
+        assert!(sys.contains(&"n".repeat(MAX_AI_PERSONA_CHARS)));
+        assert!(!sys.contains(&"n".repeat(MAX_AI_PERSONA_CHARS + 1)));
+        assert!(sys.contains("Reply in English"));
+    }
+
+    #[test]
+    fn test_build_system_prompt_normal_persona_unchanged() {
+        let sys = build_system_prompt("Joker", "Reply in Russian");
+        assert!(sys.contains("Persona: Joker."));
+        assert!(sys.contains("Reply in Russian"));
+    }
 
     #[test]
     fn test_sanitize_clean_text() {
