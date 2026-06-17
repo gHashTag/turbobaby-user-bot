@@ -21,9 +21,17 @@ ALTER TABLE strains ADD COLUMN IF NOT EXISTS description     TEXT;
 ALTER TABLE strains ADD COLUMN IF NOT EXISTS price_per_gram  DOUBLE PRECISION NOT NULL DEFAULT 0;
 ALTER TABLE strains ADD COLUMN IF NOT EXISTS available_grams DOUBLE PRECISION;
 
--- Upsert all 12 strains with full detail data
+-- Bug fix (deleted/hidden strains reappear after redeploy): seed ONLY into an
+-- EMPTY catalog. The migration runner re-executes ALL SQL on every boot
+-- (src/db/mod.rs::run_migrations has no migration-tracking table), so the
+-- previous `INSERT ... VALUES ... ON CONFLICT (name) DO UPDATE SET ...
+-- is_available = EXCLUDED.is_available` ran each restart and therefore
+--   (a) re-created admin-DELETED strains (deleted name => no conflict => INSERT), and
+--   (b) forced is_available back to TRUE on admin-HIDDEN strains (conflict => UPDATE).
+-- Guarding on `WHERE NOT EXISTS (any strain)` + `DO NOTHING` turns this into a
+-- one-time fresh-install seed that never clobbers admin edits on re-run.
 INSERT INTO strains (name, category, thc_percent, cbd_percent, effect, flavor_profile, description, price_per_gram, available_grams, image_url, is_available)
-VALUES
+SELECT * FROM (VALUES
   (
     'Super Runtz',
     'hybrid',
@@ -180,14 +188,7 @@ VALUES
     '/assets/Mac-1.jpeg',
     true
   )
-ON CONFLICT (name) DO UPDATE SET
-    category        = EXCLUDED.category,
-    thc_percent     = EXCLUDED.thc_percent,
-    cbd_percent     = EXCLUDED.cbd_percent,
-    effect          = EXCLUDED.effect,
-    flavor_profile  = EXCLUDED.flavor_profile,
-    description     = EXCLUDED.description,
-    price_per_gram  = EXCLUDED.price_per_gram,
-    available_grams = EXCLUDED.available_grams,
-    image_url       = EXCLUDED.image_url,
-    is_available    = EXCLUDED.is_available;
+) AS seed(name, category, thc_percent, cbd_percent, effect, flavor_profile,
+          description, price_per_gram, available_grams, image_url, is_available)
+WHERE NOT EXISTS (SELECT 1 FROM strains)
+ON CONFLICT (name) DO NOTHING;
