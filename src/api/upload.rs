@@ -141,10 +141,9 @@ async fn upload_file(
     loop {
         let next = multipart.next_field().await.map_err(|e| {
             tracing::error!("upload: next_field error: {:?}", e);
-            err(
-                StatusCode::BAD_REQUEST,
-                format!("multipart parse error: {}", e),
-            )
+            // Generic client message; detail stays in the server log above
+            // (don't leak parser internals in the response body).
+            err(StatusCode::BAD_REQUEST, "invalid multipart request")
         })?;
         let mut field = match next {
             Some(f) => f,
@@ -200,10 +199,7 @@ async fn upload_file(
                         buf.len(),
                         e
                     );
-                    return Err(err(
-                        StatusCode::BAD_REQUEST,
-                        format!("chunk read error: {}", e),
-                    ));
+                    return Err(err(StatusCode::BAD_REQUEST, "upload read error"));
                 }
             }
         }
@@ -281,10 +277,7 @@ async fn upload_file(
             }
             Ok(Err(e)) => {
                 tracing::error!("upload s3 error: {:?}", e);
-                return Err(err(
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    format!("s3 upload failed: {}", e),
-                ));
+                return Err(err(StatusCode::INTERNAL_SERVER_ERROR, "s3 upload failed"));
             }
             Err(_elapsed) => {
                 tracing::error!(
@@ -318,10 +311,7 @@ async fn upload_file(
         }
         Err(e) => {
             tracing::error!("upload file write error: {:?}", e);
-            Err(err(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("local write failed: {}", e),
-            ))
+            Err(err(StatusCode::INTERNAL_SERVER_ERROR, "file write failed"))
         }
     }
 }
