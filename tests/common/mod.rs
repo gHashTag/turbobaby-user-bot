@@ -82,6 +82,38 @@ pub async fn make_app_with_db() -> Option<(Router, Arc<Database>)> {
     Some((woody_weed_bot::api::router(state), db))
 }
 
+/// Forge a VALID Telegram `initData` query string for `user_id`, signed with
+/// `bot_token`, so owner-gated endpoints (`check_owner`) can be exercised in
+/// integration tests. Mirrors `validate_init_data`'s algorithm exactly:
+/// `secret = HMAC-SHA256("WebAppData", bot_token)`, then
+/// `hash = HMAC-SHA256(secret, <sorted "k=v" lines over DECODED values>)`.
+/// Only `auth_date` (freshness) and `user` (identity) are required.
+pub fn make_init_data(user_id: i64, bot_token: &str) -> String {
+    use hmac::{Hmac, Mac};
+    use sha2::Sha256;
+    type HmacSha256 = Hmac<Sha256>;
+
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("system clock before epoch")
+        .as_secs();
+    let user_json = format!("{{\"id\":{user_id},\"first_name\":\"Test\"}}");
+    // data_check_string: keys sorted ascending (auth_date < user), DECODED values.
+    let data_check_string = format!("auth_date={now}\nuser={user_json}");
+
+    let mut secret = HmacSha256::new_from_slice(b"WebAppData").unwrap();
+    secret.update(bot_token.as_bytes());
+    let secret_key = secret.finalize().into_bytes();
+
+    let mut mac = HmacSha256::new_from_slice(&secret_key).unwrap();
+    mac.update(data_check_string.as_bytes());
+    let hash = hex::encode(mac.finalize().into_bytes());
+
+    // URL-encode the user value so JSON punctuation can't break `&`/`=` parsing.
+    let user_enc = urlencoding::encode(&user_json);
+    format!("user={user_enc}&auth_date={now}&hash={hash}")
+}
+
 /// Pure guard: is this DSN safe for a destructive integration-test run?
 /// Allows local hosts (localhost/127.0.0.1/::1) or any database whose name
 /// contains "test". Blocks remote production-looking DSNs. Pure so it can be
