@@ -41,13 +41,17 @@ async fn malformed_idempotency_key_rejected_400() {
         "tx_type": "neg_test",
     });
 
-    // Space — `is_valid_idempotency_key` rejects anything outside
-    // `[A-Za-z0-9_-]`. Slash, quote, control chars same.
+    // `is_valid_idempotency_key` rejects anything outside `[A-Za-z0-9_-]`.
+    // NOTE: control chars (e.g. '\n') are NOT exercised here — they are invalid
+    // HTTP *header values*, so `Request::builder().header(...)` rejects them
+    // before the request reaches the handler (that's the http layer's job, a
+    // different test boundary). These cases are all valid header values that
+    // DO reach the handler and must come back 400.
     for bad_key in [
         "has space",
         "with/slash",
         "with\"quote",
-        "with\nnewline",
+        "with.dot",
         &"a".repeat(101),
     ] {
         let resp = post_add_bonus(app.clone(), target_tid, &admin_token, bad_key, &body).await;
