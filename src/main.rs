@@ -3284,5 +3284,63 @@ mod html_lang_tests {
     }
 }
 
+/// SQL-injection guard. `Statement::from_string(..)` takes NO bind parameters,
+/// so its SQL text MUST be fully static — any `format!`-interpolated value in a
+/// `from_string` call is a parameter that should have gone through
+/// `from_sql_and_values($1, …)` instead, i.e. a potential SQL injection.
+/// Audit (Wave #61): all 33 `from_string` calls are static today; this locks
+/// that in so a future edit can't slip a user value into raw SQL.
+#[cfg(test)]
+mod sql_injection_guard_tests {
+    use std::path::Path;
+
+    fn rs_files(dir: &Path, out: &mut Vec<std::path::PathBuf>) {
+        if let Ok(entries) = std::fs::read_dir(dir) {
+            for e in entries.flatten() {
+                let p = e.path();
+                if p.is_dir() {
+                    rs_files(&p, out);
+                } else if p.extension().and_then(|x| x.to_str()) == Some("rs") {
+                    out.push(p);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn from_string_sql_is_always_static_no_format_interpolation() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let mut files = Vec::new();
+        rs_files(&root, &mut files);
+        let mut offenders = Vec::new();
+        for f in files {
+            if f.to_string_lossy().contains("/ui/") {
+                continue; // wasm UI has no DB access
+            }
+            let src = std::fs::read_to_string(&f).expect("read rs file");
+            // Production code only — test modules may legitimately use format!.
+            let prod = &src[..src.find("#[cfg(test)]").unwrap_or(src.len())];
+            let mut from = 0;
+            while let Some(rel) = prod[from..].find("from_string(") {
+                let s = from + rel;
+                // Inspect the call's argument list, up to the statement end.
+                let end = prod[s..].find(';').map(|e| s + e).unwrap_or(prod.len());
+                if prod[s..end].contains("format!") {
+                    let line = prod[..s].matches('\n').count() + 1;
+                    offenders.push(format!("{}:{}", f.display(), line));
+                }
+                from = s + "from_string(".len();
+            }
+        }
+        assert!(
+            offenders.is_empty(),
+            "Statement::from_string() must use STATIC SQL — a format!-interpolated \
+             value is an unparameterized injection vector; use \
+             from_sql_and_values($1, …) instead. Offenders:\n  {}",
+            offenders.join("\n  ")
+        );
+    }
+}
+
 // WASM entry point is now in src/lib.rs via #[wasm_bindgen(start)]
 // This file is only used for the native backend (Axum server)
