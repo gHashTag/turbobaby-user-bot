@@ -190,8 +190,7 @@ pub fn OrdersScreen() -> Element {
                                         let (status_color, status_label) = status_style(&o.status);
                                         let date_str = o.created_at.split('T').next().unwrap_or(&o.created_at).to_string();
                                         let shop = o.shop_id.as_deref().unwrap_or("Woody Shop");
-                                        let total_val = if o.total.is_finite() { o.total.max(0.0) } else { 0.0 };
-                                        let total_str = format!("฿{}", total_val as i32);
+                                        let total_str = crate::trios::pricing::format_baht(o.total);
                                         let is_cancelled = o.status == "cancelled";
                                         let opacity = if is_cancelled { "0.7" } else { "1" };
                                         let border_color = if is_cancelled { "#2a2a4a" } else { status_color };

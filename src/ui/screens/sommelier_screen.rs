@@ -274,7 +274,7 @@ pub fn SommelierScreen() -> Element {
                                         let price = set.total_price.filter(|v| v.is_finite()).unwrap_or(0.0).max(0.0);
                                         let discount = set.discount_percent.filter(|v| v.is_finite()).unwrap_or(0.0).max(0.0);
                                         let final_price = if discount > 0.0 { (price * (1.0 - discount / 100.0)).max(0.0) } else { price };
-                                        let price_str = format!("฿{}", final_price as i32);
+                                        let price_str = crate::trios::pricing::format_baht(final_price);
                                         let set_id = set.id.clone().unwrap_or_default();
                                         let set_name = name.clone();
 
@@ -341,7 +341,7 @@ pub fn SommelierScreen() -> Element {
                                         let match_color = if match_pct >= 90 { "#39ff14" } else if match_pct >= 80 { "#00e5ff" } else { "#ffe600" };
                                         let reason = s.match_reason.clone().unwrap_or_default();
                                         let price = s.price_per_gram.filter(|v| v.is_finite()).unwrap_or(0.0).max(0.0);
-                                        let price_str = format!("฿{}", price as i32);
+                                        let price_str = crate::trios::pricing::format_baht(price);
                                         let s_name = s.name.clone();
                                         let s_id = s.id.clone().unwrap_or_default();
                                         let s_price = price;

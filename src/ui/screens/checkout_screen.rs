@@ -203,16 +203,18 @@ pub fn CheckoutScreen() -> Element {
                                 span { "{item.name}" }
                                 span { style: "color: #8b8b9e;", "x{item.quantity}" }
                                 {
-                                    let line_price = if item.price.is_finite() { item.price.max(0.0) * item.quantity as f64 } else { 0.0 };
-                                    rsx! { span { "฿{line_price as i32}" } }
+                                    let line_str = crate::trios::pricing::format_baht(
+                                        item.price * item.quantity as f64,
+                                    );
+                                    rsx! { span { "{line_str}" } }
                                 }
                             }
                         }
                         div { style: "display: flex; justify-content: space-between; font-size: 15px; font-weight: 800; padding-top: 8px; border-top: 1px solid #2a2a4a; margin-top: 8px;",
                             span { "{total_label}" }
                             {
-                                let safe_total = if cart_total.is_finite() { cart_total.max(0.0) } else { 0.0 };
-                                rsx! { span { style: "font-size: 20px; font-weight: 800; color: #ffe600; text-shadow: 2px 2px 0 #000;", "฿{safe_total as i32}" } }
+                                let total_str = crate::trios::pricing::format_baht(cart_total);
+                                rsx! { span { style: "font-size: 20px; font-weight: 800; color: #ffe600; text-shadow: 2px 2px 0 #000;", "{total_str}" } }
                             }
                         }
                     }

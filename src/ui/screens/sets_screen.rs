@@ -252,8 +252,8 @@ fn render_set_card(set: ApiSet, mut cart: Signal<Cart>) -> Element {
     } else {
         total_price
     };
-    let original_price_str = format!("฿{}", total_price as i32);
-    let price_str = format!("฿{}", discounted_price as i32);
+    let original_price_str = crate::trios::pricing::format_baht(total_price);
+    let price_str = crate::trios::pricing::format_baht(discounted_price);
     let discount_badge = if has_discount {
         format!("{}% OFF", discount as i32)
     } else {

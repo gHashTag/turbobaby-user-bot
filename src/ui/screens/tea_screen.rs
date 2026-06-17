@@ -150,7 +150,7 @@ pub fn TeaScreen() -> Element {
                                     let show_low_stock = stock > 0 && stock <= 5;
                                     let show_out_of_stock = stock == 0 || !is_available;
                                     let t_price = if t.price.is_finite() { t.price.max(0.0) } else { 0.0 };
-                                    let price_str = format!("฿{}", t_price as i32);
+                                    let price_str = crate::trios::pricing::format_baht(t_price);
                                     let t_name = crate::ui::lang::localized(&t.name, t.name_en.as_deref());
                                     let sub_disp = crate::ui::lang::localized(sub, t.subcategory_en.as_deref());
                                     let t_id = t.id.clone();
@@ -279,7 +279,7 @@ pub fn TeaScreen() -> Element {
                     tea.subcategory_en.as_deref(),
                 ).to_uppercase();
                 let t_price = if tea.price.is_finite() { tea.price.max(0.0) } else { 0.0 };
-                let price_str = format!("฿{}", t_price as i32);
+                let price_str = crate::trios::pricing::format_baht(t_price);
                 let add_id = tea.id.clone();
                 let add_name = crate::ui::lang::localized(&tea.name, tea.name_en.as_deref());
                 let avail = tea.is_available.unwrap_or(true) && tea.stock.unwrap_or(999) > 0;

@@ -166,6 +166,9 @@ pub fn ProfileScreen() -> Element {
         .unwrap_or(150.0)
         .max(0.0);
 
+    // Single source of truth for the ฿ stat (was an inline `as i32` narrowing).
+    let total_spent_str = crate::trios::pricing::format_baht(total_spent);
+
     // Cashback is calculated from tier
     let cashback_pct = current_tier.cashback();
 
@@ -366,7 +369,7 @@ pub fn ProfileScreen() -> Element {
             // Stats row
             div { style: "display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 0 16px 16px;",
                 div { style: "text-align: center; padding: 10px 4px; background: #16213e; border: 4px solid #2a2a4a; border-radius: 0; box-shadow: 4px 4px 0 #000;",
-                    div { style: "font-size: 20px; font-weight: 800; color: {current_tier.color()}; text-shadow: 2px 2px 0 #000; margin-bottom: 4px;", "฿{total_spent as i32}" }
+                    div { style: "font-size: 20px; font-weight: 800; color: {current_tier.color()}; text-shadow: 2px 2px 0 #000; margin-bottom: 4px;", "{total_spent_str}" }
                     div { style: "font-size: 13px; color: #8b8b9e;", "SPENT" }
                 }
                 div { style: "text-align: center; padding: 10px 4px; background: #16213e; border: 4px solid #2a2a4a; border-radius: 0; box-shadow: 4px 4px 0 #000;",
@@ -395,8 +398,13 @@ pub fn ProfileScreen() -> Element {
                             div { style: "height: 100%; width: {progress_pct}%; border-radius: 0; background: linear-gradient(90deg, {current_tier.color()}, {next.color()}); transition: width 0.3s;" }
                         }
                         if let Some(rem) = remaining {
-                            div { style: "font-size: 13px; color: #8b8b9e; margin-top: 6px; text-align: center;",
-                                "฿{rem as i32} more to unlock {next.label()}"
+                            {
+                                let rem_str = crate::trios::pricing::format_baht(rem);
+                                rsx! {
+                                    div { style: "font-size: 13px; color: #8b8b9e; margin-top: 6px; text-align: center;",
+                                        "{rem_str} more to unlock {next.label()}"
+                                    }
+                                }
                             }
                         }
                     }
@@ -524,7 +532,10 @@ pub fn ProfileScreen() -> Element {
                                     }
                                     div { style: "font-size: 15px; color: {tier.color()}; margin-bottom: 4px;", "{tier.label()}" }
                                     div { style: "font-size: 13px; color: #8b8b9e; margin-bottom: 2px;", "{tier.cashback()}% cashback" }
-                                    div { style: "font-size: 15px; color: #8b8b9e;", "฿{tier.threshold() as i32}+" }
+                                    {
+                                        let threshold_str = crate::trios::pricing::format_baht(tier.threshold() as f64);
+                                        rsx! { div { style: "font-size: 15px; color: #8b8b9e;", "{threshold_str}+" } }
+                                    }
                                 }
                             }
                         }
