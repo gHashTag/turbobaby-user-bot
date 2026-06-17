@@ -322,6 +322,45 @@ mod tests {
         content_matches_extension, validate_extension, validate_filename, ALLOWED_EXTENSIONS,
         MAX_UPLOAD_SIZE,
     };
+
+    /// Regression pin for W-91 (Wave #56): `err(...)` is the only client-facing
+    /// String-message error sink in the whole API (other handlers return a bare
+    /// StatusCode). Its messages must NOT interpolate the raw error binding —
+    /// raw AWS-SDK / IO / fs errors belong in the server-side `tracing::error!`,
+    /// not the HTTP response body (OWASP improper error handling). This scans
+    /// the production part of this file for a `format!` that interpolates the
+    /// error var `e` outside a logging macro.
+    #[test]
+    fn upload_responses_never_interpolate_raw_errors() {
+        let src = std::fs::read_to_string(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/api/upload.rs"),
+        )
+        .expect("read upload.rs");
+        // Only the production code (the test module legitimately discusses `e`).
+        let prod = &src[..src.find("#[cfg(test)]").unwrap_or(src.len())];
+        let offenders: Vec<(usize, &str)> = prod
+            .lines()
+            .enumerate()
+            .filter(|(_, l)| {
+                let t = l.trim_start();
+                // Skip server-side logs — those SHOULD carry the detail.
+                !t.starts_with("tracing::")
+                    && l.contains("format!")
+                    && (l.contains(", e)") || l.contains("{e}") || l.contains("{:?}\", e"))
+            })
+            .map(|(i, l)| (i + 1, l.trim()))
+            .collect();
+        assert!(
+            offenders.is_empty(),
+            "upload err()/response messages must not interpolate the raw error \
+             (leaks internals; log it via tracing::error! instead). Offenders:\n  {}",
+            offenders
+                .iter()
+                .map(|(n, l)| format!("L{n}: {l}"))
+                .collect::<Vec<_>>()
+                .join("\n  ")
+        );
+    }
     use axum::http::StatusCode;
 
     #[test]
