@@ -144,8 +144,19 @@ async fn get_strains(
     let response_data = json!({ "strains": strains });
     let data_json = response_data.to_string();
 
+    // The admin (`include_hidden`) variant is a DIFFERENT, auth-gated response
+    // (hidden rows + real marketing flags). Cache it under a separate key so it
+    // doesn't flap the public "strains" ETag, and mark it `private, no-store` so
+    // a shared cache/CDN can never serve the admin payload to an unauthenticated
+    // request for the same URL. The public variant stays shared-cacheable.
+    let (cache_key, cache_control): (&str, &'static str) = if include_hidden {
+        ("strains_admin", "private, no-store")
+    } else {
+        ("strains", "public, max-age=60")
+    };
+
     // Compute ETag and check conditional request
-    let (changed, etag) = state.cache.has_changed("strains", &data_json).await;
+    let (changed, etag) = state.cache.has_changed(cache_key, &data_json).await;
 
     if !changed {
         if let Some(if_none_match) = headers.get("if-none-match") {
@@ -163,10 +174,9 @@ async fn get_strains(
     response
         .headers_mut()
         .insert("etag", make_etag_header(&etag));
-    response.headers_mut().insert(
-        "cache-control",
-        HeaderValue::from_static("public, max-age=60"),
-    );
+    response
+        .headers_mut()
+        .insert("cache-control", HeaderValue::from_static(cache_control));
     response
         .headers_mut()
         .insert("content-type", HeaderValue::from_static("application/json"));

@@ -68,9 +68,12 @@ impl Default for ETagCache {
     }
 }
 
-/// Update ETag cache after data modification
+/// Update ETag cache after data modification. Clears both the public and the
+/// admin (`include_hidden`) ETag keys so neither variant serves a stale 304.
 pub(crate) async fn invalidate_strains(cache: &ETagCache) {
-    cache.hashes.write().await.remove("strains");
+    let mut h = cache.hashes.write().await;
+    h.remove("strains");
+    h.remove("strains_admin");
 }
 
 // Используется в будущих cache invalidation путях
