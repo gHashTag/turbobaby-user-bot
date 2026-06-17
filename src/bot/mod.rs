@@ -164,3 +164,37 @@ pub(crate) fn create_handler() -> UpdateHandler<teloxide::RequestError> {
         )
         .branch(Update::filter_callback_query().endpoint(callbacks::handle_callback))
 }
+
+/// Architectural fitness function (OWASP LLM10 — Unbounded Consumption /
+/// denial-of-wallet): every bot source file that calls the paid AI
+/// (`ask_grok`) must also gate it behind the per-user rate limiter
+/// (`ai_rate_limit_allow`). This locks in the cycle-#129 coverage so a future
+/// AI command/callback can't be added without the rate limit and silently open
+/// a cost-abuse hole.
+#[cfg(test)]
+mod ai_rate_limit_coverage_tests {
+    use std::path::Path;
+
+    #[test]
+    fn every_ask_grok_caller_in_bot_is_rate_limited() {
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/bot");
+        let mut offenders = Vec::new();
+        for entry in std::fs::read_dir(&dir).expect("read src/bot") {
+            let path = entry.expect("dir entry").path();
+            if path.extension().and_then(|e| e.to_str()) != Some("rs") {
+                continue;
+            }
+            let src = std::fs::read_to_string(&path).expect("read bot file");
+            // `.ask_grok(` = a call site (the fn is DEFINED in src/ai.rs, not here).
+            if src.contains(".ask_grok(") && !src.contains("ai_rate_limit_allow") {
+                offenders.push(path.display().to_string());
+            }
+        }
+        assert!(
+            offenders.is_empty(),
+            "every bot file calling .ask_grok() must gate it behind \
+             ai_rate_limit_allow (OWASP LLM10 denial-of-wallet). Offenders:\n  {}",
+            offenders.join("\n  ")
+        );
+    }
+}
