@@ -572,8 +572,10 @@ fn AccessDeniedScreen(
                 "ID: {telegram_id}" }
             div { style: "margin-top:20px;max-width:300px;margin-left:auto;margin-right:auto;",
                 input { style: input_style(), r#type: "text", placeholder: "Ваш Telegram ID (число)",
+                    "aria-label": "Telegram ID",
                     value: "{admin_id}", oninput: move |e| admin_id.set(e.value()) }
                 input { style: input_style(), r#type: "password", placeholder: "Пароль админа",
+                    "aria-label": "Пароль админа",
                     value: "{password}", oninput: move |e| password.set(e.value()) }
                 if !error.read().is_empty() {
                     div { style: "color:#ff4757;font-size:12px;margin-top:4px;", "{error}" }

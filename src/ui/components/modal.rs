@@ -43,6 +43,8 @@ pub fn Modal(props: ModalProps) -> Element {
     }
 
     let size_class = format!("modal-{}", props.size.as_str());
+    // WCAG 4.1.2: announce the overlay as a modal dialog with an accessible name.
+    let aria_label = props.title.clone().unwrap_or_else(|| "Диалог".to_string());
 
     rsx! {
         div {
@@ -53,6 +55,9 @@ pub fn Modal(props: ModalProps) -> Element {
             },
             div {
                 class: "modal {size_class}",
+                role: "dialog",
+                "aria-modal": "true",
+                "aria-label": "{aria_label}",
                 onclick: move |e| { e.stop_propagation(); },
                 if props.show_close || props.title.is_some() {
                     div {

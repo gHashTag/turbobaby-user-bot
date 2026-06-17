@@ -33,6 +33,9 @@ pub fn VideoModal(props: VideoModalProps) -> Element {
             onclick: move |_| on_close.call(()),
             div {
                 style: "background:#1a1a2e;padding:16px;border-radius:8px;max-width:90vw;max-height:80vh;display:flex;flex-direction:column;align-items:center;gap:8px;",
+                role: "dialog",
+                "aria-modal": "true",
+                "aria-label": "Видео",
                 onclick: move |e: Event<MouseData>| e.stop_propagation(),
                 video {
                     style: "max-width:100%;max-height:60vh;border-radius:6px;",

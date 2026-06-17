@@ -3264,5 +3264,25 @@ mod sensitive_read_fail_loud_tests {
     }
 }
 
+/// WCAG 3.1.1 (Language of Page): the served `index.html` must declare a
+/// document language so screen readers / speech synthesis pronounce content
+/// correctly. Source-scanning guard — cheap to lose in an index.html rewrite.
+#[cfg(test)]
+mod html_lang_tests {
+    use std::path::Path;
+
+    #[test]
+    fn index_html_declares_a_document_language() {
+        let html =
+            std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("index.html"))
+                .expect("read index.html");
+        let lower = html.to_ascii_lowercase();
+        assert!(
+            lower.contains("<html lang=\"") || lower.contains("<html lang='"),
+            "index.html <html> must declare a `lang` attribute (WCAG 3.1.1) — got the bare <html> tag"
+        );
+    }
+}
+
 // WASM entry point is now in src/lib.rs via #[wasm_bindgen(start)]
 // This file is only used for the native backend (Axum server)

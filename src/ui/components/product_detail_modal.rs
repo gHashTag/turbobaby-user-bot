@@ -90,6 +90,9 @@ pub fn ProductDetailModal(props: ProductDetailModalProps) -> Element {
             onclick: move |_| on_close.call(()),
             div {
                 style: "background:#16213e;border:4px solid #2a2a4a;box-shadow:4px 4px 0 #000;max-width:480px;width:100%;max-height:85vh;overflow:auto;position:relative;",
+                role: "dialog",
+                "aria-modal": "true",
+                "aria-label": "{name}",
                 onclick: move |e: Event<MouseData>| e.stop_propagation(),
 
                 // Close (✕) — top-right, always reachable while scrolling.
