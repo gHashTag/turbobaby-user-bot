@@ -376,7 +376,14 @@ pub fn calculate_progress(plant: &Plant, now: Timestamp) -> PlantProgress {
     let time_to_harvest = if is_ready_to_harvest {
         0
     } else {
-        ((TOTAL_WATER_STAGES - 1 - water_count) as i64).saturating_mul(WATER_COOLDOWN_MS)
+        // `saturating_sub`: the `is_ready_to_harvest` guard above already keeps
+        // us out of this branch when `water_count >= TOTAL_WATER_STAGES - 1`,
+        // but compute the remaining stages defensively so an over-grown /
+        // corrupt count (validate_water_count allows up to 100) can never
+        // underflow this usize subtraction. Matches the saturating idiom used
+        // for the cooldown math above.
+        ((TOTAL_WATER_STAGES - 1).saturating_sub(water_count) as i64)
+            .saturating_mul(WATER_COOLDOWN_MS)
     };
 
     PlantProgress {
@@ -627,6 +634,26 @@ mod tests {
         assert_eq!(progress.stage, GrowthStage::Seed);
         assert_eq!(progress.total_progress, 0);
         assert!(progress.can_water);
+    }
+
+    #[test]
+    fn test_calculate_progress_overgrown_water_count_no_underflow() {
+        // Regression: an over-grown / corrupt water_count (> TOTAL_WATER_STAGES-1;
+        // validate_water_count allows up to 100) must NOT underflow the usize
+        // subtraction in time_to_harvest. The is_ready_to_harvest guard already
+        // keeps us out of that branch, but saturating_sub makes it safe even if
+        // the guard is ever refactored.
+        let mut plant = Plant::new(
+            "user123".to_string(),
+            "strain456".to_string(),
+            "OG Kush".to_string(),
+        );
+        plant.water_count = 50; // way past the 13-stage cap
+        let now = chrono::Utc::now().timestamp_millis();
+        let progress = calculate_progress(&plant, now); // must not panic
+        assert!(progress.is_ready_to_harvest);
+        assert_eq!(progress.time_to_harvest, 0);
+        assert_eq!(progress.stage_index, TOTAL_WATER_STAGES - 1); // clamped to Final
     }
 
     #[test]
