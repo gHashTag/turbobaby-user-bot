@@ -77,6 +77,76 @@ async fn add_bonus_idempotent_replay_returns_same_tx_id() {
     );
 }
 
+/// The replay test above checks the *response* contract; this checks the
+/// *effect* the doc-comment claims but never asserted: two POSTs with the same
+/// idempotency key credit the balance EXACTLY ONCE and write EXACTLY ONE
+/// `bonus_transactions` ledger row (verify the ledger count, not just the
+/// balance — a guard that fires on balance but not the audit log would slip
+/// past a balance-only check).
+#[tokio::test]
+#[ignore = "needs DATABASE_URL env var; run with --ignored"]
+async fn add_bonus_same_key_credits_once_and_writes_one_ledger_row() {
+    let Some((app, db)) = common::make_app_with_db().await else {
+        eprintln!("DATABASE_URL not set — skipping");
+        return;
+    };
+    use sea_orm::{ConnectionTrait, DbBackend, Statement};
+
+    let admin_token = generate_admin_token("test_password", "dummy_test_token");
+    let idem_key = uuid::Uuid::new_v4().to_string();
+    let tid: i64 = 999_800_000 + (rand_suffix() as i64);
+    let body = json!({ "amount": 100.0_f64, "tx_type": "integration_ledger_test" });
+
+    // Fire the SAME (key, body) twice.
+    let r1 = post_add_bonus(app.clone(), tid, &admin_token, &idem_key, &body).await;
+    assert_eq!(r1.status, StatusCode::OK);
+    let r2 = post_add_bonus(app.clone(), tid, &admin_token, &idem_key, &body).await;
+    assert_eq!(r2.status, StatusCode::OK);
+    assert_eq!(
+        r2.body["idempotent_replay"], true,
+        "second call is a replay"
+    );
+
+    // Effect 1: balance credited exactly once (100, not 200) — via owner GET.
+    let init = common::make_init_data(tid, "dummy_test_token");
+    let prof = app
+        .oneshot(
+            Request::builder()
+                .uri(format!("/api/loyalty/{tid}"))
+                .header("X-Telegram-Init-Data", init)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .expect("router.oneshot profile");
+    assert_eq!(prof.status(), StatusCode::OK);
+    let pbody: serde_json::Value =
+        serde_json::from_slice(&prof.into_body().collect().await.unwrap().to_bytes())
+            .expect("json");
+    assert_eq!(
+        pbody["profile"]["bonus_balance"].as_f64(),
+        Some(100.0),
+        "balance must be credited exactly once"
+    );
+
+    // Effect 2: exactly one ledger row for this user.
+    let row = db
+        .orm
+        .query_one(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            "SELECT COUNT(*)::bigint AS n FROM bonus_transactions WHERE telegram_id = $1",
+            [tid.into()],
+        ))
+        .await
+        .expect("count query")
+        .expect("count row");
+    let n: i64 = row.try_get("", "n").expect("n");
+    assert_eq!(
+        n, 1,
+        "same idempotency key must write exactly one bonus_transactions row"
+    );
+}
+
 struct AddBonusResponse {
     status: StatusCode,
     body: serde_json::Value,
