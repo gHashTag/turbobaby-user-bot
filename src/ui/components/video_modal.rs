@@ -36,6 +36,19 @@ pub fn VideoModal(props: VideoModalProps) -> Element {
                 role: "dialog",
                 "aria-modal": "true",
                 "aria-label": "Видео",
+                // WCAG 2.4.3: move focus into the dialog on open.
+                tabindex: "-1",
+                onmounted: move |e: Event<MountedData>| {
+                    spawn(async move {
+                        let _ = e.set_focus(true).await;
+                    });
+                },
+                // WCAG 2.1.2: Escape closes the dialog (keyboard parity with ✕).
+                onkeydown: move |e: Event<KeyboardData>| {
+                    if e.key() == Key::Escape {
+                        on_close.call(());
+                    }
+                },
                 onclick: move |e: Event<MouseData>| e.stop_propagation(),
                 video {
                     style: "max-width:100%;max-height:60vh;border-radius:6px;",
