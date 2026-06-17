@@ -133,6 +133,85 @@ async fn use_bonus_replay_and_deduction_ledger() {
     );
 }
 
+/// Overdraw guard on a FUNDED account: with balance 50, deducting 100 must be
+/// rejected (400) and leave the balance EXACTLY 50 — no partial deduction, no
+/// `GREATEST(0, …)` clamp to 0, no debit ledger row. (The existing negative
+/// test covers the empty-balance case; this covers a non-zero insufficient
+/// balance, where a partial-deduction bug would actually move money.)
+#[tokio::test]
+#[ignore = "needs DATABASE_URL env var; run with --ignored"]
+async fn use_bonus_overdraw_rejected_balance_unchanged() {
+    let Some((app, db)) = common::make_app_with_db().await else {
+        eprintln!("DATABASE_URL not set — skipping");
+        return;
+    };
+    let admin_token = generate_admin_token("test_password", "dummy_test_token");
+    let tid: i64 = 999_700_000 + (rand_suffix() as i64);
+
+    // Seed 50 bonus.
+    let seed = post(
+        app.clone(),
+        "POST",
+        &format!("/api/loyalty/{tid}/bonus"),
+        &admin_token,
+        &uuid::Uuid::new_v4().to_string(),
+        Some(&json!({ "amount": 50.0_f64, "tx_type": "overdraw_seed" })),
+    )
+    .await;
+    assert_eq!(seed.status, StatusCode::OK);
+
+    // Attempt to deduct 100 (> balance) → 400.
+    let over = post(
+        app.clone(),
+        "POST",
+        &format!("/api/loyalty/{tid}/use-bonus"),
+        &admin_token,
+        &uuid::Uuid::new_v4().to_string(),
+        Some(&json!({ "amount": 100.0_f64 })),
+    )
+    .await;
+    assert_eq!(
+        over.status,
+        StatusCode::BAD_REQUEST,
+        "overdraw must be rejected, body: {}",
+        over.body
+    );
+
+    // Balance unchanged (still exactly 50) — via owner GET.
+    let init = common::make_init_data(tid, "dummy_test_token");
+    let prof = app
+        .oneshot(
+            Request::builder()
+                .uri(format!("/api/loyalty/{tid}"))
+                .header("X-Telegram-Init-Data", init)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .expect("router.oneshot profile");
+    assert_eq!(prof.status(), StatusCode::OK);
+    let pbody: serde_json::Value =
+        serde_json::from_slice(&prof.into_body().collect().await.unwrap().to_bytes())
+            .expect("json");
+    assert_eq!(
+        pbody["profile"]["bonus_balance"].as_f64(),
+        Some(50.0),
+        "rejected overdraw must leave the balance untouched"
+    );
+
+    // No debit ledger row — only the seed grant exists.
+    let deductions = BtEntity::find()
+        .filter(BtCol::TelegramId.eq(tid))
+        .filter(BtCol::TxType.eq("admin_deduction"))
+        .all(&db.orm)
+        .await
+        .expect("ledger query");
+    assert!(
+        deductions.is_empty(),
+        "a rejected overdraw must NOT write a deduction ledger row, got: {deductions:#?}"
+    );
+}
+
 struct Resp {
     status: StatusCode,
     body: serde_json::Value,
