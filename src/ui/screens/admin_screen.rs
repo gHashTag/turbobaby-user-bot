@@ -190,6 +190,11 @@ struct AdminSet {
     image_url: Option<String>,
     #[serde(default)]
     video_url: Option<String>,
+    /// Migration 038: bilingual name/description, symmetric with the other set types.
+    #[serde(default)]
+    name_en: Option<String>,
+    #[serde(default)]
+    description_en: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -1975,6 +1980,8 @@ fn SetsTab() -> Element {
     let mut icon = use_signal(String::new);
     let mut image_url = use_signal(String::new);
     let mut video_url = use_signal(String::new);
+    let mut name_en = use_signal(String::new);
+    let mut description_en = use_signal(String::new);
     // Phase 3 / next cycle: IDs are now signals of Vec<String> rather
     // than comma-separated text. The IdPicker component mutates these
     // in-place via checkbox toggles.
@@ -2110,6 +2117,10 @@ fn SetsTab() -> Element {
                         oninput: move |e| icon.set(e.value()) }
                     ImageUpload { image_url: image_url.read().clone(), on_change: move |url: String| image_url.set(url) }
                     VideoUpload { video_url: video_url.read().clone(), on_change: move |url: String| video_url.set(url) }
+                    input { style: input_style(), placeholder: "Название (EN)", value: "{name_en}",
+                        oninput: move |e| name_en.set(e.value()) }
+                    textarea { style: textarea_style(), placeholder: "Описание (EN)", value: "{description_en}",
+                        oninput: move |e| description_en.set(e.value()) }
                     IdPicker {
                         label: "Сорта".to_string(),
                         options: strain_catalog.read().clone(),
@@ -2147,6 +2158,7 @@ fn SetsTab() -> Element {
                             let a_ids: Vec<String> = accessory_ids.read().clone();
                             let desc = description();
                             let ic = icon(); let img = image_url(); let vid = video_url();
+                            let ne = name_en(); let de = description_en();
                             let deal = is_deal_of_day();
                             submitting.set(true);
                             let temp_id = format!("temp-{}", uuid::Uuid::new_v4());
@@ -2159,10 +2171,13 @@ fn SetsTab() -> Element {
                                 strain_ids: s_ids.clone(), accessory_ids: a_ids.clone(),
                                 total_price: p, discount_percent: d,
                                 is_available: true, is_deal_of_day: deal,
+                                name_en: if ne.is_empty() { None } else { Some(ne.clone()) },
+                                description_en: if de.is_empty() { None } else { Some(de.clone()) },
                             });
                             status.set("✅ Добавлен!".into());
                             name.set(String::new()); description.set(String::new()); icon.set(String::new());
                             image_url.set(String::new()); video_url.set(String::new());
+                            name_en.set(String::new()); description_en.set(String::new());
                             strain_ids.set(Vec::new()); accessory_ids.set(Vec::new());
                             total_price.set(String::new()); discount_percent.set(String::new());
                             is_deal_of_day.set(false);
@@ -2174,6 +2189,8 @@ fn SetsTab() -> Element {
                                     "icon": if ic.is_empty() { serde_json::Value::Null } else { ic.into() },
                                     "image_url": if img.is_empty() { serde_json::Value::Null } else { img.into() },
                                     "video_url": if vid.is_empty() { serde_json::Value::Null } else { vid.into() },
+                                    "name_en": if ne.is_empty() { serde_json::Value::Null } else { ne.into() },
+                                    "description_en": if de.is_empty() { serde_json::Value::Null } else { de.into() },
                                     "strain_ids": s_ids, "accessory_ids": a_ids,
                                     "is_deal_of_day": deal,
                                 });
@@ -2335,6 +2352,8 @@ fn EditSetCard(
     let mut icon = use_signal(|| item.icon.clone().unwrap_or_default());
     let mut image_url = use_signal(|| item.image_url.clone().unwrap_or_default());
     let mut video_url = use_signal(|| item.video_url.clone().unwrap_or_default());
+    let mut name_en = use_signal(|| item.name_en.clone().unwrap_or_default());
+    let mut description_en = use_signal(|| item.description_en.clone().unwrap_or_default());
     let strain_ids: Signal<Vec<String>> = use_signal(|| item.strain_ids.clone());
     let accessory_ids: Signal<Vec<String>> = use_signal(|| item.accessory_ids.clone());
     let mut total_price = use_signal(|| item.total_price.to_string());
@@ -2350,6 +2369,8 @@ fn EditSetCard(
             input { style: input_style(), placeholder: "Иконка", value: "{icon}", oninput: move |e| icon.set(e.value()) }
             ImageUpload { image_url: image_url.read().clone(), on_change: move |url: String| image_url.set(url) }
             VideoUpload { video_url: video_url.read().clone(), on_change: move |url: String| video_url.set(url) }
+            input { style: input_style(), placeholder: "Название (EN)", value: "{name_en}", oninput: move |e| name_en.set(e.value()) }
+            textarea { style: textarea_style(), placeholder: "Описание (EN)", value: "{description_en}", oninput: move |e| description_en.set(e.value()) }
             IdPicker {
                 label: "Сорта".to_string(),
                 options: strain_catalog,
@@ -2382,6 +2403,7 @@ fn EditSetCard(
                         if n.is_empty() { status.set("❌ Название обязательно".into()); return; }
                         let desc = description();
                         let ic = icon(); let img = image_url(); let vid = video_url();
+                        let ne = name_en(); let de = description_en();
                         let s_ids: Vec<String> = strain_ids.read().clone();
                         let a_ids: Vec<String> = accessory_ids.read().clone();
                         let deal = is_deal_of_day();
@@ -2398,6 +2420,8 @@ fn EditSetCard(
                             s.total_price = p;
                             s.discount_percent = d;
                             s.is_deal_of_day = deal;
+                            s.name_en = if ne.is_empty() { None } else { Some(ne.clone()) };
+                            s.description_en = if de.is_empty() { None } else { Some(de.clone()) };
                         }
                         spawn(async move {
                             let body = json!({
@@ -2406,6 +2430,8 @@ fn EditSetCard(
                                 "icon": if ic.is_empty() { serde_json::Value::Null } else { ic.into() },
                                 "image_url": if img.is_empty() { serde_json::Value::Null } else { img.into() },
                                 "video_url": if vid.is_empty() { serde_json::Value::Null } else { vid.into() },
+                                "name_en": if ne.is_empty() { serde_json::Value::Null } else { ne.into() },
+                                "description_en": if de.is_empty() { serde_json::Value::Null } else { de.into() },
                                 "strain_ids": s_ids, "accessory_ids": a_ids,
                                 "is_deal_of_day": deal,
                             });

@@ -56,6 +56,7 @@ const MIGRATION_SQL: &str = concat!(
     include_str!("../../migrations/035_referral_code_telegram_id.sql"),
     include_str!("../../migrations/036_garden_backfill_non_strain_orders.sql"),
     include_str!("../../migrations/037_garden_universal_backfill.sql"),
+    include_str!("../../migrations/038_sets_bilingual.sql"),
 );
 
 /// Columns the catalog endpoints SELECT that were added by *later* migrations

@@ -1102,6 +1102,12 @@ pub(crate) struct SetRequest {
     #[allow(dead_code)]
     pub is_available: Option<bool>,
     pub is_deal_of_day: Option<bool>,
+    // Migration 038: the general Sets tab now carries English name/description
+    // like accessory_sets and tea_sets already did.
+    #[serde(default)]
+    pub name_en: Option<String>,
+    #[serde(default)]
+    pub description_en: Option<String>,
 }
 
 fn set_row(r: &sea_orm::QueryResult) -> Value {
@@ -1136,6 +1142,8 @@ fn set_row(r: &sea_orm::QueryResult) -> Value {
         "is_deal_of_day": r.try_get::<bool>("", "is_deal_of_day").unwrap_or(false),
         "image_url": r.try_get::<Option<String>>("", "image_url").ok().flatten(),
         "video_url": r.try_get::<Option<String>>("", "video_url").ok().flatten(),
+        "name_en": r.try_get::<Option<String>>("", "name_en").ok().flatten(),
+        "description_en": r.try_get::<Option<String>>("", "description_en").ok().flatten(),
     })
 }
 
@@ -1157,7 +1165,7 @@ async fn get_sets(
         // Use a single compatible query that works with or without accessory_ids column.
         let rows = state.db.orm.query_all(Statement::from_string(
             DbBackend::Postgres,
-            "SELECT id, name, description, icon, strain_ids, COALESCE(accessory_ids, NULL::text[]) AS accessory_ids, total_price::float8 AS total_price, discount_percent::float8 AS discount_percent, is_available, COALESCE(is_deal_of_day, false) AS is_deal_of_day, image_url, video_url FROM sets ORDER BY name LIMIT 5000".to_string(),
+            "SELECT id, name, description, icon, strain_ids, COALESCE(accessory_ids, NULL::text[]) AS accessory_ids, total_price::float8 AS total_price, discount_percent::float8 AS discount_percent, is_available, COALESCE(is_deal_of_day, false) AS is_deal_of_day, image_url, video_url, name_en, description_en FROM sets ORDER BY name LIMIT 5000".to_string(),
         )).await.map_err(|e| { tracing::error!("get_sets admin: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?;
         let items: Vec<Value> = rows.iter().map(set_row).collect();
         return Ok(Json(json!({ "sets": items })));
@@ -1191,7 +1199,7 @@ async fn get_sets(
     // for legacy rows that predate those columns.
     let general_sets = state.db.orm.query_all(Statement::from_string(
         DbBackend::Postgres,
-        "SELECT id, name, description, icon, strain_ids, COALESCE(accessory_ids, ARRAY[]::text[]) AS accessory_ids, total_price::float8 AS total_price, discount_percent::float8 AS discount_percent, is_available, COALESCE(is_deal_of_day, false) AS is_deal_of_day, image_url, video_url FROM sets WHERE is_available = TRUE LIMIT 2000".to_string(),
+        "SELECT id, name, description, icon, strain_ids, COALESCE(accessory_ids, ARRAY[]::text[]) AS accessory_ids, total_price::float8 AS total_price, discount_percent::float8 AS discount_percent, is_available, COALESCE(is_deal_of_day, false) AS is_deal_of_day, image_url, video_url, name_en, description_en FROM sets WHERE is_available = TRUE LIMIT 2000".to_string(),
     )).await.unwrap_or_else(|e| { tracing::error!("get_sets sets (degraded to empty): {e}"); Vec::new() });
 
     let mut items: Vec<serde_json::Value> = Vec::new();
@@ -1263,7 +1271,9 @@ async fn get_sets(
     }
 
     for r in general_sets.iter() {
-        let strain_ids: Vec<String> = r.try_get::<Vec<String>>("", "strain_ids").unwrap_or_default();
+        let strain_ids: Vec<String> = r
+            .try_get::<Vec<String>>("", "strain_ids")
+            .unwrap_or_default();
         let accessory_ids: Vec<String> = r
             .try_get::<Vec<String>>("", "accessory_ids")
             .unwrap_or_default();
@@ -1292,8 +1302,8 @@ async fn get_sets(
             "discount_percent": discount_percent,
             "is_available": r.try_get::<bool>("", "is_available").unwrap_or(false),
             "is_deal_of_day": r.try_get::<bool>("", "is_deal_of_day").unwrap_or(false),
-            "name_en": serde_json::Value::Null,
-            "description_en": serde_json::Value::Null,
+            "name_en": r.try_get::<Option<String>>("", "name_en").ok().flatten(),
+            "description_en": r.try_get::<Option<String>>("", "description_en").ok().flatten(),
             "image_url": r.try_get::<Option<String>>("", "image_url").ok().flatten(),
             "video_url": r.try_get::<Option<String>>("", "video_url").ok().flatten(),
         }));
@@ -1356,7 +1366,7 @@ async fn create_set(
     use sea_orm::{ConnectionTrait, DbBackend, Statement};
     state.db.orm.execute(Statement::from_sql_and_values(
         DbBackend::Postgres,
-        "INSERT INTO sets (id, name, description, icon, strain_ids, accessory_ids, total_price, discount_percent, is_deal_of_day, image_url, video_url) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)",
+        "INSERT INTO sets (id, name, description, icon, strain_ids, accessory_ids, total_price, discount_percent, is_deal_of_day, image_url, video_url, name_en, description_en) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)",
         [
             id.clone().into(),
             req.name.into(),
@@ -1369,6 +1379,8 @@ async fn create_set(
             req.is_deal_of_day.unwrap_or(false).into(),
             req.image_url.filter(|s| !s.is_empty()).into(),
             req.video_url.into(),
+            req.name_en.filter(|s| !s.is_empty()).into(),
+            req.description_en.filter(|s| !s.is_empty()).into(),
         ],
     )).await.map_err(|e| { tracing::error!("create_set: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?;
     Ok(Json(json!({ "success": true, "id": id })))
@@ -1393,7 +1405,7 @@ async fn update_set(
     use sea_orm::{ConnectionTrait, DbBackend, Statement};
     state.db.orm.execute(Statement::from_sql_and_values(
         DbBackend::Postgres,
-        "UPDATE sets SET name=$1, description=$2, icon=$3, strain_ids=$4, accessory_ids=$5, total_price=$6, discount_percent=$7, is_deal_of_day=$8, image_url=$9, video_url=$10, is_available=$11 WHERE id=$12",
+        "UPDATE sets SET name=$1, description=$2, icon=$3, strain_ids=$4, accessory_ids=$5, total_price=$6, discount_percent=$7, is_deal_of_day=$8, image_url=$9, video_url=$10, is_available=$11, name_en=$12, description_en=$13 WHERE id=$14",
         [
             req.name.into(),
             req.description.unwrap_or_default().into(),
@@ -1406,6 +1418,8 @@ async fn update_set(
             req.image_url.filter(|s| !s.is_empty()).into(),
             req.video_url.into(),
             req.is_available.unwrap_or(true).into(),
+            req.name_en.filter(|s| !s.is_empty()).into(),
+            req.description_en.filter(|s| !s.is_empty()).into(),
             id.into(),
         ],
     )).await.map_err(|e| { tracing::error!("update_set: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?;
@@ -1790,6 +1804,8 @@ mod tests {
             video_url: None,
             is_available: Some(true),
             is_deal_of_day: Some(false),
+            name_en: None,
+            description_en: None,
         }
     }
 
