@@ -1,4 +1,5 @@
 use crate::trios::i18n::{t, T_SOMM_DESC, T_SOMM_EXP, T_SOMM_MOOD, T_SOMM_TIME, T_SOMM_TITLE};
+use crate::ui::api::context::api_base_url;
 use crate::ui::components::bottom_nav::BottomNav;
 use crate::ui::state::{Cart, CartItem, CartItemType};
 use dioxus::prelude::*;
@@ -91,6 +92,156 @@ struct SommelierResponse {
     recommended_strains: Option<Vec<RecommendedStrain>>,
 }
 
+/// A strain row from `GET /api/strains`, the input to the rule-based recommender.
+#[derive(Debug, Clone, Deserialize)]
+struct CatalogStrain {
+    #[serde(default)]
+    id: Option<String>,
+    name: String,
+    #[serde(default)]
+    category: Option<String>,
+    #[serde(default)]
+    thc_percent: Option<f64>,
+    #[serde(default)]
+    effect: Option<String>,
+    #[serde(default)]
+    flavor_profile: Option<String>,
+    #[serde(default)]
+    price_per_gram: Option<f64>,
+    #[serde(default)]
+    image_url: Option<String>,
+    #[serde(default)]
+    is_available: Option<bool>,
+}
+
+#[derive(Debug, Deserialize)]
+struct StrainsCatalog {
+    strains: Vec<CatalogStrain>,
+}
+
+/// Rule-based match score (35..=99) + a short reason for a strain given the
+/// quiz answers. The AI sommelier (GROK/GLM) is config-gated and off in prod, so
+/// this local heuristic makes the section actually recommend real catalog strains
+/// instead of always returning "no recommendations". Heuristics: mood → category
+/// + effect keywords, time → sativa(day)/indica(evening), experience → THC band.
+fn score_strain(
+    s: &CatalogStrain,
+    mood: Option<Mood>,
+    time: TimeOfDay,
+    exp: Experience,
+) -> (i32, String) {
+    let cat = s.category.as_deref().unwrap_or("").to_lowercase();
+    let thc = s.thc_percent.unwrap_or(0.0);
+    let eff = s.effect.as_deref().unwrap_or("").to_lowercase();
+    let has_flavor = s
+        .flavor_profile
+        .as_deref()
+        .map(|f| !f.trim().is_empty())
+        .unwrap_or(false);
+    let is_sativa = cat.contains("sativa");
+    let is_indica = cat.contains("indica");
+    let is_hybrid = cat.contains("hybrid");
+
+    let mut score = 50i32;
+    let mut reason = String::new();
+    if let Some(m) = mood {
+        match m {
+            Mood::Relax => {
+                if is_indica {
+                    score += 25;
+                    reason = "Indica · relaxing".into();
+                } else if is_hybrid {
+                    score += 12;
+                    reason = "Hybrid · mellow".into();
+                }
+                if eff.contains("relax") || eff.contains("calm") || eff.contains("chill") {
+                    score += 15;
+                }
+            }
+            Mood::Energy => {
+                if is_sativa {
+                    score += 25;
+                    reason = "Sativa · energizing".into();
+                } else if is_hybrid {
+                    score += 12;
+                    reason = "Hybrid · uplifting".into();
+                }
+                if eff.contains("energ") || eff.contains("uplift") || eff.contains("focus") {
+                    score += 15;
+                }
+            }
+            Mood::Creative => {
+                if is_sativa || is_hybrid {
+                    score += 18;
+                    reason = "Creative & focused".into();
+                }
+                if eff.contains("creativ") || eff.contains("focus") || eff.contains("euphor") {
+                    score += 18;
+                }
+            }
+            Mood::Sleep => {
+                if is_indica {
+                    score += 25;
+                    reason = "Indica · for sleep".into();
+                }
+                if thc >= 22.0 {
+                    score += 10;
+                }
+                if eff.contains("sleep") || eff.contains("sedat") || eff.contains("relax") {
+                    score += 12;
+                }
+            }
+            Mood::Strong => {
+                let bonus = ((thc - 18.0).max(0.0) as i32).min(35);
+                score += bonus;
+                reason = format!("High THC · {}%", thc as i32);
+            }
+            Mood::Taste => {
+                if has_flavor {
+                    score += 22;
+                    reason = "Rich flavor".into();
+                }
+                score += 8;
+            }
+        }
+    }
+
+    match time {
+        TimeOfDay::Day => {
+            if is_sativa {
+                score += 10;
+            }
+        }
+        TimeOfDay::Evening => {
+            if is_indica {
+                score += 10;
+            }
+        }
+        TimeOfDay::Any => {}
+    }
+
+    match exp {
+        Experience::Beginner => {
+            if thc <= 20.0 {
+                score += 12;
+            } else {
+                score -= 12;
+            }
+        }
+        Experience::Medium => {}
+        Experience::Expert => {
+            if thc >= 24.0 {
+                score += 10;
+            }
+        }
+    }
+
+    if reason.is_empty() {
+        reason = "Good match".into();
+    }
+    (score.clamp(35, 99), reason)
+}
+
 fn category_emoji(cat: &str) -> &'static str {
     match cat.to_lowercase().as_str() {
         "sativa" => "☀️",
@@ -121,12 +272,50 @@ pub fn SommelierScreen() -> Element {
                 recommended_strains: None,
             });
         }
-        // BUG-FIX: /api/sommelier/recommend backend endpoint does not exist.
-        // Return empty gracefully so the UI shows "No recommendations found"
-        // instead of a permanent 404 error.
+        // There is no backend /api/sommelier/recommend — the AI sommelier
+        // (GROK/GLM) is config-gated and off in prod. Recommend client-side:
+        // pull the live catalog and rank it by the quiz answers so the section
+        // returns real strains instead of always "no recommendations".
+        let mood = selected_mood();
+        let time = selected_time();
+        let exp = selected_exp();
+        let url = format!("{}/api/strains", api_base_url());
+        let catalog = crate::ui::api::local_client::LocalClient::new()
+            .get(&url)
+            .send()
+            .await
+            .map_err(|e| e.to_string())?
+            .json::<StrainsCatalog>()
+            .await
+            .map_err(|e| e.to_string())?;
+        let mut scored: Vec<(i32, RecommendedStrain)> = catalog
+            .strains
+            .into_iter()
+            .filter(|s| s.is_available.unwrap_or(true))
+            .map(|s| {
+                let (score, reason) = score_strain(&s, mood, time, exp);
+                (
+                    score,
+                    RecommendedStrain {
+                        id: s.id,
+                        name: s.name,
+                        category: s.category,
+                        thc_percent: s.thc_percent,
+                        effect: s.effect,
+                        flavor_profile: s.flavor_profile,
+                        price_per_gram: s.price_per_gram,
+                        image_url: s.image_url,
+                        match_reason: Some(reason),
+                        match_percent: Some(score),
+                    },
+                )
+            })
+            .collect();
+        scored.sort_by(|a, b| b.0.cmp(&a.0));
+        let top: Vec<RecommendedStrain> = scored.into_iter().take(6).map(|(_, r)| r).collect();
         Ok::<SommelierResponse, String>(SommelierResponse {
             recommended_sets: None,
-            recommended_strains: None,
+            recommended_strains: if top.is_empty() { None } else { Some(top) },
         })
     });
 
