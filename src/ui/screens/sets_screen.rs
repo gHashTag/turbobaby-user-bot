@@ -1,4 +1,4 @@
-use crate::trios::i18n::{t, T_ADD_TO_CART, T_FILTER_ALL, T_SETS_DESC, T_SETS_TITLE};
+use crate::trios::i18n::{t, T_ADD_TO_CART, T_SETS_DESC, T_SETS_TITLE};
 use crate::ui::api::context::api_base_url;
 use crate::ui::assets;
 use crate::ui::components::bottom_nav::BottomNav;
@@ -7,6 +7,13 @@ use crate::ui::components::video_modal::VideoModal;
 use crate::ui::state::{Cart, CartItem, CartItemType};
 use dioxus::prelude::*;
 use serde::Deserialize;
+
+// Fixed accent for the sets theme. Previously each card derived its colour from a
+// per-set "mood", but the API never carried mood data (the `target_mood`/
+// `time_of_day`/`strains` fields and the whole mood filter were dead: 4 of 5
+// filter chips matched nothing and every card was mislabelled "party"). The dead
+// filter was removed; one accent keeps the look consistent.
+const ACCENT: &str = "#b388ff";
 
 #[derive(Debug, Clone, Deserialize)]
 struct ApiSet {
@@ -18,11 +25,8 @@ struct ApiSet {
     #[serde(default)]
     description_en: Option<String>,
     icon: Option<String>,
-    strains: Option<Vec<String>>,
     total_price: f64,
     discount_percent: f64,
-    target_mood: Option<String>,
-    time_of_day: Option<String>,
     image_url: Option<String>,
     #[serde(default)]
     video_url: Option<String>,
@@ -34,62 +38,9 @@ struct SetsResponse {
     sets: Vec<ApiSet>,
 }
 
-fn mood_emoji(mood: &str) -> &'static str {
-    match mood.to_lowercase().as_str() {
-        "energy" => "⚡",
-        "party" => "🎉",
-        "heavy" => "🏋️",
-        "beginner" => "🌱",
-        "relax" | "relaxation" => "😌",
-        _ => "🎁",
-    }
-}
-
-fn mood_color(mood: &str) -> &'static str {
-    match mood.to_lowercase().as_str() {
-        "energy" => "#ffe600",
-        "party" => "#ff6b9d",
-        "heavy" => "#b388ff",
-        "beginner" => "#39ff14",
-        "relax" | "relaxation" => "#00e5ff",
-        _ => "#888",
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-enum MoodFilter {
-    All,
-    Energy,
-    Party,
-    Heavy,
-    Beginner,
-}
-
-impl MoodFilter {
-    fn label(&self) -> &'static str {
-        match self {
-            Self::All => t(crate::ui::lang::current_lang(), T_FILTER_ALL),
-            Self::Energy => "⚡ Energy",
-            Self::Party => "🎉 Party",
-            Self::Heavy => "🏋️ Heavy",
-            Self::Beginner => "🌱 Beginner",
-        }
-    }
-    fn matches(&self, mood: &str) -> bool {
-        match self {
-            Self::All => true,
-            Self::Energy => mood == "energy",
-            Self::Party => mood == "party",
-            Self::Heavy => mood == "heavy",
-            Self::Beginner => mood == "beginner",
-        }
-    }
-}
-
 #[component]
 pub fn SetsScreen() -> Element {
     let cart = use_context::<Signal<Cart>>();
-    let mut mood_filter = use_signal(|| MoodFilter::All);
 
     let sets_title = t(crate::ui::lang::current_lang(), T_SETS_TITLE);
     let sets_desc = t(crate::ui::lang::current_lang(), T_SETS_DESC);
@@ -109,17 +60,8 @@ pub fn SetsScreen() -> Element {
             .map_err(|e| e.to_string())
     });
 
-    let filtered_sets = match &*sets_resource.read() {
-        Some(Ok(sets)) => {
-            let f = mood_filter();
-            sets.iter()
-                .filter(|s| {
-                    let mood = s.target_mood.as_deref().unwrap_or("");
-                    f.matches(mood)
-                })
-                .cloned()
-                .collect::<Vec<_>>()
-        }
+    let all_sets = match &*sets_resource.read() {
+        Some(Ok(sets)) => sets.clone(),
         _ => Vec::new(),
     };
 
@@ -131,30 +73,6 @@ pub fn SetsScreen() -> Element {
                     "{sets_title}"
                 }
                 p { style: "font-size:13px;color:#888;margin-top:4px;", "{sets_desc}" }
-            }
-
-            div { style: "display:flex;gap:6px;padding:0 16px 12px;overflow-x:auto;",
-                for filter in [MoodFilter::All, MoodFilter::Energy, MoodFilter::Party, MoodFilter::Heavy, MoodFilter::Beginner] {
-                    {
-                        let is_active = mood_filter() == filter;
-                        let bg = if is_active { "rgba(179,136,255,0.15)" } else { "transparent" };
-                        let color = if is_active { "#b388ff" } else { "#888" };
-                        let border = if is_active { "#b388ff" } else { "#2a2a4a" };
-                        let label = filter.label();
-                        rsx! {
-                            button {
-                                style: "
-                                    font-size:12px;font-weight:600;padding:8px 16px;
-                                    background:{bg};color:{color};
-                                    border:3px solid {border};border-radius:20px;
-                                    cursor:pointer;white-space:nowrap;
-                                ",
-                                onclick: move |_| mood_filter.set(filter),
-                                "{label}"
-                            }
-                        }
-                    }
-                }
             }
 
             div { style: "padding:0 16px 16px;",
@@ -197,11 +115,11 @@ pub fn SetsScreen() -> Element {
                     Some(Ok(_)) => rsx! {
                         div { style: "padding:0 16px 8px;",
                             h2 { style: "font-size:13px;font-weight:700;color:#b388ff;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;text-shadow:2px 2px 0 #000;",
-                                "All Sets ({filtered_sets.len()})"
+                                "All Sets ({all_sets.len()})"
                             }
                         }
                         div { style: "display:flex;flex-direction:column;gap:12px;padding:0 16px;",
-                            for set in filtered_sets.iter() {
+                            for set in all_sets.iter() {
                                 { render_set_card(set.clone(), cart) }
                             }
                         }
@@ -233,9 +151,6 @@ pub fn SetsScreen() -> Element {
 
 fn render_set_card(set: ApiSet, mut cart: Signal<Cart>) -> Element {
     let add_to_cart = t(crate::ui::lang::current_lang(), T_ADD_TO_CART).to_string();
-    let mood = set.target_mood.as_deref().unwrap_or("party");
-    let emoji = mood_emoji(mood);
-    let m_color = mood_color(mood);
     let discount = if set.discount_percent.is_finite() {
         set.discount_percent.max(0.0)
     } else {
@@ -266,13 +181,6 @@ fn render_set_card(set: ApiSet, mut cart: Signal<Cart>) -> Element {
         set.description.as_deref().unwrap_or(""),
         set.description_en.as_deref(),
     );
-    let time_str = set.time_of_day.as_deref().unwrap_or("");
-    let strains_count = set.strains.as_ref().map(|v| v.len()).unwrap_or(0);
-    let strains_label = if strains_count > 0 {
-        format!("{} strains", strains_count)
-    } else {
-        String::new()
-    };
     let img_url = set.image_url.clone().unwrap_or_default();
     let has_image = !img_url.is_empty()
         && (img_url.starts_with("http://")
@@ -286,14 +194,13 @@ fn render_set_card(set: ApiSet, mut cart: Signal<Cart>) -> Element {
     let mut show_video = use_signal(|| false);
     let mut detail_open = use_signal(|| false);
     let desc_full = desc.to_string();
-    let mood_badge = format!("{emoji} {mood}");
     let is_available = set.is_available.unwrap_or(true);
     let opacity = if is_available { "" } else { "opacity:0.6;" };
 
     rsx! {
         div { style: "
             background:#16213e;
-            border:4px solid {m_color}33;
+            border:4px solid {ACCENT}33;
             box-shadow:4px 4px 0 #000;
             overflow:hidden;
             position:relative;
@@ -315,7 +222,7 @@ fn render_set_card(set: ApiSet, mut cart: Signal<Cart>) -> Element {
                 if has_discount {
                     span { style: "
                         position:absolute;top:8px;right:8px;
-                        font-size:13px;font-weight:700;background:{m_color};color:#000;
+                        font-size:13px;font-weight:700;background:{ACCENT};color:#000;
                         padding:4px 8px;box-shadow:2px 2px 0 #000;z-index:2;
                     ", "{discount_badge}" }
                 }
@@ -331,20 +238,9 @@ fn render_set_card(set: ApiSet, mut cart: Signal<Cart>) -> Element {
             div { style: "padding:14px;",
                 div { style: "display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;",
                     span { style: "font-size:16px;font-weight:700;text-shadow:2px 2px 0 #000;", "{set_name}" }
-                    span { style: "font-size:13px;color:{m_color};", "{emoji} {mood}" }
                 }
                 if !desc.is_empty() {
                     div { style: "font-size:13px;color:#888;margin-bottom:6px;", "{desc}" }
-                }
-                if !strains_label.is_empty() || !time_str.is_empty() {
-                    div { style: "font-size:13px;color:#888;margin-bottom:8px;",
-                        if !strains_label.is_empty() {
-                            span { style: "border:2px solid #2a2a4a;padding:2px 8px;margin-right:4px;", "{strains_label}" }
-                        }
-                        if !time_str.is_empty() {
-                            span { style: "border:2px solid #2a2a4a;padding:2px 8px;", "🕐 {time_str}" }
-                        }
-                    }
                 }
                 div { style: "display:flex;justify-content:space-between;align-items:center;",
                     div {
@@ -405,7 +301,6 @@ fn render_set_card(set: ApiSet, mut cart: Signal<Cart>) -> Element {
                         name: crate::ui::lang::localized(&set.name, set.name_en.as_deref()),
                         image_url: set.image_url.clone(),
                         description: desc_full.clone(),
-                        category_badge: Some(mood_badge.clone()),
                         price_line: Some(price_str.clone()),
                         can_add: avail,
                         add_to_cart_label: Some(add_to_cart.clone()),
