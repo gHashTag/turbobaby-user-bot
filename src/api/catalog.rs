@@ -1181,6 +1181,19 @@ async fn get_sets(
         "SELECT id, name, description, icon, items, total_price::float8 AS total_price, discount_percent::float8 AS discount_percent, is_available, name_en, description_en, image_url, video_url FROM tea_sets WHERE is_available = TRUE LIMIT 2000".to_string(),
     )).await.unwrap_or_else(|e| { tracing::error!("get_sets tea_sets (degraded to empty): {e}"); Vec::new() });
 
+    // General `sets` (strain + accessory bundles, the admin "Sets" tab). Bug fix:
+    // these were written by POST /api/sets and priced by the checkout price-auth
+    // UNION (orders.rs), but the PUBLIC list never read this table — so any set an
+    // admin created was invisible to customers ("sets aren't being added"). It is
+    // read here with the same degrade-to-empty resilience as the two tables above.
+    // `sets` has no name_en/description_en columns (migration 016 skipped it), so
+    // those are emitted as null; `accessory_ids`/`is_deal_of_day` are COALESCEd
+    // for legacy rows that predate those columns.
+    let general_sets = state.db.orm.query_all(Statement::from_string(
+        DbBackend::Postgres,
+        "SELECT id, name, description, icon, strain_ids, COALESCE(accessory_ids, ARRAY[]::text[]) AS accessory_ids, total_price::float8 AS total_price, discount_percent::float8 AS discount_percent, is_available, COALESCE(is_deal_of_day, false) AS is_deal_of_day, image_url, video_url FROM sets WHERE is_available = TRUE LIMIT 2000".to_string(),
+    )).await.unwrap_or_else(|e| { tracing::error!("get_sets sets (degraded to empty): {e}"); Vec::new() });
+
     let mut items: Vec<serde_json::Value> = Vec::new();
 
     for r in accessory_sets.iter() {
@@ -1244,6 +1257,43 @@ async fn get_sets(
             "is_deal_of_day": false,
             "name_en": r.try_get::<Option<String>>("", "name_en").ok().flatten(),
             "description_en": r.try_get::<Option<String>>("", "description_en").ok().flatten(),
+            "image_url": r.try_get::<Option<String>>("", "image_url").ok().flatten(),
+            "video_url": r.try_get::<Option<String>>("", "video_url").ok().flatten(),
+        }));
+    }
+
+    for r in general_sets.iter() {
+        let strain_ids: Vec<String> = r.try_get::<Vec<String>>("", "strain_ids").unwrap_or_default();
+        let accessory_ids: Vec<String> = r
+            .try_get::<Vec<String>>("", "accessory_ids")
+            .unwrap_or_default();
+        let mut bundle = strain_ids;
+        bundle.extend(accessory_ids);
+        let total_price: f64 = crate::try_get_warn!(r, "total_price", 0.0);
+        let total_price = if total_price.is_finite() {
+            total_price.max(0.0)
+        } else {
+            0.0
+        };
+        let discount_percent: f64 = crate::try_get_warn!(r, "discount_percent", 0.0);
+        let discount_percent = if discount_percent.is_finite() {
+            discount_percent.max(0.0)
+        } else {
+            0.0
+        };
+        items.push(json!({
+            "id": r.try_get::<String>("", "id").unwrap_or_default(),
+            "name": r.try_get::<String>("", "name").unwrap_or_default(),
+            "description": r.try_get::<String>("", "description").unwrap_or_default(),
+            "icon": r.try_get::<String>("", "icon").unwrap_or_default(),
+            "type": "set",
+            "items": bundle,
+            "total_price": total_price,
+            "discount_percent": discount_percent,
+            "is_available": r.try_get::<bool>("", "is_available").unwrap_or(false),
+            "is_deal_of_day": r.try_get::<bool>("", "is_deal_of_day").unwrap_or(false),
+            "name_en": serde_json::Value::Null,
+            "description_en": serde_json::Value::Null,
             "image_url": r.try_get::<Option<String>>("", "image_url").ok().flatten(),
             "video_url": r.try_get::<Option<String>>("", "video_url").ok().flatten(),
         }));
