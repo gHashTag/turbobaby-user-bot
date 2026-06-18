@@ -559,7 +559,34 @@ async fn set_strain_of_day(
     //   enable  — set is_strain_of_day=true, discount, set_at=NOW()
     //   disable — set is_strain_of_day=false (leave discount/set_at as audit history)
     use crate::db::entities::strain::{Column as StrainCol, Entity as StrainEntity};
-    use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
+    use sea_orm::{ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter};
+    // Carousel cap: at most 3 featured strains. When enabling, reject if 3 OTHER
+    // strains are already set — the owner must unset one first. Disabling is
+    // always allowed. (The read side also limits to 3, but enforcing here keeps
+    // the admin UI honest instead of silently dropping the 4th.)
+    if enabled {
+        let others = StrainEntity::find()
+            .filter(StrainCol::IsStrainOfDay.eq(true))
+            .filter(StrainCol::Id.ne(id.clone()))
+            .count(&state.db.orm)
+            .await
+            .map_err(|e| {
+                tracing::error!("SOTD cap count error: {:?}", e);
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({ "error": "count failed" })),
+                )
+            })?;
+        if others >= 3 {
+            return Err((
+                StatusCode::CONFLICT,
+                Json(json!({
+                    "error": "sotd_limit",
+                    "message": "Максимум 3 сорта дня. Снимите отметку с одного."
+                })),
+            ));
+        }
+    }
     let result = if enabled {
         StrainEntity::update_many()
             .col_expr(

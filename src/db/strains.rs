@@ -101,6 +101,10 @@ pub struct StrainOfDay {
     pub price_per_gram: f64,
     pub strain_of_day_discount: f64,
     pub image_url: Option<String>,
+    /// Carousel: a featured strain can be shown as a card OR a video.
+    pub video_url: Option<String>,
+    /// Carousel: localized name for non-RU users (lang::localized fallback).
+    pub name_en: Option<String>,
 }
 
 // Cycle #80: `StrainOfDay::from_row` removed alongside `Strain::from_row`.
@@ -173,6 +177,8 @@ impl From<crate::db::entities::strain::Model> for StrainOfDay {
             price_per_gram: clamp(m.price_per_gram),
             strain_of_day_discount: clamp(m.strain_of_day_discount),
             image_url: m.image_url,
+            video_url: m.video_url,
+            name_en: m.name_en,
         }
     }
 }

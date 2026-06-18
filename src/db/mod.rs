@@ -367,7 +367,9 @@ impl Database {
             .filter(entities::strain::Column::IsStrainOfDay.eq(true))
             .filter(entities::strain::Column::IsAvailable.eq(true))
             .order_by(entities::strain::Column::StrainOfDaySetAt, Order::Desc)
-            .limit(5)
+            // Carousel: owner picks UP TO 3 featured strains; show the 3 most
+            // recently set. Admin enforcement of the cap lives in set_strain_of_day.
+            .limit(3)
             .all(&self.orm)
             .await
             .context("get_strains_of_day SeaORM")?;
