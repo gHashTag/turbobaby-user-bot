@@ -46,17 +46,20 @@ fn category_emoji(cat: &str) -> &'static str {
     }
 }
 
-fn category_badge_style(cat: &str) -> String {
-    let (color, bg) = match cat.to_lowercase().as_str() {
-        "grinder" => ("#00e5ff", "rgba(0,229,255,0.15)"),
-        "papers" | "rolling" => ("#ffe600", "rgba(255,230,0,0.15)"),
-        "pipe" => ("#b388ff", "rgba(179,136,255,0.15)"),
-        _ => ("#888", "rgba(136,136,136,0.1)"),
-    };
-    format!(
-        "font-size:13px;color:{};border:2px solid {};background:{};padding:2px 8px;",
-        color, color, bg
-    )
+/// Accent colour per accessory category — drives the card border + on-image
+/// badge, mirroring how strain cards tint by marketing flag (menu_screen).
+fn category_color(cat: &str) -> &'static str {
+    match cat.to_lowercase().as_str() {
+        "grinder" | "vaporizer" => "#00e5ff",
+        "papers" | "rolling" => "#ffe600",
+        "pipe" => "#b388ff",
+        "bong" => "#39ff14",
+        "storage" => "#ff9d00",
+        "lighter" => "#ff4757",
+        "clothing" => "#ff6b9d",
+        "souvenir" => "#4ecdc4",
+        _ => "#888",
+    }
 }
 
 const CATEGORIES: &[&str] = &[
@@ -215,13 +218,13 @@ fn render_accessory_card(
             || video_url.starts_with("https://")
             || (video_url.starts_with("/") && !video_url.starts_with("//")));
     let mut show_video = use_signal(|| false);
-    let badge_style = category_badge_style(cat);
+    let cat_color = category_color(cat);
     let cat_disp = crate::ui::lang::localized(cat, a.category_en.as_deref());
     let badge_label = format!("{} {}", emoji, cat_disp);
 
     let card_style = format!(
-        "background:#16213e;border:4px solid #2a2a4a;box-shadow:4px 4px 0 #000;overflow:hidden;position:relative;cursor:pointer;{}",
-        opacity
+        "background:#16213e;border:4px solid {};box-shadow:4px 4px 0 #000;overflow:hidden;position:relative;cursor:pointer;{}",
+        cat_color, opacity
     );
     let mut detail_open = use_signal(|| false);
     let desc_full = desc.to_string();
@@ -244,13 +247,12 @@ fn render_accessory_card(
                         span { style: "font-size:48px;", "{emoji}" }
                     }
                 }}
-                {show_out_of_stock.then(|| rsx! {
-                    span { style: "
-                        position:absolute;top:8px;left:8px;
-                        font-size:13px;font-weight:700;background:#ff4757;color:#fff;
-                        padding:4px 8px;box-shadow:2px 2px 0 #000;z-index:2;
-                    ", "SOLD OUT" }
-                })}
+                div { style: "position:absolute;top:8px;left:8px;display:flex;flex-direction:column;gap:4px;z-index:2;align-items:flex-start;",
+                    span { style: "font-size:13px;font-weight:700;background:{cat_color};color:#000;padding:4px 8px;box-shadow:2px 2px 0 #000;", "{badge_label}" }
+                    {show_out_of_stock.then(|| rsx! {
+                        span { style: "font-size:13px;font-weight:700;background:#ff4757;color:#fff;padding:4px 8px;box-shadow:2px 2px 0 #000;", "SOLD OUT" }
+                    })}
+                }
                 {has_video.then(|| rsx! {
                     button { style: "position:absolute;bottom:8px;right:8px;width:44px;height:44px;border-radius:50%;background:rgba(0,0,0,0.6);border:1px solid #fff;color:#fff;font-size:16px;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:2;",
                         "aria-label": "Смотреть видео",
@@ -263,9 +265,6 @@ fn render_accessory_card(
             div { style: "padding:12px;",
                 div { style: "font-size:17px;font-weight:700;margin-bottom:6px;color:#fff;line-height:1.2;text-shadow:2px 2px 0 #000;",
                     "{a_name}"
-                }
-                div { style: "display:flex;gap:6px;align-items:center;margin-bottom:6px;flex-wrap:wrap;",
-                    span { style: badge_style, "{badge_label}" }
                 }
                 if !desc.is_empty() {
                     div { style: "font-size:13px;color:#888;margin-bottom:4px;line-height:1.35;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;",
