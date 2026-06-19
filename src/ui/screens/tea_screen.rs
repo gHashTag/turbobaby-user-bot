@@ -169,14 +169,14 @@ pub fn TeaScreen() -> Element {
                                         ",
                                             onclick: move |_| selected_tea.set(Some(t_click.clone())),
                                             div { style: "
-                                                height: 100px;
+                                                min-height: 100px;
                                                 background: linear-gradient(135deg, #16213e, #16213e);
                                                 display: flex; align-items: center; justify-content: center;
                                                 font-size: 36px; position: relative;
                                             ",
                                                 if let Some(ref img) = t.image_url {
                                                     if !img.is_empty() && (img.starts_with("http://") || img.starts_with("https://") || (img.starts_with("/") && !img.starts_with("//"))) {
-                                                        img { src: "{img}", alt: "{t_name}", style: "width: 100%; height: 100%; object-fit: cover;" }
+                                                        img { src: "{img}", alt: "{t_name}", style: "width: 100%; height: auto; object-fit: contain; display: block;" }
                                                     } else {
                                                         "{emoji}"
                                                     }

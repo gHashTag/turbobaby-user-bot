@@ -209,13 +209,13 @@ fn render_set_card(set: ApiSet, mut cart: Signal<Cart>) -> Element {
         ",
             onclick: move |_| detail_open.set(true),
             div { style: "
-                height:100px;
+                min-height:100px;
                 background:linear-gradient(135deg,#1a1a2e,#16213e);
                 display:flex;align-items:center;justify-content:center;
-                font-size:40px;position:relative;overflow:hidden;
+                font-size:40px;position:relative;
             ",
                 if has_image {
-                    img { src: "{img_url}", alt: "{set_name}", style: "width:100%;height:100%;object-fit:cover;position:absolute;inset:0;" }
+                    img { src: "{img_url}", alt: "{set_name}", style: "width:100%;height:auto;object-fit:contain;display:block;" }
                 } else {
                     "{icon}"
                 }

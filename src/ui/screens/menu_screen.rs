@@ -483,11 +483,11 @@ fn render_strain_card(strain: ApiStrain, mut cart: Signal<Cart>) -> Element {
     rsx! {
         div { key: strain.id.clone(), class: "comet-card", style: card_style,
             onclick: move |_| detail_open.set(true),
-            div { style: "width:100%;aspect-ratio:2/3;background:linear-gradient(135deg,#1a1a2e,#16213e);display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;",
+            div { style: "width:100%;min-height:180px;background:linear-gradient(135deg,#1a1a2e,#16213e);display:flex;align-items:center;justify-content:center;position:relative;",
                 {if has_video {
                     rsx! {
                         video {
-                            style: "width:100%;height:100%;object-fit:cover;display:block;",
+                            style: "width:100%;height:auto;display:block;",
                             src: "{video_url}",
                             "type": "video/mp4",
                             autoplay: true,
@@ -516,7 +516,7 @@ fn render_strain_card(strain: ApiStrain, mut cart: Signal<Cart>) -> Element {
                             src: "{img_url_bust}",
                             alt: "{alt_name}",
                             loading: "lazy",
-                            style: "width:100%;height:100%;object-fit:cover;display:block;"
+                            style: "width:100%;height:auto;object-fit:contain;display:block;"
                         }
                     }
                 } else {
