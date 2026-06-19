@@ -117,12 +117,17 @@ pub fn ProductDetailModal(props: ProductDetailModalProps) -> Element {
                 }
 
                 {has_image.then(|| rsx! {
-                    div { style: "width:100%;aspect-ratio:1/1;background:linear-gradient(135deg,#1a1a2e,#16213e);overflow:hidden;",
+                    // Full image, natural aspect ratio — strain art is tall promo
+                    // cards, so the old square crop (aspect-ratio:1/1 + object-fit:
+                    // cover) cut off the top/bottom. width:100% + height:auto shows
+                    // the WHOLE image; the dialog (max-height:85vh, overflow:auto)
+                    // scrolls.
+                    div { style: "width:100%;background:linear-gradient(135deg,#1a1a2e,#16213e);",
                         img {
                             src: "{img}",
                             alt: "{alt}",
                             loading: "lazy",
-                            style: "width:100%;height:100%;object-fit:cover;display:block;"
+                            style: "width:100%;height:auto;object-fit:contain;display:block;"
                         }
                     }
                 })}
