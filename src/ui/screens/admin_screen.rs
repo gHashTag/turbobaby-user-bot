@@ -4065,20 +4065,27 @@ fn EditAccessoryCard(
     .header("X-Admin-Token", admin_token())
     .header("X-Admin-Telegram-Id", telegram_id.to_string())
                                    .json(&body).send().await;
-                               let success = match res {
-                                   Ok(r) => r.status().is_success(),
-                                   Err(_) => false,
+                               // Surface the real reason so a save failure is
+                               // diagnosable (HTTP status vs network) instead of an
+                               // opaque "не сохранено".
+                               let outcome = match res {
+                                   Ok(r) if r.status().is_success() => Ok(()),
+                                   Ok(r) => Err(format!("HTTP {}", r.status().as_u16())),
+                                   Err(_) => Err("сеть/таймаут".to_string()),
                                };
-                               if success {
-                                   on_saved.call(());
-                                   status.set("✅ Сохранено".into());
-                                   TelegramApp::init().haptic_notification(HapticNotification::Success);
-                               } else {
-                                   TelegramApp::init().haptic_notification(HapticNotification::Error);
-                                   if let Some(orig) = original {
-                                       if let Some(a) = cache.write().iter_mut().find(|a| a.id == id) { *a = orig; }
+                               match outcome {
+                                   Ok(()) => {
+                                       on_saved.call(());
+                                       status.set("✅ Сохранено".into());
+                                       TelegramApp::init().haptic_notification(HapticNotification::Success);
                                    }
-                                   status.set("❌ Не сохранено. Попробуйте снова".into());
+                                   Err(reason) => {
+                                       TelegramApp::init().haptic_notification(HapticNotification::Error);
+                                       if let Some(orig) = original {
+                                           if let Some(a) = cache.write().iter_mut().find(|a| a.id == id) { *a = orig; }
+                                       }
+                                       status.set(format!("❌ Не сохранено ({reason}). Попробуйте снова"));
+                                   }
                                }
                            });
                        },

@@ -200,7 +200,7 @@ fn render_set_card(set: ApiSet, mut cart: Signal<Cart>) -> Element {
     rsx! {
         div { style: "
             background:#16213e;
-            border:4px solid {ACCENT}33;
+            border:4px solid {ACCENT};
             box-shadow:4px 4px 0 #000;
             overflow:hidden;
             position:relative;
@@ -218,6 +218,10 @@ fn render_set_card(set: ApiSet, mut cart: Signal<Cart>) -> Element {
                     img { src: "{img_url}", alt: "{set_name}", style: "width:100%;height:auto;object-fit:contain;display:block;" }
                 } else {
                     "{icon}"
+                }
+                // On-image badge (top-left), mirroring strain/accessory cards.
+                span { style: "position:absolute;top:8px;left:8px;z-index:2;font-size:13px;font-weight:700;background:{ACCENT};color:#000;padding:4px 8px;box-shadow:2px 2px 0 #000;",
+                    "📦 SET"
                 }
                 if has_discount {
                     span { style: "
