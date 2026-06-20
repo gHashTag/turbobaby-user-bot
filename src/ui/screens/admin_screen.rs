@@ -1746,12 +1746,13 @@ fn TeaTab() -> Element {
                            oninput: move |e| name.set(e.value()) }
                        select { style: input_style(), value: "{subcategory}",
                            oninput: move |e| subcategory.set(e.value()),
-                           option { value: "green", "🍃 Green" }
-                           option { value: "black", "🖤 Black" }
-                           option { value: "herbal", "🌿 Herbal" }
-                           option { value: "oolong", "🍂 Oolong" }
-                           option { value: "puer", "🟫 Pu-er" }
-                           option { value: "other", "🍵 Other" }
+                           option { value: "tea", "🍵 Tea" }
+                           option { value: "coffee", "☕ Coffee" }
+                           option { value: "lemonade", "🍋 Lemonade" }
+                           option { value: "milkshake", "🥛 Milkshake" }
+                           option { value: "soda", "🥤 Soda" }
+                           option { value: "juice", "🧃 Juice" }
+                           option { value: "other", "🥤 Other" }
                        }
                        input { style: input_style(), placeholder: "Цена ฿", value: "{price}", r#type: "number",
                            oninput: move |e| price.set(e.value()) }
@@ -4128,9 +4129,10 @@ fn EditTeaCard(
                div { style: edit_header_style(), "✏️ Редактирование" }
                input { style: input_style(), placeholder: "Название", value: "{name}", oninput: move |e| name.set(e.value()) }
                select { style: input_style(), value: "{subcategory}", oninput: move |e| subcategory.set(e.value()),
-                   option { value: "green", "🍃 Green" } option { value: "black", "🖤 Black" }
-                   option { value: "herbal", "🌿 Herbal" } option { value: "oolong", "🍂 Oolong" }
-                   option { value: "puer", "🟫 Pu-er" } option { value: "other", "🍵 Other" } }
+                   option { value: "tea", "🍵 Tea" } option { value: "coffee", "☕ Coffee" }
+                   option { value: "lemonade", "🍋 Lemonade" } option { value: "milkshake", "🥛 Milkshake" }
+                   option { value: "soda", "🥤 Soda" } option { value: "juice", "🧃 Juice" }
+                   option { value: "other", "🥤 Other" } }
                input { style: input_style(), placeholder: "Цена ฿", value: "{price}", r#type: "number", oninput: move |e| price.set(e.value()) }
                input { style: input_style(), placeholder: "Кол-во", value: "{stock}", r#type: "number", oninput: move |e| stock.set(e.value()) }
                textarea { style: textarea_style(), placeholder: "Описание (RU)", value: "{description}", oninput: move |e| description.set(e.value()) }

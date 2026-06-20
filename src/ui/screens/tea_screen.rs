@@ -32,16 +32,43 @@ struct TeaResponse {
 
 fn subcategory_emoji(sub: &str) -> &'static str {
     match sub.to_lowercase().as_str() {
+        "coffee" => "☕",
+        "lemonade" => "🍋",
+        "milkshake" => "🥛",
+        "soda" => "🥤",
+        "juice" => "🧃",
         "tea" | "cbd tea" => "🍵",
         "dessert" | "fruit" => "🥭",
         "teaware" => "🫖",
         "herbal" => "🍃",
         "flower" => "💜",
-        _ => "🍵",
+        _ => "🥤",
     }
 }
 
-const SUBCATEGORIES: &[&str] = &["All", "Tea", "Dessert", "Teaware"];
+/// Map a raw `subcategory` value to a top-level Drinks filter group. Legacy
+/// fine-grained tea subcats (green/black/herbal/…) and non-drink leftovers fold
+/// into "Tea" so nothing disappears from the catalog after the Drinks rename.
+fn drink_group(sub: &str) -> &'static str {
+    match sub.to_lowercase().as_str() {
+        "coffee" => "Coffee",
+        "lemonade" => "Lemonade",
+        "milkshake" => "Milkshake",
+        "soda" => "Soda",
+        "juice" => "Juice",
+        _ => "Tea",
+    }
+}
+
+const SUBCATEGORIES: &[&str] = &[
+    "All",
+    "Tea",
+    "Coffee",
+    "Lemonade",
+    "Milkshake",
+    "Soda",
+    "Juice",
+];
 
 #[component]
 pub fn TeaScreen() -> Element {
@@ -79,9 +106,7 @@ pub fn TeaScreen() -> Element {
             } else {
                 teas.iter()
                     .filter(|t| {
-                        t.subcategory
-                            .as_deref()
-                            .unwrap_or("")
+                        drink_group(t.subcategory.as_deref().unwrap_or(""))
                             .eq_ignore_ascii_case(&sub)
                     })
                     .cloned()
