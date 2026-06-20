@@ -182,45 +182,68 @@ async fn get_accessory(
     }
 }
 
-fn validate_accessory_request(req: &AccessoryRequest) -> Result<(), StatusCode> {
+/// Validate an accessory create/update request.
+///
+/// Returns a descriptive `(400, reason)` on failure so the admin UI can
+/// surface *which* field was rejected instead of an opaque "HTTP 400".
+/// The reason string names the field + the violated rule (lengths included)
+/// — diagnosable from the client without server-log access.
+fn validate_accessory_request(req: &AccessoryRequest) -> Result<(), (StatusCode, String)> {
+    fn bad(msg: String) -> (StatusCode, String) {
+        (StatusCode::BAD_REQUEST, msg)
+    }
     if req.name.len() > 200 {
-        return Err(StatusCode::BAD_REQUEST);
+        return Err(bad(format!(
+            "name слишком длинное ({}>200)",
+            req.name.len()
+        )));
     }
     if let Some(ref c) = req.category {
         if c.len() > 200 {
-            return Err(StatusCode::BAD_REQUEST);
+            return Err(bad(format!("category слишком длинная ({}>200)", c.len())));
         }
     }
     if let Some(ref d) = req.description {
         if d.len() > 1000 {
-            return Err(StatusCode::BAD_REQUEST);
+            return Err(bad(format!(
+                "description слишком длинное ({}>1000)",
+                d.len()
+            )));
         }
     }
     if let Some(ref n) = req.name_en {
         if n.len() > 200 {
-            return Err(StatusCode::BAD_REQUEST);
+            return Err(bad(format!("name_en слишком длинное ({}>200)", n.len())));
         }
     }
     if let Some(ref d) = req.description_en {
         if d.len() > 1000 {
-            return Err(StatusCode::BAD_REQUEST);
+            return Err(bad(format!(
+                "description_en слишком длинное ({}>1000)",
+                d.len()
+            )));
         }
     }
     if let Some(ref c) = req.category_en {
         if c.len() > 200 {
-            return Err(StatusCode::BAD_REQUEST);
+            return Err(bad(format!(
+                "category_en слишком длинная ({}>200)",
+                c.len()
+            )));
         }
     }
     if !req.price.is_finite() || req.price < 0.0 || req.price > 1_000_000.0 {
-        return Err(StatusCode::BAD_REQUEST);
+        return Err(bad(format!("price вне диапазона 0..1e6 ({})", req.price)));
     }
     if let Some(s) = req.stock {
         if !(0..=1_000_000).contains(&s) {
-            return Err(StatusCode::BAD_REQUEST);
+            return Err(bad(format!("stock вне диапазона 0..1e6 ({s})")));
         }
     }
-    crate::api::validate_url(&req.image_url)?;
-    crate::api::validate_url(&req.video_url)?;
+    crate::api::validate_url(&req.image_url)
+        .map_err(|_| bad(format!("image_url невалиден ({:?})", req.image_url)))?;
+    crate::api::validate_url(&req.video_url)
+        .map_err(|_| bad(format!("video_url невалиден ({:?})", req.video_url)))?;
     Ok(())
 }
 
@@ -228,8 +251,8 @@ async fn create_accessory(
     State(state): State<AppState>,
     headers: HeaderMap,
     Json(req): Json<AccessoryRequest>,
-) -> Result<Json<Value>, StatusCode> {
-    check_admin(&headers, &state)?;
+) -> Result<Json<Value>, (StatusCode, String)> {
+    check_admin(&headers, &state).map_err(|s| (s, String::new()))?;
     validate_accessory_request(&req)?;
     let id = uuid::Uuid::new_v4().to_string();
     use sea_orm::{ConnectionTrait, DbBackend, Statement};
@@ -250,7 +273,7 @@ async fn create_accessory(
             req.description_en.into(),
             req.category_en.into(),
         ],
-    )).await.map_err(|e| { tracing::error!("create_accessory: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?;
+    )).await.map_err(|e| { tracing::error!("create_accessory: {e}"); (StatusCode::INTERNAL_SERVER_ERROR, String::new()) })?;
     Ok(Json(json!({ "success": true, "id": id })))
 }
 
@@ -259,11 +282,11 @@ async fn update_accessory(
     headers: HeaderMap,
     Path(id): Path<String>,
     Json(req): Json<AccessoryRequest>,
-) -> Result<Json<Value>, StatusCode> {
+) -> Result<Json<Value>, (StatusCode, String)> {
     if id.len() > 200 {
-        return Err(StatusCode::BAD_REQUEST);
+        return Err((StatusCode::BAD_REQUEST, "id слишком длинный".to_string()));
     }
-    check_admin(&headers, &state)?;
+    check_admin(&headers, &state).map_err(|s| (s, String::new()))?;
     validate_accessory_request(&req)?;
     use sea_orm::{ConnectionTrait, DbBackend, Statement};
     state.db.orm.execute(Statement::from_sql_and_values(
@@ -283,7 +306,7 @@ async fn update_accessory(
             req.is_available.unwrap_or(true).into(),
             id.into(),
         ],
-    )).await.map_err(|e| { tracing::error!("update_accessory: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?;
+    )).await.map_err(|e| { tracing::error!("update_accessory: {e}"); (StatusCode::INTERNAL_SERVER_ERROR, String::new()) })?;
     Ok(Json(json!({ "success": true })))
 }
 
@@ -1515,7 +1538,7 @@ mod tests {
         let mut req = valid_accessory();
         req.name = "a".repeat(201);
         assert_eq!(
-            validate_accessory_request(&req).unwrap_err(),
+            validate_accessory_request(&req).unwrap_err().0,
             StatusCode::BAD_REQUEST
         );
     }
@@ -1525,7 +1548,7 @@ mod tests {
         let mut req = valid_accessory();
         req.category = Some("a".repeat(201));
         assert_eq!(
-            validate_accessory_request(&req).unwrap_err(),
+            validate_accessory_request(&req).unwrap_err().0,
             StatusCode::BAD_REQUEST
         );
     }
@@ -1535,7 +1558,7 @@ mod tests {
         let mut req = valid_accessory();
         req.description = Some("a".repeat(1001));
         assert_eq!(
-            validate_accessory_request(&req).unwrap_err(),
+            validate_accessory_request(&req).unwrap_err().0,
             StatusCode::BAD_REQUEST
         );
     }
@@ -1545,7 +1568,7 @@ mod tests {
         let mut req = valid_accessory();
         req.price = -1.0;
         assert_eq!(
-            validate_accessory_request(&req).unwrap_err(),
+            validate_accessory_request(&req).unwrap_err().0,
             StatusCode::BAD_REQUEST
         );
     }
@@ -1555,7 +1578,7 @@ mod tests {
         let mut req = valid_accessory();
         req.price = 2_000_000.0;
         assert_eq!(
-            validate_accessory_request(&req).unwrap_err(),
+            validate_accessory_request(&req).unwrap_err().0,
             StatusCode::BAD_REQUEST
         );
     }
@@ -1565,7 +1588,7 @@ mod tests {
         let mut req = valid_accessory();
         req.price = f64::NAN;
         assert_eq!(
-            validate_accessory_request(&req).unwrap_err(),
+            validate_accessory_request(&req).unwrap_err().0,
             StatusCode::BAD_REQUEST
         );
     }
@@ -1575,7 +1598,7 @@ mod tests {
         let mut req = valid_accessory();
         req.image_url = Some("javascript:alert(1)".into());
         assert_eq!(
-            validate_accessory_request(&req).unwrap_err(),
+            validate_accessory_request(&req).unwrap_err().0,
             StatusCode::BAD_REQUEST
         );
     }
@@ -1588,7 +1611,7 @@ mod tests {
         let mut req = valid_accessory();
         req.stock = Some(-1);
         assert_eq!(
-            validate_accessory_request(&req).unwrap_err(),
+            validate_accessory_request(&req).unwrap_err().0,
             StatusCode::BAD_REQUEST
         );
     }
@@ -1598,7 +1621,7 @@ mod tests {
         let mut req = valid_accessory();
         req.stock = Some(1_000_001);
         assert_eq!(
-            validate_accessory_request(&req).unwrap_err(),
+            validate_accessory_request(&req).unwrap_err().0,
             StatusCode::BAD_REQUEST
         );
     }

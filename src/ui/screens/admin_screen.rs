@@ -4071,7 +4071,20 @@ fn EditAccessoryCard(
                                // opaque "не сохранено".
                                let outcome = match res {
                                    Ok(r) if r.status().is_success() => Ok(()),
-                                   Ok(r) => Err(format!("HTTP {}", r.status().as_u16())),
+                                   Ok(r) => {
+                                       // Surface the server's reason body (e.g. which field
+                                       // validation rejected) so a 400 is self-diagnosable
+                                       // from the client without server-log access.
+                                       let st = r.status().as_u16();
+                                       let body = r.text().await.unwrap_or_default();
+                                       let b = body.trim();
+                                       if b.is_empty() {
+                                           Err(format!("HTTP {st}"))
+                                       } else {
+                                           let snip: String = b.chars().take(100).collect();
+                                           Err(format!("HTTP {st}: {snip}"))
+                                       }
+                                   }
                                    Err(_) => Err("сеть/таймаут".to_string()),
                                };
                                match outcome {
