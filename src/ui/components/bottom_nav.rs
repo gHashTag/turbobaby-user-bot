@@ -48,8 +48,8 @@ pub fn BottomNav(#[props(default)] cart_count: u32) -> Element {
             Link { to: Route::Tea {},
                 div { class: if is_tea { "nav-item active" } else { "nav-item" },
                     onmouseenter: move |_| { prefetch::prefetch_route(&Route::Tea {}); },
-                    span { class: "nav-icon", "🍵" }
-                    span { class: "nav-label", "Tea" }
+                    span { class: "nav-icon", "🥤" }
+                    span { class: "nav-label", "Drinks" }
                 }
             }
             Link { to: Route::Garden {},
