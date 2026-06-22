@@ -1,8 +1,8 @@
 use crate::trios::i18n::{t, T_ACC_DESC, T_ACC_TITLE, T_ADD_TO_CART, T_FILTER_ALL};
 use crate::ui::api::context::api_base_url;
 use crate::ui::components::bottom_nav::BottomNav;
+use crate::ui::components::card_media::CardMedia;
 use crate::ui::components::product_detail_modal::ProductDetailModal;
-use crate::ui::components::video_modal::VideoModal;
 use crate::ui::state::{Cart, CartItem, CartItemType};
 use dioxus::prelude::*;
 use serde::Deserialize;
@@ -207,17 +207,6 @@ fn render_accessory_card(
         a.description.as_deref().unwrap_or(""),
         a.description_en.as_deref(),
     );
-    let img_url = a.image_url.clone().unwrap_or_default();
-    let has_image = !img_url.is_empty()
-        && (img_url.starts_with("http://")
-            || img_url.starts_with("https://")
-            || (img_url.starts_with("/") && !img_url.starts_with("//")));
-    let video_url = a.video_url.clone().unwrap_or_default();
-    let has_video = !video_url.is_empty()
-        && (video_url.starts_with("http://")
-            || video_url.starts_with("https://")
-            || (video_url.starts_with("/") && !video_url.starts_with("//")));
-    let mut show_video = use_signal(|| false);
     let cat_color = category_color(cat);
     let cat_disp = crate::ui::lang::localized(cat, a.category_en.as_deref());
     let badge_label = format!("{} {}", emoji, cat_disp);
@@ -232,35 +221,17 @@ fn render_accessory_card(
     rsx! {
         div { key: a.id.clone(), class: "comet-card", style: card_style,
             onclick: move |_| detail_open.set(true),
-            div { style: "width:100%;min-height:180px;background:linear-gradient(135deg,#1a1a2e,#16213e);display:flex;align-items:center;justify-content:center;position:relative;",
-                {if has_image {
-                    rsx! {
-                        img {
-                            src: "{img_url}",
-                            alt: "{a_name}",
-                            loading: "lazy",
-                            style: "width:100%;height:auto;object-fit:contain;display:block;"
-                        }
-                    }
-                } else {
-                    rsx! {
-                        span { style: "font-size:48px;", "{emoji}" }
-                    }
-                }}
+            CardMedia {
+                image_url: a.image_url.clone(),
+                video_url: a.video_url.clone(),
+                emoji: emoji.to_string(),
+                alt: a_name.clone(),
                 div { style: "position:absolute;top:8px;left:8px;display:flex;flex-direction:column;gap:4px;z-index:2;align-items:flex-start;",
                     span { style: "font-size:13px;font-weight:700;background:{cat_color};color:#000;padding:4px 8px;box-shadow:2px 2px 0 #000;", "{badge_label}" }
                     {show_out_of_stock.then(|| rsx! {
                         span { style: "font-size:13px;font-weight:700;background:#ff4757;color:#fff;padding:4px 8px;box-shadow:2px 2px 0 #000;", "SOLD OUT" }
                     })}
                 }
-                {has_video.then(|| rsx! {
-                    button { style: "position:absolute;bottom:8px;right:8px;width:44px;height:44px;border-radius:50%;background:rgba(0,0,0,0.6);border:1px solid #fff;color:#fff;font-size:16px;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:2;",
-                        "aria-label": "Смотреть видео",
-                        onclick: move |e: Event<MouseData>| { e.stop_propagation(); show_video.set(true); }, "▶️" }
-                })}
-                {show_video().then(|| rsx! {
-                    VideoModal { url: video_url.clone(), on_close: move |_| show_video.set(false) }
-                })}
             }
             div { style: "padding:12px;",
                 div { style: "font-size:17px;font-weight:700;margin-bottom:6px;color:#fff;line-height:1.2;text-shadow:2px 2px 0 #000;",

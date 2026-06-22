@@ -7,6 +7,7 @@
 pub mod bottom_nav;
 pub mod button;
 pub mod card;
+pub mod card_media;
 pub mod modal;
 
 pub mod cart_item;
@@ -38,6 +39,7 @@ pub mod toast;
 // ---------------------------------------------------------------------------
 pub use button::{Button, ButtonProps, ButtonSize, ButtonVariant};
 pub use card::{Card, CardProps, CardVariant};
+pub use card_media::CardMedia;
 pub use cart_item::{CartItemComponent, CartItemProps};
 pub use input::{Input, InputProps, InputType};
 pub use loading::{Loading, LoadingOverlay, LoadingProps, LoadingSize};

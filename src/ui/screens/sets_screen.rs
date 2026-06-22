@@ -1,8 +1,8 @@
 use crate::trios::i18n::{t, T_ADD_TO_CART, T_SETS_DESC, T_SETS_TITLE};
 use crate::ui::api::context::api_base_url;
 use crate::ui::components::bottom_nav::BottomNav;
+use crate::ui::components::card_media::CardMedia;
 use crate::ui::components::product_detail_modal::ProductDetailModal;
-use crate::ui::components::video_modal::VideoModal;
 use crate::ui::state::{Cart, CartItem, CartItemType};
 use dioxus::prelude::*;
 use serde::Deserialize;
@@ -184,7 +184,7 @@ pub fn SetsScreen() -> Element {
                             }
                             div { style: "display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:0 16px;",
                                 for set in ordered.iter() {
-                                    { render_set_card(set.clone(), cart, true) }
+                                    { render_set_card(set.clone(), cart) }
                                 }
                             }
                         }
@@ -214,21 +214,8 @@ pub fn SetsScreen() -> Element {
     }
 }
 
-/// `compact` = carousel context: cap the image height so a tall product photo
-/// doesn't blow the card up to full-screen (the vertical list keeps full-height
-/// images, per the earlier "фото 100% по высоте" request).
-fn render_set_card(set: ApiSet, mut cart: Signal<Cart>, compact: bool) -> Element {
+fn render_set_card(set: ApiSet, mut cart: Signal<Cart>) -> Element {
     let add_to_cart = t(crate::ui::lang::current_lang(), T_ADD_TO_CART).to_string();
-    let img_box_style = if compact {
-        "height:150px;background:linear-gradient(135deg,#1a1a2e,#16213e);display:flex;align-items:center;justify-content:center;font-size:40px;position:relative;overflow:hidden;"
-    } else {
-        "min-height:100px;background:linear-gradient(135deg,#1a1a2e,#16213e);display:flex;align-items:center;justify-content:center;font-size:40px;position:relative;"
-    };
-    let img_style = if compact {
-        "width:100%;height:100%;object-fit:cover;display:block;"
-    } else {
-        "width:100%;height:auto;object-fit:contain;display:block;"
-    };
     let discount = if set.discount_percent.is_finite() {
         set.discount_percent.max(0.0)
     } else {
@@ -259,17 +246,6 @@ fn render_set_card(set: ApiSet, mut cart: Signal<Cart>, compact: bool) -> Elemen
         set.description.as_deref().unwrap_or(""),
         set.description_en.as_deref(),
     );
-    let img_url = set.image_url.clone().unwrap_or_default();
-    let has_image = !img_url.is_empty()
-        && (img_url.starts_with("http://")
-            || img_url.starts_with("https://")
-            || (img_url.starts_with("/") && !img_url.starts_with("//")));
-    let video_url = set.video_url.clone().unwrap_or_default();
-    let has_video = !video_url.is_empty()
-        && (video_url.starts_with("http://")
-            || video_url.starts_with("https://")
-            || (video_url.starts_with("/") && !video_url.starts_with("//")));
-    let mut show_video = use_signal(|| false);
     let mut detail_open = use_signal(|| false);
     let desc_full = desc.to_string();
     let is_available = set.is_available.unwrap_or(true);
@@ -295,12 +271,11 @@ fn render_set_card(set: ApiSet, mut cart: Signal<Cart>, compact: bool) -> Elemen
             {opacity}
         ",
             onclick: move |_| detail_open.set(true),
-            div { style: "{img_box_style}",
-                if has_image {
-                    img { src: "{img_url}", alt: "{set_name}", style: "{img_style}" }
-                } else {
-                    "{icon}"
-                }
+            CardMedia {
+                image_url: set.image_url.clone(),
+                video_url: set.video_url.clone(),
+                emoji: icon.to_string(),
+                alt: set_name.clone(),
                 // On-image badge (top-left), mirroring strain/accessory cards.
                 span { style: "position:absolute;top:8px;left:8px;z-index:2;font-size:13px;font-weight:700;background:{ACCENT};color:#000;padding:4px 8px;box-shadow:2px 2px 0 #000;",
                     "📦 SET"
@@ -317,14 +292,6 @@ fn render_set_card(set: ApiSet, mut cart: Signal<Cart>, compact: bool) -> Elemen
                         font-size:13px;font-weight:700;background:{ACCENT};color:#000;
                         padding:4px 8px;box-shadow:2px 2px 0 #000;z-index:2;
                     ", "{discount_badge}" }
-                }
-                if has_video {
-                    button { style: "position:absolute;bottom:8px;right:8px;width:44px;height:44px;border-radius:50%;background:rgba(0,0,0,0.6);border:1px solid #fff;color:#fff;font-size:16px;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:2;",
-                        "aria-label": "Смотреть видео",
-                        onclick: move |e: Event<MouseData>| { e.stop_propagation(); show_video.set(true); }, "▶️" }
-                }
-                if show_video() {
-                    VideoModal { url: video_url.clone(), on_close: move |_| show_video.set(false) }
                 }
             }
             div { style: "padding:14px;",
