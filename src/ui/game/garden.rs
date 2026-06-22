@@ -232,11 +232,20 @@ pub fn Garden() -> Element {
                                             .set(format!("Сад пуст после авто-посадки: {}", e2)),
                                     }
                                 } else {
-                                    let err = resp
-                                        .get("error")
-                                        .and_then(|v| v.as_str())
-                                        .unwrap_or("Не удалось получить семечко");
-                                    error_c.set(err.to_string());
+                                    // Map known server error codes to friendly text.
+                                    let code =
+                                        resp.get("error").and_then(|v| v.as_str()).unwrap_or("");
+                                    let msg = match code {
+                                        "product_not_in_menu" => {
+                                            "Товар из заказа больше нет в меню — семечко не посадить. Закажите что-то из актуального меню."
+                                        }
+                                        "no_completed_orders" | "no_catalog_items" => {
+                                            "Сделайте заказ из меню — и получите семечко для выращивания скидки."
+                                        }
+                                        "" => "Не удалось получить семечко",
+                                        other => other,
+                                    };
+                                    error_c.set(msg.to_string());
                                 }
                             }
                             Err(e) => {

@@ -929,6 +929,42 @@ async fn force_seed(
         ));
     };
 
+    // B1: only seed a product that still exists AND is available in the live
+    // catalog — the order JSON is a stale snapshot, so a since-deleted/hidden
+    // strain would otherwise be planted as a "phantom" not in the menu.
+    let live = state
+        .db
+        .orm
+        .query_one(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            "SELECT EXISTS ( \
+                 SELECT 1 FROM strains        WHERE id = $1 AND is_available = true \
+                 UNION ALL SELECT 1 FROM sets           WHERE id = $1 AND is_available = true \
+                 UNION ALL SELECT 1 FROM accessory_sets WHERE id = $1 AND is_available = true \
+                 UNION ALL SELECT 1 FROM tea_sets       WHERE id = $1 AND is_available = true \
+                 UNION ALL SELECT 1 FROM accessories    WHERE id = $1 AND is_available = true \
+                 UNION ALL SELECT 1 FROM tea_products   WHERE id = $1 AND is_available = true \
+             ) AS ok",
+            [strain_id.clone().into()],
+        ))
+        .await
+        .map_err(|e| {
+            tracing::error!("force_seed: live-check failed: {e}");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+    let is_live = live
+        .and_then(|r| r.try_get::<bool>("", "ok").ok())
+        .unwrap_or(false);
+    if !is_live {
+        tracing::info!(
+            telegram_id = tid,
+            "force_seed: skipped — seed product not in live catalog"
+        );
+        return Ok(Json(
+            json!({ "success": false, "error": "product_not_in_menu" }),
+        ));
+    }
+
     // 3. Plant the seed
     let plant_id = uuid::Uuid::new_v4().to_string();
     let planted_at = chrono::Utc::now().timestamp_millis();

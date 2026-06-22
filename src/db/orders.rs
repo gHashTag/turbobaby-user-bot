@@ -242,6 +242,11 @@ pub async fn complete_order_and_update_loyalty(
             planted_at.saturating_sub(crate::trios::garden::POST_HARVEST_COOLDOWN_MS);
         tx.execute(Statement::from_sql_and_values(
             DbBackend::Postgres,
+            // B1: only seed a plant whose product still exists AND is available
+            // in the LIVE catalog. Order JSON is a stale snapshot — a strain the
+            // shop later deleted/hid used to be seeded as a "phantom" not in the
+            // menu. The EXISTS gate (any of the 6 catalogs, available=true) keeps
+            // the garden in sync with what's actually buyable.
             "INSERT INTO garden_plants \
                   (id, user_id, strain_id, strain_name, current_stage, planted_at, is_completed, water_count) \
              SELECT $1, $2, $3, $4, 'seed', $5, false, 0 \
@@ -251,6 +256,14 @@ pub async fn complete_order_and_update_loyalty(
              AND NOT EXISTS ( \
                  SELECT 1 FROM garden_plants \
                  WHERE user_id = $2 AND harvested_at IS NOT NULL AND harvested_at > $6 \
+             ) \
+             AND EXISTS ( \
+                 SELECT 1 FROM strains        WHERE id = $3 AND is_available = true \
+                 UNION ALL SELECT 1 FROM sets           WHERE id = $3 AND is_available = true \
+                 UNION ALL SELECT 1 FROM accessory_sets WHERE id = $3 AND is_available = true \
+                 UNION ALL SELECT 1 FROM tea_sets       WHERE id = $3 AND is_available = true \
+                 UNION ALL SELECT 1 FROM accessories    WHERE id = $3 AND is_available = true \
+                 UNION ALL SELECT 1 FROM tea_products   WHERE id = $3 AND is_available = true \
              )",
             [
                 plant_id.into(),
