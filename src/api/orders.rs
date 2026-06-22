@@ -57,6 +57,12 @@ pub(crate) struct CreateOrderRequest {
     pub bonus_used: Option<f64>,
     pub total: f64,
     pub shop_id: Option<String>,
+    /// B4: an optional garden reward to apply (product-scoped discount). The
+    /// server loads the reward, computes the discount from DB prices, and
+    /// verifies `total = subtotal - bonus_used - garden_discount` — the client
+    /// can't set the discount amount itself.
+    #[serde(default)]
+    pub garden_reward_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -145,7 +151,19 @@ fn validate_create_order(req: &CreateOrderRequest) -> Result<f64, StatusCode> {
         return Err(StatusCode::BAD_REQUEST);
     }
     let expected_total = (req.subtotal - bonus_used).max(0.0);
-    if (req.total - expected_total).abs() > 0.01 {
+    // B4: when a garden reward is applied the total is further reduced by a
+    // server-computed product discount, so the exact equality is deferred to
+    // create_order (which knows the discount). Here we only require the claimed
+    // total not to EXCEED the no-discount expected (a reward can only lower it).
+    if req
+        .garden_reward_id
+        .as_deref()
+        .is_some_and(|s| !s.is_empty())
+    {
+        if req.total > expected_total + 0.01 {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    } else if (req.total - expected_total).abs() > 0.01 {
         return Err(StatusCode::BAD_REQUEST);
     }
     Ok(bonus_used)
@@ -408,6 +426,63 @@ pub(crate) fn check_full_subtotal(
     FullSubtotalCheck::Ok
 }
 
+/// True if `item` references catalog product `id` in any of its `*_id` fields.
+pub(crate) fn item_matches_id(item: &OrderItem, id: &str) -> bool {
+    item.strain_id.as_deref() == Some(id)
+        || item.accessory_id.as_deref() == Some(id)
+        || item.tea_id.as_deref() == Some(id)
+        || item.set_id.as_deref() == Some(id)
+}
+
+/// Server-authoritative UNIT price for one order item — same catalog + effective
+/// price logic as `check_full_subtotal`, but per-item. `None` if the product is
+/// unknown or unavailable. Used by the B4 garden discount so the reduction is
+/// computed server-side (never trusting a client-sent amount).
+pub(crate) fn item_unit_price(
+    item: &OrderItem,
+    catalog: &PriceCatalog<'_>,
+    now: chrono::DateTime<chrono::Utc>,
+) -> Option<f64> {
+    if let Some(sid) = item.strain_id.as_deref() {
+        let strain = catalog.strains.get(sid)?;
+        if !strain.is_available {
+            return None;
+        }
+        let flags = MarketingFlags {
+            price_per_gram: strain.price_per_gram,
+            is_strain_of_day: strain.is_strain_of_day,
+            strain_of_day_discount: strain.strain_of_day_discount,
+            sale_active: strain.sale_active,
+            sale_until: strain.sale_until.as_deref(),
+            sale_price: strain.sale_price,
+            discount_percent: strain.discount_percent,
+            is_new_arrival: strain.is_new_arrival,
+            new_until: strain.new_until.as_deref(),
+        };
+        Some(effective_strain_price(&flags, now).price)
+    } else if let Some(aid) = item.accessory_id.as_deref() {
+        let &(price, avail) = catalog.accessories.get(aid)?;
+        if !avail {
+            return None;
+        }
+        Some(effective_accessory_price(price))
+    } else if let Some(tid) = item.tea_id.as_deref() {
+        let &(price, avail) = catalog.tea_products.get(tid)?;
+        if !avail {
+            return None;
+        }
+        Some(effective_tea_price(price))
+    } else if let Some(sid) = item.set_id.as_deref() {
+        let &(tp, dp, avail) = catalog.sets.get(sid)?;
+        if !avail {
+            return None;
+        }
+        Some(effective_set_price(tp, dp))
+    } else {
+        None
+    }
+}
+
 async fn create_order(
     headers: HeaderMap,
     State(state): State<AppState>,
@@ -457,6 +532,71 @@ async fn create_order(
     }
 
     let bonus_used = validate_create_order(&req)?;
+
+    // B4: load + validate an applied garden reward (product-scoped discount).
+    // Returns (reward_id, target_product_id, percent) on success. Every failure
+    // path is a 422 (the client claimed a reward it can't use) — never a silent
+    // accept. The discount AMOUNT is computed later from DB prices, not here.
+    let garden_reward: Option<(String, String, u32)> = {
+        use sea_orm::{ConnectionTrait, DbBackend, Statement};
+        if let Some(rid) = req.garden_reward_id.as_deref().filter(|s| !s.is_empty()) {
+            if rid.len() > 200 {
+                return Err(StatusCode::BAD_REQUEST);
+            }
+            let Some(uid) = req.telegram_id else {
+                // Rewards belong to an authenticated user; anon can't apply one.
+                return Err(StatusCode::UNPROCESSABLE_ENTITY);
+            };
+            let now_ms = chrono::Utc::now().timestamp_millis();
+            let row = state
+                .db
+                .orm
+                .query_one(Statement::from_sql_and_values(
+                    DbBackend::Postgres,
+                    "SELECT discount_percent, target_product_id, scope, is_used, expires_at, user_id \
+                     FROM garden_rewards WHERE id = $1",
+                    [rid.into()],
+                ))
+                .await
+                .map_err(|e| {
+                    error!("create_order: garden reward lookup failed: {e}");
+                    StatusCode::INTERNAL_SERVER_ERROR
+                })?;
+            let Some(row) = row else {
+                return Err(StatusCode::UNPROCESSABLE_ENTITY);
+            };
+            let r_user: String = row.try_get("", "user_id").unwrap_or_default();
+            let is_used: bool = row.try_get("", "is_used").unwrap_or(true);
+            let expires_at: i64 = row.try_get("", "expires_at").unwrap_or(0);
+            let scope: String = row.try_get("", "scope").unwrap_or_default();
+            let target: Option<String> = row
+                .try_get::<Option<String>>("", "target_product_id")
+                .ok()
+                .flatten();
+            let pct: i32 = row.try_get("", "discount_percent").unwrap_or(0);
+            if r_user != uid.to_string()
+                || is_used
+                || expires_at <= now_ms
+                || scope != "product"
+                || target.is_none()
+            {
+                tracing::info!(
+                    telegram_id = uid,
+                    "create_order: garden reward not applicable (used/expired/scope/owner)"
+                );
+                return Err(StatusCode::UNPROCESSABLE_ENTITY);
+            }
+            let target = target.unwrap();
+            // The reward's target product must actually be in the cart.
+            if !req.items.iter().any(|i| item_matches_id(i, &target)) {
+                return Err(StatusCode::UNPROCESSABLE_ENTITY);
+            }
+            Some((rid.to_string(), target, pct.clamp(0, 100) as u32))
+        } else {
+            None
+        }
+    };
+    let mut garden_discount = 0.0_f64;
 
     // Cycle #58 / C: full server-side price authority across every catalog
     // (strains + accessories + tea + sets). Cycle #56 covered strains only;
@@ -620,7 +760,27 @@ async fn create_order(
         }
 
         match check_full_subtotal(&req.items, &catalog, req.subtotal, 0.01, chrono::Utc::now()) {
-            FullSubtotalCheck::Ok => {}
+            FullSubtotalCheck::Ok => {
+                // B4: compute the garden product-scoped discount from server-side
+                // prices (the catalog is live here). Applied to the target line's
+                // unit × quantity. If the target product can't be priced, reject.
+                if let Some((_, ref target, pct)) = garden_reward {
+                    let now_dt = chrono::Utc::now();
+                    if let Some(ti) = req.items.iter().find(|i| item_matches_id(i, target)) {
+                        match item_unit_price(ti, &catalog, now_dt) {
+                            Some(unit) => {
+                                let qty = if ti.quantity.is_finite() {
+                                    ti.quantity.max(0.0)
+                                } else {
+                                    0.0
+                                };
+                                garden_discount = (unit * qty * (pct as f64) / 100.0).max(0.0);
+                            }
+                            None => return Err(StatusCode::UNPROCESSABLE_ENTITY),
+                        }
+                    }
+                }
+            }
             FullSubtotalCheck::UnknownItem { catalog: cat, id } => {
                 tracing::warn!(
                     telegram_id = req.telegram_id.unwrap_or(0),
@@ -713,6 +873,36 @@ async fn create_order(
                 }
                 return Err(StatusCode::UNPROCESSABLE_ENTITY);
             }
+        }
+    }
+
+    // B4: with a garden reward applied, the authoritative total is
+    // subtotal - bonus_used - (server-computed) garden_discount. Verify the
+    // client's claimed total matches; a mismatch = tampering → reject + audit.
+    if garden_reward.is_some() {
+        let expected = (req.subtotal - bonus_used - garden_discount).max(0.0);
+        if (req.total - expected).abs() > 0.01 {
+            tracing::warn!(
+                telegram_id = req.telegram_id.unwrap_or(0),
+                claimed_total = req.total,
+                expected_total = expected,
+                garden_discount,
+                "create_order: garden-discount total mismatch — possible tampering"
+            );
+            if let Err(e) = crate::db::orders::record_fraud_event(
+                &state.db.orm,
+                req.telegram_id,
+                crate::db::orders::FRAUD_CODE_SUBTOTAL_MISMATCH,
+                None,
+                None,
+                Some(req.total),
+                Some(expected),
+            )
+            .await
+            {
+                tracing::warn!("fraud_event audit insert failed: {}", e);
+            }
+            return Err(StatusCode::UNPROCESSABLE_ENTITY);
         }
     }
 
@@ -864,6 +1054,27 @@ async fn create_order(
         error!("create_order insert error: {}", e);
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
+
+    // B4: consume the applied garden reward atomically with the order. The
+    // `WHERE is_used = false` makes it race-safe + idempotent: if a concurrent
+    // order already used it, 0 rows → abort (tx drops → full rollback) so the
+    // discount can never be applied twice.
+    if let Some((ref rid, _, _)) = garden_reward {
+        let used = tx
+            .execute(Statement::from_sql_and_values(
+                DbBackend::Postgres,
+                "UPDATE garden_rewards SET is_used = true WHERE id = $1 AND is_used = false",
+                [rid.clone().into()],
+            ))
+            .await
+            .map_err(|e| {
+                error!("create_order: mark garden reward used: {}", e);
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?;
+        if used.rows_affected() == 0 {
+            return Err(StatusCode::CONFLICT);
+        }
+    }
 
     // Record the idempotency key inside the same tx so retries after this
     // commit see the cached order_id. The earlier advisory lock guarantees
@@ -1264,9 +1475,9 @@ async fn get_user_orders(
 mod tests {
     use super::{
         check_and_record, check_full_subtotal, check_strain_subtotal, is_valid_idempotency_key,
-        new_store, validate_create_order, validate_update_order_status, CreateOrderRequest,
-        FullSubtotalCheck, PriceCatalog, SubtotalCheck, ANON_ORDER_RL_MAX_ATTEMPTS,
-        ANON_ORDER_RL_MAX_IPS, ANON_ORDER_RL_WINDOW,
+        item_matches_id, item_unit_price, new_store, validate_create_order,
+        validate_update_order_status, CreateOrderRequest, FullSubtotalCheck, PriceCatalog,
+        SubtotalCheck, ANON_ORDER_RL_MAX_ATTEMPTS, ANON_ORDER_RL_MAX_IPS, ANON_ORDER_RL_WINDOW,
     };
 
     // ── Idempotency-key validator (cycle #57) ────────────────────────────
@@ -1583,6 +1794,97 @@ mod tests {
         );
     }
 
+    // ── B4: garden product-scoped discount money path ──────────────
+    #[test]
+    fn item_unit_price_per_catalog() {
+        let s = strain("s1", 100.0);
+        let mut cat = PriceCatalog::default();
+        cat.strains.insert(s.id.as_str(), &s);
+        cat.accessories.insert("a1", (250.0, true));
+        cat.tea_products.insert("t1", (80.0, true));
+        cat.sets.insert("set1", (1000.0, 10.0, true)); // 900 effective
+        assert_eq!(
+            item_unit_price(&strain_item("s1", 2.0), &cat, now_utc()),
+            Some(100.0)
+        );
+        assert_eq!(
+            item_unit_price(&accessory_item_with("a1", 1.0), &cat, now_utc()),
+            Some(250.0)
+        );
+        assert_eq!(
+            item_unit_price(&tea_item_with("t1", 1.0), &cat, now_utc()),
+            Some(80.0)
+        );
+        assert_eq!(
+            item_unit_price(&set_item_with("set1", 1.0), &cat, now_utc()),
+            Some(900.0)
+        );
+        // Unknown + unavailable → None (so the discount path rejects).
+        assert_eq!(
+            item_unit_price(&accessory_item_with("nope", 1.0), &cat, now_utc()),
+            None
+        );
+        cat.accessories.insert("a2", (250.0, false));
+        assert_eq!(
+            item_unit_price(&accessory_item_with("a2", 1.0), &cat, now_utc()),
+            None
+        );
+    }
+
+    #[test]
+    fn item_matches_id_checks_all_id_fields() {
+        assert!(item_matches_id(&strain_item("s1", 1.0), "s1"));
+        assert!(item_matches_id(&accessory_item_with("a1", 1.0), "a1"));
+        assert!(item_matches_id(&tea_item_with("t1", 1.0), "t1"));
+        assert!(item_matches_id(&set_item_with("set1", 1.0), "set1"));
+        assert!(!item_matches_id(&strain_item("s1", 1.0), "other"));
+    }
+
+    #[test]
+    fn validate_order_garden_reward_relaxes_total_downward_only() {
+        let mut req = valid_req();
+        req.subtotal = 200.0;
+        req.bonus_used = Some(0.0);
+        // With a reward, a LOWER total (the discount) is allowed; the exact
+        // amount is verified later in create_order against DB prices.
+        req.garden_reward_id = Some("rw1".into());
+        req.total = 150.0;
+        assert!(validate_create_order(&req).is_ok());
+        // But the total can never EXCEED subtotal - bonus (a reward only lowers).
+        req.total = 250.0;
+        assert_eq!(
+            validate_create_order(&req).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
+        // Without a reward, the total must be exact.
+        req.garden_reward_id = None;
+        req.total = 150.0;
+        assert_eq!(
+            validate_create_order(&req).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
+        req.total = 200.0;
+        assert!(validate_create_order(&req).is_ok());
+    }
+
+    // The end-to-end discount arithmetic: discount = unit × qty × pct/100, and
+    // expected_total = subtotal - bonus - discount.
+    #[test]
+    fn garden_discount_arithmetic() {
+        let s = strain("s1", 100.0);
+        let mut cat = PriceCatalog::default();
+        cat.strains.insert(s.id.as_str(), &s);
+        let target = strain_item("s1", 2.0); // 2g × 100 = 200 line total
+        let unit = item_unit_price(&target, &cat, now_utc()).unwrap();
+        let pct = 20u32;
+        let discount = (unit * 2.0 * (pct as f64) / 100.0).max(0.0);
+        assert_eq!(discount, 40.0); // 20% of 200
+        let subtotal = 200.0;
+        let bonus = 0.0;
+        let expected_total = (subtotal - bonus - discount).max(0.0);
+        assert_eq!(expected_total, 160.0);
+    }
+
     #[test]
     fn full_check_flags_unavailable_accessory() {
         let mut cat = PriceCatalog::default();
@@ -1679,6 +1981,7 @@ mod tests {
             bonus_used: Some(10.0),
             total: 90.0,
             shop_id: None,
+            garden_reward_id: None,
         }
     }
 
@@ -1959,6 +2262,7 @@ mod tests {
             bonus_used: Some(0.0),
             total: 100.0,
             shop_id: None,
+            garden_reward_id: None,
         }
     }
 

@@ -11,6 +11,26 @@ use dioxus::prelude::*;
 use serde_json::json;
 use web_sys;
 
+/// B4: a garden reward the customer can apply at checkout (product-scoped).
+#[derive(Clone, serde::Deserialize)]
+struct ApiReward {
+    id: String,
+    #[serde(default)]
+    discount_percent: u32,
+    #[serde(default)]
+    is_active: bool,
+    #[serde(default)]
+    scope: String,
+    #[serde(default)]
+    target_product_id: Option<String>,
+}
+
+#[derive(serde::Deserialize)]
+struct RewardsResp {
+    #[serde(default)]
+    rewards: Vec<ApiReward>,
+}
+
 fn to_trios_items(items: &[CartItem]) -> Vec<crate::trios::store::CartItem> {
     items
         .iter()
@@ -67,6 +87,52 @@ pub fn CheckoutScreen() -> Element {
         "🏠 Woody Weed Pecker",
         "44, 129, Koh Phangan, Surat Thani 84280",
     )];
+
+    // B4: fetch the user's garden rewards; show a toggle for any product-scoped,
+    // still-active reward whose target product is in this cart.
+    let mut applied_reward = use_signal(|| Option::<(String, f64)>::None);
+    let rewards_res = {
+        let init = init_data.clone();
+        use_resource(move || {
+            let init = init.clone();
+            async move {
+                let tid = telegram_id?;
+                let url = format!("{}/api/garden/rewards?telegram_id={}", api_base_url(), tid);
+                let text = crate::ui::api::http::fetch_text_authed(&url, &init)
+                    .await
+                    .ok()?;
+                serde_json::from_str::<RewardsResp>(&text)
+                    .ok()
+                    .map(|r| r.rewards)
+            }
+        })
+    };
+    // (reward, discount_amount) pairs applicable to this cart.
+    let applicable_rewards: Vec<(ApiReward, f64, String)> = match &*rewards_res.read() {
+        Some(Some(list)) => list
+            .iter()
+            .filter(|r| r.is_active && r.scope == "product")
+            .filter_map(|r| {
+                let tpid = r.target_product_id.as_deref()?;
+                let item = cart_items.iter().find(|i| i.id == tpid)?;
+                let unit = if item.price.is_finite() {
+                    item.price.max(0.0)
+                } else {
+                    0.0
+                };
+                let disc =
+                    (unit * item.quantity as f64 * r.discount_percent as f64 / 100.0).max(0.0);
+                Some((r.clone(), disc, item.name.clone()))
+            })
+            .collect(),
+        _ => Vec::new(),
+    };
+    let applied_discount = applied_reward
+        .read()
+        .as_ref()
+        .map(|(_, d)| *d)
+        .unwrap_or(0.0);
+    let effective_total = (cart_total - applied_discount).max(0.0);
 
     let submit_cart_items = cart_items.clone();
     let submit_order = move |_| {
@@ -127,6 +193,13 @@ pub fn CheckoutScreen() -> Element {
             })
             .collect();
 
+        // B4: apply the selected garden reward (server re-verifies the amount).
+        let (garden_reward_id, garden_discount) = match applied_reward.read().clone() {
+            Some((rid, d)) => (Some(rid), d),
+            None => (None, 0.0),
+        };
+        let order_total = (cart_total - garden_discount).max(0.0);
+
         let body = json!({
             "telegram_id": telegram_id,
             "customer_name": customer_name(),
@@ -134,7 +207,8 @@ pub fn CheckoutScreen() -> Element {
             "customer_telegram": telegram_username.clone(),
             "items": items_json,
             "subtotal": cart_total,
-            "total": cart_total,
+            "total": order_total,
+            "garden_reward_id": garden_reward_id,
             "shop_id": shops[shop_selected()].0,
         });
 
@@ -213,10 +287,42 @@ pub fn CheckoutScreen() -> Element {
                                 }
                             }
                         }
+                        // B4: garden discount picker — toggle a product-scoped reward.
+                        if !applicable_rewards.is_empty() {
+                            div { style: "border-top:1px solid #2a2a4a;margin-top:8px;padding-top:8px;",
+                                div { style: "font-size:12px;color:#39ff14;font-weight:700;margin-bottom:6px;", "🌱 Скидка из сада" }
+                                for (r, disc, tname) in applicable_rewards.iter() {
+                                    {
+                                        let rid = r.id.clone();
+                                        let tname = tname.clone();
+                                        let pct = r.discount_percent;
+                                        let d = *disc;
+                                        let is_on = applied_reward.read().as_ref().map(|(id, _)| id == &rid).unwrap_or(false);
+                                        let disc_str = crate::trios::pricing::format_baht(d);
+                                        let border = if is_on { "#39ff14" } else { "#2a2a4a" };
+                                        let amt_style = if is_on { "font-size:12px;color:#39ff14;font-weight:700;" } else { "font-size:12px;color:#8b8b9e;" };
+                                        rsx! {
+                                            div {
+                                                style: "display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px;border:3px solid {border};cursor:pointer;margin-bottom:6px;",
+                                                onclick: move |_| {
+                                                    if applied_reward.read().as_ref().map(|(id, _)| id == &rid).unwrap_or(false) {
+                                                        applied_reward.set(None);
+                                                    } else {
+                                                        applied_reward.set(Some((rid.clone(), d)));
+                                                    }
+                                                },
+                                                span { style: "font-size:12px;color:#e8e8e8;", "{pct}% на {tname}" }
+                                                span { style: "{amt_style}", "−{disc_str}" }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
                         div { style: "display: flex; justify-content: space-between; font-size: 15px; font-weight: 800; padding-top: 8px; border-top: 1px solid #2a2a4a; margin-top: 8px;",
                             span { "{total_label}" }
                             {
-                                let total_str = crate::trios::pricing::format_baht(cart_total);
+                                let total_str = crate::trios::pricing::format_baht(effective_total);
                                 rsx! { span { style: "font-size: 20px; font-weight: 800; color: #ffe600; text-shadow: 2px 2px 0 #000;", "{total_str}" } }
                             }
                         }

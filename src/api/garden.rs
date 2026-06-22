@@ -80,6 +80,10 @@ pub(crate) struct RewardResponse {
     pub expires_at: i64,
     pub is_used: bool,
     pub is_active: bool,
+    // B4: product-scoped target (lets checkout match the reward to a cart line).
+    pub scope: String,
+    pub target_catalog: Option<String>,
+    pub target_product_id: Option<String>,
 }
 
 // ── Plant Endpoints ───────────────────────────────────────────────
@@ -551,7 +555,8 @@ async fn get_user_rewards(
 
     let rows = state.db.orm.query_all(Statement::from_sql_and_values(
         DbBackend::Postgres,
-        "SELECT id, plant_id, strain_name, discount_percent, bonus_points, expires_at, is_used \
+        "SELECT id, plant_id, strain_name, discount_percent, bonus_points, expires_at, is_used, \
+                COALESCE(scope, 'cart') AS scope, target_catalog, target_product_id \
          FROM garden_rewards \
          WHERE user_id = $1 \
          ORDER BY created_at DESC LIMIT 200",
@@ -576,6 +581,17 @@ async fn get_user_rewards(
                 expires_at,
                 is_used,
                 is_active: garden::reward_is_active(is_used, expires_at, now),
+                scope: r
+                    .try_get::<String>("", "scope")
+                    .unwrap_or_else(|_| "cart".into()),
+                target_catalog: r
+                    .try_get::<Option<String>>("", "target_catalog")
+                    .ok()
+                    .flatten(),
+                target_product_id: r
+                    .try_get::<Option<String>>("", "target_product_id")
+                    .ok()
+                    .flatten(),
             }
         })
         .collect();
