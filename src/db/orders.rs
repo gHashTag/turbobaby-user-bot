@@ -251,7 +251,7 @@ pub async fn complete_order_and_update_loyalty(
                   (id, user_id, strain_id, strain_name, current_stage, planted_at, is_completed, water_count) \
              SELECT $1, $2, $3, $4, 'seed', $5, false, 0 \
              WHERE NOT EXISTS ( \
-                 SELECT 1 FROM garden_plants WHERE user_id = $2 AND is_completed = false \
+                 SELECT 1 FROM garden_plants WHERE user_id = $2 AND harvested_at IS NULL \
              ) \
              AND NOT EXISTS ( \
                  SELECT 1 FROM garden_plants \

@@ -116,7 +116,7 @@ async fn get_user_plants(
                 is_completed, harvested_at, reward_claimed, water_count, last_watered_at, \
                 target_catalog, target_product_id, target_name, target_image_url \
          FROM garden_plants \
-         WHERE user_id = $1 AND is_completed = false \
+         WHERE user_id = $1 AND harvested_at IS NULL \
          ORDER BY planted_at DESC LIMIT 200",
             [user_id.clone().into()],
         ))
@@ -918,7 +918,7 @@ async fn force_seed(
         .orm
         .query_one(Statement::from_sql_and_values(
             DbBackend::Postgres,
-            "SELECT 1 FROM garden_plants WHERE user_id = $1 AND is_completed = false LIMIT 1",
+            "SELECT 1 FROM garden_plants WHERE user_id = $1 AND harvested_at IS NULL LIMIT 1",
             [user_id.clone().into()],
         ))
         .await
@@ -1262,7 +1262,7 @@ async fn choose_plant(
                    target_catalog, target_product_id, target_name, target_image_url) \
              SELECT $1, $2, $3, $4, 'seed', $5, false, 0, $7, $3, $4, $8 \
              WHERE NOT EXISTS ( \
-                 SELECT 1 FROM garden_plants WHERE user_id = $2 AND is_completed = false \
+                 SELECT 1 FROM garden_plants WHERE user_id = $2 AND harvested_at IS NULL \
              ) \
              AND NOT EXISTS ( \
                  SELECT 1 FROM garden_plants \

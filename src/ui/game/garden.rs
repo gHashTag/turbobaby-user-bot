@@ -141,14 +141,6 @@ async fn choose_plant_api(
     }
 }
 
-async fn force_seed_api(telegram_id: i64, init_data: &str) -> Result<serde_json::Value, String> {
-    let base = api_base_url();
-    let url = format!("{}/api/garden/force-seed", base);
-    let body = format!("{{\"telegram_id\":{}}}", telegram_id);
-    let text = crate::ui::api::http::post_json_authed(&url, init_data, &body).await?;
-    serde_json::from_str::<serde_json::Value>(&text).map_err(|e| format!("Parse error: {e}"))
-}
-
 async fn water_plant_api(plant_id: &str, init_data: &str) -> Result<WaterPlantResponse, String> {
     let base = api_base_url();
     let url = format!(
@@ -261,51 +253,17 @@ pub fn Garden() -> Element {
                     loading_c.set(false);
                     return;
                 }
+                // Just reflect server state. An EMPTY garden no longer auto-seeds
+                // a stage-0 plant (that was the "посадить семечку опять начинается
+                // с нуля" bug — it re-created a fresh seed on every empty mount);
+                // the empty state shows the "Выбрать товар" chooser so the player
+                // plants intentionally. A grown plant now persists (the backend
+                // `get_user_plants` was changed to return un-harvested plants).
                 match fetch_plants(tid, &value).await {
-                    Ok(p) if !p.is_empty() => {
+                    Ok(p) => {
                         plants_c.set(p);
                     }
-                    Ok(_) => {
-                        // Empty garden — try auto-seed (cycle #169G safety net).
-                        match force_seed_api(tid, &value).await {
-                            Ok(resp) => {
-                                if resp
-                                    .get("success")
-                                    .and_then(|v| v.as_bool())
-                                    .unwrap_or(false)
-                                {
-                                    // Retry fetch after successful seeding
-                                    match fetch_plants(tid, &value).await {
-                                        Ok(p2) => plants_c.set(p2),
-                                        Err(e2) => error_c
-                                            .set(format!("Сад пуст после авто-посадки: {}", e2)),
-                                    }
-                                } else {
-                                    // Map known server error codes to friendly text.
-                                    let code =
-                                        resp.get("error").and_then(|v| v.as_str()).unwrap_or("");
-                                    let msg = match code {
-                                        "product_not_in_menu" => {
-                                            "Товар из заказа больше нет в меню — семечко не посадить. Закажите что-то из актуального меню."
-                                        }
-                                        "no_completed_orders" | "no_catalog_items" => {
-                                            "Сделайте заказ из меню — и получите семечко для выращивания скидки."
-                                        }
-                                        "" => "Не удалось получить семечко",
-                                        other => other,
-                                    };
-                                    error_c.set(msg.to_string());
-                                }
-                            }
-                            Err(e) => {
-                                error_c.set(format!("Авто-посадка не удалась: {}", e));
-                            }
-                        }
-                    }
                     Err(e) => {
-                        // Surface the real error instead of silently swapping in
-                        // mock data — users were seeing a fake garden whenever
-                        // the API blipped (NN/g "Visibility of system status").
                         error_c.set(format!("Не удалось загрузить сад: {}", e));
                     }
                 }
