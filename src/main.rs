@@ -385,6 +385,19 @@ async fn main() -> Result<()> {
     let config_for_bot = config.clone();
     let ai_client_for_bot = ai_client.clone();
 
+    // Tell admins WHAT just shipped (commit subject + version) so they know what
+    // to test. Spawned so it never blocks boot; gated to real Railway deploys
+    // inside notify_deploy (skips local cargo run).
+    {
+        let bot_deploy = bot.clone();
+        let config_deploy = config.clone();
+        tokio::spawn(async move {
+            // brief delay so polling is ready to send.
+            tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+            crate::notify::notify_deploy(&bot_deploy, &config_deploy).await;
+        });
+    }
+
     // Background TTL sweep for `order_idempotency_keys` (cycle #58 / A).
     // The table is append-only inside create_order (migration 029, cycle
     // #57); without periodic cleanup it grows unbounded. 24 h covers any

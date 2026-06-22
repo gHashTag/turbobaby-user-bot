@@ -44,6 +44,26 @@ pre-push:
         Frontend smoke test failed — the committed WASM bundle does not load in a
         browser. Do NOT push. See scripts/predeploy-smoke.sh output above.
 
+    deploy-heads-up:
+      # Announce the deploy so admins know what to test. ALWAYS prints the tip
+      # commit locally; ALSO pings Telegram if DEPLOY_NOTIFY_BOT_TOKEN +
+      # DEPLOY_NOTIFY_CHAT_ID are set in the env (export them in your shell, e.g.
+      # the bot token + an admin chat id). The backend ALSO notifies admins on
+      # successful boot (notify::notify_deploy) with the full commit detail —
+      # that's the reliable "deploy SUCCEEDED" signal; this is the immediate
+      # "deploy STARTING" heads-up. Best-effort: never blocks the push.
+      run: |
+        subject="$(git log -1 --pretty=%s)"
+        sha="$(git rev-parse --short HEAD)"
+        echo "🚀 Deploy heads-up: $sha — $subject"
+        if [ -n "$DEPLOY_NOTIFY_BOT_TOKEN" ] && [ -n "$DEPLOY_NOTIFY_CHAT_ID" ]; then
+          curl -fsS -X POST "https://api.telegram.org/bot${DEPLOY_NOTIFY_BOT_TOKEN}/sendMessage" \
+            --data-urlencode "chat_id=${DEPLOY_NOTIFY_CHAT_ID}" \
+            --data-urlencode "text=🚀 Деплой запущен: ${sha} — ${subject}. Через ~5 мин проверьте этот раздел." \
+            >/dev/null 2>&1 || echo "  (deploy ping failed — ignoring)"
+        fi
+        exit 0
+
 # commit-msg — enforce Conventional Commits format so the changelog / release
 # tooling can parse the history without manual triage. Migrated from
 # .githooks/commit-msg (cycle #53).
