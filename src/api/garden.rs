@@ -20,6 +20,8 @@ pub(crate) fn routes() -> Router<AppState> {
         // #168); the manual endpoint had zero callers across the UI
         // and backend.
         .route("/garden/products", get(get_garden_products))
+        .route("/garden/eligibility", get(get_garden_eligibility))
+        .route("/garden/eligible", put(set_garden_eligible))
         .route("/garden/plants/choose", post(choose_plant))
         .route("/garden/plants", get(get_user_plants))
         .route("/garden/plants/:id/water", post(water_plant))
@@ -1108,6 +1110,86 @@ async fn get_garden_products(State(state): State<AppState>) -> Result<Json<Value
         })
         .collect();
     Ok(Json(json!({ "products": products })))
+}
+
+// ── B5: admin garden eligibility (opt products in/out of the chooser) ──
+
+/// GET /api/garden/eligibility (admin) — every available product across all
+/// catalogs with its current `garden_eligible` flag, so admins can toggle which
+/// products customers may grow a discount for.
+async fn get_garden_eligibility(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+) -> Result<Json<Value>, StatusCode> {
+    check_admin(&headers, &state)?;
+    use sea_orm::{ConnectionTrait, DbBackend, Statement};
+    let sql = "\
+        SELECT 'strain'        AS catalog, id, name, garden_eligible FROM strains        WHERE is_available \
+        UNION ALL SELECT 'accessory',     id, name, garden_eligible FROM accessories    WHERE is_available \
+        UNION ALL SELECT 'tea',           id, name, garden_eligible FROM tea_products   WHERE is_available \
+        UNION ALL SELECT 'set',           id, name, garden_eligible FROM sets           WHERE is_available \
+        UNION ALL SELECT 'accessory_set', id, name, garden_eligible FROM accessory_sets WHERE is_available \
+        UNION ALL SELECT 'tea_set',       id, name, garden_eligible FROM tea_sets       WHERE is_available \
+        ORDER BY catalog, name LIMIT 5000";
+    let rows = state
+        .db
+        .orm
+        .query_all(Statement::from_string(DbBackend::Postgres, sql.to_string()))
+        .await
+        .map_err(|e| {
+            tracing::error!("get_garden_eligibility: {e}");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+    let products: Vec<Value> = rows
+        .iter()
+        .map(|r| {
+            json!({
+                "catalog": r.try_get::<String>("", "catalog").unwrap_or_default(),
+                "id": r.try_get::<String>("", "id").unwrap_or_default(),
+                "name": r.try_get::<String>("", "name").unwrap_or_default(),
+                "garden_eligible": r.try_get::<bool>("", "garden_eligible").unwrap_or(true),
+            })
+        })
+        .collect();
+    Ok(Json(json!({ "products": products })))
+}
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct SetEligibleRequest {
+    pub catalog: String,
+    pub product_id: String,
+    pub eligible: bool,
+}
+
+/// PUT /api/garden/eligible (admin) — flip a product's garden eligibility.
+async fn set_garden_eligible(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    Json(req): Json<SetEligibleRequest>,
+) -> Result<Json<Value>, StatusCode> {
+    check_admin(&headers, &state)?;
+    if req.product_id.len() > 200 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    let Some(table) = garden_catalog_table(&req.catalog) else {
+        return Err(StatusCode::BAD_REQUEST);
+    };
+    use sea_orm::{ConnectionTrait, DbBackend, Statement};
+    state
+        .db
+        .orm
+        .execute(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            // `table` is from the static allow-list — safe to interpolate.
+            format!("UPDATE {table} SET garden_eligible = $1 WHERE id = $2"),
+            [req.eligible.into(), req.product_id.clone().into()],
+        ))
+        .await
+        .map_err(|e| {
+            tracing::error!("set_garden_eligible: {e}");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+    Ok(Json(json!({ "success": true })))
 }
 
 #[derive(Debug, Deserialize)]

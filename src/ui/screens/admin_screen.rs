@@ -5811,6 +5811,124 @@ fn GardenTab() -> Element {
                         },
                         if *saving.read() { "⏳ Сохранение..." } else { "💾 Сохранить настройки" }
                     }
+                    GardenEligibility {}
+                }
+            }
+        }
+    }
+}
+
+// ─── Garden eligibility (B5: opt products in/out of the garden chooser) ───
+
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+struct EligProduct {
+    catalog: String,
+    id: String,
+    name: String,
+    #[serde(default = "default_true")]
+    garden_eligible: bool,
+}
+
+#[derive(Debug, Deserialize)]
+struct EligResp {
+    #[serde(default)]
+    products: Vec<EligProduct>,
+}
+
+fn garden_catalog_label(c: &str) -> &'static str {
+    match c {
+        "strain" => "🌿 Сорта",
+        "accessory" => "💨 Аксессуары",
+        "tea" => "🥤 Напитки",
+        "set" => "📦 Наборы",
+        "accessory_set" => "🔧 Сеты аксессуаров",
+        "tea_set" => "🫖 Сеты напитков",
+        _ => "Прочее",
+    }
+}
+
+#[component]
+fn GardenEligibility() -> Element {
+    let telegram_id = use_telegram_id().unwrap_or(0);
+    let init_data = use_signal(use_telegram_init_data);
+    let mut items: Signal<Vec<EligProduct>> = use_signal(Vec::new);
+    let mut loading = use_signal(|| true);
+
+    let _ = use_resource(move || {
+        let init = init_data.read().clone();
+        async move {
+            let url = format!("{}/api/garden/eligibility", api_base_url());
+            if let Ok(resp) = HTTP_CLIENT
+                .clone()
+                .get(&url)
+                .header("X-Telegram-Init-Data", init)
+                .header("X-Admin-Token", admin_token())
+                .header("X-Admin-Telegram-Id", telegram_id.to_string())
+                .send()
+                .await
+            {
+                if resp.status().is_success() {
+                    if let Ok(data) = resp.json::<EligResp>().await {
+                        items.set(data.products);
+                    }
+                }
+            }
+            loading.set(false);
+            Some(())
+        }
+    });
+
+    rsx! {
+        div { style: "margin-top:20px;",
+            h3 { class: "admin-card-title", "🌱 Участвуют в саду" }
+            div { class: "admin-card-meta", style: "margin-bottom:10px;",
+                "Выключи товар — и его нельзя будет выбрать для выращивания скидки." }
+            if *loading.read() {
+                EmptyState { icon: "⏳".to_string(), title: "Загрузка...".to_string(), description: "".to_string() }
+            } else {
+                for p in items.read().clone().into_iter() {
+                    {
+                        let on = p.garden_eligible;
+                        let cat = p.catalog.clone();
+                        let pid = p.id.clone();
+                        let name = p.name.clone();
+                        let badge = garden_catalog_label(&p.catalog);
+                        let id_data = init_data.read().clone();
+                        rsx! {
+                            div { style: "display:flex;justify-content:space-between;align-items:center;gap:8px;background:#1a1a2e;padding:8px 10px;border-radius:6px;margin-bottom:6px;",
+                                div { style: "min-width:0;",
+                                    div { style: "font-size:10px;color:#8b8b9e;", "{badge}" }
+                                    div { style: "font-size:13px;color:#e8e8e8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;", "{name}" }
+                                }
+                                button {
+                                    class: if on { "admin-btn primary" } else { "admin-btn danger" },
+                                    onclick: move |_| {
+                                        let new_val = !on;
+                                        let cat = cat.clone(); let pid = pid.clone(); let id_data = id_data.clone();
+                                        let mut items2 = items;
+                                        spawn(async move {
+                                            let url = format!("{}/api/garden/eligible", api_base_url());
+                                            let body = json!({ "catalog": cat, "product_id": pid, "eligible": new_val });
+                                            let res = HTTP_CLIENT.clone().put(&url)
+                                                .header("X-Telegram-Init-Data", id_data)
+                                                .header("X-Admin-Token", admin_token())
+                                                .header("X-Admin-Telegram-Id", telegram_id.to_string())
+                                                .json(&body).send().await;
+                                            if matches!(res, Ok(ref r) if r.status().is_success()) {
+                                                if let Some(it) = items2.write().iter_mut().find(|x| x.id == pid && x.catalog == cat) {
+                                                    it.garden_eligible = new_val;
+                                                }
+                                                TelegramApp::init().haptic_notification(HapticNotification::Success);
+                                            } else {
+                                                TelegramApp::init().haptic_notification(HapticNotification::Error);
+                                            }
+                                        });
+                                    },
+                                    if on { "✓ Вкл" } else { "✖ Выкл" }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
