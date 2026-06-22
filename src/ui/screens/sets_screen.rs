@@ -149,72 +149,42 @@ pub fn SetsScreen() -> Element {
                         }
                     },
                     Some(Ok(_)) => {
-                        // Promo packs (a badge OR a discount) lead in a swipeable
-                        // carousel; everything else lists below. Stable partition
-                        // keeps the admin order within each group.
-                        let (promo, mut rest): (Vec<ApiSet>, Vec<ApiSet>) = all_sets
+                        // Like the strains menu: a 2-column grid of cards. Promo
+                        // packs (badge or discount) lead; within each group the
+                        // chosen sort applies.
+                        let (mut promo, mut rest): (Vec<ApiSet>, Vec<ApiSet>) = all_sets
                             .iter()
                             .cloned()
                             .partition(|s| crate::trios::packs::is_promo(&s.badge, s.discount_percent));
-                        // Phase 2: sort the "Все наборы" list by the chosen key.
                         let active_sort = sort_by();
+                        sort_packs(&mut promo, &active_sort);
                         sort_packs(&mut rest, &active_sort);
-                        let promo_count = promo.len();
-                        let rest_n = rest.len();
-                        let promo_hdr = crate::ui::lang::localized("🔥 Акции и спецпредложения", Some("🔥 Sale & Special"));
-                        let rest_hdr = crate::ui::lang::localized("Все наборы", Some("All packs"));
+                        let mut ordered = promo;
+                        ordered.extend(rest);
                         rsx! {
-                            if promo_count > 0 {
-                                div { style: "padding:0 16px 8px;",
-                                    h2 { style: "font-size:13px;font-weight:700;color:#b388ff;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;text-shadow:2px 2px 0 #000;",
-                                        "{promo_hdr}"
-                                    }
-                                }
-                                div { style: "display:flex;overflow-x:auto;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;gap:12px;padding:0 16px 8px;",
-                                    for set in promo.iter() {
-                                        div { style: "flex:0 0 85%;scroll-snap-align:center;box-sizing:border-box;",
-                                            { render_set_card(set.clone(), cart) }
-                                        }
-                                    }
-                                }
-                                if promo_count > 1 {
-                                    div { style: "display:flex;justify-content:center;gap:6px;margin:0 0 14px;",
-                                        for _i in 0..promo_count {
-                                            span { style: "width:8px;height:8px;border-radius:50%;background:#b388ff;opacity:0.55;box-shadow:1px 1px 0 #000;" }
-                                        }
-                                    }
-                                }
-                            }
-                            if rest_n > 0 {
-                                div { style: "padding:0 16px 8px;",
-                                    h2 { style: "font-size:13px;font-weight:700;color:#b388ff;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;text-shadow:2px 2px 0 #000;",
-                                        "{rest_hdr} ({rest_n})"
-                                    }
-                                }
-                                // Sort chips (Phase 2).
-                                div { style: "display:flex;gap:6px;padding:0 16px 12px;overflow-x:auto;",
-                                    for (key, ru, en) in SORTS.iter() {
-                                        {
-                                            let is_active = active_sort == *key;
-                                            let bg = if is_active { "#b388ff" } else { "transparent" };
-                                            let color = if is_active { "#000" } else { "#8b8b9e" };
-                                            let border = if is_active { "#b388ff" } else { "#2a2a4a" };
-                                            let label = crate::ui::lang::localized(ru, Some(en));
-                                            let k = key.to_string();
-                                            rsx! {
-                                                button {
-                                                    style: "font-size:13px;padding:6px 10px;background:{bg};color:{color};border:4px solid {border};border-radius:20px;cursor:pointer;white-space:nowrap;",
-                                                    onclick: move |_| sort_by.set(k.clone()),
-                                                    "{label}"
-                                                }
+                            // Sort chips (like the strain filter row).
+                            div { style: "display:flex;gap:6px;padding:0 16px 12px;overflow-x:auto;",
+                                for (key, ru, en) in SORTS.iter() {
+                                    {
+                                        let is_active = active_sort == *key;
+                                        let bg = if is_active { "#b388ff" } else { "transparent" };
+                                        let color = if is_active { "#000" } else { "#8b8b9e" };
+                                        let border = if is_active { "#b388ff" } else { "#2a2a4a" };
+                                        let label = crate::ui::lang::localized(ru, Some(en));
+                                        let k = key.to_string();
+                                        rsx! {
+                                            button {
+                                                style: "font-size:13px;padding:6px 10px;background:{bg};color:{color};border:4px solid {border};border-radius:20px;cursor:pointer;white-space:nowrap;",
+                                                onclick: move |_| sort_by.set(k.clone()),
+                                                "{label}"
                                             }
                                         }
                                     }
                                 }
-                                div { style: "display:flex;flex-direction:column;gap:12px;padding:0 16px;",
-                                    for set in rest.iter() {
-                                        { render_set_card(set.clone(), cart) }
-                                    }
+                            }
+                            div { style: "display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:0 16px;",
+                                for set in ordered.iter() {
+                                    { render_set_card(set.clone(), cart, true) }
                                 }
                             }
                         }
@@ -244,8 +214,21 @@ pub fn SetsScreen() -> Element {
     }
 }
 
-fn render_set_card(set: ApiSet, mut cart: Signal<Cart>) -> Element {
+/// `compact` = carousel context: cap the image height so a tall product photo
+/// doesn't blow the card up to full-screen (the vertical list keeps full-height
+/// images, per the earlier "фото 100% по высоте" request).
+fn render_set_card(set: ApiSet, mut cart: Signal<Cart>, compact: bool) -> Element {
     let add_to_cart = t(crate::ui::lang::current_lang(), T_ADD_TO_CART).to_string();
+    let img_box_style = if compact {
+        "height:150px;background:linear-gradient(135deg,#1a1a2e,#16213e);display:flex;align-items:center;justify-content:center;font-size:40px;position:relative;overflow:hidden;"
+    } else {
+        "min-height:100px;background:linear-gradient(135deg,#1a1a2e,#16213e);display:flex;align-items:center;justify-content:center;font-size:40px;position:relative;"
+    };
+    let img_style = if compact {
+        "width:100%;height:100%;object-fit:cover;display:block;"
+    } else {
+        "width:100%;height:auto;object-fit:contain;display:block;"
+    };
     let discount = if set.discount_percent.is_finite() {
         set.discount_percent.max(0.0)
     } else {
@@ -312,14 +295,9 @@ fn render_set_card(set: ApiSet, mut cart: Signal<Cart>) -> Element {
             {opacity}
         ",
             onclick: move |_| detail_open.set(true),
-            div { style: "
-                min-height:100px;
-                background:linear-gradient(135deg,#1a1a2e,#16213e);
-                display:flex;align-items:center;justify-content:center;
-                font-size:40px;position:relative;
-            ",
+            div { style: "{img_box_style}",
                 if has_image {
-                    img { src: "{img_url}", alt: "{set_name}", style: "width:100%;height:auto;object-fit:contain;display:block;" }
+                    img { src: "{img_url}", alt: "{set_name}", style: "{img_style}" }
                 } else {
                     "{icon}"
                 }
