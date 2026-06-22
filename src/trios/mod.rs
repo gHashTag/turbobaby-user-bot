@@ -6,6 +6,7 @@ pub mod core;
 pub mod drink_categories;
 pub mod garden;
 pub mod i18n;
+pub mod packs;
 pub mod pricing;
 pub mod quest;
 pub mod store;

@@ -1,6 +1,5 @@
 use crate::trios::i18n::{t, T_ADD_TO_CART, T_SETS_DESC, T_SETS_TITLE};
 use crate::ui::api::context::api_base_url;
-use crate::ui::assets;
 use crate::ui::components::bottom_nav::BottomNav;
 use crate::ui::components::product_detail_modal::ProductDetailModal;
 use crate::ui::components::video_modal::VideoModal;
@@ -31,6 +30,14 @@ struct ApiSet {
     #[serde(default)]
     video_url: Option<String>,
     is_available: Option<bool>,
+    // Packs Phase 1 (migration 040). Defaulted so non-`sets` sources
+    // (accessory_sets/tea_sets, which omit them) still deserialize.
+    #[serde(default)]
+    strain_count: usize,
+    #[serde(default)]
+    total_weight_grams: f64,
+    #[serde(default)]
+    badge: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -75,35 +82,6 @@ pub fn SetsScreen() -> Element {
                 p { style: "font-size:13px;color:#888;margin-top:4px;", "{sets_desc}" }
             }
 
-            div { style: "padding:0 16px 16px;",
-                h2 { style: "font-size:13px;font-weight:700;color:#b388ff;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;text-shadow:2px 2px 0 #000;",
-                    "Featured Packs"
-                }
-                div { style: "display:grid;grid-template-columns:repeat(3,1fr);gap:12px;",
-                    div { style: "
-                        background:#16213e;border:4px solid #2a2a4a;
-                        box-shadow:4px 4px 0 #000;overflow:hidden;
-                    ",
-                        img { src: "{assets::packs::INDICA}", alt: "Indica Pack", style: "width:100%;aspect-ratio:1;object-fit:cover;" }
-                        div { style: "padding:8px;text-align:center;color:#e8e8e8;font-size:13px;font-weight:600;", "Indica Pack" }
-                    }
-                    div { style: "
-                        background:#16213e;border:4px solid #2a2a4a;
-                        box-shadow:4px 4px 0 #000;overflow:hidden;
-                    ",
-                        img { src: "{assets::packs::SATIVA}", alt: "Sativa Pack", style: "width:100%;aspect-ratio:1;object-fit:cover;" }
-                        div { style: "padding:8px;text-align:center;color:#e8e8e8;font-size:13px;font-weight:600;", "Sativa Pack" }
-                    }
-                    div { style: "
-                        background:#16213e;border:4px solid #2a2a4a;
-                        box-shadow:4px 4px 0 #000;overflow:hidden;
-                    ",
-                        img { src: "{assets::packs::STARTER}", alt: "Starter Pack", style: "width:100%;aspect-ratio:1;object-fit:cover;" }
-                        div { style: "padding:8px;text-align:center;color:#e8e8e8;font-size:13px;font-weight:600;", "Starter Pack" }
-                    }
-                }
-            }
-
             {
                 match &*sets_resource.read() {
                     Some(Ok(sets)) if sets.is_empty() => rsx! {
@@ -112,15 +90,51 @@ pub fn SetsScreen() -> Element {
                             p { style: "font-size:15px;color:#888;", "No sets available yet" }
                         }
                     },
-                    Some(Ok(_)) => rsx! {
-                        div { style: "padding:0 16px 8px;",
-                            h2 { style: "font-size:13px;font-weight:700;color:#b388ff;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;text-shadow:2px 2px 0 #000;",
-                                "All Sets ({all_sets.len()})"
+                    Some(Ok(_)) => {
+                        // Promo packs (a badge OR a discount) lead in a swipeable
+                        // carousel; everything else lists below. Stable partition
+                        // keeps the admin order within each group.
+                        let (promo, rest): (Vec<ApiSet>, Vec<ApiSet>) = all_sets
+                            .iter()
+                            .cloned()
+                            .partition(|s| crate::trios::packs::is_promo(&s.badge, s.discount_percent));
+                        let promo_count = promo.len();
+                        let rest_n = rest.len();
+                        let promo_hdr = crate::ui::lang::localized("🔥 Акции и спецпредложения", Some("🔥 Sale & Special"));
+                        let rest_hdr = crate::ui::lang::localized("Все наборы", Some("All packs"));
+                        rsx! {
+                            if promo_count > 0 {
+                                div { style: "padding:0 16px 8px;",
+                                    h2 { style: "font-size:13px;font-weight:700;color:#b388ff;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;text-shadow:2px 2px 0 #000;",
+                                        "{promo_hdr}"
+                                    }
+                                }
+                                div { style: "display:flex;overflow-x:auto;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;gap:12px;padding:0 16px 8px;",
+                                    for set in promo.iter() {
+                                        div { style: "flex:0 0 85%;scroll-snap-align:center;box-sizing:border-box;",
+                                            { render_set_card(set.clone(), cart) }
+                                        }
+                                    }
+                                }
+                                if promo_count > 1 {
+                                    div { style: "display:flex;justify-content:center;gap:6px;margin:0 0 14px;",
+                                        for _i in 0..promo_count {
+                                            span { style: "width:8px;height:8px;border-radius:50%;background:#b388ff;opacity:0.55;box-shadow:1px 1px 0 #000;" }
+                                        }
+                                    }
+                                }
                             }
-                        }
-                        div { style: "display:flex;flex-direction:column;gap:12px;padding:0 16px;",
-                            for set in all_sets.iter() {
-                                { render_set_card(set.clone(), cart) }
+                            if rest_n > 0 {
+                                div { style: "padding:0 16px 8px;",
+                                    h2 { style: "font-size:13px;font-weight:700;color:#b388ff;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;text-shadow:2px 2px 0 #000;",
+                                        "{rest_hdr} ({rest_n})"
+                                    }
+                                }
+                                div { style: "display:flex;flex-direction:column;gap:12px;padding:0 16px;",
+                                    for set in rest.iter() {
+                                        { render_set_card(set.clone(), cart) }
+                                    }
+                                }
                             }
                         }
                     },
@@ -196,6 +210,15 @@ fn render_set_card(set: ApiSet, mut cart: Signal<Cart>) -> Element {
     let desc_full = desc.to_string();
     let is_available = set.is_available.unwrap_or(true);
     let opacity = if is_available { "" } else { "opacity:0.6;" };
+    // Packs Phase 1: promo badge chip + weight/strain-count meta line.
+    let badge = crate::trios::packs::PackBadge::from_str(&set.badge);
+    let badge_label = badge
+        .label()
+        .map(|(ru, en)| crate::ui::lang::localized(ru, Some(en)));
+    let badge_color = badge.color();
+    let strain_word = crate::ui::lang::localized("сортов", Some("strains"));
+    let weight_line =
+        crate::trios::packs::weight_line(set.total_weight_grams, set.strain_count, &strain_word);
 
     rsx! {
         div { style: "
@@ -223,6 +246,12 @@ fn render_set_card(set: ApiSet, mut cart: Signal<Cart>) -> Element {
                 span { style: "position:absolute;top:8px;left:8px;z-index:2;font-size:13px;font-weight:700;background:{ACCENT};color:#000;padding:4px 8px;box-shadow:2px 2px 0 #000;",
                     "📦 SET"
                 }
+                // Promo badge (SALE / SPECIAL OFFER / LIMITED EDITION), under the SET tag.
+                if let Some(bl) = badge_label.clone() {
+                    span { style: "position:absolute;top:38px;left:8px;z-index:2;font-size:11px;font-weight:700;background:{badge_color};color:#fff;padding:3px 7px;box-shadow:2px 2px 0 #000;",
+                        "{bl}"
+                    }
+                }
                 if has_discount {
                     span { style: "
                         position:absolute;top:8px;right:8px;
@@ -242,6 +271,9 @@ fn render_set_card(set: ApiSet, mut cart: Signal<Cart>) -> Element {
             div { style: "padding:14px;",
                 div { style: "display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;",
                     span { style: "font-size:16px;font-weight:700;text-shadow:2px 2px 0 #000;", "{set_name}" }
+                }
+                if !weight_line.is_empty() {
+                    div { style: "font-size:12px;color:#b388ff;font-weight:600;margin-bottom:6px;", "⚖️ {weight_line}" }
                 }
                 if !desc.is_empty() {
                     div { style: "font-size:13px;color:#888;margin-bottom:6px;", "{desc}" }

@@ -31,6 +31,35 @@ struct SotdResponse {
     strains: Vec<SotdStrain>,
 }
 
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+struct HomePack {
+    id: String,
+    name: String,
+    #[serde(default)]
+    name_en: Option<String>,
+    #[serde(default)]
+    icon: Option<String>,
+    #[serde(default)]
+    image_url: Option<String>,
+    #[serde(default)]
+    total_price: f64,
+    #[serde(default)]
+    discount_percent: f64,
+    #[serde(default)]
+    badge: String,
+    #[serde(default)]
+    total_weight_grams: f64,
+    #[serde(default)]
+    strain_count: usize,
+    #[serde(default)]
+    is_available: Option<bool>,
+}
+
+#[derive(Debug, Deserialize)]
+struct HomePacksResponse {
+    sets: Vec<HomePack>,
+}
+
 fn category_emoji(cat: &str) -> &'static str {
     match cat {
         "Sativa" => "☀️",
@@ -45,6 +74,74 @@ fn format_price(price: f64) -> String {
     crate::trios::pricing::format_baht(price)
 }
 
+/// Compact pack card for the home carousel. Tapping navigates to the Sets
+/// section (the full card with add-to-cart / details lives there).
+fn render_home_pack_card(p: HomePack) -> Element {
+    let name = crate::ui::lang::localized(&p.name, p.name_en.as_deref());
+    let discount = if p.discount_percent.is_finite() {
+        p.discount_percent.max(0.0)
+    } else {
+        0.0
+    };
+    let total = if p.total_price.is_finite() {
+        p.total_price.max(0.0)
+    } else {
+        0.0
+    };
+    let has_discount = discount > 0.0;
+    let price = if has_discount {
+        (total * (1.0 - discount / 100.0)).max(0.0)
+    } else {
+        total
+    };
+    let price_str = crate::trios::pricing::format_baht(price);
+    let icon = p
+        .icon
+        .clone()
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| "🎁".to_string());
+    let img = p.image_url.clone().unwrap_or_default();
+    let has_image = img.starts_with("http://")
+        || img.starts_with("https://")
+        || (img.starts_with('/') && !img.starts_with("//"));
+    let badge = crate::trios::packs::PackBadge::from_str(&p.badge);
+    let badge_label = badge
+        .label()
+        .map(|(ru, en)| crate::ui::lang::localized(ru, Some(en)));
+    let badge_color = badge.color();
+    let strain_word = crate::ui::lang::localized("сортов", Some("strains"));
+    let weight_line =
+        crate::trios::packs::weight_line(p.total_weight_grams, p.strain_count, &strain_word);
+
+    rsx! {
+        Link { to: Route::Sets {},
+            div { style: "flex:0 0 70%;scroll-snap-align:center;box-sizing:border-box;background:#16213e;border:4px solid #b388ff;box-shadow:4px 4px 0 #000;overflow:hidden;cursor:pointer;",
+                div { style: "position:relative;min-height:90px;background:linear-gradient(135deg,#1a1a2e,#16213e);display:flex;align-items:center;justify-content:center;font-size:40px;",
+                    if has_image {
+                        img { src: "{img}", alt: "{name}", style: "width:100%;height:auto;object-fit:contain;display:block;" }
+                    } else {
+                        "{icon}"
+                    }
+                    span { style: "position:absolute;top:6px;left:6px;font-size:11px;font-weight:700;background:#b388ff;color:#000;padding:3px 6px;box-shadow:2px 2px 0 #000;", "📦 SET" }
+                    if let Some(bl) = badge_label.clone() {
+                        span { style: "position:absolute;top:32px;left:6px;font-size:10px;font-weight:700;background:{badge_color};color:#fff;padding:2px 6px;box-shadow:2px 2px 0 #000;", "{bl}" }
+                    }
+                    if has_discount {
+                        span { style: "position:absolute;top:6px;right:6px;font-size:11px;font-weight:700;background:#b388ff;color:#000;padding:3px 6px;box-shadow:2px 2px 0 #000;", "{discount as i32}% OFF" }
+                    }
+                }
+                div { style: "padding:10px 12px;",
+                    div { style: "font-size:15px;font-weight:700;color:#e8e8e8;text-shadow:2px 2px 0 #000;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;", "{name}" }
+                    if !weight_line.is_empty() {
+                        div { style: "font-size:11px;color:#b388ff;font-weight:600;margin-bottom:4px;", "⚖️ {weight_line}" }
+                    }
+                    span { style: "font-size:18px;font-weight:800;color:#ffe600;text-shadow:2px 2px 0 #000;", "{price_str}" }
+                }
+            }
+        }
+    }
+}
+
 #[component]
 pub fn HomeScreen() -> Element {
     let cart = use_context::<Signal<Cart>>();
@@ -56,6 +153,21 @@ pub fn HomeScreen() -> Element {
     let nav_tea = t(crate::ui::lang::current_lang(), T_NAV_TEA).to_string();
     let nav_garden = t(crate::ui::lang::current_lang(), T_NAV_GARDEN).to_string();
     let add_to_cart_label = t(crate::ui::lang::current_lang(), T_ADD_TO_CART).to_string();
+
+    // Packs carousel (first block). Promo packs lead; tap → Sets section.
+    let packs_resource = use_resource(|| async move {
+        let base = api_base_url();
+        let url = format!("{}/api/sets", base);
+        crate::ui::api::local_client::LocalClient::new()
+            .get(&url)
+            .send()
+            .await
+            .map_err(|e| e.to_string())?
+            .json::<HomePacksResponse>()
+            .await
+            .map(|r| r.sets)
+            .map_err(|e| e.to_string())
+    });
 
     let sotd_resource = use_resource(|| async move {
         let base = api_base_url();
@@ -84,6 +196,46 @@ pub fn HomeScreen() -> Element {
                     "WOODY WEEDPECKER"
                 }
                 p { style: "font-size:13px;color:#888;margin-top:6px;", "{home_subtitle}" }
+            }
+
+            // Packs carousel — FIRST content block (flagship of the shop).
+            {
+                match &*packs_resource.read() {
+                    Some(Ok(packs)) if packs.iter().any(|p| p.is_available.unwrap_or(true)) => {
+                        let mut list: Vec<HomePack> = packs
+                            .iter()
+                            .filter(|p| p.is_available.unwrap_or(true))
+                            .cloned()
+                            .collect();
+                        // Promo packs first; stable sort keeps admin order otherwise.
+                        list.sort_by_key(|p| {
+                            if crate::trios::packs::is_promo(&p.badge, p.discount_percent) { 0 } else { 1 }
+                        });
+                        let count = list.len();
+                        let packs_hdr = crate::ui::lang::localized("📦 Наборы", Some("📦 Packs"));
+                        rsx! {
+                            div { style: "padding:0 16px 8px;",
+                                h2 { style: "font-size:13px;font-weight:700;color:#b388ff;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;text-shadow:2px 2px 0 #000;",
+                                    "{packs_hdr}"
+                                }
+                            }
+                            div { style: "display:flex;overflow-x:auto;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;gap:12px;padding:0 16px 8px;",
+                                for p in list.iter() {
+                                    { render_home_pack_card(p.clone()) }
+                                }
+                            }
+                            if count > 1 {
+                                div { style: "display:flex;justify-content:center;gap:6px;margin:0 0 14px;",
+                                    for _i in 0..count {
+                                        span { style: "width:8px;height:8px;border-radius:50%;background:#b388ff;opacity:0.55;box-shadow:1px 1px 0 #000;" }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    // No packs / loading / error: render nothing (home stays clean).
+                    _ => rsx! {},
+                }
             }
 
             {

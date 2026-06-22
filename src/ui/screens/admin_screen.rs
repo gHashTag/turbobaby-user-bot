@@ -195,6 +195,11 @@ struct AdminSet {
     name_en: Option<String>,
     #[serde(default)]
     description_en: Option<String>,
+    /// Migration 040 (Packs Phase 1): total pack weight + one promo badge.
+    #[serde(default)]
+    total_weight_grams: f64,
+    #[serde(default)]
+    badge: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -2036,6 +2041,9 @@ fn SetsTab() -> Element {
     let mut total_price = use_signal(String::new);
     let mut discount_percent = use_signal(String::new);
     let mut is_deal_of_day = use_signal(|| false);
+    // Packs Phase 1: total weight (grams) + one promo badge.
+    let mut total_weight = use_signal(String::new);
+    let mut badge = use_signal(|| "none".to_string());
     let mut status = use_signal(String::new);
     let mut submitting = use_signal(|| false);
     let mut editing_id: Signal<Option<String>> = use_signal(|| None);
@@ -2181,6 +2189,14 @@ fn SetsTab() -> Element {
                         oninput: move |e| total_price.set(e.value()) }
                     input { style: input_style(), placeholder: "Скидка %", value: "{discount_percent}", r#type: "number",
                         oninput: move |e| discount_percent.set(e.value()) }
+                    input { style: input_style(), placeholder: "Общий вес (г), напр. 10", value: "{total_weight}", r#type: "number",
+                        oninput: move |e| total_weight.set(e.value()) }
+                    select { style: input_style(), value: "{badge}", oninput: move |e| badge.set(e.value()),
+                        option { value: "none", "Без бейджа" }
+                        option { value: "sale", "🔴 SALE" }
+                        option { value: "special", "🟡 SPECIAL OFFER" }
+                        option { value: "limited", "🟣 LIMITED EDITION" }
+                    }
                     label { style: "display:flex;align-items:center;gap:8px;font-size:13px;color:#888;",
                         input { r#type: "checkbox", checked: is_deal_of_day(),
                             onchange: move |e| is_deal_of_day.set(e.checked()) }
@@ -2199,6 +2215,15 @@ fn SetsTab() -> Element {
                                 Ok(v) if v.is_finite() => v,
                                 _ => { status.set("❌ Скидка должна быть числом".into()); return; }
                             };
+                            // Weight is optional; empty → 0. Bound-check to the server range.
+                            let w = match total_weight.read().trim() {
+                                "" => 0.0,
+                                s => match s.parse::<f64>() {
+                                    Ok(v) if v.is_finite() && (0.0..=100_000.0).contains(&v) => v,
+                                    _ => { status.set("❌ Вес: число 0–100000".into()); return; }
+                                },
+                            };
+                            let bdg = badge();
                             if n.is_empty() { status.set("❌ Название обязательно".into()); return; }
                             let s_ids: Vec<String> = strain_ids.read().clone();
                             let a_ids: Vec<String> = accessory_ids.read().clone();
@@ -2219,6 +2244,7 @@ fn SetsTab() -> Element {
                                 is_available: true, is_deal_of_day: deal,
                                 name_en: if ne.is_empty() { None } else { Some(ne.clone()) },
                                 description_en: if de.is_empty() { None } else { Some(de.clone()) },
+                                total_weight_grams: w, badge: bdg.clone(),
                             });
                             status.set("✅ Добавлен!".into());
                             name.set(String::new()); description.set(String::new()); icon.set(String::new());
@@ -2227,6 +2253,7 @@ fn SetsTab() -> Element {
                             strain_ids.set(Vec::new()); accessory_ids.set(Vec::new());
                             total_price.set(String::new()); discount_percent.set(String::new());
                             is_deal_of_day.set(false);
+                            total_weight.set(String::new()); badge.set("none".to_string());
                             auto_scroll_to_list();
                             spawn(async move {
                                 let body = json!({
@@ -2239,6 +2266,7 @@ fn SetsTab() -> Element {
                                     "description_en": if de.is_empty() { serde_json::Value::Null } else { de.into() },
                                     "strain_ids": s_ids, "accessory_ids": a_ids,
                                     "is_deal_of_day": deal,
+                                    "total_weight_grams": w, "badge": bdg,
                                 });
                                 let url = format!("{}/api/sets", api_base_url());
                                 let res = HTTP_CLIENT.clone().post(&url)
@@ -2405,6 +2433,20 @@ fn EditSetCard(
     let mut total_price = use_signal(|| item.total_price.to_string());
     let mut discount_percent = use_signal(|| item.discount_percent.to_string());
     let mut is_deal_of_day = use_signal(|| item.is_deal_of_day);
+    let mut total_weight = use_signal(|| {
+        if item.total_weight_grams > 0.0 {
+            item.total_weight_grams.to_string()
+        } else {
+            String::new()
+        }
+    });
+    let mut badge = use_signal(|| {
+        if item.badge.is_empty() {
+            "none".to_string()
+        } else {
+            item.badge.clone()
+        }
+    });
     let mut status = use_signal(String::new);
     let item_id = item.id.clone();
     rsx! {
@@ -2429,6 +2471,13 @@ fn EditSetCard(
             }
             input { style: input_style(), placeholder: "Цена ฿", value: "{total_price}", r#type: "number", oninput: move |e| total_price.set(e.value()) }
             input { style: input_style(), placeholder: "Скидка %", value: "{discount_percent}", r#type: "number", oninput: move |e| discount_percent.set(e.value()) }
+            input { style: input_style(), placeholder: "Общий вес (г)", value: "{total_weight}", r#type: "number", oninput: move |e| total_weight.set(e.value()) }
+            select { style: input_style(), value: "{badge}", oninput: move |e| badge.set(e.value()),
+                option { value: "none", "Без бейджа" }
+                option { value: "sale", "🔴 SALE" }
+                option { value: "special", "🟡 SPECIAL OFFER" }
+                option { value: "limited", "🟣 LIMITED EDITION" }
+            }
             label { style: "display:flex;align-items:center;gap:8px;font-size:13px;color:#888;",
                 input { r#type: "checkbox", checked: is_deal_of_day(),
                     onchange: move |e| is_deal_of_day.set(e.checked()) }
@@ -2446,6 +2495,14 @@ fn EditSetCard(
                             Ok(v) if v.is_finite() => v,
                             _ => { status.set("❌ Скидка должна быть числом".into()); return; }
                         };
+                        let w = match total_weight.read().trim() {
+                            "" => 0.0,
+                            s => match s.parse::<f64>() {
+                                Ok(v) if v.is_finite() && (0.0..=100_000.0).contains(&v) => v,
+                                _ => { status.set("❌ Вес: число 0–100000".into()); return; }
+                            },
+                        };
+                        let bdg = badge();
                         if n.is_empty() { status.set("❌ Название обязательно".into()); return; }
                         let desc = description();
                         let ic = icon(); let img = image_url(); let vid = video_url();
@@ -2468,6 +2525,8 @@ fn EditSetCard(
                             s.is_deal_of_day = deal;
                             s.name_en = if ne.is_empty() { None } else { Some(ne.clone()) };
                             s.description_en = if de.is_empty() { None } else { Some(de.clone()) };
+                            s.total_weight_grams = w;
+                            s.badge = bdg.clone();
                         }
                         spawn(async move {
                             let body = json!({
@@ -2480,6 +2539,7 @@ fn EditSetCard(
                                 "description_en": if de.is_empty() { serde_json::Value::Null } else { de.into() },
                                 "strain_ids": s_ids, "accessory_ids": a_ids,
                                 "is_deal_of_day": deal,
+                                "total_weight_grams": w, "badge": bdg,
                             });
                             let url = format!("{}/api/sets/{}", api_base_url(), id);
                             let res = HTTP_CLIENT.clone().put(&url)
@@ -2487,13 +2547,29 @@ fn EditSetCard(
                                 .header("X-Admin-Token", admin_token())
                                 .header("X-Admin-Telegram-Id", telegram_id.to_string())
                                 .json(&body).send().await;
-                            let success = match res { Ok(r) => r.status().is_success(), Err(_) => false };
-                            if success {
-                                TelegramApp::init().haptic_notification(HapticNotification::Success);
-                            } else {
-                                TelegramApp::init().haptic_notification(HapticNotification::Error);
-                                if let Some(orig) = original { if let Some(s) = cache.write().iter_mut().find(|s| s.id == id) { *s = orig; } }
-                                status.set("❌ Не сохранено. Попробуйте снова".into());
+                            // Surface the real reason (HTTP status + body) instead
+                            // of an opaque "Не сохранено", like the accessory/garden fix.
+                            let outcome = match res {
+                                Ok(r) if r.status().is_success() => Ok(()),
+                                Ok(r) => {
+                                    let st = r.status().as_u16();
+                                    let body = r.text().await.unwrap_or_default();
+                                    let b = body.trim();
+                                    if b.is_empty() { Err(format!("HTTP {st}")) }
+                                    else { Err(format!("HTTP {st}: {}", b.chars().take(80).collect::<String>())) }
+                                }
+                                Err(_) => Err("сеть/таймаут".to_string()),
+                            };
+                            match outcome {
+                                Ok(()) => {
+                                    on_saved.call(());
+                                    TelegramApp::init().haptic_notification(HapticNotification::Success);
+                                }
+                                Err(reason) => {
+                                    TelegramApp::init().haptic_notification(HapticNotification::Error);
+                                    if let Some(orig) = original { if let Some(s) = cache.write().iter_mut().find(|s| s.id == id) { *s = orig; } }
+                                    status.set(format!("❌ Не сохранено ({reason})"));
+                                }
                             }
                         });
                     },

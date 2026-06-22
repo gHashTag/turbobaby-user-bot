@@ -58,6 +58,7 @@ const MIGRATION_SQL: &str = concat!(
     include_str!("../../migrations/037_garden_universal_backfill.sql"),
     include_str!("../../migrations/038_sets_bilingual.sql"),
     include_str!("../../migrations/039_sets_columns.sql"),
+    include_str!("../../migrations/040_sets_packs_fields.sql"),
 );
 
 /// Columns the catalog endpoints SELECT that were added by *later* migrations
@@ -74,7 +75,10 @@ pub(crate) const CRITICAL_COLUMNS: &[(&str, &[&str])] = &[
         "tea_sets",
         &["image_url", "video_url", "name_en", "description_en"],
     ),
-    ("sets", &["image_url", "video_url"]),
+    (
+        "sets",
+        &["image_url", "video_url", "total_weight_grams", "badge"],
+    ),
 ];
 
 /// Pure diff: which `expected` (table, column) pairs are absent from `present`

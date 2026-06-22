@@ -1131,6 +1131,11 @@ pub(crate) struct SetRequest {
     pub name_en: Option<String>,
     #[serde(default)]
     pub description_en: Option<String>,
+    // Migration 040 (Packs Phase 1): total pack weight + one promo badge.
+    #[serde(default)]
+    pub total_weight_grams: Option<f64>,
+    #[serde(default)]
+    pub badge: Option<String>,
 }
 
 fn set_row(r: &sea_orm::QueryResult) -> Value {
@@ -1152,6 +1157,18 @@ fn set_row(r: &sea_orm::QueryResult) -> Value {
     } else {
         0.0
     };
+    let strain_count = strain_ids.len();
+    let total_weight_grams: f64 = crate::try_get_warn!(r, "total_weight_grams", 0.0);
+    let total_weight_grams = if total_weight_grams.is_finite() {
+        total_weight_grams.max(0.0)
+    } else {
+        0.0
+    };
+    let badge = r
+        .try_get::<String>("", "badge")
+        .ok()
+        .filter(|b| crate::trios::packs::PackBadge::is_valid(b))
+        .unwrap_or_else(|| "none".to_string());
     json!({
         "id": r.try_get::<String>("", "id").unwrap_or_default(),
         "name": r.try_get::<String>("", "name").unwrap_or_default(),
@@ -1159,6 +1176,9 @@ fn set_row(r: &sea_orm::QueryResult) -> Value {
         "icon": r.try_get::<String>("", "icon").unwrap_or_default(),
         "strain_ids": strain_ids,
         "accessory_ids": accessory_ids,
+        "strain_count": strain_count,
+        "total_weight_grams": total_weight_grams,
+        "badge": badge,
         "total_price": total_price,
         "discount_percent": discount_percent,
         "is_available": r.try_get::<bool>("", "is_available").unwrap_or(false),
@@ -1188,7 +1208,7 @@ async fn get_sets(
         // Use a single compatible query that works with or without accessory_ids column.
         let rows = state.db.orm.query_all(Statement::from_string(
             DbBackend::Postgres,
-            "SELECT id, name, description, icon, strain_ids, COALESCE(accessory_ids, NULL::text[]) AS accessory_ids, total_price::float8 AS total_price, discount_percent::float8 AS discount_percent, is_available, COALESCE(is_deal_of_day, false) AS is_deal_of_day, image_url, video_url, name_en, description_en FROM sets ORDER BY name LIMIT 5000".to_string(),
+            "SELECT id, name, description, icon, strain_ids, COALESCE(accessory_ids, NULL::text[]) AS accessory_ids, total_price::float8 AS total_price, discount_percent::float8 AS discount_percent, is_available, COALESCE(is_deal_of_day, false) AS is_deal_of_day, image_url, video_url, name_en, description_en, COALESCE(total_weight_grams, 0)::float8 AS total_weight_grams, COALESCE(badge, 'none') AS badge FROM sets ORDER BY name LIMIT 5000".to_string(),
         )).await.map_err(|e| { tracing::error!("get_sets admin: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?;
         let items: Vec<Value> = rows.iter().map(set_row).collect();
         return Ok(Json(json!({ "sets": items })));
@@ -1222,7 +1242,7 @@ async fn get_sets(
     // for legacy rows that predate those columns.
     let general_sets = state.db.orm.query_all(Statement::from_string(
         DbBackend::Postgres,
-        "SELECT id, name, description, icon, strain_ids, COALESCE(accessory_ids, ARRAY[]::text[]) AS accessory_ids, total_price::float8 AS total_price, discount_percent::float8 AS discount_percent, is_available, COALESCE(is_deal_of_day, false) AS is_deal_of_day, image_url, video_url, name_en, description_en FROM sets WHERE is_available = TRUE LIMIT 2000".to_string(),
+        "SELECT id, name, description, icon, strain_ids, COALESCE(accessory_ids, ARRAY[]::text[]) AS accessory_ids, total_price::float8 AS total_price, discount_percent::float8 AS discount_percent, is_available, COALESCE(is_deal_of_day, false) AS is_deal_of_day, image_url, video_url, name_en, description_en, COALESCE(total_weight_grams, 0)::float8 AS total_weight_grams, COALESCE(badge, 'none') AS badge FROM sets WHERE is_available = TRUE LIMIT 2000".to_string(),
     )).await.unwrap_or_else(|e| { tracing::error!("get_sets sets (degraded to empty): {e}"); Vec::new() });
 
     let mut items: Vec<serde_json::Value> = Vec::new();
@@ -1300,6 +1320,9 @@ async fn get_sets(
         let accessory_ids: Vec<String> = r
             .try_get::<Vec<String>>("", "accessory_ids")
             .unwrap_or_default();
+        // Strain count drives the "N сортов по Xг" line — capture before the
+        // strain_ids vec is consumed into the combined bundle below.
+        let strain_count = strain_ids.len();
         let mut bundle = strain_ids;
         bundle.extend(accessory_ids);
         let total_price: f64 = crate::try_get_warn!(r, "total_price", 0.0);
@@ -1314,6 +1337,17 @@ async fn get_sets(
         } else {
             0.0
         };
+        let total_weight_grams: f64 = crate::try_get_warn!(r, "total_weight_grams", 0.0);
+        let total_weight_grams = if total_weight_grams.is_finite() {
+            total_weight_grams.max(0.0)
+        } else {
+            0.0
+        };
+        let badge = r
+            .try_get::<String>("", "badge")
+            .ok()
+            .filter(|b| crate::trios::packs::PackBadge::is_valid(b))
+            .unwrap_or_else(|| "none".to_string());
         items.push(json!({
             "id": r.try_get::<String>("", "id").unwrap_or_default(),
             "name": r.try_get::<String>("", "name").unwrap_or_default(),
@@ -1321,6 +1355,9 @@ async fn get_sets(
             "icon": r.try_get::<String>("", "icon").unwrap_or_default(),
             "type": "set",
             "items": bundle,
+            "strain_count": strain_count,
+            "total_weight_grams": total_weight_grams,
+            "badge": badge,
             "total_price": total_price,
             "discount_percent": discount_percent,
             "is_available": r.try_get::<bool>("", "is_available").unwrap_or(false),
@@ -1369,8 +1406,30 @@ fn validate_set_request(req: &SetRequest) -> Result<(), StatusCode> {
             return Err(StatusCode::BAD_REQUEST);
         }
     }
+    // Migration 040 (Packs): total weight + promo badge.
+    if let Some(w) = req.total_weight_grams {
+        if !w.is_finite() || !(0.0..=100_000.0).contains(&w) {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    }
+    if let Some(ref b) = req.badge {
+        if !crate::trios::packs::PackBadge::is_valid(b) {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    }
     crate::api::validate_url(&req.video_url)?;
     Ok(())
+}
+
+/// Canonical badge string to persist (defaults to "none"; normalizes case).
+fn normalize_badge(badge: Option<String>) -> String {
+    badge
+        .map(|b| {
+            crate::trios::packs::PackBadge::from_str(&b)
+                .as_str()
+                .to_string()
+        })
+        .unwrap_or_else(|| "none".to_string())
 }
 
 async fn create_set(
@@ -1389,7 +1448,7 @@ async fn create_set(
     use sea_orm::{ConnectionTrait, DbBackend, Statement};
     state.db.orm.execute(Statement::from_sql_and_values(
         DbBackend::Postgres,
-        "INSERT INTO sets (id, name, description, icon, strain_ids, accessory_ids, total_price, discount_percent, is_deal_of_day, image_url, video_url, name_en, description_en) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)",
+        "INSERT INTO sets (id, name, description, icon, strain_ids, accessory_ids, total_price, discount_percent, is_deal_of_day, image_url, video_url, name_en, description_en, total_weight_grams, badge) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)",
         [
             id.clone().into(),
             req.name.into(),
@@ -1404,6 +1463,8 @@ async fn create_set(
             req.video_url.into(),
             req.name_en.filter(|s| !s.is_empty()).into(),
             req.description_en.filter(|s| !s.is_empty()).into(),
+            req.total_weight_grams.unwrap_or(0.0).into(),
+            normalize_badge(req.badge).into(),
         ],
     )).await.map_err(|e| { tracing::error!("create_set: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?;
     Ok(Json(json!({ "success": true, "id": id })))
@@ -1428,7 +1489,7 @@ async fn update_set(
     use sea_orm::{ConnectionTrait, DbBackend, Statement};
     state.db.orm.execute(Statement::from_sql_and_values(
         DbBackend::Postgres,
-        "UPDATE sets SET name=$1, description=$2, icon=$3, strain_ids=$4, accessory_ids=$5, total_price=$6, discount_percent=$7, is_deal_of_day=$8, image_url=$9, video_url=$10, is_available=$11, name_en=$12, description_en=$13 WHERE id=$14",
+        "UPDATE sets SET name=$1, description=$2, icon=$3, strain_ids=$4, accessory_ids=$5, total_price=$6, discount_percent=$7, is_deal_of_day=$8, image_url=$9, video_url=$10, is_available=$11, name_en=$12, description_en=$13, total_weight_grams=$14, badge=$15 WHERE id=$16",
         [
             req.name.into(),
             req.description.unwrap_or_default().into(),
@@ -1443,6 +1504,8 @@ async fn update_set(
             req.is_available.unwrap_or(true).into(),
             req.name_en.filter(|s| !s.is_empty()).into(),
             req.description_en.filter(|s| !s.is_empty()).into(),
+            req.total_weight_grams.unwrap_or(0.0).into(),
+            normalize_badge(req.badge).into(),
             id.into(),
         ],
     )).await.map_err(|e| { tracing::error!("update_set: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?;
@@ -1829,12 +1892,61 @@ mod tests {
             is_deal_of_day: Some(false),
             name_en: None,
             description_en: None,
+            total_weight_grams: Some(10.0),
+            badge: Some("none".into()),
         }
     }
 
     #[test]
     fn test_validate_set_ok() {
         assert!(validate_set_request(&valid_set()).is_ok());
+    }
+
+    #[test]
+    fn test_validate_set_badge_invalid_rejected() {
+        let mut req = valid_set();
+        req.badge = Some("bogus".into());
+        assert_eq!(
+            validate_set_request(&req).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
+        // Valid badges + None pass.
+        for b in ["none", "sale", "special", "limited"] {
+            let mut r = valid_set();
+            r.badge = Some(b.into());
+            assert!(validate_set_request(&r).is_ok(), "badge {b} should pass");
+        }
+        req.badge = None;
+        // (name was untouched above except badge) re-make a clean req:
+        let mut r2 = valid_set();
+        r2.badge = None;
+        assert!(validate_set_request(&r2).is_ok());
+    }
+
+    #[test]
+    fn test_validate_set_weight_out_of_range_rejected() {
+        let mut req = valid_set();
+        req.total_weight_grams = Some(-1.0);
+        assert_eq!(
+            validate_set_request(&req).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
+        req.total_weight_grams = Some(200_000.0);
+        assert_eq!(
+            validate_set_request(&req).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
+        req.total_weight_grams = Some(f64::NAN);
+        assert_eq!(
+            validate_set_request(&req).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
+        // Boundary OK.
+        let mut ok = valid_set();
+        ok.total_weight_grams = Some(0.0);
+        assert!(validate_set_request(&ok).is_ok());
+        ok.total_weight_grams = Some(100_000.0);
+        assert!(validate_set_request(&ok).is_ok());
     }
 
     #[test]
