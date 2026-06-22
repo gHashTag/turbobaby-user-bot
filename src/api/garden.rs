@@ -19,6 +19,8 @@ pub(crate) fn routes() -> Router<AppState> {
         // side-effect of `complete_order_and_update_loyalty` (cycle
         // #168); the manual endpoint had zero callers across the UI
         // and backend.
+        .route("/garden/products", get(get_garden_products))
+        .route("/garden/plants/choose", post(choose_plant))
         .route("/garden/plants", get(get_user_plants))
         .route("/garden/plants/:id/water", post(water_plant))
         .route("/garden/plants/:id/harvest", post(harvest_plant))
@@ -61,6 +63,11 @@ pub(crate) struct PlantResponse {
     pub can_water: bool,
     pub next_water_at: i64,
     pub last_watered_at: Option<i64>,
+    // B3: the chosen target product (seed = its photo). Null for legacy plants.
+    pub target_catalog: Option<String>,
+    pub target_product_id: Option<String>,
+    pub target_name: Option<String>,
+    pub target_image_url: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -100,7 +107,8 @@ async fn get_user_plants(
         .query_all(Statement::from_sql_and_values(
             DbBackend::Postgres,
             "SELECT id, user_id, strain_id, strain_name, current_stage, planted_at, \
-                is_completed, harvested_at, reward_claimed, water_count, last_watered_at \
+                is_completed, harvested_at, reward_claimed, water_count, last_watered_at, \
+                target_catalog, target_product_id, target_name, target_image_url \
          FROM garden_plants \
          WHERE user_id = $1 AND is_completed = false \
          ORDER BY planted_at DESC LIMIT 200",
@@ -153,6 +161,22 @@ async fn get_user_plants(
                 can_water: progress.can_water,
                 next_water_at: progress.next_water_at,
                 last_watered_at: plant.last_watered_at,
+                target_catalog: r
+                    .try_get::<Option<String>>("", "target_catalog")
+                    .ok()
+                    .flatten(),
+                target_product_id: r
+                    .try_get::<Option<String>>("", "target_product_id")
+                    .ok()
+                    .flatten(),
+                target_name: r
+                    .try_get::<Option<String>>("", "target_name")
+                    .ok()
+                    .flatten(),
+                target_image_url: r
+                    .try_get::<Option<String>>("", "target_image_url")
+                    .ok()
+                    .flatten(),
             }
         })
         .collect();
@@ -328,7 +352,8 @@ async fn harvest_plant(
     let row = tx
         .query_one(Statement::from_sql_and_values(
             DbBackend::Postgres,
-            "SELECT user_id, strain_id, strain_name, is_completed, harvested_at \
+            "SELECT user_id, strain_id, strain_name, is_completed, harvested_at, \
+                    target_catalog, target_product_id \
              FROM garden_plants \
              WHERE id = $1 \
              FOR UPDATE",
@@ -370,6 +395,21 @@ async fn harvest_plant(
 
     let strain_id: String = r.try_get("", "strain_id").unwrap_or_default();
     let strain_name: String = r.try_get("", "strain_name").unwrap_or_default();
+    // B3/B4: carry the chosen target product onto the reward so checkout can
+    // scope the discount to it. Legacy plants (no target) → scope 'cart'.
+    let target_catalog: Option<String> = r
+        .try_get::<Option<String>>("", "target_catalog")
+        .ok()
+        .flatten();
+    let target_product_id: Option<String> = r
+        .try_get::<Option<String>>("", "target_product_id")
+        .ok()
+        .flatten();
+    let reward_scope = if target_product_id.is_some() {
+        "product"
+    } else {
+        "cart"
+    };
 
     let reward_id = uuid::Uuid::new_v4().to_string();
 
@@ -432,8 +472,9 @@ async fn harvest_plant(
     tx.execute(Statement::from_sql_and_values(
         DbBackend::Postgres,
         "INSERT INTO garden_rewards (id, plant_id, user_id, strain_id, strain_name, \
-                                    discount_percent, bonus_points, expires_at, is_used, created_at) \
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
+                                    discount_percent, bonus_points, expires_at, is_used, created_at, \
+                                    target_catalog, target_product_id, scope) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)",
         [
             reward_id.clone().into(),
             id.into(),
@@ -445,6 +486,9 @@ async fn harvest_plant(
             expires_at.into(),
             false.into(),
             now.into(),
+            target_catalog.into(),
+            target_product_id.into(),
+            reward_scope.into(),
         ],
     )).await.map_err(|e| {
         tracing::error!("harvest_plant insert reward: {e}");
@@ -994,6 +1038,167 @@ async fn force_seed(
     Ok(Json(
         json!({ "success": true, "plant_id": plant_id, "strain_name": strain_name }),
     ))
+}
+
+// ── B3: choose-any-product flow ───────────────────────────────────
+
+/// Map a customer-facing catalog key to its table name. Static allow-list
+/// (no user value reaches SQL as an identifier) — unknown → None.
+fn garden_catalog_table(catalog: &str) -> Option<&'static str> {
+    match catalog {
+        "strain" => Some("strains"),
+        "accessory" => Some("accessories"),
+        "tea" => Some("tea_products"),
+        "set" => Some("sets"),
+        "accessory_set" => Some("accessory_sets"),
+        "tea_set" => Some("tea_sets"),
+        _ => None,
+    }
+}
+
+/// GET /api/garden/products — every live, garden-eligible product the customer
+/// can choose to grow a discount for, across all catalogs. Public (catalog data,
+/// no user data), mirrors `/api/sets` resilience: degrade each source to empty.
+async fn get_garden_products(State(state): State<AppState>) -> Result<Json<Value>, StatusCode> {
+    use sea_orm::{ConnectionTrait, DbBackend, Statement};
+    let sql = "\
+        SELECT 'strain'        AS catalog, id, name, image_url, price_per_gram::float8 AS price FROM strains        WHERE is_available AND garden_eligible \
+        UNION ALL SELECT 'accessory',     id, name, image_url, price::float8        FROM accessories    WHERE is_available AND garden_eligible \
+        UNION ALL SELECT 'tea',           id, name, image_url, price::float8        FROM tea_products   WHERE is_available AND garden_eligible \
+        UNION ALL SELECT 'set',           id, name, image_url, total_price::float8  FROM sets           WHERE is_available AND garden_eligible \
+        UNION ALL SELECT 'accessory_set', id, name, image_url, total_price::float8  FROM accessory_sets WHERE is_available AND garden_eligible \
+        UNION ALL SELECT 'tea_set',       id, name, image_url, total_price::float8  FROM tea_sets       WHERE is_available AND garden_eligible \
+        ORDER BY catalog, name LIMIT 3000";
+    let rows = state
+        .db
+        .orm
+        .query_all(Statement::from_string(DbBackend::Postgres, sql.to_string()))
+        .await
+        .map_err(|e| {
+            tracing::error!("get_garden_products: {e}");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+    let products: Vec<Value> = rows
+        .iter()
+        .map(|r| {
+            let price: f64 = crate::try_get_warn!(r, "price", 0.0);
+            json!({
+                "catalog": r.try_get::<String>("", "catalog").unwrap_or_default(),
+                "id": r.try_get::<String>("", "id").unwrap_or_default(),
+                "name": r.try_get::<String>("", "name").unwrap_or_default(),
+                "image_url": r.try_get::<Option<String>>("", "image_url").ok().flatten(),
+                "price": if price.is_finite() { price.max(0.0) } else { 0.0 },
+            })
+        })
+        .collect();
+    Ok(Json(json!({ "products": products })))
+}
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct ChoosePlantRequest {
+    pub telegram_id: i64,
+    pub catalog: String,
+    pub product_id: String,
+}
+
+/// POST /api/garden/plants/choose — the customer picks a live product to grow a
+/// discount for. Snapshots the product's name + photo onto the plant's target_*
+/// (the photo becomes the seed image). Same one-active-plant + 24h post-harvest
+/// cooldown guards as the auto-seed.
+async fn choose_plant(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    Json(req): Json<ChoosePlantRequest>,
+) -> Result<Json<Value>, StatusCode> {
+    validate_telegram_id_param(req.telegram_id)?;
+    crate::api::auth::check_owner(&headers, &state, req.telegram_id)?;
+    check_not_blocked(&state, req.telegram_id).await?;
+    if req.product_id.len() > 200 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    let Some(table) = garden_catalog_table(&req.catalog) else {
+        return Err(StatusCode::BAD_REQUEST);
+    };
+    use sea_orm::{ConnectionTrait, DbBackend, Statement};
+
+    // Validate the product is live + garden-eligible, and snapshot name/photo.
+    let row = state
+        .db
+        .orm
+        .query_one(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            // `table` is from the static allow-list above — safe to interpolate.
+            format!(
+                "SELECT name, image_url FROM {table} WHERE id = $1 AND is_available AND garden_eligible"
+            ),
+            [req.product_id.clone().into()],
+        ))
+        .await
+        .map_err(|e| {
+            tracing::error!("choose_plant: lookup failed: {e}");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+    let Some(row) = row else {
+        return Ok(Json(
+            json!({ "success": false, "error": "product_not_available" }),
+        ));
+    };
+    let name: String = row.try_get("", "name").unwrap_or_default();
+    let image_url: Option<String> = row
+        .try_get::<Option<String>>("", "image_url")
+        .ok()
+        .flatten();
+
+    let user_id = req.telegram_id.to_string();
+    let plant_id = uuid::Uuid::new_v4().to_string();
+    let planted_at = chrono::Utc::now().timestamp_millis();
+    let harvest_cooldown_floor = planted_at.saturating_sub(garden::POST_HARVEST_COOLDOWN_MS);
+
+    let res = state
+        .db
+        .orm
+        .execute(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            "INSERT INTO garden_plants \
+                  (id, user_id, strain_id, strain_name, current_stage, planted_at, is_completed, water_count, \
+                   target_catalog, target_product_id, target_name, target_image_url) \
+             SELECT $1, $2, $3, $4, 'seed', $5, false, 0, $7, $3, $4, $8 \
+             WHERE NOT EXISTS ( \
+                 SELECT 1 FROM garden_plants WHERE user_id = $2 AND is_completed = false \
+             ) \
+             AND NOT EXISTS ( \
+                 SELECT 1 FROM garden_plants \
+                 WHERE user_id = $2 AND harvested_at IS NOT NULL AND harvested_at > $6 \
+             )",
+            [
+                plant_id.clone().into(),
+                user_id.into(),
+                req.product_id.clone().into(),
+                name.clone().into(),
+                planted_at.into(),
+                harvest_cooldown_floor.into(),
+                req.catalog.clone().into(),
+                image_url.into(),
+            ],
+        ))
+        .await
+        .map_err(|e| {
+            tracing::error!("choose_plant: insert failed: {e}");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    if res.rows_affected() == 0 {
+        // A guard blocked it: either an active plant exists or within cooldown.
+        return Ok(Json(
+            json!({ "success": false, "error": "already_growing_or_cooldown" }),
+        ));
+    }
+    tracing::info!(
+        telegram_id = req.telegram_id,
+        "choose_plant: planted {}",
+        req.catalog
+    );
+    Ok(Json(json!({ "success": true, "plant_id": plant_id })))
 }
 
 #[cfg(test)]

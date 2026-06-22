@@ -59,6 +59,7 @@ const MIGRATION_SQL: &str = concat!(
     include_str!("../../migrations/038_sets_bilingual.sql"),
     include_str!("../../migrations/039_sets_columns.sql"),
     include_str!("../../migrations/040_sets_packs_fields.sql"),
+    include_str!("../../migrations/041_garden_choose_product.sql"),
 );
 
 /// Columns the catalog endpoints SELECT that were added by *later* migrations

@@ -21,15 +21,20 @@ struct ApiPlant {
     #[serde(default)]
     last_watered_at: Option<i64>,
     reward_claimed: bool,
+    // B3: chosen target product (seed = its photo).
+    #[serde(default)]
+    target_name: Option<String>,
+    #[serde(default)]
+    target_image_url: Option<String>,
 }
 
-impl From<ApiPlant> for Plant {
-    fn from(a: ApiPlant) -> Self {
+impl From<&ApiPlant> for Plant {
+    fn from(a: &ApiPlant) -> Self {
         Plant {
-            id: a.id,
+            id: a.id.clone(),
             user_id: String::new(),
-            strain_id: a.strain_id,
-            strain_name: a.strain_name,
+            strain_id: a.strain_id.clone(),
+            strain_name: a.strain_name.clone(),
             current_stage: a.current_stage,
             planted_at: a.planted_at,
             is_completed: a.is_completed,
@@ -39,6 +44,22 @@ impl From<ApiPlant> for Plant {
             last_watered_at: a.last_watered_at,
         }
     }
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+struct GardenProduct {
+    catalog: String,
+    id: String,
+    name: String,
+    #[serde(default)]
+    image_url: Option<String>,
+    #[serde(default)]
+    price: f64,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+struct GardenProductsResponse {
+    products: Vec<GardenProduct>,
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
@@ -69,13 +90,55 @@ struct HarvestPlantResponse {
     error: Option<String>,
 }
 
-async fn fetch_plants(telegram_id: i64, init_data: &str) -> Result<Vec<Plant>, String> {
+async fn fetch_plants(telegram_id: i64, init_data: &str) -> Result<Vec<ApiPlant>, String> {
     let base = api_base_url();
     let url = format!("{}/api/garden/plants?telegram_id={}", base, telegram_id);
     let text = crate::ui::api::http::fetch_text_authed(&url, init_data).await?;
     serde_json::from_str::<GardenResponse>(&text)
         .map_err(|e| format!("Parse error: {e}"))
-        .map(|r| r.plants.into_iter().map(Into::into).collect())
+        .map(|r| r.plants)
+}
+
+async fn fetch_garden_products() -> Result<Vec<GardenProduct>, String> {
+    let base = api_base_url();
+    let url = format!("{}/api/garden/products", base);
+    let text = crate::ui::api::http::fetch_text(&url).await?;
+    serde_json::from_str::<GardenProductsResponse>(&text)
+        .map_err(|e| format!("Parse error: {e}"))
+        .map(|r| r.products)
+}
+
+/// POST a chosen product to plant it. Returns Ok(()) or a server error code.
+async fn choose_plant_api(
+    telegram_id: i64,
+    catalog: &str,
+    product_id: &str,
+    init_data: &str,
+) -> Result<(), String> {
+    let base = api_base_url();
+    let url = format!("{}/api/garden/plants/choose", base);
+    let body = serde_json::json!({
+        "telegram_id": telegram_id,
+        "catalog": catalog,
+        "product_id": product_id,
+    })
+    .to_string();
+    let text = crate::ui::api::http::post_json_authed(&url, init_data, &body).await?;
+    let resp: serde_json::Value =
+        serde_json::from_str(&text).map_err(|e| format!("Parse error: {e}"))?;
+    if resp
+        .get("success")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false)
+    {
+        Ok(())
+    } else {
+        Err(resp
+            .get("error")
+            .and_then(|v| v.as_str())
+            .unwrap_or("choose_failed")
+            .to_string())
+    }
 }
 
 async fn force_seed_api(telegram_id: i64, init_data: &str) -> Result<serde_json::Value, String> {
@@ -114,36 +177,21 @@ async fn harvest_plant_api(plant_id: &str, init_data: &str) -> Result<(), String
     }
 }
 
-fn mock_plants() -> Vec<Plant> {
+fn mock_plants() -> Vec<ApiPlant> {
     let now = chrono::Utc::now().timestamp_millis();
-    vec![
-        Plant {
-            id: "mock-1".into(),
-            user_id: "user".into(),
-            strain_id: "banana-fritter".into(),
-            strain_name: "Banana Fritter".into(),
-            current_stage: GrowthStage::BigVeg,
-            planted_at: now.saturating_sub(86400000 * 5),
-            is_completed: false,
-            harvested_at: None,
-            reward_claimed: false,
-            water_count: 5,
-            last_watered_at: Some(now.saturating_sub(120000)),
-        },
-        Plant {
-            id: "mock-2".into(),
-            user_id: "user".into(),
-            strain_id: "super-lemon-haze".into(),
-            strain_name: "Super Lemon Haze".into(),
-            current_stage: GrowthStage::Seed,
-            planted_at: now.saturating_sub(60000),
-            is_completed: false,
-            harvested_at: None,
-            reward_claimed: false,
-            water_count: 0,
-            last_watered_at: None,
-        },
-    ]
+    vec![ApiPlant {
+        id: "mock-1".into(),
+        strain_id: "banana-fritter".into(),
+        strain_name: "Banana Fritter".into(),
+        current_stage: GrowthStage::BigVeg,
+        planted_at: now.saturating_sub(86400000 * 5),
+        is_completed: false,
+        reward_claimed: false,
+        water_count: 5,
+        last_watered_at: Some(now.saturating_sub(120000)),
+        target_name: None,
+        target_image_url: None,
+    }]
 }
 
 /// Returns the plant growth stage image URL based on stage index (0-13).
@@ -191,10 +239,11 @@ fn progress_bar_gradient(stage: &GrowthStage) -> &'static str {
 
 #[component]
 pub fn Garden() -> Element {
-    let plants = use_signal(Vec::<Plant>::new);
+    let plants = use_signal(Vec::<ApiPlant>::new);
     let loading = use_signal(|| true);
     let error_msg = use_signal(String::new);
     let now_ms = use_signal(|| chrono::Utc::now().timestamp_millis());
+    let mut show_chooser = use_signal(|| false);
     let telegram_id = use_telegram_id().unwrap_or(0);
     let init_data = use_telegram_init_data();
 
@@ -317,21 +366,39 @@ pub fn Garden() -> Element {
                 div { style: "text-align: center; padding: 60px 20px;",
                     div { style: "font-size: 48px; margin-bottom: 16px;", "🌱" }
                     p { style: "font-size: 11px; color: #8b8b9e; margin-bottom: 8px;", "{empty_label}" }
-                    p { style: "font-size: 18px; color: #555577;", "{empty_cta}" }
+                    p { style: "font-size: 13px; color: #8b8b9e; margin-bottom: 16px;", "{empty_cta}" }
+                    button {
+                        style: "padding:12px 20px;background:#39ff14;color:#000;border:4px solid #2d9e0f;box-shadow:3px 3px 0 #000;font-size:14px;font-weight:700;cursor:pointer;",
+                        onclick: move |_| show_chooser.set(true),
+                        "🌱 Выбрать товар для скидки"
+                    }
                 }
             } else {
                 div { style: "max-width: 400px; margin: 0 auto; padding: 0 16px;",
                     {plant_list.into_iter().map(|plant| {
-                        let progress = calculate_progress(&plant, now);
+                        let core: Plant = (&plant).into();
+                        let progress = calculate_progress(&core, now);
                         let pid = plant.id.clone();
-                        let sname = plant.strain_name.clone();
+                        // Prefer the chosen product's name + photo (the seed); fall
+                        // back to the legacy strain + the generic stage sprite.
+                        let sname = plant.target_name.clone()
+                            .filter(|s| !s.is_empty())
+                            .unwrap_or_else(|| plant.strain_name.clone());
                         let wc = plant.water_count;
                         let total_stages = GrowthStage::TOTAL_STAGES;
                         let color = stage_color(&progress.stage).to_string();
                         let gradient = progress_bar_gradient(&progress.stage).to_string();
                         let stage_name = progress.stage_name.clone();
                         let emoji = progress.stage_emoji.clone();
-                        let img_url = stage_image_url(progress.stage_index);
+                        let img_url = {
+                            let ti = plant.target_image_url.clone().unwrap_or_default();
+                            if ti.starts_with("http://") || ti.starts_with("https://")
+                                || (ti.starts_with('/') && !ti.starts_with("//")) {
+                                ti
+                            } else {
+                                stage_image_url(progress.stage_index)
+                            }
+                        };
                         let total_pct = progress.total_progress;
                         let pct_str = format!("{}%", total_pct);
                         let is_active = progress.stage_index > 0 && !progress.is_ready_to_harvest;
@@ -492,6 +559,119 @@ pub fn Garden() -> Element {
                             }
                         }
                     })}
+                }
+            }
+
+            if show_chooser() {
+                GardenChooser { telegram_id, init_data: init_data.clone(), plants, open: show_chooser }
+            }
+        }
+    }
+}
+
+/// Modal: pick a live, garden-eligible product to grow a discount for. On
+/// success the chosen product's photo becomes the plant's seed image.
+#[component]
+fn GardenChooser(
+    telegram_id: i64,
+    init_data: String,
+    plants: Signal<Vec<ApiPlant>>,
+    open: Signal<bool>,
+) -> Element {
+    let products = use_resource(|| async move { fetch_garden_products().await });
+    let mut busy = use_signal(|| false);
+    let mut err = use_signal(String::new);
+
+    let cat_label = |c: &str| match c {
+        "strain" => "🌿 Сорта",
+        "accessory" => "💨 Аксессуары",
+        "tea" => "🥤 Напитки",
+        "set" => "📦 Наборы",
+        "accessory_set" => "🔧 Сеты аксессуаров",
+        "tea_set" => "🫖 Сеты напитков",
+        _ => "Прочее",
+    };
+
+    rsx! {
+        div {
+            style: "position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,0.75);display:flex;align-items:flex-end;justify-content:center;",
+            onclick: move |_| open.set(false),
+            div {
+                style: "background:#0f0f1a;width:100%;max-width:520px;max-height:85vh;overflow:auto;border-top:4px solid #39ff14;padding:16px;",
+                onclick: move |e: Event<MouseData>| e.stop_propagation(),
+                div { style: "display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;",
+                    div { style: "font-size:15px;font-weight:700;color:#39ff14;", "Выбери товар для скидки" }
+                    button { style: "width:44px;height:44px;background:transparent;border:none;color:#8b8b9e;font-size:20px;cursor:pointer;",
+                        "aria-label": "Закрыть", onclick: move |_| open.set(false), "✕" }
+                }
+                if !err.read().is_empty() {
+                    div { style: "background:#2a1a1a;color:#ff6b7a;font-size:13px;padding:8px;margin-bottom:10px;border:1px solid #ff4757;", "{err}" }
+                }
+                {
+                    match &*products.read() {
+                        Some(Ok(list)) if !list.is_empty() => {
+                            let items = list.clone();
+                            rsx! {
+                                div { style: "display:grid;grid-template-columns:1fr 1fr;gap:10px;",
+                                    for p in items.into_iter() {
+                                        {
+                                            let img = p.image_url.clone().unwrap_or_default();
+                                            let has_img = img.starts_with("http") || img.starts_with('/');
+                                            let cat = p.catalog.clone();
+                                            let pid = p.id.clone();
+                                            let name = p.name.clone();
+                                            let badge = cat_label(&p.catalog);
+                                            let price = if p.price.is_finite() { p.price.max(0.0) } else { 0.0 };
+                                            let init = init_data.clone();
+                                            rsx! {
+                                                div {
+                                                    style: "background:#16213e;border:3px solid #2a2a4a;box-shadow:3px 3px 0 #000;overflow:hidden;cursor:pointer;",
+                                                    onclick: move |_| {
+                                                        if *busy.read() { return; }
+                                                        busy.set(true);
+                                                        err.set(String::new());
+                                                        let cat = cat.clone(); let pid = pid.clone(); let init = init.clone();
+                                                        spawn(async move {
+                                                            match choose_plant_api(telegram_id, &cat, &pid, &init).await {
+                                                                Ok(()) => {
+                                                                    if let Ok(p2) = fetch_plants(telegram_id, &init).await {
+                                                                        plants.set(p2);
+                                                                    }
+                                                                    open.set(false);
+                                                                }
+                                                                Err(code) => {
+                                                                    let msg = match code.as_str() {
+                                                                        "already_growing_or_cooldown" => "У тебя уже растёт растение или идёт суточный кулдаун после сбора.",
+                                                                        "product_not_available" => "Товар недоступен.",
+                                                                        other => other,
+                                                                    };
+                                                                    err.set(msg.to_string());
+                                                                    busy.set(false);
+                                                                }
+                                                            }
+                                                        });
+                                                    },
+                                                    div { style: "min-height:90px;background:#111;display:flex;align-items:center;justify-content:center;font-size:32px;",
+                                                        if has_img {
+                                                            img { src: "{img}", alt: "{name}", style: "width:100%;height:auto;object-fit:contain;display:block;" }
+                                                        } else { "🎁" }
+                                                    }
+                                                    div { style: "padding:8px;",
+                                                        div { style: "font-size:10px;color:#8b8b9e;", "{badge}" }
+                                                        div { style: "font-size:13px;font-weight:700;color:#e8e8e8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;", "{name}" }
+                                                        div { style: "font-size:12px;color:#ffe600;", "{price} ฿" }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        Some(Ok(_)) => rsx! { div { style: "text-align:center;padding:30px;color:#8b8b9e;", "Нет доступных товаров" } },
+                        Some(Err(e)) => rsx! { div { style: "text-align:center;padding:30px;color:#ff6b7a;", "Ошибка: {e}" } },
+                        None => rsx! { div { style: "text-align:center;padding:30px;color:#8b8b9e;", "Загрузка..." } },
+                    }
                 }
             }
         }
