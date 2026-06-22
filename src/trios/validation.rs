@@ -204,9 +204,75 @@ pub fn clamp_finite_non_negative(v: f64) -> f64 {
     }
 }
 
+/// Normalize a user-typed media URL so a common paste mistake doesn't get
+/// rejected by the server's `validate_url` (which only accepts `http://`,
+/// `https://`, a leading `/`, or `data:`). The admin image/video fields are
+/// free-text, so a pasted `bucket-…up.railway.app/x.mov` or `youtube.com/…`
+/// (no scheme) would otherwise produce an opaque HTTP 400 on save.
+///
+/// Rules (mirrors the server's allow-list so the result always passes it):
+/// - trim surrounding whitespace;
+/// - empty → empty (cleared field is valid);
+/// - already `http://` / `https://` / `/…` / `data:` → unchanged;
+/// - protocol-relative `//host/…` → `https://host/…`;
+/// - anything else (scheme-less host/path) → prefix `https://`.
+///
+/// Safe: it can only ever yield a value starting with `https://`, a leading
+/// `/`, or `data:` — never `javascript:` etc. The server's `validate_url`
+/// remains the real gate; this is a client-side friendliness layer.
+pub fn normalize_media_url(input: &str) -> String {
+    let s = input.trim();
+    if s.is_empty() {
+        return String::new();
+    }
+    if s.starts_with("http://")
+        || s.starts_with("https://")
+        || s.starts_with("data:")
+        || (s.starts_with('/') && !s.starts_with("//"))
+    {
+        return s.to_string();
+    }
+    if let Some(rest) = s.strip_prefix("//") {
+        return format!("https://{rest}");
+    }
+    format!("https://{s}")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn normalize_media_url_cases() {
+        // Already-valid forms pass through unchanged.
+        assert_eq!(
+            normalize_media_url("https://x.com/a.mov"),
+            "https://x.com/a.mov"
+        );
+        assert_eq!(
+            normalize_media_url("http://x.com/a.png"),
+            "http://x.com/a.png"
+        );
+        assert_eq!(normalize_media_url("/uploads/a.png"), "/uploads/a.png");
+        assert_eq!(
+            normalize_media_url("data:image/png;base64,AAA"),
+            "data:image/png;base64,AAA"
+        );
+        // Empty / whitespace → empty.
+        assert_eq!(normalize_media_url(""), "");
+        assert_eq!(normalize_media_url("   "), "");
+        // Scheme-less host (the actual bug): gets https:// + trimmed.
+        assert_eq!(
+            normalize_media_url("  bucket-x.up.railway.app/media/a.mov  "),
+            "https://bucket-x.up.railway.app/media/a.mov"
+        );
+        assert_eq!(
+            normalize_media_url("youtube.com/watch?v=1"),
+            "https://youtube.com/watch?v=1"
+        );
+        // Protocol-relative → https.
+        assert_eq!(normalize_media_url("//cdn.x/a.png"), "https://cdn.x/a.png");
+    }
 
     #[test]
     fn test_validate_telegram_id_valid() {

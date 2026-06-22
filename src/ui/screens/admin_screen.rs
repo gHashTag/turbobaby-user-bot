@@ -1470,7 +1470,11 @@ fn AccessoriesTab() -> Element {
                                    Ok(v) => v,
                                    Err(msg) => { status.set(format!("❌ {}", msg)); return; }
                                };
-                               let d = description(); let img = image_url(); let vid = video_url();
+                               let d = description();
+                               // Normalize free-text URLs so a scheme-less paste
+                               // (e.g. "bucket-…/x.mov") doesn't 400 server-side.
+                               let img = crate::trios::validation::normalize_media_url(&image_url());
+                               let vid = crate::trios::validation::normalize_media_url(&video_url());
                                let ne = name_en(); let de = description_en(); let ce = category_en();
                                submitting.set(true);
                                let temp_id = format!("temp-{}", uuid::Uuid::new_v4());
@@ -4078,7 +4082,11 @@ fn EditAccessoryCard(
                                _ => { status.set("❌ Количество должно быть числом ≥ 0".into()); return; }
                            };
                            if n.is_empty() { status.set("❌ Название обязательно".into()); return; }
-                           let d = description(); let img = image_url(); let vid = video_url();
+                           let d = description();
+                           // Normalize free-text URLs so a scheme-less paste
+                           // (e.g. "bucket-…/x.mov") doesn't 400 server-side.
+                           let img = crate::trios::validation::normalize_media_url(&image_url());
+                           let vid = crate::trios::validation::normalize_media_url(&video_url());
                            let ne = name_en(); let de = description_en(); let ce = category_en();
                            let id = item_id.clone();
                            let original = cache.read().iter().find(|a| a.id == id).cloned();
