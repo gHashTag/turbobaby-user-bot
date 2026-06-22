@@ -18,49 +18,178 @@ pub use strains::*;
 
 use anyhow::{Context, Result};
 
-const MIGRATION_SQL: &str = concat!(
-    include_str!("../../migrations/001_initial.sql"),
-    include_str!("../../migrations/002_catalog.sql"),
-    include_str!("../../migrations/003_quest.sql"),
-    include_str!("../../migrations/004_garden.sql"),
-    include_str!("../../migrations/005_alter_strains_sotd.sql"),
-    include_str!("../../migrations/006_seed_strain_images.sql"),
-    include_str!("../../migrations/007_referral_events.sql"),
-    include_str!("../../migrations/008_strains_full_seed.sql"),
-    include_str!("../../migrations/009_loyalty_tiers_seed.sql"),
-    include_str!("../../migrations/010_tech_tree_seed.sql"),
-    include_str!("../../migrations/011_strains_force_prices.sql"),
-    include_str!("../../migrations/012_strains_fix_numeric_to_float8.sql"),
-    include_str!("../../migrations/013_catalog_full_seed.sql"),
-    include_str!("../../migrations/014_force_prices.sql"),
-    include_str!("../../migrations/015_catalog_fix_numeric_to_float8.sql"),
-    include_str!("../../migrations/016_bilingual_fields.sql"),
-    include_str!("../../migrations/017_restore_old_prices_and_discounts.sql"),
-    include_str!("../../migrations/018_seed_tea_products.sql"),
-    include_str!("../../migrations/019_add_default_images.sql"),
-    include_str!("../../migrations/020_force_double_precision.sql"),
-    include_str!("../../migrations/021_hunt_checkpoints_fields.sql"),
-    include_str!("../../migrations/022_strains_video_url.sql"),
-    include_str!("../../migrations/023_managers_commission_rate.sql"),
-    include_str!("../../migrations/024_catalog_video_url.sql"),
-    include_str!("../../migrations/025_orders_telegram_nullable.sql"),
-    include_str!("../../migrations/026_garden_backfill_from_orders.sql"),
-    include_str!("../../migrations/027_game_high_scores.sql"),
-    include_str!("../../migrations/028_strain_marketing_flags.sql"),
-    include_str!("../../migrations/029_order_idempotency_keys.sql"),
-    include_str!("../../migrations/030_order_fraud_events.sql"),
-    include_str!("../../migrations/031_block_history.sql"),
-    include_str!("../../migrations/032_loyalty_config_marketing_badges_hidden.sql"),
-    include_str!("../../migrations/033_loyalty_idempotency_keys.sql"),
-    include_str!("../../migrations/034_sets_image_url.sql"),
-    include_str!("../../migrations/035_referral_code_telegram_id.sql"),
-    include_str!("../../migrations/036_garden_backfill_non_strain_orders.sql"),
-    include_str!("../../migrations/037_garden_universal_backfill.sql"),
-    include_str!("../../migrations/038_sets_bilingual.sql"),
-    include_str!("../../migrations/039_sets_columns.sql"),
-    include_str!("../../migrations/040_sets_packs_fields.sql"),
-    include_str!("../../migrations/041_garden_choose_product.sql"),
-);
+/// Every migration as `(name, sql)`, in apply order. Replaces the old single
+/// `concat!` blob so each migration can be tracked + run EXACTLY ONCE (see
+/// `run_migrations` + the `_schema_migrations` table). Re-running the whole blob
+/// every boot was resurrecting admin-deleted catalog rows and overwriting admin
+/// edits (seed migrations 013/018 `ON CONFLICT DO UPDATE`, the price/image
+/// `UPDATE` migrations) — the bug this fix closes.
+const MIGRATIONS: &[(&str, &str)] = &[
+    (
+        "001_initial.sql",
+        include_str!("../../migrations/001_initial.sql"),
+    ),
+    (
+        "002_catalog.sql",
+        include_str!("../../migrations/002_catalog.sql"),
+    ),
+    (
+        "003_quest.sql",
+        include_str!("../../migrations/003_quest.sql"),
+    ),
+    (
+        "004_garden.sql",
+        include_str!("../../migrations/004_garden.sql"),
+    ),
+    (
+        "005_alter_strains_sotd.sql",
+        include_str!("../../migrations/005_alter_strains_sotd.sql"),
+    ),
+    (
+        "006_seed_strain_images.sql",
+        include_str!("../../migrations/006_seed_strain_images.sql"),
+    ),
+    (
+        "007_referral_events.sql",
+        include_str!("../../migrations/007_referral_events.sql"),
+    ),
+    (
+        "008_strains_full_seed.sql",
+        include_str!("../../migrations/008_strains_full_seed.sql"),
+    ),
+    (
+        "009_loyalty_tiers_seed.sql",
+        include_str!("../../migrations/009_loyalty_tiers_seed.sql"),
+    ),
+    (
+        "010_tech_tree_seed.sql",
+        include_str!("../../migrations/010_tech_tree_seed.sql"),
+    ),
+    (
+        "011_strains_force_prices.sql",
+        include_str!("../../migrations/011_strains_force_prices.sql"),
+    ),
+    (
+        "012_strains_fix_numeric_to_float8.sql",
+        include_str!("../../migrations/012_strains_fix_numeric_to_float8.sql"),
+    ),
+    (
+        "013_catalog_full_seed.sql",
+        include_str!("../../migrations/013_catalog_full_seed.sql"),
+    ),
+    (
+        "014_force_prices.sql",
+        include_str!("../../migrations/014_force_prices.sql"),
+    ),
+    (
+        "015_catalog_fix_numeric_to_float8.sql",
+        include_str!("../../migrations/015_catalog_fix_numeric_to_float8.sql"),
+    ),
+    (
+        "016_bilingual_fields.sql",
+        include_str!("../../migrations/016_bilingual_fields.sql"),
+    ),
+    (
+        "017_restore_old_prices_and_discounts.sql",
+        include_str!("../../migrations/017_restore_old_prices_and_discounts.sql"),
+    ),
+    (
+        "018_seed_tea_products.sql",
+        include_str!("../../migrations/018_seed_tea_products.sql"),
+    ),
+    (
+        "019_add_default_images.sql",
+        include_str!("../../migrations/019_add_default_images.sql"),
+    ),
+    (
+        "020_force_double_precision.sql",
+        include_str!("../../migrations/020_force_double_precision.sql"),
+    ),
+    (
+        "021_hunt_checkpoints_fields.sql",
+        include_str!("../../migrations/021_hunt_checkpoints_fields.sql"),
+    ),
+    (
+        "022_strains_video_url.sql",
+        include_str!("../../migrations/022_strains_video_url.sql"),
+    ),
+    (
+        "023_managers_commission_rate.sql",
+        include_str!("../../migrations/023_managers_commission_rate.sql"),
+    ),
+    (
+        "024_catalog_video_url.sql",
+        include_str!("../../migrations/024_catalog_video_url.sql"),
+    ),
+    (
+        "025_orders_telegram_nullable.sql",
+        include_str!("../../migrations/025_orders_telegram_nullable.sql"),
+    ),
+    (
+        "026_garden_backfill_from_orders.sql",
+        include_str!("../../migrations/026_garden_backfill_from_orders.sql"),
+    ),
+    (
+        "027_game_high_scores.sql",
+        include_str!("../../migrations/027_game_high_scores.sql"),
+    ),
+    (
+        "028_strain_marketing_flags.sql",
+        include_str!("../../migrations/028_strain_marketing_flags.sql"),
+    ),
+    (
+        "029_order_idempotency_keys.sql",
+        include_str!("../../migrations/029_order_idempotency_keys.sql"),
+    ),
+    (
+        "030_order_fraud_events.sql",
+        include_str!("../../migrations/030_order_fraud_events.sql"),
+    ),
+    (
+        "031_block_history.sql",
+        include_str!("../../migrations/031_block_history.sql"),
+    ),
+    (
+        "032_loyalty_config_marketing_badges_hidden.sql",
+        include_str!("../../migrations/032_loyalty_config_marketing_badges_hidden.sql"),
+    ),
+    (
+        "033_loyalty_idempotency_keys.sql",
+        include_str!("../../migrations/033_loyalty_idempotency_keys.sql"),
+    ),
+    (
+        "034_sets_image_url.sql",
+        include_str!("../../migrations/034_sets_image_url.sql"),
+    ),
+    (
+        "035_referral_code_telegram_id.sql",
+        include_str!("../../migrations/035_referral_code_telegram_id.sql"),
+    ),
+    (
+        "036_garden_backfill_non_strain_orders.sql",
+        include_str!("../../migrations/036_garden_backfill_non_strain_orders.sql"),
+    ),
+    (
+        "037_garden_universal_backfill.sql",
+        include_str!("../../migrations/037_garden_universal_backfill.sql"),
+    ),
+    (
+        "038_sets_bilingual.sql",
+        include_str!("../../migrations/038_sets_bilingual.sql"),
+    ),
+    (
+        "039_sets_columns.sql",
+        include_str!("../../migrations/039_sets_columns.sql"),
+    ),
+    (
+        "040_sets_packs_fields.sql",
+        include_str!("../../migrations/040_sets_packs_fields.sql"),
+    ),
+    (
+        "041_garden_choose_product.sql",
+        include_str!("../../migrations/041_garden_choose_product.sql"),
+    ),
+];
 
 /// Columns the catalog endpoints SELECT that were added by *later* migrations
 /// (016/019/024/034) — exactly the ones that go missing when a prod migration
@@ -179,18 +308,98 @@ impl Database {
     }
 
     pub async fn run_migrations(&self) -> Result<()> {
-        // Cycle #96: was `pool.get().batch_execute(MIGRATION_SQL)` with a
-        // post-run `pool.retain` to evict cached prepared statements
-        // (defence against the tokio_postgres SQLSTATE 0A000 "cached plan
-        // must not change result type" issue triggered by ALTER TYPE in
-        // migration 012). sqlx (which SeaORM uses) handles prepared
-        // statements differently and isn't subject to that bug, so we
-        // just run the SQL and move on.
-        use sea_orm::ConnectionTrait;
+        // Each migration runs EXACTLY ONCE, tracked in `_schema_migrations`.
+        // Previously the whole concat'd SQL re-ran every boot, so seed migrations
+        // (013/018 `ON CONFLICT DO UPDATE`) resurrected admin-deleted catalog rows
+        // and the price/image `UPDATE` migrations overwrote admin edits — on every
+        // deploy. The tracker stops that permanently.
+        use sea_orm::{ConnectionTrait, DbBackend, Statement};
+
         self.orm
-            .execute_unprepared(MIGRATION_SQL)
+            .execute_unprepared(
+                "CREATE TABLE IF NOT EXISTS _schema_migrations (\
+                     name TEXT PRIMARY KEY, \
+                     applied_at TIMESTAMPTZ NOT NULL DEFAULT now())",
+            )
             .await
-            .context("run_migrations: execute_unprepared")?;
+            .context("run_migrations: create _schema_migrations")?;
+
+        // One-time transition for ALREADY-MIGRATED databases: if the tracker is
+        // empty but the DB is established (the `strains` table — created by 001 —
+        // already exists), every migration listed here has demonstrably run
+        // before (repeatedly). Mark them all applied WITHOUT re-running, so the
+        // seed/price migrations can't clobber admin data even once more. A truly
+        // fresh DB has no `strains` table → this is skipped and everything runs.
+        let tracked: i64 = self
+            .orm
+            .query_one(Statement::from_string(
+                DbBackend::Postgres,
+                "SELECT count(*)::bigint AS c FROM _schema_migrations".to_string(),
+            ))
+            .await
+            .context("run_migrations: count tracker")?
+            .and_then(|r| r.try_get::<i64>("", "c").ok())
+            .unwrap_or(0);
+        if tracked == 0 {
+            let established: bool = self
+                .orm
+                .query_one(Statement::from_string(
+                    DbBackend::Postgres,
+                    "SELECT to_regclass('public.strains') IS NOT NULL AS est".to_string(),
+                ))
+                .await
+                .context("run_migrations: established check")?
+                .and_then(|r| r.try_get::<bool>("", "est").ok())
+                .unwrap_or(false);
+            if established {
+                for (name, _) in MIGRATIONS {
+                    self.orm
+                        .execute(Statement::from_sql_and_values(
+                            DbBackend::Postgres,
+                            "INSERT INTO _schema_migrations (name) VALUES ($1) ON CONFLICT DO NOTHING",
+                            [(*name).into()],
+                        ))
+                        .await
+                        .context("run_migrations: backfill tracker")?;
+                }
+                tracing::warn!(
+                    "run_migrations: established DB — backfilled {} migrations as applied \
+                     (one-time; future migrations run normally, seeds no longer re-run)",
+                    MIGRATIONS.len()
+                );
+            }
+        }
+
+        // Apply each not-yet-recorded migration once, in order.
+        for (name, sql) in MIGRATIONS {
+            let applied: bool = self
+                .orm
+                .query_one(Statement::from_sql_and_values(
+                    DbBackend::Postgres,
+                    "SELECT EXISTS(SELECT 1 FROM _schema_migrations WHERE name = $1) AS a",
+                    [(*name).into()],
+                ))
+                .await
+                .with_context(|| format!("run_migrations: check {name}"))?
+                .and_then(|r| r.try_get::<bool>("", "a").ok())
+                .unwrap_or(false);
+            if applied {
+                continue;
+            }
+            self.orm
+                .execute_unprepared(sql)
+                .await
+                .with_context(|| format!("run_migrations: apply {name}"))?;
+            self.orm
+                .execute(Statement::from_sql_and_values(
+                    DbBackend::Postgres,
+                    "INSERT INTO _schema_migrations (name) VALUES ($1) ON CONFLICT DO NOTHING",
+                    [(*name).into()],
+                ))
+                .await
+                .with_context(|| format!("run_migrations: record {name}"))?;
+            tracing::info!("run_migrations: applied {name}");
+        }
         Ok(())
     }
 
