@@ -1224,12 +1224,12 @@ async fn get_sets(
     // root cause for ops.
     let accessory_sets = state.db.orm.query_all(Statement::from_string(
         DbBackend::Postgres,
-        "SELECT id, name, description, icon, accessories, total_price::float8 AS total_price, discount_percent::float8 AS discount_percent, is_available, is_deal_of_day, name_en, description_en, image_url, video_url FROM accessory_sets WHERE is_available = TRUE LIMIT 2000".to_string(),
+        "SELECT id, name, description, icon, accessories, total_price::float8 AS total_price, discount_percent::float8 AS discount_percent, is_available, is_deal_of_day, name_en, description_en, image_url, video_url, EXTRACT(EPOCH FROM created_at)::float8 AS created_at_epoch FROM accessory_sets WHERE is_available = TRUE LIMIT 2000".to_string(),
     )).await.unwrap_or_else(|e| { tracing::error!("get_sets accessory_sets (degraded to empty): {e}"); Vec::new() });
 
     let tea_sets = state.db.orm.query_all(Statement::from_string(
         DbBackend::Postgres,
-        "SELECT id, name, description, icon, items, total_price::float8 AS total_price, discount_percent::float8 AS discount_percent, is_available, name_en, description_en, image_url, video_url FROM tea_sets WHERE is_available = TRUE LIMIT 2000".to_string(),
+        "SELECT id, name, description, icon, items, total_price::float8 AS total_price, discount_percent::float8 AS discount_percent, is_available, name_en, description_en, image_url, video_url, EXTRACT(EPOCH FROM created_at)::float8 AS created_at_epoch FROM tea_sets WHERE is_available = TRUE LIMIT 2000".to_string(),
     )).await.unwrap_or_else(|e| { tracing::error!("get_sets tea_sets (degraded to empty): {e}"); Vec::new() });
 
     // General `sets` (strain + accessory bundles, the admin "Sets" tab). Bug fix:
@@ -1242,7 +1242,7 @@ async fn get_sets(
     // for legacy rows that predate those columns.
     let general_sets = state.db.orm.query_all(Statement::from_string(
         DbBackend::Postgres,
-        "SELECT id, name, description, icon, strain_ids, COALESCE(accessory_ids, ARRAY[]::text[]) AS accessory_ids, total_price::float8 AS total_price, discount_percent::float8 AS discount_percent, is_available, COALESCE(is_deal_of_day, false) AS is_deal_of_day, image_url, video_url, name_en, description_en, COALESCE(total_weight_grams, 0)::float8 AS total_weight_grams, COALESCE(badge, 'none') AS badge FROM sets WHERE is_available = TRUE LIMIT 2000".to_string(),
+        "SELECT id, name, description, icon, strain_ids, COALESCE(accessory_ids, ARRAY[]::text[]) AS accessory_ids, total_price::float8 AS total_price, discount_percent::float8 AS discount_percent, is_available, COALESCE(is_deal_of_day, false) AS is_deal_of_day, image_url, video_url, name_en, description_en, COALESCE(total_weight_grams, 0)::float8 AS total_weight_grams, COALESCE(badge, 'none') AS badge, EXTRACT(EPOCH FROM created_at)::float8 AS created_at_epoch, (SELECT COUNT(*) FROM orders o WHERE o.status = 'completed' AND o.items IS NOT NULL AND jsonb_typeof(o.items) = 'array' AND EXISTS (SELECT 1 FROM jsonb_array_elements(o.items) e WHERE e->>'set_id' = sets.id))::bigint AS popularity FROM sets WHERE is_available = TRUE LIMIT 2000".to_string(),
     )).await.unwrap_or_else(|e| { tracing::error!("get_sets sets (degraded to empty): {e}"); Vec::new() });
 
     let mut items: Vec<serde_json::Value> = Vec::new();
@@ -1278,6 +1278,8 @@ async fn get_sets(
             "description_en": r.try_get::<Option<String>>("", "description_en").ok().flatten(),
             "image_url": r.try_get::<Option<String>>("", "image_url").ok().flatten(),
             "video_url": r.try_get::<Option<String>>("", "video_url").ok().flatten(),
+            "created_at_epoch": r.try_get::<f64>("", "created_at_epoch").unwrap_or(0.0),
+            "popularity": 0,
         }));
     }
 
@@ -1310,6 +1312,8 @@ async fn get_sets(
             "description_en": r.try_get::<Option<String>>("", "description_en").ok().flatten(),
             "image_url": r.try_get::<Option<String>>("", "image_url").ok().flatten(),
             "video_url": r.try_get::<Option<String>>("", "video_url").ok().flatten(),
+            "created_at_epoch": r.try_get::<f64>("", "created_at_epoch").unwrap_or(0.0),
+            "popularity": 0,
         }));
     }
 
@@ -1366,6 +1370,8 @@ async fn get_sets(
             "description_en": r.try_get::<Option<String>>("", "description_en").ok().flatten(),
             "image_url": r.try_get::<Option<String>>("", "image_url").ok().flatten(),
             "video_url": r.try_get::<Option<String>>("", "video_url").ok().flatten(),
+            "created_at_epoch": r.try_get::<f64>("", "created_at_epoch").unwrap_or(0.0),
+            "popularity": r.try_get::<i64>("", "popularity").unwrap_or(0),
         }));
     }
 

@@ -38,6 +38,11 @@ struct ApiSet {
     total_weight_grams: f64,
     #[serde(default)]
     badge: String,
+    // Packs Phase 2 (sorting).
+    #[serde(default)]
+    created_at_epoch: f64,
+    #[serde(default)]
+    popularity: i64,
 }
 
 #[derive(Debug, Deserialize)]
@@ -45,9 +50,62 @@ struct SetsResponse {
     sets: Vec<ApiSet>,
 }
 
+/// Sort options for the "Все наборы" list. `(key, ru, en)`.
+const SORTS: &[(&str, &str, &str)] = &[
+    ("default", "По умолчанию", "Default"),
+    ("popularity", "Популярность", "Popular"),
+    ("price", "Цена", "Price"),
+    ("new", "Новинки", "New"),
+    ("discount", "Скидки", "Discount"),
+];
+
+/// Effective (discounted) price, clamped finite & non-negative.
+fn effective_price(s: &ApiSet) -> f64 {
+    let d = if s.discount_percent.is_finite() {
+        s.discount_percent.max(0.0)
+    } else {
+        0.0
+    };
+    let t = if s.total_price.is_finite() {
+        s.total_price.max(0.0)
+    } else {
+        0.0
+    };
+    (t * (1.0 - d / 100.0)).max(0.0)
+}
+
+/// Stable in-place sort of packs by the chosen key (no-op for "default").
+fn sort_packs(v: &mut [ApiSet], key: &str) {
+    use std::cmp::Ordering;
+    match key {
+        // Cheapest first.
+        "price" => v.sort_by(|a, b| {
+            effective_price(a)
+                .partial_cmp(&effective_price(b))
+                .unwrap_or(Ordering::Equal)
+        }),
+        // Newest first.
+        "new" => v.sort_by(|a, b| {
+            b.created_at_epoch
+                .partial_cmp(&a.created_at_epoch)
+                .unwrap_or(Ordering::Equal)
+        }),
+        // Biggest discount first.
+        "discount" => v.sort_by(|a, b| {
+            b.discount_percent
+                .partial_cmp(&a.discount_percent)
+                .unwrap_or(Ordering::Equal)
+        }),
+        // Most-ordered first.
+        "popularity" => v.sort_by(|a, b| b.popularity.cmp(&a.popularity)),
+        _ => {}
+    }
+}
+
 #[component]
 pub fn SetsScreen() -> Element {
     let cart = use_context::<Signal<Cart>>();
+    let mut sort_by = use_signal(|| "default".to_string());
 
     let sets_title = t(crate::ui::lang::current_lang(), T_SETS_TITLE);
     let sets_desc = t(crate::ui::lang::current_lang(), T_SETS_DESC);
@@ -94,10 +152,13 @@ pub fn SetsScreen() -> Element {
                         // Promo packs (a badge OR a discount) lead in a swipeable
                         // carousel; everything else lists below. Stable partition
                         // keeps the admin order within each group.
-                        let (promo, rest): (Vec<ApiSet>, Vec<ApiSet>) = all_sets
+                        let (promo, mut rest): (Vec<ApiSet>, Vec<ApiSet>) = all_sets
                             .iter()
                             .cloned()
                             .partition(|s| crate::trios::packs::is_promo(&s.badge, s.discount_percent));
+                        // Phase 2: sort the "Все наборы" list by the chosen key.
+                        let active_sort = sort_by();
+                        sort_packs(&mut rest, &active_sort);
                         let promo_count = promo.len();
                         let rest_n = rest.len();
                         let promo_hdr = crate::ui::lang::localized("🔥 Акции и спецпредложения", Some("🔥 Sale & Special"));
@@ -128,6 +189,26 @@ pub fn SetsScreen() -> Element {
                                 div { style: "padding:0 16px 8px;",
                                     h2 { style: "font-size:13px;font-weight:700;color:#b388ff;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;text-shadow:2px 2px 0 #000;",
                                         "{rest_hdr} ({rest_n})"
+                                    }
+                                }
+                                // Sort chips (Phase 2).
+                                div { style: "display:flex;gap:6px;padding:0 16px 12px;overflow-x:auto;",
+                                    for (key, ru, en) in SORTS.iter() {
+                                        {
+                                            let is_active = active_sort == *key;
+                                            let bg = if is_active { "#b388ff" } else { "transparent" };
+                                            let color = if is_active { "#000" } else { "#8b8b9e" };
+                                            let border = if is_active { "#b388ff" } else { "#2a2a4a" };
+                                            let label = crate::ui::lang::localized(ru, Some(en));
+                                            let k = key.to_string();
+                                            rsx! {
+                                                button {
+                                                    style: "font-size:13px;padding:6px 10px;background:{bg};color:{color};border:4px solid {border};border-radius:20px;cursor:pointer;white-space:nowrap;",
+                                                    onclick: move |_| sort_by.set(k.clone()),
+                                                    "{label}"
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                                 div { style: "display:flex;flex-direction:column;gap:12px;padding:0 16px;",
