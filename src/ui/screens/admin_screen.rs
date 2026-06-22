@@ -1657,7 +1657,11 @@ fn TeaTab() -> Element {
     });
     let mut loading = use_signal(|| true);
     let mut name = use_signal(String::new);
-    let mut subcategory = use_signal(|| "green".to_string());
+    // Holds the selected category's canonical KEY, or "__new__" to create one.
+    let mut subcategory = use_signal(|| "tea".to_string());
+    // Bilingual inputs shown only when "__new__" is selected.
+    let mut new_cat_ru = use_signal(String::new);
+    let mut new_cat_en = use_signal(String::new);
     let mut price = use_signal(String::new);
     let mut stock = use_signal(String::new);
     let mut description = use_signal(String::new);
@@ -1665,7 +1669,6 @@ fn TeaTab() -> Element {
     let mut video_url = use_signal(String::new);
     let mut name_en = use_signal(String::new);
     let mut description_en = use_signal(String::new);
-    let mut subcategory_en = use_signal(String::new);
     let mut status = use_signal(String::new);
     let mut submitting = use_signal(|| false);
     let mut editing_id: Signal<Option<String>> = use_signal(|| None);
@@ -1744,15 +1747,32 @@ fn TeaTab() -> Element {
                    children: rsx!{
                        input { style: input_style(), placeholder: "Название (RU)", value: "{name}",
                            oninput: move |e| name.set(e.value()) }
-                       select { style: input_style(), value: "{subcategory}",
-                           oninput: move |e| subcategory.set(e.value()),
-                           option { value: "tea", "🍵 Tea" }
-                           option { value: "coffee", "☕ Coffee" }
-                           option { value: "lemonade", "🍋 Lemonade" }
-                           option { value: "milkshake", "🥛 Milkshake" }
-                           option { value: "soda", "🥤 Soda" }
-                           option { value: "juice", "🧃 Juice" }
-                           option { value: "other", "🥤 Other" }
+                       // Category dropdown — built dynamically from existing
+                       // catalog categories (+ built-in starters), with a
+                       // "create new" option. New categories auto-appear.
+                       {
+                           let cats = crate::trios::drink_categories::admin_categories(
+                               cache.read().iter().map(|t| (
+                                   t.subcategory.as_deref().unwrap_or(""),
+                                   t.subcategory_en.as_deref(),
+                               )),
+                           );
+                           rsx! {
+                               select { style: input_style(), value: "{subcategory}",
+                                   oninput: move |e| subcategory.set(e.value()),
+                                   for cat in cats.iter() {
+                                       option { value: "{cat.key}",
+                                           "{crate::trios::drink_categories::emoji(&cat.key)} {cat.ru} / {cat.en}" }
+                                   }
+                                   option { value: "__new__", "➕ Новая категория" }
+                               }
+                           }
+                       }
+                       if subcategory() == "__new__" {
+                           input { style: input_style(), placeholder: "Категория (RU), напр. Смузи", value: "{new_cat_ru}",
+                               oninput: move |e| new_cat_ru.set(e.value()) }
+                           input { style: input_style(), placeholder: "Category (EN), e.g. Smoothie", value: "{new_cat_en}",
+                               oninput: move |e| new_cat_en.set(e.value()) }
                        }
                        input { style: input_style(), placeholder: "Цена ฿", value: "{price}", r#type: "number",
                            oninput: move |e| price.set(e.value()) }
@@ -1767,14 +1787,34 @@ fn TeaTab() -> Element {
                            oninput: move |e| name_en.set(e.value()) }
                        textarea { style: textarea_style(), placeholder: "Description (EN)", value: "{description_en}",
                            oninput: move |e| description_en.set(e.value()) }
-                       input { style: input_style(), placeholder: "Subcategory (EN)", value: "{subcategory_en}",
-                           oninput: move |e| subcategory_en.set(e.value()) }
                        button {
                            style: if *submitting.read() { submit_btn_disabled_style() } else { submit_btn_style() },
                            disabled: *submitting.read(),
                            onclick: move |_| {
-                               let n = name(); let sc = subcategory();
+                               let n = name();
                                if n.trim().is_empty() { status.set("❌ Имя обязательно".into()); return; }
+                               // Resolve the chosen category into bilingual labels
+                               // (sc = RU, sce = EN). Both persist on the drink so
+                               // a brand-new category is fully defined by its first
+                               // item. See trios::drink_categories.
+                               let key = subcategory();
+                               let (sc, sce) = if key == "__new__" {
+                                   let ru = new_cat_ru().trim().to_string();
+                                   let en = new_cat_en().trim().to_string();
+                                   if ru.is_empty() { status.set("❌ Введите название категории (RU)".into()); return; }
+                                   (ru.clone(), if en.is_empty() { ru } else { en })
+                               } else {
+                                   let cats = crate::trios::drink_categories::admin_categories(
+                                       cache.read().iter().map(|t| (
+                                           t.subcategory.as_deref().unwrap_or(""),
+                                           t.subcategory_en.as_deref(),
+                                       )),
+                                   );
+                                   match cats.iter().find(|c| c.key == key) {
+                                       Some(c) => (c.ru.clone(), c.en.clone()),
+                                       None => (key.clone(), key.clone()),
+                                   }
+                               };
                                // Cycle #139: strict parse for price + stock (mirrors
                                // the accessory form). Specific field error replaces
                                // the generic "Name + price" toast.
@@ -1791,7 +1831,7 @@ fn TeaTab() -> Element {
                                    Err(msg) => { status.set(format!("❌ {}", msg)); return; }
                                };
                                let d = description(); let img = image_url(); let vid = video_url();
-                               let ne = name_en(); let de = description_en(); let sce = subcategory_en();
+                               let ne = name_en(); let de = description_en();
                                submitting.set(true);
                                let temp_id = format!("temp-{}", uuid::Uuid::new_v4());
                                cache.write().insert(0, AdminTea {
@@ -1807,7 +1847,8 @@ fn TeaTab() -> Element {
                                status.set("✅ Добавлен!".into());
                                name.set(String::new()); price.set(String::new()); stock.set(String::new());
                                description.set(String::new()); image_url.set(String::new()); video_url.set(String::new());
-                               name_en.set(String::new()); description_en.set(String::new()); subcategory_en.set(String::new());
+                               name_en.set(String::new()); description_en.set(String::new());
+                               subcategory.set("tea".to_string()); new_cat_ru.set(String::new()); new_cat_en.set(String::new());
                                auto_scroll_to_list();
                                spawn(async move {
                                    let body = json!({
@@ -4122,11 +4163,15 @@ fn EditTeaCard(
     let telegram_id = use_telegram_id().unwrap_or(0);
     let init_data = use_signal(use_telegram_init_data);
     let mut name = use_signal(|| item.name.clone());
+    // Preselect the item's current category by its canonical key.
     let mut subcategory = use_signal(|| {
-        item.subcategory
-            .clone()
-            .unwrap_or_else(|| "green".to_string())
+        crate::trios::drink_categories::canonical_key(
+            item.subcategory.as_deref().unwrap_or(""),
+            item.subcategory_en.as_deref(),
+        )
     });
+    let mut new_cat_ru = use_signal(String::new);
+    let mut new_cat_en = use_signal(String::new);
     let mut price = use_signal(|| item.price.to_string());
     let mut stock = use_signal(|| item.stock.map(|s| s.to_string()).unwrap_or_default());
     let mut description = use_signal(|| item.description.clone().unwrap_or_default());
@@ -4134,18 +4179,33 @@ fn EditTeaCard(
     let mut video_url = use_signal(|| item.video_url.clone().unwrap_or_default());
     let mut name_en = use_signal(|| item.name_en.clone().unwrap_or_default());
     let mut description_en = use_signal(|| item.description_en.clone().unwrap_or_default());
-    let mut subcategory_en = use_signal(|| item.subcategory_en.clone().unwrap_or_default());
     let mut status = use_signal(String::new);
     let item_id = item.id.clone();
     rsx! {
            div { "data-editing": "true", style: edit_card_style(),
                div { style: edit_header_style(), "✏️ Редактирование" }
                input { style: input_style(), placeholder: "Название", value: "{name}", oninput: move |e| name.set(e.value()) }
-               select { style: input_style(), value: "{subcategory}", oninput: move |e| subcategory.set(e.value()),
-                   option { value: "tea", "🍵 Tea" } option { value: "coffee", "☕ Coffee" }
-                   option { value: "lemonade", "🍋 Lemonade" } option { value: "milkshake", "🥛 Milkshake" }
-                   option { value: "soda", "🥤 Soda" } option { value: "juice", "🧃 Juice" }
-                   option { value: "other", "🥤 Other" } }
+               {
+                   let cats = crate::trios::drink_categories::admin_categories(
+                       cache.read().iter().map(|t| (
+                           t.subcategory.as_deref().unwrap_or(""),
+                           t.subcategory_en.as_deref(),
+                       )),
+                   );
+                   rsx! {
+                       select { style: input_style(), value: "{subcategory}", oninput: move |e| subcategory.set(e.value()),
+                           for cat in cats.iter() {
+                               option { value: "{cat.key}",
+                                   "{crate::trios::drink_categories::emoji(&cat.key)} {cat.ru} / {cat.en}" }
+                           }
+                           option { value: "__new__", "➕ Новая категория" }
+                       }
+                   }
+               }
+               if subcategory() == "__new__" {
+                   input { style: input_style(), placeholder: "Категория (RU)", value: "{new_cat_ru}", oninput: move |e| new_cat_ru.set(e.value()) }
+                   input { style: input_style(), placeholder: "Category (EN)", value: "{new_cat_en}", oninput: move |e| new_cat_en.set(e.value()) }
+               }
                input { style: input_style(), placeholder: "Цена ฿", value: "{price}", r#type: "number", oninput: move |e| price.set(e.value()) }
                input { style: input_style(), placeholder: "Кол-во", value: "{stock}", r#type: "number", oninput: move |e| stock.set(e.value()) }
                textarea { style: textarea_style(), placeholder: "Описание (RU)", value: "{description}", oninput: move |e| description.set(e.value()) }
@@ -4154,12 +4214,30 @@ fn EditTeaCard(
                div { style: en_section_style(), "🇬🇧 English" }
                input { style: input_style(), placeholder: "Name (EN)", value: "{name_en}", oninput: move |e| name_en.set(e.value()) }
                textarea { style: textarea_style(), placeholder: "Description (EN)", value: "{description_en}", oninput: move |e| description_en.set(e.value()) }
-               input { style: input_style(), placeholder: "Subcategory (EN)", value: "{subcategory_en}", oninput: move |e| subcategory_en.set(e.value()) }
                div { style: "display:flex;gap:8px;",
                    button { style: submit_btn_style(),
                        onclick: move |_| {
                            let n = name().trim().to_string();
-                           let sc = subcategory();
+                           if n.is_empty() { status.set("❌ Название обязательно".into()); return; }
+                           // Resolve the chosen category into bilingual labels.
+                           let key = subcategory();
+                           let (sc, sce) = if key == "__new__" {
+                               let ru = new_cat_ru().trim().to_string();
+                               let en = new_cat_en().trim().to_string();
+                               if ru.is_empty() { status.set("❌ Введите название категории (RU)".into()); return; }
+                               (ru.clone(), if en.is_empty() { ru } else { en })
+                           } else {
+                               let cats = crate::trios::drink_categories::admin_categories(
+                                   cache.read().iter().map(|t| (
+                                       t.subcategory.as_deref().unwrap_or(""),
+                                       t.subcategory_en.as_deref(),
+                                   )),
+                               );
+                               match cats.iter().find(|c| c.key == key) {
+                                   Some(c) => (c.ru.clone(), c.en.clone()),
+                                   None => (key.clone(), key.clone()),
+                               }
+                           };
                            let p = match price.read().trim().parse::<f64>() {
                                Ok(v) if v > 0.0 && v.is_finite() => v,
                                _ => { status.set("❌ Цена должна быть числом больше 0".into()); return; }
@@ -4169,9 +4247,8 @@ fn EditTeaCard(
                                Ok(v) if v >= 0 => v,
                                _ => { status.set("❌ Количество должно быть числом ≥ 0".into()); return; }
                            };
-                           if n.is_empty() { status.set("❌ Название обязательно".into()); return; }
                            let d = description(); let img = image_url(); let vid = video_url();
-                           let ne = name_en(); let de = description_en(); let sce = subcategory_en();
+                           let ne = name_en(); let de = description_en();
                            let id = item_id.clone();
                            let original = cache.read().iter().find(|t| t.id == id).cloned();
                            if let Some(t) = cache.write().iter_mut().find(|t| t.id == id) {

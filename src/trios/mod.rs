@@ -3,6 +3,7 @@
 pub mod api_errors;
 pub mod checkout_errors;
 pub mod core;
+pub mod drink_categories;
 pub mod garden;
 pub mod i18n;
 pub mod pricing;

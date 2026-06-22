@@ -30,49 +30,12 @@ struct TeaResponse {
     products: Vec<ApiTea>,
 }
 
-fn subcategory_emoji(sub: &str) -> &'static str {
-    match sub.to_lowercase().as_str() {
-        "coffee" => "☕",
-        "lemonade" => "🍋",
-        "milkshake" => "🥛",
-        "soda" => "🥤",
-        "juice" => "🧃",
-        "tea" | "cbd tea" => "🍵",
-        "dessert" | "fruit" => "🥭",
-        "teaware" => "🫖",
-        "herbal" => "🍃",
-        "flower" => "💜",
-        _ => "🥤",
-    }
-}
-
-/// Map a raw `subcategory` value to a top-level Drinks filter group. Legacy
-/// fine-grained tea subcats (green/black/herbal/…) and non-drink leftovers fold
-/// into "Tea" so nothing disappears from the catalog after the Drinks rename.
-fn drink_group(sub: &str) -> &'static str {
-    match sub.to_lowercase().as_str() {
-        "coffee" => "Coffee",
-        "lemonade" => "Lemonade",
-        "milkshake" => "Milkshake",
-        "soda" => "Soda",
-        "juice" => "Juice",
-        _ => "Tea",
-    }
-}
-
-const SUBCATEGORIES: &[&str] = &[
-    "All",
-    "Tea",
-    "Coffee",
-    "Lemonade",
-    "Milkshake",
-    "Soda",
-    "Juice",
-];
+use crate::trios::drink_categories as dcat;
 
 #[component]
 pub fn TeaScreen() -> Element {
     let mut cart = use_context::<Signal<Cart>>();
+    // Holds the active category's **canonical key** (or "All").
     let mut active_sub = use_signal(|| "All".to_string());
     // Tapping a tea card opens a detail popup with the full description.
     // Held at screen level (one modal) because the cards render inline in a
@@ -98,16 +61,30 @@ pub fn TeaScreen() -> Element {
             .map_err(|e| e.to_string())
     });
 
+    // Categories present in the live catalog, derived from the data (a category
+    // exists iff a drink carries it). Drives the filter chips below.
+    let categories = match &*tea_resource.read() {
+        Some(Ok(teas)) => dcat::present_categories(teas.iter().map(|t| {
+            (
+                t.subcategory.as_deref().unwrap_or(""),
+                t.subcategory_en.as_deref(),
+            )
+        })),
+        _ => Vec::new(),
+    };
+
     let filtered = match &*tea_resource.read() {
         Some(Ok(teas)) => {
-            let sub = active_sub();
-            if sub == "All" {
+            let key = active_sub();
+            if key == "All" {
                 teas.clone()
             } else {
                 teas.iter()
                     .filter(|t| {
-                        drink_group(t.subcategory.as_deref().unwrap_or(""))
-                            .eq_ignore_ascii_case(&sub)
+                        dcat::canonical_key(
+                            t.subcategory.as_deref().unwrap_or(""),
+                            t.subcategory_en.as_deref(),
+                        ) == key
                     })
                     .cloned()
                     .collect()
@@ -128,16 +105,37 @@ pub fn TeaScreen() -> Element {
                 p { style: "font-size: 13px; color: #8b8b9e; margin-top: 4px;", "{tea_desc}" }
             }
 
-            // Subcategory filter tabs (pill chips)
+            // Category filter tabs (pill chips) — derived dynamically from the
+            // catalog, so a newly-added category auto-appears here.
             div { style: "display: flex; gap: 6px; padding: 0 16px 12px; overflow-x: auto;",
-                for sub in SUBCATEGORIES.iter() {
+                // "All" chip first.
+                {
+                    let is_active = active_sub() == "All";
+                    let bg = if is_active { "#39ff14" } else { "transparent" };
+                    let color = if is_active { "#000" } else { "#8b8b9e" };
+                    let border = if is_active { "#39ff14" } else { "#2a2a4a" };
+                    rsx! {
+                        button {
+                            style: "
+                                font-size: 13px; padding: 6px 10px;
+                                background: {bg}; color: {color};
+                                border: 4px solid {border}; border-radius: 20px;
+                                cursor: pointer; white-space: nowrap;
+                            ",
+                            onclick: move |_| active_sub.set("All".to_string()),
+                            "{filter_all}"
+                        }
+                    }
+                }
+                for cat in categories.iter() {
                     {
-                        let is_active = active_sub() == *sub;
+                        let is_active = active_sub() == cat.key;
                         let bg = if is_active { "#39ff14" } else { "transparent" };
                         let color = if is_active { "#000" } else { "#8b8b9e" };
                         let border = if is_active { "#39ff14" } else { "#2a2a4a" };
-                        let label = if *sub == "All" { filter_all.to_string() } else { sub.to_string() };
-                        let sub_val = sub.to_string();
+                        let label = crate::ui::lang::localized(&cat.ru, Some(&cat.en));
+                        let emoji = dcat::emoji(&cat.key);
+                        let key_val = cat.key.clone();
                         rsx! {
                             button {
                                 style: "
@@ -146,8 +144,8 @@ pub fn TeaScreen() -> Element {
                                     border: 4px solid {border}; border-radius: 20px;
                                     cursor: pointer; white-space: nowrap;
                                 ",
-                                onclick: move |_| active_sub.set(sub_val.clone()),
-                                "{label}"
+                                onclick: move |_| active_sub.set(key_val.clone()),
+                                "{emoji} {label}"
                             }
                         }
                     }
@@ -169,7 +167,7 @@ pub fn TeaScreen() -> Element {
                                 {
                                     let t = tea.clone();
                                     let sub = t.subcategory.as_deref().unwrap_or("tea");
-                                    let emoji = subcategory_emoji(sub);
+                                    let emoji = dcat::emoji(&dcat::canonical_key(sub, t.subcategory_en.as_deref()));
                                     let is_available = t.is_available.unwrap_or(true);
                                     let stock = t.stock.unwrap_or(999).max(0);
                                     let show_low_stock = stock > 0 && stock <= 5;
