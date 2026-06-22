@@ -115,6 +115,9 @@ pub fn CheckoutScreen() -> Element {
                     "tea_id": item.id,
                     "tea_name": item.name,
                     "quantity": item.quantity,
+                    // A3: carry the drink's dine-in/takeaway choice (default
+                    // takeaway if the customer never toggled it).
+                    "fulfillment": item.fulfillment.clone().unwrap_or_else(|| "takeaway".to_string()),
                 }),
                 CartItemType::Set => json!({
                     "set_id": item.id,

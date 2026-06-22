@@ -27,6 +27,7 @@ pub fn StrainGrid(props: StrainGridProps) -> Element {
                                 quantity: 1,
                                 image_url: Some(s.image_url.clone()),
                                 item_type: CartItemType::Strain,
+                                fulfillment: None,
                             };
                             cart.write().add_item(cart_item);
                             crate::ui::telegram::TelegramApp::init().haptic_notification(crate::ui::telegram::HapticNotification::Success);

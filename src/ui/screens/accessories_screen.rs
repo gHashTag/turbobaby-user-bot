@@ -299,6 +299,7 @@ fn render_accessory_card(
                                     quantity: 1,
                                     image_url: None,
                                     item_type: CartItemType::Accessory,
+                                    fulfillment: None,
                                 });
                                 crate::ui::telegram::TelegramApp::init().haptic_notification(crate::ui::telegram::HapticNotification::Success);
                             },
@@ -343,6 +344,7 @@ fn render_accessory_card(
                             quantity: q,
                             image_url: None,
                             item_type: CartItemType::Accessory,
+                            fulfillment: None,
                         });
                         crate::ui::telegram::TelegramApp::init().haptic_notification(crate::ui::telegram::HapticNotification::Success);
                     },

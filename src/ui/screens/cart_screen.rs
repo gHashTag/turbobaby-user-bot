@@ -2,7 +2,7 @@
 use crate::trios::i18n::{t, T_CART_EMPTY, T_CART_EMPTY_DESC, T_CART_TITLE};
 use crate::ui::components::bottom_nav::BottomNav;
 use crate::ui::routes::Route;
-use crate::ui::state::{Cart, CartItem};
+use crate::ui::state::{Cart, CartItem, CartItemType};
 use dioxus::prelude::*;
 
 fn format_price(price: f64) -> String {
@@ -131,6 +131,51 @@ fn cart_item_row(item: CartItem) -> Element {
             div { style: "flex: 1;",
                 div { style: "font-size: 17px; font-weight: 700; margin-bottom: 2px;", "{item.name}" }
                 div { style: "font-size: 15px; color: #8b8b9e;", "{price_str} each · {line_total_str}" }
+                // A3: per-drink dine-in / takeaway toggle (drinks only).
+                if item.item_type == CartItemType::Tea {
+                    {
+                        let cur = item.fulfillment.clone().unwrap_or_else(|| "takeaway".to_string());
+                        let din_active = cur == "dine_in";
+                        let id_din = item.id.clone();
+                        let id_take = item.id.clone();
+                        let din_style = format!(
+                            "font-size:12px;padding:4px 8px;border:3px solid {};background:{};color:{};border-radius:0;cursor:pointer;white-space:nowrap;",
+                            if din_active { "#39ff14" } else { "#2a2a4a" },
+                            if din_active { "#39ff14" } else { "transparent" },
+                            if din_active { "#000" } else { "#8b8b9e" },
+                        );
+                        let take_style = format!(
+                            "font-size:12px;padding:4px 8px;border:3px solid {};background:{};color:{};border-radius:0;cursor:pointer;white-space:nowrap;",
+                            if !din_active { "#39ff14" } else { "#2a2a4a" },
+                            if !din_active { "#39ff14" } else { "transparent" },
+                            if !din_active { "#000" } else { "#8b8b9e" },
+                        );
+                        rsx! {
+                            div { style: "display:flex;gap:6px;margin-top:6px;",
+                                button {
+                                    style: "{din_style}",
+                                    onclick: move |_| {
+                                        let mut c = cart.write();
+                                        if let Some(it) = c.items.iter_mut().find(|i| i.id == id_din) {
+                                            it.fulfillment = Some("dine_in".to_string());
+                                        }
+                                    },
+                                    "🍽 На месте"
+                                }
+                                button {
+                                    style: "{take_style}",
+                                    onclick: move |_| {
+                                        let mut c = cart.write();
+                                        if let Some(it) = c.items.iter_mut().find(|i| i.id == id_take) {
+                                            it.fulfillment = Some("takeaway".to_string());
+                                        }
+                                    },
+                                    "🥡 С собой"
+                                }
+                            }
+                        }
+                    }
+                }
             }
             div { style: "display: flex; align-items: center; gap: 6px;",
                 button {
@@ -177,6 +222,7 @@ fn cart_item_row(item: CartItem) -> Element {
                             quantity: 1,
                             image_url: None,
                             item_type: item.item_type.clone(),
+                            fulfillment: None,
                         });
                         crate::ui::telegram::TelegramApp::init().haptic_notification(crate::ui::telegram::HapticNotification::Success);
                     },

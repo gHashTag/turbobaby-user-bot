@@ -939,7 +939,13 @@ async fn notify_admins(
                         .or(item["set_name"].as_str())
                         .unwrap_or("?");
                     let qty = item["quantity"].as_f64().unwrap_or(0.0);
-                    format!("  • {} × {}g", html_escape(name), qty)
+                    // A3: show how each drink should be served.
+                    let fulfillment = match item["fulfillment"].as_str() {
+                        Some("dine_in") => " 🍽 на месте",
+                        Some("takeaway") => " 🥡 с собой",
+                        _ => "",
+                    };
+                    format!("  • {} × {}g{}", html_escape(name), qty, fulfillment)
                 })
                 .collect::<Vec<_>>()
                 .join("\n")
@@ -1359,6 +1365,7 @@ mod tests {
             is_accessory: None,
             is_tea: None,
             is_tea_set: None,
+            fulfillment: None,
         }
     }
 
@@ -1377,6 +1384,7 @@ mod tests {
             is_accessory: Some(true),
             is_tea: None,
             is_tea_set: None,
+            fulfillment: None,
         }
     }
 
@@ -1512,6 +1520,7 @@ mod tests {
             is_accessory: Some(true),
             is_tea: None,
             is_tea_set: None,
+            fulfillment: None,
         }
     }
 
@@ -1530,6 +1539,7 @@ mod tests {
             is_accessory: None,
             is_tea: Some(true),
             is_tea_set: None,
+            fulfillment: None,
         }
     }
 
@@ -1548,6 +1558,7 @@ mod tests {
             is_accessory: None,
             is_tea: None,
             is_tea_set: None,
+            fulfillment: None,
         }
     }
 
@@ -1662,6 +1673,7 @@ mod tests {
                 is_accessory: None,
                 is_tea: None,
                 is_tea_set: None,
+                fulfillment: None,
             }],
             subtotal: 100.0,
             bonus_used: Some(10.0),
@@ -1712,6 +1724,7 @@ mod tests {
                 is_accessory: None,
                 is_tea: None,
                 is_tea_set: None,
+                fulfillment: None,
             })
             .collect();
         assert_eq!(

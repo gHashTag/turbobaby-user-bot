@@ -350,6 +350,11 @@ pub struct OrderItem {
     pub is_accessory: Option<bool>,
     pub is_tea: Option<bool>,
     pub is_tea_set: Option<bool>,
+    /// A3: per-drink fulfillment — "dine_in" (на месте) or "takeaway" (с собой).
+    /// Only set for drink (tea) items; None for everything else. Stored in the
+    /// order `items` JSONB so staff see how each drink should be served.
+    #[serde(default)]
+    pub fulfillment: Option<String>,
 }
 
 // ─── Audit-table TTL sweeps (cycles #58 / #63 / #66) ──────────────────────
@@ -1478,6 +1483,7 @@ mod tests {
             is_accessory: None,
             is_tea: None,
             is_tea_set: None,
+            fulfillment: None,
         };
         let json = serde_json::to_value(&item).unwrap();
         let back: OrderItem = serde_json::from_value(json).unwrap();
@@ -1501,6 +1507,7 @@ mod tests {
             is_accessory: None,
             is_tea: None,
             is_tea_set: None,
+            fulfillment: None,
         };
         let json = serde_json::to_value(&item).unwrap();
         assert!(json.get("strain_id").is_some());

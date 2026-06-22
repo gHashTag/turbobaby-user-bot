@@ -623,6 +623,7 @@ fn render_strain_card(strain: ApiStrain, mut cart: Signal<Cart>) -> Element {
                                     quantity: 1,
                                     image_url: None,
                                     item_type: CartItemType::Strain,
+                                    fulfillment: None,
                                 });
                                 crate::ui::telegram::TelegramApp::init().haptic_notification(crate::ui::telegram::HapticNotification::Success);
                             },
@@ -675,6 +676,7 @@ fn render_strain_card(strain: ApiStrain, mut cart: Signal<Cart>) -> Element {
                             quantity: q,
                             image_url: None,
                             item_type: CartItemType::Strain,
+                            fulfillment: None,
                         });
                         crate::ui::telegram::TelegramApp::init().haptic_notification(crate::ui::telegram::HapticNotification::Success);
                     },

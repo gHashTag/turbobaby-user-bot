@@ -19,6 +19,10 @@ pub struct CartItem {
     pub quantity: u32,
     pub image_url: Option<String>,
     pub item_type: CartItemType,
+    /// A3: per-drink fulfillment — Some("dine_in") / Some("takeaway") for drinks,
+    /// None for everything else. Chosen via a toggle on drink cart lines.
+    #[serde(default)]
+    pub fulfillment: Option<String>,
 }
 
 /// Shopping cart

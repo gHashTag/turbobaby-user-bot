@@ -4549,6 +4549,9 @@ struct AdminOrderItem {
     set_name: Option<String>,
     #[serde(default)]
     quantity: f64,
+    /// A3: per-drink dine-in/takeaway.
+    #[serde(default)]
+    fulfillment: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -4623,7 +4626,12 @@ fn OrderDetailModal(order: AdminOrder, on_close: EventHandler<()>) -> Element {
                                         .or(item.tea_name.clone())
                                         .or(item.set_name.clone())
                                         .unwrap_or_else(|| "Неизвестно".into());
-                                    format!("{} × {:.0}", name, item.quantity)
+                                    let f = match item.fulfillment.as_deref() {
+                                        Some("dine_in") => " 🍽 на месте",
+                                        Some("takeaway") => " 🥡 с собой",
+                                        _ => "",
+                                    };
+                                    format!("{} × {:.0}{}", name, item.quantity, f)
                                 }
                             }
                         }

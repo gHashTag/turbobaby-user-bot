@@ -389,6 +389,7 @@ fn render_set_card(set: ApiSet, mut cart: Signal<Cart>) -> Element {
                                     quantity: 1,
                                     image_url: None,
                                     item_type: CartItemType::Set,
+                                    fulfillment: None,
                                 });
                                 crate::ui::telegram::TelegramApp::init().haptic_notification(crate::ui::telegram::HapticNotification::Success);
                             },
@@ -429,6 +430,7 @@ fn render_set_card(set: ApiSet, mut cart: Signal<Cart>) -> Element {
                                 quantity: q,
                                 image_url: None,
                                 item_type: CartItemType::Set,
+                                fulfillment: None,
                             });
                             crate::ui::telegram::TelegramApp::init().haptic_notification(crate::ui::telegram::HapticNotification::Success);
                         },
