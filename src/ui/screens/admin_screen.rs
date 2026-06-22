@@ -5668,11 +5668,23 @@ fn GardenTab() -> Element {
                         disabled: *saving.read(),
                         onclick: move |_| {
                             let enabled = *is_enabled.read();
-                            let disc = discount.read().trim().parse::<f64>().unwrap_or(10.0);
-                            let bp = bonus_points.read().trim().parse::<f64>().unwrap_or(100.0);
-                            let ed = expire_days.read().trim().parse::<f64>().unwrap_or(7.0);
-                            if !disc.is_finite() || !bp.is_finite() || !ed.is_finite() { error.set("Неверные числовые значения".into()); return; }
-                            if disc < 0.0 || bp < 0.0 || ed < 0.0 { error.set("Значения не могут быть отрицательными".into()); return; }
+                            // The backend wants integers (u32); serde_json will NOT
+                            // coerce a JSON float like `10.0` into u32, so sending
+                            // floats here yielded a silent 422 ("не сохранялось").
+                            // Parse + round to integers and bound-check to match the
+                            // server's validate_garden_config_update ranges.
+                            let disc = match discount.read().trim().parse::<f64>() {
+                                Ok(v) if v.is_finite() && (0.0..=100.0).contains(&v) => v.round() as u32,
+                                _ => { error.set("Скидка: число 0–100".into()); return; }
+                            };
+                            let bp = match bonus_points.read().trim().parse::<f64>() {
+                                Ok(v) if v.is_finite() && (0.0..=1_000_000.0).contains(&v) => v.round() as u32,
+                                _ => { error.set("Бонусы: число 0–1000000".into()); return; }
+                            };
+                            let ed = match expire_days.read().trim().parse::<f64>() {
+                                Ok(v) if v.is_finite() && (1.0..=365.0).contains(&v) => v.round() as u32,
+                                _ => { error.set("Срок: число 1–365 дней".into()); return; }
+                            };
                             let id_data = init_data.read().clone();
                             saving.set(true);
                             error.set(String::new());
@@ -5697,9 +5709,18 @@ fn GardenTab() -> Element {
                                     Ok(r) if r.status().is_success() => {
                                         push_toast(toasts2, "✓ Настройки сохранены!".into(), ToastKind::Success);
                                     }
-                                    _ => {
-                                        error2.set("Ошибка сохранения".into());
-                                        push_toast(toasts2, "Ошибка сохранения".into(), ToastKind::Error);
+                                    Ok(r) => {
+                                        let st = r.status().as_u16();
+                                        let body = r.text().await.unwrap_or_default();
+                                        let b = body.trim();
+                                        let msg = if b.is_empty() { format!("Ошибка сохранения (HTTP {st})") }
+                                            else { format!("Ошибка сохранения (HTTP {st}): {}", b.chars().take(80).collect::<String>()) };
+                                        error2.set(msg.clone());
+                                        push_toast(toasts2, msg, ToastKind::Error);
+                                    }
+                                    Err(_) => {
+                                        error2.set("Ошибка сети/таймаут".into());
+                                        push_toast(toasts2, "Ошибка сети/таймаут".into(), ToastKind::Error);
                                     }
                                 }
                             });

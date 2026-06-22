@@ -269,8 +269,15 @@ pub struct PlantProgress {
     pub next_water_at: Timestamp,
 }
 
-/// Watering cooldown in milliseconds (5 minutes)
-pub const WATER_COOLDOWN_MS: i64 = 5 * 60 * 1000;
+/// Watering cooldown in milliseconds (24 hours = one water per day).
+///
+/// The discount is meant to be *grown* over time, not farmed in an afternoon.
+/// With 13 waters from seed → harvest, a 24h cooldown spreads the full grow
+/// across ~13 days (owner decision). Enforced server-side in
+/// `api/garden.rs::water_plant` (WHERE-clause guard) AND surfaced in the UI via
+/// `calculate_progress` (`can_water` / `next_water_at`), so it can't be bypassed
+/// by calling the API directly. Was 5 minutes (full grow in ~1h — too fast).
+pub const WATER_COOLDOWN_MS: i64 = 24 * 60 * 60 * 1000;
 /// Total water stages
 pub const TOTAL_WATER_STAGES: usize = 14;
 /// The water_count of a fully-grown plant (last valid index, 0-based).
