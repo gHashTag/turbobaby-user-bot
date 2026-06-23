@@ -99,6 +99,22 @@ fn push_error(mut errors: Signal<Vec<JsErrorItem>>, mut item: JsErrorItem) {
     }
 }
 
+/// Benign, non-actionable JS errors that must NOT pop the error overlay.
+/// `AbortError` / "operation was aborted" / "play() request was interrupted"
+/// come from autoplay `<video>` previews on cards: when a card re-renders or
+/// scrolls out, the browser cancels the in-flight media load — expected, not a
+/// bug. `ResizeObserver loop` is the classic harmless browser warning. These are
+/// cancellations, not failures, so filtering them is safe (real fetch failures
+/// surface as TypeError/NetworkError, which still show).
+#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+fn is_benign_js_error(msg: &str) -> bool {
+    msg.contains("AbortError")
+        || msg.contains("operation was aborted")
+        || msg.contains("play() request was interrupted")
+        || msg.contains("request is not allowed by the user agent")
+        || msg.contains("ResizeObserver loop")
+}
+
 /// Install global JS error handlers and Rust panic hook.
 /// Call this once inside App or a top-level provider.
 pub fn install_error_handlers(errors: Signal<Vec<JsErrorItem>>) {
@@ -128,6 +144,9 @@ pub fn install_error_handlers(errors: Signal<Vec<JsErrorItem>>) {
                     .unwrap_or(0);
                 let stack = get_stack_from_event(&event);
                 let full_msg = format!("{} at {}:{}:{}", msg, filename, lineno, colno);
+                if is_benign_js_error(&full_msg) {
+                    return;
+                }
                 push_error(
                     errors_clone,
                     JsErrorItem {
@@ -144,10 +163,32 @@ pub fn install_error_handlers(errors: Signal<Vec<JsErrorItem>>) {
             // unhandledrejection
             let errors_clone = errors;
             let onunhandled = Closure::wrap(Box::new(move |event: Event| {
-                let reason = js_sys::Reflect::get(&event, &"reason".into())
-                    .ok()
-                    .and_then(|v| v.as_string())
+                let reason_val = js_sys::Reflect::get(&event, &"reason".into()).ok();
+                let reason = reason_val
+                    .as_ref()
+                    .and_then(|v| {
+                        // String reason → use directly.
+                        if let Some(s) = v.as_string() {
+                            return Some(s);
+                        }
+                        // Error / DOMException object → "Name: message".
+                        let name = js_sys::Reflect::get(v, &"name".into())
+                            .ok()
+                            .and_then(|x| x.as_string());
+                        let message = js_sys::Reflect::get(v, &"message".into())
+                            .ok()
+                            .and_then(|x| x.as_string());
+                        match (name, message) {
+                            (Some(n), Some(m)) => Some(format!("{n}: {m}")),
+                            (Some(n), None) => Some(n),
+                            (None, Some(m)) => Some(m),
+                            _ => None,
+                        }
+                    })
                     .unwrap_or_else(|| "Promise rejected".into());
+                if is_benign_js_error(&reason) {
+                    return;
+                }
                 push_error(
                     errors_clone,
                     JsErrorItem {
