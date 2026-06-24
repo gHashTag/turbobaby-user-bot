@@ -357,12 +357,18 @@ pub fn Garden() -> Element {
                         let stage_name = progress.stage_name.clone();
                         let emoji = progress.stage_emoji.clone();
                         let img_url = {
+                            // Main hero is ALWAYS the growing-bush sprite (seed →
+                            // sprout → … → bud) so the player SEES it grow. The
+                            // chosen product shows as a small thumbnail (below).
+                            stage_image_url(progress.stage_index)
+                        };
+                        let product_thumb = {
                             let ti = plant.target_image_url.clone().unwrap_or_default();
                             if ti.starts_with("http://") || ti.starts_with("https://")
                                 || (ti.starts_with('/') && !ti.starts_with("//")) {
-                                ti
+                                Some(ti)
                             } else {
-                                stage_image_url(progress.stage_index)
+                                None
                             }
                         };
                         let total_pct = progress.total_progress;
@@ -448,6 +454,14 @@ pub fn Garden() -> Element {
                                         src: "{img_url}",
                                         alt: "Растение",
                                         style: "width: 100%; height: 100%; object-fit: cover;",
+                                    }
+                                    // Target product thumbnail (top-left): what
+                                    // discount this bush is growing.
+                                    if let Some(timg) = product_thumb.clone() {
+                                        div { style: "position:absolute;top:12px;left:12px;display:flex;align-items:center;gap:6px;background:rgba(0,0,0,0.65);padding:4px 8px;border-radius:8px;z-index:2;",
+                                            img { src: "{timg}", alt: "Товар", style: "width:34px;height:34px;object-fit:cover;border-radius:6px;border:1px solid #39ff14;" }
+                                            span { style: "font-size:10px;color:#39ff14;font-weight:700;", "🎯 скидка" }
+                                        }
                                     }
                                     // Gradient overlay at bottom
                                     div { style: "position: absolute; bottom: 0; left: 0; right: 0; height: 50%; background: linear-gradient(transparent, rgba(15,15,26,0.95));" }
