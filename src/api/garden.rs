@@ -1252,45 +1252,75 @@ async fn choose_plant(
     let planted_at = chrono::Utc::now().timestamp_millis();
     let harvest_cooldown_floor = planted_at.saturating_sub(garden::POST_HARVEST_COOLDOWN_MS);
 
-    let res = state
-        .db
-        .orm
-        .execute(Statement::from_sql_and_values(
+    // The player explicitly picks WHAT to grow, so choosing REPLACES any current
+    // un-harvested plant (delete + plant the new one) — they're no longer stuck
+    // with a leftover auto-seeded plant. Still blocked during the 24h
+    // post-harvest cooldown so a reward can't be farmed back-to-back.
+    use sea_orm::TransactionTrait;
+    let tx = state.db.orm.begin().await.map_err(|e| {
+        tracing::error!("choose_plant tx.begin: {e}");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    let in_cooldown: bool = tx
+        .query_one(Statement::from_sql_and_values(
             DbBackend::Postgres,
-            "INSERT INTO garden_plants \
-                  (id, user_id, strain_id, strain_name, current_stage, planted_at, is_completed, water_count, \
-                   target_catalog, target_product_id, target_name, target_image_url) \
-             SELECT $1, $2, $3, $4, 'seed', $5, false, 0, $7, $3, $4, $8 \
-             WHERE NOT EXISTS ( \
-                 SELECT 1 FROM garden_plants WHERE user_id = $2 AND harvested_at IS NULL \
-             ) \
-             AND NOT EXISTS ( \
-                 SELECT 1 FROM garden_plants \
-                 WHERE user_id = $2 AND harvested_at IS NOT NULL AND harvested_at > $6 \
-             )",
-            [
-                plant_id.clone().into(),
-                user_id.into(),
-                req.product_id.clone().into(),
-                name.clone().into(),
-                planted_at.into(),
-                harvest_cooldown_floor.into(),
-                req.catalog.clone().into(),
-                image_url.into(),
-            ],
+            "SELECT EXISTS(SELECT 1 FROM garden_plants \
+                 WHERE user_id = $1 AND harvested_at IS NOT NULL AND harvested_at > $2) AS c",
+            [user_id.clone().into(), harvest_cooldown_floor.into()],
         ))
         .await
         .map_err(|e| {
-            tracing::error!("choose_plant: insert failed: {e}");
+            tracing::error!("choose_plant cooldown check: {e}");
             StatusCode::INTERNAL_SERVER_ERROR
-        })?;
-
-    if res.rows_affected() == 0 {
-        // A guard blocked it: either an active plant exists or within cooldown.
+        })?
+        .and_then(|r| r.try_get::<bool>("", "c").ok())
+        .unwrap_or(false);
+    if in_cooldown {
         return Ok(Json(
-            json!({ "success": false, "error": "already_growing_or_cooldown" }),
+            json!({ "success": false, "error": "harvest_cooldown" }),
         ));
     }
+
+    // Replace the current un-harvested plant.
+    tx.execute(Statement::from_sql_and_values(
+        DbBackend::Postgres,
+        "DELETE FROM garden_plants WHERE user_id = $1 AND harvested_at IS NULL",
+        [user_id.clone().into()],
+    ))
+    .await
+    .map_err(|e| {
+        tracing::error!("choose_plant: delete current: {e}");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    tx.execute(Statement::from_sql_and_values(
+        DbBackend::Postgres,
+        "INSERT INTO garden_plants \
+              (id, user_id, strain_id, strain_name, current_stage, planted_at, is_completed, water_count, \
+               target_catalog, target_product_id, target_name, target_image_url) \
+         VALUES ($1, $2, $3, $4, 'seed', $5, false, 0, $6, $3, $4, $7)",
+        [
+            plant_id.clone().into(),
+            user_id.into(),
+            req.product_id.clone().into(),
+            name.clone().into(),
+            planted_at.into(),
+            req.catalog.clone().into(),
+            image_url.into(),
+        ],
+    ))
+    .await
+    .map_err(|e| {
+        tracing::error!("choose_plant: insert failed: {e}");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    tx.commit().await.map_err(|e| {
+        tracing::error!("choose_plant commit: {e}");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
     tracing::info!(
         telegram_id = req.telegram_id,
         "choose_plant: planted {}",

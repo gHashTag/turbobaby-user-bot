@@ -315,21 +315,29 @@ pub fn Garden() -> Element {
                 margin: "0 auto 12px".to_string(),
             }
 
+            // Always-visible chooser: pick (or change) the product to grow a
+            // discount for — works even when a plant already exists (it replaces).
+            if !is_loading {
+                div { style: "text-align:center;padding:0 16px 14px;",
+                    button {
+                        style: "padding:10px 18px;background:#39ff14;color:#000;border:4px solid #2d9e0f;box-shadow:3px 3px 0 #000;font-size:13px;font-weight:700;cursor:pointer;",
+                        onclick: move |_| show_chooser.set(true),
+                        if plant_list.is_empty() { "🌱 Выбрать товар для скидки" } else { "🔄 Сменить товар" }
+                    }
+                }
+            }
+
             if is_loading {
                 div { style: "text-align: center; padding: 60px 20px;",
                     div { style: "font-size: 36px; margin-bottom: 12px;", "🌱" }
                     p { style: "font-size: 12px; color: #8b8b9e;", "{loading_text}" }
                 }
             } else if plant_list.is_empty() {
-                div { style: "text-align: center; padding: 60px 20px;",
+                div { style: "text-align: center; padding: 40px 20px;",
                     div { style: "font-size: 48px; margin-bottom: 16px;", "🌱" }
                     p { style: "font-size: 11px; color: #8b8b9e; margin-bottom: 8px;", "{empty_label}" }
-                    p { style: "font-size: 13px; color: #8b8b9e; margin-bottom: 16px;", "{empty_cta}" }
-                    button {
-                        style: "padding:12px 20px;background:#39ff14;color:#000;border:4px solid #2d9e0f;box-shadow:3px 3px 0 #000;font-size:14px;font-weight:700;cursor:pointer;",
-                        onclick: move |_| show_chooser.set(true),
-                        "🌱 Выбрать товар для скидки"
-                    }
+                    p { style: "font-size: 13px; color: #8b8b9e;", "{empty_cta}" }
+                    p { style: "font-size: 13px; color: #39ff14; margin-top: 12px;", "↑ Нажми «Выбрать товар» вверху" }
                 }
             } else {
                 div { style: "max-width: 400px; margin: 0 auto; padding: 0 16px;",
@@ -599,7 +607,7 @@ fn GardenChooser(
                                                                 }
                                                                 Err(code) => {
                                                                     let msg = match code.as_str() {
-                                                                        "already_growing_or_cooldown" => "У тебя уже растёт растение или идёт суточный кулдаун после сбора.",
+                                                                        "harvest_cooldown" => "Скидку можно растить раз в сутки — подожди после прошлого сбора.",
                                                                         "product_not_available" => "Товар недоступен.",
                                                                         other => other,
                                                                     };
