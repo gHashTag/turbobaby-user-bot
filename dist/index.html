@@ -2,6 +2,30 @@
 <html lang="ru">
 <head>
     <script src="https://telegram.org/js/telegram-web-app.js?v=4"></script>
+    <script>
+    // Telegram lifecycle: keep the mini-app EXPANDED with a dark header/background
+    // so it doesn't "go dark"/collapse when you switch apps or return from
+    // background. iOS WebViews drop the rendered frame on resume; re-applying on
+    // visibilitychange/focus keeps it full-screen and themed instead of a blank
+    // frame. All wrapped in try/catch for older Telegram clients / plain browser.
+    (function () {
+      function applyTg() {
+        var w = window.Telegram && window.Telegram.WebApp;
+        if (!w) return;
+        try { w.ready(); } catch (e) {}
+        try { w.expand(); } catch (e) {}
+        try { w.setBackgroundColor('#0f0f1a'); } catch (e) {}
+        try { w.setHeaderColor('#0f0f1a'); } catch (e) {}
+        try { if (w.disableVerticalSwipes) w.disableVerticalSwipes(); } catch (e) {}
+      }
+      applyTg();
+      document.addEventListener('visibilitychange', function () {
+        if (!document.hidden) applyTg();
+      });
+      window.addEventListener('focus', applyTg);
+      window.addEventListener('pageshow', applyTg);
+    })();
+    </script>
     <meta charset="utf-8"/>
     <!-- App-like mini-app: disable pinch / double-tap zoom (the rapid taps in the
          "ловля шишек" game were triggering browser zoom). maximum-scale +
@@ -18,8 +42,8 @@
     
     
 <script type="module">
-import init, * as bindings from '/woody-weed-bot-8fd36b01110f397d.js';
-const wasm = await init({ module_or_path: '/woody-weed-bot-8fd36b01110f397d_bg.wasm' });
+import init, * as bindings from '/woody-weed-bot-ef7a919dd298d178.js';
+const wasm = await init({ module_or_path: '/woody-weed-bot-ef7a919dd298d178_bg.wasm' });
 
 
 window.wasmBindings = bindings;
@@ -29,6 +53,9 @@ dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
 
 </script>
     <style>
+        /* Dark base so a WebView resume / screen switch never flashes white or a
+           blank frame — the app's dark colour is always painted underneath. */
+        html, body { background: #0f0f1a; margin: 0; }
         #preloader {
             position: fixed;
             top: 0; left: 0;
@@ -114,7 +141,7 @@ dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
         }, true);
     });
     </script>
-<link rel="modulepreload" href="/woody-weed-bot-8fd36b01110f397d.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-web-bf44d47c344f35d0/inline0.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-web-bf44d47c344f35d0/src/js/eval.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-interpreter-js-53424282ea002554/src/js/patch_console.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-interpreter-js-53424282ea002554/inline0.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-web-bf44d47c344f35d0/inline1.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-cli-config-24e80746d3c500cd/inline0.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-interpreter-js-53424282ea002554/src/js/hydrate.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-interpreter-js-53424282ea002554/src/js/common.js" crossorigin="anonymous"><link rel="preload" href="/woody-weed-bot-8fd36b01110f397d_bg.wasm" crossorigin="anonymous" as="fetch" type="application/wasm"></head>
+<link rel="modulepreload" href="/woody-weed-bot-ef7a919dd298d178.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-interpreter-js-53424282ea002554/inline0.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-web-bf44d47c344f35d0/src/js/eval.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-interpreter-js-53424282ea002554/src/js/patch_console.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-web-bf44d47c344f35d0/inline0.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-interpreter-js-53424282ea002554/src/js/hydrate.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-cli-config-24e80746d3c500cd/inline0.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-web-bf44d47c344f35d0/inline1.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-interpreter-js-53424282ea002554/src/js/common.js" crossorigin="anonymous"><link rel="preload" href="/woody-weed-bot-ef7a919dd298d178_bg.wasm" crossorigin="anonymous" as="fetch" type="application/wasm"></head>
 <body>
     <div id="preloader">
         <div class="spinner"></div>

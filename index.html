@@ -2,6 +2,30 @@
 <html lang="ru">
 <head>
     <script src="https://telegram.org/js/telegram-web-app.js?v=4"></script>
+    <script>
+    // Telegram lifecycle: keep the mini-app EXPANDED with a dark header/background
+    // so it doesn't "go dark"/collapse when you switch apps or return from
+    // background. iOS WebViews drop the rendered frame on resume; re-applying on
+    // visibilitychange/focus keeps it full-screen and themed instead of a blank
+    // frame. All wrapped in try/catch for older Telegram clients / plain browser.
+    (function () {
+      function applyTg() {
+        var w = window.Telegram && window.Telegram.WebApp;
+        if (!w) return;
+        try { w.ready(); } catch (e) {}
+        try { w.expand(); } catch (e) {}
+        try { w.setBackgroundColor('#0f0f1a'); } catch (e) {}
+        try { w.setHeaderColor('#0f0f1a'); } catch (e) {}
+        try { if (w.disableVerticalSwipes) w.disableVerticalSwipes(); } catch (e) {}
+      }
+      applyTg();
+      document.addEventListener('visibilitychange', function () {
+        if (!document.hidden) applyTg();
+      });
+      window.addEventListener('focus', applyTg);
+      window.addEventListener('pageshow', applyTg);
+    })();
+    </script>
     <meta charset="utf-8"/>
     <!-- App-like mini-app: disable pinch / double-tap zoom (the rapid taps in the
          "ловля шишек" game were triggering browser zoom). maximum-scale +
@@ -18,6 +42,9 @@
     <link data-trunk rel="copy-dir" href="assets" data-target-path="assets"/>
     <link data-trunk rel="rust" data-target-name="woody_weed_bot" data-wasm-opt="0" />
     <style>
+        /* Dark base so a WebView resume / screen switch never flashes white or a
+           blank frame — the app's dark colour is always painted underneath. */
+        html, body { background: #0f0f1a; margin: 0; }
         #preloader {
             position: fixed;
             top: 0; left: 0;
