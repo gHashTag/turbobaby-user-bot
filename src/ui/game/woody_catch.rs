@@ -347,6 +347,10 @@ pub fn WoodyCatch() -> Element {
                 padding: 16px; position: relative; overflow: hidden;
                 font-family: system-ui, -apple-system, sans-serif;
                 min-height: 100vh;
+                /* Rapid taps must not trigger double-tap zoom / text selection. */
+                touch-action: manipulation;
+                -webkit-user-select: none; user-select: none;
+                -webkit-tap-highlight-color: transparent;
             ",
 
             // ── Ambient glow ────────────────────────────────────────────────
