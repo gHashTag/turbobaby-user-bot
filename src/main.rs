@@ -713,28 +713,40 @@ async fn main() -> Result<()> {
         }
     };
 
-    // SPA handler: Telegram WebView (iOS WKWebView) aggressively caches
-    // HTML responses and ignores Cache-Control headers. A query-param
-    // redirect (?v=4) busts the cache for every SPA route — not just /.
-    // When v=4 is present we serve index.html; otherwise redirect to
-    // the same path with ?v=4 appended.
+    // SPA handler: serve index.html DIRECTLY for every SPA route.
+    //
+    // IMPORTANT (blank-screen regression, AGENTS.md #15): we must NOT issue a
+    // redirect on the initial load. The old `?v=4` cache-bust hack returned a
+    // 303 to `<path>?v=4` on the first hit. Inside the Telegram Mini App
+    // WebView (esp. macOS Telegram 9.6 / iOS WKWebView) that redirect dropped
+    // the `#tgWebAppData=…` URL fragment and disrupted the initial frame, so
+    // the document that finally loaded never even started the WASM module —
+    // producing a blank screen with "Steps reached: none".
+    //
+    // Cache-busting is already handled correctly WITHOUT a redirect:
+    //   * Trunk content-hashes every asset filename (woody-weed-bot-<hash>.js
+    //     / _bg.wasm), so a new build is always a new URL the WebView can't
+    //     confuse with a cached one.
+    //   * The HTML itself is served `no-store` below, so the WebView always
+    //     re-fetches it and picks up the new hashed asset names.
     let spa_handler = {
         let static_cache = static_cache.clone();
-        move |uri: axum::http::Uri| async move {
-            if uri.query().map(|q| q.contains("v=4")).unwrap_or(false) {
-                let html = if let Some(file) = static_cache.get("index.html") {
-                    String::from_utf8_lossy(&file.raw).to_string()
-                } else {
-                    "<h1>App not found</h1>".to_string()
-                };
-                axum::response::Html(html).into_response()
+        move |_uri: axum::http::Uri| async move {
+            let html = if let Some(file) = static_cache.get("index.html") {
+                String::from_utf8_lossy(&file.raw).to_string()
             } else {
-                let path = uri.path();
-                let existing = uri.query().unwrap_or("");
-                let sep = if existing.is_empty() { "" } else { "&" };
-                axum::response::Redirect::to(&format!("{}?{}{}v=4", path, existing, sep))
-                    .into_response()
-            }
+                "<h1>App not found</h1>".to_string()
+            };
+            (
+                [(
+                    axum::http::header::CACHE_CONTROL,
+                    axum::http::HeaderValue::from_static(
+                        "no-store, no-cache, must-revalidate, max-age=0",
+                    ),
+                )],
+                axum::response::Html(html),
+            )
+                .into_response()
         }
     };
     let spa_routes = Router::new()

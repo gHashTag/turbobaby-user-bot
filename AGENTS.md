@@ -175,6 +175,18 @@ pkill cargo; rm -f target/.cargo-lock; rm -rf target/tmp
 
 ---
 
+### 11. Пустой/чёрный экран в Mini App — редирект `?v=4` ломал первый рендер
+
+**Симптом:** Белый/пустой экран в Telegram (чаще macOS Telegram / iOS WKWebView). Диагностика: `Blank screen detected · no [WASM] steps logged · Steps reached: none`, при этом `Telegram.WebApp` и `initData` присутствуют. Не выполнился даже Step 1 в `lib.rs::run()`.
+
+**Причина:** SPA-handler в `main.rs` на первый запрос без `v=4` отдавал `303 Redirect` на `<path>?v=4` (хак кэш-бастинга). Внутри WebView редирект теряет URL-фрагмент `#tgWebAppData=…` и срывает начальный кадр — итоговый документ загружается так, что WASM вообще не стартует.
+
+**Решение:** SPA-handler теперь отдаёт `index.html` НАПРЯМУЮ (без редиректа) с `Cache-Control: no-store`. Кэш-бастинг уже обеспечен хешами в именах ассетов (Trunk) + `no-store` на HTML.
+
+**Урок:** НИКОГДА не делай HTTP-редирект на начальной загрузке Mini App — редирект теряет `#tgWebAppData`. Кэш бьётся хешами файлов и `no-store`, а не редиректом.
+
+---
+
 ## Чеклист перед деплоем
 
 - [ ] `cargo check --features backend` проходит
@@ -186,3 +198,4 @@ pkill cargo; rm -f target/.cargo-lock; rm -rf target/tmp
 - [ ] `on_saved` вызывается только внутри `if success`
 - [ ] `use_telegram_id_or_admin` используется вместо `use_telegram_id` в админке
 - [ ] После push: сообщить пользователю про полный рестарт Mini App
+- [ ] SPA-маршруты отдают `index.html` напрямую (без `303`-редиректа на `?v=4`)
