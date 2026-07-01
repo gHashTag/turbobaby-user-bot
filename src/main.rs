@@ -141,6 +141,29 @@ async fn alert_5xx_middleware(
     resp
 }
 
+/// `true` for paths that are clearly static assets (Trunk hashed bundles,
+/// wasm-bindgen snippets, CSS, WASM, images, fonts, media). SPA fallback to
+/// index.html must NOT apply to these: a stale cached JS requesting an old
+/// snippet path would receive HTML and throw a confusing binding-name
+/// SyntaxError instead of a clean 404.
+#[cfg(not(target_arch = "wasm32"))]
+fn looks_like_static_asset(path: &str) -> bool {
+    if path.starts_with("snippets/") {
+        return true;
+    }
+    let static_exts: &[&str] = &[
+        "js", "wasm", "css", "svg", "png", "jpg", "jpeg", "webp", "gif",
+        "mp4", "webm", "mov", "ico", "woff", "woff2", "ttf", "otf", "eot",
+        "json", "txt", "xml", "map",
+    ];
+    std::path::Path::new(path)
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.to_lowercase())
+        .map(|e| static_exts.contains(&e.as_str()))
+        .unwrap_or(false)
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 fn content_type_for(path: &std::path::Path) -> &'static str {
     match path
@@ -651,7 +674,17 @@ async fn main() -> Result<()> {
                     return (axum::http::StatusCode::NOT_FOUND, "Not found").into_response();
                 }
                 let exact = static_cache.get(path);
-                let cached = exact.or_else(|| static_cache.get("index.html"));
+                // SPA fallback to index.html is only for client routes. Static
+                // assets (Trunk hashed bundles, snippets, CSS, WASM, images) must
+                // NOT fall back to HTML: a stale cached JS trying to import an old
+                // snippet would receive index.html and throw
+                // "SyntaxError: Importing binding name 'get_select_data' is not found."
+                let cached = exact.or_else(|| {
+                    if looks_like_static_asset(path) {
+                        return None;
+                    }
+                    static_cache.get("index.html")
+                });
                 if let Some(file) = cached {
                     let (body, encoding) = match pick_encoding(&headers) {
                         Some("br") => {
@@ -879,8 +912,25 @@ async fn shutdown_signal() {
 
 #[cfg(test)]
 mod tests {
-    use super::content_type_for;
+    use super::{content_type_for, looks_like_static_asset};
     use std::path::Path;
+
+    #[test]
+    fn test_looks_like_static_asset_positive() {
+        assert!(looks_like_static_asset("woody-weed-bot-abc123.js"));
+        assert!(looks_like_static_asset("app_bg.wasm"));
+        assert!(looks_like_static_asset("style.css"));
+        assert!(looks_like_static_asset("snippets/dioxus-web-xxx/inline1.js"));
+        assert!(looks_like_static_asset("assets/logo.png"));
+    }
+
+    #[test]
+    fn test_looks_like_static_asset_negative() {
+        assert!(!looks_like_static_asset("menu"));
+        assert!(!looks_like_static_asset("sets"));
+        assert!(!looks_like_static_asset("cart"));
+        assert!(!looks_like_static_asset(""));
+    }
 
     #[test]
     fn test_content_type_for_html() {
