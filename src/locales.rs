@@ -120,7 +120,7 @@ fn ru() -> Locale {
         flag: "🇷🇺".into(),
         name: "Русский".into(),
         welcome: "Добро пожаловать в Woody Weed! 🪵".into(),
-        start_description: "Лучший кальянный магазин на Ко Пангане".into(),
+        start_description: "Лучший каннабис-магазин на Ко Пангане".into(),
         open_menu: "Открыть меню".into(),
         menu: "🌿 Меню".into(),
         view_sets: "Наборы".into(),

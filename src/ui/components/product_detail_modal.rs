@@ -12,6 +12,7 @@
 //! WebView, so we reuse its shape here instead of inventing a new one. All
 //! meta fields are optional because accessories/tea/sets have no THC etc.
 
+use crate::ui::components::image_lightbox::ImageLightbox;
 use dioxus::prelude::*;
 
 #[derive(Props, PartialEq, Clone)]
@@ -83,6 +84,9 @@ pub fn ProductDetailModal(props: ProductDetailModalProps) -> Element {
     let description = props.description.clone();
     // Quantity selector state (1..=99). Only meaningful when `can_add`.
     let mut qty = use_signal(|| 1u32);
+    let mut lightbox_open = use_signal(|| false);
+    let lightbox_src = img.clone();
+    let lightbox_alt = alt.clone();
 
     rsx! {
         div {
@@ -121,13 +125,20 @@ pub fn ProductDetailModal(props: ProductDetailModalProps) -> Element {
                     // cards, so the old square crop (aspect-ratio:1/1 + object-fit:
                     // cover) cut off the top/bottom. width:100% + height:auto shows
                     // the WHOLE image; the dialog (max-height:85vh, overflow:auto)
-                    // scrolls.
-                    div { style: "width:100%;background:linear-gradient(135deg,#1a1a2e,#16213e);",
+                    // scrolls. Tapping opens the app-controlled lightbox because the
+                    // mini-app viewport disables native pinch-zoom.
+                    div {
+                        style: "width:100%;background:linear-gradient(135deg,#1a1a2e,#16213e);cursor:pointer;position:relative;",
+                        onclick: move |_| lightbox_open.set(true),
                         img {
                             src: "{img}",
                             alt: "{alt}",
                             loading: "lazy",
                             style: "width:100%;height:auto;object-fit:contain;display:block;"
+                        }
+                        span {
+                            style: "position:absolute;bottom:8px;right:8px;width:40px;height:40px;border-radius:50%;background:rgba(0,0,0,0.55);border:1px solid #fff;color:#fff;font-size:18px;display:flex;align-items:center;justify-content:center;pointer-events:none;",
+                            "🔍"
                         }
                     }
                 })}
@@ -211,5 +222,12 @@ pub fn ProductDetailModal(props: ProductDetailModalProps) -> Element {
                 }
             }
         }
+        {lightbox_open().then(|| rsx! {
+            ImageLightbox {
+                src: lightbox_src.clone(),
+                alt: lightbox_alt.clone(),
+                on_close: move |_| lightbox_open.set(false),
+            }
+        })}
     }
 }

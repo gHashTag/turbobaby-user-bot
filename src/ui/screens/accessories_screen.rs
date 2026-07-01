@@ -3,6 +3,7 @@ use crate::ui::api::context::api_base_url;
 use crate::ui::components::bottom_nav::BottomNav;
 use crate::ui::components::card_media::CardMedia;
 use crate::ui::components::product_detail_modal::ProductDetailModal;
+use crate::ui::components::video_modal::VideoModal;
 use crate::ui::state::{Cart, CartItem, CartItemType};
 use dioxus::prelude::*;
 use serde::Deserialize;
@@ -216,6 +217,7 @@ fn render_accessory_card(
         cat_color, opacity
     );
     let mut detail_open = use_signal(|| false);
+    let mut show_video = use_signal(|| false);
     let desc_full = desc.to_string();
 
     rsx! {
@@ -226,6 +228,7 @@ fn render_accessory_card(
                 video_url: a.video_url.clone(),
                 emoji: emoji.to_string(),
                 alt: a_name.clone(),
+                on_video_click: move |_| show_video.set(true),
                 div { style: "position:absolute;top:8px;left:8px;display:flex;flex-direction:column;gap:4px;z-index:2;align-items:flex-start;",
                     span { style: "font-size:13px;font-weight:700;background:{cat_color};color:#000;padding:4px 8px;box-shadow:2px 2px 0 #000;", "{badge_label}" }
                     {show_out_of_stock.then(|| rsx! {
@@ -293,6 +296,9 @@ fn render_accessory_card(
         }
         // Hoisted out of `.comet-card` (transform/will-change) so the modal's
         // position:fixed resolves against the viewport, not the narrow card.
+        {show_video().then(|| rsx! {
+            VideoModal { url: a.video_url.clone().unwrap_or_default(), on_close: move |_| show_video.set(false) }
+        })}
         {detail_open().then(|| {
             let add_id = a.id.clone();
             let add_name = crate::ui::lang::localized(&a.name, a.name_en.as_deref());

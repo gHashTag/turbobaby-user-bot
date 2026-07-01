@@ -1,6 +1,7 @@
 use crate::trios::i18n::{t, T_ADD_TO_CART, T_LOADING, T_MENU_DESC, T_MENU_TITLE};
 use crate::ui::api::context::api_base_url;
 use crate::ui::components::bottom_nav::BottomNav;
+use crate::ui::components::card_media::CardMedia;
 use crate::ui::components::product_detail_modal::ProductDetailModal;
 use crate::ui::components::video_modal::VideoModal;
 use crate::ui::routes::Route;
@@ -309,7 +310,7 @@ pub fn MenuScreen() -> Element {
                             rsx! {
                                 // Hero #1 — Strain of the Day
                                 {sotd.map(|s| {
-                                    let sid = s.id.clone();
+                                    let _sid = s.id.clone();
                                     rsx! {
                                         div { key: "hero-sotd",
                                             style: "padding:8px 16px 4px;",
@@ -483,47 +484,12 @@ fn render_strain_card(strain: ApiStrain, mut cart: Signal<Cart>) -> Element {
     rsx! {
         div { key: strain.id.clone(), class: "comet-card", style: card_style,
             onclick: move |_| detail_open.set(true),
-            div { style: "width:100%;min-height:180px;background:linear-gradient(135deg,#1a1a2e,#16213e);display:flex;align-items:center;justify-content:center;position:relative;",
-                {if has_video {
-                    rsx! {
-                        video {
-                            style: "width:100%;height:auto;display:block;",
-                            src: "{video_url}",
-                            "type": "video/mp4",
-                            autoplay: true,
-                            muted: true,
-                            loop: true,
-                            // playsinline is REQUIRED for muted autoplay inside
-                            // mobile WebViews (Telegram/iOS Safari). Without it the
-                            // browser blocks autoplay, the <video> stays paused on a
-                            // blank frame and the card looks like it has no video.
-                            "playsinline": "true",
-                            "webkit-playsinline": "true",
-                            preload: "auto",
-                            // poster shows the product image until the first video
-                            // frame is painted, so there is never an empty box.
-                            poster: if has_image { "{img_url}" } else { "" },
-                            // cross-origin videos (S3/Railway bucket) need the
-                            // crossorigin attribute so the browser sends CORS headers
-                            // and allows the video element to paint frames.
-                            crossorigin: "anonymous",
-                            onclick: move |e: Event<MouseData>| { e.stop_propagation(); show_video.set(true); }
-                        }
-                    }
-                } else if has_image {
-                    rsx! {
-                        img {
-                            src: "{img_url_bust}",
-                            alt: "{alt_name}",
-                            loading: "lazy",
-                            style: "width:100%;height:auto;object-fit:contain;display:block;"
-                        }
-                    }
-                } else {
-                    rsx! {
-                        span { style: "font-size:48px;", "{emoji}" }
-                    }
-                }}
+            CardMedia {
+                image_url: if has_image { Some(img_url_bust.clone()) } else { None },
+                video_url: if has_video { Some(video_url.clone()) } else { None },
+                emoji: emoji.to_string(),
+                alt: alt_name.clone(),
+                on_video_click: move |_| show_video.set(true),
                 // TZ #2 badge stack: stacked top-left, ordered by visual priority.
                 div { style: "position:absolute;top:8px;left:8px;display:flex;flex-direction:column;gap:4px;z-index:2;align-items:flex-start;",
                     {is_sotd.then(|| rsx! {
@@ -551,9 +517,6 @@ fn render_strain_card(strain: ApiStrain, mut cart: Signal<Cart>) -> Element {
                         ", "🔥 SALE" }
                     })}
                 }
-                {show_video().then(|| rsx! {
-                    VideoModal { url: video_url.clone(), on_close: move |_| show_video.set(false) }
-                })}
             }
             div { style: "padding:12px;",
                 div { style: "font-size:17px;font-weight:700;margin-bottom:6px;color:#fff;line-height:1.2;text-shadow:2px 2px 0 #000;",
@@ -683,6 +646,12 @@ fn render_strain_card(strain: ApiStrain, mut cart: Signal<Cart>) -> Element {
                     on_close: move |_| detail_open.set(false),
                 }
             }
+        })}
+        // Hoist VideoModal out of the card so its position:fixed resolves
+        // against the viewport.  Inside .comet-card (will-change:transform +
+        // overflow:hidden) it was clipped to the card rectangle.
+        {show_video().then(|| rsx! {
+            VideoModal { url: video_url.clone(), on_close: move |_| show_video.set(false) }
         })}
     }
 }

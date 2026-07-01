@@ -3,6 +3,7 @@ use crate::ui::api::context::api_base_url;
 use crate::ui::components::bottom_nav::BottomNav;
 use crate::ui::components::card_media::CardMedia;
 use crate::ui::components::product_detail_modal::ProductDetailModal;
+use crate::ui::components::video_modal::VideoModal;
 use crate::ui::state::{Cart, CartItem, CartItemType};
 use dioxus::prelude::*;
 use serde::Deserialize;
@@ -247,6 +248,7 @@ fn render_set_card(set: ApiSet, mut cart: Signal<Cart>) -> Element {
         set.description_en.as_deref(),
     );
     let mut detail_open = use_signal(|| false);
+    let mut show_video = use_signal(|| false);
     let desc_full = desc.to_string();
     let is_available = set.is_available.unwrap_or(true);
     let opacity = if is_available { "" } else { "opacity:0.6;" };
@@ -276,6 +278,7 @@ fn render_set_card(set: ApiSet, mut cart: Signal<Cart>) -> Element {
                 video_url: set.video_url.clone(),
                 emoji: icon.to_string(),
                 alt: set_name.clone(),
+                on_video_click: move |_| show_video.set(true),
                 // On-image badge (top-left), mirroring strain/accessory cards.
                 span { style: "position:absolute;top:8px;left:8px;z-index:2;font-size:13px;font-weight:700;background:{ACCENT};color:#000;padding:4px 8px;box-shadow:2px 2px 0 #000;",
                     "📦 SET"
@@ -354,6 +357,11 @@ fn render_set_card(set: ApiSet, mut cart: Signal<Cart>) -> Element {
                     }
                 }}
             }
+            // Hoist VideoModal out of the card so its position:fixed resolves
+            // against the viewport, not the narrow transformed card.
+            {show_video().then(|| rsx! {
+                VideoModal { url: set.video_url.clone().unwrap_or_default(), on_close: move |_| show_video.set(false) }
+            })}
             {detail_open().then(|| {
                 let add_id = set.id.clone();
                 let add_name = crate::ui::lang::localized(&set.name, set.name_en.as_deref());

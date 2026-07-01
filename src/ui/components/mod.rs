@@ -11,6 +11,7 @@ pub mod card_media;
 pub mod modal;
 
 pub mod cart_item;
+pub mod image_lightbox;
 pub mod input;
 pub mod loading;
 pub mod plant_cell;
@@ -42,6 +43,7 @@ pub use card::{Card, CardProps, CardVariant};
 pub use card_media::CardMedia;
 pub use cart_item::{CartItemComponent, CartItemProps};
 pub use input::{Input, InputProps, InputType};
+pub use image_lightbox::{ImageLightbox, ImageLightboxProps};
 pub use loading::{Loading, LoadingOverlay, LoadingProps, LoadingSize};
 pub use modal::{Modal, ModalProps, ModalSize};
 pub use plant_cell::{EmptyPlotCell, PlantCell};
