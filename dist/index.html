@@ -42,8 +42,8 @@
     
     
 <script type="module">
-import init, * as bindings from '/woody-weed-bot-81b4d58f2892947f.js';
-const wasm = await init({ module_or_path: '/woody-weed-bot-81b4d58f2892947f_bg.wasm' });
+import init, * as bindings from '/woody-weed-bot-f4f714dfe1a2334a.js';
+const wasm = await init({ module_or_path: '/woody-weed-bot-f4f714dfe1a2334a_bg.wasm' });
 
 
 window.wasmBindings = bindings;
@@ -52,6 +52,54 @@ window.wasmBindings = bindings;
 dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
 
 </script>
+    <script>
+    // Cycle #170: Telegram/WebView aggressively caches index.html across deploys.
+    // A stale HTML loads an old JS hash, which requests old wasm-bindgen snippets
+    // that no longer exist, producing:
+    //   "SyntaxError: Importing binding name 'get_select_data' is not found."
+    // Fetch the live build version from /version.txt and, if it differs from the
+    // JS hash embedded in this HTML, clear caches and move to a versioned URL.
+    // The hash fragment (#tgWebAppData=...) is preserved; this is a client-side
+    // navigation, not an HTTP redirect, so it does not drop initData.
+    (function () {
+      function clearAndGo(targetVersion) {
+        try { sessionStorage.setItem('__wwb_version_redirected', '1'); } catch (e) {}
+        if (window.caches) {
+          try {
+            caches.keys().then(function (keys) {
+              return Promise.all(keys.map(function (k) { return caches.delete(k); }));
+            }).catch(function () {});
+          } catch (e) {}
+        }
+        try { localStorage.clear(); } catch (e) {}
+        var url = new URL(location.href);
+        url.searchParams.set('v', targetVersion);
+        location.replace(url.toString());
+      }
+      try {
+        if (sessionStorage.getItem('__wwb_version_redirected')) return;
+        var moduleScript = document.querySelector('script[type="module"]');
+        var match = moduleScript && moduleScript.textContent.match(/\/woody-weed-bot-([a-f0-9]+)\.js/);
+        var localVersion = match ? match[1] : '';
+        fetch('/version.txt?cb=' + Date.now(), { cache: 'no-store', credentials: 'same-origin' })
+          .then(function (r) { if (!r.ok) throw new Error(r.status); return r.text(); })
+          .then(function (serverVersion) {
+            serverVersion = (serverVersion || '').trim();
+            if (!serverVersion) return;
+            if (localVersion && localVersion === serverVersion) return;
+            // Embedded JS hash differs from the server's current build: this page is stale.
+            clearAndGo(serverVersion);
+          })
+          .catch(function (e) {
+            // Version check is best-effort. If the module later fails, the
+            // error box offers a manual clear-cache button.
+            console.error('version check failed', e);
+          });
+      } catch (e) {
+        console.error('version check error', e);
+      }
+    })();
+    </script>
     <style>
         /* Dark base so a WebView resume / screen switch never flashes white or a
            blank frame — the app's dark colour is always painted underneath. */
@@ -102,13 +150,56 @@ dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
     function updateErrorBox() {
         var box = document.getElementById('error-box');
         if (!box) return;
+        var hasImportError = window.__errors.some(function (e) {
+            var msg = (e.msg || '').toString();
+            return msg.indexOf('get_select_data') !== -1 || msg.indexOf('get_form_data') !== -1 || msg.indexOf('SyntaxError') !== -1;
+        });
         box.innerHTML = '<h3 style="color:#ff4757;margin:0 0 8px">🚨 Errors (' + window.__errors.length + ')</h3>' +
             window.__errors.map(function(e) {
                 return '<div style="margin-bottom:8px;font-size:12px;border-bottom:1px solid #333;padding-bottom:4px">' +
                     '<div style="color:#ff4757">' + (e.msg || 'Unknown') + '</div>' +
                     '<div style="color:#888;font-size:10px">' + (e.url||'') + ':' + (e.line||'') + '</div>' +
                     '<pre style="color:#aaa;font-size:10px;margin:4px 0;white-space:pre-wrap">' + (e.stack||'').substring(0,500) + '</pre></div>';
-            }).join('');
+            }).join('') +
+            (hasImportError ? '<div style="margin-top:12px;padding-top:8px;border-top:1px solid #333">' +
+                '<p style="color:#aaa;font-size:11px;margin:0 0 8px">Старый кеш Telegram может загружать устаревшие файлы. Попробуй очистить кеш и перезагрузить.</p>' +
+                '<button id="clear-cache-btn" style="padding:8px 16px;background:#39ff14;color:#000;border:none;border-radius:6px;font-weight:700;cursor:pointer;">Очистить кеш и перезагрузить</button>' +
+                '</div>' : '');
+        var btn = document.getElementById('clear-cache-btn');
+        if (btn) {
+            btn.onclick = function () {
+                fetch('/version.txt?cb=' + Date.now(), { cache: 'no-store', credentials: 'same-origin' })
+                    .then(function (r) { return r.text(); })
+                    .then(function (v) {
+                        var version = (v || '').trim() || Date.now().toString();
+                        try { sessionStorage.setItem('__wwb_version_redirected', '1'); } catch (e) {}
+                        if (window.caches) {
+                            try {
+                                caches.keys().then(function (keys) {
+                                    return Promise.all(keys.map(function (k) { return caches.delete(k); }));
+                                }).catch(function(){}).finally(function () {
+                                    var url = new URL(location.href);
+                                    url.searchParams.set('v', version);
+                                    location.replace(url.toString());
+                                });
+                            } catch (e) {
+                                var url = new URL(location.href);
+                                url.searchParams.set('v', version);
+                                location.replace(url.toString());
+                            }
+                        } else {
+                            var url = new URL(location.href);
+                            url.searchParams.set('v', version);
+                            location.replace(url.toString());
+                        }
+                    })
+                    .catch(function () {
+                        var url = new URL(location.href);
+                        url.searchParams.set('v', Date.now().toString());
+                        location.replace(url.toString());
+                    });
+            };
+        }
     }
     // 3D Comet Card tilt effect (matching old React bot exactly)
     document.addEventListener('DOMContentLoaded', function() {
@@ -141,7 +232,7 @@ dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
         }, true);
     });
     </script>
-<link rel="modulepreload" href="/woody-weed-bot-81b4d58f2892947f.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-interpreter-js-53424282ea002554/inline0.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-web-bf44d47c344f35d0/inline1.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-web-bf44d47c344f35d0/inline0.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-interpreter-js-53424282ea002554/src/js/patch_console.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-cli-config-24e80746d3c500cd/inline0.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-interpreter-js-53424282ea002554/src/js/common.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-interpreter-js-53424282ea002554/src/js/hydrate.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-web-bf44d47c344f35d0/src/js/eval.js" crossorigin="anonymous"><link rel="preload" href="/woody-weed-bot-81b4d58f2892947f_bg.wasm" crossorigin="anonymous" as="fetch" type="application/wasm"></head>
+<link rel="modulepreload" href="/woody-weed-bot-f4f714dfe1a2334a.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-interpreter-js-53424282ea002554/src/js/patch_console.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-interpreter-js-53424282ea002554/src/js/hydrate.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-web-bf44d47c344f35d0/inline1.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-interpreter-js-53424282ea002554/inline0.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-cli-config-24e80746d3c500cd/inline0.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-web-bf44d47c344f35d0/inline0.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-web-bf44d47c344f35d0/src/js/eval.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-interpreter-js-53424282ea002554/src/js/common.js" crossorigin="anonymous"><link rel="preload" href="/woody-weed-bot-f4f714dfe1a2334a_bg.wasm" crossorigin="anonymous" as="fetch" type="application/wasm"></head>
 <body>
     <div id="preloader">
         <div class="spinner"></div>
