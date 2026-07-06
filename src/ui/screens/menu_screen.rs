@@ -5,6 +5,7 @@ use crate::ui::components::card_media::CardMedia;
 use crate::ui::components::product_detail_modal::ProductDetailModal;
 use crate::ui::components::video_modal::VideoModal;
 use crate::ui::routes::Route;
+use crate::ui::share::{share_product, ProductKind, SharedProduct};
 use crate::ui::state::{Cart, CartItem, CartItemType};
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -123,7 +124,7 @@ pub fn MenuScreen() -> Element {
     let mut active_filter = use_signal(|| "All".to_string());
     let mut active_sort = use_signal(|| "default".to_string());
 
-    let cart = use_context::<Signal<Cart>>();
+    let mut cart = use_context::<Signal<Cart>>();
     let cart_count: u32 = cart.read().items.iter().map(|i| i.quantity).sum();
 
     let menu_title = t(crate::ui::lang::current_lang(), T_MENU_TITLE).to_string();
@@ -170,6 +171,28 @@ pub fn MenuScreen() -> Element {
             })?;
 
             Ok(strains_resp.strains)
+        }
+    });
+
+    // Deep-link target: if the app opened with a shared strain, open its
+    // detail modal once the catalog list has loaded.
+    let mut pending = use_context::<Signal<Option<SharedProduct>>>();
+    let mut shared_strain = use_signal(|| None::<ApiStrain>);
+    use_effect(move || {
+        let target = pending.read().clone();
+        if let Some(target) = target {
+            if target.kind == ProductKind::Strain {
+                match &*strains_resource.read() {
+                    Some(Ok(strains)) => {
+                        if let Some(s) = strains.iter().find(|s| s.id == target.id).cloned() {
+                            shared_strain.set(Some(s));
+                        }
+                        pending.set(None);
+                    }
+                    Some(Err(_)) => pending.set(None),
+                    None => {}
+                }
+            }
         }
     });
 
@@ -317,7 +340,7 @@ pub fn MenuScreen() -> Element {
                                             div { style: "font-size:13px;font-weight:800;color:#ffe600;text-shadow:2px 2px 0 #000;letter-spacing:1px;margin-bottom:8px;",
                                                 "🔥 STRAIN OF THE DAY"
                                             }
-                                            div { key: "{sid}",
+                                            div { key: "{_sid}",
                                                 style: "max-width:380px;margin:0 auto;",
                                                 {render_strain_card(s, cart)}
                                             }
@@ -365,6 +388,81 @@ pub fn MenuScreen() -> Element {
                     },
                 }
             }
+
+            // Deep-link strain modal: shown when the app was opened via a shared
+            // strain link and the target is still available in the catalog.
+            {shared_strain().map(|strain| {
+                let add_id = strain.id.clone();
+                let add_name = crate::ui::lang::localized(&strain.name,
+                    strain.name_en.as_deref(),
+                );
+                let add_label = t(crate::ui::lang::current_lang(), T_ADD_TO_CART).to_string();
+                let cat = strain.category.as_deref().unwrap_or("Hybrid");
+                let emoji = category_emoji(cat);
+                let badge_label = format!("{} {}", emoji, cat);
+                let thc_str = strain.thc_percent.map(|t| format!("THC {:.0}%", t)).unwrap_or_default();
+                let cbd_str = strain.cbd_percent.map(|c| format!("CBD {:.1}%", c)).unwrap_or_default();
+                let effect_str = crate::ui::lang::localized(
+                    &strain.effect.clone().unwrap_or_default(),
+                    strain.effect_en.as_deref(),
+                );
+                let flavor_str = crate::ui::lang::localized(
+                    &strain.flavor_profile.clone().unwrap_or_default(),
+                    strain.flavor_profile_en.as_deref(),
+                );
+                let desc_str = crate::ui::lang::localized(
+                    &strain.description.clone().unwrap_or_default(),
+                    strain.description_en.as_deref(),
+                );
+                let priced = crate::trios::pricing::effective_strain_price(
+                    &crate::trios::pricing::MarketingFlags {
+                        price_per_gram: strain.price_per_gram,
+                        is_strain_of_day: strain.is_strain_of_day,
+                        strain_of_day_discount: strain.strain_of_day_discount,
+                        sale_active: strain.sale_active,
+                        sale_until: strain.sale_until.as_deref(),
+                        sale_price: strain.sale_price,
+                        discount_percent: strain.discount_percent,
+                        is_new_arrival: strain.is_new_arrival,
+                        new_until: strain.new_until.as_deref(),
+                    },
+                    chrono::Utc::now(),
+                );
+                let effective_price = priced.price;
+                let has_real_price = strain.price_per_gram > 0.0;
+                let avail = strain.is_available && has_real_price;
+                let share_name = add_name.clone();
+                let share_id = strain.id.clone();
+                rsx! {
+                    ProductDetailModal {
+                        name: add_name.clone(),
+                        image_url: strain.image_url.clone(),
+                        description: desc_str,
+                        category_badge: Some(badge_label),
+                        thc: (!thc_str.is_empty()).then(|| thc_str),
+                        cbd: (!cbd_str.is_empty()).then(|| cbd_str),
+                        effect: (!effect_str.is_empty()).then(|| effect_str),
+                        flavor: (!flavor_str.is_empty()).then(|| flavor_str),
+                        price_line: has_real_price.then(|| format!("{}/g", crate::trios::pricing::format_baht(effective_price))),
+                        can_add: avail,
+                        add_to_cart_label: Some(format!("{add_label} 🛒")),
+                        on_add_to_cart: move |q: u32| {
+                            cart.write().add_item(CartItem {
+                                id: add_id.clone(),
+                                name: add_name.clone(),
+                                price: effective_price,
+                                quantity: q,
+                                image_url: None,
+                                item_type: CartItemType::Strain,
+                                fulfillment: None,
+                            });
+                            crate::ui::telegram::TelegramApp::init().haptic_notification(crate::ui::telegram::HapticNotification::Success);
+                        },
+                        on_share: move |_| share_product(ProductKind::Strain, &share_id, &share_name),
+                        on_close: move |_| shared_strain.set(None),
+                    }
+                }
+            })}
 
             BottomNav { cart_count }
         }
@@ -618,6 +716,8 @@ fn render_strain_card(strain: ApiStrain, mut cart: Signal<Cart>) -> Element {
             let add_price = effective_price;
             let add_label = add_to_cart_label.clone();
             let avail = strain.is_available && has_real_price;
+            let share_id = strain.id.clone();
+            let share_name = name_disp.clone();
             rsx! {
                 ProductDetailModal {
                     name: name_disp.clone(),
@@ -643,6 +743,7 @@ fn render_strain_card(strain: ApiStrain, mut cart: Signal<Cart>) -> Element {
                         });
                         crate::ui::telegram::TelegramApp::init().haptic_notification(crate::ui::telegram::HapticNotification::Success);
                     },
+                    on_share: move |_| share_product(ProductKind::Strain, &share_id, &share_name),
                     on_close: move |_| detail_open.set(false),
                 }
             }

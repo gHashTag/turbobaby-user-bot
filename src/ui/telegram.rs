@@ -253,6 +253,26 @@ impl TelegramApp {
         None
     }
 
+    /// Read the `start_param` Telegram passes when the Mini App is opened via a
+    /// `t.me/{bot}?startapp=...` deep link. Empty/missing values return `None`.
+    pub fn start_param(&self) -> Option<String> {
+        let js = r#"(function(){try{
+            if(window.Telegram && window.Telegram.WebApp){
+                var p = window.Telegram.WebApp.initDataUnsafe;
+                if(p && typeof p.start_param === 'string' && p.start_param.length > 0){
+                    return p.start_param;
+                }
+            }
+            return '';
+        }catch(e){return '';}})()"#;
+        let val = js_sys::eval(js).ok()?;
+        let s = val.as_string()?;
+        if s.is_empty() {
+            return None;
+        }
+        Some(s)
+    }
+
     /// Get Telegram initData string (for server-side validation)
     pub fn get_init_data(&self) -> String {
         let js = r#"(function(){try{

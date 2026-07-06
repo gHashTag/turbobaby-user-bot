@@ -108,6 +108,8 @@ pub const T_PLACE_ORDER: Key = "checkout.place_order";
 pub const T_BACK: Key = "btn.back";
 pub const T_TOTAL: Key = "label.total";
 pub const T_ADD_TO_CART: Key = "btn.add_to_cart";
+pub const T_SHARE: Key = "btn.share";
+pub const T_SHARE_MESSAGE: Key = "share.message";
 pub const T_LOADING: Key = "label.loading";
 pub const T_FILTER_ALL: Key = "filter.all";
 pub const T_SOMM_MOOD: Key = "somm.mood";
@@ -244,6 +246,8 @@ fn get_ru_translation(key: Key) -> Value {
         T_BACK => "← Назад",
         T_TOTAL => "Итого:",
         T_ADD_TO_CART => "В корзину",
+        T_SHARE => "Поделиться",
+        T_SHARE_MESSAGE => "Посмотри {0} в Woody Weed 👇",
         T_LOADING => "Загрузка...",
         T_FILTER_ALL => "Все",
         T_SOMM_MOOD => "Настроение",
@@ -359,6 +363,8 @@ fn get_en_translation(key: Key) -> Value {
         T_BACK => "← Back",
         T_TOTAL => "Total:",
         T_ADD_TO_CART => "Add to Cart",
+        T_SHARE => "Share",
+        T_SHARE_MESSAGE => "Check out {0} in Woody Weed 👇",
         T_LOADING => "Loading...",
         T_FILTER_ALL => "All",
         T_SOMM_MOOD => "Mood",

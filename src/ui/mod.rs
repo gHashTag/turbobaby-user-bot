@@ -3,6 +3,7 @@ pub mod assets;
 pub mod lang;
 pub mod prefetch;
 pub mod routes;
+pub mod share;
 pub mod state;
 pub mod telegram;
 

@@ -7,6 +7,7 @@ use crate::ui::assets;
 use crate::ui::components::bottom_nav::BottomNav;
 use crate::ui::components::video_modal::VideoModal;
 use crate::ui::routes::Route;
+use crate::ui::share::SharedProduct;
 use crate::ui::state::{Cart, CartItem, CartItemType};
 use dioxus::prelude::*;
 use serde::Deserialize;
@@ -146,6 +147,19 @@ fn render_home_pack_card(p: HomePack) -> Element {
 pub fn HomeScreen() -> Element {
     let cart = use_context::<Signal<Cart>>();
     let cart_count: u32 = cart.read().items.iter().map(|i| i.quantity).sum();
+
+    // Deep-link landing: when the app opens with a shared product, navigate
+    // from the home route to the catalog screen that owns the product.
+    let pending = use_context::<Signal<Option<SharedProduct>>>();
+    let nav = navigator();
+    use_effect(move || {
+        if let Some(target) = pending.read().clone() {
+            // Navigate to the catalog screen that owns the shared product.
+            // The target screen will open the product modal and clear the target.
+            nav.push(target.kind.route());
+        }
+    });
+
     let home_subtitle = t(crate::ui::lang::current_lang(), T_HOME_SUBTITLE).to_string();
     let nav_menu = t(crate::ui::lang::current_lang(), T_NAV_MENU).to_string();
     let nav_sets = t(crate::ui::lang::current_lang(), T_NAV_SETS).to_string();

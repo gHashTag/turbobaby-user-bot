@@ -4,6 +4,7 @@ use crate::ui::components::bottom_nav::BottomNav;
 use crate::ui::components::card_media::CardMedia;
 use crate::ui::components::product_detail_modal::ProductDetailModal;
 use crate::ui::components::video_modal::VideoModal;
+use crate::ui::share::{share_product, ProductKind, SharedProduct};
 use crate::ui::state::{Cart, CartItem, CartItemType};
 use dioxus::prelude::*;
 use serde::Deserialize;
@@ -105,12 +106,12 @@ fn sort_packs(v: &mut [ApiSet], key: &str) {
 
 #[component]
 pub fn SetsScreen() -> Element {
-    let cart = use_context::<Signal<Cart>>();
+    let mut cart = use_context::<Signal<Cart>>();
     let mut sort_by = use_signal(|| "default".to_string());
 
     let sets_title = t(crate::ui::lang::current_lang(), T_SETS_TITLE);
     let sets_desc = t(crate::ui::lang::current_lang(), T_SETS_DESC);
-    let _add_to_cart = t(crate::ui::lang::current_lang(), T_ADD_TO_CART);
+    let add_to_cart = t(crate::ui::lang::current_lang(), T_ADD_TO_CART);
 
     let sets_resource = use_resource(|| async move {
         let base = api_base_url();
@@ -124,6 +125,27 @@ pub fn SetsScreen() -> Element {
             .await
             .map(|r| r.sets)
             .map_err(|e| e.to_string())
+    });
+
+    // Deep-link target: open the shared set modal once the catalog loads.
+    let mut pending = use_context::<Signal<Option<SharedProduct>>>();
+    let mut shared_set = use_signal(|| None::<ApiSet>);
+    use_effect(move || {
+        let target = pending.read().clone();
+        if let Some(target) = target {
+            if target.kind == ProductKind::Set {
+                match &*sets_resource.read() {
+                    Some(Ok(sets)) => {
+                        if let Some(s) = sets.iter().find(|s| s.id == target.id).cloned() {
+                            shared_set.set(Some(s));
+                        }
+                        pending.set(None);
+                    }
+                    Some(Err(_)) => pending.set(None),
+                    None => {}
+                }
+            }
+        }
     });
 
     let all_sets = match &*sets_resource.read() {
@@ -209,6 +231,60 @@ pub fn SetsScreen() -> Element {
                     },
                 }
             }
+
+            // Deep-link set modal.
+            {shared_set().map(|set| {
+                let add_id = set.id.clone();
+                let add_name = crate::ui::lang::localized(&set.name, set.name_en.as_deref());
+                let discount = if set.discount_percent.is_finite() {
+                    set.discount_percent.max(0.0)
+                } else {
+                    0.0
+                };
+                let total_price = if set.total_price.is_finite() {
+                    set.total_price.max(0.0)
+                } else {
+                    0.0
+                };
+                let has_discount = discount > 0.0;
+                let discounted_price = if has_discount {
+                    (total_price * (1.0 - discount / 100.0)).max(0.0)
+                } else {
+                    total_price
+                };
+                let price_str = crate::trios::pricing::format_baht(discounted_price);
+                let avail = set.is_available.unwrap_or(true);
+                let desc = crate::ui::lang::localized(
+                    set.description.as_deref().unwrap_or(""),
+                    set.description_en.as_deref(),
+                );
+                let share_name = add_name.clone();
+                let share_id = set.id.clone();
+                rsx! {
+                    ProductDetailModal {
+                        name: add_name.clone(),
+                        image_url: set.image_url.clone(),
+                        description: desc,
+                        price_line: Some(price_str),
+                        can_add: avail,
+                        add_to_cart_label: Some(add_to_cart.to_string()),
+                        on_add_to_cart: move |q: u32| {
+                            cart.write().add_item(CartItem {
+                                id: add_id.clone(),
+                                name: add_name.clone(),
+                                price: discounted_price,
+                                quantity: q,
+                                image_url: None,
+                                item_type: CartItemType::Set,
+                                fulfillment: None,
+                            });
+                            crate::ui::telegram::TelegramApp::init().haptic_notification(crate::ui::telegram::HapticNotification::Success);
+                        },
+                        on_share: move |_| share_product(ProductKind::Set, &share_id, &share_name),
+                        on_close: move |_| shared_set.set(None),
+                    }
+                }
+            })}
 
             BottomNav {}
         }
@@ -367,6 +443,8 @@ fn render_set_card(set: ApiSet, mut cart: Signal<Cart>) -> Element {
                 let add_name = crate::ui::lang::localized(&set.name, set.name_en.as_deref());
                 let add_price = discounted_price;
                 let avail = is_available;
+                let share_id = set.id.clone();
+                let share_name = add_name.clone();
                 rsx! {
                     ProductDetailModal {
                         name: crate::ui::lang::localized(&set.name, set.name_en.as_deref()),
@@ -387,6 +465,7 @@ fn render_set_card(set: ApiSet, mut cart: Signal<Cart>) -> Element {
                             });
                             crate::ui::telegram::TelegramApp::init().haptic_notification(crate::ui::telegram::HapticNotification::Success);
                         },
+                        on_share: move |_| share_product(ProductKind::Set, &share_id, &share_name),
                         on_close: move |_| detail_open.set(false),
                     }
                 }

@@ -12,7 +12,9 @@
 //! WebView, so we reuse its shape here instead of inventing a new one. All
 //! meta fields are optional because accessories/tea/sets have no THC etc.
 
+use crate::trios::i18n::{t, T_SHARE};
 use crate::ui::components::image_lightbox::ImageLightbox;
+use crate::ui::lang::current_lang;
 use dioxus::prelude::*;
 
 #[derive(Props, PartialEq, Clone)]
@@ -56,6 +58,12 @@ pub struct ProductDetailModalProps {
     /// quantity (caller pushes the item into the cart). The modal closes
     /// itself afterwards.
     pub on_add_to_cart: EventHandler<u32>,
+    /// Called when the user taps the "Share" button.
+    #[props(default)]
+    pub on_share: EventHandler<()>,
+    /// Localized label for the share button.
+    #[props(default)]
+    pub share_label: Option<String>,
     /// Called when the user taps the backdrop or the close button.
     pub on_close: EventHandler<()>,
 }
@@ -77,6 +85,11 @@ pub fn ProductDetailModal(props: ProductDetailModalProps) -> Element {
         .add_to_cart_label
         .clone()
         .unwrap_or_else(|| "В корзину 🛒".to_string());
+    let share_label = props
+        .share_label
+        .clone()
+        .unwrap_or_else(|| t(current_lang(), T_SHARE).to_string());
+    let on_share = props.on_share;
     let img = props.image_url.clone().unwrap_or_default();
     let has_image = is_usable_src(&img);
     let name = props.name.clone();
@@ -213,6 +226,12 @@ pub fn ProductDetailModal(props: ProductDetailModalProps) -> Element {
                         }
                         }
                     })}
+
+                    button {
+                        style: "font-size:14px;font-weight:700;width:100%;padding:12px 20px;margin-bottom:8px;background:#00e5ff;color:#000;border:4px solid #008ba3;box-shadow:3px 3px 0 #000;cursor:pointer;",
+                        onclick: move |e: Event<MouseData>| { e.stop_propagation(); on_share.call(()); },
+                        "🔗 {share_label}"
+                    }
 
                     button {
                         style: "font-size:14px;font-weight:700;width:100%;padding:12px 20px;background:#2a2a4a;color:#e8e8e8;border:4px solid #1a1a2e;box-shadow:3px 3px 0 #000;cursor:pointer;",

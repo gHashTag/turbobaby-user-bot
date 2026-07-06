@@ -2,6 +2,7 @@ use crate::trios::i18n::{t, T_ADD_TO_CART, T_FILTER_ALL, T_TEA_DESC, T_TEA_TITLE
 use crate::ui::api::context::api_base_url;
 use crate::ui::components::bottom_nav::BottomNav;
 use crate::ui::components::product_detail_modal::ProductDetailModal;
+use crate::ui::share::{share_product, ProductKind, SharedProduct};
 use crate::ui::state::{Cart, CartItem, CartItemType};
 use dioxus::prelude::*;
 use serde::Deserialize;
@@ -59,6 +60,26 @@ pub fn TeaScreen() -> Element {
             .await
             .map(|r| r.products)
             .map_err(|e| e.to_string())
+    });
+
+    // Deep-link target: open the shared tea product modal once the catalog loads.
+    let mut pending = use_context::<Signal<Option<SharedProduct>>>();
+    use_effect(move || {
+        let target = pending.read().clone();
+        if let Some(target) = target {
+            if target.kind == ProductKind::Tea {
+                match &*tea_resource.read() {
+                    Some(Ok(teas)) => {
+                        if let Some(t) = teas.iter().find(|t| t.id == target.id).cloned() {
+                            selected_tea.set(Some(t));
+                        }
+                        pending.set(None);
+                    }
+                    Some(Err(_)) => pending.set(None),
+                    None => {}
+                }
+            }
+        }
     });
 
     // Categories present in the live catalog, derived from the data (a category
@@ -307,6 +328,8 @@ pub fn TeaScreen() -> Element {
                 let add_id = tea.id.clone();
                 let add_name = crate::ui::lang::localized(&tea.name, tea.name_en.as_deref());
                 let avail = tea.is_available.unwrap_or(true) && tea.stock.unwrap_or(999) > 0;
+                let share_id = tea.id.clone();
+                let share_name = add_name.clone();
                 rsx! {
                     ProductDetailModal {
                         name: crate::ui::lang::localized(&tea.name, tea.name_en.as_deref()),
@@ -331,6 +354,7 @@ pub fn TeaScreen() -> Element {
                             });
                             crate::ui::telegram::TelegramApp::init().haptic_notification(crate::ui::telegram::HapticNotification::Success);
                         },
+                        on_share: move |_| share_product(ProductKind::Tea, &share_id, &share_name),
                         on_close: move |_| selected_tea.set(None),
                     }
                 }

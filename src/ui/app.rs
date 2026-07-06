@@ -5,6 +5,7 @@
 use crate::ui::api::context::ApiClientProvider;
 use crate::ui::components::{install_error_handlers, ErrorOverlay, JsErrorItem};
 use crate::ui::routes::Routes;
+use crate::ui::share::{parse_start_param, SharedProduct};
 use crate::ui::state::Cart;
 use crate::ui::telegram::TelegramProvider;
 use dioxus::prelude::*;
@@ -59,8 +60,23 @@ pub fn App() -> Element {
     use_context_provider(|| Signal::new(Vec::<JsErrorItem>::new()));
     let errors = use_context::<Signal<Vec<JsErrorItem>>>();
 
+    // Product deep-link target parsed from Telegram.WebApp.initDataUnsafe.start_param.
+    // Catalog screens read this signal to navigate/open the shared product modal.
+    use_context_provider(|| Signal::new(None::<SharedProduct>));
+    let mut pending_shared = use_context::<Signal<Option<SharedProduct>>>();
+
     use_effect(move || {
         install_error_handlers(errors);
+    });
+
+    use_effect(move || {
+        if pending_shared.read().is_none() {
+            if let Some(param) = crate::ui::telegram::TelegramApp::init().start_param() {
+                if let Some(product) = parse_start_param(&param) {
+                    pending_shared.set(Some(product));
+                }
+            }
+        }
     });
 
     rsx! {
