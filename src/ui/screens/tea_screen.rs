@@ -1,5 +1,4 @@
 use crate::trios::i18n::{t, T_ADD_TO_CART, T_FILTER_ALL, T_TEA_DESC, T_TEA_TITLE};
-use crate::ui::admin::use_admin_status;
 use crate::ui::api::context::api_base_url;
 use crate::ui::components::bottom_nav::BottomNav;
 use crate::ui::components::product_detail_modal::ProductDetailModal;
@@ -48,9 +47,6 @@ pub fn TeaScreen() -> Element {
     let tea_desc = t(crate::ui::lang::current_lang(), T_TEA_DESC);
     let filter_all = t(crate::ui::lang::current_lang(), T_FILTER_ALL);
     let add_to_cart = t(crate::ui::lang::current_lang(), T_ADD_TO_CART);
-
-    // Share button is visible only to admins.
-    let is_admin = use_admin_status();
 
     let tea_resource = use_resource(|| async move {
         let base = api_base_url();
@@ -358,7 +354,7 @@ pub fn TeaScreen() -> Element {
                             });
                             crate::ui::telegram::TelegramApp::init().haptic_notification(crate::ui::telegram::HapticNotification::Success);
                         },
-                        on_share: is_admin().then(|| EventHandler::new(move |_| share_product(ProductKind::Tea, &share_id, &share_name))),
+                        on_share: Some(EventHandler::new(move |_| share_product(ProductKind::Tea, &share_id, &share_name))),
                         on_close: move |_| selected_tea.set(None),
                     }
                 }

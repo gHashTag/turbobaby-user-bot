@@ -1,5 +1,4 @@
 use crate::trios::i18n::{t, T_ADD_TO_CART, T_SETS_DESC, T_SETS_TITLE};
-use crate::ui::admin::use_admin_status;
 use crate::ui::api::context::api_base_url;
 use crate::ui::components::bottom_nav::BottomNav;
 use crate::ui::components::card_media::CardMedia;
@@ -114,9 +113,6 @@ pub fn SetsScreen() -> Element {
     let sets_desc = t(crate::ui::lang::current_lang(), T_SETS_DESC);
     let add_to_cart = t(crate::ui::lang::current_lang(), T_ADD_TO_CART);
 
-    // Share button is visible only to admins.
-    let is_admin = use_admin_status();
-
     let sets_resource = use_resource(|| async move {
         let base = api_base_url();
         let url = format!("{}/api/sets", base);
@@ -211,7 +207,7 @@ pub fn SetsScreen() -> Element {
                             }
                             div { style: "display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:0 16px;",
                                 for set in ordered.iter() {
-                                    { render_set_card(set.clone(), cart, is_admin()) }
+                                    { render_set_card(set.clone(), cart) }
                                 }
                             }
                         }
@@ -284,7 +280,7 @@ pub fn SetsScreen() -> Element {
                             });
                             crate::ui::telegram::TelegramApp::init().haptic_notification(crate::ui::telegram::HapticNotification::Success);
                         },
-                        on_share: is_admin().then(|| EventHandler::new(move |_| share_product(ProductKind::Set, &share_id, &share_name))),
+                        on_share: Some(EventHandler::new(move |_| share_product(ProductKind::Set, &share_id, &share_name))),
                         on_close: move |_| shared_set.set(None),
                     }
                 }
@@ -295,7 +291,7 @@ pub fn SetsScreen() -> Element {
     }
 }
 
-fn render_set_card(set: ApiSet, mut cart: Signal<Cart>, is_admin: bool) -> Element {
+fn render_set_card(set: ApiSet, mut cart: Signal<Cart>) -> Element {
     let add_to_cart = t(crate::ui::lang::current_lang(), T_ADD_TO_CART).to_string();
     let discount = if set.discount_percent.is_finite() {
         set.discount_percent.max(0.0)
@@ -469,7 +465,7 @@ fn render_set_card(set: ApiSet, mut cart: Signal<Cart>, is_admin: bool) -> Eleme
                             });
                             crate::ui::telegram::TelegramApp::init().haptic_notification(crate::ui::telegram::HapticNotification::Success);
                         },
-                        on_share: is_admin.then(|| EventHandler::new(move |_| share_product(ProductKind::Set, &share_id, &share_name))),
+                        on_share: Some(EventHandler::new(move |_| share_product(ProductKind::Set, &share_id, &share_name))),
                         on_close: move |_| detail_open.set(false),
                     }
                 }
