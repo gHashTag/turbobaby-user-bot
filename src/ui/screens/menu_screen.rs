@@ -1,4 +1,5 @@
 use crate::trios::i18n::{t, T_ADD_TO_CART, T_LOADING, T_MENU_DESC, T_MENU_TITLE};
+use crate::ui::admin::use_admin_status;
 use crate::ui::api::context::api_base_url;
 use crate::ui::components::bottom_nav::BottomNav;
 use crate::ui::components::card_media::CardMedia;
@@ -130,6 +131,9 @@ pub fn MenuScreen() -> Element {
     let menu_title = t(crate::ui::lang::current_lang(), T_MENU_TITLE).to_string();
     let menu_desc = t(crate::ui::lang::current_lang(), T_MENU_DESC).to_string();
     let loading_label = t(crate::ui::lang::current_lang(), T_LOADING).to_string();
+
+    // Share button is visible only to admins.
+    let is_admin = use_admin_status();
 
     let strains_resource: Resource<Result<Vec<ApiStrain>, String>> = use_resource(move || {
         async move {
@@ -342,7 +346,7 @@ pub fn MenuScreen() -> Element {
                                             }
                                             div { key: "{_sid}",
                                                 style: "max-width:380px;margin:0 auto;",
-                                                {render_strain_card(s, cart)}
+                                                {render_strain_card(s, cart, is_admin())}
                                             }
                                         }
                                     }
@@ -355,13 +359,13 @@ pub fn MenuScreen() -> Element {
                                             "🆕 NEW ARRIVALS"
                                         }
                                         div { style: "display:grid;grid-template-columns:1fr 1fr;gap:12px;",
-                                            {new_arrivals.into_iter().map(|s| render_strain_card(s, cart))}
+                                            {new_arrivals.into_iter().map(|s| render_strain_card(s, cart, is_admin()))}
                                         }
                                     }
                                 })}
                                 // Rest of the catalog
                                 div { style: "display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:8px 16px 0;",
-                                    {rest.into_iter().map(|s| render_strain_card(s, cart))}
+                                    {rest.into_iter().map(|s| render_strain_card(s, cart, is_admin()))}
                                 }
                             }
                         }
@@ -458,7 +462,7 @@ pub fn MenuScreen() -> Element {
                             });
                             crate::ui::telegram::TelegramApp::init().haptic_notification(crate::ui::telegram::HapticNotification::Success);
                         },
-                        on_share: move |_| share_product(ProductKind::Strain, &share_id, &share_name),
+                        on_share: is_admin().then(|| EventHandler::new(move |_| share_product(ProductKind::Strain, &share_id, &share_name))),
                         on_close: move |_| shared_strain.set(None),
                     }
                 }
@@ -469,7 +473,7 @@ pub fn MenuScreen() -> Element {
     }
 }
 
-fn render_strain_card(strain: ApiStrain, mut cart: Signal<Cart>) -> Element {
+fn render_strain_card(strain: ApiStrain, mut cart: Signal<Cart>, is_admin: bool) -> Element {
     let add_to_cart_label = t(crate::ui::lang::current_lang(), T_ADD_TO_CART).to_string();
     let cat = strain.category.as_deref().unwrap_or("Hybrid");
     let emoji = category_emoji(cat);
@@ -743,7 +747,7 @@ fn render_strain_card(strain: ApiStrain, mut cart: Signal<Cart>) -> Element {
                         });
                         crate::ui::telegram::TelegramApp::init().haptic_notification(crate::ui::telegram::HapticNotification::Success);
                     },
-                    on_share: move |_| share_product(ProductKind::Strain, &share_id, &share_name),
+                    on_share: is_admin.then(|| EventHandler::new(move |_| share_product(ProductKind::Strain, &share_id, &share_name))),
                     on_close: move |_| detail_open.set(false),
                 }
             }

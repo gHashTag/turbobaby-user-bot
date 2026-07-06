@@ -58,9 +58,10 @@ pub struct ProductDetailModalProps {
     /// quantity (caller pushes the item into the cart). The modal closes
     /// itself afterwards.
     pub on_add_to_cart: EventHandler<u32>,
-    /// Called when the user taps the "Share" button.
+    /// When provided, render a "Share" button that calls `on_share`.
+    /// Pass `None` for non-admin users so the button is hidden.
     #[props(default)]
-    pub on_share: EventHandler<()>,
+    pub on_share: Option<EventHandler<()>>,
     /// Localized label for the share button.
     #[props(default)]
     pub share_label: Option<String>,
@@ -89,7 +90,8 @@ pub fn ProductDetailModal(props: ProductDetailModalProps) -> Element {
         .share_label
         .clone()
         .unwrap_or_else(|| t(current_lang(), T_SHARE).to_string());
-    let on_share = props.on_share;
+    let has_share = props.on_share.is_some();
+    let on_share = props.on_share.clone();
     let img = props.image_url.clone().unwrap_or_default();
     let has_image = is_usable_src(&img);
     let name = props.name.clone();
@@ -227,11 +229,16 @@ pub fn ProductDetailModal(props: ProductDetailModalProps) -> Element {
                         }
                     })}
 
-                    button {
-                        style: "font-size:14px;font-weight:700;width:100%;padding:12px 20px;margin-bottom:8px;background:#00e5ff;color:#000;border:4px solid #008ba3;box-shadow:3px 3px 0 #000;cursor:pointer;",
-                        onclick: move |e: Event<MouseData>| { e.stop_propagation(); on_share.call(()); },
-                        "🔗 {share_label}"
-                    }
+                    {has_share.then(|| {
+                        let share = on_share.clone().unwrap();
+                        rsx! {
+                            button {
+                                style: "font-size:14px;font-weight:700;width:100%;padding:12px 20px;margin-bottom:8px;background:#00e5ff;color:#000;border:4px solid #008ba3;box-shadow:3px 3px 0 #000;cursor:pointer;",
+                                onclick: move |e: Event<MouseData>| { e.stop_propagation(); share.call(()); },
+                                "🔗 {share_label}"
+                            }
+                        }
+                    })}
 
                     button {
                         style: "font-size:14px;font-weight:700;width:100%;padding:12px 20px;background:#2a2a4a;color:#e8e8e8;border:4px solid #1a1a2e;box-shadow:3px 3px 0 #000;cursor:pointer;",

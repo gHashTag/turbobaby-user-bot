@@ -1,4 +1,5 @@
 use crate::trios::i18n::{t, T_ACC_DESC, T_ACC_TITLE, T_ADD_TO_CART, T_FILTER_ALL};
+use crate::ui::admin::use_admin_status;
 use crate::ui::api::context::api_base_url;
 use crate::ui::components::bottom_nav::BottomNav;
 use crate::ui::components::card_media::CardMedia;
@@ -78,6 +79,9 @@ pub fn AccessoriesScreen() -> Element {
     let acc_desc = t(crate::ui::lang::current_lang(), T_ACC_DESC);
     let filter_all = t(crate::ui::lang::current_lang(), T_FILTER_ALL);
     let add_to_cart = t(crate::ui::lang::current_lang(), T_ADD_TO_CART);
+
+    // Share button is visible only to admins.
+    let is_admin = use_admin_status();
 
     let accessories_resource = use_resource(|| async move {
         let base = api_base_url();
@@ -178,7 +182,7 @@ pub fn AccessoriesScreen() -> Element {
                     Some(Ok(_)) => rsx! {
                         div { style: "display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:0 16px;",
                             for accessory in filtered.iter() {
-                                {render_accessory_card(accessory.clone(), cart, add_to_cart)}
+                                {render_accessory_card(accessory.clone(), cart, add_to_cart, is_admin())}
                             }
                         }
                     },
@@ -237,7 +241,7 @@ pub fn AccessoriesScreen() -> Element {
                             });
                             crate::ui::telegram::TelegramApp::init().haptic_notification(crate::ui::telegram::HapticNotification::Success);
                         },
-                        on_share: move |_| share_product(ProductKind::Accessory, &share_id, &share_name),
+                        on_share: is_admin().then(|| EventHandler::new(move |_| share_product(ProductKind::Accessory, &share_id, &share_name))),
                         on_close: move |_| shared_accessory.set(None),
                     }
                 }
@@ -252,6 +256,7 @@ fn render_accessory_card(
     a: ApiAccessory,
     mut cart: Signal<Cart>,
     add_to_cart: &'static str,
+    is_admin: bool,
 ) -> Element {
     let cat = a.category.as_deref().unwrap_or("other");
     let emoji = category_emoji(cat);
@@ -395,7 +400,7 @@ fn render_accessory_card(
                         });
                         crate::ui::telegram::TelegramApp::init().haptic_notification(crate::ui::telegram::HapticNotification::Success);
                     },
-                    on_share: move |_| share_product(ProductKind::Accessory, &share_id, &share_name),
+                    on_share: is_admin.then(|| EventHandler::new(move |_| share_product(ProductKind::Accessory, &share_id, &share_name))),
                     on_close: move |_| detail_open.set(false),
                 }
             }
