@@ -1,6 +1,5 @@
 use crate::ui::components::bottom_nav::BottomNav;
-use crate::ui::components::lazy_screen::LazyScreen;
-use crate::ui::game::WoodyCatch;
+use crate::ui::game::WoodyShop;
 use dioxus::prelude::*;
 
 #[component]
@@ -8,12 +7,12 @@ pub fn GameScreen() -> Element {
     rsx! {
         div { style: "
             min-height: 100vh;
-            background: #0c1222;
+            background: #0f0f1a;
             display: flex; flex-direction: column;
             align-items: center;
-            padding: 8px 8px 80px;
+            padding-bottom: 80px;
         ",
-            LazyScreen { heavy: true, WoodyCatch {} }
+            WoodyShop {}
             BottomNav {}
         }
     }
