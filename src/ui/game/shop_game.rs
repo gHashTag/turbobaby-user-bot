@@ -27,6 +27,7 @@ const HARVEST_REWARD: u32 = 45;
 const DJ_PARTY_MS: u32 = 8000;
 const GRILL_COOK_MS: u32 = 2500;
 const EVENT_INTERVAL_MS: u32 = 25000;
+const STARTING_COINS: u32 = 30;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Order {
@@ -158,7 +159,7 @@ impl Default for ShopState {
 impl ShopState {
     pub fn new() -> Self {
         Self {
-            coins: 0,
+            coins: STARTING_COINS,
             served: 0,
             harvested: 0,
             woody_table: 1,
@@ -349,18 +350,27 @@ pub fn WoodyShop() -> Element {
     // Farm growth loop: watered plots grow over time.
     {
         let mut state = state;
+        let mut logs = logs;
         use_future(move || async move {
             loop {
                 TimeoutFuture::new(4000).await;
-                state.with_mut(|s| {
+                let grew = state.with_mut(|s| {
+                    let mut grew = false;
                     for stage in s.farm.iter_mut() {
                         *stage = match *stage {
-                            FarmStage::Watered => FarmStage::Grown,
-                            FarmStage::Planted => FarmStage::Watered,
+                            FarmStage::Watered => { grew = true; FarmStage::Grown }
+                            FarmStage::Planted => { grew = true; FarmStage::Watered }
                             other => other,
                         };
                     }
+                    grew
                 });
+                if grew {
+                    logs.with_mut(|l| {
+                        if l.len() > 6 { l.remove(0); }
+                        l.push("Farm grew a step".into());
+                    });
+                }
             }
         });
     }
@@ -510,7 +520,7 @@ pub fn WoodyShop() -> Element {
     };
 
     let mut logs = logs;
-    let reset_game = move |_| {
+    let mut reset_game = move |_| {
         state.set(ShopState::new());
         logs.with_mut(|l| {
             l.clear();
@@ -612,6 +622,16 @@ pub fn WoodyShop() -> Element {
                     border: 2px solid #2a2a4a; border-radius: 12px; padding: 10px;
                 ",
                 div { style: "font-size: 13px; font-weight: 700; color: #888; margin-bottom: 8px;", "🆙 UPGRADES" }
+                if coins < 30 && upgrades.spawn_level == 1 && upgrades.speed_level == 1 {
+                    div {
+                        style: "
+                            font-size: 11px; color: #888; margin-bottom: 8px;
+                            background: rgba(57,255,20,0.08); border-radius: 6px;
+                            padding: 4px 8px;
+                        ",
+                        "💡 Tip: serve customers to earn coins, then buy upgrades."
+                    }
+                }
                 div {
                     style: "display: flex; gap: 8px;",
                     UpgradeButton {
@@ -620,7 +640,13 @@ pub fn WoodyShop() -> Element {
                         cost: Upgrades::cost_table_count(upgrades.table_count_level),
                         maxed: upgrades.table_count_level >= (MAX_TABLES - INITIAL_TABLES + 1) as u32,
                         coins,
-                        on_click: move |_| buy_upgrade("tables"),
+                        on_click: {
+                            let spawn_floater = move |t: String, y: u32| spawn_floater(t, y);
+                            move |_| {
+                                buy_upgrade("tables");
+                                spawn_floater("🪑 Tables upgraded!".to_string(), 240);
+                            }
+                        },
                     }
                     UpgradeButton {
                         label: "⚡ Speed",
@@ -628,7 +654,13 @@ pub fn WoodyShop() -> Element {
                         cost: Upgrades::cost_speed(upgrades.speed_level),
                         maxed: upgrades.speed_level >= 5,
                         coins,
-                        on_click: move |_| buy_upgrade("speed"),
+                        on_click: {
+                            let spawn_floater = move |t: String, y: u32| spawn_floater(t, y);
+                            move |_| {
+                                buy_upgrade("speed");
+                                spawn_floater("⚡ Faster service!".to_string(), 240);
+                            }
+                        },
                     }
                     UpgradeButton {
                         label: "🚪 Flow",
@@ -636,7 +668,13 @@ pub fn WoodyShop() -> Element {
                         cost: Upgrades::cost_spawn(upgrades.spawn_level),
                         maxed: upgrades.spawn_level >= 5,
                         coins,
-                        on_click: move |_| buy_upgrade("spawn"),
+                        on_click: {
+                            let spawn_floater = move |t: String, y: u32| spawn_floater(t, y);
+                            move |_| {
+                                buy_upgrade("spawn");
+                                spawn_floater("🚪 More customers!".to_string(), 240);
+                            }
+                        },
                     }
                 }
             }
@@ -659,7 +697,15 @@ pub fn WoodyShop() -> Element {
                             color: #666; font-size: 11px; padding: 4px 8px;
                             border-radius: 6px; cursor: pointer;
                         ",
-                        onclick: reset_game,
+                        onclick: move |_| {
+                            if js_sys::eval("confirm('Reset all progress? This cannot be undone.')")
+                                .ok()
+                                .and_then(|v| v.as_bool())
+                                .unwrap_or(false)
+                            {
+                                reset_game(());
+                            }
+                        },
                         "🔄 Reset"
                     }
                 }
@@ -1027,11 +1073,11 @@ fn FarmPlot(
     coins: u32,
     on_floater: EventHandler<(String, u32)>,
 ) -> Element {
-    let (emoji, label, can_plant, can_water, can_harvest) = match stage {
-        FarmStage::Empty => ("🟫", "Empty soil", true, false, false),
-        FarmStage::Planted => ("🌱", "Seedling", false, true, false),
-        FarmStage::Watered => ("🌿", "Growing", false, false, false),
-        FarmStage::Grown => ("🌳", "Ready!", false, false, true),
+    let (emoji, label, can_plant, can_water, can_harvest, accent) = match stage {
+        FarmStage::Empty => ("🟫", "Empty soil", true, false, false, "#2a2a4a"),
+        FarmStage::Planted => ("🌱", "Seedling", false, true, false, "#39ff14"),
+        FarmStage::Watered => ("🌿", "Growing fast", false, false, false, "#00e5ff"),
+        FarmStage::Grown => ("🌳", "Ready!", false, false, true, "#ffe600"),
     };
 
     let plant_emoji = if watering { "💧" } else { emoji };
@@ -1039,12 +1085,13 @@ fn FarmPlot(
     rsx! {
         div {
             style: "
-                background: rgba(255,255,255,0.04); border: 2px solid #2a2a4a;
+                background: rgba(255,255,255,0.04); border: 2px solid {accent};
                 border-radius: 14px; padding: 12px; text-align: center;
                 display: flex; flex-direction: column; align-items: center; gap: 6px;
+                box-shadow: 0 0 12px {accent}20;
             ",
-            div { style: "font-size: 42px;", "{plant_emoji}" }
-            div { style: "font-size: 12px; color: #888;", "{label}" }
+            div { style: "font-size: 46px; filter: drop-shadow(0 3px 5px rgba(0,0,0,0.5));", "{plant_emoji}" }
+            div { style: "font-size: 12px; color: {accent}; font-weight: 700;", "{label}" }
             if watering {
                 ProgressBar { total_ms: 1200, remaining_ms: water_ms, color: "#00e5ff" }
             }
@@ -1057,6 +1104,7 @@ fn FarmPlot(
                     on_click: {
                         let mut state = state;
                         let mut logs = logs;
+                        let on_floater = on_floater;
                         move |_| {
                             state.with_mut(|s| {
                                 if s.farm[idx] == FarmStage::Empty && s.coins >= PLANT_COST {
@@ -1064,6 +1112,7 @@ fn FarmPlot(
                                     s.farm[idx] = FarmStage::Planted;
                                 }
                             });
+                            on_floater.call((format!("-{PLANT_COST} 🪙"), 260));
                             logs.with_mut(|l| {
                                 if l.len() > 6 { l.remove(0); }
                                 l.push(format!("Planted seed -{}", PLANT_COST));
@@ -1079,8 +1128,9 @@ fn FarmPlot(
                         let mut state = state;
                         let mut logs = logs;
                         move |_| {
+                            if state.read().is_busy() { return; }
                             state.with_mut(|s| {
-                                if s.farm[idx] == FarmStage::Planted {
+                                if s.farm[idx] == FarmStage::Planted && !s.farm_watering[idx] {
                                     s.farm_watering[idx] = true;
                                     s.farm_water_ms[idx] = 1200;
                                 }
@@ -1204,6 +1254,10 @@ fn PartyZone(
                     }
                 },
             }
+            div {
+                style: "font-size: 11px; color: #666; text-align: center;",
+                "Tip: party adds +5 🪙 per serve while active"
+            }
         }
     }
 }
@@ -1247,6 +1301,10 @@ fn GrillZone(
             div {
                 style: "font-size: 13px; color: #888; text-align: center;",
                 "Cook food. Serves hungry customers instantly when in shop."
+            }
+            div {
+                style: "font-size: 11px; color: #666; text-align: center;",
+                "Tip: grilled food auto-serves hungry customers"
             }
             if grill_cooking {
                 div { style: "width: 100%;",
