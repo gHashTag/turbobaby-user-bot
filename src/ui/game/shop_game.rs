@@ -9,6 +9,9 @@
 use dioxus::prelude::*;
 use gloo_timers::future::TimeoutFuture;
 
+#[cfg(target_arch = "wasm32")]
+use gloo_storage::{LocalStorage, Storage};
+
 // ── Domain types ───────────────────────────────────────────────────────────────
 
 const MAX_TABLES: usize = 6;
@@ -25,7 +28,7 @@ const DJ_PARTY_MS: u32 = 8000;
 const GRILL_COOK_MS: u32 = 2500;
 const EVENT_INTERVAL_MS: u32 = 25000;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Order {
     Weed,
     Coffee,
@@ -42,7 +45,7 @@ impl Order {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum TableState {
     Empty,
     Seated,                     // customer waiting for order to be taken
@@ -52,7 +55,7 @@ pub enum TableState {
     Dirty,                      // table needs cleaning
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum FarmStage {
     Empty,
     Planted,
@@ -60,7 +63,7 @@ pub enum FarmStage {
     Grown,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum WoodyAction {
     Idle,
     WalkingTo(usize),
@@ -69,7 +72,7 @@ pub enum WoodyAction {
     Cleaning(usize),
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum ActiveZone {
     Shop,
     Farm,
@@ -77,7 +80,7 @@ pub enum ActiveZone {
     Grill,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Upgrades {
     pub table_count_level: u32,
     pub speed_level: u32,
@@ -120,7 +123,7 @@ impl Upgrades {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct ShopState {
     pub coins: u32,
     pub served: u32,
@@ -137,7 +140,19 @@ pub struct ShopState {
     pub party_multiplier: f32,
     pub grill_stock: u32, // cooked food ready
     pub grill_cooking: bool,
+    pub grill_timer_ms: u32,
+    #[serde(skip)]
+    pub woody_timer_ms: u32,
+    #[serde(skip)]
+    pub woody_total_ms: u32,
+    #[serde(skip)]
+    pub farm_water_ms: [u32; FARM_SLOTS],
+    #[serde(skip)]
     pub event_text: Option<String>,
+}
+
+impl Default for ShopState {
+    fn default() -> Self { Self::new() }
 }
 
 impl ShopState {
@@ -158,8 +173,24 @@ impl ShopState {
             party_multiplier: 1.0,
             grill_stock: 0,
             grill_cooking: false,
+            grill_timer_ms: 0,
+            woody_timer_ms: 0,
+            woody_total_ms: 0,
+            farm_water_ms: [0; FARM_SLOTS],
             event_text: None,
         }
+    }
+
+    pub fn reset_volatile(&mut self) {
+        self.woody_action = WoodyAction::Idle;
+        self.woody_table = self.woody_table.min(self.table_count().saturating_sub(1));
+        self.farm_watering = [false; FARM_SLOTS];
+        self.farm_water_ms = [0; FARM_SLOTS];
+        self.woody_timer_ms = 0;
+        self.woody_total_ms = 0;
+        self.grill_cooking = false;
+        self.grill_timer_ms = 0;
+        self.event_text = None;
     }
 
     pub fn table_count(&self) -> usize {
@@ -181,6 +212,25 @@ impl ShopState {
         let party_bonus = if self.party_active { 5 } else { 0 };
         (base + party_bonus).max(1)
     }
+
+    #[cfg(target_arch = "wasm32")]
+    pub fn load() -> Self {
+        let mut s = LocalStorage::get("wwb_shop_state")
+            .unwrap_or_else(|_| ShopState::new());
+        s.reset_volatile();
+        s
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    pub fn save(&self) {
+        let _ = LocalStorage::set("wwb_shop_state", self);
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn load() -> Self { ShopState::new() }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn save(&self) {}
 }
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
@@ -220,12 +270,58 @@ fn haptic_success() {
     );
 }
 
+fn haptic_error() {
+    let _ = js_sys::eval(
+        "try { Telegram.WebApp.HapticFeedback.notificationOccurred('error'); } catch(e) {}",
+    );
+}
+
 // ── Game component ─────────────────────────────────────────────────────────────
 
 #[component]
 pub fn WoodyShop() -> Element {
-    let mut state = use_signal(ShopState::new);
+    let mut state = use_signal(ShopState::load);
     let logs = use_signal(|| Vec::<String>::new());
+
+    // Persist game progress to localStorage on every state change.
+    {
+        let state = state;
+        let logs = logs;
+        use_effect(move || {
+            state.read().save();
+            // Touch logs so effect re-runs when logs change too.
+            let _ = logs.read().len();
+        });
+    }
+
+    // Progress tick loop for timers (woody actions, watering, grill).
+    {
+        let mut state = state;
+        use_future(move || async move {
+            loop {
+                TimeoutFuture::new(100).await;
+                state.with_mut(|s| {
+                    if s.woody_timer_ms > 100 {
+                        s.woody_timer_ms -= 100;
+                    } else {
+                        s.woody_timer_ms = 0;
+                    }
+                    if s.grill_cooking && s.grill_timer_ms > 100 {
+                        s.grill_timer_ms -= 100;
+                    } else if s.grill_cooking {
+                        s.grill_timer_ms = 0;
+                    }
+                    for ms in s.farm_water_ms.iter_mut() {
+                        if *ms > 100 {
+                            *ms -= 100;
+                        } else {
+                            *ms = 0;
+                        }
+                    }
+                });
+            }
+        });
+    }
 
     // Customer spawn loop (depends on upgrades).
     {
@@ -345,6 +441,18 @@ pub fn WoodyShop() -> Element {
         });
     }
 
+    // Floating feedback texts (e.g. +10 🪙) that pop and fade.
+    let floaters = use_signal(|| Vec::<(String, u32, i32)>::new());
+    let spawn_floater = move |text: String, y: u32| {
+        let mut floaters = floaters;
+        let id = js_sys::Date::now() as i32;
+        floaters.with_mut(|f| f.push((text, y, id)));
+        spawn(async move {
+            TimeoutFuture::new(800).await;
+            floaters.with_mut(|f| f.retain(|&(_, _, i)| i != id));
+        });
+    };
+
     // Derived snapshots.
     let coins = state.read().coins;
     let served = state.read().served;
@@ -358,6 +466,10 @@ pub fn WoodyShop() -> Element {
     let party_active = state.read().party_active;
     let party_timer_ms = state.read().party_timer_ms;
     let grill_stock = state.read().grill_stock;
+    let grill_timer_ms = state.read().grill_timer_ms;
+    let woody_timer_ms = state.read().woody_timer_ms;
+    let woody_total_ms = state.read().woody_total_ms;
+    let farm_water_ms = state.read().farm_water_ms.clone();
     let event_text = state.read().event_text.clone();
     let reward = state.read().reward_per_serve();
 
@@ -392,7 +504,17 @@ pub fn WoodyShop() -> Element {
                     "spawn" => s.upgrades.spawn_level += 1,
                     _ => {}
                 }
+                haptic_success();
             }
+        });
+    };
+
+    let mut logs = logs;
+    let reset_game = move |_| {
+        state.set(ShopState::new());
+        logs.with_mut(|l| {
+            l.clear();
+            l.push("Progress reset".into());
         });
     };
 
@@ -466,16 +588,19 @@ pub fn WoodyShop() -> Element {
                             tables,
                             reward,
                             upgrades,
+                            woody_timer_ms,
+                            woody_total_ms,
+                            on_floater: move |evt: (String, u32)| spawn_floater(evt.0, evt.1),
                         }
                     },
                     ActiveZone::Farm => rsx! {
-                        FarmZone { state, logs, farm, farm_watering, coins }
+                        FarmZone { state, logs, farm, farm_watering, farm_water_ms, coins, on_floater: move |evt: (String, u32)| spawn_floater(evt.0, evt.1) }
                     },
                     ActiveZone::Party => rsx! {
                         PartyZone { state, logs, party_active, party_timer_ms }
                     },
                     ActiveZone::Grill => rsx! {
-                        GrillZone { state, logs, grill_stock, grill_cooking: state.read().grill_cooking }
+                        GrillZone { state, logs, grill_stock, grill_cooking: state.read().grill_cooking, grill_timer_ms }
                     },
                 }
             }
@@ -488,7 +613,7 @@ pub fn WoodyShop() -> Element {
                 ",
                 div { style: "font-size: 13px; font-weight: 700; color: #888; margin-bottom: 8px;", "🆙 UPGRADES" }
                 div {
-                    style: "display: flex; gap: 6px;",
+                    style: "display: flex; gap: 8px;",
                     UpgradeButton {
                         label: "🪑 Tables",
                         level: upgrades.table_count_level,
@@ -516,7 +641,7 @@ pub fn WoodyShop() -> Element {
                 }
             }
 
-            // Mini log
+            // Mini log + reset
             div {
                 style: "
                     margin-top: 10px; min-height: 56px;
@@ -525,6 +650,34 @@ pub fn WoodyShop() -> Element {
                 ",
                 for entry in logs.read().iter().rev().enumerate().take(3) {
                     div { key: "{entry.0}", "• {entry.1}" }
+                }
+                div {
+                    style: "margin-top: 6px; text-align: right;",
+                    button {
+                        style: "
+                            background: transparent; border: 1px solid #444;
+                            color: #666; font-size: 11px; padding: 4px 8px;
+                            border-radius: 6px; cursor: pointer;
+                        ",
+                        onclick: reset_game,
+                        "🔄 Reset"
+                    }
+                }
+            }
+
+            // Floating feedback layer
+            for floater in floaters.read().iter() {
+                div {
+                    key: "{floater.2}",
+                    style: "
+                        position: fixed; left: 50%; top: {floater.1}px;
+                        transform: translateX(-50%);
+                        color: #ffe600; font-size: 20px; font-weight: 800;
+                        pointer-events: none; z-index: 9999;
+                        animation: floater-rise 0.8s ease-out forwards;
+                        text-shadow: 0 2px 4px rgba(0,0,0,0.6);
+                    ",
+                    "{floater.0}"
                 }
             }
         }
@@ -539,14 +692,16 @@ fn ZoneTabs(active_zone: ActiveZone, state: Signal<ShopState>) -> Element {
         let is_active = active_zone == zone;
         let bg = if is_active { "#39ff14" } else { "#2a2a4a" };
         let fg = if is_active { "#000" } else { "#888" };
+        let shadow = if is_active { "0 0 12px rgba(57,255,20,0.4)" } else { "none" };
         let mut state = state;
         let z = zone;
         rsx! {
             button {
                 style: "
-                    flex: 1; padding: 10px 4px; border-radius: 10px; border: none;
+                    flex: 1; min-height: 48px; padding: 12px 4px; border-radius: 12px; border: none;
                     font-size: 12px; font-weight: 700; cursor: pointer;
-                    background: {bg}; color: {fg}; transition: all 0.15s;
+                    background: {bg}; color: {fg}; box-shadow: {shadow};
+                    transition: all 0.15s; active: transform: scale(0.96);
                 ",
                 onclick: move |_| state.with_mut(|s| s.active_zone = z),
                 "{emoji} {label}"
@@ -577,16 +732,20 @@ fn ShopZone(
     tables: [TableState; MAX_TABLES],
     reward: u32,
     upgrades: Upgrades,
+    woody_timer_ms: u32,
+    woody_total_ms: u32,
+    on_floater: EventHandler<(String, u32)>,
 ) -> Element {
     let on_table_click = move |idx: usize| {
         if state.read().is_busy() {
+            haptic_error();
             return;
         }
         let mut state = state;
         let mut logs = logs;
         let current_table = state.read().woody_table;
         if current_table == idx {
-            perform_shop_action(&mut state, idx, &mut logs, reward, &upgrades);
+            perform_shop_action(&mut state, idx, &mut logs, reward, &upgrades, on_floater);
             return;
         }
         state.with_mut(|s| s.woody_action = WoodyAction::WalkingTo(idx));
@@ -630,9 +789,21 @@ fn ShopZone(
                     }
                 }
             }
+            // Active action progress
+            if woody_total_ms > 0 {
+                div {
+                    style: "margin-top: 10px;",
+                    ProgressBar {
+                        total_ms: woody_total_ms,
+                        remaining_ms: woody_timer_ms,
+                        color: "#39ff14",
+                    }
+                }
+            }
+
             // Action bar
             div {
-                style: "display: flex; gap: 6px; margin-top: 6px;",
+                style: "display: flex; gap: 8px; margin-top: 10px;",
                 ActionButton {
                     label: "👋 Order",
                     active: matches!(tables[woody_table], TableState::Seated),
@@ -640,9 +811,10 @@ fn ShopZone(
                     on_click: {
                         let mut state = state;
                         let mut logs = logs;
+                        let on_floater = on_floater;
                         move |_| {
                             if state.read().is_busy() { return; }
-                            perform_shop_action(&mut state, woody_table, &mut logs, reward, &upgrades);
+                            perform_shop_action(&mut state, woody_table, &mut logs, reward, &upgrades, on_floater);
                         }
                     },
                 }
@@ -653,9 +825,10 @@ fn ShopZone(
                     on_click: {
                         let mut state = state;
                         let mut logs = logs;
+                        let on_floater = on_floater;
                         move |_| {
                             if state.read().is_busy() { return; }
-                            perform_shop_action(&mut state, woody_table, &mut logs, reward, &upgrades);
+                            perform_shop_action(&mut state, woody_table, &mut logs, reward, &upgrades, on_floater);
                         }
                     },
                 }
@@ -666,9 +839,10 @@ fn ShopZone(
                     on_click: {
                         let mut state = state;
                         let mut logs = logs;
+                        let on_floater = on_floater;
                         move |_| {
                             if state.read().is_busy() { return; }
-                            perform_shop_action(&mut state, woody_table, &mut logs, reward, &upgrades);
+                            perform_shop_action(&mut state, woody_table, &mut logs, reward, &upgrades, on_floater);
                         }
                     },
                 }
@@ -808,7 +982,9 @@ fn FarmZone(
     logs: Signal<Vec<String>>,
     farm: [FarmStage; FARM_SLOTS],
     farm_watering: [bool; FARM_SLOTS],
+    farm_water_ms: [u32; FARM_SLOTS],
     coins: u32,
+    on_floater: EventHandler<(String, u32)>,
 ) -> Element {
     rsx! {
         div {
@@ -828,9 +1004,11 @@ fn FarmZone(
                         idx,
                         stage: *stage,
                         watering: farm_watering[idx],
+                        water_ms: farm_water_ms[idx],
                         state,
                         logs,
                         coins,
+                        on_floater,
                     }
                 }
             }
@@ -843,9 +1021,11 @@ fn FarmPlot(
     idx: usize,
     stage: FarmStage,
     watering: bool,
+    water_ms: u32,
     state: Signal<ShopState>,
     logs: Signal<Vec<String>>,
     coins: u32,
+    on_floater: EventHandler<(String, u32)>,
 ) -> Element {
     let (emoji, label, can_plant, can_water, can_harvest) = match stage {
         FarmStage::Empty => ("🟫", "Empty soil", true, false, false),
@@ -865,8 +1045,11 @@ fn FarmPlot(
             ",
             div { style: "font-size: 42px;", "{plant_emoji}" }
             div { style: "font-size: 12px; color: #888;", "{label}" }
+            if watering {
+                ProgressBar { total_ms: 1200, remaining_ms: water_ms, color: "#00e5ff" }
+            }
             div {
-                style: "display: flex; gap: 4px; width: 100%; margin-top: 4px;",
+                style: "display: flex; gap: 6px; width: 100%; margin-top: 8px;",
                 ActionButton {
                     label: "🌱 Plant",
                     active: can_plant && coins >= PLANT_COST,
@@ -899,6 +1082,7 @@ fn FarmPlot(
                             state.with_mut(|s| {
                                 if s.farm[idx] == FarmStage::Planted {
                                     s.farm_watering[idx] = true;
+                                    s.farm_water_ms[idx] = 1200;
                                 }
                             });
                             logs.with_mut(|l| {
@@ -924,6 +1108,7 @@ fn FarmPlot(
                     on_click: {
                         let mut state = state;
                         let mut logs = logs;
+                        let on_floater = on_floater;
                         move |_| {
                             state.with_mut(|s| {
                                 if s.farm[idx] == FarmStage::Grown {
@@ -932,6 +1117,7 @@ fn FarmPlot(
                                     s.harvested += 1;
                                 }
                             });
+                            on_floater.call((format!("+{} 🪙", HARVEST_REWARD), 260));
                             logs.with_mut(|l| {
                                 if l.len() > 6 { l.remove(0); }
                                 l.push(format!("Harvest! +{} 🪙", HARVEST_REWARD));
@@ -991,6 +1177,9 @@ fn PartyZone(
                     style: "font-size: 24px; font-weight: 800; color: #d946ef;",
                     "⏳ {seconds}s"
                 }
+                div { style: "width: 80%;",
+                    ProgressBar { total_ms: DJ_PARTY_MS, remaining_ms: party_timer_ms, color: "#d946ef" }
+                }
             }
             ActionButton {
                 label: button_label,
@@ -1027,6 +1216,7 @@ fn GrillZone(
     logs: Signal<Vec<String>>,
     grill_stock: u32,
     grill_cooking: bool,
+    grill_timer_ms: u32,
 ) -> Element {
     let cost: u32 = 10;
     let emoji = if grill_cooking { "🔥" } else { "🍖" };
@@ -1058,8 +1248,13 @@ fn GrillZone(
                 style: "font-size: 13px; color: #888; text-align: center;",
                 "Cook food. Serves hungry customers instantly when in shop."
             }
+            if grill_cooking {
+                div { style: "width: 100%;",
+                    ProgressBar { total_ms: GRILL_COOK_MS, remaining_ms: grill_timer_ms, color: "#ff9d00" }
+                }
+            }
             div {
-                style: "display: flex; gap: 6px;",
+                style: "display: flex; gap: 8px; width: 100%;",
                 ActionButton {
                     label: button_label,
                     active: !grill_cooking && state.read().coins >= cost,
@@ -1072,6 +1267,7 @@ fn GrillZone(
                                 if !s.grill_cooking && s.coins >= cost {
                                     s.coins -= cost;
                                     s.grill_cooking = true;
+                                    s.grill_timer_ms = GRILL_COOK_MS;
                                 }
                             });
                             logs.with_mut(|l| {
@@ -1123,10 +1319,11 @@ fn UpgradeButton(
     rsx! {
         button {
             style: "
-                flex: 1; padding: 10px 4px; border-radius: 8px; border: none;
+                flex: 1; min-height: 48px; padding: 12px 6px; border-radius: 10px; border: none;
                 font-size: 11px; font-weight: 700; cursor: pointer;
                 background: {bg}; color: {fg}; opacity: {opacity};
-                transition: all 0.15s;
+                transition: all 0.15s; transform: scale(1.0);
+                active: transform: scale(0.96);
             ",
             disabled: maxed || coins < cost,
             onclick: move |_| on_click.call(()),
@@ -1150,15 +1347,42 @@ fn ActionButton(
     rsx! {
         button {
             style: "
-                flex: 1; padding: 10px 4px; border-radius: 8px; border: none;
+                flex: 1; min-height: 48px; padding: 14px 8px; border-radius: 10px; border: none;
                 font-size: 12px; font-weight: 700; cursor: {cursor_style(active)};
                 background: {bg_style(active, color)}; color: {text_style(active)};
                 box-shadow: {shadow_style(active)}; opacity: {opacity_style(active)};
-                transition: all 0.15s;
+                transition: all 0.15s; transform: scale(1.0);
+                active: transform: scale(0.96);
             ",
             disabled: !active,
             onclick: move |_| on_click.call(()),
             "{label}"
+        }
+    }
+}
+
+#[component]
+fn ProgressBar(total_ms: u32, remaining_ms: u32, color: &'static str) -> Element {
+    let pct = if total_ms > 0 {
+        let r = remaining_ms.min(total_ms);
+        (100.0 * (1.0 - (r as f32) / (total_ms as f32))).clamp(0.0, 100.0)
+    } else {
+        0.0
+    };
+    let pct_str = format!("{:.1}%", pct);
+    rsx! {
+        div {
+            style: "
+                width: 100%; height: 8px; background: #2a2a4a;
+                border-radius: 4px; overflow: hidden;
+            ",
+            div {
+                style: "
+                    height: 100%; width: {pct_str}; background: {color};
+                    transition: width 0.1s linear;
+                    box-shadow: 0 0 8px {color};
+                ",
+            }
         }
     }
 }
@@ -1207,6 +1431,7 @@ fn perform_shop_action(
     logs: &mut Signal<Vec<String>>,
     reward: u32,
     upgrades: &Upgrades,
+    on_floater: EventHandler<(String, u32)>,
 ) {
     let action: Option<(WoodyAction, String)> = state.with_mut(|s| {
         let table = s.tables.get_mut(idx)?;
@@ -1238,7 +1463,17 @@ fn perform_shop_action(
     });
 
     let Some((action, msg)) = action else { return };
-    state.with_mut(|s| s.woody_action = action.clone());
+    let (total_ms, _) = match action {
+        WoodyAction::PreparingAt(_, _) => (upgrades.prepare_ms(), "Preparing..."),
+        WoodyAction::Serving(_, _) => (upgrades.eat_ms(), "Serving..."),
+        WoodyAction::Cleaning(_) => (CLEAN_MS, "Cleaning..."),
+        _ => (0, ""),
+    };
+    state.with_mut(|s| {
+        s.woody_action = action.clone();
+        s.woody_timer_ms = total_ms;
+        s.woody_total_ms = total_ms;
+    });
     haptic_light();
     logs.with_mut(|l| {
         if l.len() > 6 {
@@ -1258,6 +1493,8 @@ fn perform_shop_action(
                 state.with_mut(|s| {
                     s.tables[idx] = TableState::Ready { order };
                     s.woody_action = WoodyAction::Idle;
+                    s.woody_timer_ms = 0;
+                    s.woody_total_ms = 0;
                 });
                 haptic_success();
                 logs.with_mut(|l| {
@@ -1274,7 +1511,10 @@ fn perform_shop_action(
                     s.coins += reward;
                     s.served += 1;
                     s.woody_action = WoodyAction::Idle;
+                    s.woody_timer_ms = 0;
+                    s.woody_total_ms = 0;
                 });
+                on_floater.call((format!("+{} 🪙", reward), 220));
                 haptic_success();
                 logs.with_mut(|l| {
                     if l.len() > 6 {
@@ -1287,6 +1527,8 @@ fn perform_shop_action(
                 TimeoutFuture::new(CLEAN_MS).await;
                 state.with_mut(|s| {
                     s.woody_action = WoodyAction::Idle;
+                    s.woody_timer_ms = 0;
+                    s.woody_total_ms = 0;
                 });
                 haptic_light();
                 logs.with_mut(|l| {

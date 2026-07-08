@@ -634,6 +634,10 @@ body {
 @keyframes pulse { 0%, 80%, 100% { transform: scale(0); opacity: 0.5; } 40% { transform: scale(1); opacity: 1; } }
 @keyframes game-pulse { 0% { transform: scale(1); } 50% { transform: scale(1.04); } 100% { transform: scale(1); } }
 @keyframes game-bounce { from { transform: scale(1); } to { transform: scale(1.1); } }
+@keyframes floater-rise {
+  0% { transform: translateX(-50%) translateY(0); opacity: 1; }
+  100% { transform: translateX(-50%) translateY(-40px); opacity: 0; }
+}
 
 .fade-in { animation: fadeIn 0.15s ease-out; }
 
