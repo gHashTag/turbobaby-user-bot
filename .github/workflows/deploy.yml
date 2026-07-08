@@ -16,4 +16,9 @@ jobs:
       - name: Deploy to Railway
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-        run: railway up --service woody-weed-bot
+        run: |
+          # Trunk mirrors root assets into dist/assets/, and the backend already
+          # serves /assets from the root assets/ directory. Removing the duplicate
+          # cuts the Railway upload by ~130 MB and avoids the recent 502/413 errors.
+          rm -rf dist/assets
+          railway up --service woody-weed-bot

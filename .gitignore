@@ -14,6 +14,9 @@ target/
 dist/ but we commit it so Railway serves the pre-built WASM without a Docker stage)
 # NOTE: if you switch back to Dockerfile-only builds, re-ignore dist/
 # dist/
+# Trunk also mirrors root assets into dist/assets/; we serve /assets from the
+# root assets/ directory, so keeping the duplicate in dist/ bloats deploys.
+dist/assets/
 logs/
 *.log
 # E2E test artifacts
