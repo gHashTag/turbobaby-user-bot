@@ -49,11 +49,23 @@ impl Order {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum TableState {
     Empty,
-    Seated,                     // customer waiting for order to be taken
-    Preparing { order: Order }, // product is being made
-    Ready { order: Order },     // product ready to serve
-    Eating,                     // customer eats after being served
-    Dirty,                      // table needs cleaning
+    Seated { vip: bool }, // customer waiting for order to be taken
+    Preparing { order: Order, vip: bool }, // product is being made
+    Ready { order: Order, vip: bool }, // product ready to serve
+    Eating { vip: bool }, // customer eats after being served
+    Dirty,                // table needs cleaning
+}
+
+impl TableState {
+    pub fn is_vip(self) -> bool {
+        match self {
+            TableState::Seated { vip }
+            | TableState::Preparing { vip, .. }
+            | TableState::Ready { vip, .. }
+            | TableState::Eating { vip } => vip,
+            _ => false,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -150,10 +162,18 @@ pub struct ShopState {
     pub farm_water_ms: [u32; FARM_SLOTS],
     #[serde(skip)]
     pub event_text: Option<String>,
+    #[serde(skip)]
+    pub combo_count: u32,
+    #[serde(skip)]
+    pub combo_timer_ms: u32,
+    pub total_earned: u64,
+    pub best_combo: u32,
 }
 
 impl Default for ShopState {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ShopState {
@@ -179,6 +199,10 @@ impl ShopState {
             woody_total_ms: 0,
             farm_water_ms: [0; FARM_SLOTS],
             event_text: None,
+            combo_count: 0,
+            combo_timer_ms: 0,
+            total_earned: 0,
+            best_combo: 0,
         }
     }
 
@@ -191,7 +215,21 @@ impl ShopState {
         self.woody_total_ms = 0;
         self.grill_cooking = false;
         self.grill_timer_ms = 0;
+        self.combo_count = 0;
+        self.combo_timer_ms = 0;
         self.event_text = None;
+    }
+
+    pub fn combo_multiplier(&self) -> f32 {
+        let raw = 1.0 + (self.combo_count as f32) * 0.1;
+        raw.min(2.5)
+    }
+
+    pub fn reward_for_table(&self, table: TableState) -> u32 {
+        let base = self.reward_per_serve();
+        let vip_mul = if table.is_vip() { 2.0 } else { 1.0 };
+        let combo_mul = self.combo_multiplier();
+        ((base as f32) * vip_mul * combo_mul).floor() as u32
     }
 
     pub fn table_count(&self) -> usize {
@@ -216,8 +254,7 @@ impl ShopState {
 
     #[cfg(target_arch = "wasm32")]
     pub fn load() -> Self {
-        let mut s = LocalStorage::get("wwb_shop_state")
-            .unwrap_or_else(|_| ShopState::new());
+        let mut s = LocalStorage::get("wwb_shop_state").unwrap_or_else(|_| ShopState::new());
         s.reset_volatile();
         s
     }
@@ -228,7 +265,9 @@ impl ShopState {
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    pub fn load() -> Self { ShopState::new() }
+    pub fn load() -> Self {
+        ShopState::new()
+    }
 
     #[cfg(not(target_arch = "wasm32"))]
     pub fn save(&self) {}
@@ -247,6 +286,18 @@ fn rand_order() -> Order {
         1 => Order::Snack,
         _ => Order::Weed,
     }
+}
+
+fn stable_order_for_seat(idx: usize) -> Order {
+    match idx % 3 {
+        0 => Order::Coffee,
+        1 => Order::Snack,
+        _ => Order::Weed,
+    }
+}
+
+fn rand_vip() -> bool {
+    rand_u32() % 100 < 20
 }
 
 fn rand_event() -> &'static str {
@@ -319,6 +370,12 @@ pub fn WoodyShop() -> Element {
                             *ms = 0;
                         }
                     }
+                    if s.combo_timer_ms > 100 {
+                        s.combo_timer_ms -= 100;
+                    } else {
+                        s.combo_timer_ms = 0;
+                        s.combo_count = 0;
+                    }
                 });
             }
         });
@@ -334,7 +391,7 @@ pub fn WoodyShop() -> Element {
                 TimeoutFuture::new(delay).await;
                 state.with_mut(|s| {
                     if let Some(idx) = s.first_empty_table() {
-                        s.tables[idx] = TableState::Seated;
+                        s.tables[idx] = TableState::Seated { vip: rand_vip() };
                     }
                 });
                 logs.with_mut(|l| {
@@ -358,8 +415,14 @@ pub fn WoodyShop() -> Element {
                     let mut grew = false;
                     for stage in s.farm.iter_mut() {
                         *stage = match *stage {
-                            FarmStage::Watered => { grew = true; FarmStage::Grown }
-                            FarmStage::Planted => { grew = true; FarmStage::Watered }
+                            FarmStage::Watered => {
+                                grew = true;
+                                FarmStage::Grown
+                            }
+                            FarmStage::Planted => {
+                                grew = true;
+                                FarmStage::Watered
+                            }
                             other => other,
                         };
                     }
@@ -367,7 +430,9 @@ pub fn WoodyShop() -> Element {
                 });
                 if grew {
                     logs.with_mut(|l| {
-                        if l.len() > 6 { l.remove(0); }
+                        if l.len() > 6 {
+                            l.remove(0);
+                        }
                         l.push("Farm grew a step".into());
                     });
                 }
@@ -410,7 +475,7 @@ pub fn WoodyShop() -> Element {
                             // rush hour: fill empty tables
                             for i in 0..s.table_count() {
                                 if s.tables[i] == TableState::Empty {
-                                    s.tables[i] = TableState::Seated;
+                                    s.tables[i] = TableState::Seated { vip: rand_vip() };
                                 }
                             }
                         }
@@ -600,6 +665,7 @@ pub fn WoodyShop() -> Element {
                             upgrades,
                             woody_timer_ms,
                             woody_total_ms,
+                            grill_stock,
                             on_floater: move |evt: (String, u32)| spawn_floater(evt.0, evt.1),
                         }
                     },
@@ -738,7 +804,11 @@ fn ZoneTabs(active_zone: ActiveZone, state: Signal<ShopState>) -> Element {
         let is_active = active_zone == zone;
         let bg = if is_active { "#39ff14" } else { "#2a2a4a" };
         let fg = if is_active { "#000" } else { "#888" };
-        let shadow = if is_active { "0 0 12px rgba(57,255,20,0.4)" } else { "none" };
+        let shadow = if is_active {
+            "0 0 12px rgba(57,255,20,0.4)"
+        } else {
+            "none"
+        };
         let mut state = state;
         let z = zone;
         rsx! {
@@ -780,6 +850,7 @@ fn ShopZone(
     upgrades: Upgrades,
     woody_timer_ms: u32,
     woody_total_ms: u32,
+    grill_stock: u32,
     on_floater: EventHandler<(String, u32)>,
 ) -> Element {
     let on_table_click = move |idx: usize| {
@@ -852,7 +923,7 @@ fn ShopZone(
                 style: "display: flex; gap: 8px; margin-top: 10px;",
                 ActionButton {
                     label: "👋 Order",
-                    active: matches!(tables[woody_table], TableState::Seated),
+                    active: matches!(tables[woody_table], TableState::Seated { .. }),
                     color: "#39ff14",
                     on_click: {
                         let mut state = state;
@@ -892,6 +963,20 @@ fn ShopZone(
                         }
                     },
                 }
+                ActionButton {
+                    label: "🍔 Grill",
+                    active: matches!(tables[woody_table], TableState::Seated { .. }) && grill_stock > 0,
+                    color: "#ff9d00",
+                    on_click: {
+                        let mut state = state;
+                        let mut logs = logs;
+                        let on_floater = on_floater;
+                        move |_| {
+                            if state.read().is_busy() { return; }
+                            quick_serve_with_grill(&mut state, woody_table, &mut logs, on_floater);
+                        }
+                    },
+                }
             }
         }
     }
@@ -906,14 +991,17 @@ fn TableRow(
     woody_here: bool,
     on_click: EventHandler<usize>,
 ) -> Element {
+    let is_vip = table.is_vip();
     let customer_emoji = if matches!(table, TableState::Empty) {
         ""
+    } else if is_vip {
+        "👑"
     } else {
         "🧑‍🦱"
     };
     let order_bubble = match table {
-        TableState::Seated => Some(rand_order().emoji()),
-        TableState::Ready { order } => Some(order.emoji()),
+        TableState::Seated { .. } => Some(stable_order_for_seat(idx).emoji()),
+        TableState::Ready { order, .. } => Some(order.emoji()),
         _ => None,
     };
     let table_emoji = match table {
@@ -922,7 +1010,7 @@ fn TableRow(
     };
     let busy_dot = match table {
         TableState::Preparing { .. } => Some("⚙️"),
-        TableState::Eating => Some("😋"),
+        TableState::Eating { .. } => Some("😋"),
         _ => None,
     };
 
@@ -990,24 +1078,26 @@ fn TableRow(
     }
 }
 
-fn table_label(table: TableState) -> &'static str {
-    match table {
+fn table_label(table: TableState) -> String {
+    let vip = if table.is_vip() { " 👑" } else { "" };
+    let base = match table {
         TableState::Empty => "Free table",
-        TableState::Seated => "Customer waiting",
+        TableState::Seated { .. } => "Customer waiting",
         TableState::Preparing { .. } => "Preparing...",
         TableState::Ready { .. } => "Order ready",
-        TableState::Eating => "Customer eating",
+        TableState::Eating { .. } => "Customer eating",
         TableState::Dirty => "Dirty table",
-    }
+    };
+    format!("{}{}", base, vip)
 }
 
 fn table_color(table: TableState) -> &'static str {
     match table {
         TableState::Empty => "#666",
-        TableState::Seated => "#39ff14",
+        TableState::Seated { .. } => "#39ff14",
         TableState::Preparing { .. } => "#ff9d00",
         TableState::Ready { .. } => "#00e5ff",
-        TableState::Eating => "#ffe600",
+        TableState::Eating { .. } => "#ffe600",
         TableState::Dirty => "#ff4757",
     }
 }
@@ -1483,27 +1573,97 @@ fn opacity_style(active: bool) -> &'static str {
 
 // ── Core shop action logic ─────────────────────────────────────────────────────
 
+fn quick_serve_with_grill(
+    state: &mut Signal<ShopState>,
+    idx: usize,
+    logs: &mut Signal<Vec<String>>,
+    on_floater: EventHandler<(String, u32)>,
+) {
+    let vip = state.with(|s| match s.tables.get(idx) {
+        Some(TableState::Seated { vip }) => Some(*vip),
+        _ => None,
+    });
+    let Some(vip) = vip else { return };
+
+    let eat_ms = state.with(|s| s.upgrades.eat_ms());
+    state.with_mut(|s| {
+        if s.grill_stock == 0 {
+            return;
+        }
+        s.grill_stock -= 1;
+        s.tables[idx] = TableState::Eating { vip };
+        s.woody_action = WoodyAction::Serving(idx, Order::Snack);
+        s.woody_timer_ms = eat_ms;
+        s.woody_total_ms = eat_ms;
+    });
+    haptic_light();
+    logs.with_mut(|l| {
+        if l.len() > 6 {
+            l.remove(0);
+        }
+        l.push(format!("Quick grill serve at table {}", idx + 1));
+    });
+
+    let mut state = *state;
+    let mut logs = *logs;
+    spawn(async move {
+        TimeoutFuture::new(eat_ms).await;
+        let earned = state.with(|s| s.reward_for_table(s.tables[idx]));
+        let is_vip = state.with(|s| s.tables[idx].is_vip());
+        let combo = state.with(|s| s.combo_count);
+        state.with_mut(|s| {
+            s.tables[idx] = TableState::Dirty;
+            s.coins += earned;
+            s.total_earned += earned as u64;
+            s.served += 1;
+            s.combo_count += 1;
+            s.combo_timer_ms = 4000;
+            if s.combo_count > s.best_combo {
+                s.best_combo = s.combo_count;
+            }
+            s.woody_action = WoodyAction::Idle;
+            s.woody_timer_ms = 0;
+            s.woody_total_ms = 0;
+        });
+        let mut label = format!("+{} 🪙", earned);
+        if is_vip {
+            label.push_str(" VIP");
+        }
+        if combo >= 2 {
+            label.push_str(&format!(" x{}", combo));
+        }
+        on_floater.call((label, 220));
+        haptic_success();
+        logs.with_mut(|l| {
+            if l.len() > 6 {
+                l.remove(0);
+            }
+            l.push(format!("Grilled customer left +{} 🪙", earned));
+        });
+    });
+}
+
 fn perform_shop_action(
     state: &mut Signal<ShopState>,
     idx: usize,
     logs: &mut Signal<Vec<String>>,
-    reward: u32,
+    _reward: u32,
     upgrades: &Upgrades,
     on_floater: EventHandler<(String, u32)>,
 ) {
     let action: Option<(WoodyAction, String)> = state.with_mut(|s| {
         let table = s.tables.get_mut(idx)?;
         match *table {
-            TableState::Seated => {
+            TableState::Seated { vip } => {
                 let order = rand_order();
-                *table = TableState::Preparing { order };
+                *table = TableState::Preparing { order, vip };
                 Some((
                     WoodyAction::PreparingAt(idx, order),
                     format!("Taking order at table {}", idx + 1),
                 ))
             }
-            TableState::Ready { order } => {
-                *table = TableState::Eating;
+            TableState::Ready { order, vip } => {
+                *table = TableState::Eating { vip };
                 Some((
                     WoodyAction::Serving(idx, order),
                     format!("Serving at table {}", idx + 1),
@@ -1548,8 +1708,9 @@ fn perform_shop_action(
         match action {
             WoodyAction::PreparingAt(idx, order) => {
                 TimeoutFuture::new(prepare_ms).await;
+                let vip = state.with(|s| s.tables[idx].is_vip());
                 state.with_mut(|s| {
-                    s.tables[idx] = TableState::Ready { order };
+                    s.tables[idx] = TableState::Ready { order, vip };
                     s.woody_action = WoodyAction::Idle;
                     s.woody_timer_ms = 0;
                     s.woody_total_ms = 0;
@@ -1564,21 +1725,37 @@ fn perform_shop_action(
             }
             WoodyAction::Serving(idx, _order) => {
                 TimeoutFuture::new(eat_ms).await;
+                let earned = state.with(|s| s.reward_for_table(s.tables[idx]));
+                let is_vip = state.with(|s| s.tables[idx].is_vip());
+                let combo = state.with(|s| s.combo_count);
                 state.with_mut(|s| {
                     s.tables[idx] = TableState::Dirty;
-                    s.coins += reward;
+                    s.coins += earned;
+                    s.total_earned += earned as u64;
                     s.served += 1;
+                    s.combo_count += 1;
+                    s.combo_timer_ms = 4000;
+                    if s.combo_count > s.best_combo {
+                        s.best_combo = s.combo_count;
+                    }
                     s.woody_action = WoodyAction::Idle;
                     s.woody_timer_ms = 0;
                     s.woody_total_ms = 0;
                 });
-                on_floater.call((format!("+{} 🪙", reward), 220));
+                let mut label = format!("+{} 🪙", earned);
+                if is_vip {
+                    label.push_str(" VIP");
+                }
+                if combo >= 2 {
+                    label.push_str(&format!(" x{}", combo));
+                }
+                on_floater.call((label, 220));
                 haptic_success();
                 logs.with_mut(|l| {
                     if l.len() > 6 {
                         l.remove(0);
                     }
-                    l.push(format!("Customer left +{} 🪙", reward));
+                    l.push(format!("Customer left +{} 🪙", earned));
                 });
             }
             WoodyAction::Cleaning(_idx) => {
