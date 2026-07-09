@@ -370,6 +370,16 @@ pub fn HomeScreen() -> Element {
                             div { style: "font-size:13px;font-weight:700;color:#e8e8e8;", "{nav_garden}" }
                         }
                     }
+                    Link { to: Route::Game {},
+                        div { style: "
+                            background:#16213e;border:4px solid #ff6b35;
+                            box-shadow:4px 4px 0 #000;
+                            padding:14px 8px;text-align:center;cursor:pointer;
+                        ",
+                            div { style: "font-size:28px;margin-bottom:6px;", "🎮" }
+                            div { style: "font-size:13px;font-weight:700;color:#e8e8e8;", "Game" }
+                        }
+                    }
                 }
             }
 

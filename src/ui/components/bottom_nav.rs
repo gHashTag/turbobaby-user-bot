@@ -14,6 +14,7 @@ pub fn BottomNav(#[props(default)] cart_count: u32) -> Element {
     let is_cart = matches!(route, Route::Cart {});
     let is_profile = matches!(route, Route::Profile {});
     let is_quest = matches!(route, Route::Quest { .. });
+    let is_game = matches!(route, Route::Game {});
 
     rsx! {
         nav { class: "bottom-nav",
@@ -83,6 +84,13 @@ pub fn BottomNav(#[props(default)] cart_count: u32) -> Element {
                     onmouseenter: move |_| { prefetch::prefetch_route(&Route::Profile {}); },
                     span { class: "nav-icon", "👤" }
                     span { class: "nav-label", "Profile" }
+                }
+            }
+            Link { to: Route::Game {},
+                div { class: if is_game { "nav-item active" } else { "nav-item" },
+                    onmouseenter: move |_| { prefetch::prefetch_route(&Route::Game {}); },
+                    span { class: "nav-icon", "🎮" }
+                    span { class: "nav-label", "Game" }
                 }
             }
         }
