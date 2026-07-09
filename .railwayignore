@@ -1,0 +1,5 @@
+target/
+.git/
+e2e/
+node_modules/
+assets/uploads/
