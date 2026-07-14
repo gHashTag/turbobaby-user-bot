@@ -4521,6 +4521,8 @@ struct AdminOrder {
     subtotal: f64,
     #[serde(default)]
     bonus_used: f64,
+    #[serde(default)]
+    stars_used: i64,
     total: f64,
     status: String,
     #[serde(default)]
@@ -4646,6 +4648,12 @@ fn OrderDetailModal(order: AdminOrder, on_close: EventHandler<()>) -> Element {
                         div { style: "display:flex;justify-content:space-between;font-size:13px;color:#ffe600;",
                             span { "Бонусы" }
                             span { "-{order.bonus_used:.0} Бат" }
+                        }
+                    }
+                    if order.stars_used > 0 {
+                        div { style: "display:flex;justify-content:space-between;font-size:13px;color:#7dd3fc;",
+                            span { "⭐ Stars" }
+                            span { "-{order.stars_used} ฿" }
                         }
                     }
                     div { style: "display:flex;justify-content:space-between;font-size:16px;font-weight:700;color:#39ff14;",
@@ -4797,7 +4805,7 @@ fn OrdersTab() -> Element {
                 _ => &o.status,
             };
             csv.push_str(&format!(
-                "\"{}\",\"{}\",\"{}\",\"{}\",\"{}\",\"{}\",\"{}\",{},{},{}\n",
+                "\"{}\",\"{}\",\"{}\",\"{}\",\"{}\",\"{}\",\"{}\",{},{},{},{}\n",
                 o.id.replace('"', "\"\""),
                 o.created_at.as_deref().unwrap_or(""),
                 status_ru,
@@ -4810,6 +4818,7 @@ fn OrdersTab() -> Element {
                 items_str.replace('"', "\"\""),
                 o.subtotal,
                 o.bonus_used,
+                o.stars_used,
                 o.total,
             ));
         }
@@ -4950,6 +4959,11 @@ fn OrdersTab() -> Element {
                                         if order.bonus_used > 0.0 {
                                             span { class: "admin-badge warn",
                                                 "-{order.bonus_used:.0}Б бонусов"
+                                            }
+                                        }
+                                        if order.stars_used > 0 {
+                                            span { class: "admin-badge info",
+                                                "-{order.stars_used}⭐"
                                             }
                                         }
                                     }

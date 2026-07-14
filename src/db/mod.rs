@@ -189,6 +189,10 @@ const MIGRATIONS: &[(&str, &str)] = &[
         "041_garden_choose_product.sql",
         include_str!("../../migrations/041_garden_choose_product.sql"),
     ),
+    (
+        "042_stars_currency.sql",
+        include_str!("../../migrations/042_stars_currency.sql"),
+    ),
 ];
 
 /// Columns the catalog endpoints SELECT that were added by *later* migrations

@@ -6,6 +6,8 @@
 // v0.4 DJ zone, grill zone, random events.
 // Pure emoji/CSS visuals inside the existing Dioxus/WASM Telegram Mini App.
 
+use crate::ui::api::context::api_base_url;
+use crate::ui::telegram::{use_telegram_id, use_telegram_init_data};
 use dioxus::prelude::*;
 use gloo_timers::future::TimeoutFuture;
 
@@ -548,6 +550,56 @@ pub fn WoodyShop() -> Element {
     let event_text = state.read().event_text.clone();
     let reward = state.read().reward_per_serve();
 
+    // Stars (⭐) credit hook: game rewards call the server-side ledger.
+    let telegram_id = use_telegram_id();
+    let init_data = use_telegram_init_data();
+    let credit_stars = move |amount: i64, reason: String| {
+        let Some(tid) = telegram_id else { return; };
+        if amount <= 0 {
+            return;
+        }
+        let init = init_data.clone();
+        let url = format!("{}/api/stars/add", api_base_url());
+        let body = serde_json::json!({
+            "telegram_id": tid,
+            "amount": amount,
+            "source": "woodshop",
+            "reason": reason,
+            "external_tx_id": uuid::Uuid::new_v4().to_string(),
+        });
+        spawn(async move {
+            let client = crate::ui::api::local_client::LocalClient::new();
+            let _ = client
+                .post(&url)
+                .header("Content-Type", "application/json")
+                .header("X-Telegram-Init-Data", init)
+                .json(&body)
+                .send()
+                .await;
+        });
+    };
+
+    // Watch served/harvested counters and credit Stars (⭐) for game rewards.
+    {
+        let mut prev_served = use_signal(|| state.read().served);
+        let mut prev_harvested = use_signal(|| state.read().harvested);
+        let credit_stars = credit_stars;
+        use_effect(move || {
+            let served = state.read().served;
+            let harvested = state.read().harvested;
+            if served > prev_served() {
+                let delta = served - prev_served();
+                prev_served.set(served);
+                credit_stars(delta as i64, "serve".to_string());
+            }
+            if harvested > prev_harvested() {
+                let delta = harvested - prev_harvested();
+                prev_harvested.set(harvested);
+                credit_stars((delta * 3) as i64, "harvest".to_string());
+            }
+        });
+    }
+
     // Helpers
     let mut buy_upgrade = move |kind: &'static str| {
         state.with_mut(|s| {
@@ -670,7 +722,15 @@ pub fn WoodyShop() -> Element {
                         }
                     },
                     ActiveZone::Farm => rsx! {
-                        FarmZone { state, logs, farm, farm_watering, farm_water_ms, coins, on_floater: move |evt: (String, u32)| spawn_floater(evt.0, evt.1) }
+                        FarmZone {
+                            state,
+                            logs,
+                            farm,
+                            farm_watering,
+                            farm_water_ms,
+                            coins,
+                            on_floater: move |evt: (String, u32)| spawn_floater(evt.0, evt.1),
+                        }
                     },
                     ActiveZone::Party => rsx! {
                         PartyZone { state, logs, party_active, party_timer_ms }
@@ -1250,19 +1310,23 @@ fn FarmPlot(
                         let mut logs = logs;
                         let on_floater = on_floater;
                         move |_| {
+                            let mut harvested = false;
                             state.with_mut(|s| {
                                 if s.farm[idx] == FarmStage::Grown {
                                     s.farm[idx] = FarmStage::Empty;
                                     s.coins += HARVEST_REWARD;
                                     s.harvested += 1;
+                                    harvested = true;
                                 }
                             });
-                            on_floater.call((format!("+{} 🪙", HARVEST_REWARD), 260));
-                            logs.with_mut(|l| {
-                                if l.len() > 6 { l.remove(0); }
-                                l.push(format!("Harvest! +{} 🪙", HARVEST_REWARD));
-                            });
-                            haptic_success();
+                            if harvested {
+                                on_floater.call((format!("+{} 🪙", HARVEST_REWARD), 260));
+                                logs.with_mut(|l| {
+                                    if l.len() > 6 { l.remove(0); }
+                                    l.push(format!("Harvest! +{} 🪙", HARVEST_REWARD));
+                                });
+                                haptic_success();
+                            }
                         }
                     },
                 }

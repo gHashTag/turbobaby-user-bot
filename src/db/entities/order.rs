@@ -16,6 +16,7 @@ pub struct Model {
     pub items: JsonValue,
     pub subtotal: f64,
     pub bonus_used: f64,
+    pub stars_used: i64,
     pub total: f64,
     pub status: String,
     pub shop_id: Option<String>,

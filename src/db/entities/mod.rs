@@ -26,8 +26,14 @@ pub mod quest_place;
 #[allow(unreachable_pub)]
 pub mod referral_event;
 #[allow(unreachable_pub)]
+pub mod stars_idempotency_key;
+#[allow(unreachable_pub)]
+pub mod stars_transaction;
+#[allow(unreachable_pub)]
 pub mod strain;
 #[allow(unreachable_pub)]
 pub mod treasure_hunt;
 #[allow(unreachable_pub)]
 pub mod user;
+#[allow(unreachable_pub)]
+pub mod user_stars;

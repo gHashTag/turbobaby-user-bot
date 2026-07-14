@@ -55,12 +55,17 @@ pub(crate) struct CreateOrderRequest {
     pub items: Vec<OrderItem>,
     pub subtotal: f64,
     pub bonus_used: Option<f64>,
+    /// Stars (⭐) the user wants to spend as an internal-currency discount.
+    /// 1 Star = 1 THB. Server-side balance is debited atomically; the client
+    /// only proposes the amount, it never sets the fiat discount itself.
+    #[serde(default)]
+    pub stars_used: Option<i64>,
     pub total: f64,
     pub shop_id: Option<String>,
     /// B4: an optional garden reward to apply (product-scoped discount). The
     /// server loads the reward, computes the discount from DB prices, and
-    /// verifies `total = subtotal - bonus_used - garden_discount` — the client
-    /// can't set the discount amount itself.
+    /// verifies `total = subtotal - bonus_used - stars_used - garden_discount`
+    /// — the client can't set the discount amount itself.
     #[serde(default)]
     pub garden_reward_id: Option<String>,
 }
@@ -81,8 +86,16 @@ pub(crate) fn routes() -> Router<AppState> {
         .route("/orders/user/:telegram_id", get(get_user_orders))
 }
 
-/// Validates a CreateOrderRequest. Returns the sanitized bonus_used on success.
-fn validate_create_order(req: &CreateOrderRequest) -> Result<f64, StatusCode> {
+/// Sanitized payment inputs returned by [`validate_create_order`].
+#[derive(Debug)]
+struct ValidatedPayment {
+    bonus_used: f64,
+    stars_used: i64,
+}
+
+/// Validates a CreateOrderRequest. Returns the sanitized bonus_used and
+/// stars_used on success.
+fn validate_create_order(req: &CreateOrderRequest) -> Result<ValidatedPayment, StatusCode> {
     if let Some(ref name) = req.customer_name {
         if name.len() > 200 {
             return Err(StatusCode::BAD_REQUEST);
@@ -150,7 +163,16 @@ fn validate_create_order(req: &CreateOrderRequest) -> Result<f64, StatusCode> {
     if bonus_used > req.subtotal + 0.01 {
         return Err(StatusCode::BAD_REQUEST);
     }
-    let expected_total = (req.subtotal - bonus_used).max(0.0);
+    let stars_used = req.stars_used.unwrap_or(0).max(0);
+    const MAX_STARS_PER_TX: i64 = 1_000_000;
+    if stars_used > MAX_STARS_PER_TX {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    let stars_discount = stars_used as f64;
+    if stars_discount > req.subtotal - bonus_used + 0.01 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    let expected_total = (req.subtotal - bonus_used - stars_discount).max(0.0);
     // B4: when a garden reward is applied the total is further reduced by a
     // server-computed product discount, so the exact equality is deferred to
     // create_order (which knows the discount). Here we only require the claimed
@@ -166,7 +188,10 @@ fn validate_create_order(req: &CreateOrderRequest) -> Result<f64, StatusCode> {
     } else if (req.total - expected_total).abs() > 0.01 {
         return Err(StatusCode::BAD_REQUEST);
     }
-    Ok(bonus_used)
+    Ok(ValidatedPayment {
+        bonus_used,
+        stars_used,
+    })
 }
 
 /// True if `k` is a syntactically acceptable `X-Idempotency-Key` value.
@@ -531,7 +556,10 @@ async fn create_order(
         check_not_blocked(&state, tid).await?;
     }
 
-    let bonus_used = validate_create_order(&req)?;
+    let ValidatedPayment {
+        bonus_used,
+        stars_used,
+    } = validate_create_order(&req)?;
 
     // B4: load + validate an applied garden reward (product-scoped discount).
     // Returns (reward_id, target_product_id, percent) on success. Every failure
@@ -877,10 +905,11 @@ async fn create_order(
     }
 
     // B4: with a garden reward applied, the authoritative total is
-    // subtotal - bonus_used - (server-computed) garden_discount. Verify the
-    // client's claimed total matches; a mismatch = tampering → reject + audit.
+    // subtotal - bonus_used - stars_used - (server-computed) garden_discount.
+    // Verify the client's claimed total matches; a mismatch = tampering → reject + audit.
     if garden_reward.is_some() {
-        let expected = (req.subtotal - bonus_used - garden_discount).max(0.0);
+        let stars_discount = stars_used as f64;
+        let expected = (req.subtotal - bonus_used - stars_discount - garden_discount).max(0.0);
         if (req.total - expected).abs() > 0.01 {
             tracing::warn!(
                 telegram_id = req.telegram_id.unwrap_or(0),
@@ -921,11 +950,14 @@ async fn create_order(
         loyalty_profile::{Column as LpCol, Entity as LoyaltyProfileEntity},
         order::{ActiveModel as OrderAm, Entity as OrderEntity},
         order_idempotency_key::{ActiveModel as IdemAm, Entity as IdemEntity},
+        stars_transaction::{ActiveModel as StarsTxAm, Entity as StarsTxEntity},
+        user_stars::{ActiveModel as UsAm, Column as UsCol, Entity as UsEntity},
     };
     use sea_orm::{
         ActiveValue::Set, ColumnTrait, ConnectionTrait, DbBackend, EntityTrait, QueryFilter,
         Statement, TransactionTrait,
     };
+    use sea_orm::sea_query::OnConflict;
     let tx = state.db.orm.begin().await.map_err(|e| {
         error!("create_order tx.begin error: {}", e);
         StatusCode::INTERNAL_SERVER_ERROR
@@ -1035,6 +1067,97 @@ async fn create_order(
         }
     }
 
+    // Atomic Stars deduction + ledger entry (cycle #172). The debit is
+    // idempotent by virtue of running inside the order idempotency tx.
+    if stars_used > 0 {
+        let Some(tid) = req.telegram_id else {
+            return Err(StatusCode::BAD_REQUEST);
+        };
+        // user_stars FKs to loyalty_profiles; seed both idempotently so a
+        // brand-new gamer who earned Stars before ever ordering still succeeds.
+        let lp_seed = crate::db::entities::loyalty_profile::ActiveModel {
+            telegram_id: Set(tid),
+            bonus_balance: Set(Some(0.0)),
+            total_spent: Set(Some(0.0)),
+            ..Default::default()
+        };
+        LoyaltyProfileEntity::insert(lp_seed)
+            .on_conflict(
+                OnConflict::column(crate::db::entities::loyalty_profile::Column::TelegramId)
+                    .do_nothing()
+                    .to_owned(),
+            )
+            .do_nothing()
+            .exec(&tx)
+            .await
+            .map_err(|e| {
+                error!("stars deduction loyalty seed error: {}", e);
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?;
+        UsEntity::insert(UsAm {
+            telegram_id: Set(tid),
+            balance: Set(0),
+            ..Default::default()
+        })
+        .on_conflict(
+            OnConflict::column(UsCol::TelegramId)
+                .update_column(UsCol::UpdatedAt)
+                .to_owned(),
+        )
+        .exec(&tx)
+        .await
+        .map_err(|e| {
+            error!("stars deduction user_stars seed error: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+        let debited = UsEntity::update_many()
+            .col_expr(
+                UsCol::Balance,
+                sea_orm::sea_query::Expr::cust_with_values("balance - $1", [stars_used]),
+            )
+            .filter(UsCol::TelegramId.eq(tid))
+            .filter(UsCol::Balance.gte(stars_used))
+            .exec(&tx)
+            .await
+            .map_err(|e| {
+                error!("stars deduction error: {}", e);
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?;
+        if debited.rows_affected == 0 {
+            // Not enough Stars — fail loud so the UI can prompt the user.
+            return Err(StatusCode::PAYMENT_REQUIRED);
+        }
+
+        let balance_after = UsEntity::find_by_id(tid)
+            .one(&tx)
+            .await
+            .map_err(|e| {
+                error!("stars deduction balance read: {}", e);
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?
+            .map(|r| r.balance)
+            .unwrap_or(0);
+        let stars_tx_id = uuid::Uuid::new_v4().to_string();
+        StarsTxEntity::insert(StarsTxAm {
+            id: Set(stars_tx_id),
+            telegram_id: Set(tid),
+            amount: Set(-stars_used),
+            balance_after: Set(balance_after),
+            source: Set("plot".to_string()),
+            reason: Set("purchase".to_string()),
+            external_tx_id: Set(None),
+            related_order_id: Set(Some(id.clone())),
+            ..Default::default()
+        })
+        .exec(&tx)
+        .await
+        .map_err(|e| {
+            error!("stars transaction insert error: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+    }
+
     // Order INSERT via ActiveModel.
     let order_am = OrderAm {
         id: Set(id.clone()),
@@ -1045,6 +1168,7 @@ async fn create_order(
         items: Set(items_json.clone()),
         subtotal: Set(req.subtotal),
         bonus_used: Set(bonus_used),
+        stars_used: Set(stars_used),
         total: Set(req.total),
         status: Set("pending".to_string()),
         shop_id: Set(req.shop_id.clone()),
@@ -1113,6 +1237,7 @@ async fn create_order(
             &items_v,
             req.subtotal,
             bonus_used,
+            stars_used,
             req.total,
         )
         .await;
@@ -1133,6 +1258,7 @@ async fn notify_admins(
     items: &Value,
     subtotal: f64,
     bonus_used: f64,
+    stars_used: i64,
     total: f64,
 ) {
     use teloxide::prelude::*;
@@ -1169,9 +1295,14 @@ async fn notify_admins(
         .or_else(|| customer_name.as_ref().map(|n| html_escape(n)))
         .unwrap_or_else(|| "Anonymous".into());
 
+    let stars_line = if stars_used > 0 {
+        format!("\n⭐ Stars: -{} ฿", stars_used)
+    } else {
+        String::new()
+    };
     let text = format!(
-        "🚨 <b>New Order!</b>\n━━━━━━━━━━━━━━━━\n👤 {}\n📦 Items:\n{}\n━━━━━━━━━━━━━━━━\n💰 Subtotal: {} ฿\n🎁 Bonus: -{} ฿\n💳 Total: {} ฿\n🔖 #{}",
-        source, items_text, subtotal, bonus_used, total, html_escape(&order_id[order_id.len().saturating_sub(6)..])
+        "🚨 <b>New Order!</b>\n━━━━━━━━━━━━━━━━\n👤 {}\n📦 Items:\n{}\n━━━━━━━━━━━━━━━━\n💰 Subtotal: {} ฿\n🎁 Bonus: -{} ฿{}\n💳 Total: {} ฿\n🔖 #{}",
+        source, items_text, subtotal, bonus_used, stars_line, total, html_escape(&order_id[order_id.len().saturating_sub(6)..])
     );
 
     let btns = InlineKeyboardMarkup::new(vec![vec![
@@ -1294,6 +1425,8 @@ async fn update_order_status(
     use crate::db::entities::{
         loyalty_profile::{ActiveModel as LpAm, Column as LpCol, Entity as LpEntity},
         order::{Column as OrderCol, Entity as OrderEntity},
+        stars_transaction::{ActiveModel as StarsTxAm, Entity as StarsTxEntity},
+        user_stars::{ActiveModel as UsAm, Column as UsCol, Entity as UsEntity},
     };
     use sea_orm::sea_query::OnConflict;
     use sea_orm::{
@@ -1397,6 +1530,69 @@ async fn update_order_status(
                                 tracing::error!("reject bonus refund: {:?}", e);
                                 StatusCode::INTERNAL_SERVER_ERROR
                             })?;
+                    }
+                }
+                // Refund Stars that were debited at checkout (cycle #172).
+                let stars = o.stars_used.max(0);
+                if stars > 0 {
+                    if let Some(tid) = o.telegram_id {
+                        UsEntity::insert(UsAm {
+                            telegram_id: Set(tid),
+                            balance: Set(0),
+                            ..Default::default()
+                        })
+                        .on_conflict(
+                            OnConflict::column(UsCol::TelegramId)
+                                .update_column(UsCol::UpdatedAt)
+                                .to_owned(),
+                        )
+                        .exec(&tx)
+                        .await
+                        .map_err(|e| {
+                            tracing::error!("reject stars refund seed: {:?}", e);
+                            StatusCode::INTERNAL_SERVER_ERROR
+                        })?;
+                        UsEntity::update_many()
+                            .col_expr(
+                                UsCol::Balance,
+                                sea_orm::sea_query::Expr::cust_with_values(
+                                    "balance + $1",
+                                    [stars],
+                                ),
+                            )
+                            .filter(UsCol::TelegramId.eq(tid))
+                            .exec(&tx)
+                            .await
+                            .map_err(|e| {
+                                tracing::error!("reject stars refund: {:?}", e);
+                                StatusCode::INTERNAL_SERVER_ERROR
+                            })?;
+                        let balance_after = UsEntity::find_by_id(tid)
+                            .one(&tx)
+                            .await
+                            .map_err(|e| {
+                                tracing::error!("reject stars balance read: {:?}", e);
+                                StatusCode::INTERNAL_SERVER_ERROR
+                            })?
+                            .map(|r| r.balance)
+                            .unwrap_or(0);
+                        StarsTxEntity::insert(StarsTxAm {
+                            id: Set(uuid::Uuid::new_v4().to_string()),
+                            telegram_id: Set(tid),
+                            amount: Set(stars),
+                            balance_after: Set(balance_after),
+                            source: Set("plot".to_string()),
+                            reason: Set("refund".to_string()),
+                            external_tx_id: Set(None),
+                            related_order_id: Set(Some(id.clone())),
+                            ..Default::default()
+                        })
+                        .exec(&tx)
+                        .await
+                        .map_err(|e| {
+                            tracing::error!("reject stars transaction: {:?}", e);
+                            StatusCode::INTERNAL_SERVER_ERROR
+                        })?;
                     }
                 }
             }
@@ -1979,6 +2175,7 @@ mod tests {
             }],
             subtotal: 100.0,
             bonus_used: Some(10.0),
+            stars_used: None,
             total: 90.0,
             shop_id: None,
             garden_reward_id: None,
@@ -1988,7 +2185,7 @@ mod tests {
     #[test]
     fn test_validate_ok() {
         let req = valid_req();
-        assert_eq!(validate_create_order(&req).unwrap(), 10.0);
+        assert_eq!(validate_create_order(&req).unwrap().bonus_used, 10.0);
     }
 
     #[test]
@@ -1996,7 +2193,7 @@ mod tests {
         let mut req = valid_req();
         req.bonus_used = None;
         req.total = 100.0;
-        assert_eq!(validate_create_order(&req).unwrap(), 0.0);
+        assert_eq!(validate_create_order(&req).unwrap().bonus_used, 0.0);
     }
 
     #[test]
@@ -2142,7 +2339,7 @@ mod tests {
     fn test_validate_total_tolerance() {
         let mut req = valid_req();
         req.total = 90.009; // within 0.01 of expected 90.0
-        assert_eq!(validate_create_order(&req).unwrap(), 10.0);
+        assert_eq!(validate_create_order(&req).unwrap().bonus_used, 10.0);
     }
 
     #[test]
@@ -2260,6 +2457,7 @@ mod tests {
             items: vec![strain_item("s1", 1.0)],
             subtotal: 100.0,
             bonus_used: Some(0.0),
+            stars_used: None,
             total: 100.0,
             shop_id: None,
             garden_reward_id: None,

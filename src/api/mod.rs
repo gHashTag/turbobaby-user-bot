@@ -18,6 +18,7 @@ pub(crate) mod orders;
 pub(crate) mod quest;
 pub(crate) mod rate_limit;
 pub(crate) mod referrals;
+pub(crate) mod stars;
 pub(crate) mod strains;
 pub(crate) mod tech_tree;
 pub(crate) mod upload;
@@ -94,6 +95,7 @@ fn api_routes() -> Router<AppState> {
         .merge(happy_hour::routes())
         .merge(garden::routes())
         .merge(referrals::routes())
+        .merge(stars::routes())
         .merge(tech_tree::routes())
         .merge(cart::routes());
 

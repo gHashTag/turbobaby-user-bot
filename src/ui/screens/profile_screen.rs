@@ -27,6 +27,11 @@ struct LoyaltyProfileData {
     referral_count: Option<i32>,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+struct StarsBalanceResp {
+    balance: i64,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum Tier {
     Starter,
@@ -118,6 +123,7 @@ pub fn ProfileScreen() -> Element {
 
     let telegram_id = use_telegram_id().unwrap_or(0);
     let init_data = use_telegram_init_data();
+    let init_data_for_stars = init_data.clone();
 
     let loyalty_resource = use_resource(move || {
         let init = init_data.clone();
@@ -145,6 +151,27 @@ pub fn ProfileScreen() -> Element {
         .clone()
         .flatten()
         .and_then(|r| r.profile.clone());
+
+    let stars_balance_res = use_resource(move || {
+        let init = init_data_for_stars.clone();
+        async move {
+            if telegram_id == 0 {
+                return None;
+            }
+            let url = format!("{}/api/stars/balance/{}", api_base_url(), telegram_id);
+            let client = crate::ui::api::local_client::LocalClient::new();
+            let resp = client
+                .get(&url)
+                .header("X-Telegram-Init-Data", init)
+                .send()
+                .await;
+            match resp {
+                Ok(r) => r.json::<StarsBalanceResp>().await.ok().map(|r| r.balance),
+                Err(_) => None,
+            }
+        }
+    });
+    let stars_balance = stars_balance_res.read().clone().flatten().unwrap_or(0);
 
     let current_tier = loyalty_data
         .as_ref()
@@ -367,7 +394,7 @@ pub fn ProfileScreen() -> Element {
             }
 
             // Stats row
-            div { style: "display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 0 16px 16px;",
+            div { style: "display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; padding: 0 16px 16px;",
                 div { style: "text-align: center; padding: 10px 4px; background: #16213e; border: 4px solid #2a2a4a; border-radius: 0; box-shadow: 4px 4px 0 #000;",
                     div { style: "font-size: 20px; font-weight: 800; color: {current_tier.color()}; text-shadow: 2px 2px 0 #000; margin-bottom: 4px;", "{total_spent_str}" }
                     div { style: "font-size: 13px; color: #8b8b9e;", "SPENT" }
@@ -375,6 +402,10 @@ pub fn ProfileScreen() -> Element {
                 div { style: "text-align: center; padding: 10px 4px; background: #16213e; border: 4px solid #2a2a4a; border-radius: 0; box-shadow: 4px 4px 0 #000;",
                     div { style: "font-size: 20px; font-weight: 800; color: #39ff14; text-shadow: 2px 2px 0 #000; margin-bottom: 4px;", "B{bonus_balance as i32}" }
                     div { style: "font-size: 13px; color: #8b8b9e;", "BONUS" }
+                }
+                div { style: "text-align: center; padding: 10px 4px; background: #16213e; border: 4px solid #2a2a4a; border-radius: 0; box-shadow: 4px 4px 0 #000;",
+                    div { style: "font-size: 20px; font-weight: 800; color: #7dd3fc; text-shadow: 2px 2px 0 #000; margin-bottom: 4px;", "⭐{stars_balance}" }
+                    div { style: "font-size: 13px; color: #8b8b9e;", "STARS" }
                 }
                 div { style: "text-align: center; padding: 10px 4px; background: #16213e; border: 4px solid #2a2a4a; border-radius: 0; box-shadow: 4px 4px 0 #000;",
                     div { style: "font-size: 20px; font-weight: 800; color: #ffe600; text-shadow: 2px 2px 0 #000; margin-bottom: 4px;", "{cashback_pct as i32}%" }

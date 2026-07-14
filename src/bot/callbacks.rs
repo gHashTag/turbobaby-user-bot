@@ -565,7 +565,7 @@ pub(crate) async fn handle_callback(
                         let mut refund_ok = true;
                         if let Ok(Some(r)) = tx.query_one(Statement::from_sql_and_values(
                             DbBackend::Postgres,
-                            "SELECT telegram_id, bonus_used::float8 AS bonus_used, status FROM orders WHERE id = $1 FOR UPDATE",
+                            "SELECT telegram_id, bonus_used::float8 AS bonus_used, stars_used, status FROM orders WHERE id = $1 FOR UPDATE",
                             [_order_id.into()],
                         )).await {
                             // Fail loud: `should_refund_bonus("")` is TRUE, so a
@@ -589,6 +589,8 @@ pub(crate) async fn handle_callback(
                             if refund_ok && should_refund_bonus(&current_status) {
                                 let bonus_raw: f64 = r.try_get::<f64>("", "bonus_used").unwrap_or(0.0);
                                 let bonus = if bonus_raw.is_finite() { bonus_raw.max(0.0) } else { 0.0 };
+                                let stars_raw: i64 = r.try_get::<i64>("", "stars_used").unwrap_or(0);
+                                let stars = stars_raw.max(0);
                                 let tid: Option<i64> = r.try_get("", "telegram_id").ok().flatten();
                                 if bonus > 0.0 {
                                     if let Some(tid) = tid {
@@ -607,6 +609,39 @@ pub(crate) async fn handle_callback(
                                                 [bonus.into(), tid.into()],
                                             )).await {
                                                 tracing::error!("callback: reject bonus refund error: {}", e);
+                                                refund_ok = false;
+                                            }
+                                        }
+                                    }
+                                }
+                                if refund_ok && stars > 0 {
+                                    if let Some(tid) = tid {
+                                        if let Err(e) = tx.execute(Statement::from_sql_and_values(
+                                            DbBackend::Postgres,
+                                            "INSERT INTO user_stars (telegram_id, balance, updated_at) VALUES ($1, 0, NOW()) ON CONFLICT (telegram_id) DO NOTHING",
+                                            [tid.into()],
+                                        )).await {
+                                            tracing::error!("callback: reject stars seed error: {}", e);
+                                            refund_ok = false;
+                                        }
+                                        if refund_ok {
+                                            if let Err(e) = tx.execute(Statement::from_sql_and_values(
+                                                DbBackend::Postgres,
+                                                "UPDATE user_stars SET balance = balance + $1, updated_at = NOW() WHERE telegram_id = $2",
+                                                [stars.into(), tid.into()],
+                                            )).await {
+                                                tracing::error!("callback: reject stars refund error: {}", e);
+                                                refund_ok = false;
+                                            }
+                                        }
+                                        if refund_ok {
+                                            let tx_id = uuid::Uuid::new_v4().to_string();
+                                            if let Err(e) = tx.execute(Statement::from_sql_and_values(
+                                                DbBackend::Postgres,
+                                                "INSERT INTO stars_transactions (id, telegram_id, amount, balance_after, source, reason, related_order_id) VALUES ($1, $2, $3, COALESCE((SELECT balance FROM user_stars WHERE telegram_id = $2), 0), 'plot', 'refund', $4)",
+                                                [tx_id.into(), tid.into(), stars.into(), _order_id.into()],
+                                            )).await {
+                                                tracing::error!("callback: reject stars transaction error: {}", e);
                                                 refund_ok = false;
                                             }
                                         }

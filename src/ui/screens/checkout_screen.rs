@@ -31,6 +31,11 @@ struct RewardsResp {
     rewards: Vec<ApiReward>,
 }
 
+#[derive(serde::Deserialize)]
+struct StarsBalanceResp {
+    balance: i64,
+}
+
 fn to_trios_items(items: &[CartItem]) -> Vec<crate::trios::store::CartItem> {
     items
         .iter()
@@ -91,6 +96,30 @@ pub fn CheckoutScreen() -> Element {
     // B4: fetch the user's garden rewards; show a toggle for any product-scoped,
     // still-active reward whose target product is in this cart.
     let mut applied_reward = use_signal(|| Option::<(String, f64)>::None);
+    // Stars (⭐) the user wants to spend as internal-currency discount.
+    let mut stars_to_use = use_signal(|| 0i64);
+    let stars_balance_res = {
+        let init = init_data.clone();
+        use_resource(move || {
+            let init = init.clone();
+            async move {
+                let tid = telegram_id?;
+                let url = format!("{}/api/stars/balance/{}", api_base_url(), tid);
+                let text = crate::ui::api::http::fetch_text_authed(&url, &init)
+                    .await
+                    .ok()?;
+                serde_json::from_str::<StarsBalanceResp>(&text)
+                    .ok()
+                    .map(|r| r.balance)
+            }
+        })
+    };
+    let stars_balance = stars_balance_res
+        .read()
+        .as_ref()
+        .and_then(|opt| opt.as_ref())
+        .cloned()
+        .unwrap_or(0);
     let rewards_res = {
         let init = init_data.clone();
         use_resource(move || {
@@ -132,7 +161,12 @@ pub fn CheckoutScreen() -> Element {
         .as_ref()
         .map(|(_, d)| *d)
         .unwrap_or(0.0);
-    let effective_total = (cart_total - applied_discount).max(0.0);
+    let pre_stars_total = (cart_total - applied_discount).max(0.0);
+    let max_stars = (pre_stars_total.floor() as i64)
+        .min(stars_balance)
+        .max(0);
+    let stars_val = (*stars_to_use.read()).clamp(0, max_stars.max(0));
+    let effective_total = (pre_stars_total - stars_val as f64).max(0.0);
 
     let submit_cart_items = cart_items.clone();
     let submit_order = move |_| {
@@ -198,7 +232,8 @@ pub fn CheckoutScreen() -> Element {
             Some((rid, d)) => (Some(rid), d),
             None => (None, 0.0),
         };
-        let order_total = (cart_total - garden_discount).max(0.0);
+        let submit_stars = (*stars_to_use.read()).clamp(0, max_stars);
+        let order_total = (cart_total - garden_discount - submit_stars as f64).max(0.0);
 
         let body = json!({
             "telegram_id": telegram_id,
@@ -207,6 +242,8 @@ pub fn CheckoutScreen() -> Element {
             "customer_telegram": telegram_username.clone(),
             "items": items_json,
             "subtotal": cart_total,
+            "bonus_used": null,
+            "stars_used": submit_stars,
             "total": order_total,
             "garden_reward_id": garden_reward_id,
             "shop_id": shops[shop_selected()].0,
@@ -316,6 +353,29 @@ pub fn CheckoutScreen() -> Element {
                                             }
                                         }
                                     }
+                                }
+                            }
+                        }
+                        // Stars discount picker.
+                        if stars_balance > 0 && pre_stars_total > 0.0 {
+                            div { style: "border-top:1px solid #2a2a4a;margin-top:8px;padding-top:8px;",
+                                div { style: "display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;",
+                                    div { style: "font-size:12px;color:#7dd3fc;font-weight:700;", "⭐ Stars" }
+                                    div { style: "font-size:12px;color:#8b8b9e;", "доступно {stars_balance}" }
+                                }
+                                div { style: "display:flex;align-items:center;gap:8px;",
+                                    input {
+                                        r#type: "number",
+                                        min: "0",
+                                        max: "{max_stars}",
+                                        value: "{stars_val}",
+                                        style: "width:80px;font-size:14px;padding:6px 8px;background:#0f0f1a;color:#e8e8e8;border:3px solid #2a2a4a;",
+                                        oninput: move |e| {
+                                            let v = e.value().parse::<i64>().unwrap_or(0);
+                                            stars_to_use.set(v.clamp(0, max_stars));
+                                        }
+                                    }
+                                    span { style: "font-size:12px;color:#7dd3fc;", "−{stars_val} ฿" }
                                 }
                             }
                         }
