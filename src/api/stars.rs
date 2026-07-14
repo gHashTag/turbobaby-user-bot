@@ -9,10 +9,10 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_json::{json, Value};
 
-use crate::api::auth::{check_admin, check_not_blocked, check_owner, validate_telegram_id_param};
+use crate::api::auth::{check_not_blocked, check_owner, validate_telegram_id_param};
 use crate::AppState;
 
 pub(crate) fn routes() -> Router<AppState> {
@@ -460,7 +460,7 @@ async fn spend_stars(
         let idem_am = OrderIdemAm {
             key: Set(k.clone()),
             order_id: Set(format!("stars:{}", tx_id)),
-            telegram_id: Set(req.telegram_id),
+            telegram_id: Set(Some(req.telegram_id)),
             ..Default::default()
         };
         OrderIdemEntity::insert(idem_am).exec(&tx).await.map_err(|e| {
