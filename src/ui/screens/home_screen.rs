@@ -116,8 +116,8 @@ fn render_home_pack_card(p: HomePack) -> Element {
 
     rsx! {
         Link { to: Route::Sets {},
-            div { style: "flex:0 0 70%;height:220px;scroll-snap-align:center;box-sizing:border-box;background:#16213e;border:4px solid #b388ff;box-shadow:4px 4px 0 #000;overflow:hidden;cursor:pointer;display:flex;flex-direction:column;",
-                div { style: "position:relative;height:110px;min-height:110px;background:linear-gradient(135deg,#1a1a2e,#16213e);display:flex;align-items:center;justify-content:center;font-size:40px;flex-shrink:0;",
+            div { style: "flex:0 0 70%;aspect-ratio:4/5;scroll-snap-align:center;box-sizing:border-box;background:#16213e;border:4px solid #b388ff;box-shadow:4px 4px 0 #000;overflow:hidden;cursor:pointer;display:flex;flex-direction:column;",
+                div { style: "position:relative;aspect-ratio:4/3;background:linear-gradient(135deg,#1a1a2e,#16213e);display:flex;align-items:center;justify-content:center;font-size:40px;flex-shrink:0;overflow:hidden;",
                     if has_image {
                         img { src: "{img}", alt: "{name}", style: "width:100%;height:100%;object-fit:cover;display:block;" }
                     } else {
