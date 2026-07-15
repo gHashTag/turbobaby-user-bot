@@ -211,7 +211,7 @@ pub fn SetsScreen() -> Element {
                                     }
                                 }
                             }
-                            div { style: "display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:0 16px;",
+                            div { style: "display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:0 16px;align-items:stretch;",
                                 for set in ordered.iter() {
                                     {
                                         let s = set.clone();
@@ -366,6 +366,9 @@ where
             overflow:hidden;
             position:relative;
             cursor:pointer;
+            display:flex;
+            flex-direction:column;
+            height:100%;
             {opacity}
         ",
             onclick: move |_| on_select(),
@@ -393,7 +396,7 @@ where
                     ", "{discount_badge}" }
                 }
             }
-            div { style: "padding:14px;",
+            div { style: "padding:14px;display:flex;flex-direction:column;flex:1;min-height:0;",
                 div { style: "display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;",
                     span { style: "font-size:16px;font-weight:700;text-shadow:2px 2px 0 #000;", "{set_name}" }
                 }
@@ -403,7 +406,7 @@ where
                 if !desc.is_empty() {
                     div { style: "font-size:13px;color:#888;margin-bottom:6px;", "{desc}" }
                 }
-                div { style: "display:flex;justify-content:space-between;align-items:center;",
+                div { style: "display:flex;justify-content:space-between;align-items:center;margin-top:auto;",
                     div {
                         if has_discount {
                             span { style: "font-size:13px;color:#888;text-decoration:line-through;margin-right:6px;", "{original_price_str}" }
@@ -412,7 +415,7 @@ where
                     }
                 }
             }
-            div { style: "padding:0 14px 14px;",
+            div { style: "padding:0 14px 14px;margin-top:auto;",
                 {if is_available {
                     rsx! {
                         button {
