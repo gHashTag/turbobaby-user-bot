@@ -392,15 +392,20 @@ async fn create_strain(
         display_order: Set(display_order),
         ..Default::default()
     };
-    StrainEntity::insert(model)
-        .exec(&state.db.orm)
-        .await
-        .map_err(|e| {
-            tracing::error!("create_strain SeaORM error: {:?}", e);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
+    if let Err(e) = StrainEntity::insert(model).exec(&state.db.orm).await {
+        tracing::error!("create_strain SeaORM error: {:?}", e);
+        if is_unique_violation(&e) {
+            return Err(StatusCode::CONFLICT);
+        }
+        return Err(StatusCode::INTERNAL_SERVER_ERROR);
+    }
     invalidate_strains(&state.cache).await;
     Ok(Json(json!({ "success": true, "id": id })))
+}
+
+fn is_unique_violation(e: &sea_orm::DbErr) -> bool {
+    let s = format!("{:?}", e);
+    s.contains("23505") || s.to_lowercase().contains("unique constraint")
 }
 
 async fn update_strain(
