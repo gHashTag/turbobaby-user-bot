@@ -116,10 +116,10 @@ fn render_home_pack_card(p: HomePack) -> Element {
 
     rsx! {
         Link { to: Route::Sets {},
-            div { style: "flex:0 0 70%;scroll-snap-align:center;box-sizing:border-box;background:#16213e;border:4px solid #b388ff;box-shadow:4px 4px 0 #000;overflow:hidden;cursor:pointer;display:flex;flex-direction:column;",
-                div { style: "position:relative;min-height:90px;background:linear-gradient(135deg,#1a1a2e,#16213e);display:flex;align-items:center;justify-content:center;font-size:40px;",
+            div { style: "flex:0 0 70%;height:220px;scroll-snap-align:center;box-sizing:border-box;background:#16213e;border:4px solid #b388ff;box-shadow:4px 4px 0 #000;overflow:hidden;cursor:pointer;display:flex;flex-direction:column;",
+                div { style: "position:relative;height:110px;min-height:110px;background:linear-gradient(135deg,#1a1a2e,#16213e);display:flex;align-items:center;justify-content:center;font-size:40px;flex-shrink:0;",
                     if has_image {
-                        img { src: "{img}", alt: "{name}", style: "width:100%;height:auto;object-fit:contain;display:block;" }
+                        img { src: "{img}", alt: "{name}", style: "width:100%;height:100%;object-fit:cover;display:block;" }
                     } else {
                         "{icon}"
                     }
@@ -131,12 +131,12 @@ fn render_home_pack_card(p: HomePack) -> Element {
                         span { style: "position:absolute;top:6px;right:6px;font-size:11px;font-weight:700;background:#b388ff;color:#000;padding:3px 6px;box-shadow:2px 2px 0 #000;", "{discount as i32}% OFF" }
                     }
                 }
-                div { style: "padding:10px 12px;display:flex;flex-direction:column;flex:1;",
+                div { style: "padding:10px 12px;display:flex;flex-direction:column;flex:1;min-height:0;justify-content:space-between;",
                     div { style: "font-size:15px;font-weight:700;color:#e8e8e8;text-shadow:2px 2px 0 #000;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;", "{name}" }
-                    if !weight_line.is_empty() {
-                        div { style: "font-size:11px;color:#b388ff;font-weight:600;margin-bottom:4px;", "⚖️ {weight_line}" }
-                    }
-                    div { style: "margin-top:auto;",
+                    div { style: "display:flex;justify-content:space-between;align-items:flex-end;",
+                        if !weight_line.is_empty() {
+                            div { style: "font-size:11px;color:#b388ff;font-weight:600;", "⚖️ {weight_line}" }
+                        }
                         span { style: "font-size:18px;font-weight:800;color:#ffe600;text-shadow:2px 2px 0 #000;", "{price_str}" }
                     }
                 }
