@@ -40,10 +40,10 @@ pub fn CardMedia(
     let has_video = is_media_url(&vid);
 
     rsx! {
-        div { style: "width:100%;min-height:180px;background:linear-gradient(135deg,#1a1a2e,#16213e);display:flex;align-items:center;justify-content:center;position:relative;",
+        div { style: "width:100%;aspect-ratio:4/3;background:linear-gradient(135deg,#1a1a2e,#16213e);display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;",
             if has_video {
                 video {
-                    style: "width:100%;height:auto;display:block;",
+                    style: "width:100%;height:100%;object-fit:cover;display:block;",
                     src: "{vid}",
                     "type": "video/mp4",
                     autoplay: true,
@@ -71,7 +71,7 @@ pub fn CardMedia(
                     src: "{img}",
                     alt: "{alt}",
                     loading: "lazy",
-                    style: "width:100%;height:auto;object-fit:contain;display:block;"
+                    style: "width:100%;height:100%;object-fit:cover;display:block;"
                 }
             } else {
                 span { style: "font-size:48px;", "{emoji}" }
