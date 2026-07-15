@@ -782,7 +782,41 @@ async fn main() -> Result<()> {
                 .into_response()
         }
     };
+
+    // /version.txt returns the current Trunk JS hash so the client-side cache
+    // buster in index.html can detect a stale cached HTML page and force a
+    // reload. Without this route the buster silently fails and users keep
+    // loading old hashed bundles after a deploy.
+    let version_handler = {
+        let static_cache = static_cache.clone();
+        move || async move {
+            let hash = static_cache
+                .get("index.html")
+                .and_then(|file| {
+                    let html = String::from_utf8_lossy(&file.raw);
+                    html.lines()
+                        .find_map(|line| {
+                            line.split_once("/woody-weed-bot-")
+                                .and_then(|(_, rest)| rest.split_once(".js"))
+                                .map(|(hash, _)| hash.to_string())
+                        })
+                })
+                .unwrap_or_else(|| "unknown".to_string());
+            (
+                [(
+                    axum::http::header::CACHE_CONTROL,
+                    axum::http::HeaderValue::from_static(
+                        "no-store, no-cache, must-revalidate, max-age=0",
+                    ),
+                )],
+                hash,
+            )
+                .into_response()
+        }
+    };
+
     let spa_routes = Router::new()
+        .route("/version.txt", get(version_handler))
         .route("/", get(spa_handler.clone()))
         .route("/menu", get(spa_handler.clone()))
         .route("/sets", get(spa_handler.clone()))
