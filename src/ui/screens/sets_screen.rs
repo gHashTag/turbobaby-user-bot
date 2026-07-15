@@ -127,9 +127,15 @@ pub fn SetsScreen() -> Element {
             .map_err(|e| e.to_string())
     });
 
+    // Single selected set for both card taps and deep-link shares.
+    // Held at screen level because the cards render inline in a `for` loop,
+    // where a per-card `use_signal` would violate hook ordering when the list
+    // is re-sorted.
+    let mut selected_set = use_signal(|| None::<ApiSet>);
+    let mut selected_set_video = use_signal(|| None::<String>);
+
     // Deep-link target: open the shared set modal once the catalog loads.
     let mut pending = use_context::<Signal<Option<SharedProduct>>>();
-    let mut shared_set = use_signal(|| None::<ApiSet>);
     use_effect(move || {
         let target = pending.read().clone();
         if let Some(target) = target {
@@ -137,7 +143,7 @@ pub fn SetsScreen() -> Element {
                 match &*sets_resource.read() {
                     Some(Ok(sets)) => {
                         if let Some(s) = sets.iter().find(|s| s.id == target.id).cloned() {
-                            shared_set.set(Some(s));
+                            selected_set.set(Some(s));
                         }
                         pending.set(None);
                     }
@@ -207,7 +213,11 @@ pub fn SetsScreen() -> Element {
                             }
                             div { style: "display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:0 16px;",
                                 for set in ordered.iter() {
-                                    { render_set_card(set.clone(), cart) }
+                                    {
+                                        let s = set.clone();
+                                        let s_select = s.clone();
+                                        render_set_card(s, cart, move || selected_set.set(Some(s_select.clone())), move |url| selected_set_video.set(Some(url)))
+                                    }
                                 }
                             }
                         }
@@ -232,8 +242,8 @@ pub fn SetsScreen() -> Element {
                 }
             }
 
-            // Deep-link set modal.
-            {shared_set().map(|set| {
+            // Selected set modal (card tap or deep link).
+            {selected_set().map(|set| {
                 let add_id = set.id.clone();
                 let add_name = crate::ui::lang::localized(&set.name, set.name_en.as_deref());
                 let discount = if set.discount_percent.is_finite() {
@@ -281,9 +291,13 @@ pub fn SetsScreen() -> Element {
                             crate::ui::telegram::TelegramApp::init().haptic_notification(crate::ui::telegram::HapticNotification::Success);
                         },
                         on_share: Some(EventHandler::new(move |_| share_product(ProductKind::Set, &share_id, &share_name))),
-                        on_close: move |_| shared_set.set(None),
+                        on_close: move |_| selected_set.set(None),
                     }
                 }
+            })}
+
+            {selected_set_video().map(|url| rsx! {
+                VideoModal { url, on_close: move |_| selected_set_video.set(None) }
             })}
 
             BottomNav {}
@@ -291,7 +305,16 @@ pub fn SetsScreen() -> Element {
     }
 }
 
-fn render_set_card(set: ApiSet, mut cart: Signal<Cart>) -> Element {
+fn render_set_card<S, V>(
+    set: ApiSet,
+    mut cart: Signal<Cart>,
+    mut on_select: S,
+    mut on_video: V,
+) -> Element
+where
+    S: FnMut() + 'static,
+    V: FnMut(String) + 'static,
+{
     let add_to_cart = t(crate::ui::lang::current_lang(), T_ADD_TO_CART).to_string();
     let discount = if set.discount_percent.is_finite() {
         set.discount_percent.max(0.0)
@@ -323,9 +346,6 @@ fn render_set_card(set: ApiSet, mut cart: Signal<Cart>) -> Element {
         set.description.as_deref().unwrap_or(""),
         set.description_en.as_deref(),
     );
-    let mut detail_open = use_signal(|| false);
-    let mut show_video = use_signal(|| false);
-    let desc_full = desc.to_string();
     let is_available = set.is_available.unwrap_or(true);
     let opacity = if is_available { "" } else { "opacity:0.6;" };
     // Packs Phase 1: promo badge chip + weight/strain-count meta line.
@@ -348,13 +368,13 @@ fn render_set_card(set: ApiSet, mut cart: Signal<Cart>) -> Element {
             cursor:pointer;
             {opacity}
         ",
-            onclick: move |_| detail_open.set(true),
+            onclick: move |_| on_select(),
             CardMedia {
                 image_url: set.image_url.clone(),
                 video_url: set.video_url.clone(),
                 emoji: icon.to_string(),
                 alt: set_name.clone(),
-                on_video_click: move |_| show_video.set(true),
+                on_video_click: move |_| on_video(set.video_url.clone().unwrap_or_default()),
                 // On-image badge (top-left), mirroring strain/accessory cards.
                 span { style: "position:absolute;top:8px;left:8px;z-index:2;font-size:13px;font-weight:700;background:{ACCENT};color:#000;padding:4px 8px;box-shadow:2px 2px 0 #000;",
                     "📦 SET"
@@ -433,43 +453,6 @@ fn render_set_card(set: ApiSet, mut cart: Signal<Cart>) -> Element {
                     }
                 }}
             }
-            // Hoist VideoModal out of the card so its position:fixed resolves
-            // against the viewport, not the narrow transformed card.
-            {show_video().then(|| rsx! {
-                VideoModal { url: set.video_url.clone().unwrap_or_default(), on_close: move |_| show_video.set(false) }
-            })}
-            {detail_open().then(|| {
-                let add_id = set.id.clone();
-                let add_name = crate::ui::lang::localized(&set.name, set.name_en.as_deref());
-                let add_price = discounted_price;
-                let avail = is_available;
-                let share_id = set.id.clone();
-                let share_name = add_name.clone();
-                rsx! {
-                    ProductDetailModal {
-                        name: crate::ui::lang::localized(&set.name, set.name_en.as_deref()),
-                        image_url: set.image_url.clone(),
-                        description: desc_full.clone(),
-                        price_line: Some(price_str.clone()),
-                        can_add: avail,
-                        add_to_cart_label: Some(add_to_cart.clone()),
-                        on_add_to_cart: move |q: u32| {
-                            cart.write().add_item(CartItem {
-                                id: add_id.clone(),
-                                name: add_name.clone(),
-                                price: add_price,
-                                quantity: q,
-                                image_url: None,
-                                item_type: CartItemType::Set,
-                                fulfillment: None,
-                            });
-                            crate::ui::telegram::TelegramApp::init().haptic_notification(crate::ui::telegram::HapticNotification::Success);
-                        },
-                        on_share: Some(EventHandler::new(move |_| share_product(ProductKind::Set, &share_id, &share_name))),
-                        on_close: move |_| detail_open.set(false),
-                    }
-                }
-            })}
         }
     }
 }

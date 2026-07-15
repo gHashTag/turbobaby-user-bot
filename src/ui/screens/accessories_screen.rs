@@ -93,9 +93,15 @@ pub fn AccessoriesScreen() -> Element {
             .map_err(|e| e.to_string())
     });
 
+    // Single selected accessory for both card taps and deep-link shares.
+    // Held at screen level because the cards render inline in a `for` loop,
+    // where a per-card `use_signal` would violate hook ordering when the list
+    // is re-filtered.
+    let mut selected_accessory = use_signal(|| None::<ApiAccessory>);
+    let mut selected_accessory_video = use_signal(|| None::<String>);
+
     // Deep-link target: open the shared accessory modal once the catalog loads.
     let mut pending = use_context::<Signal<Option<SharedProduct>>>();
-    let mut shared_accessory = use_signal(|| None::<ApiAccessory>);
     use_effect(move || {
         let target = pending.read().clone();
         if let Some(target) = target {
@@ -103,7 +109,7 @@ pub fn AccessoriesScreen() -> Element {
                 match &*accessories_resource.read() {
                     Some(Ok(accessories)) => {
                         if let Some(a) = accessories.iter().find(|a| a.id == target.id).cloned() {
-                            shared_accessory.set(Some(a));
+                            selected_accessory.set(Some(a));
                         }
                         pending.set(None);
                     }
@@ -178,7 +184,11 @@ pub fn AccessoriesScreen() -> Element {
                     Some(Ok(_)) => rsx! {
                         div { style: "display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:0 16px;",
                             for accessory in filtered.iter() {
-                                {render_accessory_card(accessory.clone(), cart, add_to_cart)}
+                                {
+                                    let a = accessory.clone();
+                                    let a_select = a.clone();
+                                    render_accessory_card(a, cart, add_to_cart, move || selected_accessory.set(Some(a_select.clone())), move |url| selected_accessory_video.set(Some(url)))
+                                }
                             }
                         }
                     },
@@ -197,8 +207,8 @@ pub fn AccessoriesScreen() -> Element {
                 }
             }
 
-            // Deep-link accessory modal.
-            {shared_accessory().map(|a| {
+            // Selected accessory modal (card tap or deep link).
+            {selected_accessory().map(|a| {
                 let add_id = a.id.clone();
                 let add_name = crate::ui::lang::localized(&a.name,
                     a.name_en.as_deref(),
@@ -238,9 +248,13 @@ pub fn AccessoriesScreen() -> Element {
                             crate::ui::telegram::TelegramApp::init().haptic_notification(crate::ui::telegram::HapticNotification::Success);
                         },
                         on_share: Some(EventHandler::new(move |_| share_product(ProductKind::Accessory, &share_id, &share_name))),
-                        on_close: move |_| shared_accessory.set(None),
+                        on_close: move |_| selected_accessory.set(None),
                     }
                 }
+            })}
+
+            {selected_accessory_video().map(|url| rsx! {
+                VideoModal { url, on_close: move |_| selected_accessory_video.set(None) }
             })}
 
             BottomNav {}
@@ -248,11 +262,17 @@ pub fn AccessoriesScreen() -> Element {
     }
 }
 
-fn render_accessory_card(
+fn render_accessory_card<S, V>(
     a: ApiAccessory,
     mut cart: Signal<Cart>,
     add_to_cart: &'static str,
-) -> Element {
+    mut on_select: S,
+    mut on_video: V,
+) -> Element
+where
+    S: FnMut() + 'static,
+    V: FnMut(String) + 'static,
+{
     let cat = a.category.as_deref().unwrap_or("other");
     let emoji = category_emoji(cat);
     let is_available = a.is_available.unwrap_or(true);
@@ -284,19 +304,15 @@ fn render_accessory_card(
         "background:#16213e;border:4px solid {};box-shadow:4px 4px 0 #000;overflow:hidden;position:relative;cursor:pointer;{}",
         cat_color, opacity
     );
-    let mut detail_open = use_signal(|| false);
-    let mut show_video = use_signal(|| false);
-    let desc_full = desc.to_string();
-
     rsx! {
         div { key: a.id.clone(), class: "comet-card", style: card_style,
-            onclick: move |_| detail_open.set(true),
+            onclick: move |_| on_select(),
             CardMedia {
                 image_url: a.image_url.clone(),
                 video_url: a.video_url.clone(),
                 emoji: emoji.to_string(),
                 alt: a_name.clone(),
-                on_video_click: move |_| show_video.set(true),
+                on_video_click: move |_| on_video(a.video_url.clone().unwrap_or_default()),
                 div { style: "position:absolute;top:8px;left:8px;display:flex;flex-direction:column;gap:4px;z-index:2;align-items:flex-start;",
                     span { style: "font-size:13px;font-weight:700;background:{cat_color};color:#000;padding:4px 8px;box-shadow:2px 2px 0 #000;", "{badge_label}" }
                     {show_out_of_stock.then(|| rsx! {
@@ -362,43 +378,5 @@ fn render_accessory_card(
                 }}
             }
         }
-        // Hoisted out of `.comet-card` (transform/will-change) so the modal's
-        // position:fixed resolves against the viewport, not the narrow card.
-        {show_video().then(|| rsx! {
-            VideoModal { url: a.video_url.clone().unwrap_or_default(), on_close: move |_| show_video.set(false) }
-        })}
-        {detail_open().then(|| {
-            let add_id = a.id.clone();
-            let add_name = crate::ui::lang::localized(&a.name, a.name_en.as_deref());
-            let add_price = a_price;
-            let avail = !show_out_of_stock;
-            let share_id = a.id.clone();
-            let share_name = add_name.clone();
-            rsx! {
-                ProductDetailModal {
-                    name: crate::ui::lang::localized(&a.name, a.name_en.as_deref()),
-                    image_url: a.image_url.clone(),
-                    description: desc_full.clone(),
-                    category_badge: Some(badge_label.clone()),
-                    price_line: Some(price_str.clone()),
-                    can_add: avail,
-                    add_to_cart_label: Some(format!("{add_to_cart} 🛒")),
-                    on_add_to_cart: move |q: u32| {
-                        cart.write().add_item(CartItem {
-                            id: add_id.clone(),
-                            name: add_name.clone(),
-                            price: add_price,
-                            quantity: q,
-                            image_url: None,
-                            item_type: CartItemType::Accessory,
-                            fulfillment: None,
-                        });
-                        crate::ui::telegram::TelegramApp::init().haptic_notification(crate::ui::telegram::HapticNotification::Success);
-                    },
-                    on_share: Some(EventHandler::new(move |_| share_product(ProductKind::Accessory, &share_id, &share_name))),
-                    on_close: move |_| detail_open.set(false),
-                }
-            }
-        })}
     }
 }

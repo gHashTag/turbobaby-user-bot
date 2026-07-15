@@ -175,10 +175,16 @@ pub fn MenuScreen() -> Element {
         }
     });
 
+    // Single selected strain for both card taps and deep-link shares.
+    // Held at screen level because the cards render inline in a `for` loop,
+    // where a per-card `use_signal` would violate hook ordering and crash
+    // when the list is re-sorted (e.g. THC sort).
+    let mut selected_strain = use_signal(|| None::<ApiStrain>);
+    let mut selected_strain_video = use_signal(|| None::<String>);
+
     // Deep-link target: if the app opened with a shared strain, open its
     // detail modal once the catalog list has loaded.
     let mut pending = use_context::<Signal<Option<SharedProduct>>>();
-    let mut shared_strain = use_signal(|| None::<ApiStrain>);
     use_effect(move || {
         let target = pending.read().clone();
         if let Some(target) = target {
@@ -186,7 +192,7 @@ pub fn MenuScreen() -> Element {
                 match &*strains_resource.read() {
                     Some(Ok(strains)) => {
                         if let Some(s) = strains.iter().find(|s| s.id == target.id).cloned() {
-                            shared_strain.set(Some(s));
+                            selected_strain.set(Some(s));
                         }
                         pending.set(None);
                     }
@@ -343,7 +349,10 @@ pub fn MenuScreen() -> Element {
                                             }
                                             div { key: "{_sid}",
                                                 style: "max-width:380px;margin:0 auto;",
-                                                {render_strain_card(s, cart)}
+                                                {
+                                                    let s_select = s.clone();
+                                                    render_strain_card(s, cart, move || selected_strain.set(Some(s_select.clone())), move |url| selected_strain_video.set(Some(url)))
+                                                }
                                             }
                                         }
                                     }
@@ -356,13 +365,19 @@ pub fn MenuScreen() -> Element {
                                             "🆕 NEW ARRIVALS"
                                         }
                                         div { style: "display:grid;grid-template-columns:1fr 1fr;gap:12px;",
-                                            {new_arrivals.into_iter().map(|s| render_strain_card(s, cart))}
+                                            {new_arrivals.into_iter().map(move |s| {
+                                                let s_select = s.clone();
+                                                render_strain_card(s, cart, move || selected_strain.set(Some(s_select.clone())), move |url| selected_strain_video.set(Some(url)))
+                                            })}
                                         }
                                     }
                                 })}
                                 // Rest of the catalog
                                 div { style: "display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:8px 16px 0;",
-                                    {rest.into_iter().map(|s| render_strain_card(s, cart))}
+                                    {rest.into_iter().map(move |s| {
+                                        let s_select = s.clone();
+                                        render_strain_card(s, cart, move || selected_strain.set(Some(s_select.clone())), move |url| selected_strain_video.set(Some(url)))
+                                    })}
                                 }
                             }
                         }
@@ -390,9 +405,9 @@ pub fn MenuScreen() -> Element {
                 }
             }
 
-            // Deep-link strain modal: shown when the app was opened via a shared
-            // strain link and the target is still available in the catalog.
-            {shared_strain().map(|strain| {
+            // Selected strain modal: shown when the user taps a card or when the
+            // app opened via a shared strain deep link.
+            {selected_strain().map(|strain| {
                 let add_id = strain.id.clone();
                 let add_name = crate::ui::lang::localized(&strain.name,
                     strain.name_en.as_deref(),
@@ -460,9 +475,13 @@ pub fn MenuScreen() -> Element {
                             crate::ui::telegram::TelegramApp::init().haptic_notification(crate::ui::telegram::HapticNotification::Success);
                         },
                         on_share: Some(EventHandler::new(move |_| share_product(ProductKind::Strain, &share_id, &share_name))),
-                        on_close: move |_| shared_strain.set(None),
+                        on_close: move |_| selected_strain.set(None),
                     }
                 }
+            })}
+
+            {selected_strain_video().map(|url| rsx! {
+                VideoModal { url, on_close: move |_| selected_strain_video.set(None) }
             })}
 
             BottomNav { cart_count }
@@ -470,7 +489,16 @@ pub fn MenuScreen() -> Element {
     }
 }
 
-fn render_strain_card(strain: ApiStrain, mut cart: Signal<Cart>) -> Element {
+fn render_strain_card<S, V>(
+    strain: ApiStrain,
+    mut cart: Signal<Cart>,
+    mut on_select: S,
+    mut on_video: V,
+) -> Element
+where
+    S: FnMut() + 'static,
+    V: FnMut(String) + 'static,
+{
     let add_to_cart_label = t(crate::ui::lang::current_lang(), T_ADD_TO_CART).to_string();
     let cat = strain.category.as_deref().unwrap_or("Hybrid");
     let emoji = category_emoji(cat);
@@ -563,10 +591,6 @@ fn render_strain_card(strain: ApiStrain, mut cart: Signal<Cart>) -> Element {
             || img_url.starts_with("https://")
             || (img_url.starts_with("/") && !img_url.starts_with("//")));
     let alt_name = name_disp.clone();
-    let desc_str = crate::ui::lang::localized(
-        &strain.description.clone().unwrap_or_default(),
-        strain.description_en.as_deref(),
-    );
     let img_url_bust = if !has_image {
         String::new()
     } else {
@@ -577,18 +601,15 @@ fn render_strain_card(strain: ApiStrain, mut cart: Signal<Cart>) -> Element {
         && (video_url.starts_with("http://")
             || video_url.starts_with("https://")
             || (video_url.starts_with("/") && !video_url.starts_with("//")));
-    let mut show_video = use_signal(|| false);
-    let mut detail_open = use_signal(|| false);
-
     rsx! {
         div { key: strain.id.clone(), class: "comet-card", style: card_style,
-            onclick: move |_| detail_open.set(true),
+            onclick: move |_| on_select(),
             CardMedia {
                 image_url: if has_image { Some(img_url_bust.clone()) } else { None },
                 video_url: if has_video { Some(video_url.clone()) } else { None },
                 emoji: emoji.to_string(),
                 alt: alt_name.clone(),
-                on_video_click: move |_| show_video.set(true),
+                on_video_click: move |_| on_video(video_url.clone()),
                 // TZ #2 badge stack: stacked top-left, ordered by visual priority.
                 div { style: "position:absolute;top:8px;left:8px;display:flex;flex-direction:column;gap:4px;z-index:2;align-items:flex-start;",
                     {is_sotd.then(|| rsx! {
@@ -706,54 +727,5 @@ fn render_strain_card(strain: ApiStrain, mut cart: Signal<Cart>) -> Element {
                 }}
             }
         }
-        // Modal rendered as a SIBLING of `.comet-card`, not a child: the card has
-        // `transform`/`will-change` (3D tilt), which would make it the containing
-        // block for the modal's `position:fixed` (and `overflow:hidden` would clip
-        // it) — collapsing the dialog to the card's narrow column. Hoisting it out
-        // lets `position:fixed` resolve against the viewport → full-width dialog.
-        {detail_open().then(|| {
-            let add_id = strain.id.clone();
-            let add_name = name_disp.clone();
-            let add_price = effective_price;
-            let add_label = add_to_cart_label.clone();
-            let avail = strain.is_available && has_real_price;
-            let share_id = strain.id.clone();
-            let share_name = name_disp.clone();
-            rsx! {
-                ProductDetailModal {
-                    name: name_disp.clone(),
-                    image_url: strain.image_url.clone(),
-                    description: desc_str.clone(),
-                    category_badge: Some(badge_label.clone()),
-                    thc: (!thc_str.is_empty()).then(|| thc_str.clone()),
-                    cbd: (!cbd_str.is_empty()).then(|| cbd_str.clone()),
-                    effect: (!effect_str.is_empty()).then(|| effect_str.clone()),
-                    flavor: (!flavor_str.is_empty()).then(|| flavor_str.clone()),
-                    price_line: has_real_price.then(|| format!("{display_price}/g")),
-                    can_add: avail,
-                    add_to_cart_label: Some(format!("{add_label} 🛒")),
-                    on_add_to_cart: move |q: u32| {
-                        cart.write().add_item(CartItem {
-                            id: add_id.clone(),
-                            name: add_name.clone(),
-                            price: add_price,
-                            quantity: q,
-                            image_url: None,
-                            item_type: CartItemType::Strain,
-                            fulfillment: None,
-                        });
-                        crate::ui::telegram::TelegramApp::init().haptic_notification(crate::ui::telegram::HapticNotification::Success);
-                    },
-                    on_share: Some(EventHandler::new(move |_| share_product(ProductKind::Strain, &share_id, &share_name))),
-                    on_close: move |_| detail_open.set(false),
-                }
-            }
-        })}
-        // Hoist VideoModal out of the card so its position:fixed resolves
-        // against the viewport.  Inside .comet-card (will-change:transform +
-        // overflow:hidden) it was clipped to the card rectangle.
-        {show_video().then(|| rsx! {
-            VideoModal { url: video_url.clone(), on_close: move |_| show_video.set(false) }
-        })}
     }
 }

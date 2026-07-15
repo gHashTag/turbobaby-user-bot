@@ -63,20 +63,37 @@ pub fn App() -> Element {
     // Product deep-link target parsed from Telegram.WebApp.initDataUnsafe.start_param.
     // Catalog screens read this signal to navigate/open the shared product modal.
     use_context_provider(|| Signal::new(None::<SharedProduct>));
-    let mut pending_shared = use_context::<Signal<Option<SharedProduct>>>();
+    let pending_shared = use_context::<Signal<Option<SharedProduct>>>();
 
     use_effect(move || {
         install_error_handlers(errors);
     });
 
-    use_effect(move || {
-        if pending_shared.read().is_none() {
-            if let Some(param) = crate::ui::telegram::TelegramApp::init().start_param() {
-                if let Some(product) = parse_start_param(&param) {
-                    pending_shared.set(Some(product));
+    // Telegram WebApp initDataUnsafe may not be populated on the very first
+    // render, so poll start_param briefly instead of reading it once.
+    use_hook(move || {
+        let mut pending = pending_shared.clone();
+        spawn(async move {
+            for _ in 0..30 {
+                if pending.read().is_some() {
+                    return;
+                }
+                if let Some(param) = crate::ui::telegram::TelegramApp::init().start_param() {
+                    if let Some(product) = parse_start_param(&param) {
+                        pending.set(Some(product));
+                        return;
+                    }
+                }
+                #[cfg(target_arch = "wasm32")]
+                {
+                    gloo_timers::future::TimeoutFuture::new(100).await;
+                }
+                #[cfg(not(target_arch = "wasm32"))]
+                {
+                    break;
                 }
             }
-        }
+        });
     });
 
     rsx! {
