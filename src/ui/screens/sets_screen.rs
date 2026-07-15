@@ -358,9 +358,11 @@ where
     let weight_line =
         crate::trios::packs::weight_line(set.total_weight_grams, set.strain_count, &strain_word);
 
-    // Lock every text slot to a fixed height so all set cards are the SAME
-    // size regardless of how much metadata the backend returned.  This mirrors
-    // the way Menu/Accessory cards keep their rows visually aligned.
+    // Use the EXACT same block-root pattern as strain/accessory cards.
+    // The only difference is that set metadata (weight, description) can be
+    // missing, so we keep the same number of visual lines by rendering a
+    // non-breaking space when a slot is empty. Each text slot is clamped to a
+    // fixed line count so every card occupies the same vertical space.
     let weight_text = if weight_line.is_empty() {
         "\u{00A0}".to_string()
     } else {
@@ -386,37 +388,32 @@ where
                 emoji: icon.to_string(),
                 alt: set_name.clone(),
                 on_video_click: move |_| on_video(set.video_url.clone().unwrap_or_default()),
-                // On-image badge (top-left), mirroring strain/accessory cards.
-                span { style: "position:absolute;top:8px;left:8px;z-index:2;font-size:13px;font-weight:700;background:{ACCENT};color:#000;padding:4px 8px;box-shadow:2px 2px 0 #000;",
-                    "📦 SET"
-                }
-                // Promo badge (SALE / SPECIAL OFFER / LIMITED EDITION), under the SET tag.
-                if let Some(bl) = badge_label.clone() {
-                    span { style: "position:absolute;top:38px;left:8px;z-index:2;font-size:11px;font-weight:700;background:{badge_color};color:#fff;padding:3px 7px;box-shadow:2px 2px 0 #000;",
-                        "{bl}"
+                // Badge stack exactly like strain/accessory cards: flex column,
+                // top-left, with the SET tag on top and promo/discount below it.
+                div { style: "position:absolute;top:8px;left:8px;display:flex;flex-direction:column;gap:4px;z-index:2;align-items:flex-start;",
+                    span { style: "font-size:13px;font-weight:700;background:{ACCENT};color:#000;padding:4px 8px;box-shadow:2px 2px 0 #000;", "📦 SET" }
+                    if let Some(bl) = badge_label.clone() {
+                        span { style: "font-size:11px;font-weight:700;background:{badge_color};color:#fff;padding:3px 7px;box-shadow:2px 2px 0 #000;",
+                            "{bl}"
+                        }
                     }
-                }
-                if has_discount {
-                    span { style: "
-                        position:absolute;top:8px;right:8px;
-                        font-size:13px;font-weight:700;background:{ACCENT};color:#000;
-                        padding:4px 8px;box-shadow:2px 2px 0 #000;z-index:2;
-                    ", "{discount_badge}" }
+                    if has_discount {
+                        span { style: "font-size:13px;font-weight:700;background:{ACCENT};color:#000;padding:4px 8px;box-shadow:2px 2px 0 #000;",
+                            "{discount_badge}" }
+                    }
                 }
             }
             div { style: "padding:12px;",
-                div { style: "min-height:2.4em;margin-bottom:6px;",
-                    div { style: "font-size:17px;font-weight:700;color:#fff;line-height:1.2;text-shadow:2px 2px 0 #000;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;",
-                        "{set_name}"
-                    }
+                div { style: "font-size:17px;font-weight:700;margin-bottom:6px;color:#fff;line-height:1.2;text-shadow:2px 2px 0 #000;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:2.4em;max-height:2.4em;",
+                    "{set_name}"
                 }
-                div { style: "font-size:12px;color:#b388ff;font-weight:600;margin-bottom:4px;min-height:1.2em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;",
+                div { style: "font-size:13px;color:#b388ff;font-weight:600;margin-bottom:4px;line-height:1.35;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-height:1.35em;max-height:1.35em;",
                     "{weight_text}"
                 }
-                div { style: "font-size:13px;color:#888;margin-bottom:8px;line-height:1.35;min-height:1.35em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;",
+                div { style: "font-size:13px;color:#888;margin-bottom:8px;line-height:1.35;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-height:1.35em;max-height:1.35em;",
                     "{desc_text}"
                 }
-                div { style: "display:flex;gap:6px;align-items:baseline;margin-bottom:6px;min-height:1.2em;",
+                div { style: "display:flex;gap:6px;align-items:baseline;margin-bottom:6px;min-height:1.2em;max-height:1.2em;",
                     span { style: "font-size:20px;font-weight:800;color:#ffe600;text-shadow:2px 2px 0 #000;", "{price_str}" }
                     {has_discount.then(|| rsx! {
                         span { style: "font-size:13px;color:#888;text-decoration:line-through;margin-left:4px;", "{original_price_str}" }
