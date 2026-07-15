@@ -358,19 +358,13 @@ where
     let weight_line =
         crate::trios::packs::weight_line(set.total_weight_grams, set.strain_count, &strain_word);
 
+    let card_style = format!(
+        "background:#16213e;border:4px solid {};box-shadow:4px 4px 0 #000;overflow:hidden;position:relative;cursor:pointer;{}",
+        ACCENT, opacity
+    );
+
     rsx! {
-        div { style: "
-            background:#16213e;
-            border:4px solid {ACCENT};
-            box-shadow:4px 4px 0 #000;
-            overflow:hidden;
-            position:relative;
-            cursor:pointer;
-            display:flex;
-            flex-direction:column;
-            height:100%;
-            {opacity}
-        ",
+        div { key: set.id.clone(), class: "comet-card", style: card_style,
             onclick: move |_| on_select(),
             CardMedia {
                 image_url: set.image_url.clone(),
@@ -396,31 +390,30 @@ where
                     ", "{discount_badge}" }
                 }
             }
-            div { style: "padding:14px;display:flex;flex-direction:column;flex:1;min-height:0;",
-                div { style: "display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;",
-                    span { style: "font-size:16px;font-weight:700;text-shadow:2px 2px 0 #000;", "{set_name}" }
+            div { style: "padding:12px;",
+                div { style: "font-size:17px;font-weight:700;margin-bottom:6px;color:#fff;line-height:1.2;text-shadow:2px 2px 0 #000;",
+                    "{set_name}"
                 }
                 if !weight_line.is_empty() {
-                    div { style: "font-size:12px;color:#b388ff;font-weight:600;margin-bottom:6px;", "⚖️ {weight_line}" }
+                    div { style: "font-size:12px;color:#b388ff;font-weight:600;margin-bottom:4px;", "⚖️ {weight_line}" }
                 }
                 if !desc.is_empty() {
-                    div { style: "font-size:13px;color:#888;margin-bottom:6px;", "{desc}" }
+                    div { style: "font-size:13px;color:#888;margin-bottom:8px;line-height:1.35;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;", "{desc}" }
                 }
-                div { style: "display:flex;justify-content:space-between;align-items:center;margin-top:auto;",
-                    div {
-                        if has_discount {
-                            span { style: "font-size:13px;color:#888;text-decoration:line-through;margin-right:6px;", "{original_price_str}" }
-                        }
-                        span { style: "font-size:22px;font-weight:800;color:#ffe600;text-shadow:2px 2px 0 #000;", "{price_str}" }
-                    }
+                div { style: "display:flex;gap:6px;align-items:baseline;margin-bottom:6px;",
+                    span { style: "font-size:20px;font-weight:800;color:#ffe600;text-shadow:2px 2px 0 #000;", "{price_str}" }
+                    {has_discount.then(|| rsx! {
+                        span { style: "font-size:13px;color:#888;text-decoration:line-through;margin-left:4px;", "{original_price_str}" }
+                    })}
                 }
             }
-            div { style: "padding:0 14px 14px;margin-top:auto;",
+            div { style: "padding:0 12px 12px;",
                 {if is_available {
                     rsx! {
                         button {
                             style: "
-                                font-size:14px;font-weight:700;width:100%;padding:12px 20px;
+                                font-size:14px;font-weight:700;
+                                width:100%;padding:12px 20px;
                                 background:#39ff14;color:#000;
                                 border:4px solid #2d9e0f;
                                 box-shadow:3px 3px 0 #000;
@@ -440,7 +433,7 @@ where
                                 });
                                 crate::ui::telegram::TelegramApp::init().haptic_notification(crate::ui::telegram::HapticNotification::Success);
                             },
-                            "{add_to_cart}"
+                            "{add_to_cart} 🛒"
                         }
                     }
                 } else {
