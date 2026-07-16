@@ -211,7 +211,7 @@ pub fn SetsScreen() -> Element {
                                     }
                                 }
                             }
-                            div { style: "display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:0 16px;",
+                            div { style: "display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:0 16px;grid-auto-rows:1fr;",
                                 for set in ordered.iter() {
                                     {
                                         let s = set.clone();
@@ -358,11 +358,12 @@ where
     let weight_line =
         crate::trios::packs::weight_line(set.total_weight_grams, set.strain_count, &strain_word);
 
-    // Use the EXACT same block-root pattern as strain/accessory cards.
-    // The only difference is that set metadata (weight, description) can be
-    // missing, so we keep the same number of visual lines by rendering a
-    // non-breaking space when a slot is empty. Each text slot is clamped to a
-    // fixed line count so every card occupies the same vertical space.
+    // The Menu/Accessory cards look uniform because their text blocks are
+    // close enough in height that the default grid row stretch hides the
+    // differences.  Set cards must make that uniform height EXPLICIT because
+    // weight/description can be empty for some sets.  We do it by reserving
+    // fixed-height slots for every text line and rendering a non-breaking
+    // space when a slot has no real text.
     let weight_text = if weight_line.is_empty() {
         "\u{00A0}".to_string()
     } else {
@@ -375,7 +376,7 @@ where
     };
 
     let card_style = format!(
-        "background:#16213e;border:4px solid {};box-shadow:4px 4px 0 #000;overflow:hidden;position:relative;cursor:pointer;{}",
+        "background:#16213e;border:4px solid {};box-shadow:4px 4px 0 #000;overflow:hidden;position:relative;cursor:pointer;height:100%;{}",
         ACCENT, opacity
     );
 
@@ -403,14 +404,14 @@ where
                     }
                 }
             }
-            div { style: "padding:12px;",
-                div { style: "font-size:17px;font-weight:700;margin-bottom:6px;color:#fff;line-height:1.2;text-shadow:2px 2px 0 #000;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:2.4em;max-height:2.4em;",
+            div { style: "padding:12px;display:flex;flex-direction:column;",
+                div { style: "font-size:17px;font-weight:700;margin-bottom:6px;color:#fff;line-height:1.2;text-shadow:2px 2px 0 #000;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;",
                     "{set_name}"
                 }
-                div { style: "font-size:13px;color:#b388ff;font-weight:600;margin-bottom:4px;line-height:1.35;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-height:1.35em;max-height:1.35em;",
+                div { style: "font-size:13px;color:#b388ff;font-weight:600;margin-bottom:4px;line-height:1.35;min-height:1.35em;max-height:1.35em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;",
                     "{weight_text}"
                 }
-                div { style: "font-size:13px;color:#888;margin-bottom:8px;line-height:1.35;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-height:1.35em;max-height:1.35em;",
+                div { style: "font-size:13px;color:#888;margin-bottom:8px;line-height:1.35;min-height:1.35em;max-height:1.35em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;",
                     "{desc_text}"
                 }
                 div { style: "display:flex;gap:6px;align-items:baseline;margin-bottom:6px;min-height:1.2em;max-height:1.2em;",
@@ -420,7 +421,7 @@ where
                     })}
                 }
             }
-            div { style: "padding:0 12px 12px;",
+            div { style: "padding:0 12px 12px;margin-top:auto;",
                 {if is_available {
                     rsx! {
                         button {
