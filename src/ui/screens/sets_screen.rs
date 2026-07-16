@@ -211,7 +211,7 @@ pub fn SetsScreen() -> Element {
                                     }
                                 }
                             }
-                            div { style: "display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:0 16px;grid-auto-rows:1fr;",
+                            div { style: "display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:0 16px;align-items:start;",
                                 for set in ordered.iter() {
                                     {
                                         let s = set.clone();
@@ -376,7 +376,7 @@ where
     };
 
     let card_style = format!(
-        "background:#16213e;border:4px solid {};box-shadow:4px 4px 0 #000;overflow:hidden;position:relative;cursor:pointer;height:100%;{}",
+        "background:#16213e;border:4px solid {};box-shadow:4px 4px 0 #000;overflow:hidden;position:relative;cursor:pointer;{}",
         ACCENT, opacity
     );
 
@@ -404,7 +404,7 @@ where
                     }
                 }
             }
-            div { style: "padding:12px;display:flex;flex-direction:column;",
+            div { style: "padding:12px;",
                 div { style: "font-size:17px;font-weight:700;margin-bottom:6px;color:#fff;line-height:1.2;text-shadow:2px 2px 0 #000;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;",
                     "{set_name}"
                 }
@@ -421,7 +421,7 @@ where
                     })}
                 }
             }
-            div { style: "padding:0 12px 12px;margin-top:auto;",
+            div { style: "padding:0 12px 12px;",
                 {if is_available {
                     rsx! {
                         button {
