@@ -3,6 +3,7 @@ use crate::ui::api::context::api_base_url;
 use crate::ui::components::bottom_nav::BottomNav;
 use crate::ui::components::card_media::CardMedia;
 use crate::ui::components::product_detail_modal::ProductDetailModal;
+use crate::ui::components::set_card::{render_uniform_set_card, SetCardData};
 use crate::ui::state::{Cart, CartItem, CartItemType};
 use dioxus::prelude::*;
 use serde::Deserialize;
@@ -182,9 +183,32 @@ pub fn SetsScreen() -> Element {
                                     }
                                 }
                             }
-                            div { style: "display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:0 16px;",
+                            div { style: "display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:0 16px;align-items:stretch;",
                                 for set in ordered.iter() {
-                                    { render_set_card(set.clone(), cart) }
+                                    {
+                                        let s = set.clone();
+                                        let c = cart;
+                                        render_uniform_set_card(
+                                            SetCardData {
+                                                id: s.id.clone(),
+                                                name: s.name.clone(),
+                                                name_en: s.name_en.clone(),
+                                                description: s.description.clone(),
+                                                description_en: s.description_en.clone(),
+                                                icon: s.icon.clone(),
+                                                total_price: s.total_price,
+                                                discount_percent: s.discount_percent,
+                                                image_url: s.image_url.clone(),
+                                                video_url: s.video_url.clone(),
+                                                is_available: s.is_available,
+                                                strain_count: s.strain_count,
+                                                total_weight_grams: s.total_weight_grams,
+                                                badge: s.badge.clone(),
+                                            },
+                                            c,
+                                            ACCENT,
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -214,6 +238,9 @@ pub fn SetsScreen() -> Element {
     }
 }
 
+// Original free-form set card kept as the user asked to revert the design
+// before building the separate uniform-height variant.
+#[allow(dead_code)]
 fn render_set_card(set: ApiSet, mut cart: Signal<Cart>) -> Element {
     let add_to_cart = t(crate::ui::lang::current_lang(), T_ADD_TO_CART).to_string();
     let discount = if set.discount_percent.is_finite() {
