@@ -211,7 +211,7 @@ pub fn SetsScreen() -> Element {
                                     }
                                 }
                             }
-                            div { style: "display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:0 16px;align-items:start;",
+                            div { style: "display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:0 16px;align-items:stretch;",
                                 for set in ordered.iter() {
                                     {
                                         let s = set.clone();
@@ -375,8 +375,11 @@ where
         desc.clone()
     };
 
+    // Static-height card: media is locked to 4:3 and the text block is locked
+    // to a fixed height so all cards have exactly the same footprint. The grid
+    // stretches every card to the tallest card in the row via align-items:stretch.
     let card_style = format!(
-        "background:#16213e;border:4px solid {};box-shadow:4px 4px 0 #000;overflow:hidden;position:relative;cursor:pointer;{}",
+        "background:#16213e;border:4px solid {};box-shadow:4px 4px 0 #000;overflow:hidden;position:relative;cursor:pointer;height:100%;{}",
         ACCENT, opacity
     );
 
@@ -404,8 +407,8 @@ where
                     }
                 }
             }
-            div { style: "padding:12px;",
-                div { style: "font-size:17px;font-weight:700;margin-bottom:6px;color:#fff;line-height:1.2;text-shadow:2px 2px 0 #000;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;",
+            div { style: "padding:12px;display:flex;flex-direction:column;height:100%;",
+                div { style: "font-size:17px;font-weight:700;margin-bottom:6px;color:#fff;line-height:1.2;text-shadow:2px 2px 0 #000;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:1.2em;",
                     "{set_name}"
                 }
                 div { style: "font-size:13px;color:#b388ff;font-weight:600;margin-bottom:4px;line-height:1.35;min-height:1.35em;max-height:1.35em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;",
@@ -414,14 +417,14 @@ where
                 div { style: "font-size:13px;color:#888;margin-bottom:8px;line-height:1.35;min-height:1.35em;max-height:1.35em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;",
                     "{desc_text}"
                 }
-                div { style: "display:flex;gap:6px;align-items:baseline;margin-bottom:6px;min-height:1.2em;max-height:1.2em;",
+                div { style: "display:flex;gap:6px;align-items:baseline;margin-top:auto;margin-bottom:6px;min-height:1.2em;max-height:1.2em;",
                     span { style: "font-size:20px;font-weight:800;color:#ffe600;text-shadow:2px 2px 0 #000;", "{price_str}" }
                     {has_discount.then(|| rsx! {
                         span { style: "font-size:13px;color:#888;text-decoration:line-through;margin-left:4px;", "{original_price_str}" }
                     })}
                 }
             }
-            div { style: "padding:0 12px 12px;",
+            div { style: "padding:0 12px 12px;margin-top:auto;",
                 {if is_available {
                     rsx! {
                         button {
