@@ -1,13 +1,10 @@
 //! Dedicated uniform-height set card for the Sets grid.
 //!
-//! This component replicates the original set card design (CardMedia-style
-//! image/video area that fills its container with `object-fit:cover`, badge
-//! stack, name/weight/price/button layout) but locks the whole card to a fixed
-//! aspect ratio so every cell in the 2-column grid is exactly the same size.
-//!
-//! The media area is 50% of the card height, which is the same proportion as the
-//! old 4:3 media block inside a 2:3 card.  The image/video is forced to cover
-//! that whole area.
+//! This component replicates the original set card design: the image/video area
+//! fills the top part of the card with `width:100%;height:100%;object-fit:cover`
+//! (the same style used in the very first set card video preview in 5a2d97a),
+//! badge stack, name/weight/price/button layout, and locks the whole card to a
+//! fixed aspect ratio so every cell in the 2-column grid is exactly the same size.
 
 use crate::trios::i18n::{t, T_ADD_TO_CART};
 use crate::ui::lang;
@@ -109,15 +106,13 @@ pub fn render_uniform_set_card(
         desc.clone()
     };
 
-    let s0 = set.clone();
-    let s_add = set.clone();
-    let img_url = s0.image_url.clone().unwrap_or_default();
+    let img_url = set.image_url.clone().unwrap_or_default();
     let has_image = is_media_url(&img_url);
-    let vid_url = s0.video_url.clone().unwrap_or_default();
+    let vid_url = set.video_url.clone().unwrap_or_default();
     let has_video = is_media_url(&vid_url);
 
-    // Lock the card to a 2:3 portrait ratio.  Every card in the 2-column grid
-    // therefore has the same height, derived directly from its width.
+    // Lock the card to a fixed aspect ratio so every card in the 2-column grid
+    // is the same height.  The media area takes 50% of the card.
     let card_style = format!(
         "background:#16213e;border:4px solid {};box-shadow:4px 4px 0 #000;overflow:hidden;position:relative;cursor:pointer;display:flex;flex-direction:column;height:100%;aspect-ratio:2/3;{}",
         accent, opacity
@@ -198,7 +193,7 @@ pub fn render_uniform_set_card(
                         ",
                         onclick: move |e: Event<MouseData>| {
                             e.stop_propagation();
-                            let s = s_add.clone();
+                            let s = set.clone();
                             let mut c = cart.write();
                             c.add_item(CartItem {
                                 id: s.id.clone(),
