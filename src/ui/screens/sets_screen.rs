@@ -205,7 +205,11 @@ pub fn SetsScreen() -> Element {
                                     }
                                 }
                             }
-                            div { style: "display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:0 16px;",
+                            // Two-column masonry: each card keeps its natural
+                            // media height (full uncropped photo/video), but the
+                            // browser balances the columns so rows never look
+                            // staggered when images have different aspect ratios.
+                            div { style: "column-count:2;column-gap:12px;padding:0 16px;",
                                 for set in ordered.iter() {
                                     { render_set_card(set.clone(), cart) }
                                 }
@@ -346,6 +350,13 @@ fn render_set_card(set: ApiSet, mut cart: Signal<Cart>) -> Element {
             overflow:hidden;
             position:relative;
             cursor:pointer;
+            width:100%;
+            box-sizing:border-box;
+            break-inside:avoid;
+            page-break-inside:avoid;
+            margin-bottom:12px;
+            display:inline-block;
+            vertical-align:top;
             {opacity}
         ",
             onclick: move |_| detail_open.set(true),
