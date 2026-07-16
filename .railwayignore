@@ -3,3 +3,7 @@ target/
 e2e/
 node_modules/
 assets/uploads/
+# Runtime user uploads (timestamped filenames). Static product images have fixed
+# names and are kept; these are handled by S3 or local dev, not production deploys.
+assets/image-*.*
+assets/video-*.*
