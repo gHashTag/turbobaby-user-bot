@@ -9,7 +9,6 @@ pub mod button;
 pub mod card;
 pub mod card_media;
 pub mod modal;
-pub mod set_card;
 
 pub mod cart_item;
 pub mod image_lightbox;
