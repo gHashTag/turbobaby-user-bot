@@ -3,8 +3,6 @@ use crate::ui::api::context::api_base_url;
 use crate::ui::components::bottom_nav::BottomNav;
 use crate::ui::components::card_media::CardMedia;
 use crate::ui::components::product_detail_modal::ProductDetailModal;
-use crate::ui::components::video_modal::VideoModal;
-use crate::ui::share::{share_product, ProductKind, SharedProduct};
 use crate::ui::state::{Cart, CartItem, CartItemType};
 use dioxus::prelude::*;
 use serde::Deserialize;
@@ -106,12 +104,12 @@ fn sort_packs(v: &mut [ApiSet], key: &str) {
 
 #[component]
 pub fn SetsScreen() -> Element {
-    let mut cart = use_context::<Signal<Cart>>();
+    let cart = use_context::<Signal<Cart>>();
     let mut sort_by = use_signal(|| "default".to_string());
 
     let sets_title = t(crate::ui::lang::current_lang(), T_SETS_TITLE);
     let sets_desc = t(crate::ui::lang::current_lang(), T_SETS_DESC);
-    let add_to_cart = t(crate::ui::lang::current_lang(), T_ADD_TO_CART);
+    let _add_to_cart = t(crate::ui::lang::current_lang(), T_ADD_TO_CART);
 
     let sets_resource = use_resource(|| async move {
         let base = api_base_url();
@@ -125,33 +123,6 @@ pub fn SetsScreen() -> Element {
             .await
             .map(|r| r.sets)
             .map_err(|e| e.to_string())
-    });
-
-    // Single selected set for both card taps and deep-link shares.
-    // Held at screen level because the cards render inline in a `for` loop,
-    // where a per-card `use_signal` would violate hook ordering when the list
-    // is re-sorted.
-    let mut selected_set = use_signal(|| None::<ApiSet>);
-    let mut selected_set_video = use_signal(|| None::<String>);
-
-    // Deep-link target: open the shared set modal once the catalog loads.
-    let mut pending = use_context::<Signal<Option<SharedProduct>>>();
-    use_effect(move || {
-        let target = pending.read().clone();
-        if let Some(target) = target {
-            if target.kind == ProductKind::Set {
-                match &*sets_resource.read() {
-                    Some(Ok(sets)) => {
-                        if let Some(s) = sets.iter().find(|s| s.id == target.id).cloned() {
-                            selected_set.set(Some(s));
-                        }
-                        pending.set(None);
-                    }
-                    Some(Err(_)) => pending.set(None),
-                    None => {}
-                }
-            }
-        }
     });
 
     let all_sets = match &*sets_resource.read() {
@@ -211,13 +182,9 @@ pub fn SetsScreen() -> Element {
                                     }
                                 }
                             }
-                            div { style: "display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:0 16px;align-items:stretch;",
+                            div { style: "display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:0 16px;",
                                 for set in ordered.iter() {
-                                    {
-                                        let s = set.clone();
-                                        let s_select = s.clone();
-                                        render_set_card(s, cart, move || selected_set.set(Some(s_select.clone())), move |url| selected_set_video.set(Some(url)))
-                                    }
+                                    { render_set_card(set.clone(), cart) }
                                 }
                             }
                         }
@@ -242,79 +209,12 @@ pub fn SetsScreen() -> Element {
                 }
             }
 
-            // Selected set modal (card tap or deep link).
-            {selected_set().map(|set| {
-                let add_id = set.id.clone();
-                let add_name = crate::ui::lang::localized(&set.name, set.name_en.as_deref());
-                let discount = if set.discount_percent.is_finite() {
-                    set.discount_percent.max(0.0)
-                } else {
-                    0.0
-                };
-                let total_price = if set.total_price.is_finite() {
-                    set.total_price.max(0.0)
-                } else {
-                    0.0
-                };
-                let has_discount = discount > 0.0;
-                let discounted_price = if has_discount {
-                    (total_price * (1.0 - discount / 100.0)).max(0.0)
-                } else {
-                    total_price
-                };
-                let price_str = crate::trios::pricing::format_baht(discounted_price);
-                let avail = set.is_available.unwrap_or(true);
-                let desc = crate::ui::lang::localized(
-                    set.description.as_deref().unwrap_or(""),
-                    set.description_en.as_deref(),
-                );
-                let share_name = add_name.clone();
-                let share_id = set.id.clone();
-                rsx! {
-                    ProductDetailModal {
-                        name: add_name.clone(),
-                        image_url: set.image_url.clone(),
-                        description: desc,
-                        price_line: Some(price_str),
-                        can_add: avail,
-                        add_to_cart_label: Some(add_to_cart.to_string()),
-                        on_add_to_cart: move |q: u32| {
-                            cart.write().add_item(CartItem {
-                                id: add_id.clone(),
-                                name: add_name.clone(),
-                                price: discounted_price,
-                                quantity: q,
-                                image_url: None,
-                                item_type: CartItemType::Set,
-                                fulfillment: None,
-                            });
-                            crate::ui::telegram::TelegramApp::init().haptic_notification(crate::ui::telegram::HapticNotification::Success);
-                        },
-                        on_share: Some(EventHandler::new(move |_| share_product(ProductKind::Set, &share_id, &share_name))),
-                        on_close: move |_| selected_set.set(None),
-                    }
-                }
-            })}
-
-            {selected_set_video().map(|url| rsx! {
-                VideoModal { url, on_close: move |_| selected_set_video.set(None) }
-            })}
-
             BottomNav {}
         }
     }
 }
 
-fn render_set_card<S, V>(
-    set: ApiSet,
-    mut cart: Signal<Cart>,
-    mut on_select: S,
-    mut on_video: V,
-) -> Element
-where
-    S: FnMut() + 'static,
-    V: FnMut(String) + 'static,
-{
+fn render_set_card(set: ApiSet, mut cart: Signal<Cart>) -> Element {
     let add_to_cart = t(crate::ui::lang::current_lang(), T_ADD_TO_CART).to_string();
     let discount = if set.discount_percent.is_finite() {
         set.discount_percent.max(0.0)
@@ -346,6 +246,8 @@ where
         set.description.as_deref().unwrap_or(""),
         set.description_en.as_deref(),
     );
+    let mut detail_open = use_signal(|| false);
+    let desc_full = desc.to_string();
     let is_available = set.is_available.unwrap_or(true);
     let opacity = if is_available { "" } else { "opacity:0.6;" };
     // Packs Phase 1: promo badge chip + weight/strain-count meta line.
@@ -358,79 +260,65 @@ where
     let weight_line =
         crate::trios::packs::weight_line(set.total_weight_grams, set.strain_count, &strain_word);
 
-    // The Menu/Accessory cards look uniform because their text blocks are
-    // close enough in height that the default grid row stretch hides the
-    // differences.  Set cards must make that uniform height EXPLICIT because
-    // weight/description can be empty for some sets.  We do it by reserving
-    // fixed-height slots for every text line and rendering a non-breaking
-    // space when a slot has no real text.
-    let weight_text = if weight_line.is_empty() {
-        "\u{00A0}".to_string()
-    } else {
-        format!("⚖️ {}", weight_line)
-    };
-    let desc_text = if desc.is_empty() {
-        "\u{00A0}".to_string()
-    } else {
-        desc.clone()
-    };
-
-    // Static-height card: media is locked to 4:3 and the text block is locked
-    // to a fixed height so all cards have exactly the same footprint. The grid
-    // stretches every card to the tallest card in the row via align-items:stretch.
-    let card_style = format!(
-        "background:#16213e;border:4px solid {};box-shadow:4px 4px 0 #000;overflow:hidden;position:relative;cursor:pointer;height:100%;{}",
-        ACCENT, opacity
-    );
-
     rsx! {
-        div { key: set.id.clone(), class: "comet-card", style: card_style,
-            onclick: move |_| on_select(),
+        div { style: "
+            background:#16213e;
+            border:4px solid {ACCENT};
+            box-shadow:4px 4px 0 #000;
+            overflow:hidden;
+            position:relative;
+            cursor:pointer;
+            {opacity}
+        ",
+            onclick: move |_| detail_open.set(true),
             CardMedia {
                 image_url: set.image_url.clone(),
                 video_url: set.video_url.clone(),
                 emoji: icon.to_string(),
                 alt: set_name.clone(),
-                on_video_click: move |_| on_video(set.video_url.clone().unwrap_or_default()),
-                // Badge stack exactly like strain/accessory cards: flex column,
-                // top-left, with the SET tag on top and promo/discount below it.
-                div { style: "position:absolute;top:8px;left:8px;display:flex;flex-direction:column;gap:4px;z-index:2;align-items:flex-start;",
-                    span { style: "font-size:13px;font-weight:700;background:{ACCENT};color:#000;padding:4px 8px;box-shadow:2px 2px 0 #000;", "📦 SET" }
-                    if let Some(bl) = badge_label.clone() {
-                        span { style: "font-size:11px;font-weight:700;background:{badge_color};color:#fff;padding:3px 7px;box-shadow:2px 2px 0 #000;",
-                            "{bl}"
+                // On-image badge (top-left), mirroring strain/accessory cards.
+                span { style: "position:absolute;top:8px;left:8px;z-index:2;font-size:13px;font-weight:700;background:{ACCENT};color:#000;padding:4px 8px;box-shadow:2px 2px 0 #000;",
+                    "📦 SET"
+                }
+                // Promo badge (SALE / SPECIAL OFFER / LIMITED EDITION), under the SET tag.
+                if let Some(bl) = badge_label.clone() {
+                    span { style: "position:absolute;top:38px;left:8px;z-index:2;font-size:11px;font-weight:700;background:{badge_color};color:#fff;padding:3px 7px;box-shadow:2px 2px 0 #000;",
+                        "{bl}"
+                    }
+                }
+                if has_discount {
+                    span { style: "
+                        position:absolute;top:8px;right:8px;
+                        font-size:13px;font-weight:700;background:{ACCENT};color:#000;
+                        padding:4px 8px;box-shadow:2px 2px 0 #000;z-index:2;
+                    ", "{discount_badge}" }
+                }
+            }
+            div { style: "padding:14px;",
+                div { style: "display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;",
+                    span { style: "font-size:16px;font-weight:700;text-shadow:2px 2px 0 #000;", "{set_name}" }
+                }
+                if !weight_line.is_empty() {
+                    div { style: "font-size:12px;color:#b388ff;font-weight:600;margin-bottom:6px;", "⚖️ {weight_line}" }
+                }
+                if !desc.is_empty() {
+                    div { style: "font-size:13px;color:#888;margin-bottom:6px;", "{desc}" }
+                }
+                div { style: "display:flex;justify-content:space-between;align-items:center;",
+                    div {
+                        if has_discount {
+                            span { style: "font-size:13px;color:#888;text-decoration:line-through;margin-right:6px;", "{original_price_str}" }
                         }
-                    }
-                    if has_discount {
-                        span { style: "font-size:13px;font-weight:700;background:{ACCENT};color:#000;padding:4px 8px;box-shadow:2px 2px 0 #000;",
-                            "{discount_badge}" }
+                        span { style: "font-size:22px;font-weight:800;color:#ffe600;text-shadow:2px 2px 0 #000;", "{price_str}" }
                     }
                 }
             }
-            div { style: "padding:12px;display:flex;flex-direction:column;height:100%;",
-                div { style: "font-size:17px;font-weight:700;margin-bottom:6px;color:#fff;line-height:1.2;text-shadow:2px 2px 0 #000;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:1.2em;",
-                    "{set_name}"
-                }
-                div { style: "font-size:13px;color:#b388ff;font-weight:600;margin-bottom:4px;line-height:1.35;min-height:1.35em;max-height:1.35em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;",
-                    "{weight_text}"
-                }
-                div { style: "font-size:13px;color:#888;margin-bottom:8px;line-height:1.35;min-height:1.35em;max-height:1.35em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;",
-                    "{desc_text}"
-                }
-                div { style: "display:flex;gap:6px;align-items:baseline;margin-top:auto;margin-bottom:6px;min-height:1.2em;max-height:1.2em;",
-                    span { style: "font-size:20px;font-weight:800;color:#ffe600;text-shadow:2px 2px 0 #000;", "{price_str}" }
-                    {has_discount.then(|| rsx! {
-                        span { style: "font-size:13px;color:#888;text-decoration:line-through;margin-left:4px;", "{original_price_str}" }
-                    })}
-                }
-            }
-            div { style: "padding:0 12px 12px;margin-top:auto;",
+            div { style: "padding:0 14px 14px;",
                 {if is_available {
                     rsx! {
                         button {
                             style: "
-                                font-size:14px;font-weight:700;
-                                width:100%;padding:12px 20px;
+                                font-size:14px;font-weight:700;width:100%;padding:12px 20px;
                                 background:#39ff14;color:#000;
                                 border:4px solid #2d9e0f;
                                 box-shadow:3px 3px 0 #000;
@@ -450,7 +338,7 @@ where
                                 });
                                 crate::ui::telegram::TelegramApp::init().haptic_notification(crate::ui::telegram::HapticNotification::Success);
                             },
-                            "{add_to_cart} 🛒"
+                            "{add_to_cart}"
                         }
                     }
                 } else {
@@ -466,6 +354,35 @@ where
                     }
                 }}
             }
+            {detail_open().then(|| {
+                let add_id = set.id.clone();
+                let add_name = crate::ui::lang::localized(&set.name, set.name_en.as_deref());
+                let add_price = discounted_price;
+                let avail = is_available;
+                rsx! {
+                    ProductDetailModal {
+                        name: crate::ui::lang::localized(&set.name, set.name_en.as_deref()),
+                        image_url: set.image_url.clone(),
+                        description: desc_full.clone(),
+                        price_line: Some(price_str.clone()),
+                        can_add: avail,
+                        add_to_cart_label: Some(add_to_cart.clone()),
+                        on_add_to_cart: move |q: u32| {
+                            cart.write().add_item(CartItem {
+                                id: add_id.clone(),
+                                name: add_name.clone(),
+                                price: add_price,
+                                quantity: q,
+                                image_url: None,
+                                item_type: CartItemType::Set,
+                                fulfillment: None,
+                            });
+                            crate::ui::telegram::TelegramApp::init().haptic_notification(crate::ui::telegram::HapticNotification::Success);
+                        },
+                        on_close: move |_| detail_open.set(false),
+                    }
+                }
+            })}
         }
     }
 }
