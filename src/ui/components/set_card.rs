@@ -1,20 +1,20 @@
-//! Dedicated set card with a uniform footprint.
+//! Dedicated uniform-height set card for the Sets grid.
 //!
-//! Unlike the free-form `render_set_card` in `sets_screen.rs` (which shows the
-//! whole image at natural proportions and therefore has variable height), this
-//! component locks the card to a fixed aspect ratio and fills the media area
-//! with `width:100%;height:100%;object-fit:cover`.  Every card in the grid has
-//! the same height because the height is derived from the width via
-//! `aspect-ratio`.
+//! This component replicates the original set card design (CardMedia-style
+//! image/video area that fills its container with `object-fit:cover`, badge
+//! stack, name/weight/price/button layout) but locks the whole card to a fixed
+//! aspect ratio so every cell in the 2-column grid is exactly the same size.
+//!
+//! The media area is 50% of the card height, which is the same proportion as the
+//! old 4:3 media block inside a 2:3 card.  The image/video is forced to cover
+//! that whole area.
 
 use crate::trios::i18n::{t, T_ADD_TO_CART};
-use crate::ui::components::product_detail_modal::ProductDetailModal;
-use crate::ui::components::video_modal::VideoModal;
 use crate::ui::lang;
 use crate::ui::state::{Cart, CartItem, CartItemType};
 use dioxus::prelude::*;
 
-/// Public, serializable data needed to render a set card.
+/// Public data needed to render a uniform set card.
 #[derive(PartialEq, Clone)]
 pub struct SetCardData {
     pub id: String,
@@ -49,17 +49,19 @@ impl SetCardData {
     }
 }
 
-/// Render a uniform-height set card for the Sets grid.
+/// Render a uniform-height set card.
 ///
-/// Kept as a plain function (not a `#[component]`) because it needs a
-/// `Signal<Cart>` handle; passing signals through `#[component]` props is
-/// fragile in Dioxus 0.6 and the inline function call works reliably.
+/// `on_select` opens the product detail modal; `on_video` opens the video
+/// modal.  Both are hoisted to the screen level so the card itself does not
+/// hold per-item signals (which would break hook ordering when the grid is
+/// re-sorted).
 pub fn render_uniform_set_card(
     set: SetCardData,
-    cart: Signal<Cart>,
+    mut cart: Signal<Cart>,
     accent: &'static str,
+    mut on_select: impl FnMut() + 'static,
+    mut on_video: impl FnMut(String) + 'static,
 ) -> Element {
-    let mut cart = cart;
     let add_to_cart_label = t(lang::current_lang(), T_ADD_TO_CART).to_string();
     let price = set.effective_price();
     let has_discount = set.discount_percent > 0.0 && set.discount_percent.is_finite();
@@ -82,7 +84,9 @@ pub fn render_uniform_set_card(
     let opacity = if is_available { "" } else { "opacity:0.6;" };
 
     let badge = crate::trios::packs::PackBadge::from_str(&set.badge);
-    let badge_label = badge.label().map(|(ru, en)| lang::localized(ru, Some(en)));
+    let badge_label = badge
+        .label()
+        .map(|(ru, en)| lang::localized(ru, Some(en)));
     let badge_color = badge.color();
     let strain_word = lang::localized("сортов", Some("strains"));
     let weight_line = crate::trios::packs::weight_line(
@@ -91,30 +95,39 @@ pub fn render_uniform_set_card(
         &strain_word,
     );
 
-    let mut detail_open = use_signal(|| false);
-    let mut show_video = use_signal(|| false);
+    // Keep the same number of visual text lines on every card so the content
+    // area is identical in size.  Use a non-breaking space when a slot has no
+    // real text.
+    let weight_text = if weight_line.is_empty() {
+        "\u{00A0}".to_string()
+    } else {
+        format!("⚖️ {}", weight_line)
+    };
+    let desc_text = if desc.is_empty() {
+        "\u{00A0}".to_string()
+    } else {
+        desc.clone()
+    };
 
     let s0 = set.clone();
-    let s4 = set.clone();
-    let s5 = set.clone();
+    let s_add = set.clone();
     let img_url = s0.image_url.clone().unwrap_or_default();
     let has_image = is_media_url(&img_url);
     let vid_url = s0.video_url.clone().unwrap_or_default();
     let has_video = is_media_url(&vid_url);
 
-    // Portrait product card: height is 1.5× the width, so every card in the
-    // 2-column grid is identical in size. The media area fills the top ~58% of
-    // the card and the image/video is forced to cover that entire area.
+    // Lock the card to a 2:3 portrait ratio.  Every card in the 2-column grid
+    // therefore has the same height, derived directly from its width.
     let card_style = format!(
         "background:#16213e;border:4px solid {};box-shadow:4px 4px 0 #000;overflow:hidden;position:relative;cursor:pointer;display:flex;flex-direction:column;height:100%;aspect-ratio:2/3;{}",
         accent, opacity
     );
 
     rsx! {
-        div { style: card_style,
-            onclick: move |_| detail_open.set(true),
-            // Media area: fills top 58% of the card, image/video cover it fully.
-            div { style: "flex:0 0 58%;position:relative;overflow:hidden;background:linear-gradient(135deg,#1a1a2e,#16213e);display:flex;align-items:center;justify-content:center;",
+        div { class: "comet-card", style: card_style,
+            onclick: move |_| on_select(),
+            // Media area: exactly 50% of the card height, image/video fill it.
+            div { style: "flex:0 0 50%;position:relative;overflow:hidden;background:linear-gradient(135deg,#1a1a2e,#16213e);display:flex;align-items:center;justify-content:center;",
                 if has_video {
                     video {
                         style: "width:100%;height:100%;object-fit:cover;display:block;",
@@ -131,7 +144,7 @@ pub fn render_uniform_set_card(
                     }
                     div {
                         style: "position:absolute;inset:0;z-index:3;cursor:pointer;",
-                        onclick: move |e: Event<MouseData>| { e.stop_propagation(); show_video.set(true); }
+                        onclick: move |e: Event<MouseData>| { e.stop_propagation(); on_video(vid_url.clone()); }
                     }
                 } else if has_image {
                     img {
@@ -141,52 +154,51 @@ pub fn render_uniform_set_card(
                         style: "width:100%;height:100%;object-fit:cover;display:block;"
                     }
                 } else {
-                    span { style: "font-size:40px;", "{icon}" }
+                    span { style: "font-size:48px;", "{icon}" }
                 }
-                // Badge stack top-left, matching strain/accessory cards.
+                // Badge stack (top-left), matching the original set card.
                 div { style: "position:absolute;top:8px;left:8px;display:flex;flex-direction:column;gap:4px;z-index:4;align-items:flex-start;",
-                    span { style: "font-size:12px;font-weight:700;background:{accent};color:#000;padding:3px 7px;box-shadow:2px 2px 0 #000;", "📦 SET" }
+                    span { style: "font-size:13px;font-weight:700;background:{accent};color:#000;padding:4px 8px;box-shadow:2px 2px 0 #000;", "📦 SET" }
                     if let Some(bl) = badge_label.clone() {
-                        span { style: "font-size:10px;font-weight:700;background:{badge_color};color:#fff;padding:2px 6px;box-shadow:2px 2px 0 #000;", "{bl}" }
+                        span { style: "font-size:11px;font-weight:700;background:{badge_color};color:#fff;padding:3px 7px;box-shadow:2px 2px 0 #000;", "{bl}" }
                     }
                     if has_discount {
-                        span { style: "font-size:12px;font-weight:700;background:{accent};color:#000;padding:3px 7px;box-shadow:2px 2px 0 #000;", "{discount_badge}" }
+                        span { style: "font-size:13px;font-weight:700;background:{accent};color:#000;padding:4px 8px;box-shadow:2px 2px 0 #000;", "{discount_badge}" }
                     }
                 }
             }
-            // Content area: bottom 42% of the card, tightly clamped.
-            div { style: "flex:1 1 auto;padding:10px;display:flex;flex-direction:column;overflow:hidden;",
-                div { style: "font-size:15px;font-weight:700;color:#fff;line-height:1.2;text-shadow:2px 2px 0 #000;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;margin-bottom:4px;",
+            // Content area: fills the remaining 50% of the card, text clamped.
+            div { style: "flex:1 1 auto;padding:12px;display:flex;flex-direction:column;overflow:hidden;",
+                div { style: "font-size:17px;font-weight:700;margin-bottom:6px;color:#fff;line-height:1.2;text-shadow:2px 2px 0 #000;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;",
                     "{set_name}"
                 }
-                if !weight_line.is_empty() {
-                    div { style: "font-size:11px;color:#b388ff;font-weight:600;margin-bottom:3px;", "⚖️ {weight_line}" }
+                div { style: "font-size:13px;color:#b388ff;font-weight:600;margin-bottom:4px;line-height:1.35;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;",
+                    "{weight_text}"
                 }
-                if !desc.is_empty() {
-                    div { style: "font-size:12px;color:#888;margin-bottom:4px;line-height:1.3;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden;",
-                        "{desc}"
-                    }
+                div { style: "font-size:13px;color:#888;margin-bottom:8px;line-height:1.35;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;",
+                    "{desc_text}"
                 }
-                div { style: "display:flex;gap:4px;align-items:baseline;margin-top:auto;",
-                    span { style: "font-size:18px;font-weight:800;color:#ffe600;text-shadow:2px 2px 0 #000;", "{price_str}" }
+                div { style: "display:flex;gap:6px;align-items:baseline;margin-top:auto;",
+                    span { style: "font-size:20px;font-weight:800;color:#ffe600;text-shadow:2px 2px 0 #000;", "{price_str}" }
                     if has_discount {
-                        span { style: "font-size:12px;color:#888;text-decoration:line-through;", "{original_price_str}" }
+                        span { style: "font-size:13px;color:#888;text-decoration:line-through;margin-left:4px;", "{original_price_str}" }
                     }
                 }
             }
-            div { style: "padding:0 10px 10px;margin-top:auto;",
+            div { style: "padding:0 12px 12px;",
                 if is_available {
                     button {
                         style: "
-                            font-size:13px;font-weight:700;width:100%;padding:10px 16px;
+                            font-size:14px;font-weight:700;
+                            width:100%;padding:12px 20px;
                             background:#39ff14;color:#000;
-                            border:3px solid #2d9e0f;
-                            box-shadow:2px 2px 0 #000;
+                            border:4px solid #2d9e0f;
+                            box-shadow:3px 3px 0 #000;
                             cursor:pointer;
                         ",
                         onclick: move |e: Event<MouseData>| {
                             e.stop_propagation();
-                            let s = s4.clone();
+                            let s = s_add.clone();
                             let mut c = cart.write();
                             c.add_item(CartItem {
                                 id: s.id.clone(),
@@ -199,57 +211,19 @@ pub fn render_uniform_set_card(
                             });
                             crate::ui::telegram::TelegramApp::init().haptic_notification(crate::ui::telegram::HapticNotification::Success);
                         },
-                        "{add_to_cart_label}"
+                        "{add_to_cart_label} 🛒"
                     }
                 } else {
                     button { style: "
-                        font-size:13px;font-weight:600;width:100%;padding:10px 16px;
+                        font-size:14px;font-weight:600;
+                        width:100%;padding:12px 20px;
                         background:transparent;color:#888;
-                        border:3px solid #2a2a4a;
-                        box-shadow:2px 2px 0 #000;
+                        border:4px solid #2a2a4a;
+                        box-shadow:3px 3px 0 #000;
                         cursor:not-allowed;
                     ", "Sold Out" }
                 }
             }
-            {detail_open().then(|| {
-                let s = s5.clone();
-                let add_price = price;
-                let avail = is_available;
-                rsx! {
-                    ProductDetailModal {
-                        name: lang::localized(
-                            &s.name, s.name_en.as_deref()),
-                        image_url: s.image_url.clone(),
-                        description: lang::localized(
-                            s.description.as_deref().unwrap_or(""),
-                            s.description_en.as_deref(),
-                        ),
-                        price_line: Some(price_str.clone()),
-                        can_add: avail,
-                        add_to_cart_label: Some(add_to_cart_label.clone()),
-                        on_add_to_cart: move |q: u32| {
-                            cart.write().add_item(CartItem {
-                                id: s.id.clone(),
-                                name: lang::localized(
-                                    &s.name, s.name_en.as_deref()),
-                                price: add_price,
-                                quantity: q,
-                                image_url: None,
-                                item_type: CartItemType::Set,
-                                fulfillment: None,
-                            });
-                            crate::ui::telegram::TelegramApp::init().haptic_notification(crate::ui::telegram::HapticNotification::Success);
-                        },
-                        on_close: move |_| detail_open.set(false),
-                    }
-                }
-            })}
-            {show_video().then(|| {
-                let url = vid_url.clone();
-                rsx! {
-                    VideoModal { url, on_close: move |_| show_video.set(false) }
-                }
-            })}
         }
     }
 }
