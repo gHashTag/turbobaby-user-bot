@@ -28,7 +28,10 @@ pub(crate) struct TelegramUser {
 ///
 /// Algorithm (per Telegram docs):
 /// 1. Parse URL-encoded key=value pairs.
-/// 2. Remove `hash` key.
+/// 2. Remove `hash` AND `signature` keys. `signature` is Telegram's Ed25519
+///    third-party-validation field; it is NOT part of the HMAC data-check-string
+///    and is now present in every Mini App's initData. Leaving it in makes the
+///    HMAC never match → permanent 401 (this was the garden-401 root cause).
 /// 3. Sort remaining keys alphabetically.
 /// 4. Build data_check_string = "key1=value1\nkey2=value2\n..."
 /// 5. secret_key = HMAC_SHA256(key="WebAppData", msg=BOT_TOKEN)
@@ -57,7 +60,10 @@ pub(crate) fn validate_init_data(init_data: &str, bot_token: &str) -> Option<Tel
         .find(|(k, _)| k == "hash")
         .map(|(_, v)| v.clone())?;
 
-    let mut data_pairs: Vec<_> = pairs.into_iter().filter(|(k, _)| k != "hash").collect();
+    let mut data_pairs: Vec<_> = pairs
+        .into_iter()
+        .filter(|(k, _)| k != "hash" && k != "signature")
+        .collect();
     data_pairs.sort_by(|a, b| a.0.cmp(&b.0));
 
     // Build data_check_string from URL-decoded values (real Telegram behavior)
@@ -205,7 +211,10 @@ pub(crate) fn validate_init_data_debug(
         }
     };
 
-    let mut data_pairs: Vec<_> = pairs.into_iter().filter(|(k, _)| k != "hash").collect();
+    let mut data_pairs: Vec<_> = pairs
+        .into_iter()
+        .filter(|(k, _)| k != "hash" && k != "signature")
+        .collect();
     data_pairs.sort_by(|a, b| a.0.cmp(&b.0));
 
     let data_check_string_decoded = data_pairs
@@ -580,6 +589,85 @@ mod tests {
             "auth_date={}&hash={}&user={}",
             auth_date_str, hash, user_encoded
         )
+    }
+
+    /// Build initData that also carries the Ed25519 `signature` field Telegram
+    /// now attaches to every Mini App launch. The `hash` is computed over the
+    /// data-check-string that EXCLUDES both `hash` and `signature` (per spec),
+    /// while the emitted string still contains an arbitrary `signature=` value —
+    /// exactly what a real client sends. Validation must ignore `signature`.
+    fn generate_init_data_with_signature(
+        bot_token: &str,
+        user_id: i64,
+        first_name: &str,
+        signature: &str,
+    ) -> String {
+        let user_json = format!("{{\"id\":{},\"first_name\":\"{}\"}}", user_id, first_name);
+        let user_encoded = urlencoding::encode(&user_json);
+        let auth_date = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64
+            - 3600;
+        let auth_date_str = auth_date.to_string();
+
+        // data-check-string excludes hash AND signature.
+        let mut pairs = [
+            ("auth_date".to_string(), auth_date_str.clone()),
+            ("user".to_string(), user_json.clone()),
+        ];
+        pairs.sort_by(|a, b| a.0.cmp(&b.0));
+        let data_check_string = pairs
+            .iter()
+            .map(|(k, v)| format!("{}={}", k, v))
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        let mut secret_mac = HmacSha256::new_from_slice(b"WebAppData").unwrap();
+        secret_mac.update(bot_token.as_bytes());
+        let secret_key = secret_mac.finalize().into_bytes();
+
+        let mut mac = HmacSha256::new_from_slice(&secret_key).unwrap();
+        mac.update(data_check_string.as_bytes());
+        let hash = hex::encode(mac.finalize().into_bytes());
+
+        // The emitted query string carries signature; order is irrelevant.
+        format!(
+            "auth_date={}&signature={}&hash={}&user={}",
+            auth_date_str, signature, hash, user_encoded
+        )
+    }
+
+    #[test]
+    fn test_validate_init_data_with_signature_field() {
+        // Regression: Telegram adds an Ed25519 `signature` field to initData.
+        // It must be excluded from the HMAC data-check-string alongside `hash`;
+        // otherwise HMAC never matches and every request 401s (garden-401 bug).
+        let token = "test_bot_token_12345";
+        let init_data = generate_init_data_with_signature(
+            token,
+            8420420131,
+            "ShopOwner",
+            "abcDEF123_signature-value",
+        );
+        assert!(
+            init_data.contains("signature="),
+            "test fixture must include a signature field"
+        );
+        let user = validate_init_data(&init_data, token)
+            .expect("initData with a signature field must still validate");
+        assert_eq!(user.id, 8420420131);
+        assert_eq!(user.first_name, Some("ShopOwner".to_string()));
+    }
+
+    #[test]
+    fn test_validate_init_data_debug_with_signature_field() {
+        let token = "test_bot_token_12345";
+        let init_data =
+            generate_init_data_with_signature(token, 8420420131, "ShopOwner", "sig_xyz");
+        let (ok, _dcs, _hash, user, err) = validate_init_data_debug(&init_data, token);
+        assert!(ok, "debug validator must accept signature-bearing initData; err={err:?}");
+        assert_eq!(user.map(|u| u.id), Some(8420420131));
     }
 
     #[test]
