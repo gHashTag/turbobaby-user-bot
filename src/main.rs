@@ -721,12 +721,19 @@ async fn main() -> Result<()> {
                     // caused stale snippet exports (get_select_data) to be cached
                     // forever in Safari/WebView. Immutable now requires the hash
                     // to be in the file name itself, not just the parent dir.
+                    // Cycle #171: Telegram/WebView sometimes serves a stale cached
+                    // JS/WASM file even though the hashed filename changed. Use
+                    // no-store for the main bundle so the WebView always fetches the
+                    // file the fresh HTML asked for. Snippets and CSS stay immutable
+                    // because they are rarely the stale-cache culprit.
                     let cache_header = if exact.is_some() {
                         let file_name = std::path::Path::new(path)
                             .file_name()
                             .and_then(|n| n.to_str())
                             .unwrap_or("");
-                        if file_name.contains('-') {
+                        if file_name.starts_with("woody-weed-bot-") {
+                            "no-store, no-cache, must-revalidate, max-age=0"
+                        } else if file_name.contains('-') {
                             "public, max-age=31536000, immutable"
                         } else {
                             "no-store, no-cache, must-revalidate, max-age=0"
@@ -756,12 +763,15 @@ async fn main() -> Result<()> {
     // the document that finally loaded never even started the WASM module —
     // producing a blank screen with "Steps reached: none".
     //
-    // Cache-busting is already handled correctly WITHOUT a redirect:
+    // Cache-busting:
     //   * Trunk content-hashes every asset filename (woody-weed-bot-<hash>.js
-    //     / _bg.wasm), so a new build is always a new URL the WebView can't
-    //     confuse with a cached one.
+    //     / _bg.wasm), so a new build is a new URL.
     //   * The HTML itself is served `no-store` below, so the WebView always
     //     re-fetches it and picks up the new hashed asset names.
+    //   * Cycle #171: the main bundle URLs also carry `?v=<hash>` so even a
+    //     misbehaving WebView cache keyed by full URL cannot serve an old
+    //     bundle when the HTML changes. version.txt parses the hash from the
+    //     filename, so the query string is ignored there.
     let spa_handler = {
         let static_cache = static_cache.clone();
         move |_uri: axum::http::Uri| async move {
@@ -798,7 +808,13 @@ async fn main() -> Result<()> {
                         .find_map(|line| {
                             line.split_once("/woody-weed-bot-")
                                 .and_then(|(_, rest)| rest.split_once(".js"))
-                                .map(|(hash, _)| hash.to_string())
+                                .map(|(hash, _)| {
+                                    // Cycle #171: index.html may include ?v=... after the filename.
+                                    // Take only the leading hex hash (before any '?' or non-hex).
+                                    hash.chars()
+                                        .take_while(|c| c.is_ascii_hexdigit())
+                                        .collect::<String>()
+                                })
                         })
                 })
                 .unwrap_or_else(|| "unknown".to_string());
