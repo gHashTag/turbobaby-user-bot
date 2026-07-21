@@ -724,6 +724,55 @@ mod tests {
     }
 
     #[test]
+    fn test_validate_init_data_with_query_id_and_full_user_json() {
+        // Regression for real Telegram initData: it carries query_id, and
+        // user JSON includes is_premium, photo_url, last_name, etc. All of
+        // these must participate in the HMAC data-check-string exactly as
+        // received (URL-decoded), and signature must still be excluded.
+        let token = "test_bot_token_12345";
+        let user_json = r#"{"id":144022504,"first_name":"Dmitrii","last_name":"T27 DEV","username":"t27_dev","language_code":"ru","is_premium":true,"allows_write_to_pm":true,"photo_url":"https:\/\/t.me\/i\/userpic\/320\/abc.jpg"}"#;
+        let user_encoded = urlencoding::encode(user_json);
+        let auth_date = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64
+            - 3600;
+        let auth_date_str = auth_date.to_string();
+        let query_id = "AAHom5UIAAAAAOiblQhHtdzh";
+
+        let mut pairs = [
+            ("auth_date".to_string(), auth_date_str.clone()),
+            ("query_id".to_string(), query_id.to_string()),
+            ("user".to_string(), user_json.to_string()),
+        ];
+        pairs.sort_by(|a, b| a.0.cmp(&b.0));
+        let data_check_string = pairs
+            .iter()
+            .map(|(k, v)| format!("{}={}", k, v))
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        let mut secret_mac = HmacSha256::new_from_slice(b"WebAppData").unwrap();
+        secret_mac.update(token.as_bytes());
+        let secret_key = secret_mac.finalize().into_bytes();
+
+        let mut mac = HmacSha256::new_from_slice(&secret_key).unwrap();
+        mac.update(data_check_string.as_bytes());
+        let hash = hex::encode(mac.finalize().into_bytes());
+
+        let signature = "dummy_sig_value";
+        let init_data = format!(
+            "auth_date={}&query_id={}&signature={}&hash={}&user={}",
+            auth_date_str, query_id, signature, hash, user_encoded
+        );
+
+        let user = validate_init_data(&init_data, token)
+            .expect("realistic initData with query_id + full user JSON must validate");
+        assert_eq!(user.id, 144022504);
+        assert_eq!(user.first_name, Some("Dmitrii".to_string()));
+    }
+
+    #[test]
     fn test_validate_init_data_success() {
         let token = "test_bot_token_12345";
         let init_data = generate_init_data(token, 8420420131, "ShopOwner");
