@@ -70,7 +70,6 @@ pub async fn fetch_text_full(url: &str) -> Result<(u16, String), String> {
 
 /// GET with `X-Telegram-Init-Data`, returns `(status, body)`. See
 /// [`fetch_text_full`] for rationale.
-#[allow(dead_code)]
 pub async fn fetch_text_authed_full(url: &str, init_data: &str) -> Result<(u16, String), String> {
     let resp = Request::get(url)
         .header("x-telegram-init-data", init_data)

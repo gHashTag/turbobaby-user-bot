@@ -47,9 +47,30 @@ pub fn friendly_response_error(lang: Lang, status: u16) -> String {
     t(lang, key).to_string()
 }
 
+/// Should a failed authenticated request trigger a one-time re-auth retry?
+///
+/// Only a `401` warrants it: the Telegram WebApp sometimes exposes
+/// `initDataUnsafe.user.id` (so the client knows its telegram_id and fires the
+/// request) *before* the signed `initData` string is populated, and initData
+/// also expires after 24h. Both surface as a `401` from `check_owner`. Re-reading
+/// a fresh initData and retrying once recovers those cases without looping.
+/// Other statuses (403 blocked, 5xx, network) are not fixed by re-auth.
+pub fn should_retry_reauth(status: u16) -> bool {
+    status == 401
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn retry_reauth_only_on_401() {
+        assert!(should_retry_reauth(401));
+        // Not fixable by re-authenticating.
+        for s in [0u16, 400, 403, 404, 409, 422, 429, 500, 502, 503] {
+            assert!(!should_retry_reauth(s), "status {s} must not trigger re-auth");
+        }
+    }
 
     #[test]
     fn maps_401_to_telegram_resign_in_phrase_ru() {
