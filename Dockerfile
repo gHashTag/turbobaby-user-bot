@@ -15,12 +15,16 @@ RUN mkdir -p src && echo 'fn main() {}' > src/main.rs && \
     cargo build --release --target x86_64-unknown-linux-musl --features backend --bin woody-weed-bot-server || true && \
     rm -rf src
 
-# Build server
+# Build server. We include a SOURCE_CACHE_BUST arg so a forced bump
+# invalidates this layer and makes Railway rebuild the Rust binary even when
+# only backend source changed in a way Docker didn't detect.
 ARG BUILD_VERSION=docker
+ARG SOURCE_CACHE_BUST=1
 ENV BUILD_VERSION_OVERRIDE=$BUILD_VERSION
 COPY src ./src
 COPY migrations ./migrations
-RUN touch src/main.rs && \
+RUN echo "source-bust=${SOURCE_CACHE_BUST}" && \
+    touch src/main.rs && \
     cargo build --release --target x86_64-unknown-linux-musl --features backend --bin woody-weed-bot-server
 
 # ============================================================
@@ -34,7 +38,7 @@ RUN apk add --no-cache ca-certificates curl
 COPY --from=backend /app/target/x86_64-unknown-linux-musl/release/woody-weed-bot-server ./
 
 # Force Railway to rebuild the COPY layer — busts Docker cache when dist changes.
-ARG DIST_CACHE_BUST=16
+ARG DIST_CACHE_BUST=17
 ENV DIST_CACHE_BUST=$DIST_CACHE_BUST
 
 # Freshly built WASM frontend (pre-built in CI or committed to repo)
