@@ -40,16 +40,21 @@ async fn validate_init_data_handler(
     let has_user = init_data.contains("user=");
     let has_auth_date = init_data.contains("auth_date=");
 
-    let (valid, _data_check_string, _hash, user, error) =
-        validate_init_data_debug(&init_data, &state.config.bot_token);
+    let info = validate_init_data_debug(&init_data, &state.config.bot_token);
 
     Ok(Json(json!({
-        "valid": valid,
+        "valid": info.ok,
         "init_data_len": len,
         "has_hash": has_hash,
         "has_user": has_user,
         "has_auth_date": has_auth_date,
-        "user_id": user.as_ref().map(|u| u.id),
-        "reason": error,
+        "user_id": info.user.as_ref().map(|u| u.id),
+        "keys": info.keys,
+        "reason": info.error,
+        "hash": info.hash,
+        "expected_hash_decoded": info.expected_hash_decoded,
+        "expected_hash_raw": info.expected_hash_raw,
+        "data_check_string_decoded": info.data_check_string_decoded,
+        "data_check_string_raw": info.data_check_string_raw,
     })))
 }

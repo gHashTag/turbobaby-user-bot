@@ -588,14 +588,15 @@ async fn debug_validate_init_data(
     Json(req): Json<ValidateInitDataRequest>,
 ) -> Result<Json<ValidateInitDataResponse>, StatusCode> {
     check_admin(&headers, &state)?;
-    let (ok, data_check_string, received_hash, user, error) =
-        crate::api::auth::validate_init_data_debug(&req.init_data, &state.config.bot_token);
+    let info = crate::api::auth::validate_init_data_debug(&req.init_data, &state.config.bot_token);
     Ok(Json(ValidateInitDataResponse {
-        ok,
-        data_check_string,
-        received_hash,
-        user: user.map(|u| json!({"id": u.id, "first_name": u.first_name, "username": u.username})),
-        error,
+        ok: info.ok,
+        data_check_string: info.data_check_string_decoded,
+        received_hash: info.hash,
+        user: info
+            .user
+            .map(|u| json!({"id": u.id, "first_name": u.first_name, "username": u.username})),
+        error: info.error,
     }))
 }
 

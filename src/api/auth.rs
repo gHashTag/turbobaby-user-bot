@@ -161,19 +161,34 @@ pub(crate) fn validate_init_data(init_data: &str, bot_token: &str) -> Option<Tel
     })
 }
 
+/// Detailed diagnostics returned by `validate_init_data_debug`.
+#[derive(Debug)]
+pub(crate) struct InitDataDebugInfo {
+    pub ok: bool,
+    pub data_check_string_decoded: String,
+    pub data_check_string_raw: String,
+    pub hash: String,
+    pub expected_hash_decoded: String,
+    pub expected_hash_raw: String,
+    pub keys: Vec<String>,
+    pub user: Option<TelegramUser>,
+    pub error: Option<String>,
+}
+
 /// Debug version that returns detailed validation info instead of just Option.
-pub(crate) fn validate_init_data_debug(
-    init_data: &str,
-    bot_token: &str,
-) -> (bool, String, String, Option<TelegramUser>, Option<String>) {
+pub(crate) fn validate_init_data_debug(init_data: &str, bot_token: &str) -> InitDataDebugInfo {
     if init_data.len() > 4096 {
-        return (
-            false,
-            String::new(),
-            String::new(),
-            None,
-            Some("init_data too long".to_string()),
-        );
+        return InitDataDebugInfo {
+            ok: false,
+            data_check_string_decoded: String::new(),
+            data_check_string_raw: String::new(),
+            hash: String::new(),
+            expected_hash_decoded: String::new(),
+            expected_hash_raw: String::new(),
+            keys: Vec::new(),
+            user: None,
+            error: Some("init_data too long".to_string()),
+        };
     }
     let mut pairs: Vec<(String, String)> = Vec::new();
     for pair in init_data.split('&') {
@@ -181,18 +196,24 @@ pub(crate) fn validate_init_data_debug(
         let key = match parts.next() {
             Some(k) => k,
             None => {
-                return (
-                    false,
-                    String::new(),
-                    String::new(),
-                    None,
-                    Some("empty pair".to_string()),
-                )
+                return InitDataDebugInfo {
+                    ok: false,
+                    data_check_string_decoded: String::new(),
+                    data_check_string_raw: String::new(),
+                    hash: String::new(),
+                    expected_hash_decoded: String::new(),
+                    expected_hash_raw: String::new(),
+                    keys: Vec::new(),
+                    user: None,
+                    error: Some("empty pair".to_string()),
+                }
             }
         };
         let value = parts.next().unwrap_or("");
         pairs.push((key.to_string(), value.to_string()));
     }
+
+    let keys: Vec<String> = pairs.iter().map(|(k, _)| k.clone()).collect();
 
     let hash = match pairs
         .iter()
@@ -201,13 +222,17 @@ pub(crate) fn validate_init_data_debug(
     {
         Some(h) => h,
         None => {
-            return (
-                false,
-                String::new(),
-                String::new(),
-                None,
-                Some("missing hash".to_string()),
-            )
+            return InitDataDebugInfo {
+                ok: false,
+                data_check_string_decoded: String::new(),
+                data_check_string_raw: String::new(),
+                hash: String::new(),
+                expected_hash_decoded: String::new(),
+                expected_hash_raw: String::new(),
+                keys,
+                user: None,
+                error: Some("missing hash".to_string()),
+            }
         }
     };
 
@@ -236,13 +261,17 @@ pub(crate) fn validate_init_data_debug(
     let mut secret_mac = match HmacSha256::new_from_slice(b"WebAppData") {
         Ok(m) => m,
         Err(_) => {
-            return (
-                false,
-                data_check_string_decoded.clone(),
-                hash.clone(),
-                None,
-                Some("HMAC init failed".to_string()),
-            )
+            return InitDataDebugInfo {
+                ok: false,
+                data_check_string_decoded,
+                data_check_string_raw,
+                hash,
+                expected_hash_decoded: String::new(),
+                expected_hash_raw: String::new(),
+                keys,
+                user: None,
+                error: Some("HMAC init failed".to_string()),
+            }
         }
     };
     secret_mac.update(bot_token.as_bytes());
@@ -251,28 +280,36 @@ pub(crate) fn validate_init_data_debug(
     let mut mac = match HmacSha256::new_from_slice(&secret_key) {
         Ok(m) => m,
         Err(_) => {
-            return (
-                false,
-                data_check_string_decoded.clone(),
-                hash.clone(),
-                None,
-                Some("HMAC init failed".to_string()),
-            )
+            return InitDataDebugInfo {
+                ok: false,
+                data_check_string_decoded,
+                data_check_string_raw,
+                hash,
+                expected_hash_decoded: String::new(),
+                expected_hash_raw: String::new(),
+                keys,
+                user: None,
+                error: Some("HMAC init failed".to_string()),
+            }
         }
     };
     mac.update(data_check_string_decoded.as_bytes());
-    let expected_hash = hex::encode(mac.finalize().into_bytes());
+    let expected_hash_decoded = hex::encode(mac.finalize().into_bytes());
 
     let mut mac_raw = match HmacSha256::new_from_slice(&secret_key) {
         Ok(m) => m,
         Err(_) => {
-            return (
-                false,
-                data_check_string_raw.clone(),
-                hash.clone(),
-                None,
-                Some("HMAC init failed".to_string()),
-            )
+            return InitDataDebugInfo {
+                ok: false,
+                data_check_string_decoded,
+                data_check_string_raw,
+                hash,
+                expected_hash_decoded,
+                expected_hash_raw: String::new(),
+                keys,
+                user: None,
+                error: Some("HMAC init failed".to_string()),
+            }
         }
     };
     mac_raw.update(data_check_string_raw.as_bytes());
@@ -300,8 +337,10 @@ pub(crate) fn validate_init_data_debug(
             })
         });
 
-    let ok_decoded = constant_time_eq::constant_time_eq(expected_hash.as_bytes(), hash.as_bytes());
-    let ok_raw = constant_time_eq::constant_time_eq(expected_hash_raw.as_bytes(), hash.as_bytes());
+    let ok_decoded =
+        constant_time_eq::constant_time_eq(expected_hash_decoded.as_bytes(), hash.as_bytes());
+    let ok_raw =
+        constant_time_eq::constant_time_eq(expected_hash_raw.as_bytes(), hash.as_bytes());
     let mut ok = ok_decoded || ok_raw;
     let mut error = None;
 
@@ -336,7 +375,17 @@ pub(crate) fn validate_init_data_debug(
         }
     }
 
-    (ok, data_check_string_decoded, hash, user, error)
+    InitDataDebugInfo {
+        ok,
+        data_check_string_decoded,
+        data_check_string_raw,
+        hash,
+        expected_hash_decoded,
+        expected_hash_raw,
+        keys,
+        user,
+        error,
+    }
 }
 
 #[allow(unreachable_pub)] // Used by tests/integration_*.rs to mint admin tokens.
@@ -665,9 +714,13 @@ mod tests {
         let token = "test_bot_token_12345";
         let init_data =
             generate_init_data_with_signature(token, 8420420131, "ShopOwner", "sig_xyz");
-        let (ok, _dcs, _hash, user, err) = validate_init_data_debug(&init_data, token);
-        assert!(ok, "debug validator must accept signature-bearing initData; err={err:?}");
-        assert_eq!(user.map(|u| u.id), Some(8420420131));
+        let info = validate_init_data_debug(&init_data, token);
+        assert!(
+            info.ok,
+            "debug validator must accept signature-bearing initData; err={:?}",
+            info.error
+        );
+        assert_eq!(info.user.map(|u| u.id), Some(8420420131));
     }
 
     #[test]
