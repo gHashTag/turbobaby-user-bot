@@ -416,7 +416,13 @@ pub fn Garden() -> Element {
                                                     }
                                                 }
                                                 p.is_completed = resp.is_completed;
+                                                // Update last_watered_at locally so the UI
+                                                // immediately disables the water button for the
+                                                // 24h cooldown instead of staying enabled until
+                                                // the next 5s tick / refetch.
+                                                p.last_watered_at = Some(chrono::Utc::now().timestamp_millis());
                                             }
+                                            crate::ui::telegram::TelegramApp::init().haptic_notification(crate::ui::telegram::HapticNotification::Success);
                                         } else {
                                             es.set(resp.error.unwrap_or_else(|| "Water failed".into()));
                                         }
@@ -437,7 +443,10 @@ pub fn Garden() -> Element {
                             let init = init_harvest.clone();
                             spawn(async move {
                                 match harvest_plant_api(&plant_id, &init).await {
-                                    Ok(()) => { ps.write().retain(|p| p.id != plant_id); }
+                                    Ok(()) => {
+                                        ps.write().retain(|p| p.id != plant_id);
+                                        crate::ui::telegram::TelegramApp::init().haptic_notification(crate::ui::telegram::HapticNotification::Success);
+                                    }
                                     Err(e) => { es.set(format!("Не удалось собрать урожай: {}", e)); }
                                 }
                             });

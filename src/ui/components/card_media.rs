@@ -32,18 +32,44 @@ pub fn CardMedia(
     /// Called when the user taps the video preview area.
     #[props(default)]
     on_video_click: EventHandler<()>,
+    /// Fixed aspect-ratio for the media area (e.g. "4/3" or "1/1"). When set,
+    /// images/videos fill the box with `object-fit: cover` so every card keeps
+    /// the same media height. When omitted, the original full-uncropped
+    /// variable-height behaviour is preserved.
+    #[props(default)]
+    aspect_ratio: Option<String>,
     children: Element,
 ) -> Element {
     let img = image_url.unwrap_or_default();
     let has_image = is_media_url(&img);
     let vid = video_url.unwrap_or_default();
     let has_video = is_media_url(&vid);
+    let fixed = aspect_ratio.is_some();
+    let ratio = aspect_ratio.unwrap_or_default();
+    let container_style = if fixed {
+        format!(
+            "width:100%;aspect-ratio:{};min-height:auto;background:linear-gradient(135deg,#1a1a2e,#16213e);display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;",
+            ratio
+        )
+    } else {
+        "width:100%;min-height:180px;background:linear-gradient(135deg,#1a1a2e,#16213e);display:flex;align-items:center;justify-content:center;position:relative;".to_string()
+    };
+    let media_style = if fixed {
+        "width:100%;height:100%;object-fit:cover;display:block;"
+    } else {
+        "width:100%;height:auto;display:block;"
+    };
+    let img_style = if fixed {
+        "width:100%;height:100%;object-fit:cover;display:block;"
+    } else {
+        "width:100%;height:auto;object-fit:contain;display:block;"
+    };
 
     rsx! {
-        div { style: "width:100%;min-height:180px;background:linear-gradient(135deg,#1a1a2e,#16213e);display:flex;align-items:center;justify-content:center;position:relative;",
+        div { style: "{container_style}",
             if has_video {
                 video {
-                    style: "width:100%;height:auto;display:block;",
+                    style: "{media_style}",
                     src: "{vid}",
                     "type": "video/mp4",
                     autoplay: true,
@@ -71,7 +97,7 @@ pub fn CardMedia(
                     src: "{img}",
                     alt: "{alt}",
                     loading: "lazy",
-                    style: "width:100%;height:auto;object-fit:contain;display:block;"
+                    style: "{img_style}"
                 }
             } else {
                 span { style: "font-size:48px;", "{emoji}" }

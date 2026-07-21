@@ -205,11 +205,10 @@ pub fn SetsScreen() -> Element {
                                     }
                                 }
                             }
-                            // Two-column masonry: each card keeps its natural
-                            // media height (full uncropped photo/video), but the
-                            // browser balances the columns so rows never look
-                            // staggered when images have different aspect ratios.
-                            div { style: "column-count:2;column-gap:12px;padding:0 16px;",
+                            // Two-column grid with uniform cards. Media is locked
+                            // to a fixed aspect ratio and text slots are clamped
+                            // so every card in a row keeps the same height.
+                            div { style: "display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:0 16px;",
                                 for set in ordered.iter() {
                                     { render_set_card(set.clone(), cart) }
                                 }
@@ -352,11 +351,8 @@ fn render_set_card(set: ApiSet, mut cart: Signal<Cart>) -> Element {
             cursor:pointer;
             width:100%;
             box-sizing:border-box;
-            break-inside:avoid;
-            page-break-inside:avoid;
-            margin-bottom:12px;
-            display:inline-block;
-            vertical-align:top;
+            display:flex;
+            flex-direction:column;
             {opacity}
         ",
             onclick: move |_| detail_open.set(true),
@@ -366,6 +362,7 @@ fn render_set_card(set: ApiSet, mut cart: Signal<Cart>) -> Element {
                 emoji: icon.to_string(),
                 alt: set_name.clone(),
                 on_video_click: move |_| show_video.set(true),
+                aspect_ratio: Some("4/3".to_string()),
                 // On-image badge (top-left), mirroring strain/accessory cards.
                 span { style: "position:absolute;top:8px;left:8px;z-index:2;font-size:13px;font-weight:700;background:{ACCENT};color:#000;padding:4px 8px;box-shadow:2px 2px 0 #000;",
                     "📦 SET"
@@ -384,17 +381,17 @@ fn render_set_card(set: ApiSet, mut cart: Signal<Cart>) -> Element {
                     ", "{discount_badge}" }
                 }
             }
-            div { style: "padding:14px;",
-                div { style: "display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;",
-                    span { style: "font-size:16px;font-weight:700;text-shadow:2px 2px 0 #000;", "{set_name}" }
+            div { style: "padding:14px;display:flex;flex-direction:column;flex:1;min-height:0;",
+                div { style: "display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;min-width:0;",
+                    span { style: "font-size:16px;font-weight:700;text-shadow:2px 2px 0 #000;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;", "{set_name}" }
                 }
                 if !weight_line.is_empty() {
-                    div { style: "font-size:12px;color:#b388ff;font-weight:600;margin-bottom:6px;", "⚖️ {weight_line}" }
+                    div { style: "font-size:12px;color:#b388ff;font-weight:600;margin-bottom:6px;flex-shrink:0;", "⚖️ {weight_line}" }
                 }
                 if !desc.is_empty() {
-                    div { style: "font-size:13px;color:#888;margin-bottom:6px;", "{desc}" }
+                    div { style: "font-size:13px;color:#888;margin-bottom:6px;line-height:1.35;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;", "{desc}" }
                 }
-                div { style: "display:flex;justify-content:space-between;align-items:center;",
+                div { style: "display:flex;justify-content:space-between;align-items:center;margin-top:auto;",
                     div {
                         if has_discount {
                             span { style: "font-size:13px;color:#888;text-decoration:line-through;margin-right:6px;", "{original_price_str}" }
@@ -403,7 +400,7 @@ fn render_set_card(set: ApiSet, mut cart: Signal<Cart>) -> Element {
                     }
                 }
             }
-            div { style: "padding:0 14px 14px;",
+            div { style: "padding:0 14px 14px;flex-shrink:0;",
                 {if is_available {
                     rsx! {
                         button {
