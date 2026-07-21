@@ -90,13 +90,35 @@ struct HarvestPlantResponse {
     error: Option<String>,
 }
 
-async fn fetch_plants(telegram_id: i64, init_data: &str) -> Result<Vec<ApiPlant>, String> {
+/// Fetch the user's plants. On failure the `Err` carries the HTTP status so the
+/// caller can distinguish an auth failure (`401` → stale/empty Telegram
+/// initData, worth a one-time re-auth retry) from other errors. A network or
+/// parse failure reports status `0`.
+async fn fetch_plants(telegram_id: i64, init_data: &str) -> Result<Vec<ApiPlant>, u16> {
     let base = api_base_url();
     let url = format!("{}/api/garden/plants?telegram_id={}", base, telegram_id);
-    let text = crate::ui::api::http::fetch_text_authed(&url, init_data).await?;
-    serde_json::from_str::<GardenResponse>(&text)
-        .map_err(|e| format!("Parse error: {e}"))
+    let (status, body) = crate::ui::api::http::fetch_text_authed_full(&url, init_data)
+        .await
+        .map_err(|_| 0u16)?;
+    if !(200..300).contains(&status) {
+        return Err(status);
+    }
+    serde_json::from_str::<GardenResponse>(&body)
         .map(|r| r.plants)
+        .map_err(|_| 0u16)
+}
+
+/// Ask the backend WHY it rejected this initData via the debug endpoint added on
+/// main (`GET /api/debug/validate-init-data`). Returns a "\nserver=…" suffix for
+/// the error banner, or an empty string on failure. The endpoint never echoes
+/// the bot token or full initData — only a machine-readable reason.
+async fn fetch_validation_reason(init_data: &str) -> String {
+    let base = api_base_url();
+    let url = format!("{}/api/debug/validate-init-data", base);
+    match crate::ui::api::http::fetch_text_authed(&url, init_data).await {
+        Ok(text) => format!("\nserver={}", text.chars().take(300).collect::<String>()),
+        Err(_) => String::new(),
+    }
 }
 
 async fn fetch_garden_products() -> Result<Vec<GardenProduct>, String> {
@@ -259,34 +281,47 @@ pub fn Garden() -> Element {
                 // before initData string itself, so the first read can be empty and
                 // the server returns 401. Retry before giving up.
                 let mut attempt_init = value.clone();
-                let mut attempts = 0;
                 for _ in 0..12 {
-                    attempts += 1;
                     if !attempt_init.is_empty() {
                         break;
                     }
                     TimeoutFuture::new(420).await;
                     attempt_init = tg.get_init_data();
                 }
-                let sent_len = attempt_init.len();
-                let has_hash = attempt_init.contains("hash=");
+                let lang = crate::ui::lang::current_lang();
                 match fetch_plants(tid, &attempt_init).await {
                     Ok(p) => {
                         plants_c.set(p);
                     }
-                    Err(e) => {
-                        let diag = tg.debug_dump();
-                        // Ask the server WHY it rejected this initData.
-                        let mut detail = String::new();
-                        let base = api_base_url();
-                        let debug_url = format!("{}/api/debug/validate-init-data", base);
-                        if let Ok(text) = crate::ui::api::http::fetch_text_authed(&debug_url, &attempt_init).await {
-                            detail = format!(" server={}", text.chars().take(300).collect::<String>());
+                    // A 401 means the initData we sent was empty, stale (>24h) or
+                    // reconstructed with a hash the server rejected. Re-arm the
+                    // WebApp, read a fresh initData and retry ONCE before giving up.
+                    Err(status) if crate::trios::api_errors::should_retry_reauth(status) => {
+                        tg.ready();
+                        TimeoutFuture::new(500).await;
+                        let fresh_init = tg.get_init_data();
+                        match fetch_plants(tid, &fresh_init).await {
+                            Ok(p) => {
+                                plants_c.set(p);
+                            }
+                            Err(_) => {
+                                // Still unauthorised: show the friendly RU message and
+                                // append the server-side validation reason (debug
+                                // endpoint) so we can diagnose without client logs.
+                                let detail = fetch_validation_reason(&fresh_init).await;
+                                error_c.set(format!(
+                                    "{}{}",
+                                    crate::trios::api_errors::friendly_response_error(lang, 401),
+                                    detail
+                                ));
+                            }
                         }
-                        error_c.set(format!(
-                            "Не удалось загрузить сад: {}\nattempts={} sent_len={} has_hash={}\n[diag: {}]{}",
-                            e, attempts, sent_len, has_hash, diag, detail
-                        ));
+                    }
+                    Err(status) => {
+                        // Network/parse (status 0) → treat as a transient server
+                        // problem for messaging; otherwise map the real status.
+                        let s = if status == 0 { 503 } else { status };
+                        error_c.set(crate::trios::api_errors::friendly_response_error(lang, s));
                     }
                 }
                 loading_c.set(false);
