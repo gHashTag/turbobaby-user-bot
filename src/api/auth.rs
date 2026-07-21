@@ -296,7 +296,14 @@ pub(crate) fn validate_init_data_debug(
     let mut ok = ok_decoded || ok_raw;
     let mut error = None;
 
-    if ok {
+    if !ok {
+        error = Some(format!(
+            "HMAC mismatch: decoded={} raw={} hash_len={}",
+            ok_decoded,
+            ok_raw,
+            hash.len()
+        ));
+    } else {
         let auth_date = data_pairs
             .iter()
             .find(|(k, _)| k == "auth_date")
