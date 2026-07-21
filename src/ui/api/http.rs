@@ -47,7 +47,7 @@ pub async fn fetch_text_authed(url: &str, init_data: &str) -> Result<String, Str
         let body = resp.text().await.unwrap_or_default();
         return Err(format!(
             "HTTP {status}: {}",
-            body.chars().take(120).collect::<String>()
+            body.chars().take(240).collect::<String>()
         ));
     }
     resp.text().await.map_err(|e| format!("Read error: {e}"))

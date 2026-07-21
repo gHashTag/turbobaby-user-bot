@@ -276,9 +276,16 @@ pub fn Garden() -> Element {
                     }
                     Err(e) => {
                         let diag = tg.debug_dump();
+                        // Ask the server WHY it rejected this initData.
+                        let mut detail = String::new();
+                        let base = api_base_url();
+                        let debug_url = format!("{}/api/debug/validate-init-data", base);
+                        if let Ok(text) = crate::ui::api::http::fetch_text_authed(&debug_url, &attempt_init).await {
+                            detail = format!(" server={}", text.chars().take(300).collect::<String>());
+                        }
                         error_c.set(format!(
-                            "Не удалось загрузить сад: {}\nattempts={} sent_len={} has_hash={}\n[diag: {}]",
-                            e, attempts, sent_len, has_hash, diag
+                            "Не удалось загрузить сад: {}\nattempts={} sent_len={} has_hash={}\n[diag: {}]{}",
+                            e, attempts, sent_len, has_hash, diag, detail
                         ));
                     }
                 }

@@ -7,6 +7,7 @@ pub(crate) mod admin;
 pub mod auth;
 #[allow(unreachable_pub)]
 pub mod cache;
+pub(crate) mod debug;
 pub(crate) mod cart;
 pub(crate) mod catalog;
 pub(crate) mod garden;
@@ -86,6 +87,7 @@ pub fn router(state: crate::AppState) -> Router {
 fn api_routes() -> Router<AppState> {
     let mut router = Router::<AppState>::new()
         .route("/ping", get(ping_handler))
+        .merge(debug::routes())
         .merge(orders::routes())
         .merge(strains::routes())
         .merge(loyalty::routes())
