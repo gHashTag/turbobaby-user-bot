@@ -277,14 +277,19 @@ impl TelegramApp {
     pub fn get_init_data(&self) -> String {
         let js = r#"(function(){try{
             if(window.Telegram && window.Telegram.WebApp){
-                var d = window.Telegram.WebApp.initData;
+                var w = window.Telegram.WebApp;
+                var d = w.initData;
                 if(typeof d === 'string' && d.length > 0) return d;
-                // Fallback: reconstruct from initDataUnsafe if initData is missing
-                var u = window.Telegram.WebApp.initDataUnsafe;
+                // Fallback: reconstruct from initDataUnsafe if initData string is missing.
+                // Some WebViews populate initDataUnsafe before initData. We build the
+                // data_check_string the same way Telegram does (sorted keys, user JSON
+                // URL-encoded) and append the provided hash so the server can validate.
+                var u = w.initDataUnsafe;
                 if(u && u.hash){
                     var parts = [];
                     var keys = Object.keys(u).filter(function(k){
-                        return k !== 'hash' && k !== 'receiver' && k !== 'chat' && u[k] !== undefined && u[k] !== null;
+                        return k !== 'hash' && k !== 'receiver' && k !== 'chat'
+                            && u[k] !== undefined && u[k] !== null;
                     });
                     keys.sort();
                     keys.forEach(function(k){
@@ -295,8 +300,7 @@ impl TelegramApp {
                         }
                     });
                     parts.push('hash=' + encodeURIComponent(u.hash));
-                    var reconstructed = parts.join('&');
-                    return reconstructed;
+                    return parts.join('&');
                 }
             }
             return "";

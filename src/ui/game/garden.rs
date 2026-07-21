@@ -5,7 +5,7 @@ use crate::trios::i18n::{
 };
 use crate::ui::api::context::api_base_url;
 use crate::ui::components::ErrorBanner;
-use crate::ui::telegram::{use_telegram_id, use_telegram_init_data};
+use crate::ui::telegram::{use_telegram, use_telegram_id, use_telegram_init_data};
 use dioxus::prelude::*;
 use gloo_timers::future::TimeoutFuture;
 
@@ -238,6 +238,7 @@ pub fn Garden() -> Element {
     let mut show_chooser = use_signal(|| false);
     let telegram_id = use_telegram_id().unwrap_or(0);
     let init_data = use_telegram_init_data();
+    let tg = use_telegram();
 
     {
         let mut plants_c = plants;
@@ -253,18 +254,25 @@ pub fn Garden() -> Element {
                     loading_c.set(false);
                     return;
                 }
-                // Just reflect server state. An EMPTY garden no longer auto-seeds
-                // a stage-0 plant (that was the "посадить семечку опять начинается
-                // с нуля" bug — it re-created a fresh seed on every empty mount);
-                // the empty state shows the "Выбрать товар" chooser so the player
-                // plants intentionally. A grown plant now persists (the backend
-                // `get_user_plants` was changed to return un-harvested plants).
-                match fetch_plants(tid, &value).await {
+                // Wait up to ~2.5s for Telegram WebApp to expose non-empty initData.
+                // On some iOS/Android WebViews initDataUnsafe.user.id is available
+                // before initData string itself, so the first read can be empty and
+                // the server returns 401. Retry a few times before giving up.
+                let mut attempt_init = value.clone();
+                for _attempt in 0..6 {
+                    if !attempt_init.is_empty() {
+                        break;
+                    }
+                    TimeoutFuture::new(500).await;
+                    attempt_init = tg.get_init_data();
+                }
+                match fetch_plants(tid, &attempt_init).await {
                     Ok(p) => {
                         plants_c.set(p);
                     }
                     Err(e) => {
-                        error_c.set(format!("Не удалось загрузить сад: {}", e));
+                        let diag = tg.debug_dump();
+                        error_c.set(format!("Не удалось загрузить сад: {}\n[diag: {}]", e, diag));
                     }
                 }
                 loading_c.set(false);
