@@ -19,12 +19,12 @@ RUN mkdir -p src && echo 'fn main() {}' > src/main.rs && \
 # invalidates this layer and makes Railway rebuild the Rust binary even when
 # only backend source changed in a way Docker didn't detect.
 ARG BUILD_VERSION=docker
-ARG SOURCE_CACHE_BUST=1
+ARG SOURCE_CACHE_BUST=2
 ENV BUILD_VERSION_OVERRIDE=$BUILD_VERSION
 COPY src ./src
 COPY migrations ./migrations
 RUN echo "source-bust=${SOURCE_CACHE_BUST}" && \
-    touch src/main.rs && \
+    find src -type f -exec touch {} + && \
     cargo build --release --target x86_64-unknown-linux-musl --features backend --bin woody-weed-bot-server
 
 # ============================================================
