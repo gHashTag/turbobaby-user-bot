@@ -68,6 +68,8 @@ use crate::db::Database;
 #[cfg(not(target_arch = "wasm32"))]
 use axum_prometheus::PrometheusMetricLayer;
 #[cfg(not(target_arch = "wasm32"))]
+use reqwest::Url;
+use teloxide::types::{MenuButton, WebAppInfo};
 use teloxide::Bot;
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -407,6 +409,35 @@ async fn main() -> Result<()> {
     let db_for_bot = db.clone();
     let config_for_bot = config.clone();
     let ai_client_for_bot = ai_client.clone();
+
+    // Keep the Telegram menu button in sync with the current Web App URL.
+    // Railway can change the public domain on redeploy; if the menu button
+    // still points at an old/stale domain, users load an outdated WASM bundle
+    // and see permanent 401 / broken screens. Set the default menu button on
+    // every boot so it always matches config.web_app_url.
+    {
+        let bot_menu = bot.clone();
+        let web_app_url = config.web_app_url.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+            match web_app_url.parse::<Url>() {
+                Ok(url) => {
+                    let menu = MenuButton::WebApp {
+                        text: "🌿 Woody".to_string(),
+                        web_app: WebAppInfo { url },
+                    };
+                    if let Err(e) = bot_menu.set_chat_menu_button().menu_button(menu).await {
+                        tracing::warn!("Failed to set Telegram menu button: {}", e);
+                    } else {
+                        tracing::info!("Telegram menu button updated to {}", web_app_url);
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!("Invalid WEB_APP_URL '{}': {}", web_app_url, e);
+                }
+            }
+        });
+    }
 
     // Tell admins WHAT just shipped (commit subject + version) so they know what
     // to test. Spawned so it never blocks boot; gated to real Railway deploys
