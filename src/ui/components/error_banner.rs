@@ -37,6 +37,7 @@ pub fn ErrorBanner(props: ErrorBannerProps) -> Element {
             background: rgba(255,71,87,0.1); border: 4px solid #ff4757;
             color: #ff4757; font-size: 13px; text-align: center;
             box-shadow: 3px 3px 0 #000;
+            white-space: pre-wrap; word-break: break-word;
         ",
             "{icon} {msg}"
         }

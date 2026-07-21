@@ -254,25 +254,32 @@ pub fn Garden() -> Element {
                     loading_c.set(false);
                     return;
                 }
-                // Wait up to ~2.5s for Telegram WebApp to expose non-empty initData.
+                // Wait up to ~5s for Telegram WebApp to expose non-empty initData.
                 // On some iOS/Android WebViews initDataUnsafe.user.id is available
                 // before initData string itself, so the first read can be empty and
-                // the server returns 401. Retry a few times before giving up.
+                // the server returns 401. Retry before giving up.
                 let mut attempt_init = value.clone();
-                for _attempt in 0..6 {
+                let mut attempts = 0;
+                for _ in 0..12 {
+                    attempts += 1;
                     if !attempt_init.is_empty() {
                         break;
                     }
-                    TimeoutFuture::new(500).await;
+                    TimeoutFuture::new(420).await;
                     attempt_init = tg.get_init_data();
                 }
+                let sent_len = attempt_init.len();
+                let has_hash = attempt_init.contains("hash=");
                 match fetch_plants(tid, &attempt_init).await {
                     Ok(p) => {
                         plants_c.set(p);
                     }
                     Err(e) => {
                         let diag = tg.debug_dump();
-                        error_c.set(format!("Не удалось загрузить сад: {}\n[diag: {}]", e, diag));
+                        error_c.set(format!(
+                            "Не удалось загрузить сад: {}\nattempts={} sent_len={} has_hash={}\n[diag: {}]",
+                            e, attempts, sent_len, has_hash, diag
+                        ));
                     }
                 }
                 loading_c.set(false);
