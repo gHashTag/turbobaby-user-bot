@@ -25,5 +25,9 @@ e2e/test-results/
 e2e/playwright-report/
 e2e/node_modules/
 
-# Asset export bundles (scripts/export-assets.sh) — kept local, not in git
+# Runtime user uploads — handled by S3 or local dev, not production deploys
+assets/uploads/
+
+# Asset export bundles / docs screenshots (scripts/export-assets.sh) — kept local, not in git
 exports/
+docs/screenshots/
