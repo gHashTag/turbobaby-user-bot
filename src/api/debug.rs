@@ -55,11 +55,26 @@ async fn validate_init_data_handler(
         "expected_hash_decoded": info.expected_hash_decoded,
         "expected_hash_raw": info.expected_hash_raw,
         "expected_hash_with_signature": info.expected_hash_with_signature,
+        "expected_hash_decoded_alt_secret": info.expected_hash_decoded_alt_secret,
+        "expected_hash_raw_alt_secret": info.expected_hash_raw_alt_secret,
+        "expected_hash_with_signature_alt_secret": info.expected_hash_with_signature_alt_secret,
         "data_check_string_decoded": info.data_check_string_decoded,
         "data_check_string_raw": info.data_check_string_raw,
         "data_check_string_with_signature": info.data_check_string_with_signature,
         "ok_with_signature": constant_time_eq::constant_time_eq(
             info.expected_hash_with_signature.as_bytes(),
+            info.hash.as_bytes()
+        ),
+        "ok_alt_secret_decoded": constant_time_eq::constant_time_eq(
+            info.expected_hash_decoded_alt_secret.as_bytes(),
+            info.hash.as_bytes()
+        ),
+        "ok_alt_secret_raw": constant_time_eq::constant_time_eq(
+            info.expected_hash_raw_alt_secret.as_bytes(),
+            info.hash.as_bytes()
+        ),
+        "ok_alt_secret_with_signature": constant_time_eq::constant_time_eq(
+            info.expected_hash_with_signature_alt_secret.as_bytes(),
             info.hash.as_bytes()
         ),
     })))
