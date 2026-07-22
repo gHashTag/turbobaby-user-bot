@@ -19,7 +19,7 @@ rewrite = "/api/"
 wasm-bindgen = "0.2.95"
 
 [[copy-dir]]
-path = "/home/user/workspace/woody-weed-bot/assets"
+path = "assets"
 target_path = "assets"
 
 [watch]
