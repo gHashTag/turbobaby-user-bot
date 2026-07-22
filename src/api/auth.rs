@@ -182,9 +182,11 @@ pub(crate) struct InitDataDebugInfo {
     pub ok: bool,
     pub data_check_string_decoded: String,
     pub data_check_string_raw: String,
+    pub data_check_string_with_signature: String,
     pub hash: String,
     pub expected_hash_decoded: String,
     pub expected_hash_raw: String,
+    pub expected_hash_with_signature: String,
     pub keys: Vec<String>,
     pub user: Option<TelegramUser>,
     pub error: Option<String>,
@@ -197,9 +199,11 @@ pub(crate) fn validate_init_data_debug(init_data: &str, bot_token: &str) -> Init
             ok: false,
             data_check_string_decoded: String::new(),
             data_check_string_raw: String::new(),
+            data_check_string_with_signature: String::new(),
             hash: String::new(),
             expected_hash_decoded: String::new(),
             expected_hash_raw: String::new(),
+            expected_hash_with_signature: String::new(),
             keys: Vec::new(),
             user: None,
             error: Some("init_data too long".to_string()),
@@ -215,9 +219,11 @@ pub(crate) fn validate_init_data_debug(init_data: &str, bot_token: &str) -> Init
                     ok: false,
                     data_check_string_decoded: String::new(),
                     data_check_string_raw: String::new(),
+                    data_check_string_with_signature: String::new(),
                     hash: String::new(),
                     expected_hash_decoded: String::new(),
                     expected_hash_raw: String::new(),
+                    expected_hash_with_signature: String::new(),
                     keys: Vec::new(),
                     user: None,
                     error: Some("empty pair".to_string()),
@@ -241,15 +247,19 @@ pub(crate) fn validate_init_data_debug(init_data: &str, bot_token: &str) -> Init
                 ok: false,
                 data_check_string_decoded: String::new(),
                 data_check_string_raw: String::new(),
+                data_check_string_with_signature: String::new(),
                 hash: String::new(),
                 expected_hash_decoded: String::new(),
                 expected_hash_raw: String::new(),
+                expected_hash_with_signature: String::new(),
                 keys,
                 user: None,
                 error: Some("missing hash".to_string()),
             }
         }
     };
+
+    let pairs_clone = pairs.clone();
 
     let mut data_pairs: Vec<_> = pairs
         .into_iter()
@@ -273,6 +283,23 @@ pub(crate) fn validate_init_data_debug(init_data: &str, bot_token: &str) -> Init
         .collect::<Vec<_>>()
         .join("\n");
 
+    // Variant where signature is NOT excluded (some Telegram clients reportedly
+    // include it in the HMAC data-check-string). Kept for diagnostics only.
+    let mut data_pairs_with_sig: Vec<_> = pairs_clone
+        .into_iter()
+        .filter(|(k, _)| k != "hash")
+        .collect();
+    data_pairs_with_sig.sort_by(|a, b| a.0.cmp(&b.0));
+    let data_check_string_with_signature = data_pairs_with_sig
+        .iter()
+        .map(|(k, v)| {
+            let kd = urlencoding::decode(k).unwrap_or(std::borrow::Cow::Borrowed(k));
+            let vd = urlencoding::decode(v).unwrap_or(std::borrow::Cow::Borrowed(v));
+            format!("{}={}", kd, vd)
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+
     let mut secret_mac = match HmacSha256::new_from_slice(b"WebAppData") {
         Ok(m) => m,
         Err(_) => {
@@ -280,9 +307,11 @@ pub(crate) fn validate_init_data_debug(init_data: &str, bot_token: &str) -> Init
                 ok: false,
                 data_check_string_decoded,
                 data_check_string_raw,
+                data_check_string_with_signature: String::new(),
                 hash,
                 expected_hash_decoded: String::new(),
                 expected_hash_raw: String::new(),
+                expected_hash_with_signature: String::new(),
                 keys,
                 user: None,
                 error: Some("HMAC init failed".to_string()),
@@ -299,9 +328,11 @@ pub(crate) fn validate_init_data_debug(init_data: &str, bot_token: &str) -> Init
                 ok: false,
                 data_check_string_decoded,
                 data_check_string_raw,
+                data_check_string_with_signature: String::new(),
                 hash,
                 expected_hash_decoded: String::new(),
                 expected_hash_raw: String::new(),
+                expected_hash_with_signature: String::new(),
                 keys,
                 user: None,
                 error: Some("HMAC init failed".to_string()),
@@ -318,9 +349,11 @@ pub(crate) fn validate_init_data_debug(init_data: &str, bot_token: &str) -> Init
                 ok: false,
                 data_check_string_decoded,
                 data_check_string_raw,
+                data_check_string_with_signature: String::new(),
                 hash,
                 expected_hash_decoded,
                 expected_hash_raw: String::new(),
+                expected_hash_with_signature: String::new(),
                 keys,
                 user: None,
                 error: Some("HMAC init failed".to_string()),
@@ -329,6 +362,27 @@ pub(crate) fn validate_init_data_debug(init_data: &str, bot_token: &str) -> Init
     };
     mac_raw.update(data_check_string_raw.as_bytes());
     let expected_hash_raw = hex::encode(mac_raw.finalize().into_bytes());
+
+    let mut mac_sig = match HmacSha256::new_from_slice(&secret_key) {
+        Ok(m) => m,
+        Err(_) => {
+            return InitDataDebugInfo {
+                ok: false,
+                data_check_string_decoded,
+                data_check_string_raw,
+                data_check_string_with_signature,
+                hash,
+                expected_hash_decoded,
+                expected_hash_raw,
+                expected_hash_with_signature: String::new(),
+                keys,
+                user: None,
+                error: Some("HMAC init failed".to_string()),
+            }
+        }
+    };
+    mac_sig.update(data_check_string_with_signature.as_bytes());
+    let expected_hash_with_signature = hex::encode(mac_sig.finalize().into_bytes());
 
     let user = data_pairs
         .iter()
@@ -356,14 +410,17 @@ pub(crate) fn validate_init_data_debug(init_data: &str, bot_token: &str) -> Init
         constant_time_eq::constant_time_eq(expected_hash_decoded.as_bytes(), hash.as_bytes());
     let ok_raw =
         constant_time_eq::constant_time_eq(expected_hash_raw.as_bytes(), hash.as_bytes());
+    let ok_with_sig =
+        constant_time_eq::constant_time_eq(expected_hash_with_signature.as_bytes(), hash.as_bytes());
     let mut ok = ok_decoded || ok_raw;
     let mut error = None;
 
     if !ok {
         error = Some(format!(
-            "HMAC mismatch: decoded={} raw={} hash_len={}",
+            "HMAC mismatch: decoded={} raw={} with_sig={} hash_len={}",
             ok_decoded,
             ok_raw,
+            ok_with_sig,
             hash.len()
         ));
     } else {
@@ -394,9 +451,11 @@ pub(crate) fn validate_init_data_debug(init_data: &str, bot_token: &str) -> Init
         ok,
         data_check_string_decoded,
         data_check_string_raw,
+        data_check_string_with_signature,
         hash,
         expected_hash_decoded,
         expected_hash_raw,
+        expected_hash_with_signature,
         keys,
         user,
         error,
