@@ -80,7 +80,6 @@ pub fn render_uniform_set_card(
     let icon = set.icon.as_deref().unwrap_or("🎁");
 
     let is_available = set.is_available.unwrap_or(true);
-    let opacity = if is_available { "" } else { "opacity:0.6;" };
 
     let badge = crate::trios::packs::PackBadge::from_str(&set.badge);
     let badge_label = badge.label().map(|(ru, en)| lang::localized(ru, Some(en)));
@@ -103,17 +102,16 @@ pub fn render_uniform_set_card(
     let vid_url = s0.video_url.clone().unwrap_or_default();
     let has_video = is_media_url(&vid_url);
 
-    // Two-layer fixed-aspect card: the outer wrapper uses the classic
-    // padding-bottom hack so the card is exactly 2:3 relative to its column
-    // width. This works in every WebView, including older Telegram WebViews
-    // where `aspect-ratio` + grid stretch is unreliable. The inner absolute
-    // div is the actual card flex container.
+    // Fixed 2:3 card using the classic padding-bottom hack. The wrapper keeps
+    // the footprint identical for every column width; the inner absolute div is
+    // the actual card. `aspect-ratio` is avoided because older WebViews and
+    // some Telegram clients ignore it for grid items.
     let wrapper_style = format!(
-        "position:relative;width:100%;height:0;padding-bottom:150%;{}",
-        opacity
+        "position:relative;width:100%;height:0;padding-bottom:150%;opacity:{};",
+        if is_available { "1" } else { "0.6" }
     );
     let card_style = format!(
-        "position:absolute;inset:0;background:#16213e;border:4px solid {};box-shadow:4px 4px 0 #000;overflow:hidden;cursor:pointer;display:flex;flex-direction:column;",
+        "position:absolute;top:0;left:0;right:0;bottom:0;background:#16213e;border:4px solid {};box-shadow:4px 4px 0 #000;overflow:hidden;cursor:pointer;display:flex;flex-direction:column;",
         accent
     );
 
