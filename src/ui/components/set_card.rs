@@ -145,7 +145,7 @@ pub fn render_uniform_set_card(
                         src: "{img_url}",
                         alt: "{set_name}",
                         loading: "lazy",
-                        style: "width:100%;height:100%;object-fit:cover;display:block;"
+                        style: "width:100%;height:100%;object-fit:contain;display:block;"
                     }
                 } else {
                     span { style: "font-size:40px;", "{icon}" }

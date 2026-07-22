@@ -5,7 +5,7 @@ const { chromium } = require('playwright');
   const url = process.argv[2] || 'http://127.0.0.1:8080/sets';
   await page.goto(url, { waitUntil: 'networkidle', timeout: 120000 });
   await page.waitForTimeout(8000);
-  const cards = await page.locator('div[style*="padding-bottom:150%"]').all();
+  const cards = await page.locator('div[style*="padding-bottom:135%"]').all();
   console.log('Found wrapper cards:', cards.length);
   for (let i = 0; i < cards.length; i++) {
     const box = await cards[i].boundingBox();
