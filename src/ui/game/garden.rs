@@ -130,6 +130,25 @@ async fn fetch_garden_products() -> Result<Vec<GardenProduct>, String> {
         .map(|r| r.products)
 }
 
+/// Copy text to the browser clipboard. Returns true on apparent success.
+fn copy_to_clipboard(text: &str) -> bool {
+    let js = format!(
+        r#"(function(){{
+            try {{
+                navigator.clipboard.writeText({});
+                return true;
+            }} catch(e) {{
+                return false;
+            }}
+        }})()"#,
+        serde_json::Value::String(text.to_string())
+    );
+    js_sys::eval(&js)
+        .ok()
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false)
+}
+
 /// POST a chosen product to plant it. Returns Ok(()) or a server error code.
 async fn choose_plant_api(
     telegram_id: i64,
@@ -370,6 +389,23 @@ pub fn Garden() -> Element {
             ErrorBanner {
                 message: err.clone(),
                 margin: "0 auto 12px".to_string(),
+            }
+
+            // Cycle #171: when initData diagnostics are available, let the user
+            // copy the full server JSON with one tap so they can paste it into
+            // support/dev chat without touching the browser console.
+            if err.contains("server={") {
+                div { style: "text-align:center;margin:0 auto 12px;",
+                    button {
+                        style: "padding:8px 14px;background:#ff4757;color:#fff;border:4px solid #c0392b;box-shadow:3px 3px 0 #000;font-size:11px;cursor:pointer;",
+                        onclick: move |_| {
+                            if copy_to_clipboard(&err) {
+                                let _ = js_sys::eval("alert('📋 Диагностика скопирована')");
+                            }
+                        },
+                        "📋 Скопировать диагностику"
+                    }
+                }
             }
 
             // Always-visible chooser: pick (or change) the product to grow a
