@@ -225,11 +225,11 @@ pub fn SetsScreen() -> Element {
                                     }
                                 }
                             }
-                            // Two-column grid with uniform cards. Each card is
-                            // locked to a 2:3 footprint and the media area fills
-                            // 58% of it, so every preview is the same size while
-                            // images/videos keep their aspect ratio via cover.
-                            div { style: "display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:0 16px;",
+                            // Two-column grid with uniform cards. The grid row
+                            // height is shared (grid-auto-rows:1fr) and each card
+                            // stretches to fill its cell, so every card in a row
+                            // is the same height. The media area is locked to 4/3.
+                            div { style: "display:grid;grid-template-columns:1fr 1fr;grid-auto-rows:1fr;gap:12px;padding:0 16px;",
                                 for set in ordered.iter() {
                                     { render_uniform_set_card(set.clone().into(), cart, ACCENT) }
                                 }

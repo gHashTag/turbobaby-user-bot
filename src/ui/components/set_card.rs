@@ -103,19 +103,21 @@ pub fn render_uniform_set_card(
     let vid_url = s0.video_url.clone().unwrap_or_default();
     let has_video = is_media_url(&vid_url);
 
-    // Portrait product card: height is 1.5× the width, so every card in the
-    // 2-column grid is identical in size. The media area fills the top ~58% of
-    // the card and the image/video is forced to cover that entire area.
+    // Card height is driven by the grid row, not by aspect-ratio, because
+    // `aspect-ratio` on a grid item makes it ignore stretch alignment and each
+    // card sizes independently. The grid uses `grid-auto-rows:1fr` so every row
+    // is the same height, and `height:100%` makes every card fill that row.
     let card_style = format!(
-        "background:#16213e;border:4px solid {};box-shadow:4px 4px 0 #000;overflow:hidden;position:relative;cursor:pointer;display:flex;flex-direction:column;height:100%;min-height:0;aspect-ratio:2/3;{}",
+        "background:#16213e;border:4px solid {};box-shadow:4px 4px 0 #000;overflow:hidden;position:relative;cursor:pointer;display:flex;flex-direction:column;height:100%;min-height:0;{}",
         accent, opacity
     );
 
     rsx! {
         div { style: card_style,
             onclick: move |_| detail_open.set(true),
-            // Media area: fills top 58% of the card, image/video cover it fully.
-            div { style: "flex:0 0 58%;position:relative;overflow:hidden;background:linear-gradient(135deg,#1a1a2e,#16213e);display:flex;align-items:center;justify-content:center;",
+            // Media area: locked to a 4/3 preview so every card has the same
+            // media height. Images/videos fill it with object-fit:cover.
+            div { style: "flex:0 0 auto;width:100%;aspect-ratio:4/3;position:relative;overflow:hidden;background:linear-gradient(135deg,#1a1a2e,#16213e);display:flex;align-items:center;justify-content:center;",
                 if has_video {
                     video {
                         style: "width:100%;height:100%;object-fit:cover;display:block;",
@@ -155,8 +157,8 @@ pub fn render_uniform_set_card(
                     }
                 }
             }
-            // Content area: bottom 42% of the card, tightly clamped.
-            div { style: "flex:1 1 auto;padding:10px;display:flex;flex-direction:column;overflow:hidden;",
+            // Content area: fills remaining space, but never expands past it.
+            div { style: "flex:1 1 auto;min-height:0;padding:10px;display:flex;flex-direction:column;overflow:hidden;",
                 div { style: "font-size:15px;font-weight:700;color:#fff;line-height:1.2;text-shadow:2px 2px 0 #000;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;margin-bottom:4px;",
                     "{set_name}"
                 }
@@ -168,7 +170,7 @@ pub fn render_uniform_set_card(
                         "{desc}"
                     }
                 }
-                div { style: "display:flex;gap:4px;align-items:baseline;margin-top:auto;",
+                div { style: "display:flex;gap:4px;align-items:baseline;margin-top:auto;flex-shrink:0;",
                     span { style: "font-size:18px;font-weight:800;color:#ffe600;text-shadow:2px 2px 0 #000;", "{price_str}" }
                     if has_discount {
                         span { style: "font-size:12px;color:#888;text-decoration:line-through;", "{original_price_str}" }
