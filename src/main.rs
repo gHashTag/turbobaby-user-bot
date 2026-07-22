@@ -422,9 +422,21 @@ async fn main() -> Result<()> {
             tokio::time::sleep(std::time::Duration::from_secs(2)).await;
             match web_app_url.parse::<Url>() {
                 Ok(url) => {
+                    // Cycle #171: bust Telegram's WebView cache by appending a versioned
+                    // query string. Without this, iOS/Android WebViews serve a stale
+                    // index.html after deploy and users never see fixes.
+                    let cache_busted_url = if url.query().is_some() {
+                        format!("{}&wwb_v=171", url)
+                    } else {
+                        format!("{}?wwb_v=171", url)
+                    };
+                    let menu_url = match cache_busted_url.parse::<Url>() {
+                        Ok(u) => u,
+                        Err(_) => url,
+                    };
                     let menu = MenuButton::WebApp {
                         text: "🌿 Woody".to_string(),
-                        web_app: WebAppInfo { url },
+                        web_app: WebAppInfo { url: menu_url },
                     };
                     if let Err(e) = bot_menu.set_chat_menu_button().menu_button(menu).await {
                         tracing::warn!("Failed to set Telegram menu button: {}", e);
