@@ -104,10 +104,25 @@ pub(crate) fn validate_init_data(init_data: &str, bot_token: &str) -> Option<Tel
     let ok_raw = constant_time_eq::constant_time_eq(expected_hash_raw.as_bytes(), hash.as_bytes());
 
     if !ok_decoded && !ok_raw {
+        // Safe diagnostics: log hash lengths and first/last bytes, plus key list,
+        // but never the full initData or user PII. Helps catch token/format drift.
+        let hash_prefix = hash.chars().take(8).collect::<String>();
+        let hash_suffix = hash.chars().rev().take(4).collect::<String>();
+        let exp_dec_prefix = expected_hash.chars().take(8).collect::<String>();
+        let exp_dec_suffix = expected_hash.chars().rev().take(4).collect::<String>();
+        let exp_raw_prefix = expected_hash_raw.chars().take(8).collect::<String>();
+        let exp_raw_suffix = expected_hash_raw.chars().rev().take(4).collect::<String>();
+        let key_list: Vec<&str> = data_pairs.iter().map(|(k, _)| k.as_str()).collect();
         tracing::warn!(
-            "initData HMAC mismatch (decoded={}, raw={})",
-            ok_decoded,
-            ok_raw
+            "initData HMAC mismatch: hash_len={} keys={:?} hash=[{}..{}] expected_decoded=[{}..{}] expected_raw=[{}..{}]",
+            hash.len(),
+            key_list,
+            hash_prefix,
+            hash_suffix,
+            exp_dec_prefix,
+            exp_dec_suffix,
+            exp_raw_prefix,
+            exp_raw_suffix
         );
         return None;
     }
