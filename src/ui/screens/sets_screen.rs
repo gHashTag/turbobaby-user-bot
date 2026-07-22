@@ -225,11 +225,10 @@ pub fn SetsScreen() -> Element {
                                     }
                                 }
                             }
-                            // Two-column grid with uniform cards. The grid row
-                            // height is shared (grid-auto-rows:1fr) and each card
-                            // stretches to fill its cell, so every card in a row
-                            // is the same height. The media area is locked to 4/3.
-                            div { style: "display:grid;grid-template-columns:1fr 1fr;grid-auto-rows:1fr;gap:12px;padding:0 16px;",
+                            // Two-column grid with uniform cards. Each card uses
+                            // the padding-bottom hack for a fixed 2:3 footprint, so
+                            // every card has the same size regardless of content.
+                            div { style: "display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:0 16px;align-items:start",
                                 for set in ordered.iter() {
                                     { render_uniform_set_card(set.clone().into(), cart, ACCENT) }
                                 }

@@ -426,9 +426,9 @@ async fn main() -> Result<()> {
                     // query string. Without this, iOS/Android WebViews serve a stale
                     // index.html after deploy and users never see fixes.
                     let cache_busted_url = if url.query().is_some() {
-                        format!("{}&wwb_v=174", url)
+                        format!("{}&wwb_v=175", url)
                     } else {
-                        format!("{}?wwb_v=174", url)
+                        format!("{}?wwb_v=175", url)
                     };
                     let menu_url = match cache_busted_url.parse::<Url>() {
                         Ok(u) => u,

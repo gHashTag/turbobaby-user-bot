@@ -103,18 +103,24 @@ pub fn render_uniform_set_card(
     let vid_url = s0.video_url.clone().unwrap_or_default();
     let has_video = is_media_url(&vid_url);
 
-    // Card height is driven by the grid row, not by aspect-ratio, because
-    // `aspect-ratio` on a grid item makes it ignore stretch alignment and each
-    // card sizes independently. The grid uses `grid-auto-rows:1fr` so every row
-    // is the same height, and `height:100%` makes every card fill that row.
+    // Two-layer fixed-aspect card: the outer wrapper uses the classic
+    // padding-bottom hack so the card is exactly 2:3 relative to its column
+    // width. This works in every WebView, including older Telegram WebViews
+    // where `aspect-ratio` + grid stretch is unreliable. The inner absolute
+    // div is the actual card flex container.
+    let wrapper_style = format!(
+        "position:relative;width:100%;height:0;padding-bottom:150%;{}",
+        opacity
+    );
     let card_style = format!(
-        "background:#16213e;border:4px solid {};box-shadow:4px 4px 0 #000;overflow:hidden;position:relative;cursor:pointer;display:flex;flex-direction:column;height:100%;min-height:0;{}",
-        accent, opacity
+        "position:absolute;inset:0;background:#16213e;border:4px solid {};box-shadow:4px 4px 0 #000;overflow:hidden;cursor:pointer;display:flex;flex-direction:column;",
+        accent
     );
 
     rsx! {
-        div { style: card_style,
-            onclick: move |_| detail_open.set(true),
+        div { style: wrapper_style,
+            div { style: card_style,
+                onclick: move |_| detail_open.set(true),
             // Media area: locked to a 4/3 preview so every card has the same
             // media height. Images/videos fill it with object-fit:cover.
             div { style: "flex:0 0 auto;width:100%;aspect-ratio:4/3;position:relative;overflow:hidden;background:linear-gradient(135deg,#1a1a2e,#16213e);display:flex;align-items:center;justify-content:center;",
@@ -256,6 +262,7 @@ pub fn render_uniform_set_card(
                     VideoModal { url, on_close: move |_| show_video.set(false) }
                 }
             })}
+            }
         }
     }
 }
