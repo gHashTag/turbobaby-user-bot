@@ -107,7 +107,7 @@ pub fn render_uniform_set_card(
     // 2-column grid is identical in size. The media area fills the top ~58% of
     // the card and the image/video is forced to cover that entire area.
     let card_style = format!(
-        "background:#16213e;border:4px solid {};box-shadow:4px 4px 0 #000;overflow:hidden;position:relative;cursor:pointer;display:flex;flex-direction:column;height:100%;aspect-ratio:2/3;{}",
+        "background:#16213e;border:4px solid {};box-shadow:4px 4px 0 #000;overflow:hidden;position:relative;cursor:pointer;display:flex;flex-direction:column;height:100%;min-height:0;aspect-ratio:2/3;{}",
         accent, opacity
     );
 
@@ -175,7 +175,7 @@ pub fn render_uniform_set_card(
                     }
                 }
             }
-            div { style: "padding:0 10px 10px;margin-top:auto;",
+            div { style: "padding:0 10px 10px;flex-shrink:0;",
                 if is_available {
                     button {
                         style: "
