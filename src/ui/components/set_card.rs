@@ -107,7 +107,7 @@ pub fn render_uniform_set_card(
     // the actual card. `aspect-ratio` is avoided because older WebViews and
     // some Telegram clients ignore it for grid items.
     let wrapper_style = format!(
-        "position:relative;width:100%;height:0;padding-bottom:150%;opacity:{};",
+        "position:relative;width:100%;height:0;padding-bottom:135%;opacity:{};",
         if is_available { "1" } else { "0.6" }
     );
     let card_style = format!(

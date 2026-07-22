@@ -13,7 +13,7 @@ use serde::Deserialize;
 // `time_of_day`/`strains` fields and the whole mood filter were dead: 4 of 5
 // filter chips matched nothing and every card was mislabelled "party"). The dead
 // filter was removed; one accent keeps the look consistent.
-const ACCENT: &str = "#b388ff";
+const ACCENT: &str = "#ff4757";
 
 #[derive(Debug, Clone, Deserialize)]
 struct ApiSet {
