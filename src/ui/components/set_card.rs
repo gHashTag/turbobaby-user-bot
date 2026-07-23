@@ -119,12 +119,10 @@ pub fn render_uniform_set_card(
         div { style: wrapper_style,
             div { style: card_style,
                 onclick: move |_| detail_open.set(true),
-            // Media area: locked to a 4/3 preview so every card has the same
-            // media height. Images/videos fill it with object-fit:cover.
-            div { style: "flex:0 0 auto;width:100%;aspect-ratio:4/3;position:relative;overflow:hidden;background:linear-gradient(135deg,#1a1a2e,#16213e);display:flex;align-items:center;justify-content:center;",
+                // Full-bleed media fills the whole card, like the home carousel.
                 if has_video {
                     video {
-                        style: "width:100%;height:100%;object-fit:cover;display:block;",
+                        style: "position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;z-index:1;",
                         src: "{vid_url}",
                         "type": "video/mp4",
                         autoplay: true,
@@ -145,12 +143,12 @@ pub fn render_uniform_set_card(
                         src: "{img_url}",
                         alt: "{set_name}",
                         loading: "lazy",
-                        style: "width:100%;height:100%;object-fit:contain;display:block;"
+                        style: "position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;z-index:1;"
                     }
                 } else {
-                    span { style: "font-size:40px;", "{icon}" }
+                    div { style: "position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:40px;background:linear-gradient(135deg,#1a1a2e,#16213e);z-index:1;", "{icon}" }
                 }
-                // Badge stack top-left, matching strain/accessory cards.
+                // Badge stack top-left.
                 div { style: "position:absolute;top:8px;left:8px;display:flex;flex-direction:column;gap:4px;z-index:4;align-items:flex-start;",
                     span { style: "font-size:12px;font-weight:700;background:{accent};color:#000;padding:3px 7px;box-shadow:2px 2px 0 #000;", "📦 SET" }
                     if let Some(bl) = badge_label.clone() {
@@ -160,62 +158,60 @@ pub fn render_uniform_set_card(
                         span { style: "font-size:12px;font-weight:700;background:{accent};color:#000;padding:3px 7px;box-shadow:2px 2px 0 #000;", "{discount_badge}" }
                     }
                 }
-            }
-            // Content area: fills remaining space, but never expands past it.
-            div { style: "flex:1 1 auto;min-height:0;padding:10px;display:flex;flex-direction:column;overflow:hidden;",
-                div { style: "font-size:15px;font-weight:700;color:#fff;line-height:1.2;text-shadow:2px 2px 0 #000;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;margin-bottom:4px;",
-                    "{set_name}"
-                }
-                if !weight_line.is_empty() {
-                    div { style: "font-size:11px;color:#b388ff;font-weight:600;margin-bottom:3px;", "⚖️ {weight_line}" }
-                }
-                if !desc.is_empty() {
-                    div { style: "font-size:12px;color:#888;margin-bottom:4px;line-height:1.3;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden;",
-                        "{desc}"
+                // Bottom text overlay with price, name, description, add-to-cart.
+                div { style: "position:absolute;left:0;right:0;bottom:0;z-index:4;padding:10px;background:linear-gradient(to top,rgba(0,0,0,0.92) 0%,rgba(0,0,0,0.65) 55%,transparent 100%);display:flex;flex-direction:column;justify-content:flex-end;min-height:0;",
+                    div { style: "font-size:15px;font-weight:700;color:#fff;line-height:1.2;text-shadow:2px 2px 0 #000;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;margin-bottom:4px;",
+                        "{set_name}"
                     }
-                }
-                div { style: "display:flex;gap:4px;align-items:baseline;margin-top:auto;flex-shrink:0;",
-                    span { style: "font-size:18px;font-weight:800;color:#ffe600;text-shadow:2px 2px 0 #000;", "{price_str}" }
-                    if has_discount {
-                        span { style: "font-size:12px;color:#888;text-decoration:line-through;", "{original_price_str}" }
+                    if !weight_line.is_empty() {
+                        div { style: "font-size:11px;color:#b388ff;font-weight:600;text-shadow:1px 1px 0 #000;margin-bottom:3px;", "⚖️ {weight_line}" }
                     }
-                }
-            }
-            div { style: "padding:0 10px 10px;flex-shrink:0;",
-                if is_available {
-                    button {
-                        style: "
-                            font-size:13px;font-weight:700;width:100%;padding:10px 16px;
-                            background:#39ff14;color:#000;
-                            border:3px solid #2d9e0f;
+                    if !desc.is_empty() {
+                        div { style: "font-size:12px;color:#ccc;margin-bottom:4px;line-height:1.3;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden;",
+                            "{desc}"
+                        }
+                    }
+                    div { style: "display:flex;gap:4px;align-items:baseline;margin-bottom:6px;",
+                        span { style: "font-size:18px;font-weight:800;color:#ffe600;text-shadow:2px 2px 0 #000;", "{price_str}" }
+                        if has_discount {
+                            span { style: "font-size:12px;color:#aaa;text-decoration:line-through;", "{original_price_str}" }
+                        }
+                    }
+                    if is_available {
+                        button {
+                            style: "
+                                font-size:13px;font-weight:700;width:100%;padding:10px 16px;
+                                background:#39ff14;color:#000;
+                                border:3px solid #2d9e0f;
+                                box-shadow:2px 2px 0 #000;
+                                cursor:pointer;
+                            ",
+                            onclick: move |e: Event<MouseData>| {
+                                e.stop_propagation();
+                                let s = s4.clone();
+                                let mut c = cart.write();
+                                c.add_item(CartItem {
+                                    id: s.id.clone(),
+                                    name: lang::localized(&s.name, s.name_en.as_deref()),
+                                    price,
+                                    quantity: 1,
+                                    image_url: None,
+                                    item_type: CartItemType::Set,
+                                    fulfillment: None,
+                                });
+                                crate::ui::telegram::TelegramApp::init().haptic_notification(crate::ui::telegram::HapticNotification::Success);
+                            },
+                            "{add_to_cart_label}"
+                        }
+                    } else {
+                        button { style: "
+                            font-size:13px;font-weight:600;width:100%;padding:10px 16px;
+                            background:transparent;color:#888;
+                            border:3px solid #2a2a4a;
                             box-shadow:2px 2px 0 #000;
-                            cursor:pointer;
-                        ",
-                        onclick: move |e: Event<MouseData>| {
-                            e.stop_propagation();
-                            let s = s4.clone();
-                            let mut c = cart.write();
-                            c.add_item(CartItem {
-                                id: s.id.clone(),
-                                name: lang::localized(&s.name, s.name_en.as_deref()),
-                                price,
-                                quantity: 1,
-                                image_url: None,
-                                item_type: CartItemType::Set,
-                                fulfillment: None,
-                            });
-                            crate::ui::telegram::TelegramApp::init().haptic_notification(crate::ui::telegram::HapticNotification::Success);
-                        },
-                        "{add_to_cart_label}"
+                            cursor:not-allowed;
+                        ", "Sold Out" }
                     }
-                } else {
-                    button { style: "
-                        font-size:13px;font-weight:600;width:100%;padding:10px 16px;
-                        background:transparent;color:#888;
-                        border:3px solid #2a2a4a;
-                        box-shadow:2px 2px 0 #000;
-                        cursor:not-allowed;
-                    ", "Sold Out" }
                 }
             }
             {detail_open().then(|| {
@@ -260,7 +256,6 @@ pub fn render_uniform_set_card(
                     VideoModal { url, on_close: move |_| show_video.set(false) }
                 }
             })}
-            }
         }
     }
 }
