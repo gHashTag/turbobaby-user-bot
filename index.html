@@ -71,10 +71,16 @@
         var match = moduleScript && moduleScript.textContent.match(/\/woody-weed-bot-([a-f0-9]+)\.js/);
         var localVersion = match ? match[1] : '';
         fetch('/version.txt?cb=' + Date.now(), { cache: 'no-store', credentials: 'same-origin' })
-          .then(function (r) { if (!r.ok) throw new Error(r.status); return r.text(); })
+          .then(function (r) {
+            if (!r.ok) throw new Error(r.status);
+            var ct = (r.headers.get('content-type') || '').toLowerCase();
+            if (ct.indexOf('text/plain') === -1) throw new Error('bad content-type: ' + ct);
+            return r.text();
+          })
           .then(function (serverVersion) {
             serverVersion = (serverVersion || '').trim();
-            if (!serverVersion) return;
+            // Ignore non-hash responses (e.g. dev server returning index.html for /version.txt).
+            if (!serverVersion || !/^[a-f0-9]{16,}$/i.test(serverVersion)) return;
             if (localVersion && localVersion === serverVersion) return;
             // Embedded JS hash differs from the server's current build: this page is stale.
             clearAndGo(serverVersion);
@@ -158,9 +164,14 @@
         if (btn) {
             btn.onclick = function () {
                 fetch('/version.txt?cb=' + Date.now(), { cache: 'no-store', credentials: 'same-origin' })
-                    .then(function (r) { return r.text(); })
+                    .then(function (r) {
+                        if (!r.ok) throw new Error(r.status);
+                        var ct = (r.headers.get('content-type') || '').toLowerCase();
+                        if (ct.indexOf('text/plain') === -1) throw new Error('bad content-type: ' + ct);
+                        return r.text();
+                    })
                     .then(function (v) {
-                        var version = (v || '').trim() || Date.now().toString();
+                        var version = ((v || '').trim().match(/^[a-f0-9]{16,}$/i) || [])[0] || Date.now().toString();
                         try { sessionStorage.setItem('__wwb_version_redirected', '1'); } catch (e) {}
                         if (window.caches) {
                             try {

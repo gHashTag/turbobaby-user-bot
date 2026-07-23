@@ -1,0 +1,25 @@
+[build]
+target = "index.html"
+dist = "dist"
+public_url = "/"
+filehash = true
+release = true
+# Keep no_opt=true: prebuilt wasm-opt v116 doesn't support bulk-memory/nontrapping-fptoint
+# features emitted by modern rustc. cargo --release already shrinks the binary enough.
+no_opt = true
+
+[serve]
+addresses = ["0.0.0.0"]
+port = 8080
+open = false
+
+[[proxy]]
+backend = "https://woody-weed-bot-production-370f.up.railway.app/api/"
+rewrite = "/api/"
+
+[tools]
+wasm-bindgen = "0.2.122"
+
+[watch]
+watch = ["src", "index.html"]
+ignore = ["dist", "target", "assets"]
