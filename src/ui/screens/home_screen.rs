@@ -115,32 +115,32 @@ fn render_home_pack_card(p: HomePack) -> Element {
         crate::trios::packs::weight_line(p.total_weight_grams, p.strain_count, &strain_word);
 
     rsx! {
-        Link { to: Route::Sets {},
-            div { style: "flex:0 0 70%;position:relative;box-sizing:border-box;",
-                div { style: "position:relative;width:100%;height:0;padding-bottom:135%;background:#16213e;border:4px solid #b388ff;box-shadow:4px 4px 0 #000;overflow:hidden;cursor:pointer;display:flex;flex-direction:column;",
-                    div { style: "position:absolute;inset:0;display:flex;flex-direction:column;",
-                        div { style: "position:relative;width:100%;aspect-ratio:4/3;flex-shrink:0;background:linear-gradient(135deg,#1a1a2e,#16213e);display:flex;align-items:center;justify-content:center;font-size:40px;overflow:hidden;",
-                            if has_image {
-                                img { src: "{img}", alt: "{name}", style: "width:100%;height:100%;object-fit:contain;display:block;background:#16213e;" }
-                            } else {
-                                "{icon}"
-                            }
-                            span { style: "position:absolute;top:6px;left:6px;font-size:11px;font-weight:700;background:#b388ff;color:#000;padding:3px 6px;box-shadow:2px 2px 0 #000;", "📦 SET" }
-                            if let Some(bl) = badge_label.clone() {
-                                span { style: "position:absolute;top:32px;left:6px;font-size:10px;font-weight:700;background:{badge_color};color:#fff;padding:2px 6px;box-shadow:2px 2px 0 #000;", "{bl}" }
-                            }
-                            if has_discount {
-                                span { style: "position:absolute;top:6px;right:6px;font-size:11px;font-weight:700;background:#b388ff;color:#000;padding:3px 6px;box-shadow:2px 2px 0 #000;", "{discount as i32}% OFF" }
-                            }
+        Link {
+            to: Route::Sets {},
+            style: "flex:0 0 70%;scroll-snap-align:center;box-sizing:border-box;",
+            div { style: "position:relative;width:100%;height:0;padding-bottom:135%;background:#16213e;border:4px solid #b388ff;box-shadow:4px 4px 0 #000;overflow:hidden;cursor:pointer;display:flex;flex-direction:column;",
+                div { style: "position:absolute;inset:0;display:flex;flex-direction:column;",
+                    div { style: "position:relative;width:100%;aspect-ratio:4/3;flex-shrink:0;background:linear-gradient(135deg,#1a1a2e,#16213e);display:flex;align-items:center;justify-content:center;font-size:40px;overflow:hidden;",
+                        if has_image {
+                            img { src: "{img}", alt: "{name}", style: "width:100%;height:100%;object-fit:contain;display:block;background:#16213e;" }
+                        } else {
+                            "{icon}"
                         }
-                        div { style: "flex:1;min-height:0;padding:10px 12px;display:flex;flex-direction:column;justify-content:space-between;",
-                            div { style: "font-size:15px;font-weight:700;color:#e8e8e8;text-shadow:2px 2px 0 #000;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;", "{name}" }
-                            div { style: "display:flex;justify-content:space-between;align-items:flex-end;",
-                                if !weight_line.is_empty() {
-                                    div { style: "font-size:11px;color:#b388ff;font-weight:600;", "⚖️ {weight_line}" }
-                                }
-                                span { style: "font-size:18px;font-weight:800;color:#ffe600;text-shadow:2px 2px 0 #000;", "{price_str}" }
+                        span { style: "position:absolute;top:6px;left:6px;font-size:11px;font-weight:700;background:#b388ff;color:#000;padding:3px 6px;box-shadow:2px 2px 0 #000;", "📦 SET" }
+                        if let Some(bl) = badge_label.clone() {
+                            span { style: "position:absolute;top:32px;left:6px;font-size:10px;font-weight:700;background:{badge_color};color:#fff;padding:2px 6px;box-shadow:2px 2px 0 #000;", "{bl}" }
+                        }
+                        if has_discount {
+                            span { style: "position:absolute;top:6px;right:6px;font-size:11px;font-weight:700;background:#b388ff;color:#000;padding:3px 6px;box-shadow:2px 2px 0 #000;", "{discount as i32}% OFF" }
+                        }
+                    }
+                    div { style: "flex:1;min-height:0;padding:10px 12px;display:flex;flex-direction:column;justify-content:space-between;",
+                        div { style: "font-size:15px;font-weight:700;color:#e8e8e8;text-shadow:2px 2px 0 #000;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;", "{name}" }
+                        div { style: "display:flex;justify-content:space-between;align-items:flex-end;",
+                            if !weight_line.is_empty() {
+                                div { style: "font-size:11px;color:#b388ff;font-weight:600;", "⚖️ {weight_line}" }
                             }
+                            span { style: "font-size:18px;font-weight:800;color:#ffe600;text-shadow:2px 2px 0 #000;", "{price_str}" }
                         }
                     }
                 }
