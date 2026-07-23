@@ -399,7 +399,10 @@ async fn check_admin_access(
     Query(query): Query<AdminCheckQuery>,
     State(state): State<AppState>,
 ) -> Result<Json<Value>, StatusCode> {
-    validate_telegram_id_param(query.telegram_id)?;
+    // telegram_id is client-supplied and unverified; it is only used for
+    // initData-based admin checks. A missing/zero value is fine when the
+    // request authenticates via X-Admin-Token, so don't reject the request
+    // upfront. (Token-authenticated responses always report telegram_id: 0.)
     let init_data_opt = headers
         .get("X-Telegram-Init-Data")
         .and_then(|v| v.to_str().ok());
