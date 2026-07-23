@@ -73,14 +73,22 @@ pub fn parse_start_param(param: &str) -> Option<SharedProduct> {
         return None;
     }
 
-    let (prefix, id) = param.split_once('_')?;
-    let kind = match prefix {
-        "p_strain" => ProductKind::Strain,
-        "p_acc" => ProductKind::Accessory,
-        "p_set" => ProductKind::Set,
-        "p_tea" => ProductKind::Tea,
-        _ => return None,
+    // The payload format is `{prefix}_{id}`. Prefixes themselves contain an
+    // underscore (e.g. "p_set"), so split_once('_') on the first underscore
+    // would mis-parse "p_set_xxx" into prefix "p" and id "set_xxx". Use
+    // strip_prefix instead, then validate the remaining id.
+    let (kind, id) = if let Some(id) = param.strip_prefix("p_strain_") {
+        (ProductKind::Strain, id)
+    } else if let Some(id) = param.strip_prefix("p_acc_") {
+        (ProductKind::Accessory, id)
+    } else if let Some(id) = param.strip_prefix("p_set_") {
+        (ProductKind::Set, id)
+    } else if let Some(id) = param.strip_prefix("p_tea_") {
+        (ProductKind::Tea, id)
+    } else {
+        return None;
     };
+
     if id.is_empty() {
         return None;
     }
@@ -161,6 +169,15 @@ mod tests {
         let p = parse_start_param("p_set_550e8400-e29b-41d4-a716-446655440000").unwrap();
         assert_eq!(p.kind, ProductKind::Set);
         assert_eq!(p.id, "550e8400-e29b-41d4-a716-446655440000");
+    }
+
+    #[test]
+    fn parse_rejects_ambiguous_single_underscore_prefix() {
+        // "p_set_xxx" must NOT be mis-parsed as prefix "p" + id "set_xxx".
+        assert!(parse_start_param("p_set_123").is_some());
+        let p = parse_start_param("p_set_123").unwrap();
+        assert_eq!(p.kind, ProductKind::Set);
+        assert_eq!(p.id, "123");
     }
 
     #[test]

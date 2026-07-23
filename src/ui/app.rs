@@ -80,6 +80,10 @@ pub fn App() -> Element {
                 }
                 if let Some(param) = crate::ui::telegram::TelegramApp::init().start_param() {
                     if let Some(product) = parse_start_param(&param) {
+                        #[cfg(target_arch = "wasm32")]
+                        web_sys::console::log_1(
+                            &format!("[deeplink] resolved {:?} {}", product.kind, product.id).into()
+                        );
                         pending.set(Some(product));
                         return;
                     }
