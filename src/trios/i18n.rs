@@ -97,6 +97,7 @@ pub const T_EVENTS_BOOK_FREE: Key = "events.book_free";
 pub const T_EVENTS_SOLD_OUT: Key = "events.sold_out";
 pub const T_EVENTS_ERROR: Key = "events.error";
 pub const T_EVENTS_INSUFFICIENT_STARS: Key = "events.insufficient_stars";
+pub const T_EVENTS_REMINDER_BODY: Key = "events.reminder_body";
 pub const T_EVENTS_WEEKDAY_MON: Key = "events.weekday.mon";
 pub const T_EVENTS_WEEKDAY_TUE: Key = "events.weekday.tue";
 pub const T_EVENTS_WEEKDAY_WED: Key = "events.weekday.wed";
@@ -128,6 +129,9 @@ pub const T_YOUR_ORDER: Key = "checkout.your_order";
 pub const T_YOUR_INFO: Key = "checkout.your_info";
 pub const T_PICKUP_LOCATION: Key = "checkout.pickup_location";
 pub const T_DELIVERY: Key = "checkout.delivery";
+pub const T_DELIVERY_ZONE: Key = "checkout.delivery_zone";
+pub const T_DELIVERY_ETA: Key = "checkout.delivery_eta";
+pub const T_DELIVERY_FEE: Key = "checkout.delivery_fee";
 pub const T_PAYMENT: Key = "checkout.payment";
 pub const T_PLACE_ORDER: Key = "checkout.place_order";
 pub const T_BACK: Key = "btn.back";
@@ -279,6 +283,7 @@ fn get_ru_translation(key: Key) -> Value {
         T_EVENTS_SOLD_OUT => "Мест нет",
         T_EVENTS_ERROR => "Не удалось забронировать",
         T_EVENTS_INSUFFICIENT_STARS => "Недостаточно Stars. Заработайте в играх Woody или пополните баланс.",
+        T_EVENTS_REMINDER_BODY => "Напоминаем: вы забронировали мероприятие «{title}». Начало: {starts_at}. Ждём вас!",
         T_EVENTS_WEEKDAY_MON => "пн",
         T_EVENTS_WEEKDAY_TUE => "вт",
         T_EVENTS_WEEKDAY_WED => "ср",
@@ -309,6 +314,9 @@ fn get_ru_translation(key: Key) -> Value {
         T_YOUR_INFO => "Ваши данные",
         T_PICKUP_LOCATION => "📍 Точка самовывоза",
         T_DELIVERY => "Доставка",
+        T_DELIVERY_ZONE => "Зона доставки",
+        T_DELIVERY_ETA => "Время доставки: {0} мин",
+        T_DELIVERY_FEE => "Стоимость доставки: {0} ฿",
         T_PAYMENT => "Оплата",
         T_PLACE_ORDER => "Оформить заказ ✓",
         T_BACK => "← Назад",
@@ -438,6 +446,7 @@ fn get_en_translation(key: Key) -> Value {
         T_EVENTS_SOLD_OUT => "Sold out",
         T_EVENTS_ERROR => "Booking failed",
         T_EVENTS_INSUFFICIENT_STARS => "Not enough Stars. Earn them in Woody games or top up your balance.",
+        T_EVENTS_REMINDER_BODY => "Reminder: you booked «{title}». Starts at: {starts_at}. See you there!",
         T_EVENTS_WEEKDAY_MON => "Mon",
         T_EVENTS_WEEKDAY_TUE => "Tue",
         T_EVENTS_WEEKDAY_WED => "Wed",
@@ -468,6 +477,9 @@ fn get_en_translation(key: Key) -> Value {
         T_YOUR_INFO => "Your Info",
         T_PICKUP_LOCATION => "Pickup Location",
         T_DELIVERY => "Delivery",
+        T_DELIVERY_ZONE => "Delivery Zone",
+        T_DELIVERY_ETA => "Delivery time: {0} min",
+        T_DELIVERY_FEE => "Delivery fee: {0} ฿",
         T_PAYMENT => "Payment",
         T_PLACE_ORDER => "Place Order ✓",
         T_BACK => "← Back",
@@ -609,6 +621,7 @@ pub fn get_translations(lang: Lang) -> Translations {
         T_EVENTS_SOLD_OUT,
         T_EVENTS_ERROR,
         T_EVENTS_INSUFFICIENT_STARS,
+        T_EVENTS_REMINDER_BODY,
         T_EVENTS_WEEKDAY_MON,
         T_EVENTS_WEEKDAY_TUE,
         T_EVENTS_WEEKDAY_WED,
@@ -639,6 +652,9 @@ pub fn get_translations(lang: Lang) -> Translations {
         T_YOUR_INFO,
         T_PICKUP_LOCATION,
         T_DELIVERY,
+        T_DELIVERY_ZONE,
+        T_DELIVERY_ETA,
+        T_DELIVERY_FEE,
         T_PAYMENT,
         T_PLACE_ORDER,
         T_BACK,

@@ -229,6 +229,18 @@ const MIGRATIONS: &[(&str, &str)] = &[
         "051_events_stars_price.sql",
         include_str!("../../migrations/051_events_stars_price.sql"),
     ),
+    (
+        "052_event_reminders.sql",
+        include_str!("../../migrations/052_event_reminders.sql"),
+    ),
+    (
+        "053_fix_variant_c_uuid_ids.sql",
+        include_str!("../../migrations/053_fix_variant_c_uuid_ids.sql"),
+    ),
+    (
+        "054_fix_lab_cert_numeric_to_double.sql",
+        include_str!("../../migrations/054_fix_lab_cert_numeric_to_double.sql"),
+    ),
 ];
 
 /// Columns the catalog endpoints SELECT that were added by *later* migrations

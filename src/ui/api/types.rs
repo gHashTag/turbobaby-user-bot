@@ -456,3 +456,20 @@ pub struct CreateReviewRequest {
 pub struct LineBroadcastRequest {
     pub message: String,
 }
+
+/// Delivery zone with ETA / fee — matches backend `/api/delivery/zones`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct DeliveryZone {
+    pub id: String,
+    pub name: String,
+    #[serde(default)]
+    pub name_en: Option<String>,
+    pub min_eta_minutes: u32,
+    pub max_eta_minutes: u32,
+    pub delivery_fee_baht: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct DeliveryZonesResponse {
+    pub zones: Vec<DeliveryZone>,
+}

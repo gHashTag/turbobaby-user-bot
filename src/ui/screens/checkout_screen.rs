@@ -1,15 +1,17 @@
+use crate::trios::core::Lang;
 use crate::trios::i18n::{
-    t, T_BACK, T_CHECKOUT_TITLE, T_DELIVERY, T_PAYMENT, T_PICKUP_LOCATION, T_PLACE_ORDER, T_TOTAL,
-    T_YOUR_INFO, T_YOUR_ORDER,
+    t, T_BACK, T_CHECKOUT_TITLE, T_DELIVERY, T_DELIVERY_ETA, T_DELIVERY_FEE, T_DELIVERY_ZONE,
+    T_PAYMENT, T_PICKUP_LOCATION, T_PLACE_ORDER, T_TOTAL, T_YOUR_INFO, T_YOUR_ORDER,
 };
 use crate::trios::store::validate_checkout;
+use crate::ui::api::types::{DeliveryZone, DeliveryZonesResponse};
 use crate::ui::api::context::api_base_url;
 use crate::ui::routes::Route;
 use crate::ui::state::{Cart, CartItem, CartItemType};
 use crate::ui::telegram::{use_telegram_id, use_telegram_init_data, use_telegram_username};
 use dioxus::prelude::*;
 use serde_json::json;
-use web_sys;
+use web_sys::window;
 
 /// B4: a garden reward the customer can apply at checkout (product-scoped).
 #[derive(Clone, serde::Deserialize)]
@@ -34,6 +36,14 @@ struct RewardsResp {
 #[derive(serde::Deserialize)]
 struct StarsBalanceResp {
     balance: i64,
+}
+
+fn zone_display_name(zone: &DeliveryZone) -> String {
+    if crate::ui::lang::current_lang() == Lang::English {
+        zone.name_en.clone().unwrap_or_else(|| zone.name.clone())
+    } else {
+        zone.name.clone()
+    }
 }
 
 fn to_trios_items(items: &[CartItem]) -> Vec<crate::trios::store::CartItem> {
@@ -61,6 +71,7 @@ pub fn CheckoutScreen() -> Element {
     let mut customer_phone = use_signal(String::new);
     let mut delivery_address = use_signal(String::new);
     let mut delivery_notes = use_signal(String::new);
+    let mut delivery_zone_id = use_signal(|| Option::<String>::None);
     let mut shop_selected = use_signal(|| 0usize);
     let mut is_processing = use_signal(|| false);
     let mut order_error = use_signal(|| Option::<String>::None);
@@ -84,6 +95,7 @@ pub fn CheckoutScreen() -> Element {
     let your_info = format!("👤 {}", t(crate::ui::lang::current_lang(), T_YOUR_INFO));
     let pickup_location = t(crate::ui::lang::current_lang(), T_PICKUP_LOCATION);
     let delivery = t(crate::ui::lang::current_lang(), T_DELIVERY);
+    let delivery_zone_label = t(crate::ui::lang::current_lang(), T_DELIVERY_ZONE);
     let payment = t(crate::ui::lang::current_lang(), T_PAYMENT);
     let place_order = t(crate::ui::lang::current_lang(), T_PLACE_ORDER);
     let back = t(crate::ui::lang::current_lang(), T_BACK);
@@ -138,6 +150,14 @@ pub fn CheckoutScreen() -> Element {
             }
         })
     };
+    // Delivery zones/ETA are public; no auth header needed.
+    let zones_res = use_resource(move || async move {
+        let url = format!("{}/api/delivery/zones", api_base_url());
+        let text = crate::ui::api::http::fetch_text(&url).await.ok()?;
+        serde_json::from_str::<DeliveryZonesResponse>(&text)
+            .ok()
+            .map(|r| r.zones)
+    });
     // (reward, discount_amount) pairs applicable to this cart.
     let applicable_rewards: Vec<(ApiReward, f64, String)> = match &*rewards_res.read() {
         Some(Some(list)) => list
@@ -169,6 +189,31 @@ pub fn CheckoutScreen() -> Element {
         .max(0);
     let stars_val = (*stars_to_use.read()).clamp(0, max_stars.max(0));
     let effective_total = (pre_stars_total - stars_val as f64).max(0.0);
+
+    let zones = match &*zones_res.read() {
+        Some(Some(z)) => z.clone(),
+        _ => Vec::new(),
+    };
+    let selected_zone = delivery_zone_id
+        .read()
+        .as_ref()
+        .and_then(|id| zones.iter().find(|z| z.id == *id))
+        .or_else(|| zones.first())
+        .cloned();
+    let (delivery_eta_text, delivery_fee_text) = match selected_zone.as_ref() {
+        Some(z) => {
+            let eta = format!("{}-{}", z.min_eta_minutes, z.max_eta_minutes);
+            let eta_text = t(crate::ui::lang::current_lang(), T_DELIVERY_ETA)
+                .replace("{0}", &eta);
+            let fee_text = t(crate::ui::lang::current_lang(), T_DELIVERY_FEE)
+                .replace("{0}", &format!("{:.0}", z.delivery_fee_baht));
+            (eta_text, fee_text)
+        }
+        None => (
+            "⏰ 30-45 min delivery".to_string(),
+            "💰 Free delivery over ฿1,000".to_string(),
+        ),
+    };
 
     let submit_cart_items = cart_items.clone();
     let submit_order = move |_| {
@@ -468,7 +513,7 @@ pub fn CheckoutScreen() -> Element {
                     div {
                         style: "margin-top:8px;cursor:pointer;font-size:13px;color:#00e5ff;text-decoration:underline;text-align:center;",
                         onclick: move |_| {
-                            let _ = web_sys::window().and_then(|w| w.open_with_url_and_target("https://www.google.com/maps/place/Woody+Weed+Pecker/@9.7124562,99.9877309,17z/data=!3m1!4b1!4m6!3m5!1s0x3054ffe9f6df4edf:0xf8735a84f5193e1a!8m2!3d9.7124562!4d99.9877309!16s%2Fg%2F11x314fym6!18m1!1e1?entry=ttu&g_ep=EgoyMDI2MDUxMy4wIKXMDSoASAFQAw%3D%3D", "_blank").ok());
+                            let _ = window().and_then(|w| w.open_with_url_and_target("https://www.google.com/maps/place/Woody+Weed+Pecker/@9.7124562,99.9877309,17z/data=!3m1!4b1!4m6!3m5!1s0x3054ffe9f6df4edf:0xf8735a84f5193e1a!8m2!3d9.7124562!4d99.9877309!16s%2Fg%2F11x314fym6!18m1!1e1?entry=ttu&g_ep=EgoyMDI2MDUxMy4wIKXMDSoASAFQAw%3D%3D", "_blank").ok());
                         },
                         "📍 Открыть на карте"
                     }
@@ -511,13 +556,39 @@ pub fn CheckoutScreen() -> Element {
                             oninput: move |e| delivery_notes.set(e.value()),
                         }
                     }
+                    // Zone selector: drives ETA / fee display from backend config.
+                    if !zones.is_empty() {
+                        div { style: "margin-bottom: 8px;",
+                            label { style: "font-size: 13px; color: #8b8b9e; display: block; margin-bottom: 4px;", "{delivery_zone_label}" }
+                            for z in zones.iter() {
+                                {
+                                    let zid = z.id.clone();
+                                    let zname = zone_display_name(z);
+                                    let is_selected = selected_zone.as_ref().map(|s| s.id == zid).unwrap_or(false);
+                                    let border = if is_selected { "#39ff14" } else { "#2a2a4a" };
+                                    let bg = if is_selected { "rgba(57,255,20,0.08)" } else { "transparent" };
+                                    rsx! {
+                                        div {
+                                            style: "
+                                                background: {bg}; border: 3px solid {border};
+                                                border-radius: 0; padding: 8px;
+                                                margin-bottom: 6px; cursor: pointer;
+                                            ",
+                                            onclick: move |_| delivery_zone_id.set(Some(zid.clone())),
+                                            div { style: "font-size: 14px;", "{zname}" }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                     div { style: "
                         background: rgba(0,229,255,0.05);
                         border: 4px solid rgba(0,229,255,0.2);
                         border-radius: 0; padding: 10px;
                     ",
-                        div { style: "font-size: 13px; margin-bottom: 6px;", "⏰ 30-45 min delivery" }
-                        div { style: "font-size: 15px; color: #39ff14;", "💰 Free delivery over ฿1,000" }
+                        div { style: "font-size: 13px; margin-bottom: 6px;", "{delivery_eta_text}" }
+                        div { style: "font-size: 15px; color: #39ff14;", "{delivery_fee_text}" }
                     }
                 }
 

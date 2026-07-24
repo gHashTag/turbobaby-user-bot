@@ -318,6 +318,12 @@ impl ApiClient {
     ) -> Result<serde_json::Value> {
         self.post("/api/admin/line-broadcast", req).await
     }
+
+    // Delivery zones / ETA
+    pub async fn get_delivery_zones(&self) -> Result<Vec<DeliveryZone>> {
+        let resp: DeliveryZonesResponse = self.get("/api/delivery/zones").await?;
+        Ok(resp.zones)
+    }
 }
 
 #[derive(Debug, Serialize)]

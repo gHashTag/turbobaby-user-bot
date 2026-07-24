@@ -502,6 +502,15 @@ async fn main() -> Result<()> {
         crate::db::orders::cleanup_old_block_history(&orm, 90).await
     });
 
+    // A3: background event reminders. Check every 5 minutes for events
+    // starting within the next 24 hours; send one Telegram reminder per
+    // confirmed booking and mark reminder_sent_at so users aren't spammed.
+    {
+        let reminder_bot = bot_arc_for_state.clone();
+        let reminder_orm = db.orm.clone();
+        crate::api::events::spawn_event_reminder_loop(reminder_orm, reminder_bot, 24, 300);
+    }
+
     tokio::spawn(async move {
         use teloxide::types::AllowedUpdate;
         use teloxide::update_listeners::Polling;

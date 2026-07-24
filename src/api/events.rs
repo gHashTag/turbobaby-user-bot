@@ -1304,6 +1304,101 @@ async fn cancel_booking(
     Ok(Json(resp))
 }
 
+// ── Reminders ──────────────────────────────────────────────────
+
+/// A3: send one reminder per confirmed booking for events starting
+/// within the next `hours` window and not already reminded.
+/// Returns the number of successfully delivered reminders.
+#[allow(dead_code)]
+pub(crate) async fn send_event_reminders(
+    orm: &sea_orm::DatabaseConnection,
+    bot: &teloxide::Bot,
+    hours: i64,
+) -> Result<usize, sea_orm::DbErr> {
+    use sea_orm::{ConnectionTrait, DbBackend, Statement};
+
+    let rows = orm
+        .query_all(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            "SELECT b.id AS booking_id, b.telegram_id, e.id AS event_id, e.title, e.starts_at \
+             FROM event_bookings b \
+             JOIN events e ON e.id = b.event_id \
+             WHERE b.status = 'confirmed' \
+               AND b.reminder_sent_at IS NULL \
+               AND e.starts_at > NOW() \
+               AND e.starts_at <= NOW() + make_interval(hours => $1) \
+             ORDER BY e.starts_at ASC",
+            [hours.into()],
+        ))
+        .await?;
+
+    let mut sent = 0usize;
+    for r in rows {
+        let booking_id: String = r.try_get("", "booking_id").unwrap_or_default();
+        let telegram_id: i64 = r.try_get("", "telegram_id").unwrap_or(0);
+        let title: String = r.try_get("", "title").unwrap_or_default();
+        let starts_at: chrono::DateTime<chrono::Utc> =
+            r.try_get("", "starts_at").unwrap_or_else(|_| chrono::Utc::now());
+        let starts_local = starts_at.with_timezone(&chrono::FixedOffset::east_opt(7 * 3600).unwrap());
+        let starts_text = starts_local.format("%d.%m.%Y %H:%M (Bangkok)").to_string();
+        let body = crate::trios::i18n::tf(
+            crate::trios::core::Lang::Russian,
+            crate::trios::i18n::T_EVENTS_REMINDER_BODY,
+            &[
+                title.clone(),
+                starts_text,
+            ],
+        );
+
+        // Best-effort send; failures are logged but don't break the sweep.
+        use teloxide::prelude::Requester;
+        let deliver = async {
+            bot.send_message(teloxide::types::ChatId(telegram_id), &body)
+                .await?;
+            Ok::<(), teloxide::RequestError>(())
+        };
+        if let Err(e) = deliver.await {
+            tracing::warn!("event reminder send failed booking={} tid={}: {}", booking_id, telegram_id, e);
+            continue;
+        }
+
+        orm.execute(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            "UPDATE event_bookings SET reminder_sent_at = NOW() WHERE id = $1",
+            [booking_id.into()],
+        ))
+        .await?;
+        sent += 1;
+    }
+
+    Ok(sent)
+}
+
+/// Spawn a background loop that sends event reminders every `interval_secs`.
+/// Gated to server builds (not WASM).
+#[cfg(not(target_arch = "wasm32"))]
+#[allow(dead_code)]
+pub(crate) fn spawn_event_reminder_loop(
+    orm: sea_orm::DatabaseConnection,
+    bot: std::sync::Arc<teloxide::Bot>,
+    hours: i64,
+    interval_secs: u64,
+) {
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(interval_secs));
+        interval.tick().await; // discard cold-start tick
+        loop {
+            interval.tick().await;
+            match send_event_reminders(&orm, &bot, hours,
+            ).await {
+                Ok(0) => {}
+                Ok(n) => tracing::info!("event reminders: sent {} reminder(s)", n),
+                Err(e) => tracing::warn!("event reminders sweep failed: {}", e),
+            }
+        }
+    });
+}
+
 // ── Tests ────────────────────────────────────────────────────
 
 #[cfg(test)]

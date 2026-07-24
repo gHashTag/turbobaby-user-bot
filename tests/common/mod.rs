@@ -39,7 +39,7 @@ use woody_weed_bot::AppState;
 
 /// Build a test `AppState` + `Router` against `DATABASE_URL`. Returns
 /// `None` if env var unset — callers should `return` rather than fail.
-pub async fn make_app() -> Option<Router> {
+pub(crate) async fn make_app() -> Option<Router> {
     let (app, _db) = make_app_with_db().await?;
     Some(app)
 }
@@ -48,7 +48,7 @@ pub async fn make_app() -> Option<Router> {
 /// so DB-level assertions (e.g. "exactly one ledger row exists")
 /// don't need to spin up a second connection. The handle is the
 /// SAME `Arc<Database>` plumbed through the `AppState`.
-pub async fn make_app_with_db() -> Option<(Router, Arc<Database>)> {
+pub(crate) async fn make_app_with_db() -> Option<(Router, Arc<Database>)> {
     let database_url = std::env::var("DATABASE_URL").ok()?;
 
     // SAFETY GUARD: this harness runs `run_migrations()` and the suite writes
@@ -90,7 +90,7 @@ pub async fn make_app_with_db() -> Option<(Router, Arc<Database>)> {
 /// `secret = HMAC-SHA256("WebAppData", bot_token)`, then
 /// `hash = HMAC-SHA256(secret, <sorted "k=v" lines over DECODED values>)`.
 /// Only `auth_date` (freshness) and `user` (identity) are required.
-pub fn make_init_data(user_id: i64, bot_token: &str) -> String {
+pub(crate) fn make_init_data(user_id: i64, bot_token: &str) -> String {
     use hmac::{Hmac, Mac};
     use sha2::Sha256;
     type HmacSha256 = Hmac<Sha256>;
@@ -120,7 +120,7 @@ pub fn make_init_data(user_id: i64, bot_token: &str) -> String {
 /// Allows local hosts (localhost/127.0.0.1/::1) or any database whose name
 /// contains "test". Blocks remote production-looking DSNs. Pure so it can be
 /// unit-tested without a DB.
-pub fn is_safe_test_dsn(url: &str) -> bool {
+pub(crate) fn is_safe_test_dsn(url: &str) -> bool {
     let lower = url.to_ascii_lowercase();
     let host_is_local =
         lower.contains("@localhost") || lower.contains("@127.0.0.1") || lower.contains("@[::1]");
