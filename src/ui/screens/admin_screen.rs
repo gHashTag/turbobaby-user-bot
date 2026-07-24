@@ -6845,6 +6845,8 @@ fn EventsTab() -> Element {
                 div { style: "display:flex;flex-direction:column;gap:8px;",
                     {
                         list.into_iter().map(move |ev| {
+                            let ev_id = ev.id.clone();
+                            let ev_id_for_key = ev_id.clone();
                             let ev_clone = ev.clone();
                             let ev_clone2 = ev.clone();
                             let date_label = parse_event_start(&ev.starts_at).map(|s| s.format("%d %b %Y %H:%M").to_string()).unwrap_or_else(|| ev.starts_at.clone());
@@ -6852,7 +6854,7 @@ fn EventsTab() -> Element {
                             let price_label = ev.price_baht.map(|p| format!("{:.0} ฿", p)).unwrap_or_else(|| "бесплатно".to_string());
                             let public_label = if ev.is_public { "публично" } else { "скрыто" };
                             rsx! {
-                                div { key: "{ev.id}", style: "background:#1a1a2e;border:1px solid #2a2a4a;border-radius:6px;padding:10px;display:flex;justify-content:space-between;align-items:center;",
+                                div { key: "{ev_id_for_key}", style: "background:#1a1a2e;border:1px solid #2a2a4a;border-radius:6px;padding:10px;display:flex;justify-content:space-between;align-items:center;",
                                     div { style: "display:flex;flex-direction:column;gap:2px;",
                                         span { style: "color:#e8e8e8;font-weight:700;font-size:14px;", "{ev.title}" }
                                         span { style: "color:#888;font-size:12px;", "{date_label} • {cap_label} • {price_label} • {public_label}" }
@@ -6875,7 +6877,7 @@ fn EventsTab() -> Element {
                                         button {
                                             style: "padding:6px 10px;background:#2a2a4a;color:#ff4757;border:none;border-radius:4px;font-size:12px;cursor:pointer;",
                                             "aria-label": "Удалить",
-                                            onclick: move |_| delete_target_id.set(Some(ev.id.clone())),
+                                            onclick: move |_| delete_target_id.set(Some(ev_id.clone())),
                                             "🗑"
                                         }
                                     }
