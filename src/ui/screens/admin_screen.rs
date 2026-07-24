@@ -218,7 +218,9 @@ struct AdminAccessorySet {
     is_available: bool,
     #[serde(default)]
     is_deal_of_day: bool,
+    #[serde(default)]
     name_en: Option<String>,
+    #[serde(default)]
     description_en: Option<String>,
     #[serde(default)]
     image_url: Option<String>,
@@ -240,7 +242,9 @@ struct AdminTeaSet {
     #[serde(default)]
     discount_percent: f64,
     is_available: bool,
+    #[serde(default)]
     name_en: Option<String>,
+    #[serde(default)]
     description_en: Option<String>,
     /// Migration 034: image upload symmetric with AccessorySet.
     #[serde(default)]
@@ -288,6 +292,8 @@ enum Tab {
     TeaSets,
     Dashboard,
     Orders,
+    // Quests hidden until partner locations are configured.
+    #[allow(dead_code)]
     Quests,
     Treasures,
     Garden,
@@ -734,7 +740,6 @@ fn AdminPanel(active_tab: Signal<Tab>, mut password_token: Signal<String>) -> El
                 {tab_btn(Tab::Sets, "📦 Sets")}
                 {tab_btn(Tab::AccessorySets, "🔧 Acc.Sets")}
                 {tab_btn(Tab::TeaSets, "🫖 Tea Sets")}
-                {tab_btn(Tab::Quests, "🗺️ Квесты")}
                 {tab_btn(Tab::Treasures, "🏴\u{200d}☠️ Сокровища")}
                 {tab_btn(Tab::Garden, "🌱 Сад")}
                 {tab_btn(Tab::Loyalty, "💎 Лояльность")}
@@ -749,7 +754,8 @@ fn AdminPanel(active_tab: Signal<Tab>, mut password_token: Signal<String>) -> El
                 Tab::TeaSets => rsx!(TabMount { tab: current, expected: Tab::TeaSets, TeaSetsTab {} }),
                 Tab::Dashboard => rsx!(TabMount { tab: current, expected: Tab::Dashboard, DashboardTab {} }),
                 Tab::Orders => rsx!(TabMount { tab: current, expected: Tab::Orders, OrdersTab {} }),
-                Tab::Quests => rsx!(TabMount { tab: current, expected: Tab::Quests, QuestsTab {} }),
+                // Quests hidden until partner locations are configured (GH: keep Tab::Quests/QuestsTab code).
+                Tab::Quests => rsx!(TabMount { tab: current, expected: Tab::Quests, div {} }),
                 Tab::Treasures => rsx!(TabMount { tab: current, expected: Tab::Treasures, TreasuresTab {} }),
                 Tab::Garden => rsx!(TabMount { tab: current, expected: Tab::Garden, GardenTab {} }),
                 Tab::Loyalty => rsx!(TabMount { tab: current, expected: Tab::Loyalty, LoyaltyTab {} }),
@@ -2449,6 +2455,7 @@ fn EditSetCard(
     });
     let mut status = use_signal(String::new);
     let item_id = item.id.clone();
+    let is_available = item.is_available;
     rsx! {
         div { "data-editing": "true", style: edit_card_style(),
             div { style: edit_header_style(), "✏️ Редактирование" }
@@ -2523,6 +2530,7 @@ fn EditSetCard(
                             s.total_price = p;
                             s.discount_percent = d;
                             s.is_deal_of_day = deal;
+                            s.is_available = is_available;
                             s.name_en = if ne.is_empty() { None } else { Some(ne.clone()) };
                             s.description_en = if de.is_empty() { None } else { Some(de.clone()) };
                             s.total_weight_grams = w;
@@ -2539,6 +2547,7 @@ fn EditSetCard(
                                 "description_en": if de.is_empty() { serde_json::Value::Null } else { de.into() },
                                 "strain_ids": s_ids, "accessory_ids": a_ids,
                                 "is_deal_of_day": deal,
+                                "is_available": is_available,
                                 "total_weight_grams": w, "badge": bdg,
                             });
                             let url = format!("{}/api/sets/{}", api_base_url(), id);
@@ -2752,8 +2761,8 @@ fn AccessorySetsTab() -> Element {
                                 _ => { status.set("❌ Цена должна быть числом ≥ 0".into()); return; }
                             };
                             let d = match discount_percent.read().trim().parse::<f64>() {
-                                Ok(v) if v.is_finite() => v,
-                                _ => { status.set("❌ Скидка должна быть числом".into()); return; }
+                                Ok(v) if v >= 0.0 && v <= 100.0 && v.is_finite() => v,
+                                _ => { status.set("❌ Скидка должна быть числом 0–100".into()); return; }
                             };
                             if n.is_empty() { status.set("❌ Название обязательно".into()); return; }
                             let accs: Vec<String> = accessories.read().clone();
@@ -2789,6 +2798,7 @@ fn AccessorySetsTab() -> Element {
                                     "video_url": if vid.is_empty() { serde_json::Value::Null } else { vid.into() },
                                     "accessories": accs,
                                     "is_deal_of_day": deal,
+                                    "is_available": true,
                                     "name_en": if ne.is_empty() { serde_json::Value::Null } else { ne.into() },
                                     "description_en": if de.is_empty() { serde_json::Value::Null } else { de.into() },
                                 });
@@ -2956,6 +2966,7 @@ fn EditAccessorySetCard(
     let mut description_en = use_signal(|| item.description_en.clone().unwrap_or_default());
     let mut status = use_signal(String::new);
     let item_id = item.id.clone();
+    let is_available = item.is_available;
     rsx! {
         div { "data-editing": "true", style: edit_card_style(),
             div { style: edit_header_style(), "✏️ Редактирование" }
@@ -2988,8 +2999,8 @@ fn EditAccessorySetCard(
                             _ => { status.set("❌ Цена должна быть числом ≥ 0".into()); return; }
                         };
                         let d = match discount_percent.read().trim().parse::<f64>() {
-                            Ok(v) if v.is_finite() => v,
-                            _ => { status.set("❌ Скидка должна быть числом".into()); return; }
+                            Ok(v) if v >= 0.0 && v <= 100.0 && v.is_finite() => v,
+                            _ => { status.set("❌ Скидка должна быть числом 0–100".into()); return; }
                         };
                         if n.is_empty() { status.set("❌ Название обязательно".into()); return; }
                         let accs: Vec<String> = accessories.read().clone();
@@ -3009,6 +3020,7 @@ fn EditAccessorySetCard(
                             s.total_price = p;
                             s.discount_percent = d;
                             s.is_deal_of_day = deal;
+                            s.is_available = is_available;
                             s.name_en = if ne.is_empty() { None } else { Some(ne.clone()) };
                             s.description_en = if de.is_empty() { None } else { Some(de.clone()) };
                         }
@@ -3021,6 +3033,7 @@ fn EditAccessorySetCard(
                                 "video_url": if vid.is_empty() { serde_json::Value::Null } else { vid.into() },
                                 "accessories": accs,
                                 "is_deal_of_day": deal,
+                                "is_available": is_available,
                                 "name_en": if ne.is_empty() { serde_json::Value::Null } else { ne.into() },
                                 "description_en": if de.is_empty() { serde_json::Value::Null } else { de.into() },
                             });
@@ -3030,15 +3043,28 @@ fn EditAccessorySetCard(
                                 .header("X-Admin-Token", admin_token())
                                 .header("X-Admin-Telegram-Id", telegram_id.to_string())
                                 .json(&body).send().await;
-                            let success = match res { Ok(r) => r.status().is_success(), Err(_) => false };
-                            if success {
-                                on_saved.call(());
-                                status.set("✅ Сохранено".into());
-                                TelegramApp::init().haptic_notification(HapticNotification::Success);
-                            } else {
-                                TelegramApp::init().haptic_notification(HapticNotification::Error);
-                                if let Some(orig) = original { if let Some(s) = cache.write().iter_mut().find(|s| s.id == id) { *s = orig; } }
-                                status.set("❌ Не сохранено. Попробуйте снова".into());
+                            let outcome = match res {
+                                Ok(r) if r.status().is_success() => Ok(()),
+                                Ok(r) => {
+                                    let st = r.status().as_u16();
+                                    let body = r.text().await.unwrap_or_default();
+                                    let b = body.trim();
+                                    if b.is_empty() { Err(format!("HTTP {st}")) }
+                                    else { Err(format!("HTTP {st}: {}", b.chars().take(80).collect::<String>())) }
+                                }
+                                Err(_) => Err("сеть/таймаут".to_string()),
+                            };
+                            match outcome {
+                                Ok(()) => {
+                                    on_saved.call(());
+                                    status.set("✅ Сохранено".into());
+                                    TelegramApp::init().haptic_notification(HapticNotification::Success);
+                                }
+                                Err(reason) => {
+                                    TelegramApp::init().haptic_notification(HapticNotification::Error);
+                                    if let Some(orig) = original { if let Some(s) = cache.write().iter_mut().find(|s| s.id == id) { *s = orig; } }
+                                    status.set(format!("❌ Не сохранено ({reason})"));
+                                }
                             }
                         });
                     },
@@ -3415,6 +3441,7 @@ fn EditTeaSetCard(
     let mut description_en = use_signal(|| item.description_en.clone().unwrap_or_default());
     let mut status = use_signal(String::new);
     let item_id = item.id.clone();
+    let is_available = item.is_available;
     rsx! {
         div { "data-editing": "true", style: edit_card_style(),
             div { style: edit_header_style(), "✏️ Редактирование" }
@@ -3461,6 +3488,7 @@ fn EditTeaSetCard(
                             s.items = tea_items.clone();
                             s.total_price = p;
                             s.discount_percent = d;
+                            s.is_available = is_available;
                             s.name_en = if ne.is_empty() { None } else { Some(ne.clone()) };
                             s.description_en = if de.is_empty() { None } else { Some(de.clone()) };
                         }
@@ -3472,6 +3500,7 @@ fn EditTeaSetCard(
                                 "image_url": if img.is_empty() { serde_json::Value::Null } else { img.into() },
                                 "video_url": if vid.is_empty() { serde_json::Value::Null } else { vid.into() },
                                 "items": tea_items,
+                                "is_available": is_available,
                                 "name_en": if ne.is_empty() { serde_json::Value::Null } else { ne.into() },
                                 "description_en": if de.is_empty() { serde_json::Value::Null } else { de.into() },
                             });
@@ -3481,15 +3510,28 @@ fn EditTeaSetCard(
                                 .header("X-Admin-Token", admin_token())
                                 .header("X-Admin-Telegram-Id", telegram_id.to_string())
                                 .json(&body).send().await;
-                            let success = match res { Ok(r) => r.status().is_success(), Err(_) => false };
-                            if success {
-                                on_saved.call(());
-                                status.set("✅ Сохранено".into());
-                                TelegramApp::init().haptic_notification(HapticNotification::Success);
-                            } else {
-                                TelegramApp::init().haptic_notification(HapticNotification::Error);
-                                if let Some(orig) = original { if let Some(s) = cache.write().iter_mut().find(|s| s.id == id) { *s = orig; } }
-                                status.set("❌ Не сохранено. Попробуйте снова".into());
+                            let outcome = match res {
+                                Ok(r) if r.status().is_success() => Ok(()),
+                                Ok(r) => {
+                                    let st = r.status().as_u16();
+                                    let body = r.text().await.unwrap_or_default();
+                                    let b = body.trim();
+                                    if b.is_empty() { Err(format!("HTTP {st}")) }
+                                    else { Err(format!("HTTP {st}: {}", b.chars().take(80).collect::<String>())) }
+                                }
+                                Err(_) => Err("сеть/таймаут".to_string()),
+                            };
+                            match outcome {
+                                Ok(()) => {
+                                    on_saved.call(());
+                                    status.set("✅ Сохранено".into());
+                                    TelegramApp::init().haptic_notification(HapticNotification::Success);
+                                }
+                                Err(reason) => {
+                                    TelegramApp::init().haptic_notification(HapticNotification::Error);
+                                    if let Some(orig) = original { if let Some(s) = cache.write().iter_mut().find(|s| s.id == id) { *s = orig; } }
+                                    status.set(format!("❌ Не сохранено ({reason})"));
+                                }
                             }
                         });
                     },
@@ -5118,7 +5160,9 @@ fn OrdersTab() -> Element {
 
 // ─── Quests ───────────────────────────────────────────────────
 
+// Quests tab hidden until partner locations are configured.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[allow(dead_code)]
 struct AdminQuestPlace {
     #[serde(default)]
     id: String,
@@ -5136,11 +5180,13 @@ struct AdminQuestPlace {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct QuestPlacesResp {
     quest_places: Vec<AdminQuestPlace>,
 }
 
 #[component]
+#[allow(dead_code)]
 fn QuestsTab() -> Element {
     let telegram_id = use_telegram_id().unwrap_or(0);
     let init_data = use_signal(use_telegram_init_data);

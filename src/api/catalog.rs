@@ -526,7 +526,7 @@ async fn update_accessory_set(
     use sea_orm::{ConnectionTrait, DbBackend, Statement};
     state.db.orm.execute(Statement::from_sql_and_values(
         DbBackend::Postgres,
-        "UPDATE accessory_sets SET name=$1, description=$2, icon=$3, accessories=$4, total_price=$5, discount_percent=$6, is_deal_of_day=$7, name_en=$8, description_en=$9, image_url=$10, video_url=$11, is_available=$12 WHERE id=$13",
+        "UPDATE accessory_sets SET name=$1, description=$2, icon=$3, accessories=$4, total_price=$5, discount_percent=$6, is_deal_of_day=$7, name_en=$8, description_en=$9, image_url=$10, video_url=$11, is_available=COALESCE($12, is_available) WHERE id=$13",
         [
             req.name.into(),
             req.description.unwrap_or_default().into(),
@@ -539,7 +539,7 @@ async fn update_accessory_set(
             req.description_en.into(),
             req.image_url.into(),
             req.video_url.into(),
-            req.is_available.unwrap_or(true).into(),
+            req.is_available.into(),
             id.into(),
         ],
     )).await.map_err(|e| { tracing::error!("update_accessory_set: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?;
@@ -1033,7 +1033,7 @@ async fn update_tea_set(
     use sea_orm::{ConnectionTrait, DbBackend, Statement};
     state.db.orm.execute(Statement::from_sql_and_values(
         DbBackend::Postgres,
-        "UPDATE tea_sets SET name=$1, description=$2, icon=$3, items=$4, total_price=$5, discount_percent=$6, name_en=$7, description_en=$8, image_url=$9, video_url=$10, is_available=$11 WHERE id=$12",
+        "UPDATE tea_sets SET name=$1, description=$2, icon=$3, items=$4, total_price=$5, discount_percent=$6, name_en=$7, description_en=$8, image_url=$9, video_url=$10, is_available=COALESCE($11, is_available) WHERE id=$12",
         [
             req.name.into(),
             req.description.unwrap_or_default().into(),
@@ -1045,7 +1045,7 @@ async fn update_tea_set(
             req.description_en.into(),
             req.image_url.filter(|s| !s.is_empty()).into(),
             req.video_url.into(),
-            req.is_available.unwrap_or(true).into(),
+            req.is_available.into(),
             id.into(),
         ],
     )).await.map_err(|e| { tracing::error!("update_tea_set: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?;
@@ -1495,7 +1495,7 @@ async fn update_set(
     use sea_orm::{ConnectionTrait, DbBackend, Statement};
     state.db.orm.execute(Statement::from_sql_and_values(
         DbBackend::Postgres,
-        "UPDATE sets SET name=$1, description=$2, icon=$3, strain_ids=$4, accessory_ids=$5, total_price=$6, discount_percent=$7, is_deal_of_day=$8, image_url=$9, video_url=$10, is_available=$11, name_en=$12, description_en=$13, total_weight_grams=$14, badge=$15 WHERE id=$16",
+        "UPDATE sets SET name=$1, description=$2, icon=$3, strain_ids=$4, accessory_ids=$5, total_price=$6, discount_percent=$7, is_deal_of_day=$8, image_url=$9, video_url=$10, is_available=COALESCE($11, is_available), name_en=$12, description_en=$13, total_weight_grams=$14, badge=$15 WHERE id=$16",
         [
             req.name.into(),
             req.description.unwrap_or_default().into(),
@@ -1507,7 +1507,7 @@ async fn update_set(
             req.is_deal_of_day.unwrap_or(false).into(),
             req.image_url.filter(|s| !s.is_empty()).into(),
             req.video_url.into(),
-            req.is_available.unwrap_or(true).into(),
+            req.is_available.into(),
             req.name_en.filter(|s| !s.is_empty()).into(),
             req.description_en.filter(|s| !s.is_empty()).into(),
             req.total_weight_grams.unwrap_or(0.0).into(),

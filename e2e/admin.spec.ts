@@ -110,7 +110,6 @@ const ADMIN_TABS = [
   'TeaSets',
   'Dashboard',
   'Orders',
-  'Quests',
   'Treasures',
   'Garden',
   'Loyalty',

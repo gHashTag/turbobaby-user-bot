@@ -552,7 +552,7 @@ pub(crate) async fn handle_command(
             if config.admin_ids.contains(&user_id) {
                 bot.send_message(
                     msg.chat.id,
-                    "🔧 <b>Admin Panel</b>\n━━━━━━━━━━━━━━━━\nУправление товарами: Strains / Gear / Tea",
+                    "🔧 <b>Admin Panel</b>\n━━━━━━━━━━━━━━━━\nУправление товарами:\nStrains • Gear • Tea • Sets • Acc.Sets • Tea Sets",
                 )
                 .parse_mode(teloxide::types::ParseMode::Html)
                 .reply_markup(InlineKeyboardMarkup::new(vec![vec![web_app_btn(
