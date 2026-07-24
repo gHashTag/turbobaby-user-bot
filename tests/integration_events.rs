@@ -234,9 +234,6 @@ async fn add_stars(
         .await
         .expect("add stars");
     assert_eq!(response.status(), StatusCode::OK, "add stars failed");
-    let bytes = response.into_body().collect().await.unwrap().to_bytes();
-    let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap_or_default();
-    eprintln!("add_stars body={body}");
     app
 }
 
@@ -256,7 +253,6 @@ async fn get_stars_balance(app: axum::Router, telegram_id: i64) -> (axum::Router
     assert_eq!(response.status(), StatusCode::OK, "get balance failed");
     let bytes = response.into_body().collect().await.unwrap().to_bytes();
     let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap_or_default();
-    eprintln!("get_balance body={body}");
     let balance = body["balance"].as_i64().unwrap_or(0);
     (app, balance)
 }
@@ -425,10 +421,10 @@ async fn paid_event_booking_deducts_stars() {
         eprintln!("DATABASE_URL not set — skipping integration events test");
         return;
     };
-    let _ = db
-        .orm
-        .execute_unprepared("TRUNCATE events, event_bookings, user_stars, stars_transactions, stars_idempotency_keys, loyalty_idempotency_keys, loyalty_profile")
-        .await;
+    db.orm
+        .execute_unprepared("TRUNCATE events, event_bookings, user_stars, stars_transactions, stars_idempotency_keys, loyalty_idempotency_keys, loyalty_profiles")
+        .await
+        .expect("truncate test tables");
 
     let user_id: i64 = 3001;
     let idem_key = "paid_event_test_001";
@@ -506,10 +502,10 @@ async fn paid_event_booking_fails_without_stars() {
         eprintln!("DATABASE_URL not set — skipping integration events test");
         return;
     };
-    let _ = db
-        .orm
+    db.orm
         .execute_unprepared("TRUNCATE events, event_bookings, user_stars, stars_transactions, stars_idempotency_keys")
-        .await;
+        .await
+        .expect("truncate test tables");
 
     let user_id: i64 = 3002;
     let (app, event_id) =

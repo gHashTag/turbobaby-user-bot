@@ -1,8 +1,8 @@
-import { RawInterpreter } from './snippets/dioxus-interpreter-js-53424282ea002554/inline0.js?v=24489403ba53392';
-import { setAttributeInner } from './snippets/dioxus-interpreter-js-53424282ea002554/src/js/common.js?v=24489403ba53392';
-import { get_form_data } from './snippets/dioxus-web-bf44d47c344f35d0/inline0.js?v=24489403ba53392';
-import { get_select_data } from './snippets/dioxus-web-bf44d47c344f35d0/inline1.js?v=24489403ba53392';
-import { WebDioxusChannel } from './snippets/dioxus-web-bf44d47c344f35d0/src/js/eval.js?v=24489403ba53392';
+import { RawInterpreter } from './snippets/dioxus-interpreter-js-53424282ea002554/inline0.js?v=60a47077e808605d';
+import { setAttributeInner } from './snippets/dioxus-interpreter-js-53424282ea002554/src/js/common.js?v=60a47077e808605d';
+import { get_form_data } from './snippets/dioxus-web-bf44d47c344f35d0/inline0.js?v=60a47077e808605d';
+import { get_select_data } from './snippets/dioxus-web-bf44d47c344f35d0/inline1.js?v=60a47077e808605d';
+import { WebDioxusChannel } from './snippets/dioxus-web-bf44d47c344f35d0/src/js/eval.js?v=60a47077e808605d';
 
 
 export class JSOwner {
