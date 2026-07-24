@@ -60,22 +60,27 @@ impl Config {
         let database_url = required[1].clone();
 
         // Admin IDs from env; if ADMIN_IDS is set it is the only source of truth.
-        // Hard-coded defaults are used ONLY as a fallback when ADMIN_IDS is empty
-        // (local development before env is configured).
+        // Production refuses to start without ADMIN_IDS to avoid default-admin backdoors.
         let is_production = std::env::var("NODE_ENV").unwrap_or_default() == "production"
             || std::env::var("RAILWAY_ENVIRONMENT").is_ok();
 
-        let env_ids: Vec<i64> = std::env::var("ADMIN_IDS")
+        let admin_ids: Vec<i64> = std::env::var("ADMIN_IDS")
             .unwrap_or_default()
             .split(',')
             .filter_map(|s| s.trim().parse::<i64>().ok())
             .collect();
-        let admin_ids = if !env_ids.is_empty() {
-            env_ids
-        } else {
-            tracing::warn!("ADMIN_IDS not set — using default admins 144022504, 8420420131");
-            vec![144022504, 8420420131]
-        };
+        if admin_ids.is_empty() {
+            if is_production {
+                return Err(anyhow!(
+                    "ADMIN_IDS is required in production — set ADMIN_IDS to a comma-separated \
+                     list of Telegram user IDs"
+                ));
+            } else {
+                tracing::warn!(
+                    "ADMIN_IDS not set — admin endpoints will reject all requests"
+                );
+            }
+        }
 
         // The backend service serves BOTH the API and the WASM frontend on the same origin.
         // If WEB_APP_URL is empty or points to the broken legacy TMA service, fall back to the

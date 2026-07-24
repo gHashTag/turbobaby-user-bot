@@ -59,6 +59,8 @@ pub fn CheckoutScreen() -> Element {
     let cart_total = cart.read().total;
     let mut customer_name = use_signal(String::new);
     let mut customer_phone = use_signal(String::new);
+    let mut delivery_address = use_signal(String::new);
+    let mut delivery_notes = use_signal(String::new);
     let mut shop_selected = use_signal(|| 0usize);
     let mut is_processing = use_signal(|| false);
     let mut order_error = use_signal(|| Option::<String>::None);
@@ -173,6 +175,10 @@ pub fn CheckoutScreen() -> Element {
         if is_processing() {
             return;
         }
+        if telegram_id.is_none() {
+            order_error.set(Some("Откройте приложение в Telegram, чтобы оформить заказ".into()));
+            return;
+        }
         let trios_items = to_trios_items(&submit_cart_items);
         if validate_checkout(&customer_name(), &customer_phone(), &trios_items).is_err() {
             return;
@@ -247,6 +253,8 @@ pub fn CheckoutScreen() -> Element {
             "total": order_total,
             "garden_reward_id": garden_reward_id,
             "shop_id": shops[shop_selected()].0,
+            "delivery_address": delivery_address(),
+            "delivery_notes": delivery_notes(),
         });
 
         let init_data_clone = init_data.clone();
@@ -473,12 +481,42 @@ pub fn CheckoutScreen() -> Element {
                     box-shadow: 4px 4px 0 #000;
                 ",
                     h2 { style: "font-size: 13px; font-weight: 700; color: #00e5ff; text-transform: uppercase; letter-spacing: 1px; text-shadow: 2px 2px 0 #000; margin-bottom: 10px;", "{delivery}" }
+                    div { style: "margin-bottom: 8px;",
+                        label { style: "font-size: 13px; color: #8b8b9e; display: block; margin-bottom: 4px;", "Delivery address *" }
+                        input {
+                            style: "
+                                font-size: 15px; width: 100%; padding: 10px 12px;
+                                background: #0f0f1a; color: #e8e8e8;
+                                border: 4px solid #2a2a4a; border-radius: 0;
+                                box-sizing: border-box;
+                            ",
+                            r#type: "text",
+                            placeholder: "Hotel / condo / street address",
+                            value: "{delivery_address}",
+                            oninput: move |e| delivery_address.set(e.value()),
+                        }
+                    }
+                    div { style: "margin-bottom: 8px;",
+                        label { style: "font-size: 13px; color: #8b8b9e; display: block; margin-bottom: 4px;", "Notes" }
+                        input {
+                            style: "
+                                font-size: 15px; width: 100%; padding: 10px 12px;
+                                background: #0f0f1a; color: #e8e8e8;
+                                border: 4px solid #2a2a4a; border-radius: 0;
+                                box-sizing: border-box;
+                            ",
+                            r#type: "text",
+                            placeholder: "Room number, lobby, meet at gate…",
+                            value: "{delivery_notes}",
+                            oninput: move |e| delivery_notes.set(e.value()),
+                        }
+                    }
                     div { style: "
                         background: rgba(0,229,255,0.05);
                         border: 4px solid rgba(0,229,255,0.2);
                         border-radius: 0; padding: 10px;
                     ",
-                        div { style: "font-size: 13px; margin-bottom: 6px;", "⏰ 30-45 min pickup" }
+                        div { style: "font-size: 13px; margin-bottom: 6px;", "⏰ 30-45 min delivery" }
                         div { style: "font-size: 15px; color: #39ff14;", "💰 Free delivery over ฿1,000" }
                     }
                 }
@@ -526,7 +564,10 @@ pub fn CheckoutScreen() -> Element {
                     }
                     {
                         let trios_items = to_trios_items(&cart_items);
-                        let can_order = validate_checkout(&customer_name(), &customer_phone(), &trios_items).is_ok() && !is_processing();
+                        let can_order = telegram_id.is_some()
+                            && validate_checkout(&customer_name(), &customer_phone(), &trios_items).is_ok()
+                            && !delivery_address.read().trim().is_empty()
+                            && !is_processing();
                         let btn_bg = if can_order { "#39ff14" } else { "#2a2a4a" };
                         let btn_color = if can_order { "#000" } else { "#8b8b9e" };
                         let btn_cursor = if can_order { "pointer" } else { "not-allowed" };

@@ -28,7 +28,7 @@ pub use admin_screen::AdminScreen;
 pub use ar_hunt_screen::ARHuntScreen;
 pub use cart_screen::CartScreen;
 pub use checkout_screen::CheckoutScreen;
-pub use events_screen::EventsScreen;
+pub use events_screen::{EventDetailScreen, EventsScreen, MyBookingsScreen};
 pub use game_screen::GameScreen;
 pub use garden_screen::GardenScreen;
 pub use home_screen::HomeScreen;

@@ -200,6 +200,25 @@ pub async fn post_admin_token(
     Ok((status, body))
 }
 
+/// PUT JSON with Telegram initData. Returns response status code as `u16`.
+pub async fn put_json_authed(
+    url: &str,
+    init_data: &str,
+    body: &str,
+) -> Result<(u16, String), String> {
+    let resp = Request::put(url)
+        .header("content-type", "application/json")
+        .header("x-telegram-init-data", init_data)
+        .body(body.to_string())
+        .map_err(|e| format!("Build error: {e}"))?
+        .send()
+        .await
+        .map_err(|e| format!("Network error: {e}"))?;
+    let status = resp.status();
+    let body = resp.text().await.map_err(|e| format!("Read error: {e}"))?;
+    Ok((status, body))
+}
+
 /// PUT JSON with optional admin token header. Returns response status code as
 /// `u16` so callers can branch (admin endpoints often return 401/404 with
 /// meaningful bodies).

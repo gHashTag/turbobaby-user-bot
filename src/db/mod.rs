@@ -197,6 +197,14 @@ const MIGRATIONS: &[(&str, &str)] = &[
         "043_events_booking.sql",
         include_str!("../../migrations/043_events_booking.sql"),
     ),
+    (
+        "044_order_delivery_fields.sql",
+        include_str!("../../migrations/044_order_delivery_fields.sql"),
+    ),
+    (
+        "045_events_waitlist_status.sql",
+        include_str!("../../migrations/045_events_waitlist_status.sql"),
+    ),
 ];
 
 /// Columns the catalog endpoints SELECT that were added by *later* migrations

@@ -273,6 +273,26 @@ impl TelegramApp {
         Some(s)
     }
 
+    /// Read the bot username from Telegram initData. Falls back to the
+    /// compile-time constant in `share.rs` if the WebApp SDK is unavailable.
+    pub fn bot_username(&self) -> Option<String> {
+        let js = r#"(function(){try{
+            if(window.Telegram && window.Telegram.WebApp){
+                var p = window.Telegram.WebApp.initDataUnsafe;
+                if(p && p.bot && typeof p.bot.username === 'string' && p.bot.username.length > 0){
+                    return p.bot.username;
+                }
+            }
+            return '';
+        }catch(e){return '';}})()"#;
+        let val = js_sys::eval(js).ok()?;
+        let s = val.as_string()?;
+        if s.is_empty() {
+            return None;
+        }
+        Some(s)
+    }
+
     /// Get Telegram initData string (for server-side validation)
     pub fn get_init_data(&self) -> String {
         let js = r#"(function(){try{

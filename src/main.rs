@@ -51,7 +51,7 @@ use teloxide::dispatching::Dispatcher;
 #[cfg(not(target_arch = "wasm32"))]
 use teloxide::prelude::*;
 #[cfg(not(target_arch = "wasm32"))]
-use tower_http::cors::{Any, CorsLayer};
+use tower_http::cors::{AllowOrigin, Any, CorsLayer};
 #[cfg(not(target_arch = "wasm32"))]
 use tower_http::services::ServeDir;
 #[cfg(not(target_arch = "wasm32"))]
@@ -542,24 +542,63 @@ async fn main() -> Result<()> {
     let (prometheus_layer, metric_handle) = PrometheusMetricLayer::pair();
 
     // CORS configuration
-    let cors = CorsLayer::new()
-        .allow_origin(Any)
-        .allow_methods([
-            axum::http::Method::GET,
-            axum::http::Method::POST,
-            axum::http::Method::PUT,
-            axum::http::Method::DELETE,
-            axum::http::Method::OPTIONS,
-        ])
-        .allow_headers([
-            axum::http::header::CONTENT_TYPE,
-            axum::http::header::HeaderName::from_static("x-telegram-init-data"),
-            axum::http::header::HeaderName::from_static("x-admin-token"),
-            axum::http::header::HeaderName::from_static("x-admin-telegram-id"),
-            axum::http::header::ACCEPT,
-            axum::http::header::ACCEPT_ENCODING,
-        ])
-        .expose_headers([axum::http::header::CONTENT_ENCODING]);
+    // Production: only the configured Web App URL and Telegram WebView origins
+    // may call the API. Local development keeps Any so trunk serve / curl work.
+    let cors = if config.is_production {
+        let web_app_url = config.web_app_url.clone();
+        let allowed_origins = std::sync::Arc::new([
+            web_app_url.clone(),
+            format!("{}/", web_app_url.trim_end_matches('/')), // tolerate trailing slash variants
+        ]);
+        CorsLayer::new()
+            .allow_origin(AllowOrigin::predicate(move |origin, _parts| {
+                let Ok(origin_str) = origin.to_str() else {
+                    return false;
+                };
+                if allowed_origins.iter().any(|o| o == origin_str) {
+                    return true;
+                }
+                // Telegram WebView origin for Mini Apps.
+                origin_str.ends_with(".telegram.org") || origin_str == "https://telegram.org"
+            }))
+            .allow_methods([
+                axum::http::Method::GET,
+                axum::http::Method::POST,
+                axum::http::Method::PUT,
+                axum::http::Method::DELETE,
+                axum::http::Method::OPTIONS,
+            ])
+            .allow_headers([
+                axum::http::header::CONTENT_TYPE,
+                axum::http::header::HeaderName::from_static("x-telegram-init-data"),
+                axum::http::header::HeaderName::from_static("x-admin-token"),
+                axum::http::header::HeaderName::from_static("x-admin-telegram-id"),
+                axum::http::header::HeaderName::from_static("x-idempotency-key"),
+                axum::http::header::ACCEPT,
+                axum::http::header::ACCEPT_ENCODING,
+            ])
+            .expose_headers([axum::http::header::CONTENT_ENCODING])
+    } else {
+        CorsLayer::new()
+            .allow_origin(Any)
+            .allow_methods([
+                axum::http::Method::GET,
+                axum::http::Method::POST,
+                axum::http::Method::PUT,
+                axum::http::Method::DELETE,
+                axum::http::Method::OPTIONS,
+            ])
+            .allow_headers([
+                axum::http::header::CONTENT_TYPE,
+                axum::http::header::HeaderName::from_static("x-telegram-init-data"),
+                axum::http::header::HeaderName::from_static("x-admin-token"),
+                axum::http::header::HeaderName::from_static("x-admin-telegram-id"),
+                axum::http::header::HeaderName::from_static("x-idempotency-key"),
+                axum::http::header::ACCEPT,
+                axum::http::header::ACCEPT_ENCODING,
+            ])
+            .expose_headers([axum::http::header::CONTENT_ENCODING])
+    };
 
     // Bypass ngrok interstitial page on free tier
     let ngrok_bypass = SetResponseHeaderLayer::overriding(
@@ -606,7 +645,7 @@ async fn main() -> Result<()> {
         axum::http::header::CONTENT_SECURITY_POLICY,
         HeaderValue::from_static(
             "default-src 'self'; \
-             script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' https://telegram.org; \
+             script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://telegram.org; \
              style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; \
              img-src 'self' data: https: blob:; \
              media-src 'self' data: https: blob:; \

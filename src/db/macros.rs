@@ -4,11 +4,15 @@
 /// `tracing::warn!` (target `db.schema_drift`) when the read fails.
 ///
 /// Replaces the common pattern
-/// ```ignore
+/// ```text
 /// let v = r.try_get::<f64>("", "price").unwrap_or(0.0);
 /// ```
 /// with
-/// ```ignore
+/// ```rust,no_run
+/// # struct Row;
+/// # impl Row { fn try_get<T: Default>(&self, _pre: &str, _col: &str) -> Result<T, &'static str> { Ok(T::default()) } }
+/// use woody_weed_bot::try_get_warn;
+/// let r = Row;
 /// let v: f64 = try_get_warn!(r, "price", 0.0);
 /// ```
 ///

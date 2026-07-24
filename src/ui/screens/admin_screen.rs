@@ -6683,8 +6683,9 @@ fn EventsTab() -> Element {
             "title_en": if title_en.read().trim().is_empty() { serde_json::Value::Null } else { title_en.read().clone().into() },
             "description": if description.read().trim().is_empty() { serde_json::Value::Null } else { description.read().clone().into() },
             "description_en": if description_en.read().trim().is_empty() { serde_json::Value::Null } else { description_en.read().clone().into() },
-            "starts_at": format!("{}:00Z", starts_at.read().clone()),
-            "ends_at": if ends_at.read().trim().is_empty() { serde_json::Value::Null } else { format!("{}:00Z", ends_at.read().clone()).into() },
+            // Admin input is interpreted as Asia/Bangkok (UTC+7), not browser local time.
+            "starts_at": format!("{}:00+07:00", starts_at.read().clone()),
+            "ends_at": if ends_at.read().trim().is_empty() { serde_json::Value::Null } else { format!("{}:00+07:00", ends_at.read().clone()).into() },
             "location_text": if location_text.read().trim().is_empty() { serde_json::Value::Null } else { location_text.read().clone().into() },
             "image_url": if image_url.read().trim().is_empty() { serde_json::Value::Null } else { image_url.read().clone().into() },
             "max_seats": if max_seats.read().trim().is_empty() { serde_json::Value::Null } else { max_seats.read().parse::<i32>().unwrap_or(0).into() },
@@ -6762,22 +6763,8 @@ fn EventsTab() -> Element {
         title_en.set(ev.title_en.clone().unwrap_or_default());
         description.set(ev.description.clone().unwrap_or_default());
         description_en.set(ev.description_en.clone().unwrap_or_default());
-        if let Some(s) = ev.starts_at.split('Z').next() {
-            let s = s.trim_end_matches(":");
-            if s.len() >= 16 { starts_at.set(s[..16].to_string()); } else { starts_at.set(String::new()); }
-        } else {
-            starts_at.set(String::new());
-        }
-        if let Some(end) = ev.ends_at.as_deref() {
-            if let Some(s) = end.split('Z').next() {
-                let s = s.trim_end_matches(":");
-                if s.len() >= 16 { ends_at.set(s[..16].to_string()); } else { ends_at.set(String::new()); }
-            } else {
-                ends_at.set(String::new());
-            }
-        } else {
-            ends_at.set(String::new());
-        }
+        starts_at.set(parse_event_start(&ev.starts_at).map(|dt| dt.format("%Y-%m-%dT%H:%M").to_string()).unwrap_or_default());
+        ends_at.set(ev.ends_at.as_deref().and_then(parse_event_start).map(|dt| dt.format("%Y-%m-%dT%H:%M").to_string()).unwrap_or_default());
         location_text.set(ev.location_text.clone().unwrap_or_default());
         image_url.set(ev.image_url.clone().unwrap_or_default());
         max_seats.set(ev.max_seats.map(|v| v.to_string()).unwrap_or_default());
@@ -6813,7 +6800,7 @@ fn EventsTab() -> Element {
                                                 let eid = event_id.clone();
                                                 spawn(async move {
                                                     let url = format!("{}/api/admin/events/{}/bookings/{}/cancel", api_base_url(), urlencoding::encode(&eid), urlencoding::encode(&cid));
-                                                    match HTTP_CLIENT.clone().post(&url).headers(admin_event_headers(init, telegram_id)).send().await {
+                                                    match HTTP_CLIENT.clone().put(&url).headers(admin_event_headers(init, telegram_id)).send().await {
                                                         Ok(r) if r.status().is_success() => {
                                                             load_bookings.call(eid.clone());
                                                             push_toast(toasts, "Бронь отменена".into(), ToastKind::Success);

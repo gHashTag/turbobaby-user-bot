@@ -26,6 +26,7 @@ pub enum ProductKind {
     Accessory,
     Set,
     Tea,
+    Event,
 }
 
 impl ProductKind {
@@ -36,6 +37,7 @@ impl ProductKind {
             Self::Accessory => "p_acc",
             Self::Set => "p_set",
             Self::Tea => "p_tea",
+            Self::Event => "p_event",
         }
     }
 
@@ -46,6 +48,7 @@ impl ProductKind {
             Self::Accessory => Route::Accessories {},
             Self::Set => Route::Sets {},
             Self::Tea => Route::Tea {},
+            Self::Event => Route::Events {},
         }
     }
 }
@@ -85,6 +88,8 @@ pub fn parse_start_param(param: &str) -> Option<SharedProduct> {
         (ProductKind::Set, id)
     } else if let Some(id) = param.strip_prefix("p_tea_") {
         (ProductKind::Tea, id)
+    } else if let Some(id) = param.strip_prefix("p_event_") {
+        (ProductKind::Event, id)
     } else {
         return None;
     };
@@ -98,11 +103,24 @@ pub fn parse_start_param(param: &str) -> Option<SharedProduct> {
     })
 }
 
+/// Runtime bot username. On WASM reads from Telegram initData so test/staging
+/// bots do not accidentally emit production links; falls back to the
+/// compile-time constant when the WebApp SDK is unavailable.
+fn bot_username() -> String {
+    #[cfg(target_arch = "wasm32")]
+    {
+        if let Some(name) = crate::ui::telegram::TelegramApp::init().bot_username() {
+            return name;
+        }
+    }
+    BOT_USERNAME.to_string()
+}
+
 /// Build the `t.me` deep link that opens the mini-app with this product.
 fn deep_link_url(kind: ProductKind, id: &str) -> String {
     format!(
         "https://t.me/{}?startapp={}_{}",
-        BOT_USERNAME,
+        bot_username(),
         kind.payload_prefix(),
         id
     )
@@ -220,6 +238,7 @@ mod tests {
             (ProductKind::Accessory, "acc-99"),
             (ProductKind::Set, "set-007"),
             (ProductKind::Tea, "tea-chai"),
+            (ProductKind::Event, "evt-42"),
         ];
         for (kind, id) in cases {
             let link = product_deep_link(kind, id);
@@ -228,5 +247,12 @@ mod tests {
             assert_eq!(parsed.kind, kind);
             assert_eq!(parsed.id, id);
         }
+    }
+
+    #[test]
+    fn parse_event_payload() {
+        let p = parse_start_param("p_event_550e8400-e29b-41d4-a716-446655440000").unwrap();
+        assert_eq!(p.kind, ProductKind::Event);
+        assert_eq!(p.id, "550e8400-e29b-41d4-a716-446655440000");
     }
 }

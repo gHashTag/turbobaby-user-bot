@@ -11,14 +11,28 @@ use std::collections::HashMap;
 
 use crate::api::auth::{check_admin, check_not_blocked, check_owner, validate_telegram_id_param};
 use crate::api::orders::is_valid_idempotency_key;
+use crate::api::rate_limit::{check_and_record, new_store, SlidingWindowStore};
 use crate::AppState;
+use std::time::Duration;
+
+/// Cycle #168: per-telegram-id rate limit for event booking.
+/// 5 bookings per minute per user is generous for legitimate use and
+/// tight enough to prevent seat-spray abuse.
+static EVENT_BOOKING_RATE_LIMIT: std::sync::LazyLock<SlidingWindowStore> =
+    std::sync::LazyLock::new(new_store);
+const EVENT_BOOKING_RL_WINDOW: Duration = Duration::from_secs(60);
+const EVENT_BOOKING_RL_MAX_ATTEMPTS: usize = 5;
+const EVENT_BOOKING_RL_MAX_IDS: usize = 20_000;
 
 pub(crate) fn routes() -> Router<AppState> {
     Router::new()
         // Public event calendar
+        .route("/events/my-bookings", get(my_bookings))
+        .route("/events/bookings/:booking_id/cancel", put(cancel_my_booking))
         .route("/events", get(list_events))
         .route("/events/:id", get(get_event))
         .route("/events/:id/book", post(book_event))
+        .route("/events/:id/waitlist", post(join_waitlist))
         // Admin
         .route("/admin/events", get(list_admin_events).post(create_event))
         .route("/admin/events/:id", get(get_admin_event).put(update_event).delete(delete_event))
@@ -343,24 +357,34 @@ async fn book_event(
     event_id_ok(&id)?;
     validate_telegram_id_param(req.telegram_id)?;
 
-    // Authenticated action: the initData user must own telegram_id.
-    // Production initData HMAC validation is flaky for some Telegram clients,
-    // so mirror the order/garden/admin lenient fallback: accept fresh initData
-    // whose user.id matches the requested telegram_id when strict HMAC fails.
-    // FIXME: remove fallback once validate_init_data is fully reliable.
-    let _owner_id = match check_owner(&headers, &state, req.telegram_id) {
-        Ok(id) => id,
-        Err(StatusCode::UNAUTHORIZED) => {
-            crate::api::auth::check_owner_lenient(&headers, &state, req.telegram_id, "event")?
-        }
-        Err(other) => return Err(other),
-    };
+    // Strict Telegram initData ownership check. Lenient fallback removed:
+    // booking as another user by knowing their telegram_id is a vulnerability.
+    let _owner_id = check_owner(&headers, &state, req.telegram_id)?;
     check_not_blocked(&state, req.telegram_id).await?;
 
-    let seats = req.seats.unwrap_or(1);
-    if seats <= 0 || seats > 10 {
-        return Err(StatusCode::BAD_REQUEST);
+    // Rate-limit event bookings per telegram id.
+    let rate_key = format!("event_book:{}", req.telegram_id);
+    if !check_and_record(
+        &EVENT_BOOKING_RATE_LIMIT,
+        &rate_key,
+        EVENT_BOOKING_RL_WINDOW,
+        EVENT_BOOKING_RL_MAX_ATTEMPTS,
+        EVENT_BOOKING_RL_MAX_IDS,
+    )
+    .await
+    {
+        crate::metrics::rate_limit_blocked("event_booking");
+        tracing::warn!("book_event: rate-limit exceeded tid={}", req.telegram_id);
+        return Err(StatusCode::TOO_MANY_REQUESTS);
     }
+
+    // MVP: one seat per booking. Keep the field for forward compatibility,
+    // but reject explicit multi-seat requests until paid/booking-for-others flow.
+    let seats = match req.seats {
+        None => 1,
+        Some(1) => 1,
+        Some(_) => return Err(StatusCode::BAD_REQUEST),
+    };
 
     let idem_key: Option<String> = headers
         .get("x-idempotency-key")
@@ -468,6 +492,202 @@ async fn book_event(
         "booking_id": booking_id,
         "seats": seats,
     })))
+}
+
+async fn my_bookings(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    Query(q): Query<HashMap<String, String>>,
+) -> Result<Json<Value>, StatusCode> {
+    let tid = q
+        .get("telegram_id")
+        .and_then(|s| s.parse::<i64>().ok())
+        .ok_or(StatusCode::BAD_REQUEST)?;
+    validate_telegram_id_param(tid)?;
+    check_owner(&headers, &state, tid)?;
+    check_not_blocked(&state, tid).await?;
+
+    use sea_orm::{ConnectionTrait, DbBackend, Statement};
+    let rows = state
+        .db
+        .orm
+        .query_all(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            "SELECT b.id, b.event_id, b.telegram_id, b.seats, b.status, b.order_id, b.created_at, \
+             e.title, e.title_en, e.starts_at, e.location_text \
+             FROM event_bookings b JOIN events e ON e.id = b.event_id \
+             WHERE b.telegram_id = $1 \
+             ORDER BY e.starts_at ASC",
+            [tid.into()],
+        ))
+        .await
+        .map_err(|e| {
+            tracing::error!("my_bookings: {e}");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+    let bookings: Vec<Value> = rows
+        .iter()
+        .map(|r| {
+            let mut b = booking_row(r);
+            if let Value::Object(ref mut m) = b {
+                m.insert(
+                    "event_title".to_string(),
+                    json!(r.try_get::<String>("", "title").unwrap_or_default()),
+                );
+                m.insert(
+                    "event_title_en".to_string(),
+                    json!(r.try_get::<Option<String>>("", "title_en").ok().flatten()),
+                );
+                m.insert(
+                    "event_starts_at".to_string(),
+                    json!(r.try_get::<DateTime<Utc>>("", "starts_at").ok().map(|d| d.to_rfc3339())),
+                );
+                m.insert(
+                    "event_location_text".to_string(),
+                    json!(r.try_get::<Option<String>>("", "location_text").ok().flatten()),
+                );
+            }
+            b
+        })
+        .collect();
+    Ok(Json(json!({ "bookings": bookings })))
+}
+
+async fn cancel_my_booking(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    Path(booking_id): Path<String>,
+    Query(q): Query<HashMap<String, String>>,
+) -> Result<Json<Value>, StatusCode> {
+    booking_id_ok(&booking_id)?;
+    let tid = q
+        .get("telegram_id")
+        .and_then(|s| s.parse::<i64>().ok())
+        .ok_or(StatusCode::BAD_REQUEST)?;
+    validate_telegram_id_param(tid)?;
+    check_owner(&headers, &state, tid)?;
+
+    use sea_orm::{ConnectionTrait, DbBackend, Statement};
+    let row = state
+        .db
+        .orm
+        .query_one(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            "SELECT telegram_id FROM event_bookings WHERE id = $1",
+            [booking_id.clone().into()],
+        ))
+        .await
+        .map_err(|e| {
+            tracing::error!("cancel_my_booking lookup: {e}");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+    let owner: i64 = row.and_then(|r| r.try_get("", "telegram_id").ok()).unwrap_or(0);
+    if owner != tid {
+        return Err(StatusCode::FORBIDDEN);
+    }
+
+    state
+        .db
+        .orm
+        .execute(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            "UPDATE event_bookings SET status = 'cancelled', updated_at = NOW() WHERE id = $1 AND telegram_id = $2",
+            [booking_id.into(), tid.into()],
+        ))
+        .await
+        .map_err(|e| {
+            tracing::error!("cancel_my_booking: {e}");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+    Ok(Json(json!({ "success": true })))
+}
+
+async fn join_waitlist(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(req): Json<BookEventRequest>,
+) -> Result<Json<Value>, StatusCode> {
+    event_id_ok(&id)?;
+    validate_telegram_id_param(req.telegram_id)?;
+    check_owner(&headers, &state, req.telegram_id)?;
+    check_not_blocked(&state, req.telegram_id).await?;
+
+    use sea_orm::{ConnectionTrait, DbBackend, Statement};
+    // Only allow waitlist if the event is public and capacity is actually full.
+    let ev = state
+        .db
+        .orm
+        .query_one(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            "SELECT id, max_seats FROM events WHERE id = $1 AND is_public = TRUE",
+            [id.clone().into()],
+        ))
+        .await
+        .map_err(|e| {
+            tracing::error!("join_waitlist lookup: {e}");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+    let Some(ev) = ev else {
+        return Err(StatusCode::NOT_FOUND);
+    };
+    let max_seats: Option<i32> = ev.try_get::<Option<i32>>("", "max_seats").ok().flatten();
+    let cap = max_seats.unwrap_or(0);
+    if cap <= 0 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    let taken_row = state
+        .db
+        .orm
+        .query_one(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            "SELECT COALESCE(SUM(seats), 0)::int AS taken FROM event_bookings WHERE event_id = $1 AND status = 'confirmed'",
+            [id.clone().into()],
+        ))
+        .await
+        .map_err(|e| {
+            tracing::error!("join_waitlist capacity check: {e}");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+    let taken: i32 = taken_row.and_then(|r| r.try_get("", "taken").ok()).unwrap_or(0);
+    if taken < cap {
+        return Err(StatusCode::CONFLICT); // still has seats
+    }
+
+    // Idempotency: one waitlist entry per user per event.
+    let dup = state
+        .db
+        .orm
+        .query_one(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            "SELECT 1 FROM event_bookings WHERE event_id = $1 AND telegram_id = $2 AND status IN ('confirmed','waitlisted')",
+            [id.clone().into(), req.telegram_id.into()],
+        ))
+        .await
+        .map_err(|e| {
+            tracing::error!("join_waitlist dup check: {e}");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+    if dup.is_some() {
+        return Err(StatusCode::CONFLICT);
+    }
+
+    let booking_id = uuid::Uuid::new_v4().to_string();
+    state
+        .db
+        .orm
+        .execute(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            "INSERT INTO event_bookings (id, event_id, telegram_id, seats, status) VALUES ($1,$2,$3,1,'waitlisted')",
+            [booking_id.clone().into(), id.into(), req.telegram_id.into()],
+        ))
+        .await
+        .map_err(|e| {
+            tracing::error!("join_waitlist insert: {e}");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+    Ok(Json(json!({ "success": true, "booking_id": booking_id, "status": "waitlisted" })))
 }
 
 // ── Admin endpoints ──────────────────────────────────────────

@@ -33,7 +33,7 @@ pub fn CartItemComponent(props: CartItemProps) -> Element {
             }
             div { class: "cart-item-details",
                 h4 { class: "cart-item-name", "{item.name}" }
-                p { class: "cart-item-price", "{safe_price} ₽" }
+                p { class: "cart-item-price", "{safe_price} ฿" }
                 div { class: "cart-item-controls",
                     Button {
                         variant: ButtonVariant::Secondary,

@@ -20,6 +20,8 @@ pub struct Model {
     pub total: f64,
     pub status: String,
     pub shop_id: Option<String>,
+    pub delivery_address: Option<String>,
+    pub delivery_notes: Option<String>,
     pub created_at: DateTimeWithTimeZone,
 }
 

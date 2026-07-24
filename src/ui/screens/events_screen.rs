@@ -12,9 +12,13 @@ use crate::trios::i18n::{
     T_EVENTS_WEEKDAY_TUE, T_EVENTS_WEEKDAY_WED,
 };
 use crate::ui::api::context::api_base_url;
-use crate::ui::api::http::post_json_authed_idempotent_full;
+use crate::ui::api::http::{
+    fetch_text_authed_full, fetch_text_full, post_json_authed_idempotent_full,
+};
 use crate::ui::api::types::Event as CalendarEvent;
 use crate::ui::components::bottom_nav::BottomNav;
+use crate::ui::routes::Route;
+use crate::ui::share::{ProductKind, SharedProduct};
 use crate::ui::telegram::{use_telegram_id, use_telegram_init_data};
 use chrono::{Datelike, Days, FixedOffset, NaiveDate, Utc, Weekday};
 use dioxus::prelude::*;
@@ -160,11 +164,26 @@ fn EventCard(props: EventCardProps) -> Element {
     let is_free = ev.price_baht.map_or(true, |p| p <= 0.0);
     let price_label = ev.price_baht.filter(|p| *p > 0.0).map(|p| format!("{:.0} ฿", p));
 
+    let share_id = ev.id.clone();
+    let share_name = ev.display_title();
     rsx! {
-        button {
+        div {
+            role: "button",
+            "aria-label": "Open event details",
             style: "width:100%;text-align:left;background:#1a1a2e;border:3px solid #2a2a4a;border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:6px;cursor:pointer;box-shadow:3px 3px 0 #000;",
             onclick: move |_| props.on_select.call(ev.clone()),
-            div { style: "font-size:15px;font-weight:700;color:#e8e8e8;", "{ev.display_title()}" }
+            div { style: "display:flex;justify-content:space-between;align-items:flex-start;",
+                div { style: "font-size:15px;font-weight:700;color:#e8e8e8;", "{ev.display_title()}" }
+                button {
+                    style: "background:transparent;border:none;color:#39ff14;font-size:18px;cursor:pointer;width:44px;height:44px;display:flex;align-items:center;justify-content:center;",
+                    "aria-label": "Share event",
+                    onclick: move |e| {
+                        e.stop_propagation();
+                        crate::ui::share::share_product(crate::ui::share::ProductKind::Event, &share_id, &share_name);
+                    },
+                    "↗"
+                }
+            }
             if let Some(ref label) = start_label {
                 div { style: "font-size:12px;color:#888;", "🕒 {label}" }
             }
@@ -374,6 +393,20 @@ pub fn EventsScreen() -> Element {
     let init_data = use_telegram_init_data();
     let lang = crate::ui::lang::current_lang();
 
+    // Deep-link events: if the app opened with a shared event, jump to the
+    // event detail route instead of the calendar list.
+    let nav = use_navigator();
+    let mut pending = use_context::<Signal<Option<SharedProduct>>>();
+    use_effect(move || {
+        let target = pending.read().clone();
+        if let Some(target) = target {
+            if target.kind == ProductKind::Event {
+                pending.set(None);
+                nav.push(Route::EventDetail { id: target.id });
+            }
+        }
+    });
+
     let title = t(lang, T_EVENTS_TITLE).to_string();
     let subtitle = t(lang, T_EVENTS_SUBTITLE).to_string();
     let loading = t(lang, T_EVENTS_LOADING).to_string();
@@ -388,7 +421,9 @@ pub fn EventsScreen() -> Element {
             .unwrap_or_else(|| from.clone());
         async move {
             let base = api_base_url();
-            let url = format!("{}/api/events?from={}T00:00:00Z&to={}T00:00:00Z", base, from, to);
+            // Shop timezone is Asia/Bangkok UTC+7; ask the backend for events
+            // that start within that day, not UTC midnight.
+            let url = format!("{}/api/events?from={}T00:00:00%2B07:00&to={}T00:00:00%2B07:00", base, from, to);
             match crate::ui::api::http::fetch_text_full(&url).await {
                 Ok((status, body)) if (200..300).contains(&status) => {
                     let parsed: serde_json::Value = serde_json::from_str(&body).unwrap_or_default();
@@ -496,6 +531,205 @@ pub fn EventsScreen() -> Element {
                 }
             }
             { modal }
+            BottomNav {}
+        }
+    }
+}
+
+#[component]
+pub fn EventDetailScreen(id: String) -> Element {
+    let telegram_id = use_telegram_id();
+    let init_data = use_telegram_init_data();
+    let mut event = use_signal(|| None::<CalendarEvent>);
+    let mut loading = use_signal(|| true);
+    let mut error = use_signal(|| None::<String>);
+    let nav = use_navigator();
+
+    use_effect(move || {
+        let id = id.clone();
+        spawn(async move {
+            let url = format!("{}/api/events/{}", api_base_url(), urlencoding::encode(&id));
+            match fetch_text_full(&url).await {
+                Ok((status, body)) if (200..300).contains(&status) => {
+                    let parsed: serde_json::Value = serde_json::from_str(&body).unwrap_or_default();
+                    if let Some(e) = parsed.get("event").and_then(|v| serde_json::from_value(v.clone()).ok()) {
+                        event.set(Some(e));
+                    } else {
+                        error.set(Some("Event not found".to_string()));
+                    }
+                }
+                Ok((status, _)) => error.set(Some(format!("HTTP {status}"))),
+                Err(e) => error.set(Some(e.to_string())),
+            }
+            loading.set(false);
+        });
+    });
+
+    let ev = event.read().clone();
+    let go_back = move |_| { nav.push(Route::Events {}); };
+    rsx! {
+        div { style: "min-height:100vh;background:#0f0f1a;color:#e8e8e8;padding-bottom:80px;",
+            if *loading.read() {
+                div { style: "text-align:center;padding:40px 0;color:#888;font-size:12px;", "Loading..." }
+            } else if let Some(err) = error.read().clone() {
+                div { style: "text-align:center;padding:40px 0;color:#ff4757;font-size:12px;", "{err}" }
+            } else if let Some(ev) = ev {
+                EventBookingModal {
+                    ev,
+                    telegram_id,
+                    init_data: init_data.clone(),
+                    on_close: EventHandler::new(go_back.clone()),
+                    on_booked: EventHandler::new(go_back),
+                }
+            }
+            BottomNav {}
+        }
+    }
+}
+
+#[derive(Clone, Debug, serde::Deserialize)]
+#[allow(dead_code)]
+struct MyBooking {
+    id: String,
+    event_id: String,
+    seats: i32,
+    status: String,
+    #[serde(default)]
+    event_title: String,
+    #[serde(default)]
+    event_title_en: Option<String>,
+    #[serde(default)]
+    event_starts_at: Option<String>,
+    #[serde(default)]
+    event_location_text: Option<String>,
+}
+
+#[component]
+pub fn MyBookingsScreen() -> Element {
+    let telegram_id = use_telegram_id();
+    let init_data = use_telegram_init_data();
+    let mut bookings: Signal<Vec<MyBooking>> = use_signal(Vec::new);
+    let mut loading = use_signal(|| true);
+    let mut error = use_signal(|| None::<String>);
+    let refresh = use_signal(|| 0u32);
+
+    let init_data_for_effect = init_data.clone();
+    let init_data_for_cancel = init_data.clone();
+
+    use_effect(move || {
+        let _ = refresh.read();
+        let Some(tid) = telegram_id else {
+            loading.set(false);
+            return;
+        };
+        let init = init_data_for_effect.clone();
+        spawn(async move {
+            let url = format!(
+                "{}/api/events/my-bookings?telegram_id={}",
+                api_base_url(),
+                tid
+            );
+            match fetch_text_authed_full(&url, &init).await {
+                Ok((status, body)) if (200..300).contains(&status) => {
+                    let parsed: serde_json::Value = serde_json::from_str(&body).unwrap_or_default();
+                    let list: Vec<MyBooking> = parsed
+                        .get("bookings")
+                        .and_then(|v| v.as_array())
+                        .map(|arr| {
+                            arr.iter()
+                                .filter_map(|v| serde_json::from_value(v.clone()).ok())
+                                .collect()
+                        })
+                        .unwrap_or_default();
+                    bookings.set(list);
+                }
+                Ok((status, _)) => error.set(Some(format!("HTTP {status}"))),
+                Err(e) => error.set(Some(e.to_string())),
+            }
+            loading.set(false);
+        });
+    });
+
+    let lang = crate::ui::lang::current_lang();
+    let back_label = t(lang, T_BACK).to_string();
+    let nav = use_navigator();
+
+    let list = bookings.read().clone();
+    let has_bookings = !list.is_empty();
+
+    let cancel = use_callback(move |booking_id: String| {
+        let tid = telegram_id.unwrap_or(0);
+        if tid == 0 {
+            return;
+        }
+        let init = init_data_for_cancel.clone();
+        let mut refresh_sig = refresh.clone();
+        spawn(async move {
+            let url = format!(
+                "{}/api/events/bookings/{}/cancel?telegram_id={}",
+                api_base_url(),
+                urlencoding::encode(&booking_id),
+                tid
+            );
+            let _ = crate::ui::api::http::put_json_authed(
+                &url, &init, "{}",
+            ).await;
+            let next = *refresh_sig.read() + 1;
+            refresh_sig.set(next);
+        });
+    });
+
+    rsx! {
+        div { style: "min-height:100vh;background:#0f0f1a;color:#e8e8e8;padding-bottom:80px;",
+            div { style: "padding:20px 16px 16px;text-align:center;position:relative;",
+                button {
+                    style: "position:absolute;left:16px;top:20px;background:transparent;border:none;color:#e8e8e8;font-size:20px;width:44px;height:44px;display:flex;align-items:center;justify-content:center;cursor:pointer;",
+                    "aria-label": back_label.clone(),
+                    onclick: move |_| { nav.push(Route::Events {}); },
+                    "←"
+                }
+                h1 { style: "font-size:20px;font-weight:800;color:#39ff14;text-shadow:2px 2px 0 #000;", "My bookings" }
+            }
+            if *loading.read() {
+                div { style: "text-align:center;padding:40px 0;color:#888;font-size:12px;", "Loading..." }
+            } else if let Some(err) = error.read().clone() {
+                div { style: "text-align:center;padding:40px 0;color:#ff4757;font-size:12px;", "{err}" }
+            } else if !has_bookings {
+                div { style: "text-align:center;padding:40px 0;color:#888;font-size:12px;", "No bookings yet" }
+            } else {
+                div { style: "padding:0 16px;display:flex;flex-direction:column;gap:10px;",
+                    {
+                        list.into_iter().map(move |b| {
+                            let start = b.event_starts_at.as_deref().and_then(parse_event_start).map(|dt| dt.format("%d %b %Y • %H:%M").to_string()).unwrap_or_default();
+                            let show_title = crate::ui::lang::localized(
+                                &b.event_title,
+                                b.event_title_en.as_deref(),
+                            );
+                            let can_cancel = b.status == "confirmed" || b.status == "waitlisted";
+                            let bid = b.id.clone();
+                            let bid2 = b.id.clone();
+                            let status_color = if b.status == "confirmed" { "#39ff14" } else if b.status == "waitlisted" { "#ffe600" } else { "#ff4757" };
+                            rsx! {
+                                div { key: "{bid2}", style: "background:#1a1a2e;border:2px solid #2a2a4a;border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:6px;",
+                                    div { style: "font-size:14px;font-weight:700;color:#e8e8e8;", "{show_title}" }
+                                    div { style: "font-size:11px;color:#888;", "{start}" }
+                                    if let Some(loc) = b.event_location_text {
+                                        div { style: "font-size:11px;color:#b388ff;", "📍 {loc}" }
+                                    }
+                                    div { style: "font-size:11px;color:{status_color};text-transform:uppercase;", "{b.status}" }
+                                    if can_cancel {
+                                        button {
+                                            style: "margin-top:6px;padding:8px 12px;background:#ff4757;color:#fff;border:none;border-radius:4px;font-size:12px;cursor:pointer;",
+                                            onclick: move |_| cancel(bid.clone()),
+                                            "Cancel"
+                                        }
+                                    }
+                                }
+                            }
+                        })
+                    }
+                }
+            }
             BottomNav {}
         }
     }

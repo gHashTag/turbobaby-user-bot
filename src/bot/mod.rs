@@ -136,6 +136,7 @@ pub(crate) fn product_start_param(kind_prefix: &str, product_id: &str) -> String
     format!("{}_{}", kind_prefix, product_id)
 }
 
+
 /// Wrap a Telegram API call that's allowed to fail silently. Rate-limit
 /// (HTTP 429) and "message too old to edit" failures are routine — those
 /// are dropped without noise. Everything else gets a `debug!` log so ops
@@ -247,4 +248,5 @@ mod deep_link_tests {
         assert!(url.contains("bot%20name"));
         assert!(url.contains("p_set%3Aa%20b"));
     }
-}
+
+} // mod deep_link_tests

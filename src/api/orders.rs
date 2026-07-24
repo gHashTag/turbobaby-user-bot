@@ -62,6 +62,10 @@ pub(crate) struct CreateOrderRequest {
     pub stars_used: Option<i64>,
     pub total: f64,
     pub shop_id: Option<String>,
+    #[serde(default)]
+    pub delivery_address: Option<String>,
+    #[serde(default)]
+    pub delivery_notes: Option<String>,
     /// B4: an optional garden reward to apply (product-scoped discount). The
     /// server loads the reward, computes the discount from DB prices, and
     /// verifies `total = subtotal - bonus_used - stars_used - garden_discount`
@@ -551,25 +555,13 @@ async fn create_order(
     }
 
     // If telegram_id is provided, verify ownership and blocked status.
-    // Cycle #176: production initData HMAC validation intermittently fails for
-    // some Telegram clients (same drift already mitigated for /api/garden/* and
-    // /api/admin). Use strict validation first, then a fresh-auth_date + user.id
-    // fallback so legitimate customers can still place orders while the root
-    // cause is debugged. FIXME: remove fallback once validate_init_data is fully
-    // reliable.
+    // Strict Telegram initData ownership check. Lenient fallback removed
+    // (cycle #XXX): it bypassed HMAC for anyone who knew a target telegram_id,
+    // which is a privilege-escalation / order-as-someone-else vulnerability.
+    // If legitimate Telegram WebViews fail HMAC, that must be fixed inside
+    // validate_init_data, not here.
     if let Some(tid) = req.telegram_id {
-        let _owner_id = match crate::api::auth::check_owner(&headers, &state, tid) {
-            Ok(id) => id,
-            Err(StatusCode::UNAUTHORIZED) => {
-                crate::api::auth::check_owner_lenient(
-                    &headers,
-                    &state,
-                    tid,
-                    "order",
-                )?
-            }
-            Err(other) => return Err(other),
-        };
+        let _owner_id = crate::api::auth::check_owner(&headers, &state, tid)?;
         check_not_blocked(&state, tid).await?;
     }
 
@@ -1189,6 +1181,8 @@ async fn create_order(
         total: Set(req.total),
         status: Set("pending".to_string()),
         shop_id: Set(req.shop_id.clone()),
+        delivery_address: Set(req.delivery_address.clone()),
+        delivery_notes: Set(req.delivery_notes.clone()),
         ..Default::default()
     };
     OrderEntity::insert(order_am).exec(&tx).await.map_err(|e| {
@@ -2196,6 +2190,8 @@ mod tests {
             total: 90.0,
             shop_id: None,
             garden_reward_id: None,
+            delivery_address: Some("123 Test Lane".into()),
+            delivery_notes: None,
         }
     }
 
@@ -2478,6 +2474,8 @@ mod tests {
             total: 100.0,
             shop_id: None,
             garden_reward_id: None,
+            delivery_address: None,
+            delivery_notes: None,
         }
     }
 
