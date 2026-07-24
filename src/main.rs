@@ -546,9 +546,27 @@ async fn main() -> Result<()> {
     // may call the API. Local development keeps Any so trunk serve / curl work.
     let cors = if config.is_production {
         let web_app_url = config.web_app_url.clone();
+        // Extract scheme+host+port from the configured URL; WEB_APP_URL may
+        // include a path/query that would never match the Origin header.
+        // WEB_APP_URL may include a path/query; the Origin header only carries
+        // scheme://host[:port], so strip everything after the authority.
+        let web_app_origin = {
+            let raw = web_app_url.trim();
+            if let Some(pos) = raw.find("://") {
+                let scheme = &raw[..pos];
+                let after_scheme = &raw[pos + 3..];
+                let authority_end = after_scheme
+                    .find(|c| c == '/' || c == '?' || c == '#')
+                    .unwrap_or(after_scheme.len());
+                let authority = &after_scheme[..authority_end];
+                format!("{}://{}", scheme, authority)
+            } else {
+                raw.to_string()
+            }
+        };
         let allowed_origins = std::sync::Arc::new([
-            web_app_url.clone(),
-            format!("{}/", web_app_url.trim_end_matches('/')), // tolerate trailing slash variants
+            web_app_origin.clone(),
+            format!("{}/", web_app_origin.trim_end_matches('/')), // tolerate trailing slash variants
         ]);
         CorsLayer::new()
             .allow_origin(AllowOrigin::predicate(move |origin, _parts| {
