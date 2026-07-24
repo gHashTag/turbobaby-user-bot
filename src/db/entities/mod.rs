@@ -14,6 +14,8 @@ pub mod loyalty_config;
 #[allow(unreachable_pub)]
 pub mod loyalty_idempotency_key;
 #[allow(unreachable_pub)]
+pub mod lab_certificate;
+#[allow(unreachable_pub)]
 pub mod loyalty_profile;
 #[allow(unreachable_pub)]
 pub mod order;
@@ -31,6 +33,8 @@ pub mod stars_idempotency_key;
 pub mod stars_transaction;
 #[allow(unreachable_pub)]
 pub mod strain;
+#[allow(unreachable_pub)]
+pub mod strain_review;
 #[allow(unreachable_pub)]
 pub mod treasure_hunt;
 #[allow(unreachable_pub)]

@@ -1,6 +1,7 @@
 use axum::{
     extract::{Path, Query, State},
     http::{HeaderMap, StatusCode},
+    response::{IntoResponse, Response},
     routing::{get, post, put},
     Json, Router,
 };
@@ -14,6 +15,7 @@ use crate::api::rate_limit::{
 };
 use crate::db::orders::{Order, OrderItem};
 use crate::db::strains::Strain;
+use crate::promptpay::{build_payload, svg_qr};
 use crate::trios::pricing::{
     effective_accessory_price, effective_set_price, effective_strain_price, effective_tea_price,
     MarketingFlags,
@@ -87,7 +89,9 @@ pub(crate) fn routes() -> Router<AppState> {
         .route("/orders", get(get_orders))
         .route("/orders/:id", get(get_order))
         .route("/orders/:id/status", put(update_order_status))
+        .route("/orders/:id/promptpay-qr", get(promptpay_qr))
         .route("/orders/user/:telegram_id", get(get_user_orders))
+        .route("/delivery/zones", get(list_delivery_zones))
 }
 
 /// Sanitized payment inputs returned by [`validate_create_order`].
@@ -563,6 +567,24 @@ async fn create_order(
     if let Some(tid) = req.telegram_id {
         let _owner_id = crate::api::auth::check_owner(&headers, &state, tid)?;
         check_not_blocked(&state, tid).await?;
+
+        // Cycle #next: Thailand cannabis compliance — verified age is
+        // required before an authenticated user can place an order.
+        // Anonymous orders still pass (they lack a profile to verify).
+        let age_verified = crate::db::entities::loyalty_profile::Entity::find_by_id(tid)
+            .one(&state.db.orm)
+            .await
+            .map_err(|e| {
+                tracing::error!("create_order: age_verified read failed: {}", e);
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?
+            .map(|p| p.age_verified)
+            .unwrap_or(false);
+        if !age_verified {
+            tracing::warn!("create_order rejected: age not verified telegram_id={}", tid);
+            crate::metrics::auth_failure("order_age_not_verified");
+            return Err(StatusCode::FORBIDDEN);
+        }
     }
 
     let ValidatedPayment {
@@ -1406,9 +1428,12 @@ pub(crate) fn validate_update_order_status(id: &str, status: &str) -> Result<(),
     const VALID_STATUSES: &[&str] = &[
         "pending",
         "confirmed",
-        "completed",
-        "rejected",
+        "preparing",
         "ready",
+        "out_for_delivery",
+        "delivered",
+        "completed", // legacy alias for delivered
+        "rejected",
         "cancelled",
     ];
     if !VALID_STATUSES.contains(&status) {
@@ -1455,13 +1480,15 @@ async fn update_order_status(
         return Err(StatusCode::NOT_FOUND);
     };
     let cur_status = current.status.as_str();
-    if (cur_status == "completed" || cur_status == "rejected" || cur_status == "cancelled")
-        && req.status != cur_status
-    {
+    let is_terminal = matches!(
+        cur_status,
+        "completed" | "delivered" | "rejected" | "cancelled"
+    );
+    if is_terminal && req.status != cur_status {
         return Err(StatusCode::BAD_REQUEST);
     }
 
-    if req.status == "completed" {
+    if req.status == "completed" || req.status == "delivered" {
         // Cycle #171: `complete_order_and_update_loyalty` is now the
         // canonical completion point — loyalty tier (cycle #88) +
         // garden seed (cycle #168) + referral bonus (cycle #170
@@ -1497,7 +1524,7 @@ async fn update_order_status(
             // Refund only if the order isn't already in a terminal state.
             // (cycle #76 `should_refund_bonus` helper lives in bot/callbacks
             // for the duplicate refund path there.)
-            if o.status != "rejected" && o.status != "completed" {
+            if !matches!(o.status.as_str(), "rejected" | "completed" | "delivered" | "cancelled") {
                 let bonus = if o.bonus_used.is_finite() {
                     o.bonus_used.max(0.0)
                 } else {
@@ -1676,6 +1703,42 @@ async fn get_user_orders(
         })?;
     let orders: Vec<Order> = models.into_iter().map(Order::from).collect();
     Ok(Json(json!({ "orders": orders })))
+}
+
+/// Public delivery zones + ETA/fee ranges. No auth — used by the customer
+/// checkout and order tracker.
+async fn list_delivery_zones(State(state): State<AppState>) -> Json<Value> {
+    Json(json!({ "zones": state.config.delivery_zones.zones }))
+}
+
+/// Admin-only SVG QR code for PromptPay payment of an order. Falls back to
+/// a text QR if no merchant ID is configured.
+async fn promptpay_qr(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Response, StatusCode> {
+    if id.len() > 200 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    check_admin(&headers, &state)?;
+    use crate::db::entities::order::Entity as OrderEntity;
+    use sea_orm::EntityTrait;
+    let model = OrderEntity::find_by_id(id.clone())
+        .one(&state.db.orm)
+        .await
+        .map_err(|e| {
+            tracing::error!("promptpay_qr order lookup: {:?}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+    let order = model.ok_or(StatusCode::NOT_FOUND)?;
+    let total = if order.total.is_finite() { order.total } else { 0.0 };
+    let payload = build_payload(&state.config.promptpay, total, &id);
+    let svg = svg_qr(&payload).map_err(|e| {
+        tracing::error!("promptpay_qr render: {}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+    Ok(([(axum::http::header::CONTENT_TYPE, "image/svg+xml")], svg).into_response())
 }
 
 #[cfg(test)]

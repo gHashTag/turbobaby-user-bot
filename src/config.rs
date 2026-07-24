@@ -36,6 +36,19 @@ pub struct Config {
     /// (`HIDE_MARKETING_BADGES=1`); promote to a DB-backed admin
     /// toggle when that's needed.
     pub hide_marketing_badges: bool,
+    /// Delivery zones and ETA estimates. Loaded from `DELIVERY_ZONES_JSON`
+    /// or built-in Koh Phangan defaults. Used by the order tracker and
+    /// checkout to show ETA / fee ranges.
+    pub delivery_zones: crate::delivery::DeliveryZones,
+    /// PromptPay merchant identifier for cashless Thai QR payments.
+    /// Thai mobile numbers (10 digits starting with 0) or 13-digit national
+    /// IDs are accepted. Optional — when absent the QR endpoint falls back
+    /// to a plain text payment prompt.
+    pub promptpay: crate::promptpay::QrConfig,
+    /// LINE channel access token for retention broadcasts. Optional —
+    /// when absent the admin LINE broadcast endpoint returns 503 and the
+    /// capability is listed in disabled_capabilities.
+    pub line_channel_access_token: Option<String>,
 }
 
 impl Config {
@@ -129,6 +142,11 @@ impl Config {
             hide_marketing_badges: parse_bool_env(
                 std::env::var("HIDE_MARKETING_BADGES").ok().as_deref(),
             ),
+            delivery_zones: crate::delivery::DeliveryZones::from_env_or_default(),
+            promptpay: crate::promptpay::QrConfig::from_env(),
+            line_channel_access_token: std::env::var("LINE_CHANNEL_ACCESS_TOKEN")
+                .ok()
+                .filter(|s| !s.trim().is_empty()),
         })
     }
 
@@ -142,25 +160,39 @@ impl Config {
         !self.grok_api_key.trim().is_empty() || !self.glm_api_key.trim().is_empty()
     }
 
+    pub fn line_enabled(&self) -> bool {
+        self.line_channel_access_token
+            .as_deref()
+            .map(|s| !s.trim().is_empty())
+            .unwrap_or(false)
+    }
+
     /// Optional capabilities that are OFF because their config is absent.
     /// Logged at startup so ops sees "AI disabled (no key)" up front instead
     /// of discovering it from a failed user request (the AI client only warns
     /// per-call). These are NOT faults — an environment may intentionally run
     /// without AI or S3 — so the caller logs a warning, not an alert.
     pub fn disabled_capabilities(&self) -> Vec<&'static str> {
-        disabled_capabilities_from(self.ai_enabled(), self.s3_enabled())
+        disabled_capabilities_from(self.ai_enabled(), self.s3_enabled(), self.line_enabled())
     }
 }
 
 /// Pure core of [`Config::disabled_capabilities`] — split out so the mapping
 /// is unit-testable without constructing a full `Config`.
-fn disabled_capabilities_from(ai_enabled: bool, s3_enabled: bool) -> Vec<&'static str> {
+fn disabled_capabilities_from(
+    ai_enabled: bool,
+    s3_enabled: bool,
+    line_enabled: bool,
+) -> Vec<&'static str> {
     let mut off = Vec::new();
     if !ai_enabled {
         off.push("AI sommelier (GROK_API_KEY + GLM_API_KEY both unset)");
     }
     if !s3_enabled {
         off.push("S3 media uploads (S3_BUCKET / S3_ENDPOINT unset)");
+    }
+    if !line_enabled {
+        off.push("LINE retention broadcasts (LINE_CHANNEL_ACCESS_TOKEN unset)");
     }
     off
 }
@@ -242,26 +274,33 @@ mod tests {
 
     #[test]
     fn capabilities_all_enabled_is_empty() {
-        assert!(disabled_capabilities_from(true, true).is_empty());
+        assert!(disabled_capabilities_from(true, true, true).is_empty());
     }
 
     #[test]
     fn capabilities_ai_off_reported() {
-        let off = disabled_capabilities_from(false, true);
+        let off = disabled_capabilities_from(false, true, true);
         assert_eq!(off.len(), 1);
         assert!(off[0].contains("AI"));
     }
 
     #[test]
     fn capabilities_s3_off_reported() {
-        let off = disabled_capabilities_from(true, false);
+        let off = disabled_capabilities_from(true, false, true);
         assert_eq!(off.len(), 1);
         assert!(off[0].contains("S3"));
     }
 
     #[test]
-    fn capabilities_both_off_reported() {
-        assert_eq!(disabled_capabilities_from(false, false).len(), 2);
+    fn capabilities_line_off_reported() {
+        let off = disabled_capabilities_from(true, true, false);
+        assert_eq!(off.len(), 1);
+        assert!(off[0].contains("LINE"));
+    }
+
+    #[test]
+    fn capabilities_all_off_reported() {
+        assert_eq!(disabled_capabilities_from(false, false, false).len(), 3);
     }
 
     // ── collect_required_env (cycle #122) ───────────────────────────
@@ -406,6 +445,9 @@ mod tests {
             backup_assets: false,
             admin_password: None,
             hide_marketing_badges: false,
+            delivery_zones: crate::delivery::DeliveryZones::default(),
+            promptpay: crate::promptpay::QrConfig::default(),
+            line_channel_access_token: None,
         };
         assert!(cfg.s3_enabled());
     }
@@ -463,6 +505,9 @@ mod tests {
             backup_assets: false,
             admin_password: None,
             hide_marketing_badges: false,
+            delivery_zones: crate::delivery::DeliveryZones::default(),
+            promptpay: crate::promptpay::QrConfig::default(),
+            line_channel_access_token: None,
         }
     }
 }

@@ -1,7 +1,12 @@
 use dioxus::prelude::*;
+use serde_json::json;
 use wasm_bindgen::prelude::Closure;
 use wasm_bindgen::JsCast;
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen_futures::spawn_local;
 use web_sys::Event;
+
+use crate::ui::api::{context::api_base_url, http::post_json_status_only};
 
 #[derive(Clone, Debug)]
 pub struct JsErrorItem {
@@ -115,6 +120,30 @@ fn is_benign_js_error(msg: &str) -> bool {
         || msg.contains("ResizeObserver loop")
 }
 
+#[cfg(target_arch = "wasm32")]
+fn send_error_telemetry(item: &JsErrorItem) {
+    let payload = json!({
+        "source": item.source,
+        "message": item.message,
+        "stack": item.stack,
+        "url_path": web_sys::window()
+            .and_then(|w| w.location().pathname().ok())
+            .unwrap_or_default(),
+        "user_agent": web_sys::window()
+            .and_then(|w| w.navigator().user_agent().ok())
+            .unwrap_or_default(),
+    })
+    .to_string();
+    let url = format!("{}/api/client-errors", api_base_url());
+    spawn_local(async move {
+        // Fire-and-forget: telemetry must not block the UI or re-throw.
+        let _ = post_json_status_only(&url, &payload).await;
+    });
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn send_error_telemetry(_item: &JsErrorItem) {}
+
 /// Install global JS error handlers and Rust panic hook.
 /// Call this once inside App or a top-level provider.
 pub fn install_error_handlers(errors: Signal<Vec<JsErrorItem>>) {
@@ -147,15 +176,14 @@ pub fn install_error_handlers(errors: Signal<Vec<JsErrorItem>>) {
                 if is_benign_js_error(&full_msg) {
                     return;
                 }
-                push_error(
-                    errors_clone,
-                    JsErrorItem {
-                        id: js_sys::Date::now() as u64,
-                        message: full_msg,
-                        stack,
-                        source: "window.onerror".into(),
-                    },
-                );
+                let item = JsErrorItem {
+                    id: js_sys::Date::now() as u64,
+                    message: full_msg,
+                    stack,
+                    source: "window.onerror".into(),
+                };
+                send_error_telemetry(&item);
+                push_error(errors_clone, item);
             }) as Box<dyn FnMut(_)>);
             window.set_onerror(Some(onerror.as_ref().unchecked_ref()));
             onerror.forget();
@@ -189,15 +217,14 @@ pub fn install_error_handlers(errors: Signal<Vec<JsErrorItem>>) {
                 if is_benign_js_error(&reason) {
                     return;
                 }
-                push_error(
-                    errors_clone,
-                    JsErrorItem {
-                        id: js_sys::Date::now() as u64,
-                        message: reason,
-                        stack: None,
-                        source: "unhandledrejection".into(),
-                    },
-                );
+                let item = JsErrorItem {
+                    id: js_sys::Date::now() as u64,
+                    message: reason,
+                    stack: None,
+                    source: "unhandledrejection".into(),
+                };
+                send_error_telemetry(&item);
+                push_error(errors_clone, item);
             }) as Box<dyn FnMut(_)>);
             window
                 .add_event_listener_with_callback(

@@ -205,6 +205,26 @@ const MIGRATIONS: &[(&str, &str)] = &[
         "045_events_waitlist_status.sql",
         include_str!("../../migrations/045_events_waitlist_status.sql"),
     ),
+    (
+        "046_opaque_referral_codes.sql",
+        include_str!("../../migrations/046_opaque_referral_codes.sql"),
+    ),
+    (
+        "047_age_verification.sql",
+        include_str!("../../migrations/047_age_verification.sql"),
+    ),
+    (
+        "048_client_error_logs.sql",
+        include_str!("../../migrations/048_client_error_logs.sql"),
+    ),
+    (
+        "049_strain_reviews.sql",
+        include_str!("../../migrations/049_strain_reviews.sql"),
+    ),
+    (
+        "050_lab_certificates.sql",
+        include_str!("../../migrations/050_lab_certificates.sql"),
+    ),
 ];
 
 /// Columns the catalog endpoints SELECT that were added by *later* migrations

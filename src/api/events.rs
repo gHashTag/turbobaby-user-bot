@@ -487,6 +487,7 @@ async fn book_event(
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
+    crate::metrics::event_booking_created("confirmed");
     Ok(Json(json!({
         "success": true,
         "booking_id": booking_id,
@@ -599,6 +600,7 @@ async fn cancel_my_booking(
             tracing::error!("cancel_my_booking: {e}");
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
+    crate::metrics::event_booking_cancelled();
     Ok(Json(json!({ "success": true })))
 }
 
@@ -687,6 +689,7 @@ async fn join_waitlist(
             tracing::error!("join_waitlist insert: {e}");
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
+    crate::metrics::event_booking_created("waitlisted");
     Ok(Json(json!({ "success": true, "booking_id": booking_id, "status": "waitlisted" })))
 }
 
@@ -865,6 +868,7 @@ async fn cancel_booking(
         "UPDATE event_bookings SET status = 'cancelled', updated_at = NOW() WHERE event_id = $1 AND id = $2",
         [event_id.into(), booking_id.into()],
     )).await.map_err(|e| { tracing::error!("cancel_booking: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?;
+    crate::metrics::event_booking_cancelled();
     Ok(Json(json!({ "success": true })))
 }
 

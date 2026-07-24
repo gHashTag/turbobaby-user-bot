@@ -81,6 +81,20 @@ pub async fn fetch_text_authed_full(url: &str, init_data: &str) -> Result<(u16, 
     Ok((status, body))
 }
 
+/// POST `body` as JSON and return only the HTTP status. Telemetry calls
+/// (e.g. `/api/client-errors`) don't need the body and may not be
+/// authenticated, so we avoid sending sensitive headers.
+pub async fn post_json_status_only(url: &str, body: &str) -> Result<u16, String> {
+    let resp = Request::post(url)
+        .header("content-type", "application/json")
+        .body(body.to_string())
+        .map_err(|e| format!("Build error: {e}"))?
+        .send()
+        .await
+        .map_err(|e| format!("Network error: {e}"))?;
+    Ok(resp.status())
+}
+
 /// POST `body` as JSON, return response body as text.
 pub async fn post_json(url: &str, body: &str) -> Result<String, String> {
     let resp = Request::post(url)

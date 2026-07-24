@@ -43,14 +43,24 @@ struct OrdersResponse {
     orders: Vec<ApiOrder>,
 }
 
+const ORDER_PIPELINE: &[&str] = &[
+    "pending",
+    "confirmed",
+    "preparing",
+    "ready",
+    "out_for_delivery",
+    "delivered",
+];
+
 fn status_style(status: &str) -> (&'static str, &'static str) {
     match status.to_lowercase().as_str() {
         "pending" => ("#ffe600", "⏳ Pending"),
         "confirmed" => ("#00e5ff", "✅ Confirmed"),
+        "preparing" => ("#ff9d00", "🔥 Preparing"),
         "ready" => ("#39ff14", "📦 Ready"),
+        "out_for_delivery" => ("#00e5ff", "🚗 Out for Delivery"),
         "completed" | "delivered" => ("#39ff14", "✅ Delivered"),
-        "processing" => ("#00e5ff", "🔄 In Progress"),
-        "cancelled" => ("#ff4757", "❌ Cancelled"),
+        "cancelled" | "rejected" => ("#ff4757", "❌ Cancelled"),
         _ => ("#8b8b9e", "📋 Unknown"),
     }
 }
@@ -58,29 +68,89 @@ fn status_style(status: &str) -> (&'static str, &'static str) {
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum StatusFilter {
     All,
-    Pending,
-    Confirmed,
-    Ready,
+    Active,
     Completed,
+    Cancelled,
 }
 
 impl StatusFilter {
     fn label(&self) -> &'static str {
         match self {
             Self::All => "All",
-            Self::Pending => "⏳ Pending",
-            Self::Confirmed => "✅ Confirmed",
-            Self::Ready => "📦 Ready",
+            Self::Active => "🔄 Active",
             Self::Completed => "✅ Completed",
+            Self::Cancelled => "❌ Cancelled",
         }
     }
     fn matches(&self, status: &str) -> bool {
         match self {
             Self::All => true,
-            Self::Pending => status == "pending",
-            Self::Confirmed => status == "confirmed",
-            Self::Ready => status == "ready",
+            Self::Active => !is_terminal_status(status),
             Self::Completed => status == "completed" || status == "delivered",
+            Self::Cancelled => status == "cancelled" || status == "rejected",
+        }
+    }
+}
+
+fn is_terminal_status(status: &str) -> bool {
+    matches!(status, "delivered" | "completed" | "rejected" | "cancelled")
+}
+
+fn pipeline_index(status: &str) -> usize {
+    ORDER_PIPELINE
+        .iter()
+        .position(|&s| s == status)
+        .unwrap_or(ORDER_PIPELINE.len())
+}
+
+fn status_progress(status: &str) -> (&str, &str) {
+    // (label for step, emoji)
+    match status {
+        "pending" => ("Received", "📥"),
+        "confirmed" => ("Confirmed", "✅"),
+        "preparing" => ("Preparing", "🔥"),
+        "ready" => ("Ready", "📦"),
+        "out_for_delivery" => ("On the way", "🚗"),
+        "delivered" | "completed" => ("Delivered", "🎉"),
+        _ => (status, ""),
+    }
+}
+
+#[component]
+fn PipelineSegment(i: usize, current: usize, last: bool) -> Element {
+    let active = i <= current;
+    let bg = if active { "#39ff14" } else { "#2a2a4a" };
+    let flex = if last { "0 0 8px" } else { "1" };
+    let shape = if last { "border-radius: 50%;" } else { "border-radius: 2px;" };
+    rsx! {
+        div { style: "{shape} height: 4px; background: {bg}; flex: {flex}; min-width: 8px;" }
+        if !last {
+            div { style: "width: 4px; height: 4px; background: {bg};" }
+        }
+    }
+}
+
+/// Compact horizontal progress tracker for the delivery pipeline.
+#[component]
+fn StatusProgress(status: String) -> Element {
+    let current = pipeline_index(&status);
+    let _terminal = is_terminal_status(&status);
+    let cancelled = status == "cancelled" || status == "rejected";
+    let (step_label, emoji) = status_progress(&status);
+    rsx! {
+        div { style: "margin-bottom: 8px;",
+            div { style: "font-size: 12px; color: #8b8b9e; margin-bottom: 4px;",
+                "{emoji} {step_label}"
+            }
+            div { style: "display: flex; align-items: center; gap: 4px;",
+                if cancelled {
+                    div { style: "flex:1;height:4px;background:#ff4757;border-radius:2px;" }
+                } else {
+                    for i in 0..ORDER_PIPELINE.len() {
+                        PipelineSegment { i, current, last: i == ORDER_PIPELINE.len() - 1 }
+                    }
+                }
+            }
         }
     }
 }
@@ -141,7 +211,7 @@ pub fn OrdersScreen() -> Element {
 
             // Status filters (pill chips)
             div { style: "display: flex; gap: 6px; padding: 0 16px 12px; overflow-x: auto;",
-                for filter in [StatusFilter::All, StatusFilter::Pending, StatusFilter::Confirmed, StatusFilter::Ready, StatusFilter::Completed] {
+                for filter in [StatusFilter::All, StatusFilter::Active, StatusFilter::Completed, StatusFilter::Cancelled] {
                     {
                         let is_active = active_filter() == filter;
                         let bg = if is_active { "#39ff14" } else { "transparent" };
@@ -191,10 +261,10 @@ pub fn OrdersScreen() -> Element {
                                         let date_str = o.created_at.split('T').next().unwrap_or(&o.created_at).to_string();
                                         let shop = o.shop_id.as_deref().unwrap_or("Woody Shop");
                                         let total_str = crate::trios::pricing::format_baht(o.total);
-                                        let is_cancelled = o.status == "cancelled";
+                                        let is_cancelled = o.status == "cancelled" || o.status == "rejected";
                                         let opacity = if is_cancelled { "0.7" } else { "1" };
                                         let border_color = if is_cancelled { "#2a2a4a" } else { status_color };
-                                        let is_active = o.status == "confirmed" || o.status == "processing";
+                                        let is_active = !is_terminal_status(&o.status);
                                         let shadow = if is_active { "4px 4px 0 #000, 0 0 12px rgba(0,229,255,0.1)" } else { "4px 4px 0 #000" };
 
                                         rsx! {
@@ -204,6 +274,7 @@ pub fn OrdersScreen() -> Element {
                                                 box-shadow: {shadow};
                                                 opacity: {opacity};
                                             ",
+                                                StatusProgress { status: o.status.clone() }
                                                 div { style: "display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;",
                                                     span { style: "font-size: 15px; color: #e8e8e8;", "Order #{short_id}" }
                                                     span { style: "

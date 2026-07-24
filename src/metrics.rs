@@ -96,6 +96,49 @@ pub fn auth_failure(kind: &str) {
     counter!("auth_failures_total", "kind" => kind.to_string()).increment(1);
 }
 
+/// Cycle #170: event-booking lifecycle metrics.
+pub fn event_booking_created(status: &str) {
+    counter!("event_bookings_created_total", "status" => status.to_string()).increment(1);
+}
+
+pub fn event_booking_cancelled() {
+    counter!("event_bookings_cancelled_total").increment(1);
+}
+
+pub fn event_shared(kind: &str) {
+    counter!("events_shared_total", "kind" => kind.to_string()).increment(1);
+}
+
+pub fn event_detail_opened(source: &str) {
+    counter!("event_details_opened_total", "source" => source.to_string()).increment(1);
+}
+
+pub fn event_booking_attempted(cta_variant: &str) {
+    counter!(
+        "event_booking_attempted_total",
+        "cta_variant" => cta_variant.to_string()
+    )
+    .increment(1);
+}
+
+pub fn event_booking_succeeded(cta_variant: &str) {
+    counter!(
+        "event_booking_succeeded_total",
+        "cta_variant" => cta_variant.to_string()
+    )
+    .increment(1);
+}
+
+pub fn event_booking_failed(reason: &str) {
+    counter!("event_booking_failed_total", "reason" => reason.to_string()).increment(1);
+}
+
+/// Cycle #173 (C3): frontend error telemetry received.
+/// `source` is one of `"wasm"`, `"android"`, `"ios"`, `"unknown"`.
+pub fn client_error_received(source: &str) {
+    counter!("client_errors_received_total", "source" => source.to_string()).increment(1);
+}
+
 // Cycle #108: `db_pool_acquire_failed(scope: &str)` was declared here
 // to report `pool.get()` failures from the deadpool_postgres path.
 // Cycle #96 dropped that pool when the SeaORM migration finished, so
@@ -134,6 +177,24 @@ mod tests {
     fn test_qr_scanned_does_not_panic() {
         qr_scanned(true);
         qr_scanned(false);
+    }
+
+    #[test]
+    fn test_event_metrics_do_not_panic() {
+        event_booking_created("confirmed");
+        event_booking_created("waitlisted");
+        event_booking_cancelled();
+        event_shared("event");
+        event_detail_opened("share");
+        event_booking_attempted("A");
+        event_booking_succeeded("A");
+        event_booking_failed("sold_out");
+    }
+
+    #[test]
+    fn test_client_error_received_does_not_panic() {
+        client_error_received("wasm");
+        client_error_received("unknown");
     }
 
     #[test]

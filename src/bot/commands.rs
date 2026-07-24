@@ -513,21 +513,34 @@ pub(crate) async fn handle_command(
         }
 
         Command::Invite => {
-            let code = ref_db::referral_code_for(user_id);
-            let invite_link = format!("https://t.me/{}?start=ref_{}", config.bot_username, code);
-            let text = format!(
-                "🎁 <b>{}</b>\n\n🔗 <code>{}</code>\n\n{}",
-                locale.referral_title, invite_link, locale.referral_share_hint,
-            );
-            // Share button via switch_inline_query so Telegram shows "Share" UX
-            let share_btn = InlineKeyboardButton::switch_inline_query(
-                format!("📤 {}", locale.referral_share_button),
-                format!("🪵 Woody Weed — {invite_link}"),
-            );
-            bot.send_message(msg.chat.id, text)
-                .parse_mode(teloxide::types::ParseMode::Html)
-                .reply_markup(InlineKeyboardMarkup::new(vec![vec![share_btn]]))
-                .await?;
+            // Cycle #next: referral codes are opaque, so fetch/create the
+            // persisted code instead of deriving it from telegram_id.
+            let code = ref_db::get_or_create_referral_code(&db.orm, user_id)
+                .await
+                .unwrap_or_else(|e| {
+                    tracing::error!("get_or_create_referral_code failed for invite: {}", e);
+                    // Graceful degrade: no code means no invite link this turn.
+                    String::new()
+                });
+            if code.is_empty() {
+                bot.send_message(msg.chat.id, "⚠️ Не удалось получить реферальный код. Попробуйте позже.")
+                    .await?;
+            } else {
+                let invite_link = format!("https://t.me/{}?start=ref_{}", config.bot_username, code);
+                let text = format!(
+                    "🎁 <b>{}</b>\n\n🔗 <code>{}</code>\n\n{}",
+                    locale.referral_title, invite_link, locale.referral_share_hint,
+                );
+                // Share button via switch_inline_query so Telegram shows "Share" UX
+                let share_btn = InlineKeyboardButton::switch_inline_query(
+                    format!("📤 {}", locale.referral_share_button),
+                    format!("🪵 Woody Weed — {invite_link}"),
+                );
+                bot.send_message(msg.chat.id, text)
+                    .parse_mode(teloxide::types::ParseMode::Html)
+                    .reply_markup(InlineKeyboardMarkup::new(vec![vec![share_btn]]))
+                    .await?;
+            }
         }
 
         Command::Refstats => {

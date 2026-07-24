@@ -9,8 +9,10 @@ use serde_json::{json, Value};
 
 use crate::api::auth::check_admin;
 use crate::api::cache::{invalidate_strains, make_etag_header};
+use crate::db::entities::lab_certificate;
 use crate::db::strains::Strain;
 use crate::AppState;
+use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QueryOrder};
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct CreateStrainRequest {
@@ -64,6 +66,7 @@ pub(crate) fn routes() -> Router<AppState> {
         .route("/strains/:id/availability", put(toggle_availability))
         .route("/strains/strain-of-day", get(get_strains_of_day))
         .route("/strains/:id/strain-of-day", put(set_strain_of_day))
+        .route("/strains/:id/lab-certs", get(list_lab_certs))
         // Cycle #133-C: bulk-toggle marketing flags. POST body lists
         // strain ids and which boolean flags to set (`Option<bool>`
         // each — `None` means leave untouched). Closes ТЗ #2 §3/§4
@@ -1030,4 +1033,37 @@ mod tests {
             StatusCode::BAD_REQUEST
         );
     }
+}
+
+async fn list_lab_certs(
+    Path(strain_id): Path<String>,
+    State(state): State<AppState>,
+) -> Result<Json<Value>, StatusCode> {
+    let certs = lab_certificate::Entity::find()
+        .filter(lab_certificate::Column::StrainId.eq(strain_id))
+        .order_by_desc(lab_certificate::Column::TestedAt)
+        .all(&state.db.orm)
+        .await
+        .map_err(|e| {
+            tracing::error!("list_lab_certs DB error: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    let out: Vec<Value> = certs
+        .into_iter()
+        .map(|c| {
+            json!({
+                "id": c.id,
+                "strain_id": c.strain_id,
+                "certificate_url": c.certificate_url,
+                "tested_at": c.tested_at.map(|d| d.to_string()),
+                "thc_percent": c.thc_percent,
+                "cbd_percent": c.cbd_percent,
+                "uploaded_by_telegram_id": c.uploaded_by_telegram_id,
+                "created_at": c.created_at.to_rfc3339(),
+            })
+        })
+        .collect();
+
+    Ok(Json(json!({ "lab_certificates": out })))
 }

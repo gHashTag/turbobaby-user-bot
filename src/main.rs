@@ -19,6 +19,12 @@ pub mod notify;
 mod s3;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod util;
+#[cfg(all(not(target_arch = "wasm32"), feature = "backend"))]
+mod delivery;
+#[cfg(all(not(target_arch = "wasm32"), feature = "backend"))]
+mod line;
+#[cfg(all(not(target_arch = "wasm32"), feature = "backend"))]
+mod promptpay;
 
 // Business logic modules (shared between backend and web)
 pub mod trios;

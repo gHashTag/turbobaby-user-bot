@@ -33,6 +33,8 @@ use teloxide::Bot;
 use woody_weed_bot::api::cache::ETagCache;
 use woody_weed_bot::config::Config;
 use woody_weed_bot::db::Database;
+use woody_weed_bot::delivery::DeliveryZones;
+use woody_weed_bot::promptpay::QrConfig;
 use woody_weed_bot::AppState;
 
 /// Build a test `AppState` + `Router` against `DATABASE_URL`. Returns
@@ -158,5 +160,8 @@ fn test_config(database_url: &str) -> Config {
         backup_assets: false,
         admin_password: Some("test_password".into()),
         hide_marketing_badges: false,
+        delivery_zones: DeliveryZones::default(),
+        promptpay: QrConfig::default(),
+        line_channel_access_token: None,
     }
 }

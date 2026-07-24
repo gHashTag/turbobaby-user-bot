@@ -31,17 +31,31 @@ pub(crate) struct TopReferrer {
 // Code generation
 // ──────────────────────────────────────────────────────────────────
 
-/// Salt used when generating referral codes — not a secret, just prevents
-/// trivial enumeration of sequential IDs.
-/// Cycle #169: referral code is the raw telegram_id so deep-links are
-/// human-readable and survive any bot-name changes.
-pub(crate) fn referral_code_for(telegram_id: i64) -> String {
-    telegram_id.to_string()
+/// Characters used for opaque referral codes. Visually ambiguous glyphs
+/// (0/O, 1/I/l) are excluded to reduce support tickets.
+const REFERRAL_CODE_ALPHABET: &[u8] = b"ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+const REFERRAL_CODE_LEN: usize = 8;
+
+/// Generate an opaque, random referral code. Not deterministic — the
+/// caller must check for collisions against the database before persisting.
+fn generate_referral_code() -> String {
+    use rand::Rng;
+    let mut rng = rand::thread_rng();
+    (0..REFERRAL_CODE_LEN)
+        .map(|_| {
+            let idx = rng.gen_range(0..REFERRAL_CODE_ALPHABET.len());
+            REFERRAL_CODE_ALPHABET[idx] as char
+        })
+        .collect()
 }
 
-/// Get existing referral code for `telegram_id`, or persist the canonical
-/// one (`telegram_id` as string). The code is unique because telegram_id
-/// itself is unique.
+/// Maximum collision retries when generating a referral code. The alphabet
+/// gives ~2.8e12 possible 8-char codes, so collisions are astronomically
+/// unlikely until the user base grows enormous; the loop is defense in depth.
+const MAX_CODE_RETRIES: usize = 10;
+
+/// Get existing referral code for `telegram_id`, or create and persist a
+/// new opaque code. Collisions are retried up to `MAX_CODE_RETRIES` times.
 pub(crate) async fn get_or_create_referral_code(
     orm: &sea_orm::DatabaseConnection,
     telegram_id: i64,
@@ -51,8 +65,6 @@ pub(crate) async fn get_or_create_referral_code(
     };
     use sea_orm::sea_query::OnConflict;
     use sea_orm::{ActiveValue::Set, ColumnTrait, EntityTrait, QueryFilter};
-
-    let code = referral_code_for(telegram_id);
 
     // Check existing code first.
     if let Some(m) = LoyaltyProfileEntity::find_by_id(telegram_id)
@@ -64,6 +76,27 @@ pub(crate) async fn get_or_create_referral_code(
         if let Some(existing) = m.referral_code {
             return Ok(existing);
         }
+    }
+
+    // Generate an unused opaque code. Retry if we happen to collide.
+    let mut code = generate_referral_code();
+    for attempt in 0..MAX_CODE_RETRIES {
+        let collision = LoyaltyProfileEntity::find()
+            .filter(LpCol::ReferralCode.eq(&code))
+            .one(orm)
+            .await
+            .context("check referral_code collision")?;
+        if collision.is_none() {
+            break;
+        }
+        if attempt == MAX_CODE_RETRIES - 1 {
+            anyhow::bail!(
+                "failed to generate unique referral code for telegram_id={} after {} attempts",
+                telegram_id,
+                MAX_CODE_RETRIES
+            );
+        }
+        code = generate_referral_code();
     }
 
     // Upsert: seed row + write code in one path.
@@ -460,17 +493,18 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_referral_code_is_telegram_id() {
-        assert_eq!(referral_code_for(123456789), "123456789");
-        assert_eq!(referral_code_for(42), "42");
-        assert_eq!(referral_code_for(0), "0");
+    fn test_generate_referral_code_length_and_alphabet() {
+        let code = generate_referral_code();
+        assert_eq!(code.len(), REFERRAL_CODE_LEN);
+        assert!(code.chars().all(|c| REFERRAL_CODE_ALPHABET.contains(&(c as u8))));
     }
 
     #[test]
-    fn test_referral_code_negative_id() {
-        // Negative IDs are invalid in practice, but the function must still
-        // produce a stable string so `find_referrer_by_code` can match.
-        assert_eq!(referral_code_for(-1), "-1");
+    fn test_generate_referral_code_not_telegram_id() {
+        // Cycle #next: codes are now opaque, not derived from telegram_id.
+        let code = generate_referral_code();
+        assert_ne!(code, "123456789");
+        assert!(!code.chars().all(|c| c.is_ascii_digit()));
     }
 
     #[test]

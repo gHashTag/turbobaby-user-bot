@@ -4608,22 +4608,57 @@ struct OrdersResp {
     orders: Vec<AdminOrder>,
 }
 
-#[component]
-fn OrderDetailModal(order: AdminOrder, on_close: EventHandler<()>) -> Element {
-    let status_label = match order.status.as_str() {
+/// Full delivery pipeline statuses. `completed` is kept as a legacy alias
+/// for `delivered`.
+const ORDER_PIPELINE: &[&str] = &[
+    "pending",
+    "confirmed",
+    "preparing",
+    "ready",
+    "out_for_delivery",
+    "delivered",
+];
+
+fn admin_status_label(status: &str) -> &str {
+    match status {
         "pending" => "⏳ Ожидает",
         "confirmed" => "✓ Подтверждён",
-        "completed" => "✅ Выполнен",
-        "rejected" => "✖ Отменён",
-        _ => &order.status,
-    };
-    let status_cls = match order.status.as_str() {
+        "preparing" => "🔥 Готовится",
+        "ready" => "📦 Готов",
+        "out_for_delivery" => "🚗 В доставке",
+        "delivered" | "completed" => "✅ Выполнен",
+        "cancelled" | "rejected" => "✖ Отменён",
+        _ => status,
+    }
+}
+
+fn admin_status_badge_class(status: &str) -> &'static str {
+    match status {
         "pending" => "admin-badge warn",
         "confirmed" => "admin-badge info",
-        "completed" => "admin-badge success",
-        "rejected" => "admin-badge danger",
+        "preparing" => "admin-badge info",
+        "ready" => "admin-badge info",
+        "out_for_delivery" => "admin-badge info",
+        "delivered" | "completed" => "admin-badge success",
+        "cancelled" | "rejected" => "admin-badge danger",
         _ => "admin-badge muted",
-    };
+    }
+}
+
+/// Next status in the delivery pipeline, if the order is not terminal.
+fn next_pipeline_status(status: &str) -> Option<&'static str> {
+    let pos = ORDER_PIPELINE.iter().position(|&s| s == status);
+    pos.and_then(|i| ORDER_PIPELINE.get(i + 1).copied())
+}
+
+fn is_terminal_status(status: &str) -> bool {
+    matches!(status, "delivered" | "completed" | "rejected" | "cancelled")
+}
+
+#[component]
+fn OrderDetailModal(order: AdminOrder, on_close: EventHandler<()>) -> Element {
+    let status_label = admin_status_label(&order.status);
+    let status_cls = admin_status_badge_class(&order.status);
     let suffix: String = order
         .id
         .chars()
@@ -4844,13 +4879,7 @@ fn OrdersTab() -> Element {
                 })
                 .collect::<Vec<_>>()
                 .join("; ");
-            let status_ru = match o.status.as_str() {
-                "pending" => "Ожидает",
-                "confirmed" => "Подтверждён",
-                "completed" => "Выполнен",
-                "rejected" => "Отменён",
-                _ => &o.status,
-            };
+            let status_ru = admin_status_label(&o.status);
             csv.push_str(&format!(
                 "\"{}\",\"{}\",\"{}\",\"{}\",\"{}\",\"{}\",\"{}\",{},{},{},{}\n",
                 o.id.replace('"', "\"\""),
@@ -4912,7 +4941,7 @@ fn OrdersTab() -> Element {
                 div { class: "admin-badge danger", "{error}" }
             }
             // Filter bar
-            div { class: "admin-filter-bar",
+            div { class: "admin-filter-bar", style: "flex-wrap: wrap;",
                 button {
                     class: if *filter.read() == "all" { "admin-btn primary admin-btn-sm" } else { "admin-btn secondary admin-btn-sm" },
                     onclick: move |_| filter.set("all".into()), "Все ({orders.read().len()})" }
@@ -4923,8 +4952,17 @@ fn OrdersTab() -> Element {
                     class: if *filter.read() == "confirmed" { "admin-btn primary admin-btn-sm" } else { "admin-btn secondary admin-btn-sm" },
                     onclick: move |_| filter.set("confirmed".into()), "✓ {count_by(\"confirmed\")}" }
                 button {
-                    class: if *filter.read() == "completed" { "admin-btn primary admin-btn-sm" } else { "admin-btn secondary admin-btn-sm" },
-                    onclick: move |_| filter.set("completed".into()), "✅ {count_by(\"completed\")}" }
+                    class: if *filter.read() == "preparing" { "admin-btn primary admin-btn-sm" } else { "admin-btn secondary admin-btn-sm" },
+                    onclick: move |_| filter.set("preparing".into()), "🔥 {count_by(\"preparing\")}" }
+                button {
+                    class: if *filter.read() == "ready" { "admin-btn primary admin-btn-sm" } else { "admin-btn secondary admin-btn-sm" },
+                    onclick: move |_| filter.set("ready".into()), "📦 {count_by(\"ready\")}" }
+                button {
+                    class: if *filter.read() == "out_for_delivery" { "admin-btn primary admin-btn-sm" } else { "admin-btn secondary admin-btn-sm" },
+                    onclick: move |_| filter.set("out_for_delivery".into()), "🚗 {count_by(\"out_for_delivery\")}" }
+                button {
+                    class: if *filter.read() == "delivered" { "admin-btn primary admin-btn-sm" } else { "admin-btn secondary admin-btn-sm" },
+                    onclick: move |_| filter.set("delivered".into()), "✅ {count_by(\"delivered\")}" }
                 button {
                     class: if *filter.read() == "rejected" { "admin-btn primary admin-btn-sm" } else { "admin-btn secondary admin-btn-sm" },
                     onclick: move |_| filter.set("rejected".into()), "✖ {count_by(\"rejected\")}" }
@@ -4958,27 +4996,13 @@ fn OrdersTab() -> Element {
                     for order in filtered.iter().cloned() {
                         {
                             let order_id = order.id.clone();
-                            let order_id2 = order.id.clone();
                             let order_id3 = order.id.clone();
+                            let order_id_href = order.id.clone();
                             let status = order.status.clone();
-                            let status2 = order.status.clone();
                             let status3 = order.status.clone();
                             let init_data2 = init_data;
-                            let init_data3 = init_data;
-                            let status_label_str = match order.status.as_str() {
-                                "pending" => "⏳ Ожидает".to_string(),
-                                "confirmed" => "✓ Подтверждён".to_string(),
-                                "completed" => "✅ Выполнен".to_string(),
-                                "rejected" => "✖ Отменён".to_string(),
-                                _ => order.status.clone(),
-                            };
-                            let status_badge_cls = match order.status.as_str() {
-                                "pending" => "admin-badge warn",
-                                "confirmed" => "admin-badge info",
-                                "completed" => "admin-badge success",
-                                "rejected" => "admin-badge danger",
-                                _ => "admin-badge muted",
-                            };
+                            let status_label_str = admin_status_label(&order.status).to_string();
+                            let status_badge_cls = admin_status_badge_class(&order.status);
                             let short_id: String = order.id.chars().rev().take(6).collect::<Vec<_>>().into_iter().rev().collect();
                             rsx! {
                                 div { class: "admin-card", style: "cursor:pointer;",
@@ -5015,13 +5039,15 @@ fn OrdersTab() -> Element {
                                         }
                                     }
                                     div { class: "admin-row-actions",
-                                        if status == "pending" {
+                                        if let Some(next) = next_pipeline_status(&status) {
                                             button {
                                                 class: "admin-btn secondary admin-btn-sm",
                                                 disabled: updating_id.read().as_deref() == Some(&order_id),
                                                 onclick: move |_| {
                                                     let oid = order_id.clone();
                                                     let id2 = init_data2.read().clone();
+                                                    let next_status = next.to_string();
+                                                    let next_label = admin_status_label(next).to_string();
                                                     updating_id.set(Some(oid.clone()));
                                                     let mut orders2 = orders;
                                                     let mut updating2 = updating_id;
@@ -5032,54 +5058,22 @@ fn OrdersTab() -> Element {
                                                             .header("X-Telegram-Init-Data", id2)
                                                             .header("X-Admin-Token", admin_token())
                                                             .header("X-Admin-Telegram-Id", telegram_id.to_string())
-                                                            .json(&json!({"status": "confirmed"}))
+                                                            .json(&json!({"status": next_status}))
                                                             .send().await;
                                                         updating2.set(None);
                                                         match res {
                                                             Ok(r) if r.status().is_success() => {
-                                                                if let Some(o) = orders2.write().iter_mut().find(|o| o.id == oid) { o.status = "confirmed".into(); }
-                                                                push_toast(toasts2, "✓ Заказ подтверждён".into(), ToastKind::Success);
+                                                                if let Some(o) = orders2.write().iter_mut().find(|o| o.id == oid) { o.status = next_status.clone(); }
+                                                                push_toast(toasts2, format!("→ {next_label}"), ToastKind::Success);
                                                             }
-                                                            _ => { push_toast(toasts2, "Ошибка подтверждения".into(), ToastKind::Error); }
+                                                            _ => { push_toast(toasts2, "Ошибка смены статуса".into(), ToastKind::Error); }
                                                         }
                                                     });
                                                 },
-                                                "✓ Подтвердить"
+                                                "→ {admin_status_label(next)}"
                                             }
                                         }
-                                        if status2 == "confirmed" {
-                                            button {
-                                                class: "admin-btn primary admin-btn-sm",
-                                                disabled: updating_id.read().as_deref() == Some(&order_id2),
-                                                onclick: move |_| {
-                                                    let oid = order_id2.clone();
-                                                    let id3 = init_data3.read().clone();
-                                                    updating_id.set(Some(oid.clone()));
-                                                    let mut orders3 = orders;
-                                                    let mut updating3 = updating_id;
-                                                    let toasts3 = toasts;
-                                                    spawn(async move {
-                                                        let url = format!("{}/api/orders/{}/status", api_base_url(), oid);
-                                                        let res = HTTP_CLIENT.clone().put(&url)
-                                                            .header("X-Telegram-Init-Data", id3)
-                                                            .header("X-Admin-Token", admin_token())
-                                                            .header("X-Admin-Telegram-Id", telegram_id.to_string())
-                                                            .json(&json!({"status": "completed"}))
-                                                            .send().await;
-                                                        updating3.set(None);
-                                                        match res {
-                                                            Ok(r) if r.status().is_success() => {
-                                                                if let Some(o) = orders3.write().iter_mut().find(|o| o.id == oid) { o.status = "completed".into(); }
-                                                                push_toast(toasts3, "✅ Заказ выполнен".into(), ToastKind::Success);
-                                                            }
-                                                            _ => { push_toast(toasts3, "Ошибка выполнения".into(), ToastKind::Error); }
-                                                        }
-                                                    });
-                                                },
-                                                "📦 Выполнить"
-                                            }
-                                        }
-                                        if status3 != "rejected" && status3 != "completed" {
+                                        if !is_terminal_status(&status3) {
                                             button {
                                                 class: "admin-btn danger admin-btn-sm",
                                                 onclick: move |_| {
@@ -5106,6 +5100,12 @@ fn OrdersTab() -> Element {
                                                 },
                                                 "✖ Отмена"
                                             }
+                                        }
+                                        a {
+                                            style: "padding:6px 12px;background:#1a3a1a;color:#39ff14;border:1px solid #2a5a2a;border-radius:4px;font-size:12px;text-decoration:none;cursor:pointer;",
+                                            href: "{api_base_url()}/api/orders/{order_id_href}/promptpay-qr",
+                                            target: "_blank",
+                                            "QR"
                                         }
                                     }
                                 }

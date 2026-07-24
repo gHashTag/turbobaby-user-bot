@@ -18,6 +18,8 @@ pub struct Model {
     pub first_purchase_at: Option<DateTimeWithTimeZone>,
     pub manager_telegram_id: Option<i64>,
     pub is_blocked: bool,
+    pub age_verified: bool,
+    pub date_of_birth: Option<chrono::NaiveDate>,
 }
 
 #[allow(dead_code)] // Standard SeaORM entity pattern

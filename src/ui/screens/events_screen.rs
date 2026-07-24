@@ -26,6 +26,25 @@ use serde_json::json;
 
 const BANGKOK_OFFSET_SECONDS: i32 = 7 * 3600;
 
+/// Metrics are backend-only; the WASM UI cannot reach `crate::metrics`.
+/// This wrapper no-ops in the WASM build and delegates to the real helpers
+/// when the backend crate is being compiled (e.g. unit tests that include
+/// UI modules are rare, but the cfg keeps both targets green).
+#[cfg(target_arch = "wasm32")]
+fn track_event(_name: &str, _detail: &str) {}
+
+#[cfg(all(not(target_arch = "wasm32"), feature = "backend"))]
+fn track_event(name: &str, detail: &str) {
+    match name {
+        "shared" => crate::metrics::event_shared(detail),
+        "booking_attempted" => crate::metrics::event_booking_attempted(detail),
+        "booking_succeeded" => crate::metrics::event_booking_succeeded(detail),
+        "booking_failed" => crate::metrics::event_booking_failed(detail),
+        "detail_opened" => crate::metrics::event_detail_opened(detail),
+        _ => {}
+    }
+}
+
 fn bangkok_offset() -> FixedOffset {
     FixedOffset::east_opt(BANGKOK_OFFSET_SECONDS)
         .unwrap_or_else(|| FixedOffset::east_opt(0).expect("UTC offset 0 is valid"))
@@ -179,6 +198,7 @@ fn EventCard(props: EventCardProps) -> Element {
                     "aria-label": "Share event",
                     onclick: move |e| {
                         e.stop_propagation();
+                        track_event("shared", "event");
                         crate::ui::share::share_product(crate::ui::share::ProductKind::Event, &share_id, &share_name);
                     },
                     "↗"
@@ -297,15 +317,19 @@ fn EventBookingModal(props: EventBookingModalProps) -> Element {
                             let url = format!("{}/api/events/{}/book", base, urlencoding::encode(&ev_clone.id));
                             let idempotency_key = format!("evt_{}_{}_1", ev_clone.id, tid);
                             let body = json!({ "telegram_id": tid, "seats": 1 }).to_string();
+                            track_event("booking_attempted", "A");
                             match post_json_authed_idempotent_full(&url, &init, &idempotency_key, &body).await {
                                 Ok((status, _)) if (200..300).contains(&status) => {
+                                    track_event("booking_succeeded", "A");
                                     state.set(BookingState::Done { seats: 1 });
                                 }
                                 Ok((status, body)) => {
                                     let snippet: String = body.chars().take(120).collect();
+                                    track_event("booking_failed", &format!("http_{status}"));
                                     state.set(BookingState::Error(format!("HTTP {status}: {snippet}")));
                                 }
                                 Err(e) => {
+                                    track_event("booking_failed", "network");
                                     state.set(BookingState::Error(e.to_string()));
                                 }
                             }
@@ -402,6 +426,7 @@ pub fn EventsScreen() -> Element {
         if let Some(target) = target {
             if target.kind == ProductKind::Event {
                 pending.set(None);
+                track_event("detail_opened", "share");
                 nav.push(Route::EventDetail { id: target.id });
             }
         }
@@ -549,6 +574,7 @@ pub fn EventDetailScreen(id: String) -> Element {
         let id = id.clone();
         spawn(async move {
             let url = format!("{}/api/events/{}", api_base_url(), urlencoding::encode(&id));
+            track_event("detail_opened", "route");
             match fetch_text_full(&url).await {
                 Ok((status, body)) if (200..300).contains(&status) => {
                     let parsed: serde_json::Value = serde_json::from_str(&body).unwrap_or_default();

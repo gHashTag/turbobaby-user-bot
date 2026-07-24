@@ -10,6 +10,7 @@ pub mod cache;
 pub(crate) mod debug;
 pub(crate) mod cart;
 pub(crate) mod catalog;
+pub(crate) mod client_errors;
 pub(crate) mod events;
 pub(crate) mod garden;
 pub(crate) mod happy_hour;
@@ -20,10 +21,12 @@ pub(crate) mod orders;
 pub(crate) mod quest;
 pub(crate) mod rate_limit;
 pub(crate) mod referrals;
+pub(crate) mod reviews;
 pub(crate) mod stars;
 pub(crate) mod strains;
 pub(crate) mod tech_tree;
 pub(crate) mod upload;
+pub(crate) mod users;
 
 use crate::AppState;
 use axum::extract::State;
@@ -98,9 +101,12 @@ fn api_routes() -> Router<AppState> {
         .merge(quest::routes())
         .merge(happy_hour::routes())
         .merge(garden::routes())
+        .merge(client_errors::routes())
         .merge(referrals::routes())
+        .merge(reviews::routes())
         .merge(stars::routes())
         .merge(tech_tree::routes())
+        .merge(users::routes())
         .merge(cart::routes());
 
     // Apply 2MB body limit to all non-upload routes.

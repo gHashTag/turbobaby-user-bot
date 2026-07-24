@@ -9,7 +9,11 @@ use serde_json::{json, Value};
 
 // Admin API routes
 use crate::api::auth::{check_admin, validate_telegram_id_param};
+use crate::db::entities::{lab_certificate, strain_review};
 use crate::AppState;
+use sea_orm::{
+    ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QueryOrder, QuerySelect, Set,
+};
 
 // Cycle #128: removed LOGIN_LOCK static. It was introduced to pair
 // with a per-attempt `tokio::time::sleep(3s)` that cycle #126 deleted,
@@ -68,6 +72,11 @@ pub(crate) fn routes() -> Router<AppState> {
             "/admin/marketing-display",
             get(get_marketing_display).put(set_marketing_display),
         )
+        // Variant C: community / retention admin surface.
+        .route("/admin/reviews", get(list_reviews_admin))
+        .route("/admin/reviews/:id/moderate", post(moderate_review))
+        .route("/admin/strains/:id/lab-cert", post(create_lab_cert))
+        .route("/admin/line-broadcast", post(line_broadcast))
 }
 
 async fn get_stats(
@@ -570,6 +579,167 @@ async fn debug_validate_init_data(
             .map(|u| json!({"id": u.id, "first_name": u.first_name, "username": u.username})),
         error: info.error,
     }))
+}
+
+#[derive(Deserialize)]
+struct ModerateReviewRequest {
+    approved: bool,
+}
+
+#[derive(Deserialize)]
+struct CreateLabCertRequest {
+    certificate_url: String,
+    #[serde(default)]
+    tested_at: Option<String>,
+    #[serde(default)]
+    thc_percent: Option<f64>,
+    #[serde(default)]
+    cbd_percent: Option<f64>,
+}
+
+#[derive(Deserialize)]
+struct LineBroadcastRequest {
+    text: String,
+}
+
+async fn list_reviews_admin(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    Query(q): Query<std::collections::HashMap<String, String>>,
+) -> Result<Json<Value>, StatusCode> {
+    check_admin(&headers, &state)?;
+
+    let mut query = strain_review::Entity::find();
+    if q.get("pending").map(|s| s == "1" || s == "true").unwrap_or(false) {
+        query = query.filter(strain_review::Column::Approved.eq(false));
+    }
+    let rows = query
+        .order_by_desc(strain_review::Column::CreatedAt)
+        .limit(100)
+        .all(&state.db.orm)
+        .await
+        .map_err(|e| {
+            tracing::error!("list_reviews_admin DB error: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    let out: Vec<Value> = rows
+        .into_iter()
+        .map(|r| {
+            json!({
+                "id": r.id,
+                "telegram_id": r.telegram_id,
+                "strain_id": r.strain_id,
+                "order_id": r.order_id,
+                "rating": r.rating,
+                "comment": r.comment,
+                "approved": r.approved,
+                "created_at": r.created_at.to_rfc3339(),
+            })
+        })
+        .collect();
+    Ok(Json(json!({ "reviews": out })))
+}
+
+async fn moderate_review(
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    State(state): State<AppState>,
+    Json(req): Json<ModerateReviewRequest>,
+) -> Result<Json<Value>, StatusCode> {
+    check_admin(&headers, &state)?;
+    let model = strain_review::Entity::find_by_id(&id)
+        .one(&state.db.orm)
+        .await
+        .map_err(|e| {
+            tracing::error!("moderate_review DB error: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    let mut active: strain_review::ActiveModel = model.into();
+    active.approved = Set(req.approved);
+    active.update(&state.db.orm).await.map_err(|e| {
+        tracing::error!("moderate_review update error: {}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+    Ok(Json(json!({ "success": true, "approved": req.approved })))
+}
+
+async fn create_lab_cert(
+    headers: HeaderMap,
+    Path(strain_id): Path<String>,
+    State(state): State<AppState>,
+    Json(req): Json<CreateLabCertRequest>,
+) -> Result<Json<Value>, StatusCode> {
+    let admin_id = check_admin(&headers, &state)?;
+    if req.certificate_url.is_empty() || req.certificate_url.len() > 2048 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    crate::api::validate_url(&Some(req.certificate_url.clone()))?;
+
+    let tested_at = req
+        .tested_at
+        .as_deref()
+        .filter(|s| !s.is_empty())
+        .and_then(|s| chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d").ok());
+
+    if let Some(v) = req.thc_percent {
+        if !v.is_finite() || !(0.0..=100.0).contains(&v) {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    }
+    if let Some(v) = req.cbd_percent {
+        if !v.is_finite() || !(0.0..=100.0).contains(&v) {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    }
+
+    let id = uuid::Uuid::new_v4().to_string();
+    let now = chrono::Local::now().fixed_offset();
+    let active = lab_certificate::ActiveModel {
+        id: Set(id.clone()),
+        strain_id: Set(strain_id.clone()),
+        certificate_url: Set(req.certificate_url),
+        tested_at: Set(tested_at),
+        thc_percent: Set(req.thc_percent),
+        cbd_percent: Set(req.cbd_percent),
+        uploaded_by_telegram_id: Set(Some(admin_id)),
+        created_at: Set(now.into()),
+    };
+    active.insert(&state.db.orm).await.map_err(|e| {
+        tracing::error!("create_lab_cert insert error: {}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    Ok(Json(json!({ "id": id, "strain_id": strain_id })))
+}
+
+async fn line_broadcast(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    Json(req): Json<LineBroadcastRequest>,
+) -> Result<Json<Value>, StatusCode> {
+    check_admin(&headers, &state)?;
+    let token = state
+        .config
+        .line_channel_access_token
+        .as_deref()
+        .ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
+
+    let (status, body) = crate::line::broadcast_message(token, &req.text)
+        .await
+        .map_err(|e| {
+            tracing::warn!("line_broadcast rejected: {}", e);
+            StatusCode::BAD_REQUEST
+        })?;
+
+    if status.is_success() {
+        Ok(Json(json!({ "success": true, "line_status": status.as_u16() })))
+    } else {
+        tracing::warn!("LINE broadcast returned {}: {}", status, body);
+        Err(StatusCode::BAD_GATEWAY)
+    }
 }
 
 #[cfg(test)]

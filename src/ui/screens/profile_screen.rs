@@ -32,6 +32,15 @@ struct StarsBalanceResp {
     balance: i64,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+#[allow(dead_code)] // API mirror: telegram_id/min_age_years are used for diagnostics only.
+struct UserProfileResp {
+    telegram_id: i64,
+    age_verified: bool,
+    date_of_birth: Option<String>,
+    min_age_years: i32,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum Tier {
     Starter,
@@ -116,6 +125,10 @@ impl Tier {
     }
 }
 
+fn today_iso() -> String {
+    chrono::Local::now().naive_local().date().format("%Y-%m-%d").to_string()
+}
+
 #[component]
 pub fn ProfileScreen() -> Element {
     let cart = use_context::<Signal<Cart>>();
@@ -123,10 +136,13 @@ pub fn ProfileScreen() -> Element {
 
     let telegram_id = use_telegram_id().unwrap_or(0);
     let init_data = use_telegram_init_data();
+    let init_data_for_loyalty = init_data.clone();
     let init_data_for_stars = init_data.clone();
+    let init_data_for_profile = init_data.clone();
+    let init_data_for_verify = init_data.clone();
 
     let loyalty_resource = use_resource(move || {
-        let init = init_data.clone();
+        let init = init_data_for_loyalty.clone();
         async move {
             if telegram_id == 0 {
                 return None;
@@ -151,6 +167,35 @@ pub fn ProfileScreen() -> Element {
         .clone()
         .flatten()
         .and_then(|r| r.profile.clone());
+
+    let mut age_verified = use_signal(|| false);
+    let mut dob_input = use_signal(|| String::new());
+    let mut verification_error = use_signal(|| String::new());
+    let mut verification_loading = use_signal(|| false);
+
+    let _profile_resource = use_resource(move || {
+        let init = init_data_for_profile.clone();
+        async move {
+            if telegram_id == 0 {
+                return;
+            }
+            let url = format!("{}/api/users/me/{}", api_base_url(), telegram_id);
+            let client = crate::ui::api::local_client::LocalClient::new();
+            if let Ok(r) = client
+                .get(&url)
+                .header("X-Telegram-Init-Data", init)
+                .send()
+                .await
+            {
+                if let Ok(resp) = r.json::<UserProfileResp>().await {
+                    age_verified.set(resp.age_verified);
+                    if let Some(d) = resp.date_of_birth {
+                        dob_input.set(d);
+                    }
+                }
+            }
+        }
+    });
 
     let stars_balance_res = use_resource(move || {
         let init = init_data_for_stars.clone();
@@ -242,6 +287,81 @@ pub fn ProfileScreen() -> Element {
             div { style: "padding: 20px 16px 16px; text-align: center;",
                 h1 { style: "font-size: 24px; font-weight: 800; color: #39ff14; text-shadow: 3px 3px 0 #000, 0 0 10px rgba(57,255,20,0.5); letter-spacing: 2px;", "{profile_title}" }
                 p { style: "font-size: 13px; color: #8b8b9e; margin-top: 4px;", "Your membership status" }
+            }
+
+            // Age verification banner
+            {
+                let verified = *age_verified.read();
+                if verified {
+                    rsx! {
+                        div { style: "margin: 0 16px 16px; padding: 12px; background: #1a3a1a; border: 2px solid #39ff14; border-radius: 6px; display: flex; align-items: center; gap: 8px;",
+                            span { style: "font-size: 16px;", "✅" }
+                            span { style: "font-size: 13px; color: #9efb9e;", "Age verified — you can place orders" }
+                        }
+                    }
+                } else {
+                    let dob = dob_input.read().clone();
+                    let err = verification_error.read().clone();
+                    let loading = *verification_loading.read();
+                    rsx! {
+                        div { style: "margin: 0 16px 16px; padding: 12px; background: #2a1a0f; border: 2px solid #ff9d00; border-radius: 6px;",
+                            div { style: "font-size: 13px; color: #ff9d00; margin-bottom: 8px;", "🔞 Age verification required (20+)" }
+                            div { style: "display: flex; gap: 8px; align-items: center;",
+                                input {
+                                    r#type: "date",
+                                    style: "flex: 1; padding: 8px; background: #0f0f1a; color: #e8e8e8; border: 1px solid #444; border-radius: 4px; font-size: 13px;",
+                                    value: "{dob}",
+                                    max: "{today_iso()}",
+                                    oninput: move |e| dob_input.set(e.value()),
+                                }
+                                button {
+                                    style: "padding: 8px 14px; background: #ff9d00; color: #000; border: none; border-radius: 4px; font-size: 13px; font-weight: 700; cursor: pointer; min-width: 44px; min-height: 44px;",
+                                    disabled: loading,
+                                    onclick: move |_| {
+                                        let dob = dob_input.read().clone();
+                                        if dob.is_empty() { return; }
+                                        verification_loading.set(true);
+                                        verification_error.set(String::new());
+                                        let init = init_data_for_verify.clone();
+                                        let tid = telegram_id;
+                                        spawn(async move {
+                                            let url = format!("{}/api/users/me/{}/verify-age", api_base_url(), tid);
+                                            let client = crate::ui::api::local_client::LocalClient::new();
+                                            let body = serde_json::json!({ "dob": dob });
+                                            match client.post(&url)
+                                                .header("X-Telegram-Init-Data", init)
+                                                .json(&body)
+                                                .send()
+                                                .await
+                                            {
+                                                Ok(r) if r.status().is_success() => {
+                                                    if let Ok(resp) = r.json::<serde_json::Value>().await {
+                                                        if let Some(true) = resp.get("age_verified").and_then(|v| v.as_bool()) {
+                                                            age_verified.set(true);
+                                                        } else {
+                                                            verification_error.set("You must be 20+ to order".to_string());
+                                                        }
+                                                    }
+                                                }
+                                                Ok(r) => {
+                                                    verification_error.set(format!("Server error: {}", r.status()));
+                                                }
+                                                Err(e) => {
+                                                    verification_error.set(format!("Network: {}", e));
+                                                }
+                                            }
+                                            verification_loading.set(false);
+                                        });
+                                    },
+                                    if loading { "..." } else { "Verify" }
+                                }
+                            }
+                            if !err.is_empty() {
+                                div { style: "font-size: 12px; color: #ff6b7a; margin-top: 8px;", "{err}" }
+                            }
+                        }
+                    }
+                }
             }
 
             // Tier strip — all 4 tiers
