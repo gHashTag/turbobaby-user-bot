@@ -105,6 +105,10 @@ pub fn event_booking_cancelled() {
     counter!("event_bookings_cancelled_total").increment(1);
 }
 
+pub fn event_waitlist_promoted() {
+    counter!("event_waitlist_promoted_total").increment(1);
+}
+
 pub fn event_shared(kind: &str) {
     counter!("events_shared_total", "kind" => kind.to_string()).increment(1);
 }
@@ -184,6 +188,7 @@ mod tests {
         event_booking_created("confirmed");
         event_booking_created("waitlisted");
         event_booking_cancelled();
+        event_waitlist_promoted();
         event_shared("event");
         event_detail_opened("share");
         event_booking_attempted("A");

@@ -385,6 +385,90 @@ async fn waitlist_opens_when_capacity_full() {
 
 #[tokio::test]
 #[ignore = "needs DATABASE_URL env var; run with --ignored"]
+async fn waitlist_auto_promotes_on_cancel() {
+    let Some((app, db)) = common::make_app_with_db().await else {
+        eprintln!("DATABASE_URL not set — skipping integration events test");
+        return;
+    };
+    let _ = db.orm.execute_unprepared("TRUNCATE events, event_bookings").await;
+
+    let (app, event_id) = create_public_event(app, "Promote Demo", "2030-07-25T18:00:00Z", 2).await;
+
+    let (app, _, book1) = book_event(app, &event_id, 2101).await;
+    let booking1_id = book1["booking_id"].as_str().expect("booking id").to_string();
+    let (app, _, _) = book_event(app, &event_id, 2102).await;
+
+    // Third user joins the waitlist.
+    let waiter_id: i64 = 2103;
+    let waiter_init = common::make_init_data(waiter_id, "dummy_test_token");
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!("/api/events/{}/waitlist", event_id))
+                .method("POST")
+                .header("X-Telegram-Init-Data", &waiter_init)
+                .header("content-type", "application/json")
+                .body(Body::from(serde_json::json!({ "telegram_id": waiter_id }).to_string()))
+                .unwrap(),
+        )
+        .await
+        .expect("waitlist");
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let wait_body: serde_json::Value = serde_json::from_slice(&bytes).expect("json body");
+    assert_eq!(wait_body["status"], "waitlisted");
+    let wait_booking_id = wait_body["booking_id"].as_str().expect("waitlist booking id").to_string();
+
+    // Cancel the first confirmed booking — the waitlist entry should be promoted.
+    let cancel_init = common::make_init_data(2101, "dummy_test_token");
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!(
+                    "/api/events/bookings/{}/cancel?telegram_id={}",
+                    booking1_id, 2101
+                ))
+                .method("PUT")
+                .header("X-Telegram-Init-Data", &cancel_init)
+                .header("content-type", "application/json")
+                .body(Body::from("{}"))
+                .unwrap(),
+        )
+        .await
+        .expect("cancel");
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let cancel_body: serde_json::Value = serde_json::from_slice(&bytes).expect("json body");
+    assert_eq!(
+        cancel_body["promoted_booking_id"].as_str(),
+        Some(wait_booking_id.as_str()),
+        "cancel should report the promoted waitlist booking"
+    );
+
+    // The waitlisted user is now confirmed.
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri(format!("/api/events/my-bookings?telegram_id={}", waiter_id))
+                .header("X-Telegram-Init-Data", waiter_init)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .expect("my bookings");
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let body: serde_json::Value = serde_json::from_slice(&bytes).expect("json body");
+    let bookings = body["bookings"].as_array().expect("bookings array");
+    assert_eq!(bookings.len(), 1);
+    assert_eq!(bookings[0]["id"], wait_booking_id);
+    assert_eq!(bookings[0]["status"], "confirmed");
+}
+
+#[tokio::test]
+#[ignore = "needs DATABASE_URL env var; run with --ignored"]
 async fn timezone_edge_case_lists_bangkok_midnight_range() {
     let Some((app, db)) = common::make_app_with_db().await else {
         eprintln!("DATABASE_URL not set — skipping integration events test");

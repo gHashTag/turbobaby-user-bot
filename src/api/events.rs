@@ -668,6 +668,321 @@ async fn my_bookings(
     Ok(Json(json!({ "bookings": bookings })))
 }
 
+/// Cancel a booking and, if a seat opens up, auto-promote the oldest waitlist entry.
+/// Returns the promoted booking id (if any) so the HTTP layer can report it.
+async fn cancel_booking_and_promote(
+    db: &sea_orm::DatabaseConnection,
+    event_id: &str,
+    booking_id: &str,
+) -> Result<Option<String>, StatusCode> {
+    use sea_orm::{ConnectionTrait, DbBackend, Statement, TransactionTrait};
+
+    let tx = db.begin().await.map_err(|e| {
+        tracing::error!("cancel_booking tx.begin: {e}");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    // Lock event and booking rows to prevent races.
+    let ev = tx
+        .query_one(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            "SELECT id, max_seats, price_stars FROM events WHERE id = $1 FOR UPDATE",
+            [event_id.into()],
+        ))
+        .await
+        .map_err(|e| {
+            tracing::error!("cancel_booking lock event: {e}");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+    if ev.is_none() {
+        let _ = tx.rollback().await;
+        return Err(StatusCode::NOT_FOUND);
+    }
+
+    let booking = tx
+        .query_one(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            "SELECT id, telegram_id, status, stars_paid, stars_tx_id FROM event_bookings WHERE id = $1 AND event_id = $2 FOR UPDATE",
+            [booking_id.into(), event_id.into()],
+        ))
+        .await
+        .map_err(|e| {
+            tracing::error!("cancel_booking lock booking: {e}");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+    let Some(booking) = booking else {
+        let _ = tx.rollback().await;
+        return Err(StatusCode::NOT_FOUND);
+    };
+    let status: String = booking.try_get("", "status").unwrap_or_default();
+    if status == "cancelled" {
+        let _ = tx.rollback().await;
+        return Ok(None);
+    }
+    let booking_telegram_id: i64 = booking.try_get("", "telegram_id").unwrap_or(0);
+    let stars_paid: i64 = booking
+        .try_get::<Option<i64>>("", "stars_paid")
+        .ok()
+        .flatten()
+        .unwrap_or(0);
+
+    // Refund Stars if this was a paid booking.
+    if stars_paid > 0 {
+        use crate::db::entities::{
+            loyalty_profile::{ActiveModel as LpAm, Column as LpCol, Entity as LpEntity},
+            stars_transaction::{ActiveModel as TxAm, Entity as TxEntity},
+            user_stars::{ActiveModel as UsAm, Column as UsCol, Entity as UsEntity},
+        };
+        use sea_orm::sea_query::OnConflict;
+        use sea_orm::{ActiveValue::Set, ColumnTrait, EntityTrait, QueryFilter};
+
+        let lp_am = LpAm {
+            telegram_id: Set(booking_telegram_id),
+            bonus_balance: Set(Some(0.0)),
+            total_spent: Set(Some(0.0)),
+            ..Default::default()
+        };
+        LpEntity::insert(lp_am)
+            .on_conflict(OnConflict::column(LpCol::TelegramId).do_nothing().to_owned())
+            .do_nothing()
+            .exec(&tx)
+            .await
+            .map_err(|e| {
+                tracing::error!("cancel_booking loyalty_profile upsert: {e}");
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?;
+
+        let us_am = UsAm {
+            telegram_id: Set(booking_telegram_id),
+            balance: Set(0),
+            ..Default::default()
+        };
+        UsEntity::insert(us_am)
+            .on_conflict(
+                OnConflict::column(UsCol::TelegramId)
+                    .update_column(UsCol::UpdatedAt)
+                    .to_owned(),
+            )
+            .exec(&tx)
+            .await
+            .map_err(|e| {
+                tracing::error!("cancel_booking user_stars upsert: {e}");
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?;
+
+        UsEntity::update_many()
+            .col_expr(
+                UsCol::Balance,
+                sea_orm::sea_query::Expr::cust_with_values("balance + $1", [stars_paid]),
+            )
+            .filter(UsCol::TelegramId.eq(booking_telegram_id))
+            .exec(&tx)
+            .await
+            .map_err(|e| {
+                tracing::error!("cancel_booking stars refund: {e}");
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?;
+
+        let balance_after = UsEntity::find_by_id(booking_telegram_id)
+            .one(&tx)
+            .await
+            .map_err(|e| {
+                tracing::error!("cancel_booking stars refund balance read: {e}");
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?
+            .map(|r| r.balance)
+            .unwrap_or(0);
+
+        let refund_tx_id = uuid::Uuid::new_v4().to_string();
+        TxEntity::insert(TxAm {
+            id: Set(refund_tx_id),
+            telegram_id: Set(booking_telegram_id),
+            amount: Set(stars_paid),
+            balance_after: Set(balance_after),
+            source: Set("events".to_string()),
+            reason: Set("event_refund".to_string()),
+            external_tx_id: Set(None),
+            related_order_id: Set(Some(booking_id.to_string())),
+            ..Default::default()
+        })
+        .exec(&tx)
+        .await
+        .map_err(|e| {
+            tracing::error!("cancel_booking stars refund ledger insert: {e}");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+    }
+
+    // Cancel the booking.
+    tx.execute(Statement::from_sql_and_values(
+        DbBackend::Postgres,
+        "UPDATE event_bookings SET status = 'cancelled', updated_at = NOW() WHERE id = $1",
+        [booking_id.into()],
+    ))
+    .await
+    .map_err(|e| {
+        tracing::error!("cancel_booking update: {e}");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    crate::metrics::event_booking_cancelled();
+
+    // Auto-promote the oldest waitlist entry if capacity allows.
+    let max_seats: Option<i32> = ev
+        .as_ref()
+        .and_then(|r| r.try_get::<Option<i32>>("", "max_seats").ok().flatten());
+    let mut promoted_id: Option<String> = None;
+    if let Some(cap) = max_seats {
+        let taken_row = tx
+            .query_one(Statement::from_sql_and_values(
+                DbBackend::Postgres,
+                "SELECT COALESCE(SUM(seats), 0)::int AS taken FROM event_bookings WHERE event_id = $1 AND status = 'confirmed'",
+                [event_id.into()],
+            ))
+            .await
+            .map_err(|e| {
+                tracing::error!("cancel_booking capacity check: {e}");
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?;
+        let taken: i32 = taken_row
+            .and_then(|r| r.try_get("", "taken").ok())
+            .unwrap_or(0);
+        if taken < cap {
+            if let Some(wait) = tx
+                .query_one(Statement::from_sql_and_values(
+                    DbBackend::Postgres,
+                    "SELECT id, telegram_id FROM event_bookings WHERE event_id = $1 AND status = 'waitlisted' ORDER BY created_at ASC LIMIT 1 FOR UPDATE",
+                    [event_id.into()],
+                ))
+                .await
+                .map_err(|e| {
+                    tracing::error!("cancel_booking waitlist select: {e}");
+                    StatusCode::INTERNAL_SERVER_ERROR
+                })?
+            {
+                let wait_id: String = wait.try_get("", "id").unwrap_or_default();
+                let wait_tid: i64 = wait.try_get("", "telegram_id").unwrap_or(0);
+                let price_stars: Option<i64> = ev
+                    .as_ref()
+                    .and_then(|r| r.try_get::<Option<i64>>("", "price_stars").ok().flatten());
+                let promo_price = price_stars.unwrap_or(0);
+                let mut promo_stars_tx_id: Option<String> = None;
+                let can_promote = if promo_price > 0 {
+                    use crate::db::entities::{
+                        loyalty_profile::{ActiveModel as LpAm2, Column as LpCol2, Entity as LpEntity2},
+                        stars_transaction::{ActiveModel as TxAm2, Entity as TxEntity2},
+                        user_stars::{ActiveModel as UsAm2, Column as UsCol2, Entity as UsEntity2},
+                    };
+                    use sea_orm::sea_query::OnConflict;
+                    use sea_orm::{ActiveValue::Set, ColumnTrait, EntityTrait, QueryFilter};
+
+                    let lp_am = LpAm2 {
+                        telegram_id: Set(wait_tid),
+                        bonus_balance: Set(Some(0.0)),
+                        total_spent: Set(Some(0.0)),
+                        ..Default::default()
+                    };
+                    let _ = LpEntity2::insert(lp_am)
+                        .on_conflict(OnConflict::column(LpCol2::TelegramId).do_nothing().to_owned())
+                        .do_nothing()
+                        .exec(&tx)
+                        .await
+                        .map_err(|e| {
+                            tracing::error!("cancel_booking promote loyalty_profile upsert: {e}");
+                        });
+
+                    let us_am = UsAm2 {
+                        telegram_id: Set(wait_tid),
+                        balance: Set(0),
+                        ..Default::default()
+                    };
+                    let _ = UsEntity2::insert(us_am)
+                        .on_conflict(
+                            OnConflict::column(UsCol2::TelegramId)
+                                .update_column(UsCol2::UpdatedAt)
+                                .to_owned(),
+                        )
+                        .exec(&tx)
+                        .await
+                        .map_err(|e| {
+                            tracing::error!("cancel_booking promote user_stars upsert: {e}");
+                        });
+
+                    let debited = UsEntity2::update_many()
+                        .col_expr(
+                            UsCol2::Balance,
+                            sea_orm::sea_query::Expr::cust_with_values("balance - $1", [promo_price]),
+                        )
+                        .filter(UsCol2::TelegramId.eq(wait_tid))
+                        .filter(UsCol2::Balance.gte(promo_price))
+                        .exec(&tx)
+                        .await
+                        .map_err(|e| {
+                            tracing::error!("cancel_booking promote stars debit: {e}");
+                            StatusCode::INTERNAL_SERVER_ERROR
+                        })?;
+                    if debited.rows_affected > 0 {
+                        let balance_after = UsEntity2::find_by_id(wait_tid)
+                            .one(&tx)
+                            .await
+                            .map_err(|e| {
+                                tracing::error!("cancel_booking promote balance read: {e}");
+                                StatusCode::INTERNAL_SERVER_ERROR
+                            })?
+                            .map(|r| r.balance)
+                            .unwrap_or(0);
+                        let promo_tx_id = uuid::Uuid::new_v4().to_string();
+                        TxEntity2::insert(TxAm2 {
+                            id: Set(promo_tx_id.clone()),
+                            telegram_id: Set(wait_tid),
+                            amount: Set(-promo_price),
+                            balance_after: Set(balance_after),
+                            source: Set("events".to_string()),
+                            reason: Set("event_booking".to_string()),
+                            external_tx_id: Set(None),
+                            related_order_id: Set(Some(wait_id.clone())),
+                            ..Default::default()
+                        })
+                        .exec(&tx)
+                        .await
+                        .map_err(|e| {
+                            tracing::error!("cancel_booking promote ledger insert: {e}");
+                            StatusCode::INTERNAL_SERVER_ERROR
+                        })?;
+                        promo_stars_tx_id = Some(promo_tx_id);
+                        true
+                    } else {
+                        false
+                    }
+                } else {
+                    true
+                };
+                if can_promote {
+                    tx.execute(Statement::from_sql_and_values(
+                        DbBackend::Postgres,
+                        "UPDATE event_bookings SET status = 'confirmed', updated_at = NOW(), stars_paid = $1, stars_tx_id = $2 WHERE id = $3",
+                        [promo_price.into(), promo_stars_tx_id.into(), wait_id.clone().into()],
+                    ))
+                    .await
+                    .map_err(|e| {
+                        tracing::error!("cancel_booking promote update: {e}");
+                        StatusCode::INTERNAL_SERVER_ERROR
+                    })?;
+                    crate::metrics::event_booking_created("confirmed");
+                    crate::metrics::event_waitlist_promoted();
+                    promoted_id = Some(wait_id);
+                }
+            }
+        }
+    }
+
+    tx.commit().await.map_err(|e| {
+        tracing::error!("cancel_booking commit: {e}");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+    Ok(promoted_id)
+}
+
 async fn cancel_my_booking(
     headers: HeaderMap,
     State(state): State<AppState>,
@@ -688,7 +1003,7 @@ async fn cancel_my_booking(
         .orm
         .query_one(Statement::from_sql_and_values(
             DbBackend::Postgres,
-            "SELECT telegram_id FROM event_bookings WHERE id = $1",
+            "SELECT event_id, telegram_id FROM event_bookings WHERE id = $1",
             [booking_id.clone().into()],
         ))
         .await
@@ -696,26 +1011,28 @@ async fn cancel_my_booking(
             tracing::error!("cancel_my_booking lookup: {e}");
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
-    let owner: i64 = row.and_then(|r| r.try_get("", "telegram_id").ok()).unwrap_or(0);
+    let (event_id, owner): (String, i64) = row
+        .map(|r| {
+            (
+                r.try_get("", "event_id").unwrap_or_default(),
+                r.try_get("", "telegram_id").unwrap_or(0),
+            )
+        })
+        .unwrap_or_default();
     if owner != tid {
         return Err(StatusCode::FORBIDDEN);
     }
+    if event_id.is_empty() {
+        return Err(StatusCode::NOT_FOUND);
+    }
 
-    state
-        .db
-        .orm
-        .execute(Statement::from_sql_and_values(
-            DbBackend::Postgres,
-            "UPDATE event_bookings SET status = 'cancelled', updated_at = NOW() WHERE id = $1 AND telegram_id = $2",
-            [booking_id.into(), tid.into()],
-        ))
-        .await
-        .map_err(|e| {
-            tracing::error!("cancel_my_booking: {e}");
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
-    crate::metrics::event_booking_cancelled();
-    Ok(Json(json!({ "success": true })))
+    let promoted_id = cancel_booking_and_promote(&state.db.orm, &event_id, &booking_id)
+        .await?;
+    let mut resp = json!({ "success": true });
+    if let Some(id) = promoted_id {
+        resp["promoted_booking_id"] = id.into();
+    }
+    Ok(Json(resp))
 }
 
 async fn join_waitlist(
@@ -979,14 +1296,12 @@ async fn cancel_booking(
     event_id_ok(&event_id)?;
     booking_id_ok(&booking_id)?;
     check_admin(&headers, &state)?;
-    use sea_orm::{ConnectionTrait, DbBackend, Statement};
-    state.db.orm.execute(Statement::from_sql_and_values(
-        DbBackend::Postgres,
-        "UPDATE event_bookings SET status = 'cancelled', updated_at = NOW() WHERE event_id = $1 AND id = $2",
-        [event_id.into(), booking_id.into()],
-    )).await.map_err(|e| { tracing::error!("cancel_booking: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?;
-    crate::metrics::event_booking_cancelled();
-    Ok(Json(json!({ "success": true })))
+    let promoted_id = cancel_booking_and_promote(&state.db.orm, &event_id, &booking_id).await?;
+    let mut resp = json!({ "success": true });
+    if let Some(id) = promoted_id {
+        resp["promoted_booking_id"] = id.into();
+    }
+    Ok(Json(resp))
 }
 
 // ── Tests ────────────────────────────────────────────────────
