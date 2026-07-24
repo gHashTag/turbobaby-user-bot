@@ -7,7 +7,7 @@ use crate::ui::assets;
 use crate::ui::components::bottom_nav::BottomNav;
 use crate::ui::components::video_modal::VideoModal;
 use crate::ui::routes::Route;
-use crate::ui::share::SharedProduct;
+use crate::ui::share::{share_product, ProductKind, SharedProduct};
 use crate::ui::state::{Cart, CartItem, CartItemType};
 use dioxus::prelude::*;
 use serde::Deserialize;
@@ -130,8 +130,26 @@ fn render_home_pack_card(p: HomePack) -> Element {
                 if let Some(bl) = badge_label.clone() {
                     span { style: "position:absolute;top:32px;left:6px;z-index:2;font-size:10px;font-weight:700;background:{badge_color};color:#fff;padding:2px 6px;box-shadow:2px 2px 0 #000;", "{bl}" }
                 }
+                // Share icon: opens Telegram's native share picker with a deep
+                // link directly to this set so forwards don't fall back to the
+                // home page.
+                {
+                    let share_id = p.id.clone();
+                    let share_name = name.clone();
+                    rsx! {
+                        button {
+                            style: "position:absolute;top:2px;right:2px;z-index:3;width:44px;height:44px;border-radius:50%;background:rgba(0,0,0,0.55);border:1px solid #fff;color:#fff;font-size:18px;display:flex;align-items:center;justify-content:center;cursor:pointer;",
+                            "aria-label": "Share",
+                            onclick: move |e: Event<MouseData>| {
+                                e.stop_propagation();
+                                share_product(ProductKind::Set, &share_id, &share_name);
+                            },
+                            "🔗"
+                        }
+                    }
+                }
                 if has_discount {
-                    span { style: "position:absolute;top:6px;right:6px;z-index:2;font-size:11px;font-weight:700;background:#b388ff;color:#000;padding:3px 6px;box-shadow:2px 2px 0 #000;", "{discount as i32}% OFF" }
+                    span { style: "position:absolute;top:52px;right:6px;z-index:2;font-size:11px;font-weight:700;background:#b388ff;color:#000;padding:3px 6px;box-shadow:2px 2px 0 #000;", "{discount as i32}% OFF" }
                 }
                 // Bottom text overlay with a dark gradient so the white text is readable over any image.
                 div { style: "position:absolute;left:0;right:0;bottom:0;z-index:2;padding:10px 12px;background:linear-gradient(to top,rgba(0,0,0,0.85) 0%,rgba(0,0,0,0.5) 60%,transparent 100%);display:flex;flex-direction:column;justify-content:flex-end;min-height:0;",

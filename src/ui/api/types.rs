@@ -323,3 +323,78 @@ pub enum LoyaltyTier {
     Silver,
     Gold,
 }
+
+/// Calendar event — matches backend /api/events JSON schema
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Event {
+    pub id: String,
+    pub title: String,
+    #[serde(default)]
+    pub title_en: Option<String>,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub description_en: Option<String>,
+    pub starts_at: String,
+    #[serde(default)]
+    pub ends_at: Option<String>,
+    #[serde(default)]
+    pub location_text: Option<String>,
+    #[serde(default)]
+    pub image_url: Option<String>,
+    #[serde(default)]
+    pub max_seats: Option<i32>,
+    #[serde(default)]
+    pub price_baht: Option<f64>,
+    #[serde(default)]
+    pub is_public: bool,
+    #[serde(default)]
+    pub seats_taken: i64,
+    #[serde(default)]
+    pub seats_available: Option<i32>,
+    #[serde(default)]
+    pub created_at: Option<String>,
+}
+
+impl Event {
+    /// Localized display title.
+    pub fn display_title(&self) -> String {
+        crate::ui::lang::localized(&self.title, self.title_en.as_deref())
+    }
+
+    /// Localized description, if any.
+    pub fn display_description(&self) -> Option<String> {
+        self.description
+            .as_deref()
+            .map(|d| crate::ui::lang::localized(d, self.description_en.as_deref()))
+    }
+
+    /// True when the event has a finite capacity and all seats are taken.
+    pub fn is_sold_out(&self) -> bool {
+        matches!(
+            (self.max_seats, self.seats_available),
+            (Some(cap), Some(available)) if available <= 0 && cap > 0
+        )
+    }
+}
+
+/// User's event booking — matches backend /api/events/:id/book response.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct EventBooking {
+    pub id: String,
+    pub event_id: String,
+    pub telegram_id: i64,
+    pub seats: i32,
+    pub status: String,
+    #[serde(default)]
+    pub order_id: Option<String>,
+    pub created_at: String,
+}
+
+/// Body for creating an event booking.
+#[derive(Debug, Serialize)]
+pub struct BookEventRequest {
+    pub telegram_id: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub seats: Option<i32>,
+}

@@ -2191,6 +2191,13 @@ mod schema_drift_tests {
         // Computed/JSON expressions that look like identifiers to the
         // tokenizer but aren't column names.
         "now",
+        // `seats` is a real column on `event_bookings`, but the drift
+        // detector's simple parser recurses through `COALESCE((SELECT
+        // SUM(b.seats) FROM event_bookings ...), 0) AS seats_taken` in
+        // `events` SELECTs and misattributes `seats` to the primary
+        // `events` table. Allow it here; the column is declared in
+        // migration 043.
+        "seats",
     ];
 
     fn collect_files_with_ext(root: &Path, ext: &str, out: &mut Vec<PathBuf>) {

@@ -13,7 +13,7 @@ pub fn BottomNav(#[props(default)] cart_count: u32) -> Element {
     let is_garden = matches!(route, Route::Garden {});
     let is_cart = matches!(route, Route::Cart {});
     let is_profile = matches!(route, Route::Profile {});
-    let is_quest = matches!(route, Route::Quest { .. });
+    let is_events = matches!(route, Route::Events {});
     let is_game = matches!(route, Route::Game {});
 
     rsx! {
@@ -60,11 +60,11 @@ pub fn BottomNav(#[props(default)] cart_count: u32) -> Element {
                     span { class: "nav-label", "Garden" }
                 }
             }
-            Link { to: Route::Quest { id: "daily".to_string() },
-                div { class: if is_quest { "nav-item active" } else { "nav-item" },
-                    onmouseenter: move |_| { prefetch::prefetch_route(&Route::Quest { id: "daily".to_string() }); },
-                    span { class: "nav-icon", "🗺️" }
-                    span { class: "nav-label", "Quest" }
+            Link { to: Route::Events {},
+                div { class: if is_events { "nav-item active" } else { "nav-item" },
+                    onmouseenter: move |_| { prefetch::prefetch_route(&Route::Events {}); },
+                    span { class: "nav-icon", "📅" }
+                    span { class: "nav-label", "Events" }
                 }
             }
             Link { to: Route::Cart {},

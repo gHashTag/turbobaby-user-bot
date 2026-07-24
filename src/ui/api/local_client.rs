@@ -67,6 +67,18 @@ impl LocalRequest {
         self
     }
 
+    pub fn headers<I, K, V>(mut self, iter: I) -> Self
+    where
+        I: IntoIterator<Item = (K, V)>,
+        K: Into<String>,
+        V: Into<String>,
+    {
+        for (k, v) in iter {
+            self.headers.push((k.into(), v.into()));
+        }
+        self
+    }
+
     /// Append URL query parameters reqwest-style: `.query(&[("k","v")])`.
     /// Handles `?` vs `&` correctly whether the base URL already has a query
     /// string or not. URL-encodes values to keep call sites simple.

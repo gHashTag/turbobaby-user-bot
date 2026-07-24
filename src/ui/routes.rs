@@ -5,10 +5,10 @@
 
 use crate::ui::components::lazy_screen::LazyScreen;
 use crate::ui::screens::{
-    ARHuntScreen, AccessoriesScreen, AdminScreen, CartScreen, CheckoutScreen, GameScreen,
-    GardenScreen, HomeScreen, LocationQuestScreen, MenuScreen, OrdersScreen, ProfileScreen,
-    QuestScreen, ReferralsScreen, SetsScreen, SommelierScreen, SuccessScreen, TeaScreen,
-    TechTreeScreen, TreasureHuntScreen,
+    ARHuntScreen, AccessoriesScreen, AdminScreen, CartScreen, CheckoutScreen, EventsScreen,
+    GameScreen, GardenScreen, HomeScreen, LocationQuestScreen, MenuScreen, OrdersScreen,
+    ProfileScreen, QuestScreen, ReferralsScreen, SetsScreen, SommelierScreen, SuccessScreen,
+    TeaScreen, TechTreeScreen, TreasureHuntScreen,
 };
 use dioxus::prelude::*;
 
@@ -35,6 +35,8 @@ pub enum Route {
     Accessories {},
     #[route("/tea")]
     Tea {},
+    #[route("/events")]
+    Events {},
     #[route("/cart")]
     Cart {},
     #[route("/checkout")]
@@ -120,6 +122,15 @@ fn Tea() -> Element {
     rsx! {
         LazyScreen {
             TeaScreen {}
+        }
+    }
+}
+
+#[component]
+fn Events() -> Element {
+    rsx! {
+        LazyScreen {
+            EventsScreen {}
         }
     }
 }

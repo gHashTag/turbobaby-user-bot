@@ -17,6 +17,7 @@ pub const T_NAV_GARDEN: Key = "nav.garden";
 pub const T_NAV_ACCESSORIES: Key = "nav.accessories";
 pub const T_NAV_TEA: Key = "nav.tea";
 pub const T_NAV_QUEST: Key = "nav.quest";
+pub const T_NAV_EVENTS: Key = "nav.events";
 pub const T_NAV_CART: Key = "nav.cart";
 pub const T_NAV_PROFILE: Key = "nav.profile";
 
@@ -79,6 +80,28 @@ pub const T_POINT_2: Key = "point_2";
 pub const T_POINT_3: Key = "point_3";
 pub const T_POINT_4: Key = "point_4";
 pub const T_POINT_5: Key = "point_5";
+
+/// Events calendar translations
+pub const T_EVENTS_TITLE: Key = "events.title";
+pub const T_EVENTS_SUBTITLE: Key = "events.subtitle";
+pub const T_EVENTS_LOADING: Key = "events.loading";
+pub const T_EVENTS_NO_EVENTS: Key = "events.no_events";
+pub const T_EVENTS_DATE: Key = "events.date";
+pub const T_EVENTS_LOCATION: Key = "events.location";
+pub const T_EVENTS_CAPACITY: Key = "events.capacity";
+pub const T_EVENTS_PRICE: Key = "events.price";
+pub const T_EVENTS_BOOK: Key = "events.book";
+pub const T_EVENTS_BOOKED: Key = "events.booked";
+pub const T_EVENTS_BOOK_FREE: Key = "events.book_free";
+pub const T_EVENTS_SOLD_OUT: Key = "events.sold_out";
+pub const T_EVENTS_ERROR: Key = "events.error";
+pub const T_EVENTS_WEEKDAY_MON: Key = "events.weekday.mon";
+pub const T_EVENTS_WEEKDAY_TUE: Key = "events.weekday.tue";
+pub const T_EVENTS_WEEKDAY_WED: Key = "events.weekday.wed";
+pub const T_EVENTS_WEEKDAY_THU: Key = "events.weekday.thu";
+pub const T_EVENTS_WEEKDAY_FRI: Key = "events.weekday.fri";
+pub const T_EVENTS_WEEKDAY_SAT: Key = "events.weekday.sat";
+pub const T_EVENTS_WEEKDAY_SUN: Key = "events.weekday.sun";
 
 /// Screen title translations
 pub const T_HOME_TITLE: Key = "home.title";
@@ -163,6 +186,7 @@ fn get_ru_translation(key: Key) -> Value {
         T_NAV_ACCESSORIES => "Аксессуары",
         T_NAV_TEA => "Напитки",
         T_NAV_QUEST => "Квест",
+        T_NAV_EVENTS => "События",
         T_NAV_CART => "Корзина",
         T_NAV_PROFILE => "Профиль",
         // Garden
@@ -218,6 +242,27 @@ fn get_ru_translation(key: Key) -> Value {
         T_POINT_3 => "Точка 3: Джунгли хилл",
         T_POINT_4 => "Точка 4: Пиратская бухта",
         T_POINT_5 => "Точка 5: Триада",
+        // Events calendar
+        T_EVENTS_TITLE => "📅 События",
+        T_EVENTS_SUBTITLE => "Календарь мероприятий Woody",
+        T_EVENTS_LOADING => "Загружаем события...",
+        T_EVENTS_NO_EVENTS => "На этот день ничего не запланировано",
+        T_EVENTS_DATE => "Мероприятие уже началось",
+        T_EVENTS_LOCATION => "Локация",
+        T_EVENTS_CAPACITY => "Мест",
+        T_EVENTS_PRICE => "Цена",
+        T_EVENTS_BOOK => "Забронировать",
+        T_EVENTS_BOOKED => "Бронь подтверждена",
+        T_EVENTS_BOOK_FREE => "Бесплатно",
+        T_EVENTS_SOLD_OUT => "Мест нет",
+        T_EVENTS_ERROR => "Не удалось забронировать",
+        T_EVENTS_WEEKDAY_MON => "пн",
+        T_EVENTS_WEEKDAY_TUE => "вт",
+        T_EVENTS_WEEKDAY_WED => "ср",
+        T_EVENTS_WEEKDAY_THU => "чт",
+        T_EVENTS_WEEKDAY_FRI => "пт",
+        T_EVENTS_WEEKDAY_SAT => "сб",
+        T_EVENTS_WEEKDAY_SUN => "вс",
         // Screen titles
         T_HOME_TITLE => "Главная",
         T_HOME_SUBTITLE => "Премиум каннабис на острове Панган",
@@ -280,6 +325,7 @@ fn get_en_translation(key: Key) -> Value {
         T_NAV_ACCESSORIES => "Accessories",
         T_NAV_TEA => "Drinks",
         T_NAV_QUEST => "Quest",
+        T_NAV_EVENTS => "Events",
         T_NAV_CART => "Cart",
         T_NAV_PROFILE => "Profile",
         // Garden
@@ -335,6 +381,27 @@ fn get_en_translation(key: Key) -> Value {
         T_POINT_3 => "Point 3: Jungle Hill",
         T_POINT_4 => "Point 4: Pirate Bay",
         T_POINT_5 => "Point 5: Triad",
+        // Events calendar
+        T_EVENTS_TITLE => "📅 Events",
+        T_EVENTS_SUBTITLE => "Woody events calendar",
+        T_EVENTS_LOADING => "Loading events...",
+        T_EVENTS_NO_EVENTS => "Nothing planned for this day",
+        T_EVENTS_DATE => "Event already started",
+        T_EVENTS_LOCATION => "Location",
+        T_EVENTS_CAPACITY => "Capacity",
+        T_EVENTS_PRICE => "Price",
+        T_EVENTS_BOOK => "Book now",
+        T_EVENTS_BOOKED => "Booking confirmed",
+        T_EVENTS_BOOK_FREE => "Free",
+        T_EVENTS_SOLD_OUT => "Sold out",
+        T_EVENTS_ERROR => "Booking failed",
+        T_EVENTS_WEEKDAY_MON => "Mon",
+        T_EVENTS_WEEKDAY_TUE => "Tue",
+        T_EVENTS_WEEKDAY_WED => "Wed",
+        T_EVENTS_WEEKDAY_THU => "Thu",
+        T_EVENTS_WEEKDAY_FRI => "Fri",
+        T_EVENTS_WEEKDAY_SAT => "Sat",
+        T_EVENTS_WEEKDAY_SUN => "Sun",
         // Screen titles
         T_HOME_TITLE => "Home",
         T_HOME_SUBTITLE => "Premium Cannabis on Koh Phangan",
@@ -414,6 +481,7 @@ pub fn get_translations(lang: Lang) -> Translations {
         T_NAV_ACCESSORIES,
         T_NAV_TEA,
         T_NAV_QUEST,
+        T_NAV_EVENTS,
         T_NAV_CART,
         T_NAV_PROFILE,
         // Garden
@@ -464,6 +532,27 @@ pub fn get_translations(lang: Lang) -> Translations {
         T_ERROR_INVALID_QR,
         T_ERROR_ALREADY_CHECKED,
         T_ERROR_CHECKIN_FAILED,
+        // Events calendar
+        T_EVENTS_TITLE,
+        T_EVENTS_SUBTITLE,
+        T_EVENTS_LOADING,
+        T_EVENTS_NO_EVENTS,
+        T_EVENTS_DATE,
+        T_EVENTS_LOCATION,
+        T_EVENTS_CAPACITY,
+        T_EVENTS_PRICE,
+        T_EVENTS_BOOK,
+        T_EVENTS_BOOKED,
+        T_EVENTS_BOOK_FREE,
+        T_EVENTS_SOLD_OUT,
+        T_EVENTS_ERROR,
+        T_EVENTS_WEEKDAY_MON,
+        T_EVENTS_WEEKDAY_TUE,
+        T_EVENTS_WEEKDAY_WED,
+        T_EVENTS_WEEKDAY_THU,
+        T_EVENTS_WEEKDAY_FRI,
+        T_EVENTS_WEEKDAY_SAT,
+        T_EVENTS_WEEKDAY_SUN,
         // Screen titles
         T_HOME_TITLE,
         T_HOME_SUBTITLE,

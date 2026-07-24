@@ -10,6 +10,7 @@ pub mod cache;
 pub(crate) mod debug;
 pub(crate) mod cart;
 pub(crate) mod catalog;
+pub(crate) mod events;
 pub(crate) mod garden;
 pub(crate) mod happy_hour;
 pub(crate) mod loyalty;
@@ -93,6 +94,7 @@ fn api_routes() -> Router<AppState> {
         .merge(loyalty::routes())
         .merge(admin::routes())
         .merge(catalog::routes())
+        .merge(events::routes())
         .merge(quest::routes())
         .merge(happy_hour::routes())
         .merge(garden::routes())

@@ -236,6 +236,51 @@ impl ApiClient {
         let resp: StrainsResponse = self.get("/api/strains/strain-of-day").await?;
         Ok(resp.strains)
     }
+
+    // Events calendar endpoints
+    pub async fn get_events(&self) -> Result<Vec<Event>> {
+        #[derive(Deserialize)]
+        struct EventsResponse {
+            events: Vec<Event>,
+        }
+        let resp: EventsResponse = self.get("/api/events").await?;
+        Ok(resp.events)
+    }
+
+    pub async fn get_event(&self, id: &str) -> Result<Event> {
+        #[derive(Deserialize)]
+        struct EventResponse {
+            event: Event,
+        }
+        let resp: EventResponse = self
+            .get(&format!("/api/events/{}", urlencoding::encode(id)))
+            .await?;
+        Ok(resp.event)
+    }
+
+    pub async fn book_event(
+        &self,
+        id: &str,
+        telegram_id: i64,
+        seats: i32,
+    ) -> Result<serde_json::Value> {
+        let idempotency_key = format!("evt_book_{}_{}_{}", id, telegram_id, seats);
+        let url = self.build_url(&format!("/api/events/{}/book", urlencoding::encode(id)));
+        let body_str = serde_json::to_string(&BookEventRequest {
+            telegram_id,
+            seats: if seats == 1 { None } else { Some(seats) },
+        })
+        .map_err(|e| ApiError::Parse(e.to_string()))?;
+        let req = self
+            .with_auth(
+                Request::post(&url)
+                    .header("content-type", "application/json")
+                    .header("x-idempotency-key", &idempotency_key),
+            )
+            .body(body_str)
+            .map_err(|e| ApiError::Network(e.to_string()))?;
+        Self::run(req).await
+    }
 }
 
 #[derive(Debug, Serialize)]

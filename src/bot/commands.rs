@@ -9,7 +9,9 @@ use teloxide::{
 
 // Cycle #76: button helpers consolidated to bot/mod.rs.
 // Cycle #129: AI_RATE_LIMIT replaced by `ai_rate_limit_allow` helper.
-use crate::bot::{ai_rate_limit_allow, callback_btn, web_app_btn};
+use crate::bot::{
+    ai_rate_limit_allow, callback_btn, miniapp_deep_link, product_start_param, url_btn, web_app_btn,
+};
 use crate::{
     ai::{get_random_fact_prompt, get_random_joke_prompt},
     config::Config,
@@ -233,20 +235,26 @@ pub(crate) async fn handle_command(
                 let s = &strains[0];
                 let discount = s.strain_of_day_discount;
                 let discounted = calculate_discounted_price(s.price_per_gram, discount);
+                // Include the forwardable t.me deep link directly in the message
+                // text as well as the button, so the product context survives
+                // even if the recipient's client strips inline keyboards.
+                let sotd_start_param = product_start_param("p_strain", &s.id);
+                let sotd_deep_link = miniapp_deep_link(&config.bot_username, &sotd_start_param);
                 let text = format!(
-                    "🔥 <b>{}</b> (1/{})\n━━━━━━━━━━━━━━━━\n\n🌿 <b>{}</b>\n{}{}\n💰 <s>{} ฿/г</s> → <b>{} ฿/г</b>\n🔥 Скидка: -{}%",
+                    "🔥 <b>{}</b> (1/{})\n━━━━━━━━━━━━━━━━\n\n🌿 <b>{}</b>\n{}{}\n💰 <s>{} ฿/г</s> → <b>{} ฿/г</b>\n🔥 Скидка: -{}%\n\n👉 {}",
                     locale.strain_of_day, strains.len(), html_escape(&s.name),
                     s.thc_percent.map(|t| format!("⚡ THC: {}%\n", t)).unwrap_or_default(),
                     s.category.as_ref().map(|c| format!("📁 {}\n", html_escape(c))).unwrap_or_default(),
-                    s.price_per_gram, discounted, discount
+                    s.price_per_gram, discounted, discount,
+                    html_escape(&sotd_deep_link)
                 );
                 let mut btns: Vec<Vec<InlineKeyboardButton>> = vec![];
                 if strains.len() > 1 {
                     btns.push(vec![callback_btn(&locale.next_strain, "sotd_next_0")]);
                 }
-                btns.push(vec![web_app_btn(
+                btns.push(vec![url_btn(
                     &format!("🛒 {}", locale.open_menu),
-                    &build_app_url(base, &lang, None),
+                    &sotd_deep_link,
                 )]);
                 bot.send_message(msg.chat.id, text)
                     .parse_mode(teloxide::types::ParseMode::Html)

@@ -29,6 +29,8 @@ use crate::ui::components::{
 use crate::ui::telegram::{
     use_telegram_id, use_telegram_init_data, HapticNotification, TelegramApp,
 };
+use crate::ui::api::types::{Event as AdminEvent, EventBooking};
+use crate::ui::screens::events_screen::parse_event_start;
 
 fn admin_token() -> String {
     #[cfg(target_arch = "wasm32")]
@@ -299,6 +301,7 @@ enum Tab {
     Garden,
     Loyalty,
     Managers,
+    Events,
 }
 
 // ── File upload helper ─────────────────────────────────────────
@@ -744,6 +747,7 @@ fn AdminPanel(active_tab: Signal<Tab>, mut password_token: Signal<String>) -> El
                 {tab_btn(Tab::Garden, "🌱 Сад")}
                 {tab_btn(Tab::Loyalty, "💎 Лояльность")}
                 {tab_btn(Tab::Managers, "👥 Менеджеры")}
+                {tab_btn(Tab::Events, "📅 События")}
             }
             match current {
                 Tab::Strains => rsx!(TabMount { tab: current, expected: Tab::Strains, StrainsTab {} }),
@@ -760,6 +764,7 @@ fn AdminPanel(active_tab: Signal<Tab>, mut password_token: Signal<String>) -> El
                 Tab::Garden => rsx!(TabMount { tab: current, expected: Tab::Garden, GardenTab {} }),
                 Tab::Loyalty => rsx!(TabMount { tab: current, expected: Tab::Loyalty, LoyaltyTab {} }),
                 Tab::Managers => rsx!(TabMount { tab: current, expected: Tab::Managers, ManagersTab {} }),
+                Tab::Events => rsx!(TabMount { tab: current, expected: Tab::Events, EventsTab {} }),
             }
         }
     }
@@ -6538,6 +6543,9 @@ fn en_section_style() -> &'static str {
 fn cancel_btn_style() -> &'static str {
     "padding:10px;background:#2a2a4a;color:#e8e8e8;border:none;border-radius:4px;font-weight:600;font-size:13px;cursor:pointer;margin-top:4px;"
 }
+fn danger_btn_style() -> &'static str {
+    "padding:10px;background:#ff4757;color:#fff;border:none;border-radius:4px;font-weight:600;font-size:13px;cursor:pointer;margin-top:4px;"
+}
 fn edit_card_style() -> &'static str {
     "background:#1a1a2e;border:1px solid #6699ff;border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:8px;"
 }
@@ -6547,3 +6555,442 @@ fn edit_header_style() -> &'static str {
 fn textarea_style() -> &'static str {
     "padding:10px 12px;background:#0f0f1a;color:#e8e8e8;border:1px solid #2a2a4a;border-radius:4px;font-size:14px;min-height:80px;resize:vertical;font-family:inherit;"
 }
+
+// ── Events admin tab ─────────────────────────────────────────────
+
+#[component]
+fn EventsTab() -> Element {
+    let telegram_id = use_telegram_id().unwrap_or(0);
+    let init_data = use_signal(use_telegram_init_data);
+    let mut cache: Signal<Vec<AdminEvent>> = use_signal(Vec::new);
+    let mut loading = use_signal(|| true);
+    let mut reload = use_signal(|| 0u32);
+    let toasts: Signal<Vec<ToastItem>> = use_signal(Vec::new);
+    let mut search_query = use_signal(String::new);
+
+    let mut title = use_signal(String::new);
+    let mut title_en = use_signal(String::new);
+    let mut description = use_signal(String::new);
+    let mut description_en = use_signal(String::new);
+    let mut starts_at = use_signal(String::new);
+    let mut ends_at = use_signal(String::new);
+    let mut location_text = use_signal(String::new);
+    let mut image_url = use_signal(String::new);
+    let mut max_seats = use_signal(String::new);
+    let mut price_baht = use_signal(String::new);
+    let mut is_public = use_signal(|| true);
+    let mut editing_id: Signal<Option<String>> = use_signal(|| None);
+    let mut delete_target_id: Signal<Option<String>> = use_signal(|| None);
+    let mut submitting = use_signal(|| false);
+
+    let mut booking_target: Signal<Option<AdminEvent>> = use_signal(|| None);
+    let mut bookings: Signal<Vec<EventBooking>> = use_signal(Vec::new);
+    let mut bookings_loading = use_signal(|| false);
+
+    fn admin_event_headers(init: String, telegram_id: i64) -> Vec<(&'static str, String)> {
+        vec![
+            ("X-Telegram-Init-Data", init),
+            ("X-Admin-Token", admin_token()),
+            ("X-Admin-Telegram-Id", telegram_id.to_string()),
+        ]
+    }
+
+    let clear_form = use_callback(move |()| {
+        title.set(String::new());
+        title_en.set(String::new());
+        description.set(String::new());
+        description_en.set(String::new());
+        starts_at.set(String::new());
+        ends_at.set(String::new());
+        location_text.set(String::new());
+        image_url.set(String::new());
+        max_seats.set(String::new());
+        price_baht.set(String::new());
+        is_public.set(true);
+        editing_id.set(None);
+    });
+
+    let _ = use_resource(move || {
+        let _ = reload.read();
+        let init = init_data.read().clone();
+        async move {
+            let url = format!("{}/api/admin/events", api_base_url());
+            if let Ok(resp) = HTTP_CLIENT
+                .clone()
+                .get(&url)
+                .headers(admin_event_headers(init, telegram_id))
+                .send()
+                .await
+            {
+                if let Ok(data) = resp.json::<serde_json::Value>().await {
+                    let events = data
+                        .get("events")
+                        .and_then(|v| v.as_array())
+                        .map(|arr| {
+                            arr.iter()
+                                .filter_map(|v| serde_json::from_value(v.clone()).ok())
+                                .collect::<Vec<AdminEvent>>()
+                        })
+                        .unwrap_or_default();
+                    cache.set(events);
+                }
+            }
+            loading.set(false);
+            Some(())
+        }
+    });
+
+    let load_bookings = use_callback(move |event_id: String| {
+        bookings_loading.set(true);
+        let init = init_data.read().clone();
+        spawn(async move {
+            let url = format!("{}/api/admin/events/{}/bookings", api_base_url(), urlencoding::encode(&event_id));
+            let mut list = Vec::new();
+            if let Ok(resp) = HTTP_CLIENT
+                .clone()
+                .get(&url)
+                .headers(admin_event_headers(init, telegram_id))
+                .send()
+                .await
+            {
+                if let Ok(data) = resp.json::<serde_json::Value>().await {
+                    list = data
+                        .get("bookings")
+                        .and_then(|v| v.as_array())
+                        .map(|arr| {
+                            arr.iter()
+                                .filter_map(|v| serde_json::from_value(v.clone()).ok())
+                                .collect::<Vec<EventBooking>>()
+                        })
+                        .unwrap_or_default();
+                }
+            }
+            bookings.set(list);
+            bookings_loading.set(false);
+        });
+    });
+
+    let create_or_update = move |_| {
+        if title.read().trim().is_empty() || starts_at.read().trim().is_empty() {
+            push_toast(toasts, "Название и дата обязательны".into(), ToastKind::Error);
+            return;
+        }
+        submitting.set(true);
+        let init = init_data.read().clone();
+        let id_opt = editing_id.read().clone();
+        let body = json!({
+            "title": title.read().clone(),
+            "title_en": if title_en.read().trim().is_empty() { serde_json::Value::Null } else { title_en.read().clone().into() },
+            "description": if description.read().trim().is_empty() { serde_json::Value::Null } else { description.read().clone().into() },
+            "description_en": if description_en.read().trim().is_empty() { serde_json::Value::Null } else { description_en.read().clone().into() },
+            "starts_at": format!("{}:00Z", starts_at.read().clone()),
+            "ends_at": if ends_at.read().trim().is_empty() { serde_json::Value::Null } else { format!("{}:00Z", ends_at.read().clone()).into() },
+            "location_text": if location_text.read().trim().is_empty() { serde_json::Value::Null } else { location_text.read().clone().into() },
+            "image_url": if image_url.read().trim().is_empty() { serde_json::Value::Null } else { image_url.read().clone().into() },
+            "max_seats": if max_seats.read().trim().is_empty() { serde_json::Value::Null } else { max_seats.read().parse::<i32>().unwrap_or(0).into() },
+            "price_baht": if price_baht.read().trim().is_empty() { serde_json::Value::Null } else { price_baht.read().parse::<f64>().unwrap_or(0.0).into() },
+            "is_public": *is_public.read(),
+        });
+        spawn(async move {
+            let base = api_base_url();
+            let res = if let Some(id) = id_opt {
+                let url = format!("{}/api/admin/events/{}", base, urlencoding::encode(&id));
+                HTTP_CLIENT.clone().put(&url).headers(admin_event_headers(init, telegram_id)).json(&body).send().await
+            } else {
+                let url = format!("{}/api/admin/events", base);
+                HTTP_CLIENT.clone().post(&url).headers(admin_event_headers(init, telegram_id)).json(&body).send().await
+            };
+            submitting.set(false);
+            match res {
+                Ok(r) if r.status().is_success() => {
+                    clear_form.call(());
+                    let next = *reload.read() + 1;
+                    reload.set(next);
+                    push_toast(toasts, "Сохранено".into(), ToastKind::Success);
+                }
+                _ => {
+                    push_toast(toasts, "Ошибка сохранения".into(), ToastKind::Error);
+                }
+            }
+        });
+    };
+
+    let confirm_delete = move |_| {
+        let id = delete_target_id.read().clone();
+        if let Some(id) = id {
+            let init = init_data.read().clone();
+            delete_target_id.set(None);
+            spawn(async move {
+                let url = format!("{}/api/admin/events/{}", api_base_url(), urlencoding::encode(&id));
+                match HTTP_CLIENT
+                    .clone()
+                    .delete(&url)
+                    .headers(admin_event_headers(init, telegram_id))
+                    .send()
+                    .await
+                {
+                    Ok(r) if r.status().is_success() => {
+                        let next = *reload.read() + 1;
+                        reload.set(next);
+                        push_toast(toasts, "Удалено".into(), ToastKind::Success);
+                    }
+                    _ => {
+                        push_toast(toasts, "Ошибка удаления".into(), ToastKind::Error);
+                    }
+                }
+            });
+        }
+    };
+
+    let filtered: Vec<AdminEvent> = {
+        let q = search_query.read().to_lowercase();
+        cache
+            .read()
+            .iter()
+            .filter(|e| e.title.to_lowercase().contains(&q) || e.location_text.as_deref().unwrap_or("").to_lowercase().contains(&q))
+            .cloned()
+            .collect()
+    };
+
+    let mut open_bookings = move |ev: AdminEvent| {
+        load_bookings.call(ev.id.clone());
+        booking_target.set(Some(ev));
+    };
+
+    let mut start_edit = move |ev: AdminEvent| {
+        title.set(ev.title.clone());
+        title_en.set(ev.title_en.clone().unwrap_or_default());
+        description.set(ev.description.clone().unwrap_or_default());
+        description_en.set(ev.description_en.clone().unwrap_or_default());
+        if let Some(s) = ev.starts_at.split('Z').next() {
+            let s = s.trim_end_matches(":");
+            if s.len() >= 16 { starts_at.set(s[..16].to_string()); } else { starts_at.set(String::new()); }
+        } else {
+            starts_at.set(String::new());
+        }
+        if let Some(end) = ev.ends_at.as_deref() {
+            if let Some(s) = end.split('Z').next() {
+                let s = s.trim_end_matches(":");
+                if s.len() >= 16 { ends_at.set(s[..16].to_string()); } else { ends_at.set(String::new()); }
+            } else {
+                ends_at.set(String::new());
+            }
+        } else {
+            ends_at.set(String::new());
+        }
+        location_text.set(ev.location_text.clone().unwrap_or_default());
+        image_url.set(ev.image_url.clone().unwrap_or_default());
+        max_seats.set(ev.max_seats.map(|v| v.to_string()).unwrap_or_default());
+        price_baht.set(ev.price_baht.map(|v| format!("{}", v)).unwrap_or_default());
+        is_public.set(ev.is_public);
+        editing_id.set(Some(ev.id.clone()));
+    };
+
+    let booking_rows = {
+        let list = bookings.read().clone();
+        if list.is_empty() {
+            rsx! { p { style: "color:#888;font-size:13px;", "Бронирований пока нет" } }
+        } else {
+            rsx! {
+                div { style: "display:flex;flex-direction:column;gap:8px;",
+                    {
+                        list.into_iter().map(move |b| {
+                            let cancel_id = b.id.clone();
+                            let event_id = b.event_id.clone();
+                            rsx! {
+                                div { key: "{b.id}", style: "display:flex;justify-content:space-between;align-items:center;background:#1a1a2e;padding:8px;border:1px solid #2a2a4a;",
+                                    div { style: "font-size:13px;",
+                                        span { style: "color:#e8e8e8;", "{b.telegram_id}" }
+                                        span { style: "color:#888;margin-left:8px;", "{b.status}" }
+                                        span { style: "color:#39ff14;margin-left:8px;", "+{b.seats}" }
+                                    }
+                                    if b.status == "confirmed" {
+                                        button {
+                                            style: "padding:6px 10px;background:#ff4757;color:#fff;border:none;border-radius:4px;font-size:12px;cursor:pointer;",
+                                            onclick: move |_| {
+                                                let init = init_data.read().clone();
+                                                let cid = cancel_id.clone();
+                                                let eid = event_id.clone();
+                                                spawn(async move {
+                                                    let url = format!("{}/api/admin/events/{}/bookings/{}/cancel", api_base_url(), urlencoding::encode(&eid), urlencoding::encode(&cid));
+                                                    match HTTP_CLIENT.clone().post(&url).headers(admin_event_headers(init, telegram_id)).send().await {
+                                                        Ok(r) if r.status().is_success() => {
+                                                            load_bookings.call(eid.clone());
+                                                            push_toast(toasts, "Бронь отменена".into(), ToastKind::Success);
+                                                        }
+                                                        _ => {
+                                                            push_toast(toasts, "Ошибка отмены".into(), ToastKind::Error);
+                                                        }
+                                                    }
+                                                });
+                                            },
+                                            "Отменить"
+                                        }
+                                    }
+                                }
+                            }
+                        })
+                    }
+                }
+            }
+        }
+    };
+
+    let event_rows = {
+        let list = filtered.clone();
+        if list.is_empty() {
+            rsx! { p { style: "color:#888;font-size:13px;", "Нет событий" } }
+        } else {
+            rsx! {
+                div { style: "display:flex;flex-direction:column;gap:8px;",
+                    {
+                        list.into_iter().map(move |ev| {
+                            let ev_clone = ev.clone();
+                            let ev_clone2 = ev.clone();
+                            let date_label = parse_event_start(&ev.starts_at).map(|s| s.format("%d %b %Y %H:%M").to_string()).unwrap_or_else(|| ev.starts_at.clone());
+                            let cap_label = ev.max_seats.map(|cap| format!("{}/{}", ev.seats_taken, cap)).unwrap_or_else(|| "∞".to_string());
+                            let price_label = ev.price_baht.map(|p| format!("{:.0} ฿", p)).unwrap_or_else(|| "бесплатно".to_string());
+                            let public_label = if ev.is_public { "публично" } else { "скрыто" };
+                            rsx! {
+                                div { key: "{ev.id}", style: "background:#1a1a2e;border:1px solid #2a2a4a;border-radius:6px;padding:10px;display:flex;justify-content:space-between;align-items:center;",
+                                    div { style: "display:flex;flex-direction:column;gap:2px;",
+                                        span { style: "color:#e8e8e8;font-weight:700;font-size:14px;", "{ev.title}" }
+                                        span { style: "color:#888;font-size:12px;", "{date_label} • {cap_label} • {price_label} • {public_label}" }
+                                        if let Some(ref loc) = ev.location_text {
+                                            span { style: "color:#6699ff;font-size:12px;", "📍 {loc}" }
+                                        }
+                                    }
+                                    div { style: "display:flex;gap:6px;",
+                                        button {
+                                            style: "padding:6px 10px;background:#2a2a4a;color:#e8e8e8;border:none;border-radius:4px;font-size:12px;cursor:pointer;",
+                                            onclick: move |_| open_bookings(ev_clone.clone()),
+                                            "Брони"
+                                        }
+                                        button {
+                                            style: "padding:6px 10px;background:#2a2a4a;color:#39ff14;border:none;border-radius:4px;font-size:12px;cursor:pointer;",
+                                            "aria-label": "Редактировать",
+                                            onclick: move |_| start_edit(ev_clone2.clone()),
+                                            "✎"
+                                        }
+                                        button {
+                                            style: "padding:6px 10px;background:#2a2a4a;color:#ff4757;border:none;border-radius:4px;font-size:12px;cursor:pointer;",
+                                            "aria-label": "Удалить",
+                                            onclick: move |_| delete_target_id.set(Some(ev.id.clone())),
+                                            "🗑"
+                                        }
+                                    }
+                                }
+                            }
+                        })
+                    }
+                }
+            }
+        }
+    };
+
+    let modal_open = editing_id.read().is_some();
+
+    rsx! {
+        div { style: "padding:12px;display:flex;flex-direction:column;gap:12px;",
+            { render_toasts(toasts) }
+            div { style: "display:flex;gap:8px;",
+                input {
+                    style: input_style(),
+                    r#type: "text",
+                    placeholder: "Поиск событий...",
+                    value: "{search_query}",
+                    oninput: move |evt| search_query.set(evt.value()),
+                }
+                button {
+                    style: "padding:8px 16px;background:#39ff14;color:#000;border:none;border-radius:4px;font-weight:700;font-size:13px;cursor:pointer;",
+                    onclick: move |_| {
+                        clear_form.call(());
+                        editing_id.set(Some(String::new()));
+                    },
+                    "➕ Событие"
+                }
+            }
+            if *loading.read() {
+                div { style: "display:flex;flex-direction:column;gap:8px;",
+                    for _ in 0..3 {
+                        div { style: "background:#1a1a2e;padding:10px;border-radius:6px;", Skeleton { shape: SkeletonShape::Text, width: Some("80%".into()) } }
+                    }
+                }
+            } else {
+                { event_rows }
+            }
+        }
+
+        Modal {
+            open: modal_open,
+            title: if editing_id.read().as_deref() == Some(&String::new()) { Some("Новое событие".to_string()) } else { Some("Редактировать событие".to_string()) },
+            show_close: true,
+            on_close: move |_| {
+                clear_form.call(());
+                editing_id.set(None);
+            },
+            div { style: "display:flex;flex-direction:column;gap:10px;",
+                input { style: input_style(), r#type: "text", placeholder: "Название", value: "{title}", oninput: move |evt| title.set(evt.value()) }
+                input { style: input_style(), r#type: "text", placeholder: "Название (EN)", value: "{title_en}", oninput: move |evt| title_en.set(evt.value()) }
+                textarea { style: textarea_style(), placeholder: "Описание", value: "{description}", oninput: move |evt| description.set(evt.value()) }
+                textarea { style: textarea_style(), placeholder: "Описание (EN)", value: "{description_en}", oninput: move |evt| description_en.set(evt.value()) }
+                label { style: "font-size:12px;color:#888;", "Начало (дата и время)" }
+                input { style: input_style(), r#type: "datetime-local", value: "{starts_at}", oninput: move |evt| starts_at.set(evt.value()) }
+                label { style: "font-size:12px;color:#888;", "Окончание (необязательно)" }
+                input { style: input_style(), r#type: "datetime-local", value: "{ends_at}", oninput: move |evt| ends_at.set(evt.value()) }
+                input { style: input_style(), r#type: "text", placeholder: "Место", value: "{location_text}", oninput: move |evt| location_text.set(evt.value()) }
+                input { style: input_style(), r#type: "text", placeholder: "URL изображения", value: "{image_url}", oninput: move |evt| image_url.set(evt.value()) }
+                div { style: "display:flex;gap:10px;",
+                    input { style: input_style(), r#type: "number", placeholder: "Мест", value: "{max_seats}", oninput: move |evt| max_seats.set(evt.value()) }
+                    input { style: input_style(), r#type: "number", placeholder: "Цена (бат)", value: "{price_baht}", oninput: move |evt| price_baht.set(evt.value()) }
+                }
+                label { style: "display:flex;align-items:center;gap:8px;font-size:13px;color:#e8e8e8;",
+                    input { r#type: "checkbox", checked: *is_public.read(), onchange: move |evt| is_public.set(evt.checked()) }
+                    "Публичное событие"
+                }
+                div { style: "display:flex;gap:8px;justify-content:flex-end;",
+                    button { style: cancel_btn_style(), onclick: move |_| { clear_form.call(()); editing_id.set(None); }, "Отмена" }
+                    button {
+                        style: submit_btn_style(),
+                        disabled: *submitting.read(),
+                        onclick: create_or_update,
+                        if *submitting.read() { "⏳" } else { "Сохранить" }
+                    }
+                }
+            }
+        }
+
+        if let Some(ref ev) = booking_target.read().clone() {
+            Modal {
+                open: true,
+                title: Some(format!("Брони: {}", ev.title)),
+                show_close: true,
+                on_close: move |_| booking_target.set(None),
+                div { style: "display:flex;flex-direction:column;gap:10px;",
+                    if *bookings_loading.read() {
+                        Skeleton { shape: SkeletonShape::Text, width: Some("60%".into()) }
+                    } else {
+                        { booking_rows }
+                    }
+                }
+            }
+        }
+
+        if delete_target_id.read().is_some() {
+            Modal {
+                open: true,
+                title: Some("Удалить событие?".to_string()),
+                show_close: true,
+                on_close: move |_| delete_target_id.set(None),
+                div { style: "display:flex;flex-direction:column;gap:12px;",
+                    p { style: "color:#e8e8e8;font-size:14px;", "Это также отменит все бронирования. Продолжить?" }
+                    div { style: "display:flex;gap:8px;justify-content:flex-end;",
+                        button { style: cancel_btn_style(), onclick: move |_| delete_target_id.set(None), "Отмена" }
+                        button { style: danger_btn_style(), onclick: confirm_delete, "Удалить" }
+                    }
+                }
+            }
+        }
+    }
+}
+

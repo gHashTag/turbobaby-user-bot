@@ -108,6 +108,14 @@ fn deep_link_url(kind: ProductKind, id: &str) -> String {
     )
 }
 
+/// Public accessor for the raw `t.me` deep-link URL.
+///
+/// Useful when callers want to display or copy the link without opening the
+/// native share picker (e.g. a share icon on a home-screen card).
+pub fn product_deep_link(kind: ProductKind, id: &str) -> String {
+    deep_link_url(kind, id)
+}
+
 /// Open a `t.me` URL using Telegram's native method, falling back to a plain
 /// browser open if the WebApp SDK is unavailable.
 pub fn open_telegram_link(url: &str) {
@@ -196,5 +204,29 @@ mod tests {
         let url = deep_link_url(ProductKind::Tea, "t42");
         assert!(url.contains("startapp=p_tea_t42"));
         assert!(url.starts_with("https://t.me/Woody_WeedPecker_bot"));
+    }
+
+    #[test]
+    fn product_deep_link_public_wrapper_matches_internal() {
+        let via_public = product_deep_link(ProductKind::Set, "550e8400-e29b-41d4-a716-446655440000");
+        let via_internal = deep_link_url(ProductKind::Set, "550e8400-e29b-41d4-a716-446655440000");
+        assert_eq!(via_public, via_internal);
+    }
+
+    #[test]
+    fn all_catalog_kinds_round_trip_through_parse() {
+        let cases = [
+            (ProductKind::Strain, "strain-42"),
+            (ProductKind::Accessory, "acc-99"),
+            (ProductKind::Set, "set-007"),
+            (ProductKind::Tea, "tea-chai"),
+        ];
+        for (kind, id) in cases {
+            let link = product_deep_link(kind, id);
+            let start_param = link.split("startapp=").nth(1).unwrap();
+            let parsed = parse_start_param(start_param).unwrap();
+            assert_eq!(parsed.kind, kind);
+            assert_eq!(parsed.id, id);
+        }
     }
 }
