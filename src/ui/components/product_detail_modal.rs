@@ -12,7 +12,12 @@
 //! WebView, so we reuse its shape here instead of inventing a new one. All
 //! meta fields are optional because accessories/tea/sets have no THC etc.
 
-use crate::trios::i18n::{t, T_SHARE};
+use crate::trios::i18n::{
+    t, T_LAB_CERTS, T_LAB_CERT_CBD, T_LAB_CERT_EMPTY, T_LAB_CERT_TESTED, T_LAB_CERT_THC,
+    T_REVIEWS_AVG, T_REVIEWS_EMPTY, T_REVIEWS_TITLE, T_SHARE,
+};
+use crate::ui::api::context::use_api_client;
+use crate::ui::api::types::LabCertificate;
 use crate::ui::components::image_lightbox::ImageLightbox;
 use crate::ui::lang::current_lang;
 use dioxus::prelude::*;
@@ -65,6 +70,10 @@ pub struct ProductDetailModalProps {
     /// Localized label for the share button.
     #[props(default)]
     pub share_label: Option<String>,
+    /// Strain identifier; when present the modal fetches and renders
+    /// customer reviews and lab certificates for this strain.
+    #[props(default)]
+    pub strain_id: Option<String>,
     /// Called when the user taps the backdrop or the close button.
     pub on_close: EventHandler<()>,
 }
@@ -75,6 +84,109 @@ fn is_usable_src(url: &str) -> bool {
         && (url.starts_with("http://")
             || url.starts_with("https://")
             || (url.starts_with('/') && !url.starts_with("//")))
+}
+
+fn stars_for(rating: i32) -> String {
+    let clamped = rating.clamp(0, 5);
+    "★".repeat(clamped as usize) + &"☆".repeat((5 - clamped) as usize)
+}
+
+fn render_variant_c_sections(
+    strain_id: Option<String>,
+    resource: &Resource<(Option<crate::ui::api::types::ReviewsList>, Option<Vec<LabCertificate>>)>,
+) -> Element {
+    if strain_id.is_none() {
+        return rsx! {};
+    }
+    let lang = current_lang();
+    let data = resource.read();
+    let (reviews_opt, certs_opt) = match data.as_ref() {
+        Some(d) => (d.0.clone(), d.1.clone()),
+        None => (None, None),
+    };
+
+    let reviews_section = reviews_opt.map(|list| {
+        let avg = list.average_rating;
+        let empty = list.reviews.is_empty();
+        rsx! {
+            div { style: "margin-top:18px;padding-top:14px;border-top:1px solid #2a2a4a;",
+                div { style: "font-size:16px;font-weight:800;color:#39ff14;margin-bottom:8px;text-shadow:1px 1px 0 #000;",
+                    {t(lang, T_REVIEWS_TITLE)}
+                }
+                if empty {
+                    div { style: "font-size:13px;color:#8b8b9e;", {t(lang, T_REVIEWS_EMPTY)} }
+                } else {
+                    {avg.map(|a| rsx! {
+                        div { style: "font-size:13px;color:#ffe600;margin-bottom:8px;",
+                            {t(lang, T_REVIEWS_AVG).replace("{0}", &format!("{a:.1}"))}
+                        }
+                    })}
+                    div { style: "display:flex;flex-direction:column;gap:10px;",
+                        for review in list.reviews.iter().take(20) {
+                            div { style: "background:#1a1a2e;border:2px solid #2a2a4a;padding:10px;",
+                                div { style: "display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;",
+                                    span { style: "font-size:14px;color:#ffe600;", {stars_for(review.rating)} }
+                                    span { style: "font-size:11px;color:#8b8b9e;", {review.created_at.split('T').next().unwrap_or("").to_string()} }
+                                }
+                                if !review.comment.is_empty() {
+                                    div { style: "font-size:13px;color:#ddd;line-height:1.45;white-space:pre-wrap;", {review.comment.clone()} }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    });
+
+    let certs_section = certs_opt.map(|certs| {
+        let empty = certs.is_empty();
+        rsx! {
+            div { style: "margin-top:18px;padding-top:14px;border-top:1px solid #2a2a4a;",
+                div { style: "font-size:16px;font-weight:800;color:#00e5ff;margin-bottom:8px;text-shadow:1px 1px 0 #000;",
+                    {t(lang, T_LAB_CERTS)}
+                }
+                if empty {
+                    div { style: "font-size:13px;color:#8b8b9e;", {t(lang, T_LAB_CERT_EMPTY)} }
+                } else {
+                    div { style: "display:flex;flex-direction:column;gap:10px;",
+                        for cert in certs.iter().take(10) {
+                            div { style: "background:#1a1a2e;border:2px solid #2a2a4a;padding:10px;",
+                                div { style: "display:flex;gap:12px;flex-wrap:wrap;font-size:13px;margin-bottom:6px;",
+                                    if let Some(thc) = cert.thc_percent {
+                                        span { style: "color:#39ff14;", {format!("{}: {thc:.1}%", t(lang, T_LAB_CERT_THC))} }
+                                    }
+                                    if let Some(cbd) = cert.cbd_percent {
+                                        span { style: "color:#00e5ff;", {format!("{}: {cbd:.1}%", t(lang, T_LAB_CERT_CBD))} }
+                                    }
+                                }
+                                div { style: "font-size:11px;color:#8b8b9e;",
+                                    {format!(
+                                        "{}: {}",
+                                        t(lang, T_LAB_CERT_TESTED),
+                                        cert.tested_at.as_deref().unwrap_or("—")
+                                    )}
+                                }
+                                if let Some(url) = cert.certificate_url.as_deref().filter(|u| !u.is_empty()) {
+                                    a {
+                                        style: "display:inline-block;margin-top:6px;font-size:13px;color:#b388ff;text-decoration:underline;",
+                                        href: "{url}",
+                                        target: "_blank",
+                                        "📄 Certificate"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    });
+
+    rsx! {
+        {reviews_section}
+        {certs_section}
+    }
 }
 
 #[component]
@@ -102,6 +214,23 @@ pub fn ProductDetailModal(props: ProductDetailModalProps) -> Element {
     let mut lightbox_open = use_signal(|| false);
     let lightbox_src = img.clone();
     let lightbox_alt = alt.clone();
+
+    let strain_id = props.strain_id.clone();
+    let client = use_api_client();
+    let reviews_resource = use_resource(move || {
+        let id = strain_id.clone();
+        let client = client.clone();
+        async move {
+            match id {
+                Some(sid) if !sid.is_empty() => {
+                    let reviews = client.get_strain_reviews(&sid).await.ok();
+                    let certs = client.get_strain_lab_certs(&sid).await.ok();
+                    (reviews, certs)
+                }
+                _ => (None, None),
+            }
+        }
+    });
 
     rsx! {
         div {
@@ -245,6 +374,8 @@ pub fn ProductDetailModal(props: ProductDetailModalProps) -> Element {
                         onclick: move |e: Event<MouseData>| { e.stop_propagation(); on_close.call(()); },
                         "Закрыть"
                     }
+
+                    {render_variant_c_sections(props.strain_id.clone(), &reviews_resource)}
                 }
             }
         }

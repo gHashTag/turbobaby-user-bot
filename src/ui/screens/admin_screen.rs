@@ -21,7 +21,11 @@ use web_sys;
 // from the wasm bundle vs shipping reqwest itself.
 static HTTP_CLIENT: LazyLock<crate::ui::api::local_client::LocalClient> =
     LazyLock::new(crate::ui::api::local_client::LocalClient::new);
+use crate::trios::i18n::{
+    t, T_LINE_BROADCAST, T_LINE_BROADCAST_SEND, T_LINE_BROADCAST_SENT, T_LINE_BROADCAST_TEXT,
+};
 use crate::ui::api::context::api_base_url;
+use crate::ui::api::types::{Event as AdminEvent, EventBooking, LineBroadcastRequest};
 use crate::ui::components::{
     EmptyState, IdPicker, Modal, Skeleton, SkeletonShape, Toast, ToastContainer, ToastKind,
     VideoModal,
@@ -29,7 +33,6 @@ use crate::ui::components::{
 use crate::ui::telegram::{
     use_telegram_id, use_telegram_init_data, HapticNotification, TelegramApp,
 };
-use crate::ui::api::types::{Event as AdminEvent, EventBooking};
 use crate::ui::screens::events_screen::parse_event_start;
 
 fn admin_token() -> String {
@@ -302,6 +305,7 @@ enum Tab {
     Loyalty,
     Managers,
     Events,
+    LineBroadcast,
 }
 
 // ── File upload helper ─────────────────────────────────────────
@@ -748,6 +752,7 @@ fn AdminPanel(active_tab: Signal<Tab>, mut password_token: Signal<String>) -> El
                 {tab_btn(Tab::Loyalty, "💎 Лояльность")}
                 {tab_btn(Tab::Managers, "👥 Менеджеры")}
                 {tab_btn(Tab::Events, "📅 События")}
+                {tab_btn(Tab::LineBroadcast, "📣 LINE")}
             }
             match current {
                 Tab::Strains => rsx!(TabMount { tab: current, expected: Tab::Strains, StrainsTab {} }),
@@ -765,6 +770,7 @@ fn AdminPanel(active_tab: Signal<Tab>, mut password_token: Signal<String>) -> El
                 Tab::Loyalty => rsx!(TabMount { tab: current, expected: Tab::Loyalty, LoyaltyTab {} }),
                 Tab::Managers => rsx!(TabMount { tab: current, expected: Tab::Managers, ManagersTab {} }),
                 Tab::Events => rsx!(TabMount { tab: current, expected: Tab::Events, EventsTab {} }),
+                Tab::LineBroadcast => rsx!(TabMount { tab: current, expected: Tab::LineBroadcast, LineBroadcastTab {} }),
             }
         }
     }
@@ -6578,6 +6584,7 @@ fn EventsTab() -> Element {
     let mut image_url = use_signal(String::new);
     let mut max_seats = use_signal(String::new);
     let mut price_baht = use_signal(String::new);
+    let mut price_stars = use_signal(String::new);
     let mut is_public = use_signal(|| true);
     let mut editing_id: Signal<Option<String>> = use_signal(|| None);
     let mut delete_target_id: Signal<Option<String>> = use_signal(|| None);
@@ -6606,6 +6613,7 @@ fn EventsTab() -> Element {
         image_url.set(String::new());
         max_seats.set(String::new());
         price_baht.set(String::new());
+        price_stars.set(String::new());
         is_public.set(true);
         editing_id.set(None);
     });
@@ -6690,6 +6698,7 @@ fn EventsTab() -> Element {
             "image_url": if image_url.read().trim().is_empty() { serde_json::Value::Null } else { image_url.read().clone().into() },
             "max_seats": if max_seats.read().trim().is_empty() { serde_json::Value::Null } else { max_seats.read().parse::<i32>().unwrap_or(0).into() },
             "price_baht": if price_baht.read().trim().is_empty() { serde_json::Value::Null } else { price_baht.read().parse::<f64>().unwrap_or(0.0).into() },
+            "price_stars": if price_stars.read().trim().is_empty() { serde_json::Value::Null } else { price_stars.read().parse::<i64>().unwrap_or(0).into() },
             "is_public": *is_public.read(),
         });
         spawn(async move {
@@ -6769,6 +6778,7 @@ fn EventsTab() -> Element {
         image_url.set(ev.image_url.clone().unwrap_or_default());
         max_seats.set(ev.max_seats.map(|v| v.to_string()).unwrap_or_default());
         price_baht.set(ev.price_baht.map(|v| format!("{}", v)).unwrap_or_default());
+        price_stars.set(ev.price_stars.map(|v| v.to_string()).unwrap_or_default());
         is_public.set(ev.is_public);
         editing_id.set(Some(ev.id.clone()));
     };
@@ -6838,7 +6848,13 @@ fn EventsTab() -> Element {
                             let ev_clone2 = ev.clone();
                             let date_label = parse_event_start(&ev.starts_at).map(|s| s.format("%d %b %Y %H:%M").to_string()).unwrap_or_else(|| ev.starts_at.clone());
                             let cap_label = ev.max_seats.map(|cap| format!("{}/{}", ev.seats_taken, cap)).unwrap_or_else(|| "∞".to_string());
-                            let price_label = ev.price_baht.map(|p| format!("{:.0} ฿", p)).unwrap_or_else(|| "бесплатно".to_string());
+                            let price_label = if let Some(s) = ev.price_stars.filter(|s| *s > 0) {
+                                format!("{} ⭐", s)
+                            } else if let Some(p) = ev.price_baht.filter(|p| *p > 0.0) {
+                                format!("{:.0} ฿", p)
+                            } else {
+                                "бесплатно".to_string()
+                            };
                             let public_label = if ev.is_public { "публично" } else { "скрыто" };
                             rsx! {
                                 div { key: "{ev_id_for_key}", style: "background:#1a1a2e;border:1px solid #2a2a4a;border-radius:6px;padding:10px;display:flex;justify-content:space-between;align-items:center;",
@@ -6932,6 +6948,7 @@ fn EventsTab() -> Element {
                 div { style: "display:flex;gap:10px;",
                     input { style: input_style(), r#type: "number", placeholder: "Мест", value: "{max_seats}", oninput: move |evt| max_seats.set(evt.value()) }
                     input { style: input_style(), r#type: "number", placeholder: "Цена (бат)", value: "{price_baht}", oninput: move |evt| price_baht.set(evt.value()) }
+                    input { style: input_style(), r#type: "number", placeholder: "Цена (Stars)", value: "{price_stars}", oninput: move |evt| price_stars.set(evt.value()) }
                 }
                 label { style: "display:flex;align-items:center;gap:8px;font-size:13px;color:#e8e8e8;",
                     input { r#type: "checkbox", checked: *is_public.read(), onchange: move |evt| is_public.set(evt.checked()) }
@@ -6978,6 +6995,78 @@ fn EventsTab() -> Element {
                         button { style: danger_btn_style(), onclick: confirm_delete, "Удалить" }
                     }
                 }
+            }
+        }
+    }
+}
+
+// ── LINE Broadcast tab (Variant C retention) ─────────────────
+
+#[component]
+fn LineBroadcastTab() -> Element {
+    let lang = crate::ui::lang::current_lang();
+    let init_data = use_telegram_init_data();
+    let token = admin_token();
+    let mut text = use_signal(|| String::new());
+    let sending = use_signal(|| false);
+    let sent = use_signal(|| false);
+
+    rsx! {
+        div { style: "padding: 16px;",
+            div { style: "font-size: 18px; font-weight: 800; color: #39ff14; margin-bottom: 12px; text-shadow: 2px 2px 0 #000;",
+                {t(lang, T_LINE_BROADCAST)}
+            }
+            div { style: "font-size: 13px; color: #8b8b9e; margin-bottom: 12px;",
+                " Sends a text broadcast to all LINE friends who have added the shop bot. "
+            }
+            div { style: "margin-bottom: 12px;",
+                div { style: "font-size: 13px; color: #e8e8e8; margin-bottom: 6px;", {t(lang, T_LINE_BROADCAST_TEXT)} }
+                textarea {
+                    style: "width: 100%; min-height: 120px; background: #1a1a2e; border: 2px solid #2a2a4a; color: #e8e8e8; padding: 10px; font-size: 14px; resize: vertical;",
+                    value: "{text()}",
+                    oninput: move |e: Event<FormData>| text.set(e.value().clone()),
+                }
+            }
+            if sent() {
+                div { style: "padding: 12px; background: #1a2e1a; border: 2px solid #39ff14; color: #39ff14; font-size: 14px; margin-bottom: 12px;",
+                    {t(lang, T_LINE_BROADCAST_SENT)}
+                }
+            }
+            button {
+                style: "font-size: 14px; font-weight: 700; padding: 12px 24px; background: #00e5ff; color: #000; border: 4px solid #008ba3; box-shadow: 3px 3px 0 #000; cursor: pointer;",
+                disabled: sending() || text().trim().is_empty(),
+                onclick: move |e: Event<MouseData>| {
+                    e.stop_propagation();
+                    let body = LineBroadcastRequest {
+                        message: text().trim().to_string(),
+                    };
+                    let client = crate::ui::api::local_client::LocalClient::new();
+                    let base = api_base_url();
+                    let url = format!("{base}/api/admin/line-broadcast");
+                    let init = init_data.clone();
+                    let tok = token.clone();
+                    let mut sending = sending;
+                    let mut sent = sent;
+                    let mut text = text;
+                    spawn(async move {
+                        sending.set(true);
+                        let res = client
+                            .post(&url)
+                            .header("X-Telegram-Init-Data", init)
+                            .header("X-Admin-Token", tok)
+                            .json(&body)
+                            .send()
+                            .await;
+                        sending.set(false);
+                        if let Ok(resp) = res {
+                            if resp.status().is_success() {
+                                sent.set(true);
+                                text.set(String::new());
+                            }
+                        }
+                    });
+                },
+                {t(lang, T_LINE_BROADCAST_SEND)}
             }
         }
     }

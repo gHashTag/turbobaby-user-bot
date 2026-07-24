@@ -6,10 +6,11 @@
 
 use crate::trios::i18n::{
     t, T_BACK, T_EVENTS_BOOK, T_EVENTS_BOOKED, T_EVENTS_BOOK_FREE, T_EVENTS_CAPACITY,
-    T_EVENTS_DATE, T_EVENTS_ERROR, T_EVENTS_LOADING, T_EVENTS_NO_EVENTS, T_EVENTS_PRICE,
-    T_EVENTS_SOLD_OUT, T_EVENTS_SUBTITLE, T_EVENTS_TITLE, T_EVENTS_WEEKDAY_FRI,
-    T_EVENTS_WEEKDAY_MON, T_EVENTS_WEEKDAY_SAT, T_EVENTS_WEEKDAY_SUN, T_EVENTS_WEEKDAY_THU,
-    T_EVENTS_WEEKDAY_TUE, T_EVENTS_WEEKDAY_WED,
+    T_EVENTS_DATE, T_EVENTS_ERROR, T_EVENTS_INSUFFICIENT_STARS, T_EVENTS_LOADING,
+    T_EVENTS_NO_EVENTS, T_EVENTS_PRICE, T_EVENTS_PRICE_STARS, T_EVENTS_SOLD_OUT,
+    T_EVENTS_SUBTITLE, T_EVENTS_TITLE, T_EVENTS_WEEKDAY_FRI, T_EVENTS_WEEKDAY_MON,
+    T_EVENTS_WEEKDAY_SAT, T_EVENTS_WEEKDAY_SUN, T_EVENTS_WEEKDAY_THU, T_EVENTS_WEEKDAY_TUE,
+    T_EVENTS_WEEKDAY_WED,
 };
 use crate::ui::api::context::api_base_url;
 use crate::ui::api::http::{
@@ -180,8 +181,16 @@ fn EventCard(props: EventCardProps) -> Element {
     let start = parse_event_start(&ev.starts_at);
     let start_label = start.map(|s| s.format("%H:%M").to_string());
     let avail = ev.max_seats.map(|cap| cap.saturating_sub(ev.seats_taken as i32));
-    let is_free = ev.price_baht.map_or(true, |p| p <= 0.0);
-    let price_label = ev.price_baht.filter(|p| *p > 0.0).map(|p| format!("{:.0} ฿", p));
+    let has_baht = ev.price_baht.map_or(false, |p| p > 0.0);
+    let has_stars = ev.price_stars.map_or(false, |s| s > 0);
+    let is_free = !has_baht && !has_stars;
+    let price_label = if has_stars {
+        Some(format!("{} ⭐", ev.price_stars.unwrap_or(0)))
+    } else if has_baht {
+        Some(format!("{:.0} ฿", ev.price_baht.unwrap_or(0.0)))
+    } else {
+        None
+    };
 
     let share_id = ev.id.clone();
     let share_name = ev.display_title();
@@ -246,6 +255,7 @@ fn EventBookingModal(props: EventBookingModalProps) -> Element {
 
     let starts = parse_event_start(&ev.starts_at);
     let has_started = starts.map_or(false, |dt| Utc::now() >= dt.with_timezone(&Utc));
+    let has_stars_price = ev.price_stars.map_or(false, |s| s > 0);
     let can_book = props.telegram_id.is_some() && !ev.is_sold_out() && !has_started;
 
     let date_label = starts.map(|s| s.format("%d %b %Y • %H:%M").to_string());
@@ -261,10 +271,19 @@ fn EventBookingModal(props: EventBookingModalProps) -> Element {
         }
     });
 
-    let price_badge = ev.price_baht.map(|price| {
-        if price > 0.0 {
+    let price_badge = {
+        let has_baht = ev.price_baht.map_or(false, |p| p > 0.0);
+        if has_stars_price {
+            let price_label = t(lang, T_EVENTS_PRICE_STARS).to_string();
+            let price_str = ev.price_stars.unwrap_or(0).to_string();
+            rsx! {
+                div { style: "font-size:12px;color:#39ff14;background:rgba(57,255,20,0.1);padding:6px 10px;border:2px solid #39ff14;",
+                    "{price_label}: {price_str} ⭐"
+                }
+            }
+        } else if has_baht {
             let price_label = t(lang, T_EVENTS_PRICE).to_string();
-            let price_str = format!("{:.0}", price);
+            let price_str = format!("{:.0}", ev.price_baht.unwrap_or(0.0));
             rsx! {
                 div { style: "font-size:12px;color:#39ff14;background:rgba(57,255,20,0.1);padding:6px 10px;border:2px solid #39ff14;",
                     "{price_label}: {price_str} ฿"
@@ -278,7 +297,7 @@ fn EventBookingModal(props: EventBookingModalProps) -> Element {
                 }
             }
         }
-    });
+    };
 
     let book_label = t(lang, T_EVENTS_BOOK).to_string();
     let sold_label = t(lang, T_EVENTS_SOLD_OUT).to_string();
@@ -291,6 +310,8 @@ fn EventBookingModal(props: EventBookingModalProps) -> Element {
         started_label
     } else if props.telegram_id.is_none() {
         "Telegram required".to_string()
+    } else if has_stars_price {
+        format!("{} ({} ⭐)", book_label, ev.price_stars.unwrap_or(0))
     } else {
         book_label
     };
@@ -324,9 +345,15 @@ fn EventBookingModal(props: EventBookingModalProps) -> Element {
                                     state.set(BookingState::Done { seats: 1 });
                                 }
                                 Ok((status, body)) => {
-                                    let snippet: String = body.chars().take(120).collect();
-                                    track_event("booking_failed", &format!("http_{status}"));
-                                    state.set(BookingState::Error(format!("HTTP {status}: {snippet}")));
+                                    if status == 402 {
+                                        track_event("booking_failed", "insufficient_stars");
+                                        let msg = t(lang, T_EVENTS_INSUFFICIENT_STARS).to_string();
+                                        state.set(BookingState::Error(msg));
+                                    } else {
+                                        let snippet: String = body.chars().take(120).collect();
+                                        track_event("booking_failed", &format!("http_{status}"));
+                                        state.set(BookingState::Error(format!("HTTP {status}: {snippet}")));
+                                    }
                                 }
                                 Err(e) => {
                                     track_event("booking_failed", "network");

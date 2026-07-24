@@ -347,6 +347,8 @@ pub struct Event {
     #[serde(default)]
     pub price_baht: Option<f64>,
     #[serde(default)]
+    pub price_stars: Option<i64>,
+    #[serde(default)]
     pub is_public: bool,
     #[serde(default)]
     pub seats_taken: i64,
@@ -388,6 +390,10 @@ pub struct EventBooking {
     pub status: String,
     #[serde(default)]
     pub order_id: Option<String>,
+    #[serde(default)]
+    pub stars_paid: Option<i64>,
+    #[serde(default)]
+    pub stars_tx_id: Option<String>,
     pub created_at: String,
 }
 
@@ -397,4 +403,56 @@ pub struct BookEventRequest {
     pub telegram_id: i64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub seats: Option<i32>,
+}
+
+// ── Variant C: Reviews / Lab Certificates / LINE broadcast ─────
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Review {
+    pub id: String,
+    pub telegram_id: i64,
+    pub strain_id: String,
+    pub order_id: String,
+    pub rating: i32,
+    pub comment: String,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ReviewsList {
+    pub reviews: Vec<Review>,
+    pub average_rating: Option<f64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct LabCertificate {
+    pub id: String,
+    pub strain_id: String,
+    #[serde(default)]
+    pub certificate_url: Option<String>,
+    #[serde(default)]
+    pub tested_at: Option<String>,
+    pub thc_percent: Option<f64>,
+    pub cbd_percent: Option<f64>,
+    pub uploaded_by_telegram_id: i64,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct LabCertificatesList {
+    pub lab_certificates: Vec<LabCertificate>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct CreateReviewRequest {
+    pub order_id: String,
+    pub strain_id: String,
+    pub rating: i32,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub comment: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct LineBroadcastRequest {
+    pub message: String,
 }

@@ -462,6 +462,7 @@ pub fn MenuScreen() -> Element {
                         price_line: has_real_price.then(|| format!("{}/g", crate::trios::pricing::format_baht(effective_price))),
                         can_add: avail,
                         add_to_cart_label: Some(format!("{add_label} 🛒")),
+                        strain_id: Some(strain.id.clone()),
                         on_add_to_cart: move |q: u32| {
                             cart.write().add_item(CartItem {
                                 id: add_id.clone(),

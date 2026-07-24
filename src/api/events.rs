@@ -54,6 +54,7 @@ pub(crate) struct CreateEventRequest {
     pub image_url: Option<String>,
     pub max_seats: Option<i32>,
     pub price_baht: Option<f64>,
+    pub price_stars: Option<i64>,
     pub is_public: Option<bool>,
 }
 
@@ -69,6 +70,7 @@ pub(crate) struct UpdateEventRequest {
     pub image_url: Option<String>,
     pub max_seats: Option<i32>,
     pub price_baht: Option<f64>,
+    pub price_stars: Option<i64>,
     pub is_public: Option<bool>,
 }
 
@@ -160,6 +162,11 @@ fn validate_event_request(
             return Err(bad(format!("price_baht вне диапазона 0..1e6 ({price})")));
         }
     }
+    if let Some(stars) = req.price_stars {
+        if stars < 0 || stars > 1_000_000_000 {
+            return Err(bad(format!("price_stars вне диапазона 0..1e9 ({stars})")));
+        }
+    }
     let is_public = req.is_public.unwrap_or(true);
     Ok((is_public, starts_at, ends_at))
 }
@@ -228,6 +235,11 @@ fn validate_update_request(
             return Err(bad(format!("price_baht вне диапазона 0..1e6 ({price})")));
         }
     }
+    if let Some(stars) = req.price_stars {
+        if stars < 0 || stars > 1_000_000_000 {
+            return Err(bad(format!("price_stars вне диапазона 0..1e9 ({stars})")));
+        }
+    }
     Ok((req.is_public, starts_at, ends_at))
 }
 
@@ -236,6 +248,7 @@ fn event_row(r: &sea_orm::QueryResult) -> Value {
     let ends_at: Option<DateTime<Utc>> = r.try_get::<Option<DateTime<Utc>>>("", "ends_at").ok().flatten();
     let max_seats: Option<i32> = r.try_get::<Option<i32>>("", "max_seats").ok().flatten();
     let price_baht: Option<f64> = r.try_get::<Option<f64>>("", "price_baht").ok().flatten();
+    let price_stars: Option<i64> = r.try_get::<Option<i64>>("", "price_stars").ok().flatten();
     let seats_taken: i64 = r.try_get::<i64>("", "seats_taken").unwrap_or(0);
     json!({
         "id": r.try_get::<String>("", "id").unwrap_or_default(),
@@ -249,6 +262,7 @@ fn event_row(r: &sea_orm::QueryResult) -> Value {
         "image_url": r.try_get::<Option<String>>("", "image_url").ok().flatten(),
         "max_seats": max_seats,
         "price_baht": price_baht.and_then(|p| if p.is_finite() { Some(p) } else { None }),
+        "price_stars": price_stars,
         "is_public": r.try_get::<bool>("", "is_public").unwrap_or(true),
         "seats_taken": seats_taken,
         "seats_available": max_seats.map(|cap| (cap - seats_taken as i32).max(0)),
@@ -265,6 +279,8 @@ fn booking_row(r: &sea_orm::QueryResult) -> Value {
         "seats": r.try_get::<i32>("", "seats").unwrap_or(1),
         "status": r.try_get::<String>("", "status").unwrap_or_default(),
         "order_id": r.try_get::<Option<String>>("", "order_id").ok().flatten(),
+        "stars_paid": r.try_get::<Option<i64>>("", "stars_paid").ok().flatten(),
+        "stars_tx_id": r.try_get::<Option<String>>("", "stars_tx_id").ok().flatten(),
         "created_at": created_at.to_rfc3339(),
     })
 }
@@ -304,7 +320,7 @@ async fn list_events(
     let where_sql = clauses.join(" AND ");
     let sql = format!(
         "SELECT e.id, e.title, e.title_en, e.description, e.description_en, e.starts_at, e.ends_at, \
-         e.location_text, e.image_url, e.max_seats, e.price_baht::float8 AS price_baht, e.is_public, e.created_at, \
+         e.location_text, e.image_url, e.max_seats, e.price_baht::float8 AS price_baht, e.price_stars, e.is_public, e.created_at, \
          COALESCE((SELECT SUM(b.seats) FROM event_bookings b WHERE b.event_id = e.id AND b.status = 'confirmed'), 0)::bigint AS seats_taken \
          FROM events e \
          WHERE {where_sql} \
@@ -336,7 +352,7 @@ async fn get_event(
     let row = state.db.orm.query_one(Statement::from_sql_and_values(
         DbBackend::Postgres,
         "SELECT e.id, e.title, e.title_en, e.description, e.description_en, e.starts_at, e.ends_at, \
-         e.location_text, e.image_url, e.max_seats, e.price_baht::float8 AS price_baht, e.is_public, e.created_at, \
+         e.location_text, e.image_url, e.max_seats, e.price_baht::float8 AS price_baht, e.price_stars, e.is_public, e.created_at, \
          COALESCE((SELECT SUM(b.seats) FROM event_bookings b WHERE b.event_id = e.id AND b.status = 'confirmed'), 0)::bigint AS seats_taken \
          FROM events e \
          WHERE e.id = $1 AND e.is_public = TRUE",
@@ -403,7 +419,7 @@ async fn book_event(
     if let Some(ref k) = idem_key {
         let existing = state.db.orm.query_one(Statement::from_sql_and_values(
             DbBackend::Postgres,
-            "SELECT id, event_id, telegram_id, seats, status, order_id, created_at FROM event_bookings \
+            "SELECT id, event_id, telegram_id, seats, status, order_id, stars_paid, stars_tx_id, created_at FROM event_bookings \
              WHERE event_id = $1 AND telegram_id = $2 AND idempotency_key = $3",
             [id.clone().into(), req.telegram_id.into(), k.clone().into()],
         )).await.map_err(|e| { tracing::error!("book_event idempotency lookup: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?;
@@ -426,7 +442,7 @@ async fn book_event(
     // Lock event row, ensure it is public and has not started.
     let ev = tx.query_one(Statement::from_sql_and_values(
         DbBackend::Postgres,
-        "SELECT id, max_seats, starts_at FROM events WHERE id = $1 AND is_public = TRUE FOR UPDATE",
+        "SELECT id, max_seats, starts_at, price_stars FROM events WHERE id = $1 AND is_public = TRUE FOR UPDATE",
         [id.clone().into()],
     )).await.map_err(|e| { tracing::error!("book_event lock event: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?;
 
@@ -466,16 +482,114 @@ async fn book_event(
         }
     }
 
-    // Free booking in MVP; price_baht is reserved for future paid flow.
+    // Paid booking: debit internal Stars atomically inside the same tx.
+    let price_stars: Option<i64> = ev.try_get::<Option<i64>>("", "price_stars").ok().flatten();
+    let stars_cost = price_stars.unwrap_or(0).saturating_mul(seats as i64);
+    let mut stars_tx_id: Option<String> = None;
+    if stars_cost > 0 {
+        use crate::db::entities::{
+            loyalty_profile::{ActiveModel as LpAm, Column as LpCol, Entity as LpEntity},
+            stars_transaction::{ActiveModel as TxAm, Entity as TxEntity},
+            user_stars::{ActiveModel as UsAm, Column as UsCol, Entity as UsEntity},
+        };
+        use sea_orm::sea_query::OnConflict;
+        use sea_orm::{ActiveValue::Set, ColumnTrait, EntityTrait, QueryFilter};
+
+        // Ensure loyalty_profile exists because user_stars.telegram_id references it.
+        let lp_am = LpAm {
+            telegram_id: Set(req.telegram_id),
+            bonus_balance: Set(Some(0.0)),
+            total_spent: Set(Some(0.0)),
+            ..Default::default()
+        };
+        LpEntity::insert(lp_am)
+            .on_conflict(OnConflict::column(LpCol::TelegramId).do_nothing().to_owned())
+            .do_nothing()
+            .exec(&tx)
+            .await
+            .map_err(|e| {
+                tracing::error!("book_event loyalty_profile upsert: {e}");
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?;
+
+        let us_am = UsAm {
+            telegram_id: Set(req.telegram_id),
+            balance: Set(0),
+            ..Default::default()
+        };
+        UsEntity::insert(us_am)
+            .on_conflict(
+                OnConflict::column(UsCol::TelegramId)
+                    .update_column(UsCol::UpdatedAt)
+                    .to_owned(),
+            )
+            .exec(&tx)
+            .await
+            .map_err(|e| {
+                tracing::error!("book_event user_stars upsert: {e}");
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?;
+
+        let debited = UsEntity::update_many()
+            .col_expr(
+                UsCol::Balance,
+                sea_orm::sea_query::Expr::cust_with_values("balance - $1", [stars_cost]),
+            )
+            .filter(UsCol::TelegramId.eq(req.telegram_id))
+            .filter(UsCol::Balance.gte(stars_cost))
+            .exec(&tx)
+            .await
+            .map_err(|e| {
+                tracing::error!("book_event stars debit: {e}");
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?;
+        if debited.rows_affected == 0 {
+            let _ = tx.rollback().await;
+            return Err(StatusCode::PAYMENT_REQUIRED);
+        }
+
+        let balance_after = UsEntity::find_by_id(req.telegram_id)
+            .one(&tx)
+            .await
+            .map_err(|e| {
+                tracing::error!("book_event stars balance read: {e}");
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?
+            .map(|r| r.balance)
+            .unwrap_or(0);
+
+        let tx_id = uuid::Uuid::new_v4().to_string();
+        TxEntity::insert(TxAm {
+            id: Set(tx_id.clone()),
+            telegram_id: Set(req.telegram_id),
+            amount: Set(-stars_cost),
+            balance_after: Set(balance_after),
+            source: Set("events".to_string()),
+            reason: Set("event_booking".to_string()),
+            external_tx_id: Set(None),
+            related_order_id: Set(Some(booking_id.clone())),
+            ..Default::default()
+        })
+        .exec(&tx)
+        .await
+        .map_err(|e| {
+            tracing::error!("book_event stars transaction insert: {e}");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+        stars_tx_id = Some(tx_id);
+    }
+
     tx.execute(Statement::from_sql_and_values(
         DbBackend::Postgres,
-        "INSERT INTO event_bookings (id, event_id, telegram_id, seats, status, idempotency_key) VALUES ($1,$2,$3,$4,'confirmed',$5)",
+        "INSERT INTO event_bookings (id, event_id, telegram_id, seats, status, idempotency_key, stars_paid, stars_tx_id) VALUES ($1,$2,$3,$4,'confirmed',$5,$6,$7)",
         [
             booking_id.clone().into(),
             id.clone().into(),
             req.telegram_id.into(),
             seats.into(),
             idem_key.into(),
+            stars_cost.into(),
+            stars_tx_id.into(),
         ],
     )).await.map_err(|e| {
         tracing::error!("book_event insert: {e}");
@@ -514,7 +628,7 @@ async fn my_bookings(
         .orm
         .query_all(Statement::from_sql_and_values(
             DbBackend::Postgres,
-            "SELECT b.id, b.event_id, b.telegram_id, b.seats, b.status, b.order_id, b.created_at, \
+            "SELECT b.id, b.event_id, b.telegram_id, b.seats, b.status, b.order_id, b.stars_paid, b.stars_tx_id, b.created_at, \
              e.title, e.title_en, e.starts_at, e.location_text \
              FROM event_bookings b JOIN events e ON e.id = b.event_id \
              WHERE b.telegram_id = $1 \
@@ -704,7 +818,7 @@ async fn list_admin_events(
     let rows = state.db.orm.query_all(Statement::from_string(
         DbBackend::Postgres,
         "SELECT e.id, e.title, e.title_en, e.description, e.description_en, e.starts_at, e.ends_at, \
-         e.location_text, e.image_url, e.max_seats, e.price_baht::float8 AS price_baht, e.is_public, e.created_at, \
+         e.location_text, e.image_url, e.max_seats, e.price_baht::float8 AS price_baht, e.price_stars, e.is_public, e.created_at, \
          COALESCE((SELECT SUM(b.seats) FROM event_bookings b WHERE b.event_id = e.id AND b.status = 'confirmed'), 0)::bigint AS seats_taken, \
          (SELECT COUNT(*)::bigint FROM event_bookings b WHERE b.event_id = e.id) AS bookings_count \
          FROM events e \
@@ -732,8 +846,8 @@ async fn create_event(
     use sea_orm::{ConnectionTrait, DbBackend, Statement};
     state.db.orm.execute(Statement::from_sql_and_values(
         DbBackend::Postgres,
-        "INSERT INTO events (id, title, title_en, description, description_en, starts_at, ends_at, location_text, image_url, max_seats, price_baht, is_public) \
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)",
+        "INSERT INTO events (id, title, title_en, description, description_en, starts_at, ends_at, location_text, image_url, max_seats, price_baht, price_stars, is_public) \
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)",
         [
             id.clone().into(),
             req.title.trim().into(),
@@ -746,6 +860,7 @@ async fn create_event(
             req.image_url.filter(|s| !s.is_empty()).into(),
             req.max_seats.into(),
             req.price_baht.into(),
+            req.price_stars.into(),
             is_public.into(),
         ],
     )).await.map_err(|e| { tracing::error!("create_event: {e}"); (StatusCode::INTERNAL_SERVER_ERROR, String::new()) })?;
@@ -763,7 +878,7 @@ async fn get_admin_event(
     let row = state.db.orm.query_one(Statement::from_sql_and_values(
         DbBackend::Postgres,
         "SELECT e.id, e.title, e.title_en, e.description, e.description_en, e.starts_at, e.ends_at, \
-         e.location_text, e.image_url, e.max_seats, e.price_baht::float8 AS price_baht, e.is_public, e.created_at, \
+         e.location_text, e.image_url, e.max_seats, e.price_baht::float8 AS price_baht, e.price_stars, e.is_public, e.created_at, \
          COALESCE((SELECT SUM(b.seats) FROM event_bookings b WHERE b.event_id = e.id AND b.status = 'confirmed'), 0)::bigint AS seats_taken \
          FROM events e \
          WHERE e.id = $1",
@@ -798,9 +913,10 @@ async fn update_event(
             image_url = COALESCE($8, image_url), \
             max_seats = COALESCE($9, max_seats), \
             price_baht = COALESCE($10, price_baht), \
-            is_public = COALESCE($11, is_public), \
+            price_stars = COALESCE($11, price_stars), \
+            is_public = COALESCE($12, is_public), \
             updated_at = NOW() \
-         WHERE id = $12",
+         WHERE id = $13",
         [
             req.title.as_deref().map(|s| s.trim()).filter(|s| !s.is_empty()).map(|s| s.to_string()).into(),
             req.title_en.filter(|s| !s.is_empty()).into(),
@@ -812,6 +928,7 @@ async fn update_event(
             req.image_url.filter(|s| !s.is_empty()).into(),
             req.max_seats.into(),
             req.price_baht.into(),
+            req.price_stars.into(),
             is_public.map(|v| v.into()).unwrap_or(sea_orm::Value::Bool(None)),
             id.into(),
         ],
@@ -845,7 +962,7 @@ async fn list_event_bookings(
     use sea_orm::{ConnectionTrait, DbBackend, Statement};
     let rows = state.db.orm.query_all(Statement::from_sql_and_values(
         DbBackend::Postgres,
-        "SELECT id, event_id, telegram_id, seats, status, order_id, created_at FROM event_bookings \
+        "SELECT id, event_id, telegram_id, seats, status, order_id, stars_paid, stars_tx_id, created_at FROM event_bookings \
          WHERE event_id = $1 \
          ORDER BY created_at DESC",
         [id.into()],
@@ -901,6 +1018,7 @@ mod tests {
             image_url: Some("/uploads/event.jpg".into()),
             max_seats: Some(20),
             price_baht: None,
+            price_stars: None,
             is_public: Some(true),
         }
     }
@@ -942,6 +1060,20 @@ mod tests {
     fn validate_event_price_negative() {
         let mut r = valid_create();
         r.price_baht = Some(-1.0);
+        assert_eq!(validate_event_request(&r).unwrap_err().0, StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn validate_event_price_stars_negative() {
+        let mut r = valid_create();
+        r.price_stars = Some(-1);
+        assert_eq!(validate_event_request(&r).unwrap_err().0, StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn validate_event_price_stars_too_large() {
+        let mut r = valid_create();
+        r.price_stars = Some(1_000_000_001);
         assert_eq!(validate_event_request(&r).unwrap_err().0, StatusCode::BAD_REQUEST);
     }
 

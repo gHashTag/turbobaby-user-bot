@@ -90,11 +90,13 @@ pub const T_EVENTS_DATE: Key = "events.date";
 pub const T_EVENTS_LOCATION: Key = "events.location";
 pub const T_EVENTS_CAPACITY: Key = "events.capacity";
 pub const T_EVENTS_PRICE: Key = "events.price";
+pub const T_EVENTS_PRICE_STARS: Key = "events.price_stars";
 pub const T_EVENTS_BOOK: Key = "events.book";
 pub const T_EVENTS_BOOKED: Key = "events.booked";
 pub const T_EVENTS_BOOK_FREE: Key = "events.book_free";
 pub const T_EVENTS_SOLD_OUT: Key = "events.sold_out";
 pub const T_EVENTS_ERROR: Key = "events.error";
+pub const T_EVENTS_INSUFFICIENT_STARS: Key = "events.insufficient_stars";
 pub const T_EVENTS_WEEKDAY_MON: Key = "events.weekday.mon";
 pub const T_EVENTS_WEEKDAY_TUE: Key = "events.weekday.tue";
 pub const T_EVENTS_WEEKDAY_WED: Key = "events.weekday.wed";
@@ -135,6 +137,25 @@ pub const T_SHARE: Key = "btn.share";
 pub const T_SHARE_MESSAGE: Key = "share.message";
 pub const T_LOADING: Key = "label.loading";
 pub const T_FILTER_ALL: Key = "filter.all";
+
+// Variant C: retention + community
+pub const T_REVIEWS_TITLE: Key = "reviews.title";
+pub const T_REVIEWS_AVG: Key = "reviews.avg";
+pub const T_REVIEWS_EMPTY: Key = "reviews.empty";
+pub const T_REVIEW_LEAVE: Key = "review.leave";
+pub const T_REVIEW_RATING: Key = "review.rating";
+pub const T_REVIEW_COMMENT: Key = "review.comment";
+pub const T_REVIEW_SUBMIT: Key = "review.submit";
+pub const T_REVIEW_THANKS: Key = "review.thanks";
+pub const T_LAB_CERTS: Key = "lab_certs.title";
+pub const T_LAB_CERT_THC: Key = "lab_certs.thc";
+pub const T_LAB_CERT_CBD: Key = "lab_certs.cbd";
+pub const T_LAB_CERT_TESTED: Key = "lab_certs.tested";
+pub const T_LAB_CERT_EMPTY: Key = "lab_certs.empty";
+pub const T_LINE_BROADCAST: Key = "line.broadcast.title";
+pub const T_LINE_BROADCAST_TEXT: Key = "line.broadcast.text";
+pub const T_LINE_BROADCAST_SEND: Key = "line.broadcast.send";
+pub const T_LINE_BROADCAST_SENT: Key = "line.broadcast.sent";
 pub const T_SOMM_MOOD: Key = "somm.mood";
 pub const T_SOMM_TIME: Key = "somm.time";
 pub const T_SOMM_EXP: Key = "somm.experience";
@@ -251,11 +272,13 @@ fn get_ru_translation(key: Key) -> Value {
         T_EVENTS_LOCATION => "Локация",
         T_EVENTS_CAPACITY => "Мест",
         T_EVENTS_PRICE => "Цена",
+        T_EVENTS_PRICE_STARS => "Цена в Stars",
         T_EVENTS_BOOK => "Забронировать",
         T_EVENTS_BOOKED => "Бронь подтверждена",
         T_EVENTS_BOOK_FREE => "Бесплатно",
         T_EVENTS_SOLD_OUT => "Мест нет",
         T_EVENTS_ERROR => "Не удалось забронировать",
+        T_EVENTS_INSUFFICIENT_STARS => "Недостаточно Stars. Заработайте в играх Woody или пополните баланс.",
         T_EVENTS_WEEKDAY_MON => "пн",
         T_EVENTS_WEEKDAY_TUE => "вт",
         T_EVENTS_WEEKDAY_WED => "ср",
@@ -295,6 +318,24 @@ fn get_ru_translation(key: Key) -> Value {
         T_SHARE_MESSAGE => "Посмотри {0} в Woody Weed 👇",
         T_LOADING => "Загрузка...",
         T_FILTER_ALL => "Все",
+        // Variant C
+        T_REVIEWS_TITLE => "Отзывы",
+        T_REVIEWS_AVG => "Средняя оценка: {0}",
+        T_REVIEWS_EMPTY => "Пока нет отзывов. Будьте первым!",
+        T_REVIEW_LEAVE => "Оставить отзыв",
+        T_REVIEW_RATING => "Оценка",
+        T_REVIEW_COMMENT => "Комментарий",
+        T_REVIEW_SUBMIT => "Отправить",
+        T_REVIEW_THANKS => "Спасибо за отзыв!",
+        T_LAB_CERTS => "Лабораторные тесты",
+        T_LAB_CERT_THC => "THC",
+        T_LAB_CERT_CBD => "CBD",
+        T_LAB_CERT_TESTED => "Тестировано",
+        T_LAB_CERT_EMPTY => "Нет сертификатов",
+        T_LINE_BROADCAST => "LINE рассылка",
+        T_LINE_BROADCAST_TEXT => "Текст сообщения",
+        T_LINE_BROADCAST_SEND => "Разослать",
+        T_LINE_BROADCAST_SENT => "Сообщение разослано",
         T_SOMM_MOOD => "Настроение",
         T_SOMM_TIME => "Время суток",
         T_SOMM_EXP => "Опыт",
@@ -390,11 +431,13 @@ fn get_en_translation(key: Key) -> Value {
         T_EVENTS_LOCATION => "Location",
         T_EVENTS_CAPACITY => "Capacity",
         T_EVENTS_PRICE => "Price",
+        T_EVENTS_PRICE_STARS => "Price in Stars",
         T_EVENTS_BOOK => "Book now",
         T_EVENTS_BOOKED => "Booking confirmed",
         T_EVENTS_BOOK_FREE => "Free",
         T_EVENTS_SOLD_OUT => "Sold out",
         T_EVENTS_ERROR => "Booking failed",
+        T_EVENTS_INSUFFICIENT_STARS => "Not enough Stars. Earn them in Woody games or top up your balance.",
         T_EVENTS_WEEKDAY_MON => "Mon",
         T_EVENTS_WEEKDAY_TUE => "Tue",
         T_EVENTS_WEEKDAY_WED => "Wed",
@@ -434,6 +477,24 @@ fn get_en_translation(key: Key) -> Value {
         T_SHARE_MESSAGE => "Check out {0} in Woody Weed 👇",
         T_LOADING => "Loading...",
         T_FILTER_ALL => "All",
+        // Variant C
+        T_REVIEWS_TITLE => "Reviews",
+        T_REVIEWS_AVG => "Average rating: {0}",
+        T_REVIEWS_EMPTY => "No reviews yet. Be the first!",
+        T_REVIEW_LEAVE => "Leave a review",
+        T_REVIEW_RATING => "Rating",
+        T_REVIEW_COMMENT => "Comment",
+        T_REVIEW_SUBMIT => "Submit",
+        T_REVIEW_THANKS => "Thanks for your review!",
+        T_LAB_CERTS => "Lab tests",
+        T_LAB_CERT_THC => "THC",
+        T_LAB_CERT_CBD => "CBD",
+        T_LAB_CERT_TESTED => "Tested",
+        T_LAB_CERT_EMPTY => "No certificates",
+        T_LINE_BROADCAST => "LINE broadcast",
+        T_LINE_BROADCAST_TEXT => "Message text",
+        T_LINE_BROADCAST_SEND => "Broadcast",
+        T_LINE_BROADCAST_SENT => "Broadcast sent",
         T_SOMM_MOOD => "Mood",
         T_SOMM_TIME => "Time of Day",
         T_SOMM_EXP => "Experience",
@@ -541,11 +602,13 @@ pub fn get_translations(lang: Lang) -> Translations {
         T_EVENTS_LOCATION,
         T_EVENTS_CAPACITY,
         T_EVENTS_PRICE,
+        T_EVENTS_PRICE_STARS,
         T_EVENTS_BOOK,
         T_EVENTS_BOOKED,
         T_EVENTS_BOOK_FREE,
         T_EVENTS_SOLD_OUT,
         T_EVENTS_ERROR,
+        T_EVENTS_INSUFFICIENT_STARS,
         T_EVENTS_WEEKDAY_MON,
         T_EVENTS_WEEKDAY_TUE,
         T_EVENTS_WEEKDAY_WED,

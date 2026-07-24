@@ -281,6 +281,43 @@ impl ApiClient {
             .map_err(|e| ApiError::Network(e.to_string()))?;
         Self::run(req).await
     }
+
+    // Reviews & lab certificates (Variant C)
+    pub async fn get_strain_reviews(&self, strain_id: &str) -> Result<ReviewsList> {
+        self.get(&format!(
+            "/api/reviews?strain_id={}",
+            urlencoding::encode(strain_id)
+        ))
+        .await
+    }
+
+    pub async fn get_strain_lab_certs(
+        &self,
+        strain_id: &str,
+    ) -> Result<Vec<LabCertificate>> {
+        #[derive(Deserialize)]
+        struct CertsResponse {
+            lab_certificates: Vec<LabCertificate>,
+        }
+        let resp: CertsResponse = self
+            .get(&format!(
+                "/api/strains/{}/lab-certs",
+                urlencoding::encode(strain_id)
+            ))
+            .await?;
+        Ok(resp.lab_certificates)
+    }
+
+    pub async fn create_review(&self, req: &CreateReviewRequest) -> Result<serde_json::Value> {
+        self.post("/api/reviews", req).await
+    }
+
+    pub async fn send_line_broadcast(
+        &self,
+        req: &LineBroadcastRequest,
+    ) -> Result<serde_json::Value> {
+        self.post("/api/admin/line-broadcast", req).await
+    }
 }
 
 #[derive(Debug, Serialize)]
