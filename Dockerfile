@@ -19,7 +19,7 @@ RUN mkdir -p src && echo 'fn main() {}' > src/main.rs && \
 # invalidates this layer and makes Railway rebuild the Rust binary even when
 # only backend source changed in a way Docker didn't detect.
 ARG BUILD_VERSION=docker
-ARG SOURCE_CACHE_BUST=4
+ARG SOURCE_CACHE_BUST=5
 ENV BUILD_VERSION_OVERRIDE=$BUILD_VERSION
 COPY src ./src
 COPY migrations ./migrations

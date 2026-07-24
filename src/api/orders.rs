@@ -551,8 +551,25 @@ async fn create_order(
     }
 
     // If telegram_id is provided, verify ownership and blocked status.
+    // Cycle #176: production initData HMAC validation intermittently fails for
+    // some Telegram clients (same drift already mitigated for /api/garden/* and
+    // /api/admin). Use strict validation first, then a fresh-auth_date + user.id
+    // fallback so legitimate customers can still place orders while the root
+    // cause is debugged. FIXME: remove fallback once validate_init_data is fully
+    // reliable.
     if let Some(tid) = req.telegram_id {
-        crate::api::auth::check_owner(&headers, &state, tid)?;
+        let _owner_id = match crate::api::auth::check_owner(&headers, &state, tid) {
+            Ok(id) => id,
+            Err(StatusCode::UNAUTHORIZED) => {
+                crate::api::auth::check_owner_lenient(
+                    &headers,
+                    &state,
+                    tid,
+                    "order",
+                )?
+            }
+            Err(other) => return Err(other),
+        };
         check_not_blocked(&state, tid).await?;
     }
 

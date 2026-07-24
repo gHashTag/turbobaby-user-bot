@@ -717,6 +717,7 @@ pub(crate) fn check_owner_lenient(
     headers: &HeaderMap,
     state: &AppState,
     expected_telegram_id: i64,
+    metric_kind: &str,
 ) -> Result<i64, StatusCode> {
     match check_owner(headers, state, expected_telegram_id) {
         Ok(id) => Ok(id),
@@ -753,10 +754,11 @@ pub(crate) fn check_owner_lenient(
                 return Err(StatusCode::UNAUTHORIZED);
             }
             tracing::warn!(
-                "lenient garden auth accepted telegram_id={} (HMAC validation failed)",
+                "lenient {} auth accepted telegram_id={} (HMAC validation failed)",
+                metric_kind,
                 user_id
             );
-            crate::metrics::auth_failure("garden_lenient_auth_accepted");
+            crate::metrics::auth_failure(&format!("{}_lenient_auth_accepted", metric_kind));
             Ok(user_id)
         }
         Err(other) => Err(other),

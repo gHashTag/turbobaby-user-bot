@@ -96,7 +96,7 @@ async fn get_user_plants(
     Query(query): Query<UserPlantsQuery>,
 ) -> Result<Json<Value>, StatusCode> {
     validate_telegram_id_param(query.telegram_id)?;
-    crate::api::auth::check_owner_lenient(&headers, &state, query.telegram_id)?;
+    crate::api::auth::check_owner_lenient(&headers, &state, query.telegram_id, "garden")?;
     check_not_blocked(&state, query.telegram_id).await?;
     // Cycle #94: SeaORM via Statement. No `garden_plant` entity — wire
     // shape (`PlantResponse`) is a heavily-derived view (`progress`,
@@ -239,7 +239,7 @@ async fn water_plant(
     let tid = user_id
         .parse::<i64>()
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    crate::api::auth::check_owner_lenient(&headers, &state, tid)?;
+    crate::api::auth::check_owner_lenient(&headers, &state, tid, "garden")?;
     check_not_blocked(&state, tid).await?;
 
     // Fail loud on the state reads: this is a state mutation. Wave #38 made a
@@ -381,7 +381,7 @@ async fn harvest_plant(
     let tid = user_id
         .parse::<i64>()
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    crate::api::auth::check_owner_lenient(&headers, &state, tid)?;
+    crate::api::auth::check_owner_lenient(&headers, &state, tid, "garden")?;
     check_not_blocked(&state, tid).await?;
 
     let is_completed: bool = r.try_get("", "is_completed").unwrap_or(false);
@@ -547,7 +547,7 @@ async fn get_user_rewards(
     Query(query): Query<UserRewardsQuery>,
 ) -> Result<Json<Value>, StatusCode> {
     validate_telegram_id_param(query.telegram_id)?;
-    crate::api::auth::check_owner_lenient(&headers, &state, query.telegram_id)?;
+    crate::api::auth::check_owner_lenient(&headers, &state, query.telegram_id, "garden")?;
     check_not_blocked(&state, query.telegram_id).await?;
     // Cycle #94: SeaORM via Statement.
     use sea_orm::{ConnectionTrait, DbBackend, Statement};
@@ -651,7 +651,7 @@ async fn use_reward(
     let tid = user_id
         .parse::<i64>()
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    crate::api::auth::check_owner_lenient(&headers, &state, tid)?;
+    crate::api::auth::check_owner_lenient(&headers, &state, tid, "garden")?;
     check_not_blocked(&state, tid).await?;
 
     // FAIL LOUD on the reward-row reads: this is a financial mutation. A silent
@@ -904,7 +904,7 @@ async fn force_seed(
     Json(req): Json<ForceSeedRequest>,
 ) -> Result<Json<Value>, StatusCode> {
     validate_telegram_id_param(req.telegram_id)?;
-    crate::api::auth::check_owner_lenient(&headers, &state, req.telegram_id)?;
+    crate::api::auth::check_owner_lenient(&headers, &state, req.telegram_id, "garden")?;
     check_not_blocked(&state, req.telegram_id).await?;
 
     use sea_orm::{ConnectionTrait, DbBackend, Statement};
@@ -1209,7 +1209,7 @@ async fn choose_plant(
     Json(req): Json<ChoosePlantRequest>,
 ) -> Result<Json<Value>, StatusCode> {
     validate_telegram_id_param(req.telegram_id)?;
-    crate::api::auth::check_owner_lenient(&headers, &state, req.telegram_id)?;
+    crate::api::auth::check_owner_lenient(&headers, &state, req.telegram_id, "garden")?;
     check_not_blocked(&state, req.telegram_id).await?;
     if req.product_id.len() > 200 {
         return Err(StatusCode::BAD_REQUEST);
