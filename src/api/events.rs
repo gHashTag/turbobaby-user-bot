@@ -268,15 +268,15 @@ async fn list_events(
 
     if let Some(from) = q.get("from").filter(|s| !s.is_empty()) {
         let _ = parse_iso_timestamp(from)?;
-        clauses.push("e.starts_at >= $1".to_string());
+        clauses.push("e.starts_at >= $1::timestamptz".to_string());
         values.push(from.clone().into());
     }
     if let Some(to) = q.get("to").filter(|s| !s.is_empty()) {
         let _ = parse_iso_timestamp(to)?;
         if values.is_empty() {
-            clauses.push("e.starts_at <= $1".to_string());
+            clauses.push("e.starts_at <= $1::timestamptz".to_string());
         } else {
-            clauses.push("e.starts_at <= $2".to_string());
+            clauses.push("e.starts_at <= $2::timestamptz".to_string());
         }
         values.push(to.clone().into());
     }
