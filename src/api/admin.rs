@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 // Admin API routes
-use crate::api::auth::{check_admin, validate_init_data, validate_telegram_id_param};
+use crate::api::auth::{check_admin, validate_telegram_id_param};
 use crate::AppState;
 
 // Cycle #128: removed LOGIN_LOCK static. It was introduced to pair
@@ -400,63 +400,32 @@ async fn check_admin_access(
     State(state): State<AppState>,
 ) -> Result<Json<Value>, StatusCode> {
     // telegram_id is client-supplied and unverified; it is only used for
-    // initData-based admin checks. A missing/zero value is fine when the
-    // request authenticates via X-Admin-Token, so don't reject the request
-    // upfront. (Token-authenticated responses always report telegram_id: 0.)
-    let init_data_opt = headers
-        .get("X-Telegram-Init-Data")
-        .and_then(|v| v.to_str().ok());
+    // display. The real identity comes from verified initData or the
+    // X-Admin-Token password path.
+    let init_data_present = headers.get("X-Telegram-Init-Data").is_some();
     tracing::debug!(
         "admin/check: telegram_id_query={}, init_data_present={}",
         query.telegram_id,
-        init_data_opt.is_some()
+        init_data_present
     );
 
-    // 1. Try Telegram initData HMAC validation
-    if let Some(init_data) = init_data_opt {
-        if !init_data.is_empty() {
-            if let Some(user) = validate_init_data(init_data, &state.config.bot_token) {
-                if state.config.admin_ids.contains(&user.id) {
-                    tracing::debug!(
-                        "admin/check: initData authenticated telegram_id={}",
-                        user.id
-                    );
-                    return Ok(Json(json!({ "is_admin": true, "telegram_id": user.id })));
-                }
-                tracing::warn!(
-                    "admin/check: initData valid but user not admin telegram_id={}",
-                    user.id
-                );
-                // Don't return here — allow password fallback below
-            } else {
-                tracing::warn!("admin/check: invalid initData signature");
-            }
-        }
-    }
-
-    // 2. Fallback: password token (X-Admin-Token)
-    let token_opt = headers.get("X-Admin-Token").and_then(|v| v.to_str().ok());
-    if let Some(token) = token_opt {
-        if let Some(ref password) = state.config.admin_password {
-            if crate::api::auth::verify_admin_token(token, &state.config.bot_token, password) {
-                // Password-token auth is NOT tied to a specific telegram_id (the
-                // password is shared). Report `0` — the same sentinel `check_admin`
-                // returns for the token path — instead of echoing the client-supplied
-                // `query.telegram_id`, which is unverified input and must never be
-                // presented as the authenticated identity. (The frontend only reads
-                // `is_admin`; this keeps the API contract honest for any future
-                // consumer that might trust the `telegram_id` field.)
+    match crate::api::auth::check_admin(&headers, &state) {
+        Ok(telegram_id) => {
+            // check_admin returns 0 for password-token auth (shared password has
+            // no specific telegram_id) and the real user id for initData auth.
+            // Never echo the client-supplied query.telegram_id (OWASP A01).
+            if telegram_id == 0 {
                 tracing::info!("admin/check: token authenticated (no specific telegram_id)");
-                return Ok(Json(json!({ "is_admin": true, "telegram_id": 0 })));
+            } else {
+                tracing::debug!("admin/check: authenticated telegram_id={}", telegram_id);
             }
-            tracing::warn!("admin/check: token verification failed");
-        } else {
-            tracing::warn!("admin/check: ADMIN_PASSWORD not set");
+            Ok(Json(json!({ "is_admin": true, "telegram_id": telegram_id })))
+        }
+        Err(status) => {
+            tracing::warn!("admin/check: unauthorized (status={})", status.as_u16());
+            Err(status)
         }
     }
-
-    tracing::warn!("admin/check: unauthorized");
-    Err(StatusCode::UNAUTHORIZED)
 }
 
 fn validate_admin_login(req: &AdminLoginRequest) -> Result<(), StatusCode> {
