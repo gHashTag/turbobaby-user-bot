@@ -407,15 +407,23 @@ async fn check_admin_access(
     headers: HeaderMap,
     Query(query): Query<AdminCheckQuery>,
     State(state): State<AppState>,
-) -> Result<Json<Value>, StatusCode> {
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
     // telegram_id is client-supplied and unverified; it is only used for
     // display. The real identity comes from verified initData or the
     // X-Admin-Token password path.
     let init_data_present = headers.get("X-Telegram-Init-Data").is_some();
+    let token_present = headers.get("X-Admin-Token").is_some();
     tracing::debug!(
-        "admin/check: telegram_id_query={}, init_data_present={}",
+        "admin/check: telegram_id_query={}, init_data_present={} token_present={}",
         query.telegram_id,
-        init_data_present
+        init_data_present,
+        token_present
+    );
+
+    let reason = diagnose_admin_auth_failure(&headers,
+        &state,
+        init_data_present,
+        token_present,
     );
 
     match crate::api::auth::check_admin(&headers, &state) {
@@ -432,9 +440,48 @@ async fn check_admin_access(
         }
         Err(status) => {
             tracing::warn!("admin/check: unauthorized (status={})", status.as_u16());
-            Err(status)
+            Err((
+                status,
+                Json(json!({
+                    "is_admin": false,
+                    "telegram_id": 0,
+                    "reason": reason.unwrap_or("unauthorized")
+                })),
+            ))
         }
     }
+}
+
+/// Diagnostic reason for a 401 on /api/admin/check. Does NOT perform the
+/// authoritative auth check — it only inspects the headers to tell the UI
+/// (and support) why the request was rejected.
+fn diagnose_admin_auth_failure(
+    headers: &HeaderMap,
+    state: &AppState,
+    init_data_present: bool,
+    token_present: bool,
+) -> Option<&'static str> {
+    if init_data_present {
+        let init_data = headers
+            .get("X-Telegram-Init-Data")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("");
+        if init_data.is_empty() {
+            return Some("empty_init_data");
+        }
+        if let Some(user) = crate::api::auth::validate_init_data(init_data, &state.config.bot_token) {
+            if !state.config.admin_ids.contains(&user.id) {
+                return Some("not_admin");
+            }
+            // Would have succeeded; fall through to generic unauthorized.
+        } else {
+            return Some("invalid_init_data");
+        }
+    }
+    if token_present {
+        return Some("invalid_token");
+    }
+    Some("no_credentials")
 }
 
 fn validate_admin_login(req: &AdminLoginRequest) -> Result<(), StatusCode> {

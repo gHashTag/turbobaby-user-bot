@@ -285,6 +285,8 @@ struct TeaSetsResp {
 #[derive(Debug, Deserialize)]
 struct AdminCheck {
     is_admin: bool,
+    #[serde(default)]
+    reason: Option<String>,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -520,13 +522,18 @@ pub fn AdminScreen() -> Element {
                 .await
                 .map_err(|e| format!("send to {url}: {e}"))?;
             let status = resp.status();
-            if !status.is_success() {
-                return Err(format!("http {} from {url}", status.as_u16()));
+            if status.is_success() {
+                return resp.json::<AdminCheck>()
+                    .await
+                    .map_err(|e| format!("json: {e}"));
             }
-            resp.json::<AdminCheck>()
+            // 401 responses now carry a JSON body with a diagnostic reason.
+            let reason = resp.json::<AdminCheck>()
                 .await
-                .map(|c| c.is_admin)
-                .map_err(|e| format!("json: {e}"))
+                .ok()
+                .and_then(|c| c.reason)
+                .unwrap_or_else(|| format!("http {}", status.as_u16()));
+            Err(reason)
         }
     });
 
@@ -537,8 +544,9 @@ pub fn AdminScreen() -> Element {
             div { style: "font-size:10px;color:#444;margin-bottom:16px;font-family:monospace;", "v{build_version}" }
             match &*access.read() {
                 None => rsx!(div { style: "color:#888;padding:20px 0;", "Проверка доступа..." }),
-                Some(Ok(true)) => rsx!(AdminPanel { active_tab, password_token }),
-                _ => rsx!(AccessDeniedScreen { telegram_id: telegram_id(), password_token, access_reload }),
+                Some(Ok(check)) if check.is_admin => rsx!(AdminPanel { active_tab, password_token }),
+                Some(Err(reason)) => rsx!(AccessDeniedScreen { telegram_id: telegram_id(), password_token, access_reload, reason: reason.clone() }),
+                _ => rsx!(AccessDeniedScreen { telegram_id: telegram_id(), password_token, access_reload, reason: "unknown".to_string() }),
             }
         }
     }
@@ -549,6 +557,7 @@ fn AccessDeniedScreen(
     telegram_id: i64,
     mut password_token: Signal<String>,
     mut access_reload: Signal<u32>,
+    reason: String,
 ) -> Element {
     let debug = TelegramApp::init().debug_dump();
     let mut password = use_signal(String::new);
@@ -591,9 +600,19 @@ fn AccessDeniedScreen(
             h2 { style: "color:#ff4757;font-size:18px;margin-bottom:8px;", "Доступ закрыт" }
             p { style: "color:#888;font-size:13px;line-height:1.5;max-width:300px;margin:0 auto;",
                 "Попросите владельца добавить ваш Telegram ID в админы." }
+            if !reason.is_empty() {
+                div { style: "margin-top:12px;padding:8px 12px;background:#2a1a1a;border-radius:6px;font-family:monospace;font-size:11px;color:#ff9f43;display:inline-block;max-width:300px;word-break:break-all;",
+                    "{reason}" }
+            }
+            if reason == "invalid_init_data" || reason == "not_admin" {
+                div { style: "margin-top:12px;padding:10px;background:#1a1a2e;border-radius:6px;font-size:12px;color:#6699ff;max-width:300px;margin-left:auto;margin-right:auto;line-height:1.4;",
+                    "Откройте это приложение через нового бота: "
+                    a { style: "color:#39ff14;text-decoration:underline;", href: "https://t.me/Woody_WeedPecker_bot", "@Woody_WeedPecker_bot" }
+                }
+            }
             div { style: "margin-top:20px;padding:12px;background:#1a1a2e;border-radius:8px;font-family:monospace;font-size:13px;color:#39ff14;display:inline-block;",
                 "ID: {telegram_id}" }
-            div { style: "margin-top:20px;max-width:300px;margin-left:auto;margin-right:auto;",
+            div { style: "margin-top:20px;max-width:300px;margin-left:auto;margin-right:auto;display:flex;flex-direction:column;gap:8px;",
                 input { style: input_style(), r#type: "text", placeholder: "Ваш Telegram ID (число)",
                     "aria-label": "Telegram ID",
                     value: "{admin_id}", oninput: move |e| admin_id.set(e.value()) }
