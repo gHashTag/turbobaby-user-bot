@@ -673,12 +673,15 @@ async fn main() -> Result<()> {
         )
     };
     // CSP for Telegram Mini App: allow self, WASM eval, inline styles, and API/S3 images.
+    // wasm-bindgen emits `new Function(...)` for dynamic closure signatures, so
+    // `script-src` needs BOTH `wasm-unsafe-eval` (for WebAssembly.compile) and
+    // `unsafe-eval` (for `new Function`).
     let csp_layer = || {
         SetResponseHeaderLayer::if_not_present(
         axum::http::header::CONTENT_SECURITY_POLICY,
         HeaderValue::from_static(
             "default-src 'self'; \
-             script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://telegram.org; \
+             script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' https://telegram.org; \
              style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; \
              img-src 'self' data: https: blob:; \
              media-src 'self' data: https: blob:; \
@@ -3356,6 +3359,14 @@ mod security_headers_tests {
             "CSP must include a frame-ancestors directive: it is the clickjacking \
              control (supersedes X-Frame-Options) and the only framing header that \
              can allow the Telegram WebView origin"
+        );
+        // wasm-bindgen uses `new Function(...)` for dynamic closure signatures, so
+        // the Telegram Mini App breaks if `script-src` lacks `unsafe-eval` even
+        // though `wasm-unsafe-eval` covers WASM compilation.
+        assert!(
+            src.contains("'unsafe-eval'") && src.contains("'wasm-unsafe-eval'"),
+            "CSP script-src must allow both 'unsafe-eval' (wasm-bindgen closures) \
+             and 'wasm-unsafe-eval' (WASM instantiation)"
         );
         // Referrer-Policy.
         assert!(
