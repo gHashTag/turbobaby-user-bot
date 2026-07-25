@@ -191,6 +191,24 @@ pub fn HomeScreen() -> Element {
     let nav_garden = t(crate::ui::lang::current_lang(), T_NAV_GARDEN).to_string();
     let add_to_cart_label = t(crate::ui::lang::current_lang(), T_ADD_TO_CART).to_string();
 
+    // Secret admin entry: 5 rapid taps on the logo navigates to /admin.
+    // Easier than remembering /admin URL or relying on bot command menu.
+    let mut logo_taps = use_signal(|| 0u32);
+    let mut last_tap = use_signal(|| 0u64);
+    let nav_for_logo = nav.clone();
+    let logo_onclick = move |_| {
+        let now = js_sys::Date::now() as u64;
+        let dt = now.saturating_sub(last_tap());
+        // Reset counter if taps pause for more than 800 ms.
+        let count = if dt > 800 { 1 } else { logo_taps() + 1 };
+        logo_taps.set(count);
+        last_tap.set(now);
+        if count >= 5 {
+            logo_taps.set(0);
+            nav_for_logo.push(Route::Admin {});
+        }
+    };
+
     // Packs carousel (first block). Promo packs lead; tap → Sets section.
     let packs_resource = use_resource(|| async move {
         let base = api_base_url();
@@ -227,7 +245,8 @@ pub fn HomeScreen() -> Element {
                 img {
                     src: "{assets::logo::MAIN}",
                     alt: "Woody Weed Bot",
-                    style: "height:120px;width:auto;display:block;margin:0 auto;box-shadow:0 0 20px rgba(57,255,20,0.3);cursor:pointer;user-select:none;transition:transform 0.1s;",
+                    style: "height:120px;width:auto;display:block;margin:0 auto;box-shadow:0 0 20px rgba(57,255,20,0.3);cursor:pointer;user-select:none;transition:transform 0.1s;touch-action:manipulation;",
+                    onclick: logo_onclick,
                 }
                 h1 { style: "font-size:24px;font-weight:800;color:#39ff14;text-shadow:3px 3px 0 #000,0 0 10px rgba(57,255,20,0.5);letter-spacing:2px;margin-top:12px;",
                     "WOODY WEEDPECKER"
