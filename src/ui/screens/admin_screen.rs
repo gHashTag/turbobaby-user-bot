@@ -649,6 +649,24 @@ fn AccessDeniedScreen(
                     },
                     if *logging_in.read() { "⏳..." } else { "🔑 Войти по паролю" }
                 }
+                button {
+                    style: secondary_btn_style(),
+                    onclick: move |_| {
+                        #[cfg(target_arch = "wasm32")]
+                        {
+                            if let Some(window) = web_sys::window() {
+                                if let Ok(Some(storage)) = window.local_storage() {
+                                    let _ = storage.remove_item("wwb_admin_token");
+                                    let _ = storage.remove_item("wwb_admin_telegram_id");
+                                }
+                            }
+                        }
+                        password_token.set(String::new());
+                        let new_reload = access_reload.read().wrapping_add(1);
+                        access_reload.set(new_reload);
+                    },
+                    "🧹 Сбросить сохранённый вход"
+                }
             }
             details { style: "margin-top:16px;text-align:left;max-width:340px;margin-left:auto;margin-right:auto;",
                 summary { style: "color:#666;font-size:11px;cursor:pointer;", "debug" }
@@ -6548,6 +6566,9 @@ fn en_section_style() -> &'static str {
 }
 fn cancel_btn_style() -> &'static str {
     "padding:10px;background:#2a2a4a;color:#e8e8e8;border:none;border-radius:4px;font-weight:600;font-size:13px;cursor:pointer;margin-top:4px;"
+}
+fn secondary_btn_style() -> &'static str {
+    "padding:10px;background:#1a1a2e;color:#888;border:1px solid #2a2a4a;border-radius:4px;font-weight:600;font-size:13px;cursor:pointer;margin-top:8px;"
 }
 fn danger_btn_style() -> &'static str {
     "padding:10px;background:#ff4757;color:#fff;border:none;border-radius:4px;font-weight:600;font-size:13px;cursor:pointer;margin-top:4px;"
