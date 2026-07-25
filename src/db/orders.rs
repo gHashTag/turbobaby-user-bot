@@ -789,7 +789,7 @@ async fn auto_block_for_fraud(
             "SELECT COUNT(*)::bigint AS n FROM order_fraud_events \
              WHERE telegram_id = $1 \
                AND code = $2 \
-               AND created_at > NOW() - make_interval(hours => $3)",
+               AND created_at > NOW() - ($3 * INTERVAL '1 hour')",
             [
                 telegram_id.into(),
                 FRAUD_CODE_SUBTOTAL_MISMATCH.into(),

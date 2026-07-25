@@ -1326,7 +1326,7 @@ pub(crate) async fn send_event_reminders(
              WHERE b.status = 'confirmed' \
                AND b.reminder_sent_at IS NULL \
                AND e.starts_at > NOW() \
-               AND e.starts_at <= NOW() + make_interval(hours => $1) \
+               AND e.starts_at <= NOW() + ($1 * INTERVAL '1 hour') \
              ORDER BY e.starts_at ASC",
             [hours.into()],
         ))
