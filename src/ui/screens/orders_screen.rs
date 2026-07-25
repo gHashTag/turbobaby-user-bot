@@ -121,7 +121,11 @@ fn PipelineSegment(i: usize, current: usize, last: bool) -> Element {
     let active = i <= current;
     let bg = if active { "#39ff14" } else { "#2a2a4a" };
     let flex = if last { "0 0 8px" } else { "1" };
-    let shape = if last { "border-radius: 50%;" } else { "border-radius: 2px;" };
+    let shape = if last {
+        "border-radius: 50%;"
+    } else {
+        "border-radius: 2px;"
+    };
     rsx! {
         div { style: "{shape} height: 4px; background: {bg}; flex: {flex}; min-width: 8px;" }
         if !last {

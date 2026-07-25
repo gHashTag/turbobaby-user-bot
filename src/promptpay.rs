@@ -25,7 +25,9 @@ pub struct QrConfig {
 impl QrConfig {
     pub fn from_env() -> Self {
         Self {
-            promptpay_id: std::env::var("PROMPTPAY_ID").ok().filter(|s| !s.trim().is_empty()),
+            promptpay_id: std::env::var("PROMPTPAY_ID")
+                .ok()
+                .filter(|s| !s.trim().is_empty()),
         }
     }
 }
@@ -135,7 +137,10 @@ mod tests {
 
     #[test]
     fn normalize_thai_mobile() {
-        assert_eq!(normalize_promptpay_id("0812345678"), Some("66812345678".into()));
+        assert_eq!(
+            normalize_promptpay_id("0812345678"),
+            Some("66812345678".into())
+        );
         assert_eq!(
             normalize_promptpay_id("+66 81 234 5678"),
             Some("66812345678".into())

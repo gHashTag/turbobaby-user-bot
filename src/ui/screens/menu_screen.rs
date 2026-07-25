@@ -131,7 +131,6 @@ pub fn MenuScreen() -> Element {
     let menu_desc = t(crate::ui::lang::current_lang(), T_MENU_DESC).to_string();
     let loading_label = t(crate::ui::lang::current_lang(), T_LOADING).to_string();
 
-
     let strains_resource: Resource<Result<Vec<ApiStrain>, String>> = use_resource(move || {
         async move {
             // Fetch from API. Cycle #74: route non-2xx status through

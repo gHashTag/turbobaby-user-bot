@@ -7,10 +7,9 @@
 use crate::trios::i18n::{
     t, T_BACK, T_EVENTS_BOOK, T_EVENTS_BOOKED, T_EVENTS_BOOK_FREE, T_EVENTS_CAPACITY,
     T_EVENTS_DATE, T_EVENTS_ERROR, T_EVENTS_INSUFFICIENT_STARS, T_EVENTS_LOADING,
-    T_EVENTS_NO_EVENTS, T_EVENTS_PRICE, T_EVENTS_PRICE_STARS, T_EVENTS_SOLD_OUT,
-    T_EVENTS_SUBTITLE, T_EVENTS_TITLE, T_EVENTS_WEEKDAY_FRI, T_EVENTS_WEEKDAY_MON,
-    T_EVENTS_WEEKDAY_SAT, T_EVENTS_WEEKDAY_SUN, T_EVENTS_WEEKDAY_THU, T_EVENTS_WEEKDAY_TUE,
-    T_EVENTS_WEEKDAY_WED,
+    T_EVENTS_NO_EVENTS, T_EVENTS_PRICE, T_EVENTS_PRICE_STARS, T_EVENTS_SOLD_OUT, T_EVENTS_SUBTITLE,
+    T_EVENTS_TITLE, T_EVENTS_WEEKDAY_FRI, T_EVENTS_WEEKDAY_MON, T_EVENTS_WEEKDAY_SAT,
+    T_EVENTS_WEEKDAY_SUN, T_EVENTS_WEEKDAY_THU, T_EVENTS_WEEKDAY_TUE, T_EVENTS_WEEKDAY_WED,
 };
 use crate::ui::api::context::api_base_url;
 use crate::ui::api::http::{
@@ -180,7 +179,9 @@ fn EventCard(props: EventCardProps) -> Element {
     let ev = props.ev;
     let start = parse_event_start(&ev.starts_at);
     let start_label = start.map(|s| s.format("%H:%M").to_string());
-    let avail = ev.max_seats.map(|cap| cap.saturating_sub(ev.seats_taken as i32));
+    let avail = ev
+        .max_seats
+        .map(|cap| cap.saturating_sub(ev.seats_taken as i32));
     let has_baht = ev.price_baht.map_or(false, |p| p > 0.0);
     let has_stars = ev.price_stars.map_or(false, |s| s > 0);
     let is_free = !has_baht && !has_stars;
@@ -464,37 +465,42 @@ pub fn EventsScreen() -> Element {
     let loading = t(lang, T_EVENTS_LOADING).to_string();
     let no_events = t(lang, T_EVENTS_NO_EVENTS).to_string();
 
-    let mut events_resource: Resource<Result<Vec<CalendarEvent>, String>> = use_resource(use_reactive!(|selected| {
-        let from = selected.to_string();
-        let to = selected
-            .read()
-            .succ_opt()
-            .map(|d| d.to_string())
-            .unwrap_or_else(|| from.clone());
-        async move {
-            let base = api_base_url();
-            // Shop timezone is Asia/Bangkok UTC+7; ask the backend for events
-            // that start within that day, not UTC midnight.
-            let url = format!("{}/api/events?from={}T00:00:00%2B07:00&to={}T00:00:00%2B07:00", base, from, to);
-            match crate::ui::api::http::fetch_text_full(&url).await {
-                Ok((status, body)) if (200..300).contains(&status) => {
-                    let parsed: serde_json::Value = serde_json::from_str(&body).unwrap_or_default();
-                    let events: Vec<CalendarEvent> = parsed
-                        .get("events")
-                        .and_then(|v| v.as_array())
-                        .map(|arr| {
-                            arr.iter()
-                                .filter_map(|v| serde_json::from_value(v.clone()).ok())
-                                .collect()
-                        })
-                        .unwrap_or_default();
-                    Ok(events)
+    let mut events_resource: Resource<Result<Vec<CalendarEvent>, String>> =
+        use_resource(use_reactive!(|selected| {
+            let from = selected.to_string();
+            let to = selected
+                .read()
+                .succ_opt()
+                .map(|d| d.to_string())
+                .unwrap_or_else(|| from.clone());
+            async move {
+                let base = api_base_url();
+                // Shop timezone is Asia/Bangkok UTC+7; ask the backend for events
+                // that start within that day, not UTC midnight.
+                let url = format!(
+                    "{}/api/events?from={}T00:00:00%2B07:00&to={}T00:00:00%2B07:00",
+                    base, from, to
+                );
+                match crate::ui::api::http::fetch_text_full(&url).await {
+                    Ok((status, body)) if (200..300).contains(&status) => {
+                        let parsed: serde_json::Value =
+                            serde_json::from_str(&body).unwrap_or_default();
+                        let events: Vec<CalendarEvent> = parsed
+                            .get("events")
+                            .and_then(|v| v.as_array())
+                            .map(|arr| {
+                                arr.iter()
+                                    .filter_map(|v| serde_json::from_value(v.clone()).ok())
+                                    .collect()
+                            })
+                            .unwrap_or_default();
+                        Ok(events)
+                    }
+                    Ok((status, _)) => Err(format!("HTTP {status}")),
+                    Err(e) => Err(e.to_string()),
                 }
-                Ok((status, _)) => Err(format!("HTTP {status}")),
-                Err(e) => Err(e.to_string()),
             }
-        }
-    }));
+        }));
 
     let events_for_day = use_memo(move || {
         let sel = selected.read().clone();
@@ -605,7 +611,10 @@ pub fn EventDetailScreen(id: String) -> Element {
             match fetch_text_full(&url).await {
                 Ok((status, body)) if (200..300).contains(&status) => {
                     let parsed: serde_json::Value = serde_json::from_str(&body).unwrap_or_default();
-                    if let Some(e) = parsed.get("event").and_then(|v| serde_json::from_value(v.clone()).ok()) {
+                    if let Some(e) = parsed
+                        .get("event")
+                        .and_then(|v| serde_json::from_value(v.clone()).ok())
+                    {
                         event.set(Some(e));
                     } else {
                         error.set(Some("Event not found".to_string()));
@@ -619,7 +628,9 @@ pub fn EventDetailScreen(id: String) -> Element {
     });
 
     let ev = event.read().clone();
-    let go_back = move |_| { nav.push(Route::Events {}); };
+    let go_back = move |_| {
+        nav.push(Route::Events {});
+    };
     rsx! {
         div { style: "min-height:100vh;background:#0f0f1a;color:#e8e8e8;padding-bottom:80px;",
             if *loading.read() {
@@ -724,9 +735,7 @@ pub fn MyBookingsScreen() -> Element {
                 urlencoding::encode(&booking_id),
                 tid
             );
-            let _ = crate::ui::api::http::put_json_authed(
-                &url, &init, "{}",
-            ).await;
+            let _ = crate::ui::api::http::put_json_authed(&url, &init, "{}").await;
             let next = *refresh_sig.read() + 1;
             refresh_sig.set(next);
         });

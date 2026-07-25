@@ -291,10 +291,7 @@ impl ApiClient {
         .await
     }
 
-    pub async fn get_strain_lab_certs(
-        &self,
-        strain_id: &str,
-    ) -> Result<Vec<LabCertificate>> {
+    pub async fn get_strain_lab_certs(&self, strain_id: &str) -> Result<Vec<LabCertificate>> {
         #[derive(Deserialize)]
         struct CertsResponse {
             lab_certificates: Vec<LabCertificate>,

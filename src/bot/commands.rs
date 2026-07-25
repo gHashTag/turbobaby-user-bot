@@ -523,10 +523,14 @@ pub(crate) async fn handle_command(
                     String::new()
                 });
             if code.is_empty() {
-                bot.send_message(msg.chat.id, "⚠️ Не удалось получить реферальный код. Попробуйте позже.")
-                    .await?;
+                bot.send_message(
+                    msg.chat.id,
+                    "⚠️ Не удалось получить реферальный код. Попробуйте позже.",
+                )
+                .await?;
             } else {
-                let invite_link = format!("https://t.me/{}?start=ref_{}", config.bot_username, code);
+                let invite_link =
+                    format!("https://t.me/{}?start=ref_{}", config.bot_username, code);
                 let text = format!(
                     "🎁 <b>{}</b>\n\n🔗 <code>{}</code>\n\n{}",
                     locale.referral_title, invite_link, locale.referral_share_hint,

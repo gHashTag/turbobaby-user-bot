@@ -89,9 +89,7 @@ impl Config {
                      list of Telegram user IDs"
                 ));
             } else {
-                tracing::warn!(
-                    "ADMIN_IDS not set — admin endpoints will reject all requests"
-                );
+                tracing::warn!("ADMIN_IDS not set — admin endpoints will reject all requests");
             }
         }
 
@@ -99,7 +97,8 @@ impl Config {
         // If WEB_APP_URL is empty or points to the broken legacy TMA service, fall back to the
         // canonical backend URL so the Telegram WebApp button always opens a working page.
         let raw_web_app_url = std::env::var("WEB_APP_URL").unwrap_or_default();
-        let canonical_web_app_url = "https://woody-weed-bot-production-370f.up.railway.app/?cache=180".to_string();
+        let canonical_web_app_url =
+            "https://woody-weed-bot-production-370f.up.railway.app/?cache=180".to_string();
         let web_app_url = if raw_web_app_url.trim().is_empty()
             || raw_web_app_url.contains("woody-woodpecker-tma-production")
         {

@@ -144,7 +144,9 @@ mod tests {
     fn test_is_age_verified_one_day_short() {
         let today = chrono::Local::now().naive_local().date();
         // Birthday is tomorrow
-        let dob = (today + chrono::Duration::days(1)).with_year(today.year() - 20).unwrap();
+        let dob = (today + chrono::Duration::days(1))
+            .with_year(today.year() - 20)
+            .unwrap();
         assert!(!is_age_verified(dob));
     }
 
@@ -165,7 +167,10 @@ mod tests {
 
     #[test]
     fn test_parse_dob_invalid_format() {
-        assert_eq!(parse_dob("17-05-1990").unwrap_err(), StatusCode::BAD_REQUEST);
+        assert_eq!(
+            parse_dob("17-05-1990").unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
     }
 
     #[test]

@@ -85,11 +85,8 @@ pub fn render_uniform_set_card(
     let badge_label = badge.label().map(|(ru, en)| lang::localized(ru, Some(en)));
     let badge_color = badge.color();
     let strain_word = lang::localized("сортов", Some("strains"));
-    let weight_line = crate::trios::packs::weight_line(
-        set.total_weight_grams,
-        set.strain_count,
-        &strain_word,
-    );
+    let weight_line =
+        crate::trios::packs::weight_line(set.total_weight_grams, set.strain_count, &strain_word);
 
     let mut detail_open = use_signal(|| false);
     let mut show_video = use_signal(|| false);

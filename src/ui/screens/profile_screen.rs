@@ -126,7 +126,11 @@ impl Tier {
 }
 
 fn today_iso() -> String {
-    chrono::Local::now().naive_local().date().format("%Y-%m-%d").to_string()
+    chrono::Local::now()
+        .naive_local()
+        .date()
+        .format("%Y-%m-%d")
+        .to_string()
 }
 
 #[component]

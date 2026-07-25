@@ -10,11 +10,11 @@ pub mod bonus_transaction;
 #[allow(unreachable_pub)]
 pub mod garden_config;
 #[allow(unreachable_pub)]
+pub mod lab_certificate;
+#[allow(unreachable_pub)]
 pub mod loyalty_config;
 #[allow(unreachable_pub)]
 pub mod loyalty_idempotency_key;
-#[allow(unreachable_pub)]
-pub mod lab_certificate;
 #[allow(unreachable_pub)]
 pub mod loyalty_profile;
 #[allow(unreachable_pub)]

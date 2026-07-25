@@ -496,7 +496,9 @@ mod tests {
     fn test_generate_referral_code_length_and_alphabet() {
         let code = generate_referral_code();
         assert_eq!(code.len(), REFERRAL_CODE_LEN);
-        assert!(code.chars().all(|c| REFERRAL_CODE_ALPHABET.contains(&(c as u8))));
+        assert!(code
+            .chars()
+            .all(|c| REFERRAL_CODE_ALPHABET.contains(&(c as u8))));
     }
 
     #[test]

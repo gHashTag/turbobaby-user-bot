@@ -554,7 +554,9 @@ pub fn WoodyShop() -> Element {
     let telegram_id = use_telegram_id();
     let init_data = use_telegram_init_data();
     let credit_stars = move |amount: i64, reason: String| {
-        let Some(tid) = telegram_id else { return; };
+        let Some(tid) = telegram_id else {
+            return;
+        };
         if amount <= 0 {
             return;
         }

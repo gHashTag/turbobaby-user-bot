@@ -131,11 +131,10 @@ async fn create_review(
         return Err(StatusCode::UNPROCESSABLE_ENTITY);
     }
 
-    let items: Vec<OrderItem> = serde_json::from_value(order.items.clone())
-        .map_err(|e| {
-            tracing::warn!("create_review: cannot parse order items: {}", e);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
+    let items: Vec<OrderItem> = serde_json::from_value(order.items.clone()).map_err(|e| {
+        tracing::warn!("create_review: cannot parse order items: {}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
 
     let strain_bought = items
         .iter()
@@ -158,7 +157,9 @@ async fn create_review(
         return Err(StatusCode::CONFLICT);
     }
 
-    let clean_comment = crate::util::html_escape(&req.comment.trim()).trim().to_string();
+    let clean_comment = crate::util::html_escape(&req.comment.trim())
+        .trim()
+        .to_string();
 
     let id = uuid::Uuid::new_v4().to_string();
     let now = chrono::Local::now().fixed_offset();

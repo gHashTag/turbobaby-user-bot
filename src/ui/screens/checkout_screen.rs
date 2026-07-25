@@ -4,8 +4,8 @@ use crate::trios::i18n::{
     T_PAYMENT, T_PICKUP_LOCATION, T_PLACE_ORDER, T_TOTAL, T_YOUR_INFO, T_YOUR_ORDER,
 };
 use crate::trios::store::validate_checkout;
-use crate::ui::api::types::{DeliveryZone, DeliveryZonesResponse};
 use crate::ui::api::context::api_base_url;
+use crate::ui::api::types::{DeliveryZone, DeliveryZonesResponse};
 use crate::ui::routes::Route;
 use crate::ui::state::{Cart, CartItem, CartItemType};
 use crate::ui::telegram::{use_telegram_id, use_telegram_init_data, use_telegram_username};
@@ -184,9 +184,7 @@ pub fn CheckoutScreen() -> Element {
         .map(|(_, d)| *d)
         .unwrap_or(0.0);
     let pre_stars_total = (cart_total - applied_discount).max(0.0);
-    let max_stars = (pre_stars_total.floor() as i64)
-        .min(stars_balance)
-        .max(0);
+    let max_stars = (pre_stars_total.floor() as i64).min(stars_balance).max(0);
     let stars_val = (*stars_to_use.read()).clamp(0, max_stars.max(0));
     let effective_total = (pre_stars_total - stars_val as f64).max(0.0);
 
@@ -203,8 +201,7 @@ pub fn CheckoutScreen() -> Element {
     let (delivery_eta_text, delivery_fee_text) = match selected_zone.as_ref() {
         Some(z) => {
             let eta = format!("{}-{}", z.min_eta_minutes, z.max_eta_minutes);
-            let eta_text = t(crate::ui::lang::current_lang(), T_DELIVERY_ETA)
-                .replace("{0}", &eta);
+            let eta_text = t(crate::ui::lang::current_lang(), T_DELIVERY_ETA).replace("{0}", &eta);
             let fee_text = t(crate::ui::lang::current_lang(), T_DELIVERY_FEE)
                 .replace("{0}", &format!("{:.0}", z.delivery_fee_baht));
             (eta_text, fee_text)
@@ -221,7 +218,9 @@ pub fn CheckoutScreen() -> Element {
             return;
         }
         if telegram_id.is_none() {
-            order_error.set(Some("Откройте приложение в Telegram, чтобы оформить заказ".into()));
+            order_error.set(Some(
+                "Откройте приложение в Telegram, чтобы оформить заказ".into(),
+            ));
             return;
         }
         let trios_items = to_trios_items(&submit_cart_items);

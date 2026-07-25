@@ -68,7 +68,10 @@ mod tests {
         assert!(should_retry_reauth(401));
         // Not fixable by re-authenticating.
         for s in [0u16, 400, 403, 404, 409, 422, 429, 500, 502, 503] {
-            assert!(!should_retry_reauth(s), "status {s} must not trigger re-auth");
+            assert!(
+                !should_retry_reauth(s),
+                "status {s} must not trigger re-auth"
+            );
         }
     }
 

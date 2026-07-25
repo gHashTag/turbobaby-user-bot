@@ -339,10 +339,12 @@ pub(crate) fn validate_init_data_debug(init_data: &str, bot_token: &str) -> Init
     // Diagnostic: Telegram docs say the secret is HMAC("WebAppData", bot_token).
     // Some reports claim only the token payload (after "bot_id:") is used.
     let alt_secret_key = bot_token.find(':').and_then(|idx| {
-        HmacSha256::new_from_slice(b"WebAppData").ok().map(|mut alt_mac| {
-            alt_mac.update(bot_token[idx + 1..].as_bytes());
-            alt_mac.finalize().into_bytes()
-        })
+        HmacSha256::new_from_slice(b"WebAppData")
+            .ok()
+            .map(|mut alt_mac| {
+                alt_mac.update(bot_token[idx + 1..].as_bytes());
+                alt_mac.finalize().into_bytes()
+            })
     });
 
     let mut mac = match HmacSha256::new_from_slice(&secret_key) {
@@ -417,21 +419,33 @@ pub(crate) fn validate_init_data_debug(init_data: &str, bot_token: &str) -> Init
     mac_sig.update(data_check_string_with_signature.as_bytes());
     let expected_hash_with_signature = hex::encode(mac_sig.finalize().into_bytes());
 
-    let (expected_hash_decoded_alt_secret, expected_hash_raw_alt_secret, expected_hash_with_signature_alt_secret) =
-        if let Some(ref alt_key) = alt_secret_key {
-            let dec = HmacSha256::new_from_slice(alt_key)
-                .map(|mut m| { m.update(data_check_string_decoded.as_bytes()); hex::encode(m.finalize().into_bytes()) })
-                .unwrap_or_default();
-            let raw = HmacSha256::new_from_slice(alt_key)
-                .map(|mut m| { m.update(data_check_string_raw.as_bytes()); hex::encode(m.finalize().into_bytes()) })
-                .unwrap_or_default();
-            let sig = HmacSha256::new_from_slice(alt_key)
-                .map(|mut m| { m.update(data_check_string_with_signature.as_bytes()); hex::encode(m.finalize().into_bytes()) })
-                .unwrap_or_default();
-            (dec, raw, sig)
-        } else {
-            (String::new(), String::new(), String::new())
-        };
+    let (
+        expected_hash_decoded_alt_secret,
+        expected_hash_raw_alt_secret,
+        expected_hash_with_signature_alt_secret,
+    ) = if let Some(ref alt_key) = alt_secret_key {
+        let dec = HmacSha256::new_from_slice(alt_key)
+            .map(|mut m| {
+                m.update(data_check_string_decoded.as_bytes());
+                hex::encode(m.finalize().into_bytes())
+            })
+            .unwrap_or_default();
+        let raw = HmacSha256::new_from_slice(alt_key)
+            .map(|mut m| {
+                m.update(data_check_string_raw.as_bytes());
+                hex::encode(m.finalize().into_bytes())
+            })
+            .unwrap_or_default();
+        let sig = HmacSha256::new_from_slice(alt_key)
+            .map(|mut m| {
+                m.update(data_check_string_with_signature.as_bytes());
+                hex::encode(m.finalize().into_bytes())
+            })
+            .unwrap_or_default();
+        (dec, raw, sig)
+    } else {
+        (String::new(), String::new(), String::new())
+    };
 
     let user = data_pairs
         .iter()
@@ -457,10 +471,11 @@ pub(crate) fn validate_init_data_debug(init_data: &str, bot_token: &str) -> Init
 
     let ok_decoded =
         constant_time_eq::constant_time_eq(expected_hash_decoded.as_bytes(), hash.as_bytes());
-    let ok_raw =
-        constant_time_eq::constant_time_eq(expected_hash_raw.as_bytes(), hash.as_bytes());
-    let ok_with_sig =
-        constant_time_eq::constant_time_eq(expected_hash_with_signature.as_bytes(), hash.as_bytes());
+    let ok_raw = constant_time_eq::constant_time_eq(expected_hash_raw.as_bytes(), hash.as_bytes());
+    let ok_with_sig = constant_time_eq::constant_time_eq(
+        expected_hash_with_signature.as_bytes(),
+        hash.as_bytes(),
+    );
     let mut ok = ok_decoded || ok_raw;
     let mut error = None;
 

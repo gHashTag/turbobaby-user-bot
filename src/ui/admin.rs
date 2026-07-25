@@ -47,13 +47,12 @@ pub fn use_admin_status() -> Signal<bool> {
                     .send()
                     .await;
                 let ok = match resp {
-                    Ok(r) if r.status().is_success() => {
-                        r.json::<serde_json::Value>()
-                            .await
-                            .ok()
-                            .and_then(|v| v.get("is_admin").and_then(|v| v.as_bool()))
-                            .unwrap_or(false)
-                    }
+                    Ok(r) if r.status().is_success() => r
+                        .json::<serde_json::Value>()
+                        .await
+                        .ok()
+                        .and_then(|v| v.get("is_admin").and_then(|v| v.as_bool()))
+                        .unwrap_or(false),
                     _ => false,
                 };
                 is_admin.set(ok);

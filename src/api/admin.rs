@@ -420,11 +420,7 @@ async fn check_admin_access(
         token_present
     );
 
-    let reason = diagnose_admin_auth_failure(&headers,
-        &state,
-        init_data_present,
-        token_present,
-    );
+    let reason = diagnose_admin_auth_failure(&headers, &state, init_data_present, token_present);
 
     match crate::api::auth::check_admin(&headers, &state) {
         Ok(telegram_id) => {
@@ -436,7 +432,9 @@ async fn check_admin_access(
             } else {
                 tracing::debug!("admin/check: authenticated telegram_id={}", telegram_id);
             }
-            Ok(Json(json!({ "is_admin": true, "telegram_id": telegram_id })))
+            Ok(Json(
+                json!({ "is_admin": true, "telegram_id": telegram_id }),
+            ))
         }
         Err(status) => {
             tracing::warn!("admin/check: unauthorized (status={})", status.as_u16());
@@ -469,7 +467,8 @@ fn diagnose_admin_auth_failure(
         if init_data.is_empty() {
             return Some("empty_init_data");
         }
-        if let Some(user) = crate::api::auth::validate_init_data(init_data, &state.config.bot_token) {
+        if let Some(user) = crate::api::auth::validate_init_data(init_data, &state.config.bot_token)
+        {
             if !state.config.admin_ids.contains(&user.id) {
                 return Some("not_admin");
             }
@@ -657,7 +656,10 @@ async fn list_reviews_admin(
     check_admin(&headers, &state)?;
 
     let mut query = strain_review::Entity::find();
-    if q.get("pending").map(|s| s == "1" || s == "true").unwrap_or(false) {
+    if q.get("pending")
+        .map(|s| s == "1" || s == "true")
+        .unwrap_or(false)
+    {
         query = query.filter(strain_review::Column::Approved.eq(false));
     }
     let rows = query
@@ -782,7 +784,9 @@ async fn line_broadcast(
         })?;
 
     if status.is_success() {
-        Ok(Json(json!({ "success": true, "line_status": status.as_u16() })))
+        Ok(Json(
+            json!({ "success": true, "line_status": status.as_u16() }),
+        ))
     } else {
         tracing::warn!("LINE broadcast returned {}: {}", status, body);
         Err(StatusCode::BAD_GATEWAY)

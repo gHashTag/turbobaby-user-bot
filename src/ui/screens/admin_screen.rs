@@ -30,10 +30,10 @@ use crate::ui::components::{
     EmptyState, IdPicker, Modal, Skeleton, SkeletonShape, Toast, ToastContainer, ToastKind,
     VideoModal,
 };
+use crate::ui::screens::events_screen::parse_event_start;
 use crate::ui::telegram::{
     use_telegram_id, use_telegram_init_data, HapticNotification, TelegramApp,
 };
-use crate::ui::screens::events_screen::parse_event_start;
 
 fn admin_token() -> String {
     #[cfg(target_arch = "wasm32")]
@@ -523,12 +523,14 @@ pub fn AdminScreen() -> Element {
                 .map_err(|e| format!("send to {url}: {e}"))?;
             let status = resp.status();
             if status.is_success() {
-                return resp.json::<AdminCheck>()
+                return resp
+                    .json::<AdminCheck>()
                     .await
                     .map_err(|e| format!("json: {e}"));
             }
             // 401 responses now carry a JSON body with a diagnostic reason.
-            let reason = resp.json::<AdminCheck>()
+            let reason = resp
+                .json::<AdminCheck>()
                 .await
                 .ok()
                 .and_then(|c| c.reason)
@@ -1105,35 +1107,31 @@ fn StrainsTab() -> Element {
                    }
                }
 
-               h3 { style: list_title_style(), "Страйны ({filtered.len()})" }
-               // Cycle #136: TЗ #2 §5 admin-UI toggle for hiding promo
-               // badges (Sale / Best / New) on the customer menu.
-               // Reads /api/admin/marketing-display on mount and lets
-               // the admin flip the state without env / redeploy.
-               {
-                   let current = *badges_hidden.read();
-                   match current {
-                       None => rsx! {
-                           div { style: "margin:6px 0;font-size:12px;color:#888;",
-                               "Загрузка состояния меток…"
-                           }
-                       },
-                       Some(hidden) => {
-                           let init_for_toggle = init_data.read().clone();
-                           let label = if hidden {
-                               "🚫 Метки скрыты — показать"
-                           } else {
-                               "👁 Метки видны — скрыть"
-                           };
-                           let style = if hidden {
-                               "padding:6px 12px;background:#2a2a4a;color:#bbb;border:1px solid #444;border-radius:4px;font-size:13px;cursor:pointer;margin:6px 0;"
-                           } else {
-                               "padding:6px 12px;background:#1a3a1a;color:#9efb9e;border:1px solid #2a5a2a;border-radius:4px;font-size:13px;cursor:pointer;margin:6px 0;"
-                           };
-                           rsx! {
-                               button {
-                                   style: "{style}",
-                                   onclick: move |_| {
+               div { style: "display:flex;align-items:center;gap:6px;margin-bottom:6px;",
+                   input {
+                       style: "flex:1;padding:6px 10px;background:#1a1a2e;color:#e8e8e8;border:1px solid #2a2a4a;border-radius:4px;font-size:13px;",
+                       placeholder: "🔍 Поиск...",
+                       value: "{search_query}",
+                       oninput: move |e: Event<FormData>| search_query.set(e.value())
+                   }
+                   // Cycle #136: TЗ #2 §5 admin-UI toggle for hiding promo
+                   // badges (Sale / Best / New) on the customer menu.
+                   // Compact icon button so the search + toggle fit one line.
+                   {
+                       let current = *badges_hidden.read();
+                       let (icon, bg, color, border, label, is_disabled) = match current {
+                           None => ("⏳", "#2a2a4a", "#888", "#444", "Загрузка состояния меток…", true),
+                           Some(true) => ("🚫", "#2a2a4a", "#bbb", "#444", "Показать промо-метки", false),
+                           Some(false) => ("👁", "#1a3a1a", "#9efb9e", "#2a5a2a", "Скрыть промо-метки", false),
+                       };
+                       let init_for_toggle = init_data.read().clone();
+                       rsx! {
+                           button {
+                               style: "min-width:44px;min-height:44px;padding:8px;background:{bg};color:{color};border:1px solid {border};border-radius:4px;font-size:16px;cursor:pointer;line-height:1;display:flex;align-items:center;justify-content:center;",
+                               disabled: is_disabled,
+                               "aria-label": "{label}",
+                               onclick: move |_| {
+                                   if let Some(hidden) = current {
                                        let next = !hidden;
                                        let init = init_for_toggle.clone();
                                        let mut state = badges_hidden;
@@ -1148,18 +1146,18 @@ fn StrainsTab() -> Element {
                                                state.set(Some(next));
                                            }
                                        });
-                                   },
-                                   "{label}"
-                               }
+                                   }
+                               },
+                               "{icon}"
                            }
                        }
                    }
                }
-               {render_search(search_query)}
+               h3 { style: "font-size:12px;color:#888;margin:0 0 4px 0;", "Страйны ({filtered.len()})" }
                if *loading.read() {
-                   div { style: "display:flex;flex-direction:column;gap:8px;",
+                   div { style: "display:flex;flex-direction:column;gap:4px;",
                        for _ in 0..4 {
-                           div { style: "background:#1a1a2e;padding:8px 10px;border-radius:6px;display:flex;align-items:center;gap:6px;",
+                           div { style: "background:#1a1a2e;padding:4px 6px;border-radius:6px;display:flex;align-items:center;gap:4px;",
                                Skeleton { shape: SkeletonShape::Avatar }
                                div { style: "flex:1;display:flex;flex-direction:column;gap:4px;",
                                    Skeleton { shape: SkeletonShape::Text, width: Some("60%".into()) }
@@ -1259,7 +1257,7 @@ fn StrainsTab() -> Element {
                            rsx! {}
                        }
                    }
-                   div { "data-list": "true", style: "display:flex;flex-direction:column;gap:8px;",
+                   div { "data-list": "true", style: "display:flex;flex-direction:column;gap:4px;",
                        for s in filtered {
                            if editing_id.read().as_deref() == Some(s.id.as_str()) {
                                EditStrainCard {
@@ -3799,8 +3797,14 @@ fn ItemRow(
     } else {
         ("#666", "ВЫКЛ")
     };
-    let toggle_label = if is_available { "👁️" } else { "🚫" };
+    let toggle_icon = if is_available { "👁️" } else { "🚫" };
+    let toggle_label = if is_available {
+        "Скрыть"
+    } else {
+        "Показать"
+    };
     let mut show_video = use_signal(|| false);
+    let mut menu_open = use_signal(|| false);
     let thumb = match image_url.as_deref() {
         Some(url)
             if !url.is_empty()
@@ -3808,52 +3812,63 @@ fn ItemRow(
                     || url.starts_with("https://")
                     || (url.starts_with("/") && !url.starts_with("//"))) =>
         {
-            rsx! { img { src: "{url}", alt: "{name}", style: "width:36px;height:36px;object-fit:cover;border-radius:6px;border:1px solid #2a2a4a;flex-shrink:0;" } }
+            rsx! { img { src: "{url}", alt: "{name}", style: "width:28px;height:28px;object-fit:cover;border-radius:4px;border:1px solid #2a2a4a;flex-shrink:0;" } }
         }
         _ => {
-            rsx! { div { style: "width:36px;height:36px;background:#2a2a4a;border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:16px;", "📦" } }
+            rsx! { div { style: "width:28px;height:28px;background:#2a2a4a;border-radius:4px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px;", "📦" } }
         }
     };
     rsx! {
-        div { style: "background:#1a1a2e;padding:8px 10px;border-radius:6px;display:flex;align-items:center;gap:6px;flex-wrap:nowrap;overflow:hidden;",
+        div { style: "background:#1a1a2e;padding:4px 6px;border-radius:6px;display:flex;align-items:center;gap:4px;flex-wrap:nowrap;overflow:hidden;",
             {thumb}
             div { style: "flex:1;min-width:0;overflow:hidden;cursor:pointer;",
                 onclick: move |_| on_edit.call(()),
-                div { style: "font-weight:600;font-size:13px;color:#e8e8e8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;", "{name}" }
+                div { style: "font-weight:600;font-size:12px;color:#e8e8e8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;", "{name}" }
                 div { style: "font-size:10px;color:#888;margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;", "{sub}" }
             }
-            span { style: "font-size:9px;padding:2px 5px;background:{badge.0}20;color:{badge.0};border-radius:8px;font-weight:600;flex-shrink:0;", "{badge.1}" }
-            {if let Some(ref url) = video_url {
-                let url = url.clone();
-                rsx! {
-                    button { style: "flex-shrink:0;min-width:44px;min-height:44px;padding:8px 10px;background:#1a2a3a;color:#4fc3f7;border:none;border-radius:4px;font-size:16px;cursor:pointer;line-height:1;display:flex;align-items:center;justify-content:center;",
-                        "aria-label": "Смотреть видео",
-                        onclick: move |e: Event<MouseData>| { e.stop_propagation(); show_video.set(true); }, "▶️" }
-                    {show_video().then(|| rsx! {
-                        VideoModal { url: url.clone(), on_close: move |_| show_video.set(false) }
-                    })}
-                }
-            } else {
-                rsx! {}
-            }}
-            button { style: "flex-shrink:0;min-width:44px;min-height:44px;padding:8px 10px;background:#2a2a4a;color:#e8e8e8;border:none;border-radius:4px;font-size:16px;cursor:pointer;line-height:1;display:flex;align-items:center;justify-content:center;",
-                "aria-label": "Редактировать",
-                onclick: move |e: Event<MouseData>| { e.stop_propagation(); on_edit.call(()); }, "✏️" }
-            button { style: "flex-shrink:0;min-width:44px;min-height:44px;padding:8px 10px;background:#2a2a4a;color:#e8e8e8;border:none;border-radius:4px;font-size:16px;cursor:pointer;line-height:1;display:flex;align-items:center;justify-content:center;",
-                "aria-label": "Переключить видимость",
-                onclick: move |e: Event<MouseData>| { e.stop_propagation(); on_toggle.call(()); }, "{toggle_label}" }
-            {if let Some(handler) = on_sotd {
-                rsx! {
-                    button { style: "flex-shrink:0;min-width:44px;min-height:44px;padding:8px 10px;background:#2a2a1a;color:#ffe600;border:none;border-radius:4px;font-size:16px;cursor:pointer;line-height:1;display:flex;align-items:center;justify-content:center;",
-                        "aria-label": "Сорт дня",
-                        onclick: move |e: Event<MouseData>| { e.stop_propagation(); handler.call(()); }, "🌟" }
-                }
-            } else {
-                rsx! {}
-            }}
-            button { style: "flex-shrink:0;min-width:44px;min-height:44px;padding:8px 10px;background:#3a1a1a;color:#ff8888;border:none;border-radius:4px;font-size:16px;cursor:pointer;line-height:1;display:flex;align-items:center;justify-content:center;",
-                "aria-label": "Удалить",
-                onclick: move |e: Event<MouseData>| { e.stop_propagation(); on_delete.call(()); }, "🗑" }
+            span { style: "font-size:9px;padding:1px 4px;background:{badge.0}20;color:{badge.0};border-radius:8px;font-weight:600;flex-shrink:0;", "{badge.1}" }
+            button { style: "flex-shrink:0;min-width:44px;min-height:44px;padding:8px;background:#2a2a4a;color:#e8e8e8;border:none;border-radius:4px;font-size:16px;cursor:pointer;line-height:1;display:flex;align-items:center;justify-content:center;",
+                "aria-label": "{toggle_label}",
+                onclick: move |e: Event<MouseData>| { e.stop_propagation(); on_toggle.call(()); }, "{toggle_icon}" }
+            button { style: "flex-shrink:0;min-width:44px;min-height:44px;padding:8px;background:#1a2a3a;color:#e8e8e8;border:none;border-radius:4px;font-size:18px;cursor:pointer;line-height:1;display:flex;align-items:center;justify-content:center;",
+                "aria-label": "Действия",
+                onclick: move |e: Event<MouseData>| { e.stop_propagation(); menu_open.set(true); }, "⋮" }
+        }
+        Modal {
+            open: menu_open(),
+            title: Some(name.clone()),
+            show_close: true,
+            on_close: move |_| menu_open.set(false),
+            div { style: "display:flex;flex-direction:column;gap:8px;padding:8px 0;",
+                button { style: "width:100%;padding:10px;background:#2a2a4a;color:#e8e8e8;border:none;border-radius:4px;font-size:14px;cursor:pointer;text-align:left;",
+                    onclick: move |_| { menu_open.set(false); on_edit.call(()); },
+                    "✏️ Редактировать" }
+                {if let Some(handler) = on_sotd {
+                    rsx! {
+                        button { style: "width:100%;padding:10px;background:#2a2a1a;color:#ffe600;border:none;border-radius:4px;font-size:14px;cursor:pointer;text-align:left;",
+                            onclick: move |e: Event<MouseData>| { e.stop_propagation(); menu_open.set(false); handler.call(()); },
+                            "🌟 Сорт дня" }
+                    }
+                } else {
+                    rsx! {}
+                }}
+                {if let Some(ref url) = video_url {
+                    let url = url.clone();
+                    rsx! {
+                        button { style: "width:100%;padding:10px;background:#1a2a3a;color:#4fc3f7;border:none;border-radius:4px;font-size:14px;cursor:pointer;text-align:left;",
+                            onclick: move |e: Event<MouseData>| { e.stop_propagation(); menu_open.set(false); show_video.set(true); },
+                            "▶️ Смотреть видео" }
+                        {show_video().then(|| rsx! {
+                            VideoModal { url: url.clone(), on_close: move |_| show_video.set(false) }
+                        })}
+                    }
+                } else {
+                    rsx! {}
+                }}
+                button { style: "width:100%;padding:10px;background:#3a1a1a;color:#ff8888;border:none;border-radius:4px;font-size:14px;cursor:pointer;text-align:left;",
+                    onclick: move |_| { menu_open.set(false); on_delete.call(()); },
+                    "🗑 Удалить" }
+            }
         }
     }
 }
@@ -6692,7 +6707,11 @@ fn EventsTab() -> Element {
         bookings_loading.set(true);
         let init = init_data.read().clone();
         spawn(async move {
-            let url = format!("{}/api/admin/events/{}/bookings", api_base_url(), urlencoding::encode(&event_id));
+            let url = format!(
+                "{}/api/admin/events/{}/bookings",
+                api_base_url(),
+                urlencoding::encode(&event_id)
+            );
             let mut list = Vec::new();
             if let Ok(resp) = HTTP_CLIENT
                 .clone()
@@ -6720,7 +6739,11 @@ fn EventsTab() -> Element {
 
     let create_or_update = move |_| {
         if title.read().trim().is_empty() || starts_at.read().trim().is_empty() {
-            push_toast(toasts, "Название и дата обязательны".into(), ToastKind::Error);
+            push_toast(
+                toasts,
+                "Название и дата обязательны".into(),
+                ToastKind::Error,
+            );
             return;
         }
         submitting.set(true);
@@ -6745,10 +6768,22 @@ fn EventsTab() -> Element {
             let base = api_base_url();
             let res = if let Some(id) = id_opt {
                 let url = format!("{}/api/admin/events/{}", base, urlencoding::encode(&id));
-                HTTP_CLIENT.clone().put(&url).headers(admin_event_headers(init, telegram_id)).json(&body).send().await
+                HTTP_CLIENT
+                    .clone()
+                    .put(&url)
+                    .headers(admin_event_headers(init, telegram_id))
+                    .json(&body)
+                    .send()
+                    .await
             } else {
                 let url = format!("{}/api/admin/events", base);
-                HTTP_CLIENT.clone().post(&url).headers(admin_event_headers(init, telegram_id)).json(&body).send().await
+                HTTP_CLIENT
+                    .clone()
+                    .post(&url)
+                    .headers(admin_event_headers(init, telegram_id))
+                    .json(&body)
+                    .send()
+                    .await
             };
             submitting.set(false);
             match res {
@@ -6771,7 +6806,11 @@ fn EventsTab() -> Element {
             let init = init_data.read().clone();
             delete_target_id.set(None);
             spawn(async move {
-                let url = format!("{}/api/admin/events/{}", api_base_url(), urlencoding::encode(&id));
+                let url = format!(
+                    "{}/api/admin/events/{}",
+                    api_base_url(),
+                    urlencoding::encode(&id)
+                );
                 match HTTP_CLIENT
                     .clone()
                     .delete(&url)
@@ -6797,7 +6836,14 @@ fn EventsTab() -> Element {
         cache
             .read()
             .iter()
-            .filter(|e| e.title.to_lowercase().contains(&q) || e.location_text.as_deref().unwrap_or("").to_lowercase().contains(&q))
+            .filter(|e| {
+                e.title.to_lowercase().contains(&q)
+                    || e.location_text
+                        .as_deref()
+                        .unwrap_or("")
+                        .to_lowercase()
+                        .contains(&q)
+            })
             .cloned()
             .collect()
     };
@@ -6812,8 +6858,18 @@ fn EventsTab() -> Element {
         title_en.set(ev.title_en.clone().unwrap_or_default());
         description.set(ev.description.clone().unwrap_or_default());
         description_en.set(ev.description_en.clone().unwrap_or_default());
-        starts_at.set(parse_event_start(&ev.starts_at).map(|dt| dt.format("%Y-%m-%dT%H:%M").to_string()).unwrap_or_default());
-        ends_at.set(ev.ends_at.as_deref().and_then(parse_event_start).map(|dt| dt.format("%Y-%m-%dT%H:%M").to_string()).unwrap_or_default());
+        starts_at.set(
+            parse_event_start(&ev.starts_at)
+                .map(|dt| dt.format("%Y-%m-%dT%H:%M").to_string())
+                .unwrap_or_default(),
+        );
+        ends_at.set(
+            ev.ends_at
+                .as_deref()
+                .and_then(parse_event_start)
+                .map(|dt| dt.format("%Y-%m-%dT%H:%M").to_string())
+                .unwrap_or_default(),
+        );
         location_text.set(ev.location_text.clone().unwrap_or_default());
         image_url.set(ev.image_url.clone().unwrap_or_default());
         max_seats.set(ev.max_seats.map(|v| v.to_string()).unwrap_or_default());
@@ -7111,4 +7167,3 @@ fn LineBroadcastTab() -> Element {
         }
     }
 }
-

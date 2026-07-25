@@ -28,16 +28,25 @@ pub(crate) fn routes() -> Router<AppState> {
     Router::new()
         // Public event calendar
         .route("/events/my-bookings", get(my_bookings))
-        .route("/events/bookings/:booking_id/cancel", put(cancel_my_booking))
+        .route(
+            "/events/bookings/:booking_id/cancel",
+            put(cancel_my_booking),
+        )
         .route("/events", get(list_events))
         .route("/events/:id", get(get_event))
         .route("/events/:id/book", post(book_event))
         .route("/events/:id/waitlist", post(join_waitlist))
         // Admin
         .route("/admin/events", get(list_admin_events).post(create_event))
-        .route("/admin/events/:id", get(get_admin_event).put(update_event).delete(delete_event))
+        .route(
+            "/admin/events/:id",
+            get(get_admin_event).put(update_event).delete(delete_event),
+        )
         .route("/admin/events/:id/bookings", get(list_event_bookings))
-        .route("/admin/events/:id/bookings/:booking_id/cancel", put(cancel_booking))
+        .route(
+            "/admin/events/:id/bookings/:booking_id/cancel",
+            put(cancel_booking),
+        )
 }
 
 // ── Requests ─────────────────────────────────────────────────
@@ -84,11 +93,10 @@ pub(crate) struct BookEventRequest {
 // ── Helpers ──────────────────────────────────────────────────
 
 fn parse_iso_timestamp(s: &str) -> Result<DateTime<Utc>, StatusCode> {
-    s.parse::<DateTime<Utc>>()
-        .map_err(|e| {
-            tracing::debug!("parse_iso_timestamp failed: {e}");
-            StatusCode::BAD_REQUEST
-        })
+    s.parse::<DateTime<Utc>>().map_err(|e| {
+        tracing::debug!("parse_iso_timestamp failed: {e}");
+        StatusCode::BAD_REQUEST
+    })
 }
 
 fn event_id_ok(id: &str) -> Result<(), StatusCode> {
@@ -124,17 +132,26 @@ fn validate_event_request(
     }
     if let Some(ref d) = req.description {
         if d.len() > 2000 {
-            return Err(bad(format!("description слишком длинное ({}>2000)", d.len())));
+            return Err(bad(format!(
+                "description слишком длинное ({}>2000)",
+                d.len()
+            )));
         }
     }
     if let Some(ref d) = req.description_en {
         if d.len() > 2000 {
-            return Err(bad(format!("description_en слишком длинное ({}>2000)", d.len())));
+            return Err(bad(format!(
+                "description_en слишком длинное ({}>2000)",
+                d.len()
+            )));
         }
     }
     if let Some(ref l) = req.location_text {
         if l.len() > 300 {
-            return Err(bad(format!("location_text слишком длинный ({}>300)", l.len())));
+            return Err(bad(format!(
+                "location_text слишком длинный ({}>300)",
+                l.len()
+            )));
         }
     }
     crate::api::validate_url(&req.image_url)
@@ -173,8 +190,14 @@ fn validate_event_request(
 
 fn validate_update_request(
     req: &UpdateEventRequest,
-) -> Result<(Option<bool>, Option<DateTime<Utc>>, Option<Option<DateTime<Utc>>>), (StatusCode, String)>
-{
+) -> Result<
+    (
+        Option<bool>,
+        Option<DateTime<Utc>>,
+        Option<Option<DateTime<Utc>>>,
+    ),
+    (StatusCode, String),
+> {
     fn bad(msg: String) -> (StatusCode, String) {
         (StatusCode::BAD_REQUEST, msg)
     }
@@ -192,17 +215,26 @@ fn validate_update_request(
     }
     if let Some(ref d) = req.description {
         if d.len() > 2000 {
-            return Err(bad(format!("description слишком длинное ({}>2000)", d.len())));
+            return Err(bad(format!(
+                "description слишком длинное ({}>2000)",
+                d.len()
+            )));
         }
     }
     if let Some(ref d) = req.description_en {
         if d.len() > 2000 {
-            return Err(bad(format!("description_en слишком длинное ({}>2000)", d.len())));
+            return Err(bad(format!(
+                "description_en слишком длинное ({}>2000)",
+                d.len()
+            )));
         }
     }
     if let Some(ref l) = req.location_text {
         if l.len() > 300 {
-            return Err(bad(format!("location_text слишком длинный ({}>300)", l.len())));
+            return Err(bad(format!(
+                "location_text слишком длинный ({}>300)",
+                l.len()
+            )));
         }
     }
     crate::api::validate_url(&req.image_url)
@@ -245,7 +277,10 @@ fn validate_update_request(
 
 fn event_row(r: &sea_orm::QueryResult) -> Value {
     let starts_at: DateTime<Utc> = r.try_get("", "starts_at").unwrap_or_else(|_| Utc::now());
-    let ends_at: Option<DateTime<Utc>> = r.try_get::<Option<DateTime<Utc>>>("", "ends_at").ok().flatten();
+    let ends_at: Option<DateTime<Utc>> = r
+        .try_get::<Option<DateTime<Utc>>>("", "ends_at")
+        .ok()
+        .flatten();
     let max_seats: Option<i32> = r.try_get::<Option<i32>>("", "max_seats").ok().flatten();
     let price_baht: Option<f64> = r.try_get::<Option<f64>>("", "price_baht").ok().flatten();
     let price_stars: Option<i64> = r.try_get::<Option<i64>>("", "price_stars").ok().flatten();
@@ -333,7 +368,11 @@ async fn list_events(
     let rows = state
         .db
         .orm
-        .query_all(Statement::from_sql_and_values(DbBackend::Postgres, sql, values))
+        .query_all(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            sql,
+            values,
+        ))
         .await
         .map_err(|e| {
             tracing::error!("list_events: {e}");
@@ -475,7 +514,9 @@ async fn book_event(
             "SELECT COALESCE(SUM(seats), 0)::int AS taken FROM event_bookings WHERE event_id = $1 AND status = 'confirmed'",
             [id.clone().into()],
         )).await.map_err(|e| { tracing::error!("book_event capacity check: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?;
-        let taken: i32 = taken_row.and_then(|r| r.try_get("", "taken").ok()).unwrap_or(0);
+        let taken: i32 = taken_row
+            .and_then(|r| r.try_get("", "taken").ok())
+            .unwrap_or(0);
         if taken + seats > cap {
             let _ = tx.rollback().await;
             return Err(StatusCode::CONFLICT);
@@ -503,7 +544,11 @@ async fn book_event(
             ..Default::default()
         };
         LpEntity::insert(lp_am)
-            .on_conflict(OnConflict::column(LpCol::TelegramId).do_nothing().to_owned())
+            .on_conflict(
+                OnConflict::column(LpCol::TelegramId)
+                    .do_nothing()
+                    .to_owned(),
+            )
             .do_nothing()
             .exec(&tx)
             .await
@@ -655,11 +700,17 @@ async fn my_bookings(
                 );
                 m.insert(
                     "event_starts_at".to_string(),
-                    json!(r.try_get::<DateTime<Utc>>("", "starts_at").ok().map(|d| d.to_rfc3339())),
+                    json!(r
+                        .try_get::<DateTime<Utc>>("", "starts_at")
+                        .ok()
+                        .map(|d| d.to_rfc3339())),
                 );
                 m.insert(
                     "event_location_text".to_string(),
-                    json!(r.try_get::<Option<String>>("", "location_text").ok().flatten()),
+                    json!(r
+                        .try_get::<Option<String>>("", "location_text")
+                        .ok()
+                        .flatten()),
                 );
             }
             b
@@ -743,7 +794,11 @@ async fn cancel_booking_and_promote(
             ..Default::default()
         };
         LpEntity::insert(lp_am)
-            .on_conflict(OnConflict::column(LpCol::TelegramId).do_nothing().to_owned())
+            .on_conflict(
+                OnConflict::column(LpCol::TelegramId)
+                    .do_nothing()
+                    .to_owned(),
+            )
             .do_nothing()
             .exec(&tx)
             .await
@@ -1026,8 +1081,7 @@ async fn cancel_my_booking(
         return Err(StatusCode::NOT_FOUND);
     }
 
-    let promoted_id = cancel_booking_and_promote(&state.db.orm, &event_id, &booking_id)
-        .await?;
+    let promoted_id = cancel_booking_and_promote(&state.db.orm, &event_id, &booking_id).await?;
     let mut resp = json!({ "success": true });
     if let Some(id) = promoted_id {
         resp["promoted_booking_id"] = id.into();
@@ -1083,7 +1137,9 @@ async fn join_waitlist(
             tracing::error!("join_waitlist capacity check: {e}");
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
-    let taken: i32 = taken_row.and_then(|r| r.try_get("", "taken").ok()).unwrap_or(0);
+    let taken: i32 = taken_row
+        .and_then(|r| r.try_get("", "taken").ok())
+        .unwrap_or(0);
     if taken < cap {
         return Err(StatusCode::CONFLICT); // still has seats
     }
@@ -1121,7 +1177,9 @@ async fn join_waitlist(
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
     crate::metrics::event_booking_created("waitlisted");
-    Ok(Json(json!({ "success": true, "booking_id": booking_id, "status": "waitlisted" })))
+    Ok(Json(
+        json!({ "success": true, "booking_id": booking_id, "status": "waitlisted" }),
+    ))
 }
 
 // ── Admin endpoints ──────────────────────────────────────────
@@ -1142,13 +1200,19 @@ async fn list_admin_events(
          ORDER BY e.starts_at DESC \
          LIMIT 500".to_string(),
     )).await.map_err(|e| { tracing::error!("list_admin_events: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?;
-    let events: Vec<Value> = rows.iter().map(|r| {
-        let mut v = event_row(r);
-        if let Value::Object(ref mut m) = v {
-            m.insert("bookings_count".to_string(), json!(r.try_get::<i64>("", "bookings_count").unwrap_or(0)));
-        }
-        v
-    }).collect();
+    let events: Vec<Value> = rows
+        .iter()
+        .map(|r| {
+            let mut v = event_row(r);
+            if let Value::Object(ref mut m) = v {
+                m.insert(
+                    "bookings_count".to_string(),
+                    json!(r.try_get::<i64>("", "bookings_count").unwrap_or(0)),
+                );
+            }
+            v
+        })
+        .collect();
     Ok(Json(json!({ "events": events })))
 }
 
@@ -1217,9 +1281,12 @@ async fn update_event(
     check_admin(&headers, &state).map_err(|s| (s, String::new()))?;
     let (is_public, starts_at, ends_at) = validate_update_request(&req)?;
     use sea_orm::{ConnectionTrait, DbBackend, Statement};
-    state.db.orm.execute(Statement::from_sql_and_values(
-        DbBackend::Postgres,
-        "UPDATE events SET \
+    state
+        .db
+        .orm
+        .execute(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            "UPDATE events SET \
             title = COALESCE($1, title), \
             title_en = COALESCE($2, title_en), \
             description = COALESCE($3, description), \
@@ -1234,22 +1301,39 @@ async fn update_event(
             is_public = COALESCE($12, is_public), \
             updated_at = NOW() \
          WHERE id = $13",
-        [
-            req.title.as_deref().map(|s| s.trim()).filter(|s| !s.is_empty()).map(|s| s.to_string()).into(),
-            req.title_en.filter(|s| !s.is_empty()).into(),
-            req.description.filter(|s| !s.is_empty()).into(),
-            req.description_en.filter(|s| !s.is_empty()).into(),
-            starts_at.map(|d| sea_orm::Value::ChronoDateTimeUtc(Some(Box::new(d)))).unwrap_or(sea_orm::Value::ChronoDateTimeUtc(None)),
-            ends_at.unwrap_or(None).map(|d| sea_orm::Value::ChronoDateTimeUtc(Some(Box::new(d)))).unwrap_or(sea_orm::Value::ChronoDateTimeUtc(None)),
-            req.location_text.filter(|s| !s.is_empty()).into(),
-            req.image_url.filter(|s| !s.is_empty()).into(),
-            req.max_seats.into(),
-            req.price_baht.into(),
-            req.price_stars.into(),
-            is_public.map(|v| v.into()).unwrap_or(sea_orm::Value::Bool(None)),
-            id.into(),
-        ],
-    )).await.map_err(|e| { tracing::error!("update_event: {e}"); (StatusCode::INTERNAL_SERVER_ERROR, String::new()) })?;
+            [
+                req.title
+                    .as_deref()
+                    .map(|s| s.trim())
+                    .filter(|s| !s.is_empty())
+                    .map(|s| s.to_string())
+                    .into(),
+                req.title_en.filter(|s| !s.is_empty()).into(),
+                req.description.filter(|s| !s.is_empty()).into(),
+                req.description_en.filter(|s| !s.is_empty()).into(),
+                starts_at
+                    .map(|d| sea_orm::Value::ChronoDateTimeUtc(Some(Box::new(d))))
+                    .unwrap_or(sea_orm::Value::ChronoDateTimeUtc(None)),
+                ends_at
+                    .unwrap_or(None)
+                    .map(|d| sea_orm::Value::ChronoDateTimeUtc(Some(Box::new(d))))
+                    .unwrap_or(sea_orm::Value::ChronoDateTimeUtc(None)),
+                req.location_text.filter(|s| !s.is_empty()).into(),
+                req.image_url.filter(|s| !s.is_empty()).into(),
+                req.max_seats.into(),
+                req.price_baht.into(),
+                req.price_stars.into(),
+                is_public
+                    .map(|v| v.into())
+                    .unwrap_or(sea_orm::Value::Bool(None)),
+                id.into(),
+            ],
+        ))
+        .await
+        .map_err(|e| {
+            tracing::error!("update_event: {e}");
+            (StatusCode::INTERNAL_SERVER_ERROR, String::new())
+        })?;
     Ok(Json(json!({ "success": true })))
 }
 
@@ -1261,11 +1345,19 @@ async fn delete_event(
     event_id_ok(&id)?;
     check_admin(&headers, &state)?;
     use sea_orm::{ConnectionTrait, DbBackend, Statement};
-    state.db.orm.execute(Statement::from_sql_and_values(
-        DbBackend::Postgres,
-        "DELETE FROM events WHERE id = $1",
-        [id.into()],
-    )).await.map_err(|e| { tracing::error!("delete_event: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?;
+    state
+        .db
+        .orm
+        .execute(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            "DELETE FROM events WHERE id = $1",
+            [id.into()],
+        ))
+        .await
+        .map_err(|e| {
+            tracing::error!("delete_event: {e}");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
     Ok(Json(json!({ "success": true })))
 }
 
@@ -1337,17 +1429,16 @@ pub(crate) async fn send_event_reminders(
         let booking_id: String = r.try_get("", "booking_id").unwrap_or_default();
         let telegram_id: i64 = r.try_get("", "telegram_id").unwrap_or(0);
         let title: String = r.try_get("", "title").unwrap_or_default();
-        let starts_at: chrono::DateTime<chrono::Utc> =
-            r.try_get("", "starts_at").unwrap_or_else(|_| chrono::Utc::now());
-        let starts_local = starts_at.with_timezone(&chrono::FixedOffset::east_opt(7 * 3600).unwrap());
+        let starts_at: chrono::DateTime<chrono::Utc> = r
+            .try_get("", "starts_at")
+            .unwrap_or_else(|_| chrono::Utc::now());
+        let starts_local =
+            starts_at.with_timezone(&chrono::FixedOffset::east_opt(7 * 3600).unwrap());
         let starts_text = starts_local.format("%d.%m.%Y %H:%M (Bangkok)").to_string();
         let body = crate::trios::i18n::tf(
             crate::trios::core::Lang::Russian,
             crate::trios::i18n::T_EVENTS_REMINDER_BODY,
-            &[
-                title.clone(),
-                starts_text,
-            ],
+            &[title.clone(), starts_text],
         );
 
         // Best-effort send; failures are logged but don't break the sweep.
@@ -1358,7 +1449,12 @@ pub(crate) async fn send_event_reminders(
             Ok::<(), teloxide::RequestError>(())
         };
         if let Err(e) = deliver.await {
-            tracing::warn!("event reminder send failed booking={} tid={}: {}", booking_id, telegram_id, e);
+            tracing::warn!(
+                "event reminder send failed booking={} tid={}: {}",
+                booking_id,
+                telegram_id,
+                e
+            );
             continue;
         }
 
@@ -1389,8 +1485,7 @@ pub(crate) fn spawn_event_reminder_loop(
         interval.tick().await; // discard cold-start tick
         loop {
             interval.tick().await;
-            match send_event_reminders(&orm, &bot, hours,
-            ).await {
+            match send_event_reminders(&orm, &bot, hours).await {
                 Ok(0) => {}
                 Ok(n) => tracing::info!("event reminders: sent {} reminder(s)", n),
                 Err(e) => tracing::warn!("event reminders sweep failed: {}", e),
@@ -1442,56 +1537,80 @@ mod tests {
     fn validate_event_title_required_for_create() {
         let mut r = valid_create();
         r.title = "   ".into();
-        assert_eq!(validate_event_request(&r).unwrap_err().0, StatusCode::BAD_REQUEST);
+        assert_eq!(
+            validate_event_request(&r).unwrap_err().0,
+            StatusCode::BAD_REQUEST
+        );
     }
 
     #[test]
     fn validate_event_title_too_long() {
         let mut r = valid_create();
         r.title = "a".repeat(201);
-        assert_eq!(validate_event_request(&r).unwrap_err().0, StatusCode::BAD_REQUEST);
+        assert_eq!(
+            validate_event_request(&r).unwrap_err().0,
+            StatusCode::BAD_REQUEST
+        );
     }
 
     #[test]
     fn validate_event_ends_before_starts() {
         let mut r = valid_create();
         r.ends_at = Some("2026-08-01T18:00:00+07:00".into());
-        assert_eq!(validate_event_request(&r).unwrap_err().0, StatusCode::BAD_REQUEST);
+        assert_eq!(
+            validate_event_request(&r).unwrap_err().0,
+            StatusCode::BAD_REQUEST
+        );
     }
 
     #[test]
     fn validate_event_negative_max_seats() {
         let mut r = valid_create();
         r.max_seats = Some(-1);
-        assert_eq!(validate_event_request(&r).unwrap_err().0, StatusCode::BAD_REQUEST);
+        assert_eq!(
+            validate_event_request(&r).unwrap_err().0,
+            StatusCode::BAD_REQUEST
+        );
     }
 
     #[test]
     fn validate_event_price_negative() {
         let mut r = valid_create();
         r.price_baht = Some(-1.0);
-        assert_eq!(validate_event_request(&r).unwrap_err().0, StatusCode::BAD_REQUEST);
+        assert_eq!(
+            validate_event_request(&r).unwrap_err().0,
+            StatusCode::BAD_REQUEST
+        );
     }
 
     #[test]
     fn validate_event_price_stars_negative() {
         let mut r = valid_create();
         r.price_stars = Some(-1);
-        assert_eq!(validate_event_request(&r).unwrap_err().0, StatusCode::BAD_REQUEST);
+        assert_eq!(
+            validate_event_request(&r).unwrap_err().0,
+            StatusCode::BAD_REQUEST
+        );
     }
 
     #[test]
     fn validate_event_price_stars_too_large() {
         let mut r = valid_create();
         r.price_stars = Some(1_000_000_001);
-        assert_eq!(validate_event_request(&r).unwrap_err().0, StatusCode::BAD_REQUEST);
+        assert_eq!(
+            validate_event_request(&r).unwrap_err().0,
+            StatusCode::BAD_REQUEST
+        );
     }
 
     #[test]
     fn validate_event_bad_image_url() {
         let mut r = valid_create();
         r.image_url = Some("javascript:alert(1)".into());
-        assert_eq!(validate_event_request(&r).unwrap_err().0, StatusCode::BAD_REQUEST);
+        assert_eq!(
+            validate_event_request(&r).unwrap_err().0,
+            StatusCode::BAD_REQUEST
+        );
     }
 
     #[test]

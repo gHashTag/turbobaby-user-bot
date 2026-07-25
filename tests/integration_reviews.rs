@@ -49,7 +49,11 @@ async fn seed_delivered_order(
             DbBackend::Postgres,
             "INSERT INTO orders (id, telegram_id, items, subtotal, total, status, created_at) \
              VALUES ($1, $2, $3::jsonb, 100.0, 100.0, 'delivered', NOW())",
-            [order_id.into(), telegram_id.into(), items.to_string().into()],
+            [
+                order_id.into(),
+                telegram_id.into(),
+                items.to_string().into(),
+            ],
         ))
         .await
         .expect("seed delivered order");
@@ -62,7 +66,10 @@ async fn list_reviews_returns_empty_for_unknown_strain() {
         eprintln!("DATABASE_URL not set — skipping integration reviews test");
         return;
     };
-    let _ = db.orm.execute_unprepared("TRUNCATE strain_reviews, lab_certificates, orders").await;
+    let _ = db
+        .orm
+        .execute_unprepared("TRUNCATE strain_reviews, lab_certificates, orders")
+        .await;
 
     let strain_id = uuid::Uuid::new_v4().to_string();
     seed_strain(&db, &strain_id, "Ghost OG").await;
@@ -91,7 +98,10 @@ async fn user_can_create_review_for_delivered_order() {
         eprintln!("DATABASE_URL not set — skipping integration reviews test");
         return;
     };
-    let _ = db.orm.execute_unprepared("TRUNCATE strain_reviews, lab_certificates, orders, strains").await;
+    let _ = db
+        .orm
+        .execute_unprepared("TRUNCATE strain_reviews, lab_certificates, orders, strains")
+        .await;
 
     let user_id: i64 = 1001;
     let strain_id = uuid::Uuid::new_v4().to_string();
@@ -153,7 +163,10 @@ async fn duplicate_review_for_same_order_strain_is_rejected() {
         eprintln!("DATABASE_URL not set — skipping integration reviews test");
         return;
     };
-    let _ = db.orm.execute_unprepared("TRUNCATE strain_reviews, lab_certificates, orders, strains").await;
+    let _ = db
+        .orm
+        .execute_unprepared("TRUNCATE strain_reviews, lab_certificates, orders, strains")
+        .await;
 
     let user_id: i64 = 1002;
     let strain_id = uuid::Uuid::new_v4().to_string();
@@ -213,7 +226,10 @@ async fn review_for_pending_order_is_rejected() {
         eprintln!("DATABASE_URL not set — skipping integration reviews test");
         return;
     };
-    let _ = db.orm.execute_unprepared("TRUNCATE strain_reviews, lab_certificates, orders, strains").await;
+    let _ = db
+        .orm
+        .execute_unprepared("TRUNCATE strain_reviews, lab_certificates, orders, strains")
+        .await;
 
     let user_id: i64 = 1003;
     let strain_id = uuid::Uuid::new_v4().to_string();
@@ -230,7 +246,11 @@ async fn review_for_pending_order_is_rejected() {
             DbBackend::Postgres,
             "INSERT INTO orders (id, telegram_id, items, subtotal, total, status, created_at) \
              VALUES ($1, $2, $3::jsonb, 100.0, 100.0, 'pending', NOW())",
-            [order_id.clone().into(), user_id.into(), items.to_string().into()],
+            [
+                order_id.clone().into(),
+                user_id.into(),
+                items.to_string().into(),
+            ],
         ))
         .await
         .expect("seed pending order");
@@ -353,7 +373,10 @@ async fn admin_can_create_and_list_lab_cert() {
         eprintln!("DATABASE_URL not set — skipping integration reviews test");
         return;
     };
-    let _ = db.orm.execute_unprepared("TRUNCATE strain_reviews, lab_certificates, orders, strains").await;
+    let _ = db
+        .orm
+        .execute_unprepared("TRUNCATE strain_reviews, lab_certificates, orders, strains")
+        .await;
 
     let strain_id = uuid::Uuid::new_v4().to_string();
     seed_strain(&db, &strain_id, "Lab Test").await;
@@ -409,7 +432,10 @@ async fn line_broadcast_without_config_returns_service_unavailable() {
         eprintln!("DATABASE_URL not set — skipping integration reviews test");
         return;
     };
-    let _ = db.orm.execute_unprepared("TRUNCATE strain_reviews, lab_certificates, orders, strains").await;
+    let _ = db
+        .orm
+        .execute_unprepared("TRUNCATE strain_reviews, lab_certificates, orders, strains")
+        .await;
 
     let (admin_init, admin_token, admin_telegram_id) = admin_headers();
     let body = serde_json::json!({ "text": "Hello LINE friends" });

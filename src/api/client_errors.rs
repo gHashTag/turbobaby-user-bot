@@ -15,7 +15,7 @@
 //!     flooding the table.
 
 use axum::{
-    extract::{State, Json},
+    extract::{Json, State},
     http::{HeaderMap, StatusCode},
     routing::post,
     Router,
@@ -25,7 +25,9 @@ use serde::Deserialize;
 // use serde_json::Value;
 use std::time::{Duration, Instant};
 
-use crate::api::rate_limit::{check_and_record, client_ip_from_headers, new_store, SlidingWindowStore};
+use crate::api::rate_limit::{
+    check_and_record, client_ip_from_headers, new_store, SlidingWindowStore,
+};
 use crate::AppState;
 
 /// Per-IP rate limit: 10 error reports per minute is generous for legitimate

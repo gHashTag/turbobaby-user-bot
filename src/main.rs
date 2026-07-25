@@ -9,22 +9,22 @@ mod bot;
 mod config;
 #[cfg(not(target_arch = "wasm32"))]
 mod db;
+#[cfg(all(not(target_arch = "wasm32"), feature = "backend"))]
+mod delivery;
+#[cfg(all(not(target_arch = "wasm32"), feature = "backend"))]
+mod line;
 #[cfg(not(target_arch = "wasm32"))]
 mod locales;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod metrics;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod notify;
+#[cfg(all(not(target_arch = "wasm32"), feature = "backend"))]
+mod promptpay;
 #[cfg(not(target_arch = "wasm32"))]
 mod s3;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod util;
-#[cfg(all(not(target_arch = "wasm32"), feature = "backend"))]
-mod delivery;
-#[cfg(all(not(target_arch = "wasm32"), feature = "backend"))]
-mod line;
-#[cfg(all(not(target_arch = "wasm32"), feature = "backend"))]
-mod promptpay;
 
 // Business logic modules (shared between backend and web)
 pub mod trios;
@@ -160,9 +160,8 @@ fn looks_like_static_asset(path: &str) -> bool {
         return true;
     }
     let static_exts: &[&str] = &[
-        "js", "wasm", "css", "svg", "png", "jpg", "jpeg", "webp", "gif",
-        "mp4", "webm", "mov", "ico", "woff", "woff2", "ttf", "otf", "eot",
-        "json", "txt", "xml", "map",
+        "js", "wasm", "css", "svg", "png", "jpg", "jpeg", "webp", "gif", "mp4", "webm", "mov",
+        "ico", "woff", "woff2", "ttf", "otf", "eot", "json", "txt", "xml", "map",
     ];
     std::path::Path::new(path)
         .extension()
@@ -922,18 +921,17 @@ async fn main() -> Result<()> {
                 .get("index.html")
                 .and_then(|file| {
                     let html = String::from_utf8_lossy(&file.raw);
-                    html.lines()
-                        .find_map(|line| {
-                            line.split_once("/woody-weed-bot-")
-                                .and_then(|(_, rest)| rest.split_once(".js"))
-                                .map(|(hash, _)| {
-                                    // Cycle #171: index.html may include ?v=... after the filename.
-                                    // Take only the leading hex hash (before any '?' or non-hex).
-                                    hash.chars()
-                                        .take_while(|c| c.is_ascii_hexdigit())
-                                        .collect::<String>()
-                                })
-                        })
+                    html.lines().find_map(|line| {
+                        line.split_once("/woody-weed-bot-")
+                            .and_then(|(_, rest)| rest.split_once(".js"))
+                            .map(|(hash, _)| {
+                                // Cycle #171: index.html may include ?v=... after the filename.
+                                // Take only the leading hex hash (before any '?' or non-hex).
+                                hash.chars()
+                                    .take_while(|c| c.is_ascii_hexdigit())
+                                    .collect::<String>()
+                            })
+                    })
                 })
                 .unwrap_or_else(|| "unknown".to_string());
             (
@@ -1088,7 +1086,9 @@ mod tests {
         assert!(looks_like_static_asset("woody-weed-bot-abc123.js"));
         assert!(looks_like_static_asset("app_bg.wasm"));
         assert!(looks_like_static_asset("style.css"));
-        assert!(looks_like_static_asset("snippets/dioxus-web-xxx/inline1.js"));
+        assert!(looks_like_static_asset(
+            "snippets/dioxus-web-xxx/inline1.js"
+        ));
         assert!(looks_like_static_asset("assets/logo.png"));
     }
 

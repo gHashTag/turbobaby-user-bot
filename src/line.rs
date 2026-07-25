@@ -50,10 +50,7 @@ pub(crate) async fn broadcast_message(
         .map_err(|e| format!("LINE broadcast request failed: {e}"))?;
 
     let status = response.status();
-    let body_text = response
-        .text()
-        .await
-        .unwrap_or_default();
+    let body_text = response.text().await.unwrap_or_default();
     Ok((status, body_text))
 }
 
@@ -64,9 +61,7 @@ mod tests {
     #[test]
     fn broadcast_rejects_empty_text() {
         let rt = tokio::runtime::Runtime::new().unwrap();
-        let err = rt
-            .block_on(broadcast_message("token", ""))
-            .unwrap_err();
+        let err = rt.block_on(broadcast_message("token", "")).unwrap_err();
         assert!(err.contains("empty"));
     }
 
@@ -74,18 +69,14 @@ mod tests {
     fn broadcast_rejects_overlong_text() {
         let rt = tokio::runtime::Runtime::new().unwrap();
         let text = "x".repeat(MAX_BROADCAST_CHARS + 1);
-        let err = rt
-            .block_on(broadcast_message("token", &text))
-            .unwrap_err();
+        let err = rt.block_on(broadcast_message("token", &text)).unwrap_err();
         assert!(err.contains("too long"));
     }
 
     #[test]
     fn broadcast_rejects_empty_token() {
         let rt = tokio::runtime::Runtime::new().unwrap();
-        let err = rt
-            .block_on(broadcast_message("", "hello"))
-            .unwrap_err();
+        let err = rt.block_on(broadcast_message("", "hello")).unwrap_err();
         assert!(err.contains("token is empty"));
     }
 }

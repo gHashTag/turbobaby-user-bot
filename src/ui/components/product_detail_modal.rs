@@ -93,7 +93,10 @@ fn stars_for(rating: i32) -> String {
 
 fn render_variant_c_sections(
     strain_id: Option<String>,
-    resource: &Resource<(Option<crate::ui::api::types::ReviewsList>, Option<Vec<LabCertificate>>)>,
+    resource: &Resource<(
+        Option<crate::ui::api::types::ReviewsList>,
+        Option<Vec<LabCertificate>>,
+    )>,
 ) -> Element {
     if strain_id.is_none() {
         return rsx! {};

@@ -581,7 +581,10 @@ async fn create_order(
             .map(|p| p.age_verified)
             .unwrap_or(false);
         if !age_verified {
-            tracing::warn!("create_order rejected: age not verified telegram_id={}", tid);
+            tracing::warn!(
+                "create_order rejected: age not verified telegram_id={}",
+                tid
+            );
             crate::metrics::auth_failure("order_age_not_verified");
             return Err(StatusCode::FORBIDDEN);
         }
@@ -984,11 +987,11 @@ async fn create_order(
         stars_transaction::{ActiveModel as StarsTxAm, Entity as StarsTxEntity},
         user_stars::{ActiveModel as UsAm, Column as UsCol, Entity as UsEntity},
     };
+    use sea_orm::sea_query::OnConflict;
     use sea_orm::{
         ActiveValue::Set, ColumnTrait, ConnectionTrait, DbBackend, EntityTrait, QueryFilter,
         Statement, TransactionTrait,
     };
-    use sea_orm::sea_query::OnConflict;
     let tx = state.db.orm.begin().await.map_err(|e| {
         error!("create_order tx.begin error: {}", e);
         StatusCode::INTERNAL_SERVER_ERROR
@@ -1524,7 +1527,10 @@ async fn update_order_status(
             // Refund only if the order isn't already in a terminal state.
             // (cycle #76 `should_refund_bonus` helper lives in bot/callbacks
             // for the duplicate refund path there.)
-            if !matches!(o.status.as_str(), "rejected" | "completed" | "delivered" | "cancelled") {
+            if !matches!(
+                o.status.as_str(),
+                "rejected" | "completed" | "delivered" | "cancelled"
+            ) {
                 let bonus = if o.bonus_used.is_finite() {
                     o.bonus_used.max(0.0)
                 } else {
@@ -1593,10 +1599,7 @@ async fn update_order_status(
                         UsEntity::update_many()
                             .col_expr(
                                 UsCol::Balance,
-                                sea_orm::sea_query::Expr::cust_with_values(
-                                    "balance + $1",
-                                    [stars],
-                                ),
+                                sea_orm::sea_query::Expr::cust_with_values("balance + $1", [stars]),
                             )
                             .filter(UsCol::TelegramId.eq(tid))
                             .exec(&tx)
@@ -1732,7 +1735,11 @@ async fn promptpay_qr(
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
     let order = model.ok_or(StatusCode::NOT_FOUND)?;
-    let total = if order.total.is_finite() { order.total } else { 0.0 };
+    let total = if order.total.is_finite() {
+        order.total
+    } else {
+        0.0
+    };
     let payload = build_payload(&state.config.promptpay, total, &id);
     let svg = svg_qr(&payload).map_err(|e| {
         tracing::error!("promptpay_qr render: {}", e);

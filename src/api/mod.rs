@@ -7,10 +7,10 @@ pub(crate) mod admin;
 pub mod auth;
 #[allow(unreachable_pub)]
 pub mod cache;
-pub(crate) mod debug;
 pub(crate) mod cart;
 pub(crate) mod catalog;
 pub(crate) mod client_errors;
+pub(crate) mod debug;
 pub(crate) mod events;
 pub(crate) mod garden;
 pub(crate) mod happy_hour;

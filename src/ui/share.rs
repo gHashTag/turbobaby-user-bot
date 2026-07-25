@@ -226,7 +226,8 @@ mod tests {
 
     #[test]
     fn product_deep_link_public_wrapper_matches_internal() {
-        let via_public = product_deep_link(ProductKind::Set, "550e8400-e29b-41d4-a716-446655440000");
+        let via_public =
+            product_deep_link(ProductKind::Set, "550e8400-e29b-41d4-a716-446655440000");
         let via_internal = deep_link_url(ProductKind::Set, "550e8400-e29b-41d4-a716-446655440000");
         assert_eq!(via_public, via_internal);
     }

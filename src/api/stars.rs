@@ -104,7 +104,9 @@ async fn get_balance(
         .map(|r| r.try_get::<i64>("", "balance").unwrap_or(0))
         .unwrap_or(0);
 
-    Ok(Json(json!({ "telegram_id": telegram_id, "balance": balance })))
+    Ok(Json(
+        json!({ "telegram_id": telegram_id, "balance": balance }),
+    ))
 }
 
 /// GetTransactionHistory(userId) — paginated append-only ledger.
@@ -149,7 +151,9 @@ async fn get_history(
         })
         .collect();
 
-    Ok(Json(json!({ "telegram_id": telegram_id, "transactions": txs })))
+    Ok(Json(
+        json!({ "telegram_id": telegram_id, "transactions": txs }),
+    ))
 }
 
 /// AddStars(userId, amount) — credits Stars from a game.
@@ -222,7 +226,11 @@ async fn add_stars(
         ..Default::default()
     };
     LpEntity::insert(lp_am)
-        .on_conflict(OnConflict::column(LpCol::TelegramId).do_nothing().to_owned())
+        .on_conflict(
+            OnConflict::column(LpCol::TelegramId)
+                .do_nothing()
+                .to_owned(),
+        )
         .do_nothing()
         .exec(&tx)
         .await
@@ -463,10 +471,13 @@ async fn spend_stars(
             telegram_id: Set(Some(req.telegram_id)),
             ..Default::default()
         };
-        OrderIdemEntity::insert(idem_am).exec(&tx).await.map_err(|e| {
-            tracing::error!("stars spend idempotency insert: {:?}", e);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
+        OrderIdemEntity::insert(idem_am)
+            .exec(&tx)
+            .await
+            .map_err(|e| {
+                tracing::error!("stars spend idempotency insert: {:?}", e);
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?;
     }
 
     tx.commit().await.map_err(|e| {
