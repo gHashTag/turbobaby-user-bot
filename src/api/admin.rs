@@ -62,6 +62,7 @@ pub(crate) fn routes() -> Router<AppState> {
         )
         .route("/admin/check", get(check_admin_access))
         .route("/admin/login", post(admin_login))
+        .route("/admin/notify-deploy", post(manual_notify_deploy))
         .route("/admin/ping", get(ping))
         .route("/debug/validate-initdata", post(debug_validate_init_data))
         // Cycle #136: TЗ #2 §5 self-service marketing-badge toggle.
@@ -524,6 +525,36 @@ async fn admin_login(
     // defence than the per-request slowdown.
     crate::api::auth::record_failed_admin_attempt(&headers)?;
     Err(StatusCode::UNAUTHORIZED)
+}
+
+#[derive(Deserialize)]
+struct ManualNotifyDeployRequest {
+    #[serde(default)]
+    note: String,
+}
+
+async fn manual_notify_deploy(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    Json(req): Json<ManualNotifyDeployRequest>,
+) -> Result<Json<Value>, StatusCode> {
+    check_admin(&headers, &state)?;
+    let note = if req.note.trim().is_empty() {
+        "manual trigger from admin panel"
+    } else {
+        req.note.trim()
+    };
+    let text = crate::notify::notify_deploy_manual(
+        &state.bot,
+        &state.config,
+        note,
+    )
+    .await;
+    Ok(Json(json!({
+        "success": true,
+        "sent_to": state.config.admin_ids.len(),
+        "message_preview": text,
+    })))
 }
 
 async fn ping() -> Result<Json<Value>, StatusCode> {
