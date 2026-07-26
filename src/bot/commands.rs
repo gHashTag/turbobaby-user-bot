@@ -574,28 +574,20 @@ pub(crate) async fn handle_command(
         }
 
         Command::Admin => {
-            if config.admin_ids.contains(&user_id) {
-                bot.send_message(
-                    msg.chat.id,
-                    "🔧 <b>Admin Panel</b>\n━━━━━━━━━━━━━━━━\nУправление товарами:\nStrains • Gear • Tea • Sets • Acc.Sets • Tea Sets",
-                )
-                .parse_mode(teloxide::types::ParseMode::Html)
-                .reply_markup(InlineKeyboardMarkup::new(vec![vec![web_app_btn(
-                    "🔧 Открыть админку",
-                    &build_admin_url(base),
-                )]]))
-                .await?;
-            } else {
-                bot.send_message(
-                    msg.chat.id,
-                    format!(
-                        "🔒 Доступ закрыт\n\nВаш Telegram ID: <code>{}</code>\nПередайте его владельцу шопа, чтобы получить доступ.",
-                        user_id
-                    ),
-                )
-                .parse_mode(teloxide::types::ParseMode::Html)
-                .await?;
-            }
+            // Cycle #171: the WebApp admin screen now gates on ADMIN_PASSWORD,
+            // not on Telegram initData / admin_ids.  The bot button is just a
+            // convenient entry point; showing it to everyone is safe because the
+            // WebApp still requires the shared admin password.
+            bot.send_message(
+                msg.chat.id,
+                "🔧 <b>Admin Panel</b>\n━━━━━━━━━━━━━━━━\nУправление товарами:\nStrains • Gear • Tea • Sets • Acc.Sets • Tea Sets",
+            )
+            .parse_mode(teloxide::types::ParseMode::Html)
+            .reply_markup(InlineKeyboardMarkup::new(vec![vec![web_app_btn(
+                "🔧 Открыть админку",
+                &build_admin_url(base),
+            )]]))
+            .await?;
         }
 
         Command::Blocks => {
