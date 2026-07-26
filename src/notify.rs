@@ -3,6 +3,14 @@ use teloxide::prelude::*;
 use teloxide::types::ParseMode;
 use teloxide::Bot;
 
+/// True when running inside Railway (RAILWAY_ENVIRONMENT is set) or when
+/// NODE_ENV=production. Used as a less-fragile deploy gate than a single
+/// git-specific env var, which Railway only injects for GitHub-sourced deploys.
+fn is_railway_production() -> bool {
+    std::env::var("RAILWAY_ENVIRONMENT").is_ok()
+        || std::env::var("NODE_ENV").unwrap_or_default() == "production"
+}
+
 /// Send a Telegram message to every admin in `config.admin_ids`.
 ///
 /// Cycle #149: previously this re-escaped `text` via `html_escape` and
@@ -15,7 +23,10 @@ use teloxide::Bot;
 ///      their user-controlled substrings (audited cycle #149).
 pub async fn notify_admins(bot: &Bot, config: &Config, text: &str) {
     if config.admin_ids.is_empty() {
-        tracing::warn!("notify_admins: no ADMIN_IDS configured, skipping {} byte(s) of text", text.len());
+        tracing::warn!(
+            "notify_admins: no ADMIN_IDS configured, skipping {} byte(s) of text",
+            text.len()
+        );
         return;
     }
     tracing::info!("notify_admins: sending to {} admin(s)", config.admin_ids.len());
@@ -43,29 +54,44 @@ pub async fn notify_admins(bot: &Bot, config: &Config, text: &str) {
 /// On startup after a successful Railway deploy, tell every admin WHAT shipped
 /// (the commit subject) + the version, so they know which area to test/check.
 ///
-/// Gated to real deploys: Railway injects `RAILWAY_GIT_COMMIT_*` env vars, so we
-/// only send when `RAILWAY_GIT_COMMIT_SHA` is present (skips local `cargo run`).
 /// Fired on boot — the only reliable "deploy succeeded" signal (the new backend
 /// booted). A rare extra ping on a crash-restart is acceptable (also useful).
+///
+/// Railway only injects `RAILWAY_GIT_COMMIT_*` env vars for deployments that
+/// originate from a GitHub repo integration. CLI `railway up` deploys do NOT
+/// receive those variables, so the old gate (`RAILWAY_GIT_COMMIT_SHA` present)
+/// silently skipped deploy notifications. The new gate keys off the environment
+/// itself (`RAILWAY_ENVIRONMENT` / `NODE_ENV=production`) and uses git env as
+/// best-effort metadata.
 pub async fn notify_deploy(bot: &Bot, config: &Config) {
     tracing::info!("notify_deploy: starting deploy notification check");
-    let Ok(sha) = std::env::var("RAILWAY_GIT_COMMIT_SHA") else {
-        tracing::info!("notify_deploy: RAILWAY_GIT_COMMIT_SHA not set — skipping (local dev)");
-        return; // not on Railway (local dev) — don't spam admins.
+    if !is_railway_production() {
+        tracing::info!(
+            "notify_deploy: not a Railway/production environment — skipping (local dev)"
+        );
+        return;
+    }
+
+    let sha = std::env::var("RAILWAY_GIT_COMMIT_SHA").unwrap_or_default();
+    let sha7: String = if sha.is_empty() {
+        env!("BUILD_VERSION").to_string()
+    } else {
+        sha.chars().take(7).collect()
     };
-    let sha7: String = sha.chars().take(7).collect();
     let full_msg = std::env::var("RAILWAY_GIT_COMMIT_MESSAGE").unwrap_or_default();
     let author = std::env::var("RAILWAY_GIT_AUTHOR").unwrap_or_default();
     tracing::info!(
-        "notify_deploy: Railway env found (sha={}, msg_len={}, author_len={}, admin_ids={})",
-        sha7,
+        "notify_deploy: production boot (sha_len={}, msg_len={}, author_len={}, admin_ids={})",
+        sha.len(),
         full_msg.len(),
         author.len(),
         config.admin_ids.len()
     );
 
     if config.admin_ids.is_empty() {
-        tracing::error!("notify_deploy: ADMIN_IDS is empty — deploy notification has nowhere to go");
+        tracing::error!(
+            "notify_deploy: ADMIN_IDS is empty — deploy notification has nowhere to go"
+        );
         return;
     }
 
@@ -102,34 +128,39 @@ pub async fn notify_deploy(bot: &Bot, config: &Config) {
     }
     text.push_str("\n\n\u{1F9EA} Проверьте раздел, которого касается это изменение.");
 
-    tracing::info!("notify_deploy: built message ({} chars), calling notify_admins", text.len());
+    tracing::info!(
+        "notify_deploy: built message ({} chars), calling notify_admins",
+        text.len()
+    );
     notify_admins(bot, config, &text).await;
     tracing::info!("notify_deploy: finished");
 }
 
 /// Manual deploy notification — used by the `/api/admin/notify-deploy` endpoint.
-/// Unlike `notify_deploy`, this is NOT gated by `RAILWAY_GIT_COMMIT_SHA`; it
+/// Unlike `notify_deploy`, this is NOT gated by environment variables; it
 /// always sends a "manual deploy ping" to admins so an operator can verify the
-/// notification path is alive without waiting for the next Railway deploy.
+/// notification path is alive without waiting for the next deploy.
 ///
 /// Returns the rendered message text so the HTTP response can echo it for
 /// debugging.
 pub async fn notify_deploy_manual(bot: &Bot, config: &Config, note: &str) -> String {
     tracing::info!("notify_deploy_manual: manual trigger (note_len={})", note.len());
     if config.admin_ids.is_empty() {
-        tracing::error!("notify_deploy_manual: ADMIN_IDS is empty — manual notification has nowhere to go");
+        tracing::error!(
+            "notify_deploy_manual: ADMIN_IDS is empty — manual notification has nowhere to go"
+        );
         return "ADMIN_IDS is empty — no recipients".to_string();
     }
 
-    let mut text = format!(
-        "\u{1F680} <b>Ручной тест деплой-уведомления</b>\n\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\n\u{1F916} v{}\n\u{1F4AC} {}",
-        env!("BUILD_VERSION"),
-        crate::util::html_escape(note)
-    );
     let sha = std::env::var("RAILWAY_GIT_COMMIT_SHA")
         .map(|s| s.chars().take(7).collect::<String>())
-        .unwrap_or_else(|_| "local".to_string());
-    text.push_str(&format!("\n\u{1F516} {}", crate::util::html_escape(&sha)));
+        .unwrap_or_else(|_| env!("BUILD_VERSION").to_string());
+    let text = format!(
+        "\u{1F680} <b>Ручной тест деплой-уведомления</b>\n\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\n\u{1F916} v{}\n\u{1F4AC} {}\n\u{1F516} {}",
+        env!("BUILD_VERSION"),
+        crate::util::html_escape(note),
+        crate::util::html_escape(&sha)
+    );
 
     notify_admins(bot, config, &text).await;
     tracing::info!("notify_deploy_manual: done");
