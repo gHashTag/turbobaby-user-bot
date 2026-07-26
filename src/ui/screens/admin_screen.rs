@@ -458,34 +458,13 @@ async fn upload_video() -> Result<Option<String>, String> {
 
 #[component]
 pub fn AdminScreen() -> Element {
-    let tg_id = use_telegram_id();
     let active_tab = use_signal(|| Tab::Strains);
     let build_version: &'static str = env!("BUILD_VERSION");
-    let init_data = use_telegram_init_data();
-    let access_reload = use_signal(|| 0u32);
 
-    // Reactive telegram_id: re-reads localStorage whenever access_reload changes
-    // (e.g. after a successful password login). Falls back to the Telegram WebApp
-    // user id when running inside Telegram.
-    let telegram_id = use_memo(move || {
-        let _ = access_reload.read();
-        #[cfg(target_arch = "wasm32")]
-        {
-            let stored = web_sys::window()
-                .and_then(|w| w.local_storage().ok())
-                .flatten()
-                .and_then(|s| s.get_item("wwb_admin_telegram_id").ok())
-                .flatten()
-                .and_then(|id| id.parse::<i64>().ok())
-                .filter(|id| *id != 0);
-            tg_id.or(stored).unwrap_or(0)
-        }
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            tg_id.unwrap_or(0)
-        }
-    });
-
+    // Password-only admin auth. We no longer rely on Telegram initData for
+    // the initial gate — it fails in plain browsers and is confusing in the
+    // Telegram WebApp when the user is not yet in ADMIN_IDS. A valid
+    // ADMIN_PASSWORD token is enough; Telegram ID is optional metadata.
     let password_token = use_signal(|| {
         #[cfg(target_arch = "wasm32")]
         {
@@ -502,22 +481,20 @@ pub fn AdminScreen() -> Element {
         String::new()
     });
 
+    let access_reload = use_signal(|| 0u32);
     let access = use_resource(move || {
         let _ = access_reload.read();
-        let init_data = init_data.clone();
         let token = password_token.read().clone();
-        let telegram_id = telegram_id();
         async move {
+            if token.is_empty() {
+                return Err("no_token".to_string());
+            }
             let base = api_base_url();
-            let url = format!("{}/api/admin/check?telegram_id={}", base, telegram_id);
-            let mut req = HTTP_CLIENT
+            let url = format!("{}/api/admin/check", base);
+            let resp = HTTP_CLIENT
                 .clone()
                 .get(&url)
-                .header("X-Telegram-Init-Data", init_data.clone());
-            if !token.is_empty() {
-                req = req.header("X-Admin-Token", token);
-            }
-            let resp = req
+                .header("X-Admin-Token", token)
                 .send()
                 .await
                 .map_err(|e| format!("send to {url}: {e}"))?;
@@ -528,7 +505,6 @@ pub fn AdminScreen() -> Element {
                     .await
                     .map_err(|e| format!("json: {e}"));
             }
-            // 401 responses now carry a JSON body with a diagnostic reason.
             let reason = resp
                 .json::<AdminCheck>()
                 .await
@@ -542,82 +518,30 @@ pub fn AdminScreen() -> Element {
     rsx! {
         div { style: "min-height:100vh;background:#0f0f1a;color:#e8e8e8;padding:16px;padding-bottom:80px;",
             h1 { style: "font-size:22px;color:#ff4757;margin-bottom:4px;", "🔧 Admin" }
-            div { style: "font-size:11px;color:#666;margin-bottom:4px;", "tg: {telegram_id()}" }
             div { style: "font-size:10px;color:#444;margin-bottom:16px;font-family:monospace;", "v{build_version}" }
             match &*access.read() {
-                None => rsx!(div { style: "color:#888;padding:20px 0;", "Проверка доступа..." }),
                 Some(Ok(check)) if check.is_admin => rsx!(AdminPanel { active_tab, password_token }),
-                Some(Err(reason)) => rsx!(AccessDeniedScreen { telegram_id: telegram_id(), password_token, access_reload, reason: reason.clone() }),
-                _ => rsx!(AccessDeniedScreen { telegram_id: telegram_id(), password_token, access_reload, reason: "unknown".to_string() }),
+                _ => rsx!(AdminLoginScreen { password_token, access_reload }),
             }
         }
     }
 }
 
 #[component]
-fn AccessDeniedScreen(
-    telegram_id: i64,
+fn AdminLoginScreen(
     mut password_token: Signal<String>,
     mut access_reload: Signal<u32>,
-    reason: String,
 ) -> Element {
-    let debug = TelegramApp::init().debug_dump();
     let mut password = use_signal(String::new);
-    let mut admin_id = use_signal(String::new);
     let mut error = use_signal(String::new);
     let mut logging_in = use_signal(|| false);
-    let storage_dump = {
-        #[cfg(target_arch = "wasm32")]
-        {
-            web_sys::window()
-                .and_then(|w| w.local_storage().ok())
-                .flatten()
-                .map(|s| {
-                    let mut items = vec![];
-                    let len = s.length().unwrap_or(0);
-                    for i in 0..len {
-                        if let Some(key) = s.key(i).ok().flatten() {
-                            if key.starts_with("wwb_") {
-                                let val = s.get_item(&key).ok().flatten().unwrap_or_default();
-                                items.push(format!(
-                                    "{}={}",
-                                    key,
-                                    val.chars().take(20).collect::<String>()
-                                ));
-                            }
-                        }
-                    }
-                    items.join("\n")
-                })
-                .unwrap_or_else(|| "localStorage unavailable".to_string())
-        }
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            "N/A".to_string()
-        }
-    };
     rsx! {
         div { style: "padding:30px 16px;text-align:center;",
-            div { style: "font-size:48px;margin-bottom:12px;", "🔒" }
-            h2 { style: "color:#ff4757;font-size:18px;margin-bottom:8px;", "Доступ закрыт" }
+            div { style: "font-size:48px;margin-bottom:12px;", "🔧" }
+            h2 { style: "color:#39ff14;font-size:18px;margin-bottom:8px;", "Вход в админку" }
             p { style: "color:#888;font-size:13px;line-height:1.5;max-width:300px;margin:0 auto;",
-                "Попросите владельца добавить ваш Telegram ID в админы." }
-            if !reason.is_empty() {
-                div { style: "margin-top:12px;padding:8px 12px;background:#2a1a1a;border-radius:6px;font-family:monospace;font-size:11px;color:#ff9f43;display:inline-block;max-width:300px;word-break:break-all;",
-                    "{reason}" }
-            }
-            if reason == "invalid_init_data" || reason == "not_admin" {
-                div { style: "margin-top:12px;padding:10px;background:#1a1a2e;border-radius:6px;font-size:12px;color:#6699ff;max-width:300px;margin-left:auto;margin-right:auto;line-height:1.4;",
-                    "Откройте это приложение через нового бота: "
-                    a { style: "color:#39ff14;text-decoration:underline;", href: "https://t.me/Woody_WeedPecker_bot", "@Woody_WeedPecker_bot" }
-                }
-            }
-            div { style: "margin-top:20px;padding:12px;background:#1a1a2e;border-radius:8px;font-family:monospace;font-size:13px;color:#39ff14;display:inline-block;",
-                "ID: {telegram_id}" }
+                "Введите общий пароль администратора." }
             div { style: "margin-top:20px;max-width:300px;margin-left:auto;margin-right:auto;display:flex;flex-direction:column;gap:8px;",
-                input { style: input_style(), r#type: "text", placeholder: "Ваш Telegram ID (число)",
-                    "aria-label": "Telegram ID",
-                    value: "{admin_id}", oninput: move |e| admin_id.set(e.value()) }
                 input { style: input_style(), r#type: "password", placeholder: "Пароль админа",
                     "aria-label": "Пароль админа",
                     value: "{password}", oninput: move |e| password.set(e.value()) }
@@ -629,11 +553,7 @@ fn AccessDeniedScreen(
                     disabled: *logging_in.read(),
                     onclick: move |_| {
                         let pw = password.read().trim().to_string();
-                        let id_str = admin_id.read().trim().to_string();
                         if pw.is_empty() { error.set("Введите пароль".into()); return; }
-                        if id_str.is_empty() { error.set("Введите ваш Telegram ID".into()); return; }
-                        let id_parsed = id_str.parse::<i64>().unwrap_or(0);
-                        if id_parsed == 0 { error.set("Некорректный Telegram ID".into()); return; }
                         logging_in.set(true);
                         error.set(String::new());
                         let mut token_signal = password_token;
@@ -642,7 +562,7 @@ fn AccessDeniedScreen(
                         spawn(async move {
                             let url = format!("{}/api/admin/login", api_base_url());
                             let res = HTTP_CLIENT.clone().post(&url)
-                                .json(&serde_json::json!({"password": pw, "telegram_id": id_parsed}))
+                                .json(&serde_json::json!({"password": pw, "telegram_id": 0}))
                                 .send().await;
                             logging_in2.set(false);
                             match res {
@@ -654,7 +574,7 @@ fn AccessDeniedScreen(
                                                 if let Some(window) = web_sys::window() {
                                                     if let Ok(Some(storage)) = window.local_storage() {
                                                         let _ = storage.set_item("wwb_admin_token", token);
-                                                        let _ = storage.set_item("wwb_admin_telegram_id", &id_parsed.to_string());
+                                                        let _ = storage.set_item("wwb_admin_telegram_id", "0");
                                                     }
                                                 }
                                             }
@@ -668,7 +588,7 @@ fn AccessDeniedScreen(
                             }
                         });
                     },
-                    if *logging_in.read() { "⏳..." } else { "🔑 Войти по паролю" }
+                    if *logging_in.read() { "⏳..." } else { "🔑 Войти" }
                 }
                 button {
                     style: secondary_btn_style(),
@@ -683,18 +603,12 @@ fn AccessDeniedScreen(
                             }
                         }
                         password_token.set(String::new());
+                        password.set(String::new());
                         let new_reload = access_reload.read().wrapping_add(1);
                         access_reload.set(new_reload);
                     },
                     "🧹 Сбросить сохранённый вход"
                 }
-            }
-            details { style: "margin-top:16px;text-align:left;max-width:340px;margin-left:auto;margin-right:auto;",
-                summary { style: "color:#666;font-size:11px;cursor:pointer;", "debug" }
-                pre { style: "font-size:10px;color:#888;background:#1a1a2e;padding:8px;border-radius:6px;white-space:pre-wrap;word-break:break-all;",
-                    "{debug}" }
-                pre { style: "font-size:10px;color:#39ff14;background:#1a1a2e;padding:8px;border-radius:6px;white-space:pre-wrap;word-break:break-all;margin-top:4px;",
-                    "localStorage:\n{storage_dump}" }
             }
         }
     }
