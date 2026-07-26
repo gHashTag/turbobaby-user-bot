@@ -532,6 +532,12 @@ fn AdminLoginScreen(
     mut password_token: Signal<String>,
     mut access_reload: Signal<u32>,
 ) -> Element {
+    // Cycle #171: restored the two-field login shape (Telegram ID + password)
+    // that admins were used to.  The Telegram ID is optional metadata; the
+    // real auth is still the shared ADMIN_PASSWORD.  Wrapped in a <form> with
+    // a submit button so Enter/Tap works reliably in Telegram WebApp and
+    // mobile browsers — the previous bare button missed taps in some WebViews.
+    let mut admin_id = use_signal(String::new);
     let mut password = use_signal(String::new);
     let mut error = use_signal(String::new);
     let mut logging_in = use_signal(|| false);
@@ -540,8 +546,51 @@ fn AdminLoginScreen(
             div { style: "font-size:48px;margin-bottom:12px;", "🔧" }
             h2 { style: "color:#39ff14;font-size:18px;margin-bottom:8px;", "Вход в админку" }
             p { style: "color:#888;font-size:13px;line-height:1.5;max-width:300px;margin:0 auto;",
-                "Введите общий пароль администратора." }
-            div { style: "margin-top:20px;max-width:300px;margin-left:auto;margin-right:auto;display:flex;flex-direction:column;gap:8px;",
+                "Введите Telegram ID и общий пароль администратора." }
+            form {
+                style: "margin-top:20px;max-width:300px;margin-left:auto;margin-right:auto;display:flex;flex-direction:column;gap:8px;",
+                onsubmit: move |_| {
+                    let pw = password.read().trim().to_string();
+                    let id_str = admin_id.read().trim().to_string();
+                    if pw.is_empty() { error.set("Введите пароль".into()); return; }
+                    let id_parsed = id_str.parse::<i64>().unwrap_or(0);
+                    logging_in.set(true);
+                    error.set(String::new());
+                    let mut token_signal = password_token;
+                    let mut error2 = error;
+                    let mut logging_in2 = logging_in;
+                    spawn(async move {
+                        let url = format!("{}/api/admin/login", api_base_url());
+                        let res = HTTP_CLIENT.clone().post(&url)
+                            .json(&serde_json::json!({"password": pw, "telegram_id": id_parsed}))
+                            .send().await;
+                        logging_in2.set(false);
+                        match res {
+                            Ok(r) if r.status().is_success() => {
+                                if let Ok(data) = r.json::<serde_json::Value>().await {
+                                    if let Some(token) = data["token"].as_str() {
+                                        #[cfg(target_arch = "wasm32")]
+                                        {
+                                            if let Some(window) = web_sys::window() {
+                                                if let Ok(Some(storage)) = window.local_storage() {
+                                                    let _ = storage.set_item("wwb_admin_token", token);
+                                                    let _ = storage.set_item("wwb_admin_telegram_id", &id_parsed.to_string());
+                                                }
+                                            }
+                                        }
+                                        token_signal.set(token.to_string());
+                                        let new_reload = access_reload.read().wrapping_add(1);
+                                        access_reload.set(new_reload);
+                                    }
+                                }
+                            }
+                            _ => { error2.set("Неверный пароль".into()); }
+                        }
+                    });
+                },
+                input { style: input_style(), r#type: "text", placeholder: "Ваш Telegram ID (число)",
+                    "aria-label": "Telegram ID",
+                    value: "{admin_id}", oninput: move |e| admin_id.set(e.value()) }
                 input { style: input_style(), r#type: "password", placeholder: "Пароль админа",
                     "aria-label": "Пароль админа",
                     value: "{password}", oninput: move |e| password.set(e.value()) }
@@ -549,48 +598,13 @@ fn AdminLoginScreen(
                     div { style: "color:#ff4757;font-size:12px;margin-top:4px;", "{error}" }
                 }
                 button {
+                    r#type: "submit",
                     style: if *logging_in.read() { submit_btn_disabled_style() } else { submit_btn_style() },
                     disabled: *logging_in.read(),
-                    onclick: move |_| {
-                        let pw = password.read().trim().to_string();
-                        if pw.is_empty() { error.set("Введите пароль".into()); return; }
-                        logging_in.set(true);
-                        error.set(String::new());
-                        let mut token_signal = password_token;
-                        let mut error2 = error;
-                        let mut logging_in2 = logging_in;
-                        spawn(async move {
-                            let url = format!("{}/api/admin/login", api_base_url());
-                            let res = HTTP_CLIENT.clone().post(&url)
-                                .json(&serde_json::json!({"password": pw, "telegram_id": 0}))
-                                .send().await;
-                            logging_in2.set(false);
-                            match res {
-                                Ok(r) if r.status().is_success() => {
-                                    if let Ok(data) = r.json::<serde_json::Value>().await {
-                                        if let Some(token) = data["token"].as_str() {
-                                            #[cfg(target_arch = "wasm32")]
-                                            {
-                                                if let Some(window) = web_sys::window() {
-                                                    if let Ok(Some(storage)) = window.local_storage() {
-                                                        let _ = storage.set_item("wwb_admin_token", token);
-                                                        let _ = storage.set_item("wwb_admin_telegram_id", "0");
-                                                    }
-                                                }
-                                            }
-                                            token_signal.set(token.to_string());
-                                            let new_reload = access_reload.read().wrapping_add(1);
-                                            access_reload.set(new_reload);
-                                        }
-                                    }
-                                }
-                                _ => { error2.set("Неверный пароль".into()); }
-                            }
-                        });
-                    },
-                    if *logging_in.read() { "⏳..." } else { "🔑 Войти" }
+                    if *logging_in.read() { "⏳..." } else { "🔑 Войти по паролю" }
                 }
                 button {
+                    r#type: "button",
                     style: secondary_btn_style(),
                     onclick: move |_| {
                         #[cfg(target_arch = "wasm32")]
@@ -604,6 +618,7 @@ fn AdminLoginScreen(
                         }
                         password_token.set(String::new());
                         password.set(String::new());
+                        admin_id.set(String::new());
                         let new_reload = access_reload.read().wrapping_add(1);
                         access_reload.set(new_reload);
                     },
