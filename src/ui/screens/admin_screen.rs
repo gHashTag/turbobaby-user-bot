@@ -490,7 +490,10 @@ pub fn AdminScreen() -> Element {
                 return Err("no_token".to_string());
             }
             let base = api_base_url();
-            let url = format!("{}/api/admin/check", base);
+            // /api/admin/check still requires a telegram_id query param for the
+            // diagnostics path (it is not used for auth when X-Admin-Token is
+            // present, but Axum rejects the request without it).
+            let url = format!("{}/api/admin/check?telegram_id=0", base);
             let resp = HTTP_CLIENT
                 .clone()
                 .get(&url)
