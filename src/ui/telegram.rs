@@ -4,6 +4,7 @@
 
 use dioxus::prelude::*;
 use serde_json::Value;
+use wasm_bindgen::JsCast;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HapticStyle {
@@ -291,6 +292,52 @@ impl TelegramApp {
             return None;
         }
         Some(s)
+    }
+
+    /// Read a value from Telegram WebApp CloudStorage.
+    /// Returns `None` if the value is missing or CloudStorage is unavailable.
+    ///
+    /// CloudStorage is async; this helper awaits the JS callback so the WASM
+    /// event loop stays free. Do not call from a synchronous context.
+    pub async fn cloud_storage_get(&self, key: &str) -> Option<String> {
+        let escaped = Self::js_escape(key);
+        let js = format!(
+            r#"new Promise((resolve) => {{
+                try{{
+                    if(window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.CloudStorage){{
+                        window.Telegram.WebApp.CloudStorage.getItem("{}", function(err, value){{
+                            resolve((!err && typeof value === 'string') ? value : '');
+                        }});
+                    }} else {{
+                        resolve('');
+                    }}
+                }}catch(e){{ resolve(''); }}
+            }})"#,
+            escaped
+        );
+        let promise_val = js_sys::eval(&js).ok()?;
+        let promise = promise_val.dyn_into::<js_sys::Promise>().ok()?;
+        let result = wasm_bindgen_futures::JsFuture::from(promise).await.ok()?;
+        result.as_string().filter(|s| !s.is_empty())
+    }
+
+    /// Write a value to Telegram WebApp CloudStorage.
+    pub fn cloud_storage_set(&self, key: &str, value: &str) {
+        let escaped_key = Self::js_escape(key);
+        let escaped_value = Self::js_escape(value);
+        let _ = document::eval(&format!(
+            r#"if(window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.CloudStorage){{ window.Telegram.WebApp.CloudStorage.setItem("{}", "{}"); }}"#,
+            escaped_key, escaped_value
+        ));
+    }
+
+    /// Remove a value from Telegram WebApp CloudStorage.
+    pub fn cloud_storage_remove(&self, key: &str) {
+        let escaped_key = Self::js_escape(key);
+        let _ = document::eval(&format!(
+            r#"if(window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.CloudStorage){{ window.Telegram.WebApp.CloudStorage.removeItem("{}"); }}"#,
+            escaped_key
+        ));
     }
 
     /// Get Telegram initData string (for server-side validation)

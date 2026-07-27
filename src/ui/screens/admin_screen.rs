@@ -35,6 +35,12 @@ use crate::ui::telegram::{
     use_telegram_id, use_telegram_init_data, HapticNotification, TelegramApp,
 };
 
+/// Read the cached admin token from synchronous storage (localStorage).
+/// This is used for the first paint so the login screen doesn't flash
+/// unnecessarily when a token is already cached in the browser.
+/// Telegram Mini App WebViews do not reliably persist localStorage across
+/// restarts, so the real auto-login source is CloudStorage, loaded async in
+/// `AdminScreen`.
 fn admin_token() -> String {
     #[cfg(target_arch = "wasm32")]
     {
@@ -55,6 +61,43 @@ fn admin_token() -> String {
         String::new()
     }
 }
+
+/// Persist the admin token to Telegram CloudStorage (primary) and localStorage
+/// (fallback for plain-browser previews / older clients where CloudStorage is
+/// unavailable). Telegram Mini App WebViews do not reliably persist localStorage
+/// across restarts, so CloudStorage is required for auto-login to work.
+#[cfg(target_arch = "wasm32")]
+fn save_admin_token(token: &str, telegram_id: i64) {
+    let tg = crate::ui::telegram::TelegramApp;
+    tg.cloud_storage_set("wwb_admin_token", token);
+    tg.cloud_storage_set("wwb_admin_telegram_id", &telegram_id.to_string());
+    if let Some(window) = web_sys::window() {
+        if let Ok(Some(storage)) = window.local_storage() {
+            let _ = storage.set_item("wwb_admin_token", token);
+            let _ = storage.set_item("wwb_admin_telegram_id", &telegram_id.to_string());
+        }
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn save_admin_token(_token: &str, _telegram_id: i64) {}
+
+/// Remove the persisted admin token from both CloudStorage and localStorage.
+#[cfg(target_arch = "wasm32")]
+fn clear_admin_token() {
+    let tg = crate::ui::telegram::TelegramApp;
+    tg.cloud_storage_remove("wwb_admin_token");
+    tg.cloud_storage_remove("wwb_admin_telegram_id");
+    if let Some(window) = web_sys::window() {
+        if let Ok(Some(storage)) = window.local_storage() {
+            let _ = storage.remove_item("wwb_admin_token");
+            let _ = storage.remove_item("wwb_admin_telegram_id");
+        }
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn clear_admin_token() {}
 
 #[derive(Clone)]
 struct ToastItem {
@@ -320,12 +363,7 @@ async fn upload_file(accept: &str) -> Result<Option<String>, String> {
     let accept = accept.to_string();
     let init_data = use_telegram_init_data();
     let telegram_id = use_telegram_id().unwrap_or(0).to_string();
-    let token = web_sys::window()
-        .and_then(|w| w.local_storage().ok())
-        .flatten()
-        .and_then(|s| s.get_item("wwb_admin_token").ok())
-        .flatten()
-        .unwrap_or_default();
+    let token = admin_token();
     if init_data.len() > 4096 {
         return Err("Ошибка загрузки: слишком длинные init_data".into());
     }
@@ -465,20 +503,24 @@ pub fn AdminScreen() -> Element {
     // the initial gate — it fails in plain browsers and is confusing in the
     // Telegram WebApp when the user is not yet in ADMIN_IDS. A valid
     // ADMIN_PASSWORD token is enough; Telegram ID is optional metadata.
-    let password_token = use_signal(|| {
+    let password_token = use_signal(|| admin_token());
+
+    // Cycle #171: load the durable token from Telegram CloudStorage async.
+    // WebView localStorage is sandboxed and often does not survive app restart,
+    // so the real persistent store for auto-login is CloudStorage. We paint the
+    // localStorage-cached token immediately, then upgrade from CloudStorage
+    // once it resolves.
+    let mut cloud_token = password_token;
+    use_future(move || async move {
         #[cfg(target_arch = "wasm32")]
         {
-            if let Some(window) = web_sys::window() {
-                if let Ok(Some(storage)) = window.local_storage() {
-                    if let Ok(Some(token)) = storage.get_item("wwb_admin_token") {
-                        if token.len() <= 2048 {
-                            return token;
-                        }
-                    }
+            let tg = TelegramApp;
+            if let Some(token) = tg.cloud_storage_get("wwb_admin_token").await {
+                if token.len() <= 2048 && !token.is_empty() {
+                    cloud_token.set(token);
                 }
             }
         }
-        String::new()
     });
 
     let access_reload = use_signal(|| 0u32);
@@ -573,14 +615,7 @@ fn AdminLoginScreen(
                                 if let Ok(data) = r.json::<serde_json::Value>().await {
                                     if let Some(token) = data["token"].as_str() {
                                         #[cfg(target_arch = "wasm32")]
-                                        {
-                                            if let Some(window) = web_sys::window() {
-                                                if let Ok(Some(storage)) = window.local_storage() {
-                                                    let _ = storage.set_item("wwb_admin_token", token);
-                                                    let _ = storage.set_item("wwb_admin_telegram_id", &id_parsed.to_string());
-                                                }
-                                            }
-                                        }
+                                        save_admin_token(token, id_parsed);
                                         token_signal.set(token.to_string());
                                         let new_reload = access_reload.read().wrapping_add(1);
                                         access_reload.set(new_reload);
@@ -611,14 +646,7 @@ fn AdminLoginScreen(
                     style: secondary_btn_style(),
                     onclick: move |_| {
                         #[cfg(target_arch = "wasm32")]
-                        {
-                            if let Some(window) = web_sys::window() {
-                                if let Ok(Some(storage)) = window.local_storage() {
-                                    let _ = storage.remove_item("wwb_admin_token");
-                                    let _ = storage.remove_item("wwb_admin_telegram_id");
-                                }
-                            }
-                        }
+                        clear_admin_token();
                         password_token.set(String::new());
                         password.set(String::new());
                         admin_id.set(String::new());
@@ -696,14 +724,7 @@ fn AdminPanel(active_tab: Signal<Tab>, mut password_token: Signal<String>) -> El
                     style: "padding:6px 12px;background:#2a2a4a;color:#888;border:none;border-radius:4px;font-size:12px;cursor:pointer;",
                     onclick: move |_| {
                         #[cfg(target_arch = "wasm32")]
-                        {
-                            if let Some(window) = web_sys::window() {
-                                if let Ok(Some(storage)) = window.local_storage() {
-                                    let _ = storage.remove_item("wwb_admin_token");
-                                    let _ = storage.remove_item("wwb_admin_telegram_id");
-                                }
-                            }
-                        }
+                        clear_admin_token();
                         password_token.set(String::new());
                     },
                     "🚪 Выйти"
