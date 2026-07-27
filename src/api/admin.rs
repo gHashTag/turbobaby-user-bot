@@ -497,6 +497,12 @@ async fn admin_login(
     Json(req): Json<AdminLoginRequest>,
 ) -> Result<Json<Value>, StatusCode> {
     validate_admin_login(&req)?;
+    tracing::info!(
+        "admin_login: attempt (admin_password_set={} password_len={} telegram_id={})",
+        state.config.admin_password.is_some(),
+        req.password.len(),
+        req.telegram_id.unwrap_or(0)
+    );
     let valid = if let Some(ref password) = state.config.admin_password {
         crate::api::auth::verify_admin_token(
             &crate::api::auth::generate_admin_token(&req.password, &state.config.bot_token),

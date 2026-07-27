@@ -68,10 +68,18 @@ pub(crate) fn build_app_url(base_url: &str, lang: &str, page: Option<&str>) -> S
 }
 
 fn build_admin_url(base_url: &str) -> String {
-    // Strip any trailing slash, then append /admin so the Telegram WebApp
-    // opens directly on the admin route.
-    let trimmed = base_url.trim_end_matches('/');
-    format!("{}/admin", trimmed)
+    // Insert `/admin` as the path component. If the configured URL carries a
+    // cache-bust query (e.g. ?cache=180), append `/admin` BEFORE the query so
+    // the path is correct and Telegram's WebApp fragment (#tgWebAppData=...)
+    // remains intact. Also strip any trailing slash on the path part to avoid
+    // double slashes.
+    let query_or_fragment_start = base_url.find('?').or_else(|| base_url.find('#'));
+    if let Some(pos) = query_or_fragment_start {
+        let path_part = base_url[..pos].trim_end_matches('/');
+        format!("{}/admin{}", path_part, &base_url[pos..])
+    } else {
+        format!("{}/admin", base_url.trim_end_matches('/'))
+    }
 }
 
 /// Pure price calculator: apply a percentage discount and round to the nearest integer.
@@ -729,6 +737,30 @@ mod tests {
         assert_eq!(
             build_admin_url("https://app.com//"),
             "https://app.com/admin"
+        );
+    }
+
+    #[test]
+    fn test_build_admin_url_with_query() {
+        assert_eq!(
+            build_admin_url("https://app.com/?cache=180"),
+            "https://app.com/admin?cache=180"
+        );
+    }
+
+    #[test]
+    fn test_build_admin_url_with_fragment() {
+        assert_eq!(
+            build_admin_url("https://app.com/#tgWebAppData=xyz"),
+            "https://app.com/admin#tgWebAppData=xyz"
+        );
+    }
+
+    #[test]
+    fn test_build_admin_url_with_query_and_fragment() {
+        assert_eq!(
+            build_admin_url("https://app.com/?cache=180#tgWebAppData=xyz"),
+            "https://app.com/admin?cache=180#tgWebAppData=xyz"
         );
     }
 

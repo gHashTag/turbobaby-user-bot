@@ -137,7 +137,9 @@ impl Config {
             s3_access_key: std::env::var("S3_ACCESS_KEY_ID").ok(),
             s3_secret_key: std::env::var("S3_SECRET_ACCESS_KEY").ok(),
             backup_assets: std::env::var("BACKUP_ASSETS").unwrap_or("true".into()) != "false",
-            admin_password: std::env::var("ADMIN_PASSWORD").ok(),
+            admin_password: std::env::var("ADMIN_PASSWORD")
+                .ok()
+                .filter(|s| !s.trim().is_empty()),
             hide_marketing_badges: parse_bool_env(
                 std::env::var("HIDE_MARKETING_BADGES").ok().as_deref(),
             ),
