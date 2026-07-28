@@ -169,6 +169,8 @@ pub const T_BROADCAST_BUTTON_TEXT: Key = "broadcast.button_text";
 pub const T_BROADCAST_PREVIEW: Key = "broadcast.preview";
 pub const T_BROADCAST_NO_PRODUCT: Key = "broadcast.no_product";
 pub const T_BROADCAST_SELECT_CATALOG: Key = "broadcast.select_catalog";
+pub const T_BROADCAST_SEND_TEST: Key = "broadcast.send_test";
+pub const T_BROADCAST_TEST_SENT: Key = "broadcast.test_sent";
 pub const T_SOMM_MOOD: Key = "somm.mood";
 pub const T_SOMM_TIME: Key = "somm.time";
 pub const T_SOMM_EXP: Key = "somm.experience";
@@ -362,6 +364,8 @@ fn get_ru_translation(key: Key) -> Value {
         T_BROADCAST_PREVIEW => "Предпросмотр",
         T_BROADCAST_NO_PRODUCT => "Товар не выбран",
         T_BROADCAST_SELECT_CATALOG => "Выберите каталог",
+        T_BROADCAST_SEND_TEST => "Отправить админам (тест)",
+        T_BROADCAST_TEST_SENT => "Тестовое сообщение отправлено админам",
         T_SOMM_MOOD => "Настроение",
         T_SOMM_TIME => "Время суток",
         T_SOMM_EXP => "Опыт",
@@ -534,6 +538,8 @@ fn get_en_translation(key: Key) -> Value {
         T_BROADCAST_PREVIEW => "Preview",
         T_BROADCAST_NO_PRODUCT => "No product selected",
         T_BROADCAST_SELECT_CATALOG => "Select catalog",
+        T_BROADCAST_SEND_TEST => "Send to admins (test)",
+        T_BROADCAST_TEST_SENT => "Test message sent to admins",
         T_SOMM_MOOD => "Mood",
         T_SOMM_TIME => "Time of Day",
         T_SOMM_EXP => "Experience",

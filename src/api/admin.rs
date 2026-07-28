@@ -135,6 +135,7 @@ pub(crate) fn routes() -> Router<AppState> {
         .route("/admin/reviews/:id/moderate", post(moderate_review))
         .route("/admin/strains/:id/lab-cert", post(create_lab_cert))
         .route("/admin/broadcast", post(telegram_broadcast))
+        .route("/admin/broadcast/test", post(telegram_broadcast_test))
 }
 
 async fn get_stats(
@@ -1006,6 +1007,122 @@ async fn telegram_broadcast(
         "sent": sent,
         "failed": failed,
         "recipients": dedup.len(),
+    })))
+}
+
+/// Test-only broadcast: send the same rich message to every configured admin
+/// without touching the main broadcast rate-limit bucket. This lets admins
+/// preview the exact photo/caption/button layout before spamming all users.
+async fn telegram_broadcast_test(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    Json(req): Json<TelegramBroadcastRequest>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    let admin_id = check_admin(&headers, &state)
+        .map_err(|e| (e, Json(json!({ "error": "unauthorized" }))))?;
+
+    let text = req.text.trim();
+    if text.is_empty() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": "Текст рассылки пуст" })),
+        ));
+    }
+
+    // Validate the marketing CTA shape up-front so the UI catches typos before
+    // we send anything to a real admin chat.
+    let reply_markup = req
+        .product
+        .as_ref()
+        .and_then(|p| broadcast_reply_markup(&state.config.bot_username, p, req.button_text.as_deref()));
+    if req.product.is_some() && reply_markup.is_none() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": "Неизвестный тип товара" })),
+        ));
+    }
+
+    let has_photo = req
+        .photo_url
+        .as_deref()
+        .filter(|s| !s.trim().is_empty())
+        .is_some();
+    let photo_url = req.photo_url.clone().unwrap_or_default();
+    if has_photo && crate::api::validate_url(&req.photo_url).is_err() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": "Некорректный URL фото" })),
+        ));
+    }
+
+    // NO rate-limit here — this is a preview to admins only.
+    let display_text = if has_photo && text.len() > 1024 {
+        format!("{}…", &text[..1021])
+    } else {
+        text.to_string()
+    };
+
+    let mut sent = 0usize;
+    let mut failed = 0usize;
+    let mut dedup = HashSet::<i64>::new();
+    for admin_telegram_id in &state.config.admin_ids {
+        let telegram_id = *admin_telegram_id;
+        if telegram_id <= 0 || !dedup.insert(telegram_id) {
+            continue;
+        }
+        let result = if has_photo {
+            let mut call = state
+                .bot
+                .send_photo(
+                    teloxide::types::ChatId(telegram_id),
+                    InputFile::url(photo_url.parse().map_err(|_| {
+                        (
+                            StatusCode::BAD_REQUEST,
+                            Json(json!({ "error": "Некорректный URL фото" })),
+                        )
+                    })?),
+                )
+                .caption(display_text.clone())
+                .parse_mode(ParseMode::Html);
+            if let Some(ref markup) = reply_markup {
+                call = call.reply_markup(markup.clone());
+            }
+            call.await
+        } else {
+            let mut call = state
+                .bot
+                .send_message(teloxide::types::ChatId(telegram_id), display_text.clone())
+                .parse_mode(ParseMode::Html);
+            if let Some(ref markup) = reply_markup {
+                call = call.reply_markup(markup.clone());
+            }
+            call.await
+        };
+        match result {
+            Ok(_) => {
+                sent += 1;
+                tracing::debug!("telegram_broadcast_test: sent to admin {}", telegram_id);
+            }
+            Err(e) => {
+                failed += 1;
+                tracing::warn!("telegram_broadcast_test: failed to send to admin {}: {}", telegram_id, e);
+            }
+        }
+    }
+
+    tracing::info!(
+        "telegram_broadcast_test: admin_id={} sent={} failed={} recipients={}",
+        admin_id,
+        sent,
+        failed,
+        dedup.len()
+    );
+    Ok(Json(json!({
+        "success": true,
+        "sent": sent,
+        "failed": failed,
+        "recipients": dedup.len(),
+        "test": true,
     })))
 }
 

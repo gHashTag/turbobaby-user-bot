@@ -43,7 +43,8 @@ fn clear_admin_token_cache() {
 use crate::trios::i18n::{
     t, T_BROADCAST, T_BROADCAST_BUTTON_TEXT, T_BROADCAST_NO_PRODUCT, T_BROADCAST_PHOTO,
     T_BROADCAST_PHOTO_HINT, T_BROADCAST_PREVIEW, T_BROADCAST_PRODUCT, T_BROADCAST_PRODUCT_NONE,
-    T_BROADCAST_SELECT_CATALOG, T_BROADCAST_SEND, T_BROADCAST_SENT, T_BROADCAST_TEXT,
+    T_BROADCAST_SELECT_CATALOG, T_BROADCAST_SEND, T_BROADCAST_SEND_TEST, T_BROADCAST_SENT,
+    T_BROADCAST_TEST_SENT, T_BROADCAST_TEXT,
 };
 use crate::ui::api::context::api_base_url;
 use crate::ui::api::types::{
@@ -7238,15 +7239,15 @@ async fn load_broadcast_products(
 #[component]
 fn BroadcastTab() -> Element {
     let lang = crate::ui::lang::current_lang();
-    let init_data = use_telegram_init_data();
-    let token = admin_token();
+    let _init_data = use_telegram_init_data();
+    let _token = admin_token();
     let mut text = use_signal(|| String::new());
     let mut photo_url = use_signal(|| String::new());
     let mut catalog = use_signal(|| "none".to_string());
     let mut selected_product = use_signal(|| None::<BroadcastPickerProduct>);
     let mut button_text = use_signal(|| String::new());
-    let sending = use_signal(|| false);
-    let sent = use_signal(|| false);
+    let mut sending = use_signal(|| false);
+    let mut sent = use_signal(|| false);
     let mut error = use_signal(|| Option::<String>::None);
     let mut result = use_signal(|| Option::<serde_json::Value>::None);
 
@@ -7409,94 +7410,147 @@ fn BroadcastTab() -> Element {
                     {t(lang, T_BROADCAST_SENT)}
                 }
             }
-            if let Some(ref r) = result() {
-                if let (Some(sent_n), Some(recipients_n)) = (r.get("sent").and_then(|v| v.as_u64()), r.get("recipients").and_then(|v| v.as_u64())) {
-                    div { style: "padding: 12px; background: #1a2e1a; border: 2px solid #39ff14; color: #39ff14; font-size: 14px; margin-bottom: 12px;",
-                        "✅ Отправлено {sent_n} из {recipients_n} пользователей"
-                    }
-                }
-            }
-            button {
-                style: "font-size: 14px; font-weight: 700; padding: 12px 24px; background: #00e5ff; color: #000; border: 4px solid #008ba3; box-shadow: 3px 3px 0 #000; cursor: pointer;",
-                disabled: sending() || text().trim().is_empty(),
-                onclick: move |e: Event<MouseData>| {
-                    e.stop_propagation();
-                    error.set(None);
-                    result.set(None);
-                    let catalog_val = catalog().clone();
-                    let product = selected_product().as_ref().and_then(|p| {
-                        BroadcastCatalog::from_value(&catalog_val)
-                            .map(|cat| BroadcastProduct {
-                                kind: cat.value().to_string(),
-                                id: p.id.clone(),
-                                name: p.name.clone(),
-                                image_url: if p.image_url.is_empty() { None } else { Some(p.image_url.clone()) },
-                            })
-                    });
-                    let photo = {
-                        let s = photo_url().trim().to_string();
-                        if s.is_empty() { None } else { Some(s) }
-                    };
-                    let btn = {
-                        let s = button_text().trim().to_string();
-                        if s.is_empty() { None } else { Some(s) }
-                    };
-                    let body = BroadcastRequest {
-                        text: text().trim().to_string(),
-                        photo_url: photo,
-                        product,
-                        button_text: btn,
-                    };
-                    let client = crate::ui::api::local_client::LocalClient::new();
-                    let base = api_base_url();
-                    let url = format!("{base}/api/admin/broadcast");
-                    let init = init_data.clone();
-                    let tok = token.clone();
-                    let mut sending = sending;
-                    let mut sent = sent;
-                    let mut text = text;
-                    let mut photo_url = photo_url;
-                    let mut catalog = catalog;
-                    let mut selected_product = selected_product;
-                    let mut button_text = button_text;
-                    let mut error = error;
-                    let mut result = result;
-                    spawn(async move {
-                        sending.set(true);
-                        let res = client
-                            .post(&url)
-                            .header("X-Telegram-Init-Data", init)
-                            .header("X-Admin-Token", tok)
-                            .json(&body)
-                            .send()
-                            .await;
-                        sending.set(false);
-                        match res {
-                            Ok(resp) if resp.status().is_success() => {
-                                let data = resp.json::<serde_json::Value>().await.ok();
-                                result.set(data);
-                                sent.set(true);
-                                text.set(String::new());
-                                photo_url.set(String::new());
-                                catalog.set("none".to_string());
-                                selected_product.set(None);
-                                button_text.set(String::new());
+            { {
+                if let Some(ref r) = result() {
+                    let sent_n = r.get("sent").and_then(|v| v.as_u64());
+                    let recipients_n = r.get("recipients").and_then(|v| v.as_u64());
+                    let is_test = r.get("test").and_then(|v| v.as_bool()).unwrap_or(false);
+                    if let (Some(sent_n), Some(recipients_n)) = (sent_n, recipients_n) {
+                        if is_test {
+                            rsx! {
+                                div { style: "padding: 12px; background: #1a2e1a; border: 2px solid #39ff14; color: #39ff14; font-size: 14px; margin-bottom: 12px;",
+                                    "🧪 "
+                                    {t(lang, T_BROADCAST_TEST_SENT)}
+                                    " ({sent_n}/{recipients_n})"
+                                }
                             }
-                            Ok(resp) => {
-                                let err_text = resp.json::<serde_json::Value>().await
-                                    .ok()
-                                    .and_then(|v| v.get("error").and_then(|e| e.as_str()).map(|s| s.to_string()))
-                                    .unwrap_or_else(|| "Ошибка рассылки".into());
-                                error.set(Some(err_text));
-                            }
-                            Err(_) => {
-                                error.set(Some("Сеть недоступна".into()));
+                        } else {
+                            rsx! {
+                                div { style: "padding: 12px; background: #1a2e1a; border: 2px solid #39ff14; color: #39ff14; font-size: 14px; margin-bottom: 12px;",
+                                    "✅ Отправлено {sent_n} из {recipients_n} пользователей"
+                                }
                             }
                         }
-                    });
-                },
-                {t(lang, T_BROADCAST_SEND)}
+                    } else {
+                        rsx! {}
+                    }
+                } else {
+                    rsx! {}
+                }
+            } }
+            div { style: "display:flex;gap:10px;flex-wrap:wrap;",
+                button {
+                    style: "font-size: 14px; font-weight: 700; padding: 12px 24px; background: #00e5ff; color: #000; border: 4px solid #008ba3; box-shadow: 3px 3px 0 #000; cursor: pointer;",
+                    disabled: sending() || text().trim().is_empty(),
+                    onclick: move |e: Event<MouseData>| {
+                        e.stop_propagation();
+                        send_broadcast(&mut sending, &mut sent, &mut text, &mut photo_url, &mut catalog, &mut selected_product, &mut button_text, &mut error, &mut result, false);
+                    },
+                    {t(lang, T_BROADCAST_SEND)}
+                }
+                button {
+                    style: "font-size: 14px; font-weight: 700; padding: 12px 24px; background: #ffaa00; color: #000; border: 4px solid #cc8800; box-shadow: 3px 3px 0 #000; cursor: pointer;",
+                    disabled: sending() || text().trim().is_empty(),
+                    onclick: move |e: Event<MouseData>| {
+                        e.stop_propagation();
+                        send_broadcast(&mut sending, &mut sent, &mut text, &mut photo_url, &mut catalog, &mut selected_product, &mut button_text, &mut error, &mut result, true);
+                    },
+                    {t(lang, T_BROADCAST_SEND_TEST)}
+                }
             }
         }
     }
 }
+
+fn send_broadcast(
+        sending: &mut Signal<bool>,
+        sent: &mut Signal<bool>,
+        text: &mut Signal<String>,
+        photo_url: &mut Signal<String>,
+        catalog: &mut Signal<String>,
+        selected_product: &mut Signal<Option<BroadcastPickerProduct>>,
+        button_text: &mut Signal<String>,
+        error: &mut Signal<Option<String>>,
+        result: &mut Signal<Option<serde_json::Value>>,
+        test_only: bool,
+    ) {
+        error.set(None);
+        result.set(None);
+        let catalog_val = catalog().clone();
+        let product = selected_product().as_ref().and_then(|p| {
+            BroadcastCatalog::from_value(&catalog_val)
+                .map(|cat| BroadcastProduct {
+                    kind: cat.value().to_string(),
+                    id: p.id.clone(),
+                    name: p.name.clone(),
+                    image_url: if p.image_url.is_empty() { None } else { Some(p.image_url.clone()) },
+                })
+        });
+        let photo = {
+            let s = photo_url().trim().to_string();
+            if s.is_empty() { None } else { Some(s) }
+        };
+        let btn = {
+            let s = button_text().trim().to_string();
+            if s.is_empty() { None } else { Some(s) }
+        };
+        let body = BroadcastRequest {
+            text: text().trim().to_string(),
+            photo_url: photo,
+            product,
+            button_text: btn,
+        };
+        let client = crate::ui::api::local_client::LocalClient::new();
+        let base = api_base_url();
+        let url = if test_only {
+            format!("{base}/api/admin/broadcast/test")
+        } else {
+            format!("{base}/api/admin/broadcast")
+        };
+        let init = use_telegram_init_data();
+        let tok = admin_token();
+        let mut sending = *sending;
+        let mut sent = *sent;
+        let mut text = *text;
+        let mut photo_url = *photo_url;
+        let mut catalog = *catalog;
+        let mut selected_product = *selected_product;
+        let mut button_text = *button_text;
+        let mut error = *error;
+        let mut result = *result;
+        spawn(async move {
+            sending.set(true);
+            let res = client
+                .post(&url)
+                .header("X-Telegram-Init-Data", init)
+                .header("X-Admin-Token", tok)
+                .json(&body)
+                .send()
+                .await;
+            sending.set(false);
+            match res {
+                Ok(resp) if resp.status().is_success() => {
+                    let data = resp.json::<serde_json::Value>().await.ok();
+                    result.set(data);
+                    sent.set(true);
+                    if !test_only {
+                        text.set(String::new());
+                        photo_url.set(String::new());
+                        catalog.set("none".to_string());
+                        selected_product.set(None);
+                        button_text.set(String::new());
+                    }
+                }
+                Ok(resp) => {
+                    let err_text = resp.json::<serde_json::Value>().await
+                        .ok()
+                        .and_then(|v| v.get("error").and_then(|e| e.as_str()).map(|s| s.to_string()))
+                        .unwrap_or_else(|| "Ошибка рассылки".into());
+                    error.set(Some(err_text));
+                }
+                Err(_) => {
+                    error.set(Some("Сеть недоступна".into()));
+                }
+            }
+        });
+    }
