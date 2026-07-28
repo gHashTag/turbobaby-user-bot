@@ -440,7 +440,11 @@ async fn telegram_broadcast_with_no_users_returns_success() {
         .await;
 
     let (admin_init, admin_token, admin_telegram_id) = admin_headers();
-    let body = serde_json::json!({ "text": "Hello Telegram friends" });
+    let body = serde_json::json!({
+        "text": "Hello Telegram friends",
+        "product": { "kind": "strain", "id": "strain-42" },
+        "button_text": "Open"
+    });
 
     let response = app
         .oneshot(
@@ -468,4 +472,32 @@ async fn telegram_broadcast_with_no_users_returns_success() {
     let sent = json["sent"].as_u64().unwrap_or(0);
     let failed = json["failed"].as_u64().unwrap_or(0);
     assert_eq!(recipients, sent + failed);
+}
+
+#[tokio::test]
+#[ignore]
+async fn telegram_broadcast_with_bad_photo_url_rejected() {
+    let Some((app, _db)) = common::make_app_with_db().await else { return; };
+    let (admin_init, admin_token, admin_telegram_id) = admin_headers();
+    let body = serde_json::json!({
+        "text": "Photo broadcast",
+        "photo_url": "not-a-url"
+    });
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/api/admin/broadcast")
+                .method("POST")
+                .header("X-Telegram-Init-Data", admin_init)
+                .header("X-Admin-Token", admin_token)
+                .header("X-Admin-Telegram-Id", admin_telegram_id)
+                .header("content-type", "application/json")
+                .body(Body::from(body.to_string()))
+                .unwrap(),
+        )
+        .await
+        .expect("telegram broadcast");
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 }

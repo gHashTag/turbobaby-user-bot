@@ -41,10 +41,16 @@ fn clear_admin_token_cache() {
 }
 
 use crate::trios::i18n::{
-    t, T_BROADCAST, T_BROADCAST_SEND, T_BROADCAST_SENT, T_BROADCAST_TEXT,
+    t, T_BROADCAST, T_BROADCAST_BUTTON_TEXT, T_BROADCAST_NO_PRODUCT, T_BROADCAST_PHOTO,
+    T_BROADCAST_PHOTO_HINT, T_BROADCAST_PREVIEW, T_BROADCAST_PRODUCT, T_BROADCAST_PRODUCT_NONE,
+    T_BROADCAST_SELECT_CATALOG, T_BROADCAST_SEND, T_BROADCAST_SENT, T_BROADCAST_TEXT,
 };
 use crate::ui::api::context::api_base_url;
-use crate::ui::api::types::{BroadcastRequest, Event as AdminEvent, EventBooking};
+use crate::ui::api::types::{
+    Accessory, BroadcastProduct, BroadcastRequest, Event as AdminEvent, EventBooking, Set,
+    Strain, TeaProduct,
+};
+use crate::ui::share::{product_deep_link, ProductKind};
 use crate::ui::components::{
     EmptyState, IdPicker, Modal, Skeleton, SkeletonShape, Toast, ToastContainer, ToastKind,
     VideoModal,
@@ -7080,16 +7086,181 @@ fn EventsTab() -> Element {
 
 // ── Telegram Broadcast tab ───────────────────────────────────
 
+#[derive(Clone)]
+struct BroadcastPickerProduct {
+    id: String,
+    name: String,
+    image_url: String,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum BroadcastCatalog {
+    Strains,
+    Accessories,
+    Tea,
+    Sets,
+}
+
+impl BroadcastCatalog {
+    fn from_value(s: &str) -> Option<Self> {
+        match s {
+            "strain" => Some(Self::Strains),
+            "accessory" => Some(Self::Accessories),
+            "tea" => Some(Self::Tea),
+            "set" => Some(Self::Sets),
+            _ => None,
+        }
+    }
+    fn value(self) -> &'static str {
+        match self {
+            Self::Strains => "strain",
+            Self::Accessories => "accessory",
+            Self::Tea => "tea",
+            Self::Sets => "set",
+        }
+    }
+    fn label(self) -> &'static str {
+        match self {
+            Self::Strains => "🌿 Штаммы",
+            Self::Accessories => "💨 Аксессуары",
+            Self::Tea => "🍵 Чай",
+            Self::Sets => "📦 Наборы",
+        }
+    }
+    fn product_kind(self) -> ProductKind {
+        match self {
+            Self::Strains => ProductKind::Strain,
+            Self::Accessories => ProductKind::Accessory,
+            Self::Tea => ProductKind::Tea,
+            Self::Sets => ProductKind::Set,
+        }
+    }
+}
+
+async fn load_broadcast_products(
+    catalog: BroadcastCatalog,
+) -> Result<Vec<BroadcastPickerProduct>, String> {
+    let base = api_base_url();
+    let path = match catalog {
+        BroadcastCatalog::Strains => "/api/strains",
+        BroadcastCatalog::Accessories => "/api/accessories",
+        BroadcastCatalog::Tea => "/api/tea-products",
+        BroadcastCatalog::Sets => "/api/sets",
+    };
+    let url = format!("{base}{path}");
+    let resp = HTTP_CLIENT
+        .clone()
+        .get(&url)
+        .send()
+        .await
+        .map_err(|e| format!("network: {e}"))?;
+    if !resp.status().is_success() {
+        return Err("Ошибка загрузки каталога".into());
+    }
+    Ok(match catalog {
+        BroadcastCatalog::Strains => {
+            #[derive(Deserialize)]
+            struct R {
+                strains: Vec<Strain>,
+            }
+            resp.json::<R>()
+                .await
+                .map_err(|e| format!("json: {e}"))?
+                .strains
+                .into_iter()
+                .map(|s| BroadcastPickerProduct {
+                    id: s.id,
+                    name: s.name,
+                    image_url: s.image_url,
+                })
+                .collect()
+        }
+        BroadcastCatalog::Accessories => {
+            #[derive(Deserialize)]
+            struct R {
+                accessories: Vec<Accessory>,
+            }
+            resp.json::<R>()
+                .await
+                .map_err(|e| format!("json: {e}"))?
+                .accessories
+                .into_iter()
+                .map(|a| BroadcastPickerProduct {
+                    id: a.id,
+                    name: a.name,
+                    image_url: a.image_url,
+                })
+                .collect()
+        }
+        BroadcastCatalog::Tea => {
+            #[derive(Deserialize)]
+            struct R {
+                #[serde(default)]
+                products: Vec<TeaProduct>,
+                #[serde(default)]
+                tea_products: Vec<TeaProduct>,
+            }
+            let r = resp.json::<R>().await.map_err(|e| format!("json: {e}"))?;
+            let items = if !r.products.is_empty() {
+                r.products
+            } else {
+                r.tea_products
+            };
+            items
+                .into_iter()
+                .map(|t| BroadcastPickerProduct {
+                    id: t.id,
+                    name: t.name,
+                    image_url: t.image_url,
+                })
+                .collect()
+        }
+        BroadcastCatalog::Sets => {
+            #[derive(Deserialize)]
+            struct R {
+                sets: Vec<Set>,
+            }
+            resp.json::<R>()
+                .await
+                .map_err(|e| format!("json: {e}"))?
+                .sets
+                .into_iter()
+                .map(|s| BroadcastPickerProduct {
+                    id: s.id,
+                    name: s.name,
+                    image_url: String::new(),
+                })
+                .collect()
+        }
+    })
+}
+
 #[component]
 fn BroadcastTab() -> Element {
     let lang = crate::ui::lang::current_lang();
     let init_data = use_telegram_init_data();
     let token = admin_token();
     let mut text = use_signal(|| String::new());
+    let mut photo_url = use_signal(|| String::new());
+    let mut catalog = use_signal(|| "none".to_string());
+    let mut selected_product = use_signal(|| None::<BroadcastPickerProduct>);
+    let mut button_text = use_signal(|| String::new());
     let sending = use_signal(|| false);
     let sent = use_signal(|| false);
     let mut error = use_signal(|| Option::<String>::None);
     let mut result = use_signal(|| Option::<serde_json::Value>::None);
+
+    let products = use_resource(move || {
+        let cat_val = catalog.read().clone();
+        async move {
+            match BroadcastCatalog::from_value(&cat_val) {
+                Some(c) => load_broadcast_products(c).await,
+                None => Ok(vec![]),
+            }
+        }
+    });
+
+    let select_style = "width:100%;padding:10px 12px;background:#0f0f1a;color:#e8e8e8;border:1px solid #2a2a4a;border-radius:4px;font-size:14px;cursor:pointer;";
 
     rsx! {
         div { style: "padding: 16px;",
@@ -7097,12 +7268,14 @@ fn BroadcastTab() -> Element {
                 {t(lang, T_BROADCAST)}
             }
             div { style: "font-size: 13px; color: #8b8b9e; margin-bottom: 12px;",
-                " Sends a text message to every Telegram user who has interacted with the bot. "
+                " Рассылка с фото и кнопкой на товар всем пользователям бота. "
             }
+
+            // Text
             div { style: "margin-bottom: 12px;",
                 div { style: "font-size: 13px; color: #e8e8e8; margin-bottom: 6px;", {t(lang, T_BROADCAST_TEXT)} }
                 textarea {
-                    style: "width: 100%; min-height: 120px; background: #1a1a2e; border: 2px solid #2a2a4a; color: #e8e8e8; padding: 10px; font-size: 14px; resize: vertical;",
+                    style: "width: 100%; min-height: 100px; background: #1a1a2e; border: 2px solid #2a2a4a; color: #e8e8e8; padding: 10px; font-size: 14px; resize: vertical;",
                     value: "{text()}",
                     oninput: move |e: Event<FormData>| {
                         text.set(e.value().clone());
@@ -7111,6 +7284,121 @@ fn BroadcastTab() -> Element {
                     },
                 }
             }
+
+            // Photo
+            div { style: "margin-bottom: 12px;",
+                div { style: "font-size: 13px; color: #e8e8e8; margin-bottom: 6px;", {t(lang, T_BROADCAST_PHOTO)} }
+                ImageUpload { image_url: photo_url.read().clone(), on_change: move |url: String| photo_url.set(url) }
+                div { style: "font-size: 12px; color: #8b8b9e; margin-top: 4px;", {t(lang, T_BROADCAST_PHOTO_HINT)} }
+            }
+
+            // Product catalog picker
+            div { style: "margin-bottom: 12px;",
+                div { style: "font-size: 13px; color: #e8e8e8; margin-bottom: 6px;", {t(lang, T_BROADCAST_PRODUCT)} }
+                div { style: "font-size: 12px; color: #8b8b9e; margin-bottom: 6px;", {t(lang, T_BROADCAST_SELECT_CATALOG)} }
+                select {
+                    style: "{select_style}",
+                    value: "{catalog()}",
+                    onchange: move |e: Event<FormData>| {
+                        catalog.set(e.value().clone());
+                        selected_product.set(None);
+                        error.set(None);
+                        result.set(None);
+                    },
+                    option { value: "none", {t(lang, T_BROADCAST_PRODUCT_NONE)} }
+                    option { value: "{BroadcastCatalog::Strains.value()}", {BroadcastCatalog::Strains.label()} }
+                    option { value: "{BroadcastCatalog::Accessories.value()}", {BroadcastCatalog::Accessories.label()} }
+                    option { value: "{BroadcastCatalog::Tea.value()}", {BroadcastCatalog::Tea.label()} }
+                    option { value: "{BroadcastCatalog::Sets.value()}", {BroadcastCatalog::Sets.label()} }
+                }
+
+                if catalog() != "none" {
+                    match &*products.read() {
+                        Some(Ok(opts)) => rsx! {
+                            if opts.is_empty() {
+                                div { style: "margin-top:8px;padding:8px;background:#1a1a2e;border:1px solid #2a2a4a;border-radius:4px;color:#8b8b9e;font-size:13px;", { "Каталог пуст" } }
+                            } else {
+                                select {
+                                    style: "{select_style} margin-top:8px;",
+                                    value: "{selected_product().as_ref().map(|p| p.id.clone()).unwrap_or_default()}",
+                                    onchange: move |e: Event<FormData>| {
+                                        let id = e.value();
+                                        if let Some(Ok(opts)) = products.read().as_ref() {
+                                            selected_product.set(opts.iter().find(|p| p.id == id).cloned());
+                                        }
+                                        error.set(None);
+                                        result.set(None);
+                                    },
+                                    option { value: "", {t(lang, T_BROADCAST_NO_PRODUCT)} }
+                                    for p in opts {
+                                        option { value: "{p.id}", "{p.name}" }
+                                    }
+                                }
+                            }
+                        },
+                        Some(Err(msg)) => rsx! {
+                            div { style: "margin-top:8px;padding:8px;background:#2a0f15;border:1px solid #ff4757;border-radius:4px;color:#ff6b7a;font-size:13px;", "❌ {msg}" }
+                        },
+                        None => rsx! {
+                            div { style: "margin-top:8px;", Skeleton { shape: SkeletonShape::Text, width: Some("100%".into()) } }
+                        },
+                    }
+                }
+            }
+
+            // Button text
+            div { style: "margin-bottom: 12px;",
+                div { style: "font-size: 13px; color: #e8e8e8; margin-bottom: 6px;", {t(lang, T_BROADCAST_BUTTON_TEXT)} }
+                input {
+                    style: "{input_style()} width:100%; box-sizing:border-box;",
+                    r#type: "text",
+                    placeholder: "Открыть в магазине",
+                    value: "{button_text()}",
+                    oninput: move |e: Event<FormData>| {
+                        button_text.set(e.value().clone());
+                        error.set(None);
+                        result.set(None);
+                    },
+                }
+            }
+
+            // Preview
+            div { style: "margin-bottom: 12px;",
+                div { style: "font-size: 13px; color: #e8e8e8; margin-bottom: 6px;", {t(lang, T_BROADCAST_PREVIEW)} }
+                div { style: "background:#1a1a2e;border:2px solid #2a2a4a;border-radius:8px;padding:12px;",
+                    if !photo_url().is_empty() {
+                        img { src: "{photo_url()}", alt: "Preview", style: "width:100%;max-height:240px;object-fit:cover;border-radius:6px;margin-bottom:8px;" }
+                    }
+                    if !text().trim().is_empty() {
+                        div { style: "font-size:14px;color:#e8e8e8;white-space:pre-wrap;", "{text()}" }
+                    } else {
+                        div { style: "font-size:13px;color:#8b8b9e;", "Текст сообщения…" }
+                    }
+                    if let Some(ref p) = selected_product() {
+                        if let Some(cat) = BroadcastCatalog::from_value(&catalog()) {
+                            { {
+                                let label = {
+                                    let txt = button_text();
+                                    let s = txt.trim();
+                                    if s.is_empty() { "Открыть в магазине".to_string() } else { s.to_string() }
+                                };
+                                let link = product_deep_link(cat.product_kind(), &p.id);
+                                rsx! {
+                                    div { style: "margin-top:10px;display:flex;flex-direction:column;gap:6px;",
+                                        button {
+                                            style: "padding:10px 14px;background:#00e5ff;color:#000;border:none;border-radius:6px;font-weight:700;font-size:13px;cursor:default;",
+                                            disabled: true,
+                                            "{label}"
+                                        }
+                                        div { style: "font-size:11px;color:#6699ff;word-break:break-all;", "{link}" }
+                                    }
+                                }
+                            } }
+                        }
+                    }
+                }
+            }
+
             if let Some(ref msg) = error() {
                 div { style: "padding: 12px; background: #2a0f15; border: 2px solid #ff4757; color: #ff6b7a; font-size: 14px; margin-bottom: 12px;",
                     "❌ {msg}"
@@ -7135,8 +7423,29 @@ fn BroadcastTab() -> Element {
                     e.stop_propagation();
                     error.set(None);
                     result.set(None);
+                    let catalog_val = catalog().clone();
+                    let product = selected_product().as_ref().and_then(|p| {
+                        BroadcastCatalog::from_value(&catalog_val)
+                            .map(|cat| BroadcastProduct {
+                                kind: cat.value().to_string(),
+                                id: p.id.clone(),
+                                name: p.name.clone(),
+                                image_url: if p.image_url.is_empty() { None } else { Some(p.image_url.clone()) },
+                            })
+                    });
+                    let photo = {
+                        let s = photo_url().trim().to_string();
+                        if s.is_empty() { None } else { Some(s) }
+                    };
+                    let btn = {
+                        let s = button_text().trim().to_string();
+                        if s.is_empty() { None } else { Some(s) }
+                    };
                     let body = BroadcastRequest {
                         text: text().trim().to_string(),
+                        photo_url: photo,
+                        product,
+                        button_text: btn,
                     };
                     let client = crate::ui::api::local_client::LocalClient::new();
                     let base = api_base_url();
@@ -7146,6 +7455,10 @@ fn BroadcastTab() -> Element {
                     let mut sending = sending;
                     let mut sent = sent;
                     let mut text = text;
+                    let mut photo_url = photo_url;
+                    let mut catalog = catalog;
+                    let mut selected_product = selected_product;
+                    let mut button_text = button_text;
                     let mut error = error;
                     let mut result = result;
                     spawn(async move {
@@ -7164,6 +7477,10 @@ fn BroadcastTab() -> Element {
                                 result.set(data);
                                 sent.set(true);
                                 text.set(String::new());
+                                photo_url.set(String::new());
+                                catalog.set("none".to_string());
+                                selected_product.set(None);
+                                button_text.set(String::new());
                             }
                             Ok(resp) => {
                                 let err_text = resp.json::<serde_json::Value>().await

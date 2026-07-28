@@ -455,6 +455,17 @@ pub struct CreateReviewRequest {
 #[derive(Debug, Serialize)]
 pub struct BroadcastRequest {
     pub text: String,
+    pub photo_url: Option<String>,
+    pub product: Option<BroadcastProduct>,
+    pub button_text: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct BroadcastProduct {
+    pub kind: String,
+    pub id: String,
+    pub name: String,
+    pub image_url: Option<String>,
 }
 
 /// Delivery zone with ETA / fee — matches backend `/api/delivery/zones`.

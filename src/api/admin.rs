@@ -11,8 +11,9 @@ use serde_json::{json, Value};
 use crate::api::auth::{check_admin, validate_telegram_id_param};
 use crate::db::entities::{lab_certificate, strain_review};
 use crate::AppState;
-use teloxide::payloads::SendMessageSetters;
+use teloxide::payloads::{SendMessageSetters, SendPhotoSetters};
 use teloxide::prelude::Requester;
+use teloxide::types::{InlineKeyboardButton, InlineKeyboardMarkup, InputFile, ParseMode};
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, ConnectionTrait, DbBackend, EntityTrait, QueryFilter, QueryOrder,
     QuerySelect, Set, Statement,
@@ -41,6 +42,48 @@ const BROADCAST_RL_MAX_KEYS: usize = 100;
 #[derive(Deserialize)]
 struct AdminCheckQuery {
     telegram_id: i64,
+}
+
+#[derive(Deserialize)]
+struct TelegramBroadcastRequest {
+    text: String,
+    photo_url: Option<String>,
+    product: Option<BroadcastProduct>,
+    button_text: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct BroadcastProduct {
+    kind: String,
+    id: String,
+}
+
+/// Build an inline keyboard with a single CTA that opens the Mini App on the
+/// advertised product. Unknown catalog kinds are treated as "no markup" so a
+/// typo in the admin UI does not break the whole broadcast.
+fn broadcast_reply_markup(
+    bot_username: &str,
+    product: &BroadcastProduct,
+    button_text: Option<&str>,
+) -> Option<InlineKeyboardMarkup> {
+    let prefix = match product.kind.as_str() {
+        "strain" => "p_strain",
+        "accessory" => "p_acc",
+        "tea" => "p_tea",
+        "set" => "p_set",
+        "event" => "p_event",
+        _ => return None,
+    };
+    let url = format!(
+        "https://t.me/{bot_username}?startapp={prefix}_{id}",
+        id = product.id
+    );
+    let label = button_text
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .unwrap_or("Открыть в магазине");
+    let button = InlineKeyboardButton::url(label.to_string(), url.parse().ok()?);
+    Some(InlineKeyboardMarkup::new(vec![vec![button]]))
 }
 
 #[derive(Deserialize)]
@@ -694,11 +737,6 @@ struct CreateLabCertRequest {
     cbd_percent: Option<f64>,
 }
 
-#[derive(Deserialize)]
-struct TelegramBroadcastRequest {
-    text: String,
-}
-
 async fn list_reviews_admin(
     headers: HeaderMap,
     State(state): State<AppState>,
@@ -831,6 +869,35 @@ async fn telegram_broadcast(
         ));
     }
 
+    // Build optional marketing CTA: a t.me deep link that opens the Mini App
+    // directly on the chosen product. Validate the product kind now so a typo
+    // in the admin UI fails fast without consuming the rate-limit bucket.
+    let reply_markup = req
+        .product
+        .as_ref()
+        .and_then(|p| broadcast_reply_markup(&state.config.bot_username, p, req.button_text.as_deref()));
+    if req.product.is_some() && reply_markup.is_none() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": "Неизвестный тип товара" })),
+        ));
+    }
+
+    // Decide between photo + caption and plain text. A photo message converts
+    // better, but we keep text-only as a fallback when no image is supplied.
+    let has_photo = req
+        .photo_url
+        .as_deref()
+        .filter(|s| !s.trim().is_empty())
+        .is_some();
+    let photo_url = req.photo_url.clone().unwrap_or_default();
+    if has_photo && crate::api::validate_url(&req.photo_url).is_err() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": "Некорректный URL фото" })),
+        ));
+    }
+
     // Rate-limit by admin id. check_admin returns 0 for token-only logins,
     // which means all token-only admins share one bucket — acceptable because
     // there is typically only one such login and it prevents spam.
@@ -847,6 +914,14 @@ async fn telegram_broadcast(
             Json(json!({ "error": "Попробуйте через 10 минут" })),
         ));
     }
+
+    // Telegram photo caption limit is 1024 characters. If the admin text is
+    // longer, truncate with an ellipsis instead of failing the whole broadcast.
+    let display_text = if has_photo && text.len() > 1024 {
+        format!("{}…", &text[..1021])
+    } else {
+        text.to_string()
+    };
 
     // Collect every unique telegram_id that has ever interacted with the bot.
     // user_languages is canonical, but loyalty_profiles also holds users who
@@ -879,12 +954,35 @@ async fn telegram_broadcast(
         if telegram_id <= 0 || !dedup.insert(telegram_id) {
             continue;
         }
-        match state
-            .bot
-            .send_message(teloxide::types::ChatId(telegram_id), text)
-            .parse_mode(teloxide::types::ParseMode::Html)
-            .await
-        {
+        let result = if has_photo {
+            let mut call = state
+                .bot
+                .send_photo(
+                    teloxide::types::ChatId(telegram_id),
+                    InputFile::url(photo_url.parse().map_err(|_| {
+                        (
+                            StatusCode::BAD_REQUEST,
+                            Json(json!({ "error": "Некорректный URL фото" })),
+                        )
+                    })?),
+                )
+                .caption(display_text.clone())
+                .parse_mode(ParseMode::Html);
+            if let Some(ref markup) = reply_markup {
+                call = call.reply_markup(markup.clone());
+            }
+            call.await
+        } else {
+            let mut call = state
+                .bot
+                .send_message(teloxide::types::ChatId(telegram_id), display_text.clone())
+                .parse_mode(ParseMode::Html);
+            if let Some(ref markup) = reply_markup {
+                call = call.reply_markup(markup.clone());
+            }
+            call.await
+        };
+        match result {
             Ok(_) => {
                 sent += 1;
                 tracing::debug!("telegram_broadcast: sent to {}", telegram_id);
