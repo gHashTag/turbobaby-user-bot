@@ -7029,7 +7029,10 @@ fn EventsTab() -> Element {
                 label { style: "font-size:12px;color:#888;", "Окончание (необязательно)" }
                 input { style: input_style(), r#type: "datetime-local", value: "{ends_at}", oninput: move |evt| ends_at.set(evt.value()) }
                 input { style: input_style(), r#type: "text", placeholder: "Место", value: "{location_text}", oninput: move |evt| location_text.set(evt.value()) }
-                input { style: input_style(), r#type: "text", placeholder: "URL изображения", value: "{image_url}", oninput: move |evt| image_url.set(evt.value()) }
+                div { style: "margin-bottom:4px;",
+                    div { style: "font-size:12px;color:#888;margin-bottom:4px;", "Изображение" }
+                    ImageUpload { image_url: image_url.read().clone(), on_change: move |url: String| image_url.set(url) }
+                }
                 div { style: "display:flex;gap:10px;",
                     input { style: input_style(), r#type: "number", placeholder: "Мест", value: "{max_seats}", oninput: move |evt| max_seats.set(evt.value()) }
                     input { style: input_style(), r#type: "number", placeholder: "Цена (бат)", value: "{price_baht}", oninput: move |evt| price_baht.set(evt.value()) }

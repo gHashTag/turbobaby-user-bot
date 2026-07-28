@@ -195,12 +195,18 @@ fn EventCard(props: EventCardProps) -> Element {
 
     let share_id = ev.id.clone();
     let share_name = ev.display_title();
+    let thumb = ev.image_url.as_deref().filter(|s| {
+        s.starts_with("http://") || s.starts_with("https://") || (s.starts_with("/") && !s.starts_with("//"))
+    });
     rsx! {
         div {
             role: "button",
             "aria-label": "Open event details",
             style: "width:100%;text-align:left;background:#1a1a2e;border:3px solid #2a2a4a;border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:6px;cursor:pointer;box-shadow:3px 3px 0 #000;",
             onclick: move |_| props.on_select.call(ev.clone()),
+            if let Some(ref url) = thumb {
+                img { src: "{url}", alt: "{share_name}", style: "width:100%;max-height:160px;object-fit:cover;border-radius:8px;margin-bottom:4px;" }
+            }
             div { style: "display:flex;justify-content:space-between;align-items:flex-start;",
                 div { style: "font-size:15px;font-weight:700;color:#e8e8e8;", "{ev.display_title()}" }
                 button {
@@ -253,6 +259,9 @@ fn EventBookingModal(props: EventBookingModalProps) -> Element {
     let title = ev.display_title();
     let desc = ev.display_description();
     let back_label = t(lang, T_BACK).to_string();
+    let thumb = ev.image_url.as_deref().filter(|s| {
+        s.starts_with("http://") || s.starts_with("https://") || (s.starts_with("/") && !s.starts_with("//"))
+    });
 
     let starts = parse_event_start(&ev.starts_at);
     let has_started = starts.map_or(false, |dt| Utc::now() >= dt.with_timezone(&Utc));
@@ -416,6 +425,9 @@ fn EventBookingModal(props: EventBookingModalProps) -> Element {
                         onclick: move |_| props.on_close.call(()),
                         "✕"
                     }
+                }
+                if let Some(ref url) = thumb {
+                    img { src: "{url}", alt: "{title}", style: "width:100%;max-height:200px;object-fit:cover;border-radius:8px;margin-top:12px;" }
                 }
                 if let Some(ref label) = date_label {
                     div { style: "font-size:12px;color:#888;margin-top:8px;", "🗓️ {label}" }
