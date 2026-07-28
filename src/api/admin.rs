@@ -9,11 +9,14 @@ use serde_json::{json, Value};
 
 // Admin API routes
 use crate::api::auth::{check_admin, validate_telegram_id_param};
-use crate::db::entities::{lab_certificate, strain_review};
+use crate::db::entities::{lab_certificate, strain_review, user};
 use crate::AppState;
+use teloxide::payloads::SendMessageSetters;
+use teloxide::prelude::Requester;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QueryOrder, QuerySelect, Set,
 };
+use std::collections::HashSet;
 
 // Cycle #128: removed LOGIN_LOCK static. It was introduced to pair
 // with a per-attempt `tokio::time::sleep(3s)` that cycle #126 deleted,
@@ -23,6 +26,16 @@ use sea_orm::{
 // defence — it works per-IP, doesn't penalise legitimate parallel
 // admins on different IPs, and doesn't hold a global mutex across an
 // HMAC verify.
+
+// Per-admin Telegram broadcast rate-limit: 1 attempt per 10 minutes.
+// Keyed by admin telegram_id (from check_admin) to prevent double-clicks
+// and accidental spam to the whole user base.
+static BROADCAST_RATE_LIMIT: std::sync::LazyLock<
+    crate::api::rate_limit::SyncSlidingWindowStore,
+> = std::sync::LazyLock::new(crate::api::rate_limit::new_sync_store);
+const BROADCAST_RL_WINDOW: std::time::Duration = std::time::Duration::from_secs(600);
+const BROADCAST_RL_MAX_ATTEMPTS: usize = 1;
+const BROADCAST_RL_MAX_KEYS: usize = 100;
 
 #[derive(Deserialize)]
 struct AdminCheckQuery {
@@ -77,7 +90,7 @@ pub(crate) fn routes() -> Router<AppState> {
         .route("/admin/reviews", get(list_reviews_admin))
         .route("/admin/reviews/:id/moderate", post(moderate_review))
         .route("/admin/strains/:id/lab-cert", post(create_lab_cert))
-        .route("/admin/line-broadcast", post(line_broadcast))
+        .route("/admin/broadcast", post(telegram_broadcast))
 }
 
 async fn get_stats(
@@ -681,7 +694,7 @@ struct CreateLabCertRequest {
 }
 
 #[derive(Deserialize)]
-struct LineBroadcastRequest {
+struct TelegramBroadcastRequest {
     text: String,
 }
 
@@ -801,43 +814,92 @@ async fn create_lab_cert(
     Ok(Json(json!({ "id": id, "strain_id": strain_id })))
 }
 
-async fn line_broadcast(
+async fn telegram_broadcast(
     headers: HeaderMap,
     State(state): State<AppState>,
-    Json(req): Json<LineBroadcastRequest>,
+    Json(req): Json<TelegramBroadcastRequest>,
 ) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
-    check_admin(&headers, &state).map_err(|e| (e, Json(json!({ "error": "unauthorized" }))))?;
+    let admin_id = check_admin(&headers, &state)
+        .map_err(|e| (e, Json(json!({ "error": "unauthorized" }))))?;
 
-    let token = state
-        .config
-        .line_channel_access_token
-        .as_deref()
-        .ok_or((
-            StatusCode::SERVICE_UNAVAILABLE,
-            Json(json!({ "error": "LINE_CHANNEL_ACCESS_TOKEN not configured" })),
-        ))?;
+    // Rate-limit by admin id. check_admin returns 0 for token-only logins,
+    // which means all token-only admins share one bucket — acceptable because
+    // there is typically only one such login and it prevents spam.
+    let key = admin_id.to_string();
+    if !crate::api::rate_limit::check_and_record_sync(
+        &BROADCAST_RATE_LIMIT,
+        &key,
+        BROADCAST_RL_WINDOW,
+        BROADCAST_RL_MAX_ATTEMPTS,
+        BROADCAST_RL_MAX_KEYS,
+    ) {
+        return Err((
+            StatusCode::TOO_MANY_REQUESTS,
+            Json(json!({ "error": "Попробуйте через 10 минут" })),
+        ));
+    }
 
-    let (status, body) = crate::line::broadcast_message(token, &req.text)
+    let text = req.text.trim();
+    if text.is_empty() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": "Текст рассылки пуст" })),
+        ));
+    }
+
+    // Collect every unique telegram_id that has ever interacted with the bot.
+    // user_languages is the canonical per-user table (PK on telegram_id).
+    let user_ids: Vec<i64> = user::Entity::find()
+        .select_only()
+        .column(user::Column::TelegramId)
+        .into_tuple()
+        .all(&state.db.orm)
         .await
         .map_err(|e| {
-            tracing::warn!("line_broadcast rejected: {}", e);
+            tracing::error!("telegram_broadcast: failed to load user ids: {}", e);
             (
-                StatusCode::BAD_REQUEST,
-                Json(json!({ "error": format!("LINE request rejected: {}", e) })),
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": "Ошибка загрузки получателей" })),
             )
         })?;
 
-    if status.is_success() {
-        Ok(Json(
-            json!({ "success": true, "line_status": status.as_u16() }),
-        ))
-    } else {
-        tracing::warn!("LINE broadcast returned {}: {}", status, body);
-        Err((
-            StatusCode::BAD_GATEWAY,
-            Json(json!({ "error": format!("LINE returned {}: {}", status.as_u16(), body) })),
-        ))
+    let mut sent = 0usize;
+    let mut failed = 0usize;
+    let mut dedup = HashSet::<i64>::new();
+    for telegram_id in user_ids {
+        if telegram_id <= 0 || !dedup.insert(telegram_id) {
+            continue;
+        }
+        match state
+            .bot
+            .send_message(teloxide::types::ChatId(telegram_id), text)
+            .parse_mode(teloxide::types::ParseMode::Html)
+            .await
+        {
+            Ok(_) => {
+                sent += 1;
+                tracing::debug!("telegram_broadcast: sent to {}", telegram_id);
+            }
+            Err(e) => {
+                failed += 1;
+                tracing::warn!("telegram_broadcast: failed to send to {}: {}", telegram_id, e);
+            }
+        }
     }
+
+    tracing::info!(
+        "telegram_broadcast: admin_id={} sent={} failed={} recipients={}",
+        admin_id,
+        sent,
+        failed,
+        dedup.len()
+    );
+    Ok(Json(json!({
+        "success": true,
+        "sent": sent,
+        "failed": failed,
+        "recipients": dedup.len(),
+    })))
 }
 
 #[cfg(test)]

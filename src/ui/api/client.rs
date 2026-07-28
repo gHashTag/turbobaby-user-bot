@@ -309,11 +309,11 @@ impl ApiClient {
         self.post("/api/reviews", req).await
     }
 
-    pub async fn send_line_broadcast(
+    pub async fn send_broadcast(
         &self,
-        req: &LineBroadcastRequest,
+        req: &BroadcastRequest,
     ) -> Result<serde_json::Value> {
-        self.post("/api/admin/line-broadcast", req).await
+        self.post("/api/admin/broadcast", req).await
     }
 
     // Delivery zones / ETA

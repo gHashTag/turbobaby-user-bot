@@ -41,10 +41,10 @@ fn clear_admin_token_cache() {
 }
 
 use crate::trios::i18n::{
-    t, T_LINE_BROADCAST, T_LINE_BROADCAST_SEND, T_LINE_BROADCAST_SENT, T_LINE_BROADCAST_TEXT,
+    t, T_BROADCAST, T_BROADCAST_SEND, T_BROADCAST_SENT, T_BROADCAST_TEXT,
 };
 use crate::ui::api::context::api_base_url;
-use crate::ui::api::types::{Event as AdminEvent, EventBooking, LineBroadcastRequest};
+use crate::ui::api::types::{BroadcastRequest, Event as AdminEvent, EventBooking};
 use crate::ui::components::{
     EmptyState, IdPicker, Modal, Skeleton, SkeletonShape, Toast, ToastContainer, ToastKind,
     VideoModal,
@@ -378,7 +378,7 @@ enum Tab {
     Loyalty,
     Managers,
     Events,
-    LineBroadcast,
+    Broadcast,
 }
 
 // ── File upload helper ─────────────────────────────────────────
@@ -773,7 +773,7 @@ fn AdminPanel(active_tab: Signal<Tab>, mut password_token: Signal<String>) -> El
                 {tab_btn(Tab::Loyalty, "💎 Лояльность")}
                 {tab_btn(Tab::Managers, "👥 Менеджеры")}
                 {tab_btn(Tab::Events, "📅 События")}
-                {tab_btn(Tab::LineBroadcast, "📣 LINE")}
+                {tab_btn(Tab::Broadcast, "📣 Рассылка")}
             }
             match current {
                 Tab::Strains => rsx!(TabMount { tab: current, expected: Tab::Strains, StrainsTab {} }),
@@ -791,7 +791,7 @@ fn AdminPanel(active_tab: Signal<Tab>, mut password_token: Signal<String>) -> El
                 Tab::Loyalty => rsx!(TabMount { tab: current, expected: Tab::Loyalty, LoyaltyTab {} }),
                 Tab::Managers => rsx!(TabMount { tab: current, expected: Tab::Managers, ManagersTab {} }),
                 Tab::Events => rsx!(TabMount { tab: current, expected: Tab::Events, EventsTab {} }),
-                Tab::LineBroadcast => rsx!(TabMount { tab: current, expected: Tab::LineBroadcast, LineBroadcastTab {} }),
+                Tab::Broadcast => rsx!(TabMount { tab: current, expected: Tab::Broadcast, BroadcastTab {} }),
             }
         }
     }
@@ -7078,10 +7078,10 @@ fn EventsTab() -> Element {
     }
 }
 
-// ── LINE Broadcast tab (Variant C retention) ─────────────────
+// ── Telegram Broadcast tab ───────────────────────────────────
 
 #[component]
-fn LineBroadcastTab() -> Element {
+fn BroadcastTab() -> Element {
     let lang = crate::ui::lang::current_lang();
     let init_data = use_telegram_init_data();
     let token = admin_token();
@@ -7089,23 +7089,25 @@ fn LineBroadcastTab() -> Element {
     let sending = use_signal(|| false);
     let sent = use_signal(|| false);
     let mut error = use_signal(|| Option::<String>::None);
+    let mut result = use_signal(|| Option::<serde_json::Value>::None);
 
     rsx! {
         div { style: "padding: 16px;",
             div { style: "font-size: 18px; font-weight: 800; color: #39ff14; margin-bottom: 12px; text-shadow: 2px 2px 0 #000;",
-                {t(lang, T_LINE_BROADCAST)}
+                {t(lang, T_BROADCAST)}
             }
             div { style: "font-size: 13px; color: #8b8b9e; margin-bottom: 12px;",
-                " Sends a text broadcast to all LINE friends who have added the shop bot. "
+                " Sends a text message to every Telegram user who has interacted with the bot. "
             }
             div { style: "margin-bottom: 12px;",
-                div { style: "font-size: 13px; color: #e8e8e8; margin-bottom: 6px;", {t(lang, T_LINE_BROADCAST_TEXT)} }
+                div { style: "font-size: 13px; color: #e8e8e8; margin-bottom: 6px;", {t(lang, T_BROADCAST_TEXT)} }
                 textarea {
                     style: "width: 100%; min-height: 120px; background: #1a1a2e; border: 2px solid #2a2a4a; color: #e8e8e8; padding: 10px; font-size: 14px; resize: vertical;",
                     value: "{text()}",
                     oninput: move |e: Event<FormData>| {
                         text.set(e.value().clone());
                         error.set(None);
+                        result.set(None);
                     },
                 }
             }
@@ -7116,7 +7118,14 @@ fn LineBroadcastTab() -> Element {
             }
             if sent() {
                 div { style: "padding: 12px; background: #1a2e1a; border: 2px solid #39ff14; color: #39ff14; font-size: 14px; margin-bottom: 12px;",
-                    {t(lang, T_LINE_BROADCAST_SENT)}
+                    {t(lang, T_BROADCAST_SENT)}
+                }
+            }
+            if let Some(ref r) = result() {
+                if let (Some(sent_n), Some(recipients_n)) = (r.get("sent").and_then(|v| v.as_u64()), r.get("recipients").and_then(|v| v.as_u64())) {
+                    div { style: "padding: 12px; background: #1a2e1a; border: 2px solid #39ff14; color: #39ff14; font-size: 14px; margin-bottom: 12px;",
+                        "✅ Отправлено {sent_n} из {recipients_n} пользователей"
+                    }
                 }
             }
             button {
@@ -7125,18 +7134,20 @@ fn LineBroadcastTab() -> Element {
                 onclick: move |e: Event<MouseData>| {
                     e.stop_propagation();
                     error.set(None);
-                    let body = LineBroadcastRequest {
+                    result.set(None);
+                    let body = BroadcastRequest {
                         text: text().trim().to_string(),
                     };
                     let client = crate::ui::api::local_client::LocalClient::new();
                     let base = api_base_url();
-                    let url = format!("{base}/api/admin/line-broadcast");
+                    let url = format!("{base}/api/admin/broadcast");
                     let init = init_data.clone();
                     let tok = token.clone();
                     let mut sending = sending;
                     let mut sent = sent;
                     let mut text = text;
                     let mut error = error;
+                    let mut result = result;
                     spawn(async move {
                         sending.set(true);
                         let res = client
@@ -7149,6 +7160,8 @@ fn LineBroadcastTab() -> Element {
                         sending.set(false);
                         match res {
                             Ok(resp) if resp.status().is_success() => {
+                                let data = resp.json::<serde_json::Value>().await.ok();
+                                result.set(data);
                                 sent.set(true);
                                 text.set(String::new());
                             }
@@ -7165,7 +7178,7 @@ fn LineBroadcastTab() -> Element {
                         }
                     });
                 },
-                {t(lang, T_LINE_BROADCAST_SEND)}
+                {t(lang, T_BROADCAST_SEND)}
             }
         }
     }

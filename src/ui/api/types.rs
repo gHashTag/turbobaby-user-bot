@@ -453,7 +453,7 @@ pub struct CreateReviewRequest {
 }
 
 #[derive(Debug, Serialize)]
-pub struct LineBroadcastRequest {
+pub struct BroadcastRequest {
     pub text: String,
 }
 
