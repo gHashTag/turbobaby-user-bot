@@ -1,3 +1,4 @@
+use crate::ui::components::AccessoriesIcon;
 use crate::ui::prefetch;
 use crate::ui::routes::Route;
 use dioxus::prelude::*;
@@ -42,7 +43,7 @@ pub fn BottomNav(#[props(default)] cart_count: u32) -> Element {
             Link { to: Route::Accessories {},
                 div { class: if is_accessories { "nav-item active" } else { "nav-item" },
                     onmouseenter: move |_| { prefetch::prefetch_route(&Route::Accessories {}); },
-                    span { class: "nav-icon", "🛠️" }
+                    span { class: "nav-icon", AccessoriesIcon {} }
                     span { class: "nav-label", "Gear" }
                 }
             }

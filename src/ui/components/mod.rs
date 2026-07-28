@@ -4,6 +4,7 @@
 // ---------------------------------------------------------------------------
 // Original components
 // ---------------------------------------------------------------------------
+pub mod accessories_icon;
 pub mod bottom_nav;
 pub mod button;
 pub mod card;
@@ -39,6 +40,7 @@ pub mod toast;
 // ---------------------------------------------------------------------------
 // Re-exports — original
 // ---------------------------------------------------------------------------
+pub use accessories_icon::AccessoriesIcon;
 pub use button::{Button, ButtonProps, ButtonSize, ButtonVariant};
 pub use card::{Card, CardProps, CardVariant};
 pub use card_media::CardMedia;
