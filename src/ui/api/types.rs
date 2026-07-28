@@ -454,7 +454,7 @@ pub struct CreateReviewRequest {
 
 #[derive(Debug, Serialize)]
 pub struct LineBroadcastRequest {
-    pub message: String,
+    pub text: String,
 }
 
 /// Delivery zone with ETA / fee — matches backend `/api/delivery/zones`.

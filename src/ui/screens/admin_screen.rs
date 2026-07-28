@@ -11,6 +11,7 @@
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use std::cell::RefCell;
 use std::sync::LazyLock;
 use wasm_bindgen::JsCast;
 use web_sys;
@@ -21,6 +22,24 @@ use web_sys;
 // from the wasm bundle vs shipping reqwest itself.
 static HTTP_CLIENT: LazyLock<crate::ui::api::local_client::LocalClient> =
     LazyLock::new(crate::ui::api::local_client::LocalClient::new);
+
+// Synchronous in-memory cache for the admin token. Telegram CloudStorage is
+// async, but most admin API calls (uploads, events, broadcasts, CRUD) need to
+// read the token synchronously from async callbacks / non-render helpers. The
+// cache is populated by login, by the CloudStorage loader, and by localStorage
+// fallback reads. All reads go through `admin_token()`.
+thread_local! {
+    static ADMIN_TOKEN_CACHE: RefCell<String> = RefCell::new(String::new());
+}
+
+fn set_admin_token_cache(token: &str) {
+    ADMIN_TOKEN_CACHE.with(|c| *c.borrow_mut() = token.to_string());
+}
+
+fn clear_admin_token_cache() {
+    ADMIN_TOKEN_CACHE.with(|c| c.borrow_mut().clear());
+}
+
 use crate::trios::i18n::{
     t, T_LINE_BROADCAST, T_LINE_BROADCAST_SEND, T_LINE_BROADCAST_SENT, T_LINE_BROADCAST_TEXT,
 };
@@ -35,7 +54,9 @@ use crate::ui::telegram::{
     use_telegram_id, use_telegram_init_data, HapticNotification, TelegramApp,
 };
 
-/// Read the cached admin token from synchronous storage (localStorage).
+/// Read the cached admin token. Order of precedence:
+/// 1. In-memory cache (populated by CloudStorage loader / login).
+/// 2. localStorage fallback (for plain-browser previews / older clients).
 /// This is used for the first paint so the login screen doesn't flash
 /// unnecessarily when a token is already cached in the browser.
 /// Telegram Mini App WebViews do not reliably persist localStorage across
@@ -44,15 +65,20 @@ use crate::ui::telegram::{
 fn admin_token() -> String {
     #[cfg(target_arch = "wasm32")]
     {
+        let cached = ADMIN_TOKEN_CACHE.with(|c| c.borrow().clone());
+        if !cached.is_empty() && cached.len() <= 2048 {
+            return cached;
+        }
         let token = web_sys::window()
             .and_then(|w| w.local_storage().ok())
             .flatten()
             .and_then(|s| s.get_item("wwb_admin_token").ok())
             .flatten()
             .unwrap_or_default();
-        if token.len() > 2048 {
+        if token.is_empty() || token.len() > 2048 {
             String::new()
         } else {
+            ADMIN_TOKEN_CACHE.with(|c| *c.borrow_mut() = token.clone());
             token
         }
     }
@@ -68,6 +94,7 @@ fn admin_token() -> String {
 /// across restarts, so CloudStorage is required for auto-login to work.
 #[cfg(target_arch = "wasm32")]
 fn save_admin_token(token: &str, telegram_id: i64) {
+    set_admin_token_cache(token);
     let tg = crate::ui::telegram::TelegramApp;
     tg.cloud_storage_set("wwb_admin_token", token);
     tg.cloud_storage_set("wwb_admin_telegram_id", &telegram_id.to_string());
@@ -85,6 +112,7 @@ fn save_admin_token(_token: &str, _telegram_id: i64) {}
 /// Remove the persisted admin token from both CloudStorage and localStorage.
 #[cfg(target_arch = "wasm32")]
 fn clear_admin_token() {
+    clear_admin_token_cache();
     let tg = crate::ui::telegram::TelegramApp;
     tg.cloud_storage_remove("wwb_admin_token");
     tg.cloud_storage_remove("wwb_admin_telegram_id");
@@ -517,6 +545,7 @@ pub fn AdminScreen() -> Element {
             let tg = TelegramApp;
             if let Some(token) = tg.cloud_storage_get("wwb_admin_token").await {
                 if token.len() <= 2048 && !token.is_empty() {
+                    set_admin_token_cache(&token);
                     cloud_token.set(token);
                 }
             }
@@ -7087,7 +7116,7 @@ fn LineBroadcastTab() -> Element {
                 onclick: move |e: Event<MouseData>| {
                     e.stop_propagation();
                     let body = LineBroadcastRequest {
-                        message: text().trim().to_string(),
+                        text: text().trim().to_string(),
                     };
                     let client = crate::ui::api::local_client::LocalClient::new();
                     let base = api_base_url();
