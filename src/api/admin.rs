@@ -805,19 +805,26 @@ async fn line_broadcast(
     headers: HeaderMap,
     State(state): State<AppState>,
     Json(req): Json<LineBroadcastRequest>,
-) -> Result<Json<Value>, StatusCode> {
-    check_admin(&headers, &state)?;
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    check_admin(&headers, &state).map_err(|e| (e, Json(json!({ "error": "unauthorized" }))))?;
+
     let token = state
         .config
         .line_channel_access_token
         .as_deref()
-        .ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
+        .ok_or((
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({ "error": "LINE_CHANNEL_ACCESS_TOKEN not configured" })),
+        ))?;
 
     let (status, body) = crate::line::broadcast_message(token, &req.text)
         .await
         .map_err(|e| {
             tracing::warn!("line_broadcast rejected: {}", e);
-            StatusCode::BAD_REQUEST
+            (
+                StatusCode::BAD_REQUEST,
+                Json(json!({ "error": format!("LINE request rejected: {}", e) })),
+            )
         })?;
 
     if status.is_success() {
@@ -826,7 +833,10 @@ async fn line_broadcast(
         ))
     } else {
         tracing::warn!("LINE broadcast returned {}: {}", status, body);
-        Err(StatusCode::BAD_GATEWAY)
+        Err((
+            StatusCode::BAD_GATEWAY,
+            Json(json!({ "error": format!("LINE returned {}: {}", status.as_u16(), body) })),
+        ))
     }
 }
 

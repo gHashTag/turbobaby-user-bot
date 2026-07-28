@@ -7088,6 +7088,7 @@ fn LineBroadcastTab() -> Element {
     let mut text = use_signal(|| String::new());
     let sending = use_signal(|| false);
     let sent = use_signal(|| false);
+    let mut error = use_signal(|| Option::<String>::None);
 
     rsx! {
         div { style: "padding: 16px;",
@@ -7102,7 +7103,15 @@ fn LineBroadcastTab() -> Element {
                 textarea {
                     style: "width: 100%; min-height: 120px; background: #1a1a2e; border: 2px solid #2a2a4a; color: #e8e8e8; padding: 10px; font-size: 14px; resize: vertical;",
                     value: "{text()}",
-                    oninput: move |e: Event<FormData>| text.set(e.value().clone()),
+                    oninput: move |e: Event<FormData>| {
+                        text.set(e.value().clone());
+                        error.set(None);
+                    },
+                }
+            }
+            if let Some(ref msg) = error() {
+                div { style: "padding: 12px; background: #2a0f15; border: 2px solid #ff4757; color: #ff6b7a; font-size: 14px; margin-bottom: 12px;",
+                    "❌ {msg}"
                 }
             }
             if sent() {
@@ -7115,6 +7124,7 @@ fn LineBroadcastTab() -> Element {
                 disabled: sending() || text().trim().is_empty(),
                 onclick: move |e: Event<MouseData>| {
                     e.stop_propagation();
+                    error.set(None);
                     let body = LineBroadcastRequest {
                         text: text().trim().to_string(),
                     };
@@ -7126,6 +7136,7 @@ fn LineBroadcastTab() -> Element {
                     let mut sending = sending;
                     let mut sent = sent;
                     let mut text = text;
+                    let mut error = error;
                     spawn(async move {
                         sending.set(true);
                         let res = client
@@ -7136,10 +7147,20 @@ fn LineBroadcastTab() -> Element {
                             .send()
                             .await;
                         sending.set(false);
-                        if let Ok(resp) = res {
-                            if resp.status().is_success() {
+                        match res {
+                            Ok(resp) if resp.status().is_success() => {
                                 sent.set(true);
                                 text.set(String::new());
+                            }
+                            Ok(resp) => {
+                                let err_text = resp.json::<serde_json::Value>().await
+                                    .ok()
+                                    .and_then(|v| v.get("error").and_then(|e| e.as_str()).map(|s| s.to_string()))
+                                    .unwrap_or_else(|| "Ошибка рассылки".into());
+                                error.set(Some(err_text));
+                            }
+                            Err(_) => {
+                                error.set(Some("Сеть недоступна".into()));
                             }
                         }
                     });
