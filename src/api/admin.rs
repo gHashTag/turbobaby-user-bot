@@ -13,7 +13,7 @@ use crate::db::entities::{lab_certificate, strain_review};
 use crate::AppState;
 use teloxide::payloads::{SendMessageSetters, SendPhotoSetters};
 use teloxide::prelude::Requester;
-use teloxide::types::{InlineKeyboardButton, InlineKeyboardMarkup, InputFile, ParseMode};
+use teloxide::types::{InlineKeyboardButton, InlineKeyboardMarkup, InputFile, ParseMode, WebAppInfo};
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, ConnectionTrait, DbBackend, EntityTrait, QueryFilter, QueryOrder,
     QuerySelect, Set, Statement,
@@ -61,8 +61,11 @@ struct BroadcastProduct {
 /// Build an inline keyboard with a single CTA that opens the Mini App on the
 /// advertised product. Unknown catalog kinds are treated as "no markup" so a
 /// typo in the admin UI does not break the whole broadcast.
+///
+/// Uses a WebApp button (not a plain URL) so the Mini App opens directly
+/// inside Telegram with `start_param` populated from the deep link.
 fn broadcast_reply_markup(
-    bot_username: &str,
+    web_app_url: &str,
     product: &BroadcastProduct,
     button_text: Option<&str>,
 ) -> Option<InlineKeyboardMarkup> {
@@ -74,16 +77,30 @@ fn broadcast_reply_markup(
         "event" => "p_event",
         _ => return None,
     };
-    let url = format!(
-        "https://t.me/{bot_username}?startapp={prefix}_{id}",
-        id = product.id
-    );
     let label = button_text
         .map(|s| s.trim())
         .filter(|s| !s.is_empty())
         .unwrap_or("Открыть в магазине");
-    let button = InlineKeyboardButton::url(label.to_string(), url.parse().ok()?);
+
+    // Build the Mini App URL with the product context. Telegram passes the
+    // `startapp` value via `initDataUnsafe.start_param` when the button opens
+    // the WebApp.
+    let mini_app_url = build_web_app_url(web_app_url, &format!("{prefix}_{id}", id = product.id))?;
+    let button = InlineKeyboardButton::web_app(label.to_string(), WebAppInfo { url: mini_app_url });
     Some(InlineKeyboardMarkup::new(vec![vec![button]]))
+}
+
+/// Append `startapp={param}` to the configured Mini App URL preserving any
+/// existing query parameters (e.g. `?cache=180`). Falls back to a plain
+/// `t.me` deep link if the configured URL is missing or invalid.
+fn build_web_app_url(web_app_url: &str, startapp_param: &str) -> Option<url::Url> {
+    if web_app_url.is_empty() {
+        return None;
+    }
+    let mut url = web_app_url.parse::<url::Url>().ok()?;
+    url.query_pairs_mut()
+        .append_pair("startapp", startapp_param);
+    Some(url)
 }
 
 #[derive(Deserialize)]
@@ -876,7 +893,7 @@ async fn telegram_broadcast(
     let reply_markup = req
         .product
         .as_ref()
-        .and_then(|p| broadcast_reply_markup(&state.config.bot_username, p, req.button_text.as_deref()));
+        .and_then(|p| broadcast_reply_markup(&state.config.web_app_url, p, req.button_text.as_deref()));
     if req.product.is_some() && reply_markup.is_none() {
         return Err((
             StatusCode::BAD_REQUEST,
@@ -1034,7 +1051,7 @@ async fn telegram_broadcast_test(
     let reply_markup = req
         .product
         .as_ref()
-        .and_then(|p| broadcast_reply_markup(&state.config.bot_username, p, req.button_text.as_deref()));
+        .and_then(|p| broadcast_reply_markup(&state.config.web_app_url, p, req.button_text.as_deref()));
     if req.product.is_some() && reply_markup.is_none() {
         return Err((
             StatusCode::BAD_REQUEST,
