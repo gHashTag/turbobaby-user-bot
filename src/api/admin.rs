@@ -823,6 +823,14 @@ async fn telegram_broadcast(
     let admin_id = check_admin(&headers, &state)
         .map_err(|e| (e, Json(json!({ "error": "unauthorized" }))))?;
 
+    let text = req.text.trim();
+    if text.is_empty() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": "Текст рассылки пуст" })),
+        ));
+    }
+
     // Rate-limit by admin id. check_admin returns 0 for token-only logins,
     // which means all token-only admins share one bucket — acceptable because
     // there is typically only one such login and it prevents spam.
@@ -837,14 +845,6 @@ async fn telegram_broadcast(
         return Err((
             StatusCode::TOO_MANY_REQUESTS,
             Json(json!({ "error": "Попробуйте через 10 минут" })),
-        ));
-    }
-
-    let text = req.text.trim();
-    if text.is_empty() {
-        return Err((
-            StatusCode::BAD_REQUEST,
-            Json(json!({ "error": "Текст рассылки пуст" })),
         ));
     }
 
