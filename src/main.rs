@@ -11,8 +11,6 @@ mod config;
 mod db;
 #[cfg(all(not(target_arch = "wasm32"), feature = "backend"))]
 mod delivery;
-#[cfg(all(not(target_arch = "wasm32"), feature = "backend"))]
-mod line;
 #[cfg(not(target_arch = "wasm32"))]
 mod locales;
 #[cfg(not(target_arch = "wasm32"))]

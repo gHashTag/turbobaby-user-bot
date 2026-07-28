@@ -427,7 +427,7 @@ async fn admin_can_create_and_list_lab_cert() {
 
 #[tokio::test]
 #[ignore = "needs DATABASE_URL env var; run with --ignored"]
-async fn line_broadcast_without_config_returns_service_unavailable() {
+async fn telegram_broadcast_with_no_users_returns_success() {
     let Some((app, db)) = common::make_app_with_db().await else {
         eprintln!("DATABASE_URL not set — skipping integration reviews test");
         return;
@@ -438,12 +438,12 @@ async fn line_broadcast_without_config_returns_service_unavailable() {
         .await;
 
     let (admin_init, admin_token, admin_telegram_id) = admin_headers();
-    let body = serde_json::json!({ "text": "Hello LINE friends" });
+    let body = serde_json::json!({ "text": "Hello Telegram friends" });
 
     let response = app
         .oneshot(
             Request::builder()
-                .uri("/api/admin/line-broadcast")
+                .uri("/api/admin/broadcast")
                 .method("POST")
                 .header("X-Telegram-Init-Data", admin_init)
                 .header("X-Admin-Token", admin_token)
@@ -453,8 +453,13 @@ async fn line_broadcast_without_config_returns_service_unavailable() {
                 .unwrap(),
         )
         .await
-        .expect("line broadcast");
+        .expect("telegram broadcast");
 
-    // test_config has line_channel_access_token = None, so endpoint refuses to call LINE.
-    assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+    // No users in the empty test DB, so the broadcast loop sends nothing
+    // but still returns a structured success response.
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body).expect("valid json");
+    assert_eq!(json["success"], true);
+    assert_eq!(json["recipients"], 0);
 }

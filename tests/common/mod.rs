@@ -162,6 +162,5 @@ fn test_config(database_url: &str) -> Config {
         hide_marketing_badges: false,
         delivery_zones: DeliveryZones::default(),
         promptpay: QrConfig::default(),
-        line_channel_access_token: None,
     }
 }

@@ -95,8 +95,6 @@ pub mod db;
 #[cfg(all(not(target_arch = "wasm32"), feature = "backend"))]
 pub mod delivery;
 #[cfg(all(not(target_arch = "wasm32"), feature = "backend"))]
-pub mod line;
-#[cfg(all(not(target_arch = "wasm32"), feature = "backend"))]
 pub mod locales;
 #[cfg(all(not(target_arch = "wasm32"), feature = "backend"))]
 pub mod metrics;

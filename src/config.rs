@@ -45,10 +45,6 @@ pub struct Config {
     /// IDs are accepted. Optional — when absent the QR endpoint falls back
     /// to a plain text payment prompt.
     pub promptpay: crate::promptpay::QrConfig,
-    /// LINE channel access token for retention broadcasts. Optional —
-    /// when absent the admin LINE broadcast endpoint returns 503 and the
-    /// capability is listed in disabled_capabilities.
-    pub line_channel_access_token: Option<String>,
 }
 
 impl Config {
@@ -145,9 +141,6 @@ impl Config {
             ),
             delivery_zones: crate::delivery::DeliveryZones::from_env_or_default(),
             promptpay: crate::promptpay::QrConfig::from_env(),
-            line_channel_access_token: std::env::var("LINE_CHANNEL_ACCESS_TOKEN")
-                .ok()
-                .filter(|s| !s.trim().is_empty()),
         })
     }
 
@@ -161,20 +154,13 @@ impl Config {
         !self.grok_api_key.trim().is_empty() || !self.glm_api_key.trim().is_empty()
     }
 
-    pub fn line_enabled(&self) -> bool {
-        self.line_channel_access_token
-            .as_deref()
-            .map(|s| !s.trim().is_empty())
-            .unwrap_or(false)
-    }
-
     /// Optional capabilities that are OFF because their config is absent.
     /// Logged at startup so ops sees "AI disabled (no key)" up front instead
     /// of discovering it from a failed user request (the AI client only warns
     /// per-call). These are NOT faults — an environment may intentionally run
     /// without AI or S3 — so the caller logs a warning, not an alert.
     pub fn disabled_capabilities(&self) -> Vec<&'static str> {
-        disabled_capabilities_from(self.ai_enabled(), self.s3_enabled(), self.line_enabled())
+        disabled_capabilities_from(self.ai_enabled(), self.s3_enabled())
     }
 }
 
@@ -183,7 +169,6 @@ impl Config {
 fn disabled_capabilities_from(
     ai_enabled: bool,
     s3_enabled: bool,
-    line_enabled: bool,
 ) -> Vec<&'static str> {
     let mut off = Vec::new();
     if !ai_enabled {
@@ -191,9 +176,6 @@ fn disabled_capabilities_from(
     }
     if !s3_enabled {
         off.push("S3 media uploads (S3_BUCKET / S3_ENDPOINT unset)");
-    }
-    if !line_enabled {
-        off.push("LINE retention broadcasts (LINE_CHANNEL_ACCESS_TOKEN unset)");
     }
     off
 }
@@ -275,33 +257,26 @@ mod tests {
 
     #[test]
     fn capabilities_all_enabled_is_empty() {
-        assert!(disabled_capabilities_from(true, true, true).is_empty());
+        assert!(disabled_capabilities_from(true, true).is_empty());
     }
 
     #[test]
     fn capabilities_ai_off_reported() {
-        let off = disabled_capabilities_from(false, true, true);
+        let off = disabled_capabilities_from(false, true);
         assert_eq!(off.len(), 1);
         assert!(off[0].contains("AI"));
     }
 
     #[test]
     fn capabilities_s3_off_reported() {
-        let off = disabled_capabilities_from(true, false, true);
+        let off = disabled_capabilities_from(true, false);
         assert_eq!(off.len(), 1);
         assert!(off[0].contains("S3"));
     }
 
     #[test]
-    fn capabilities_line_off_reported() {
-        let off = disabled_capabilities_from(true, true, false);
-        assert_eq!(off.len(), 1);
-        assert!(off[0].contains("LINE"));
-    }
-
-    #[test]
     fn capabilities_all_off_reported() {
-        assert_eq!(disabled_capabilities_from(false, false, false).len(), 3);
+        assert_eq!(disabled_capabilities_from(false, false).len(), 2);
     }
 
     // ── collect_required_env (cycle #122) ───────────────────────────
@@ -448,7 +423,6 @@ mod tests {
             hide_marketing_badges: false,
             delivery_zones: crate::delivery::DeliveryZones::default(),
             promptpay: crate::promptpay::QrConfig::default(),
-            line_channel_access_token: None,
         };
         assert!(cfg.s3_enabled());
     }
@@ -508,7 +482,6 @@ mod tests {
             hide_marketing_badges: false,
             delivery_zones: crate::delivery::DeliveryZones::default(),
             promptpay: crate::promptpay::QrConfig::default(),
-            line_channel_access_token: None,
         }
     }
 }
