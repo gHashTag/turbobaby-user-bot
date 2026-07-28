@@ -9,12 +9,13 @@ use serde_json::{json, Value};
 
 // Admin API routes
 use crate::api::auth::{check_admin, validate_telegram_id_param};
-use crate::db::entities::{lab_certificate, strain_review, user};
+use crate::db::entities::{lab_certificate, strain_review};
 use crate::AppState;
 use teloxide::payloads::SendMessageSetters;
 use teloxide::prelude::Requester;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QueryOrder, QuerySelect, Set,
+    ActiveModelTrait, ColumnTrait, ConnectionTrait, DbBackend, EntityTrait, QueryFilter, QueryOrder,
+    QuerySelect, Set, Statement,
 };
 use std::collections::HashSet;
 
@@ -848,12 +849,17 @@ async fn telegram_broadcast(
     }
 
     // Collect every unique telegram_id that has ever interacted with the bot.
-    // user_languages is the canonical per-user table (PK on telegram_id).
-    let user_ids: Vec<i64> = user::Entity::find()
-        .select_only()
-        .column(user::Column::TelegramId)
-        .into_tuple()
-        .all(&state.db.orm)
+    // user_languages is canonical, but loyalty_profiles also holds users who
+    // placed orders without explicitly setting a language, so we union both.
+    let user_ids: Vec<i64> = state
+        .db
+        .orm
+        .query_all(Statement::from_string(
+            DbBackend::Postgres,
+            "SELECT telegram_id FROM user_languages \
+             UNION \
+             SELECT telegram_id FROM loyalty_profiles".to_string(),
+        ))
         .await
         .map_err(|e| {
             tracing::error!("telegram_broadcast: failed to load user ids: {}", e);
@@ -861,7 +867,10 @@ async fn telegram_broadcast(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(json!({ "error": "Ошибка загрузки получателей" })),
             )
-        })?;
+        })?
+        .iter()
+        .filter_map(|r| r.try_get::<i64>("", "telegram_id").ok())
+        .collect();
 
     let mut sent = 0usize;
     let mut failed = 0usize;
