@@ -5,10 +5,40 @@ use crate::ui::game::Garden;
 use crate::ui::game::WoodyCatch;
 use dioxus::prelude::*;
 
+#[cfg(target_arch = "wasm32")]
+use gloo_storage::{LocalStorage, Storage};
+
+const GARDEN_TAB_KEY: &str = "wwb_garden_tab";
+
+#[cfg(target_arch = "wasm32")]
+fn load_garden_tab() -> bool {
+    LocalStorage::get(GARDEN_TAB_KEY).unwrap_or(false)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn load_garden_tab() -> bool {
+    false
+}
+
+#[cfg(target_arch = "wasm32")]
+fn save_garden_tab(show_game: bool) {
+    let _ = LocalStorage::set(GARDEN_TAB_KEY, show_game);
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn save_garden_tab(_show_game: bool) {}
+
 #[component]
 pub fn GardenScreen() -> Element {
-    let mut show_game = use_signal(|| false);
+    let mut show_game = use_signal(load_garden_tab);
     let cart_count = 0u32;
+
+    {
+        let show_game = show_game;
+        use_effect(move || {
+            save_garden_tab(*show_game.read());
+        });
+    }
 
     let is_game = *show_game.read();
 
