@@ -301,7 +301,7 @@ async fn water_plant(
                 new_stage.clone().into(),
                 new_completed.into(),
                 now.into(),
-                id.into(),
+                id.clone().into(),
                 max_last_water.into(),
             ],
         ))
@@ -327,6 +327,16 @@ async fn water_plant(
         tracing::error!("water_plant commit: {e}");
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
+
+    tracing::info!(
+        plant_id = %id,
+        user_id = %user_id,
+        old_water_count = water_count,
+        new_water_count = new_count,
+        new_stage = %new_stage,
+        is_completed = new_completed,
+        "water_plant: watered"
+    );
 
     Ok(Json(json!({
         "success": true,
@@ -1282,6 +1292,33 @@ async fn choose_plant(
         ));
     }
 
+    // Read the current un-harvested plant (if any) so we can log what progress
+    // is being replaced. This helps diagnose "my plant reset" reports.
+    let current_rows = tx
+        .query_all(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            "SELECT id, water_count, current_stage, last_watered_at \
+             FROM garden_plants WHERE user_id = $1 AND harvested_at IS NULL",
+            [user_id.clone().into()],
+        ))
+        .await
+        .map_err(|e| {
+            tracing::error!("choose_plant: read current: {e}");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    let replaced: Vec<(String, i32, String, Option<i64>)> = current_rows
+        .iter()
+        .map(|r| {
+            (
+                r.try_get("", "id").unwrap_or_default(),
+                r.try_get::<i32>("", "water_count").unwrap_or(0),
+                r.try_get::<String>("", "current_stage").unwrap_or_default(),
+                r.try_get("", "last_watered_at").ok(),
+            )
+        })
+        .collect();
+
     // Replace the current un-harvested plant.
     tx.execute(Statement::from_sql_and_values(
         DbBackend::Postgres,
@@ -1321,10 +1358,25 @@ async fn choose_plant(
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
+    for (old_id, old_wc, old_stage, old_lw) in replaced {
+        tracing::info!(
+            telegram_id = req.telegram_id,
+            old_plant_id = %old_id,
+            old_water_count = old_wc,
+            old_stage = %old_stage,
+            old_last_watered_at = ?old_lw,
+            new_plant_id = %plant_id,
+            "choose_plant: replaced {} with {}",
+            old_id,
+            plant_id
+        );
+    }
     tracing::info!(
         telegram_id = req.telegram_id,
-        "choose_plant: planted {}",
-        req.catalog
+        new_plant_id = %plant_id,
+        "choose_plant: planted {} {}",
+        req.catalog,
+        req.product_id
     );
     Ok(Json(json!({ "success": true, "plant_id": plant_id })))
 }

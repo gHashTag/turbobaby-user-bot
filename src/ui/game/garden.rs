@@ -277,6 +277,7 @@ pub fn Garden() -> Element {
     let error_msg = use_signal(String::new);
     let now_ms = use_signal(|| chrono::Utc::now().timestamp_millis());
     let mut show_chooser = use_signal(|| false);
+    let mut show_replace_warning = use_signal(|| false);
     let telegram_id = use_telegram_id().unwrap_or(0);
     let init_data = use_telegram_init_data();
     let tg = use_telegram();
@@ -414,7 +415,13 @@ pub fn Garden() -> Element {
                 div { style: "text-align:center;padding:0 16px 14px;",
                     button {
                         style: "padding:10px 18px;background:#39ff14;color:#000;border:4px solid #2d9e0f;box-shadow:3px 3px 0 #000;font-size:13px;font-weight:700;cursor:pointer;",
-                        onclick: move |_| show_chooser.set(true),
+                        onclick: move |_| {
+                            if plants.read().is_empty() {
+                                show_chooser.set(true);
+                            } else {
+                                show_replace_warning.set(true);
+                            }
+                        },
                         if plant_list.is_empty() { "🌱 Выбрать товар для скидки" } else { "🔄 Сменить товар" }
                     }
                 }
@@ -646,6 +653,41 @@ pub fn Garden() -> Element {
 
             if show_chooser() {
                 GardenChooser { telegram_id, init_data: init_data.clone(), plants, open: show_chooser }
+            }
+
+            // Cycle #172: warn before replacing an existing plant — choosing a
+            // different product deletes the current plant and starts a fresh seed,
+            // which resets watering progress. Users were accidentally tapping
+            // "Сменить товар" and losing their grow progress.
+            if show_replace_warning() {
+                div {
+                    style: "position:fixed;inset:0;z-index:1001;background:rgba(0,0,0,0.8);display:flex;align-items:center;justify-content:center;padding:16px;",
+                    onclick: move |_| show_replace_warning.set(false),
+                    div {
+                        style: "background:#1a1a2e;max-width:340px;width:100%;border:4px solid #ff4757;box-shadow:4px 4px 0 #000;padding:20px;border-radius:12px;text-align:center;",
+                        onclick: move |e: Event<MouseData>| e.stop_propagation(),
+                        div { style: "font-size:36px;margin-bottom:12px;", "⚠️" }
+                        div { style: "font-size:15px;font-weight:700;color:#ff6b7a;margin-bottom:10px;", "Сменить товар — начать с семечка" }
+                        p { style: "font-size:12px;color:#8b8b9e;line-height:1.5;margin-bottom:16px;",
+                            "Текущее растение будет удалено, а прогресс полива сброшен. Новое растение вырастает с 0/14."
+                        }
+                        div { style: "display:flex;gap:10px;justify-content:center;",
+                            button {
+                                style: "padding:10px 16px;background:transparent;color:#8b8b9e;border:2px solid #2a2a4a;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;",
+                                onclick: move |_| show_replace_warning.set(false),
+                                "Отмена"
+                            }
+                            button {
+                                style: "padding:10px 16px;background:#ff4757;color:#fff;border:2px solid #c0392b;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;box-shadow:2px 2px 0 #000;",
+                                onclick: move |_| {
+                                    show_replace_warning.set(false);
+                                    show_chooser.set(true);
+                                },
+                                "Всё равно сменить"
+                            }
+                        }
+                    }
+                }
             }
         }
     }
