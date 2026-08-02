@@ -26,6 +26,7 @@ pub(crate) fn routes() -> Router<AppState> {
         .route("/garden/plants", get(get_user_plants))
         .route("/garden/plants/:id/water", post(water_plant))
         .route("/garden/plants/:id/harvest", post(harvest_plant))
+        .route("/garden/plants/:id/reset", post(reset_plant))
         // Rewards
         .route("/garden/rewards", get(get_user_rewards))
         .route("/garden/rewards/:id/use", post(use_reward))
@@ -1211,8 +1212,10 @@ pub(crate) struct ChoosePlantRequest {
 
 /// POST /api/garden/plants/choose — the customer picks a live product to grow a
 /// discount for. Snapshots the product's name + photo onto the plant's target_*
-/// (the photo becomes the seed image). Same one-active-plant + 24h post-harvest
-/// cooldown guards as the auto-seed.
+/// (the photo becomes the seed image). If an un-harvested plant already exists,
+/// only its target product/strain fields are updated — watering progress is
+/// preserved. The 24h post-harvest cooldown still blocks a new plant after a
+/// recent harvest.
 async fn choose_plant(
     headers: HeaderMap,
     State(state): State<AppState>,
@@ -1258,14 +1261,9 @@ async fn choose_plant(
         .flatten();
 
     let user_id = req.telegram_id.to_string();
-    let plant_id = uuid::Uuid::new_v4().to_string();
-    let planted_at = chrono::Utc::now().timestamp_millis();
-    let harvest_cooldown_floor = planted_at.saturating_sub(garden::POST_HARVEST_COOLDOWN_MS);
+    let now = chrono::Utc::now().timestamp_millis();
+    let harvest_cooldown_floor = now.saturating_sub(garden::POST_HARVEST_COOLDOWN_MS);
 
-    // The player explicitly picks WHAT to grow, so choosing REPLACES any current
-    // un-harvested plant (delete + plant the new one) — they're no longer stuck
-    // with a leftover auto-seeded plant. Still blocked during the 24h
-    // post-harvest cooldown so a reward can't be farmed back-to-back.
     use sea_orm::TransactionTrait;
     let tx = state.db.orm.begin().await.map_err(|e| {
         tracing::error!("choose_plant tx.begin: {e}");
@@ -1292,93 +1290,174 @@ async fn choose_plant(
         ));
     }
 
-    // Read the current un-harvested plant (if any) so we can log what progress
-    // is being replaced. This helps diagnose "my plant reset" reports.
-    let current_rows = tx
-        .query_all(Statement::from_sql_and_values(
+    // Try to update an existing un-harvested plant first: change WHAT the user is
+    // growing without resetting water_count / current_stage / last_watered_at.
+    let updated = tx
+        .execute(Statement::from_sql_and_values(
             DbBackend::Postgres,
-            "SELECT id, water_count, current_stage, last_watered_at \
-             FROM garden_plants WHERE user_id = $1 AND harvested_at IS NULL",
-            [user_id.clone().into()],
+            "UPDATE garden_plants \
+             SET strain_id = $2, strain_name = $3, \
+                 target_catalog = $4, target_product_id = $2, target_name = $3, target_image_url = $5, \
+                 updated_at = $6 \
+             WHERE user_id = $1 AND harvested_at IS NULL",
+            [
+                user_id.clone().into(),
+                req.product_id.clone().into(),
+                name.clone().into(),
+                req.catalog.clone().into(),
+                image_url.clone().into(),
+                now.into(),
+            ],
         ))
         .await
         .map_err(|e| {
-            tracing::error!("choose_plant: read current: {e}");
+            tracing::error!("choose_plant: update existing: {e}");
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
-    let replaced: Vec<(String, i32, String, Option<i64>)> = current_rows
-        .iter()
-        .map(|r| {
-            (
-                r.try_get("", "id").unwrap_or_default(),
-                r.try_get::<i32>("", "water_count").unwrap_or(0),
-                r.try_get::<String>("", "current_stage").unwrap_or_default(),
-                r.try_get("", "last_watered_at").ok(),
-            )
-        })
-        .collect();
-
-    // Replace the current un-harvested plant.
-    tx.execute(Statement::from_sql_and_values(
-        DbBackend::Postgres,
-        "DELETE FROM garden_plants WHERE user_id = $1 AND harvested_at IS NULL",
-        [user_id.clone().into()],
-    ))
-    .await
-    .map_err(|e| {
-        tracing::error!("choose_plant: delete current: {e}");
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-
-    tx.execute(Statement::from_sql_and_values(
-        DbBackend::Postgres,
-        "INSERT INTO garden_plants \
-              (id, user_id, strain_id, strain_name, current_stage, planted_at, is_completed, water_count, \
-               target_catalog, target_product_id, target_name, target_image_url) \
-         VALUES ($1, $2, $3, $4, 'seed', $5, false, 0, $6, $3, $4, $7)",
-        [
-            plant_id.clone().into(),
-            user_id.into(),
-            req.product_id.clone().into(),
-            name.clone().into(),
-            planted_at.into(),
-            req.catalog.clone().into(),
-            image_url.into(),
-        ],
-    ))
-    .await
-    .map_err(|e| {
-        tracing::error!("choose_plant: insert failed: {e}");
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
+    let plant_id = if updated.rows_affected() > 0 {
+        // Read back the existing plant id for the response + log.
+        let id_row = tx
+            .query_one(Statement::from_sql_and_values(
+                DbBackend::Postgres,
+                "SELECT id FROM garden_plants WHERE user_id = $1 AND harvested_at IS NULL",
+                [user_id.clone().into()],
+            ))
+            .await
+            .map_err(|e| {
+                tracing::error!("choose_plant: read back id: {e}");
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?;
+        id_row
+            .and_then(|r| r.try_get::<String>("", "id").ok())
+            .unwrap_or_else(|| "existing".to_string())
+    } else {
+        // No un-harvested plant exists — plant a fresh seed.
+        let plant_id = uuid::Uuid::new_v4().to_string();
+        let planted_at = now;
+        tx.execute(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            "INSERT INTO garden_plants \
+                  (id, user_id, strain_id, strain_name, current_stage, planted_at, is_completed, water_count, \
+                   target_catalog, target_product_id, target_name, target_image_url) \
+             VALUES ($1, $2, $3, $4, 'seed', $5, false, 0, $6, $3, $4, $7)",
+            [
+                plant_id.clone().into(),
+                user_id.into(),
+                req.product_id.clone().into(),
+                name.clone().into(),
+                planted_at.into(),
+                req.catalog.clone().into(),
+                image_url.into(),
+            ],
+        ))
+        .await
+        .map_err(|e| {
+            tracing::error!("choose_plant: insert failed: {e}");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+        plant_id
+    };
 
     tx.commit().await.map_err(|e| {
         tracing::error!("choose_plant commit: {e}");
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
-    for (old_id, old_wc, old_stage, old_lw) in replaced {
-        tracing::info!(
-            telegram_id = req.telegram_id,
-            old_plant_id = %old_id,
-            old_water_count = old_wc,
-            old_stage = %old_stage,
-            old_last_watered_at = ?old_lw,
-            new_plant_id = %plant_id,
-            "choose_plant: replaced {} with {}",
-            old_id,
-            plant_id
-        );
-    }
     tracing::info!(
         telegram_id = req.telegram_id,
-        new_plant_id = %plant_id,
-        "choose_plant: planted {} {}",
+        plant_id = %plant_id,
+        was_existing = updated.rows_affected() > 0,
+        "choose_plant: chose {} {}",
         req.catalog,
         req.product_id
     );
     Ok(Json(json!({ "success": true, "plant_id": plant_id })))
+}
+
+/// POST /api/garden/plants/:id/reset — explicit "start from scratch". Resets
+/// the current un-harvested plant to a seed (water_count=0, stage=Seed) while
+/// keeping the same chosen target product. This is the ONLY supported way to
+/// intentionally reset progress; choose_plant no longer does it.
+async fn reset_plant(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<Value>, StatusCode> {
+    if id.len() > 200 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    use sea_orm::{ConnectionTrait, DbBackend, Statement, TransactionTrait};
+
+    let tx = state.db.orm.begin().await.map_err(|e| {
+        tracing::error!("reset_plant tx.begin: {e}");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    let row = tx
+        .query_one(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            "SELECT user_id, water_count, current_stage, is_completed, last_watered_at \
+             FROM garden_plants WHERE id = $1 FOR UPDATE",
+            [id.clone().into()],
+        ))
+        .await
+        .map_err(|e| {
+            tracing::error!("reset_plant FOR UPDATE: {e}");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    let Some(r) = row else {
+        return Ok(Json(json!({ "success": false, "error": "Plant not found" })));
+    };
+
+    let user_id: String = r.try_get("", "user_id").unwrap_or_default();
+    let tid = user_id
+        .parse::<i64>()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    crate::api::auth::check_owner_lenient(&headers, &state, tid, "garden")?;
+    check_not_blocked(&state, tid).await?;
+
+    let is_completed: bool = r.try_get("", "is_completed").unwrap_or(false);
+    let harvested_at: Option<i64> = r.try_get("", "harvested_at").ok();
+    let old_water_count: i32 = r.try_get("", "water_count").unwrap_or(0);
+    let old_stage: String = r
+        .try_get::<String>("", "current_stage")
+        .unwrap_or_else(|_| "seed".into());
+
+    if is_completed || harvested_at.is_some() {
+        return Ok(Json(
+            json!({ "success": false, "error": "Cannot reset a harvested plant" }),
+        ));
+    }
+
+    tx.execute(Statement::from_sql_and_values(
+        DbBackend::Postgres,
+        "UPDATE garden_plants \
+         SET water_count = 0, current_stage = 'seed', is_completed = false, last_watered_at = NULL, updated_at = $2 \
+         WHERE id = $1 AND harvested_at IS NULL",
+        [id.clone().into(), chrono::Utc::now().timestamp_millis().into()],
+    ))
+    .await
+    .map_err(|e| {
+        tracing::error!("reset_plant update: {e}");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    tx.commit().await.map_err(|e| {
+        tracing::error!("reset_plant commit: {e}");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    tracing::info!(
+        plant_id = %id,
+        user_id = %user_id,
+        old_water_count = old_water_count,
+        old_stage = %old_stage,
+        "reset_plant: reset to seed"
+    );
+
+    Ok(Json(json!({ "success": true })))
 }
 
 #[cfg(test)]

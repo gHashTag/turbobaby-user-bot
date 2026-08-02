@@ -27,6 +27,12 @@ pub const T_GARDEN_SUBTITLE: Key = "garden.subtitle";
 pub const T_GARDEN_EMPTY_LABEL: Key = "garden.empty_label";
 pub const T_GARDEN_EMPTY_CTA: Key = "garden.empty_cta";
 pub const T_GARDEN_LOADING: Key = "garden.loading";
+pub const T_GARDEN_CHANGE_PRODUCT: Key = "garden.change_product";
+pub const T_GARDEN_RESET_PROGRESS: Key = "garden.reset_progress";
+pub const T_GARDEN_RESET_CONFIRM_TITLE: Key = "garden.reset_confirm_title";
+pub const T_GARDEN_RESET_CONFIRM_BODY: Key = "garden.reset_confirm_body";
+pub const T_GARDEN_CANCEL: Key = "garden.cancel";
+pub const T_GARDEN_CONFIRM_RESET: Key = "garden.confirm_reset";
 
 /// Telegram button translations
 pub const T_BTN_CART: Key = "btn.cart";
@@ -231,6 +237,12 @@ fn get_ru_translation(key: Key) -> Value {
         T_GARDEN_EMPTY_LABEL => "Пока нет растений",
         T_GARDEN_EMPTY_CTA => "Закажите любой товар, чтобы получить первое семечко!",
         T_GARDEN_LOADING => "Загружаем ваш сад...",
+        T_GARDEN_CHANGE_PRODUCT => "Сменить товар",
+        T_GARDEN_RESET_PROGRESS => "Начать сначала",
+        T_GARDEN_RESET_CONFIRM_TITLE => "Начать сначала?",
+        T_GARDEN_RESET_CONFIRM_BODY => "Текущий прогресс полива будет сброшен. Растение вернётся к семечку (0/14), но целевой товар останется прежним.",
+        T_GARDEN_CANCEL => "Отмена",
+        T_GARDEN_CONFIRM_RESET => "Сбросить прогресс",
         // Telegram buttons
         T_BTN_CART => "Корзина",
         T_BTN_CHECKOUT => "Оформить",
@@ -405,6 +417,12 @@ fn get_en_translation(key: Key) -> Value {
         T_GARDEN_EMPTY_LABEL => "No plants yet",
         T_GARDEN_EMPTY_CTA => "Order any product to get your first seed!",
         T_GARDEN_LOADING => "Loading your garden...",
+        T_GARDEN_CHANGE_PRODUCT => "Change product",
+        T_GARDEN_RESET_PROGRESS => "Start over",
+        T_GARDEN_RESET_CONFIRM_TITLE => "Start over?",
+        T_GARDEN_RESET_CONFIRM_BODY => "Current watering progress will be reset. The plant returns to seed (0/14), but the chosen product stays the same.",
+        T_GARDEN_CANCEL => "Cancel",
+        T_GARDEN_CONFIRM_RESET => "Reset progress",
         // Telegram buttons
         T_BTN_CART => "Cart",
         T_BTN_CHECKOUT => "Checkout",
@@ -596,6 +614,12 @@ pub fn get_translations(lang: Lang) -> Translations {
         T_GARDEN_EMPTY_LABEL,
         T_GARDEN_EMPTY_CTA,
         T_GARDEN_LOADING,
+        T_GARDEN_CHANGE_PRODUCT,
+        T_GARDEN_RESET_PROGRESS,
+        T_GARDEN_RESET_CONFIRM_TITLE,
+        T_GARDEN_RESET_CONFIRM_BODY,
+        T_GARDEN_CANCEL,
+        T_GARDEN_CONFIRM_RESET,
         // Telegram buttons
         T_BTN_CART,
         T_BTN_CHECKOUT,
