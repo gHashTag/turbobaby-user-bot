@@ -6741,7 +6741,8 @@ fn EventsTab() -> Element {
         }
         submitting.set(true);
         let init = init_data.read().clone();
-        let id_opt = editing_id.read().clone();
+        // "Add" opens the modal with editing_id = Some(""), so treat an empty id as create.
+        let id_opt = editing_id.read().clone().filter(|id| !id.is_empty());
         // Snapshot form values for optimistic cache update after API success.
         let title_clone = title.read().clone();
         let title_en_clone = title_en.read().clone();
