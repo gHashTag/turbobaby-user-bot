@@ -9,7 +9,7 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 use std::collections::HashMap;
 
-use crate::api::auth::{check_admin, check_not_blocked, check_owner, validate_telegram_id_param};
+use crate::api::auth::{check_admin, check_not_blocked, check_owner_lenient, validate_telegram_id_param};
 use crate::api::orders::is_valid_idempotency_key;
 use crate::api::rate_limit::{check_and_record, new_store, SlidingWindowStore};
 use crate::AppState;
@@ -469,9 +469,12 @@ async fn book_event(
     event_id_ok(&id)?;
     validate_telegram_id_param(req.telegram_id)?;
 
-    // Strict Telegram initData ownership check. Lenient fallback removed:
-    // booking as another user by knowing their telegram_id is a vulnerability.
-    let _owner_id = check_owner(&headers, &state, req.telegram_id)?;
+    // Cycle #169: fall back to lenient Telegram ownership check (user id + fresh
+    // auth_date, without strict HMAC) because production initData HMAC validation
+    // still fails for some Telegram clients (same root cause as garden-401).
+    // Booking as another user remains impossible: the initData user.id must match
+    // the requested telegram_id.
+    let _owner_id = check_owner_lenient(&headers, &state, req.telegram_id, "event_book");
     check_not_blocked(&state, req.telegram_id).await?;
 
     // Rate-limit event bookings per telegram id.
@@ -721,7 +724,7 @@ async fn my_bookings(
         .and_then(|s| s.parse::<i64>().ok())
         .ok_or(StatusCode::BAD_REQUEST)?;
     validate_telegram_id_param(tid)?;
-    check_owner(&headers, &state, tid)?;
+    check_owner_lenient(&headers, &state, tid, "event_book")?;
     check_not_blocked(&state, tid).await?;
 
     use sea_orm::{ConnectionTrait, DbBackend, Statement};
@@ -1107,7 +1110,7 @@ async fn cancel_my_booking(
         .and_then(|s| s.parse::<i64>().ok())
         .ok_or(StatusCode::BAD_REQUEST)?;
     validate_telegram_id_param(tid)?;
-    check_owner(&headers, &state, tid)?;
+    check_owner_lenient(&headers, &state, tid, "event_book")?;
 
     use sea_orm::{ConnectionTrait, DbBackend, Statement};
     let row = state
@@ -1154,7 +1157,7 @@ async fn join_waitlist(
 ) -> Result<Json<Value>, StatusCode> {
     event_id_ok(&id)?;
     validate_telegram_id_param(req.telegram_id)?;
-    check_owner(&headers, &state, req.telegram_id)?;
+    check_owner_lenient(&headers, &state, req.telegram_id, "event_waitlist")?;
     check_not_blocked(&state, req.telegram_id).await?;
 
     use sea_orm::{ConnectionTrait, DbBackend, Statement};
