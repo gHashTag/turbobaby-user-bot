@@ -202,12 +202,12 @@ fn EventCard(props: EventCardProps) -> Element {
         div {
             role: "button",
             "aria-label": "Open event details",
-            style: "width:100%;min-height:260px;text-align:left;background:#1a1a2e;border:3px solid #2a2a4a;border-radius:12px;overflow:hidden;cursor:pointer;box-shadow:3px 3px 0 #000;position:relative;display:flex;flex-direction:column;",
+            style: "width:100%;min-height:300px;text-align:left;background:#1a1a2e;border:3px solid #2a2a4a;border-radius:12px;overflow:hidden;cursor:pointer;box-shadow:3px 3px 0 #000;position:relative;display:flex;flex-direction:column;",
             onclick: move |_| props.on_select.call(ev.clone()),
             // Full-card cover image like strain cards.
             div { style: "position:absolute;inset:0;z-index:0;",
                 if let Some(ref url) = thumb {
-                    img { src: "{url}", alt: "{share_name}", style: "width:100%;height:100%;object-fit:cover;" }
+                    img { src: "{url}", alt: "{share_name}", style: "width:100%;height:100%;object-fit:contain;background:#0f0f1a;" }
                 } else {
                     div { style: "width:100%;height:100%;background:linear-gradient(135deg,#2a2a4a,#0f0f1a);display:flex;align-items:center;justify-content:center;font-size:48px;", "📅" }
                 }
