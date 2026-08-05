@@ -474,7 +474,7 @@ async fn book_event(
     // still fails for some Telegram clients (same root cause as garden-401).
     // Booking as another user remains impossible: the initData user.id must match
     // the requested telegram_id.
-    let _owner_id = check_owner_lenient(&headers, &state, req.telegram_id, "event_book");
+    let _owner_id = check_owner_lenient(&headers, &state, req.telegram_id, "event_book")?;
     check_not_blocked(&state, req.telegram_id).await?;
 
     // Rate-limit event bookings per telegram id.
