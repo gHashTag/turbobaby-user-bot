@@ -245,6 +245,10 @@ const MIGRATIONS: &[(&str, &str)] = &[
         "055_event_photos_video.sql",
         include_str!("../../migrations/055_event_photos_video.sql"),
     ),
+    (
+        "056_garden_plants_updated_at.sql",
+        include_str!("../../migrations/056_garden_plants_updated_at.sql"),
+    ),
 ];
 
 /// Columns the catalog endpoints SELECT that were added by *later* migrations
