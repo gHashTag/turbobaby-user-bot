@@ -94,7 +94,7 @@ impl Config {
         // canonical backend URL so the Telegram WebApp button always opens a working page.
         let raw_web_app_url = std::env::var("WEB_APP_URL").unwrap_or_default();
         let canonical_web_app_url =
-            "https://woody-weed-bot-production-370f.up.railway.app/?cache=180".to_string();
+            "https://woody-weed-bot-production-370f.up.railway.app".to_string();
         let web_app_url = if raw_web_app_url.trim().is_empty()
             || raw_web_app_url.contains("woody-woodpecker-tma-production")
         {

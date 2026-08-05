@@ -6,6 +6,10 @@
 #[allow(unreachable_pub)]
 pub mod block_history;
 #[allow(unreachable_pub)]
+pub mod event;
+#[allow(unreachable_pub)]
+pub mod event_photo;
+#[allow(unreachable_pub)]
 pub mod bonus_transaction;
 #[allow(unreachable_pub)]
 pub mod garden_config;

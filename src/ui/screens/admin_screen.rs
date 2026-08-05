@@ -6626,6 +6626,8 @@ fn EventsTab() -> Element {
     let mut ends_at = use_signal(String::new);
     let mut location_text = use_signal(String::new);
     let mut image_url = use_signal(String::new);
+    let mut video_url = use_signal(String::new);
+    let mut photos: Signal<Vec<String>> = use_signal(Vec::new);
     let mut max_seats = use_signal(String::new);
     let mut price_baht = use_signal(String::new);
     let mut price_stars = use_signal(String::new);
@@ -6655,6 +6657,8 @@ fn EventsTab() -> Element {
         ends_at.set(String::new());
         location_text.set(String::new());
         image_url.set(String::new());
+        video_url.set(String::new());
+        photos.set(Vec::new());
         max_seats.set(String::new());
         price_baht.set(String::new());
         price_stars.set(String::new());
@@ -6748,6 +6752,8 @@ fn EventsTab() -> Element {
             "ends_at": if ends_at.read().trim().is_empty() { serde_json::Value::Null } else { format!("{}:00+07:00", ends_at.read().clone()).into() },
             "location_text": if location_text.read().trim().is_empty() { serde_json::Value::Null } else { location_text.read().clone().into() },
             "image_url": if image_url.read().trim().is_empty() { serde_json::Value::Null } else { image_url.read().clone().into() },
+            "video_url": if video_url.read().trim().is_empty() { serde_json::Value::Null } else { video_url.read().clone().into() },
+            "photos": serde_json::Value::Array(photos.read().iter().map(|s| serde_json::Value::String(s.clone())).collect()),
             "max_seats": if max_seats.read().trim().is_empty() { serde_json::Value::Null } else { max_seats.read().parse::<i32>().unwrap_or(0).into() },
             "price_baht": if price_baht.read().trim().is_empty() { serde_json::Value::Null } else { price_baht.read().parse::<f64>().unwrap_or(0.0).into() },
             "price_stars": if price_stars.read().trim().is_empty() { serde_json::Value::Null } else { price_stars.read().parse::<i64>().unwrap_or(0).into() },
@@ -6861,6 +6867,8 @@ fn EventsTab() -> Element {
         );
         location_text.set(ev.location_text.clone().unwrap_or_default());
         image_url.set(ev.image_url.clone().unwrap_or_default());
+        video_url.set(ev.video_url.clone().unwrap_or_default());
+        photos.set(ev.photos.clone());
         max_seats.set(ev.max_seats.map(|v| v.to_string()).unwrap_or_default());
         price_baht.set(ev.price_baht.map(|v| format!("{}", v)).unwrap_or_default());
         price_stars.set(ev.price_stars.map(|v| v.to_string()).unwrap_or_default());
@@ -6980,6 +6988,10 @@ fn EventsTab() -> Element {
 
     let modal_open = editing_id.read().is_some();
 
+    if let Some((msg, kind)) = take_global_toast() {
+        push_toast(toasts, msg, kind);
+    }
+
     rsx! {
         div { style: "padding:12px;display:flex;flex-direction:column;gap:12px;",
             { render_toasts(toasts) }
@@ -7030,8 +7042,16 @@ fn EventsTab() -> Element {
                 input { style: input_style(), r#type: "datetime-local", value: "{ends_at}", oninput: move |evt| ends_at.set(evt.value()) }
                 input { style: input_style(), r#type: "text", placeholder: "Место", value: "{location_text}", oninput: move |evt| location_text.set(evt.value()) }
                 div { style: "margin-bottom:4px;",
-                    div { style: "font-size:12px;color:#888;margin-bottom:4px;", "Изображение" }
+                    div { style: "font-size:12px;color:#888;margin-bottom:4px;", "Изображение (обложка)" }
                     ImageUpload { image_url: image_url.read().clone(), on_change: move |url: String| image_url.set(url) }
+                }
+                div { style: "margin-bottom:4px;",
+                    div { style: "font-size:12px;color:#888;margin-bottom:4px;", "Видео" }
+                    VideoUpload { video_url: video_url.read().clone(), on_change: move |url: String| video_url.set(url) }
+                }
+                div { style: "margin-bottom:4px;",
+                    div { style: "font-size:12px;color:#888;margin-bottom:4px;", "Галерея фото" }
+                    PhotoGalleryEditor { photos: photos, on_change: move |next: Vec<String>| photos.set(next) }
                 }
                 div { style: "display:flex;gap:10px;",
                     input { style: input_style(), r#type: "number", placeholder: "Мест", value: "{max_seats}", oninput: move |evt| max_seats.set(evt.value()) }
@@ -7086,6 +7106,119 @@ fn EventsTab() -> Element {
             }
         }
     }
+}
+
+#[component]
+fn PhotoGalleryEditor(photos: Signal<Vec<String>>, on_change: EventHandler<Vec<String>>) -> Element {
+    let mut add_url = use_signal(String::new);
+    rsx! {
+        div { style: "display:flex;flex-direction:column;gap:8px;",
+            div { style: "display:flex;gap:6px;align-items:center;",
+                input { style: "flex:1;{input_style()}", placeholder: "URL фото", value: "{add_url}",
+                    oninput: move |e| add_url.set(e.value()) }
+                button { style: upload_btn_style(),
+                    onclick: move |_| {
+                        let url = add_url.read().trim().to_string();
+                        if !url.is_empty() {
+                            let mut next = photos.read().clone();
+                            next.push(url);
+                            on_change.call(next);
+                            add_url.set(String::new());
+                        }
+                    },
+                    "➕ Добавить"
+                }
+            }
+            button { style: secondary_btn_style(),
+                onclick: move |_| {
+                    spawn(async move {
+                        match upload_image().await {
+                            Ok(Some(url)) => {
+                                let mut next = photos.read().clone();
+                                next.push(url);
+                                on_change.call(next);
+                            }
+                            Ok(None) => {}
+                            Err(msg) => { push_toast_global(msg, ToastKind::Error); }
+                        }
+                    });
+                },
+                "📷 Загрузить фото"
+            }
+            if !photos.read().is_empty() {
+                div { style: "display:flex;flex-wrap:wrap;gap:6px;",
+                    {
+                        let list = photos.read().clone();
+                        list.into_iter().enumerate().map(move |(i, url)| {
+                            let url_for_img = url.clone();
+                            let url_for_open = url.clone();
+                            let url_for_del = url.clone();
+                            let url_for_up = url.clone();
+                            rsx! {
+                                div { key: "{i}_{url_for_img}", style: "position:relative;width:64px;height:64px;",
+                                    if url_for_img.starts_with("http://") || url_for_img.starts_with("https://") || (url_for_img.starts_with("/") && !url_for_img.starts_with("//")) {
+                                        img { src: "{url_for_img}", alt: "", style: "width:64px;height:64px;object-fit:cover;border-radius:6px;border:1px solid #2a2a4a;cursor:pointer;",
+                                            onclick: move |_| {
+                                                let u = url_for_open.clone();
+                                                let _ = web_sys::window().and_then(|w| w.open_with_url_and_target(&u, "_blank").ok());
+                                            }
+                                        }
+                                    } else {
+                                        div { style: "width:64px;height:64px;background:#1a1a2e;border-radius:6px;border:1px solid #2a2a4a;display:flex;align-items:center;justify-content:center;font-size:11px;color:#888;", "📷" }
+                                    }
+                                    div { style: "position:absolute;top:-4px;right:-4px;display:flex;gap:2px;",
+                                        button { style: "width:18px;height:18px;background:#2a2a4a;color:#e8e8e8;border:none;border-radius:50%;font-size:10px;cursor:pointer;padding:0;",
+                                            onclick: move |_| {
+                                                let u = url_for_up.clone();
+                                                let mut next = photos.read().clone();
+                                                if let Some(pos) = next.iter().position(|x| x == &u) {
+                                                    if pos > 0 {
+                                                        next.swap(pos, pos - 1);
+                                                        on_change.call(next);
+                                                    }
+                                                }
+                                            },
+                                            "↑"
+                                        }
+                                        button { style: "width:18px;height:18px;background:#ff4757;color:#fff;border:none;border-radius:50%;font-size:10px;cursor:pointer;padding:0;",
+                                            onclick: move |_| {
+                                                let u = url_for_del.clone();
+                                                let mut next = photos.read().clone();
+                                                next.retain(|x| x != &u);
+                                                on_change.call(next);
+                                            },
+                                            "✕"
+                                        }
+                                    }
+                                }
+                            }
+                        })
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Send a toast from a component that doesn't own the toasts signal.
+/// Uses a small module-level mutex so PhotoGalleryEditor can surface
+/// upload errors without threading the full ToastContainer signal down.
+/// The owner loop should call take_global_toast() each render.
+static GLOBAL_TOAST: std::sync::OnceLock<std::sync::Mutex<Option<(String, ToastKind)>>> =
+    std::sync::OnceLock::new();
+
+fn push_toast_global(message: String, kind: ToastKind) {
+    if let Ok(mut guard) = GLOBAL_TOAST.get_or_init(Default::default).lock() {
+        *guard = Some((message, kind));
+    }
+}
+
+fn take_global_toast() -> Option<(String, ToastKind)> {
+    GLOBAL_TOAST
+        .get_or_init(Default::default)
+        .lock()
+        .ok()
+        .and_then(|mut guard| guard.take())
 }
 
 // ── Telegram Broadcast tab ───────────────────────────────────

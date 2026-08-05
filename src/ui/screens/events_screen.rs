@@ -6,9 +6,9 @@
 
 use crate::trios::i18n::{
     t, T_BACK, T_EVENTS_BOOK, T_EVENTS_BOOKED, T_EVENTS_BOOK_FREE, T_EVENTS_CAPACITY,
-    T_EVENTS_DATE, T_EVENTS_ERROR, T_EVENTS_INSUFFICIENT_STARS, T_EVENTS_LOADING,
+    T_EVENTS_DATE, T_EVENTS_ERROR, T_EVENTS_GALLERY, T_EVENTS_INSUFFICIENT_STARS, T_EVENTS_LOADING,
     T_EVENTS_NO_EVENTS, T_EVENTS_PRICE, T_EVENTS_PRICE_STARS, T_EVENTS_SOLD_OUT, T_EVENTS_SUBTITLE,
-    T_EVENTS_TITLE, T_EVENTS_WEEKDAY_FRI, T_EVENTS_WEEKDAY_MON, T_EVENTS_WEEKDAY_SAT,
+    T_EVENTS_TITLE, T_EVENTS_VIDEO, T_EVENTS_WEEKDAY_FRI, T_EVENTS_WEEKDAY_MON, T_EVENTS_WEEKDAY_SAT,
     T_EVENTS_WEEKDAY_SUN, T_EVENTS_WEEKDAY_THU, T_EVENTS_WEEKDAY_TUE, T_EVENTS_WEEKDAY_WED,
 };
 use crate::ui::api::context::api_base_url;
@@ -259,9 +259,28 @@ fn EventBookingModal(props: EventBookingModalProps) -> Element {
     let title = ev.display_title();
     let desc = ev.display_description();
     let back_label = t(lang, T_BACK).to_string();
+    let gallery_label = t(lang, T_EVENTS_GALLERY).to_string();
+    let video_label = t(lang, T_EVENTS_VIDEO).to_string();
     let thumb = ev.image_url.as_deref().filter(|s| {
         s.starts_with("http://") || s.starts_with("https://") || (s.starts_with("/") && !s.starts_with("//"))
     });
+    let valid_photos: Vec<String> = ev
+        .photos
+        .iter()
+        .filter(|s| {
+            s.starts_with("http://") || s.starts_with("https://") || (s.starts_with("/") && !s.starts_with("//"))
+        })
+        .cloned()
+        .collect();
+    let has_gallery = !valid_photos.is_empty();
+    let has_video = ev
+        .video_url
+        .as_deref()
+        .filter(|s| {
+            s.starts_with("http://") || s.starts_with("https://") || (s.starts_with("/") && !s.starts_with("//"))
+        })
+        .is_some();
+    let mut selected_photo = use_signal(|| 0usize);
 
     let starts = parse_event_start(&ev.starts_at);
     let has_started = starts.map_or(false, |dt| Utc::now() >= dt.with_timezone(&Utc));
@@ -426,8 +445,80 @@ fn EventBookingModal(props: EventBookingModalProps) -> Element {
                         "✕"
                     }
                 }
-                if let Some(ref url) = thumb {
+                if has_video {
+                    div { style: "margin-top:12px;",
+                        div { style: "font-size:12px;color:#888;margin-bottom:4px;", "🎥 {video_label}" }
+                        video {
+                            src: "{ev.video_url.as_deref().unwrap_or(\"\")}",
+                            controls: true,
+                            style: "width:100%;max-height:220px;border-radius:8px;background:#000;",
+                        }
+                    }
+                } else if let Some(ref url) = thumb {
                     img { src: "{url}", alt: "{title}", style: "width:100%;max-height:200px;object-fit:cover;border-radius:8px;margin-top:12px;" }
+                }
+                if has_gallery {
+                    div { style: "margin-top:12px;",
+                        div { style: "font-size:12px;color:#888;margin-bottom:6px;", "📷 {gallery_label}" }
+                        {
+                            let photos = valid_photos.clone();
+                            let photo_count = photos.len();
+                            let has_many = photo_count > 1;
+                            rsx! {
+                                div { style: "position:relative;width:100%;height:180px;background:#0f0f1a;border-radius:8px;overflow:hidden;border:1px solid #2a2a4a;",
+                                    {
+                                        let idx = *selected_photo.read();
+                                        if let Some(url) = photos.get(idx) {
+                                            let u = url.clone();
+                                            let alt = title.clone();
+                                            rsx! { img { src: "{u}", alt: "{alt}", style: "width:100%;height:100%;object-fit:cover;" } }
+                                        } else {
+                                            rsx! {}
+                                        }
+                                    }
+                                    if has_many {
+                                        button {
+                                            style: "position:absolute;left:4px;top:50%;transform:translateY(-50%);width:32px;height:32px;background:rgba(0,0,0,0.6);color:#e8e8e8;border:none;border-radius:50%;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;",
+                                            "aria-label": "Previous photo",
+                                            onclick: move |_| {
+                                                let next = selected_photo.read().saturating_sub(1);
+                                                selected_photo.set(next);
+                                            },
+                                            "‹"
+                                        }
+                                        button {
+                                            style: "position:absolute;right:4px;top:50%;transform:translateY(-50%);width:32px;height:32px;background:rgba(0,0,0,0.6);color:#e8e8e8;border:none;border-radius:50%;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;",
+                                            "aria-label": "Next photo",
+                                            onclick: move |_| {
+                                                let next = (*selected_photo.read() + 1).min(photo_count - 1);
+                                                selected_photo.set(next);
+                                            },
+                                            "›"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        if valid_photos.len() > 1 {
+                            { let total = valid_photos.len(); let current = *selected_photo.read(); rsx! {
+                                div { style: "display:flex;justify-content:center;gap:4px;margin-top:6px;",
+                                    {
+                                        (0..total).map(move |i| {
+                                            let active = i == current;
+                                            rsx! {
+                                                button {
+                                                    key: "{i}",
+                                                    style: if active { "width:8px;height:8px;border-radius:50%;border:none;background:#39ff14;cursor:pointer;" } else { "width:8px;height:8px;border-radius:50%;border:none;background:#2a2a4a;cursor:pointer;" },
+                                                    "aria-label": format!("Photo {}", i + 1),
+                                                    onclick: move |_| selected_photo.set(i),
+                                                }
+                                            }
+                                        })
+                                    }
+                                }
+                            }}
+                        }
+                    }
                 }
                 if let Some(ref label) = date_label {
                     div { style: "font-size:12px;color:#888;margin-top:8px;", "🗓️ {label}" }

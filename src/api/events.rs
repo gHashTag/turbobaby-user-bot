@@ -61,6 +61,8 @@ pub(crate) struct CreateEventRequest {
     pub ends_at: Option<String>,
     pub location_text: Option<String>,
     pub image_url: Option<String>,
+    pub video_url: Option<String>,
+    pub photos: Option<Vec<String>>,
     pub max_seats: Option<i32>,
     pub price_baht: Option<f64>,
     pub price_stars: Option<i64>,
@@ -77,6 +79,8 @@ pub(crate) struct UpdateEventRequest {
     pub ends_at: Option<String>,
     pub location_text: Option<String>,
     pub image_url: Option<String>,
+    pub video_url: Option<String>,
+    pub photos: Option<Vec<String>>,
     pub max_seats: Option<i32>,
     pub price_baht: Option<f64>,
     pub price_stars: Option<i64>,
@@ -156,6 +160,17 @@ fn validate_event_request(
     }
     crate::api::validate_url(&req.image_url)
         .map_err(|_| bad(format!("image_url невалиден ({:?})", req.image_url)))?;
+    crate::api::validate_url(&req.video_url)
+        .map_err(|_| bad(format!("video_url невалиден ({:?})", req.video_url)))?;
+    if let Some(ref photos) = req.photos {
+        for (i, url) in photos.iter().enumerate() {
+            crate::api::validate_url(&Some(url.clone()))
+                .map_err(|_| bad(format!("photos[{}] невалиден ({:?})", i, url)))?;
+        }
+        if photos.len() > 50 {
+            return Err(bad(format!("photos слишком много ({}>50)", photos.len())));
+        }
+    }
 
     let starts_at = parse_iso_timestamp(&req.starts_at)
         .map_err(|_| bad("starts_at не ISO-8601".to_string()))?;
@@ -239,6 +254,17 @@ fn validate_update_request(
     }
     crate::api::validate_url(&req.image_url)
         .map_err(|_| bad(format!("image_url невалиден ({:?})", req.image_url)))?;
+    crate::api::validate_url(&req.video_url)
+        .map_err(|_| bad(format!("video_url невалиден ({:?})", req.video_url)))?;
+    if let Some(ref photos) = req.photos {
+        for (i, url) in photos.iter().enumerate() {
+            crate::api::validate_url(&Some(url.clone()))
+                .map_err(|_| bad(format!("photos[{}] невалиден ({:?})", i, url)))?;
+        }
+        if photos.len() > 50 {
+            return Err(bad(format!("photos слишком много ({} >50)", photos.len())));
+        }
+    }
 
     let starts_at = if let Some(ref s) = req.starts_at {
         Some(parse_iso_timestamp(s).map_err(|_| bad("starts_at не ISO-8601".to_string()))?)
@@ -295,6 +321,7 @@ fn event_row(r: &sea_orm::QueryResult) -> Value {
         "ends_at": ends_at.map(|d| d.to_rfc3339()),
         "location_text": r.try_get::<Option<String>>("", "location_text").ok().flatten(),
         "image_url": r.try_get::<Option<String>>("", "image_url").ok().flatten(),
+        "video_url": r.try_get::<Option<String>>("", "video_url").ok().flatten(),
         "max_seats": max_seats,
         "price_baht": price_baht.and_then(|p| if p.is_finite() { Some(p) } else { None }),
         "price_stars": price_stars,
@@ -355,7 +382,7 @@ async fn list_events(
     let where_sql = clauses.join(" AND ");
     let sql = format!(
         "SELECT e.id, e.title, e.title_en, e.description, e.description_en, e.starts_at, e.ends_at, \
-         e.location_text, e.image_url, e.max_seats, e.price_baht::float8 AS price_baht, e.price_stars, e.is_public, e.created_at, \
+         e.location_text, e.image_url, e.video_url, e.max_seats, e.price_baht::float8 AS price_baht, e.price_stars, e.is_public, e.created_at, \
          COALESCE((SELECT SUM(b.seats) FROM event_bookings b WHERE b.event_id = e.id AND b.status = 'confirmed'), 0)::bigint AS seats_taken \
          FROM events e \
          WHERE {where_sql} \
@@ -391,16 +418,46 @@ async fn get_event(
     let row = state.db.orm.query_one(Statement::from_sql_and_values(
         DbBackend::Postgres,
         "SELECT e.id, e.title, e.title_en, e.description, e.description_en, e.starts_at, e.ends_at, \
-         e.location_text, e.image_url, e.max_seats, e.price_baht::float8 AS price_baht, e.price_stars, e.is_public, e.created_at, \
+         e.location_text, e.image_url, e.video_url, e.max_seats, e.price_baht::float8 AS price_baht, e.price_stars, e.is_public, e.created_at, \
          COALESCE((SELECT SUM(b.seats) FROM event_bookings b WHERE b.event_id = e.id AND b.status = 'confirmed'), 0)::bigint AS seats_taken \
          FROM events e \
          WHERE e.id = $1 AND e.is_public = TRUE",
-        [id.into()],
+        [id.clone().into()],
     )).await.map_err(|e| { tracing::error!("get_event: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?;
     match row {
-        Some(r) => Ok(Json(json!({ "event": event_row(&r) }))),
+        Some(r) => {
+            let mut ev = event_row(&r);
+            let photos = load_event_photos(&state.db.orm, &id).await?;
+            if let Value::Object(ref mut m) = ev {
+                m.insert("photos".to_string(), json!(photos));
+            }
+            Ok(Json(json!({ "event": ev })))
+        }
         None => Err(StatusCode::NOT_FOUND),
     }
+}
+
+async fn load_event_photos(
+    orm: &sea_orm::DatabaseConnection,
+    event_id: &str,
+) -> Result<Vec<String>, StatusCode> {
+    use sea_orm::{ConnectionTrait, DbBackend, Statement};
+    let rows = orm
+        .query_all(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            "SELECT url FROM event_photos WHERE event_id = $1 ORDER BY display_order ASC, created_at ASC",
+            [event_id.into()],
+        ))
+        .await
+        .map_err(|e| {
+            tracing::error!("load_event_photos: {e}");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+    Ok(rows
+        .iter()
+        .map(|r| r.try_get::<String>("", "url").unwrap_or_default())
+        .filter(|s| !s.is_empty())
+        .collect())
 }
 
 async fn book_event(
@@ -1193,7 +1250,7 @@ async fn list_admin_events(
     let rows = state.db.orm.query_all(Statement::from_string(
         DbBackend::Postgres,
         "SELECT e.id, e.title, e.title_en, e.description, e.description_en, e.starts_at, e.ends_at, \
-         e.location_text, e.image_url, e.max_seats, e.price_baht::float8 AS price_baht, e.price_stars, e.is_public, e.created_at, \
+         e.location_text, e.image_url, e.video_url, e.max_seats, e.price_baht::float8 AS price_baht, e.price_stars, e.is_public, e.created_at, \
          COALESCE((SELECT SUM(b.seats) FROM event_bookings b WHERE b.event_id = e.id AND b.status = 'confirmed'), 0)::bigint AS seats_taken, \
          (SELECT COUNT(*)::bigint FROM event_bookings b WHERE b.event_id = e.id) AS bookings_count \
          FROM events e \
@@ -1224,11 +1281,15 @@ async fn create_event(
     check_admin(&headers, &state).map_err(|s| (s, String::new()))?;
     let (is_public, starts_at, ends_at) = validate_event_request(&req)?;
     let id = uuid::Uuid::new_v4().to_string();
-    use sea_orm::{ConnectionTrait, DbBackend, Statement};
-    state.db.orm.execute(Statement::from_sql_and_values(
+    use sea_orm::{ConnectionTrait, DbBackend, Statement, TransactionTrait};
+    let tx = state.db.orm.begin().await.map_err(|e| {
+        tracing::error!("create_event tx.begin: {e}");
+        (StatusCode::INTERNAL_SERVER_ERROR, String::new())
+    })?;
+    tx.execute(Statement::from_sql_and_values(
         DbBackend::Postgres,
-        "INSERT INTO events (id, title, title_en, description, description_en, starts_at, ends_at, location_text, image_url, max_seats, price_baht, price_stars, is_public) \
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)",
+        "INSERT INTO events (id, title, title_en, description, description_en, starts_at, ends_at, location_text, image_url, video_url, max_seats, price_baht, price_stars, is_public) \
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)",
         [
             id.clone().into(),
             req.title.trim().into(),
@@ -1239,13 +1300,67 @@ async fn create_event(
             ends_at.map(|d| sea_orm::Value::ChronoDateTimeUtc(Some(Box::new(d)))).unwrap_or(sea_orm::Value::ChronoDateTimeUtc(None)),
             req.location_text.filter(|s| !s.is_empty()).into(),
             req.image_url.filter(|s| !s.is_empty()).into(),
+            req.video_url.filter(|s| !s.is_empty()).into(),
             req.max_seats.into(),
             req.price_baht.into(),
             req.price_stars.into(),
             is_public.into(),
         ],
-    )).await.map_err(|e| { tracing::error!("create_event: {e}"); (StatusCode::INTERNAL_SERVER_ERROR, String::new()) })?;
+    )).await.map_err(|e| {
+        tracing::error!("create_event: {e}");
+        (StatusCode::INTERNAL_SERVER_ERROR, String::new())
+    })?;
+    if let Err(e) = replace_event_photos(&tx, &id,
+        req.photos.as_deref().unwrap_or(&[]),
+    ).await {
+        let _ = tx.rollback().await;
+        return Err(e);
+    }
+    tx.commit().await.map_err(|e| {
+        tracing::error!("create_event tx.commit: {e}");
+        (StatusCode::INTERNAL_SERVER_ERROR, String::new())
+    })?;
     Ok(Json(json!({ "success": true, "id": id })))
+}
+
+async fn replace_event_photos(
+    db: &impl sea_orm::ConnectionTrait,
+    event_id: &str,
+    photos: &[String],
+) -> Result<(), (StatusCode, String)> {
+    use sea_orm::{DbBackend, Statement};
+    db.execute(Statement::from_sql_and_values(
+        DbBackend::Postgres,
+        "DELETE FROM event_photos WHERE event_id = $1",
+        [event_id.into()],
+    ))
+    .await
+    .map_err(|e| {
+        tracing::error!("replace_event_photos delete: {e}");
+        (StatusCode::INTERNAL_SERVER_ERROR, String::new())
+    })?;
+    for (i, url) in photos.iter().enumerate() {
+        let url = url.trim();
+        if url.is_empty() {
+            continue;
+        }
+        db.execute(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            "INSERT INTO event_photos (id, event_id, url, display_order) VALUES ($1,$2,$3,$4)",
+            [
+                uuid::Uuid::new_v4().to_string().into(),
+                event_id.into(),
+                url.into(),
+                (i as i32).into(),
+            ],
+        ))
+        .await
+        .map_err(|e| {
+            tracing::error!("replace_event_photos insert: {e}");
+            (StatusCode::INTERNAL_SERVER_ERROR, String::new())
+        })?;
+    }
+    Ok(())
 }
 
 async fn get_admin_event(
@@ -1259,14 +1374,21 @@ async fn get_admin_event(
     let row = state.db.orm.query_one(Statement::from_sql_and_values(
         DbBackend::Postgres,
         "SELECT e.id, e.title, e.title_en, e.description, e.description_en, e.starts_at, e.ends_at, \
-         e.location_text, e.image_url, e.max_seats, e.price_baht::float8 AS price_baht, e.price_stars, e.is_public, e.created_at, \
+         e.location_text, e.image_url, e.video_url, e.max_seats, e.price_baht::float8 AS price_baht, e.price_stars, e.is_public, e.created_at, \
          COALESCE((SELECT SUM(b.seats) FROM event_bookings b WHERE b.event_id = e.id AND b.status = 'confirmed'), 0)::bigint AS seats_taken \
          FROM events e \
          WHERE e.id = $1",
         [id.clone().into()],
     )).await.map_err(|e| { tracing::error!("get_admin_event: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?;
     match row {
-        Some(r) => Ok(Json(json!({ "event": event_row(&r) }))),
+        Some(r) => {
+            let mut ev = event_row(&r);
+            let photos = load_event_photos(&state.db.orm, &id).await?;
+            if let Value::Object(ref mut m) = ev {
+                m.insert("photos".to_string(), json!(photos));
+            }
+            Ok(Json(json!({ "event": ev })))
+        }
         None => Err(StatusCode::NOT_FOUND),
     }
 }
@@ -1280,13 +1402,14 @@ async fn update_event(
     event_id_ok(&id).map_err(|s| (s, String::new()))?;
     check_admin(&headers, &state).map_err(|s| (s, String::new()))?;
     let (is_public, starts_at, ends_at) = validate_update_request(&req)?;
-    use sea_orm::{ConnectionTrait, DbBackend, Statement};
-    state
-        .db
-        .orm
-        .execute(Statement::from_sql_and_values(
-            DbBackend::Postgres,
-            "UPDATE events SET \
+    use sea_orm::{ConnectionTrait, DbBackend, Statement, TransactionTrait};
+    let tx = state.db.orm.begin().await.map_err(|e| {
+        tracing::error!("update_event tx.begin: {e}");
+        (StatusCode::INTERNAL_SERVER_ERROR, String::new())
+    })?;
+    tx.execute(Statement::from_sql_and_values(
+        DbBackend::Postgres,
+        "UPDATE events SET \
             title = COALESCE($1, title), \
             title_en = COALESCE($2, title_en), \
             description = COALESCE($3, description), \
@@ -1295,45 +1418,59 @@ async fn update_event(
             ends_at = COALESCE($6, ends_at), \
             location_text = COALESCE($7, location_text), \
             image_url = COALESCE($8, image_url), \
-            max_seats = COALESCE($9, max_seats), \
-            price_baht = COALESCE($10, price_baht), \
-            price_stars = COALESCE($11, price_stars), \
-            is_public = COALESCE($12, is_public), \
+            video_url = COALESCE($9, video_url), \
+            max_seats = COALESCE($10, max_seats), \
+            price_baht = COALESCE($11, price_baht), \
+            price_stars = COALESCE($12, price_stars), \
+            is_public = COALESCE($13, is_public), \
             updated_at = NOW() \
-         WHERE id = $13",
-            [
-                req.title
-                    .as_deref()
-                    .map(|s| s.trim())
-                    .filter(|s| !s.is_empty())
-                    .map(|s| s.to_string())
-                    .into(),
-                req.title_en.filter(|s| !s.is_empty()).into(),
-                req.description.filter(|s| !s.is_empty()).into(),
-                req.description_en.filter(|s| !s.is_empty()).into(),
-                starts_at
-                    .map(|d| sea_orm::Value::ChronoDateTimeUtc(Some(Box::new(d))))
-                    .unwrap_or(sea_orm::Value::ChronoDateTimeUtc(None)),
-                ends_at
-                    .unwrap_or(None)
-                    .map(|d| sea_orm::Value::ChronoDateTimeUtc(Some(Box::new(d))))
-                    .unwrap_or(sea_orm::Value::ChronoDateTimeUtc(None)),
-                req.location_text.filter(|s| !s.is_empty()).into(),
-                req.image_url.filter(|s| !s.is_empty()).into(),
-                req.max_seats.into(),
-                req.price_baht.into(),
-                req.price_stars.into(),
-                is_public
-                    .map(|v| v.into())
-                    .unwrap_or(sea_orm::Value::Bool(None)),
-                id.into(),
-            ],
-        ))
-        .await
-        .map_err(|e| {
-            tracing::error!("update_event: {e}");
-            (StatusCode::INTERNAL_SERVER_ERROR, String::new())
-        })?;
+         WHERE id = $14",
+        [
+            req.title
+                .as_deref()
+                .map(|s| s.trim())
+                .filter(|s| !s.is_empty())
+                .map(|s| s.to_string())
+                .into(),
+            req.title_en.filter(|s| !s.is_empty()).into(),
+            req.description.filter(|s| !s.is_empty()).into(),
+            req.description_en.filter(|s| !s.is_empty()).into(),
+            starts_at
+                .map(|d| sea_orm::Value::ChronoDateTimeUtc(Some(Box::new(d))))
+                .unwrap_or(sea_orm::Value::ChronoDateTimeUtc(None)),
+            ends_at
+                .unwrap_or(None)
+                .map(|d| sea_orm::Value::ChronoDateTimeUtc(Some(Box::new(d))))
+                .unwrap_or(sea_orm::Value::ChronoDateTimeUtc(None)),
+            req.location_text.filter(|s| !s.is_empty()).into(),
+            req.image_url.filter(|s| !s.is_empty()).into(),
+            req.video_url.filter(|s| !s.is_empty()).into(),
+            req.max_seats.into(),
+            req.price_baht.into(),
+            req.price_stars.into(),
+            is_public
+                .map(|v| v.into())
+                .unwrap_or(sea_orm::Value::Bool(None)),
+            id.clone().into(),
+        ],
+    ))
+    .await
+    .map_err(|e| {
+        tracing::error!("update_event: {e}");
+        (StatusCode::INTERNAL_SERVER_ERROR, String::new())
+    })?;
+    if let Some(ref photos) = req.photos {
+        if let Err(e) = replace_event_photos(&tx, &id,
+            photos,
+        ).await {
+            let _ = tx.rollback().await;
+            return Err(e);
+        }
+    }
+    tx.commit().await.map_err(|e| {
+        tracing::error!("update_event tx.commit: {e}");
+        (StatusCode::INTERNAL_SERVER_ERROR, String::new())
+    })?;
     Ok(Json(json!({ "success": true })))
 }
 
@@ -1521,6 +1658,8 @@ mod tests {
             ends_at: Some("2026-08-01T22:00:00+07:00".into()),
             location_text: Some("Bangkok".into()),
             image_url: Some("/uploads/event.jpg".into()),
+            video_url: None,
+            photos: None,
             max_seats: Some(20),
             price_baht: None,
             price_stars: None,

@@ -343,6 +343,10 @@ pub struct Event {
     #[serde(default)]
     pub image_url: Option<String>,
     #[serde(default)]
+    pub video_url: Option<String>,
+    #[serde(default)]
+    pub photos: Vec<String>,
+    #[serde(default)]
     pub max_seats: Option<i32>,
     #[serde(default)]
     pub price_baht: Option<f64>,

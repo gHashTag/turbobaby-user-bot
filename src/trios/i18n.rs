@@ -104,6 +104,8 @@ pub const T_EVENTS_SOLD_OUT: Key = "events.sold_out";
 pub const T_EVENTS_ERROR: Key = "events.error";
 pub const T_EVENTS_INSUFFICIENT_STARS: Key = "events.insufficient_stars";
 pub const T_EVENTS_REMINDER_BODY: Key = "events.reminder_body";
+pub const T_EVENTS_VIDEO: Key = "events.video";
+pub const T_EVENTS_GALLERY: Key = "events.gallery";
 pub const T_EVENTS_WEEKDAY_MON: Key = "events.weekday.mon";
 pub const T_EVENTS_WEEKDAY_TUE: Key = "events.weekday.tue";
 pub const T_EVENTS_WEEKDAY_WED: Key = "events.weekday.wed";
@@ -307,6 +309,8 @@ fn get_ru_translation(key: Key) -> Value {
         T_EVENTS_ERROR => "Не удалось забронировать",
         T_EVENTS_INSUFFICIENT_STARS => "Недостаточно Stars. Заработайте в играх Woody или пополните баланс.",
         T_EVENTS_REMINDER_BODY => "Напоминаем: вы забронировали мероприятие «{title}». Начало: {starts_at}. Ждём вас!",
+        T_EVENTS_VIDEO => "Видео",
+        T_EVENTS_GALLERY => "Галерея",
         T_EVENTS_WEEKDAY_MON => "пн",
         T_EVENTS_WEEKDAY_TUE => "вт",
         T_EVENTS_WEEKDAY_WED => "ср",
@@ -487,6 +491,8 @@ fn get_en_translation(key: Key) -> Value {
         T_EVENTS_ERROR => "Booking failed",
         T_EVENTS_INSUFFICIENT_STARS => "Not enough Stars. Earn them in Woody games or top up your balance.",
         T_EVENTS_REMINDER_BODY => "Reminder: you booked «{title}». Starts at: {starts_at}. See you there!",
+        T_EVENTS_VIDEO => "Video",
+        T_EVENTS_GALLERY => "Gallery",
         T_EVENTS_WEEKDAY_MON => "Mon",
         T_EVENTS_WEEKDAY_TUE => "Tue",
         T_EVENTS_WEEKDAY_WED => "Wed",

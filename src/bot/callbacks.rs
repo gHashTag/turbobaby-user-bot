@@ -86,9 +86,11 @@ pub(crate) async fn handle_callback(
         .unwrap_or_else(|| map_telegram_lang(q.from.language_code.as_deref()));
     let locale = get_locale(&lang);
     let base = &config.web_app_url;
-
-    // AI rate-limit for callbacks — cycle #129 shared helper.
-    let ai_allowed = ai_rate_limit_allow(user_id);
+    let too_fast_msg = if lang == "ru" {
+        "⏳ Слишком быстро! Подождите несколько секунд."
+    } else {
+        "⏳ Too fast! Wait a few seconds."
+    };
 
     match data.as_str() {
         "start_joke" | "more_joke" => {
@@ -98,8 +100,11 @@ pub(crate) async fn handle_callback(
                 MaybeInaccessibleMessage::Regular(msg) => Some(msg),
                 MaybeInaccessibleMessage::Inaccessible(_) => None,
             }) {
-                if !ai_allowed {
-                    bot.edit_message_text(msg.chat.id, msg.id, "⏳ Too fast! Wait a few seconds.")
+                // AI rate-limit: only check inside the AI callback arms so a
+                // language-switch or strain-of-day pagination press does not
+                // silently consume the user's joke/fact quota.
+                if !ai_rate_limit_allow(user_id) {
+                    bot.edit_message_text(msg.chat.id, msg.id, too_fast_msg)
                         .await
                         .ok();
                 } else {
@@ -136,8 +141,8 @@ pub(crate) async fn handle_callback(
                 MaybeInaccessibleMessage::Regular(msg) => Some(msg),
                 MaybeInaccessibleMessage::Inaccessible(_) => None,
             }) {
-                if !ai_allowed {
-                    bot.edit_message_text(msg.chat.id, msg.id, "⏳ Too fast! Wait a few seconds.")
+                if !ai_rate_limit_allow(user_id) {
+                    bot.edit_message_text(msg.chat.id, msg.id, too_fast_msg)
                         .await
                         .ok();
                 } else {

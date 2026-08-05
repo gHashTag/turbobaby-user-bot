@@ -59,12 +59,36 @@ pub(crate) enum Command {
 use crate::util::html_escape;
 
 pub(crate) fn build_app_url(base_url: &str, lang: &str, page: Option<&str>) -> String {
-    let base = base_url.trim_end_matches('/');
-    let path = match page {
-        Some(p) => format!("{}/{}", base, p),
-        None => base.to_string(),
+    // Split the base URL at the fragment first, then the query string, so we
+    // can insert the page path component BEFORE them. Appending the page after
+    // `?cache=180` produced URLs like `/?cache=180/sets&lang=ru&v=4`, which
+    // Telegram parsed as the root path with a malformed query and silently
+    // opened the home screen instead of Sets/Sommelier/etc.
+    let fragment_start = base_url.find('#');
+    let before_fragment = if let Some(pos) = fragment_start {
+        &base_url[..pos]
+    } else {
+        base_url
     };
-    format!("{}?lang={}&v=4", path, lang)
+    let fragment = fragment_start.map(|pos| &base_url[pos..]);
+
+    let query_start = before_fragment.find('?');
+    let path_part = &before_fragment[..query_start.unwrap_or(before_fragment.len())];
+    let query = query_start.map(|pos| &before_fragment[pos..]);
+
+    let path_part = path_part.trim_end_matches('/');
+    let path = match page {
+        Some(p) => format!("{}/{}", path_part, p),
+        None => path_part.to_string(),
+    };
+
+    let lang_params = format!("lang={}&v=4", lang);
+    match (query, fragment) {
+        (Some(q), Some(f)) => format!("{}{}&{}{}", path, q, lang_params, f),
+        (Some(q), None) => format!("{}{}&{}", path, q, lang_params),
+        (None, Some(f)) => format!("{}?{}{}", path, lang_params, f),
+        (None, None) => format!("{}?{}", path, lang_params),
+    }
 }
 
 fn build_admin_url(base_url: &str) -> String {
@@ -112,6 +136,11 @@ pub(crate) async fn handle_command(
     });
     let locale = get_locale(&lang);
     let base = &config.web_app_url;
+    let too_fast_msg = if lang == "ru" {
+        "⏳ Слишком быстро! Подождите несколько секунд."
+    } else {
+        "⏳ Too fast! Wait a few seconds."
+    };
 
     match cmd {
         Command::Start(args) => {
@@ -224,7 +253,7 @@ pub(crate) async fn handle_command(
                     )],
                     vec![web_app_btn(
                         &format!("🗺️ {}", locale.quest),
-                        &build_app_url(base, &lang, Some("quest")),
+                        &build_app_url(base, &lang, Some("quest/daily")),
                     )],
                     vec![web_app_btn(
                         &format!("👤 {}", locale.profile),
@@ -350,6 +379,7 @@ pub(crate) async fn handle_command(
 
         Command::Joke => {
             if !ai_rate_limit_allow(user_id) {
+                bot.send_message(msg.chat.id, too_fast_msg).await?;
                 return Ok(());
             }
             let thinking = bot.send_message(msg.chat.id, &locale.joke_thinking).await?;
@@ -376,6 +406,7 @@ pub(crate) async fn handle_command(
 
         Command::Fact => {
             if !ai_rate_limit_allow(user_id) {
+                bot.send_message(msg.chat.id, too_fast_msg).await?;
                 return Ok(());
             }
             let thinking = bot.send_message(msg.chat.id, &locale.fact_thinking).await?;
@@ -719,6 +750,30 @@ mod tests {
         assert_eq!(
             build_app_url("https://app.com/", "th", None),
             "https://app.com?lang=th&v=4"
+        );
+    }
+
+    #[test]
+    fn test_build_app_url_with_query() {
+        assert_eq!(
+            build_app_url("https://app.com/?cache=180", "ru", Some("sets")),
+            "https://app.com/sets?cache=180&lang=ru&v=4"
+        );
+    }
+
+    #[test]
+    fn test_build_app_url_with_fragment() {
+        assert_eq!(
+            build_app_url("https://app.com/#tgWebAppData=xyz", "en", Some("menu")),
+            "https://app.com/menu?lang=en&v=4#tgWebAppData=xyz"
+        );
+    }
+
+    #[test]
+    fn test_build_app_url_with_query_and_fragment() {
+        assert_eq!(
+            build_app_url("https://app.com/?cache=180#tgWebAppData=xyz", "ru", Some("profile")),
+            "https://app.com/profile?cache=180&lang=ru&v=4#tgWebAppData=xyz"
         );
     }
 
