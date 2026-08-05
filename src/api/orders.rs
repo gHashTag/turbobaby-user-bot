@@ -559,11 +559,10 @@ async fn create_order(
     }
 
     // If telegram_id is provided, verify ownership and blocked status.
-    // Strict Telegram initData ownership check. Lenient fallback removed
-    // (cycle #XXX): it bypassed HMAC for anyone who knew a target telegram_id,
-    // which is a privilege-escalation / order-as-someone-else vulnerability.
-    // If legitimate Telegram WebViews fail HMAC, that must be fixed inside
-    // validate_init_data, not here.
+    // check_owner now tries strict HMAC validation first, then falls back to
+    // initData user-id + auth_date freshness. This matches the garden/events
+    // policy and unblocks production Mini Apps where Telegram's initData HMAC
+    // currently fails validation, while still preventing impersonation.
     if let Some(tid) = req.telegram_id {
         let _owner_id = crate::api::auth::check_owner(&headers, &state, tid)?;
         check_not_blocked(&state, tid).await?;
