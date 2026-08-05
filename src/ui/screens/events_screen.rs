@@ -5,11 +5,12 @@
 // handling is wired.
 
 use crate::trios::i18n::{
-    t, T_BACK, T_EVENTS_BOOK, T_EVENTS_BOOKED, T_EVENTS_BOOK_FREE, T_EVENTS_CAPACITY,
-    T_EVENTS_DATE, T_EVENTS_ERROR, T_EVENTS_GALLERY, T_EVENTS_INSUFFICIENT_STARS, T_EVENTS_LOADING,
-    T_EVENTS_NO_EVENTS, T_EVENTS_PRICE, T_EVENTS_PRICE_STARS, T_EVENTS_SOLD_OUT, T_EVENTS_SUBTITLE,
-    T_EVENTS_TITLE, T_EVENTS_VIDEO, T_EVENTS_WEEKDAY_FRI, T_EVENTS_WEEKDAY_MON, T_EVENTS_WEEKDAY_SAT,
-    T_EVENTS_WEEKDAY_SUN, T_EVENTS_WEEKDAY_THU, T_EVENTS_WEEKDAY_TUE, T_EVENTS_WEEKDAY_WED,
+    t, T_BACK, T_EVENTS_ALREADY_BOOKED, T_EVENTS_BOOK, T_EVENTS_BOOKED, T_EVENTS_BOOK_FREE,
+    T_EVENTS_CAPACITY, T_EVENTS_DATE, T_EVENTS_ERROR, T_EVENTS_GALLERY, T_EVENTS_INSUFFICIENT_STARS,
+    T_EVENTS_LOADING, T_EVENTS_NO_EVENTS, T_EVENTS_PRICE, T_EVENTS_PRICE_STARS, T_EVENTS_SOLD_OUT,
+    T_EVENTS_SUBTITLE, T_EVENTS_TITLE, T_EVENTS_VIDEO, T_EVENTS_WEEKDAY_FRI, T_EVENTS_WEEKDAY_MON,
+    T_EVENTS_WEEKDAY_SAT, T_EVENTS_WEEKDAY_SUN, T_EVENTS_WEEKDAY_THU, T_EVENTS_WEEKDAY_TUE,
+    T_EVENTS_WEEKDAY_WED,
 };
 use crate::ui::api::context::api_base_url;
 use crate::ui::api::http::{
@@ -368,7 +369,7 @@ fn EventBookingModal(props: EventBookingModalProps) -> Element {
             button {
                 style: btn_style,
                 disabled: !can_book || matches!(&*state.read(), BookingState::Loading),
-                onclick: move |_| {
+                onclick: move |_: Event<MouseData>| {
                     if let Some(tid) = props.telegram_id {
                         let ev_clone = ev_for_book.clone();
                         let init = props.init_data.clone();
@@ -376,18 +377,25 @@ fn EventBookingModal(props: EventBookingModalProps) -> Element {
                         spawn(async move {
                             let base = api_base_url();
                             let url = format!("{}/api/events/{}/book", base, urlencoding::encode(&ev_clone.id));
-                            let idempotency_key = format!("evt_{}_{}_1", ev_clone.id, tid);
+                            // Include a millisecond counter so repeated taps within the same
+                            // session create distinct attempts, while retries of an accidental
+                            // double-tap are still collapsed by the server-side duplicate guard.
+                            let idempotency_key = format!("evt_{}_{}_{}", ev_clone.id, tid, js_sys::Date::now() as u64);
                             let body = json!({ "telegram_id": tid, "seats": 1 }).to_string();
-                            track_event("booking_attempted", "A");
+                            track_event("booking_attempted", "B");
                             match post_json_authed_idempotent_full(&url, &init, &idempotency_key, &body).await {
                                 Ok((status, _)) if (200..300).contains(&status) => {
-                                    track_event("booking_succeeded", "A");
+                                    track_event("booking_succeeded", "B");
                                     state.set(BookingState::Done { seats: 1 });
                                 }
                                 Ok((status, body)) => {
                                     if status == 402 {
                                         track_event("booking_failed", "insufficient_stars");
                                         let msg = t(lang, T_EVENTS_INSUFFICIENT_STARS).to_string();
+                                        state.set(BookingState::Error(msg));
+                                    } else if status == 409 {
+                                        track_event("booking_failed", "already_booked");
+                                        let msg = t(lang, T_EVENTS_ALREADY_BOOKED).to_string();
                                         state.set(BookingState::Error(msg));
                                     } else {
                                         let snippet: String = body.chars().take(120).collect();
@@ -443,16 +451,16 @@ fn EventBookingModal(props: EventBookingModalProps) -> Element {
             "aria-modal": "true",
             "aria-label": "{title} details",
             style: "position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,0.85);display:flex;align-items:flex-end;justify-content:center;",
-            onclick: move |_| props.on_close.call(()),
+            onclick: move |_: Event<MouseData>| props.on_close.call(()),
             div {
-                style: "width:100%;max-height:90vh;background:#0f0f1a;border-top:4px solid #39ff14;border-radius:20px 20px 0 0;padding:20px 16px 24px;overflow-y:auto;",
-                onclick: move |e| e.stop_propagation(),
+                style: "width:100%;max-height:90vh;background:#0f0f1a;border-top:4px solid #39ff14;border-radius:20px 20px 0 0;padding:20px 16px 80px;overflow-y:auto;",
+                onclick: move |e: Event<MouseData>| e.stop_propagation(),
                 div { style: "display:flex;justify-content:space-between;align-items:flex-start;",
                     h2 { style: "font-size:18px;font-weight:800;color:#39ff14;text-shadow:2px 2px 0 #000;margin:0;", "{title}" }
                     button {
                         style: "background:transparent;border:none;color:#ff4757;font-size:24px;width:44px;height:44px;display:flex;align-items:center;justify-content:center;cursor:pointer;",
                         "aria-label": back_label.clone(),
-                        onclick: move |_| props.on_close.call(()),
+                        onclick: move |_: Event<MouseData>| props.on_close.call(()),
                         "✕"
                     }
                 }
