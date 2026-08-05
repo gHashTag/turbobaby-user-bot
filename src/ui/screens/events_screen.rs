@@ -202,40 +202,51 @@ fn EventCard(props: EventCardProps) -> Element {
         div {
             role: "button",
             "aria-label": "Open event details",
-            style: "width:100%;text-align:left;background:#1a1a2e;border:3px solid #2a2a4a;border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:6px;cursor:pointer;box-shadow:3px 3px 0 #000;",
+            style: "width:100%;min-height:260px;text-align:left;background:#1a1a2e;border:3px solid #2a2a4a;border-radius:12px;overflow:hidden;cursor:pointer;box-shadow:3px 3px 0 #000;position:relative;display:flex;flex-direction:column;",
             onclick: move |_| props.on_select.call(ev.clone()),
-            if let Some(ref url) = thumb {
-                img { src: "{url}", alt: "{share_name}", style: "width:100%;max-height:160px;object-fit:cover;border-radius:8px;margin-bottom:4px;" }
-            }
-            div { style: "display:flex;justify-content:space-between;align-items:flex-start;",
-                div { style: "font-size:15px;font-weight:700;color:#e8e8e8;", "{ev.display_title()}" }
-                button {
-                    style: "background:transparent;border:none;color:#39ff14;font-size:18px;cursor:pointer;width:44px;height:44px;display:flex;align-items:center;justify-content:center;",
-                    "aria-label": "Share event",
-                    onclick: move |e| {
-                        e.stop_propagation();
-                        track_event("shared", "event");
-                        crate::ui::share::share_product(crate::ui::share::ProductKind::Event, &share_id, &share_name);
-                    },
-                    "↗"
+            // Full-card cover image like strain cards.
+            div { style: "position:absolute;inset:0;z-index:0;",
+                if let Some(ref url) = thumb {
+                    img { src: "{url}", alt: "{share_name}", style: "width:100%;height:100%;object-fit:cover;" }
+                } else {
+                    div { style: "width:100%;height:100%;background:linear-gradient(135deg,#2a2a4a,#0f0f1a);display:flex;align-items:center;justify-content:center;font-size:48px;", "📅" }
                 }
+                // Bottom gradient so text is readable over any image.
+                div { style: "position:absolute;inset:0;background:linear-gradient(to bottom, rgba(15,15,26,0.35) 0%, rgba(15,15,26,0.65) 60%, rgba(15,15,26,0.92) 100%);" }
             }
-            if let Some(ref label) = start_label {
-                div { style: "font-size:12px;color:#888;", "🕒 {label}" }
+            // Share button floats above the image.
+            button {
+                style: "position:absolute;top:8px;right:8px;z-index:2;background:rgba(0,0,0,0.5);border:2px solid #39ff14;color:#39ff14;border-radius:50%;font-size:18px;cursor:pointer;width:44px;height:44px;display:flex;align-items:center;justify-content:center;",
+                "aria-label": "Share event",
+                onclick: move |e| {
+                    e.stop_propagation();
+                    track_event("shared", "event");
+                    crate::ui::share::share_product(crate::ui::share::ProductKind::Event, &share_id, &share_name);
+                },
+                "↗"
             }
-            if let Some(ref loc) = ev.location_text {
-                div { style: "font-size:11px;color:#b388ff;", "📍 {loc}" }
-            }
-            div { style: "display:flex;gap:8px;flex-wrap:wrap;margin-top:4px;",
-                if ev.is_sold_out() {
-                    span { style: "font-size:10px;color:#ff4757;border:2px solid #ff4757;padding:2px 6px;", "SOLD OUT" }
-                } else if let Some(a) = avail {
-                    span { style: "font-size:10px;color:#39ff14;border:2px solid #39ff14;padding:2px 6px;", "{a} seats" }
+            // Text content sits at the bottom over the gradient.
+            div { style: "position:relative;z-index:1;margin-top:auto;padding:14px;display:flex;flex-direction:column;gap:6px;",
+                div { style: "display:flex;justify-content:space-between;align-items:flex-start;",
+                    div { style: "font-size:17px;font-weight:800;color:#fff;text-shadow:2px 2px 0 #000;", "{ev.display_title()}" }
                 }
-                if is_free {
-                    span { style: "font-size:10px;color:#39ff14;border:2px solid #39ff14;padding:2px 6px;", "FREE" }
-                } else if let Some(ref p) = price_label {
-                    span { style: "font-size:10px;color:#ffe600;border:2px solid #ffe600;padding:2px 6px;", "{p}" }
+                if let Some(ref label) = start_label {
+                    div { style: "font-size:13px;color:#e8e8e8;text-shadow:1px 1px 0 #000;", "🕒 {label}" }
+                }
+                if let Some(ref loc) = ev.location_text {
+                    div { style: "font-size:12px;color:#b388ff;text-shadow:1px 1px 0 #000;", "📍 {loc}" }
+                }
+                div { style: "display:flex;gap:8px;flex-wrap:wrap;margin-top:4px;",
+                    if ev.is_sold_out() {
+                        span { style: "font-size:10px;color:#ff4757;background:rgba(0,0,0,0.5);border:2px solid #ff4757;padding:2px 6px;", "SOLD OUT" }
+                    } else if let Some(a) = avail {
+                        span { style: "font-size:10px;color:#39ff14;background:rgba(0,0,0,0.5);border:2px solid #39ff14;padding:2px 6px;", "{a} seats" }
+                    }
+                    if is_free {
+                        span { style: "font-size:10px;color:#39ff14;background:rgba(0,0,0,0.5);border:2px solid #39ff14;padding:2px 6px;", "FREE" }
+                    } else if let Some(ref p) = price_label {
+                        span { style: "font-size:10px;color:#ffe600;background:rgba(0,0,0,0.5);border:2px solid #ffe600;padding:2px 6px;", "{p}" }
+                    }
                 }
             }
         }
