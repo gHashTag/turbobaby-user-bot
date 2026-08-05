@@ -31,3 +31,4 @@ assets/uploads/
 # Asset export bundles / docs screenshots (scripts/export-assets.sh) — kept local, not in git
 exports/
 docs/screenshots/
+.claude-flow/

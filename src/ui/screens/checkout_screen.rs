@@ -636,7 +636,6 @@ pub fn CheckoutScreen() -> Element {
                         let trios_items = to_trios_items(&cart_items);
                         let can_order = telegram_id.is_some()
                             && validate_checkout(&customer_name(), &customer_phone(), &trios_items).is_ok()
-                            && !delivery_address.read().trim().is_empty()
                             && !is_processing();
                         let btn_bg = if can_order { "#39ff14" } else { "#2a2a4a" };
                         let btn_color = if can_order { "#000" } else { "#8b8b9e" };

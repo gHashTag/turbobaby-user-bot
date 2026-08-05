@@ -442,7 +442,7 @@ fn EventBookingModal(props: EventBookingModalProps) -> Element {
             role: "dialog",
             "aria-modal": "true",
             "aria-label": "{title} details",
-            style: "position:fixed;inset:0;z-index:50;background:rgba(0,0,0,0.85);display:flex;align-items:flex-end;justify-content:center;",
+            style: "position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,0.85);display:flex;align-items:flex-end;justify-content:center;",
             onclick: move |_| props.on_close.call(()),
             div {
                 style: "width:100%;max-height:90vh;background:#0f0f1a;border-top:4px solid #39ff14;border-radius:20px 20px 0 0;padding:20px 16px 24px;overflow-y:auto;",

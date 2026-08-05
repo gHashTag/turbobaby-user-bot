@@ -388,7 +388,7 @@ fn get_ru_translation(key: Key) -> Value {
         T_SOMM_RESULT => "Рекомендации",
         // Checkout error messages (cycle #69)
         T_CHECKOUT_ERR_400 => "Что-то не так с корзиной. Попробуйте очистить её и собрать заново.",
-        T_CHECKOUT_ERR_403 => "Аккаунт временно ограничен. Свяжитесь с поддержкой, чтобы продолжить заказы.",
+        T_CHECKOUT_ERR_403 => "Аккаунт ограничен или возраст не подтверждён. Проверьте Профиль или свяжитесь с поддержкой.",
         T_CHECKOUT_ERR_404 => "Один из товаров больше не доступен. Обновите меню и попробуйте снова.",
         T_CHECKOUT_ERR_409 => "Этот заказ уже создан. Откройте «Мои заказы» — он там.",
         T_CHECKOUT_ERR_422 => "Цены или товары изменились с момента добавления в корзину. Обновите меню и оформите заказ заново.",
@@ -570,7 +570,7 @@ fn get_en_translation(key: Key) -> Value {
         T_SOMM_RESULT => "Recommendations",
         // Checkout error messages (cycle #69)
         T_CHECKOUT_ERR_400 => "Something looks wrong with your cart. Try clearing it and adding items again.",
-        T_CHECKOUT_ERR_403 => "Your account is temporarily restricted. Contact support to keep ordering.",
+        T_CHECKOUT_ERR_403 => "Account restricted or age not verified. Check Profile or contact support.",
         T_CHECKOUT_ERR_404 => "One of the items is no longer available. Refresh the menu and try again.",
         T_CHECKOUT_ERR_409 => "This order has already been placed. Open «My Orders» — it's there.",
         T_CHECKOUT_ERR_422 => "Prices or items changed since you added to cart. Refresh the menu and place the order again.",
