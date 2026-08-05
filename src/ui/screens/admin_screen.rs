@@ -6742,6 +6742,25 @@ fn EventsTab() -> Element {
         submitting.set(true);
         let init = init_data.read().clone();
         let id_opt = editing_id.read().clone();
+        // Snapshot form values for optimistic cache update after API success.
+        let title_clone = title.read().clone();
+        let title_en_clone = title_en.read().clone();
+        let description_clone = description.read().clone();
+        let description_en_clone = description_en.read().clone();
+        let starts_at_api = format!("{}:00+07:00", starts_at.read().clone());
+        let ends_at_api = if ends_at.read().trim().is_empty() {
+            None
+        } else {
+            Some(format!("{}:00+07:00", ends_at.read().clone()))
+        };
+        let location_text_clone = location_text.read().clone();
+        let image_url_clone = image_url.read().clone();
+        let video_url_clone = video_url.read().clone();
+        let photos_clone = photos.read().clone();
+        let max_seats_clone = max_seats.read().clone();
+        let price_baht_clone = price_baht.read().clone();
+        let price_stars_clone = price_stars.read().clone();
+        let is_public_clone = *is_public.read();
         let body = json!({
             "title": title.read().clone(),
             "title_en": if title_en.read().trim().is_empty() { serde_json::Value::Null } else { title_en.read().clone().into() },
@@ -6761,8 +6780,8 @@ fn EventsTab() -> Element {
         });
         spawn(async move {
             let base = api_base_url();
-            let res = if let Some(id) = id_opt {
-                let url = format!("{}/api/admin/events/{}", base, urlencoding::encode(&id));
+            let res = if let Some(ref id) = id_opt {
+                let url = format!("{}/api/admin/events/{}", base, urlencoding::encode(id));
                 HTTP_CLIENT
                     .clone()
                     .put(&url)
@@ -6783,7 +6802,45 @@ fn EventsTab() -> Element {
             submitting.set(false);
             match res {
                 Ok(r) if r.status().is_success() => {
+                    let is_create = id_opt.is_none();
+                    let returned_id = if is_create {
+                        r.json::<serde_json::Value>().await.ok().and_then(|v| v.get("id").and_then(|i| i.as_str()).map(String::from))
+                    } else {
+                        id_opt.clone()
+                    };
                     clear_form.call(());
+                    // Optimistic refresh: rebuild the cache entry from form values
+                    // so the event appears immediately without waiting for use_resource.
+                    cache.with_mut(|list| {
+                        let empty_or_none = |s: &str| if s.trim().is_empty() { None } else { Some(s.to_string()) };
+                        let new_event = AdminEvent {
+                            id: returned_id.unwrap_or_default(),
+                            title: title_clone.clone(),
+                            title_en: empty_or_none(&title_en_clone),
+                            description: empty_or_none(&description_clone),
+                            description_en: empty_or_none(&description_en_clone),
+                            starts_at: starts_at_api.clone(),
+                            ends_at: ends_at_api.clone().filter(|s| !s.is_empty()),
+                            location_text: empty_or_none(&location_text_clone),
+                            image_url: empty_or_none(&image_url_clone),
+                            video_url: empty_or_none(&video_url_clone),
+                            photos: photos_clone.clone(),
+                            max_seats: max_seats_clone.parse::<i32>().ok(),
+                            price_baht: price_baht_clone.parse::<f64>().ok(),
+                            price_stars: price_stars_clone.parse::<i64>().ok(),
+                            is_public: is_public_clone,
+                            seats_taken: 0,
+                            seats_available: max_seats_clone.parse::<i32>().ok(),
+                            created_at: None,
+                        };
+                        if let Some(existing) = id_opt {
+                            if let Some(idx) = list.iter().position(|e| e.id == existing) {
+                                list[idx] = new_event;
+                                return;
+                            }
+                        }
+                        list.push(new_event);
+                    });
                     let next = *reload.read() + 1;
                     reload.set(next);
                     push_toast(toasts, "Сохранено".into(), ToastKind::Success);
