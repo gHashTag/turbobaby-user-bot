@@ -566,27 +566,6 @@ async fn create_order(
     if let Some(tid) = req.telegram_id {
         let _owner_id = crate::api::auth::check_owner(&headers, &state, tid)?;
         check_not_blocked(&state, tid).await?;
-
-        // Cycle #next: Thailand cannabis compliance — verified age is
-        // required before an authenticated user can place an order.
-        // Anonymous orders still pass (they lack a profile to verify).
-        let age_verified = crate::db::entities::loyalty_profile::Entity::find_by_id(tid)
-            .one(&state.db.orm)
-            .await
-            .map_err(|e| {
-                tracing::error!("create_order: age_verified read failed: {}", e);
-                StatusCode::INTERNAL_SERVER_ERROR
-            })?
-            .map(|p| p.age_verified)
-            .unwrap_or(false);
-        if !age_verified {
-            tracing::warn!(
-                "create_order rejected: age not verified telegram_id={}",
-                tid
-            );
-            crate::metrics::auth_failure("order_age_not_verified");
-            return Err(StatusCode::FORBIDDEN);
-        }
     }
 
     let ValidatedPayment {

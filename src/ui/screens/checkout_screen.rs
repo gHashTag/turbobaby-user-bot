@@ -1,9 +1,7 @@
 use crate::trios::core::Lang;
 use crate::trios::i18n::{
-    t, T_BACK, T_CHECKOUT_AGE_DOB, T_CHECKOUT_AGE_ERROR, T_CHECKOUT_AGE_REQUIRED,
-    T_CHECKOUT_AGE_UNDERAGE, T_CHECKOUT_AGE_VERIFY, T_CHECKOUT_AGE_VERIFYING,
-    T_CHECKOUT_TITLE, T_DELIVERY, T_DELIVERY_ETA, T_DELIVERY_FEE, T_DELIVERY_ZONE, T_PAYMENT,
-    T_PICKUP_LOCATION, T_PLACE_ORDER, T_TOTAL, T_YOUR_INFO, T_YOUR_ORDER,
+    t, T_BACK, T_CHECKOUT_TITLE, T_DELIVERY, T_DELIVERY_ETA, T_DELIVERY_FEE, T_DELIVERY_ZONE,
+    T_PAYMENT, T_PICKUP_LOCATION, T_PLACE_ORDER, T_TOTAL, T_YOUR_INFO, T_YOUR_ORDER,
 };
 use crate::trios::store::validate_checkout;
 use crate::ui::api::context::api_base_url;
@@ -40,26 +38,12 @@ struct StarsBalanceResp {
     balance: i64,
 }
 
-#[derive(serde::Deserialize)]
-struct ProfileResp {
-    #[serde(default)]
-    age_verified: bool,
-}
-
 fn zone_display_name(zone: &DeliveryZone) -> String {
     if crate::ui::lang::current_lang() == Lang::English {
         zone.name_en.clone().unwrap_or_else(|| zone.name.clone())
     } else {
         zone.name.clone()
     }
-}
-
-fn today_iso() -> String {
-    chrono::Local::now()
-        .naive_local()
-        .date()
-        .format("%Y-%m-%d")
-        .to_string()
 }
 
 fn to_trios_items(items: &[CartItem]) -> Vec<crate::trios::store::CartItem> {
@@ -96,14 +80,6 @@ pub fn CheckoutScreen() -> Element {
     // collapses them into one order (migration 029). Navigating away or
     // unmounting the screen resets — exactly the boundary we want.
     let mut idempotency_key = use_signal(|| Option::<String>::None);
-    // Thailand cannabis compliance: checkout must confirm the user is 20+
-    // before the backend will accept the order. We fetch the profile once,
-    // show an inline date-of-birth form when missing, and block the submit
-    // button until verified.
-    let mut age_verified = use_signal(|| false);
-    let mut age_dob = use_signal(String::new);
-    let mut age_verifying = use_signal(|| false);
-    let mut age_error = use_signal(|| Option::<String>::None);
     let nav = navigator();
     let telegram_id = use_telegram_id();
     let telegram_username = use_telegram_username();
@@ -182,106 +158,6 @@ pub fn CheckoutScreen() -> Element {
             .ok()
             .map(|r| r.zones)
     });
-    // Fetch profile to know whether age verification is already satisfied.
-    let profile_res = {
-        let init = init_data.clone();
-        use_resource(move || {
-            let init = init.clone();
-            async move {
-                let tid = telegram_id?;
-                let url = format!("{}/api/users/me/{}", api_base_url(), tid);
-                let text = crate::ui::api::http::fetch_text_authed(&url, &init)
-                    .await
-                    .ok()?;
-                serde_json::from_str::<ProfileResp>(&text).ok()
-            }
-        })
-    };
-    let profile_age_verified = profile_res
-        .read()
-        .as_ref()
-        .and_then(|opt| opt.as_ref())
-        .map(|p| p.age_verified)
-        .unwrap_or(false);
-    let age_ok = *age_verified.read() || profile_age_verified;
-    // Inline age-verification banner for checkout.
-    let age_gate = {
-        let init_data = init_data.clone();
-        move || -> Element {
-            if telegram_id.is_none() || age_ok {
-                return rsx! {};
-            }
-            let required_text = t(lang, T_CHECKOUT_AGE_REQUIRED).to_string();
-            let dob_label = t(lang, T_CHECKOUT_AGE_DOB).to_string();
-            let verify_label = t(lang, T_CHECKOUT_AGE_VERIFY).to_string();
-            let verifying_label = t(lang, T_CHECKOUT_AGE_VERIFYING).to_string();
-            let dob = age_dob.read().clone();
-            let loading = *age_verifying.read();
-            let err = age_error.read().clone();
-            rsx! {
-                div { style: "background:#2a1a0f;border:4px solid #ff9d00;padding:14px;margin-bottom:12px;box-shadow:4px 4px 0 #000;",
-                    div { style: "font-size:14px;color:#ff9d00;font-weight:700;margin-bottom:8px;", "{required_text}" }
-                    div { style: "display:flex;gap:8px;align-items:center;margin-bottom:8px;",
-                        div { style: "font-size:13px;color:#8b8b9e;min-width:max-content;", "{dob_label}" }
-                        input {
-                            r#type: "date",
-                            style: "flex:1;padding:8px;background:#0f0f1a;color:#e8e8e8;border:3px solid #444;font-size:14px;",
-                            value: "{dob}",
-                            max: "{today_iso()}",
-                            disabled: loading,
-                            oninput: move |e| age_dob.set(e.value()),
-                        }
-                        button {
-                            style: "padding:8px 14px;background:#ff9d00;color:#000;border:none;font-size:14px;font-weight:700;cursor:pointer;min-width:44px;min-height:44px;",
-                            disabled: loading || dob.is_empty(),
-                            onclick: move |_| {
-                                if dob.is_empty() { return; }
-                                age_verifying.set(true);
-                                age_error.set(None);
-                                let init = init_data.clone();
-                                let tid = telegram_id.unwrap_or(0);
-                                let dob_val = dob.clone();
-                                spawn(async move {
-                                    let url = format!("{}/api/users/me/{}/verify-age", api_base_url(), tid);
-                                    let client = crate::ui::api::local_client::LocalClient::new();
-                                    let body = serde_json::json!({ "dob": dob_val });
-                                    match client.post(&url)
-                                        .header("X-Telegram-Init-Data", init)
-                                        .json(&body)
-                                        .send()
-                                        .await
-                                    {
-                                        Ok(r) if r.status().is_success() => {
-                                            if let Ok(resp) = r.json::<serde_json::Value>().await {
-                                                if let Some(true) = resp.get("age_verified").and_then(|v| v.as_bool()) {
-                                                    age_verified.set(true);
-                                                } else {
-                                                    age_error.set(Some(t(lang, T_CHECKOUT_AGE_UNDERAGE).to_string()));
-                                                }
-                                            } else {
-                                                age_error.set(Some(t(lang, T_CHECKOUT_AGE_ERROR).to_string()));
-                                            }
-                                        }
-                                        Ok(_) => {
-                                            age_error.set(Some(t(lang, T_CHECKOUT_AGE_ERROR).to_string()));
-                                        }
-                                        Err(_) => {
-                                            age_error.set(Some(t(lang, T_CHECKOUT_AGE_ERROR).to_string()));
-                                        }
-                                    }
-                                    age_verifying.set(false);
-                                });
-                            },
-                            if loading { "{verifying_label}" } else { "{verify_label}" }
-                        }
-                    }
-                    if let Some(ref e) = err {
-                        div { style: "font-size:13px;color:#ff4757;text-align:center;", "{e}" }
-                    }
-                }
-            }
-        }
-    };
     // (reward, discount_amount) pairs applicable to this cart.
     let applicable_rewards: Vec<(ApiReward, f64, String)> = match &*rewards_res.read() {
         Some(Some(list)) => list
@@ -478,9 +354,7 @@ pub fn CheckoutScreen() -> Element {
             }
 
             div { style: "padding: 0 16px;",
-                // Age verification gate (Thailand cannabis compliance).
-                {age_gate()}
-                // Order summary from cart
+// Order summary from cart
                 div { style: "
                     background: #16213e; border: 4px solid #2a2a4a;
                     border-radius: 0; padding: 14px; margin-bottom: 12px;
@@ -761,7 +635,6 @@ pub fn CheckoutScreen() -> Element {
                     {
                         let trios_items = to_trios_items(&cart_items);
                         let can_order = telegram_id.is_some()
-                            && age_ok
                             && validate_checkout(&customer_name(), &customer_phone(), &trios_items).is_ok()
                             && !is_processing();
                         let btn_bg = if can_order { "#39ff14" } else { "#2a2a4a" };
