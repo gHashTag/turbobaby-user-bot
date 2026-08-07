@@ -4,13 +4,21 @@
 // has its own `#![allow(unreachable_pub)]` (SeaORM macros generate
 // pub items unconditionally).
 #[allow(unreachable_pub)]
+pub mod accessory;
 pub mod block_history;
+#[allow(unreachable_pub)]
+pub mod cart;
+#[allow(unreachable_pub)]
+pub mod cart_item;
+
 #[allow(unreachable_pub)]
 pub mod event;
 #[allow(unreachable_pub)]
 pub mod event_photo;
 #[allow(unreachable_pub)]
 pub mod bonus_transaction;
+#[allow(unreachable_pub)]
+pub mod delivery_zone;
 #[allow(unreachable_pub)]
 pub mod garden_config;
 #[allow(unreachable_pub)]
@@ -39,6 +47,8 @@ pub mod stars_transaction;
 pub mod strain;
 #[allow(unreachable_pub)]
 pub mod strain_review;
+#[allow(unreachable_pub)]
+pub mod tea_product;
 #[allow(unreachable_pub)]
 pub mod treasure_hunt;
 #[allow(unreachable_pub)]

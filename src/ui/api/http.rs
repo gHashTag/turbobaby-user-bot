@@ -214,6 +214,24 @@ pub async fn post_admin_token(
     Ok((status, body))
 }
 
+/// DELETE with `X-Telegram-Init-Data` header attached.
+pub async fn delete_authed(url: &str, init_data: &str) -> Result<String, String> {
+    let resp = Request::delete(url)
+        .header("x-telegram-init-data", init_data)
+        .send()
+        .await
+        .map_err(|e| format!("Network error: {e}"))?;
+    if !resp.ok() {
+        let status = resp.status();
+        let body = resp.text().await.unwrap_or_default();
+        return Err(format!(
+            "HTTP {status}: {}",
+            body.chars().take(120).collect::<String>()
+        ));
+    }
+    resp.text().await.map_err(|e| format!("Read error: {e}"))
+}
+
 /// PUT JSON with Telegram initData. Returns response status code as `u16`.
 pub async fn put_json_authed(
     url: &str,

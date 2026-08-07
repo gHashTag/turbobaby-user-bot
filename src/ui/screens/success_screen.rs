@@ -5,9 +5,9 @@ use crate::trios::i18n::{
     T_ORDERS_STATUS_READY, T_ORDERS_STATUS_UNKNOWN, T_SUCCESS_BACK_MENU,
     T_SUCCESS_CASH_ON_DELIVERY, T_SUCCESS_CONFIRMED, T_SUCCESS_CONTACT_SHORTLY,
     T_SUCCESS_DELIVERY_ESTIMATE, T_SUCCESS_ETA, T_SUCCESS_ETA_VALUE, T_SUCCESS_MY_ORDERS,
-    T_SUCCESS_ORDER_RECEIVED, T_SUCCESS_PAYMENT, T_SUCCESS_REWARDS_BONUS, T_SUCCESS_REWARDS_GARDEN,
-    T_SUCCESS_REWARDS_TITLE, T_SUCCESS_SHARE_REFERRAL, T_SUCCESS_STATUS, T_SUCCESS_TITLE,
-    T_SUCCESS_TRACK_ORDER,
+    T_SUCCESS_ORDER_RECEIVED, T_SUCCESS_PAYMENT, T_SUCCESS_PUSH_REASSURANCE,
+    T_SUCCESS_REWARDS_BONUS, T_SUCCESS_REWARDS_GARDEN, T_SUCCESS_REWARDS_TITLE,
+    T_SUCCESS_SHARE_REFERRAL, T_SUCCESS_STATUS, T_SUCCESS_TITLE, T_SUCCESS_TRACK_ORDER,
 };
 use crate::ui::api::context::api_base_url;
 use crate::ui::api::http::fetch_text_authed;
@@ -82,6 +82,7 @@ pub fn SuccessScreen(id: String) -> Element {
     let rewards_title = t(lang, T_SUCCESS_REWARDS_TITLE).to_string();
     let rewards_garden = t(lang, T_SUCCESS_REWARDS_GARDEN).to_string();
     let share_referral = t(lang, T_SUCCESS_SHARE_REFERRAL).to_string();
+    let push_reassurance = t(lang, T_SUCCESS_PUSH_REASSURANCE).to_string();
 
     let telegram_id = use_telegram_id();
     let init_data = use_telegram_init_data();
@@ -273,6 +274,14 @@ pub fn SuccessScreen(id: String) -> Element {
                 onclick: on_track_order,
                 "{track_order}"
             }
+
+            // Push reassurance: remind the customer that tracking the order
+            // in Telegram turns on a push for every status milestone.
+            div { style: "
+                font-size: 12px; color: #8b8b9e;
+                width: 100%; max-width: 320px;
+                margin-bottom: 16px; text-align: center;
+            ", "{push_reassurance}" }
 
             // Actions
             div { style: "display: flex; gap: 10px; width: 100%; max-width: 320px; margin-bottom: 16px;",

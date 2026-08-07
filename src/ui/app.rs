@@ -3,10 +3,12 @@
 // Cart signal is shared across all screens via context.
 
 use crate::ui::api::context::ApiClientProvider;
+use crate::ui::api::http::fetch_text_authed;
+use crate::ui::api::types::ServerCart;
 use crate::ui::components::{install_error_handlers, ErrorOverlay, JsErrorItem};
 use crate::ui::routes::Routes;
 use crate::ui::share::{parse_order_start_param, parse_start_param, SharedProduct};
-use crate::ui::state::Cart;
+use crate::ui::state::{Cart, CartItem, CartItemType};
 use crate::ui::telegram::TelegramProvider;
 use dioxus::prelude::*;
 use web_sys;
@@ -72,6 +74,39 @@ pub fn App() -> Element {
                     let current = cart_signal.read().clone();
                     if current == initial {
                         cart_signal.set(parsed);
+                    }
+                }
+            }
+        });
+    });
+
+    // Loop #11: recover the server-side cart if the local/CloudStorage cart is
+    // empty. This restores the cart after cache loss or cross-device return.
+    #[cfg(target_arch = "wasm32")]
+    use_hook(move || {
+        let mut cart_signal = cart.clone();
+        spawn(async move {
+            let tg = crate::ui::telegram::TelegramApp::init();
+            let Some(tid) = tg.get_user_id() else { return };
+            let init_data = tg.get_init_data();
+            let url = format!(
+                "{}/api/cart?telegram_id={tid}",
+                crate::ui::api::context::api_base_url()
+            );
+            if let Ok(text) = fetch_text_authed(&url, &init_data).await {
+                if let Ok(server_cart) = serde_json::from_str::<ServerCart>(&text) {
+                    let current = cart_signal.read().clone();
+                    if current.items.is_empty() && !server_cart.items.is_empty() {
+                        let items: Vec<CartItem> = server_cart
+                            .items
+                            .into_iter()
+                            .filter_map(server_item_to_cart_item)
+                            .collect();
+                        let mut recovered = Cart::new();
+                        for item in items {
+                            recovered.add_item(item);
+                        }
+                        cart_signal.set(recovered);
                     }
                 }
             }
@@ -145,4 +180,28 @@ pub fn App() -> Element {
             }
         }
     }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn server_item_to_cart_item(item: crate::ui::api::types::ServerCartItem) -> Option<CartItem> {
+    let item_type = match item.kind.as_str() {
+        "strain" => CartItemType::Strain,
+        "accessory" => CartItemType::Accessory,
+        "tea" => CartItemType::Tea,
+        "set" => CartItemType::Set,
+        _ => return None,
+    };
+    let quantity = item.quantity.max(0) as u32;
+    if quantity == 0 {
+        return None;
+    }
+    Some(CartItem {
+        id: item.catalog_id,
+        name: item.name,
+        price: if item.unit_price.is_finite() { item.unit_price.max(0.0) } else { 0.0 },
+        quantity,
+        image_url: item.image_url,
+        item_type,
+        fulfillment: None,
+    })
 }

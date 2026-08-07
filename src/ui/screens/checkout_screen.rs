@@ -20,7 +20,7 @@ use crate::trios::i18n::{
 };
 use crate::trios::store::validate_checkout;
 use crate::ui::api::context::api_base_url;
-use crate::ui::api::http::{fetch_text_authed_full, post_json_authed_idempotent_full};
+use crate::ui::api::http::{delete_authed, fetch_text_authed_full, post_json_authed_idempotent_full};
 use crate::ui::api::types::{DeliveryZone, DeliveryZonesResponse};
 use crate::ui::components::error_banner::ErrorBanner;
 use crate::ui::routes::Route;
@@ -919,6 +919,12 @@ pub fn CheckoutScreen() -> Element {
                     tg.hide_main_button();
                     // The user is leaving the form; allow Telegram swipe-to-close again.
                     tg.disable_closing_confirmation();
+                    // Loop #11: clear the server-side cart so a returning
+                    // customer doesn't see stale items after a successful order.
+                    if telegram_id_for_retry != 0 {
+                        let clear_url = format!("{}/api/cart?telegram_id={}", base_clone, telegram_id_for_retry);
+                        let _ = delete_authed(&clear_url, &init_data_clone).await;
+                    }
                     // Navigate to success and clear cart.
                     cart.write().clear();
                     tg.haptic_notification(HapticNotification::Success);

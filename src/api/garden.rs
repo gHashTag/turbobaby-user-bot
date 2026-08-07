@@ -85,7 +85,7 @@ async fn send_garden_reminders(
     let rows = orm.query_all(Statement::from_sql_and_values(
         DbBackend::Postgres,
         "SELECT p.id, p.user_id, p.is_completed, p.harvested_at, p.last_watered_at, \
-                COALESCE(ul.lang, 'en') AS lang \
+                COALESCE(ul.language, 'en') AS lang \
          FROM garden_plants p \
          LEFT JOIN user_languages ul ON ul.telegram_id = p.user_id::bigint \
          WHERE p.harvested_at IS NULL \

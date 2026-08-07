@@ -489,6 +489,7 @@ pub const T_SUCCESS_CASH_ON_DELIVERY: Key = "success.cash_on_delivery";
 pub const T_SUCCESS_BACK_MENU: Key = "success.back_menu";
 pub const T_SUCCESS_MY_ORDERS: Key = "success.my_orders";
 pub const T_SUCCESS_TRACK_ORDER: Key = "success.track_order";
+pub const T_SUCCESS_PUSH_REASSURANCE: Key = "success.push_reassurance";
 pub const T_SUCCESS_REWARDS_TITLE: Key = "success.rewards.title";
 pub const T_SUCCESS_REWARDS_GARDEN: Key = "success.rewards.garden";
 pub const T_SUCCESS_REWARDS_BONUS: Key = "success.rewards.bonus";
@@ -1125,6 +1126,7 @@ fn get_ru_translation(key: Key) -> Value {
         T_SUCCESS_BACK_MENU => "🌿 В меню",
         T_SUCCESS_MY_ORDERS => "📋 Мои заказы",
         T_SUCCESS_TRACK_ORDER => "🔔 Отслеживать",
+        T_SUCCESS_PUSH_REASSURANCE => "🔔 Push-уведомления о каждом статусе заказа",
         T_SUCCESS_REWARDS_TITLE => "🎁 Что вы получите",
         T_SUCCESS_REWARDS_GARDEN => "🌱 Семя сада за strain-заказ",
         T_SUCCESS_REWARDS_BONUS => "⭐ Бонусные баллы: {0}",
@@ -1740,6 +1742,7 @@ fn get_en_translation(key: Key) -> Value {
         T_SUCCESS_BACK_MENU => "Back to Menu",
         T_SUCCESS_MY_ORDERS => "My Orders",
         T_SUCCESS_TRACK_ORDER => "🔔 Track Order",
+        T_SUCCESS_PUSH_REASSURANCE => "🔔 Push notifications for every order status",
         T_SUCCESS_REWARDS_TITLE => "🎁 Your Rewards",
         T_SUCCESS_REWARDS_GARDEN => "🌱 Garden seed for strain orders",
         T_SUCCESS_REWARDS_BONUS => "⭐ Bonus points: {0}",

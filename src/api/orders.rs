@@ -602,24 +602,31 @@ async fn create_order(
         stars_used,
     } = validate_create_order(&req)?;
 
-    // Loop #7: the delivery zone id (if supplied) must resolve to a
-    // configured zone. Rejecting here prevents a stale/malformed zone from
+    // Loop #7 / #11: the delivery zone id (if supplied) must resolve to an
+    // active DB zone. Rejecting here prevents a stale/malformed zone from
     // being stored and misleading the ETA on the success screen.
     if let Some(ref zid) = req.delivery_zone_id {
-        if !zid.is_empty()
-            && !state
-                .config
-                .delivery_zones
-                .zones
-                .iter()
-                .any(|z| z.id == *zid)
-        {
-            tracing::info!(
-                telegram_id = req.telegram_id.unwrap_or(0),
-                zone_id = %zid,
-                "create_order: unknown delivery zone"
-            );
-            return Err(StatusCode::UNPROCESSABLE_ENTITY);
+        if !zid.is_empty() {
+            use crate::db::entities::delivery_zone::{Column as ZoneCol, Entity as ZoneEntity};
+            use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
+            let exists = ZoneEntity::find()
+                .filter(ZoneCol::Id.eq(zid.clone()))
+                .filter(ZoneCol::IsActive.eq(true))
+                .one(&state.db.orm)
+                .await
+                .map_err(|e| {
+                    tracing::error!("create_order: delivery zone lookup failed: {e}");
+                    StatusCode::INTERNAL_SERVER_ERROR
+                })?
+                .is_some();
+            if !exists {
+                tracing::info!(
+                    telegram_id = req.telegram_id.unwrap_or(0),
+                    zone_id = %zid,
+                    "create_order: unknown or inactive delivery zone"
+                );
+                return Err(StatusCode::UNPROCESSABLE_ENTITY);
+            }
         }
     }
 
@@ -1486,23 +1493,30 @@ async fn get_order_status(
         return Err(StatusCode::NOT_FOUND);
     }
 
-    let zone = model.delivery_zone_id.as_deref().and_then(|zid| {
-        state
-            .config
-            .delivery_zones
-            .zones
-            .iter()
-            .find(|z| z.id == zid)
-    });
+    let zone = if let Some(ref zid) = model.delivery_zone_id {
+        use crate::db::entities::delivery_zone::{Column as ZoneCol, Entity as ZoneEntity};
+        use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
+        ZoneEntity::find()
+            .filter(ZoneCol::Id.eq(zid.clone()))
+            .filter(ZoneCol::IsActive.eq(true))
+            .one(&state.db.orm)
+            .await
+            .map_err(|e| {
+                tracing::error!("get_order_status: delivery zone lookup failed: {e}");
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?
+    } else {
+        None
+    };
 
     Ok(Json(json!({
         "order_id": model.id,
         "status": model.status,
         "delivery_zone_id": model.delivery_zone_id,
-        "delivery_zone_name": zone.map(|z| z.name.clone()),
-        "min_eta_minutes": zone.map(|z| z.min_eta_minutes),
-        "max_eta_minutes": zone.map(|z| z.max_eta_minutes),
-        "delivery_fee_baht": zone.map(|z| z.delivery_fee_baht),
+        "delivery_zone_name": zone.as_ref().map(|z| z.name.clone()),
+        "min_eta_minutes": zone.as_ref().map(|z| z.eta_min.max(0)),
+        "max_eta_minutes": zone.as_ref().map(|z| z.eta_max.max(z.eta_min).max(0)),
+        "delivery_fee_baht": zone.as_ref().map(|z| if z.fee.is_finite() { z.fee.max(0.0) } else { 0.0 }),
     })))
 }
 
@@ -2049,8 +2063,33 @@ async fn get_user_orders(
 
 /// Public delivery zones + ETA/fee ranges. No auth — used by the customer
 /// checkout and order tracker.
-async fn list_delivery_zones(State(state): State<AppState>) -> Json<Value> {
-    Json(json!({ "zones": state.config.delivery_zones.zones }))
+async fn list_delivery_zones(State(state): State<AppState>) -> Result<Json<Value>, StatusCode> {
+    use crate::db::entities::delivery_zone::{Column as ZoneCol, Entity as ZoneEntity};
+    use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QueryOrder};
+    let models = ZoneEntity::find()
+        .filter(ZoneCol::IsActive.eq(true))
+        .order_by_asc(ZoneCol::SortOrder)
+        .order_by_asc(ZoneCol::Name)
+        .all(&state.db.orm)
+        .await
+        .map_err(|e| {
+            tracing::error!("list_delivery_zones: {e}");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+    let zones: Vec<Value> = models
+        .into_iter()
+        .map(|z| {
+            json!({
+                "id": z.id,
+                "name": z.name,
+                "name_en": z.name_en,
+                "min_eta_minutes": z.eta_min.max(0),
+                "max_eta_minutes": z.eta_max.max(z.eta_min).max(0),
+                "delivery_fee_baht": if z.fee.is_finite() { z.fee.max(0.0) } else { 0.0 },
+            })
+        })
+        .collect();
+    Ok(Json(json!({ "zones": zones })))
 }
 
 /// Admin-only SVG QR code for PromptPay payment of an order. Falls back to

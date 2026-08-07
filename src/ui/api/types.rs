@@ -488,3 +488,46 @@ pub struct DeliveryZone {
 pub struct DeliveryZonesResponse {
     pub zones: Vec<DeliveryZone>,
 }
+
+// ── Loop #11: server-side cart wire types ───────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ServerCartItem {
+    pub id: String,
+    pub kind: String,
+    pub catalog_id: String,
+    #[serde(default)]
+    pub quantity: i32,
+    #[serde(default)]
+    pub unit_price: f64,
+    pub name: String,
+    #[serde(default)]
+    pub image_url: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ServerCart {
+    pub telegram_id: i64,
+    #[serde(default)]
+    pub items: Vec<ServerCartItem>,
+    #[serde(default)]
+    pub total: f64,
+    #[serde(default)]
+    pub updated_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AddServerCartItem {
+    pub telegram_id: i64,
+    pub kind: String,
+    pub catalog_id: String,
+    #[serde(default)]
+    pub quantity: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ServerCartMerge {
+    pub telegram_id: i64,
+    #[serde(default)]
+    pub items: Vec<ServerCartItem>,
+}

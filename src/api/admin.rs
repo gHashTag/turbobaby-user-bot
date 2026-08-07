@@ -1,7 +1,7 @@
 use axum::{
     extract::{Path, Query, State},
     http::{HeaderMap, StatusCode},
-    routing::{get, post, put},
+    routing::{get, patch, post, put},
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
@@ -9,7 +9,7 @@ use serde_json::{json, Value};
 
 // Admin API routes
 use crate::api::auth::{check_admin, validate_telegram_id_param};
-use crate::db::entities::{lab_certificate, strain_review};
+use crate::db::entities::{delivery_zone, lab_certificate, strain_review};
 use crate::AppState;
 use teloxide::payloads::{SendMessageSetters, SendPhotoSetters};
 use teloxide::prelude::Requester;
@@ -153,6 +153,11 @@ pub(crate) fn routes() -> Router<AppState> {
         .route("/admin/strains/:id/lab-cert", post(create_lab_cert))
         .route("/admin/broadcast", post(telegram_broadcast))
         .route("/admin/broadcast/test", post(telegram_broadcast_test))
+        .route("/admin/delivery-zones", get(list_delivery_zones_admin).post(create_delivery_zone))
+        .route(
+            "/admin/delivery-zones/:id",
+            patch(update_delivery_zone).delete(delete_delivery_zone),
+        )
 }
 
 async fn get_stats(
@@ -1141,6 +1146,185 @@ async fn telegram_broadcast_test(
         "recipients": dedup.len(),
         "test": true,
     })))
+}
+
+// ── Loop #11: dynamic delivery zones admin CRUD ─────────────────────────────
+
+#[derive(Deserialize)]
+struct CreateZoneRequest {
+    name: String,
+    #[serde(default)]
+    name_en: Option<String>,
+    #[serde(default)]
+    fee: Option<f64>,
+    #[serde(default)]
+    min_order: Option<f64>,
+    #[serde(default)]
+    eta_min: Option<i32>,
+    #[serde(default)]
+    eta_max: Option<i32>,
+    #[serde(default)]
+    sort_order: Option<i32>,
+    #[serde(default)]
+    is_active: Option<bool>,
+}
+
+#[derive(Deserialize)]
+struct UpdateZoneRequest {
+    #[serde(default)]
+    name: Option<String>,
+    #[serde(default)]
+    name_en: Option<Option<String>>,
+    #[serde(default)]
+    fee: Option<f64>,
+    #[serde(default)]
+    min_order: Option<f64>,
+    #[serde(default)]
+    eta_min: Option<i32>,
+    #[serde(default)]
+    eta_max: Option<i32>,
+    #[serde(default)]
+    sort_order: Option<i32>,
+    #[serde(default)]
+    is_active: Option<bool>,
+}
+
+fn sanitize_f64(v: f64) -> f64 {
+    if v.is_finite() && v >= 0.0 { v } else { 0.0 }
+}
+
+fn validate_zone_name(name: &str) -> Result<(), StatusCode> {
+    if name.is_empty() || name.len() > 200 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    Ok(())
+}
+
+async fn list_delivery_zones_admin(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+) -> Result<Json<Value>, StatusCode> {
+    check_admin(&headers, &state)?;
+    use delivery_zone::{Column as ZoneCol, Entity as ZoneEntity};
+    use sea_orm::{EntityTrait, QueryOrder};
+    let models = ZoneEntity::find()
+        .order_by_asc(ZoneCol::SortOrder)
+        .order_by_asc(ZoneCol::Name)
+        .all(&state.db.orm)
+        .await
+        .map_err(|e| {
+            tracing::error!("list_delivery_zones_admin: {e}");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+    Ok(Json(json!({ "zones": models })))
+}
+
+async fn create_delivery_zone(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    Json(req): Json<CreateZoneRequest>,
+) -> Result<Json<Value>, StatusCode> {
+    check_admin(&headers, &state)?;
+    validate_zone_name(&req.name)?;
+    let now = chrono::DateTime::from(chrono::Utc::now());
+    let am = delivery_zone::ActiveModel {
+        id: Set(uuid::Uuid::new_v4().to_string()),
+        name: Set(req.name),
+        name_en: Set(req.name_en),
+        fee: Set(req.fee.map(sanitize_f64).unwrap_or(0.0)),
+        min_order: Set(req.min_order.map(sanitize_f64).unwrap_or(0.0)),
+        eta_min: Set(req.eta_min.unwrap_or(30).max(0)),
+        eta_max: Set(req.eta_max.unwrap_or(req.eta_min.unwrap_or(60)).max(req.eta_min.unwrap_or(0)).max(0)),
+        sort_order: Set(req.sort_order.unwrap_or(0)),
+        is_active: Set(req.is_active.unwrap_or(true)),
+        created_at: Set(Some(now)),
+        updated_at: Set(Some(now)),
+    };
+    let model = am.insert(&state.db.orm).await.map_err(|e| {
+        tracing::error!("create_delivery_zone insert: {e}");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+    Ok(Json(json!({ "zone": model })))
+}
+
+async fn update_delivery_zone(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(req): Json<UpdateZoneRequest>,
+) -> Result<Json<Value>, StatusCode> {
+    check_admin(&headers, &state)?;
+    if id.is_empty() || id.len() > 200 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    use delivery_zone::Entity as ZoneEntity;
+    use sea_orm::EntityTrait;
+    let model = ZoneEntity::find_by_id(id.clone())
+        .one(&state.db.orm)
+        .await
+        .map_err(|e| {
+            tracing::error!("update_delivery_zone lookup: {e}");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    let mut am: delivery_zone::ActiveModel = model.into();
+    if let Some(name) = req.name {
+        validate_zone_name(&name)?;
+        am.name = Set(name);
+    }
+    if let Some(name_en) = req.name_en {
+        am.name_en = Set(name_en);
+    }
+    if let Some(fee) = req.fee {
+        am.fee = Set(sanitize_f64(fee));
+    }
+    if let Some(min_order) = req.min_order {
+        am.min_order = Set(sanitize_f64(min_order));
+    }
+    if let Some(eta_min) = req.eta_min {
+        am.eta_min = Set(eta_min.max(0));
+    }
+    if let Some(eta_max) = req.eta_max {
+        let floor = req.eta_min.unwrap_or_else(|| am.eta_min.clone().unwrap());
+        am.eta_max = Set(eta_max.max(floor).max(0));
+    }
+    if let Some(sort_order) = req.sort_order {
+        am.sort_order = Set(sort_order);
+    }
+    if let Some(is_active) = req.is_active {
+        am.is_active = Set(is_active);
+    }
+    am.updated_at = Set(Some(chrono::DateTime::from(chrono::Utc::now())));
+    let model = am.update(&state.db.orm).await.map_err(|e| {
+        tracing::error!("update_delivery_zone update: {e}");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+    Ok(Json(json!({ "zone": model })))
+}
+
+async fn delete_delivery_zone(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<Value>, StatusCode> {
+    check_admin(&headers, &state)?;
+    if id.is_empty() || id.len() > 200 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    use delivery_zone::Entity as ZoneEntity;
+    use sea_orm::EntityTrait;
+    let res = ZoneEntity::delete_by_id(id)
+        .exec(&state.db.orm)
+        .await
+        .map_err(|e| {
+            tracing::error!("delete_delivery_zone: {e}");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+    if res.rows_affected == 0 {
+        return Err(StatusCode::NOT_FOUND);
+    }
+    Ok(Json(json!({ "success": true })))
 }
 
 #[cfg(test)]
