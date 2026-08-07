@@ -1228,7 +1228,7 @@ async fn create_delivery_zone(
     validate_zone_name(&req.name)?;
     let now = chrono::DateTime::from(chrono::Utc::now());
     let am = delivery_zone::ActiveModel {
-        id: Set(uuid::Uuid::new_v4().to_string()),
+        id: Set(uuid::Uuid::new_v4()),
         name: Set(req.name),
         name_en: Set(req.name_en),
         fee: Set(req.fee.map(sanitize_f64).unwrap_or(0.0)),
@@ -1254,12 +1254,10 @@ async fn update_delivery_zone(
     Json(req): Json<UpdateZoneRequest>,
 ) -> Result<Json<Value>, StatusCode> {
     check_admin(&headers, &state)?;
-    if id.is_empty() || id.len() > 200 {
-        return Err(StatusCode::BAD_REQUEST);
-    }
+    let id_uuid = uuid::Uuid::parse_str(&id).map_err(|_| StatusCode::BAD_REQUEST)?;
     use delivery_zone::Entity as ZoneEntity;
     use sea_orm::EntityTrait;
-    let model = ZoneEntity::find_by_id(id.clone())
+    let model = ZoneEntity::find_by_id(id_uuid)
         .one(&state.db.orm)
         .await
         .map_err(|e| {
@@ -1309,12 +1307,10 @@ async fn delete_delivery_zone(
     Path(id): Path<String>,
 ) -> Result<Json<Value>, StatusCode> {
     check_admin(&headers, &state)?;
-    if id.is_empty() || id.len() > 200 {
-        return Err(StatusCode::BAD_REQUEST);
-    }
+    let id_uuid = uuid::Uuid::parse_str(&id).map_err(|_| StatusCode::BAD_REQUEST)?;
     use delivery_zone::Entity as ZoneEntity;
     use sea_orm::EntityTrait;
-    let res = ZoneEntity::delete_by_id(id)
+    let res = ZoneEntity::delete_by_id(id_uuid)
         .exec(&state.db.orm)
         .await
         .map_err(|e| {

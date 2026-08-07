@@ -229,7 +229,7 @@ async fn get_or_create_cart(
         return Ok(c);
     }
     let am = crate::db::entities::cart::ActiveModel {
-        id: Set(uuid::Uuid::new_v4().to_string()),
+        id: Set(uuid::Uuid::new_v4()),
         telegram_id: Set(telegram_id),
         created_at: Set(Some(chrono::DateTime::from(Utc::now()))),
         updated_at: Set(Some(chrono::DateTime::from(Utc::now()))),
@@ -244,11 +244,11 @@ async fn get_or_create_cart(
 
 async fn load_cart_items(
     db: &sea_orm::DatabaseConnection,
-    cart_id: &str,
+    cart_id: &uuid::Uuid,
 ) -> Result<Vec<crate::db::entities::cart_item::Model>, StatusCode> {
     use crate::db::entities::cart_item::{Column as ItemCol, Entity as ItemEntity};
     ItemEntity::find()
-        .filter(ItemCol::CartId.eq(cart_id))
+        .filter(ItemCol::CartId.eq(*cart_id))
         .order_by_asc(ItemCol::CreatedAt)
         .all(db)
         .await
@@ -267,7 +267,7 @@ fn cart_model_to_resp(model: &crate::db::entities::cart::Model, items: &[crate::
             let q = i.quantity.max(0);
             total += price * q as f64;
             CartItemResp {
-                id: i.id.clone(),
+                id: i.id.to_string(),
                 kind: i.kind.clone(),
                 catalog_id: i.catalog_id.clone(),
                 quantity: q,
@@ -347,8 +347,8 @@ async fn add_cart_item(
         })?;
     } else {
         let am = crate::db::entities::cart_item::ActiveModel {
-            id: Set(uuid::Uuid::new_v4().to_string()),
-            cart_id: Set(cart.id.clone()),
+            id: Set(uuid::Uuid::new_v4()),
+            cart_id: Set(cart.id),
             kind: Set(kind.to_string()),
             catalog_id: Set(req.catalog_id.clone()),
             quantity: Set(req.quantity),
@@ -378,10 +378,11 @@ async fn update_cart_item(
     Json(req): Json<UpdateCartItemReq>,
 ) -> Result<Json<Value>, StatusCode> {
     validate_id(&item_id)?;
+    let item_uuid = uuid::Uuid::parse_str(&item_id).map_err(|_| StatusCode::BAD_REQUEST)?;
     validate_quantity(req.quantity)?;
 
     use crate::db::entities::cart_item::Entity as ItemEntity;
-    let item = ItemEntity::find_by_id(item_id.clone())
+    let item = ItemEntity::find_by_id(item_uuid)
         .one(&state.db.orm)
         .await
         .map_err(|e| {
@@ -419,9 +420,10 @@ async fn delete_cart_item(
     Path(item_id): Path<String>,
 ) -> Result<Json<Value>, StatusCode> {
     validate_id(&item_id)?;
+    let item_uuid = uuid::Uuid::parse_str(&item_id).map_err(|_| StatusCode::BAD_REQUEST)?;
 
     use crate::db::entities::cart_item::Entity as ItemEntity;
-    let item = ItemEntity::find_by_id(item_id.clone())
+    let item = ItemEntity::find_by_id(item_uuid)
         .one(&state.db.orm)
         .await
         .map_err(|e| {
@@ -430,7 +432,7 @@ async fn delete_cart_item(
         })?
         .ok_or(StatusCode::NOT_FOUND)?;
 
-    let cart = crate::db::entities::cart::Entity::find_by_id(item.cart_id.clone())
+    let cart = crate::db::entities::cart::Entity::find_by_id(item.cart_id)
         .one(&state.db.orm)
         .await
         .map_err(|e| {
@@ -442,7 +444,7 @@ async fn delete_cart_item(
     check_owner(&headers, &state, cart.telegram_id)?;
     check_not_blocked(&state, cart.telegram_id).await?;
 
-    ItemEntity::delete_by_id(item_id)
+    ItemEntity::delete_by_id(item_uuid)
         .exec(&state.db.orm)
         .await
         .map_err(|e| {
@@ -544,7 +546,7 @@ async fn merge_cart(
             })?;
         } else {
             let am = crate::db::entities::cart_item::ActiveModel {
-                id: Set(uuid::Uuid::new_v4().to_string()),
+                id: Set(uuid::Uuid::new_v4()),
                 cart_id: Set(cart.id.clone()),
                 kind: Set(kind.to_string()),
                 catalog_id: Set(catalog_id),

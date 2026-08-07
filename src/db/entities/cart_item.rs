@@ -7,8 +7,8 @@ use serde::{Deserialize, Serialize};
 #[sea_orm(table_name = "cart_items")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
-    pub id: String,
-    pub cart_id: String,
+    pub id: uuid::Uuid,
+    pub cart_id: uuid::Uuid,
     pub kind: String,
     pub catalog_id: String,
     pub quantity: i32,

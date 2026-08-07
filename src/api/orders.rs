@@ -607,10 +607,14 @@ async fn create_order(
     // being stored and misleading the ETA on the success screen.
     if let Some(ref zid) = req.delivery_zone_id {
         if !zid.is_empty() {
+            let zone_uuid = uuid::Uuid::parse_str(zid).map_err(|_| {
+                tracing::info!(zone_id=%zid, "create_order: malformed delivery zone id");
+                StatusCode::UNPROCESSABLE_ENTITY
+            })?;
             use crate::db::entities::delivery_zone::{Column as ZoneCol, Entity as ZoneEntity};
             use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
             let exists = ZoneEntity::find()
-                .filter(ZoneCol::Id.eq(zid.clone()))
+                .filter(ZoneCol::Id.eq(zone_uuid))
                 .filter(ZoneCol::IsActive.eq(true))
                 .one(&state.db.orm)
                 .await
@@ -1494,17 +1498,21 @@ async fn get_order_status(
     }
 
     let zone = if let Some(ref zid) = model.delivery_zone_id {
-        use crate::db::entities::delivery_zone::{Column as ZoneCol, Entity as ZoneEntity};
-        use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
-        ZoneEntity::find()
-            .filter(ZoneCol::Id.eq(zid.clone()))
-            .filter(ZoneCol::IsActive.eq(true))
-            .one(&state.db.orm)
-            .await
-            .map_err(|e| {
-                tracing::error!("get_order_status: delivery zone lookup failed: {e}");
-                StatusCode::INTERNAL_SERVER_ERROR
-            })?
+        if let Ok(zone_uuid) = uuid::Uuid::parse_str(zid) {
+            use crate::db::entities::delivery_zone::{Column as ZoneCol, Entity as ZoneEntity};
+            use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
+            ZoneEntity::find()
+                .filter(ZoneCol::Id.eq(zone_uuid))
+                .filter(ZoneCol::IsActive.eq(true))
+                .one(&state.db.orm)
+                .await
+                .map_err(|e| {
+                    tracing::error!("get_order_status: delivery zone lookup failed: {e}");
+                    StatusCode::INTERNAL_SERVER_ERROR
+                })?
+        } else {
+            None
+        }
     } else {
         None
     };
