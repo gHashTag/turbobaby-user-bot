@@ -8,6 +8,7 @@ use crate::trios::i18n::{
     T_CHECKOUT_ERR_NAME_LONG, T_CHECKOUT_ERR_NETWORK, T_CHECKOUT_ERR_NO_TELEGRAM,
     T_CHECKOUT_ERR_PARSE, T_CHECKOUT_ERR_PHONE, T_CHECKOUT_ERR_PHONE_INVALID,
     T_CHECKOUT_ERR_PHONE_LONG, T_CHECKOUT_GARDEN_DISCOUNT, T_CHECKOUT_GARDEN_DISCOUNT_PCT,
+    T_CHECKOUT_RETRY,
     T_CHECKOUT_NAME_LABEL, T_CHECKOUT_NAME_PLACEHOLDER, T_CHECKOUT_NOTES_LABEL,
     T_CHECKOUT_NOTES_PLACEHOLDER, T_CHECKOUT_OPEN_MAP, T_CHECKOUT_PAY_ON_RECEIVE,
     T_CHECKOUT_PHONE_LABEL, T_CHECKOUT_PHONE_PLACEHOLDER, T_CHECKOUT_PROCESSING,
@@ -1351,6 +1352,21 @@ pub fn CheckoutScreen() -> Element {
                     ErrorBanner {
                         message: order_error.read().clone().unwrap_or_default(),
                         icon: Some("❌".to_string()),
+                    }
+
+                    if order_error.read().is_some() {
+                        button {
+                            style: "
+                            width: 100%; font-size: 14px; font-weight: 700;
+                            padding: 12px 20px; margin-top: 10px;
+                            background: #2a2a4a; color: #e8e8e8;
+                            border: 4px solid #1a1a2e; border-radius: 0;
+                            cursor: pointer; box-shadow: 3px 3px 0 #000;
+                        ",
+                            disabled: is_processing(),
+                            onclick: move |_| { submit_order.call(()); },
+                            "{t(lang, T_CHECKOUT_RETRY)}"
+                        }
                     }
 
                     // Actions

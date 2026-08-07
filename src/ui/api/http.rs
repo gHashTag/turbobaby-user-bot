@@ -16,6 +16,9 @@
 //! `Result<T, String>` shape unchanged.
 
 use gloo_net::http::Request;
+use serde::{Deserialize, Serialize};
+
+use crate::ui::state::{Cart, CartItem, CartItemType};
 
 /// GET `url`, return the response body as text. Non-2xx responses surface
 /// as `Err(format!("HTTP {}: …"))` so callers can render them directly.
@@ -332,6 +335,103 @@ pub async fn fetch_text_admin(url: &str, auth: &AdminAuth<'_>) -> Result<(u16, S
     let status = resp.status();
     let body = resp.text().await.map_err(|e| format!("Read error: {e}"))?;
     Ok((status, body))
+}
+
+/// Loop #12: DTO for `POST /api/cart/merge`. The server is price-authoritative;
+/// it resolves `catalog_id` against current DB prices and returns a fresh cart.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MergeCartItemDto {
+    pub id: String,
+    pub kind: String,
+    pub catalog_id: String,
+    pub quantity: i32,
+    pub unit_price: f64,
+    pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub image_url: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct CartRespDto {
+    pub telegram_id: i64,
+    pub items: Vec<MergeCartItemDto>,
+    pub total: f64,
+    pub updated_at: Option<String>,
+}
+
+impl From<CartRespDto> for Cart {
+    fn from(resp: CartRespDto) -> Self {
+        let items = resp
+            .items
+            .into_iter()
+            .map(|i| CartItem {
+                id: i.catalog_id,
+                name: i.name,
+                price: i.unit_price,
+                quantity: i.quantity.max(0) as u32,
+                image_url: i.image_url,
+                item_type: kind_to_cart_item_type(&i.kind),
+                fulfillment: None,
+            })
+            .collect();
+        let mut cart = Cart { items, total: 0.0 };
+        cart.recalculate_total();
+        cart
+    }
+}
+
+/// Convert a UI [`CartItemType`] into the string kind expected by the backend
+/// cart API.
+pub fn cart_item_type_to_kind(item_type: &CartItemType) -> &'static str {
+    match item_type {
+        CartItemType::Strain => "strain",
+        CartItemType::Accessory => "accessory",
+        CartItemType::Tea => "tea",
+        CartItemType::Set => "set",
+    }
+}
+
+fn kind_to_cart_item_type(kind: &str) -> CartItemType {
+    match kind {
+        "strain" => CartItemType::Strain,
+        "accessory" => CartItemType::Accessory,
+        "tea" => CartItemType::Tea,
+        "set" => CartItemType::Set,
+        _ => CartItemType::Strain,
+    }
+}
+
+/// Merge local items into the server-side cart and return a price-authoritative
+/// [`Cart`]. Unknown/unavailable items are skipped by the server rather than
+/// failing the whole merge, so the returned cart may be smaller than the input.
+pub async fn merge_server_cart(
+    base_url: &str,
+    init_data: &str,
+    telegram_id: i64,
+    items: &[CartItem],
+) -> Result<Cart, String> {
+    let merge_items: Vec<MergeCartItemDto> = items
+        .iter()
+        .map(|i| MergeCartItemDto {
+            id: i.id.clone(),
+            kind: cart_item_type_to_kind(&i.item_type).to_string(),
+            catalog_id: i.id.clone(),
+            quantity: i.quantity as i32,
+            unit_price: i.price,
+            name: i.name.clone(),
+            image_url: i.image_url.clone(),
+        })
+        .collect();
+    let body = serde_json::json!({
+        "telegram_id": telegram_id,
+        "items": merge_items,
+    })
+    .to_string();
+    let url = format!("{}/api/cart/merge", base_url);
+    let text = post_json_authed(&url, init_data, &body).await?;
+    let resp: CartRespDto = serde_json::from_str(&text)
+        .map_err(|e| format!("Cart merge response JSON error: {e}"))?;
+    Ok(resp.into())
 }
 
 /// PUT JSON with full admin auth. Returns (status, body).

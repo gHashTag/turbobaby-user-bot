@@ -570,6 +570,8 @@ async fn merge_cart(
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
+    crate::metrics::reorder_clicked("server_merge");
+
     // Refresh cart timestamp after a successful merge.
     let cart = get_or_create_cart(&state.db.orm, req.telegram_id).await?;
     let items = load_cart_items(&state.db.orm, &cart.id).await?;

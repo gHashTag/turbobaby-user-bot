@@ -15,6 +15,7 @@ use crate::trios::i18n::{
     T_REORDER,
 };
 use crate::ui::api::context::api_base_url;
+use crate::ui::api::http::merge_server_cart;
 use crate::ui::components::bottom_nav::BottomNav;
 use crate::ui::components::skeleton::{Skeleton, SkeletonShape};
 use crate::ui::components::StatusStepper;
@@ -72,6 +73,31 @@ struct OrderStatusResp {
     min_eta_minutes: Option<u32>,
     #[serde(default)]
     max_eta_minutes: Option<u32>,
+}
+
+/// Loop #12: convert a backend order item into a local [`CartItem`] so it can
+/// be merged into the server-side cart with current DB prices.
+fn api_order_item_to_cart_item(item: &ApiOrderItem) -> Option<CartItem> {
+    let (id, name, item_type, price_hint) = if let Some(ref sid) = item.strain_id {
+        (sid.clone(), item.strain_name.clone().unwrap_or_else(|| "Strain".into()), CartItemType::Strain, item.unit_price.unwrap_or(0.0))
+    } else if let Some(ref set_id) = item.set_id {
+        (set_id.clone(), item.set_name.clone().unwrap_or_else(|| "Set".into()), CartItemType::Set, item.unit_price.unwrap_or(0.0))
+    } else if let Some(ref aid) = item.accessory_id {
+        (aid.clone(), item.accessory_name.clone().unwrap_or_else(|| "Accessory".into()), CartItemType::Accessory, item.unit_price.unwrap_or(0.0))
+    } else if let Some(ref tid) = item.tea_id {
+        (tid.clone(), item.tea_name.clone().unwrap_or_else(|| "Drink".into()), CartItemType::Tea, item.unit_price.unwrap_or(0.0))
+    } else {
+        return None;
+    };
+    Some(CartItem {
+        id,
+        name,
+        price: price_hint,
+        quantity: item.quantity.max(1.0) as u32,
+        image_url: None,
+        item_type,
+        fulfillment: None,
+    })
 }
 
 fn item_name(item: &ApiOrderItem) -> String {
@@ -157,9 +183,12 @@ fn OrderDetailCard(
     let is_pending = display_status == "pending";
     let order_for_reorder = order.clone();
     let reorder_nav = nav.clone();
-    let mut reorder_cart = cart.clone();
+    let reorder_cart = cart.clone();
+    let init_data_for_reorder = init_data.clone();
+    let init_data_for_cancel = init_data.clone();
     let mut show_cancel_confirm = use_signal(|| false);
     let mut cancelling = use_signal(|| false);
+    let reorder_loading = use_signal(|| false);
     let reorder_label = t(lang, T_REORDER);
 
     rsx! {
@@ -251,7 +280,7 @@ fn OrderDetailCard(
                                 disabled: cancelling(),
                                 onclick: move |_| {
                                     let oid = order.id.clone();
-                                    let init = init_data.clone();
+                                    let init = init_data_for_cancel.clone();
                                     let tid = telegram_id;
                                     cancelling.set(true);
                                     spawn(async move {
@@ -289,33 +318,40 @@ fn OrderDetailCard(
             if is_terminal {
                 button {
                     style: "font-size:14px;font-weight:700;width:100%;padding:12px;background:#39ff14;color:#000;border:3px solid #2d9e0f;box-shadow:2px 2px 0 #000;cursor:pointer;",
+                    disabled: reorder_loading(),
                     onclick: move |_| {
-                        reorder_cart.write().clear();
-                        for item in order_for_reorder.items.iter() {
-                            let (id, name, item_type, price_hint) = if let Some(ref sid) = item.strain_id {
-                                (sid.clone(), item.strain_name.clone().unwrap_or_else(|| "Strain".into()), CartItemType::Strain, item.unit_price.unwrap_or(0.0))
-                            } else if let Some(ref set_id) = item.set_id {
-                                (set_id.clone(), item.set_name.clone().unwrap_or_else(|| "Set".into()), CartItemType::Set, item.unit_price.unwrap_or(0.0))
-                            } else if let Some(ref aid) = item.accessory_id {
-                                (aid.clone(), item.accessory_name.clone().unwrap_or_else(|| "Accessory".into()), CartItemType::Accessory, item.unit_price.unwrap_or(0.0))
-                            } else if let Some(ref tid) = item.tea_id {
-                                (tid.clone(), item.tea_name.clone().unwrap_or_else(|| "Drink".into()), CartItemType::Tea, item.unit_price.unwrap_or(0.0))
-                            } else {
-                                continue;
-                            };
-                            let qty = item.quantity.max(1.0) as u32;
-                            reorder_cart.write().add_item(CartItem {
-                                id,
-                                name,
-                                price: price_hint,
-                                quantity: qty,
-                                image_url: None,
-                                item_type,
-                                fulfillment: None,
-                            });
-                        }
-                        TelegramApp::init().haptic_notification(HapticNotification::Success);
-                        reorder_nav.push(Route::Cart {});
+                        let order_items = order_for_reorder.items.clone();
+                        let init = init_data_for_reorder.clone();
+                        let tid = telegram_id;
+                        let mut cart_sig = reorder_cart.clone();
+                        let nav = reorder_nav.clone();
+                        let mut loading = reorder_loading.clone();
+                        spawn(async move {
+                            loading.set(true);
+                            let local_items: Vec<CartItem> = order_items
+                                .iter()
+                                .filter_map(api_order_item_to_cart_item)
+                                .collect();
+                            match merge_server_cart(&api_base_url(), &init, tid, &local_items,
+                            ).await {
+                                Ok(fresh_cart) => {
+                                    cart_sig.set(fresh_cart);
+                                    TelegramApp::init().haptic_notification(HapticNotification::Success);
+                                    nav.push(Route::Cart {});
+                                }
+                                Err(_) => {
+                                    // Fallback: load items with the stale price hint rather than leaving
+                                    // the user without a reorder path.
+                                    cart_sig.write().clear();
+                                    for item in local_items {
+                                        cart_sig.write().add_item(item);
+                                    }
+                                    TelegramApp::init().haptic_notification(HapticNotification::Success);
+                                    nav.push(Route::Cart {});
+                                }
+                            }
+                            loading.set(false);
+                        });
                     },
                     "{reorder_label}"
                 }

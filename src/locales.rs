@@ -86,6 +86,8 @@ pub(crate) struct Locale {
     pub garden_water_reminder: String,
     pub garden_harvest_ready: String,
     pub garden_open_app: String,
+    pub cart_abandonment_reminder: String,
+    pub cart_open: String,
 }
 
 pub(crate) fn get_locale(lang: &str) -> Locale {
@@ -211,6 +213,8 @@ fn ru() -> Locale {
         garden_water_reminder: "🌱 Вашему растению нужна вода! Зайдите в сад, чтобы полить.".into(),
         garden_harvest_ready: "🏆 Растение готово к сбору урожая! Откройте сад, чтобы получить награду.".into(),
         garden_open_app: "Открыть сад".into(),
+        cart_abandonment_reminder: "🛒 Вы не завершили оформление заказа. Товары ждут вас в корзине — вернитесь и заберите их одним касанием.".into(),
+        cart_open: "Открыть корзину".into(),
     }
 }
 
@@ -300,6 +304,8 @@ fn en() -> Locale {
         garden_water_reminder: "🌱 Your plant is thirsty! Visit the garden to water it.".into(),
         garden_harvest_ready: "🏆 Your plant is ready to harvest! Open the garden to claim the reward.".into(),
         garden_open_app: "Open garden".into(),
+        cart_abandonment_reminder: "🛒 You didn't finish your order. Your items are still in the cart — come back and grab them with one tap.".into(),
+        cart_open: "Open cart".into(),
     }
 }
 

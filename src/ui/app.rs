@@ -7,7 +7,9 @@ use crate::ui::api::http::fetch_text_authed;
 use crate::ui::api::types::ServerCart;
 use crate::ui::components::{install_error_handlers, ErrorOverlay, JsErrorItem};
 use crate::ui::routes::Routes;
-use crate::ui::share::{parse_order_start_param, parse_start_param, SharedProduct};
+use crate::ui::share::{
+    parse_cart_start_param, parse_order_start_param, parse_start_param, SharedProduct,
+};
 use crate::ui::state::{Cart, CartItem, CartItemType};
 use crate::ui::telegram::TelegramProvider;
 use dioxus::prelude::*;
@@ -127,6 +129,11 @@ pub fn App() -> Element {
     use_context_provider(|| Signal::new(None::<String>));
     let pending_order = use_context::<Signal<Option<String>>>();
 
+    // Cart deep-link target parsed from Telegram.WebApp.initDataUnsafe.start_param.
+    // Routes renders a small navigator that sends the user to /cart when true.
+    use_context_provider(|| Signal::new(false));
+    let pending_cart = use_context::<Signal<bool>>();
+
     use_effect(move || {
         install_error_handlers(errors);
     });
@@ -136,12 +143,24 @@ pub fn App() -> Element {
     use_hook(move || {
         let mut pending = pending_shared.clone();
         let mut pending_order_id = pending_order.clone();
+        let mut pending_cart_flag = pending_cart.clone();
         spawn(async move {
             for _ in 0..30 {
-                if pending.read().is_some() || pending_order_id.read().is_some() {
+                if pending.read().is_some()
+                    || pending_order_id.read().is_some()
+                    || pending_cart_flag()
+                {
                     return;
                 }
                 if let Some(param) = crate::ui::telegram::TelegramApp::init().start_param() {
+                    if parse_cart_start_param(&param) {
+                        #[cfg(target_arch = "wasm32")]
+                        web_sys::console::log_1(
+                            &"[deeplink] resolved cart".into(),
+                        );
+                        pending_cart_flag.set(true);
+                        return;
+                    }
                     if let Some(product) = parse_start_param(&param) {
                         #[cfg(target_arch = "wasm32")]
                         web_sys::console::log_1(

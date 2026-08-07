@@ -150,6 +150,20 @@ pub fn order_deep_link(order_id: &str) -> String {
     )
 }
 
+/// Build a `startapp` parameter that opens the Mini App on the cart screen.
+pub fn cart_start_param() -> String {
+    "cart".to_string()
+}
+
+/// Raw `t.me` deep link that opens the cart.
+pub fn cart_deep_link() -> String {
+    format!(
+        "https://t.me/{}?startapp={}",
+        bot_username(),
+        cart_start_param()
+    )
+}
+
 /// Parse an order `startapp` value (`o_{order_id}`). Unknown prefixes and
 /// payloads that are too long are rejected so malformed links degrade gracefully.
 pub fn parse_order_start_param(param: &str) -> Option<String> {
@@ -163,6 +177,11 @@ pub fn parse_order_start_param(param: &str) -> Option<String> {
         return None;
     }
     param.strip_prefix("o_").map(|id| id.to_string())
+}
+
+/// Parse a cart `startapp` value (`cart`).
+pub fn parse_cart_start_param(param: &str) -> bool {
+    param == "cart"
 }
 
 /// Open a `t.me` URL using Telegram's native method, falling back to a plain

@@ -252,6 +252,7 @@ pub fn HomeScreen() -> Element {
     // from the home route to the catalog screen that owns the product.
     let pending = use_context::<Signal<Option<SharedProduct>>>();
     let mut pending_order = use_context::<Signal<Option<String>>>();
+    let mut pending_cart = use_context::<Signal<bool>>();
     let nav = navigator();
     use_effect(move || {
         if let Some(target) = pending.read().clone() {
@@ -264,6 +265,11 @@ pub fn HomeScreen() -> Element {
             // Cycle #80: order deep link opens the dedicated detail screen.
             pending_order.set(None);
             nav.push(Route::OrderDetail { id: order_id });
+        }
+        // Loop #12: cart deep link sends the user straight to the cart.
+        if pending_cart() {
+            pending_cart.set(false);
+            nav.push(Route::Cart {});
         }
     });
 

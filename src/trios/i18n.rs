@@ -213,6 +213,7 @@ pub const T_CHECKOUT_ERR_ITEMS: Key = "checkout.error.items_empty";
 pub const T_CHECKOUT_ERR_NO_TELEGRAM: Key = "checkout.error.no_telegram";
 pub const T_CHECKOUT_ERR_NETWORK: Key = "checkout.error.network";
 pub const T_CHECKOUT_ERR_PARSE: Key = "checkout.error.parse";
+pub const T_CHECKOUT_RETRY: Key = "checkout.retry";
 pub const T_ADD_TO_CART: Key = "btn.add_to_cart";
 pub const T_FULFILLMENT_LABEL: Key = "tea.fulfillment_label";
 pub const T_FULFILLMENT_DINE_IN: Key = "tea.fulfillment_dine_in";
@@ -871,6 +872,7 @@ fn get_ru_translation(key: Key) -> Value {
         T_CHECKOUT_ERR_NO_TELEGRAM => "Откройте приложение в Telegram, чтобы оформить заказ",
         T_CHECKOUT_ERR_NETWORK => "Ошибка сети. Проверьте соединение и попробуйте снова",
         T_CHECKOUT_ERR_PARSE => "Не удалось обработать ответ сервера. Попробуйте снова",
+        T_CHECKOUT_RETRY => "Попробовать снова",
         T_BACK => "← Назад",
         T_TOTAL => "Итого:",
         T_ADD_TO_CART => "В корзину",
@@ -1487,6 +1489,7 @@ fn get_en_translation(key: Key) -> Value {
         T_CHECKOUT_ERR_NO_TELEGRAM => "Open the app in Telegram to place an order",
         T_CHECKOUT_ERR_NETWORK => "Network error. Check your connection and try again",
         T_CHECKOUT_ERR_PARSE => "Could not process server response. Please try again",
+        T_CHECKOUT_RETRY => "Try again",
         T_BACK => "← Back",
         T_TOTAL => "Total:",
         T_ADD_TO_CART => "Add to Cart",

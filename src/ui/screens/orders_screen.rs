@@ -10,6 +10,7 @@ use crate::trios::i18n::{
 };
 use crate::ui::state::{Cart, CartItem, CartItemType};
 use crate::ui::api::context::{api_base_url, use_api_client};
+use crate::ui::api::http::merge_server_cart;
 use crate::ui::components::bottom_nav::BottomNav;
 use crate::ui::components::skeleton::{Skeleton, SkeletonShape};
 use crate::ui::components::StatusStepper;
@@ -50,6 +51,31 @@ fn item_name(item: &ApiOrderItem) -> String {
         .or_else(|| item.tea_name.clone())
         .or_else(|| item.set_name.clone())
         .unwrap_or_else(|| "Unknown".to_string())
+}
+
+/// Loop #12: convert a backend order item into a local [`CartItem`] so it can
+/// be merged into the server-side cart with current DB prices.
+fn api_order_item_to_cart_item(item: &ApiOrderItem) -> Option<CartItem> {
+    let (id, name, item_type, price_hint) = if let Some(ref sid) = item.strain_id {
+        (sid.clone(), item.strain_name.clone().unwrap_or_else(|| "Strain".into()), CartItemType::Strain, item.unit_price.unwrap_or(0.0))
+    } else if let Some(ref set_id) = item.set_id {
+        (set_id.clone(), item.set_name.clone().unwrap_or_else(|| "Set".into()), CartItemType::Set, item.unit_price.unwrap_or(0.0))
+    } else if let Some(ref aid) = item.accessory_id {
+        (aid.clone(), item.accessory_name.clone().unwrap_or_else(|| "Accessory".into()), CartItemType::Accessory, item.unit_price.unwrap_or(0.0))
+    } else if let Some(ref tid) = item.tea_id {
+        (tid.clone(), item.tea_name.clone().unwrap_or_else(|| "Drink".into()), CartItemType::Tea, item.unit_price.unwrap_or(0.0))
+    } else {
+        return None;
+    };
+    Some(CartItem {
+        id,
+        name,
+        price: price_hint,
+        quantity: item.quantity.max(1.0) as u32,
+        image_url: None,
+        item_type,
+        fulfillment: None,
+    })
 }
 
 #[derive(Debug, Deserialize)]
@@ -216,11 +242,13 @@ fn ReviewForm(props: ReviewFormProps) -> Element {
 pub fn OrdersScreen() -> Element {
     let mut active_filter = use_signal(|| StatusFilter::All);
     let mut review_target = use_signal(|| None::<(ApiOrder, ApiOrderItem)>);
+    let reorder_loading = use_signal(|| false);
     let telegram_id = use_telegram_id().unwrap_or(0);
     let init_data = use_telegram_init_data();
+    let init_data_for_orders = init_data.clone();
 
     let orders_resource = use_resource(move || {
-        let init = init_data.clone();
+        let init = init_data_for_orders.clone();
         async move {
             if telegram_id == 0 {
                 return Err("No telegram_id".to_string());
@@ -392,40 +420,48 @@ pub fn OrdersScreen() -> Element {
                                                     {
                                                         let order_for_reorder = o.clone();
                                                         let reorder_nav = nav.clone();
-                                                        let mut reorder_cart = cart.clone();
+                                                        let reorder_cart = cart.clone();
                                                         let reorder_label2 = reorder_label;
+                                                        let loading = reorder_loading.clone();
+                                                        let init = init_data.clone();
+                                                        let tid = telegram_id;
                                                         rsx! {
                                                             div { style: "padding-top: 8px;",
                                                                 button {
                                                                     style: "font-size:13px;font-weight:700;width:100%;padding:10px;background:#39ff14;color:#000;border:3px solid #2d9e0f;box-shadow:2px 2px 0 #000;cursor:pointer;",
+                                                                    disabled: loading(),
                                                                     onclick: move |e: Event<MouseData>| {
                                                                         e.stop_propagation();
-                                                                        reorder_cart.write().clear();
-                                                                        for item in order_for_reorder.items.iter() {
-                                                                            let (id, name, item_type, price_hint) = if let Some(ref sid) = item.strain_id {
-                                                                                (sid.clone(), item.strain_name.clone().unwrap_or_else(|| "Strain".into()), CartItemType::Strain, item.unit_price.unwrap_or(0.0))
-                                                                            } else if let Some(ref set_id) = item.set_id {
-                                                                                (set_id.clone(), item.set_name.clone().unwrap_or_else(|| "Set".into()), CartItemType::Set, item.unit_price.unwrap_or(0.0))
-                                                                            } else if let Some(ref aid) = item.accessory_id {
-                                                                                (aid.clone(), item.accessory_name.clone().unwrap_or_else(|| "Accessory".into()), CartItemType::Accessory, item.unit_price.unwrap_or(0.0))
-                                                                            } else if let Some(ref tid) = item.tea_id {
-                                                                                (tid.clone(), item.tea_name.clone().unwrap_or_else(|| "Drink".into()), CartItemType::Tea, item.unit_price.unwrap_or(0.0))
-                                                                            } else {
-                                                                                continue;
-                                                                            };
-                                                                            let qty = item.quantity.max(1.0) as u32;
-                                                                            reorder_cart.write().add_item(CartItem {
-                                                                                id,
-                                                                                name,
-                                                                                price: price_hint,
-                                                                                quantity: qty,
-                                                                                image_url: None,
-                                                                                item_type,
-                                                                                fulfillment: None,
-                                                                            });
-                                                                        }
-                                                                        TelegramApp::init().haptic_notification(HapticNotification::Success);
-                                                                        reorder_nav.push(Route::Cart {});
+                                                                        let order_items = order_for_reorder.items.clone();
+                                                                        let mut cart_sig = reorder_cart.clone();
+                                                                        let nav = reorder_nav.clone();
+                                                                        let mut loading_inner = loading.clone();
+                                                                        let init = init.clone();
+                                                                        spawn(async move {
+                                                                            loading_inner.set(true);
+                                                                            let local_items: Vec<CartItem> = order_items
+                                                                                .iter()
+                                                                                .filter_map(api_order_item_to_cart_item)
+                                                                                .collect();
+                                                                            match merge_server_cart(
+                                                                                &api_base_url(), &init, tid, &local_items,
+                                                                            ).await {
+                                                                                Ok(fresh_cart) => {
+                                                                                    cart_sig.set(fresh_cart);
+                                                                                    TelegramApp::init().haptic_notification(HapticNotification::Success);
+                                                                                    nav.push(Route::Cart {});
+                                                                                }
+                                                                                Err(_) => {
+                                                                                    cart_sig.write().clear();
+                                                                                    for item in local_items {
+                                                                                        cart_sig.write().add_item(item);
+                                                                                    }
+                                                                                    TelegramApp::init().haptic_notification(HapticNotification::Success);
+                                                                                    nav.push(Route::Cart {});
+                                                                                }
+                                                                            }
+                                                                            loading_inner.set(false);
+                                                                        });
                                                                     },
                                                                     "{reorder_label2}"
                                                                 }

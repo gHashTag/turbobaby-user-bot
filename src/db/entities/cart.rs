@@ -12,6 +12,8 @@ pub struct Model {
     pub created_at: Option<DateTimeWithTimeZone>,
     pub updated_at: Option<DateTimeWithTimeZone>,
     pub expires_at: Option<DateTimeWithTimeZone>,
+    pub reminder_sent_at: Option<DateTimeWithTimeZone>,
+    pub reminder_count: Option<i32>,
 }
 
 #[allow(dead_code)]
