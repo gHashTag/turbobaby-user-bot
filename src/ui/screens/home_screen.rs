@@ -9,6 +9,7 @@ use crate::trios::i18n::{
     T_TRUST_MEDICAL, T_TRUST_SUPPORT,
 };
 use crate::ui::api::context::api_base_url;
+use crate::ui::api::http::{fetch_text_authed, merge_server_cart};
 use crate::ui::assets;
 use crate::ui::components::bottom_nav::BottomNav;
 use crate::ui::components::skeleton::{Skeleton, SkeletonShape};
@@ -67,6 +68,77 @@ struct HomePack {
 #[derive(Debug, Deserialize)]
 struct HomePacksResponse {
     sets: Vec<HomePack>,
+}
+
+/// Loop #15: lightweight order-detail DTO used by the proactive reorder deep-link.
+#[derive(Debug, Deserialize)]
+struct ReorderOrderDetailResponse {
+    order: ReorderOrder,
+}
+
+#[derive(Debug, Deserialize)]
+struct ReorderOrder {
+    items: Vec<ReorderOrderItem>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ReorderOrderItem {
+    strain_id: Option<String>,
+    strain_name: Option<String>,
+    accessory_id: Option<String>,
+    accessory_name: Option<String>,
+    tea_id: Option<String>,
+    tea_name: Option<String>,
+    set_id: Option<String>,
+    set_name: Option<String>,
+    quantity: f64,
+    #[serde(default)]
+    unit_price: Option<f64>,
+}
+
+fn reorder_item_to_cart_item(item: &ReorderOrderItem) -> Option<CartItem> {
+    let (id, name, item_type, price_hint) = if let Some(ref sid) = item.strain_id {
+        (
+            sid.clone(),
+            item.strain_name.clone().unwrap_or_else(|| "Strain".into()),
+            CartItemType::Strain,
+            item.unit_price.unwrap_or(0.0),
+        )
+    } else if let Some(ref set_id) = item.set_id {
+        (
+            set_id.clone(),
+            item.set_name.clone().unwrap_or_else(|| "Set".into()),
+            CartItemType::Set,
+            item.unit_price.unwrap_or(0.0),
+        )
+    } else if let Some(ref aid) = item.accessory_id {
+        (
+            aid.clone(),
+            item.accessory_name
+                .clone()
+                .unwrap_or_else(|| "Accessory".into()),
+            CartItemType::Accessory,
+            item.unit_price.unwrap_or(0.0),
+        )
+    } else if let Some(ref tid) = item.tea_id {
+        (
+            tid.clone(),
+            item.tea_name.clone().unwrap_or_else(|| "Drink".into()),
+            CartItemType::Tea,
+            item.unit_price.unwrap_or(0.0),
+        )
+    } else {
+        return None;
+    };
+    Some(CartItem {
+        id,
+        name,
+        price: price_hint,
+        quantity: item.quantity.max(1.0) as u32,
+        image_url: None,
+        item_type,
+        fulfillment: None,
+    })
 }
 
 /// Compact garden plant snapshot for the home widget. Mirrors the API shape
@@ -256,7 +328,12 @@ pub fn HomeScreen() -> Element {
     let pending = use_context::<Signal<Option<SharedProduct>>>();
     let mut pending_order = use_context::<Signal<Option<String>>>();
     let mut pending_cart = use_context::<Signal<bool>>();
+    let mut pending_reorder = use_context::<Signal<Option<String>>>();
     let nav = navigator();
+    let telegram_id = use_telegram_id();
+    let init_data = use_telegram_init_data();
+    let cart_for_reorder = use_context::<Signal<Cart>>();
+
     use_effect(move || {
         if let Some(target) = pending.read().clone() {
             // Navigate to the catalog screen that owns the shared product.
@@ -273,6 +350,50 @@ pub fn HomeScreen() -> Element {
         if pending_cart() {
             pending_cart.set(false);
             nav.push(Route::Cart {});
+        }
+        // Loop #15: proactive reorder deep-link loads the order items into the
+        // server-side cart with current DB prices and lands on /cart.
+        let maybe_reorder = pending_reorder.read().clone();
+        if let Some(order_id) = maybe_reorder {
+            pending_reorder.set(None);
+            let tid = telegram_id.unwrap_or(0);
+            let init = init_data.clone();
+            let mut cart_sig = cart_for_reorder.clone();
+            let nav = nav.clone();
+            spawn(async move {
+                if tid == 0 {
+                    return;
+                }
+                let url = format!(
+                    "{}/api/orders/{}/details?telegram_id={}",
+                    api_base_url(),
+                    order_id,
+                    tid
+                );
+                if let Ok(text) = fetch_text_authed(&url, &init).await {
+                    if let Ok(resp) = serde_json::from_str::<ReorderOrderDetailResponse>(&text) {
+                        let items: Vec<CartItem> = resp
+                            .order
+                            .items
+                            .iter()
+                            .filter_map(reorder_item_to_cart_item)
+                            .collect();
+                        match merge_server_cart(&api_base_url(), &init, tid, &items).await {
+                            Ok(fresh_cart) => {
+                                cart_sig.set(fresh_cart);
+                            }
+                            Err(_) => {
+                                let mut local = Cart::new();
+                                for item in items {
+                                    local.add_item(item);
+                                }
+                                cart_sig.set(local);
+                            }
+                        }
+                        nav.push(Route::Cart {});
+                    }
+                }
+            });
         }
     });
 

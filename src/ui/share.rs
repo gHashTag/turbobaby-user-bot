@@ -194,6 +194,38 @@ pub fn parse_cart_start_param(param: &str) -> Option<&str> {
     })
 }
 
+/// Build a `startapp` parameter that opens the Mini App and pre-loads the
+/// customer's last order into their cart for one-tap reorder.
+/// Format: `reorder__{order_id}`.
+pub fn reorder_start_param(order_id: &str) -> String {
+    format!("reorder__{}", order_id)
+}
+
+/// Raw `t.me` deep link that opens the Mini App in reorder mode.
+pub fn reorder_deep_link(order_id: &str) -> String {
+    format!(
+        "https://t.me/{}?startapp={}",
+        bot_username(),
+        reorder_start_param(order_id)
+    )
+}
+
+/// Parse a reorder `startapp` value (`reorder__{order_id}`). Unknown prefixes
+/// and payloads that are too long are rejected so malformed links degrade
+/// gracefully.
+pub fn parse_reorder_start_param(param: &str) -> Option<String> {
+    if param.is_empty() || param.len() > MAX_START_PARAM_LEN {
+        return None;
+    }
+    if !param
+        .bytes()
+        .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
+    {
+        return None;
+    }
+    param.strip_prefix("reorder__").map(|id| id.to_string())
+}
+
 /// Open a `t.me` URL using Telegram's native method, falling back to a plain
 /// browser open if the WebApp SDK is unavailable.
 pub fn open_telegram_link(url: &str) {
@@ -334,5 +366,20 @@ mod tests {
         let url = order_deep_link(id);
         let start_param = url.split("startapp=").nth(1).unwrap();
         assert_eq!(parse_order_start_param(start_param).unwrap(), id);
+    }
+
+    #[test]
+    fn parse_valid_reorder_payload() {
+        let id =
+            parse_reorder_start_param("reorder__550e8400-e29b-41d4-a716-446655440000").unwrap();
+        assert_eq!(id, "550e8400-e29b-41d4-a716-446655440000");
+    }
+
+    #[test]
+    fn reorder_deep_link_round_trips() {
+        let id = "abc-123";
+        let url = reorder_deep_link(id);
+        let start_param = url.split("startapp=").nth(1).unwrap();
+        assert_eq!(parse_reorder_start_param(start_param).unwrap(), id);
     }
 }

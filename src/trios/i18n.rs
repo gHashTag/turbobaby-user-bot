@@ -502,6 +502,14 @@ pub const T_SUCCESS_REWARDS_BONUS: Key = "success.rewards.bonus";
 pub const T_SUCCESS_CASHBACK_EARNED: Key = "success.cashback_earned";
 pub const T_SUCCESS_SHARE_REFERRAL: Key = "success.share_referral";
 pub const T_SUCCESS_REORDER: Key = "success.reorder";
+pub const T_SUCCESS_STATUS_LOADING: Key = "success.status.loading";
+pub const T_SUCCESS_STATUS_ERROR: Key = "success.status.error";
+pub const T_SUCCESS_CASHBACK_ERROR: Key = "success.cashback.error";
+pub const T_SUCCESS_RETRY: Key = "success.retry";
+pub const T_PROFILE_LOAD_ERROR: Key = "profile.load_error";
+pub const T_PROFILE_RETRY: Key = "profile.retry";
+pub const T_CART_SYNCING: Key = "cart.syncing";
+pub const T_REORDER_DEEP_LINK_TITLE: Key = "reorder.deep_link.title";
 
 // Orders screen hard-coded strings
 pub const T_ORDERS_HISTORY: Key = "orders.history";
@@ -1147,6 +1155,10 @@ fn get_ru_translation(key: Key) -> Value {
         T_SUCCESS_CASHBACK_EARNED => "💸 +{0} ฿ кешбэка начислено",
         T_SUCCESS_SHARE_REFERRAL => "👥 Пригласить друга",
         T_SUCCESS_REORDER => "🔄 Повторить заказ",
+        T_SUCCESS_STATUS_LOADING => "Обновляем статус…",
+        T_SUCCESS_STATUS_ERROR => "Не удалось загрузить статус.",
+        T_SUCCESS_CASHBACK_ERROR => "Не удалось загрузить кэшбэк.",
+        T_SUCCESS_RETRY => "Повторить",
         // Orders screen
         T_ORDERS_HISTORY => "История заказов",
         T_ORDERS_NO_ORDERS => "Пока нет заказов",
@@ -1212,11 +1224,15 @@ fn get_ru_translation(key: Key) -> Value {
         T_PROFILE_BONUS_HISTORY_EMPTY => "Пока нет начислений",
         T_PROFILE_BONUS_CREDIT => "Зачисление",
         T_PROFILE_BONUS_DEBIT => "Списание",
+        T_PROFILE_LOAD_ERROR => "Не удалось загрузить профиль.",
+        T_PROFILE_RETRY => "Повторить",
         T_PROFILE_BONUS_REFERRAL => "Реферальный бонус",
         T_PROFILE_BONUS_GARDEN => "Награда из сада",
         T_PROFILE_BONUS_CASHBACK => "Кэшбэк с заказа",
         T_PROFILE_BONUS_ADMIN => "Админ-начисление",
         T_PROFILE_BONUS_OTHER => "Бонус",
+        T_CART_SYNCING => "Синхронизация корзины…",
+        T_REORDER_DEEP_LINK_TITLE => "🔄 Ваш последний заказ готов к повтору",
         // Modal
         T_MODAL_CLOSE => "Закрыть",
         T_MODAL_CONFIRM => "Да",
@@ -1771,6 +1787,10 @@ fn get_en_translation(key: Key) -> Value {
         T_SUCCESS_CASHBACK_EARNED => "💸 +{0} ฿ cashback earned",
         T_SUCCESS_SHARE_REFERRAL => "👥 Invite a friend",
         T_SUCCESS_REORDER => "🔄 Reorder",
+        T_SUCCESS_STATUS_LOADING => "Updating status…",
+        T_SUCCESS_STATUS_ERROR => "Could not load live status.",
+        T_SUCCESS_CASHBACK_ERROR => "Could not load cashback details.",
+        T_SUCCESS_RETRY => "Retry",
         // Orders screen
         T_ORDERS_HISTORY => "Your order history",
         T_ORDERS_NO_ORDERS => "No orders yet",
@@ -1836,11 +1856,15 @@ fn get_en_translation(key: Key) -> Value {
         T_PROFILE_BONUS_HISTORY_EMPTY => "No transactions yet",
         T_PROFILE_BONUS_CREDIT => "Credit",
         T_PROFILE_BONUS_DEBIT => "Debit",
+        T_PROFILE_LOAD_ERROR => "Could not load profile.",
+        T_PROFILE_RETRY => "Retry",
         T_PROFILE_BONUS_REFERRAL => "Referral bonus",
         T_PROFILE_BONUS_GARDEN => "Garden reward",
         T_PROFILE_BONUS_CASHBACK => "Order cashback",
         T_PROFILE_BONUS_ADMIN => "Admin grant",
         T_PROFILE_BONUS_OTHER => "Bonus",
+        T_CART_SYNCING => "Syncing cart…",
+        T_REORDER_DEEP_LINK_TITLE => "🔄 Your last order is ready to reorder",
         // Modal
         T_MODAL_CLOSE => "Close",
         T_MODAL_CONFIRM => "Yes",

@@ -213,6 +213,33 @@ impl TelegramApp {
         ));
     }
 
+    /// Request permission for the bot to send messages to the user. This is the
+    /// Telegram-native gate that enables order-status push notifications.
+    /// Returns `true` if granted; outside Telegram or on cancellation returns `false`.
+    pub async fn request_write_access(&self) -> bool {
+        let js = r#"new Promise((resolve) => {
+            try {
+                if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.requestWriteAccess) {
+                    window.Telegram.WebApp.requestWriteAccess(function(granted){
+                        resolve(granted === true);
+                    });
+                } else {
+                    resolve(false);
+                }
+            } catch(e) { resolve(false); }
+        })"#;
+        let Some(promise_val) = js_sys::eval(js).ok() else {
+            return false;
+        };
+        let Ok(promise) = promise_val.dyn_into::<js_sys::Promise>() else {
+            return false;
+        };
+        let Ok(result) = wasm_bindgen_futures::JsFuture::from(promise).await else {
+            return false;
+        };
+        result.as_bool().unwrap_or(false)
+    }
+
     /// Get Telegram user ID from WebApp.
     ///
     /// Tries two sources in order:

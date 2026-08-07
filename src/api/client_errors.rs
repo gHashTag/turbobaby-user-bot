@@ -433,8 +433,27 @@ async fn log_client_event(
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
-    if event == "cart_deep_link_opened" {
-        crate::metrics::cart_deep_link_opened(&detail);
+    match event.as_str() {
+        "cart_deep_link_opened" => crate::metrics::cart_deep_link_opened(&detail),
+        "checkout_started" => crate::metrics::checkout_started(),
+        "checkout_completed" => crate::metrics::checkout_completed(),
+        "checkout_error" => crate::metrics::checkout_error(&detail),
+        "bonus_applied" => {
+            if let Ok(v) = detail.parse::<f64>() {
+                crate::metrics::bonus_applied(v);
+            }
+        }
+        "stars_applied" => {
+            if let Ok(v) = detail.parse::<i64>() {
+                crate::metrics::stars_applied(v);
+            }
+        }
+        "garden_reward_applied" => {
+            if let Ok(v) = detail.parse::<f64>() {
+                crate::metrics::garden_reward_applied(v);
+            }
+        }
+        _ => {}
     }
 
     Ok(StatusCode::ACCEPTED)
@@ -447,6 +466,12 @@ fn sanitize_event_name(raw: &str) -> String {
         "cart_deep_link_opened" => "cart_deep_link_opened".to_string(),
         "reorder_clicked" => "reorder_clicked".to_string(),
         "checkout_retry_clicked" => "checkout_retry_clicked".to_string(),
+        "checkout_started" => "checkout_started".to_string(),
+        "checkout_completed" => "checkout_completed".to_string(),
+        "checkout_error" => "checkout_error".to_string(),
+        "bonus_applied" => "bonus_applied".to_string(),
+        "stars_applied" => "stars_applied".to_string(),
+        "garden_reward_applied" => "garden_reward_applied".to_string(),
         _ => "unknown".to_string(),
     }
 }

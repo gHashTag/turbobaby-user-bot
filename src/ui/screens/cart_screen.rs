@@ -3,10 +3,11 @@ use crate::trios::i18n::{
     t, tf, T_CART_BACK_MENU, T_CART_BONUS_NUDGE, T_CART_BROWSE_MENU, T_CART_BROWSE_SETS,
     T_CART_CHECKOUT, T_CART_DECREASE_QTY, T_CART_DELIVERY, T_CART_DELIVERY_FREE, T_CART_DINE_IN,
     T_CART_EMPTY, T_CART_EMPTY_DESC, T_CART_IMAGE_ALT, T_CART_ITEMS, T_CART_REMOVE,
-    T_CART_SUBTOTAL, T_CART_TAKEAWAY, T_CART_TITLE, T_PLACE_ORDER, T_TOTAL,
+    T_CART_SUBTOTAL, T_CART_SYNCING, T_CART_TAKEAWAY, T_CART_TITLE, T_PLACE_ORDER, T_TOTAL,
 };
 use crate::ui::api::context::api_base_url;
 use crate::ui::api::http::fetch_text_authed;
+use crate::ui::api::types::ServerCart;
 use crate::ui::components::bottom_nav::BottomNav;
 use crate::ui::components::empty_state::EmptyState;
 use crate::ui::routes::Route;
@@ -23,7 +24,7 @@ fn format_price(price: f64) -> String {
 
 #[component]
 pub fn CartScreen() -> Element {
-    let cart = use_context::<Signal<Cart>>();
+    let mut cart = use_context::<Signal<Cart>>();
     let items = cart.read().items.clone();
     let total = cart.read().total;
     let item_count: u32 = items.iter().map(|i| i.quantity).sum();
@@ -61,6 +62,50 @@ pub fn CartScreen() -> Element {
             }
         })
     };
+    // Loop #15: show a server-cart sync indicator so the user knows when the
+    // cart is being reconciled with the server. If the local cart is empty and
+    // the server has items, recover them here (the startup path in app.rs also
+    // does this, but a direct deep-link to /cart may arrive after that effect).
+    let server_cart_res: Resource<Result<ServerCart, String>> = use_resource(move || {
+        let init = init_data.clone();
+        async move {
+            let tid = telegram_id.ok_or_else(|| {
+                crate::trios::api_errors::friendly_response_error(
+                    crate::ui::lang::current_lang(),
+                    0,
+                )
+            })?;
+            let url = format!("{}/api/cart?telegram_id={}", api_base_url(), tid);
+            let text = fetch_text_authed(&url, &init).await.map_err(|_| {
+                crate::trios::api_errors::friendly_response_error(
+                    crate::ui::lang::current_lang(),
+                    0,
+                )
+            })?;
+            serde_json::from_str::<ServerCart>(&text).map_err(|_| {
+                crate::trios::api_errors::friendly_response_error(
+                    crate::ui::lang::current_lang(),
+                    0,
+                )
+            })
+        }
+    });
+    use_effect(move || {
+        let maybe = server_cart_res.read().as_ref().cloned();
+        if let Some(Ok(server_cart)) = maybe {
+            if cart.read().items.is_empty() && !server_cart.items.is_empty() {
+                let mut recovered = Cart::new();
+                for item in server_cart.items {
+                    if let Some(ci) = CartItem::from_server(item) {
+                        recovered.add_item(ci);
+                    }
+                }
+                cart.set(recovered);
+            }
+        }
+    });
+    let is_syncing = server_cart_res.read().is_none();
+
     let bonus_balance = loyalty_res
         .read()
         .as_ref()
@@ -69,7 +114,11 @@ pub fn CartScreen() -> Element {
         .unwrap_or(0.0)
         .max(0.0);
     let bonus_nudge_text = if bonus_balance > 0.0 {
-        Some(tf(lang, T_CART_BONUS_NUDGE, &[format!("{bonus_balance:.0}")]))
+        Some(tf(
+            lang,
+            T_CART_BONUS_NUDGE,
+            &[format!("{bonus_balance:.0}")],
+        ))
     } else {
         None
     };
@@ -104,6 +153,12 @@ pub fn CartScreen() -> Element {
                 h1 { style: "font-size: 24px; font-weight: 800; color: #39ff14; text-shadow: 3px 3px 0 #000, 0 0 10px rgba(57,255,20,0.5); letter-spacing: 2px;", "{cart_title}" }
                 if !items.is_empty() {
                     p { style: "font-size: 15px; color: #8b8b9e; margin-top: 4px;", "{items_label}" }
+                }
+                if is_syncing {
+                    div { style: "margin-top: 10px; font-size: 13px; color: #8b8b9e; display: flex; align-items: center; justify-content: center; gap: 6px;",
+                        span { "🔄" }
+                        "{t(lang, T_CART_SYNCING)}"
+                    }
                 }
             }
 

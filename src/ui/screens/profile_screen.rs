@@ -4,12 +4,12 @@ use crate::trios::i18n::{
     T_PROFILE_BONUS_GARDEN, T_PROFILE_BONUS_HISTORY, T_PROFILE_BONUS_HISTORY_EMPTY,
     T_PROFILE_BONUS_OTHER, T_PROFILE_BONUS_REFERRAL, T_PROFILE_CASHBACK_LABEL, T_PROFILE_CONTACTS,
     T_PROFILE_COPY, T_PROFILE_COPY_LINK, T_PROFILE_EARN_PER_REF, T_PROFILE_FRIENDS_INVITED,
-    T_PROFILE_INVITED, T_PROFILE_MEMBERSHIP, T_PROFILE_MORE_TO_UNLOCK, T_PROFILE_MY_GARDEN,
-    T_PROFILE_MY_ORDERS, T_PROFILE_OPEN_MAP, T_PROFILE_PROGRESS, T_PROFILE_QR_CODE,
-    T_PROFILE_QUESTS, T_PROFILE_QUICK_ACTIONS, T_PROFILE_REFERRAL_LINK, T_PROFILE_REFERRAL_PROGRAM,
-    T_PROFILE_SHARE, T_PROFILE_SPENT, T_PROFILE_STARS, T_PROFILE_TIER_BENEFITS,
-    T_PROFILE_TIER_BRONZE, T_PROFILE_TIER_GOLD, T_PROFILE_TIER_SILVER, T_PROFILE_TIER_STARTER,
-    T_PROFILE_TITLE,
+    T_PROFILE_INVITED, T_PROFILE_LOAD_ERROR, T_PROFILE_MEMBERSHIP, T_PROFILE_MORE_TO_UNLOCK,
+    T_PROFILE_MY_GARDEN, T_PROFILE_MY_ORDERS, T_PROFILE_OPEN_MAP, T_PROFILE_PROGRESS,
+    T_PROFILE_QR_CODE, T_PROFILE_QUESTS, T_PROFILE_QUICK_ACTIONS, T_PROFILE_REFERRAL_LINK,
+    T_PROFILE_REFERRAL_PROGRAM, T_PROFILE_RETRY, T_PROFILE_SHARE, T_PROFILE_SPENT, T_PROFILE_STARS,
+    T_PROFILE_TIER_BENEFITS, T_PROFILE_TIER_BRONZE, T_PROFILE_TIER_GOLD, T_PROFILE_TIER_SILVER,
+    T_PROFILE_TIER_STARTER, T_PROFILE_TITLE,
 };
 use crate::ui::api::context::api_base_url;
 use crate::ui::assets;
@@ -137,6 +137,14 @@ impl Tier {
             Self::Gold => 1000.0,
         }
     }
+    fn rank(&self) -> u8 {
+        match self {
+            Self::Starter => 0,
+            Self::Bronze => 1,
+            Self::Silver => 2,
+            Self::Gold => 3,
+        }
+    }
     fn next(&self) -> Option<Self> {
         match self {
             Self::Starter => Some(Self::Bronze),
@@ -222,32 +230,42 @@ pub fn ProfileScreen() -> Element {
     let init_data_for_stars = init_data.clone();
     let init_data_for_bonus_history = init_data.clone();
 
+    let mut loyalty_retry = use_signal(|| 0u32);
     let loyalty_resource = use_resource(move || {
         let init = init_data_for_loyalty.clone();
+        let _ = loyalty_retry();
         async move {
             if telegram_id == 0 {
-                return None;
+                return Err("no telegram id".to_string());
             }
             let base = api_base_url();
             let url = format!("{}/api/loyalty/{}", base, telegram_id);
             let client = crate::ui::api::local_client::LocalClient::new();
-            let resp = client
+            match client
                 .get(&url)
                 .header("X-Telegram-Init-Data", init)
                 .send()
-                .await;
-            match resp {
-                Ok(r) => r.json::<LoyaltyResponse>().await.ok(),
-                Err(_) => None,
+                .await
+            {
+                Ok(r) => match r.json::<LoyaltyResponse>().await {
+                    Ok(body) => Ok(body),
+                    Err(e) => Err(format!("parse: {e}")),
+                },
+                Err(e) => Err(format!("network: {e}")),
             }
         }
     });
 
-    let loyalty_data = loyalty_resource
+    let loyalty_result = loyalty_resource
         .read()
-        .clone()
-        .flatten()
-        .and_then(|r| r.profile.clone());
+        .as_ref()
+        .and_then(|r| r.as_ref().ok().cloned());
+    let loyalty_error = loyalty_resource
+        .read()
+        .as_ref()
+        .and_then(|r| r.as_ref().err().cloned());
+
+    let loyalty_data = loyalty_result.as_ref().and_then(|r| r.profile.clone());
 
     let stars_balance_res = use_resource(move || {
         let init = init_data_for_stars.clone();
@@ -303,11 +321,11 @@ pub fn ProfileScreen() -> Element {
         .flatten()
         .unwrap_or_default();
 
-    let current_tier = loyalty_data
+    let backend_tier = loyalty_data
         .as_ref()
         .and_then(|d| d.tier.as_deref())
-        .map(Tier::from_str)
-        .unwrap_or(Tier::Starter);
+        .map(Tier::from_str);
+    let current_tier = backend_tier.unwrap_or(Tier::Starter);
 
     let total_spent = loyalty_data
         .as_ref()
@@ -329,11 +347,7 @@ pub fn ProfileScreen() -> Element {
     // Loop #14: cashback and next-tier threshold now come from the same
     // loyalty_config the backend uses to credit cashback on order completion.
     // The Tier enum is kept only for card art / labels.
-    let config = loyalty_resource
-        .read()
-        .as_ref()
-        .and_then(|opt| opt.as_ref())
-        .and_then(|r| r.config.clone());
+    let config = loyalty_result.as_ref().and_then(|r| r.config.clone());
     let cashback_pct = config
         .as_ref()
         .map(|c| c.cashback_pct)
@@ -393,19 +407,47 @@ pub fn ProfileScreen() -> Element {
 
             if is_loading {
                 { render_profile_skeleton(lang) }
+            } else if let Some(ref _err) = loyalty_error {
+                div { style: "padding: 0 16px 16px; text-align: center;",
+                    div { style: "background: #16213e; border: 4px solid #ff4757; padding: 14px; color: #ff4757; font-size: 14px; margin-bottom: 12px; box-shadow: 4px 4px 0 #000;",
+                        "{t(lang, T_PROFILE_LOAD_ERROR)}"
+                    }
+                    button {
+                        style: "font-size: 14px; font-weight: 700; padding: 12px 20px; background: #39ff14; color: #000; border: 4px solid #2d9e0f; cursor: pointer; box-shadow: 3px 3px 0 #000;",
+                        onclick: move |_| { loyalty_retry.set(loyalty_retry() + 1); },
+                        "{t(lang, T_PROFILE_RETRY)}"
+                    }
+                }
             } else {
             // Tier strip — all 4 tiers
             div { style: "display: flex; gap: 6px; padding: 0 16px 16px; overflow-x: auto;",
                 for tier in Tier::all() {
                     {
                         let is_current = *tier == current_tier;
-                        let is_unlocked = tier.threshold() <= total_spent;
+                        // Loop #15: when the backend tells us the user's current tier,
+                        // trust its rank; fall back to the local threshold only when the
+                        // loyalty row is missing (e.g. first-time visitor).
+                        let is_unlocked = backend_tier.map_or(
+                            tier.threshold() <= total_spent,
+                            |bt| bt.rank() >= tier.rank(),
+                        );
                         let border = if is_current { tier.color() } else { "#2a2a4a" };
                         let opacity = if is_unlocked { "1.0" } else { "0.4" };
                         let label = tier.label(lang);
                         let _emoji = tier.emoji();
                         let cb = tier.cashback();
-                        let thresh = tier.threshold();
+                        // For the next tier, show the backend threshold if available so
+                        // the progress bar matches the real rules; otherwise use the enum.
+                        let next_tier = current_tier.next();
+                        let thresh = if Some(*tier) == next_tier {
+                            config
+                                .as_ref()
+                                .map(|c| c.next_threshold)
+                                .filter(|v| v.is_finite() && *v > 0.0)
+                                .unwrap_or_else(|| tier.threshold())
+                        } else {
+                            tier.threshold()
+                        };
                         let shadow_val = if is_current {
                             format!("0 0 12px {}44", tier.color())
                         } else {

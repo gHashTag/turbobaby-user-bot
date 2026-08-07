@@ -171,6 +171,34 @@ pub fn cart_deep_link_opened(variant: &str) {
     .increment(1);
 }
 
+/// Loop #15: funnel instrumentation for the checkout flow.
+pub fn checkout_started() {
+    counter!("checkout_started_total").increment(1);
+}
+
+pub fn checkout_completed() {
+    counter!("checkout_completed_total").increment(1);
+}
+
+pub fn checkout_error(reason: &str) {
+    counter!("checkout_error_total", "reason" => reason.to_string()).increment(1);
+}
+
+pub fn bonus_applied(amount: f64) {
+    counter!("bonus_applied_total").increment(1);
+    gauge!("bonus_applied_amount").set(amount);
+}
+
+pub fn stars_applied(amount: i64) {
+    counter!("stars_applied_total").increment(1);
+    gauge!("stars_applied_amount").set(amount as f64);
+}
+
+pub fn garden_reward_applied(discount: f64) {
+    counter!("garden_reward_applied_total").increment(1);
+    gauge!("garden_reward_discount").set(discount);
+}
+
 pub fn event_shared(kind: &str) {
     counter!("events_shared_total", "kind" => kind.to_string()).increment(1);
 }

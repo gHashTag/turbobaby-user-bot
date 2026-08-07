@@ -37,6 +37,19 @@ use serde_json::json;
 use wasm_bindgen::JsCast;
 use web_sys::window;
 
+/// Loop #15: fire a lightweight checkout-funnel event to the backend. Failures
+/// are ignored so telemetry can never block the purchase flow.
+fn emit_checkout_event(event: &'static str, detail: String) {
+    spawn(async move {
+        let _ = crate::ui::api::http::post_client_event(
+            &crate::ui::api::context::api_base_url(),
+            event,
+            &detail,
+        )
+        .await;
+    });
+}
+
 /// B4: a garden reward the customer can apply at checkout (product-scoped).
 #[derive(Clone, serde::Deserialize)]
 struct ApiReward {
@@ -364,6 +377,18 @@ pub fn CheckoutScreen() -> Element {
     // an order. This drives both the in-app primary button and Telegram
     // MainButton enabled state.
     let mut age_confirmed = use_signal(|| false);
+
+    // Loop #15: emit checkout_started once when the screen mounts with a
+    // non-empty cart. Track only the first signalization to avoid noise.
+    let mut checkout_started_emitted = use_signal(|| false);
+    let cart_items_for_start = cart_items.clone();
+    use_effect(move || {
+        if !cart_items_for_start.is_empty() && !checkout_started_emitted() {
+            checkout_started_emitted.set(true);
+            emit_checkout_event("checkout_started", String::new());
+        }
+    });
+
     // B4: fetch the user's garden rewards; show a toggle for any product-scoped,
     // still-active reward whose target product is in this cart.
     let mut applied_reward = use_signal(|| Option::<(String, f64)>::None);
@@ -742,22 +767,61 @@ pub fn CheckoutScreen() -> Element {
     let stars_val = (*stars_to_use.read()).clamp(0, max_stars.max(0));
     let effective_total = (after_bonus - stars_val as f64).max(0.0);
 
+    // Loop #15: emit conversion events when the customer actually uses loyalty
+    // or garden rewards. Each fires once per mount to keep the signal clean.
+    let mut bonus_event_fired = use_signal(|| false);
+    use_effect(move || {
+        if bonus_val > 0.01 && !bonus_event_fired() {
+            bonus_event_fired.set(true);
+            emit_checkout_event("bonus_applied", format!("{bonus_val:.0}"));
+        }
+    });
+    let mut stars_event_fired = use_signal(|| false);
+    use_effect(move || {
+        if stars_val > 0 && !stars_event_fired() {
+            stars_event_fired.set(true);
+            emit_checkout_event("stars_applied", stars_val.to_string());
+        }
+    });
+    let mut reward_event_fired = use_signal(|| false);
+    use_effect(move || {
+        if applied_reward.read().is_some() && !reward_event_fired() {
+            reward_event_fired.set(true);
+            let discount = applied_reward
+                .read()
+                .as_ref()
+                .map(|(_, d)| *d)
+                .unwrap_or(0.0);
+            emit_checkout_event("garden_reward_applied", format!("{discount:.0}"));
+        }
+    });
+
     // Loop #14: pre-format bonus strings outside rsx! so nested format! braces
     // don't confuse the Dioxus macro parser.
     let bonus_header_text = use_memo(move || {
-        let available = tf(lang, T_CHECKOUT_BONUS_AVAILABLE, &[format!("{bonus_balance:.0}")]);
-        let max = tf(lang, T_CHECKOUT_BONUS_MAX, &[format!("{max_bonus_for_order:.0}")]);
+        let available = tf(
+            lang,
+            T_CHECKOUT_BONUS_AVAILABLE,
+            &[format!("{bonus_balance:.0}")],
+        );
+        let max = tf(
+            lang,
+            T_CHECKOUT_BONUS_MAX,
+            &[format!("{max_bonus_for_order:.0}")],
+        );
         format!("{available} · {max}")
     });
-    let bonus_applied_text = use_memo(move || {
-        tf(lang, T_CHECKOUT_BONUS_APPLIED, &[format!("{bonus_val:.0}")])
-    });
+    let bonus_applied_text =
+        use_memo(move || tf(lang, T_CHECKOUT_BONUS_APPLIED, &[format!("{bonus_val:.0}")]));
     let stars_available_text = use_memo(move || {
-        tf(lang, T_CHECKOUT_STARS_AVAILABLE, &[stars_balance.to_string()])
+        tf(
+            lang,
+            T_CHECKOUT_STARS_AVAILABLE,
+            &[stars_balance.to_string()],
+        )
     });
-    let stars_minus_text = use_memo(move || {
-        tf(lang, T_CHECKOUT_STARS_MINUS, &[stars_val.to_string()])
-    });
+    let stars_minus_text =
+        use_memo(move || tf(lang, T_CHECKOUT_STARS_MINUS, &[stars_val.to_string()]));
 
     let zones = match &*zones_res.read() {
         Some(Some(z)) => z.clone(),
@@ -1029,11 +1093,13 @@ pub fn CheckoutScreen() -> Element {
                     // Navigate to success and clear cart.
                     cart.write().clear();
                     tg.haptic_notification(HapticNotification::Success);
+                    emit_checkout_event("checkout_completed", order_id.clone());
                     nav.push(Route::Success { id: order_id });
                 }
                 SubmitResult::ParseError => {
                     tg.haptic_notification(HapticNotification::Error);
                     order_error.set(Some(t(lang, T_CHECKOUT_ERR_PARSE).to_string()));
+                    emit_checkout_event("checkout_error", "parse".to_string());
                     tg.hide_main_button_progress(&restore_text_clone);
                     is_processing.set(false);
                 }
@@ -1048,12 +1114,14 @@ pub fn CheckoutScreen() -> Element {
                         .and_then(|code| friendly_order_error_code(lang, &code));
                     let msg = code_msg.unwrap_or_else(|| friendly_order_error(lang, status));
                     order_error.set(Some(msg));
+                    emit_checkout_event("checkout_error", status.to_string());
                     tg.hide_main_button_progress(&restore_text_clone);
                     is_processing.set(false);
                 }
                 SubmitResult::NetworkError => {
                     tg.haptic_notification(HapticNotification::Error);
                     order_error.set(Some(t(lang, T_CHECKOUT_ERR_NETWORK).to_string()));
+                    emit_checkout_event("checkout_error", "network".to_string());
                     tg.hide_main_button_progress(&restore_text_clone);
                     is_processing.set(false);
                 }

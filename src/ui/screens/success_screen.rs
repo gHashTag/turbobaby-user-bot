@@ -3,11 +3,12 @@ use crate::trios::i18n::{
     t, tf, T_ORDERS_STATUS_CANCELLED, T_ORDERS_STATUS_CONFIRMED, T_ORDERS_STATUS_DELIVERED,
     T_ORDERS_STATUS_OUT_FOR_DELIVERY, T_ORDERS_STATUS_PENDING, T_ORDERS_STATUS_PREPARING,
     T_ORDERS_STATUS_READY, T_ORDERS_STATUS_UNKNOWN, T_SUCCESS_BACK_MENU, T_SUCCESS_CASHBACK_EARNED,
-    T_SUCCESS_CASH_ON_DELIVERY, T_SUCCESS_CONFIRMED, T_SUCCESS_CONTACT_SHORTLY,
-    T_SUCCESS_DELIVERY_ESTIMATE, T_SUCCESS_ETA, T_SUCCESS_ETA_VALUE, T_SUCCESS_MY_ORDERS,
-    T_SUCCESS_ORDER_RECEIVED, T_SUCCESS_PAYMENT, T_SUCCESS_PUSH_REASSURANCE, T_SUCCESS_REORDER,
-    T_SUCCESS_REWARDS_BONUS, T_SUCCESS_REWARDS_GARDEN, T_SUCCESS_REWARDS_TITLE,
-    T_SUCCESS_SHARE_REFERRAL, T_SUCCESS_STATUS, T_SUCCESS_TITLE, T_SUCCESS_TRACK_ORDER,
+    T_SUCCESS_CASHBACK_ERROR, T_SUCCESS_CASH_ON_DELIVERY, T_SUCCESS_CONFIRMED,
+    T_SUCCESS_CONTACT_SHORTLY, T_SUCCESS_DELIVERY_ESTIMATE, T_SUCCESS_ETA, T_SUCCESS_ETA_VALUE,
+    T_SUCCESS_MY_ORDERS, T_SUCCESS_ORDER_RECEIVED, T_SUCCESS_PAYMENT, T_SUCCESS_PUSH_REASSURANCE,
+    T_SUCCESS_REORDER, T_SUCCESS_RETRY, T_SUCCESS_REWARDS_BONUS, T_SUCCESS_REWARDS_GARDEN,
+    T_SUCCESS_REWARDS_TITLE, T_SUCCESS_SHARE_REFERRAL, T_SUCCESS_STATUS, T_SUCCESS_STATUS_ERROR,
+    T_SUCCESS_STATUS_LOADING, T_SUCCESS_TITLE, T_SUCCESS_TRACK_ORDER,
 };
 use crate::ui::api::context::api_base_url;
 use crate::ui::api::http::{fetch_text_authed, merge_server_cart};
@@ -177,6 +178,7 @@ pub fn SuccessScreen(id: String) -> Element {
             }
         });
     });
+    let mut status_retry = use_signal(|| 0u32);
     let status_res = {
         let id = id.clone();
         let init = init_data.clone();
@@ -184,14 +186,23 @@ pub fn SuccessScreen(id: String) -> Element {
             let id = id.clone();
             let init = init.clone();
             let _ = poll_tick();
+            let _ = status_retry();
             async move {
-                let tid = telegram_id?;
+                let tid = telegram_id.ok_or_else(|| {
+                    crate::trios::api_errors::friendly_response_error(
+                        crate::ui::lang::current_lang(),
+                        0,
+                    )
+                })?;
                 let url = format!(
                     "{}/api/orders/{id}/status?telegram_id={tid}",
                     api_base_url()
                 );
-                let text = fetch_text_authed(&url, &init).await.ok()?;
-                serde_json::from_str::<OrderStatusResp>(&text).ok()
+                match fetch_text_authed(&url, &init).await {
+                    Ok(text) => serde_json::from_str::<OrderStatusResp>(&text)
+                        .map_err(|e| format!("parse: {e}")),
+                    Err(e) => Err(e),
+                }
             }
         })
     };
@@ -227,39 +238,59 @@ pub fn SuccessScreen(id: String) -> Element {
     };
 
     // Loop #14: fetch order details to show the cashback earned on this order.
+    let mut details_retry = use_signal(|| 0u32);
     let details_res = {
         let init = init_data.clone();
         let oid = id.clone();
         use_resource(move || {
             let init = init.clone();
             let oid = oid.clone();
+            let _ = details_retry();
             async move {
-                let tid = telegram_id?;
+                let tid = telegram_id.ok_or_else(|| {
+                    crate::trios::api_errors::friendly_response_error(
+                        crate::ui::lang::current_lang(),
+                        0,
+                    )
+                })?;
                 let url = format!(
                     "{}/api/orders/{oid}/details?telegram_id={tid}",
                     api_base_url()
                 );
-                let text = fetch_text_authed(&url, &init).await.ok()?;
-                serde_json::from_str::<OrderDetailResponse>(&text).ok()
+                match fetch_text_authed(&url, &init).await {
+                    Ok(text) => serde_json::from_str::<OrderDetailResponse>(&text)
+                        .map_err(|e| format!("parse: {e}")),
+                    Err(e) => Err(e),
+                }
             }
         })
     };
 
-    let status_ref = status_res.read();
-    let status_opt = status_ref.as_ref().and_then(|opt| opt.as_ref());
-    let status_text = status_opt
+    let status_result = status_res
+        .read()
+        .as_ref()
+        .and_then(|r| r.as_ref().ok().cloned());
+    let status_error = status_res
+        .read()
+        .as_ref()
+        .and_then(|r| r.as_ref().err().cloned());
+    let status_text = status_result
+        .as_ref()
         .map(|s| order_status_label(lang, &s.status))
         .unwrap_or_else(|| t(lang, T_SUCCESS_CONFIRMED).to_string());
-    let eta_range = status_opt
+    let eta_range = status_result
+        .as_ref()
         .and_then(|s| match (s.min_eta_minutes, s.max_eta_minutes) {
             (Some(min), Some(max)) => Some(format!("{min}-{max}")),
             _ => None,
         })
         .or_else(|| zone_eta().as_ref().map(Clone::clone))
         .unwrap_or_else(|| "30-45".to_string());
-    let zone_display = status_opt
+    let zone_display = status_result
+        .as_ref()
         .and_then(|s| s.delivery_zone_name.clone())
         .or_else(|| zone_name().as_ref().map(Clone::clone));
+    let status_loading = status_res.read().is_none();
 
     let bonus_balance = profile_res
         .read()
@@ -272,19 +303,32 @@ pub fn SuccessScreen(id: String) -> Element {
         T_SUCCESS_REWARDS_BONUS,
         &[format!("{bonus_balance:.0}")],
     );
-    let cashback_earned = details_res
+    let details_result = details_res
         .read()
         .as_ref()
-        .and_then(|opt| opt.as_ref())
+        .and_then(|r| r.as_ref().ok().cloned());
+    let details_error = details_res
+        .read()
+        .as_ref()
+        .and_then(|r| r.as_ref().err().cloned());
+    let details_loading = details_res.read().is_none();
+    let cashback_earned = details_result
+        .as_ref()
         .and_then(|r| r.order.cashback_credited)
         .filter(|v| v.is_finite() && *v > 0.01);
-    let cashback_text = cashback_earned
-        .map(|c| tf(lang, T_SUCCESS_CASHBACK_EARNED, &[format!("{c:.0}")]));
+    let cashback_text =
+        cashback_earned.map(|c| tf(lang, T_SUCCESS_CASHBACK_EARNED, &[format!("{c:.0}")]));
 
     let track_link = order_deep_link(&id);
     let on_track_order = move |_| {
         track_event("order_tracked", "");
-        open_telegram_link(&track_link);
+        let link = track_link.clone();
+        spawn(async move {
+            // Ask Telegram for write-access permission so the bot can send
+            // status-milestone pushes. The deep-link is opened either way.
+            TelegramApp::init().request_write_access().await;
+            open_telegram_link(&link);
+        });
     };
 
     let nav = use_navigator();
@@ -402,6 +446,18 @@ pub fn SuccessScreen(id: String) -> Element {
                 box-shadow: 4px 4px 0 #000;
             ",
                 div { style: "font-size: 13px; font-weight: 700; color: #00e5ff; text-transform: uppercase; letter-spacing: 1px; text-shadow: 2px 2px 0 #000; margin-bottom: 4px;", "{delivery_estimate}" }
+                if status_loading {
+                    div { style: "font-size: 12px; color: #8b8b9e; margin-bottom: 8px;", "{t(lang, T_SUCCESS_STATUS_LOADING)}" }
+                } else if let Some(ref _err) = status_error {
+                    div { style: "font-size: 12px; color: #ff4757; margin-bottom: 6px;",
+                        "{t(lang, T_SUCCESS_STATUS_ERROR)}"
+                    }
+                    button {
+                        style: "font-size: 12px; font-weight: 700; padding: 4px 10px; background: #16213e; color: #00e5ff; border: 3px solid #2a2a4a; cursor: pointer;",
+                        onclick: move |_| { status_retry.set(status_retry() + 1); },
+                        "{t(lang, T_SUCCESS_RETRY)}"
+                    }
+                }
                 if let Some(name) = zone_display.as_deref() {
                     div { style: "font-size: 12px; color: #8b8b9e; margin-bottom: 8px;", "{name}" }
                 }
@@ -480,7 +536,18 @@ pub fn SuccessScreen(id: String) -> Element {
                 div { style: "font-size: 13px; font-weight: 700; color: #39ff14; text-transform: uppercase; letter-spacing: 1px; text-shadow: 2px 2px 0 #000; margin-bottom: 8px;", "{rewards_title}" }
                 div { style: "font-size: 13px; color: #e8e8e8; margin-bottom: 6px;", "{rewards_garden}" }
                 div { style: "font-size: 13px; color: #e8e8e8; margin-bottom: 6px;", "{bonus_text}" }
-                if let Some(ref text) = cashback_text {
+                if details_loading {
+                    div { style: "font-size: 12px; color: #8b8b9e;", "{t(lang, T_SUCCESS_STATUS_LOADING)}" }
+                } else if let Some(ref _err) = details_error {
+                    div { style: "display:flex; gap:8px; align-items:center;",
+                        span { style: "font-size: 12px; color: #ff4757;", "{t(lang, T_SUCCESS_CASHBACK_ERROR)}" }
+                        button {
+                            style: "font-size: 12px; font-weight: 700; padding: 4px 10px; background: #16213e; color: #00e5ff; border: 3px solid #2a2a4a; cursor: pointer;",
+                            onclick: move |_| { details_retry.set(details_retry() + 1); },
+                            "{t(lang, T_SUCCESS_RETRY)}"
+                        }
+                    }
+                } else if let Some(ref text) = cashback_text {
                     div { style: "font-size: 14px; font-weight: 800; color: #39ff14;", "{text}" }
                 }
             }
