@@ -162,5 +162,6 @@ fn test_config(database_url: &str) -> Config {
         hide_marketing_badges: false,
         delivery_zones: DeliveryZones::default(),
         promptpay: QrConfig::default(),
+        referral_welcome_bonus: 50.0,
     }
 }

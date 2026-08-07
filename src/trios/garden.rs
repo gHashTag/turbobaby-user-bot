@@ -592,6 +592,20 @@ pub fn filter_completed_plants(plants: &[Plant]) -> Vec<&Plant> {
     plants.iter().filter(|p| p.is_completed).collect()
 }
 
+/// Loop #19: next streak milestone and how many days are left to reach it.
+/// Milestones follow a Fibonacci-ish retention curve (3 → 7 → 14 → 30 → 60 → 100).
+/// Returns `(milestone, days_remaining)`. If the streak already exceeds the
+/// final milestone, returns `(0, 0)` so callers can hide the hint.
+pub fn next_streak_milestone(streak: u32) -> (u32, u32) {
+    const MILESTONES: [u32; 6] = [3, 7, 14, 30, 60, 100];
+    for m in MILESTONES {
+        if streak < m {
+            return (m, m.saturating_sub(streak));
+        }
+    }
+    (0, 0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1086,5 +1100,24 @@ mod tests {
         plant.water_count = 10;
         let progress = calculate_progress(&plant, now);
         assert_eq!(progress.time_to_harvest, 3 * WATER_COOLDOWN_MS);
+    }
+
+    #[test]
+    fn test_next_streak_milestone_returns_first_milestone_for_low_streak() {
+        assert_eq!(next_streak_milestone(0), (3, 3));
+        assert_eq!(next_streak_milestone(2), (3, 1));
+    }
+
+    #[test]
+    fn test_next_streak_milestone_jumps_to_next_tier() {
+        assert_eq!(next_streak_milestone(3), (7, 4));
+        assert_eq!(next_streak_milestone(7), (14, 7));
+        assert_eq!(next_streak_milestone(14), (30, 16));
+    }
+
+    #[test]
+    fn test_next_streak_milestone_empty_when_max_reached() {
+        assert_eq!(next_streak_milestone(100), (0, 0));
+        assert_eq!(next_streak_milestone(150), (0, 0));
     }
 }

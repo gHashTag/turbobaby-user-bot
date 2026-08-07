@@ -45,6 +45,10 @@ pub struct Config {
     /// IDs are accepted. Optional — when absent the QR endpoint falls back
     /// to a plain text payment prompt.
     pub promptpay: crate::promptpay::QrConfig,
+    /// Loop #19: one-time welcome bonus credited to a newly-referred user
+    /// when their first order completes. Kept at 0 by default so it can be
+    /// enabled later via env without changing existing economics.
+    pub referral_welcome_bonus: f64,
 }
 
 impl Config {
@@ -141,6 +145,11 @@ impl Config {
             ),
             delivery_zones: crate::delivery::DeliveryZones::from_env_or_default(),
             promptpay: crate::promptpay::QrConfig::from_env(),
+            referral_welcome_bonus: std::env::var("REFERRAL_WELCOME_BONUS")
+                .ok()
+                .and_then(|s| s.trim().parse::<f64>().ok())
+                .filter(|v| v.is_finite() && *v >= 0.0)
+                .unwrap_or(0.0),
         })
     }
 
@@ -420,6 +429,7 @@ mod tests {
             hide_marketing_badges: false,
             delivery_zones: crate::delivery::DeliveryZones::default(),
             promptpay: crate::promptpay::QrConfig::default(),
+            referral_welcome_bonus: 0.0,
         };
         assert!(cfg.s3_enabled());
     }
@@ -479,6 +489,7 @@ mod tests {
             hide_marketing_badges: false,
             delivery_zones: crate::delivery::DeliveryZones::default(),
             promptpay: crate::promptpay::QrConfig::default(),
+            referral_welcome_bonus: 0.0,
         }
     }
 }

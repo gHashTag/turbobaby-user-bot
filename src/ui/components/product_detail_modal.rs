@@ -22,6 +22,7 @@ use crate::ui::api::context::use_api_client;
 use crate::ui::api::types::LabCertificate;
 use crate::ui::components::image_lightbox::ImageLightbox;
 use crate::ui::lang::current_lang;
+use crate::ui::telegram::TelegramApp;
 use dioxus::prelude::*;
 
 #[derive(Props, PartialEq, Clone)]
@@ -413,7 +414,12 @@ pub fn ProductDetailModal(props: ProductDetailModalProps) -> Element {
 
                         button {
                             style: "font-size:14px;font-weight:700;width:100%;padding:12px 20px;margin-bottom:8px;background:#39ff14;color:#000;border:4px solid #2d9e0f;box-shadow:3px 3px 0 #000;cursor:pointer;",
-                            onclick: move |e: Event<MouseData>| { e.stop_propagation(); on_add_to_cart.call(qty()); on_close.call(()); },
+                            onclick: move |e: Event<MouseData>| {
+                                e.stop_propagation();
+                                TelegramApp::init().haptic_notification(crate::ui::telegram::HapticNotification::Success);
+                                on_add_to_cart.call(qty());
+                                on_close.call(());
+                            },
                             "{add_label}"
                         }
                         }

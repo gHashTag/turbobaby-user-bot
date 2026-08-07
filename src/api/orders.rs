@@ -1709,8 +1709,12 @@ async fn update_order_status(
         // added it duplicated here; #171 lifted into the function).
         // This call site owns no completion side effects. Future
         // completion paths get the full chain for free.
-        if let Err(e) =
-            crate::db::orders::complete_order_and_update_loyalty(&state.db.orm, &id).await
+        if let Err(e) = crate::db::orders::complete_order_and_update_loyalty(
+            &state.db.orm,
+            &id,
+            state.config.referral_welcome_bonus,
+        )
+        .await
         {
             tracing::error!(
                 "update_order_status: complete_order_and_update_loyalty error: {}",

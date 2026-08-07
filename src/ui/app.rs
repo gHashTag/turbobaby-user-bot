@@ -9,8 +9,8 @@ use crate::ui::api::types::ServerCart;
 use crate::ui::components::{install_error_handlers, ErrorOverlay, JsErrorItem};
 use crate::ui::routes::Routes;
 use crate::ui::share::{
-    parse_cart_start_param, parse_order_start_param, parse_reorder_start_param, parse_start_param,
-    SharedProduct,
+    parse_cart_start_param, parse_garden_start_param, parse_order_start_param,
+    parse_reorder_start_param, parse_start_param, SharedProduct,
 };
 use crate::ui::state::{Cart, CartItem};
 use crate::ui::telegram::TelegramProvider;
@@ -142,6 +142,12 @@ pub fn App() -> Element {
     use_context_provider(|| Signal::new(None::<String>));
     let pending_reorder = use_context::<Signal<Option<String>>>();
 
+    // Garden invite deep-link target: `startapp=garden__{referrer_id}[__{source}]`.
+    // GardenScreen reads this signal to show a welcome modal and record the
+    // pending referral on the server.
+    use_context_provider(|| Signal::new(None::<(i64, String)>));
+    let pending_garden_invite = use_context::<Signal<Option<(i64, String)>>>();
+
     use_effect(move || {
         install_error_handlers(errors);
     });
@@ -153,12 +159,14 @@ pub fn App() -> Element {
         let mut pending_order_id = pending_order.clone();
         let mut pending_cart_flag = pending_cart.clone();
         let mut pending_reorder_id = pending_reorder.clone();
+        let mut pending_garden_invite_id = pending_garden_invite.clone();
         spawn(async move {
             for _ in 0..30 {
                 if pending.read().is_some()
                     || pending_order_id.read().is_some()
                     || pending_cart_flag()
                     || pending_reorder_id.read().is_some()
+                    || pending_garden_invite_id.read().is_some()
                 {
                     return;
                 }
@@ -206,6 +214,32 @@ pub fn App() -> Element {
                             &format!("[deeplink] resolved order {}", order_id).into(),
                         );
                         pending_order_id.set(Some(order_id));
+                        return;
+                    }
+                    if let Some((referrer_id, source)) = parse_garden_start_param(&param) {
+                        #[cfg(target_arch = "wasm32")]
+                        web_sys::console::log_1(
+                            &format!(
+                                "[deeplink] resolved garden invite referrer={:?} source={:?}",
+                                referrer_id, source
+                            )
+                            .into(),
+                        );
+                        let source_str = source.unwrap_or("").to_string();
+                        let source_for_event = source_str.clone();
+                        let base = api_base_url();
+                        spawn(async move {
+                            let _ = crate::ui::api::http::post_client_event(
+                                &base,
+                                "garden_invite_link_opened",
+                                &source_for_event,
+                            )
+                            .await;
+                        });
+                        // Only show the invite modal when there is an actual referrer.
+                        if let Some(rid) = referrer_id.filter(|id| *id > 0) {
+                            pending_garden_invite_id.set(Some((rid, source_str)));
+                        }
                         return;
                     }
                 }

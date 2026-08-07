@@ -1,4 +1,4 @@
-use crate::trios::garden::{calculate_progress, GrowthStage, Plant};
+use crate::trios::garden::{calculate_progress, next_streak_milestone, GrowthStage, Plant};
 use crate::trios::i18n::{
     t, tf, T_BTN_WATER, T_CLOSE, T_GARDEN_ACHIEVEMENTS_EMPTY, T_GARDEN_ACHIEVEMENTS_NEW,
     T_GARDEN_ACHIEVEMENTS_TITLE, T_GARDEN_CANCEL, T_GARDEN_CAT_ACCESSORY,
@@ -11,11 +11,11 @@ use crate::trios::i18n::{
     T_GARDEN_ERROR_HARVEST, T_GARDEN_ERROR_PRODUCT_UNAVAILABLE, T_GARDEN_ERROR_RESET,
     T_GARDEN_HARVEST, T_GARDEN_LEADERBOARD_RANK, T_GARDEN_LEADERBOARD_TAB_HARVEST,
     T_GARDEN_LEADERBOARD_TAB_STREAK, T_GARDEN_LEADERBOARD_TITLE, T_GARDEN_LEADERBOARD_YOU,
-    T_GARDEN_LOADING, T_GARDEN_NEXT_WATER_IN, T_GARDEN_PLANT_ALT, T_GARDEN_PRODUCT_ALT,
-    T_GARDEN_READY, T_GARDEN_RESET_CONFIRM_BODY, T_GARDEN_RESET_CONFIRM_TITLE,
-    T_GARDEN_RESET_PROGRESS, T_GARDEN_REWARD_EXPIRES_IN, T_GARDEN_SHARE_CTA,
-    T_GARDEN_STREAK_BEST, T_GARDEN_STREAK_DAYS, T_GARDEN_SUBTITLE, T_GARDEN_TITLE,
-    T_GARDEN_WATER_NOW,
+    T_GARDEN_LOADING, T_GARDEN_MILESTONE_HINT, T_GARDEN_NEXT_WATER_IN, T_GARDEN_PLANT_ALT,
+    T_GARDEN_PRODUCT_ALT, T_GARDEN_READY, T_GARDEN_RESET_CONFIRM_BODY,
+    T_GARDEN_RESET_CONFIRM_TITLE, T_GARDEN_RESET_PROGRESS, T_GARDEN_REWARD_EXPIRES_IN,
+    T_GARDEN_SHARE_CTA, T_GARDEN_STREAK_BEST, T_GARDEN_STREAK_DAYS, T_GARDEN_SUBTITLE,
+    T_GARDEN_TITLE, T_GARDEN_WATER_NOW,
 };
 use crate::ui::share::share_garden;
 use crate::ui::api::context::api_base_url;
@@ -618,7 +618,10 @@ pub fn Garden() -> Element {
         let init = init_share.clone();
         spawn(async move {
             log_share_event(share_tid, &init, "garden", "garden").await;
-            share_garden();
+            // Cycle #19: share with referrer attribution so invitees can be
+            // linked back and earn a two-sided referral bonus.
+            let source = if (share_tid % 2) == 0 { "utm_a" } else { "utm_b" };
+            share_garden(Some(share_tid), Some(source));
         });
     };
 
@@ -948,9 +951,20 @@ pub fn Garden() -> Element {
                                     }
 
                                     // Loop #17: status + streak + reward expiry line.
-                                    div { style: "display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; font-size: 11px; color: #8b8b9e;",
+                                    div { style: "display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font-size: 11px; color: #8b8b9e;",
                                         span { "{status_countdown_text}" }
                                         span { "🔥 {plant.streak} {streak_days_text} · {streak_best_text} {plant.max_streak}" }
+                                    }
+                                    {
+                                        let (milestone, days_left) = next_streak_milestone(plant.streak);
+                                        if milestone > 0 {
+                                            let hint = tf(lang, T_GARDEN_MILESTONE_HINT, &[milestone.to_string(), days_left.to_string()]);
+                                            rsx! {
+                                                div { style: "margin-bottom: 10px; padding: 4px 8px; background: rgba(57,255,20,0.1); border: 1px solid rgba(57,255,20,0.35); border-radius: 8px; font-size: 11px; color: #39ff14; text-align: center;",
+                                                    "🎯 {hint}"
+                                                }
+                                            }
+                                        } else { rsx! {} }
                                     }
                                     if let Some(exp_text) = reward_expiry_text.clone() {
                                         div { style: "margin-bottom: 10px; padding: 6px 10px; background: rgba(255,71,87,0.15); border: 1px solid rgba(255,71,87,0.4); border-radius: 8px; font-size: 11px; color: #ff6b7a; text-align: center;",

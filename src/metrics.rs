@@ -183,6 +183,24 @@ pub fn share_event_logged(content_kind: &str) {
     .increment(1);
 }
 
+/// Loop #19: a user accepted a garden invite deep-link and recorded a referral.
+pub fn garden_invite_accepted(source: &str) {
+    counter!(
+        "garden_invite_accepted_total",
+        "source" => source.to_string()
+    )
+    .increment(1);
+}
+
+/// Loop #19: garden-invite recording failed for a non-duplicate reason.
+pub fn garden_invite_failed(reason: &str) {
+    counter!(
+        "garden_invite_failed_total",
+        "reason" => reason.to_string()
+    )
+    .increment(1);
+}
+
 /// Loop #18: a Woody Catch high score was submitted to the server.
 pub fn game_high_score_submitted(score: u64) {
     counter!("game_high_score_submitted_total").increment(1);
@@ -408,6 +426,8 @@ mod tests {
         garden_achievement_unlocked("garden_first_water");
         garden_leaderboard_viewed("streak");
         share_event_logged("garden");
+        garden_invite_accepted("utm_a");
+        garden_invite_failed("db");
     }
 
     #[test]

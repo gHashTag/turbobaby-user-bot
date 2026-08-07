@@ -466,7 +466,12 @@ pub(crate) async fn handle_callback(
             // INTO complete_order_and_update_loyalty — this callsite
             // only owns the user-facing Telegram notification now).
             let completion =
-                match crate::db::orders::complete_order_and_update_loyalty(&db.orm, order_id).await
+                match crate::db::orders::complete_order_and_update_loyalty(
+                    &db.orm,
+                    order_id,
+                    config.referral_welcome_bonus,
+                )
+                .await
                 {
                     Ok(Some(c)) => c,
                     Ok(None) => {

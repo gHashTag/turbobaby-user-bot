@@ -230,7 +230,8 @@ pub(crate) async fn record_referral(
 
 /// Confirm a referral (first purchase of `referred_id`).
 /// - Sets status = 'confirmed' + confirmed_at
-/// - Credits bonus to referrer's balance via bonus_transactions
+/// - Credits `bonus` to referrer's balance via bonus_transactions
+/// - Credits `referred_welcome_bonus` to the referred user's balance (Loop #19)
 /// - Increments referrer's referral_count
 ///
 /// Cycle #84: migrated to SeaORM transaction. The `SELECT ... FOR UPDATE`
@@ -241,6 +242,7 @@ pub(crate) async fn confirm_referral(
     orm: &sea_orm::DatabaseConnection,
     referred_id: i64,
     bonus: f64,
+    referred_welcome_bonus: f64,
 ) -> Result<()> {
     use crate::db::entities::{
         bonus_transaction::{ActiveModel as BonusTxAm, Entity as BonusTxEntity},
@@ -257,6 +259,11 @@ pub(crate) async fn confirm_referral(
     if !bonus.is_finite() || bonus < 0.0 {
         anyhow::bail!("invalid bonus: {}", bonus);
     }
+    let welcome_bonus = if referred_welcome_bonus.is_finite() && referred_welcome_bonus > 0.0 {
+        referred_welcome_bonus
+    } else {
+        0.0
+    };
 
     let tx = orm.begin().await.context("start SeaORM tx")?;
 
@@ -357,6 +364,63 @@ pub(crate) async fn confirm_referral(
             "confirm_referral: loyalty profile missing for referrer_id={} after upsert (race?)",
             referrer_id
         );
+    }
+
+    // 6. Loop #19: two-sided bonus — credit the newly-referred user a one-time
+    //    welcome bonus. Only applies when the env config enables a positive amount.
+    if welcome_bonus > 0.0 {
+        // Ensure the referred user's profile exists (record_referral already
+        // upserts it, but the row may be missing in legacy data).
+        let referred_seed = LpAm {
+            telegram_id: Set(referred_id),
+            bonus_balance: Set(Some(0.0)),
+            total_spent: Set(Some(0.0)),
+            ..Default::default()
+        };
+        LoyaltyProfileEntity::insert(referred_seed)
+            .on_conflict(
+                OnConflict::column(LpCol::TelegramId)
+                    .do_nothing()
+                    .to_owned(),
+            )
+            .do_nothing()
+            .exec(&tx)
+            .await
+            .context("upsert referred loyalty_profile for welcome bonus")?;
+
+        let welcome_tx_id = Uuid::new_v4().to_string();
+        let welcome_bt_am = BonusTxAm {
+            id: Set(welcome_tx_id),
+            telegram_id: Set(referred_id),
+            amount: Set(welcome_bonus),
+            tx_type: Set("referral_welcome".to_string()),
+            description: Set(Some("Welcome bonus from a friend's garden invite".to_string())),
+            related_order_id: Set(None),
+            ..Default::default()
+        };
+        BonusTxEntity::insert(welcome_bt_am)
+            .exec(&tx)
+            .await
+            .context("insert referral welcome bonus_transaction")?;
+
+        let referred_updated = LoyaltyProfileEntity::update_many()
+            .col_expr(
+                LpCol::BonusBalance,
+                sea_orm::sea_query::Expr::cust_with_values(
+                    "bonus_balance + $1",
+                    [welcome_bonus],
+                ),
+            )
+            .filter(LpCol::TelegramId.eq(referred_id))
+            .exec(&tx)
+            .await
+            .context("credit referred welcome bonus")?;
+        if referred_updated.rows_affected == 0 {
+            anyhow::bail!(
+                "confirm_referral: loyalty profile missing for referred_id={} after upsert (race?)",
+                referred_id
+            );
+        }
     }
 
     tx.commit().await.context("commit SeaORM referral tx")?;

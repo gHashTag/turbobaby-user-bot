@@ -1,14 +1,17 @@
 use axum::{
     extract::{Path, Query, State},
     http::{HeaderMap, StatusCode},
-    routing::get,
+    routing::{get, post},
     Json, Router,
 };
 use serde::Deserialize;
 use serde_json::{json, Value};
 
 use crate::api::auth::{check_not_blocked, validate_telegram_id_param};
-use crate::db::referrals::{get_or_create_referral_code, get_referrer_stats, get_top_referrers};
+use crate::db::referrals::{
+    get_or_create_referral_code, get_referrer_stats, get_top_referrers, is_self_referral,
+    record_referral,
+};
 use crate::AppState;
 
 // ──────────────────────────────────────────────────────────────────
@@ -18,6 +21,7 @@ use crate::AppState;
 pub(crate) fn routes() -> Router<AppState> {
     Router::new()
         .route("/referrals/me/:telegram_id", get(get_my_referrals))
+        .route("/referrals/me/:telegram_id/garden-invite", post(post_garden_invite))
         .route("/referrals/leaderboard", get(get_leaderboard))
 }
 
@@ -29,6 +33,13 @@ pub(crate) fn routes() -> Router<AppState> {
 pub(crate) struct LeaderboardQuery {
     pub period: Option<String>,
     pub limit: Option<i64>,
+}
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct GardenInviteRequest {
+    pub referrer_id: i64,
+    #[serde(default)]
+    pub source: Option<String>,
 }
 
 // ──────────────────────────────────────────────────────────────────
@@ -73,6 +84,88 @@ async fn get_my_referrals(
             "total_bonus_earned": stats.total_bonus_earned,
         }
     })))
+}
+
+/// POST /api/referrals/me/:telegram_id/garden-invite
+///
+/// Records a pending referral when a user opens the Mini App from a garden
+/// invite deep-link. The caller must own the telegram_id path parameter.
+async fn post_garden_invite(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    Path(telegram_id): Path<i64>,
+    Json(body): Json<GardenInviteRequest>,
+) -> Result<Json<Value>, StatusCode> {
+    validate_telegram_id_param(telegram_id)?;
+    crate::api::auth::check_owner(&headers, &state, telegram_id)?;
+    check_not_blocked(&state, telegram_id).await?;
+
+    if is_self_referral(body.referrer_id, telegram_id) {
+        return Ok(Json(json!({
+            "success": false,
+            "error": "self_referral",
+        })));
+    }
+
+    // Ensure the referrer has a code; reuse it as the attribution code.
+    let code = get_or_create_referral_code(&state.db.orm,
+        body.referrer_id,
+    )
+    .await
+    .map_err(|e| {
+        tracing::error!("DB error getting referrer code: {:?}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    match record_referral(
+        &state.db.orm,
+        body.referrer_id,
+        telegram_id,
+        &code,
+        body.source.as_deref(),
+    )
+    .await
+    {
+        Ok(_) => {
+            crate::metrics::garden_invite_accepted(body.source.as_deref().unwrap_or(""));
+            let bot_username = &state.config.bot_username;
+            let link = format!(
+                "https://t.me/{}?start=ref_{}",
+                bot_username, code
+            );
+            Ok(Json(json!({
+                "success": true,
+                "code": code,
+                "invite_link": link,
+            })))
+        }
+        Err(e) => {
+            let err_str = e.to_string();
+            if err_str.contains("self-referral") {
+                return Ok(Json(json!({
+                    "success": false,
+                    "error": "self_referral",
+                })));
+            }
+            // A duplicate insert (referred_id already has an event) is a
+            // benign race — report success without leaking internal state.
+            if err_str.contains("duplicate key") || err_str.contains("unique constraint") {
+                let bot_username = &state.config.bot_username;
+                let link = format!(
+                    "https://t.me/{}?start=ref_{}",
+                    bot_username, code
+                );
+                return Ok(Json(json!({
+                    "success": true,
+                    "code": code,
+                    "invite_link": link,
+                })));
+            }
+            tracing::error!("DB error recording garden invite: {:?}", e);
+            crate::metrics::garden_invite_failed(err_str.as_str());
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+    }
 }
 
 fn validate_leaderboard_query(params: &LeaderboardQuery) -> Result<(&str, i64), StatusCode> {

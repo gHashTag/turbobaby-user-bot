@@ -1,4 +1,4 @@
-use crate::trios::garden::{calculate_progress, GrowthStage, Plant};
+use crate::trios::garden::{calculate_progress, next_streak_milestone, GrowthStage, Plant};
 use crate::trios::i18n::{
     t, tf, T_ADD_TO_CART, T_GARDEN_HARVEST_CTA, T_GARDEN_START_FIRST_GARDEN,
     T_GARDEN_START_FIRST_GARDEN_CTA, T_GARDEN_WATER_CTA, T_HOME_ADVENTURES, T_HOME_AR_HUNT,
@@ -10,6 +10,8 @@ use crate::trios::i18n::{
     T_NAV_ACCESSORIES, T_NAV_GARDEN, T_NAV_MENU, T_NAV_SETS, T_NAV_TEA, T_TRUST_AGE, T_TRUST_GACP,
     T_TRUST_MEDICAL, T_TRUST_SUPPORT,
 };
+// Cycle #19 garden retention copy
+use crate::trios::i18n::{T_GARDEN_MILESTONE_HINT, T_GARDEN_NEXT_WATER_COUNTDOWN, T_GARDEN_WATER_NOW};
 use crate::ui::api::context::api_base_url;
 use crate::ui::api::http::{fetch_text_authed, merge_server_cart, post_client_event};
 use crate::ui::assets;
@@ -630,6 +632,29 @@ pub fn HomeScreen() -> Element {
                         let strain = plant.strain_name.clone();
                         let streak = streak_opt.as_ref().map(|s| s.streak).unwrap_or(0);
                         let _max_streak = streak_opt.as_ref().map(|s| s.max_streak).unwrap_or(0);
+                        let now_ms = js_sys::Date::now() as i64;
+                        let remaining_ms = progress.next_water_at.saturating_sub(now_ms);
+                        let countdown_text = if progress.is_ready_to_harvest {
+                            t(lang, T_HOME_GARDEN_HARVEST).to_string()
+                        } else if progress.can_water {
+                            t(lang, T_GARDEN_WATER_NOW).to_string()
+                        } else {
+                            let total_minutes = remaining_ms / (60 * 1000);
+                            let hours = total_minutes / 60;
+                            let minutes = total_minutes % 60;
+                            let cd = if hours > 0 {
+                                format!("{}h {}m", hours, minutes)
+                            } else {
+                                format!("{}m", minutes)
+                            };
+                            tf(lang, T_GARDEN_NEXT_WATER_COUNTDOWN, &[cd])
+                        };
+                        let (milestone, days_left) = next_streak_milestone(streak);
+                        let milestone_text = if milestone > 0 {
+                            tf(lang, T_GARDEN_MILESTONE_HINT, &[milestone.to_string(), days_left.to_string()])
+                        } else {
+                            String::new()
+                        };
                         rsx! {
                             {
                                 let garden_kind = if progress.is_ready_to_harvest { "harvest" } else { "water" };
@@ -660,6 +685,12 @@ pub fn HomeScreen() -> Element {
                                                         div { style: "width:{pct}%;height:100%;background:linear-gradient(90deg,#39ff14,#2d9e0f);" }
                                                     }
                                                     span { style: "font-size:12px;font-weight:700;color:#8b8b9e;min-width:38px;text-align:right;", "{pct}% {growing}" }
+                                                }
+                                                div { style: "display:flex;justify-content:space-between;align-items:center;margin-top:6px;",
+                                                    span { style: "font-size:11px;color:#8b8b9e;", "⏳ {countdown_text}" }
+                                                    if !milestone_text.is_empty() {
+                                                        span { style: "font-size:11px;color:#39ff14;", "🎯 {milestone_text}" }
+                                                    }
                                                 }
                                             }
                                             div { style: "background:#39ff14;color:#000;padding:8px 12px;border:3px solid #2d9e0f;font-size:12px;font-weight:700;box-shadow:2px 2px 0 #000;white-space:nowrap;", "{cta}" }

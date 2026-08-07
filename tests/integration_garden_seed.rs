@@ -131,7 +131,7 @@ async fn complete_order_seeds_garden_plant_for_strain_orders() {
 
     // Trigger the production path. Cycle #171 changed the return
     // type from `(i64, bool)` to `OrderCompletion`.
-    let result = complete_order_and_update_loyalty(&db.orm, &order_id)
+    let result = complete_order_and_update_loyalty(&db.orm, &order_id, 0.0)
         .await
         .expect("complete_order_and_update_loyalty");
     let completion = result.expect("must return Some(OrderCompletion)");
@@ -222,7 +222,7 @@ async fn complete_order_skips_seeding_when_active_plant_exists() {
         .await
         .expect("seed order");
 
-    let _ = complete_order_and_update_loyalty(&db.orm, &order_id)
+    let _ = complete_order_and_update_loyalty(&db.orm, &order_id, 0.0)
         .await
         .expect("complete_order");
 

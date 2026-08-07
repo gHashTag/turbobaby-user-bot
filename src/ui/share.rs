@@ -213,22 +213,78 @@ pub fn reorder_deep_link(order_id: &str) -> String {
 }
 
 /// Build a `startapp` parameter that opens the Mini App on the garden screen.
-pub fn garden_start_param() -> String {
-    "garden".to_string()
+/// When `referrer_id` is provided, the invitee can be attributed back to the
+/// referrer for a two-sided garden-referral reward.
+pub fn garden_start_param(referrer_id: Option<i64>) -> String {
+    match referrer_id {
+        Some(id) => format!("garden__{}", id),
+        None => "garden".to_string(),
+    }
 }
 
 /// Raw `t.me` deep link that opens the Mini App in the garden.
-pub fn garden_deep_link() -> String {
+pub fn garden_deep_link(referrer_id: Option<i64>) -> String {
     format!(
         "https://t.me/{}?startapp={}",
         bot_username(),
-        garden_start_param()
+        garden_start_param(referrer_id)
     )
 }
 
+/// Parse a garden `startapp` value. Plain `garden` returns no referrer.
+/// `garden__{id}[__{source}]` returns the referrer id and optional source.
+/// The id segment must be a valid i64 and the optional source is safe chars only.
+pub fn parse_garden_start_param(param: &str) -> Option<(Option<i64>, Option<&str>)> {
+    if param.is_empty() || param.len() > MAX_START_PARAM_LEN {
+        return None;
+    }
+    if !param
+        .bytes()
+        .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
+    {
+        return None;
+    }
+    if param == "garden" {
+        return Some((None, None));
+    }
+    let rest = param.strip_prefix("garden__")?;
+    if rest.is_empty() {
+        return None;
+    }
+    // Split optional UTM source: garden__123__utm_a
+    let (id_part, source) = match rest.find("__") {
+        Some(idx) => (&rest[..idx], Some(&rest[idx + 2..])),
+        None => (rest, None),
+    };
+    if let Some(s) = source {
+        if s.is_empty()
+            || s.len() > 50
+            || !s
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
+        {
+            return None;
+        }
+    }
+    let referrer_id = id_part.parse::<i64>().ok()?;
+    if referrer_id <= 0 {
+        return None;
+    }
+    Some((Some(referrer_id), source))
+}
+
 /// Open Telegram's native share picker for the garden.
-pub fn share_garden() {
-    let link = garden_deep_link();
+/// `referrer_id` is encoded so invitees are attributed. `source` is an optional
+/// A/B variant (e.g. "utm_a") logged on the server when the invite is accepted.
+pub fn share_garden(referrer_id: Option<i64>, source: Option<&str>) {
+    let mut link = garden_deep_link(referrer_id);
+    if let Some(s) = source {
+        // The parser expects garden__{id}__{source}; append source if present.
+        if referrer_id.is_some() {
+            link.push_str("__");
+            link.push_str(s);
+        }
+    }
     let lang = current_lang();
     let text = format!(
         "{}\n{}",
@@ -414,5 +470,58 @@ mod tests {
         let url = reorder_deep_link(id);
         let start_param = url.split("startapp=").nth(1).unwrap();
         assert_eq!(parse_reorder_start_param(start_param).unwrap(), id);
+    }
+
+    #[test]
+    fn garden_start_param_plain() {
+        assert_eq!(garden_start_param(None), "garden");
+    }
+
+    #[test]
+    fn garden_start_param_with_referrer() {
+        assert_eq!(garden_start_param(Some(12345)), "garden__12345");
+    }
+
+    #[test]
+    fn parse_garden_plain() {
+        assert_eq!(parse_garden_start_param("garden"), Some((None, None)));
+    }
+
+    #[test]
+    fn parse_garden_with_referrer() {
+        assert_eq!(
+            parse_garden_start_param("garden__12345"),
+            Some((Some(12345), None))
+        );
+    }
+
+    #[test]
+    fn parse_garden_with_referrer_and_source() {
+        assert_eq!(
+            parse_garden_start_param("garden__12345__utm_a"),
+            Some((Some(12345), Some("utm_a")))
+        );
+    }
+
+    #[test]
+    fn parse_garden_rejects_non_positive_id() {
+        assert!(parse_garden_start_param("garden__0").is_none());
+        assert!(parse_garden_start_param("garden__-5").is_none());
+    }
+
+    #[test]
+    fn parse_garden_rejects_malformed_source() {
+        assert!(parse_garden_start_param("garden__12345__").is_none());
+        assert!(parse_garden_start_param("garden__12345__utm!").is_none());
+    }
+
+    #[test]
+    fn garden_deep_link_round_trips() {
+        let url = garden_deep_link(Some(12345));
+        let start_param = url.split("startapp=").nth(1).unwrap();
+        assert_eq!(
+            parse_garden_start_param(start_param),
+            Some((Some(12345), None))
+        );
     }
 }

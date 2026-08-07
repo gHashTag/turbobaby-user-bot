@@ -135,6 +135,7 @@ pub struct OrderCompletion {
 pub async fn complete_order_and_update_loyalty(
     orm: &sea_orm::DatabaseConnection,
     order_id: &str,
+    referred_welcome_bonus: f64,
 ) -> Result<Option<OrderCompletion>, sea_orm::DbErr> {
     use crate::db::entities::{
         loyalty_profile::{ActiveModel as LpAm, Column as LpCol, Entity as LpEntity},
@@ -433,7 +434,8 @@ pub async fn complete_order_and_update_loyalty(
                 .unwrap_or(200.0),
             Ok(None) | Err(_) => 200.0,
         };
-        match crate::db::referrals::confirm_referral(orm, cid, bonus).await {
+        match crate::db::referrals::confirm_referral(orm, cid, bonus, referred_welcome_bonus).await
+        {
             Ok(_) => Some(bonus),
             Err(e) => {
                 tracing::error!(
