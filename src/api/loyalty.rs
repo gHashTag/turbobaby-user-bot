@@ -24,7 +24,10 @@ pub(crate) fn routes() -> Router<AppState> {
         .route("/loyalty/:telegram_id", get(get_profile))
         .route("/loyalty/:telegram_id/bonus", post(add_bonus))
         .route("/loyalty/:telegram_id/use-bonus", post(use_bonus))
-        .route("/loyalty/:telegram_id/bonus-history", get(get_bonus_history))
+        .route(
+            "/loyalty/:telegram_id/bonus-history",
+            get(get_bonus_history),
+        )
         .route("/loyalty/leaderboard", get(get_leaderboard))
         .route("/loyalty/config", get(get_loyalty_config))
         .route("/loyalty/config", post(update_loyalty_config))

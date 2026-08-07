@@ -179,9 +179,19 @@ pub fn parse_order_start_param(param: &str) -> Option<String> {
     param.strip_prefix("o_").map(|id| id.to_string())
 }
 
-/// Parse a cart `startapp` value (`cart`).
-pub fn parse_cart_start_param(param: &str) -> bool {
-    param == "cart"
+/// Parse a cart `startapp` value. Accepts plain `cart` or attribution
+/// variants like `cart__<source>` so we can track which campaign drove the
+/// open. The source segment must be safe characters only.
+pub fn parse_cart_start_param(param: &str) -> Option<&str> {
+    if param == "cart" {
+        return Some("");
+    }
+    param.strip_prefix("cart__").filter(|s| {
+        !s.is_empty()
+            && s.len() <= 50
+            && s.bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
+    })
 }
 
 /// Open a `t.me` URL using Telegram's native method, falling back to a plain

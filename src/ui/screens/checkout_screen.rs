@@ -8,10 +8,9 @@ use crate::trios::i18n::{
     T_CHECKOUT_ERR_NAME_LONG, T_CHECKOUT_ERR_NETWORK, T_CHECKOUT_ERR_NO_TELEGRAM,
     T_CHECKOUT_ERR_PARSE, T_CHECKOUT_ERR_PHONE, T_CHECKOUT_ERR_PHONE_INVALID,
     T_CHECKOUT_ERR_PHONE_LONG, T_CHECKOUT_GARDEN_DISCOUNT, T_CHECKOUT_GARDEN_DISCOUNT_PCT,
-    T_CHECKOUT_RETRY,
     T_CHECKOUT_NAME_LABEL, T_CHECKOUT_NAME_PLACEHOLDER, T_CHECKOUT_NOTES_LABEL,
     T_CHECKOUT_NOTES_PLACEHOLDER, T_CHECKOUT_OPEN_MAP, T_CHECKOUT_PAY_ON_RECEIVE,
-    T_CHECKOUT_PHONE_LABEL, T_CHECKOUT_PHONE_PLACEHOLDER, T_CHECKOUT_PROCESSING,
+    T_CHECKOUT_PHONE_LABEL, T_CHECKOUT_PHONE_PLACEHOLDER, T_CHECKOUT_PROCESSING, T_CHECKOUT_RETRY,
     T_CHECKOUT_SELECT_ZONE, T_CHECKOUT_STARS, T_CHECKOUT_STARS_AVAILABLE, T_CHECKOUT_STARS_MINUS,
     T_CHECKOUT_STEP_CART, T_CHECKOUT_STEP_CONFIRM, T_CHECKOUT_STEP_DETAILS, T_CHECKOUT_TITLE,
     T_CHECKOUT_TRUST_COD, T_CHECKOUT_TRUST_SECURE, T_CHECKOUT_TRUST_TITLE,
@@ -21,7 +20,9 @@ use crate::trios::i18n::{
 };
 use crate::trios::store::validate_checkout;
 use crate::ui::api::context::api_base_url;
-use crate::ui::api::http::{delete_authed, fetch_text_authed_full, post_json_authed_idempotent_full};
+use crate::ui::api::http::{
+    delete_authed, fetch_text_authed_full, post_json_authed_idempotent_full,
+};
 use crate::ui::api::types::{DeliveryZone, DeliveryZonesResponse};
 use crate::ui::components::error_banner::ErrorBanner;
 use crate::ui::routes::Route;
@@ -113,7 +114,10 @@ async fn submit_order_with_retry(
     let mut last_body = String::new();
     let mut had_network_error = false;
 
-    for (attempt, delay_ms) in std::iter::once(0).chain(DELAYS_MS.iter().copied()).enumerate() {
+    for (attempt, delay_ms) in std::iter::once(0)
+        .chain(DELAYS_MS.iter().copied())
+        .enumerate()
+    {
         if attempt > 0 {
             gloo_timers::future::TimeoutFuture::new(delay_ms).await;
         }
@@ -134,7 +138,9 @@ async fn submit_order_with_retry(
 
                 if status == 409 {
                     let recent_url = format!("{}/api/orders/user/{}", base, telegram_id);
-                    if let Ok((200, orders_body)) = fetch_text_authed_full(&recent_url, init_data).await {
+                    if let Ok((200, orders_body)) =
+                        fetch_text_authed_full(&recent_url, init_data).await
+                    {
                         if let Ok(val) = serde_json::from_str::<serde_json::Value>(&orders_body) {
                             if let Some(arr) = val.get("orders").and_then(|v| v.as_array()) {
                                 if let Some(first) = arr.first() {
@@ -893,7 +899,8 @@ pub fn CheckoutScreen() -> Element {
                                 delivery_zone_id().as_deref().unwrap_or(""),
                             );
                             if let Some(ref z) = zone_info {
-                                let _ = storage.set_item("woody_last_zone_name", &zone_display_name(z));
+                                let _ =
+                                    storage.set_item("woody_last_zone_name", &zone_display_name(z));
                                 let _ = storage.set_item(
                                     "woody_last_zone_eta",
                                     &format!("{}-{}", z.min_eta_minutes, z.max_eta_minutes),
@@ -923,7 +930,10 @@ pub fn CheckoutScreen() -> Element {
                     // Loop #11: clear the server-side cart so a returning
                     // customer doesn't see stale items after a successful order.
                     if telegram_id_for_retry != 0 {
-                        let clear_url = format!("{}/api/cart?telegram_id={}", base_clone, telegram_id_for_retry);
+                        let clear_url = format!(
+                            "{}/api/cart?telegram_id={}",
+                            base_clone, telegram_id_for_retry
+                        );
                         let _ = delete_authed(&clear_url, &init_data_clone).await;
                     }
                     // Navigate to success and clear cart.

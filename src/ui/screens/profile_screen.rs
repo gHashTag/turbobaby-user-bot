@@ -1,16 +1,15 @@
 use crate::trios::core::Lang;
 use crate::trios::i18n::{
-    t, tf,
-    T_PROFILE_BONUS, T_PROFILE_BONUS_ADMIN, T_PROFILE_BONUS_CASHBACK, T_PROFILE_BONUS_DEBIT,
-    T_PROFILE_BONUS_GARDEN, T_PROFILE_BONUS_HISTORY,
-    T_PROFILE_BONUS_HISTORY_EMPTY, T_PROFILE_BONUS_OTHER, T_PROFILE_BONUS_REFERRAL,
-    T_PROFILE_CASHBACK_LABEL, T_PROFILE_CONTACTS, T_PROFILE_COPY, T_PROFILE_COPY_LINK,
-    T_PROFILE_EARN_PER_REF, T_PROFILE_FRIENDS_INVITED, T_PROFILE_MEMBERSHIP,
-    T_PROFILE_MORE_TO_UNLOCK, T_PROFILE_MY_GARDEN, T_PROFILE_MY_ORDERS, T_PROFILE_OPEN_MAP,
-    T_PROFILE_PROGRESS, T_PROFILE_QR_CODE, T_PROFILE_QUICK_ACTIONS, T_PROFILE_REFERRAL_LINK,
-    T_PROFILE_REFERRAL_PROGRAM, T_PROFILE_SHARE, T_PROFILE_SPENT, T_PROFILE_STARS,
-    T_PROFILE_TIER_BENEFITS, T_PROFILE_TIER_BRONZE, T_PROFILE_TIER_GOLD, T_PROFILE_TIER_SILVER,
-    T_PROFILE_TIER_STARTER, T_PROFILE_TITLE, T_PROFILE_QUESTS, T_PROFILE_INVITED,
+    t, tf, T_PROFILE_BONUS, T_PROFILE_BONUS_ADMIN, T_PROFILE_BONUS_CASHBACK, T_PROFILE_BONUS_DEBIT,
+    T_PROFILE_BONUS_GARDEN, T_PROFILE_BONUS_HISTORY, T_PROFILE_BONUS_HISTORY_EMPTY,
+    T_PROFILE_BONUS_OTHER, T_PROFILE_BONUS_REFERRAL, T_PROFILE_CASHBACK_LABEL, T_PROFILE_CONTACTS,
+    T_PROFILE_COPY, T_PROFILE_COPY_LINK, T_PROFILE_EARN_PER_REF, T_PROFILE_FRIENDS_INVITED,
+    T_PROFILE_INVITED, T_PROFILE_MEMBERSHIP, T_PROFILE_MORE_TO_UNLOCK, T_PROFILE_MY_GARDEN,
+    T_PROFILE_MY_ORDERS, T_PROFILE_OPEN_MAP, T_PROFILE_PROGRESS, T_PROFILE_QR_CODE,
+    T_PROFILE_QUESTS, T_PROFILE_QUICK_ACTIONS, T_PROFILE_REFERRAL_LINK, T_PROFILE_REFERRAL_PROGRAM,
+    T_PROFILE_SHARE, T_PROFILE_SPENT, T_PROFILE_STARS, T_PROFILE_TIER_BENEFITS,
+    T_PROFILE_TIER_BRONZE, T_PROFILE_TIER_GOLD, T_PROFILE_TIER_SILVER, T_PROFILE_TIER_STARTER,
+    T_PROFILE_TITLE,
 };
 use crate::ui::api::context::api_base_url;
 use crate::ui::assets;
@@ -268,7 +267,11 @@ pub fn ProfileScreen() -> Element {
             if telegram_id == 0 {
                 return None;
             }
-            let url = format!("{}/api/loyalty/{}/bonus-history", api_base_url(), telegram_id);
+            let url = format!(
+                "{}/api/loyalty/{}/bonus-history",
+                api_base_url(),
+                telegram_id
+            );
             let client = crate::ui::api::local_client::LocalClient::new();
             let resp = client
                 .get(&url)
@@ -276,12 +279,20 @@ pub fn ProfileScreen() -> Element {
                 .send()
                 .await;
             match resp {
-                Ok(r) => r.json::<BonusHistoryResponse>().await.ok().map(|r| r.transactions),
+                Ok(r) => r
+                    .json::<BonusHistoryResponse>()
+                    .await
+                    .ok()
+                    .map(|r| r.transactions),
                 Err(_) => None,
             }
         }
     });
-    let bonus_history = bonus_history_res.read().clone().flatten().unwrap_or_default();
+    let bonus_history = bonus_history_res
+        .read()
+        .clone()
+        .flatten()
+        .unwrap_or_default();
 
     let current_tier = loyalty_data
         .as_ref()

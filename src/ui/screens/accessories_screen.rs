@@ -1,15 +1,14 @@
 use crate::trios::i18n::{
-    t, tf,
-    T_ACC_CAT_BONG, T_ACC_CAT_CLOTHING, T_ACC_CAT_GRINDER, T_ACC_CAT_LIGHTER, T_ACC_CAT_OTHER,
-    T_ACC_CAT_PAPERS, T_ACC_CAT_PIPE, T_ACC_CAT_SOUVENIR, T_ACC_CAT_STORAGE, T_ACC_DESC,
-    T_ACC_TITLE, T_ADD_TO_CART, T_CATALOG_EMPTY, T_CATALOG_ERROR, T_FILTER_ALL, T_LOW_STOCK,
-    T_MENU_SOLD_OUT,
+    t, tf, T_ACC_CAT_BONG, T_ACC_CAT_CLOTHING, T_ACC_CAT_GRINDER, T_ACC_CAT_LIGHTER,
+    T_ACC_CAT_OTHER, T_ACC_CAT_PAPERS, T_ACC_CAT_PIPE, T_ACC_CAT_SOUVENIR, T_ACC_CAT_STORAGE,
+    T_ACC_DESC, T_ACC_TITLE, T_ADD_TO_CART, T_CATALOG_EMPTY, T_CATALOG_ERROR, T_FILTER_ALL,
+    T_LOW_STOCK, T_MENU_SOLD_OUT,
 };
 use crate::ui::api::context::api_base_url;
 use crate::ui::components::bottom_nav::BottomNav;
 use crate::ui::components::card_media::CardMedia;
-use crate::ui::components::skeleton::{Skeleton, SkeletonShape};
 use crate::ui::components::product_detail_modal::ProductDetailModal;
+use crate::ui::components::skeleton::{Skeleton, SkeletonShape};
 use crate::ui::components::video_modal::VideoModal;
 use crate::ui::share::{share_product, ProductKind, SharedProduct};
 use crate::ui::state::{Cart, CartItem, CartItemType};

@@ -1,9 +1,9 @@
 use crate::trios::garden::{calculate_progress, GrowthStage, Plant};
 use crate::trios::i18n::{
     t, tf, T_ADD_TO_CART, T_HOME_ADVENTURES, T_HOME_AR_HUNT, T_HOME_CATEGORIES, T_HOME_DAILY_QUEST,
-    T_HOME_GAME, T_HOME_GARDEN_CTA, T_HOME_GARDEN_GROWING,
-    T_HOME_GARDEN_HARVEST, T_HOME_GARDEN_TITLE, T_HOME_GARDEN_WATER, T_HOME_LOCATION_QUEST,
-    T_HOME_NO_SOTD, T_HOME_SETS_PACKS, T_HOME_SHARE, T_HOME_SOMMELIER, T_HOME_SOTD, T_HOME_SUBTITLE,
+    T_HOME_GAME, T_HOME_GARDEN_CTA, T_HOME_GARDEN_GROWING, T_HOME_GARDEN_HARVEST,
+    T_HOME_GARDEN_TITLE, T_HOME_GARDEN_WATER, T_HOME_LOCATION_QUEST, T_HOME_NO_SOTD,
+    T_HOME_SETS_PACKS, T_HOME_SHARE, T_HOME_SOMMELIER, T_HOME_SOTD, T_HOME_SUBTITLE,
     T_HOME_TREASURE_HUNT, T_HOME_WATCH_VIDEO, T_MENU_OFF, T_MENU_SET_LABEL, T_MENU_THC,
     T_NAV_ACCESSORIES, T_NAV_GARDEN, T_NAV_MENU, T_NAV_SETS, T_NAV_TEA, T_TRUST_AGE, T_TRUST_GACP,
     T_TRUST_MEDICAL, T_TRUST_SUPPORT,
@@ -110,7 +110,10 @@ struct HomeGardenResponse {
 
 /// Fetch the user's active garden plant. Returns `Ok(None)` when the user has
 /// no plant yet — the widget should then show the empty-state CTA.
-async fn fetch_home_garden_plant(telegram_id: i64, init_data: &str) -> Result<Option<HomeGardenPlant>, ()> {
+async fn fetch_home_garden_plant(
+    telegram_id: i64,
+    init_data: &str,
+) -> Result<Option<HomeGardenPlant>, ()> {
     let base = api_base_url();
     let url = format!("{}/api/garden/plants?telegram_id={}", base, telegram_id);
     let (status, body) = crate::ui::api::http::fetch_text_authed_full(&url, init_data)

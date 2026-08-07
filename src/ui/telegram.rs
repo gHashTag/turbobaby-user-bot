@@ -163,7 +163,8 @@ impl TelegramApp {
     /// listen to reliably. Telegram only exposes a single onClick callback, so
     /// this overwrites any previous JS handler with a dispatcher.
     pub fn enable_main_button_click_dispatch(&self) {
-        let _ = document::eval(r#"
+        let _ = document::eval(
+            r#"
             (function(){
                 if(window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.MainButton){
                     window.Telegram.WebApp.MainButton.onClick(function(){
@@ -173,7 +174,8 @@ impl TelegramApp {
                     });
                 }
             })();
-        "#);
+        "#,
+        );
     }
 
     /// Show back button
@@ -480,13 +482,10 @@ pub fn use_main_button_click<F: FnMut() + 'static>(callback: F) {
             TelegramApp::init().enable_main_button_click_dispatch();
             let cb = Rc::new(RefCell::new(callback));
             let win = web_sys::window()?;
-            let listener = EventListener::new(
-                &win,
-                "woody:mainbutton",
-                move |_event: &web_sys::Event| {
+            let listener =
+                EventListener::new(&win, "woody:mainbutton", move |_event: &web_sys::Event| {
                     cb.borrow_mut()();
-                },
-            );
+                });
             Some(Rc::new(listener))
         },
         |_listener: Option<Rc<EventListener>>| {},

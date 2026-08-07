@@ -1,16 +1,15 @@
 // Cart Screen — Interactive with global Cart signal
 use crate::trios::i18n::{
-    t, tf,
-    T_CART_BACK_MENU, T_CART_BROWSE_MENU, T_CART_BROWSE_SETS, T_CART_CHECKOUT,
-    T_CART_DECREASE_QTY, T_CART_DELIVERY, T_CART_DELIVERY_FREE, T_CART_DINE_IN,
-    T_CART_EMPTY, T_CART_EMPTY_DESC, T_CART_IMAGE_ALT, T_CART_ITEMS, T_CART_REMOVE,
-    T_CART_SUBTOTAL, T_CART_TAKEAWAY, T_CART_TITLE, T_PLACE_ORDER, T_TOTAL,
+    t, tf, T_CART_BACK_MENU, T_CART_BROWSE_MENU, T_CART_BROWSE_SETS, T_CART_CHECKOUT,
+    T_CART_DECREASE_QTY, T_CART_DELIVERY, T_CART_DELIVERY_FREE, T_CART_DINE_IN, T_CART_EMPTY,
+    T_CART_EMPTY_DESC, T_CART_IMAGE_ALT, T_CART_ITEMS, T_CART_REMOVE, T_CART_SUBTOTAL,
+    T_CART_TAKEAWAY, T_CART_TITLE, T_PLACE_ORDER, T_TOTAL,
 };
 use crate::ui::components::bottom_nav::BottomNav;
 use crate::ui::components::empty_state::EmptyState;
 use crate::ui::routes::Route;
 use crate::ui::state::{Cart, CartItem, CartItemType};
-use crate::ui::telegram::{TelegramApp, HapticNotification, use_main_button_click};
+use crate::ui::telegram::{use_main_button_click, HapticNotification, TelegramApp};
 use dioxus::prelude::*;
 
 fn format_price(price: f64) -> String {

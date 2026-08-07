@@ -166,10 +166,7 @@ impl Config {
 
 /// Pure core of [`Config::disabled_capabilities`] — split out so the mapping
 /// is unit-testable without constructing a full `Config`.
-fn disabled_capabilities_from(
-    ai_enabled: bool,
-    s3_enabled: bool,
-) -> Vec<&'static str> {
+fn disabled_capabilities_from(ai_enabled: bool, s3_enabled: bool) -> Vec<&'static str> {
     let mut off = Vec::new();
     if !ai_enabled {
         off.push("AI sommelier (GROK_API_KEY + GLM_API_KEY both unset)");

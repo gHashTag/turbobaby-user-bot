@@ -52,7 +52,9 @@ const MAX_URL_PATH_LEN: usize = 500;
 const MAX_USER_AGENT_LEN: usize = 500;
 
 pub(crate) fn routes() -> Router<AppState> {
-    Router::new().route("/client-errors", post(log_client_error))
+    Router::new()
+        .route("/client-errors", post(log_client_error))
+        .route("/client-events", post(log_client_event))
 }
 
 #[derive(Debug, Deserialize)]
@@ -67,6 +69,17 @@ pub(crate) struct ClientErrorRequest {
     pub url_path: Option<String>,
     #[serde(default)]
     pub user_agent: Option<String>,
+    #[serde(default)]
+    pub telegram_id: Option<i64>,
+}
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct ClientEventRequest {
+    pub event: String,
+    #[serde(default)]
+    pub detail: Option<String>,
+    #[serde(default)]
+    pub url_path: Option<String>,
     #[serde(default)]
     pub telegram_id: Option<i64>,
 }
@@ -358,6 +371,84 @@ async fn log_client_error(
     }
 
     Ok(StatusCode::ACCEPTED)
+}
+
+/// Loop #13: lightweight conversion/event telemetry sink. Unlike
+/// `/client-errors`, this endpoint does not require a `message` field; it
+/// simply logs named client events (e.g. `cart_deep_link_opened`) for
+/// funnel attribution. Rate-limited separately so normal analytics traffic
+/// never competes with panic/error reports.
+async fn log_client_event(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    Json(req): Json<ClientEventRequest>,
+) -> Result<StatusCode, StatusCode> {
+    let ip = client_ip_from_headers(&headers);
+    if !check_and_record(
+        &CLIENT_ERROR_RATE_LIMIT,
+        &ip,
+        CLIENT_ERROR_RL_WINDOW,
+        CLIENT_ERROR_RL_MAX_ATTEMPTS,
+        CLIENT_ERROR_RL_MAX_IPS,
+    )
+    .await
+    {
+        crate::metrics::rate_limit_blocked("client_event");
+        return Err(StatusCode::TOO_MANY_REQUESTS);
+    }
+
+    let event = sanitize_event_name(&req.event);
+    let detail = req
+        .detail
+        .as_deref()
+        .map(sanitize_telemetry_text)
+        .map(|s| truncate_chars(&s, MAX_MESSAGE_LEN))
+        .unwrap_or_default();
+    let url_path = req
+        .url_path
+        .as_deref()
+        .map(sanitize_telemetry_text)
+        .map(|s| truncate_chars(&s, MAX_URL_PATH_LEN));
+    let telegram_id = req.telegram_id.filter(|&id| id > 0);
+
+    use sea_orm::{ConnectionTrait, DbBackend, Statement};
+    state
+        .db
+        .orm
+        .execute(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            "INSERT INTO client_event_logs \
+             (event, detail, url_path, telegram_id) \
+             VALUES ($1,$2,$3,$4)",
+            [
+                event.clone().into(),
+                detail.clone().into(),
+                url_path.into(),
+                telegram_id.into(),
+            ],
+        ))
+        .await
+        .map_err(|e| {
+            tracing::error!("client_event insert: {e}");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    if event == "cart_deep_link_opened" {
+        crate::metrics::cart_deep_link_opened(&detail);
+    }
+
+    Ok(StatusCode::ACCEPTED)
+}
+
+/// Normalize event name to an allow-list so a malicious client can't create
+/// arbitrary time-series names.
+fn sanitize_event_name(raw: &str) -> String {
+    match raw {
+        "cart_deep_link_opened" => "cart_deep_link_opened".to_string(),
+        "reorder_clicked" => "reorder_clicked".to_string(),
+        "checkout_retry_clicked" => "checkout_retry_clicked".to_string(),
+        _ => "unknown".to_string(),
+    }
 }
 
 #[cfg(test)]

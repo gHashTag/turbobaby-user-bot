@@ -309,10 +309,7 @@ impl ApiClient {
         self.post("/api/reviews", req).await
     }
 
-    pub async fn send_broadcast(
-        &self,
-        req: &BroadcastRequest,
-    ) -> Result<serde_json::Value> {
+    pub async fn send_broadcast(&self, req: &BroadcastRequest) -> Result<serde_json::Value> {
         self.post("/api/admin/broadcast", req).await
     }
 

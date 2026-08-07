@@ -429,9 +429,30 @@ pub async fn merge_server_cart(
     .to_string();
     let url = format!("{}/api/cart/merge", base_url);
     let text = post_json_authed(&url, init_data, &body).await?;
-    let resp: CartRespDto = serde_json::from_str(&text)
-        .map_err(|e| format!("Cart merge response JSON error: {e}"))?;
+    let resp: CartRespDto =
+        serde_json::from_str(&text).map_err(|e| format!("Cart merge response JSON error: {e}"))?;
     Ok(resp.into())
+}
+
+/// Loop #13: fire a lightweight client event to the backend. Used for
+/// conversion attribution (e.g. cart deep-link opened) where the event does not
+/// fit the error telemetry shape. Returns the HTTP status; failures are ignored
+/// on the client side so analytics can never block the user flow.
+pub async fn post_client_event(base_url: &str, event: &str, detail: &str) -> Result<u16, String> {
+    let body = serde_json::json!({
+        "event": event,
+        "detail": detail,
+    })
+    .to_string();
+    let url = format!("{}/api/client-events", base_url);
+    let resp = Request::post(&url)
+        .header("content-type", "application/json")
+        .body(body)
+        .map_err(|e| format!("Build error: {e}"))?
+        .send()
+        .await
+        .map_err(|e| format!("Network error: {e}"))?;
+    Ok(resp.status())
 }
 
 /// PUT JSON with full admin auth. Returns (status, body).

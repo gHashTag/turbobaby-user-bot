@@ -13,12 +13,12 @@ use axum::{
     Json, Router,
 };
 use chrono::Utc;
-use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
 use sea_orm::{
     ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, QueryFilter, QueryOrder,
     TransactionTrait,
 };
+use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
 
 use crate::api::auth::{check_not_blocked, check_owner, validate_telegram_id_param};
 use crate::AppState;
@@ -64,9 +64,15 @@ pub(crate) struct MergeCartReq {
 
 pub(crate) fn routes() -> Router<AppState> {
     Router::new()
-        .route("/cart", get(get_cart).post(add_cart_item).delete(clear_cart))
+        .route(
+            "/cart",
+            get(get_cart).post(add_cart_item).delete(clear_cart),
+        )
         .route("/cart/merge", post(merge_cart))
-        .route("/cart/items/:item_id", patch(update_cart_item).delete(delete_cart_item))
+        .route(
+            "/cart/items/:item_id",
+            patch(update_cart_item).delete(delete_cart_item),
+        )
 }
 
 fn parse_kind(kind: &str) -> Result<&'static str, StatusCode> {
@@ -104,72 +110,66 @@ async fn resolve_catalog_snapshot(
     use sea_orm::{ConnectionTrait, DbBackend, Statement};
 
     let row = match kind {
-        "strain" => {
-            strain::Entity::find_by_id(catalog_id.to_string())
-                .one(&state.db.orm)
-                .await
-                .map_err(|e| {
-                    tracing::error!("cart strain lookup: {e}");
-                    StatusCode::INTERNAL_SERVER_ERROR
-                })?
-                .map(|m| {
-                    let sale_until = m.sale_until.as_ref().map(|d| d.to_rfc3339());
-                    let new_until = m.new_until.as_ref().map(|d| d.to_rfc3339());
-                    (
-                        m.name,
-                        crate::trios::pricing::effective_strain_price(
-                            &crate::trios::pricing::MarketingFlags {
-                                price_per_gram: m.price_per_gram,
-                                is_strain_of_day: m.is_strain_of_day,
-                                strain_of_day_discount: m.strain_of_day_discount,
-                                sale_active: m.sale_active,
-                                sale_until: sale_until.as_deref(),
-                                sale_price: m.sale_price,
-                                discount_percent: m.discount_percent,
-                                is_new_arrival: m.is_new_arrival,
-                                new_until: new_until.as_deref(),
-                            },
-                            Utc::now(),
-                        )
-                        .price,
-                        m.image_url,
+        "strain" => strain::Entity::find_by_id(catalog_id.to_string())
+            .one(&state.db.orm)
+            .await
+            .map_err(|e| {
+                tracing::error!("cart strain lookup: {e}");
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?
+            .map(|m| {
+                let sale_until = m.sale_until.as_ref().map(|d| d.to_rfc3339());
+                let new_until = m.new_until.as_ref().map(|d| d.to_rfc3339());
+                (
+                    m.name,
+                    crate::trios::pricing::effective_strain_price(
+                        &crate::trios::pricing::MarketingFlags {
+                            price_per_gram: m.price_per_gram,
+                            is_strain_of_day: m.is_strain_of_day,
+                            strain_of_day_discount: m.strain_of_day_discount,
+                            sale_active: m.sale_active,
+                            sale_until: sale_until.as_deref(),
+                            sale_price: m.sale_price,
+                            discount_percent: m.discount_percent,
+                            is_new_arrival: m.is_new_arrival,
+                            new_until: new_until.as_deref(),
+                        },
+                        Utc::now(),
                     )
-                })
-        }
-        "accessory" => {
-            accessory::Entity::find_by_id(catalog_id.to_string())
-                .one(&state.db.orm)
-                .await
-                .map_err(|e| {
-                    tracing::error!("cart accessory lookup: {e}");
-                    StatusCode::INTERNAL_SERVER_ERROR
-                })?
-                .filter(|m| m.is_available)
-                .map(|m| {
-                    (
-                        m.name,
-                        crate::trios::pricing::effective_accessory_price(m.price),
-                        Some(m.image_url).filter(|s| !s.is_empty()),
-                    )
-                })
-        }
-        "tea" => {
-            tea_product::Entity::find_by_id(catalog_id.to_string())
-                .one(&state.db.orm)
-                .await
-                .map_err(|e| {
-                    tracing::error!("cart tea lookup: {e}");
-                    StatusCode::INTERNAL_SERVER_ERROR
-                })?
-                .filter(|m| m.is_available)
-                .map(|m| {
-                    (
-                        m.name,
-                        crate::trios::pricing::effective_tea_price(m.price),
-                        Some(m.image_url).filter(|s| !s.is_empty()),
-                    )
-                })
-        }
+                    .price,
+                    m.image_url,
+                )
+            }),
+        "accessory" => accessory::Entity::find_by_id(catalog_id.to_string())
+            .one(&state.db.orm)
+            .await
+            .map_err(|e| {
+                tracing::error!("cart accessory lookup: {e}");
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?
+            .filter(|m| m.is_available)
+            .map(|m| {
+                (
+                    m.name,
+                    crate::trios::pricing::effective_accessory_price(m.price),
+                    Some(m.image_url).filter(|s| !s.is_empty()),
+                )
+            }),
+        "tea" => tea_product::Entity::find_by_id(catalog_id.to_string())
+            .one(&state.db.orm)
+            .await
+            .map_err(|e| {
+                tracing::error!("cart tea lookup: {e}");
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?
+            .filter(|m| m.is_available)
+            .map(|m| {
+                (
+                    m.name,
+                    crate::trios::pricing::effective_tea_price(m.price),
+                    Some(m.image_url).filter(|s| !s.is_empty()),
+                )
+            }),
         "set" => {
             // The public set catalog spans three tables; we price from the
             // same UNION that create_order uses. We prefer the matching table
@@ -233,7 +233,9 @@ async fn get_or_create_cart(
         telegram_id: Set(telegram_id),
         created_at: Set(Some(chrono::DateTime::from(Utc::now()))),
         updated_at: Set(Some(chrono::DateTime::from(Utc::now()))),
-        expires_at: Set(Some(chrono::DateTime::from(Utc::now() + chrono::Duration::days(30)))),
+        expires_at: Set(Some(chrono::DateTime::from(
+            Utc::now() + chrono::Duration::days(30),
+        ))),
         ..Default::default()
     };
     am.insert(db).await.map_err(|e| {
@@ -258,12 +260,19 @@ async fn load_cart_items(
         })
 }
 
-fn cart_model_to_resp(model: &crate::db::entities::cart::Model, items: &[crate::db::entities::cart_item::Model]) -> CartResp {
+fn cart_model_to_resp(
+    model: &crate::db::entities::cart::Model,
+    items: &[crate::db::entities::cart_item::Model],
+) -> CartResp {
     let mut total = 0.0_f64;
     let item_resp: Vec<CartItemResp> = items
         .iter()
         .map(|i| {
-            let price = if i.unit_price.is_finite() { i.unit_price.max(0.0) } else { 0.0 };
+            let price = if i.unit_price.is_finite() {
+                i.unit_price.max(0.0)
+            } else {
+                0.0
+            };
             let q = i.quantity.max(0);
             total += price * q as f64;
             CartItemResp {
@@ -509,7 +518,14 @@ async fn merge_cart(
                 if let Some((name, unit_price, image_url)) =
                     resolve_catalog_snapshot(&state, kind, &item.catalog_id).await?
                 {
-                    to_insert.push((kind, item.catalog_id, item.quantity, name, unit_price, image_url));
+                    to_insert.push((
+                        kind,
+                        item.catalog_id,
+                        item.quantity,
+                        name,
+                        unit_price,
+                        image_url,
+                    ));
                 }
             }
         }
@@ -602,13 +618,19 @@ mod tests {
         assert!(validate_quantity(1_000_000).is_ok());
         assert_eq!(validate_quantity(0).unwrap_err(), StatusCode::BAD_REQUEST);
         assert_eq!(validate_quantity(-1).unwrap_err(), StatusCode::BAD_REQUEST);
-        assert_eq!(validate_quantity(1_000_001).unwrap_err(), StatusCode::BAD_REQUEST);
+        assert_eq!(
+            validate_quantity(1_000_001).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
     }
 
     #[test]
     fn validate_id_bounds() {
         assert!(validate_id("abc").is_ok());
         assert_eq!(validate_id("").unwrap_err(), StatusCode::BAD_REQUEST);
-        assert_eq!(validate_id(&"a".repeat(201)).unwrap_err(), StatusCode::BAD_REQUEST);
+        assert_eq!(
+            validate_id(&"a".repeat(201)).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
     }
 }

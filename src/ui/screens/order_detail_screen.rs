@@ -5,8 +5,7 @@
 // the orders list.
 
 use crate::trios::i18n::{
-    t, tf,
-    T_CART_DELIVERY, T_CART_SUBTOTAL, T_MODAL_CANCEL, T_MODAL_CONFIRM, T_ORDERS_ORDER,
+    t, tf, T_CART_DELIVERY, T_CART_SUBTOTAL, T_MODAL_CANCEL, T_MODAL_CONFIRM, T_ORDERS_ORDER,
     T_ORDERS_STATUS_CANCELLED, T_ORDERS_STATUS_CONFIRMED, T_ORDERS_STATUS_DELIVERED,
     T_ORDERS_STATUS_OUT_FOR_DELIVERY, T_ORDERS_STATUS_PENDING, T_ORDERS_STATUS_PREPARING,
     T_ORDERS_STATUS_READY, T_ORDERS_STATUS_UNKNOWN, T_ORDERS_TITLE, T_ORDER_DETAIL_BACK,
@@ -79,13 +78,35 @@ struct OrderStatusResp {
 /// be merged into the server-side cart with current DB prices.
 fn api_order_item_to_cart_item(item: &ApiOrderItem) -> Option<CartItem> {
     let (id, name, item_type, price_hint) = if let Some(ref sid) = item.strain_id {
-        (sid.clone(), item.strain_name.clone().unwrap_or_else(|| "Strain".into()), CartItemType::Strain, item.unit_price.unwrap_or(0.0))
+        (
+            sid.clone(),
+            item.strain_name.clone().unwrap_or_else(|| "Strain".into()),
+            CartItemType::Strain,
+            item.unit_price.unwrap_or(0.0),
+        )
     } else if let Some(ref set_id) = item.set_id {
-        (set_id.clone(), item.set_name.clone().unwrap_or_else(|| "Set".into()), CartItemType::Set, item.unit_price.unwrap_or(0.0))
+        (
+            set_id.clone(),
+            item.set_name.clone().unwrap_or_else(|| "Set".into()),
+            CartItemType::Set,
+            item.unit_price.unwrap_or(0.0),
+        )
     } else if let Some(ref aid) = item.accessory_id {
-        (aid.clone(), item.accessory_name.clone().unwrap_or_else(|| "Accessory".into()), CartItemType::Accessory, item.unit_price.unwrap_or(0.0))
+        (
+            aid.clone(),
+            item.accessory_name
+                .clone()
+                .unwrap_or_else(|| "Accessory".into()),
+            CartItemType::Accessory,
+            item.unit_price.unwrap_or(0.0),
+        )
     } else if let Some(ref tid) = item.tea_id {
-        (tid.clone(), item.tea_name.clone().unwrap_or_else(|| "Drink".into()), CartItemType::Tea, item.unit_price.unwrap_or(0.0))
+        (
+            tid.clone(),
+            item.tea_name.clone().unwrap_or_else(|| "Drink".into()),
+            CartItemType::Tea,
+            item.unit_price.unwrap_or(0.0),
+        )
     } else {
         return None;
     };

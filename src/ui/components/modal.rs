@@ -47,7 +47,10 @@ pub fn Modal(props: ModalProps) -> Element {
     let lang = lang::current_lang();
     let size_class = format!("modal-{}", props.size.as_str());
     // WCAG 4.1.2: announce the overlay as a modal dialog with an accessible name.
-    let aria_label = props.title.clone().unwrap_or_else(|| t(lang, T_MODAL_CLOSE).to_string());
+    let aria_label = props
+        .title
+        .clone()
+        .unwrap_or_else(|| t(lang, T_MODAL_CLOSE).to_string());
     let close_label = t(lang, T_MODAL_CLOSE).to_string();
 
     rsx! {

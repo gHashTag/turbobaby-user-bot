@@ -6,6 +6,8 @@ mod api;
 #[cfg(not(target_arch = "wasm32"))]
 mod bot;
 #[cfg(not(target_arch = "wasm32"))]
+mod cart_abandonment;
+#[cfg(not(target_arch = "wasm32"))]
 mod config;
 #[cfg(not(target_arch = "wasm32"))]
 mod db;
@@ -17,8 +19,6 @@ mod locales;
 pub mod metrics;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod notify;
-#[cfg(not(target_arch = "wasm32"))]
-mod cart_abandonment;
 #[cfg(all(not(target_arch = "wasm32"), feature = "backend"))]
 mod promptpay;
 #[cfg(not(target_arch = "wasm32"))]

@@ -138,10 +138,23 @@ pub fn event_waitlist_promoted() {
     counter!("event_waitlist_promoted_total").increment(1);
 }
 
-/// Loop #12: abandoned-cart reminder sent to a customer. Track volume so we
-/// can correlate reminder sends with recovered orders and spot spam.
-pub fn cart_abandonment_reminder_sent() {
-    counter!("cart_abandonment_reminder_sent_total").increment(1);
+/// Loop #12/#13: abandoned-cart reminder sent to a customer. Track volume and
+/// A/B variant so we can correlate sends with recovered orders.
+pub fn cart_abandonment_reminder_sent(variant: &str) {
+    counter!(
+        "cart_abandonment_reminder_sent_total",
+        "variant" => variant.to_string()
+    )
+    .increment(1);
+}
+
+/// Loop #13: second nudge (24h) sent.
+pub fn cart_abandonment_second_nudge_sent(variant: &str) {
+    counter!(
+        "cart_abandonment_second_nudge_sent_total",
+        "variant" => variant.to_string()
+    )
+    .increment(1);
 }
 
 /// Loop #12: customer tapped the one-tap reorder CTA on an order card/detail.
@@ -150,8 +163,12 @@ pub fn reorder_clicked(source: &str) {
 }
 
 /// Loop #12: customer opened the Mini App via a cart deep-link reminder.
-pub fn cart_deep_link_opened() {
-    counter!("cart_deep_link_opened_total").increment(1);
+pub fn cart_deep_link_opened(variant: &str) {
+    counter!(
+        "cart_deep_link_opened_total",
+        "variant" => variant.to_string()
+    )
+    .increment(1);
 }
 
 pub fn event_shared(kind: &str) {
@@ -285,10 +302,7 @@ mod metric_wiring_tests {
     /// Metric helpers that exist for forward-compatibility but are
     /// not yet wired. Each entry needs a rationale comment.
     const ALLOWED_UNUSED_METRICS: &[&str] = &[
-        // Loop #12: cart deep-link opens happen inside the Telegram Mini App;
-        // tracking them requires a lightweight client-side telemetry endpoint
-        // that is out of scope for this cycle. Reserved for #12B.
-        "cart_deep_link_opened",
+        // (empty — every declared helper is wired as of cycle #12B)
     ];
 
     fn extract_pub_fn_names(source: &str) -> Vec<String> {

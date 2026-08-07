@@ -9,7 +9,9 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 use std::collections::HashMap;
 
-use crate::api::auth::{check_admin, check_not_blocked, check_owner_lenient, validate_telegram_id_param};
+use crate::api::auth::{
+    check_admin, check_not_blocked, check_owner_lenient, validate_telegram_id_param,
+};
 use crate::api::orders::is_valid_idempotency_key;
 use crate::api::rate_limit::{check_and_record, new_store, SlidingWindowStore};
 use crate::AppState;
@@ -1313,9 +1315,7 @@ async fn create_event(
         tracing::error!("create_event: {e}");
         (StatusCode::INTERNAL_SERVER_ERROR, String::new())
     })?;
-    if let Err(e) = replace_event_photos(&tx, &id,
-        req.photos.as_deref().unwrap_or(&[]),
-    ).await {
+    if let Err(e) = replace_event_photos(&tx, &id, req.photos.as_deref().unwrap_or(&[])).await {
         let _ = tx.rollback().await;
         return Err(e);
     }
@@ -1463,9 +1463,7 @@ async fn update_event(
         (StatusCode::INTERNAL_SERVER_ERROR, String::new())
     })?;
     if let Some(ref photos) = req.photos {
-        if let Err(e) = replace_event_photos(&tx, &id,
-            photos,
-        ).await {
+        if let Err(e) = replace_event_photos(&tx, &id, photos).await {
             let _ = tx.rollback().await;
             return Err(e);
         }

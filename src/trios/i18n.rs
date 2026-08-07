@@ -495,6 +495,7 @@ pub const T_SUCCESS_REWARDS_TITLE: Key = "success.rewards.title";
 pub const T_SUCCESS_REWARDS_GARDEN: Key = "success.rewards.garden";
 pub const T_SUCCESS_REWARDS_BONUS: Key = "success.rewards.bonus";
 pub const T_SUCCESS_SHARE_REFERRAL: Key = "success.share_referral";
+pub const T_SUCCESS_REORDER: Key = "success.reorder";
 
 // Orders screen hard-coded strings
 pub const T_ORDERS_HISTORY: Key = "orders.history";
@@ -1133,6 +1134,7 @@ fn get_ru_translation(key: Key) -> Value {
         T_SUCCESS_REWARDS_GARDEN => "🌱 Семя сада за strain-заказ",
         T_SUCCESS_REWARDS_BONUS => "⭐ Бонусные баллы: {0}",
         T_SUCCESS_SHARE_REFERRAL => "👥 Пригласить друга",
+        T_SUCCESS_REORDER => "🔄 Повторить заказ",
         // Orders screen
         T_ORDERS_HISTORY => "История заказов",
         T_ORDERS_NO_ORDERS => "Пока нет заказов",
@@ -1750,6 +1752,7 @@ fn get_en_translation(key: Key) -> Value {
         T_SUCCESS_REWARDS_GARDEN => "🌱 Garden seed for strain orders",
         T_SUCCESS_REWARDS_BONUS => "⭐ Bonus points: {0}",
         T_SUCCESS_SHARE_REFERRAL => "👥 Invite a friend",
+        T_SUCCESS_REORDER => "🔄 Reorder",
         // Orders screen
         T_ORDERS_HISTORY => "Your order history",
         T_ORDERS_NO_ORDERS => "No orders yet",

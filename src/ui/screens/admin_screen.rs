@@ -48,15 +48,15 @@ use crate::trios::i18n::{
 };
 use crate::ui::api::context::api_base_url;
 use crate::ui::api::types::{
-    Accessory, BroadcastProduct, BroadcastRequest, Event as AdminEvent, EventBooking, Set,
-    Strain, TeaProduct,
+    Accessory, BroadcastProduct, BroadcastRequest, Event as AdminEvent, EventBooking, Set, Strain,
+    TeaProduct,
 };
-use crate::ui::share::{product_deep_link, ProductKind};
 use crate::ui::components::{
     EmptyState, IdPicker, Modal, Skeleton, SkeletonShape, Toast, ToastContainer, ToastKind,
     VideoModal,
 };
 use crate::ui::screens::events_screen::parse_event_start;
+use crate::ui::share::{product_deep_link, ProductKind};
 use crate::ui::telegram::{
     use_telegram_id, use_telegram_init_data, HapticNotification, TelegramApp,
 };
@@ -609,10 +609,7 @@ pub fn AdminScreen() -> Element {
 }
 
 #[component]
-fn AdminLoginScreen(
-    mut password_token: Signal<String>,
-    mut access_reload: Signal<u32>,
-) -> Element {
+fn AdminLoginScreen(mut password_token: Signal<String>, mut access_reload: Signal<u32>) -> Element {
     // Cycle #171: restored the two-field login shape (Telegram ID + password)
     // that admins were used to.  The Telegram ID is optional metadata; the
     // real auth is still the shared ADMIN_PASSWORD.  Wrapped in a <form> with
@@ -6805,7 +6802,10 @@ fn EventsTab() -> Element {
                 Ok(r) if r.status().is_success() => {
                     let is_create = id_opt.is_none();
                     let returned_id = if is_create {
-                        r.json::<serde_json::Value>().await.ok().and_then(|v| v.get("id").and_then(|i| i.as_str()).map(String::from))
+                        r.json::<serde_json::Value>()
+                            .await
+                            .ok()
+                            .and_then(|v| v.get("id").and_then(|i| i.as_str()).map(String::from))
                     } else {
                         id_opt.clone()
                     };
@@ -6813,7 +6813,13 @@ fn EventsTab() -> Element {
                     // Optimistic refresh: rebuild the cache entry from form values
                     // so the event appears immediately without waiting for use_resource.
                     cache.with_mut(|list| {
-                        let empty_or_none = |s: &str| if s.trim().is_empty() { None } else { Some(s.to_string()) };
+                        let empty_or_none = |s: &str| {
+                            if s.trim().is_empty() {
+                                None
+                            } else {
+                                Some(s.to_string())
+                            }
+                        };
                         let new_event = AdminEvent {
                             id: returned_id.unwrap_or_default(),
                             title: title_clone.clone(),
@@ -7167,7 +7173,10 @@ fn EventsTab() -> Element {
 }
 
 #[component]
-fn PhotoGalleryEditor(photos: Signal<Vec<String>>, on_change: EventHandler<Vec<String>>) -> Element {
+fn PhotoGalleryEditor(
+    photos: Signal<Vec<String>>,
+    on_change: EventHandler<Vec<String>>,
+) -> Element {
     let mut add_url = use_signal(String::new);
     rsx! {
         div { style: "display:flex;flex-direction:column;gap:8px;",
@@ -7659,94 +7668,111 @@ fn BroadcastTab() -> Element {
 }
 
 fn send_broadcast(
-        sending: &mut Signal<bool>,
-        sent: &mut Signal<bool>,
-        text: &mut Signal<String>,
-        photo_url: &mut Signal<String>,
-        catalog: &mut Signal<String>,
-        selected_product: &mut Signal<Option<BroadcastPickerProduct>>,
-        button_text: &mut Signal<String>,
-        error: &mut Signal<Option<String>>,
-        result: &mut Signal<Option<serde_json::Value>>,
-        test_only: bool,
-    ) {
-        error.set(None);
-        result.set(None);
-        let catalog_val = catalog().clone();
-        let product = selected_product().as_ref().and_then(|p| {
-            BroadcastCatalog::from_value(&catalog_val)
-                .map(|cat| BroadcastProduct {
-                    kind: cat.value().to_string(),
-                    id: p.id.clone(),
-                    name: p.name.clone(),
-                    image_url: if p.image_url.is_empty() { None } else { Some(p.image_url.clone()) },
-                })
-        });
-        let photo = {
-            let s = photo_url().trim().to_string();
-            if s.is_empty() { None } else { Some(s) }
-        };
-        let btn = {
-            let s = button_text().trim().to_string();
-            if s.is_empty() { None } else { Some(s) }
-        };
-        let body = BroadcastRequest {
-            text: text().trim().to_string(),
-            photo_url: photo,
-            product,
-            button_text: btn,
-        };
-        let client = crate::ui::api::local_client::LocalClient::new();
-        let base = api_base_url();
-        let url = if test_only {
-            format!("{base}/api/admin/broadcast/test")
+    sending: &mut Signal<bool>,
+    sent: &mut Signal<bool>,
+    text: &mut Signal<String>,
+    photo_url: &mut Signal<String>,
+    catalog: &mut Signal<String>,
+    selected_product: &mut Signal<Option<BroadcastPickerProduct>>,
+    button_text: &mut Signal<String>,
+    error: &mut Signal<Option<String>>,
+    result: &mut Signal<Option<serde_json::Value>>,
+    test_only: bool,
+) {
+    error.set(None);
+    result.set(None);
+    let catalog_val = catalog().clone();
+    let product = selected_product().as_ref().and_then(|p| {
+        BroadcastCatalog::from_value(&catalog_val).map(|cat| BroadcastProduct {
+            kind: cat.value().to_string(),
+            id: p.id.clone(),
+            name: p.name.clone(),
+            image_url: if p.image_url.is_empty() {
+                None
+            } else {
+                Some(p.image_url.clone())
+            },
+        })
+    });
+    let photo = {
+        let s = photo_url().trim().to_string();
+        if s.is_empty() {
+            None
         } else {
-            format!("{base}/api/admin/broadcast")
-        };
-        let init = use_telegram_init_data();
-        let tok = admin_token();
-        let mut sending = *sending;
-        let mut sent = *sent;
-        let mut text = *text;
-        let mut photo_url = *photo_url;
-        let mut catalog = *catalog;
-        let mut selected_product = *selected_product;
-        let mut button_text = *button_text;
-        let mut error = *error;
-        let mut result = *result;
-        spawn(async move {
-            sending.set(true);
-            let res = client
-                .post(&url)
-                .header("X-Telegram-Init-Data", init)
-                .header("X-Admin-Token", tok)
-                .json(&body)
-                .send()
-                .await;
-            sending.set(false);
-            match res {
-                Ok(resp) if resp.status().is_success() => {
-                    let data = resp.json::<serde_json::Value>().await.ok();
-                    result.set(data);
-                    sent.set(true);
-                    if !test_only {
-                        text.set(String::new());
-                        photo_url.set(String::new());
-                        catalog.set("none".to_string());
-                        selected_product.set(None);
-                        button_text.set(String::new());
-                    }
-                }
-                Ok(resp) => {
-                    let err_text = resp.json::<serde_json::Value>().await
-                        .ok()
-                        .and_then(|v| v.get("error").and_then(|e| e.as_str()).map(|s| s.to_string()))
-                        .unwrap_or_else(|| "Ошибка рассылки".into());
-                    error.set(Some(err_text));
-                }
-                Err(_) => {
-                    error.set(Some("Сеть недоступна".into()));
+            Some(s)
+        }
+    };
+    let btn = {
+        let s = button_text().trim().to_string();
+        if s.is_empty() {
+            None
+        } else {
+            Some(s)
+        }
+    };
+    let body = BroadcastRequest {
+        text: text().trim().to_string(),
+        photo_url: photo,
+        product,
+        button_text: btn,
+    };
+    let client = crate::ui::api::local_client::LocalClient::new();
+    let base = api_base_url();
+    let url = if test_only {
+        format!("{base}/api/admin/broadcast/test")
+    } else {
+        format!("{base}/api/admin/broadcast")
+    };
+    let init = use_telegram_init_data();
+    let tok = admin_token();
+    let mut sending = *sending;
+    let mut sent = *sent;
+    let mut text = *text;
+    let mut photo_url = *photo_url;
+    let mut catalog = *catalog;
+    let mut selected_product = *selected_product;
+    let mut button_text = *button_text;
+    let mut error = *error;
+    let mut result = *result;
+    spawn(async move {
+        sending.set(true);
+        let res = client
+            .post(&url)
+            .header("X-Telegram-Init-Data", init)
+            .header("X-Admin-Token", tok)
+            .json(&body)
+            .send()
+            .await;
+        sending.set(false);
+        match res {
+            Ok(resp) if resp.status().is_success() => {
+                let data = resp.json::<serde_json::Value>().await.ok();
+                result.set(data);
+                sent.set(true);
+                if !test_only {
+                    text.set(String::new());
+                    photo_url.set(String::new());
+                    catalog.set("none".to_string());
+                    selected_product.set(None);
+                    button_text.set(String::new());
                 }
             }
-        });
-    }
+            Ok(resp) => {
+                let err_text = resp
+                    .json::<serde_json::Value>()
+                    .await
+                    .ok()
+                    .and_then(|v| {
+                        v.get("error")
+                            .and_then(|e| e.as_str())
+                            .map(|s| s.to_string())
+                    })
+                    .unwrap_or_else(|| "Ошибка рассылки".into());
+                error.set(Some(err_text));
+            }
+            Err(_) => {
+                error.set(Some("Сеть недоступна".into()));
+            }
+        }
+    });
+}

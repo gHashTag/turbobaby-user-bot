@@ -772,7 +772,11 @@ mod tests {
     #[test]
     fn test_build_app_url_with_query_and_fragment() {
         assert_eq!(
-            build_app_url("https://app.com/?cache=180#tgWebAppData=xyz", "ru", Some("profile")),
+            build_app_url(
+                "https://app.com/?cache=180#tgWebAppData=xyz",
+                "ru",
+                Some("profile")
+            ),
             "https://app.com/profile?cache=180&lang=ru&v=4#tgWebAppData=xyz"
         );
     }

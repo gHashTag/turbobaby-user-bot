@@ -2,6 +2,7 @@
 //
 // Cart signal is shared across all screens via context.
 
+use crate::ui::api::context::api_base_url;
 use crate::ui::api::context::ApiClientProvider;
 use crate::ui::api::http::fetch_text_authed;
 use crate::ui::api::types::ServerCart;
@@ -153,12 +154,24 @@ pub fn App() -> Element {
                     return;
                 }
                 if let Some(param) = crate::ui::telegram::TelegramApp::init().start_param() {
-                    if parse_cart_start_param(&param) {
+                    if let Some(attribution) = parse_cart_start_param(&param) {
                         #[cfg(target_arch = "wasm32")]
                         web_sys::console::log_1(
-                            &"[deeplink] resolved cart".into(),
+                            &format!("[deeplink] resolved cart attribution={}", attribution).into(),
                         );
                         pending_cart_flag.set(true);
+                        // Loop #13: report the deep-link open back to the
+                        // server with the attribution source (e.g. A/B variant).
+                        let source = attribution.to_string();
+                        let base = api_base_url();
+                        spawn(async move {
+                            let _ = crate::ui::api::http::post_client_event(
+                                &base,
+                                "cart_deep_link_opened",
+                                &source,
+                            )
+                            .await;
+                        });
                         return;
                     }
                     if let Some(product) = parse_start_param(&param) {
@@ -217,7 +230,11 @@ fn server_item_to_cart_item(item: crate::ui::api::types::ServerCartItem) -> Opti
     Some(CartItem {
         id: item.catalog_id,
         name: item.name,
-        price: if item.unit_price.is_finite() { item.unit_price.max(0.0) } else { 0.0 },
+        price: if item.unit_price.is_finite() {
+            item.unit_price.max(0.0)
+        } else {
+            0.0
+        },
         quantity,
         image_url: item.image_url,
         item_type,

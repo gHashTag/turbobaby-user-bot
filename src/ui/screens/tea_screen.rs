@@ -1,4 +1,7 @@
-use crate::trios::i18n::{t, tf, T_ADD_TO_CART, T_CATALOG_EMPTY, T_CATALOG_ERROR, T_FILTER_ALL, T_LOW_STOCK, T_MENU_SOLD_OUT, T_TEA_DESC, T_TEA_TITLE};
+use crate::trios::i18n::{
+    t, tf, T_ADD_TO_CART, T_CATALOG_EMPTY, T_CATALOG_ERROR, T_FILTER_ALL, T_LOW_STOCK,
+    T_MENU_SOLD_OUT, T_TEA_DESC, T_TEA_TITLE,
+};
 use crate::ui::api::context::api_base_url;
 use crate::ui::components::bottom_nav::BottomNav;
 use crate::ui::components::card_media::CardMedia;

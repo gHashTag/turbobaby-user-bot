@@ -5,8 +5,7 @@
 // cancelled orders render a single status-coloured bar instead of the pipeline.
 
 use crate::trios::i18n::{
-    t,
-    T_ORDERS_STATUS_CANCELLED, T_ORDERS_STATUS_CONFIRMED, T_ORDERS_STATUS_DELIVERED,
+    t, T_ORDERS_STATUS_CANCELLED, T_ORDERS_STATUS_CONFIRMED, T_ORDERS_STATUS_DELIVERED,
     T_ORDERS_STATUS_OUT_FOR_DELIVERY, T_ORDERS_STATUS_PENDING, T_ORDERS_STATUS_PREPARING,
     T_ORDERS_STATUS_READY, T_ORDERS_STATUS_UNKNOWN, T_ORDERS_STEP_CONFIRMED,
     T_ORDERS_STEP_DELIVERED, T_ORDERS_STEP_ON_THE_WAY, T_ORDERS_STEP_PREPARING,
@@ -91,10 +90,7 @@ fn PipelineSegment(i: usize, current: usize, last: bool) -> Element {
 ///
 /// `margin_bottom` lets callers tune spacing for the list vs detail contexts.
 #[component]
-pub fn StatusStepper(
-    status: String,
-    #[props(default = 8)] margin_bottom: u32,
-) -> Element {
+pub fn StatusStepper(status: String, #[props(default = 8)] margin_bottom: u32) -> Element {
     let lang = crate::ui::lang::current_lang();
     let current = pipeline_index(&status);
     let cancelled = status == "cancelled" || status == "rejected";

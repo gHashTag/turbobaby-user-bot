@@ -82,9 +82,10 @@ async fn send_garden_reminders(
     // We need the language per user to localise the message. The DB stores
     // `user_languages.telegram_id` for registered users; unrecognised users get
     // English.
-    let rows = orm.query_all(Statement::from_sql_and_values(
-        DbBackend::Postgres,
-        "SELECT p.id, p.user_id, p.is_completed, p.harvested_at, p.last_watered_at, \
+    let rows = orm
+        .query_all(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            "SELECT p.id, p.user_id, p.is_completed, p.harvested_at, p.last_watered_at, \
                 COALESCE(ul.language, 'en') AS lang \
          FROM garden_plants p \
          LEFT JOIN user_languages ul ON ul.telegram_id = p.user_id::bigint \
@@ -94,8 +95,12 @@ async fn send_garden_reminders(
            AND (p.last_watered_at IS NULL OR p.last_watered_at <= $2) \
            AND p.water_count < 13 \
          LIMIT 500",
-        [min_last_reminder.into(), (now - crate::trios::garden::WATER_COOLDOWN_MS).into()],
-    )).await?;
+            [
+                min_last_reminder.into(),
+                (now - crate::trios::garden::WATER_COOLDOWN_MS).into(),
+            ],
+        ))
+        .await?;
 
     let mut sent = 0usize;
     for r in rows {
@@ -109,7 +114,14 @@ async fn send_garden_reminders(
         }
         let plant_id: String = r.try_get("", "id").unwrap_or_default();
 
-        crate::bot::notify::notify_garden_reminder(bot, &std::sync::Arc::new(crate::db::Database::from_conn(orm.clone())), &std::sync::Arc::new(config.clone()), tid, "water").await;
+        crate::bot::notify::notify_garden_reminder(
+            bot,
+            &std::sync::Arc::new(crate::db::Database::from_conn(orm.clone())),
+            &std::sync::Arc::new(config.clone()),
+            tid,
+            "water",
+        )
+        .await;
         sent += 1;
 
         // Mark reminder sent.
@@ -117,20 +129,23 @@ async fn send_garden_reminders(
             DbBackend::Postgres,
             "UPDATE garden_plants SET reminder_sent_at = $1 WHERE id = $2",
             [now.into(), plant_id.into()],
-        )).await?;
+        ))
+        .await?;
     }
 
     // Harvest reminders: plants that are completed but not yet harvested.
-    let harvest_rows = orm.query_all(Statement::from_sql_and_values(
-        DbBackend::Postgres,
-        "SELECT p.id, p.user_id \
+    let harvest_rows = orm
+        .query_all(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            "SELECT p.id, p.user_id \
          FROM garden_plants p \
          WHERE p.is_completed = true \
            AND p.harvested_at IS NULL \
            AND (p.reminder_sent_at IS NULL OR p.reminder_sent_at <= $1) \
          LIMIT 500",
-        [min_last_reminder.into()],
-    )).await?;
+            [min_last_reminder.into()],
+        ))
+        .await?;
 
     for r in harvest_rows {
         let user_id: String = r.try_get("", "user_id").unwrap_or_default();
@@ -143,14 +158,22 @@ async fn send_garden_reminders(
         }
         let plant_id: String = r.try_get("", "id").unwrap_or_default();
 
-        crate::bot::notify::notify_garden_reminder(bot, &std::sync::Arc::new(crate::db::Database::from_conn(orm.clone())), &std::sync::Arc::new(config.clone()), tid, "harvest").await;
+        crate::bot::notify::notify_garden_reminder(
+            bot,
+            &std::sync::Arc::new(crate::db::Database::from_conn(orm.clone())),
+            &std::sync::Arc::new(config.clone()),
+            tid,
+            "harvest",
+        )
+        .await;
         sent += 1;
 
         orm.execute(Statement::from_sql_and_values(
             DbBackend::Postgres,
             "UPDATE garden_plants SET reminder_sent_at = $1 WHERE id = $2",
             [now.into(), plant_id.into()],
-        )).await?;
+        ))
+        .await?;
     }
 
     Ok(sent)
@@ -1528,7 +1551,9 @@ async fn reset_plant(
         })?;
 
     let Some(r) = row else {
-        return Ok(Json(json!({ "success": false, "error": "Plant not found" })));
+        return Ok(Json(
+            json!({ "success": false, "error": "Plant not found" }),
+        ));
     };
 
     let user_id: String = r.try_get("", "user_id").unwrap_or_default();

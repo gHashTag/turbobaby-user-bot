@@ -29,7 +29,10 @@ pub async fn notify_admins(bot: &Bot, config: &Config, text: &str) {
         );
         return;
     }
-    tracing::info!("notify_admins: sending to {} admin(s)", config.admin_ids.len());
+    tracing::info!(
+        "notify_admins: sending to {} admin(s)",
+        config.admin_ids.len()
+    );
     let mut sent = 0usize;
     let mut failed = 0usize;
     for admin_id in &config.admin_ids {
@@ -144,7 +147,10 @@ pub async fn notify_deploy(bot: &Bot, config: &Config) {
 /// Returns the rendered message text so the HTTP response can echo it for
 /// debugging.
 pub async fn notify_deploy_manual(bot: &Bot, config: &Config, note: &str) -> String {
-    tracing::info!("notify_deploy_manual: manual trigger (note_len={})", note.len());
+    tracing::info!(
+        "notify_deploy_manual: manual trigger (note_len={})",
+        note.len()
+    );
     if config.admin_ids.is_empty() {
         tracing::error!(
             "notify_deploy_manual: ADMIN_IDS is empty — manual notification has nowhere to go"

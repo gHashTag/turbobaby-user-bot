@@ -5,15 +5,18 @@ use crate::trios::i18n::{
     T_ORDERS_STATUS_READY, T_ORDERS_STATUS_UNKNOWN, T_SUCCESS_BACK_MENU,
     T_SUCCESS_CASH_ON_DELIVERY, T_SUCCESS_CONFIRMED, T_SUCCESS_CONTACT_SHORTLY,
     T_SUCCESS_DELIVERY_ESTIMATE, T_SUCCESS_ETA, T_SUCCESS_ETA_VALUE, T_SUCCESS_MY_ORDERS,
-    T_SUCCESS_ORDER_RECEIVED, T_SUCCESS_PAYMENT, T_SUCCESS_PUSH_REASSURANCE,
+    T_SUCCESS_ORDER_RECEIVED, T_SUCCESS_PAYMENT, T_SUCCESS_PUSH_REASSURANCE, T_SUCCESS_REORDER,
     T_SUCCESS_REWARDS_BONUS, T_SUCCESS_REWARDS_GARDEN, T_SUCCESS_REWARDS_TITLE,
     T_SUCCESS_SHARE_REFERRAL, T_SUCCESS_STATUS, T_SUCCESS_TITLE, T_SUCCESS_TRACK_ORDER,
 };
 use crate::ui::api::context::api_base_url;
-use crate::ui::api::http::fetch_text_authed;
+use crate::ui::api::http::{fetch_text_authed, merge_server_cart};
 use crate::ui::routes::Route;
 use crate::ui::share::{open_telegram_link, order_deep_link};
-use crate::ui::telegram::{use_telegram_id, use_telegram_init_data, TelegramApp};
+use crate::ui::state::{Cart, CartItem};
+use crate::ui::telegram::{
+    use_telegram_id, use_telegram_init_data, HapticNotification, TelegramApp,
+};
 use dioxus::prelude::*;
 
 /// Backend metrics are unavailable in the WASM build; this wrapper no-ops there
@@ -26,6 +29,7 @@ fn track_event(name: &str, detail: &str) {
     match name {
         "order_tracked" => crate::metrics::order_tracked(),
         "referral_prompt_clicked" => crate::metrics::referral_prompt_clicked(detail),
+        "reorder_clicked" => crate::metrics::reorder_clicked(detail),
         _ => {}
     }
 }
@@ -42,6 +46,53 @@ fn order_status_label(lang: Lang, status: &str) -> String {
         _ => T_ORDERS_STATUS_UNKNOWN,
     };
     t(lang, key).to_string()
+}
+
+/// Loop #13: convert an order detail item into a local cart item so the
+/// success screen can offer one-tap reorder with current DB prices.
+fn api_order_item_to_cart_item(item: &ApiOrderItem) -> Option<CartItem> {
+    let (id, name, item_type, price_hint) = if let Some(ref sid) = item.strain_id {
+        (
+            sid.clone(),
+            item.strain_name.clone().unwrap_or_else(|| "Strain".into()),
+            crate::ui::state::CartItemType::Strain,
+            item.unit_price.unwrap_or(0.0),
+        )
+    } else if let Some(ref set_id) = item.set_id {
+        (
+            set_id.clone(),
+            item.set_name.clone().unwrap_or_else(|| "Set".into()),
+            crate::ui::state::CartItemType::Set,
+            item.unit_price.unwrap_or(0.0),
+        )
+    } else if let Some(ref aid) = item.accessory_id {
+        (
+            aid.clone(),
+            item.accessory_name
+                .clone()
+                .unwrap_or_else(|| "Accessory".into()),
+            crate::ui::state::CartItemType::Accessory,
+            item.unit_price.unwrap_or(0.0),
+        )
+    } else if let Some(ref tid) = item.tea_id {
+        (
+            tid.clone(),
+            item.tea_name.clone().unwrap_or_else(|| "Drink".into()),
+            crate::ui::state::CartItemType::Tea,
+            item.unit_price.unwrap_or(0.0),
+        )
+    } else {
+        return None;
+    };
+    Some(CartItem {
+        id,
+        name,
+        price: price_hint,
+        quantity: item.quantity.max(1.0) as u32,
+        image_url: None,
+        item_type,
+        fulfillment: None,
+    })
 }
 
 #[derive(Clone, serde::Deserialize)]
@@ -65,6 +116,31 @@ struct LoyaltyProfile {
     bonus_balance: f64,
 }
 
+#[derive(Clone, serde::Deserialize)]
+struct ApiOrderItem {
+    strain_id: Option<String>,
+    strain_name: Option<String>,
+    accessory_id: Option<String>,
+    accessory_name: Option<String>,
+    tea_id: Option<String>,
+    tea_name: Option<String>,
+    set_id: Option<String>,
+    set_name: Option<String>,
+    quantity: f64,
+    #[serde(default)]
+    unit_price: Option<f64>,
+}
+
+#[derive(Clone, serde::Deserialize)]
+struct OrderDetailResponse {
+    order: OrderDetailOrder,
+}
+
+#[derive(Clone, serde::Deserialize)]
+struct OrderDetailOrder {
+    items: Vec<ApiOrderItem>,
+}
+
 #[component]
 pub fn SuccessScreen(id: String) -> Element {
     let lang = crate::ui::lang::current_lang();
@@ -83,6 +159,7 @@ pub fn SuccessScreen(id: String) -> Element {
     let rewards_garden = t(lang, T_SUCCESS_REWARDS_GARDEN).to_string();
     let share_referral = t(lang, T_SUCCESS_SHARE_REFERRAL).to_string();
     let push_reassurance = t(lang, T_SUCCESS_PUSH_REASSURANCE).to_string();
+    let reorder = t(lang, T_SUCCESS_REORDER).to_string();
 
     let telegram_id = use_telegram_id();
     let init_data = use_telegram_init_data();
@@ -169,7 +246,11 @@ pub fn SuccessScreen(id: String) -> Element {
         .and_then(|opt| opt.as_ref())
         .map(|w| w.profile.bonus_balance)
         .unwrap_or(0.0);
-    let bonus_text = tf(lang, T_SUCCESS_REWARDS_BONUS, &[format!("{bonus_balance:.0}")]);
+    let bonus_text = tf(
+        lang,
+        T_SUCCESS_REWARDS_BONUS,
+        &[format!("{bonus_balance:.0}")],
+    );
 
     let track_link = order_deep_link(&id);
     let on_track_order = move |_| {
@@ -181,6 +262,55 @@ pub fn SuccessScreen(id: String) -> Element {
     let on_share_referral = move |_| {
         track_event("referral_prompt_clicked", "success_screen");
         nav.push(Route::Referrals {});
+    };
+
+    // Loop #13: one-tap reorder from the success screen. Fetch the order
+    // details, merge its items into the server-side cart with current prices,
+    // then navigate to the cart.
+    let reorder_id = id.clone();
+    let reorder_init = init_data.clone();
+    let reorder_tid = telegram_id;
+    let cart_for_reorder = use_context::<Signal<Cart>>();
+    let reorder_nav = nav.clone();
+    let on_reorder = move |_| {
+        track_event("reorder_clicked", "success_screen");
+        let oid = reorder_id.clone();
+        let init = reorder_init.clone();
+        let tid = reorder_tid.unwrap_or(0);
+        let mut cart_sig = cart_for_reorder.clone();
+        let nav = reorder_nav.clone();
+        spawn(async move {
+            if tid == 0 {
+                return;
+            }
+            let url = format!(
+                "{}/api/orders/{oid}/details?telegram_id={tid}",
+                api_base_url()
+            );
+            if let Ok(text) = fetch_text_authed(&url, &init).await {
+                if let Ok(resp) = serde_json::from_str::<OrderDetailResponse>(&text) {
+                    let items: Vec<CartItem> = resp
+                        .order
+                        .items
+                        .iter()
+                        .filter_map(api_order_item_to_cart_item)
+                        .collect();
+                    match merge_server_cart(&api_base_url(), &init, tid, &items).await {
+                        Ok(fresh_cart) => {
+                            cart_sig.set(fresh_cart);
+                        }
+                        Err(_) => {
+                            cart_sig.write().clear();
+                            for item in items {
+                                cart_sig.write().add_item(item);
+                            }
+                        }
+                    }
+                    TelegramApp::init().haptic_notification(HapticNotification::Success);
+                    nav.push(Route::Cart {});
+                }
+            }
+        });
     };
 
     // Hide native Telegram chrome on this terminal screen; all navigation is
@@ -335,6 +465,21 @@ pub fn SuccessScreen(id: String) -> Element {
                 ",
                 onclick: on_share_referral,
                 "{share_referral}"
+            }
+
+            // Reorder CTA: one-tap repeat of the just-placed order, merged with
+            // current DB prices via the server cart endpoint.
+            button {
+                style: "
+                    font-size: 14px; font-weight: 700; width: 100%; max-width: 320px;
+                    padding: 12px 20px; margin-bottom: 16px;
+                    background: #39ff14; color: #000;
+                    border: 4px solid #2d9e0f; border-radius: 0;
+                    cursor: pointer; box-shadow: 3px 3px 0 #000;
+                    transition: transform 0.1s, box-shadow 0.1s;
+                ",
+                onclick: on_reorder,
+                "{reorder}"
             }
         }
     }

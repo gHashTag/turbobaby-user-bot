@@ -38,7 +38,14 @@ pub enum InputType {
 
 #[component]
 pub fn Input(props: InputProps) -> Element {
-    let input_id = props.id.clone().unwrap_or_else(|| props.label.clone().unwrap_or_default().replace(' ', "_").to_lowercase());
+    let input_id = props.id.clone().unwrap_or_else(|| {
+        props
+            .label
+            .clone()
+            .unwrap_or_default()
+            .replace(' ', "_")
+            .to_lowercase()
+    });
     let label_node = props.label.clone().map(|label_text| {
         rsx! {
             label {
