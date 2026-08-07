@@ -1,9 +1,11 @@
-use crate::trios::i18n::{t, T_ADD_TO_CART, T_CATALOG_EMPTY, T_CATALOG_ERROR, T_SETS_DESC, T_SETS_TITLE};
+use crate::trios::i18n::{
+    t, T_ADD_TO_CART, T_CATALOG_EMPTY, T_CATALOG_ERROR, T_SETS_DESC, T_SETS_TITLE,
+};
 use crate::ui::api::context::api_base_url;
 use crate::ui::components::bottom_nav::BottomNav;
 use crate::ui::components::product_detail_modal::ProductDetailModal;
-use crate::ui::components::skeleton::{Skeleton, SkeletonShape};
 use crate::ui::components::set_card::{render_uniform_set_card, SetCardData};
+use crate::ui::components::skeleton::{Skeleton, SkeletonShape};
 use crate::ui::share::{share_product, ProductKind, SharedProduct};
 use crate::ui::state::{Cart, CartItem, CartItemType};
 use dioxus::prelude::*;

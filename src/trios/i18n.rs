@@ -61,6 +61,8 @@ pub const T_GARDEN_ERROR_HARVEST: Key = "garden.error.harvest";
 pub const T_GARDEN_ERROR_RESET: Key = "garden.error.reset";
 pub const T_GARDEN_ERROR_COOLDOWN: Key = "garden.error.cooldown";
 pub const T_GARDEN_ERROR_PRODUCT_UNAVAILABLE: Key = "garden.error.product_unavailable";
+pub const T_GARDEN_WATER_CTA: Key = "garden.water_cta";
+pub const T_GARDEN_HARVEST_CTA: Key = "garden.harvest_cta";
 pub const T_GARDEN_CAT_STRAIN: Key = "garden.cat.strain";
 pub const T_GARDEN_CAT_ACCESSORY: Key = "garden.cat.accessory";
 pub const T_GARDEN_CAT_TEA: Key = "garden.cat.tea";
@@ -213,6 +215,7 @@ pub const T_CHECKOUT_ERR_ITEMS: Key = "checkout.error.items_empty";
 pub const T_CHECKOUT_ERR_NO_TELEGRAM: Key = "checkout.error.no_telegram";
 pub const T_CHECKOUT_ERR_NETWORK: Key = "checkout.error.network";
 pub const T_CHECKOUT_ERR_PARSE: Key = "checkout.error.parse";
+pub const T_CHECKOUT_RETRY: Key = "checkout.retry";
 pub const T_ADD_TO_CART: Key = "btn.add_to_cart";
 pub const T_FULFILLMENT_LABEL: Key = "tea.fulfillment_label";
 pub const T_FULFILLMENT_DINE_IN: Key = "tea.fulfillment_dine_in";
@@ -313,6 +316,7 @@ pub const T_CART_CHECKOUT: Key = "cart.checkout";
 pub const T_CART_ITEMS: Key = "cart.items";
 pub const T_CART_DINE_IN: Key = "cart.dine_in";
 pub const T_CART_TAKEAWAY: Key = "cart.takeaway";
+pub const T_CART_BONUS_NUDGE: Key = "cart.bonus_nudge";
 pub const T_CART_DECREASE_QTY: Key = "cart.decrease_qty";
 pub const T_CART_REMOVE: Key = "cart.remove";
 pub const T_CART_IMAGE_ALT: Key = "cart.image_alt";
@@ -328,6 +332,10 @@ pub const T_CHECKOUT_GARDEN_DISCOUNT_PCT: Key = "checkout.garden_discount_pct";
 pub const T_CHECKOUT_STARS: Key = "checkout.stars";
 pub const T_CHECKOUT_STARS_AVAILABLE: Key = "checkout.stars_available";
 pub const T_CHECKOUT_STARS_MINUS: Key = "checkout.stars_minus";
+pub const T_CHECKOUT_BONUS: Key = "checkout.bonus";
+pub const T_CHECKOUT_BONUS_AVAILABLE: Key = "checkout.bonus_available";
+pub const T_CHECKOUT_BONUS_APPLIED: Key = "checkout.bonus_applied";
+pub const T_CHECKOUT_BONUS_MAX: Key = "checkout.bonus_max";
 pub const T_CHECKOUT_NAME_LABEL: Key = "checkout.name_label";
 pub const T_CHECKOUT_NAME_PLACEHOLDER: Key = "checkout.name_placeholder";
 pub const T_CHECKOUT_PHONE_LABEL: Key = "checkout.phone_label";
@@ -493,7 +501,17 @@ pub const T_SUCCESS_PUSH_REASSURANCE: Key = "success.push_reassurance";
 pub const T_SUCCESS_REWARDS_TITLE: Key = "success.rewards.title";
 pub const T_SUCCESS_REWARDS_GARDEN: Key = "success.rewards.garden";
 pub const T_SUCCESS_REWARDS_BONUS: Key = "success.rewards.bonus";
+pub const T_SUCCESS_CASHBACK_EARNED: Key = "success.cashback_earned";
 pub const T_SUCCESS_SHARE_REFERRAL: Key = "success.share_referral";
+pub const T_SUCCESS_REORDER: Key = "success.reorder";
+pub const T_SUCCESS_STATUS_LOADING: Key = "success.status.loading";
+pub const T_SUCCESS_STATUS_ERROR: Key = "success.status.error";
+pub const T_SUCCESS_CASHBACK_ERROR: Key = "success.cashback.error";
+pub const T_SUCCESS_RETRY: Key = "success.retry";
+pub const T_PROFILE_LOAD_ERROR: Key = "profile.load_error";
+pub const T_PROFILE_RETRY: Key = "profile.retry";
+pub const T_CART_SYNCING: Key = "cart.syncing";
+pub const T_REORDER_DEEP_LINK_TITLE: Key = "reorder.deep_link.title";
 
 // Orders screen hard-coded strings
 pub const T_ORDERS_HISTORY: Key = "orders.history";
@@ -530,6 +548,7 @@ pub const T_ORDER_DETAIL_LIVE: Key = "order.detail.live";
 pub const T_ORDER_DETAIL_CANCEL: Key = "order.detail.cancel";
 pub const T_ORDER_DETAIL_CANCEL_CONFIRM: Key = "order.detail.cancel_confirm";
 pub const T_ORDER_DETAIL_CANCELLED_BY_USER: Key = "order.detail.cancelled_by_user";
+pub const T_ORDER_REORDER: Key = "order.reorder";
 
 // Profile screen hard-coded strings
 pub const T_PROFILE_MEMBERSHIP: Key = "profile.membership";
@@ -568,6 +587,8 @@ pub const T_PROFILE_BONUS_GARDEN: Key = "profile.bonus_garden";
 pub const T_PROFILE_BONUS_CASHBACK: Key = "profile.bonus_cashback";
 pub const T_PROFILE_BONUS_ADMIN: Key = "profile.bonus_admin";
 pub const T_PROFILE_BONUS_OTHER: Key = "profile.bonus_other";
+pub const T_PROFILE_ORDER_HISTORY: Key = "profile.order_history";
+pub const T_PROFILE_REORDER: Key = "profile.reorder";
 
 // Modal hard-coded strings
 pub const T_MODAL_CLOSE: Key = "modal.close";
@@ -630,6 +651,9 @@ pub const T_HOME_GARDEN_HARVEST: Key = "home.garden.harvest";
 pub const T_HOME_GARDEN_GROWING: Key = "home.garden.growing";
 pub const T_HOME_GARDEN_EMPTY: Key = "home.garden.empty";
 pub const T_HOME_GARDEN_CTA: Key = "home.garden.cta";
+pub const T_HOME_REORDER_LAST: Key = "home.reorder.last";
+pub const T_HOME_REORDER_STATUS: Key = "home.reorder.status";
+pub const T_HOME_REORDER_CTA: Key = "home.reorder.cta";
 
 // Events screen hard-coded strings
 pub const T_EVENTS_TIME: Key = "events.time";
@@ -731,6 +755,8 @@ fn get_ru_translation(key: Key) -> Value {
         T_GARDEN_ERROR_RESET => "Не удалось сбросить: {0}",
         T_GARDEN_ERROR_COOLDOWN => "Скидку можно растить раз в сутки — подожди после прошлого сбора.",
         T_GARDEN_ERROR_PRODUCT_UNAVAILABLE => "Товар недоступен.",
+        T_GARDEN_WATER_CTA => "💧 Полей растение и получи скидку",
+        T_GARDEN_HARVEST_CTA => "🏆 Собери урожай и примени скидку",
         T_GARDEN_CAT_STRAIN => "🌿 Сорта",
         T_GARDEN_CAT_ACCESSORY => "💨 Аксессуары",
         T_GARDEN_CAT_TEA => "🥤 Напитки",
@@ -871,6 +897,7 @@ fn get_ru_translation(key: Key) -> Value {
         T_CHECKOUT_ERR_NO_TELEGRAM => "Откройте приложение в Telegram, чтобы оформить заказ",
         T_CHECKOUT_ERR_NETWORK => "Ошибка сети. Проверьте соединение и попробуйте снова",
         T_CHECKOUT_ERR_PARSE => "Не удалось обработать ответ сервера. Попробуйте снова",
+        T_CHECKOUT_RETRY => "Попробовать снова",
         T_BACK => "← Назад",
         T_TOTAL => "Итого:",
         T_ADD_TO_CART => "В корзину",
@@ -957,6 +984,7 @@ fn get_ru_translation(key: Key) -> Value {
         T_CART_ITEMS => "{0} товаров",
         T_CART_DINE_IN => "🍽 На месте",
         T_CART_TAKEAWAY => "🥡 С собой",
+        T_CART_BONUS_NUDGE => "🎁 У вас {0} ฿ бонусов — применим при оформлении",
         T_CART_DECREASE_QTY => "Убавить количество",
         T_CART_REMOVE => "Удалить товар",
         T_CART_IMAGE_ALT => "Фото: {0}",
@@ -971,6 +999,10 @@ fn get_ru_translation(key: Key) -> Value {
         T_CHECKOUT_STARS => "⭐ Звёзды",
         T_CHECKOUT_STARS_AVAILABLE => "доступно {0}",
         T_CHECKOUT_STARS_MINUS => "−{0} ฿",
+        T_CHECKOUT_BONUS => "🎁 Бонусы",
+        T_CHECKOUT_BONUS_AVAILABLE => "доступно {0} ฿",
+        T_CHECKOUT_BONUS_APPLIED => "−{0} ฿",
+        T_CHECKOUT_BONUS_MAX => "макс. {0} ฿",
         T_CHECKOUT_NAME_LABEL => "Имя *",
         T_CHECKOUT_NAME_PLACEHOLDER => "Введите имя",
         T_CHECKOUT_PHONE_LABEL => "Телефон *",
@@ -1130,7 +1162,13 @@ fn get_ru_translation(key: Key) -> Value {
         T_SUCCESS_REWARDS_TITLE => "🎁 Что вы получите",
         T_SUCCESS_REWARDS_GARDEN => "🌱 Семя сада за strain-заказ",
         T_SUCCESS_REWARDS_BONUS => "⭐ Бонусные баллы: {0}",
+        T_SUCCESS_CASHBACK_EARNED => "💸 +{0} ฿ кешбэка начислено",
         T_SUCCESS_SHARE_REFERRAL => "👥 Пригласить друга",
+        T_SUCCESS_REORDER => "🔄 Повторить заказ",
+        T_SUCCESS_STATUS_LOADING => "Обновляем статус…",
+        T_SUCCESS_STATUS_ERROR => "Не удалось загрузить статус.",
+        T_SUCCESS_CASHBACK_ERROR => "Не удалось загрузить кэшбэк.",
+        T_SUCCESS_RETRY => "Повторить",
         // Orders screen
         T_ORDERS_HISTORY => "История заказов",
         T_ORDERS_NO_ORDERS => "Пока нет заказов",
@@ -1164,6 +1202,7 @@ fn get_ru_translation(key: Key) -> Value {
         T_ORDER_DETAIL_CANCEL => "Отменить заказ",
         T_ORDER_DETAIL_CANCEL_CONFIRM => "Отменить заказ? Бонусы и звёзды вернутся на счёт.",
         T_ORDER_DETAIL_CANCELLED_BY_USER => "Вы отменили заказ",
+        T_ORDER_REORDER => "Повторить заказ",
         // Profile screen
         T_PROFILE_MEMBERSHIP => "Ваш статус",
         T_PROFILE_QR_CODE => "Ваш QR-код",
@@ -1196,11 +1235,17 @@ fn get_ru_translation(key: Key) -> Value {
         T_PROFILE_BONUS_HISTORY_EMPTY => "Пока нет начислений",
         T_PROFILE_BONUS_CREDIT => "Зачисление",
         T_PROFILE_BONUS_DEBIT => "Списание",
+        T_PROFILE_LOAD_ERROR => "Не удалось загрузить профиль.",
+        T_PROFILE_RETRY => "Повторить",
         T_PROFILE_BONUS_REFERRAL => "Реферальный бонус",
         T_PROFILE_BONUS_GARDEN => "Награда из сада",
         T_PROFILE_BONUS_CASHBACK => "Кэшбэк с заказа",
         T_PROFILE_BONUS_ADMIN => "Админ-начисление",
         T_PROFILE_BONUS_OTHER => "Бонус",
+        T_PROFILE_ORDER_HISTORY => "История заказов",
+        T_PROFILE_REORDER => "Повторить",
+        T_CART_SYNCING => "Синхронизация корзины…",
+        T_REORDER_DEEP_LINK_TITLE => "🔄 Ваш последний заказ готов к повтору",
         // Modal
         T_MODAL_CLOSE => "Закрыть",
         T_MODAL_CONFIRM => "Да",
@@ -1258,6 +1303,9 @@ fn get_ru_translation(key: Key) -> Value {
         T_HOME_GARDEN_GROWING => "растёт",
         T_HOME_GARDEN_EMPTY => "Посадите семя из заказа — получите скидку",
         T_HOME_GARDEN_CTA => "В сад",
+        T_HOME_REORDER_LAST => "Последний заказ",
+        T_HOME_REORDER_STATUS => "Статус",
+        T_HOME_REORDER_CTA => "Повторить заказ",
         // Events screen
         T_EVENTS_TIME => "🕒 {0}",
         T_EVENTS_SOLD_OUT_BADGE => "МЕСТ НЕТ",
@@ -1347,6 +1395,8 @@ fn get_en_translation(key: Key) -> Value {
         T_GARDEN_ERROR_RESET => "Failed to reset: {0}",
         T_GARDEN_ERROR_COOLDOWN => "Discount can be grown once a day — wait until after the last harvest.",
         T_GARDEN_ERROR_PRODUCT_UNAVAILABLE => "Product unavailable.",
+        T_GARDEN_WATER_CTA => "💧 Water the plant to grow a discount",
+        T_GARDEN_HARVEST_CTA => "🏆 Harvest and apply the discount",
         T_GARDEN_CAT_STRAIN => "🌿 Strains",
         T_GARDEN_CAT_ACCESSORY => "💨 Accessories",
         T_GARDEN_CAT_TEA => "🥤 Drinks",
@@ -1487,6 +1537,7 @@ fn get_en_translation(key: Key) -> Value {
         T_CHECKOUT_ERR_NO_TELEGRAM => "Open the app in Telegram to place an order",
         T_CHECKOUT_ERR_NETWORK => "Network error. Check your connection and try again",
         T_CHECKOUT_ERR_PARSE => "Could not process server response. Please try again",
+        T_CHECKOUT_RETRY => "Try again",
         T_BACK => "← Back",
         T_TOTAL => "Total:",
         T_ADD_TO_CART => "Add to Cart",
@@ -1573,6 +1624,7 @@ fn get_en_translation(key: Key) -> Value {
         T_CART_ITEMS => "{0} items",
         T_CART_DINE_IN => "🍽 Dine-in",
         T_CART_TAKEAWAY => "🥡 Takeaway",
+        T_CART_BONUS_NUDGE => "🎁 {0} ฿ bonus available at checkout",
         T_CART_DECREASE_QTY => "Decrease quantity",
         T_CART_REMOVE => "Remove item",
         T_CART_IMAGE_ALT => "Photo: {0}",
@@ -1587,6 +1639,10 @@ fn get_en_translation(key: Key) -> Value {
         T_CHECKOUT_STARS => "⭐ Stars",
         T_CHECKOUT_STARS_AVAILABLE => "{0} available",
         T_CHECKOUT_STARS_MINUS => "−{0} ฿",
+        T_CHECKOUT_BONUS => "🎁 Bonus",
+        T_CHECKOUT_BONUS_AVAILABLE => "{0} ฿ available",
+        T_CHECKOUT_BONUS_APPLIED => "−{0} ฿",
+        T_CHECKOUT_BONUS_MAX => "max {0} ฿",
         T_CHECKOUT_NAME_LABEL => "Name *",
         T_CHECKOUT_NAME_PLACEHOLDER => "Enter your name",
         T_CHECKOUT_PHONE_LABEL => "Phone *",
@@ -1746,7 +1802,13 @@ fn get_en_translation(key: Key) -> Value {
         T_SUCCESS_REWARDS_TITLE => "🎁 Your Rewards",
         T_SUCCESS_REWARDS_GARDEN => "🌱 Garden seed for strain orders",
         T_SUCCESS_REWARDS_BONUS => "⭐ Bonus points: {0}",
+        T_SUCCESS_CASHBACK_EARNED => "💸 +{0} ฿ cashback earned",
         T_SUCCESS_SHARE_REFERRAL => "👥 Invite a friend",
+        T_SUCCESS_REORDER => "🔄 Reorder",
+        T_SUCCESS_STATUS_LOADING => "Updating status…",
+        T_SUCCESS_STATUS_ERROR => "Could not load live status.",
+        T_SUCCESS_CASHBACK_ERROR => "Could not load cashback details.",
+        T_SUCCESS_RETRY => "Retry",
         // Orders screen
         T_ORDERS_HISTORY => "Your order history",
         T_ORDERS_NO_ORDERS => "No orders yet",
@@ -1780,6 +1842,7 @@ fn get_en_translation(key: Key) -> Value {
         T_ORDER_DETAIL_CANCEL => "Cancel order",
         T_ORDER_DETAIL_CANCEL_CONFIRM => "Cancel order? Bonus and stars will be refunded.",
         T_ORDER_DETAIL_CANCELLED_BY_USER => "You cancelled the order",
+        T_ORDER_REORDER => "Reorder order",
         // Profile screen
         T_PROFILE_MEMBERSHIP => "Your membership status",
         T_PROFILE_QR_CODE => "Your QR Code",
@@ -1812,11 +1875,17 @@ fn get_en_translation(key: Key) -> Value {
         T_PROFILE_BONUS_HISTORY_EMPTY => "No transactions yet",
         T_PROFILE_BONUS_CREDIT => "Credit",
         T_PROFILE_BONUS_DEBIT => "Debit",
+        T_PROFILE_LOAD_ERROR => "Could not load profile.",
+        T_PROFILE_RETRY => "Retry",
         T_PROFILE_BONUS_REFERRAL => "Referral bonus",
         T_PROFILE_BONUS_GARDEN => "Garden reward",
         T_PROFILE_BONUS_CASHBACK => "Order cashback",
         T_PROFILE_BONUS_ADMIN => "Admin grant",
         T_PROFILE_BONUS_OTHER => "Bonus",
+        T_PROFILE_ORDER_HISTORY => "Order history",
+        T_PROFILE_REORDER => "Reorder",
+        T_CART_SYNCING => "Syncing cart…",
+        T_REORDER_DEEP_LINK_TITLE => "🔄 Your last order is ready to reorder",
         // Modal
         T_MODAL_CLOSE => "Close",
         T_MODAL_CONFIRM => "Yes",
@@ -1874,6 +1943,9 @@ fn get_en_translation(key: Key) -> Value {
         T_HOME_GARDEN_GROWING => "growing",
         T_HOME_GARDEN_EMPTY => "Plant a seed from your order to earn a discount",
         T_HOME_GARDEN_CTA => "Open Garden",
+        T_HOME_REORDER_LAST => "Last order",
+        T_HOME_REORDER_STATUS => "Status",
+        T_HOME_REORDER_CTA => "Reorder",
         // Events screen
         T_EVENTS_TIME => "🕒 {0}",
         T_EVENTS_SOLD_OUT_BADGE => "SOLD OUT",

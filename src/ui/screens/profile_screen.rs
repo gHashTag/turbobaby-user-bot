@@ -1,25 +1,30 @@
 use crate::trios::core::Lang;
 use crate::trios::i18n::{
-    t, tf,
-    T_PROFILE_BONUS, T_PROFILE_BONUS_ADMIN, T_PROFILE_BONUS_CASHBACK, T_PROFILE_BONUS_DEBIT,
-    T_PROFILE_BONUS_GARDEN, T_PROFILE_BONUS_HISTORY,
-    T_PROFILE_BONUS_HISTORY_EMPTY, T_PROFILE_BONUS_OTHER, T_PROFILE_BONUS_REFERRAL,
-    T_PROFILE_CASHBACK_LABEL, T_PROFILE_CONTACTS, T_PROFILE_COPY, T_PROFILE_COPY_LINK,
-    T_PROFILE_EARN_PER_REF, T_PROFILE_FRIENDS_INVITED, T_PROFILE_MEMBERSHIP,
-    T_PROFILE_MORE_TO_UNLOCK, T_PROFILE_MY_GARDEN, T_PROFILE_MY_ORDERS, T_PROFILE_OPEN_MAP,
-    T_PROFILE_PROGRESS, T_PROFILE_QR_CODE, T_PROFILE_QUICK_ACTIONS, T_PROFILE_REFERRAL_LINK,
-    T_PROFILE_REFERRAL_PROGRAM, T_PROFILE_SHARE, T_PROFILE_SPENT, T_PROFILE_STARS,
-    T_PROFILE_TIER_BENEFITS, T_PROFILE_TIER_BRONZE, T_PROFILE_TIER_GOLD, T_PROFILE_TIER_SILVER,
-    T_PROFILE_TIER_STARTER, T_PROFILE_TITLE, T_PROFILE_QUESTS, T_PROFILE_INVITED,
+    t, tf, T_ORDERS_ORDER, T_ORDERS_STATUS_CANCELLED, T_ORDERS_STATUS_CONFIRMED,
+    T_ORDERS_STATUS_DELIVERED, T_ORDERS_STATUS_OUT_FOR_DELIVERY, T_ORDERS_STATUS_PENDING,
+    T_ORDERS_STATUS_PREPARING, T_ORDERS_STATUS_READY, T_ORDERS_STATUS_UNKNOWN, T_PROFILE_BONUS,
+    T_PROFILE_BONUS_ADMIN, T_PROFILE_BONUS_CASHBACK, T_PROFILE_BONUS_DEBIT, T_PROFILE_BONUS_GARDEN,
+    T_PROFILE_BONUS_HISTORY, T_PROFILE_BONUS_HISTORY_EMPTY, T_PROFILE_BONUS_OTHER,
+    T_PROFILE_BONUS_REFERRAL, T_PROFILE_CASHBACK_LABEL, T_PROFILE_CONTACTS, T_PROFILE_COPY,
+    T_PROFILE_COPY_LINK, T_PROFILE_EARN_PER_REF, T_PROFILE_FRIENDS_INVITED, T_PROFILE_INVITED,
+    T_PROFILE_LOAD_ERROR, T_PROFILE_MEMBERSHIP, T_PROFILE_MORE_TO_UNLOCK, T_PROFILE_MY_GARDEN,
+    T_PROFILE_MY_ORDERS, T_PROFILE_OPEN_MAP, T_PROFILE_ORDER_HISTORY, T_PROFILE_PROGRESS,
+    T_PROFILE_QR_CODE, T_PROFILE_QUESTS, T_PROFILE_QUICK_ACTIONS, T_PROFILE_REFERRAL_LINK,
+    T_PROFILE_REFERRAL_PROGRAM, T_PROFILE_REORDER, T_PROFILE_RETRY, T_PROFILE_SHARE,
+    T_PROFILE_SPENT, T_PROFILE_STARS, T_PROFILE_TIER_BENEFITS, T_PROFILE_TIER_BRONZE,
+    T_PROFILE_TIER_GOLD, T_PROFILE_TIER_SILVER, T_PROFILE_TIER_STARTER, T_PROFILE_TITLE,
 };
 use crate::ui::api::context::api_base_url;
+use crate::ui::api::http::{merge_server_cart, post_client_event};
 use crate::ui::assets;
 use crate::ui::components::bottom_nav::BottomNav;
 use crate::ui::components::skeleton::{Skeleton, SkeletonShape};
 use crate::ui::lang::{current_lang, set_app_lang};
 use crate::ui::routes::Route;
-use crate::ui::state::Cart;
-use crate::ui::telegram::{use_telegram_id, use_telegram_init_data, TelegramApp};
+use crate::ui::state::{Cart, CartItem, CartItemType};
+use crate::ui::telegram::{
+    use_telegram_id, use_telegram_init_data, HapticNotification, TelegramApp,
+};
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use dioxus::prelude::*;
 use qrcode::QrCode;
@@ -29,6 +34,7 @@ use web_sys;
 #[derive(Debug, Clone, Deserialize)]
 struct LoyaltyResponse {
     profile: Option<LoyaltyProfileData>,
+    config: Option<LoyaltyConfigData>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -42,8 +48,46 @@ struct LoyaltyProfileData {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+struct LoyaltyConfigData {
+    cashback_pct: f64,
+    max_bonus_usage_pct: f64,
+    next_tier: String,
+    next_threshold: f64,
+}
+
+#[derive(Debug, Clone, Deserialize)]
 struct StarsBalanceResp {
     balance: i64,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct ProfileOrderItem {
+    strain_id: Option<String>,
+    strain_name: Option<String>,
+    accessory_id: Option<String>,
+    accessory_name: Option<String>,
+    tea_id: Option<String>,
+    tea_name: Option<String>,
+    set_id: Option<String>,
+    set_name: Option<String>,
+    quantity: f64,
+    #[serde(default)]
+    unit_price: Option<f64>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct ProfileOrder {
+    id: String,
+    status: String,
+    total: f64,
+    created_at: String,
+    #[serde(default)]
+    items: Vec<ProfileOrderItem>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct ProfileOrdersResponse {
+    orders: Vec<ProfileOrder>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -129,6 +173,14 @@ impl Tier {
             Self::Gold => 1000.0,
         }
     }
+    fn rank(&self) -> u8 {
+        match self {
+            Self::Starter => 0,
+            Self::Bronze => 1,
+            Self::Silver => 2,
+            Self::Gold => 3,
+        }
+    }
     fn next(&self) -> Option<Self> {
         match self {
             Self::Starter => Some(Self::Bronze),
@@ -182,6 +234,86 @@ fn render_profile_skeleton(_lang: Lang) -> Element {
     }
 }
 
+fn profile_order_item_to_cart_item(item: &ProfileOrderItem) -> Option<CartItem> {
+    let (id, name, item_type, price_hint) = if let Some(ref sid) = item.strain_id {
+        (
+            sid.clone(),
+            item.strain_name.clone().unwrap_or_else(|| "Strain".into()),
+            CartItemType::Strain,
+            item.unit_price.unwrap_or(0.0),
+        )
+    } else if let Some(ref set_id) = item.set_id {
+        (
+            set_id.clone(),
+            item.set_name.clone().unwrap_or_else(|| "Set".into()),
+            CartItemType::Set,
+            item.unit_price.unwrap_or(0.0),
+        )
+    } else if let Some(ref aid) = item.accessory_id {
+        (
+            aid.clone(),
+            item.accessory_name
+                .clone()
+                .unwrap_or_else(|| "Accessory".into()),
+            CartItemType::Accessory,
+            item.unit_price.unwrap_or(0.0),
+        )
+    } else if let Some(ref tid) = item.tea_id {
+        (
+            tid.clone(),
+            item.tea_name.clone().unwrap_or_else(|| "Drink".into()),
+            CartItemType::Tea,
+            item.unit_price.unwrap_or(0.0),
+        )
+    } else {
+        return None;
+    };
+    Some(CartItem {
+        id,
+        name,
+        price: price_hint,
+        quantity: item.quantity.max(1.0) as u32,
+        image_url: None,
+        item_type,
+        fulfillment: None,
+    })
+}
+
+fn profile_item_name(item: &ProfileOrderItem) -> String {
+    item.strain_name
+        .clone()
+        .or_else(|| item.accessory_name.clone())
+        .or_else(|| item.tea_name.clone())
+        .or_else(|| item.set_name.clone())
+        .unwrap_or_else(|| "Unknown".to_string())
+}
+
+fn profile_status_color(status: &str) -> &'static str {
+    match status.to_lowercase().as_str() {
+        "pending" => "#ffe600",
+        "confirmed" => "#00e5ff",
+        "preparing" => "#ff9d00",
+        "ready" => "#39ff14",
+        "out_for_delivery" => "#00e5ff",
+        "completed" | "delivered" => "#39ff14",
+        "cancelled" | "rejected" => "#ff4757",
+        _ => "#8b8b9e",
+    }
+}
+
+fn profile_status_label_key(status: &str) -> crate::trios::i18n::Key {
+    match status.to_lowercase().as_str() {
+        "pending" => T_ORDERS_STATUS_PENDING,
+        "confirmed" => T_ORDERS_STATUS_CONFIRMED,
+        "preparing" => T_ORDERS_STATUS_PREPARING,
+        "ready" => T_ORDERS_STATUS_READY,
+        "out_for_delivery" => T_ORDERS_STATUS_OUT_FOR_DELIVERY,
+        "completed" | "delivered" => T_ORDERS_STATUS_DELIVERED,
+        "cancelled" | "rejected" => T_ORDERS_STATUS_CANCELLED,
+        _ => T_ORDERS_STATUS_UNKNOWN,
+    }
+}
+
 fn bonus_tx_label(lang: Lang, tx_type: &str) -> String {
     match tx_type {
         "referral_bonus" => t(lang, T_PROFILE_BONUS_REFERRAL).to_string(),
@@ -214,32 +346,42 @@ pub fn ProfileScreen() -> Element {
     let init_data_for_stars = init_data.clone();
     let init_data_for_bonus_history = init_data.clone();
 
+    let mut loyalty_retry = use_signal(|| 0u32);
     let loyalty_resource = use_resource(move || {
         let init = init_data_for_loyalty.clone();
+        let _ = loyalty_retry();
         async move {
             if telegram_id == 0 {
-                return None;
+                return Err("no telegram id".to_string());
             }
             let base = api_base_url();
             let url = format!("{}/api/loyalty/{}", base, telegram_id);
             let client = crate::ui::api::local_client::LocalClient::new();
-            let resp = client
+            match client
                 .get(&url)
                 .header("X-Telegram-Init-Data", init)
                 .send()
-                .await;
-            match resp {
-                Ok(r) => r.json::<LoyaltyResponse>().await.ok(),
-                Err(_) => None,
+                .await
+            {
+                Ok(r) => match r.json::<LoyaltyResponse>().await {
+                    Ok(body) => Ok(body),
+                    Err(e) => Err(format!("parse: {e}")),
+                },
+                Err(e) => Err(format!("network: {e}")),
             }
         }
     });
 
-    let loyalty_data = loyalty_resource
+    let loyalty_result = loyalty_resource
         .read()
-        .clone()
-        .flatten()
-        .and_then(|r| r.profile.clone());
+        .as_ref()
+        .and_then(|r| r.as_ref().ok().cloned());
+    let loyalty_error = loyalty_resource
+        .read()
+        .as_ref()
+        .and_then(|r| r.as_ref().err().cloned());
+
+    let loyalty_data = loyalty_result.as_ref().and_then(|r| r.profile.clone());
 
     let stars_balance_res = use_resource(move || {
         let init = init_data_for_stars.clone();
@@ -268,7 +410,11 @@ pub fn ProfileScreen() -> Element {
             if telegram_id == 0 {
                 return None;
             }
-            let url = format!("{}/api/loyalty/{}/bonus-history", api_base_url(), telegram_id);
+            let url = format!(
+                "{}/api/loyalty/{}/bonus-history",
+                api_base_url(),
+                telegram_id
+            );
             let client = crate::ui::api::local_client::LocalClient::new();
             let resp = client
                 .get(&url)
@@ -276,18 +422,53 @@ pub fn ProfileScreen() -> Element {
                 .send()
                 .await;
             match resp {
-                Ok(r) => r.json::<BonusHistoryResponse>().await.ok().map(|r| r.transactions),
+                Ok(r) => r
+                    .json::<BonusHistoryResponse>()
+                    .await
+                    .ok()
+                    .map(|r| r.transactions),
                 Err(_) => None,
             }
         }
     });
-    let bonus_history = bonus_history_res.read().clone().flatten().unwrap_or_default();
+    let bonus_history = bonus_history_res
+        .read()
+        .clone()
+        .flatten()
+        .unwrap_or_default();
 
-    let current_tier = loyalty_data
+    // Loop #16: recent orders mini-list for the profile screen.
+    let init_data_for_orders = init_data.clone();
+    let orders_resource = use_resource(move || {
+        let init = init_data_for_orders.clone();
+        async move {
+            if telegram_id == 0 {
+                return None;
+            }
+            let url = format!("{}/api/orders/user/{}", api_base_url(), telegram_id);
+            let client = crate::ui::api::local_client::LocalClient::new();
+            let resp = client
+                .get(&url)
+                .header("X-Telegram-Init-Data", init)
+                .send()
+                .await;
+            match resp {
+                Ok(r) => r
+                    .json::<ProfileOrdersResponse>()
+                    .await
+                    .ok()
+                    .map(|r| r.orders),
+                Err(_) => None,
+            }
+        }
+    });
+    let recent_orders = orders_resource.read().clone().flatten().unwrap_or_default();
+
+    let backend_tier = loyalty_data
         .as_ref()
         .and_then(|d| d.tier.as_deref())
-        .map(Tier::from_str)
-        .unwrap_or(Tier::Starter);
+        .map(Tier::from_str);
+    let current_tier = backend_tier.unwrap_or(Tier::Starter);
 
     let total_spent = loyalty_data
         .as_ref()
@@ -306,8 +487,15 @@ pub fn ProfileScreen() -> Element {
     // Single source of truth for the ฿ stat (was an inline `as i32` narrowing).
     let total_spent_str = crate::trios::pricing::format_baht(total_spent);
 
-    // Cashback is calculated from tier
-    let cashback_pct = current_tier.cashback();
+    // Loop #14: cashback and next-tier threshold now come from the same
+    // loyalty_config the backend uses to credit cashback on order completion.
+    // The Tier enum is kept only for card art / labels.
+    let config = loyalty_result.as_ref().and_then(|r| r.config.clone());
+    let cashback_pct = config
+        .as_ref()
+        .map(|c| c.cashback_pct)
+        .filter(|v| v.is_finite() && *v >= 0.0)
+        .unwrap_or_else(|| current_tier.cashback());
 
     // Cycle #169E: fallback to raw telegram_id instead of stale "WOODY-DEMO"
     // placeholder so the referral deep-link always carries the user's
@@ -328,18 +516,21 @@ pub fn ProfileScreen() -> Element {
         .and_then(|d| d.orders_count)
         .unwrap_or(0);
 
+    // Loop #14: next-tier threshold from backend config so the progress bar
+    // matches the real loyalty program rules instead of hardcoded UI values.
+    // The next tier label/color still comes from the Tier enum for card art.
     let next_tier = current_tier.next();
-    let progress_pct = if let Some(next) = next_tier {
-        let threshold = next.threshold();
-        if threshold > 0.0 {
-            ((total_spent / threshold) * 100.0).min(100.0) as i32
-        } else {
-            100
-        }
+    let next_threshold = config
+        .as_ref()
+        .map(|c| c.next_threshold)
+        .filter(|v| v.is_finite() && *v > 0.0)
+        .or_else(|| next_tier.map(|t| t.threshold()));
+    let progress_pct = if let Some(threshold) = next_threshold {
+        ((total_spent / threshold) * 100.0).min(100.0) as i32
     } else {
         100
     };
-    let remaining = next_tier.map(|t| (t.threshold() - total_spent).max(0.0));
+    let remaining = next_threshold.map(|t| (t - total_spent).max(0.0));
 
     let lang = crate::ui::lang::current_lang();
     let profile_title = t(lang, T_PROFILE_TITLE);
@@ -359,19 +550,47 @@ pub fn ProfileScreen() -> Element {
 
             if is_loading {
                 { render_profile_skeleton(lang) }
+            } else if let Some(ref _err) = loyalty_error {
+                div { style: "padding: 0 16px 16px; text-align: center;",
+                    div { style: "background: #16213e; border: 4px solid #ff4757; padding: 14px; color: #ff4757; font-size: 14px; margin-bottom: 12px; box-shadow: 4px 4px 0 #000;",
+                        "{t(lang, T_PROFILE_LOAD_ERROR)}"
+                    }
+                    button {
+                        style: "font-size: 14px; font-weight: 700; padding: 12px 20px; background: #39ff14; color: #000; border: 4px solid #2d9e0f; cursor: pointer; box-shadow: 3px 3px 0 #000;",
+                        onclick: move |_| { loyalty_retry.set(loyalty_retry() + 1); },
+                        "{t(lang, T_PROFILE_RETRY)}"
+                    }
+                }
             } else {
             // Tier strip — all 4 tiers
             div { style: "display: flex; gap: 6px; padding: 0 16px 16px; overflow-x: auto;",
                 for tier in Tier::all() {
                     {
                         let is_current = *tier == current_tier;
-                        let is_unlocked = tier.threshold() <= total_spent;
+                        // Loop #15: when the backend tells us the user's current tier,
+                        // trust its rank; fall back to the local threshold only when the
+                        // loyalty row is missing (e.g. first-time visitor).
+                        let is_unlocked = backend_tier.map_or(
+                            tier.threshold() <= total_spent,
+                            |bt| bt.rank() >= tier.rank(),
+                        );
                         let border = if is_current { tier.color() } else { "#2a2a4a" };
                         let opacity = if is_unlocked { "1.0" } else { "0.4" };
                         let label = tier.label(lang);
                         let _emoji = tier.emoji();
                         let cb = tier.cashback();
-                        let thresh = tier.threshold();
+                        // For the next tier, show the backend threshold if available so
+                        // the progress bar matches the real rules; otherwise use the enum.
+                        let next_tier = current_tier.next();
+                        let thresh = if Some(*tier) == next_tier {
+                            config
+                                .as_ref()
+                                .map(|c| c.next_threshold)
+                                .filter(|v| v.is_finite() && *v > 0.0)
+                                .unwrap_or_else(|| tier.threshold())
+                        } else {
+                            tier.threshold()
+                        };
                         let shadow_val = if is_current {
                             format!("0 0 12px {}44", tier.color())
                         } else {
@@ -659,6 +878,76 @@ pub fn ProfileScreen() -> Element {
                             span { style: "font-size: 15px;", "{t(lang, T_PROFILE_REFERRAL_PROGRAM)}" }
                         }
                         span { style: "font-size: 15px; color: #8b8b9e;", "→" }
+                    }
+                }
+            }
+
+            // Loop #16: recent order history mini-list
+            div { style: "padding: 0 16px 16px;",
+                div { style: "font-size: 13px; font-weight: 700; color: #ffe600; text-transform: uppercase; letter-spacing: 1px; text-shadow: 2px 2px 0 #000; margin-bottom: 10px;", "{t(lang, T_PROFILE_ORDER_HISTORY)}" }
+                div { style: "background: #16213e; border: 4px solid #2a2a4a; box-shadow: 4px 4px 0 #000; padding: 12px;",
+                    if recent_orders.is_empty() {
+                        div { style: "font-size: 13px; color: #8b8b9e; text-align: center; padding: 8px 0;", "{t(lang, T_PROFILE_BONUS_HISTORY_EMPTY)}" }
+                    } else {
+                        div { style: "display: flex; flex-direction: column; gap: 10px;",
+                            for order in recent_orders.iter().take(3) {{
+                                let o = order.clone();
+                                let short_id: String = o.id.chars().rev().take(6).collect::<Vec<_>>().into_iter().rev().collect();
+                                let status_color = profile_status_color(&o.status);
+                                let status_label = t(lang, profile_status_label_key(&o.status));
+                                let total_str = crate::trios::pricing::format_baht(o.total);
+                                let date_str = o.created_at.split('T').next().unwrap_or(&o.created_at).to_string();
+                                let item_summary = o.items.first().map(profile_item_name).unwrap_or_else(|| "—".to_string());
+                                let more_count = o.items.len().saturating_sub(1);
+                                let init_for_reorder = init_data.clone();
+                                let cart_for_reorder = cart.clone();
+                                let nav_for_reorder = navigator();
+                                let reorder_label = t(lang, T_PROFILE_REORDER).to_string();
+                                rsx! {
+                                    div { style: "background: #0f0f1a; border: 3px solid {status_color}; box-shadow: 2px 2px 0 #000; padding: 10px 12px;",
+                                        div { style: "display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;",
+                                            span { style: "font-size: 14px; font-weight: 700; color: #e8e8e8;", "{tf(lang, T_ORDERS_ORDER, &[short_id.clone()])}" }
+                                            span { style: "font-size: 12px; padding: 2px 6px; background: {status_color}22; color: {status_color};", "{status_label}" }
+                                        }
+                                        div { style: "font-size: 12px; color: #8b8b9e; margin-bottom: 8px;",
+                                            if more_count == 0 {
+                                                "{item_summary} · {date_str}"
+                                            } else {
+                                                "{item_summary} +{more_count} · {date_str}"
+                                            }
+                                        }
+                                        div { style: "display: flex; justify-content: space-between; align-items: center;",
+                                            span { style: "font-size: 16px; font-weight: 800; color: #ffe600; text-shadow: 2px 2px 0 #000;", "{total_str}" }
+                                            button {
+                                                style: "font-size: 12px; font-weight: 700; padding: 6px 10px; background: #39ff14; color: #000; border: 3px solid #2d9e0f; box-shadow: 2px 2px 0 #000; cursor: pointer;",
+                                                onclick: move |_| {
+                                                    let order_items = o.items.clone();
+                                                    let init = init_for_reorder.clone();
+                                                    let tid = telegram_id;
+                                                    let mut cart_sig = cart_for_reorder.clone();
+                                                    let nav = nav_for_reorder.clone();
+                                                    spawn(async move {
+                                                        let local_items: Vec<CartItem> = order_items.iter().filter_map(profile_order_item_to_cart_item).collect();
+                                                        match merge_server_cart(&api_base_url(), &init, tid, &local_items).await {
+                                                            Ok(fresh_cart) => { cart_sig.set(fresh_cart); }
+                                                            Err(_) => {
+                                                                let mut local = Cart::new();
+                                                                for item in local_items { local.add_item(item); }
+                                                                cart_sig.set(local);
+                                                            }
+                                                        }
+                                                        let _ = post_client_event(&api_base_url(), "reorder_clicked", "profile").await;
+                                                        TelegramApp::init().haptic_notification(HapticNotification::Success);
+                                                        nav.push(Route::Cart {});
+                                                    });
+                                                },
+                                                "{reorder_label}"
+                                            }
+                                        }
+                                    }
+                                }
+                            }}
+                        }
                     }
                 }
             }

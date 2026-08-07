@@ -1,4 +1,5 @@
 // Global State Management with Dioxus Signals
+use crate::ui::api::types::ServerCartItem;
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -23,6 +24,37 @@ pub struct CartItem {
     /// None for everything else. Chosen via a toggle on drink cart lines.
     #[serde(default)]
     pub fulfillment: Option<String>,
+}
+
+impl CartItem {
+    /// Loop #11/15: convert a server-side cart line to the local UI model.
+    /// Shared helper so app.rs and cart_screen.rs do not drift.
+    pub fn from_server(item: ServerCartItem) -> Option<Self> {
+        let item_type = match item.kind.as_str() {
+            "strain" => CartItemType::Strain,
+            "accessory" => CartItemType::Accessory,
+            "tea" => CartItemType::Tea,
+            "set" => CartItemType::Set,
+            _ => return None,
+        };
+        let quantity = item.quantity.max(0) as u32;
+        if quantity == 0 {
+            return None;
+        }
+        Some(Self {
+            id: item.catalog_id,
+            name: item.name,
+            price: if item.unit_price.is_finite() {
+                item.unit_price.max(0.0)
+            } else {
+                0.0
+            },
+            quantity,
+            image_url: item.image_url,
+            item_type,
+            fulfillment: None,
+        })
+    }
 }
 
 /// Shopping cart

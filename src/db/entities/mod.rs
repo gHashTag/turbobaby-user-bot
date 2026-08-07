@@ -12,13 +12,13 @@ pub mod cart;
 pub mod cart_item;
 
 #[allow(unreachable_pub)]
-pub mod event;
-#[allow(unreachable_pub)]
-pub mod event_photo;
-#[allow(unreachable_pub)]
 pub mod bonus_transaction;
 #[allow(unreachable_pub)]
 pub mod delivery_zone;
+#[allow(unreachable_pub)]
+pub mod event;
+#[allow(unreachable_pub)]
+pub mod event_photo;
 #[allow(unreachable_pub)]
 pub mod garden_config;
 #[allow(unreachable_pub)]

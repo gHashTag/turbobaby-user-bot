@@ -415,8 +415,16 @@ pub(crate) async fn handle_callback(
                 }
                 // Cycle #79: notify the customer their order was confirmed.
                 if let Some(cid) = customer_telegram_id {
-                    notify::notify_order_status(&bot, &db, &config, cid, order_id, "confirmed", None)
-                        .await;
+                    notify::notify_order_status(
+                        &bot,
+                        &db,
+                        &config,
+                        cid,
+                        order_id,
+                        "confirmed",
+                        None,
+                    )
+                    .await;
                 }
             } else if let Some(msg) = q.message.as_ref().and_then(|m| match m {
                 MaybeInaccessibleMessage::Regular(msg) => Some(msg),

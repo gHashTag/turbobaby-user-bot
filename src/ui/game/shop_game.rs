@@ -11,23 +11,20 @@ use crate::trios::i18n::{
     T_GAME_EVENT_DJ_ENERGY, T_GAME_EVENT_GRILL_DEMAND, T_GAME_EVENT_HERB_DELIVERY,
     T_GAME_EVENT_RUSH_HOUR, T_GAME_FARM_EMPTY, T_GAME_FARM_GROWN, T_GAME_FARM_PLANTED,
     T_GAME_FARM_TITLE, T_GAME_FARM_WATER, T_GAME_FARM_WATERED, T_GAME_FLOW, T_GAME_GRILL,
-    T_GAME_GRILL_COOK,
-    T_GAME_GRILL_COOKING, T_GAME_GRILL_DESC, T_GAME_GRILL_STOCK, T_GAME_GRILL_TIP,
-    T_GAME_GRILL_TITLE, T_GAME_HARVESTED, T_GAME_LOG_CLEANING, T_GAME_LOG_COOKING_STARTED,
-    T_GAME_LOG_CUSTOMER_LEFT, T_GAME_LOG_FARM_GREW, T_GAME_LOG_GRILLED_LEFT,
-    T_GAME_LOG_HARVEST, T_GAME_LOG_MOVED_TO_TABLE, T_GAME_LOG_NEW_CUSTOMER,
-    T_GAME_LOG_PARTY_STARTED, T_GAME_LOG_PLANTED_SEED, T_GAME_LOG_QUICK_GRILL,
-    T_GAME_LOG_READY_AT_TABLE, T_GAME_LOG_RESET, T_GAME_LOG_SERVING, T_GAME_LOG_TABLE_CLEANED,
-    T_GAME_LOG_TAKING_ORDER, T_GAME_LOG_WATERING, T_GAME_ORDER, T_GAME_PARTY_ON,
-    T_GAME_PARTY_START, T_GAME_PARTY_STATUS_OFF, T_GAME_PARTY_STATUS_ON, T_GAME_PARTY_TIP,
-    T_GAME_PARTY_TITLE, T_GAME_RESET, T_GAME_SERVE, T_GAME_SERVED, T_GAME_SHOP_TITLE,
-    T_GAME_SPEED, T_GAME_TAB_DJ, T_GAME_TAB_FARM, T_GAME_TAB_GRILL,
-    T_GAME_TAB_SHOP, T_GAME_TABLES, T_GAME_TABLE_DIRTY, T_GAME_TABLE_EATING,
-    T_GAME_UPGRADES,
+    T_GAME_GRILL_COOK, T_GAME_GRILL_COOKING, T_GAME_GRILL_DESC, T_GAME_GRILL_STOCK,
+    T_GAME_GRILL_TIP, T_GAME_GRILL_TITLE, T_GAME_HARVESTED, T_GAME_LOG_CLEANING,
+    T_GAME_LOG_COOKING_STARTED, T_GAME_LOG_CUSTOMER_LEFT, T_GAME_LOG_FARM_GREW,
+    T_GAME_LOG_GRILLED_LEFT, T_GAME_LOG_HARVEST, T_GAME_LOG_MOVED_TO_TABLE,
+    T_GAME_LOG_NEW_CUSTOMER, T_GAME_LOG_PARTY_STARTED, T_GAME_LOG_PLANTED_SEED,
+    T_GAME_LOG_QUICK_GRILL, T_GAME_LOG_READY_AT_TABLE, T_GAME_LOG_RESET, T_GAME_LOG_SERVING,
+    T_GAME_LOG_TABLE_CLEANED, T_GAME_LOG_TAKING_ORDER, T_GAME_LOG_WATERING, T_GAME_ORDER,
+    T_GAME_PARTY_ON, T_GAME_PARTY_START, T_GAME_PARTY_STATUS_OFF, T_GAME_PARTY_STATUS_ON,
+    T_GAME_PARTY_TIP, T_GAME_PARTY_TITLE, T_GAME_RESET, T_GAME_SERVE, T_GAME_SERVED,
+    T_GAME_SHOP_TITLE, T_GAME_SPEED, T_GAME_TABLES, T_GAME_TABLE_DIRTY, T_GAME_TABLE_EATING,
     T_GAME_TABLE_FREE, T_GAME_TABLE_PREPARING, T_GAME_TABLE_READY, T_GAME_TABLE_WAITING,
-    T_GAME_TIP,
-    T_GAME_UPGRADE_FLOW, T_GAME_UPGRADE_LEVEL_COST, T_GAME_UPGRADE_MAX,
-    T_GAME_UPGRADE_SPEED, T_GAME_UPGRADE_TABLES, T_GARDEN_HARVEST, T_GARDEN_PLANT,
+    T_GAME_TAB_DJ, T_GAME_TAB_FARM, T_GAME_TAB_GRILL, T_GAME_TAB_SHOP, T_GAME_TIP, T_GAME_UPGRADES,
+    T_GAME_UPGRADE_FLOW, T_GAME_UPGRADE_LEVEL_COST, T_GAME_UPGRADE_MAX, T_GAME_UPGRADE_SPEED,
+    T_GAME_UPGRADE_TABLES, T_GARDEN_HARVEST, T_GARDEN_PLANT,
 };
 use crate::ui::api::context::api_base_url;
 use crate::ui::telegram::{use_telegram_id, use_telegram_init_data};
@@ -893,7 +890,11 @@ pub fn WoodyShop() -> Element {
 // ── Zone tabs ──────────────────────────────────────────────────────────────────
 
 #[component]
-fn ZoneTabs(active_zone: ActiveZone, state: Signal<ShopState>, lang: crate::trios::core::Lang) -> Element {
+fn ZoneTabs(
+    active_zone: ActiveZone,
+    state: Signal<ShopState>,
+    lang: crate::trios::core::Lang,
+) -> Element {
     let make_tab = |zone: ActiveZone, label: &str| {
         let is_active = active_zone == zone;
         let bg = if is_active { "#39ff14" } else { "#2a2a4a" };
@@ -958,13 +959,7 @@ fn ShopZone(
         let current_table = state.read().woody_table;
         if current_table == idx {
             perform_shop_action(
-                &mut state,
-                idx,
-                &mut logs,
-                reward,
-                &upgrades,
-                on_floater,
-                lang,
+                &mut state, idx, &mut logs, reward, &upgrades, on_floater, lang,
             );
             return;
         }
@@ -979,7 +974,11 @@ fn ShopZone(
                 if l.len() > 6 {
                     l.remove(0);
                 }
-                l.push(tf(lang, T_GAME_LOG_MOVED_TO_TABLE, &[(idx + 1).to_string()]));
+                l.push(tf(
+                    lang,
+                    T_GAME_LOG_MOVED_TO_TABLE,
+                    &[(idx + 1).to_string()],
+                ));
             });
         });
     };
@@ -1296,10 +1295,38 @@ fn FarmPlot(
     lang: crate::trios::core::Lang,
 ) -> Element {
     let (emoji, label, can_plant, can_water, can_harvest, accent) = match stage {
-        FarmStage::Empty => ("🟫", t(lang, T_GAME_FARM_EMPTY).to_string(), true, false, false, "#2a2a4a"),
-        FarmStage::Planted => ("🌱", t(lang, T_GAME_FARM_PLANTED).to_string(), false, true, false, "#39ff14"),
-        FarmStage::Watered => ("🌿", t(lang, T_GAME_FARM_WATERED).to_string(), false, false, false, "#00e5ff"),
-        FarmStage::Grown => ("🌳", t(lang, T_GAME_FARM_GROWN).to_string(), false, false, true, "#ffe600"),
+        FarmStage::Empty => (
+            "🟫",
+            t(lang, T_GAME_FARM_EMPTY).to_string(),
+            true,
+            false,
+            false,
+            "#2a2a4a",
+        ),
+        FarmStage::Planted => (
+            "🌱",
+            t(lang, T_GAME_FARM_PLANTED).to_string(),
+            false,
+            true,
+            false,
+            "#39ff14",
+        ),
+        FarmStage::Watered => (
+            "🌿",
+            t(lang, T_GAME_FARM_WATERED).to_string(),
+            false,
+            false,
+            false,
+            "#00e5ff",
+        ),
+        FarmStage::Grown => (
+            "🌳",
+            t(lang, T_GAME_FARM_GROWN).to_string(),
+            false,
+            false,
+            true,
+            "#ffe600",
+        ),
     };
 
     let plant_emoji = if watering { "💧" } else { emoji };
@@ -1861,7 +1888,11 @@ fn perform_shop_action(
                     if l.len() > 6 {
                         l.remove(0);
                     }
-                    l.push(tf(lang, T_GAME_LOG_READY_AT_TABLE, &[order.emoji().to_string(), (idx + 1).to_string()]));
+                    l.push(tf(
+                        lang,
+                        T_GAME_LOG_READY_AT_TABLE,
+                        &[order.emoji().to_string(), (idx + 1).to_string()],
+                    ));
                 });
             }
             WoodyAction::Serving(idx, _order) => {

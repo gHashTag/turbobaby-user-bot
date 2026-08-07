@@ -477,7 +477,9 @@ async fn telegram_broadcast_with_no_users_returns_success() {
 #[tokio::test]
 #[ignore]
 async fn telegram_broadcast_with_bad_photo_url_rejected() {
-    let Some((app, _db)) = common::make_app_with_db().await else { return; };
+    let Some((app, _db)) = common::make_app_with_db().await else {
+        return;
+    };
     let (admin_init, admin_token, admin_telegram_id) = admin_headers();
     let body = serde_json::json!({
         "text": "Photo broadcast",

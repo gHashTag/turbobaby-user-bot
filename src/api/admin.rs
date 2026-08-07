@@ -11,14 +11,16 @@ use serde_json::{json, Value};
 use crate::api::auth::{check_admin, validate_telegram_id_param};
 use crate::db::entities::{delivery_zone, lab_certificate, strain_review};
 use crate::AppState;
-use teloxide::payloads::{SendMessageSetters, SendPhotoSetters};
-use teloxide::prelude::Requester;
-use teloxide::types::{InlineKeyboardButton, InlineKeyboardMarkup, InputFile, ParseMode, WebAppInfo};
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, ConnectionTrait, DbBackend, EntityTrait, QueryFilter, QueryOrder,
-    QuerySelect, Set, Statement,
+    ActiveModelTrait, ColumnTrait, ConnectionTrait, DbBackend, EntityTrait, QueryFilter,
+    QueryOrder, QuerySelect, Set, Statement,
 };
 use std::collections::HashSet;
+use teloxide::payloads::{SendMessageSetters, SendPhotoSetters};
+use teloxide::prelude::Requester;
+use teloxide::types::{
+    InlineKeyboardButton, InlineKeyboardMarkup, InputFile, ParseMode, WebAppInfo,
+};
 
 // Cycle #128: removed LOGIN_LOCK static. It was introduced to pair
 // with a per-attempt `tokio::time::sleep(3s)` that cycle #126 deleted,
@@ -32,9 +34,8 @@ use std::collections::HashSet;
 // Per-admin Telegram broadcast rate-limit: 1 attempt per 10 minutes.
 // Keyed by admin telegram_id (from check_admin) to prevent double-clicks
 // and accidental spam to the whole user base.
-static BROADCAST_RATE_LIMIT: std::sync::LazyLock<
-    crate::api::rate_limit::SyncSlidingWindowStore,
-> = std::sync::LazyLock::new(crate::api::rate_limit::new_sync_store);
+static BROADCAST_RATE_LIMIT: std::sync::LazyLock<crate::api::rate_limit::SyncSlidingWindowStore> =
+    std::sync::LazyLock::new(crate::api::rate_limit::new_sync_store);
 const BROADCAST_RL_WINDOW: std::time::Duration = std::time::Duration::from_secs(600);
 const BROADCAST_RL_MAX_ATTEMPTS: usize = 1;
 const BROADCAST_RL_MAX_KEYS: usize = 100;
@@ -153,7 +154,10 @@ pub(crate) fn routes() -> Router<AppState> {
         .route("/admin/strains/:id/lab-cert", post(create_lab_cert))
         .route("/admin/broadcast", post(telegram_broadcast))
         .route("/admin/broadcast/test", post(telegram_broadcast_test))
-        .route("/admin/delivery-zones", get(list_delivery_zones_admin).post(create_delivery_zone))
+        .route(
+            "/admin/delivery-zones",
+            get(list_delivery_zones_admin).post(create_delivery_zone),
+        )
         .route(
             "/admin/delivery-zones/:id",
             patch(update_delivery_zone).delete(delete_delivery_zone),
@@ -630,12 +634,7 @@ async fn manual_notify_deploy(
     } else {
         req.note.trim()
     };
-    let text = crate::notify::notify_deploy_manual(
-        &state.bot,
-        &state.config,
-        note,
-    )
-    .await;
+    let text = crate::notify::notify_deploy_manual(&state.bot, &state.config, note).await;
     Ok(Json(json!({
         "success": true,
         "sent_to": state.config.admin_ids.len(),
@@ -881,8 +880,8 @@ async fn telegram_broadcast(
     State(state): State<AppState>,
     Json(req): Json<TelegramBroadcastRequest>,
 ) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
-    let admin_id = check_admin(&headers, &state)
-        .map_err(|e| (e, Json(json!({ "error": "unauthorized" }))))?;
+    let admin_id =
+        check_admin(&headers, &state).map_err(|e| (e, Json(json!({ "error": "unauthorized" }))))?;
 
     let text = req.text.trim();
     if text.is_empty() {
@@ -895,10 +894,9 @@ async fn telegram_broadcast(
     // Build optional marketing CTA: a t.me deep link that opens the Mini App
     // directly on the chosen product. Validate the product kind now so a typo
     // in the admin UI fails fast without consuming the rate-limit bucket.
-    let reply_markup = req
-        .product
-        .as_ref()
-        .and_then(|p| broadcast_reply_markup(&state.config.web_app_url, p, req.button_text.as_deref()));
+    let reply_markup = req.product.as_ref().and_then(|p| {
+        broadcast_reply_markup(&state.config.web_app_url, p, req.button_text.as_deref())
+    });
     if req.product.is_some() && reply_markup.is_none() {
         return Err((
             StatusCode::BAD_REQUEST,
@@ -956,7 +954,8 @@ async fn telegram_broadcast(
             DbBackend::Postgres,
             "SELECT telegram_id FROM user_languages \
              UNION \
-             SELECT telegram_id FROM loyalty_profiles".to_string(),
+             SELECT telegram_id FROM loyalty_profiles"
+                .to_string(),
         ))
         .await
         .map_err(|e| {
@@ -1012,7 +1011,11 @@ async fn telegram_broadcast(
             }
             Err(e) => {
                 failed += 1;
-                tracing::warn!("telegram_broadcast: failed to send to {}: {}", telegram_id, e);
+                tracing::warn!(
+                    "telegram_broadcast: failed to send to {}: {}",
+                    telegram_id,
+                    e
+                );
             }
         }
     }
@@ -1040,8 +1043,8 @@ async fn telegram_broadcast_test(
     State(state): State<AppState>,
     Json(req): Json<TelegramBroadcastRequest>,
 ) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
-    let admin_id = check_admin(&headers, &state)
-        .map_err(|e| (e, Json(json!({ "error": "unauthorized" }))))?;
+    let admin_id =
+        check_admin(&headers, &state).map_err(|e| (e, Json(json!({ "error": "unauthorized" }))))?;
 
     let text = req.text.trim();
     if text.is_empty() {
@@ -1053,10 +1056,9 @@ async fn telegram_broadcast_test(
 
     // Validate the marketing CTA shape up-front so the UI catches typos before
     // we send anything to a real admin chat.
-    let reply_markup = req
-        .product
-        .as_ref()
-        .and_then(|p| broadcast_reply_markup(&state.config.web_app_url, p, req.button_text.as_deref()));
+    let reply_markup = req.product.as_ref().and_then(|p| {
+        broadcast_reply_markup(&state.config.web_app_url, p, req.button_text.as_deref())
+    });
     if req.product.is_some() && reply_markup.is_none() {
         return Err((
             StatusCode::BAD_REQUEST,
@@ -1127,7 +1129,11 @@ async fn telegram_broadcast_test(
             }
             Err(e) => {
                 failed += 1;
-                tracing::warn!("telegram_broadcast_test: failed to send to admin {}: {}", telegram_id, e);
+                tracing::warn!(
+                    "telegram_broadcast_test: failed to send to admin {}: {}",
+                    telegram_id,
+                    e
+                );
             }
         }
     }
@@ -1190,7 +1196,11 @@ struct UpdateZoneRequest {
 }
 
 fn sanitize_f64(v: f64) -> f64 {
-    if v.is_finite() && v >= 0.0 { v } else { 0.0 }
+    if v.is_finite() && v >= 0.0 {
+        v
+    } else {
+        0.0
+    }
 }
 
 fn validate_zone_name(name: &str) -> Result<(), StatusCode> {
@@ -1234,7 +1244,11 @@ async fn create_delivery_zone(
         fee: Set(req.fee.map(sanitize_f64).unwrap_or(0.0)),
         min_order: Set(req.min_order.map(sanitize_f64).unwrap_or(0.0)),
         eta_min: Set(req.eta_min.unwrap_or(30).max(0)),
-        eta_max: Set(req.eta_max.unwrap_or(req.eta_min.unwrap_or(60)).max(req.eta_min.unwrap_or(0)).max(0)),
+        eta_max: Set(req
+            .eta_max
+            .unwrap_or(req.eta_min.unwrap_or(60))
+            .max(req.eta_min.unwrap_or(0))
+            .max(0)),
         sort_order: Set(req.sort_order.unwrap_or(0)),
         is_active: Set(req.is_active.unwrap_or(true)),
         created_at: Set(Some(now)),

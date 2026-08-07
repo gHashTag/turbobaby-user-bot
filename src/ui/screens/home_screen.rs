@@ -1,14 +1,16 @@
 use crate::trios::garden::{calculate_progress, GrowthStage, Plant};
 use crate::trios::i18n::{
-    t, tf, T_ADD_TO_CART, T_HOME_ADVENTURES, T_HOME_AR_HUNT, T_HOME_CATEGORIES, T_HOME_DAILY_QUEST,
-    T_HOME_GAME, T_HOME_GARDEN_CTA, T_HOME_GARDEN_GROWING,
-    T_HOME_GARDEN_HARVEST, T_HOME_GARDEN_TITLE, T_HOME_GARDEN_WATER, T_HOME_LOCATION_QUEST,
-    T_HOME_NO_SOTD, T_HOME_SETS_PACKS, T_HOME_SHARE, T_HOME_SOMMELIER, T_HOME_SOTD, T_HOME_SUBTITLE,
-    T_HOME_TREASURE_HUNT, T_HOME_WATCH_VIDEO, T_MENU_OFF, T_MENU_SET_LABEL, T_MENU_THC,
-    T_NAV_ACCESSORIES, T_NAV_GARDEN, T_NAV_MENU, T_NAV_SETS, T_NAV_TEA, T_TRUST_AGE, T_TRUST_GACP,
-    T_TRUST_MEDICAL, T_TRUST_SUPPORT,
+    t, tf, T_ADD_TO_CART, T_GARDEN_HARVEST_CTA, T_GARDEN_WATER_CTA, T_HOME_ADVENTURES,
+    T_HOME_AR_HUNT, T_HOME_CATEGORIES, T_HOME_DAILY_QUEST, T_HOME_GAME, T_HOME_GARDEN_CTA,
+    T_HOME_GARDEN_GROWING, T_HOME_GARDEN_HARVEST, T_HOME_GARDEN_TITLE, T_HOME_GARDEN_WATER,
+    T_HOME_LOCATION_QUEST, T_HOME_NO_SOTD, T_HOME_REORDER_CTA, T_HOME_REORDER_LAST,
+    T_HOME_REORDER_STATUS, T_HOME_SETS_PACKS, T_HOME_SHARE, T_HOME_SOMMELIER, T_HOME_SOTD,
+    T_HOME_SUBTITLE, T_HOME_TREASURE_HUNT, T_HOME_WATCH_VIDEO, T_MENU_OFF, T_MENU_SET_LABEL,
+    T_MENU_THC, T_NAV_ACCESSORIES, T_NAV_GARDEN, T_NAV_MENU, T_NAV_SETS, T_NAV_TEA, T_TRUST_AGE,
+    T_TRUST_GACP, T_TRUST_MEDICAL, T_TRUST_SUPPORT,
 };
 use crate::ui::api::context::api_base_url;
+use crate::ui::api::http::{fetch_text_authed, merge_server_cart, post_client_event};
 use crate::ui::assets;
 use crate::ui::components::bottom_nav::BottomNav;
 use crate::ui::components::skeleton::{Skeleton, SkeletonShape};
@@ -69,6 +71,77 @@ struct HomePacksResponse {
     sets: Vec<HomePack>,
 }
 
+/// Loop #15: lightweight order-detail DTO used by the proactive reorder deep-link.
+#[derive(Debug, Deserialize)]
+struct ReorderOrderDetailResponse {
+    order: ReorderOrder,
+}
+
+#[derive(Debug, Deserialize)]
+struct ReorderOrder {
+    items: Vec<ReorderOrderItem>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ReorderOrderItem {
+    strain_id: Option<String>,
+    strain_name: Option<String>,
+    accessory_id: Option<String>,
+    accessory_name: Option<String>,
+    tea_id: Option<String>,
+    tea_name: Option<String>,
+    set_id: Option<String>,
+    set_name: Option<String>,
+    quantity: f64,
+    #[serde(default)]
+    unit_price: Option<f64>,
+}
+
+fn reorder_item_to_cart_item(item: &ReorderOrderItem) -> Option<CartItem> {
+    let (id, name, item_type, price_hint) = if let Some(ref sid) = item.strain_id {
+        (
+            sid.clone(),
+            item.strain_name.clone().unwrap_or_else(|| "Strain".into()),
+            CartItemType::Strain,
+            item.unit_price.unwrap_or(0.0),
+        )
+    } else if let Some(ref set_id) = item.set_id {
+        (
+            set_id.clone(),
+            item.set_name.clone().unwrap_or_else(|| "Set".into()),
+            CartItemType::Set,
+            item.unit_price.unwrap_or(0.0),
+        )
+    } else if let Some(ref aid) = item.accessory_id {
+        (
+            aid.clone(),
+            item.accessory_name
+                .clone()
+                .unwrap_or_else(|| "Accessory".into()),
+            CartItemType::Accessory,
+            item.unit_price.unwrap_or(0.0),
+        )
+    } else if let Some(ref tid) = item.tea_id {
+        (
+            tid.clone(),
+            item.tea_name.clone().unwrap_or_else(|| "Drink".into()),
+            CartItemType::Tea,
+            item.unit_price.unwrap_or(0.0),
+        )
+    } else {
+        return None;
+    };
+    Some(CartItem {
+        id,
+        name,
+        price: price_hint,
+        quantity: item.quantity.max(1.0) as u32,
+        image_url: None,
+        item_type,
+        fulfillment: None,
+    })
+}
+
 /// Compact garden plant snapshot for the home widget. Mirrors the API shape
 /// returned by `GET /api/garden/plants` (see `src/ui/game/garden.rs`).
 #[derive(Debug, Clone, Deserialize)]
@@ -108,9 +181,42 @@ struct HomeGardenResponse {
     plants: Vec<HomeGardenPlant>,
 }
 
+/// Loop #16: compact user order for the home reorder widget.
+#[derive(Debug, Clone, Deserialize)]
+struct HomeOrder {
+    id: String,
+    status: String,
+    total: f64,
+}
+
+#[derive(Debug, Deserialize)]
+struct HomeOrdersResponse {
+    orders: Vec<HomeOrder>,
+}
+
+async fn fetch_home_last_order(
+    telegram_id: i64,
+    init_data: &str,
+) -> Result<Option<HomeOrder>, String> {
+    let base = api_base_url();
+    let url = format!("{}/api/orders/user/{}", base, telegram_id);
+    let (status, body) = crate::ui::api::http::fetch_text_authed_full(&url, init_data)
+        .await
+        .map_err(|e| format!("fetch orders: {e}"))?;
+    if !(200..300).contains(&status) {
+        return Err(format!("orders HTTP {status}"));
+    }
+    let resp = serde_json::from_str::<HomeOrdersResponse>(&body)
+        .map_err(|e| format!("orders parse: {e}"))?;
+    Ok(resp.orders.into_iter().next())
+}
+
 /// Fetch the user's active garden plant. Returns `Ok(None)` when the user has
 /// no plant yet — the widget should then show the empty-state CTA.
-async fn fetch_home_garden_plant(telegram_id: i64, init_data: &str) -> Result<Option<HomeGardenPlant>, ()> {
+async fn fetch_home_garden_plant(
+    telegram_id: i64,
+    init_data: &str,
+) -> Result<Option<HomeGardenPlant>, ()> {
     let base = api_base_url();
     let url = format!("{}/api/garden/plants?telegram_id={}", base, telegram_id);
     let (status, body) = crate::ui::api::http::fetch_text_authed_full(&url, init_data)
@@ -127,6 +233,32 @@ async fn fetch_home_garden_plant(telegram_id: i64, init_data: &str) -> Result<Op
     serde_json::from_str::<HomeGardenResponse>(&body)
         .map(|r| r.plants.into_iter().next())
         .map_err(|_| ())
+}
+
+fn status_color(status: &str) -> &'static str {
+    match status.to_lowercase().as_str() {
+        "pending" => "#ffe600",
+        "confirmed" => "#00e5ff",
+        "preparing" => "#ff9d00",
+        "ready" => "#39ff14",
+        "out_for_delivery" => "#00e5ff",
+        "completed" | "delivered" => "#39ff14",
+        "cancelled" | "rejected" => "#ff4757",
+        _ => "#8b8b9e",
+    }
+}
+
+fn status_label_key(status: &str) -> crate::trios::i18n::Key {
+    match status.to_lowercase().as_str() {
+        "pending" => crate::trios::i18n::T_ORDERS_STATUS_PENDING,
+        "confirmed" => crate::trios::i18n::T_ORDERS_STATUS_CONFIRMED,
+        "preparing" => crate::trios::i18n::T_ORDERS_STATUS_PREPARING,
+        "ready" => crate::trios::i18n::T_ORDERS_STATUS_READY,
+        "out_for_delivery" => crate::trios::i18n::T_ORDERS_STATUS_OUT_FOR_DELIVERY,
+        "completed" | "delivered" => crate::trios::i18n::T_ORDERS_STATUS_DELIVERED,
+        "cancelled" | "rejected" => crate::trios::i18n::T_ORDERS_STATUS_CANCELLED,
+        _ => crate::trios::i18n::T_ORDERS_STATUS_UNKNOWN,
+    }
 }
 
 fn category_emoji(cat: &str) -> &'static str {
@@ -252,7 +384,13 @@ pub fn HomeScreen() -> Element {
     // from the home route to the catalog screen that owns the product.
     let pending = use_context::<Signal<Option<SharedProduct>>>();
     let mut pending_order = use_context::<Signal<Option<String>>>();
+    let mut pending_cart = use_context::<Signal<bool>>();
+    let mut pending_reorder = use_context::<Signal<Option<String>>>();
     let nav = navigator();
+    let telegram_id = use_telegram_id();
+    let init_data = use_telegram_init_data();
+    let cart_for_reorder = use_context::<Signal<Cart>>();
+
     use_effect(move || {
         if let Some(target) = pending.read().clone() {
             // Navigate to the catalog screen that owns the shared product.
@@ -264,6 +402,55 @@ pub fn HomeScreen() -> Element {
             // Cycle #80: order deep link opens the dedicated detail screen.
             pending_order.set(None);
             nav.push(Route::OrderDetail { id: order_id });
+        }
+        // Loop #12: cart deep link sends the user straight to the cart.
+        if pending_cart() {
+            pending_cart.set(false);
+            nav.push(Route::Cart {});
+        }
+        // Loop #15: proactive reorder deep-link loads the order items into the
+        // server-side cart with current DB prices and lands on /cart.
+        let maybe_reorder = pending_reorder.read().clone();
+        if let Some(order_id) = maybe_reorder {
+            pending_reorder.set(None);
+            let tid = telegram_id.unwrap_or(0);
+            let init = init_data.clone();
+            let mut cart_sig = cart_for_reorder.clone();
+            let nav = nav.clone();
+            spawn(async move {
+                if tid == 0 {
+                    return;
+                }
+                let url = format!(
+                    "{}/api/orders/{}/details?telegram_id={}",
+                    api_base_url(),
+                    order_id,
+                    tid
+                );
+                if let Ok(text) = fetch_text_authed(&url, &init).await {
+                    if let Ok(resp) = serde_json::from_str::<ReorderOrderDetailResponse>(&text) {
+                        let items: Vec<CartItem> = resp
+                            .order
+                            .items
+                            .iter()
+                            .filter_map(reorder_item_to_cart_item)
+                            .collect();
+                        match merge_server_cart(&api_base_url(), &init, tid, &items).await {
+                            Ok(fresh_cart) => {
+                                cart_sig.set(fresh_cart);
+                            }
+                            Err(_) => {
+                                let mut local = Cart::new();
+                                for item in items {
+                                    local.add_item(item);
+                                }
+                                cart_sig.set(local);
+                            }
+                        }
+                        nav.push(Route::Cart {});
+                    }
+                }
+            });
         }
     });
 
@@ -324,13 +511,27 @@ pub fn HomeScreen() -> Element {
 
     let telegram_id = use_telegram_id();
     let init_data = use_telegram_init_data();
+    let init_data_for_garden = init_data.clone();
     let garden_resource = use_resource(move || {
         let tid = telegram_id;
-        let init = init_data.clone();
+        let init = init_data_for_garden.clone();
         async move {
             match tid {
                 Some(id) => fetch_home_garden_plant(id, &init).await.ok().flatten(),
                 None => None,
+            }
+        }
+    });
+
+    // Loop #16: last-order widget resource.
+    let init_data_for_orders = init_data.clone();
+    let orders_resource = use_resource(move || {
+        let tid = telegram_id;
+        let init = init_data_for_orders.clone();
+        async move {
+            match tid {
+                Some(id) if id > 0 => fetch_home_last_order(id, &init).await.ok().flatten(),
+                _ => None,
             }
         }
     });
@@ -367,41 +568,145 @@ pub fn HomeScreen() -> Element {
                         let emoji = progress.stage_emoji;
                         let stage_label = progress.stage_name;
                         let pct = progress.total_progress;
-                        let cta = if progress.is_ready_to_harvest {
-                            t(lang, T_HOME_GARDEN_HARVEST).to_string()
+                        let (cta, reminder_visible) = if progress.is_ready_to_harvest {
+                            (t(lang, T_HOME_GARDEN_HARVEST).to_string(), true)
                         } else if progress.can_water {
-                            t(lang, T_HOME_GARDEN_WATER).to_string()
+                            (t(lang, T_HOME_GARDEN_WATER).to_string(), true)
                         } else {
-                            t(lang, T_HOME_GARDEN_CTA).to_string()
+                            (t(lang, T_HOME_GARDEN_CTA).to_string(), false)
+                        };
+                        let reminder_text = if progress.is_ready_to_harvest {
+                            t(lang, T_GARDEN_HARVEST_CTA).to_string()
+                        } else {
+                            t(lang, T_GARDEN_WATER_CTA).to_string()
                         };
                         let growing = t(lang, T_HOME_GARDEN_GROWING).to_string();
                         let strain = plant.strain_name.clone();
                         rsx! {
-                            Link {
-                                to: Route::Garden {},
-                                style: "text-decoration:none;",
-                                div { style: "margin:0 16px 16px;background:linear-gradient(135deg,#1a1a2e,#16213e);border:4px solid #39ff14;box-shadow:4px 4px 0 #000;padding:14px;cursor:pointer;display:flex;align-items:center;gap:12px;",
-                                    div { style: "font-size:36px;line-height:1;", "{emoji}" }
-                                    div { style: "flex:1;min-width:0;",
-                                        div { style: "display:flex;align-items:center;gap:8px;margin-bottom:4px;",
-                                            span { style: "font-size:12px;font-weight:700;color:#39ff14;text-transform:uppercase;letter-spacing:1px;", {t(lang, T_HOME_GARDEN_TITLE)} }
-                                            span { style: "font-size:11px;color:#8b8b9e;", "{stage_label}" }
-                                        }
-                                        div { style: "font-size:14px;font-weight:700;color:#e8e8e8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:6px;", "{strain}" }
-                                        div { style: "display:flex;align-items:center;gap:8px;",
-                                            div { style: "flex:1;height:8px;background:#2a2a4a;border:2px solid #2a2a4a;overflow:hidden;",
-                                                div { style: "width:{pct}%;height:100%;background:linear-gradient(90deg,#39ff14,#2d9e0f);" }
+                            {
+                                let garden_kind = if progress.is_ready_to_harvest { "harvest" } else { "water" };
+                                rsx! {
+                                    Link {
+                                        to: Route::Garden {},
+                                        style: "text-decoration:none;",
+                                        onclick: move |_| {
+                                            let base = api_base_url();
+                                            let kind = garden_kind.to_string();
+                                            spawn(async move {
+                                                let _ = post_client_event(&base, "garden_reminder_clicked", &kind).await;
+                                            });
+                                        },
+                                            div { style: "margin:0 16px 16px;background:linear-gradient(135deg,#1a1a2e,#16213e);border:4px solid #39ff14;box-shadow:4px 4px 0 #000;padding:14px;cursor:pointer;display:flex;align-items:center;gap:12px;",
+                                            div { style: "font-size:36px;line-height:1;", "{emoji}" }
+                                            div { style: "flex:1;min-width:0;",
+                                                div { style: "display:flex;align-items:center;gap:8px;margin-bottom:4px;",
+                                                    span { style: "font-size:12px;font-weight:700;color:#39ff14;text-transform:uppercase;letter-spacing:1px;", {t(lang, T_HOME_GARDEN_TITLE)} }
+                                                    span { style: "font-size:11px;color:#8b8b9e;", "{stage_label}" }
+                                                }
+                                                div { style: "font-size:14px;font-weight:700;color:#e8e8e8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:6px;", "{strain}" }
+                                                div { style: "display:flex;align-items:center;gap:8px;",
+                                                    div { style: "flex:1;height:8px;background:#2a2a4a;border:2px solid #2a2a4a;overflow:hidden;",
+                                                        div { style: "width:{pct}%;height:100%;background:linear-gradient(90deg,#39ff14,#2d9e0f);" }
+                                                    }
+                                                    span { style: "font-size:12px;font-weight:700;color:#8b8b9e;min-width:38px;text-align:right;", "{pct}% {growing}" }
+                                                }
                                             }
-                                            span { style: "font-size:12px;font-weight:700;color:#8b8b9e;min-width:38px;text-align:right;", "{pct}% {growing}" }
+                                            div { style: "background:#39ff14;color:#000;padding:8px 12px;border:3px solid #2d9e0f;font-size:12px;font-weight:700;box-shadow:2px 2px 0 #000;white-space:nowrap;", "{cta}" }
+                                        }
+                                        if reminder_visible {
+                                            {
+                                                let reminder = reminder_text.clone();
+                                                rsx! {
+                                                    div { style: "margin-top:8px;background:#0f0f1a;border:2px dashed #ffe600;padding:8px 12px;font-size:12px;color:#ffe600;text-align:center;",
+                                                        "{reminder}"
+                                                    }
+                                                }
+                                            }
                                         }
                                     }
-                                    div { style: "background:#39ff14;color:#000;padding:8px 12px;border:3px solid #2d9e0f;font-size:12px;font-weight:700;box-shadow:2px 2px 0 #000;white-space:nowrap;", "{cta}" }
                                 }
                             }
                         }
                     }
                     // No plant yet (or not authenticated): keep the home
                     // screen clean rather than nagging.
+                    Some(None) | None => rsx! {},
+                }
+            }
+
+            // Loop #16: last-order widget — one-tap reorder surface.
+            {
+                match orders_resource.read_unchecked().clone() {
+                    Some(Some(order)) => {
+                        let lang = crate::ui::lang::current_lang();
+                        let short_id: String = order
+                            .id
+                            .chars()
+                            .rev()
+                            .take(6)
+                            .collect::<Vec<_>>()
+                            .into_iter()
+                            .rev()
+                            .collect();
+                        let status_label = status_label_key(&order.status);
+                        let status_color = status_color(&order.status);
+                        let total_str = crate::trios::pricing::format_baht(order.total);
+                        let order_id_for_reorder = order.id.clone();
+                        let init_for_reorder = init_data.clone();
+                        let tid_for_reorder = telegram_id.unwrap_or(0);
+                        let cart_for_reorder = cart.clone();
+                        let nav_for_reorder = nav.clone();
+                        let reorder_cta = t(lang, T_HOME_REORDER_CTA).to_string();
+                        rsx! {
+                            div { style: "margin:0 16px 16px;background:linear-gradient(135deg,#1a1a2e,#16213e);border:4px solid {status_color};box-shadow:4px 4px 0 #000;padding:14px;cursor:pointer;display:flex;align-items:center;gap:12px;",
+                                Link {
+                                    to: Route::OrderDetail { id: order.id.clone() },
+                                    style: "display:flex;align-items:center;gap:12px;flex:1;min-width:0;text-decoration:none;",
+                                    div { style: "font-size:36px;line-height:1;", "🔄" }
+                                    div { style: "flex:1;min-width:0;",
+                                        div { style: "display:flex;align-items:center;gap:8px;margin-bottom:4px;",
+                                            span { style: "font-size:12px;font-weight:700;color:{status_color};text-transform:uppercase;letter-spacing:1px;", {t(lang, T_HOME_REORDER_LAST)} }
+                                            span { style: "font-size:11px;color:#8b8b9e;", "{t(lang, T_HOME_REORDER_STATUS)}: {t(lang, status_label)}" }
+                                        }
+                                        div { style: "font-size:14px;font-weight:700;color:#e8e8e8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:6px;",
+                                            "{tf(lang, crate::trios::i18n::T_ORDERS_ORDER, &[short_id.clone()])} · {total_str}"
+                                        }
+                                    }
+                                }
+                                button {
+                                    style: "background:#39ff14;color:#000;padding:8px 12px;border:3px solid #2d9e0f;font-size:12px;font-weight:700;box-shadow:2px 2px 0 #000;white-space:nowrap;cursor:pointer;",
+                                    onclick: move |e: Event<MouseData>| {
+                                        e.stop_propagation();
+                                        let oid = order_id_for_reorder.clone();
+                                        let init = init_for_reorder.clone();
+                                        let tid = tid_for_reorder;
+                                        let mut cart_sig = cart_for_reorder.clone();
+                                        let nav = nav_for_reorder.clone();
+                                        let base = api_base_url();
+                                        spawn(async move {
+                                            let detail_url = format!("{}/api/orders/{}/details?telegram_id={}", base, oid, tid);
+                                            if let Ok(text) = fetch_text_authed(&detail_url, &init).await {
+                                                if let Ok(resp) = serde_json::from_str::<ReorderOrderDetailResponse>(&text) {
+                                                    let items: Vec<CartItem> = resp.order.items.iter().filter_map(reorder_item_to_cart_item).collect();
+                                                    match merge_server_cart(&base, &init, tid, &items).await {
+                                                        Ok(fresh_cart) => { cart_sig.set(fresh_cart); }
+                                                        Err(_) => {
+                                                            let mut local = Cart::new();
+                                                            for item in items { local.add_item(item); }
+                                                            cart_sig.set(local);
+                                                        }
+                                                    }
+                                                    let _ = post_client_event(&base, "reorder_clicked", "home").await;
+                                                    nav.push(Route::Cart {});
+                                                }
+                                            }
+                                        });
+                                    },
+                                    "{reorder_cta}"
+                                }
+                            }
+                        }
+                    }
                     Some(None) | None => rsx! {},
                 }
             }

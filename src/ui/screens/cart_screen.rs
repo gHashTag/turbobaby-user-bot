@@ -1,16 +1,20 @@
 // Cart Screen — Interactive with global Cart signal
 use crate::trios::i18n::{
-    t, tf,
-    T_CART_BACK_MENU, T_CART_BROWSE_MENU, T_CART_BROWSE_SETS, T_CART_CHECKOUT,
-    T_CART_DECREASE_QTY, T_CART_DELIVERY, T_CART_DELIVERY_FREE, T_CART_DINE_IN,
+    t, tf, T_CART_BACK_MENU, T_CART_BONUS_NUDGE, T_CART_BROWSE_MENU, T_CART_BROWSE_SETS,
+    T_CART_CHECKOUT, T_CART_DECREASE_QTY, T_CART_DELIVERY, T_CART_DELIVERY_FREE, T_CART_DINE_IN,
     T_CART_EMPTY, T_CART_EMPTY_DESC, T_CART_IMAGE_ALT, T_CART_ITEMS, T_CART_REMOVE,
-    T_CART_SUBTOTAL, T_CART_TAKEAWAY, T_CART_TITLE, T_PLACE_ORDER, T_TOTAL,
+    T_CART_SUBTOTAL, T_CART_SYNCING, T_CART_TAKEAWAY, T_CART_TITLE, T_PLACE_ORDER, T_TOTAL,
 };
+use crate::ui::api::context::api_base_url;
+use crate::ui::api::http::fetch_text_authed;
+use crate::ui::api::types::ServerCart;
 use crate::ui::components::bottom_nav::BottomNav;
 use crate::ui::components::empty_state::EmptyState;
 use crate::ui::routes::Route;
 use crate::ui::state::{Cart, CartItem, CartItemType};
-use crate::ui::telegram::{TelegramApp, HapticNotification, use_main_button_click};
+use crate::ui::telegram::{
+    use_main_button_click, use_telegram_id, use_telegram_init_data, HapticNotification, TelegramApp,
+};
 use dioxus::prelude::*;
 
 fn format_price(price: f64) -> String {
@@ -20,7 +24,7 @@ fn format_price(price: f64) -> String {
 
 #[component]
 pub fn CartScreen() -> Element {
-    let cart = use_context::<Signal<Cart>>();
+    let mut cart = use_context::<Signal<Cart>>();
     let items = cart.read().items.clone();
     let total = cart.read().total;
     let item_count: u32 = items.iter().map(|i| i.quantity).sum();
@@ -33,6 +37,92 @@ pub fn CartScreen() -> Element {
     let items_label = tf(lang, T_CART_ITEMS, &[item_count.to_string()]);
     let tg = TelegramApp::init();
     let total_str = crate::trios::pricing::format_baht(total);
+    let telegram_id = use_telegram_id();
+    let init_data = use_telegram_init_data();
+
+    // Loop #14: surface the customer's bonus balance on the cart screen to
+    // nudge them toward checkout where it can be redeemed.
+    let loyalty_res = {
+        let init = init_data.clone();
+        use_resource(move || {
+            let init = init.clone();
+            async move {
+                let tid = telegram_id?;
+                let url = format!("{}/api/loyalty/{}", api_base_url(), tid);
+                let text = fetch_text_authed(&url, &init).await.ok()?;
+                #[derive(serde::Deserialize)]
+                struct ProfileResp {
+                    bonus_balance: f64,
+                }
+                #[derive(serde::Deserialize)]
+                struct LoyaltyResp {
+                    profile: ProfileResp,
+                }
+                serde_json::from_str::<LoyaltyResp>(&text).ok()
+            }
+        })
+    };
+    // Loop #15: show a server-cart sync indicator so the user knows when the
+    // cart is being reconciled with the server. If the local cart is empty and
+    // the server has items, recover them here (the startup path in app.rs also
+    // does this, but a direct deep-link to /cart may arrive after that effect).
+    let server_cart_res: Resource<Result<ServerCart, String>> = use_resource(move || {
+        let init = init_data.clone();
+        async move {
+            let tid = telegram_id.ok_or_else(|| {
+                crate::trios::api_errors::friendly_response_error(
+                    crate::ui::lang::current_lang(),
+                    0,
+                )
+            })?;
+            let url = format!("{}/api/cart?telegram_id={}", api_base_url(), tid);
+            let text = fetch_text_authed(&url, &init).await.map_err(|_| {
+                crate::trios::api_errors::friendly_response_error(
+                    crate::ui::lang::current_lang(),
+                    0,
+                )
+            })?;
+            serde_json::from_str::<ServerCart>(&text).map_err(|_| {
+                crate::trios::api_errors::friendly_response_error(
+                    crate::ui::lang::current_lang(),
+                    0,
+                )
+            })
+        }
+    });
+    use_effect(move || {
+        let maybe = server_cart_res.read().as_ref().cloned();
+        if let Some(Ok(server_cart)) = maybe {
+            if cart.read().items.is_empty() && !server_cart.items.is_empty() {
+                let mut recovered = Cart::new();
+                for item in server_cart.items {
+                    if let Some(ci) = CartItem::from_server(item) {
+                        recovered.add_item(ci);
+                    }
+                }
+                cart.set(recovered);
+            }
+        }
+    });
+    let is_syncing = server_cart_res.read().is_none();
+
+    let bonus_balance = loyalty_res
+        .read()
+        .as_ref()
+        .and_then(|opt| opt.as_ref())
+        .map(|r| r.profile.bonus_balance)
+        .unwrap_or(0.0)
+        .max(0.0);
+    let bonus_nudge_text = if bonus_balance > 0.0 {
+        Some(tf(
+            lang,
+            T_CART_BONUS_NUDGE,
+            &[format!("{bonus_balance:.0}")],
+        ))
+    } else {
+        None
+    };
+
     let nav = navigator();
     use_main_button_click(move || {
         if !cart.read().items.is_empty() {
@@ -63,6 +153,12 @@ pub fn CartScreen() -> Element {
                 h1 { style: "font-size: 24px; font-weight: 800; color: #39ff14; text-shadow: 3px 3px 0 #000, 0 0 10px rgba(57,255,20,0.5); letter-spacing: 2px;", "{cart_title}" }
                 if !items.is_empty() {
                     p { style: "font-size: 15px; color: #8b8b9e; margin-top: 4px;", "{items_label}" }
+                }
+                if is_syncing {
+                    div { style: "margin-top: 10px; font-size: 13px; color: #8b8b9e; display: flex; align-items: center; justify-content: center; gap: 6px;",
+                        span { "🔄" }
+                        "{t(lang, T_CART_SYNCING)}"
+                    }
                 }
             }
 
@@ -123,6 +219,11 @@ pub fn CartScreen() -> Element {
                                 div { style: "display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 15px;",
                                     span { style: "color: #8b8b9e;", "{t(lang, T_CART_DELIVERY)}" }
                                     span { style: "color: #39ff14;", "{t(lang, T_CART_DELIVERY_FREE)}" }
+                                }
+                                if let Some(ref nudge) = bonus_nudge_text {
+                                    div { style: "display: flex; justify-content: space-between; font-size: 13px; color: #39ff14; margin-bottom: 6px;",
+                                        span { "{nudge}" }
+                                    }
                                 }
                                 div { style: "display: flex; justify-content: space-between; font-size: 15px; font-weight: 800; padding-top: 6px; border-top: 1px solid #2a2a4a; margin-top: 6px;",
                                     span { "{t(lang, T_TOTAL)}" }

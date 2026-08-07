@@ -49,9 +49,10 @@ pub fn Quest() -> Element {
             //    listener that drops the scanned text into `window.__woody_qr`
             //    and closes the popup. We unbind the listener immediately so
             //    consecutive scans don't double-fire.
-            let qr_prompt = serde_json::Value::String(t(lang, T_SCAN_QR_PROMPT).to_string()).to_string();
-            let _ = eval(
-                &format!(r#"
+            let qr_prompt =
+                serde_json::Value::String(t(lang, T_SCAN_QR_PROMPT).to_string()).to_string();
+            let _ = eval(&format!(
+                r#"
                 window.__woody_qr = '';
                 if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.showScanQrPopup) {{
                     var tg = window.Telegram.WebApp;
@@ -66,8 +67,8 @@ pub fn Quest() -> Element {
                     tg.onEvent('qrTextReceived', handler);
                     tg.showScanQrPopup({{text: {qr_prompt}}});
                 }}
-            "#),
-            );
+            "#
+            ));
             scanning_c.set(true);
             scan_result_c.set(String::new());
 

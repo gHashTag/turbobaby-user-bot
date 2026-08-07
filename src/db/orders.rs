@@ -83,7 +83,10 @@ pub(crate) fn cashback_pct_for_tier(config: &serde_json::Value, tier: &str) -> f
         "bronze" => 5.0,
         _ => 2.0,
     };
-    let raw = config.get(key).cloned().unwrap_or_else(|| serde_json::json!(null));
+    let raw = config
+        .get(key)
+        .cloned()
+        .unwrap_or_else(|| serde_json::json!(null));
     let pct = if raw.is_array() {
         // `progressive_cashback` is an array indexed by completed-order
         // count. Without that context, use the first (lowest) value.
@@ -94,7 +97,11 @@ pub(crate) fn cashback_pct_for_tier(config: &serde_json::Value, tier: &str) -> f
     } else {
         raw.as_f64().unwrap_or(default)
     };
-    if pct.is_finite() && pct >= 0.0 { pct } else { default }
+    if pct.is_finite() && pct >= 0.0 {
+        pct
+    } else {
+        default
+    }
 }
 
 /// only `commit()` on the happy path.
@@ -276,19 +283,28 @@ pub async fn complete_order_and_update_loyalty(
         ))
         .await?;
     let config: serde_json::Value = config_row
-        .and_then(|r| r.try_get::<Option<serde_json::Value>>("", "config").ok().flatten())
+        .and_then(|r| {
+            r.try_get::<Option<serde_json::Value>>("", "config")
+                .ok()
+                .flatten()
+        })
         .unwrap_or_else(|| serde_json::json!({}));
     let cashback_pct = cashback_pct_for_tier(&config, &tier).min(100.0);
     let cashback_amount = (total * cashback_pct / 100.0).max(0.0);
     if cashback_amount > 0.01 {
-        use crate::db::entities::bonus_transaction::{ActiveModel as BtAm, Entity as BonusTxEntity};
+        use crate::db::entities::bonus_transaction::{
+            ActiveModel as BtAm, Entity as BonusTxEntity,
+        };
         let tx_id = uuid::Uuid::new_v4().to_string();
         let bt_am = BtAm {
             id: Set(tx_id),
             telegram_id: Set(cid),
             amount: Set(cashback_amount),
             tx_type: Set("order_cashback".to_string()),
-            description: Set(Some(format!("Cashback {}% for order {}", cashback_pct, order_id))),
+            description: Set(Some(format!(
+                "Cashback {}% for order {}",
+                cashback_pct, order_id
+            ))),
             related_order_id: Set(Some(order_id.to_string())),
             ..Default::default()
         };

@@ -1,16 +1,16 @@
 use crate::trios::i18n::{
     t, tf, T_ADD_TO_CART, T_FILTER_ALL, T_MENU_BEST_BADGE, T_MENU_CBD, T_MENU_DESC,
     T_MENU_FILTER_HYBRID, T_MENU_FILTER_INDICA, T_MENU_FILTER_SATIVA, T_MENU_FLAVOR_PREFIX,
-    T_MENU_NEW_ARRIVALS, T_MENU_NEW_BADGE, T_MENU_NO_RESULTS, T_MENU_PER_GRAM, T_MENU_PRICE_REQUEST,
-    T_MENU_SALE_BADGE, T_MENU_SOLD_OUT, T_MENU_SOTD_BADGE, T_MENU_SOTD_HERO, T_MENU_SORT_NAME,
-    T_MENU_SORT_PRICE_ASC, T_MENU_SORT_PRICE_DESC, T_MENU_SORT_THC, T_MENU_SORT_TOP, T_MENU_THC,
-    T_MENU_TITLE, T_SEARCH_PLACEHOLDER,
+    T_MENU_NEW_ARRIVALS, T_MENU_NEW_BADGE, T_MENU_NO_RESULTS, T_MENU_PER_GRAM,
+    T_MENU_PRICE_REQUEST, T_MENU_SALE_BADGE, T_MENU_SOLD_OUT, T_MENU_SORT_NAME,
+    T_MENU_SORT_PRICE_ASC, T_MENU_SORT_PRICE_DESC, T_MENU_SORT_THC, T_MENU_SORT_TOP,
+    T_MENU_SOTD_BADGE, T_MENU_SOTD_HERO, T_MENU_THC, T_MENU_TITLE, T_SEARCH_PLACEHOLDER,
 };
 use crate::ui::api::context::api_base_url;
 use crate::ui::components::bottom_nav::BottomNav;
 use crate::ui::components::card_media::CardMedia;
-use crate::ui::components::skeleton::{Skeleton, SkeletonShape};
 use crate::ui::components::product_detail_modal::ProductDetailModal;
+use crate::ui::components::skeleton::{Skeleton, SkeletonShape};
 use crate::ui::components::video_modal::VideoModal;
 use crate::ui::routes::Route;
 use crate::ui::share::{share_product, ProductKind, SharedProduct};

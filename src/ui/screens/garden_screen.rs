@@ -1,7 +1,7 @@
 // Garden Screen — Plant growing + Woody Catch game
 use crate::trios::i18n::{
-    t, T_GARDEN_ONBOARD_CTA, T_GARDEN_ONBOARD_STEP1, T_GARDEN_ONBOARD_STEP2, T_GARDEN_ONBOARD_STEP3,
-    T_GARDEN_ONBOARD_TITLE, T_GARDEN_TAB_GAME, T_GARDEN_TAB_GARDEN,
+    t, T_GARDEN_ONBOARD_CTA, T_GARDEN_ONBOARD_STEP1, T_GARDEN_ONBOARD_STEP2,
+    T_GARDEN_ONBOARD_STEP3, T_GARDEN_ONBOARD_TITLE, T_GARDEN_TAB_GAME, T_GARDEN_TAB_GARDEN,
 };
 use crate::ui::components::bottom_nav::BottomNav;
 use crate::ui::components::lazy_screen::LazyScreen;

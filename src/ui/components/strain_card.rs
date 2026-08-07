@@ -1,5 +1,8 @@
 // Strain Card Component for Menu
-use crate::trios::i18n::{t, T_MENU_SOLD_OUT, T_STRAIN_BADGE_BEST, T_STRAIN_BADGE_NEW, T_STRAIN_BADGE_SALE, T_STRAIN_BADGE_SOTD, T_ADD_TO_CART};
+use crate::trios::i18n::{
+    t, T_ADD_TO_CART, T_MENU_SOLD_OUT, T_STRAIN_BADGE_BEST, T_STRAIN_BADGE_NEW,
+    T_STRAIN_BADGE_SALE, T_STRAIN_BADGE_SOTD,
+};
 use crate::ui::api::types::Strain;
 use crate::ui::components::{Button, ButtonVariant};
 use crate::ui::lang;

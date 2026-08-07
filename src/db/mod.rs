@@ -265,6 +265,22 @@ const MIGRATIONS: &[(&str, &str)] = &[
         "060_delivery_zones.sql",
         include_str!("../../migrations/060_delivery_zones.sql"),
     ),
+    (
+        "061_cart_abandonment.sql",
+        include_str!("../../migrations/061_cart_abandonment.sql"),
+    ),
+    (
+        "062_cart_recovery_variant.sql",
+        include_str!("../../migrations/062_cart_recovery_variant.sql"),
+    ),
+    (
+        "063_client_event_logs.sql",
+        include_str!("../../migrations/063_client_event_logs.sql"),
+    ),
+    (
+        "064_bonus_tx_related_order_index.sql",
+        include_str!("../../migrations/064_bonus_tx_related_order_index.sql"),
+    ),
 ];
 
 /// Columns the catalog endpoints SELECT that were added by *later* migrations

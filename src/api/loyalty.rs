@@ -24,7 +24,10 @@ pub(crate) fn routes() -> Router<AppState> {
         .route("/loyalty/:telegram_id", get(get_profile))
         .route("/loyalty/:telegram_id/bonus", post(add_bonus))
         .route("/loyalty/:telegram_id/use-bonus", post(use_bonus))
-        .route("/loyalty/:telegram_id/bonus-history", get(get_bonus_history))
+        .route(
+            "/loyalty/:telegram_id/bonus-history",
+            get(get_bonus_history),
+        )
         .route("/loyalty/leaderboard", get(get_leaderboard))
         .route("/loyalty/config", get(get_loyalty_config))
         .route("/loyalty/config", post(update_loyalty_config))
@@ -78,7 +81,34 @@ async fn get_profile(
     crate::api::auth::check_owner(&headers, &state, telegram_id)?;
     check_not_blocked(&state, telegram_id).await?;
     // SeaORM-версия: sqlx безопасно читает NUMERIC в f64.
-    use sea_orm::{ConnectionTrait, DbBackend, Statement};
+    use sea_orm::{ConnectionTrait, DbBackend, EntityTrait, Statement};
+
+    // Loop #14: read the single loyalty_config row so the UI shows the same
+    // thresholds/cashback/max-usage the backend uses to complete orders.
+    let config: serde_json::Value = {
+        use crate::db::entities::loyalty_config::Entity as LcEntity;
+        LcEntity::find_by_id(1)
+            .one(&state.db.orm)
+            .await
+            .map_err(|e| {
+                tracing::error!("get_profile loyalty_config: {e}");
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?
+            .map(|m| m.config)
+            .unwrap_or_else(|| {
+                serde_json::json!({
+                    "bronze_threshold": 3000.0,
+                    "silver_threshold": 10000.0,
+                    "gold_threshold": 30000.0,
+                    "bronze_cashback_pct": 5.0,
+                    "silver_cashback_pct": 7.0,
+                    "gold_cashback_pct": 10.0,
+                    "max_bonus_usage_pct": 30.0,
+                    "referral_bonus": 200.0
+                })
+            })
+    };
+
     let stmt = Statement::from_sql_and_values(
         DbBackend::Postgres,
         "SELECT lp.telegram_id, lp.total_spent::float8 AS total_spent, lp.bonus_balance::float8 AS bonus_balance, lp.tier, lp.referral_code, lp.referred_by, lp.referral_count, lp.first_purchase_at, lp.manager_telegram_id, lp.is_blocked, COUNT(o.id)::int4 AS orders_count FROM loyalty_profiles lp LEFT JOIN orders o ON o.telegram_id = lp.telegram_id WHERE lp.telegram_id = $1 GROUP BY lp.telegram_id",
@@ -102,11 +132,50 @@ async fn get_profile(
                 .filter(|v| v.is_finite())
                 .unwrap_or(0.0)
                 .max(0.0);
+            let tier = r.try_get::<String>("", "tier").unwrap_or_default();
+            let cashback_pct = crate::db::orders::cashback_pct_for_tier(&config, &tier);
+            let max_bonus_usage_pct = config
+                .get("max_bonus_usage_pct")
+                .and_then(|v| v.as_f64())
+                .filter(|v| v.is_finite() && *v >= 0.0 && *v <= 100.0)
+                .unwrap_or(30.0);
+
+            let thresholds: Vec<(&str, f64)> = vec![
+                (
+                    "bronze",
+                    config
+                        .get("bronze_threshold")
+                        .and_then(|v| v.as_f64())
+                        .unwrap_or(3000.0),
+                ),
+                (
+                    "silver",
+                    config
+                        .get("silver_threshold")
+                        .and_then(|v| v.as_f64())
+                        .unwrap_or(10000.0),
+                ),
+                (
+                    "gold",
+                    config
+                        .get("gold_threshold")
+                        .and_then(|v| v.as_f64())
+                        .unwrap_or(30000.0),
+                ),
+            ];
+            let spent = total_spent.unwrap_or(0.0);
+            let (next_tier, next_threshold) = thresholds
+                .iter()
+                .filter(|(_, t)| *t > spent)
+                .min_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal))
+                .map(|(name, t)| (*name, *t))
+                .unwrap_or(("max", spent));
+
             let profile = json!({
                 "telegram_id": r.try_get::<i64>("", "telegram_id").unwrap_or(0),
                 "total_spent": total_spent,
                 "bonus_balance": bonus_balance,
-                "tier": r.try_get::<String>("", "tier").unwrap_or_default(),
+                "tier": tier,
                 "referral_code": r.try_get::<Option<String>>("", "referral_code").ok().flatten(),
                 "referred_by": r.try_get::<Option<i64>>("", "referred_by").ok().flatten(),
                 "referral_count": r.try_get::<i32>("", "referral_count").unwrap_or(0),
@@ -115,7 +184,15 @@ async fn get_profile(
                 "is_blocked": r.try_get::<bool>("", "is_blocked").unwrap_or(false),
                 "orders_count": r.try_get::<i32>("", "orders_count").unwrap_or(0),
             });
-            Ok(Json(json!({ "profile": profile })))
+            Ok(Json(json!({
+                "profile": profile,
+                "config": {
+                    "cashback_pct": cashback_pct,
+                    "max_bonus_usage_pct": max_bonus_usage_pct,
+                    "next_tier": next_tier,
+                    "next_threshold": next_threshold,
+                }
+            })))
         }
         None => Err(StatusCode::NOT_FOUND),
     }

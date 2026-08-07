@@ -39,7 +39,11 @@ pub(crate) struct TelegramUser {
 /// 7. Compare expected_hash with received `hash` (constant-time)
 pub(crate) fn validate_init_data(init_data: &str, bot_token: &str) -> Option<TelegramUser> {
     let info = validate_init_data_debug(init_data, bot_token);
-    if info.ok { info.user } else { None }
+    if info.ok {
+        info.user
+    } else {
+        None
+    }
 }
 
 /// Detailed diagnostics returned by `validate_init_data_debug`.
@@ -597,10 +601,7 @@ fn extract_init_data_user_id_and_auth_date(init_data: &str) -> Option<(i64, i64)
 /// Lenient fallback: accept the request when initData is present, its decoded
 /// `user.id` matches `expected_telegram_id`, and `auth_date` is within the
 /// last 24 hours. Used by `check_owner` when strict HMAC validation fails.
-fn lenient_owner_verify(
-    init_data: &str,
-    expected_telegram_id: i64,
-) -> Result<i64, StatusCode> {
+fn lenient_owner_verify(init_data: &str, expected_telegram_id: i64) -> Result<i64, StatusCode> {
     let Some((user_id, auth_date)) = extract_init_data_user_id_and_auth_date(init_data) else {
         crate::metrics::auth_failure("invalid_init_data");
         return Err(StatusCode::UNAUTHORIZED);

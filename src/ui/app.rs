@@ -2,13 +2,17 @@
 //
 // Cart signal is shared across all screens via context.
 
+use crate::ui::api::context::api_base_url;
 use crate::ui::api::context::ApiClientProvider;
 use crate::ui::api::http::fetch_text_authed;
 use crate::ui::api::types::ServerCart;
 use crate::ui::components::{install_error_handlers, ErrorOverlay, JsErrorItem};
 use crate::ui::routes::Routes;
-use crate::ui::share::{parse_order_start_param, parse_start_param, SharedProduct};
-use crate::ui::state::{Cart, CartItem, CartItemType};
+use crate::ui::share::{
+    parse_cart_start_param, parse_order_start_param, parse_reorder_start_param, parse_start_param,
+    SharedProduct,
+};
+use crate::ui::state::{Cart, CartItem};
 use crate::ui::telegram::TelegramProvider;
 use dioxus::prelude::*;
 use web_sys;
@@ -100,7 +104,7 @@ pub fn App() -> Element {
                         let items: Vec<CartItem> = server_cart
                             .items
                             .into_iter()
-                            .filter_map(server_item_to_cart_item)
+                            .filter_map(CartItem::from_server)
                             .collect();
                         let mut recovered = Cart::new();
                         for item in items {
@@ -127,6 +131,17 @@ pub fn App() -> Element {
     use_context_provider(|| Signal::new(None::<String>));
     let pending_order = use_context::<Signal<Option<String>>>();
 
+    // Cart deep-link target parsed from Telegram.WebApp.initDataUnsafe.start_param.
+    // Routes renders a small navigator that sends the user to /cart when true.
+    use_context_provider(|| Signal::new(false));
+    let pending_cart = use_context::<Signal<bool>>();
+
+    // Reorder deep-link target: `startapp=reorder__{order_id}`. The home screen
+    // fetches the order details, merges them into the server cart, and navigates
+    // to the cart for one-tap review.
+    use_context_provider(|| Signal::new(None::<String>));
+    let pending_reorder = use_context::<Signal<Option<String>>>();
+
     use_effect(move || {
         install_error_handlers(errors);
     });
@@ -136,12 +151,46 @@ pub fn App() -> Element {
     use_hook(move || {
         let mut pending = pending_shared.clone();
         let mut pending_order_id = pending_order.clone();
+        let mut pending_cart_flag = pending_cart.clone();
+        let mut pending_reorder_id = pending_reorder.clone();
         spawn(async move {
             for _ in 0..30 {
-                if pending.read().is_some() || pending_order_id.read().is_some() {
+                if pending.read().is_some()
+                    || pending_order_id.read().is_some()
+                    || pending_cart_flag()
+                    || pending_reorder_id.read().is_some()
+                {
                     return;
                 }
                 if let Some(param) = crate::ui::telegram::TelegramApp::init().start_param() {
+                    if let Some(order_id) = parse_reorder_start_param(&param) {
+                        #[cfg(target_arch = "wasm32")]
+                        web_sys::console::log_1(
+                            &format!("[deeplink] resolved reorder {}", order_id).into(),
+                        );
+                        pending_reorder_id.set(Some(order_id));
+                        return;
+                    }
+                    if let Some(attribution) = parse_cart_start_param(&param) {
+                        #[cfg(target_arch = "wasm32")]
+                        web_sys::console::log_1(
+                            &format!("[deeplink] resolved cart attribution={}", attribution).into(),
+                        );
+                        pending_cart_flag.set(true);
+                        // Loop #13: report the deep-link open back to the
+                        // server with the attribution source (e.g. A/B variant).
+                        let source = attribution.to_string();
+                        let base = api_base_url();
+                        spawn(async move {
+                            let _ = crate::ui::api::http::post_client_event(
+                                &base,
+                                "cart_deep_link_opened",
+                                &source,
+                            )
+                            .await;
+                        });
+                        return;
+                    }
                     if let Some(product) = parse_start_param(&param) {
                         #[cfg(target_arch = "wasm32")]
                         web_sys::console::log_1(
@@ -180,28 +229,4 @@ pub fn App() -> Element {
             }
         }
     }
-}
-
-#[cfg(target_arch = "wasm32")]
-fn server_item_to_cart_item(item: crate::ui::api::types::ServerCartItem) -> Option<CartItem> {
-    let item_type = match item.kind.as_str() {
-        "strain" => CartItemType::Strain,
-        "accessory" => CartItemType::Accessory,
-        "tea" => CartItemType::Tea,
-        "set" => CartItemType::Set,
-        _ => return None,
-    };
-    let quantity = item.quantity.max(0) as u32;
-    if quantity == 0 {
-        return None;
-    }
-    Some(CartItem {
-        id: item.catalog_id,
-        name: item.name,
-        price: if item.unit_price.is_finite() { item.unit_price.max(0.0) } else { 0.0 },
-        quantity,
-        image_url: item.image_url,
-        item_type,
-        fulfillment: None,
-    })
 }

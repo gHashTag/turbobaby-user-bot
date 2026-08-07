@@ -6,6 +6,8 @@ mod api;
 #[cfg(not(target_arch = "wasm32"))]
 mod bot;
 #[cfg(not(target_arch = "wasm32"))]
+mod cart_abandonment;
+#[cfg(not(target_arch = "wasm32"))]
 mod config;
 #[cfg(not(target_arch = "wasm32"))]
 mod db;
@@ -519,6 +521,20 @@ async fn main() -> Result<()> {
             garden_reminder_bot,
             garden_reminder_config,
             21_600,
+        );
+    }
+
+    // Loop #12: abandoned-cart reminders. Every 5 minutes look for carts
+    // with items that haven't been touched in 10 minutes and send one nudge.
+    {
+        let cart_abandonment_bot = bot_arc_for_state.clone();
+        let cart_abandonment_orm = db.orm.clone();
+        let cart_abandonment_config = config.clone();
+        crate::cart_abandonment::spawn_cart_abandonment_reminder_loop(
+            cart_abandonment_orm,
+            cart_abandonment_bot,
+            cart_abandonment_config,
+            300,
         );
     }
 

@@ -138,6 +138,72 @@ pub fn event_waitlist_promoted() {
     counter!("event_waitlist_promoted_total").increment(1);
 }
 
+/// Loop #12/#13: abandoned-cart reminder sent to a customer. Track volume and
+/// A/B variant so we can correlate sends with recovered orders.
+pub fn cart_abandonment_reminder_sent(variant: &str) {
+    counter!(
+        "cart_abandonment_reminder_sent_total",
+        "variant" => variant.to_string()
+    )
+    .increment(1);
+}
+
+/// Loop #13: second nudge (24h) sent.
+pub fn cart_abandonment_second_nudge_sent(variant: &str) {
+    counter!(
+        "cart_abandonment_second_nudge_sent_total",
+        "variant" => variant.to_string()
+    )
+    .increment(1);
+}
+
+/// Loop #12/#16: customer tapped the one-tap reorder CTA on an order card/detail.
+pub fn reorder_clicked(source: &str) {
+    counter!("reorder_clicked_total", "source" => source.to_string()).increment(1);
+}
+
+/// Loop #16: garden reminder CTA (water/harvest) was shown and tapped on Home.
+pub fn garden_reminder_clicked(kind: &str) {
+    counter!("garden_reminder_clicked_total", "kind" => kind.to_string()).increment(1);
+}
+
+/// Loop #12: customer opened the Mini App via a cart deep-link reminder.
+pub fn cart_deep_link_opened(variant: &str) {
+    counter!(
+        "cart_deep_link_opened_total",
+        "variant" => variant.to_string()
+    )
+    .increment(1);
+}
+
+/// Loop #15: funnel instrumentation for the checkout flow.
+pub fn checkout_started() {
+    counter!("checkout_started_total").increment(1);
+}
+
+pub fn checkout_completed() {
+    counter!("checkout_completed_total").increment(1);
+}
+
+pub fn checkout_error(reason: &str) {
+    counter!("checkout_error_total", "reason" => reason.to_string()).increment(1);
+}
+
+pub fn bonus_applied(amount: f64) {
+    counter!("bonus_applied_total").increment(1);
+    gauge!("bonus_applied_amount").set(amount);
+}
+
+pub fn stars_applied(amount: i64) {
+    counter!("stars_applied_total").increment(1);
+    gauge!("stars_applied_amount").set(amount as f64);
+}
+
+pub fn garden_reward_applied(discount: f64) {
+    counter!("garden_reward_applied_total").increment(1);
+    gauge!("garden_reward_discount").set(discount);
+}
+
 pub fn event_shared(kind: &str) {
     counter!("events_shared_total", "kind" => kind.to_string()).increment(1);
 }
@@ -269,7 +335,7 @@ mod metric_wiring_tests {
     /// Metric helpers that exist for forward-compatibility but are
     /// not yet wired. Each entry needs a rationale comment.
     const ALLOWED_UNUSED_METRICS: &[&str] = &[
-        // (empty — every declared helper is wired as of cycle #108)
+        // (empty — every declared helper is wired as of cycle #12B)
     ];
 
     fn extract_pub_fn_names(source: &str) -> Vec<String> {

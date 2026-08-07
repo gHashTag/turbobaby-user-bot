@@ -8,17 +8,16 @@ use crate::trios::i18n::{
     t, tf, T_BACK, T_EVENTS_ALREADY_BOOKED, T_EVENTS_BOOK, T_EVENTS_BOOKED, T_EVENTS_BOOK_FREE,
     T_EVENTS_CANCEL, T_EVENTS_CAPACITY, T_EVENTS_DATE, T_EVENTS_ERROR, T_EVENTS_EVENT_NOT_FOUND,
     T_EVENTS_FREE_BADGE, T_EVENTS_GALLERY, T_EVENTS_INSUFFICIENT_STARS, T_EVENTS_MONTH_APR,
-    T_EVENTS_MONTH_AUG, T_EVENTS_MONTH_DEC, T_EVENTS_MONTH_FEB, T_EVENTS_MONTH_JAN, T_EVENTS_MONTH_JUL,
-    T_EVENTS_MONTH_JUN, T_EVENTS_MONTH_MAR, T_EVENTS_MONTH_MAY, T_EVENTS_MONTH_NOV,
-    T_EVENTS_MONTH_OCT, T_EVENTS_MONTH_SEP,
-    T_EVENTS_MY_BOOKINGS, T_EVENTS_NEXT_PHOTO, T_EVENTS_NO_BOOKINGS, T_EVENTS_NO_EVENTS,
-    T_EVENTS_OK, T_EVENTS_OPEN_DETAILS, T_EVENTS_PHOTO_N, T_EVENTS_PREV_PHOTO, T_EVENTS_PRICE,
+    T_EVENTS_MONTH_AUG, T_EVENTS_MONTH_DEC, T_EVENTS_MONTH_FEB, T_EVENTS_MONTH_JAN,
+    T_EVENTS_MONTH_JUL, T_EVENTS_MONTH_JUN, T_EVENTS_MONTH_MAR, T_EVENTS_MONTH_MAY,
+    T_EVENTS_MONTH_NOV, T_EVENTS_MONTH_OCT, T_EVENTS_MONTH_SEP, T_EVENTS_MY_BOOKINGS,
+    T_EVENTS_NEXT_PHOTO, T_EVENTS_NO_BOOKINGS, T_EVENTS_NO_EVENTS, T_EVENTS_OK,
+    T_EVENTS_OPEN_DETAILS, T_EVENTS_PHOTO_N, T_EVENTS_PREV_PHOTO, T_EVENTS_PRICE,
     T_EVENTS_PRICE_STARS, T_EVENTS_RETRY, T_EVENTS_SEAT, T_EVENTS_SEATS, T_EVENTS_SELECT_SEATS,
-    T_EVENTS_SHARE_EVENT,
-    T_EVENTS_SOLD_OUT, T_EVENTS_SOLD_OUT_BADGE, T_EVENTS_SUBTITLE, T_EVENTS_TELEGRAM_REQUIRED,
-    T_EVENTS_TIME, T_EVENTS_TITLE, T_EVENTS_VIDEO, T_EVENTS_WEEKDAY_FRI, T_EVENTS_WEEKDAY_MON,
-    T_EVENTS_WEEKDAY_SAT, T_EVENTS_WEEKDAY_SUN, T_EVENTS_WEEKDAY_THU, T_EVENTS_WEEKDAY_TUE,
-    T_EVENTS_WEEKDAY_WED,
+    T_EVENTS_SHARE_EVENT, T_EVENTS_SOLD_OUT, T_EVENTS_SOLD_OUT_BADGE, T_EVENTS_SUBTITLE,
+    T_EVENTS_TELEGRAM_REQUIRED, T_EVENTS_TIME, T_EVENTS_TITLE, T_EVENTS_VIDEO,
+    T_EVENTS_WEEKDAY_FRI, T_EVENTS_WEEKDAY_MON, T_EVENTS_WEEKDAY_SAT, T_EVENTS_WEEKDAY_SUN,
+    T_EVENTS_WEEKDAY_THU, T_EVENTS_WEEKDAY_TUE, T_EVENTS_WEEKDAY_WED,
 };
 use crate::ui::api::context::api_base_url;
 use crate::ui::api::http::{
@@ -190,13 +189,17 @@ fn EventCard(props: EventCardProps) -> Element {
         None
     };
     let lang = crate::ui::lang::current_lang();
-    let time_line = start_label.as_ref().map(|label| tf(lang, T_EVENTS_TIME, &[label.clone()]));
+    let time_line = start_label
+        .as_ref()
+        .map(|label| tf(lang, T_EVENTS_TIME, &[label.clone()]));
     let avail_label = avail.map(|a| tf(lang, T_EVENTS_SEATS, &[a.to_string()]));
 
     let share_id = ev.id.clone();
     let share_name = ev.display_title();
     let thumb = ev.image_url.as_deref().filter(|s| {
-        s.starts_with("http://") || s.starts_with("https://") || (s.starts_with("/") && !s.starts_with("//"))
+        s.starts_with("http://")
+            || s.starts_with("https://")
+            || (s.starts_with("/") && !s.starts_with("//"))
     });
     rsx! {
         div {
@@ -273,13 +276,17 @@ fn EventBookingModal(props: EventBookingModalProps) -> Element {
     let gallery_label = t(lang, T_EVENTS_GALLERY).to_string();
     let video_label = t(lang, T_EVENTS_VIDEO).to_string();
     let thumb = ev.image_url.as_deref().filter(|s| {
-        s.starts_with("http://") || s.starts_with("https://") || (s.starts_with("/") && !s.starts_with("//"))
+        s.starts_with("http://")
+            || s.starts_with("https://")
+            || (s.starts_with("/") && !s.starts_with("//"))
     });
     let valid_photos: Vec<String> = ev
         .photos
         .iter()
         .filter(|s| {
-            s.starts_with("http://") || s.starts_with("https://") || (s.starts_with("/") && !s.starts_with("//"))
+            s.starts_with("http://")
+                || s.starts_with("https://")
+                || (s.starts_with("/") && !s.starts_with("//"))
         })
         .cloned()
         .collect();
@@ -288,7 +295,9 @@ fn EventBookingModal(props: EventBookingModalProps) -> Element {
         .video_url
         .as_deref()
         .filter(|s| {
-            s.starts_with("http://") || s.starts_with("https://") || (s.starts_with("/") && !s.starts_with("//"))
+            s.starts_with("http://")
+                || s.starts_with("https://")
+                || (s.starts_with("/") && !s.starts_with("//"))
         })
         .is_some();
     let mut selected_photo = use_signal(|| 0usize);
@@ -354,7 +363,11 @@ fn EventBookingModal(props: EventBookingModalProps) -> Element {
         telegram_required
     } else if has_stars_price {
         let seats = seats_to_book().max(1);
-        format!("{} ({} ⭐)", book_label, ev.price_stars.unwrap_or(0) * seats as i64)
+        format!(
+            "{} ({} ⭐)",
+            book_label,
+            ev.price_stars.unwrap_or(0) * seats as i64
+        )
     } else {
         book_label
     };
@@ -788,7 +801,10 @@ pub fn EventDetailScreen(id: String) -> Element {
                     {
                         event.set(Some(e));
                     } else {
-                        error.set(Some(t(crate::ui::lang::current_lang(), T_EVENTS_EVENT_NOT_FOUND).to_string()));
+                        error.set(Some(
+                            t(crate::ui::lang::current_lang(), T_EVENTS_EVENT_NOT_FOUND)
+                                .to_string(),
+                        ));
                     }
                 }
                 Ok((status, _)) => error.set(Some(format!("HTTP {status}"))),

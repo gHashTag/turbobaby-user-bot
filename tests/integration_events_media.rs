@@ -50,9 +50,16 @@ async fn create_event_with_photos_and_video_round_trips() {
     });
 
     let create_resp = post_admin_events(app.clone(), &admin_token, &body).await;
-    assert_eq!(create_resp.status, StatusCode::OK, "create event must succeed");
+    assert_eq!(
+        create_resp.status,
+        StatusCode::OK,
+        "create event must succeed"
+    );
     assert_eq!(create_resp.body["success"], true);
-    let event_id = create_resp.body["id"].as_str().expect("event id").to_string();
+    let event_id = create_resp.body["id"]
+        .as_str()
+        .expect("event id")
+        .to_string();
 
     let detail = get_event_public(app.clone(), &event_id).await;
     assert_eq!(detail.status, StatusCode::OK, "public detail must succeed");
@@ -60,13 +67,30 @@ async fn create_event_with_photos_and_video_round_trips() {
     assert_eq!(ev["video_url"], "https://example.com/video.mp4");
     let photos = ev["photos"].as_array().expect("photos array");
     assert_eq!(photos.len(), 2);
-    assert!(photos.iter().any(|p| p == "https://example.com/photo-a.jpg"));
-    assert!(photos.iter().any(|p| p == "https://example.com/photo-b.jpg"));
+    assert!(photos
+        .iter()
+        .any(|p| p == "https://example.com/photo-a.jpg"));
+    assert!(photos
+        .iter()
+        .any(|p| p == "https://example.com/photo-b.jpg"));
 
     let admin_detail = get_event_admin(app.clone(), &event_id, &admin_token).await;
-    assert_eq!(admin_detail.status, StatusCode::OK, "admin detail must succeed");
-    assert_eq!(admin_detail.body["event"]["video_url"], "https://example.com/video.mp4");
-    assert_eq!(admin_detail.body["event"]["photos"].as_array().unwrap().len(), 2);
+    assert_eq!(
+        admin_detail.status,
+        StatusCode::OK,
+        "admin detail must succeed"
+    );
+    assert_eq!(
+        admin_detail.body["event"]["video_url"],
+        "https://example.com/video.mp4"
+    );
+    assert_eq!(
+        admin_detail.body["event"]["photos"]
+            .as_array()
+            .unwrap()
+            .len(),
+        2
+    );
 }
 
 #[tokio::test]
@@ -88,7 +112,11 @@ async fn create_event_with_invalid_photo_url_rolls_back() {
     });
 
     let create_resp = post_admin_events(app.clone(), &admin_token, &body).await;
-    assert_eq!(create_resp.status, StatusCode::BAD_REQUEST, "invalid photo URL must fail");
+    assert_eq!(
+        create_resp.status,
+        StatusCode::BAD_REQUEST,
+        "invalid photo URL must fail"
+    );
     assert!(create_resp.body["error"].is_string() || create_resp.body["success"].is_null());
 
     let list_resp = list_events_admin(app, &admin_token).await;
@@ -186,7 +214,14 @@ async fn get_event_admin(app: axum::Router, event_id: &str, admin_token: &str) -
 }
 
 async fn list_events_admin(app: axum::Router, admin_token: &str) -> JsonResponse {
-    send_json(app, "GET", "/api/admin/events", Some(admin_token), &json!({})).await
+    send_json(
+        app,
+        "GET",
+        "/api/admin/events",
+        Some(admin_token),
+        &json!({}),
+    )
+    .await
 }
 
 async fn send_json(

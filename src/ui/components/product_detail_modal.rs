@@ -15,8 +15,8 @@
 use crate::trios::i18n::{
     t, T_ADD_TO_CART, T_FULFILLMENT_DINE_IN, T_FULFILLMENT_LABEL, T_FULFILLMENT_TAKEAWAY,
     T_LAB_CERTS, T_LAB_CERT_CBD, T_LAB_CERT_EMPTY, T_LAB_CERT_TESTED, T_LAB_CERT_THC,
-    T_MODAL_CERTIFICATE, T_MODAL_CLOSE, T_MODAL_DECREASE_QTY, T_MODAL_INCREASE_QTY,
-    T_REVIEWS_AVG, T_REVIEWS_EMPTY, T_REVIEWS_TITLE, T_SHARE,
+    T_MODAL_CERTIFICATE, T_MODAL_CLOSE, T_MODAL_DECREASE_QTY, T_MODAL_INCREASE_QTY, T_REVIEWS_AVG,
+    T_REVIEWS_EMPTY, T_REVIEWS_TITLE, T_SHARE,
 };
 use crate::ui::api::context::use_api_client;
 use crate::ui::api::types::LabCertificate;
@@ -229,7 +229,9 @@ pub fn ProductDetailModal(props: ProductDetailModalProps) -> Element {
     let mut qty = use_signal(|| 1u32);
     let initial_fulfillment = props.initial_fulfillment.clone();
     let mut fulfillment = use_signal(move || {
-        initial_fulfillment.clone().unwrap_or_else(|| "takeaway".to_string())
+        initial_fulfillment
+            .clone()
+            .unwrap_or_else(|| "takeaway".to_string())
     });
     let fulfillment_options = props.fulfillment_options.clone();
     let on_fulfillment_change = props.on_fulfillment_change.clone();
