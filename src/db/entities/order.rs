@@ -22,6 +22,8 @@ pub struct Model {
     pub shop_id: Option<String>,
     pub delivery_address: Option<String>,
     pub delivery_notes: Option<String>,
+    pub age_confirmed: bool,
+    pub delivery_zone_id: Option<String>,
     pub created_at: DateTimeWithTimeZone,
 }
 

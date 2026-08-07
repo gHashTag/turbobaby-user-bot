@@ -290,6 +290,12 @@ pub const T_CHECKOUT_ERR_422: Key = "checkout.err.422";
 pub const T_CHECKOUT_ERR_429: Key = "checkout.err.429";
 pub const T_CHECKOUT_ERR_5XX: Key = "checkout.err.5xx";
 
+// Loop #7: per-field checkout error messages surfaced from the server
+// response body (422 with a stable `error` code) so the UI can show a
+// sentence instead of the generic price-change hint.
+pub const T_CHECKOUT_ERR_AGE_NOT_CONFIRMED: Key = "checkout.err.age_not_confirmed";
+pub const T_CHECKOUT_ERR_ZONE_INVALID: Key = "checkout.err.zone_invalid";
+
 // Generic API error messages (cycle #74). Used by
 // `trios::api_errors::friendly_response_error` for any non-checkout API
 // call. T_API_ERR_401 covers the "Telegram session expired" scenario;
@@ -329,6 +335,7 @@ pub const T_CHECKOUT_PHONE_PLACEHOLDER: Key = "checkout.phone_placeholder";
 pub const T_CHECKOUT_OPEN_MAP: Key = "checkout.open_map";
 pub const T_CHECKOUT_ADDRESS_LABEL: Key = "checkout.address_label";
 pub const T_CHECKOUT_ADDRESS_PLACEHOLDER: Key = "checkout.address_placeholder";
+pub const T_CHECKOUT_USE_MY_LOCATION: Key = "checkout.use_my_location";
 pub const T_CHECKOUT_NOTES_LABEL: Key = "checkout.notes_label";
 pub const T_CHECKOUT_NOTES_PLACEHOLDER: Key = "checkout.notes_placeholder";
 pub const T_CHECKOUT_CASH_ON_DELIVERY: Key = "checkout.cash_on_delivery";
@@ -900,6 +907,8 @@ fn get_ru_translation(key: Key) -> Value {
         T_CHECKOUT_ERR_404 => "Один из товаров больше не доступен. Обновите меню и попробуйте снова.",
         T_CHECKOUT_ERR_409 => "Этот заказ уже создан. Откройте «Мои заказы» — он там.",
         T_CHECKOUT_ERR_422 => "Цены или товары изменились с момента добавления в корзину. Обновите меню и оформите заказ заново.",
+        T_CHECKOUT_ERR_AGE_NOT_CONFIRMED => "Для оформления заказа нужно подтвердить, что вам есть 20 лет.",
+        T_CHECKOUT_ERR_ZONE_INVALID => "Выбранный район доставки недоступен. Выберите другой.",
         T_CHECKOUT_ERR_429 => "Слишком быстро. Подождите минуту и попробуйте снова.",
         T_CHECKOUT_ERR_5XX => "Сервер сейчас недоступен. Попробуйте через минуту.",
         // Generic API error messages (cycle #74)
@@ -935,6 +944,7 @@ fn get_ru_translation(key: Key) -> Value {
         T_CHECKOUT_OPEN_MAP => "📍 Открыть на карте",
         T_CHECKOUT_ADDRESS_LABEL => "Адрес доставки *",
         T_CHECKOUT_ADDRESS_PLACEHOLDER => "Отель / кондо / улица",
+        T_CHECKOUT_USE_MY_LOCATION => "📍 Подставить моё местоположение",
         T_CHECKOUT_NOTES_LABEL => "Комментарий",
         T_CHECKOUT_NOTES_PLACEHOLDER => "Номер комнаты, лобби, встреча у ворот…",
         T_CHECKOUT_CASH_ON_DELIVERY => "Оплата при получении",
@@ -1481,6 +1491,8 @@ fn get_en_translation(key: Key) -> Value {
         T_CHECKOUT_ERR_404 => "One of the items is no longer available. Refresh the menu and try again.",
         T_CHECKOUT_ERR_409 => "This order has already been placed. Open «My Orders» — it's there.",
         T_CHECKOUT_ERR_422 => "Prices or items changed since you added to cart. Refresh the menu and place the order again.",
+        T_CHECKOUT_ERR_AGE_NOT_CONFIRMED => "Please confirm you are 20+ to place an order.",
+        T_CHECKOUT_ERR_ZONE_INVALID => "Selected delivery zone is unavailable. Please choose another.",
         T_CHECKOUT_ERR_429 => "Too fast. Wait a minute and try again.",
         T_CHECKOUT_ERR_5XX => "Server is currently unavailable. Try again in a minute.",
         // Generic API error messages (cycle #74)
@@ -1516,6 +1528,7 @@ fn get_en_translation(key: Key) -> Value {
         T_CHECKOUT_OPEN_MAP => "📍 Open map",
         T_CHECKOUT_ADDRESS_LABEL => "Delivery address *",
         T_CHECKOUT_ADDRESS_PLACEHOLDER => "Hotel / condo / street address",
+        T_CHECKOUT_USE_MY_LOCATION => "📍 Use my location",
         T_CHECKOUT_NOTES_LABEL => "Notes",
         T_CHECKOUT_NOTES_PLACEHOLDER => "Room number, lobby, meet at gate…",
         T_CHECKOUT_CASH_ON_DELIVERY => "Cash on Delivery",

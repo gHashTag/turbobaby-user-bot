@@ -85,6 +85,8 @@ async fn create_order_idempotent_replay_returns_same_order_id() {
         "bonus_used": 0.0,
         "total": expected_total,
         "shop_id": null,
+        "age_confirmed": true,
+        "delivery_zone_id": null,
     });
 
     let first = post_order(app.clone(), &idem_key, &body).await;

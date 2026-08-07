@@ -1,7 +1,8 @@
+use crate::trios::checkout_errors::{friendly_order_error, friendly_order_error_code};
 use crate::trios::core::Lang;
 use crate::trios::i18n::{
-    t, tf,
-    T_BACK, T_CHECKOUT_AGE_CONFIRM, T_CHECKOUT_AGE_NOTICE, T_CHECKOUT_CART_EMPTY,
+    t, tf, T_BACK, T_CHECKOUT_ADDRESS_LABEL, T_CHECKOUT_ADDRESS_PLACEHOLDER,
+    T_CHECKOUT_AGE_CONFIRM, T_CHECKOUT_AGE_NOTICE, T_CHECKOUT_CART_EMPTY,
     T_CHECKOUT_CASH_ON_DELIVERY, T_CHECKOUT_ERR_400, T_CHECKOUT_ERR_ADDRESS,
     T_CHECKOUT_ERR_ADDRESS_LONG, T_CHECKOUT_ERR_ITEMS, T_CHECKOUT_ERR_NAME,
     T_CHECKOUT_ERR_NAME_LONG, T_CHECKOUT_ERR_NETWORK, T_CHECKOUT_ERR_NO_TELEGRAM,
@@ -10,13 +11,12 @@ use crate::trios::i18n::{
     T_CHECKOUT_NAME_LABEL, T_CHECKOUT_NAME_PLACEHOLDER, T_CHECKOUT_NOTES_LABEL,
     T_CHECKOUT_NOTES_PLACEHOLDER, T_CHECKOUT_OPEN_MAP, T_CHECKOUT_PAY_ON_RECEIVE,
     T_CHECKOUT_PHONE_LABEL, T_CHECKOUT_PHONE_PLACEHOLDER, T_CHECKOUT_PROCESSING,
-    T_CHECKOUT_SELECT_ZONE, T_CHECKOUT_STARS, T_CHECKOUT_STARS_AVAILABLE,
-    T_CHECKOUT_STARS_MINUS, T_CHECKOUT_STEP_CART, T_CHECKOUT_STEP_DETAILS,
-    T_CHECKOUT_STEP_CONFIRM, T_CHECKOUT_TITLE, T_CHECKOUT_TRUST_COD,
-    T_CHECKOUT_TRUST_SECURE, T_CHECKOUT_TRUST_TITLE, T_CHECKOUT_TRUST_VERIFIED,
-    T_CHECKOUT_ADDRESS_LABEL, T_CHECKOUT_ADDRESS_PLACEHOLDER,
-    T_DELIVERY, T_DELIVERY_ETA, T_DELIVERY_FEE, T_DELIVERY_ZONE, T_PAYMENT,
-    T_PICKUP_LOCATION, T_PLACE_ORDER, T_TOTAL, T_YOUR_INFO, T_YOUR_ORDER,
+    T_CHECKOUT_SELECT_ZONE, T_CHECKOUT_STARS, T_CHECKOUT_STARS_AVAILABLE, T_CHECKOUT_STARS_MINUS,
+    T_CHECKOUT_STEP_CART, T_CHECKOUT_STEP_CONFIRM, T_CHECKOUT_STEP_DETAILS, T_CHECKOUT_TITLE,
+    T_CHECKOUT_TRUST_COD, T_CHECKOUT_TRUST_SECURE, T_CHECKOUT_TRUST_TITLE,
+    T_CHECKOUT_TRUST_VERIFIED, T_CHECKOUT_USE_MY_LOCATION, T_DELIVERY, T_DELIVERY_ETA,
+    T_DELIVERY_FEE, T_DELIVERY_ZONE, T_PAYMENT, T_PICKUP_LOCATION, T_PLACE_ORDER, T_TOTAL,
+    T_YOUR_INFO, T_YOUR_ORDER,
 };
 use crate::trios::store::validate_checkout;
 use crate::ui::api::context::api_base_url;
@@ -24,9 +24,13 @@ use crate::ui::api::types::{DeliveryZone, DeliveryZonesResponse};
 use crate::ui::components::error_banner::ErrorBanner;
 use crate::ui::routes::Route;
 use crate::ui::state::{Cart, CartItem, CartItemType};
-use crate::ui::telegram::{use_telegram_id, use_telegram_init_data, use_telegram_username, use_main_button_click, TelegramApp, HapticNotification};
+use crate::ui::telegram::{
+    use_main_button_click, use_telegram_id, use_telegram_init_data, use_telegram_username,
+    HapticNotification, TelegramApp,
+};
 use dioxus::prelude::*;
 use serde_json::json;
+use wasm_bindgen::JsCast;
 use web_sys::window;
 
 /// B4: a garden reward the customer can apply at checkout (product-scoped).
@@ -60,6 +64,47 @@ fn zone_display_name(zone: &DeliveryZone) -> String {
     } else {
         zone.name.clone()
     }
+}
+
+/// Try to read the browser/Telegram geolocation and prepend a 📍 pin to the
+/// address field. Falls back silently if geolocation is unavailable or denied.
+fn fill_address_from_geolocation(mut set_address: Signal<String>) {
+    spawn(async move {
+        let js = r#"
+            new Promise((resolve, reject) => {
+                if (!navigator.geolocation) { reject("no geolocation"); return; }
+                navigator.geolocation.getCurrentPosition(
+                    p => resolve({ lat: p.coords.latitude, lng: p.coords.longitude }),
+                    e => reject(e.message || "geolocation denied")
+                );
+            })
+        "#;
+        let Ok(promise_val) = wasm_bindgen::JsCast::dyn_into::<wasm_bindgen::JsValue>(
+            js_sys::eval(js).unwrap_or_default(),
+        ) else {
+            return;
+        };
+        let Ok(promise) = promise_val.dyn_into::<js_sys::Promise>() else {
+            return;
+        };
+        let fut = wasm_bindgen_futures::JsFuture::from(promise);
+        match fut.await {
+            Ok(val) => {
+                let lat = js_sys::Reflect::get(&val, &wasm_bindgen::JsValue::from_str("lat"))
+                    .ok()
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(f64::NAN);
+                let lng = js_sys::Reflect::get(&val, &wasm_bindgen::JsValue::from_str("lng"))
+                    .ok()
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(f64::NAN);
+                if lat.is_finite() && lng.is_finite() {
+                    set_address.set(format!("📍 {:.6}, {:.6}", lat, lng));
+                }
+            }
+            Err(_) => {}
+        }
+    });
 }
 
 fn phone_valid(phone: &str) -> bool {
@@ -223,12 +268,30 @@ pub fn CheckoutScreen() -> Element {
 
     // Real-time field-level validation feedback. These are derived from the
     // current input values and update immediately as the user types.
-    let name_error = use_memo(move || validate_checkout_field(&customer_name(), "name").map(|k| t(lang, k).to_string()));
-    let phone_error = use_memo(move || validate_checkout_field(&customer_phone(), "phone").map(|k| t(lang, k).to_string()));
-    let address_error = use_memo(move || validate_checkout_field(&delivery_address(), "address").map(|k| t(lang, k).to_string()));
-    let name_border = if name_error().is_some() { "#ff4757" } else { "#2a2a4a" };
-    let phone_border = if phone_error().is_some() { "#ff4757" } else { "#2a2a4a" };
-    let address_border = if address_error().is_some() { "#ff4757" } else { "#2a2a4a" };
+    let name_error = use_memo(move || {
+        validate_checkout_field(&customer_name(), "name").map(|k| t(lang, k).to_string())
+    });
+    let phone_error = use_memo(move || {
+        validate_checkout_field(&customer_phone(), "phone").map(|k| t(lang, k).to_string())
+    });
+    let address_error = use_memo(move || {
+        validate_checkout_field(&delivery_address(), "address").map(|k| t(lang, k).to_string())
+    });
+    let name_border = if name_error().is_some() {
+        "#ff4757"
+    } else {
+        "#2a2a4a"
+    };
+    let phone_border = if phone_error().is_some() {
+        "#ff4757"
+    } else {
+        "#2a2a4a"
+    };
+    let address_border = if address_error().is_some() {
+        "#ff4757"
+    } else {
+        "#2a2a4a"
+    };
 
     let checkout_title = t(crate::ui::lang::current_lang(), T_CHECKOUT_TITLE);
     let your_order = t(crate::ui::lang::current_lang(), T_YOUR_ORDER);
@@ -252,6 +315,31 @@ pub fn CheckoutScreen() -> Element {
     let mut applied_reward = use_signal(|| Option::<(String, f64)>::None);
     // Stars (⭐) the user wants to spend as internal-currency discount.
     let mut stars_to_use = use_signal(|| 0i64);
+    // Restore the rest of the checkout form (notes, stars, reward, age,
+    // zone) after the signals they mutate are declared.
+    use_effect(move || {
+        if let Some(window) = web_sys::window() {
+            if let Ok(Some(storage)) = window.local_storage() {
+                if let Ok(Some(v)) = storage.get_item("woody_last_notes") {
+                    delivery_notes.set(v);
+                }
+                if let Ok(Some(v)) = storage.get_item("woody_last_stars") {
+                    if let Ok(n) = v.parse::<i64>() {
+                        stars_to_use.set(n);
+                    }
+                }
+                if let Ok(Some(v)) = storage.get_item("woody_last_reward_id") {
+                    // We can't restore the discount amount here without the
+                    // rewards list, so we persist only the id; the picker
+                    // below re-applies it when the reward is active.
+                    applied_reward.set(Some((v, 0.0)));
+                }
+                if let Ok(Some(v)) = storage.get_item("woody_last_age_confirmed") {
+                    age_confirmed.set(v == "true");
+                }
+            }
+        }
+    });
     let stars_balance_res = {
         let init = init_data.clone();
         use_resource(move || {
@@ -318,6 +406,24 @@ pub fn CheckoutScreen() -> Element {
             .collect(),
         _ => Vec::new(),
     };
+    // If the user had a reward id persisted from a previous checkout and
+    // that reward is still applicable, swap the placeholder 0.0 amount for
+    // the real computed discount once the rewards list loads.
+    let applicable_rewards_for_restore = applicable_rewards.clone();
+    use_effect(move || {
+        if applicable_rewards_for_restore.is_empty() {
+            return;
+        }
+        if let Some((stored_id, _)) = applied_reward().as_ref() {
+            if let Some((r, disc, _)) = applicable_rewards_for_restore
+                .iter()
+                .find(|(r, _, _)| &r.id == stored_id)
+            {
+                applied_reward.set(Some((r.id.clone(), *disc)));
+            }
+        }
+    });
+
     let applied_discount = applied_reward
         .read()
         .as_ref()
@@ -390,16 +496,45 @@ pub fn CheckoutScreen() -> Element {
             return;
         }
         let trios_items = to_trios_items(&submit_cart_items);
-        if let Err(e) = validate_checkout(&customer_name(), &customer_phone(), &delivery_address(), &trios_items) {
+        if let Err(e) = validate_checkout(
+            &customer_name(),
+            &customer_phone(),
+            &delivery_address(),
+            &trios_items,
+        ) {
             let key = match e {
-                crate::trios::core::Error::Validation(msg) if msg.contains("Name is required") => T_CHECKOUT_ERR_NAME,
-                crate::trios::core::Error::Validation(msg) if msg.contains("Name is too long") => T_CHECKOUT_ERR_NAME_LONG,
-                crate::trios::core::Error::Validation(msg) if msg.contains("Phone is required") => T_CHECKOUT_ERR_PHONE,
-                crate::trios::core::Error::Validation(msg) if msg.contains("Phone is too long") => T_CHECKOUT_ERR_PHONE_LONG,
-                crate::trios::core::Error::Validation(msg) if msg.contains("Invalid phone number") => T_CHECKOUT_ERR_PHONE_INVALID,
-                crate::trios::core::Error::Validation(msg) if msg.contains("Delivery address is required") => T_CHECKOUT_ERR_ADDRESS,
-                crate::trios::core::Error::Validation(msg) if msg.contains("Delivery address is too long") => T_CHECKOUT_ERR_ADDRESS_LONG,
-                crate::trios::core::Error::Validation(msg) if msg.contains("Cart cannot be empty") => T_CHECKOUT_ERR_ITEMS,
+                crate::trios::core::Error::Validation(msg) if msg.contains("Name is required") => {
+                    T_CHECKOUT_ERR_NAME
+                }
+                crate::trios::core::Error::Validation(msg) if msg.contains("Name is too long") => {
+                    T_CHECKOUT_ERR_NAME_LONG
+                }
+                crate::trios::core::Error::Validation(msg) if msg.contains("Phone is required") => {
+                    T_CHECKOUT_ERR_PHONE
+                }
+                crate::trios::core::Error::Validation(msg) if msg.contains("Phone is too long") => {
+                    T_CHECKOUT_ERR_PHONE_LONG
+                }
+                crate::trios::core::Error::Validation(msg)
+                    if msg.contains("Invalid phone number") =>
+                {
+                    T_CHECKOUT_ERR_PHONE_INVALID
+                }
+                crate::trios::core::Error::Validation(msg)
+                    if msg.contains("Delivery address is required") =>
+                {
+                    T_CHECKOUT_ERR_ADDRESS
+                }
+                crate::trios::core::Error::Validation(msg)
+                    if msg.contains("Delivery address is too long") =>
+                {
+                    T_CHECKOUT_ERR_ADDRESS_LONG
+                }
+                crate::trios::core::Error::Validation(msg)
+                    if msg.contains("Cart cannot be empty") =>
+                {
+                    T_CHECKOUT_ERR_ITEMS
+                }
                 _ => T_CHECKOUT_ERR_400,
             };
             order_error.set(Some(t(lang, key).to_string()));
@@ -491,6 +626,8 @@ pub fn CheckoutScreen() -> Element {
             "shop_id": shops[shop_selected()].0,
             "delivery_address": delivery_address(),
             "delivery_notes": delivery_notes(),
+            "age_confirmed": age_confirmed(),
+            "delivery_zone_id": delivery_zone_id(),
         });
 
         let init_data_clone = init_data.clone();
@@ -514,7 +651,8 @@ pub fn CheckoutScreen() -> Element {
                                 if let Ok(Some(storage)) = window.local_storage() {
                                     let _ = storage.set_item("woody_last_name", &customer_name());
                                     let _ = storage.set_item("woody_last_phone", &customer_phone());
-                                    let _ = storage.set_item("woody_last_address", &delivery_address());
+                                    let _ =
+                                        storage.set_item("woody_last_address", &delivery_address());
                                     let _ = storage.set_item(
                                         "woody_last_zone_id",
                                         delivery_zone_id().as_deref().unwrap_or(""),
@@ -529,11 +667,28 @@ pub fn CheckoutScreen() -> Element {
                                             &format!("{}-{}", z.min_eta_minutes, z.max_eta_minutes),
                                         );
                                     }
+                                    let _ = storage.set_item("woody_last_notes", &delivery_notes());
+                                    let _ = storage
+                                        .set_item("woody_last_stars", &submit_stars.to_string());
+                                    let _ = storage.set_item(
+                                        "woody_last_reward_id",
+                                        applied_reward
+                                            .read()
+                                            .as_ref()
+                                            .map(|(id, _)| id.as_str())
+                                            .unwrap_or(""),
+                                    );
+                                    let _ = storage.set_item(
+                                        "woody_last_age_confirmed",
+                                        if age_confirmed() { "true" } else { "false" },
+                                    );
                                 }
                             }
                             // Stop the spinner and hide the native button before leaving the screen.
                             tg.hide_main_button_progress(&restore_text);
                             tg.hide_main_button();
+                            // The user is leaving the form; allow Telegram swipe-to-close again.
+                            tg.disable_closing_confirmation();
                             // Navigate to success and clear cart
                             cart.write().clear();
                             tg.haptic_notification(HapticNotification::Success);
@@ -546,13 +701,17 @@ pub fn CheckoutScreen() -> Element {
                 }
                 Ok(resp) => {
                     let status = resp.status().as_u16();
+                    let body_text = resp.text().await.unwrap_or_default();
                     tg.haptic_notification(HapticNotification::Error);
-                    // Cycle #65/#69 friendly per-status; cycle #70 sources
-                    // `lang` from `?lang=xx` so a non-RU Telegram client gets
-                    // localised "Account restricted" instead of Cyrillic.
-                    order_error.set(Some(crate::trios::checkout_errors::friendly_order_error(
-                        lang, status,
-                    )));
+                    // Loop #7: if the server returned a stable `error` code in
+                    // the JSON body, surface a per-field sentence before
+                    // falling back to the generic status mapper.
+                    let code_msg = serde_json::from_str::<serde_json::Value>(&body_text)
+                        .ok()
+                        .and_then(|v| v.get("error").and_then(|e| e.as_str()).map(String::from))
+                        .and_then(|code| friendly_order_error_code(lang, &code));
+                    let msg = code_msg.unwrap_or_else(|| friendly_order_error(lang, status));
+                    order_error.set(Some(msg));
                 }
                 Err(_) => {
                     tg.haptic_notification(HapticNotification::Error);
@@ -573,382 +732,421 @@ pub fn CheckoutScreen() -> Element {
     });
 
     rsx! {
-        div { style: "
+            div { style: "
             min-height: 100vh;
             background: #0f0f1a;
             color: #e8e8e8;
             padding-bottom: 80px;
         ",
-            CheckoutStepper { current: 1 }
-            div { style: "padding: 4px 16px 16px; text-align: center;",
-                h1 { style: "font-size: 24px; font-weight: 800; color: #39ff14; text-shadow: 3px 3px 0 #000, 0 0 10px rgba(57,255,20,0.5); letter-spacing: 2px;", "{checkout_title}" }
-            }
+                CheckoutStepper { current: 1 }
+                div { style: "padding: 4px 16px 16px; text-align: center;",
+                    h1 { style: "font-size: 24px; font-weight: 800; color: #39ff14; text-shadow: 3px 3px 0 #000, 0 0 10px rgba(57,255,20,0.5); letter-spacing: 2px;", "{checkout_title}" }
+                }
 
-            div { style: "padding: 0 16px;",
-// Order summary from cart
-                div { style: "
+                div { style: "padding: 0 16px;",
+    // Order summary from cart
+                    div { style: "
                     background: #16213e; border: 4px solid #2a2a4a;
                     border-radius: 0; padding: 14px; margin-bottom: 12px;
                     box-shadow: 4px 4px 0 #000;
                 ",
-                    h2 { style: "font-size: 13px; font-weight: 700; color: #00e5ff; text-transform: uppercase; letter-spacing: 1px; text-shadow: 2px 2px 0 #000; margin-bottom: 10px;", "{your_order}" }
-                    if cart_items.is_empty() {
-                        p { style: "font-size: 15px; color: #8b8b9e; text-align: center; padding: 10px;", "{t(lang, T_CHECKOUT_CART_EMPTY)}" }
-                    } else {
-                        for item in cart_items.iter() {
-                            div { style: "display:flex; gap:10px; align-items:center; margin-bottom:10px;",
-                                if let Some(url) = item.image_url.as_ref() {
-                                    img {
-                                        src: "{url}",
-                                        alt: "{item.name}",
-                                        style: "width:44px; height:44px; object-fit:cover; border:2px solid #2a2a4a; flex-shrink:0;",
-                                        loading: "lazy",
+                        h2 { style: "font-size: 13px; font-weight: 700; color: #00e5ff; text-transform: uppercase; letter-spacing: 1px; text-shadow: 2px 2px 0 #000; margin-bottom: 10px;", "{your_order}" }
+                        if cart_items.is_empty() {
+                            p { style: "font-size: 15px; color: #8b8b9e; text-align: center; padding: 10px;", "{t(lang, T_CHECKOUT_CART_EMPTY)}" }
+                        } else {
+                            for item in cart_items.iter() {
+                                div { style: "display:flex; gap:10px; align-items:center; margin-bottom:10px;",
+                                    if let Some(url) = item.image_url.as_ref() {
+                                        img {
+                                            src: "{url}",
+                                            alt: "{item.name}",
+                                            style: "width:44px; height:44px; object-fit:cover; border:2px solid #2a2a4a; flex-shrink:0;",
+                                            loading: "lazy",
+                                        }
+                                    }
+                                    div { style: "flex:1; min-width:0;",
+                                        div { style: "font-size:13px; color:#e8e8e8; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;", "{item.name}" }
+                                        div { style: "font-size:12px; color:#8b8b9e;", "x{item.quantity}" }
+                                    }
+                                    div { style: "font-size:13px; font-weight:700; color:#e8e8e8;",
+                                        { crate::trios::pricing::format_baht(item.price * item.quantity as f64) }
                                     }
                                 }
-                                div { style: "flex:1; min-width:0;",
-                                    div { style: "font-size:13px; color:#e8e8e8; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;", "{item.name}" }
-                                    div { style: "font-size:12px; color:#8b8b9e;", "x{item.quantity}" }
-                                }
-                                div { style: "font-size:13px; font-weight:700; color:#e8e8e8;",
-                                    { crate::trios::pricing::format_baht(item.price * item.quantity as f64) }
-                                }
                             }
-                        }
-                        // B4: garden discount picker — toggle a product-scoped reward.
-                        if !applicable_rewards.is_empty() {
-                            div { style: "border-top:1px solid #2a2a4a;margin-top:8px;padding-top:8px;",
-                                div { style: "font-size:12px;color:#39ff14;font-weight:700;margin-bottom:6px;", "{t(lang, T_CHECKOUT_GARDEN_DISCOUNT)}" }
-                                for (r, disc, tname) in applicable_rewards.iter() {
-                                    {
-                                        let rid = r.id.clone();
-                                        let tname = tname.clone();
-                                        let pct = r.discount_percent;
-                                        let d = *disc;
-                                        let is_on = applied_reward.read().as_ref().map(|(id, _)| id == &rid).unwrap_or(false);
-                                        let disc_str = crate::trios::pricing::format_baht(d);
-                                        let border = if is_on { "#39ff14" } else { "#2a2a4a" };
-                                        let amt_style = if is_on { "font-size:12px;color:#39ff14;font-weight:700;" } else { "font-size:12px;color:#8b8b9e;" };
-                                        let reward_label = tf(lang, T_CHECKOUT_GARDEN_DISCOUNT_PCT, &[pct.to_string(), tname]);
-                                        rsx! {
-                                            div {
-                                                style: "display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px;border:3px solid {border};cursor:pointer;margin-bottom:6px;",
-                                                onclick: move |_| {
-                                                    if applied_reward.read().as_ref().map(|(id, _)| id == &rid).unwrap_or(false) {
-                                                        applied_reward.set(None);
-                                                    } else {
-                                                        applied_reward.set(Some((rid.clone(), d)));
-                                                    }
-                                                },
-                                                span { style: "font-size:12px;color:#e8e8e8;", "{reward_label}" }
-                                                span { style: "{amt_style}", "−{disc_str}" }
+                            // B4: garden discount picker — toggle a product-scoped reward.
+                            if !applicable_rewards.is_empty() {
+                                div { style: "border-top:1px solid #2a2a4a;margin-top:8px;padding-top:8px;",
+                                    div { style: "font-size:12px;color:#39ff14;font-weight:700;margin-bottom:6px;", "{t(lang, T_CHECKOUT_GARDEN_DISCOUNT)}" }
+                                    for (r, disc, tname) in applicable_rewards.iter() {
+                                        {
+                                            let rid = r.id.clone();
+                                            let tname = tname.clone();
+                                            let pct = r.discount_percent;
+                                            let d = *disc;
+                                            let is_on = applied_reward.read().as_ref().map(|(id, _)| id == &rid).unwrap_or(false);
+                                            let disc_str = crate::trios::pricing::format_baht(d);
+                                            let border = if is_on { "#39ff14" } else { "#2a2a4a" };
+                                            let amt_style = if is_on { "font-size:12px;color:#39ff14;font-weight:700;" } else { "font-size:12px;color:#8b8b9e;" };
+                                            let reward_label = tf(lang, T_CHECKOUT_GARDEN_DISCOUNT_PCT, &[pct.to_string(), tname]);
+                                            rsx! {
+                                                div {
+                                                    style: "display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px;border:3px solid {border};cursor:pointer;margin-bottom:6px;",
+                                                    onclick: move |_| {
+                                                        if applied_reward.read().as_ref().map(|(id, _)| id == &rid).unwrap_or(false) {
+                                                            applied_reward.set(None);
+                                                        } else {
+                                                            applied_reward.set(Some((rid.clone(), d)));
+                                                        }
+                                                    },
+                                                    span { style: "font-size:12px;color:#e8e8e8;", "{reward_label}" }
+                                                    span { style: "{amt_style}", "−{disc_str}" }
+                                                }
                                             }
                                         }
                                     }
                                 }
                             }
-                        }
-                        // Stars discount picker.
-                        if stars_balance > 0 && pre_stars_total > 0.0 {
-                            div { style: "border-top:1px solid #2a2a4a;margin-top:8px;padding-top:8px;",
-                                div { style: "display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;",
-                                    div { style: "font-size:12px;color:#7dd3fc;font-weight:700;", "{t(lang, T_CHECKOUT_STARS)}" }
-                                    div { style: "font-size:12px;color:#8b8b9e;", "{tf(lang, T_CHECKOUT_STARS_AVAILABLE, &[stars_balance.to_string()])}" }
-                                }
-                                div { style: "display:flex;align-items:center;gap:8px;",
-                                    input {
-                                        r#type: "number",
-                                        inputmode: "numeric",
-                                        min: "0",
-                                        max: "{max_stars}",
-                                        value: "{stars_val}",
-                                        style: "width:80px;font-size:14px;padding:6px 8px;background:#0f0f1a;color:#e8e8e8;border:3px solid #2a2a4a;",
-                                        oninput: move |e| {
-                                            let v = e.value().parse::<i64>().unwrap_or(0);
-                                            stars_to_use.set(v.clamp(0, max_stars));
-                                        }
+                            // Stars discount picker.
+                            if stars_balance > 0 && pre_stars_total > 0.0 {
+                                div { style: "border-top:1px solid #2a2a4a;margin-top:8px;padding-top:8px;",
+                                    div { style: "display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;",
+                                        div { style: "font-size:12px;color:#7dd3fc;font-weight:700;", "{t(lang, T_CHECKOUT_STARS)}" }
+                                        div { style: "font-size:12px;color:#8b8b9e;", "{tf(lang, T_CHECKOUT_STARS_AVAILABLE, &[stars_balance.to_string()])}" }
                                     }
-                                    span { style: "font-size:12px;color:#7dd3fc;", "{tf(lang, T_CHECKOUT_STARS_MINUS, &[stars_val.to_string()])}" }
+                                    div { style: "display:flex;align-items:center;gap:8px;",
+                                        input {
+                                            r#type: "number",
+                                            inputmode: "numeric",
+                                            min: "0",
+                                            max: "{max_stars}",
+                                            value: "{stars_val}",
+                                            style: "width:80px;font-size:14px;padding:6px 8px;background:#0f0f1a;color:#e8e8e8;border:3px solid #2a2a4a;",
+                                            oninput: move |e| {
+                                                let v = e.value().parse::<i64>().unwrap_or(0);
+                                                stars_to_use.set(v.clamp(0, max_stars));
+                                            }
+                                        }
+                                        span { style: "font-size:12px;color:#7dd3fc;", "{tf(lang, T_CHECKOUT_STARS_MINUS, &[stars_val.to_string()])}" }
+                                    }
                                 }
                             }
-                        }
-                        div { style: "display: flex; justify-content: space-between; font-size: 15px; font-weight: 800; padding-top: 8px; border-top: 1px solid #2a2a4a; margin-top: 8px;",
-                            span { "{total_label}" }
-                            {
-                                let total_str = crate::trios::pricing::format_baht(effective_total);
-                                rsx! { span { style: "font-size: 20px; font-weight: 800; color: #ffe600; text-shadow: 2px 2px 0 #000;", "{total_str}" } }
+                            div { style: "display: flex; justify-content: space-between; font-size: 15px; font-weight: 800; padding-top: 8px; border-top: 1px solid #2a2a4a; margin-top: 8px;",
+                                span { "{total_label}" }
+                                {
+                                    let total_str = crate::trios::pricing::format_baht(effective_total);
+                                    rsx! { span { style: "font-size: 20px; font-weight: 800; color: #ffe600; text-shadow: 2px 2px 0 #000;", "{total_str}" } }
+                                }
                             }
                         }
                     }
-                }
 
-                // Customer info
-                div { style: "
+                    // Customer info
+                    div { style: "
                     background: #16213e; border: 4px solid #2a2a4a;
                     border-radius: 0; padding: 14px; margin-bottom: 12px;
                     box-shadow: 4px 4px 0 #000;
                 ",
-                    h2 { style: "font-size: 13px; font-weight: 700; color: #00e5ff; text-transform: uppercase; letter-spacing: 1px; text-shadow: 2px 2px 0 #000; margin-bottom: 10px;", "{your_info}" }
-                    div { style: "margin-bottom: 8px;",
-                        label { style: "font-size: 13px; color: #8b8b9e; display: block; margin-bottom: 4px;", "{t(lang, T_CHECKOUT_NAME_LABEL)}" }
-                        input {
-                            style: "
+                        h2 { style: "font-size: 13px; font-weight: 700; color: #00e5ff; text-transform: uppercase; letter-spacing: 1px; text-shadow: 2px 2px 0 #000; margin-bottom: 10px;", "{your_info}" }
+                        div { style: "margin-bottom: 8px;",
+                            label {
+                                r#for: "checkout-name",
+                                style: "font-size: 13px; color: #8b8b9e; display: block; margin-bottom: 4px;",
+                                "{t(lang, T_CHECKOUT_NAME_LABEL)}"
+                            }
+                            input {
+                                id: "checkout-name",
+                                style: "
                                 font-size: 15px; width: 100%; padding: 10px 12px;
                                 background: #0f0f1a; color: #e8e8e8;
                                 border: 4px solid {name_border}; border-radius: 0;
                                 box-sizing: border-box;
                             ",
-                            r#type: "text",
-                            autocomplete: "name",
-                            placeholder: "{t(lang, T_CHECKOUT_NAME_PLACEHOLDER)}",
-                            value: "{customer_name}",
-                            oninput: move |e| customer_name.set(e.value()),
+                                r#type: "text",
+                                autocomplete: "name",
+                                placeholder: "{t(lang, T_CHECKOUT_NAME_PLACEHOLDER)}",
+                                aria_label: "{t(lang, T_CHECKOUT_NAME_LABEL)}",
+                                value: "{customer_name}",
+                                oninput: move |e| customer_name.set(e.value()),
+                            }
+                            if let Some(err) = name_error() {
+                                p { style: "font-size: 12px; color: #ff4757; margin-top: 4px;", "{err}" }
+                            }
                         }
-                        if let Some(err) = name_error() {
-                            p { style: "font-size: 12px; color: #ff4757; margin-top: 4px;", "{err}" }
-                        }
-                    }
-                    div { style: "margin-bottom: 8px;",
-                        label { style: "font-size: 13px; color: #8b8b9e; display: block; margin-bottom: 4px;", "{t(lang, T_CHECKOUT_PHONE_LABEL)}" }
-                        input {
-                            style: "
+                        div { style: "margin-bottom: 8px;",
+                            label {
+                                r#for: "checkout-phone",
+                                style: "font-size: 13px; color: #8b8b9e; display: block; margin-bottom: 4px;",
+                                "{t(lang, T_CHECKOUT_PHONE_LABEL)}"
+                            }
+                            input {
+                                id: "checkout-phone",
+                                style: "
                                 font-size: 15px; width: 100%; padding: 10px 12px;
                                 background: #0f0f1a; color: #e8e8e8;
                                 border: 4px solid {phone_border}; border-radius: 0;
                                 box-sizing: border-box;
                             ",
-                            r#type: "tel",
-                            autocomplete: "tel",
-                            placeholder: "{t(lang, T_CHECKOUT_PHONE_PLACEHOLDER)}",
-                            value: "{customer_phone}",
-                            oninput: move |e| customer_phone.set(e.value()),
+                                r#type: "tel",
+                                autocomplete: "tel",
+                                placeholder: "{t(lang, T_CHECKOUT_PHONE_PLACEHOLDER)}",
+                                aria_label: "{t(lang, T_CHECKOUT_PHONE_LABEL)}",
+                                value: "{customer_phone}",
+                                oninput: move |e| customer_phone.set(e.value()),
+                            }
+                            if let Some(err) = phone_error() {
+                                p { style: "font-size: 12px; color: #ff4757; margin-top: 4px;", "{err}" }
+                            }
                         }
-                        if let Some(err) = phone_error() {
-                            p { style: "font-size: 12px; color: #ff4757; margin-top: 4px;", "{err}" }
+                        // Age gate: explicit 20+ confirmation required to place an order.
+                        div { style: "display: flex; align-items: flex-start; gap: 8px; margin-top: 8px;",
+                            input {
+                                r#type: "checkbox",
+                                id: "age-confirm",
+                                checked: "{age_confirmed()}",
+                                style: "width: 20px; height: 20px; margin-top: 2px; cursor: pointer; accent-color: #39ff14;",
+                                onclick: move |_| {
+                                    age_confirmed.set(!age_confirmed());
+                                },
+                            }
+                            label {
+                                r#for: "age-confirm",
+                                style: "font-size: 13px; color: #8b8b9e; cursor: pointer; line-height: 1.4;",
+                                "{t(lang, T_CHECKOUT_AGE_CONFIRM)}"
+                            }
                         }
+                        p { style: "font-size: 11px; color: #8b8b9e; margin-top: 6px; line-height: 1.4;", "{t(lang, T_CHECKOUT_AGE_NOTICE)}" }
                     }
-                    // Age gate: explicit 20+ confirmation required to place an order.
-                    div { style: "display: flex; align-items: flex-start; gap: 8px; margin-top: 8px;",
-                        input {
-                            r#type: "checkbox",
-                            id: "age-confirm",
-                            checked: "{age_confirmed()}",
-                            style: "width: 20px; height: 20px; margin-top: 2px; cursor: pointer; accent-color: #39ff14;",
-                            onclick: move |_| {
-                                age_confirmed.set(!age_confirmed());
-                            },
-                        }
-                        label {
-                            r#for: "age-confirm",
-                            style: "font-size: 13px; color: #8b8b9e; cursor: pointer; line-height: 1.4;",
-                            "{t(lang, T_CHECKOUT_AGE_CONFIRM)}"
-                        }
-                    }
-                    p { style: "font-size: 11px; color: #8b8b9e; margin-top: 6px; line-height: 1.4;", "{t(lang, T_CHECKOUT_AGE_NOTICE)}" }
-                }
 
-                // Shop selection
-                div { style: "
+                    // Shop selection
+                    div { style: "
                     background: #16213e; border: 4px solid #2a2a4a;
                     border-radius: 0; padding: 14px; margin-bottom: 12px;
                     box-shadow: 4px 4px 0 #000;
                 ",
-                    h2 { style: "font-size: 13px; font-weight: 700; color: #00e5ff; text-transform: uppercase; letter-spacing: 1px; text-shadow: 2px 2px 0 #000; margin-bottom: 10px;", "{pickup_location}" }
-                    for (idx, (name, address)) in shops.iter().enumerate() {
-                        {
-                            let is_selected = shop_selected() == idx;
-                            let border = if is_selected { "#39ff14" } else { "#2a2a4a" };
-                            let bg = if is_selected { "rgba(57,255,20,0.08)" } else { "transparent" };
-                            let shop_name = name.to_string();
-                            let shop_addr = address.to_string();
-                            let idx_val = idx;
-                            rsx! {
-                                div {
-                                    style: "
+                        h2 { style: "font-size: 13px; font-weight: 700; color: #00e5ff; text-transform: uppercase; letter-spacing: 1px; text-shadow: 2px 2px 0 #000; margin-bottom: 10px;", "{pickup_location}" }
+                        for (idx, (name, address)) in shops.iter().enumerate() {
+                            {
+                                let is_selected = shop_selected() == idx;
+                                let border = if is_selected { "#39ff14" } else { "#2a2a4a" };
+                                let bg = if is_selected { "rgba(57,255,20,0.08)" } else { "transparent" };
+                                let shop_name = name.to_string();
+                                let shop_addr = address.to_string();
+                                let idx_val = idx;
+                                rsx! {
+                                    div {
+                                        style: "
                                         background: {bg}; border: 4px solid {border};
                                         border-radius: 0; padding: 10px; margin-bottom: 6px;
                                         cursor: pointer;
                                     ",
-                                    onclick: move |_| shop_selected.set(idx_val),
-                                    div { style: "font-size: 15px; margin-bottom: 2px;", "{shop_name}" }
-                                    div { style: "font-size: 13px; color: #8b8b9e;", "{shop_addr}" }
+                                        onclick: move |_| shop_selected.set(idx_val),
+                                        div { style: "font-size: 15px; margin-bottom: 2px;", "{shop_name}" }
+                                        div { style: "font-size: 13px; color: #8b8b9e;", "{shop_addr}" }
+                                    }
                                 }
                             }
                         }
+                        div {
+                            style: "margin-top:8px;cursor:pointer;font-size:13px;color:#00e5ff;text-decoration:underline;text-align:center;",
+                            onclick: move |_| {
+                                let _ = window().and_then(|w| w.open_with_url_and_target("https://www.google.com/maps/place/Woody+Weed+Pecker/@9.7124562,99.9877309,17z/data=!3m1!4b1!4m6!3m5!1s0x3054ffe9f6df4edf:0xf8735a84f5193e1a!8m2!3d9.7124562!4d99.9877309!16s%2Fg%2F11x314fym6!18m1!1e1?entry=ttu&g_ep=EgoyMDI2MDUxMy4wIKXMDSoASAFQAw%3D%3D", "_blank").ok());
+                            },
+                            "{t(lang, T_CHECKOUT_OPEN_MAP)}"
+                        }
                     }
-                    div {
-                        style: "margin-top:8px;cursor:pointer;font-size:13px;color:#00e5ff;text-decoration:underline;text-align:center;",
-                        onclick: move |_| {
-                            let _ = window().and_then(|w| w.open_with_url_and_target("https://www.google.com/maps/place/Woody+Weed+Pecker/@9.7124562,99.9877309,17z/data=!3m1!4b1!4m6!3m5!1s0x3054ffe9f6df4edf:0xf8735a84f5193e1a!8m2!3d9.7124562!4d99.9877309!16s%2Fg%2F11x314fym6!18m1!1e1?entry=ttu&g_ep=EgoyMDI2MDUxMy4wIKXMDSoASAFQAw%3D%3D", "_blank").ok());
-                        },
-                        "{t(lang, T_CHECKOUT_OPEN_MAP)}"
-                    }
-                }
 
-                // Delivery info
-                div { style: "
+                    // Delivery info
+                    div { style: "
                     background: #16213e; border: 4px solid #2a2a4a;
                     border-radius: 0; padding: 14px; margin-bottom: 12px;
                     box-shadow: 4px 4px 0 #000;
                 ",
-                    h2 { style: "font-size: 13px; font-weight: 700; color: #00e5ff; text-transform: uppercase; letter-spacing: 1px; text-shadow: 2px 2px 0 #000; margin-bottom: 10px;", "{delivery}" }
-                    div { style: "margin-bottom: 8px;",
-                        label { style: "font-size: 13px; color: #8b8b9e; display: block; margin-bottom: 4px;", "{t(lang, T_CHECKOUT_ADDRESS_LABEL)}" }
-                        input {
-                            style: "
-                                font-size: 15px; width: 100%; padding: 10px 12px;
+                        h2 { style: "font-size: 13px; font-weight: 700; color: #00e5ff; text-transform: uppercase; letter-spacing: 1px; text-shadow: 2px 2px 0 #000; margin-bottom: 10px;", "{delivery}" }
+                        div { style: "margin-bottom: 8px;",
+                            label {
+                                r#for: "checkout-address",
+                                style: "font-size: 13px; color: #8b8b9e; display: block; margin-bottom: 4px;",
+                                "{t(lang, T_CHECKOUT_ADDRESS_LABEL)}"
+                            }
+                            textarea {
+                                id: "checkout-address",
+                                style: "
+                                font-size: 15px; width: 100%; min-height: 72px; padding: 10px 12px;
                                 background: #0f0f1a; color: #e8e8e8;
                                 border: 4px solid {address_border}; border-radius: 0;
-                                box-sizing: border-box;
+                                box-sizing: border-box; resize: vertical;
                             ",
-                            r#type: "text",
-                            autocomplete: "street-address",
-                            placeholder: "{t(lang, T_CHECKOUT_ADDRESS_PLACEHOLDER)}",
-                            value: "{delivery_address}",
-                            oninput: move |e| delivery_address.set(e.value()),
+                                autocomplete: "street-address",
+                                placeholder: "{t(lang, T_CHECKOUT_ADDRESS_PLACEHOLDER)}",
+                                aria_label: "{t(lang, T_CHECKOUT_ADDRESS_LABEL)}",
+                                value: "{delivery_address}",
+                                oninput: move |e| delivery_address.set(e.value()),
+                            }
+                            button {
+                                style: "
+                                margin-top: 6px; font-size: 13px; color: #39ff14;
+                                background: transparent; border: none; padding: 0;
+                                cursor: pointer; min-width: 44px; min-height: 44px;
+                                text-align: left;
+                            ",
+                                r#type: "button",
+                                onclick: move |_| { fill_address_from_geolocation(delivery_address); },
+                                "{t(lang, T_CHECKOUT_USE_MY_LOCATION)}"
+                            }
+                            if let Some(err) = address_error() {
+                                p { style: "font-size: 12px; color: #ff4757; margin-top: 4px;", "{err}" }
+                            }
                         }
-                        if let Some(err) = address_error() {
-                            p { style: "font-size: 12px; color: #ff4757; margin-top: 4px;", "{err}" }
-                        }
-                    }
-                    div { style: "margin-bottom: 8px;",
-                        label { style: "font-size: 13px; color: #8b8b9e; display: block; margin-bottom: 4px;", "{t(lang, T_CHECKOUT_NOTES_LABEL)}" }
-                        input {
-                            style: "
-                                font-size: 15px; width: 100%; padding: 10px 12px;
+                        div { style: "margin-bottom: 8px;",
+                            label {
+                                r#for: "checkout-notes",
+                                style: "font-size: 13px; color: #8b8b9e; display: block; margin-bottom: 4px;",
+                                "{t(lang, T_CHECKOUT_NOTES_LABEL)}"
+                            }
+                            textarea {
+                                id: "checkout-notes",
+                                style: "
+                                font-size: 15px; width: 100%; min-height: 56px; padding: 10px 12px;
                                 background: #0f0f1a; color: #e8e8e8;
                                 border: 4px solid #2a2a4a; border-radius: 0;
-                                box-sizing: border-box;
+                                box-sizing: border-box; resize: vertical;
                             ",
-                            r#type: "text",
-                            autocomplete: "off",
-                            placeholder: "{t(lang, T_CHECKOUT_NOTES_PLACEHOLDER)}",
-                            value: "{delivery_notes}",
-                            oninput: move |e| delivery_notes.set(e.value()),
+                                autocomplete: "off",
+                                placeholder: "{t(lang, T_CHECKOUT_NOTES_PLACEHOLDER)}",
+                                aria_label: "{t(lang, T_CHECKOUT_NOTES_LABEL)}",
+                                value: "{delivery_notes}",
+                                oninput: move |e| delivery_notes.set(e.value()),
+                            }
                         }
-                    }
-                    // Zone selector: native <select> is faster to tap and scroll than a
-                    // stack of custom divs, and it respects the user's keyboard on
-                    // devices without touch.
-                    if !zones.is_empty() {
-                        div { style: "margin-bottom: 8px;",
-                            label { style: "font-size: 13px; color: #8b8b9e; display: block; margin-bottom: 4px;", "{delivery_zone_label}" }
-                            select {
-                                style: "
+                        // Zone selector: native <select> is faster to tap and scroll than a
+                        // stack of custom divs, and it respects the user's keyboard on
+                        // devices without touch.
+                        if !zones.is_empty() {
+                            div { style: "margin-bottom: 8px;",
+                                label {
+                                    r#for: "checkout-zone",
+                                    style: "font-size: 13px; color: #8b8b9e; display: block; margin-bottom: 4px;",
+                                    "{delivery_zone_label}"
+                                }
+                                select {
+                                    id: "checkout-zone",
+                                    style: "
                                     width: 100%; font-size: 15px; padding: 10px 12px;
                                     background: #0f0f1a; color: #e8e8e8;
                                     border: 4px solid #2a2a4a; border-radius: 0;
                                     box-sizing: border-box; cursor: pointer;
                                 ",
-                                onchange: move |e: Event<FormData>| {
-                                    let v = e.value();
-                                    if !v.is_empty() {
-                                        delivery_zone_id.set(Some(v));
-                                    }
-                                },
-                                option {
-                                    value: "",
-                                    disabled: true,
-                                    selected: selected_zone.is_none(),
-                                    "{t(lang, T_CHECKOUT_SELECT_ZONE)}"
-                                }
-                                {
-                                    zones.iter().map(|z| {
-                                        let zid = z.id.clone();
-                                        let zname = zone_display_name(z);
-                                        let is_selected = selected_zone.as_ref().map(|s| s.id == zid).unwrap_or(false);
-                                        rsx! {
-                                            option {
-                                                key: "{zid}",
-                                                value: "{zid}",
-                                                selected: is_selected,
-                                                "{zname}"
-                                            }
+                                    aria_label: "{delivery_zone_label}",
+                                    onchange: move |e: Event<FormData>| {
+                                        let v = e.value();
+                                        if !v.is_empty() {
+                                            delivery_zone_id.set(Some(v));
                                         }
-                                    })
+                                    },
+                                    option {
+                                        value: "",
+                                        disabled: true,
+                                        selected: selected_zone.is_none(),
+                                        "{t(lang, T_CHECKOUT_SELECT_ZONE)}"
+                                    }
+                                    {
+                                        zones.iter().map(|z| {
+                                            let zid = z.id.clone();
+                                            let zname = zone_display_name(z);
+                                            let is_selected = selected_zone.as_ref().map(|s| s.id == zid).unwrap_or(false);
+                                            rsx! {
+                                                option {
+                                                    key: "{zid}",
+                                                    value: "{zid}",
+                                                    selected: is_selected,
+                                                    "{zname}"
+                                                }
+                                            }
+                                        })
+                                    }
                                 }
                             }
                         }
-                    }
-                    div { style: "
+                        div { style: "
                         background: rgba(0,229,255,0.05);
                         border: 4px solid rgba(0,229,255,0.2);
                         border-radius: 0; padding: 10px;
                     ",
-                        div { style: "font-size: 13px; margin-bottom: 6px;", "{delivery_eta_text}" }
-                        div { style: "font-size: 15px; color: #39ff14;", "{delivery_fee_text}" }
+                            div { style: "font-size: 13px; margin-bottom: 6px;", "{delivery_eta_text}" }
+                            div { style: "font-size: 15px; color: #39ff14;", "{delivery_fee_text}" }
+                        }
                     }
-                }
 
-                // Payment method
-                div { style: "
+                    // Payment method
+                    div { style: "
                     background: #16213e; border: 4px solid #2a2a4a;
                     border-radius: 0; padding: 14px; margin-bottom: 16px;
                     box-shadow: 4px 4px 0 #000;
                 ",
-                    h2 { style: "font-size: 13px; font-weight: 700; color: #00e5ff; text-transform: uppercase; letter-spacing: 1px; text-shadow: 2px 2px 0 #000; margin-bottom: 10px;", "{payment}" }
-                    div { style: "
+                        h2 { style: "font-size: 13px; font-weight: 700; color: #00e5ff; text-transform: uppercase; letter-spacing: 1px; text-shadow: 2px 2px 0 #000; margin-bottom: 10px;", "{payment}" }
+                        div { style: "
                         display: flex; align-items: center; gap: 8px;
                         background: rgba(57,255,20,0.05);
                         border: 4px solid #39ff14; border-radius: 0; padding: 10px;
                     ",
-                        div { style: "font-size: 13px;", "💳" }
-                        div { style: "flex: 1;",
-                            div { style: "font-size: 15px; color: #39ff14;", "{t(lang, T_CHECKOUT_CASH_ON_DELIVERY)}" }
-                            div { style: "font-size: 13px; color: #8b8b9e; margin-top: 2px;", "{t(lang, T_CHECKOUT_PAY_ON_RECEIVE)}" }
+                            div { style: "font-size: 13px;", "💳" }
+                            div { style: "flex: 1;",
+                                div { style: "font-size: 15px; color: #39ff14;", "{t(lang, T_CHECKOUT_CASH_ON_DELIVERY)}" }
+                                div { style: "font-size: 13px; color: #8b8b9e; margin-top: 2px;", "{t(lang, T_CHECKOUT_PAY_ON_RECEIVE)}" }
+                            }
                         }
                     }
-                }
 
-                // Trust micro-copy
-                div { style: "
+                    // Trust micro-copy
+                    div { style: "
                     background: rgba(57,255,20,0.05);
                     border: 4px solid rgba(57,255,20,0.2);
                     border-radius: 0; padding: 12px; margin-bottom: 16px;
                 ",
-                    div { style: "font-size: 13px; color: #39ff14; font-weight: 700; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px;", "{t(lang, T_CHECKOUT_TRUST_TITLE)}" }
-                    div { style: "display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: #8b8b9e;",
-                        div { "{t(lang, T_CHECKOUT_TRUST_VERIFIED)}" }
-                        div { "{t(lang, T_CHECKOUT_TRUST_COD)}" }
-                        div { "{t(lang, T_CHECKOUT_TRUST_SECURE)}" }
+                        div { style: "font-size: 13px; color: #39ff14; font-weight: 700; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px;", "{t(lang, T_CHECKOUT_TRUST_TITLE)}" }
+                        div { style: "display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: #8b8b9e;",
+                            div { "{t(lang, T_CHECKOUT_TRUST_VERIFIED)}" }
+                            div { "{t(lang, T_CHECKOUT_TRUST_COD)}" }
+                            div { "{t(lang, T_CHECKOUT_TRUST_SECURE)}" }
+                        }
                     }
-                }
 
-                // Error display
-                ErrorBanner {
-                    message: order_error.read().clone().unwrap_or_default(),
-                    icon: Some("❌".to_string()),
-                }
+                    // Error display
+                    ErrorBanner {
+                        message: order_error.read().clone().unwrap_or_default(),
+                        icon: Some("❌".to_string()),
+                    }
 
-                // Actions
-                div { style: "display: flex; gap: 10px;",
-                    Link { to: Route::Cart {},
-                        button { style: "
+                    // Actions
+                    div { style: "display: flex; gap: 10px;",
+                        Link { to: Route::Cart {},
+                            button { style: "
                             font-size: 14px; font-weight: 700; flex: 1; padding: 12px 20px;
                             background: transparent; color: #e8e8e8;
                             border: 4px solid #2a2a4a; border-radius: 0;
                             cursor: pointer; box-shadow: 3px 3px 0 #000;
                             transition: transform 0.1s, box-shadow 0.1s;
                         ", "{back}" }
-                    }
-                    {
-                        let trios_items = to_trios_items(&cart_items);
-                        let can_order = telegram_id.is_some()
-                            && validate_checkout(&customer_name(), &customer_phone(), &delivery_address(), &trios_items).is_ok()
-                            && age_confirmed()
-                            && !is_processing();
-                        if can_order {
-                            tg.enable_main_button();
-                        } else {
-                            tg.disable_main_button();
                         }
-                        let btn_bg = if can_order { "#39ff14" } else { "#2a2a4a" };
-                        let btn_color = if can_order { "#000" } else { "#8b8b9e" };
-                        let btn_cursor = if can_order { "pointer" } else { "not-allowed" };
-                        let processing = is_processing();
-                        let opacity = if processing { "0.7" } else { "1.0" };
-                        rsx! {
-                            button {
-                                style: "
+                        {
+                            let trios_items = to_trios_items(&cart_items);
+                            let can_order = telegram_id.is_some()
+                                && validate_checkout(&customer_name(), &customer_phone(), &delivery_address(), &trios_items).is_ok()
+                                && age_confirmed()
+                                && !is_processing();
+                            if can_order {
+                                tg.enable_main_button();
+                            } else {
+                                tg.disable_main_button();
+                            }
+                            let btn_bg = if can_order { "#39ff14" } else { "#2a2a4a" };
+                            let btn_color = if can_order { "#000" } else { "#8b8b9e" };
+                            let btn_cursor = if can_order { "pointer" } else { "not-allowed" };
+                            let processing = is_processing();
+                            let opacity = if processing { "0.7" } else { "1.0" };
+                            rsx! {
+                                button {
+                                    style: "
                                     font-size: 14px; font-weight: 700; flex: 2; padding: 12px 20px;
                                     background: {btn_bg};
                                     color: {btn_color};
@@ -958,14 +1156,14 @@ pub fn CheckoutScreen() -> Element {
                                     transition: transform 0.1s, box-shadow 0.1s;
                                     opacity: {opacity};
                                 ",
-                                disabled: !can_order,
-                                onclick: move |_| { submit_order.call(()); },
-                                if processing { "{t(lang, T_CHECKOUT_PROCESSING)}" } else { "{place_order}" }
+                                    disabled: !can_order,
+                                    onclick: move |_| { submit_order.call(()); },
+                                    if processing { "{t(lang, T_CHECKOUT_PROCESSING)}" } else { "{place_order}" }
+                                }
                             }
                         }
                     }
                 }
             }
         }
-    }
 }

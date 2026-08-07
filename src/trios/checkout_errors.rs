@@ -15,7 +15,8 @@
 use super::core::Lang;
 use super::i18n::{
     t, T_CHECKOUT_ERR_400, T_CHECKOUT_ERR_403, T_CHECKOUT_ERR_404, T_CHECKOUT_ERR_409,
-    T_CHECKOUT_ERR_422, T_CHECKOUT_ERR_429, T_CHECKOUT_ERR_5XX,
+    T_CHECKOUT_ERR_422, T_CHECKOUT_ERR_429, T_CHECKOUT_ERR_5XX, T_CHECKOUT_ERR_AGE_NOT_CONFIRMED,
+    T_CHECKOUT_ERR_ZONE_INVALID,
 };
 
 /// Map an HTTP status code from `POST /api/orders` to a customer-friendly
@@ -34,12 +35,29 @@ pub fn friendly_order_error(lang: Lang, status: u16) -> String {
     t(lang, key).to_string()
 }
 
+/// Map a stable `error` code from the JSON body of a failed checkout response
+/// to a customer-friendly localised sentence. Used for per-field 422 codes
+/// such as `age_not_confirmed` or `zone_invalid` that the generic status
+/// mapper would otherwise collapse into the price-change hint.
+pub fn friendly_order_error_code(lang: Lang, code: &str) -> Option<String> {
+    let key = match code {
+        "age_not_confirmed" => T_CHECKOUT_ERR_AGE_NOT_CONFIRMED,
+        "zone_invalid" => T_CHECKOUT_ERR_ZONE_INVALID,
+        _ => return None,
+    };
+    Some(t(lang, key).to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     fn ru(status: u16) -> String {
         friendly_order_error(Lang::Russian, status)
+    }
+
+    fn ru_code(code: &str) -> Option<String> {
+        friendly_order_error_code(Lang::Russian, code)
     }
 
     #[test]
@@ -107,7 +125,34 @@ mod tests {
     }
 
     #[test]
-    fn maps_unknown_status_to_raw_code_fallback() {
+    fn maps_age_not_confirmed_code_to_sentence() {
+        let s = ru_code("age_not_confirmed").expect("known code should map");
+        assert!(
+            s.contains("20") || s.contains("20+"),
+            "should mention age requirement: {s}"
+        );
+        assert!(
+            !s.contains("price"),
+            "should not be the generic 422 hint: {s}"
+        );
+    }
+
+    #[test]
+    fn maps_zone_invalid_code_to_sentence() {
+        let s = ru_code("zone_invalid").expect("known code should map");
+        assert!(
+            s.contains("район") || s.contains("зон"),
+            "should mention delivery zone: {s}"
+        );
+    }
+
+    #[test]
+    fn returns_none_for_unknown_error_code() {
+        assert!(ru_code("totally_unknown_code").is_none());
+    }
+
+    #[test]
+    fn unknown_status_to_raw_code_fallback() {
         // Better to show "HTTP 999" than silently say nothing when we
         // genuinely don't know what happened.
         let s = ru(999);

@@ -9,7 +9,7 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 use tracing::error;
 
-use crate::api::auth::{check_admin, check_not_blocked, validate_telegram_id_param};
+use crate::api::auth::{check_admin, check_not_blocked, check_owner, validate_telegram_id_param};
 use crate::api::rate_limit::{
     check_and_record, client_ip_from_headers, new_store, SlidingWindowStore,
 };
@@ -74,6 +74,16 @@ pub(crate) struct CreateOrderRequest {
     /// — the client can't set the discount amount itself.
     #[serde(default)]
     pub garden_reward_id: Option<String>,
+    /// Loop #7: explicit per-order age confirmation (20+). The server
+    /// rejects the request unless `true` — client-only UI checks are not
+    /// enough for compliance.
+    #[serde(default)]
+    pub age_confirmed: Option<bool>,
+    /// Loop #7: chosen delivery zone id from the public `/api/delivery/zones`
+    /// list. Stored on the order so the ETA/fee are authoritative on the
+    /// server and the success screen can poll them.
+    #[serde(default)]
+    pub delivery_zone_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -88,6 +98,7 @@ pub(crate) fn routes() -> Router<AppState> {
         .route("/orders", post(create_order))
         .route("/orders", get(get_orders))
         .route("/orders/:id", get(get_order))
+        .route("/orders/:id/status", get(get_order_status))
         .route("/orders/:id/status", put(update_order_status))
         .route("/orders/:id/promptpay-qr", get(promptpay_qr))
         .route("/orders/user/:telegram_id", get(get_user_orders))
@@ -113,6 +124,13 @@ fn validate_create_order(req: &CreateOrderRequest) -> Result<ValidatedPayment, S
         if phone.len() > 50 {
             return Err(StatusCode::BAD_REQUEST);
         }
+        // Loop #7: align server validation with the UI — the phone must
+        // start with '+' and contain at least 5 digits. Catches malformed
+        // or empty inputs that previously passed the loose digit-only rule.
+        let digits = phone.chars().filter(|c| c.is_ascii_digit()).count();
+        if !phone.starts_with('+') || digits < 5 {
+            return Err(StatusCode::BAD_REQUEST);
+        }
     }
     if let Some(ref tg) = req.customer_telegram {
         if tg.len() > 100 {
@@ -121,6 +139,15 @@ fn validate_create_order(req: &CreateOrderRequest) -> Result<ValidatedPayment, S
     }
     if let Some(ref shop_id) = req.shop_id {
         if shop_id.len() > 200 {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    }
+    // Loop #7: explicit age confirmation is mandatory per order.
+    if req.age_confirmed != Some(true) {
+        return Err(StatusCode::UNPROCESSABLE_ENTITY);
+    }
+    if let Some(ref zid) = req.delivery_zone_id {
+        if zid.len() > 200 {
             return Err(StatusCode::BAD_REQUEST);
         }
     }
@@ -572,6 +599,27 @@ async fn create_order(
         bonus_used,
         stars_used,
     } = validate_create_order(&req)?;
+
+    // Loop #7: the delivery zone id (if supplied) must resolve to a
+    // configured zone. Rejecting here prevents a stale/malformed zone from
+    // being stored and misleading the ETA on the success screen.
+    if let Some(ref zid) = req.delivery_zone_id {
+        if !zid.is_empty()
+            && !state
+                .config
+                .delivery_zones
+                .zones
+                .iter()
+                .any(|z| z.id == *zid)
+        {
+            tracing::info!(
+                telegram_id = req.telegram_id.unwrap_or(0),
+                zone_id = %zid,
+                "create_order: unknown delivery zone"
+            );
+            return Err(StatusCode::UNPROCESSABLE_ENTITY);
+        }
+    }
 
     // B4: load + validate an applied garden reward (product-scoped discount).
     // Returns (reward_id, target_product_id, percent) on success. Every failure
@@ -1186,6 +1234,8 @@ async fn create_order(
         shop_id: Set(req.shop_id.clone()),
         delivery_address: Set(req.delivery_address.clone()),
         delivery_notes: Set(req.delivery_notes.clone()),
+        age_confirmed: Set(req.age_confirmed.unwrap_or(false)),
+        delivery_zone_id: Set(req.delivery_zone_id.clone()),
         ..Default::default()
     };
     OrderEntity::insert(order_am).exec(&tx).await.map_err(|e| {
@@ -1397,6 +1447,61 @@ async fn get_order(
         Some(m) => Ok(Json(json!({ "order": Order::from(m) }))),
         None => Err(StatusCode::NOT_FOUND),
     }
+}
+
+/// Public order-status endpoint used by the success screen. Returns only
+/// non-sensitive fields (status + delivery zone/ETA) and requires the caller
+/// to prove ownership of the order via Telegram initData.
+async fn get_order_status(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Query(params): Query<HashMap<String, String>>,
+) -> Result<Json<Value>, StatusCode> {
+    if id.len() > 200 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    let tid = params
+        .get("telegram_id")
+        .and_then(|v| v.parse::<i64>().ok())
+        .ok_or(StatusCode::BAD_REQUEST)?;
+    validate_telegram_id_param(tid)?;
+    let _owner_id = check_owner(&headers, &state, tid)?;
+
+    use crate::db::entities::order::Entity as OrderEntity;
+    use sea_orm::EntityTrait;
+    let model = OrderEntity::find_by_id(id)
+        .one(&state.db.orm)
+        .await
+        .map_err(|e| {
+            tracing::error!("get_order_status SeaORM error: {:?}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+    let Some(model) = model else {
+        return Err(StatusCode::NOT_FOUND);
+    };
+    if model.telegram_id != Some(tid) {
+        return Err(StatusCode::NOT_FOUND);
+    }
+
+    let zone = model.delivery_zone_id.as_deref().and_then(|zid| {
+        state
+            .config
+            .delivery_zones
+            .zones
+            .iter()
+            .find(|z| z.id == zid)
+    });
+
+    Ok(Json(json!({
+        "order_id": model.id,
+        "status": model.status,
+        "delivery_zone_id": model.delivery_zone_id,
+        "delivery_zone_name": zone.map(|z| z.name.clone()),
+        "min_eta_minutes": zone.map(|z| z.min_eta_minutes),
+        "max_eta_minutes": zone.map(|z| z.max_eta_minutes),
+        "delivery_fee_baht": zone.map(|z| z.delivery_fee_baht),
+    })))
 }
 
 pub(crate) fn validate_update_order_status(id: &str, status: &str) -> Result<(), StatusCode> {
@@ -2246,6 +2351,8 @@ mod tests {
             garden_reward_id: None,
             delivery_address: Some("123 Test Lane".into()),
             delivery_notes: None,
+            age_confirmed: Some(true),
+            delivery_zone_id: Some("thongsala".into()),
         }
     }
 
@@ -2520,7 +2627,7 @@ mod tests {
         CreateOrderRequest {
             telegram_id: Some(42),
             customer_name: None,
-            customer_phone: None,
+            customer_phone: Some("+12345".into()),
             customer_telegram: None,
             items: vec![strain_item("s1", 1.0)],
             subtotal: 100.0,
@@ -2531,6 +2638,8 @@ mod tests {
             garden_reward_id: None,
             delivery_address: None,
             delivery_notes: None,
+            age_confirmed: Some(true),
+            delivery_zone_id: None,
         }
     }
 

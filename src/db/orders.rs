@@ -17,6 +17,8 @@ pub(crate) struct Order {
     pub shop_id: Option<String>,
     pub delivery_address: Option<String>,
     pub delivery_notes: Option<String>,
+    pub age_confirmed: bool,
+    pub delivery_zone_id: Option<String>,
     pub created_at: chrono::DateTime<chrono::Utc>,
 }
 
@@ -49,6 +51,8 @@ impl From<crate::db::entities::order::Model> for Order {
             shop_id: m.shop_id,
             delivery_address: m.delivery_address,
             delivery_notes: m.delivery_notes,
+            age_confirmed: m.age_confirmed,
+            delivery_zone_id: m.delivery_zone_id,
             created_at: m.created_at.with_timezone(&chrono::Utc),
         }
     }
