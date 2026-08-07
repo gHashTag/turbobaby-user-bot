@@ -9,9 +9,10 @@ use serde_json::{json, Value};
 
 use crate::api::auth::{check_not_blocked, validate_telegram_id_param};
 use crate::db::referrals::{
-    get_or_create_referral_code, get_referrer_stats, get_top_referrers, is_self_referral,
-    record_referral,
+    get_invitees, get_or_create_referral_code, get_referrer_stats, get_top_referrers,
+    is_self_referral, record_referral,
 };
+use crate::trios::referrals::assign_share_source;
 use crate::AppState;
 
 // ──────────────────────────────────────────────────────────────────
@@ -21,6 +22,8 @@ use crate::AppState;
 pub(crate) fn routes() -> Router<AppState> {
     Router::new()
         .route("/referrals/me/:telegram_id", get(get_my_referrals))
+        .route("/referrals/me/:telegram_id/share-source", get(get_share_source))
+        .route("/referrals/me/:telegram_id/invitees", get(get_my_invitees))
         .route("/referrals/me/:telegram_id/garden-invite", post(post_garden_invite))
         .route("/referrals/leaderboard", get(get_leaderboard))
 }
@@ -45,6 +48,50 @@ pub(crate) struct GardenInviteRequest {
 // ──────────────────────────────────────────────────────────────────
 // Handlers
 // ──────────────────────────────────────────────────────────────────
+
+/// GET /api/referrals/me/:telegram_id/share-source
+///
+/// Loop #20: returns the deterministic A/B share source assigned to this user.
+async fn get_share_source(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    Path(telegram_id): Path<i64>,
+) -> Result<Json<Value>, StatusCode> {
+    validate_telegram_id_param(telegram_id)?;
+    crate::api::auth::check_owner(&headers, &state, telegram_id)?;
+    check_not_blocked(&state, telegram_id).await?;
+
+    let source = assign_share_source(telegram_id, &state.config.garden_share_sources);
+    crate::metrics::share_source_assigned(&source);
+    Ok(Json(json!({"source": source})))
+}
+
+/// GET /api/referrals/me/:telegram_id/invitees
+///
+/// Loop #20: list the people this user referred via garden invites, with their
+/// garden streak and order status so the inviter sees social proof.
+async fn get_my_invitees(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    Path(telegram_id): Path<i64>,
+) -> Result<Json<Value>, StatusCode> {
+    validate_telegram_id_param(telegram_id)?;
+    crate::api::auth::check_owner(&headers, &state, telegram_id)?;
+    check_not_blocked(&state, telegram_id).await?;
+
+    let invitees = get_invitees(&state.db.orm, telegram_id)
+        .await
+        .map_err(|e| {
+            tracing::error!("DB error get_invitees: {:?}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    crate::metrics::garden_invitees_viewed();
+    Ok(Json(json!({
+        "count": invitees.len(),
+        "invitees": invitees,
+    })))
+}
 
 /// GET /api/referrals/me/:telegram_id
 ///

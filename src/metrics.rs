@@ -201,6 +201,20 @@ pub fn garden_invite_failed(reason: &str) {
     .increment(1);
 }
 
+/// Loop #20: the user viewed their garden invitee progress panel.
+pub fn garden_invitees_viewed() {
+    counter!("garden_invitees_viewed_total").increment(1);
+}
+
+/// Loop #20: a deterministic share source was assigned to a user.
+pub fn share_source_assigned(source: &str) {
+    counter!(
+        "share_source_assigned_total",
+        "source" => source.to_string()
+    )
+    .increment(1);
+}
+
 /// Loop #18: a Woody Catch high score was submitted to the server.
 pub fn game_high_score_submitted(score: u64) {
     counter!("game_high_score_submitted_total").increment(1);

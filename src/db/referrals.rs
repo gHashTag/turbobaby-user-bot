@@ -27,6 +27,16 @@ pub(crate) struct TopReferrer {
     pub total_bonus_earned: f64,
 }
 
+/// Loop #20: a single invitee's visible progress for the garden viral panel.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub(crate) struct Invitee {
+    pub display_name: String,
+    pub status: String,
+    pub streak: i64,
+    pub has_ordered: bool,
+    pub source: Option<String>,
+}
+
 // ──────────────────────────────────────────────────────────────────
 // Code generation
 // ──────────────────────────────────────────────────────────────────
@@ -544,6 +554,50 @@ pub(crate) async fn get_top_referrers(
                     0.0
                 }
             },
+        })
+        .collect())
+}
+
+/// Loop #20: list invitees for a referrer with their garden streak and
+/// order status. Privacy-safe: telegram_id is not exposed; display_name is
+/// `COALESCE(first_name, 'Friend')` plus an anonymized handle derived from the
+/// last 4 digits of referred_id.
+pub(crate) async fn get_invitees(
+    orm: &sea_orm::DatabaseConnection,
+    referrer_id: i64,
+) -> Result<Vec<Invitee>> {
+    use sea_orm::{ConnectionTrait, DbBackend, Statement};
+    let sql = "
+        SELECT
+            re.referred_id                                        AS referred_id,
+            re.status                                             AS status,
+            re.source                                             AS source,
+            COALESCE(MAX(ul.first_name), 'Friend')                AS first_name,
+            COALESCE(MAX(gp.max_streak), 0)                       AS streak,
+            MAX(CASE WHEN o.id IS NOT NULL THEN 1 ELSE 0 END)   AS has_ordered
+        FROM referral_events re
+        LEFT JOIN user_languages ul ON ul.telegram_id = re.referred_id
+        LEFT JOIN garden_plants gp ON gp.user_id = re.referred_id::text
+        LEFT JOIN orders o ON o.telegram_id = re.referred_id
+        WHERE re.referrer_id = $1
+        GROUP BY re.referred_id, re.status, re.source
+        ORDER BY MAX(re.created_at) DESC
+    ";
+    let stmt = Statement::from_sql_and_values(DbBackend::Postgres, sql, [referrer_id.into()]);
+    let rows = orm.query_all(stmt).await.context("get_invitees")?;
+    Ok(rows
+        .iter()
+        .map(|r| {
+            let referred_id: i64 = r.try_get::<i64>("", "referred_id").unwrap_or(0);
+            let first_name: String = r.try_get::<String>("", "first_name").unwrap_or_else(|_| "Friend".into());
+            let handle = format!("#{:04}", referred_id.rem_euclid(10000));
+            Invitee {
+                display_name: format!("{} {}", first_name, handle),
+                status: r.try_get::<String>("", "status").unwrap_or_else(|_| "pending".into()),
+                streak: r.try_get::<i32>("", "streak").unwrap_or(0) as i64,
+                has_ordered: r.try_get::<i32>("", "has_ordered").unwrap_or(0) == 1,
+                source: r.try_get::<String>("", "source").ok(),
+            }
         })
         .collect())
 }

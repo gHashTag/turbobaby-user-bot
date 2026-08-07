@@ -49,6 +49,9 @@ pub struct Config {
     /// when their first order completes. Kept at 0 by default so it can be
     /// enabled later via env without changing existing economics.
     pub referral_welcome_bonus: f64,
+    /// Loop #20: deterministic A/B share sources for the garden viral loop.
+    /// Comma-separated list in env; defaults to ["utm_a", "utm_b"].
+    pub garden_share_sources: Vec<String>,
 }
 
 impl Config {
@@ -150,6 +153,9 @@ impl Config {
                 .and_then(|s| s.trim().parse::<f64>().ok())
                 .filter(|v| v.is_finite() && *v >= 0.0)
                 .unwrap_or(0.0),
+            garden_share_sources: parse_garden_share_sources(
+                std::env::var("GARDEN_SHARE_SOURCES").ok().as_deref(),
+            ),
         })
     }
 
@@ -184,6 +190,28 @@ fn disabled_capabilities_from(ai_enabled: bool, s3_enabled: bool) -> Vec<&'stati
         off.push("S3 media uploads (S3_BUCKET / S3_ENDPOINT unset)");
     }
     off
+}
+
+/// Loop #20: parse comma-separated garden share sources. Falls back to a
+/// default A/B pair so the deterministic assignment always has at least two
+/// variants.
+pub(crate) fn parse_garden_share_sources(raw: Option<&str>) -> Vec<String> {
+    let defaults = || vec!["utm_a".to_string(), "utm_b".to_string()];
+    let Some(s) = raw else { return defaults() };
+    let trimmed = s.trim();
+    if trimmed.is_empty() {
+        return defaults();
+    }
+    let parts: Vec<String> = trimmed
+        .split(',')
+        .map(|p| p.trim().to_string())
+        .filter(|p| !p.is_empty() && p.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-'))
+        .collect();
+    if parts.is_empty() {
+        defaults()
+    } else {
+        parts
+    }
 }
 
 /// Cycle #133-B: parse a boolean env value. `None` (unset) -> `false`.
@@ -430,6 +458,7 @@ mod tests {
             delivery_zones: crate::delivery::DeliveryZones::default(),
             promptpay: crate::promptpay::QrConfig::default(),
             referral_welcome_bonus: 0.0,
+            garden_share_sources: vec!["utm_a".to_string(), "utm_b".to_string()],
         };
         assert!(cfg.s3_enabled());
     }
@@ -490,6 +519,7 @@ mod tests {
             delivery_zones: crate::delivery::DeliveryZones::default(),
             promptpay: crate::promptpay::QrConfig::default(),
             referral_welcome_bonus: 0.0,
+            garden_share_sources: vec!["utm_a".to_string(), "utm_b".to_string()],
         }
     }
 }

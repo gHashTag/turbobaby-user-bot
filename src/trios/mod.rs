@@ -8,6 +8,7 @@ pub mod garden;
 pub mod i18n;
 pub mod packs;
 pub mod pricing;
+pub mod referrals;
 pub mod quest;
 pub mod store;
 pub mod validation;

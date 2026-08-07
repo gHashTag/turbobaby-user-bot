@@ -11,7 +11,9 @@ use crate::trios::i18n::{
     T_TRUST_MEDICAL, T_TRUST_SUPPORT,
 };
 // Cycle #19 garden retention copy
-use crate::trios::i18n::{T_GARDEN_MILESTONE_HINT, T_GARDEN_NEXT_WATER_COUNTDOWN, T_GARDEN_WATER_NOW};
+use crate::trios::i18n::{
+    T_GARDEN_HOME_VIRAL_CTA, T_GARDEN_MILESTONE_HINT, T_GARDEN_NEXT_WATER_COUNTDOWN, T_GARDEN_WATER_NOW,
+};
 use crate::ui::api::context::api_base_url;
 use crate::ui::api::http::{fetch_text_authed, merge_server_cart, post_client_event};
 use crate::ui::assets;
@@ -19,7 +21,7 @@ use crate::ui::components::bottom_nav::BottomNav;
 use crate::ui::components::skeleton::{Skeleton, SkeletonShape};
 use crate::ui::components::video_modal::VideoModal;
 use crate::ui::routes::Route;
-use crate::ui::share::{share_product, ProductKind, SharedProduct};
+use crate::ui::share::{share_garden, share_product, ProductKind, SharedProduct};
 use crate::ui::state::{Cart, CartItem, CartItemType};
 use crate::ui::telegram::{use_telegram_id, use_telegram_init_data};
 use dioxus::prelude::*;
@@ -701,6 +703,23 @@ pub fn HomeScreen() -> Element {
                                                 rsx! {
                                                     div { style: "margin-top:8px;background:#0f0f1a;border:2px dashed #ffe600;padding:8px 12px;font-size:12px;color:#ffe600;text-align:center;",
                                                         "{reminder}"
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        // Loop #20: viral CTA when streak is active.
+                                        if streak > 0 {
+                                            {
+                                                let tid = telegram_id.unwrap_or(0);
+                                                let viral_text = t(lang, T_GARDEN_HOME_VIRAL_CTA).to_string();
+                                                rsx! {
+                                                    div {
+                                                        style: "margin-top:8px;background:#1a1a2e;border:2px solid #ff4757;padding:8px 12px;font-size:12px;color:#ff4757;text-align:center;cursor:pointer;",
+                                                        onclick: move |e: Event<MouseData>| {
+                                                            e.stop_propagation();
+                                                            share_garden(Some(tid), Some("home_viral"));
+                                                        },
+                                                        "{viral_text}"
                                                     }
                                                 }
                                             }

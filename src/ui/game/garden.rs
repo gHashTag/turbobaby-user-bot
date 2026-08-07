@@ -9,7 +9,9 @@ use crate::trios::i18n::{
     T_GARDEN_COOLDOWN, T_GARDEN_DIAGNOSTICS_COPIED, T_GARDEN_DIAGNOSTICS_COPY,
     T_GARDEN_DISCOUNT_BADGE, T_GARDEN_EMPTY_CTA, T_GARDEN_EMPTY_LABEL, T_GARDEN_ERROR_COOLDOWN,
     T_GARDEN_ERROR_HARVEST, T_GARDEN_ERROR_PRODUCT_UNAVAILABLE, T_GARDEN_ERROR_RESET,
-    T_GARDEN_HARVEST, T_GARDEN_LEADERBOARD_RANK, T_GARDEN_LEADERBOARD_TAB_HARVEST,
+    T_GARDEN_HARVEST, T_GARDEN_INVITEE_JOINED, T_GARDEN_INVITEE_ORDERED,
+    T_GARDEN_INVITEES_EMPTY, T_GARDEN_INVITEES_TITLE, T_GARDEN_INVITEE_WATERING,
+    T_GARDEN_LEADERBOARD_RANK, T_GARDEN_LEADERBOARD_TAB_HARVEST,
     T_GARDEN_LEADERBOARD_TAB_STREAK, T_GARDEN_LEADERBOARD_TITLE, T_GARDEN_LEADERBOARD_YOU,
     T_GARDEN_LOADING, T_GARDEN_MILESTONE_HINT, T_GARDEN_NEXT_WATER_IN, T_GARDEN_PLANT_ALT,
     T_GARDEN_PRODUCT_ALT, T_GARDEN_READY, T_GARDEN_RESET_CONFIRM_BODY,
@@ -183,6 +185,27 @@ struct LeaderboardResponse {
     user: Option<serde_json::Value>,
 }
 
+#[derive(Debug, Clone, serde::Deserialize)]
+struct Invitee {
+    display_name: String,
+    status: String,
+    streak: i64,
+    has_ordered: bool,
+    #[serde(default)]
+    source: Option<String>,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+struct InviteesResponse {
+    count: usize,
+    invitees: Vec<Invitee>,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+struct ShareSourceResponse {
+    source: String,
+}
+
 /// Fetch the user's plants. On failure the `Err` carries the HTTP status so the
 /// caller can distinguish an auth failure (`401` → stale/empty Telegram
 /// initData, worth a one-time re-auth retry) from other errors. A network or
@@ -259,6 +282,24 @@ async fn fetch_leaderboard(
     );
     let text = crate::ui::api::http::fetch_text_authed(&url, init_data).await?;
     serde_json::from_str::<LeaderboardResponse>(&text).map_err(|e| format!("Parse error: {e}"))
+}
+
+async fn fetch_share_source(telegram_id: i64, init_data: &str) -> Option<String> {
+    let base = api_base_url();
+    let url = format!("{}/api/referrals/me/{}/share-source", base, telegram_id);
+    let text = crate::ui::api::http::fetch_text_authed(&url, init_data).await.ok()?;
+    serde_json::from_str::<ShareSourceResponse>(&text)
+        .ok()
+        .map(|r| r.source)
+}
+
+async fn fetch_invitees(telegram_id: i64, init_data: &str) -> Result<Vec<Invitee>, String> {
+    let base = api_base_url();
+    let url = format!("{}/api/referrals/me/{}/invitees", base, telegram_id);
+    let text = crate::ui::api::http::fetch_text_authed(&url, init_data).await?;
+    serde_json::from_str::<InviteesResponse>(&text)
+        .map(|r| r.invitees)
+        .map_err(|e| format!("Parse error: {e}"))
 }
 
 async fn mark_achievements_notified(telegram_id: i64, init_data: &str) {
@@ -473,6 +514,9 @@ pub fn Garden() -> Element {
     let mut show_leaderboard = use_signal(|| false);
     let leaderboard_kind = use_signal(|| "streak".to_string());
     let new_achievements = use_signal(Vec::<String>::new);
+    // Loop #20: server-assigned share source (stable A/B) and invitee panel.
+    let share_source = use_signal(|| None::<String>);
+    let invitees = use_signal(Vec::<Invitee>::new);
     let telegram_id = use_telegram_id().unwrap_or(0);
     let init_data = use_telegram_init_data();
     let tg = use_telegram();
@@ -570,6 +614,29 @@ pub fn Garden() -> Element {
         });
     }
 
+    // Loop #20: load deterministic share source and invitee progress once
+    // initData is available. These are non-blocking; failure leaves defaults.
+    {
+        let tid = telegram_id;
+        let init = init_data.clone();
+        let mut source_c = share_source;
+        let mut invitees_c = invitees;
+        use_future(move || {
+            let value = init.clone();
+            async move {
+                if tid == 0 || value.is_empty() {
+                    return;
+                }
+                if let Some(s) = fetch_share_source(tid, &value).await {
+                    source_c.set(Some(s));
+                }
+                if let Ok(list) = fetch_invitees(tid, &value).await {
+                    invitees_c.set(list);
+                }
+            }
+        });
+    }
+
     let plant_list = plants.read().clone();
     let now = *now_ms.read();
     let is_loading = *loading.read();
@@ -614,14 +681,17 @@ pub fn Garden() -> Element {
 
     let init_share = init_for_closures.clone();
     let share_tid = telegram_id;
+    let share_source_for_click = share_source.read().clone();
     let share_click = move |_| {
         let init = init_share.clone();
+        // Loop #20: use the server-assigned source if already loaded; otherwise
+        // fall back to a deterministic local default so the share never blocks.
+        let source = share_source_for_click
+            .clone()
+            .unwrap_or_else(|| crate::trios::referrals::assign_share_source(share_tid, &["utm_a".to_string(), "utm_b".to_string()]));
         spawn(async move {
             log_share_event(share_tid, &init, "garden", "garden").await;
-            // Cycle #19: share with referrer attribution so invitees can be
-            // linked back and earn a two-sided referral bonus.
-            let source = if (share_tid % 2) == 0 { "utm_a" } else { "utm_b" };
-            share_garden(Some(share_tid), Some(source));
+            share_garden(Some(share_tid), Some(&source));
         });
     };
 
@@ -667,6 +737,50 @@ pub fn Garden() -> Element {
                         "aria-label": "{leaderboard_title}",
                         onclick: move |_| show_leaderboard.set(true),
                         "🏆"
+                    }
+                }
+
+                // Loop #20: invitee progress panel — social proof for the inviter.
+                {
+                    let list = invitees.read().clone();
+                    let invitees_title = t(lang, T_GARDEN_INVITEES_TITLE).to_string();
+                    let empty_text = t(lang, T_GARDEN_INVITEES_EMPTY).to_string();
+                    let joined_label = t(lang, T_GARDEN_INVITEE_JOINED).to_string();
+                    let ordered_label = t(lang, T_GARDEN_INVITEE_ORDERED).to_string();
+                    rsx! {
+                        div { style: "margin-top:14px;padding:10px;background:{bg_card};border:2px solid {border_subtle};border-radius:12px;text-align:left;",
+                            div { style: "font-size:12px;font-weight:800;color:#39ff14;margin-bottom:8px;display:flex;align-items:center;gap:6px;",
+                                "🤝 {invitees_title}"
+                                if !list.is_empty() {
+                                    span { style: "font-size:11px;background:#39ff14;color:#000;padding:2px 6px;border-radius:10px;", "{list.len()}" }
+                                }
+                            }
+                            if list.is_empty() {
+                                p { style: "font-size:11px;color:#8b8b9e;margin:0;", "{empty_text}" }
+                            } else {
+                                div { style: "display:flex;flex-direction:column;gap:6px;",
+                                    {
+                                        list.iter().map(|inv| {
+                                            let status_emoji = if inv.has_ordered { "🛒" } else if inv.streak > 0 { "💧" } else { "🌱" };
+                                            let status_text = if inv.has_ordered {
+                                                ordered_label.clone()
+                                            } else if inv.streak > 0 {
+                                                tf(lang, T_GARDEN_INVITEE_WATERING, &[inv.streak.to_string()])
+                                            } else {
+                                                joined_label.clone()
+                                            };
+                                            let name = inv.display_name.clone();
+                                            rsx! {
+                                                div { style: "display:flex;align-items:center;justify-content:space-between;font-size:11px;color:#e8e8e8;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.05);",
+                                                    span { "{name}" }
+                                                    span { style: "display:flex;align-items:center;gap:4px;color:#8b8b9e;", "{status_emoji} {status_text}" }
+                                                }
+                                            }
+                                        })
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
 
