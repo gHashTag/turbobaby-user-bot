@@ -6,12 +6,12 @@
 
 use std::sync::Arc;
 use teloxide::prelude::*;
-use teloxide::types::{InlineKeyboardButton, InlineKeyboardMarkup};
+use teloxide::types::InlineKeyboardMarkup;
 
 use crate::bot::{miniapp_deep_link, url_btn};
 use crate::config::Config;
 use crate::db::Database;
-use crate::locales::{get_locale, Locale};
+use crate::locales::get_locale;
 
 /// Cycle #79: notify the customer that their order status changed.
 ///
@@ -52,10 +52,7 @@ pub(crate) async fn notify_order_status(
         &config.bot_username,
         &crate::bot::order_start_param(order_id),
     );
-    let markup = InlineKeyboardMarkup::new(vec![vec![url_btn(
-        &locale.order_open_app,
-        &deep_link,
-    )]]);
+    let markup = InlineKeyboardMarkup::new(vec![vec![url_btn(&locale.order_open_app, &deep_link)]]);
 
     if let Err(e) = bot
         .send_message(ChatId(customer_telegram_id), text)

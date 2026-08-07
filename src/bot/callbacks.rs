@@ -297,11 +297,11 @@ pub(crate) async fn handle_callback(
             let order_id = &d["confirm_".len()..];
             // Cycle #96: SeaORM tx. FOR UPDATE row lock + conditional
             // status flip + commit. Drop = auto-rollback on early-return.
+            let mut customer_telegram_id: Option<i64> = None;
             let db_ok = {
                 use sea_orm::{ConnectionTrait, DbBackend, Statement, TransactionTrait};
                 match db.orm.begin().await {
                     Ok(tx) => {
-                        let mut customer_telegram_id: Option<i64> = None;
                         let ok = match tx
                             .query_one(Statement::from_sql_and_values(
                                 DbBackend::Postgres,
@@ -311,7 +311,8 @@ pub(crate) async fn handle_callback(
                             .await
                         {
                             Ok(Some(row)) => {
-                                customer_telegram_id = row.try_get("", "telegram_id").ok().flatten();
+                                customer_telegram_id =
+                                    row.try_get("", "telegram_id").ok().flatten();
                                 // Read the gating status loudly. `can_confirm_order("")`
                                 // is already false (safe no-op), but surface a corrupt
                                 // read instead of swallowing it as "not confirmable".
@@ -414,15 +415,8 @@ pub(crate) async fn handle_callback(
                 }
                 // Cycle #79: notify the customer their order was confirmed.
                 if let Some(cid) = customer_telegram_id {
-                    notify::notify_order_status(
-                        &bot,
-                        &db,
-                        &config,
-                        cid,
-                        order_id,
-                        "confirmed",
-                    )
-                    .await;
+                    notify::notify_order_status(&bot, &db, &config, cid, order_id, "confirmed")
+                        .await;
                 }
             } else if let Some(msg) = q.message.as_ref().and_then(|m| match m {
                 MaybeInaccessibleMessage::Regular(msg) => Some(msg),
@@ -728,15 +722,8 @@ pub(crate) async fn handle_callback(
             // Cycle #79: notify the customer their order was rejected.
             if rejected {
                 if let Some(tid) = customer_telegram_id {
-                    notify::notify_order_status(
-                        &bot,
-                        &db,
-                        &config,
-                        tid,
-                        _order_id,
-                        "rejected",
-                    )
-                    .await;
+                    notify::notify_order_status(&bot, &db, &config, tid, _order_id, "rejected")
+                        .await;
                 }
             }
             if let Some(msg) = q.message.as_ref().and_then(|m| match m {
