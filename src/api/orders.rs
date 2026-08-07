@@ -13,6 +13,7 @@ use crate::api::auth::{check_admin, check_not_blocked, check_owner, validate_tel
 use crate::api::rate_limit::{
     check_and_record, client_ip_from_headers, new_store, SlidingWindowStore,
 };
+use crate::db::entities::bonus_transaction::{Column as BtCol, Entity as BtEntity};
 use crate::db::orders::{Order, OrderItem};
 use crate::db::strains::Strain;
 use crate::promptpay::{build_payload, svg_qr};
@@ -21,6 +22,7 @@ use crate::trios::pricing::{
     MarketingFlags,
 };
 use crate::AppState;
+use sea_orm::{ColumnTrait, QueryFilter};
 use std::collections::HashMap;
 use std::time::Duration;
 
@@ -229,6 +231,29 @@ fn validate_create_order(req: &CreateOrderRequest) -> Result<ValidatedPayment, S
         bonus_used,
         stars_used,
     })
+}
+
+/// Load the configured max share of an order that can be paid with bonus
+/// balance. Falls back to 30 % if the loyalty_config singleton is missing or
+/// malformed, so a DB glitch never opens the ceiling to 100 %.
+async fn load_max_bonus_usage_pct(orm: &sea_orm::DatabaseConnection) -> f64 {
+    use crate::db::entities::loyalty_config::Entity as LcEntity;
+    use sea_orm::EntityTrait;
+    let Some(model) = (match LcEntity::find_by_id(1).one(orm).await {
+        Ok(m) => m,
+        Err(e) => {
+            tracing::error!("load_max_bonus_usage_pct: {e}");
+            None
+        }
+    }) else {
+        return 30.0;
+    };
+    model
+        .config
+        .get("max_bonus_usage_pct")
+        .and_then(|v| v.as_f64())
+        .filter(|v| v.is_finite() && *v >= 0.0 && *v <= 100.0)
+        .unwrap_or(30.0)
 }
 
 /// True if `k` is a syntactically acceptable `X-Idempotency-Key` value.
@@ -977,6 +1002,23 @@ async fn create_order(
         }
     }
 
+    // Loop #14: enforce the configured max_bonus_usage_pct ceiling at the
+    // trust boundary. The client can send any bonus_used ≤ subtotal, but the
+    // business rule caps how much of an order can be paid with bonus balance.
+    let max_bonus_pct = load_max_bonus_usage_pct(&state.db.orm).await;
+    let max_bonus_allowed = (req.subtotal * max_bonus_pct / 100.0).max(0.0);
+    if bonus_used > max_bonus_allowed + 0.01 {
+        tracing::warn!(
+            telegram_id = req.telegram_id.unwrap_or(0),
+            bonus_used,
+            max_bonus_pct,
+            max_bonus_allowed,
+            subtotal = req.subtotal,
+            "create_order: bonus_used exceeds configured max_bonus_usage_pct"
+        );
+        return Err(StatusCode::UNPROCESSABLE_ENTITY);
+    }
+
     // B4: with a garden reward applied, the authoritative total is
     // subtotal - bonus_used - stars_used - (server-computed) garden_discount.
     // Verify the client's claimed total matches; a mismatch = tampering → reject + audit.
@@ -1549,7 +1591,8 @@ async fn get_order_details(
 
     use crate::db::entities::order::Entity as OrderEntity;
     use sea_orm::EntityTrait;
-    let model = OrderEntity::find_by_id(id)
+    let order_id = id.clone();
+    let model = OrderEntity::find_by_id(order_id)
         .one(&state.db.orm)
         .await
         .map_err(|e| {
@@ -1563,7 +1606,28 @@ async fn get_order_details(
         return Err(StatusCode::NOT_FOUND);
     }
 
-    Ok(Json(json!({ "order": Order::from(model) })))
+    // Loop #14: surface cashback earned on this order so the success screen
+    // and order detail can reinforce the retention value immediately.
+    let cashback_credited = BtEntity::find()
+        .filter(BtCol::RelatedOrderId.eq(id.clone()))
+        .filter(BtCol::TxType.eq("order_cashback"))
+        .one(&state.db.orm)
+        .await
+        .map_err(|e| {
+            tracing::error!("get_order_details cashback lookup: {e:?}");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?
+        .map(|tx| tx.amount);
+
+    let mut order_json = serde_json::to_value(Order::from(model)).map_err(|e| {
+        tracing::error!("get_order_details serialize: {e:?}");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+    if let Some(amount) = cashback_credited {
+        order_json["cashback_credited"] = json!(amount);
+    }
+
+    Ok(Json(json!({ "order": order_json })))
 }
 
 pub(crate) fn validate_update_order_status(id: &str, status: &str) -> Result<(), StatusCode> {

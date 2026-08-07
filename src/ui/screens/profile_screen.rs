@@ -28,6 +28,7 @@ use web_sys;
 #[derive(Debug, Clone, Deserialize)]
 struct LoyaltyResponse {
     profile: Option<LoyaltyProfileData>,
+    config: Option<LoyaltyConfigData>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -38,6 +39,14 @@ struct LoyaltyProfileData {
     referral_code: Option<String>,
     referral_count: Option<i32>,
     orders_count: Option<i32>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct LoyaltyConfigData {
+    cashback_pct: f64,
+    max_bonus_usage_pct: f64,
+    next_tier: String,
+    next_threshold: f64,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -317,8 +326,19 @@ pub fn ProfileScreen() -> Element {
     // Single source of truth for the ฿ stat (was an inline `as i32` narrowing).
     let total_spent_str = crate::trios::pricing::format_baht(total_spent);
 
-    // Cashback is calculated from tier
-    let cashback_pct = current_tier.cashback();
+    // Loop #14: cashback and next-tier threshold now come from the same
+    // loyalty_config the backend uses to credit cashback on order completion.
+    // The Tier enum is kept only for card art / labels.
+    let config = loyalty_resource
+        .read()
+        .as_ref()
+        .and_then(|opt| opt.as_ref())
+        .and_then(|r| r.config.clone());
+    let cashback_pct = config
+        .as_ref()
+        .map(|c| c.cashback_pct)
+        .filter(|v| v.is_finite() && *v >= 0.0)
+        .unwrap_or_else(|| current_tier.cashback());
 
     // Cycle #169E: fallback to raw telegram_id instead of stale "WOODY-DEMO"
     // placeholder so the referral deep-link always carries the user's
@@ -339,18 +359,21 @@ pub fn ProfileScreen() -> Element {
         .and_then(|d| d.orders_count)
         .unwrap_or(0);
 
+    // Loop #14: next-tier threshold from backend config so the progress bar
+    // matches the real loyalty program rules instead of hardcoded UI values.
+    // The next tier label/color still comes from the Tier enum for card art.
     let next_tier = current_tier.next();
-    let progress_pct = if let Some(next) = next_tier {
-        let threshold = next.threshold();
-        if threshold > 0.0 {
-            ((total_spent / threshold) * 100.0).min(100.0) as i32
-        } else {
-            100
-        }
+    let next_threshold = config
+        .as_ref()
+        .map(|c| c.next_threshold)
+        .filter(|v| v.is_finite() && *v > 0.0)
+        .or_else(|| next_tier.map(|t| t.threshold()));
+    let progress_pct = if let Some(threshold) = next_threshold {
+        ((total_spent / threshold) * 100.0).min(100.0) as i32
     } else {
         100
     };
-    let remaining = next_tier.map(|t| (t.threshold() - total_spent).max(0.0));
+    let remaining = next_threshold.map(|t| (t - total_spent).max(0.0));
 
     let lang = crate::ui::lang::current_lang();
     let profile_title = t(lang, T_PROFILE_TITLE);

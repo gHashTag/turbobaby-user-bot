@@ -2,7 +2,7 @@ use crate::trios::core::Lang;
 use crate::trios::i18n::{
     t, tf, T_ORDERS_STATUS_CANCELLED, T_ORDERS_STATUS_CONFIRMED, T_ORDERS_STATUS_DELIVERED,
     T_ORDERS_STATUS_OUT_FOR_DELIVERY, T_ORDERS_STATUS_PENDING, T_ORDERS_STATUS_PREPARING,
-    T_ORDERS_STATUS_READY, T_ORDERS_STATUS_UNKNOWN, T_SUCCESS_BACK_MENU,
+    T_ORDERS_STATUS_READY, T_ORDERS_STATUS_UNKNOWN, T_SUCCESS_BACK_MENU, T_SUCCESS_CASHBACK_EARNED,
     T_SUCCESS_CASH_ON_DELIVERY, T_SUCCESS_CONFIRMED, T_SUCCESS_CONTACT_SHORTLY,
     T_SUCCESS_DELIVERY_ESTIMATE, T_SUCCESS_ETA, T_SUCCESS_ETA_VALUE, T_SUCCESS_MY_ORDERS,
     T_SUCCESS_ORDER_RECEIVED, T_SUCCESS_PAYMENT, T_SUCCESS_PUSH_REASSURANCE, T_SUCCESS_REORDER,
@@ -139,6 +139,8 @@ struct OrderDetailResponse {
 #[derive(Clone, serde::Deserialize)]
 struct OrderDetailOrder {
     items: Vec<ApiOrderItem>,
+    #[serde(default)]
+    cashback_credited: Option<f64>,
 }
 
 #[component]
@@ -224,6 +226,25 @@ pub fn SuccessScreen(id: String) -> Element {
         })
     };
 
+    // Loop #14: fetch order details to show the cashback earned on this order.
+    let details_res = {
+        let init = init_data.clone();
+        let oid = id.clone();
+        use_resource(move || {
+            let init = init.clone();
+            let oid = oid.clone();
+            async move {
+                let tid = telegram_id?;
+                let url = format!(
+                    "{}/api/orders/{oid}/details?telegram_id={tid}",
+                    api_base_url()
+                );
+                let text = fetch_text_authed(&url, &init).await.ok()?;
+                serde_json::from_str::<OrderDetailResponse>(&text).ok()
+            }
+        })
+    };
+
     let status_ref = status_res.read();
     let status_opt = status_ref.as_ref().and_then(|opt| opt.as_ref());
     let status_text = status_opt
@@ -251,6 +272,14 @@ pub fn SuccessScreen(id: String) -> Element {
         T_SUCCESS_REWARDS_BONUS,
         &[format!("{bonus_balance:.0}")],
     );
+    let cashback_earned = details_res
+        .read()
+        .as_ref()
+        .and_then(|opt| opt.as_ref())
+        .and_then(|r| r.order.cashback_credited)
+        .filter(|v| v.is_finite() && *v > 0.01);
+    let cashback_text = cashback_earned
+        .map(|c| tf(lang, T_SUCCESS_CASHBACK_EARNED, &[format!("{c:.0}")]));
 
     let track_link = order_deep_link(&id);
     let on_track_order = move |_| {
@@ -450,7 +479,10 @@ pub fn SuccessScreen(id: String) -> Element {
             ",
                 div { style: "font-size: 13px; font-weight: 700; color: #39ff14; text-transform: uppercase; letter-spacing: 1px; text-shadow: 2px 2px 0 #000; margin-bottom: 8px;", "{rewards_title}" }
                 div { style: "font-size: 13px; color: #e8e8e8; margin-bottom: 6px;", "{rewards_garden}" }
-                div { style: "font-size: 13px; color: #e8e8e8;", "{bonus_text}" }
+                div { style: "font-size: 13px; color: #e8e8e8; margin-bottom: 6px;", "{bonus_text}" }
+                if let Some(ref text) = cashback_text {
+                    div { style: "font-size: 14px; font-weight: 800; color: #39ff14;", "{text}" }
+                }
             }
 
             // Share / referral prompt.

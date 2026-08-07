@@ -1,15 +1,19 @@
 // Cart Screen — Interactive with global Cart signal
 use crate::trios::i18n::{
-    t, tf, T_CART_BACK_MENU, T_CART_BROWSE_MENU, T_CART_BROWSE_SETS, T_CART_CHECKOUT,
-    T_CART_DECREASE_QTY, T_CART_DELIVERY, T_CART_DELIVERY_FREE, T_CART_DINE_IN, T_CART_EMPTY,
-    T_CART_EMPTY_DESC, T_CART_IMAGE_ALT, T_CART_ITEMS, T_CART_REMOVE, T_CART_SUBTOTAL,
-    T_CART_TAKEAWAY, T_CART_TITLE, T_PLACE_ORDER, T_TOTAL,
+    t, tf, T_CART_BACK_MENU, T_CART_BONUS_NUDGE, T_CART_BROWSE_MENU, T_CART_BROWSE_SETS,
+    T_CART_CHECKOUT, T_CART_DECREASE_QTY, T_CART_DELIVERY, T_CART_DELIVERY_FREE, T_CART_DINE_IN,
+    T_CART_EMPTY, T_CART_EMPTY_DESC, T_CART_IMAGE_ALT, T_CART_ITEMS, T_CART_REMOVE,
+    T_CART_SUBTOTAL, T_CART_TAKEAWAY, T_CART_TITLE, T_PLACE_ORDER, T_TOTAL,
 };
+use crate::ui::api::context::api_base_url;
+use crate::ui::api::http::fetch_text_authed;
 use crate::ui::components::bottom_nav::BottomNav;
 use crate::ui::components::empty_state::EmptyState;
 use crate::ui::routes::Route;
 use crate::ui::state::{Cart, CartItem, CartItemType};
-use crate::ui::telegram::{use_main_button_click, HapticNotification, TelegramApp};
+use crate::ui::telegram::{
+    use_main_button_click, use_telegram_id, use_telegram_init_data, HapticNotification, TelegramApp,
+};
 use dioxus::prelude::*;
 
 fn format_price(price: f64) -> String {
@@ -32,6 +36,44 @@ pub fn CartScreen() -> Element {
     let items_label = tf(lang, T_CART_ITEMS, &[item_count.to_string()]);
     let tg = TelegramApp::init();
     let total_str = crate::trios::pricing::format_baht(total);
+    let telegram_id = use_telegram_id();
+    let init_data = use_telegram_init_data();
+
+    // Loop #14: surface the customer's bonus balance on the cart screen to
+    // nudge them toward checkout where it can be redeemed.
+    let loyalty_res = {
+        let init = init_data.clone();
+        use_resource(move || {
+            let init = init.clone();
+            async move {
+                let tid = telegram_id?;
+                let url = format!("{}/api/loyalty/{}", api_base_url(), tid);
+                let text = fetch_text_authed(&url, &init).await.ok()?;
+                #[derive(serde::Deserialize)]
+                struct ProfileResp {
+                    bonus_balance: f64,
+                }
+                #[derive(serde::Deserialize)]
+                struct LoyaltyResp {
+                    profile: ProfileResp,
+                }
+                serde_json::from_str::<LoyaltyResp>(&text).ok()
+            }
+        })
+    };
+    let bonus_balance = loyalty_res
+        .read()
+        .as_ref()
+        .and_then(|opt| opt.as_ref())
+        .map(|r| r.profile.bonus_balance)
+        .unwrap_or(0.0)
+        .max(0.0);
+    let bonus_nudge_text = if bonus_balance > 0.0 {
+        Some(tf(lang, T_CART_BONUS_NUDGE, &[format!("{bonus_balance:.0}")]))
+    } else {
+        None
+    };
+
     let nav = navigator();
     use_main_button_click(move || {
         if !cart.read().items.is_empty() {
@@ -122,6 +164,11 @@ pub fn CartScreen() -> Element {
                                 div { style: "display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 15px;",
                                     span { style: "color: #8b8b9e;", "{t(lang, T_CART_DELIVERY)}" }
                                     span { style: "color: #39ff14;", "{t(lang, T_CART_DELIVERY_FREE)}" }
+                                }
+                                if let Some(ref nudge) = bonus_nudge_text {
+                                    div { style: "display: flex; justify-content: space-between; font-size: 13px; color: #39ff14; margin-bottom: 6px;",
+                                        span { "{nudge}" }
+                                    }
                                 }
                                 div { style: "display: flex; justify-content: space-between; font-size: 15px; font-weight: 800; padding-top: 6px; border-top: 1px solid #2a2a4a; margin-top: 6px;",
                                     span { "{t(lang, T_TOTAL)}" }

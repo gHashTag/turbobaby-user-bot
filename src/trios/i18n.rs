@@ -314,6 +314,7 @@ pub const T_CART_CHECKOUT: Key = "cart.checkout";
 pub const T_CART_ITEMS: Key = "cart.items";
 pub const T_CART_DINE_IN: Key = "cart.dine_in";
 pub const T_CART_TAKEAWAY: Key = "cart.takeaway";
+pub const T_CART_BONUS_NUDGE: Key = "cart.bonus_nudge";
 pub const T_CART_DECREASE_QTY: Key = "cart.decrease_qty";
 pub const T_CART_REMOVE: Key = "cart.remove";
 pub const T_CART_IMAGE_ALT: Key = "cart.image_alt";
@@ -329,6 +330,10 @@ pub const T_CHECKOUT_GARDEN_DISCOUNT_PCT: Key = "checkout.garden_discount_pct";
 pub const T_CHECKOUT_STARS: Key = "checkout.stars";
 pub const T_CHECKOUT_STARS_AVAILABLE: Key = "checkout.stars_available";
 pub const T_CHECKOUT_STARS_MINUS: Key = "checkout.stars_minus";
+pub const T_CHECKOUT_BONUS: Key = "checkout.bonus";
+pub const T_CHECKOUT_BONUS_AVAILABLE: Key = "checkout.bonus_available";
+pub const T_CHECKOUT_BONUS_APPLIED: Key = "checkout.bonus_applied";
+pub const T_CHECKOUT_BONUS_MAX: Key = "checkout.bonus_max";
 pub const T_CHECKOUT_NAME_LABEL: Key = "checkout.name_label";
 pub const T_CHECKOUT_NAME_PLACEHOLDER: Key = "checkout.name_placeholder";
 pub const T_CHECKOUT_PHONE_LABEL: Key = "checkout.phone_label";
@@ -494,6 +499,7 @@ pub const T_SUCCESS_PUSH_REASSURANCE: Key = "success.push_reassurance";
 pub const T_SUCCESS_REWARDS_TITLE: Key = "success.rewards.title";
 pub const T_SUCCESS_REWARDS_GARDEN: Key = "success.rewards.garden";
 pub const T_SUCCESS_REWARDS_BONUS: Key = "success.rewards.bonus";
+pub const T_SUCCESS_CASHBACK_EARNED: Key = "success.cashback_earned";
 pub const T_SUCCESS_SHARE_REFERRAL: Key = "success.share_referral";
 pub const T_SUCCESS_REORDER: Key = "success.reorder";
 
@@ -960,6 +966,7 @@ fn get_ru_translation(key: Key) -> Value {
         T_CART_ITEMS => "{0} товаров",
         T_CART_DINE_IN => "🍽 На месте",
         T_CART_TAKEAWAY => "🥡 С собой",
+        T_CART_BONUS_NUDGE => "🎁 У вас {0} ฿ бонусов — применим при оформлении",
         T_CART_DECREASE_QTY => "Убавить количество",
         T_CART_REMOVE => "Удалить товар",
         T_CART_IMAGE_ALT => "Фото: {0}",
@@ -974,6 +981,10 @@ fn get_ru_translation(key: Key) -> Value {
         T_CHECKOUT_STARS => "⭐ Звёзды",
         T_CHECKOUT_STARS_AVAILABLE => "доступно {0}",
         T_CHECKOUT_STARS_MINUS => "−{0} ฿",
+        T_CHECKOUT_BONUS => "🎁 Бонусы",
+        T_CHECKOUT_BONUS_AVAILABLE => "доступно {0} ฿",
+        T_CHECKOUT_BONUS_APPLIED => "−{0} ฿",
+        T_CHECKOUT_BONUS_MAX => "макс. {0} ฿",
         T_CHECKOUT_NAME_LABEL => "Имя *",
         T_CHECKOUT_NAME_PLACEHOLDER => "Введите имя",
         T_CHECKOUT_PHONE_LABEL => "Телефон *",
@@ -1133,6 +1144,7 @@ fn get_ru_translation(key: Key) -> Value {
         T_SUCCESS_REWARDS_TITLE => "🎁 Что вы получите",
         T_SUCCESS_REWARDS_GARDEN => "🌱 Семя сада за strain-заказ",
         T_SUCCESS_REWARDS_BONUS => "⭐ Бонусные баллы: {0}",
+        T_SUCCESS_CASHBACK_EARNED => "💸 +{0} ฿ кешбэка начислено",
         T_SUCCESS_SHARE_REFERRAL => "👥 Пригласить друга",
         T_SUCCESS_REORDER => "🔄 Повторить заказ",
         // Orders screen
@@ -1578,6 +1590,7 @@ fn get_en_translation(key: Key) -> Value {
         T_CART_ITEMS => "{0} items",
         T_CART_DINE_IN => "🍽 Dine-in",
         T_CART_TAKEAWAY => "🥡 Takeaway",
+        T_CART_BONUS_NUDGE => "🎁 {0} ฿ bonus available at checkout",
         T_CART_DECREASE_QTY => "Decrease quantity",
         T_CART_REMOVE => "Remove item",
         T_CART_IMAGE_ALT => "Photo: {0}",
@@ -1592,6 +1605,10 @@ fn get_en_translation(key: Key) -> Value {
         T_CHECKOUT_STARS => "⭐ Stars",
         T_CHECKOUT_STARS_AVAILABLE => "{0} available",
         T_CHECKOUT_STARS_MINUS => "−{0} ฿",
+        T_CHECKOUT_BONUS => "🎁 Bonus",
+        T_CHECKOUT_BONUS_AVAILABLE => "{0} ฿ available",
+        T_CHECKOUT_BONUS_APPLIED => "−{0} ฿",
+        T_CHECKOUT_BONUS_MAX => "max {0} ฿",
         T_CHECKOUT_NAME_LABEL => "Name *",
         T_CHECKOUT_NAME_PLACEHOLDER => "Enter your name",
         T_CHECKOUT_PHONE_LABEL => "Phone *",
@@ -1751,6 +1768,7 @@ fn get_en_translation(key: Key) -> Value {
         T_SUCCESS_REWARDS_TITLE => "🎁 Your Rewards",
         T_SUCCESS_REWARDS_GARDEN => "🌱 Garden seed for strain orders",
         T_SUCCESS_REWARDS_BONUS => "⭐ Bonus points: {0}",
+        T_SUCCESS_CASHBACK_EARNED => "💸 +{0} ฿ cashback earned",
         T_SUCCESS_SHARE_REFERRAL => "👥 Invite a friend",
         T_SUCCESS_REORDER => "🔄 Reorder",
         // Orders screen
