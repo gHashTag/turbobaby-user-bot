@@ -1,5 +1,5 @@
 // Cart Screen — Interactive with global Cart signal
-use crate::trios::i18n::{t, T_CART_EMPTY, T_CART_EMPTY_DESC, T_CART_TITLE};
+use crate::trios::i18n::{t, T_CART_BROWSE_MENU, T_CART_BROWSE_SETS, T_CART_EMPTY, T_CART_EMPTY_DESC, T_CART_TITLE};
 use crate::ui::components::bottom_nav::BottomNav;
 use crate::ui::routes::Route;
 use crate::ui::state::{Cart, CartItem, CartItemType};
@@ -19,6 +19,8 @@ pub fn CartScreen() -> Element {
     let cart_title = t(crate::ui::lang::current_lang(), T_CART_TITLE);
     let cart_empty = t(crate::ui::lang::current_lang(), T_CART_EMPTY);
     let cart_empty_desc = t(crate::ui::lang::current_lang(), T_CART_EMPTY_DESC);
+    let browse_menu = t(crate::ui::lang::current_lang(), T_CART_BROWSE_MENU);
+    let browse_sets = t(crate::ui::lang::current_lang(), T_CART_BROWSE_SETS);
 
     rsx! {
         div { style: "
@@ -43,7 +45,27 @@ pub fn CartScreen() -> Element {
                             div { style: "text-align: center; padding: 60px 16px;",
                                 p { style: "font-size: 70px; margin-bottom: 16px;", "🛒" }
                                 p { style: "font-size: 13px; color: #8b8b9e; margin-bottom: 8px;", "{cart_empty}" }
-                                p { style: "font-size: 15px; color: #8b8b9e;", "{cart_empty_desc}" }
+                                p { style: "font-size: 15px; color: #8b8b9e; margin-bottom: 24px;", "{cart_empty_desc}" }
+                                div { style: "display: flex; flex-direction: column; gap: 12px;",
+                                    Link { to: Route::Menu {},
+                                        button { style: "
+                                            font-size: 15px; font-weight: 700; padding: 14px 20px;
+                                            background: #39ff14; color: #000;
+                                            border: 4px solid #2d9e0f; border-radius: 0;
+                                            cursor: pointer; box-shadow: 3px 3px 0 #000;
+                                            width: 100%;
+                                        ", "{browse_menu} →" }
+                                    }
+                                    Link { to: Route::Sets {},
+                                        button { style: "
+                                            font-size: 15px; font-weight: 700; padding: 14px 20px;
+                                            background: transparent; color: #e8e8e8;
+                                            border: 4px solid #2a2a4a; border-radius: 0;
+                                            cursor: pointer; box-shadow: 3px 3px 0 #000;
+                                            width: 100%;
+                                        ", "{browse_sets} →" }
+                                    }
+                                }
                             }
                         }
                     } else {

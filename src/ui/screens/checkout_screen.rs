@@ -1,7 +1,11 @@
 use crate::trios::core::Lang;
 use crate::trios::i18n::{
-    t, T_BACK, T_CHECKOUT_TITLE, T_DELIVERY, T_DELIVERY_ETA, T_DELIVERY_FEE, T_DELIVERY_ZONE,
-    T_PAYMENT, T_PICKUP_LOCATION, T_PLACE_ORDER, T_TOTAL, T_YOUR_INFO, T_YOUR_ORDER,
+    t, T_BACK, T_CHECKOUT_ERR_400, T_CHECKOUT_ERR_ITEMS, T_CHECKOUT_ERR_NAME,
+    T_CHECKOUT_ERR_NAME_LONG, T_CHECKOUT_ERR_NETWORK, T_CHECKOUT_ERR_NO_TELEGRAM,
+    T_CHECKOUT_ERR_PARSE, T_CHECKOUT_ERR_PHONE, T_CHECKOUT_ERR_PHONE_INVALID,
+    T_CHECKOUT_ERR_PHONE_LONG, T_CHECKOUT_TITLE, T_DELIVERY, T_DELIVERY_ETA, T_DELIVERY_FEE,
+    T_DELIVERY_ZONE, T_PAYMENT, T_PICKUP_LOCATION, T_PLACE_ORDER, T_TOTAL, T_YOUR_INFO,
+    T_YOUR_ORDER,
 };
 use crate::trios::store::validate_checkout;
 use crate::ui::api::context::api_base_url;
@@ -218,13 +222,21 @@ pub fn CheckoutScreen() -> Element {
             return;
         }
         if telegram_id.is_none() {
-            order_error.set(Some(
-                "Откройте приложение в Telegram, чтобы оформить заказ".into(),
-            ));
+            order_error.set(Some(t(lang, T_CHECKOUT_ERR_NO_TELEGRAM).to_string()));
             return;
         }
         let trios_items = to_trios_items(&submit_cart_items);
-        if validate_checkout(&customer_name(), &customer_phone(), &trios_items).is_err() {
+        if let Err(e) = validate_checkout(&customer_name(), &customer_phone(), &trios_items) {
+            let key = match e {
+                crate::trios::core::Error::Validation(msg) if msg.contains("Name is required") => T_CHECKOUT_ERR_NAME,
+                crate::trios::core::Error::Validation(msg) if msg.contains("Name is too long") => T_CHECKOUT_ERR_NAME_LONG,
+                crate::trios::core::Error::Validation(msg) if msg.contains("Phone is required") => T_CHECKOUT_ERR_PHONE,
+                crate::trios::core::Error::Validation(msg) if msg.contains("Phone is too long") => T_CHECKOUT_ERR_PHONE_LONG,
+                crate::trios::core::Error::Validation(msg) if msg.contains("Invalid phone number") => T_CHECKOUT_ERR_PHONE_INVALID,
+                crate::trios::core::Error::Validation(msg) if msg.contains("Cart cannot be empty") => T_CHECKOUT_ERR_ITEMS,
+                _ => T_CHECKOUT_ERR_400,
+            };
+            order_error.set(Some(t(lang, key).to_string()));
             return;
         }
         is_processing.set(true);
@@ -323,7 +335,7 @@ pub fn CheckoutScreen() -> Element {
                             return;
                         }
                     }
-                    order_error.set(Some("Не удалось обработать ответ сервера".into()));
+                    order_error.set(Some(t(lang, T_CHECKOUT_ERR_PARSE).to_string()));
                 }
                 Ok(resp) => {
                     let status = resp.status().as_u16();
@@ -334,8 +346,8 @@ pub fn CheckoutScreen() -> Element {
                         lang, status,
                     )));
                 }
-                Err(e) => {
-                    order_error.set(Some(format!("Ошибка сети: {}", e)));
+                Err(_) => {
+                    order_error.set(Some(t(lang, T_CHECKOUT_ERR_NETWORK).to_string()));
                 }
             }
             is_processing.set(false);
