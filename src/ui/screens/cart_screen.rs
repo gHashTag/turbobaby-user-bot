@@ -3,13 +3,14 @@ use crate::trios::i18n::{
     t, tf,
     T_CART_BACK_MENU, T_CART_BROWSE_MENU, T_CART_BROWSE_SETS, T_CART_CHECKOUT,
     T_CART_DECREASE_QTY, T_CART_DELIVERY, T_CART_DELIVERY_FREE, T_CART_DINE_IN,
-    T_CART_EMPTY, T_CART_EMPTY_DESC, T_CART_ITEMS, T_CART_SUBTOTAL, T_CART_TAKEAWAY,
-    T_CART_TITLE, T_PLACE_ORDER, T_TOTAL,
+    T_CART_EMPTY, T_CART_EMPTY_DESC, T_CART_IMAGE_ALT, T_CART_ITEMS, T_CART_REMOVE,
+    T_CART_SUBTOTAL, T_CART_TAKEAWAY, T_CART_TITLE, T_PLACE_ORDER, T_TOTAL,
 };
 use crate::ui::components::bottom_nav::BottomNav;
+use crate::ui::components::empty_state::EmptyState;
 use crate::ui::routes::Route;
 use crate::ui::state::{Cart, CartItem, CartItemType};
-use crate::ui::telegram::TelegramApp;
+use crate::ui::telegram::{TelegramApp, HapticNotification};
 use dioxus::prelude::*;
 
 fn format_price(price: f64) -> String {
@@ -63,27 +64,32 @@ pub fn CartScreen() -> Element {
                 {
                     if items.is_empty() {
                         rsx! {
-                            div { style: "text-align: center; padding: 60px 16px;",
-                                p { style: "font-size: 70px; margin-bottom: 16px;", "🛒" }
-                                p { style: "font-size: 13px; color: #8b8b9e; margin-bottom: 8px;", "{cart_empty}" }
-                                p { style: "font-size: 15px; color: #8b8b9e; margin-bottom: 24px;", "{cart_empty_desc}" }
-                                div { style: "display: flex; flex-direction: column; gap: 12px;",
-                                    Link { to: Route::Menu {},
-                                        button { style: "
-                                            font-size: 15px; font-weight: 700; padding: 14px 20px;
-                                            background: #39ff14; color: #000;
-                                            border: 4px solid #2d9e0f; border-radius: 0;
-                                            cursor: pointer; box-shadow: 3px 3px 0 #000;
-                                            width: 100%;
-                                        ", "{browse_menu} →" }
-                                    }
+                            div { style: "padding: 40px 0;",
+                                EmptyState {
+                                    icon: "🛒".to_string(),
+                                    title: cart_empty.to_string(),
+                                    description: cart_empty_desc.to_string(),
+                                    glass: true,
+                                    action: rsx! {
+                                        Link { to: Route::Menu {},
+                                            button { style: "
+                                                font-size: 15px; font-weight: 700; padding: 14px 20px;
+                                                background: #39ff14; color: #000;
+                                                border: 4px solid #2d9e0f; border-radius: 0;
+                                                cursor: pointer; box-shadow: 3px 3px 0 #000;
+                                                width: 100%; max-width: 320px;
+                                            ", "{browse_menu} →" }
+                                        }
+                                    },
+                                }
+                                div { style: "text-align:center;margin-top:16px;",
                                     Link { to: Route::Sets {},
                                         button { style: "
                                             font-size: 15px; font-weight: 700; padding: 14px 20px;
                                             background: transparent; color: #e8e8e8;
                                             border: 4px solid #2a2a4a; border-radius: 0;
                                             cursor: pointer; box-shadow: 3px 3px 0 #000;
-                                            width: 100%;
+                                            width: 100%; max-width: 320px;
                                         ", "{browse_sets} →" }
                                     }
                                 }
@@ -152,10 +158,12 @@ fn cart_item_row(item: CartItem, lang: crate::trios::core::Lang) -> Element {
     let mut cart = use_context::<Signal<Cart>>();
     let item_id_for_minus = item.id.clone();
     let item_id_for_plus = item.id.clone();
+    let item_id_for_remove = item.id.clone();
     let price_str = format_price(item.price);
     let qty = item.quantity;
     let line_total_str = format_price(item.price * item.quantity as f64);
     let row_key = item.id.clone();
+    let image_alt = tf(lang, T_CART_IMAGE_ALT, &[item.name.clone()]);
 
     rsx! {
         div {
@@ -166,11 +174,19 @@ fn cart_item_row(item: CartItem, lang: crate::trios::core::Lang) -> Element {
             border-radius: 0; padding: 10px; margin-bottom: 8px;
             box-shadow: 4px 4px 0 #000;
         ",
-            div { style: "
-                width: 44px; height: 44px; background: #16213e;
-                border-radius: 0; display: flex; align-items: center;
-                justify-content: center; font-size: 22px; flex-shrink: 0;
-            ", "🌿" }
+            if let Some(ref url) = item.image_url {
+                img {
+                    src: "{url}",
+                    alt: "{image_alt}",
+                    style: "width:44px;height:44px;object-fit:cover;background:#0f0f1a;border:2px solid #2a2a4a;flex-shrink:0;"
+                }
+            } else {
+                div { style: "
+                    width: 44px; height: 44px; background: #16213e;
+                    border-radius: 0; display: flex; align-items: center;
+                    justify-content: center; font-size: 22px; flex-shrink: 0;
+                ", "🌿" }
+            }
             div { style: "flex: 1;",
                 div { style: "font-size: 17px; font-weight: 700; margin-bottom: 2px;", "{item.name}" }
                 div { style: "font-size: 15px; color: #8b8b9e;", "{price_str} each · {line_total_str}" }
@@ -270,6 +286,23 @@ fn cart_item_row(item: CartItem, lang: crate::trios::core::Lang) -> Element {
                         crate::ui::telegram::TelegramApp::init().haptic_notification(crate::ui::telegram::HapticNotification::Success);
                     },
                     "+"
+                }
+                button {
+                    style: "
+                        width: 44px; height: 44px;
+                        border: 4px solid #ff4757; background: rgba(255,71,87,0.1);
+                        color: #ff4757; border-radius: 0; cursor: pointer;
+                        font-size: 16px; display: flex; align-items: center; justify-content: center;
+                        box-shadow: 3px 3px 0 #000;
+                        transition: transform 0.1s, box-shadow 0.1s;
+                    ",
+                    "aria-label": "{t(lang, T_CART_REMOVE)}",
+                    onclick: move |_| {
+                        let id = item_id_for_remove.clone();
+                        cart.write().remove_item(&id);
+                        TelegramApp::init().haptic_notification(HapticNotification::Warning);
+                    },
+                    "🗑"
                 }
             }
         }

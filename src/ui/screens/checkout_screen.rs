@@ -9,14 +9,17 @@ use crate::trios::i18n::{
     T_CHECKOUT_GARDEN_DISCOUNT_PCT, T_CHECKOUT_NAME_LABEL, T_CHECKOUT_NAME_PLACEHOLDER,
     T_CHECKOUT_NOTES_LABEL, T_CHECKOUT_NOTES_PLACEHOLDER, T_CHECKOUT_OPEN_MAP,
     T_CHECKOUT_PAY_ON_RECEIVE, T_CHECKOUT_PHONE_LABEL, T_CHECKOUT_PHONE_PLACEHOLDER,
-    T_CHECKOUT_PROCESSING, T_CHECKOUT_STARS, T_CHECKOUT_STARS_AVAILABLE, T_CHECKOUT_STARS_MINUS,
-    T_CHECKOUT_TITLE, T_CHECKOUT_ADDRESS_LABEL, T_CHECKOUT_ADDRESS_PLACEHOLDER,
+    T_CHECKOUT_PROCESSING, T_CHECKOUT_SELECT_ZONE, T_CHECKOUT_STARS,
+    T_CHECKOUT_STARS_AVAILABLE, T_CHECKOUT_STARS_MINUS, T_CHECKOUT_STEP_CART,
+    T_CHECKOUT_STEP_DETAILS, T_CHECKOUT_STEP_CONFIRM, T_CHECKOUT_TITLE,
+    T_CHECKOUT_ADDRESS_LABEL, T_CHECKOUT_ADDRESS_PLACEHOLDER,
     T_DELIVERY, T_DELIVERY_ETA, T_DELIVERY_FEE, T_DELIVERY_ZONE, T_PAYMENT,
     T_PICKUP_LOCATION, T_PLACE_ORDER, T_TOTAL, T_YOUR_INFO, T_YOUR_ORDER,
 };
 use crate::trios::store::validate_checkout;
 use crate::ui::api::context::api_base_url;
 use crate::ui::api::types::{DeliveryZone, DeliveryZonesResponse};
+use crate::ui::components::error_banner::ErrorBanner;
 use crate::ui::routes::Route;
 use crate::ui::state::{Cart, CartItem, CartItemType};
 use crate::ui::telegram::{use_telegram_id, use_telegram_init_data, use_telegram_username, TelegramApp, HapticNotification};
@@ -71,6 +74,48 @@ fn to_trios_items(items: &[CartItem]) -> Vec<crate::trios::store::CartItem> {
             CartItemType::Set => crate::trios::store::CartItem::new_set(i.id.clone(), i.quantity),
         })
         .collect()
+}
+
+#[derive(Props, PartialEq, Clone)]
+struct CheckoutStepperProps {
+    current: usize,
+}
+
+#[component]
+fn CheckoutStepper(props: CheckoutStepperProps) -> Element {
+    let lang = crate::ui::lang::current_lang();
+    let steps = [
+        t(lang, T_CHECKOUT_STEP_CART).to_string(),
+        t(lang, T_CHECKOUT_STEP_DETAILS).to_string(),
+        t(lang, T_CHECKOUT_STEP_CONFIRM).to_string(),
+    ];
+    let current = props.current;
+    rsx! {
+        div { style: "display:flex;align-items:center;gap:6px;padding:0 16px 16px;",
+            {
+                steps.iter().enumerate().map(|(idx, label)| {
+                    let is_active = idx == current;
+                    let is_completed = idx < current;
+                    let (bg, border, color) = if is_active {
+                        ("#39ff14", "#39ff14", "#000")
+                    } else if is_completed {
+                        ("rgba(57,255,20,0.15)", "#39ff14", "#39ff14")
+                    } else {
+                        ("transparent", "#2a2a4a", "#8b8b9e")
+                    };
+                    let dot = if is_completed { "✓" } else { &format!("{}", idx + 1) };
+                    rsx! {
+                        div {
+                            key: "{idx}",
+                            style: "flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:8px 4px;border:2px solid {border};background:{bg};color:{color};font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;",
+                            span { style: "display:flex;align-items:center;justify-content:center;width:18px;height:18px;border:2px solid {border};border-radius:50%;font-size:10px;", "{dot}" }
+                            "{label}"
+                        }
+                    }
+                })
+            }
+        }
+    }
 }
 
 #[component]
@@ -417,7 +462,8 @@ pub fn CheckoutScreen() -> Element {
             color: #e8e8e8;
             padding-bottom: 80px;
         ",
-            div { style: "padding: 20px 16px 16px; text-align: center;",
+            CheckoutStepper { current: 1 }
+            div { style: "padding: 4px 16px 16px; text-align: center;",
                 h1 { style: "font-size: 24px; font-weight: 800; color: #39ff14; text-shadow: 3px 3px 0 #000, 0 0 10px rgba(57,255,20,0.5); letter-spacing: 2px;", "{checkout_title}" }
             }
 
@@ -487,6 +533,7 @@ pub fn CheckoutScreen() -> Element {
                                 div { style: "display:flex;align-items:center;gap:8px;",
                                     input {
                                         r#type: "number",
+                                        inputmode: "numeric",
                                         min: "0",
                                         max: "{max_stars}",
                                         value: "{stars_val}",
@@ -527,6 +574,7 @@ pub fn CheckoutScreen() -> Element {
                                 box-sizing: border-box;
                             ",
                             r#type: "text",
+                            autocomplete: "name",
                             placeholder: "{t(lang, T_CHECKOUT_NAME_PLACEHOLDER)}",
                             value: "{customer_name}",
                             oninput: move |e| customer_name.set(e.value()),
@@ -542,6 +590,7 @@ pub fn CheckoutScreen() -> Element {
                                 box-sizing: border-box;
                             ",
                             r#type: "tel",
+                            autocomplete: "tel",
                             placeholder: "{t(lang, T_CHECKOUT_PHONE_PLACEHOLDER)}",
                             value: "{customer_phone}",
                             oninput: move |e| customer_phone.set(e.value()),
@@ -604,6 +653,7 @@ pub fn CheckoutScreen() -> Element {
                                 box-sizing: border-box;
                             ",
                             r#type: "text",
+                            autocomplete: "street-address",
                             placeholder: "{t(lang, T_CHECKOUT_ADDRESS_PLACEHOLDER)}",
                             value: "{delivery_address}",
                             oninput: move |e| delivery_address.set(e.value()),
@@ -619,33 +669,51 @@ pub fn CheckoutScreen() -> Element {
                                 box-sizing: border-box;
                             ",
                             r#type: "text",
+                            autocomplete: "off",
                             placeholder: "{t(lang, T_CHECKOUT_NOTES_PLACEHOLDER)}",
                             value: "{delivery_notes}",
                             oninput: move |e| delivery_notes.set(e.value()),
                         }
                     }
-                    // Zone selector: drives ETA / fee display from backend config.
+                    // Zone selector: native <select> is faster to tap and scroll than a
+                    // stack of custom divs, and it respects the user's keyboard on
+                    // devices without touch.
                     if !zones.is_empty() {
                         div { style: "margin-bottom: 8px;",
                             label { style: "font-size: 13px; color: #8b8b9e; display: block; margin-bottom: 4px;", "{delivery_zone_label}" }
-                            for z in zones.iter() {
-                                {
-                                    let zid = z.id.clone();
-                                    let zname = zone_display_name(z);
-                                    let is_selected = selected_zone.as_ref().map(|s| s.id == zid).unwrap_or(false);
-                                    let border = if is_selected { "#39ff14" } else { "#2a2a4a" };
-                                    let bg = if is_selected { "rgba(57,255,20,0.08)" } else { "transparent" };
-                                    rsx! {
-                                        div {
-                                            style: "
-                                                background: {bg}; border: 3px solid {border};
-                                                border-radius: 0; padding: 8px;
-                                                margin-bottom: 6px; cursor: pointer;
-                                            ",
-                                            onclick: move |_| delivery_zone_id.set(Some(zid.clone())),
-                                            div { style: "font-size: 14px;", "{zname}" }
-                                        }
+                            select {
+                                style: "
+                                    width: 100%; font-size: 15px; padding: 10px 12px;
+                                    background: #0f0f1a; color: #e8e8e8;
+                                    border: 4px solid #2a2a4a; border-radius: 0;
+                                    box-sizing: border-box; cursor: pointer;
+                                ",
+                                onchange: move |e: Event<FormData>| {
+                                    let v = e.value();
+                                    if !v.is_empty() {
+                                        delivery_zone_id.set(Some(v));
                                     }
+                                },
+                                option {
+                                    value: "",
+                                    disabled: true,
+                                    selected: selected_zone.is_none(),
+                                    "{t(lang, T_CHECKOUT_SELECT_ZONE)}"
+                                }
+                                {
+                                    zones.iter().map(|z| {
+                                        let zid = z.id.clone();
+                                        let zname = zone_display_name(z);
+                                        let is_selected = selected_zone.as_ref().map(|s| s.id == zid).unwrap_or(false);
+                                        rsx! {
+                                            option {
+                                                key: "{zid}",
+                                                value: "{zid}",
+                                                selected: is_selected,
+                                                "{zname}"
+                                            }
+                                        }
+                                    })
                                 }
                             }
                         }
@@ -681,13 +749,9 @@ pub fn CheckoutScreen() -> Element {
                 }
 
                 // Error display
-                if let Some(ref err) = order_error() {
-                    div { style: "
-                        background: rgba(255,71,87,0.1);
-                        border: 4px solid rgba(255,71,87,0.4);
-                        border-radius: 0; padding: 12px; margin-bottom: 12px;
-                        color: #ff4757; font-size: 14px; text-align: center;
-                    ", "❌ {err}" }
+                ErrorBanner {
+                    message: order_error.read().clone().unwrap_or_default(),
+                    icon: Some("❌".to_string()),
                 }
 
                 // Actions

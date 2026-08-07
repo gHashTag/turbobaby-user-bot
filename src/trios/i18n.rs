@@ -235,9 +235,15 @@ pub const T_CART_ITEMS: Key = "cart.items";
 pub const T_CART_DINE_IN: Key = "cart.dine_in";
 pub const T_CART_TAKEAWAY: Key = "cart.takeaway";
 pub const T_CART_DECREASE_QTY: Key = "cart.decrease_qty";
+pub const T_CART_REMOVE: Key = "cart.remove";
+pub const T_CART_IMAGE_ALT: Key = "cart.image_alt";
 
 // Checkout screen hard-coded strings
 pub const T_CHECKOUT_CART_EMPTY: Key = "checkout.cart_empty";
+pub const T_CHECKOUT_STEP_CART: Key = "checkout.step.cart";
+pub const T_CHECKOUT_STEP_DETAILS: Key = "checkout.step.details";
+pub const T_CHECKOUT_STEP_CONFIRM: Key = "checkout.step.confirm";
+pub const T_CHECKOUT_SELECT_ZONE: Key = "checkout.select_zone";
 pub const T_CHECKOUT_GARDEN_DISCOUNT: Key = "checkout.garden_discount";
 pub const T_CHECKOUT_GARDEN_DISCOUNT_PCT: Key = "checkout.garden_discount_pct";
 pub const T_CHECKOUT_STARS: Key = "checkout.stars";
@@ -255,6 +261,19 @@ pub const T_CHECKOUT_NOTES_PLACEHOLDER: Key = "checkout.notes_placeholder";
 pub const T_CHECKOUT_CASH_ON_DELIVERY: Key = "checkout.cash_on_delivery";
 pub const T_CHECKOUT_PAY_ON_RECEIVE: Key = "checkout.pay_on_receive";
 pub const T_CHECKOUT_PROCESSING: Key = "checkout.processing";
+
+// Success screen hard-coded strings
+pub const T_SUCCESS_TITLE: Key = "success.title";
+pub const T_SUCCESS_ORDER_RECEIVED: Key = "success.order_received";
+pub const T_SUCCESS_CONTACT_SHORTLY: Key = "success.contact_shortly";
+pub const T_SUCCESS_DELIVERY_ESTIMATE: Key = "success.delivery_estimate";
+pub const T_SUCCESS_STATUS: Key = "success.status";
+pub const T_SUCCESS_CONFIRMED: Key = "success.confirmed";
+pub const T_SUCCESS_ETA: Key = "success.eta";
+pub const T_SUCCESS_PAYMENT: Key = "success.payment";
+pub const T_SUCCESS_CASH_ON_DELIVERY: Key = "success.cash_on_delivery";
+pub const T_SUCCESS_BACK_MENU: Key = "success.back_menu";
+pub const T_SUCCESS_MY_ORDERS: Key = "success.my_orders";
 
 // Orders screen hard-coded strings
 pub const T_ORDERS_HISTORY: Key = "orders.history";
@@ -598,8 +617,14 @@ fn get_ru_translation(key: Key) -> Value {
         T_CART_DINE_IN => "🍽 На месте",
         T_CART_TAKEAWAY => "🥡 С собой",
         T_CART_DECREASE_QTY => "Убавить количество",
+        T_CART_REMOVE => "Удалить товар",
+        T_CART_IMAGE_ALT => "Фото: {0}",
         // Checkout screen
         T_CHECKOUT_CART_EMPTY => "Корзина пуста",
+        T_CHECKOUT_STEP_CART => "Корзина",
+        T_CHECKOUT_STEP_DETAILS => "Детали",
+        T_CHECKOUT_STEP_CONFIRM => "Подтверждение",
+        T_CHECKOUT_SELECT_ZONE => "Выберите зону доставки",
         T_CHECKOUT_GARDEN_DISCOUNT => "🌱 Скидка из сада",
         T_CHECKOUT_GARDEN_DISCOUNT_PCT => "{0}% на {1}",
         T_CHECKOUT_STARS => "⭐ Звёзды",
@@ -617,6 +642,18 @@ fn get_ru_translation(key: Key) -> Value {
         T_CHECKOUT_CASH_ON_DELIVERY => "Оплата при получении",
         T_CHECKOUT_PAY_ON_RECEIVE => "Оплатите при получении",
         T_CHECKOUT_PROCESSING => "⏳ Оформление...",
+        // Success screen
+        T_SUCCESS_TITLE => "Заказ оформлен!",
+        T_SUCCESS_ORDER_RECEIVED => "Заказ #{0} получен",
+        T_SUCCESS_CONTACT_SHORTLY => "Мы свяжемся с вами в ближайшее время",
+        T_SUCCESS_DELIVERY_ESTIMATE => "📦 Ожидаемое время доставки",
+        T_SUCCESS_STATUS => "Статус:",
+        T_SUCCESS_CONFIRMED => "Подтверждён",
+        T_SUCCESS_ETA => "Время доставки:",
+        T_SUCCESS_PAYMENT => "Оплата:",
+        T_SUCCESS_CASH_ON_DELIVERY => "Наличными при получении",
+        T_SUCCESS_BACK_MENU => "🌿 В меню",
+        T_SUCCESS_MY_ORDERS => "📋 Мои заказы",
         // Orders screen
         T_ORDERS_HISTORY => "История заказов",
         T_ORDERS_NO_ORDERS => "Пока нет заказов",
@@ -943,8 +980,14 @@ fn get_en_translation(key: Key) -> Value {
         T_CART_DINE_IN => "🍽 Dine-in",
         T_CART_TAKEAWAY => "🥡 Takeaway",
         T_CART_DECREASE_QTY => "Decrease quantity",
+        T_CART_REMOVE => "Remove item",
+        T_CART_IMAGE_ALT => "Photo: {0}",
         // Checkout screen
         T_CHECKOUT_CART_EMPTY => "Cart is empty",
+        T_CHECKOUT_STEP_CART => "Cart",
+        T_CHECKOUT_STEP_DETAILS => "Details",
+        T_CHECKOUT_STEP_CONFIRM => "Confirm",
+        T_CHECKOUT_SELECT_ZONE => "Select delivery zone",
         T_CHECKOUT_GARDEN_DISCOUNT => "🌱 Garden discount",
         T_CHECKOUT_GARDEN_DISCOUNT_PCT => "{0}% off {1}",
         T_CHECKOUT_STARS => "⭐ Stars",
@@ -962,6 +1005,18 @@ fn get_en_translation(key: Key) -> Value {
         T_CHECKOUT_CASH_ON_DELIVERY => "Cash on Delivery",
         T_CHECKOUT_PAY_ON_RECEIVE => "Pay when you receive",
         T_CHECKOUT_PROCESSING => "⏳ Processing...",
+        // Success screen
+        T_SUCCESS_TITLE => "Order Placed!",
+        T_SUCCESS_ORDER_RECEIVED => "Your order #{0} has been received",
+        T_SUCCESS_CONTACT_SHORTLY => "We'll contact you shortly",
+        T_SUCCESS_DELIVERY_ESTIMATE => "📦 Delivery Estimate",
+        T_SUCCESS_STATUS => "Status:",
+        T_SUCCESS_CONFIRMED => "Confirmed",
+        T_SUCCESS_ETA => "ETA:",
+        T_SUCCESS_PAYMENT => "Payment:",
+        T_SUCCESS_CASH_ON_DELIVERY => "Cash on delivery",
+        T_SUCCESS_BACK_MENU => "Back to Menu",
+        T_SUCCESS_MY_ORDERS => "My Orders",
         // Orders screen
         T_ORDERS_HISTORY => "Your order history",
         T_ORDERS_NO_ORDERS => "No orders yet",
