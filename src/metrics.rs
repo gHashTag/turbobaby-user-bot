@@ -215,6 +215,43 @@ pub fn share_source_assigned(source: &str) {
     .increment(1);
 }
 
+/// Loop #21: funnel stage for garden invite viral loop.
+/// Stages: "share", "accepted", "watered", "ordered".
+pub fn garden_invite_funnel(stage: &str) {
+    counter!(
+        "garden_invite_funnel_total",
+        "stage" => stage.to_string()
+    )
+    .increment(1);
+}
+
+/// Loop #21: a lifecycle notification was queued.
+pub fn notification_queued(kind: &str) {
+    counter!(
+        "notification_queued_total",
+        "kind" => kind.to_string()
+    )
+    .increment(1);
+}
+
+/// Loop #21: a friend-activity push was successfully delivered.
+pub fn friend_activity_pushed(kind: &str) {
+    counter!(
+        "friend_activity_pushed_total",
+        "kind" => kind.to_string()
+    )
+    .increment(1);
+}
+
+/// Loop #21: a referral milestone bonus was awarded.
+pub fn milestone_awarded(milestone: i32) {
+    counter!(
+        "referral_milestone_awarded_total",
+        "milestone" => milestone.to_string()
+    )
+    .increment(1);
+}
+
 /// Loop #18: a Woody Catch high score was submitted to the server.
 pub fn game_high_score_submitted(score: u64) {
     counter!("game_high_score_submitted_total").increment(1);
@@ -442,6 +479,17 @@ mod tests {
         share_event_logged("garden");
         garden_invite_accepted("utm_a");
         garden_invite_failed("db");
+    }
+
+    #[test]
+    fn test_loop21_metrics_do_not_panic() {
+        garden_invite_funnel("share");
+        garden_invite_funnel("accepted");
+        garden_invite_funnel("watered");
+        garden_invite_funnel("ordered");
+        notification_queued("friend_joined");
+        friend_activity_pushed("friend_watered");
+        milestone_awarded(3);
     }
 
     #[test]

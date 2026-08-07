@@ -436,7 +436,42 @@ pub async fn complete_order_and_update_loyalty(
         };
         match crate::db::referrals::confirm_referral(orm, cid, bonus, referred_welcome_bonus).await
         {
-            Ok(_) => Some(bonus),
+            Ok(_) => {
+                // Loop #21: award 1/3/5-referral milestones and notify the
+                // referrer that their friend ordered. These are best-effort
+                // after the order tx commits; failures are logged, not fatal.
+                if let Some(referrer_id) = crate::db::referrals::get_referrer_of(orm, cid)
+                    .await
+                    .ok()
+                    .flatten()
+                {
+                    if let Err(e) = crate::db::referrals::maybe_award_referral_milestones(
+                        orm, referrer_id,
+                    )
+                    .await
+                    {
+                        tracing::warn!(
+                            "complete_order: maybe_award_referral_milestones failed for referrer={}: {}",
+                            referrer_id, e
+                        );
+                    }
+                    let name = crate::db::users::first_name_for(orm, cid)
+                        .await
+                        .unwrap_or_else(|_| "Friend".to_string());
+                    if let Err(e) = crate::db::notifications::enqueue_friend_ordered(
+                        orm, referrer_id, &name, bonus,
+                    )
+                    .await
+                    {
+                        tracing::warn!(
+                            "complete_order: enqueue_friend_ordered failed for referrer={}: {}",
+                            referrer_id, e
+                        );
+                    }
+                    crate::metrics::garden_invite_funnel("ordered");
+                }
+                Some(bonus)
+            }
             Err(e) => {
                 tracing::error!(
                     "complete_order: confirm_referral failed for cid={}: {:?}",

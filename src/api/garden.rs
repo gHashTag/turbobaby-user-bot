@@ -714,6 +714,27 @@ async fn water_plant(
     }
     crate::metrics::garden_streak_milestone(new_streak as i64);
 
+    // Loop #21: notify the referrer when their friend waters the plant.
+    if let Some(referrer_id) = crate::db::referrals::get_referrer_of(&state.db.orm, tid)
+        .await
+        .map_err(|e| { tracing::error!("water_plant get_referrer_of: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?
+    {
+        let name = crate::db::users::first_name_for(&state.db.orm, tid)
+            .await
+            .unwrap_or_else(|_| "Friend".to_string());
+        if let Err(e) = crate::db::notifications::enqueue_friend_watered(
+            &state.db.orm,
+            referrer_id,
+            &name,
+            new_streak as i64,
+        )
+        .await
+        {
+            tracing::warn!("water_plant: failed to enqueue friend_watered: {}", e);
+        }
+        crate::metrics::garden_invite_funnel("watered");
+    }
+
     // Loop #18: evaluate garden achievements after the water is persisted.
     let new_achievements = match evaluate_and_persist_achievements(
         &state.db.orm,

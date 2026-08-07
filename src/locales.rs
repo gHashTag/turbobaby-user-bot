@@ -91,6 +91,12 @@ pub(crate) struct Locale {
     pub cart_abandonment_reminder_v2: String,
     pub cart_second_nudge: String,
     pub cart_open: String,
+    // Loop #21: referrer-facing lifecycle messages (sent by notification worker)
+    pub garden_friend_joined: String,
+    pub garden_friend_watered: String,
+    pub garden_friend_ordered: String,
+    pub garden_invite_progress_hint: String,
+    pub referral_milestone_bonus: String,
 }
 
 pub(crate) fn get_locale(lang: &str) -> Locale {
@@ -221,6 +227,12 @@ fn ru() -> Locale {
         cart_abandonment_reminder_v2: "👀 В корзине что-то классное осталось. Вернитесь — оформление займёт меньше минуты.".into(),
         cart_second_nudge: "⏰ Ваши товары всё ещё ждут. Оформите сегодня — добавим немного бонусных баллов к заказу.".into(),
         cart_open: "Открыть корзину".into(),
+        // Loop #21
+        garden_friend_joined: "🌱 {name} присоединился к вашему саду!".into(),
+        garden_friend_watered: "🔥 {name} полил растение и удерживает стрик {streak} дн.".into(),
+        garden_friend_ordered: "🎉 {name} сделал первый заказ! Вам начислено {bonus} бонусных баллов.".into(),
+        garden_invite_progress_hint: "Приглашайте больше друзей — получайте бонусы за их активность.".into(),
+        referral_milestone_bonus: "🏆 Поздравляем! Вы достигли рубежа {milestone} друзей и получили {bonus} бонусных баллов от @{bot}.".into(),
     }
 }
 
@@ -315,6 +327,12 @@ fn en() -> Locale {
         cart_abandonment_reminder_v2: "👀 Something nice is still waiting in your cart. Come back — checkout takes under a minute.".into(),
         cart_second_nudge: "⏰ Your items are still waiting. Complete your order today and we'll add a few bonus points.".into(),
         cart_open: "Open cart".into(),
+        // Loop #21
+        garden_friend_joined: "🌱 {name} joined your garden!".into(),
+        garden_friend_watered: "🔥 {name} watered their plant and kept a {streak}-day streak.".into(),
+        garden_friend_ordered: "🎉 {name} placed their first order! You earned {bonus} bonus points.".into(),
+        garden_invite_progress_hint: "Invite more friends — earn bonuses for their activity.".into(),
+        referral_milestone_bonus: "🏆 Congrats! You hit the {milestone} friends milestone and received {bonus} bonus points from @{bot}.".into(),
     }
 }
 

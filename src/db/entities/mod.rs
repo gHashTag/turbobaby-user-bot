@@ -32,6 +32,8 @@ pub mod loyalty_profile;
 #[allow(unreachable_pub)]
 pub mod order;
 #[allow(unreachable_pub)]
+pub mod notification_queue;
+#[allow(unreachable_pub)]
 pub mod order_fraud_event;
 #[allow(unreachable_pub)]
 pub mod order_idempotency_key;
@@ -39,6 +41,8 @@ pub mod order_idempotency_key;
 pub mod quest_place;
 #[allow(unreachable_pub)]
 pub mod referral_event;
+#[allow(unreachable_pub)]
+pub mod referral_milestone;
 #[allow(unreachable_pub)]
 pub mod stars_idempotency_key;
 #[allow(unreachable_pub)]

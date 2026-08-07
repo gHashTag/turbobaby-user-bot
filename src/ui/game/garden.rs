@@ -11,6 +11,8 @@ use crate::trios::i18n::{
     T_GARDEN_ERROR_HARVEST, T_GARDEN_ERROR_PRODUCT_UNAVAILABLE, T_GARDEN_ERROR_RESET,
     T_GARDEN_HARVEST, T_GARDEN_INVITEE_JOINED, T_GARDEN_INVITEE_ORDERED,
     T_GARDEN_INVITEES_EMPTY, T_GARDEN_INVITEES_TITLE, T_GARDEN_INVITEE_WATERING,
+    T_GARDEN_REFERRAL_MILESTONE_TITLE, T_GARDEN_REFERRAL_MILESTONE_SUBTITLE,
+    T_GARDEN_REFERRAL_MILESTONE_AWARDED,
     T_GARDEN_LEADERBOARD_RANK, T_GARDEN_LEADERBOARD_TAB_HARVEST,
     T_GARDEN_LEADERBOARD_TAB_STREAK, T_GARDEN_LEADERBOARD_TITLE, T_GARDEN_LEADERBOARD_YOU,
     T_GARDEN_LOADING, T_GARDEN_MILESTONE_HINT, T_GARDEN_NEXT_WATER_IN, T_GARDEN_PLANT_ALT,
@@ -206,6 +208,13 @@ struct ShareSourceResponse {
     source: String,
 }
 
+#[derive(Debug, Clone, serde::Deserialize)]
+struct MilestonesResponse {
+    confirmed: i64,
+    achieved: Vec<i32>,
+    thresholds: Vec<i32>,
+}
+
 /// Fetch the user's plants. On failure the `Err` carries the HTTP status so the
 /// caller can distinguish an auth failure (`401` → stale/empty Telegram
 /// initData, worth a one-time re-auth retry) from other errors. A network or
@@ -300,6 +309,16 @@ async fn fetch_invitees(telegram_id: i64, init_data: &str) -> Result<Vec<Invitee
     serde_json::from_str::<InviteesResponse>(&text)
         .map(|r| r.invitees)
         .map_err(|e| format!("Parse error: {e}"))
+}
+
+async fn fetch_milestones(
+    telegram_id: i64,
+    init_data: &str,
+) -> Result<MilestonesResponse, String> {
+    let base = api_base_url();
+    let url = format!("{}/api/referrals/me/{}/milestones", base, telegram_id);
+    let text = crate::ui::api::http::fetch_text_authed(&url, init_data).await?;
+    serde_json::from_str::<MilestonesResponse>(&text).map_err(|e| format!("Parse error: {e}"))
 }
 
 async fn mark_achievements_notified(telegram_id: i64, init_data: &str) {
@@ -517,6 +536,8 @@ pub fn Garden() -> Element {
     // Loop #20: server-assigned share source (stable A/B) and invitee panel.
     let share_source = use_signal(|| None::<String>);
     let invitees = use_signal(Vec::<Invitee>::new);
+    // Loop #21: milestone progress toward 1/3/5 friend thresholds.
+    let milestones = use_signal(|| None::<MilestonesResponse>);
     let telegram_id = use_telegram_id().unwrap_or(0);
     let init_data = use_telegram_init_data();
     let tg = use_telegram();
@@ -614,24 +635,32 @@ pub fn Garden() -> Element {
         });
     }
 
-    // Loop #20: load deterministic share source and invitee progress once
-    // initData is available. These are non-blocking; failure leaves defaults.
+    // Loop #20: server-assigned share source (stable A/B) and invitee panel.
+    // Loop #21: poll invitees + milestones every 30s so the social-proof panel
+    // and milestone widget update as friends water/order without a reload.
     {
         let tid = telegram_id;
         let init = init_data.clone();
         let mut source_c = share_source;
         let mut invitees_c = invitees;
+        let mut milestones_c = milestones;
         use_future(move || {
             let value = init.clone();
             async move {
                 if tid == 0 || value.is_empty() {
                     return;
                 }
-                if let Some(s) = fetch_share_source(tid, &value).await {
-                    source_c.set(Some(s));
-                }
-                if let Ok(list) = fetch_invitees(tid, &value).await {
-                    invitees_c.set(list);
+                loop {
+                    if let Some(s) = fetch_share_source(tid, &value).await {
+                        source_c.set(Some(s));
+                    }
+                    if let Ok(list) = fetch_invitees(tid, &value).await {
+                        invitees_c.set(list);
+                    }
+                    if let Ok(m) = fetch_milestones(tid, &value).await {
+                        milestones_c.set(Some(m));
+                    }
+                    TimeoutFuture::new(30_000).await;
                 }
             }
         });
@@ -737,6 +766,63 @@ pub fn Garden() -> Element {
                         "aria-label": "{leaderboard_title}",
                         onclick: move |_| show_leaderboard.set(true),
                         "🏆"
+                    }
+                }
+
+                // Loop #21: friend milestone progress widget.
+                {
+                    let ms_opt = milestones.read().clone();
+                    let title = t(lang, T_GARDEN_REFERRAL_MILESTONE_TITLE).to_string();
+                    if let Some(ms) = ms_opt {
+                        let max_threshold = ms.thresholds.iter().max().copied().unwrap_or(5);
+                        let next_threshold = ms
+                            .thresholds
+                            .iter()
+                            .filter(|&&t| !ms.achieved.contains(&t))
+                            .min()
+                            .copied()
+                            .unwrap_or(max_threshold);
+                        let subtitle = tf(
+                            lang,
+                            T_GARDEN_REFERRAL_MILESTONE_SUBTITLE,
+                            &[ms.confirmed.to_string(), next_threshold.to_string()],
+                        );
+                        let threshold_bonus = |t: i32| match t {
+                            1 => 100,
+                            3 => 300,
+                            5 => 500,
+                            _ => 0,
+                        };
+                        rsx! {
+                            div { style: "margin-top:14px;padding:10px;background:{bg_card};border:2px solid {border_subtle};border-radius:12px;text-align:left;",
+                                div { style: "font-size:12px;font-weight:800;color:#ffd700;margin-bottom:6px;display:flex;align-items:center;gap:6px;",
+                                    "🏆 {title}"
+                                    if !ms.achieved.is_empty() {
+                                        span { style: "font-size:11px;background:#ffd700;color:#000;padding:2px 6px;border-radius:10px;", "{ms.achieved.len()}" }
+                                    } else {
+                                        span {}
+                                    }
+                                }
+                                p { style: "font-size:11px;color:#8b8b9e;margin:0 0 8px 0;", "{subtitle}" }
+                                if !ms.achieved.is_empty() {
+                                    div { style: "display:flex;flex-direction:column;gap:4px;",
+                                        {
+                                            ms.achieved.iter().map(|t| {
+                                                let bonus = threshold_bonus(*t);
+                                                let text = tf(lang, T_GARDEN_REFERRAL_MILESTONE_AWARDED, &[t.to_string(), bonus.to_string()]);
+                                                rsx! {
+                                                    div { style: "font-size:11px;color:#e8e8e8;", "{text}" }
+                                                }
+                                            })
+                                        }
+                                    }
+                                } else {
+                                    div {}
+                                }
+                            }
+                        }
+                    } else {
+                        rsx! {}
                     }
                 }
 

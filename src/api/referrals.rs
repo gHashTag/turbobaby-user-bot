@@ -9,8 +9,8 @@ use serde_json::{json, Value};
 
 use crate::api::auth::{check_not_blocked, validate_telegram_id_param};
 use crate::db::referrals::{
-    get_invitees, get_or_create_referral_code, get_referrer_stats, get_top_referrers,
-    is_self_referral, record_referral,
+    get_invitees, get_or_create_referral_code, get_referral_milestones, get_referrer_stats,
+    get_top_referrers, is_self_referral, record_referral,
 };
 use crate::trios::referrals::assign_share_source;
 use crate::AppState;
@@ -24,6 +24,7 @@ pub(crate) fn routes() -> Router<AppState> {
         .route("/referrals/me/:telegram_id", get(get_my_referrals))
         .route("/referrals/me/:telegram_id/share-source", get(get_share_source))
         .route("/referrals/me/:telegram_id/invitees", get(get_my_invitees))
+        .route("/referrals/me/:telegram_id/milestones", get(get_my_milestones))
         .route("/referrals/me/:telegram_id/garden-invite", post(post_garden_invite))
         .route("/referrals/leaderboard", get(get_leaderboard))
 }
@@ -90,6 +91,34 @@ async fn get_my_invitees(
     Ok(Json(json!({
         "count": invitees.len(),
         "invitees": invitees,
+    })))
+}
+
+/// GET /api/referrals/me/:telegram_id/milestones
+///
+/// Loop #21: returns the referral milestone bonuses already awarded to this
+/// user plus the count of confirmed referrals, so the UI can show progress
+/// toward the next 1/3/5 friend thresholds.
+async fn get_my_milestones(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    Path(telegram_id): Path<i64>,
+) -> Result<Json<Value>, StatusCode> {
+    validate_telegram_id_param(telegram_id)?;
+    crate::api::auth::check_owner(&headers, &state, telegram_id)?;
+    check_not_blocked(&state, telegram_id).await?;
+
+    let (achieved, confirmed) = get_referral_milestones(&state.db.orm, telegram_id)
+        .await
+        .map_err(|e| {
+            tracing::error!("DB error get_referral_milestones: {:?}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    Ok(Json(json!({
+        "confirmed": confirmed,
+        "achieved": achieved,
+        "thresholds": [1, 3, 5],
     })))
 }
 

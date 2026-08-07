@@ -6,6 +6,7 @@
 pub mod entities;
 pub(crate) mod loyalty;
 pub(crate) mod macros;
+pub(crate) mod notifications;
 #[allow(unreachable_pub)]
 pub mod orders;
 pub(crate) mod referrals;
@@ -288,6 +289,14 @@ const MIGRATIONS: &[(&str, &str)] = &[
     (
         "066_garden_social.sql",
         include_str!("../../migrations/066_garden_social.sql"),
+    ),
+    (
+        "067_notification_queue.sql",
+        include_str!("../../migrations/067_notification_queue.sql"),
+    ),
+    (
+        "068_referral_milestones.sql",
+        include_str!("../../migrations/068_referral_milestones.sql"),
     ),
 ];
 

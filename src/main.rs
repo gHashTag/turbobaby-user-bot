@@ -19,6 +19,8 @@ mod locales;
 pub mod metrics;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod notify;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod notification_queue;
 #[cfg(all(not(target_arch = "wasm32"), feature = "backend"))]
 mod promptpay;
 #[cfg(not(target_arch = "wasm32"))]
@@ -549,6 +551,18 @@ async fn main() -> Result<()> {
             cart_abandonment_bot,
             cart_abandonment_config,
             300,
+        );
+    }
+
+    // Loop #21: drain persisted referrer-facing notifications.
+    {
+        let notification_orm = db.orm.clone();
+        let notification_bot = bot_arc_for_state.clone();
+        let notification_config = config.clone();
+        crate::notification_queue::spawn_notification_worker(
+            notification_orm,
+            notification_bot,
+            notification_config,
         );
     }
 
