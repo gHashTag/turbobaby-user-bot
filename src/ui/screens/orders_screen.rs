@@ -1,11 +1,12 @@
 use crate::trios::i18n::{
-    t, T_LOADING, T_ORDERS_TITLE, T_REVIEW_COMMENT, T_REVIEW_LEAVE, T_REVIEW_RATING,
+    t, T_LOADING, T_ORDERS_TITLE, T_REORDER, T_REVIEW_COMMENT, T_REVIEW_LEAVE, T_REVIEW_RATING,
     T_REVIEW_SUBMIT, T_REVIEW_THANKS,
 };
+use crate::ui::state::{Cart, CartItem, CartItemType};
 use crate::ui::api::context::{api_base_url, use_api_client};
 use crate::ui::components::bottom_nav::BottomNav;
 use crate::ui::routes::Route;
-use crate::ui::telegram::{use_telegram_id, use_telegram_init_data};
+use crate::ui::telegram::{use_telegram_id, use_telegram_init_data, TelegramApp, HapticNotification};
 use dioxus::prelude::*;
 use serde::Deserialize;
 
@@ -284,6 +285,10 @@ pub fn OrdersScreen() -> Element {
         }
     });
 
+    let cart = use_context::<Signal<Cart>>();
+    let nav = navigator();
+    let reorder_label = t(crate::ui::lang::current_lang(), T_REORDER);
+
     let filtered = match &*orders_resource.read() {
         Some(Ok(orders)) => {
             let f = active_filter();
@@ -422,6 +427,48 @@ pub fn OrdersScreen() -> Element {
                                                 div { style: "display: flex; justify-content: space-between; padding-top: 8px; border-top: 1px solid #2a2a4a; font-size: 13px;",
                                                     span { style: "color: #8b8b9e;", "📍 {shop} · {date_str}" }
                                                     span { style: "font-size: 20px; font-weight: 800; color: #ffe600; text-shadow: 2px 2px 0 #000;", "{total_str}" }
+                                                }
+                                                if is_terminal_status(&o.status) {
+                                                    {
+                                                        let order_for_reorder = o.clone();
+                                                        let reorder_nav = nav.clone();
+                                                        let mut reorder_cart = cart.clone();
+                                                        let reorder_label2 = reorder_label;
+                                                        rsx! {
+                                                            div { style: "padding-top: 8px;",
+                                                                button {
+                                                                    style: "font-size:13px;font-weight:700;width:100%;padding:10px;background:#39ff14;color:#000;border:3px solid #2d9e0f;box-shadow:2px 2px 0 #000;cursor:pointer;",
+                                                                    onclick: move |_| {
+                                                                        reorder_cart.write().clear();
+                                                                        for item in order_for_reorder.items.iter() {
+                                                                            let (id, name, item_type, price_hint) = if let Some(ref sid) = item.strain_id {
+                                                                                (sid.clone(), item.strain_name.clone().unwrap_or_else(|| "Strain".into()), CartItemType::Strain, 0.0)
+                                                                            } else if item.set_name.is_some() {
+                                                                                (format!("set-{}", order_for_reorder.id), item.set_name.clone().unwrap_or_else(|| "Set".into()), CartItemType::Set, 0.0)
+                                                                            } else if item.accessory_name.is_some() {
+                                                                                (format!("acc-{}", order_for_reorder.id), item.accessory_name.clone().unwrap_or_else(|| "Accessory".into()), CartItemType::Accessory, 0.0)
+                                                                            } else {
+                                                                                (format!("tea-{}", order_for_reorder.id), item.tea_name.clone().unwrap_or_else(|| "Drink".into()), CartItemType::Tea, 0.0)
+                                                                            };
+                                                                            let qty = item.quantity.max(1.0) as u32;
+                                                                            reorder_cart.write().add_item(CartItem {
+                                                                                id,
+                                                                                name,
+                                                                                price: price_hint,
+                                                                                quantity: qty,
+                                                                                image_url: None,
+                                                                                item_type,
+                                                                                fulfillment: None,
+                                                                            });
+                                                                        }
+                                                                        TelegramApp::init().haptic_notification(HapticNotification::Success);
+                                                                        reorder_nav.push(Route::Cart {});
+                                                                    },
+                                                                    "{reorder_label2}"
+                                                                }
+                                                            }
+                                                        }
+                                                    }
                                                 }
                                             }
                                         }

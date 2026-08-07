@@ -1,8 +1,9 @@
 // Cart Screen — Interactive with global Cart signal
-use crate::trios::i18n::{t, T_CART_BROWSE_MENU, T_CART_BROWSE_SETS, T_CART_EMPTY, T_CART_EMPTY_DESC, T_CART_TITLE};
+use crate::trios::i18n::{t, T_CART_BROWSE_MENU, T_CART_BROWSE_SETS, T_CART_EMPTY, T_CART_EMPTY_DESC, T_CART_TITLE, T_PLACE_ORDER};
 use crate::ui::components::bottom_nav::BottomNav;
 use crate::ui::routes::Route;
 use crate::ui::state::{Cart, CartItem, CartItemType};
+use crate::ui::telegram::TelegramApp;
 use dioxus::prelude::*;
 
 fn format_price(price: f64) -> String {
@@ -21,6 +22,18 @@ pub fn CartScreen() -> Element {
     let cart_empty_desc = t(crate::ui::lang::current_lang(), T_CART_EMPTY_DESC);
     let browse_menu = t(crate::ui::lang::current_lang(), T_CART_BROWSE_MENU);
     let browse_sets = t(crate::ui::lang::current_lang(), T_CART_BROWSE_SETS);
+    let tg = TelegramApp::init();
+    let total_str = crate::trios::pricing::format_baht(total);
+    if !items.is_empty() {
+        tg.set_main_button_text(&format!("{} — {}", t(crate::ui::lang::current_lang(), T_PLACE_ORDER), total_str));
+        tg.show_back_button();
+    } else {
+        tg.hide_main_button();
+        tg.hide_back_button();
+    }
+    // NOTE: MainButton has no reliable onclick bridge via document::eval; we keep
+    // the in-app checkout button as the actionable element. Telegram MainButton here
+    // acts as a visible price/status hint and back navigation affordance.
 
     rsx! {
         div { style: "

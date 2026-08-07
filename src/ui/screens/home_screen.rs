@@ -1,6 +1,6 @@
 use crate::trios::i18n::{
     t, T_ADD_TO_CART, T_HOME_SUBTITLE, T_NAV_ACCESSORIES, T_NAV_GARDEN, T_NAV_MENU, T_NAV_SETS,
-    T_NAV_TEA,
+    T_NAV_TEA, T_TRUST_AGE, T_TRUST_GACP, T_TRUST_MEDICAL, T_TRUST_SUPPORT,
 };
 use crate::ui::api::context::api_base_url;
 use crate::ui::assets;
@@ -484,6 +484,26 @@ pub fn HomeScreen() -> Element {
             //         Link { to: Route::TechTree {}, ... }
             //     }
             // }
+
+            // Trust / compliance footer
+            div { style: "padding:0 16px 24px;",
+                div { style: "
+                    background:#16213e;border:4px solid #2a2a4a;
+                    box-shadow:4px 4px 0 #000;
+                    padding:14px;
+                ",
+                    div { style: "display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;",
+                        span { style: "font-size:12px;font-weight:700;background:rgba(57,255,20,0.15);color:#39ff14;padding:4px 8px;border:2px solid #39ff14;", {t(crate::ui::lang::current_lang(), T_TRUST_GACP)} }
+                        span { style: "font-size:12px;font-weight:700;background:rgba(255,71,87,0.15);color:#ff4757;padding:4px 8px;border:2px solid #ff4757;", {t(crate::ui::lang::current_lang(), T_TRUST_AGE)} }
+                    }
+                    p { style: "font-size:12px;color:#8b8b9e;line-height:1.4;margin-bottom:10px;", {t(crate::ui::lang::current_lang(), T_TRUST_MEDICAL)} }
+                    a { style: "font-size:13px;font-weight:700;color:#00e5ff;text-decoration:underline;",
+                        href: "https://t.me/woodyweedpecker_support",
+                        target: "_blank",
+                        {t(crate::ui::lang::current_lang(), T_TRUST_SUPPORT)}
+                    }
+                }
+            }
 
             BottomNav { cart_count }
         }

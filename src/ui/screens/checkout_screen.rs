@@ -12,7 +12,7 @@ use crate::ui::api::context::api_base_url;
 use crate::ui::api::types::{DeliveryZone, DeliveryZonesResponse};
 use crate::ui::routes::Route;
 use crate::ui::state::{Cart, CartItem, CartItemType};
-use crate::ui::telegram::{use_telegram_id, use_telegram_init_data, use_telegram_username};
+use crate::ui::telegram::{use_telegram_id, use_telegram_init_data, use_telegram_username, TelegramApp, HapticNotification};
 use dioxus::prelude::*;
 use serde_json::json;
 use web_sys::window;
@@ -88,6 +88,11 @@ pub fn CheckoutScreen() -> Element {
     let telegram_id = use_telegram_id();
     let telegram_username = use_telegram_username();
     let init_data = use_telegram_init_data();
+    let tg = TelegramApp::init();
+    tg.set_main_button_text(&t(crate::ui::lang::current_lang(), T_PLACE_ORDER));
+    tg.show_back_button();
+    // Prevent accidental close while the user is filling the checkout form.
+    let _ = document::eval("if(window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.enableClosingConfirmation){ window.Telegram.WebApp.enableClosingConfirmation(); }");
 
     // Cycle #73 / A: lang is now resolved once at WASM startup
     // (lib.rs::run via pick_lang) and stored in OnceLock; just read it.
@@ -223,6 +228,7 @@ pub fn CheckoutScreen() -> Element {
         }
         if telegram_id.is_none() {
             order_error.set(Some(t(lang, T_CHECKOUT_ERR_NO_TELEGRAM).to_string()));
+            tg.haptic_notification(HapticNotification::Error);
             return;
         }
         let trios_items = to_trios_items(&submit_cart_items);
@@ -237,6 +243,7 @@ pub fn CheckoutScreen() -> Element {
                 _ => T_CHECKOUT_ERR_400,
             };
             order_error.set(Some(t(lang, key).to_string()));
+            tg.haptic_notification(HapticNotification::Warning);
             return;
         }
         is_processing.set(true);
@@ -331,14 +338,17 @@ pub fn CheckoutScreen() -> Element {
                             let order_id = id.to_string();
                             // Navigate to success and clear cart
                             cart.write().clear();
+                            tg.haptic_notification(HapticNotification::Success);
                             nav.push(Route::Success { id: order_id });
                             return;
                         }
                     }
+                    tg.haptic_notification(HapticNotification::Error);
                     order_error.set(Some(t(lang, T_CHECKOUT_ERR_PARSE).to_string()));
                 }
                 Ok(resp) => {
                     let status = resp.status().as_u16();
+                    tg.haptic_notification(HapticNotification::Error);
                     // Cycle #65/#69 friendly per-status; cycle #70 sources
                     // `lang` from `?lang=xx` so a non-RU Telegram client gets
                     // localised "Account restricted" instead of Cyrillic.
@@ -347,6 +357,7 @@ pub fn CheckoutScreen() -> Element {
                     )));
                 }
                 Err(_) => {
+                    tg.haptic_notification(HapticNotification::Error);
                     order_error.set(Some(t(lang, T_CHECKOUT_ERR_NETWORK).to_string()));
                 }
             }

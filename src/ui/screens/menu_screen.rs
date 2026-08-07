@@ -1,4 +1,4 @@
-use crate::trios::i18n::{t, T_ADD_TO_CART, T_LOADING, T_MENU_DESC, T_MENU_TITLE};
+use crate::trios::i18n::{t, T_ADD_TO_CART, T_LOADING, T_MENU_DESC, T_MENU_TITLE, T_SEARCH_PLACEHOLDER};
 use crate::ui::api::context::api_base_url;
 use crate::ui::components::bottom_nav::BottomNav;
 use crate::ui::components::card_media::CardMedia;
@@ -123,6 +123,7 @@ fn filter_tab_style(is_active: bool) -> String {
 pub fn MenuScreen() -> Element {
     let mut active_filter = use_signal(|| "All".to_string());
     let mut active_sort = use_signal(|| "default".to_string());
+    let mut search_query = use_signal(String::new);
 
     let mut cart = use_context::<Signal<Cart>>();
     let cart_count: u32 = cart.read().items.iter().map(|i| i.quantity).sum();
@@ -224,6 +225,22 @@ pub fn MenuScreen() -> Element {
                 }
             }
 
+            // Search bar
+            div { style: "padding:0 16px 12px;",
+                input {
+                    r#type: "text",
+                    placeholder: "{t(crate::ui::lang::current_lang(), T_SEARCH_PLACEHOLDER)}",
+                    value: "{search_query()}",
+                    style: "
+                        width:100%;box-sizing:border-box;
+                        font-size:15px;padding:10px 12px;
+                        background:#0f0f1a;color:#e8e8e8;
+                        border:4px solid #2a2a4a;border-radius:0;
+                    ",
+                    oninput: move |e| search_query.set(e.value()),
+                }
+            }
+
             div { style: "display:flex;gap:6px;padding:0 16px 12px;overflow-x:auto;",
                 button {
                     style: filter_tab_style(active_filter() == "All"),
@@ -280,12 +297,21 @@ pub fn MenuScreen() -> Element {
                     Some(Ok(all_strains)) => {
                         let filter_val = active_filter();
                         let sort_val = active_sort();
-                        let mut filtered: Vec<ApiStrain> = if filter_val == "All" {
+                        let query = search_query().to_lowercase();
+                        let mut filtered: Vec<ApiStrain> = if filter_val == "All" && query.is_empty() {
                             all_strains.clone()
                         } else {
                             let needle = filter_val.to_lowercase();
                             all_strains.iter()
-                                .filter(|s| s.category.as_deref().map(|c| c.eq_ignore_ascii_case(&needle)).unwrap_or(false))
+                                .filter(|s| {
+                                    let matches_category = filter_val == "All" || s.category.as_deref().map(|c| c.eq_ignore_ascii_case(&needle)).unwrap_or(false);
+                                    let matches_search = query.is_empty()
+                                        || s.name.to_lowercase().contains(&query)
+                                        || s.name_en.as_deref().unwrap_or("").to_lowercase().contains(&query)
+                                        || s.effect.as_deref().unwrap_or("").to_lowercase().contains(&query)
+                                        || s.flavor_profile.as_deref().unwrap_or("").to_lowercase().contains(&query);
+                                    matches_category && matches_search
+                                })
                                 .cloned()
                                 .collect()
                         };
