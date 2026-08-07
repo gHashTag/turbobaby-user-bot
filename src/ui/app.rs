@@ -5,7 +5,7 @@
 use crate::ui::api::context::ApiClientProvider;
 use crate::ui::components::{install_error_handlers, ErrorOverlay, JsErrorItem};
 use crate::ui::routes::Routes;
-use crate::ui::share::{parse_start_param, SharedProduct};
+use crate::ui::share::{parse_order_start_param, parse_start_param, SharedProduct};
 use crate::ui::state::Cart;
 use crate::ui::telegram::TelegramProvider;
 use dioxus::prelude::*;
@@ -87,6 +87,11 @@ pub fn App() -> Element {
     use_context_provider(|| Signal::new(None::<SharedProduct>));
     let pending_shared = use_context::<Signal<Option<SharedProduct>>>();
 
+    // Order deep-link target parsed from Telegram.WebApp.initDataUnsafe.start_param.
+    // OrdersScreen / OrderDetailScreen read this signal to open the referenced order.
+    use_context_provider(|| Signal::new(None::<String>));
+    let pending_order = use_context::<Signal<Option<String>>>();
+
     use_effect(move || {
         install_error_handlers(errors);
     });
@@ -95,9 +100,10 @@ pub fn App() -> Element {
     // render, so poll start_param briefly instead of reading it once.
     use_hook(move || {
         let mut pending = pending_shared.clone();
+        let mut pending_order_id = pending_order.clone();
         spawn(async move {
             for _ in 0..30 {
-                if pending.read().is_some() {
+                if pending.read().is_some() || pending_order_id.read().is_some() {
                     return;
                 }
                 if let Some(param) = crate::ui::telegram::TelegramApp::init().start_param() {
@@ -108,6 +114,14 @@ pub fn App() -> Element {
                                 .into(),
                         );
                         pending.set(Some(product));
+                        return;
+                    }
+                    if let Some(order_id) = parse_order_start_param(&param) {
+                        #[cfg(target_arch = "wasm32")]
+                        web_sys::console::log_1(
+                            &format!("[deeplink] resolved order {}", order_id).into(),
+                        );
+                        pending_order_id.set(Some(order_id));
                         return;
                     }
                 }

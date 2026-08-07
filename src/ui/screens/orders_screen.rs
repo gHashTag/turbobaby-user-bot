@@ -5,15 +5,14 @@ use crate::trios::i18n::{
     T_ORDERS_HISTORY, T_ORDERS_NO_ORDERS, T_ORDERS_ORDER, T_ORDERS_STATUS_CANCELLED,
     T_ORDERS_STATUS_CONFIRMED, T_ORDERS_STATUS_DELIVERED, T_ORDERS_STATUS_OUT_FOR_DELIVERY,
     T_ORDERS_STATUS_PENDING, T_ORDERS_STATUS_PREPARING, T_ORDERS_STATUS_READY,
-    T_ORDERS_STATUS_UNKNOWN, T_ORDERS_STEP_CONFIRMED, T_ORDERS_STEP_DELIVERED,
-    T_ORDERS_STEP_ON_THE_WAY, T_ORDERS_STEP_PREPARING, T_ORDERS_STEP_READY,
-    T_ORDERS_STEP_RECEIVED, T_ORDERS_TITLE, T_REORDER, T_REVIEW_COMMENT, T_REVIEW_LEAVE,
+    T_ORDERS_STATUS_UNKNOWN, T_ORDERS_TITLE, T_REORDER, T_REVIEW_COMMENT, T_REVIEW_LEAVE,
     T_REVIEW_RATING, T_REVIEW_SUBMIT, T_REVIEW_THANKS,
 };
 use crate::ui::state::{Cart, CartItem, CartItemType};
 use crate::ui::api::context::{api_base_url, use_api_client};
 use crate::ui::components::bottom_nav::BottomNav;
 use crate::ui::components::skeleton::{Skeleton, SkeletonShape};
+use crate::ui::components::StatusStepper;
 use crate::ui::routes::Route;
 use crate::ui::telegram::{use_telegram_id, use_telegram_init_data, TelegramApp, HapticNotification};
 use dioxus::prelude::*;
@@ -57,15 +56,6 @@ fn item_name(item: &ApiOrderItem) -> String {
 struct OrdersResponse {
     orders: Vec<ApiOrder>,
 }
-
-const ORDER_PIPELINE: &[&str] = &[
-    "pending",
-    "confirmed",
-    "preparing",
-    "ready",
-    "out_for_delivery",
-    "delivered",
-];
 
 fn status_color(status: &str) -> &'static str {
     match status.to_lowercase().as_str() {
@@ -123,70 +113,6 @@ impl StatusFilter {
 
 fn is_terminal_status(status: &str) -> bool {
     matches!(status, "delivered" | "completed" | "rejected" | "cancelled")
-}
-
-fn pipeline_index(status: &str) -> usize {
-    ORDER_PIPELINE
-        .iter()
-        .position(|&s| s == status)
-        .unwrap_or(ORDER_PIPELINE.len())
-}
-
-fn status_progress(status: &str, lang: crate::trios::core::Lang) -> (String, &str) {
-    let (key, emoji) = match status {
-        "pending" => (T_ORDERS_STEP_RECEIVED, "📥"),
-        "confirmed" => (T_ORDERS_STEP_CONFIRMED, "✅"),
-        "preparing" => (T_ORDERS_STEP_PREPARING, "🔥"),
-        "ready" => (T_ORDERS_STEP_READY, "📦"),
-        "out_for_delivery" => (T_ORDERS_STEP_ON_THE_WAY, "🚗"),
-        "delivered" | "completed" => (T_ORDERS_STEP_DELIVERED, "🎉"),
-        _ => return (status.to_string(), ""),
-    };
-    (t(lang, key).to_string(), emoji)
-}
-
-#[component]
-fn PipelineSegment(i: usize, current: usize, last: bool) -> Element {
-    let active = i <= current;
-    let bg = if active { "#39ff14" } else { "#2a2a4a" };
-    let flex = if last { "0 0 8px" } else { "1" };
-    let shape = if last {
-        "border-radius: 50%;"
-    } else {
-        "border-radius: 2px;"
-    };
-    rsx! {
-        div { style: "{shape} height: 4px; background: {bg}; flex: {flex}; min-width: 8px;" }
-        if !last {
-            div { style: "width: 4px; height: 4px; background: {bg};" }
-        }
-    }
-}
-
-/// Compact horizontal progress tracker for the delivery pipeline.
-#[component]
-fn StatusProgress(status: String) -> Element {
-    let lang = crate::ui::lang::current_lang();
-    let current = pipeline_index(&status);
-    let _terminal = is_terminal_status(&status);
-    let cancelled = status == "cancelled" || status == "rejected";
-    let (step_label, emoji) = status_progress(&status, lang);
-    rsx! {
-        div { style: "margin-bottom: 8px;",
-            div { style: "font-size: 12px; color: #8b8b9e; margin-bottom: 4px;",
-                "{emoji} {step_label}"
-            }
-            div { style: "display: flex; align-items: center; gap: 4px;",
-                if cancelled {
-                    div { style: "flex:1;height:4px;background:#ff4757;border-radius:2px;" }
-                } else {
-                    for i in 0..ORDER_PIPELINE.len() {
-                        PipelineSegment { i, current, last: i == ORDER_PIPELINE.len() - 1 }
-                    }
-                }
-            }
-        }
-    }
 }
 
 #[derive(Props, PartialEq, Clone)]
@@ -403,6 +329,8 @@ pub fn OrdersScreen() -> Element {
                                         let border_color = if is_cancelled { "#2a2a4a" } else { status_color };
                                         let is_active = !is_terminal_status(&o.status);
                                         let shadow = if is_active { "4px 4px 0 #000, 0 0 12px rgba(0,229,255,0.1)" } else { "4px 4px 0 #000" };
+                                        let order_nav = nav.clone();
+                                        let order_id_for_card = o.id.clone();
 
                                         rsx! {
                                             div { style: "
@@ -410,8 +338,10 @@ pub fn OrdersScreen() -> Element {
                                                 border-radius: 0; padding: 14px;
                                                 box-shadow: {shadow};
                                                 opacity: {opacity};
+                                                cursor: pointer;
                                             ",
-                                                StatusProgress { status: o.status.clone() }
+                                                onclick: move |_| { order_nav.push(Route::OrderDetail { id: order_id_for_card.clone() }); },
+                                                StatusStepper { status: o.status.clone() }
                                                 div { style: "display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;",
                                                     span { style: "font-size: 15px; color: #e8e8e8;", "{tf(lang, T_ORDERS_ORDER, &[short_id.clone()])}" }
                                                     span { style: "
@@ -445,7 +375,7 @@ pub fn OrdersScreen() -> Element {
                                                                     rsx! {
                                                                         button {
                                                                             style: "font-size: 12px; padding: 6px 10px; background: #ffe600; color: #000; border: 3px solid #bfa600; box-shadow: 2px 2px 0 #000; cursor: pointer;",
-                                                                            onclick: move |_| review_target.set(Some((order_clone.clone(), item_clone.clone()))),
+                                                                            onclick: move |e: Event<MouseData>| { e.stop_propagation(); review_target.set(Some((order_clone.clone(), item_clone.clone()))); },
                                                                             "★ {name}"
                                                                         }
                                                                     }
@@ -468,7 +398,8 @@ pub fn OrdersScreen() -> Element {
                                                             div { style: "padding-top: 8px;",
                                                                 button {
                                                                     style: "font-size:13px;font-weight:700;width:100%;padding:10px;background:#39ff14;color:#000;border:3px solid #2d9e0f;box-shadow:2px 2px 0 #000;cursor:pointer;",
-                                                                    onclick: move |_| {
+                                                                    onclick: move |e: Event<MouseData>| {
+                                                                        e.stop_propagation();
                                                                         reorder_cart.write().clear();
                                                                         for item in order_for_reorder.items.iter() {
                                                                             let (id, name, item_type, price_hint) = if let Some(ref sid) = item.strain_id {

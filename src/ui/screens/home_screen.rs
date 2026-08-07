@@ -183,12 +183,18 @@ pub fn HomeScreen() -> Element {
     // Deep-link landing: when the app opens with a shared product, navigate
     // from the home route to the catalog screen that owns the product.
     let pending = use_context::<Signal<Option<SharedProduct>>>();
+    let pending_order = use_context::<Signal<Option<String>>>();
     let nav = navigator();
     use_effect(move || {
         if let Some(target) = pending.read().clone() {
             // Navigate to the catalog screen that owns the shared product.
             // The target screen will open the product modal and clear the target.
             nav.push(target.kind.route());
+        }
+        if let Some(order_id) = pending_order.read().clone() {
+            // Cycle #80: order deep link opens the dedicated detail screen.
+            pending_order.set(None);
+            nav.push(Route::OrderDetail { id: order_id });
         }
     });
 

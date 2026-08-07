@@ -9,7 +9,7 @@ use teloxide::{
 use crate::bot::commands::{build_app_url, calculate_discounted_price};
 // Cycle #76: button helpers consolidated to bot/mod.rs.
 // Cycle #129: AI_RATE_LIMIT replaced by `ai_rate_limit_allow` helper.
-use crate::bot::{ai_rate_limit_allow, callback_btn, tg_fire_and_forget, web_app_btn};
+use crate::bot::{ai_rate_limit_allow, callback_btn, notify, tg_fire_and_forget, web_app_btn};
 use crate::{
     ai::{get_random_fact_prompt, get_random_joke_prompt},
     config::Config,
@@ -301,15 +301,17 @@ pub(crate) async fn handle_callback(
                 use sea_orm::{ConnectionTrait, DbBackend, Statement, TransactionTrait};
                 match db.orm.begin().await {
                     Ok(tx) => {
+                        let mut customer_telegram_id: Option<i64> = None;
                         let ok = match tx
                             .query_one(Statement::from_sql_and_values(
                                 DbBackend::Postgres,
-                                "SELECT status FROM orders WHERE id = $1 FOR UPDATE",
+                                "SELECT status, telegram_id FROM orders WHERE id = $1 FOR UPDATE",
                                 [order_id.into()],
                             ))
                             .await
                         {
                             Ok(Some(row)) => {
+                                customer_telegram_id = row.try_get("", "telegram_id").ok().flatten();
                                 // Read the gating status loudly. `can_confirm_order("")`
                                 // is already false (safe no-op), but surface a corrupt
                                 // read instead of swallowing it as "not confirmable".
@@ -409,6 +411,18 @@ pub(crate) async fn handle_callback(
                         )]]))
                         .await
                         .ok();
+                }
+                // Cycle #79: notify the customer their order was confirmed.
+                if let Some(cid) = customer_telegram_id {
+                    notify::notify_order_status(
+                        &bot,
+                        &db,
+                        &config,
+                        cid,
+                        order_id,
+                        "confirmed",
+                    )
+                    .await;
                 }
             } else if let Some(msg) = q.message.as_ref().and_then(|m| match m {
                 MaybeInaccessibleMessage::Regular(msg) => Some(msg),
@@ -542,6 +556,16 @@ pub(crate) async fn handle_callback(
                 .await
                 .ok();
             }
+            // Cycle #79: notify the customer their order was completed.
+            notify::notify_order_status(
+                &bot,
+                &db,
+                &config,
+                completion.customer_telegram_id,
+                order_id,
+                "completed",
+            )
+            .await;
         }
 
         d if d.starts_with("reject_") => {
@@ -562,6 +586,8 @@ pub(crate) async fn handle_callback(
                 .await?;
             // Cycle #96: SeaORM tx for the reject + bonus-refund path.
             // Drop = auto-rollback on every error branch.
+            let mut customer_telegram_id: Option<i64> = None;
+            let mut rejected = false;
             {
                 use sea_orm::{ConnectionTrait, DbBackend, Statement, TransactionTrait};
                 match db.orm.begin().await {
@@ -591,12 +617,13 @@ pub(crate) async fn handle_callback(
                                     String::new()
                                 }
                             };
+                            customer_telegram_id = r.try_get("", "telegram_id").ok().flatten();
                             if refund_ok && should_refund_bonus(&current_status) {
                                 let bonus_raw: f64 = r.try_get::<f64>("", "bonus_used").unwrap_or(0.0);
                                 let bonus = if bonus_raw.is_finite() { bonus_raw.max(0.0) } else { 0.0 };
                                 let stars_raw: i64 = r.try_get::<i64>("", "stars_used").unwrap_or(0);
                                 let stars = stars_raw.max(0);
-                                let tid: Option<i64> = r.try_get("", "telegram_id").ok().flatten();
+                                let tid = customer_telegram_id;
                                 if bonus > 0.0 {
                                     if let Some(tid) = tid {
                                         if let Err(e) = tx.execute(Statement::from_sql_and_values(
@@ -671,6 +698,7 @@ pub(crate) async fn handle_callback(
                                             e
                                         );
                                     } else {
+                                        rejected = true;
                                         tracing::info!(
                                             "callback: reject order_id={} updated {} rows",
                                             _order_id,
@@ -695,6 +723,20 @@ pub(crate) async fn handle_callback(
                     Err(e) => {
                         tracing::error!("callback: reject order_id={} tx error: {}", _order_id, e)
                     }
+                }
+            }
+            // Cycle #79: notify the customer their order was rejected.
+            if rejected {
+                if let Some(tid) = customer_telegram_id {
+                    notify::notify_order_status(
+                        &bot,
+                        &db,
+                        &config,
+                        tid,
+                        _order_id,
+                        "rejected",
+                    )
+                    .await;
                 }
             }
             if let Some(msg) = q.message.as_ref().and_then(|m| match m {

@@ -134,6 +134,37 @@ pub fn product_deep_link(kind: ProductKind, id: &str) -> String {
     deep_link_url(kind, id)
 }
 
+/// Build a `startapp` parameter that opens the Mini App on the order detail
+/// screen. Format: `o_{order_id}`. Order IDs are UUID-like, so the prefix keeps
+/// them disjoint from product shares.
+pub fn order_start_param(order_id: &str) -> String {
+    format!("o_{}", order_id)
+}
+
+/// Raw `t.me` deep link that opens a specific order.
+pub fn order_deep_link(order_id: &str) -> String {
+    format!(
+        "https://t.me/{}?startapp={}",
+        bot_username(),
+        order_start_param(order_id)
+    )
+}
+
+/// Parse an order `startapp` value (`o_{order_id}`). Unknown prefixes and
+/// payloads that are too long are rejected so malformed links degrade gracefully.
+pub fn parse_order_start_param(param: &str) -> Option<String> {
+    if param.is_empty() || param.len() > MAX_START_PARAM_LEN {
+        return None;
+    }
+    if !param
+        .bytes()
+        .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
+    {
+        return None;
+    }
+    param.strip_prefix("o_").map(|id| id.to_string())
+}
+
 /// Open a `t.me` URL using Telegram's native method, falling back to a plain
 /// browser open if the WebApp SDK is unavailable.
 pub fn open_telegram_link(url: &str) {
@@ -255,5 +286,24 @@ mod tests {
         let p = parse_start_param("p_event_550e8400-e29b-41d4-a716-446655440000").unwrap();
         assert_eq!(p.kind, ProductKind::Event);
         assert_eq!(p.id, "550e8400-e29b-41d4-a716-446655440000");
+    }
+
+    #[test]
+    fn parse_valid_order_payload() {
+        let id = parse_order_start_param("o_550e8400-e29b-41d4-a716-446655440000").unwrap();
+        assert_eq!(id, "550e8400-e29b-41d4-a716-446655440000");
+    }
+
+    #[test]
+    fn parse_order_rejects_missing_prefix() {
+        assert!(parse_order_start_param("550e8400-e29b-41d4-a716-446655440000").is_none());
+    }
+
+    #[test]
+    fn order_deep_link_round_trips() {
+        let id = "abc-123";
+        let url = order_deep_link(id);
+        let start_param = url.split("startapp=").nth(1).unwrap();
+        assert_eq!(parse_order_start_param(start_param).unwrap(), id);
     }
 }

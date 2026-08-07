@@ -35,6 +35,7 @@ pub mod lazy_screen;
 pub mod progress_bar;
 pub mod rarity_glow;
 pub mod skeleton;
+pub mod status_stepper;
 pub mod toast;
 
 // ---------------------------------------------------------------------------
@@ -69,6 +70,7 @@ pub use lazy_screen::LazyScreen;
 pub use progress_bar::{ProgressBar, ProgressBarProps, ProgressColor, ProgressSize};
 pub use rarity_glow::{Rarity, RarityGlow, RarityGlowProps};
 pub use skeleton::{Skeleton, SkeletonProps, SkeletonRow, SkeletonRowProps, SkeletonShape};
+pub use status_stepper::StatusStepper;
 pub use toast::{Toast, ToastContainer, ToastContainerProps, ToastKind, ToastProps};
 
 // Re-export types from state for convenience

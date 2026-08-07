@@ -514,6 +514,13 @@ pub const T_ORDERS_STEP_READY: Key = "orders.step.ready";
 pub const T_ORDERS_STEP_ON_THE_WAY: Key = "orders.step.on_the_way";
 pub const T_ORDERS_STEP_DELIVERED: Key = "orders.step.delivered";
 
+// Order detail screen
+pub const T_ORDER_DETAIL_NOT_FOUND: Key = "order.detail.not_found";
+pub const T_ORDER_DETAIL_BACK: Key = "order.detail.back";
+pub const T_ORDER_DETAIL_TOTAL: Key = "order.detail.total";
+pub const T_ORDER_DETAIL_BONUS: Key = "order.detail.bonus";
+pub const T_ORDER_DETAIL_STARS: Key = "order.detail.stars";
+
 // Profile screen hard-coded strings
 pub const T_PROFILE_MEMBERSHIP: Key = "profile.membership";
 pub const T_PROFILE_QR_CODE: Key = "profile.qr_code";
@@ -1115,6 +1122,11 @@ fn get_ru_translation(key: Key) -> Value {
         T_ORDERS_STEP_READY => "Готов",
         T_ORDERS_STEP_ON_THE_WAY => "В пути",
         T_ORDERS_STEP_DELIVERED => "Доставлен",
+        T_ORDER_DETAIL_NOT_FOUND => "Заказ не найден или недоступен",
+        T_ORDER_DETAIL_BACK => "← К заказам",
+        T_ORDER_DETAIL_TOTAL => "Итого",
+        T_ORDER_DETAIL_BONUS => "Бонусы",
+        T_ORDER_DETAIL_STARS => "Звёзды",
         // Profile screen
         T_PROFILE_MEMBERSHIP => "Ваш статус",
         T_PROFILE_QR_CODE => "Ваш QR-код",
@@ -1699,6 +1711,11 @@ fn get_en_translation(key: Key) -> Value {
         T_ORDERS_STEP_READY => "Ready",
         T_ORDERS_STEP_ON_THE_WAY => "On the way",
         T_ORDERS_STEP_DELIVERED => "Delivered",
+        T_ORDER_DETAIL_NOT_FOUND => "Order not found or unavailable",
+        T_ORDER_DETAIL_BACK => "← Back to orders",
+        T_ORDER_DETAIL_TOTAL => "Total",
+        T_ORDER_DETAIL_BONUS => "Bonus",
+        T_ORDER_DETAIL_STARS => "Stars",
         // Profile screen
         T_PROFILE_MEMBERSHIP => "Your membership status",
         T_PROFILE_QR_CODE => "Your QR Code",

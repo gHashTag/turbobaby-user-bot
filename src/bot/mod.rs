@@ -1,6 +1,7 @@
 pub(crate) mod callbacks;
 pub(crate) mod commands;
 pub(crate) mod handlers;
+pub(crate) mod notify;
 
 use std::time::Duration;
 
@@ -134,6 +135,13 @@ pub(crate) fn miniapp_deep_link(bot_username: &str, start_param: &str) -> String
 /// Build a `startapp` parameter for a catalog product.
 pub(crate) fn product_start_param(kind_prefix: &str, product_id: &str) -> String {
     format!("{}_{}", kind_prefix, product_id)
+}
+
+/// Build a `startapp` parameter that opens the Mini App on the order detail
+/// screen. Format: `o_{order_id}`. Must stay in sync with
+/// `src/ui/share.rs::parse_order_start_param`.
+pub(crate) fn order_start_param(order_id: &str) -> String {
+    format!("o_{}", order_id)
 }
 
 /// Wrap a Telegram API call that's allowed to fail silently. Rate-limit

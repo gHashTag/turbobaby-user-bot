@@ -98,6 +98,7 @@ pub(crate) fn routes() -> Router<AppState> {
         .route("/orders", post(create_order))
         .route("/orders", get(get_orders))
         .route("/orders/:id", get(get_order))
+        .route("/orders/:id/details", get(get_order_details))
         .route("/orders/:id/status", get(get_order_status))
         .route("/orders/:id/status", put(update_order_status))
         .route("/orders/:id/promptpay-qr", get(promptpay_qr))
@@ -1502,6 +1503,44 @@ async fn get_order_status(
         "max_eta_minutes": zone.map(|z| z.max_eta_minutes),
         "delivery_fee_baht": zone.map(|z| z.delivery_fee_baht),
     })))
+}
+
+/// Public order details endpoint used by the order detail screen. Returns the
+/// full order row and requires the caller to prove ownership via Telegram
+/// initData. The admin-only [`get_order`] endpoint is kept unchanged.
+async fn get_order_details(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Query(params): Query<HashMap<String, String>>,
+) -> Result<Json<Value>, StatusCode> {
+    if id.len() > 200 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    let tid = params
+        .get("telegram_id")
+        .and_then(|v| v.parse::<i64>().ok())
+        .ok_or(StatusCode::BAD_REQUEST)?;
+    validate_telegram_id_param(tid)?;
+    let _owner_id = check_owner(&headers, &state, tid)?;
+
+    use crate::db::entities::order::Entity as OrderEntity;
+    use sea_orm::EntityTrait;
+    let model = OrderEntity::find_by_id(id)
+        .one(&state.db.orm)
+        .await
+        .map_err(|e| {
+            tracing::error!("get_order_details SeaORM error: {:?}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+    let Some(model) = model else {
+        return Err(StatusCode::NOT_FOUND);
+    };
+    if model.telegram_id != Some(tid) {
+        return Err(StatusCode::NOT_FOUND);
+    }
+
+    Ok(Json(json!({ "order": Order::from(model) })))
 }
 
 pub(crate) fn validate_update_order_status(id: &str, status: &str) -> Result<(), StatusCode> {
