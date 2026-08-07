@@ -17,6 +17,7 @@ pub const T_NAV_GARDEN: Key = "nav.garden";
 pub const T_NAV_ACCESSORIES: Key = "nav.accessories";
 pub const T_NAV_TEA: Key = "nav.tea";
 pub const T_NAV_QUEST: Key = "nav.quest";
+pub const T_NAV_GAME: Key = "nav.game";
 pub const T_NAV_EVENTS: Key = "nav.events";
 pub const T_NAV_CART: Key = "nav.cart";
 pub const T_NAV_PROFILE: Key = "nav.profile";
@@ -398,6 +399,7 @@ fn get_ru_translation(key: Key) -> Value {
         T_NAV_ACCESSORIES => "Аксессуары",
         T_NAV_TEA => "Напитки",
         T_NAV_QUEST => "Квест",
+        T_NAV_GAME => "Игра",
         T_NAV_EVENTS => "События",
         T_NAV_CART => "Корзина",
         T_NAV_PROFILE => "Профиль",
@@ -740,6 +742,7 @@ fn get_en_translation(key: Key) -> Value {
         T_NAV_ACCESSORIES => "Accessories",
         T_NAV_TEA => "Drinks",
         T_NAV_QUEST => "Quest",
+        T_NAV_GAME => "Game",
         T_NAV_EVENTS => "Events",
         T_NAV_CART => "Cart",
         T_NAV_PROFILE => "Profile",
