@@ -157,9 +157,14 @@ pub fn cart_abandonment_second_nudge_sent(variant: &str) {
     .increment(1);
 }
 
-/// Loop #12: customer tapped the one-tap reorder CTA on an order card/detail.
+/// Loop #12/#16: customer tapped the one-tap reorder CTA on an order card/detail.
 pub fn reorder_clicked(source: &str) {
     counter!("reorder_clicked_total", "source" => source.to_string()).increment(1);
+}
+
+/// Loop #16: garden reminder CTA (water/harvest) was shown and tapped on Home.
+pub fn garden_reminder_clicked(kind: &str) {
+    counter!("garden_reminder_clicked_total", "kind" => kind.to_string()).increment(1);
 }
 
 /// Loop #12: customer opened the Mini App via a cart deep-link reminder.

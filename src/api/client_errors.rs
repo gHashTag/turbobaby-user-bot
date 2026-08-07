@@ -435,6 +435,8 @@ async fn log_client_event(
 
     match event.as_str() {
         "cart_deep_link_opened" => crate::metrics::cart_deep_link_opened(&detail),
+        "reorder_clicked" => crate::metrics::reorder_clicked(&detail),
+        "garden_reminder_clicked" => crate::metrics::garden_reminder_clicked(&detail),
         "checkout_started" => crate::metrics::checkout_started(),
         "checkout_completed" => crate::metrics::checkout_completed(),
         "checkout_error" => crate::metrics::checkout_error(&detail),
@@ -465,6 +467,7 @@ fn sanitize_event_name(raw: &str) -> String {
     match raw {
         "cart_deep_link_opened" => "cart_deep_link_opened".to_string(),
         "reorder_clicked" => "reorder_clicked".to_string(),
+        "garden_reminder_clicked" => "garden_reminder_clicked".to_string(),
         "checkout_retry_clicked" => "checkout_retry_clicked".to_string(),
         "checkout_started" => "checkout_started".to_string(),
         "checkout_completed" => "checkout_completed".to_string(),

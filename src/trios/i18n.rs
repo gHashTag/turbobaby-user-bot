@@ -61,6 +61,8 @@ pub const T_GARDEN_ERROR_HARVEST: Key = "garden.error.harvest";
 pub const T_GARDEN_ERROR_RESET: Key = "garden.error.reset";
 pub const T_GARDEN_ERROR_COOLDOWN: Key = "garden.error.cooldown";
 pub const T_GARDEN_ERROR_PRODUCT_UNAVAILABLE: Key = "garden.error.product_unavailable";
+pub const T_GARDEN_WATER_CTA: Key = "garden.water_cta";
+pub const T_GARDEN_HARVEST_CTA: Key = "garden.harvest_cta";
 pub const T_GARDEN_CAT_STRAIN: Key = "garden.cat.strain";
 pub const T_GARDEN_CAT_ACCESSORY: Key = "garden.cat.accessory";
 pub const T_GARDEN_CAT_TEA: Key = "garden.cat.tea";
@@ -546,6 +548,7 @@ pub const T_ORDER_DETAIL_LIVE: Key = "order.detail.live";
 pub const T_ORDER_DETAIL_CANCEL: Key = "order.detail.cancel";
 pub const T_ORDER_DETAIL_CANCEL_CONFIRM: Key = "order.detail.cancel_confirm";
 pub const T_ORDER_DETAIL_CANCELLED_BY_USER: Key = "order.detail.cancelled_by_user";
+pub const T_ORDER_REORDER: Key = "order.reorder";
 
 // Profile screen hard-coded strings
 pub const T_PROFILE_MEMBERSHIP: Key = "profile.membership";
@@ -584,6 +587,8 @@ pub const T_PROFILE_BONUS_GARDEN: Key = "profile.bonus_garden";
 pub const T_PROFILE_BONUS_CASHBACK: Key = "profile.bonus_cashback";
 pub const T_PROFILE_BONUS_ADMIN: Key = "profile.bonus_admin";
 pub const T_PROFILE_BONUS_OTHER: Key = "profile.bonus_other";
+pub const T_PROFILE_ORDER_HISTORY: Key = "profile.order_history";
+pub const T_PROFILE_REORDER: Key = "profile.reorder";
 
 // Modal hard-coded strings
 pub const T_MODAL_CLOSE: Key = "modal.close";
@@ -646,6 +651,9 @@ pub const T_HOME_GARDEN_HARVEST: Key = "home.garden.harvest";
 pub const T_HOME_GARDEN_GROWING: Key = "home.garden.growing";
 pub const T_HOME_GARDEN_EMPTY: Key = "home.garden.empty";
 pub const T_HOME_GARDEN_CTA: Key = "home.garden.cta";
+pub const T_HOME_REORDER_LAST: Key = "home.reorder.last";
+pub const T_HOME_REORDER_STATUS: Key = "home.reorder.status";
+pub const T_HOME_REORDER_CTA: Key = "home.reorder.cta";
 
 // Events screen hard-coded strings
 pub const T_EVENTS_TIME: Key = "events.time";
@@ -747,6 +755,8 @@ fn get_ru_translation(key: Key) -> Value {
         T_GARDEN_ERROR_RESET => "Не удалось сбросить: {0}",
         T_GARDEN_ERROR_COOLDOWN => "Скидку можно растить раз в сутки — подожди после прошлого сбора.",
         T_GARDEN_ERROR_PRODUCT_UNAVAILABLE => "Товар недоступен.",
+        T_GARDEN_WATER_CTA => "💧 Полей растение и получи скидку",
+        T_GARDEN_HARVEST_CTA => "🏆 Собери урожай и примени скидку",
         T_GARDEN_CAT_STRAIN => "🌿 Сорта",
         T_GARDEN_CAT_ACCESSORY => "💨 Аксессуары",
         T_GARDEN_CAT_TEA => "🥤 Напитки",
@@ -1192,6 +1202,7 @@ fn get_ru_translation(key: Key) -> Value {
         T_ORDER_DETAIL_CANCEL => "Отменить заказ",
         T_ORDER_DETAIL_CANCEL_CONFIRM => "Отменить заказ? Бонусы и звёзды вернутся на счёт.",
         T_ORDER_DETAIL_CANCELLED_BY_USER => "Вы отменили заказ",
+        T_ORDER_REORDER => "Повторить заказ",
         // Profile screen
         T_PROFILE_MEMBERSHIP => "Ваш статус",
         T_PROFILE_QR_CODE => "Ваш QR-код",
@@ -1231,6 +1242,8 @@ fn get_ru_translation(key: Key) -> Value {
         T_PROFILE_BONUS_CASHBACK => "Кэшбэк с заказа",
         T_PROFILE_BONUS_ADMIN => "Админ-начисление",
         T_PROFILE_BONUS_OTHER => "Бонус",
+        T_PROFILE_ORDER_HISTORY => "История заказов",
+        T_PROFILE_REORDER => "Повторить",
         T_CART_SYNCING => "Синхронизация корзины…",
         T_REORDER_DEEP_LINK_TITLE => "🔄 Ваш последний заказ готов к повтору",
         // Modal
@@ -1290,6 +1303,9 @@ fn get_ru_translation(key: Key) -> Value {
         T_HOME_GARDEN_GROWING => "растёт",
         T_HOME_GARDEN_EMPTY => "Посадите семя из заказа — получите скидку",
         T_HOME_GARDEN_CTA => "В сад",
+        T_HOME_REORDER_LAST => "Последний заказ",
+        T_HOME_REORDER_STATUS => "Статус",
+        T_HOME_REORDER_CTA => "Повторить заказ",
         // Events screen
         T_EVENTS_TIME => "🕒 {0}",
         T_EVENTS_SOLD_OUT_BADGE => "МЕСТ НЕТ",
@@ -1379,6 +1395,8 @@ fn get_en_translation(key: Key) -> Value {
         T_GARDEN_ERROR_RESET => "Failed to reset: {0}",
         T_GARDEN_ERROR_COOLDOWN => "Discount can be grown once a day — wait until after the last harvest.",
         T_GARDEN_ERROR_PRODUCT_UNAVAILABLE => "Product unavailable.",
+        T_GARDEN_WATER_CTA => "💧 Water the plant to grow a discount",
+        T_GARDEN_HARVEST_CTA => "🏆 Harvest and apply the discount",
         T_GARDEN_CAT_STRAIN => "🌿 Strains",
         T_GARDEN_CAT_ACCESSORY => "💨 Accessories",
         T_GARDEN_CAT_TEA => "🥤 Drinks",
@@ -1824,6 +1842,7 @@ fn get_en_translation(key: Key) -> Value {
         T_ORDER_DETAIL_CANCEL => "Cancel order",
         T_ORDER_DETAIL_CANCEL_CONFIRM => "Cancel order? Bonus and stars will be refunded.",
         T_ORDER_DETAIL_CANCELLED_BY_USER => "You cancelled the order",
+        T_ORDER_REORDER => "Reorder order",
         // Profile screen
         T_PROFILE_MEMBERSHIP => "Your membership status",
         T_PROFILE_QR_CODE => "Your QR Code",
@@ -1863,6 +1882,8 @@ fn get_en_translation(key: Key) -> Value {
         T_PROFILE_BONUS_CASHBACK => "Order cashback",
         T_PROFILE_BONUS_ADMIN => "Admin grant",
         T_PROFILE_BONUS_OTHER => "Bonus",
+        T_PROFILE_ORDER_HISTORY => "Order history",
+        T_PROFILE_REORDER => "Reorder",
         T_CART_SYNCING => "Syncing cart…",
         T_REORDER_DEEP_LINK_TITLE => "🔄 Your last order is ready to reorder",
         // Modal
@@ -1922,6 +1943,9 @@ fn get_en_translation(key: Key) -> Value {
         T_HOME_GARDEN_GROWING => "growing",
         T_HOME_GARDEN_EMPTY => "Plant a seed from your order to earn a discount",
         T_HOME_GARDEN_CTA => "Open Garden",
+        T_HOME_REORDER_LAST => "Last order",
+        T_HOME_REORDER_STATUS => "Status",
+        T_HOME_REORDER_CTA => "Reorder",
         // Events screen
         T_EVENTS_TIME => "🕒 {0}",
         T_EVENTS_SOLD_OUT_BADGE => "SOLD OUT",

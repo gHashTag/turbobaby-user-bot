@@ -11,10 +11,10 @@ use crate::trios::i18n::{
     T_ORDERS_STATUS_READY, T_ORDERS_STATUS_UNKNOWN, T_ORDERS_TITLE, T_ORDER_DETAIL_BACK,
     T_ORDER_DETAIL_BONUS, T_ORDER_DETAIL_CANCEL, T_ORDER_DETAIL_CANCEL_CONFIRM,
     T_ORDER_DETAIL_LIVE, T_ORDER_DETAIL_NOT_FOUND, T_ORDER_DETAIL_STARS, T_ORDER_DETAIL_TOTAL,
-    T_REORDER,
+    T_ORDER_REORDER,
 };
 use crate::ui::api::context::api_base_url;
-use crate::ui::api::http::merge_server_cart;
+use crate::ui::api::http::{merge_server_cart, post_client_event};
 use crate::ui::components::bottom_nav::BottomNav;
 use crate::ui::components::skeleton::{Skeleton, SkeletonShape};
 use crate::ui::components::StatusStepper;
@@ -210,7 +210,7 @@ fn OrderDetailCard(
     let mut show_cancel_confirm = use_signal(|| false);
     let mut cancelling = use_signal(|| false);
     let reorder_loading = use_signal(|| false);
-    let reorder_label = t(lang, T_REORDER);
+    let reorder_label = t(lang, T_ORDER_REORDER);
 
     rsx! {
         div { style: "
@@ -358,6 +358,7 @@ fn OrderDetailCard(
                                 Ok(fresh_cart) => {
                                     cart_sig.set(fresh_cart);
                                     TelegramApp::init().haptic_notification(HapticNotification::Success);
+                                    let _ = post_client_event(&api_base_url(), "reorder_clicked", "order_detail").await;
                                     nav.push(Route::Cart {});
                                 }
                                 Err(_) => {
@@ -368,6 +369,7 @@ fn OrderDetailCard(
                                         cart_sig.write().add_item(item);
                                     }
                                     TelegramApp::init().haptic_notification(HapticNotification::Success);
+                                    let _ = post_client_event(&api_base_url(), "reorder_clicked", "order_detail").await;
                                     nav.push(Route::Cart {});
                                 }
                             }
