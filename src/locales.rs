@@ -83,6 +83,9 @@ pub(crate) struct Locale {
     pub referral_share_button: String,
     pub referral_share_hint: String,
     pub referral_leaderboard: String,
+    pub garden_water_reminder: String,
+    pub garden_harvest_ready: String,
+    pub garden_open_app: String,
 }
 
 pub(crate) fn get_locale(lang: &str) -> Locale {
@@ -205,6 +208,9 @@ fn ru() -> Locale {
         referral_share_button: "Поделиться".into(),
         referral_share_hint: "Поделитесь ссылкой и получите бонус за каждого нового друга!".into(),
         referral_leaderboard: "Таблица лидеров".into(),
+        garden_water_reminder: "🌱 Вашему растению нужна вода! Зайдите в сад, чтобы полить.".into(),
+        garden_harvest_ready: "🏆 Растение готово к сбору урожая! Откройте сад, чтобы получить награду.".into(),
+        garden_open_app: "Открыть сад".into(),
     }
 }
 
@@ -291,6 +297,9 @@ fn en() -> Locale {
         referral_share_button: "Share".into(),
         referral_share_hint: "Share your link and earn a bonus for every new friend!".into(),
         referral_leaderboard: "Leaderboard".into(),
+        garden_water_reminder: "🌱 Your plant is thirsty! Visit the garden to water it.".into(),
+        garden_harvest_ready: "🏆 Your plant is ready to harvest! Open the garden to claim the reward.".into(),
+        garden_open_app: "Open garden".into(),
     }
 }
 

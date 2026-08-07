@@ -67,6 +67,36 @@ impl From<crate::db::entities::order::Model> for Order {
 /// count prior completions for `is_first`, flip status, accumulate
 /// total_spent on loyalty_profiles via upsert, recompute tier with a
 /// CASE-WHEN that consults loyalty_config thresholds. Drop = auto-rollback;
+/// Pure helper: extract the cashback percent for a tier from the
+/// `loyalty_config.config` JSONB value. Falls back to sane defaults and
+/// clamps to [0, 100]. Testable without a DB.
+pub(crate) fn cashback_pct_for_tier(config: &serde_json::Value, tier: &str) -> f64 {
+    let key = match tier {
+        "gold" => "gold_cashback_pct",
+        "silver" => "silver_cashback_pct",
+        "bronze" => "bronze_cashback_pct",
+        _ => "progressive_cashback",
+    };
+    let default = match tier {
+        "gold" => 10.0,
+        "silver" => 7.0,
+        "bronze" => 5.0,
+        _ => 2.0,
+    };
+    let raw = config.get(key).cloned().unwrap_or_else(|| serde_json::json!(null));
+    let pct = if raw.is_array() {
+        // `progressive_cashback` is an array indexed by completed-order
+        // count. Without that context, use the first (lowest) value.
+        raw.as_array()
+            .and_then(|arr| arr.first())
+            .and_then(|v| v.as_f64())
+            .unwrap_or(default)
+    } else {
+        raw.as_f64().unwrap_or(default)
+    };
+    if pct.is_finite() && pct >= 0.0 { pct } else { default }
+}
+
 /// only `commit()` on the happy path.
 /// Outcome of a successful order completion. Returned so callers can
 /// drive user-facing side effects (Telegram notifications, etc.)
@@ -88,6 +118,10 @@ pub struct OrderCompletion {
     /// function; callers receive `None` and skip downstream side
     /// effects like referrer notifications).
     pub referral_bonus_credited: Option<f64>,
+    /// `Some((pct, amount))` if the order earned automatic tier-based
+    /// cashback. Loop #10: credits `bonus_balance` and writes a
+    /// `bonus_transactions` row inside the completion tx.
+    pub cashback_credited: Option<(f64, f64)>,
 }
 
 #[allow(unreachable_pub)] // Used by tests/integration_use_bonus.rs to set up scenarios.
@@ -215,6 +249,67 @@ pub async fn complete_order_and_update_loyalty(
     ))
     .await?;
 
+    // 5a. Loop #10: automatic cashback. Read the freshly-computed tier and
+    //     the matching cashback percent from loyalty_config, then credit
+    //     bonus_balance and append a bonus_transactions ledger row inside
+    //     the same tx. This keeps the bookkeeping equation
+    //     `SUM(amount) == bonus_balance` intact (cycle #161).
+    // 5a. Loop #10: automatic cashback. Read the freshly-computed tier and
+    //     the matching cashback percent from loyalty_config, then credit
+    //     bonus_balance and append a bonus_transactions ledger row inside
+    //     the same tx. This keeps the bookkeeping equation
+    //     `SUM(amount) == bonus_balance` intact (cycle #161).
+    let tier_row = tx
+        .query_one(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            "SELECT tier FROM loyalty_profiles WHERE telegram_id = $1",
+            [cid.into()],
+        ))
+        .await?;
+    let tier: String = tier_row
+        .and_then(|r| r.try_get::<Option<String>>("", "tier").ok().flatten())
+        .unwrap_or_else(|| "none".to_string());
+    let config_row = tx
+        .query_one(Statement::from_string(
+            DbBackend::Postgres,
+            "SELECT config FROM loyalty_config WHERE id = 1".to_string(),
+        ))
+        .await?;
+    let config: serde_json::Value = config_row
+        .and_then(|r| r.try_get::<Option<serde_json::Value>>("", "config").ok().flatten())
+        .unwrap_or_else(|| serde_json::json!({}));
+    let cashback_pct = cashback_pct_for_tier(&config, &tier).min(100.0);
+    let cashback_amount = (total * cashback_pct / 100.0).max(0.0);
+    if cashback_amount > 0.01 {
+        use crate::db::entities::bonus_transaction::{ActiveModel as BtAm, Entity as BonusTxEntity};
+        let tx_id = uuid::Uuid::new_v4().to_string();
+        let bt_am = BtAm {
+            id: Set(tx_id),
+            telegram_id: Set(cid),
+            amount: Set(cashback_amount),
+            tx_type: Set("order_cashback".to_string()),
+            description: Set(Some(format!("Cashback {}% for order {}", cashback_pct, order_id))),
+            related_order_id: Set(Some(order_id.to_string())),
+            ..Default::default()
+        };
+        BonusTxEntity::insert(bt_am).exec(&tx).await?;
+
+        let updated = LpEntity::update_many()
+            .col_expr(
+                LpCol::BonusBalance,
+                sea_orm::sea_query::Expr::cust_with_values("bonus_balance + $1", [cashback_amount]),
+            )
+            .filter(LpCol::TelegramId.eq(cid))
+            .exec(&tx)
+            .await?;
+        if updated.rows_affected == 0 {
+            return Err(sea_orm::DbErr::Custom(format!(
+                "complete_order: loyalty profile missing for telegram_id={} during cashback credit",
+                cid
+            )));
+        }
+    }
+
     // 6. Cycle #168: seed a garden plant if this order contains a
     //    strain AND the user has no active plant. Closes the gap
     //    flagged by user-report — the Garden UI says "Order a strain
@@ -341,6 +436,11 @@ pub async fn complete_order_and_update_loyalty(
         customer_telegram_id: cid,
         is_first_order: is_first,
         referral_bonus_credited,
+        cashback_credited: if cashback_amount > 0.01 {
+            Some((cashback_pct, cashback_amount))
+        } else {
+            None
+        },
     }))
 }
 
@@ -1099,7 +1199,36 @@ pub(crate) async fn fraud_stats_24h(
 
 #[cfg(test)]
 mod tests {
-    use super::{audit_sweep_sql, idempotency_sweep_sql, OrderItem};
+    use super::{audit_sweep_sql, cashback_pct_for_tier, idempotency_sweep_sql, OrderItem};
+
+    // ── cashback_pct_for_tier (Loop #10) ───────────────────────────────
+
+    #[test]
+    fn cashback_pct_uses_config_values_per_tier() {
+        let config = serde_json::json!({
+            "bronze_cashback_pct": 5.0,
+            "silver_cashback_pct": 8.0,
+            "gold_cashback_pct": 12.0,
+            "progressive_cashback": [2.0, 3.0],
+        });
+        assert_eq!(cashback_pct_for_tier(&config, "none"), 2.0);
+        assert_eq!(cashback_pct_for_tier(&config, "bronze"), 5.0);
+        assert_eq!(cashback_pct_for_tier(&config, "silver"), 8.0);
+        assert_eq!(cashback_pct_for_tier(&config, "gold"), 12.0);
+    }
+
+    #[test]
+    fn cashback_pct_falls_back_to_defaults_on_missing_config() {
+        let config = serde_json::json!({});
+        assert_eq!(cashback_pct_for_tier(&config, "gold"), 10.0);
+        assert_eq!(cashback_pct_for_tier(&config, "none"), 2.0);
+    }
+
+    #[test]
+    fn cashback_pct_ignores_non_finite_config() {
+        let config = serde_json::json!({ "gold_cashback_pct": -50.0 });
+        assert_eq!(cashback_pct_for_tier(&config, "gold"), 10.0);
+    }
 
     // ── audit_sweep_sql (cycle #67) ─────────────────────────────────────
     //

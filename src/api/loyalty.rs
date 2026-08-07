@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::{HeaderMap, StatusCode},
     routing::{get, post},
     Json, Router,
@@ -24,6 +24,7 @@ pub(crate) fn routes() -> Router<AppState> {
         .route("/loyalty/:telegram_id", get(get_profile))
         .route("/loyalty/:telegram_id/bonus", post(add_bonus))
         .route("/loyalty/:telegram_id/use-bonus", post(use_bonus))
+        .route("/loyalty/:telegram_id/bonus-history", get(get_bonus_history))
         .route("/loyalty/leaderboard", get(get_leaderboard))
         .route("/loyalty/config", get(get_loyalty_config))
         .route("/loyalty/config", post(update_loyalty_config))
@@ -509,6 +510,65 @@ async fn use_bonus(
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
     Ok(Json(json!({ "success": true, "tx_id": tx_id })))
+}
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct BonusHistoryQuery {
+    #[serde(default = "default_bonus_history_limit")]
+    limit: i64,
+    #[serde(default)]
+    offset: i64,
+}
+
+fn default_bonus_history_limit() -> i64 {
+    50
+}
+
+const BONUS_HISTORY_MAX_LIMIT: i64 = 100;
+
+async fn get_bonus_history(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    Path(telegram_id): Path<i64>,
+    Query(query): Query<BonusHistoryQuery>,
+) -> Result<Json<Value>, StatusCode> {
+    validate_telegram_id_param(telegram_id)?;
+    crate::api::auth::check_owner(&headers, &state, telegram_id)?;
+    check_not_blocked(&state, telegram_id).await?;
+
+    let limit = query.limit.clamp(1, BONUS_HISTORY_MAX_LIMIT);
+    let offset = query.offset.max(0);
+
+    use crate::db::entities::bonus_transaction::{Column as BtCol, Entity as BonusTxEntity};
+    use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QueryOrder, QuerySelect};
+
+    let rows = BonusTxEntity::find()
+        .filter(BtCol::TelegramId.eq(telegram_id))
+        .order_by_desc(BtCol::CreatedAt)
+        .limit(Some(limit as u64))
+        .offset(Some(offset as u64))
+        .all(&state.db.orm)
+        .await
+        .map_err(|e| {
+            tracing::error!("get_bonus_history: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    let transactions: Vec<Value> = rows
+        .into_iter()
+        .map(|m| {
+            json!({
+                "id": m.id,
+                "amount": m.amount,
+                "tx_type": m.tx_type,
+                "description": m.description,
+                "related_order_id": m.related_order_id,
+                "created_at": m.created_at,
+            })
+        })
+        .collect();
+
+    Ok(Json(json!({ "transactions": transactions })))
 }
 
 async fn get_leaderboard(State(state): State<AppState>) -> Result<Json<Value>, StatusCode> {

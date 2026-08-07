@@ -13,6 +13,54 @@ use crate::config::Config;
 use crate::db::Database;
 use crate::locales::get_locale;
 
+/// Cycle #10: reminder to water or harvest the garden plant.
+/// `kind` is "water" or "harvest".
+pub(crate) async fn notify_garden_reminder(
+    bot: &Bot,
+    db: &Arc<Database>,
+    config: &Arc<Config>,
+    customer_telegram_id: i64,
+    kind: &str,
+) {
+    if customer_telegram_id == 0 {
+        return;
+    }
+
+    let lang = db
+        .get_user_lang(customer_telegram_id)
+        .await
+        .unwrap_or_else(|| "en".to_string());
+    let locale = get_locale(&lang);
+
+    let (text, btn_label) = match kind {
+        "harvest" => (
+            locale.garden_harvest_ready.clone(),
+            locale.garden_open_app.clone(),
+        ),
+        _ => (
+            locale.garden_water_reminder.clone(),
+            locale.garden_open_app.clone(),
+        ),
+    };
+
+    // Deep-link straight into the garden screen.
+    let deep_link = miniapp_deep_link(&config.bot_username, "garden");
+    let markup = InlineKeyboardMarkup::new(vec![vec![url_btn(&btn_label, &deep_link)]]);
+
+    if let Err(e) = bot
+        .send_message(ChatId(customer_telegram_id), text)
+        .reply_markup(markup)
+        .await
+    {
+        tracing::warn!(
+            "notify_garden_reminder failed: customer_telegram_id={} kind={} err={}",
+            customer_telegram_id,
+            kind,
+            e
+        );
+    }
+}
+
 /// Cycle #79: notify the customer that their order status changed.
 ///
 /// `status` must be one of: "confirmed", "completed", "rejected".
@@ -26,6 +74,7 @@ pub(crate) async fn notify_order_status(
     customer_telegram_id: i64,
     order_id: &str,
     status: &str,
+    cashback_amount: Option<f64>,
 ) {
     if customer_telegram_id == 0 {
         return;
@@ -49,7 +98,14 @@ pub(crate) async fn notify_order_status(
     };
 
     let short_id = &order_id[order_id.len().saturating_sub(6)..];
-    let text = format!("{} #{}\n\n{}", status_text, short_id, locale.order_open_app);
+    let cashback_line = cashback_amount
+        .filter(|a| *a > 0.01)
+        .map(|a| format!("\n\n💸 {} +{:.0} ฿", locale.cashback_earned, a))
+        .unwrap_or_default();
+    let text = format!(
+        "{} #{}\n\n{}{}",
+        status_text, short_id, locale.order_open_app, cashback_line
+    );
 
     // Cycle #80: deep-link straight into the order detail screen.
     let deep_link = miniapp_deep_link(
@@ -88,5 +144,17 @@ mod tests {
         assert!(!locale.order_status_rejected.is_empty());
         assert!(!locale.order_status_cancelled.is_empty());
         assert!(!locale.order_open_app.is_empty());
+    }
+
+    #[test]
+    fn garden_reminder_locale_fields_are_present() {
+        let ru = get_locale("ru");
+        assert!(!ru.garden_water_reminder.is_empty());
+        assert!(!ru.garden_harvest_ready.is_empty());
+        assert!(!ru.garden_open_app.is_empty());
+        let en = get_locale("en");
+        assert!(!en.garden_water_reminder.is_empty());
+        assert!(!en.garden_harvest_ready.is_empty());
+        assert!(!en.garden_open_app.is_empty());
     }
 }

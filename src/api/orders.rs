@@ -1820,6 +1820,7 @@ async fn update_order_status(
                 customer_tid,
                 &order_id_for_notify,
                 &status_for_notify,
+                None,
             )
             .await;
         });
@@ -2009,6 +2010,7 @@ async fn cancel_order(
             tid,
             &order_id,
             "cancelled",
+            None,
         )
         .await;
     });
@@ -2578,7 +2580,7 @@ mod tests {
         CreateOrderRequest {
             telegram_id: Some(1),
             customer_name: Some("Alice".into()),
-            customer_phone: Some("+123".into()),
+            customer_phone: Some("+12345".into()),
             customer_telegram: Some("alice".into()),
             items: vec![OrderItem {
                 strain_id: Some("s1".into()),

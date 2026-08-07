@@ -1,9 +1,12 @@
+use crate::trios::garden::{calculate_progress, GrowthStage, Plant};
 use crate::trios::i18n::{
     t, tf, T_ADD_TO_CART, T_HOME_ADVENTURES, T_HOME_AR_HUNT, T_HOME_CATEGORIES, T_HOME_DAILY_QUEST,
-    T_HOME_GAME, T_HOME_LOCATION_QUEST, T_HOME_NO_SOTD, T_HOME_SETS_PACKS, T_HOME_SHARE,
-    T_HOME_SOMMELIER, T_HOME_SOTD, T_HOME_SUBTITLE, T_HOME_TREASURE_HUNT, T_HOME_WATCH_VIDEO,
-    T_MENU_OFF, T_MENU_SET_LABEL, T_MENU_THC, T_NAV_ACCESSORIES, T_NAV_GARDEN, T_NAV_MENU,
-    T_NAV_SETS, T_NAV_TEA, T_TRUST_AGE, T_TRUST_GACP, T_TRUST_MEDICAL, T_TRUST_SUPPORT,
+    T_HOME_GAME, T_HOME_GARDEN_CTA, T_HOME_GARDEN_GROWING,
+    T_HOME_GARDEN_HARVEST, T_HOME_GARDEN_TITLE, T_HOME_GARDEN_WATER, T_HOME_LOCATION_QUEST,
+    T_HOME_NO_SOTD, T_HOME_SETS_PACKS, T_HOME_SHARE, T_HOME_SOMMELIER, T_HOME_SOTD, T_HOME_SUBTITLE,
+    T_HOME_TREASURE_HUNT, T_HOME_WATCH_VIDEO, T_MENU_OFF, T_MENU_SET_LABEL, T_MENU_THC,
+    T_NAV_ACCESSORIES, T_NAV_GARDEN, T_NAV_MENU, T_NAV_SETS, T_NAV_TEA, T_TRUST_AGE, T_TRUST_GACP,
+    T_TRUST_MEDICAL, T_TRUST_SUPPORT,
 };
 use crate::ui::api::context::api_base_url;
 use crate::ui::assets;
@@ -13,6 +16,7 @@ use crate::ui::components::video_modal::VideoModal;
 use crate::ui::routes::Route;
 use crate::ui::share::{share_product, ProductKind, SharedProduct};
 use crate::ui::state::{Cart, CartItem, CartItemType};
+use crate::ui::telegram::{use_telegram_id, use_telegram_init_data};
 use dioxus::prelude::*;
 use serde::Deserialize;
 
@@ -63,6 +67,66 @@ struct HomePack {
 #[derive(Debug, Deserialize)]
 struct HomePacksResponse {
     sets: Vec<HomePack>,
+}
+
+/// Compact garden plant snapshot for the home widget. Mirrors the API shape
+/// returned by `GET /api/garden/plants` (see `src/ui/game/garden.rs`).
+#[derive(Debug, Clone, Deserialize)]
+struct HomeGardenPlant {
+    id: String,
+    strain_id: String,
+    strain_name: String,
+    current_stage: GrowthStage,
+    water_count: u32,
+    is_completed: bool,
+    planted_at: i64,
+    #[serde(default)]
+    last_watered_at: Option<i64>,
+    reward_claimed: bool,
+}
+
+impl From<&HomeGardenPlant> for Plant {
+    fn from(a: &HomeGardenPlant) -> Self {
+        Plant {
+            id: a.id.clone(),
+            user_id: String::new(),
+            strain_id: a.strain_id.clone(),
+            strain_name: a.strain_name.clone(),
+            current_stage: a.current_stage,
+            planted_at: a.planted_at,
+            is_completed: a.is_completed,
+            harvested_at: None,
+            reward_claimed: a.reward_claimed,
+            water_count: a.water_count,
+            last_watered_at: a.last_watered_at,
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct HomeGardenResponse {
+    plants: Vec<HomeGardenPlant>,
+}
+
+/// Fetch the user's active garden plant. Returns `Ok(None)` when the user has
+/// no plant yet — the widget should then show the empty-state CTA.
+async fn fetch_home_garden_plant(telegram_id: i64, init_data: &str) -> Result<Option<HomeGardenPlant>, ()> {
+    let base = api_base_url();
+    let url = format!("{}/api/garden/plants?telegram_id={}", base, telegram_id);
+    let (status, body) = crate::ui::api::http::fetch_text_authed_full(&url, init_data)
+        .await
+        .map_err(|_| ())?;
+    if status == 401 || status == 403 {
+        // Auth problems are expected in external browsers; don't show a noisy
+        // error on the home screen, just hide the widget.
+        return Ok(None);
+    }
+    if !(200..300).contains(&status) {
+        return Err(());
+    }
+    serde_json::from_str::<HomeGardenResponse>(&body)
+        .map(|r| r.plants.into_iter().next())
+        .map_err(|_| ())
 }
 
 fn category_emoji(cat: &str) -> &'static str {
@@ -258,6 +322,19 @@ pub fn HomeScreen() -> Element {
             .map_err(|e| e.to_string())
     });
 
+    let telegram_id = use_telegram_id();
+    let init_data = use_telegram_init_data();
+    let garden_resource = use_resource(move || {
+        let tid = telegram_id;
+        let init = init_data.clone();
+        async move {
+            match tid {
+                Some(id) => fetch_home_garden_plant(id, &init).await.ok().flatten(),
+                None => None,
+            }
+        }
+    });
+
     rsx! {
         div { style: "min-height:100vh;background:#0f0f1a;color:#e8e8e8;padding-bottom:80px;",
 
@@ -272,6 +349,61 @@ pub fn HomeScreen() -> Element {
                     "WOODY WEEDPECKER"
                 }
                 p { style: "font-size:13px;color:#888;margin-top:6px;", "{home_subtitle}" }
+            }
+
+            // Compact garden progress widget — retention surface for the
+            // daily watering loop. Only renders once we know the user has a
+            // plant (or no plant at all); hidden while loading.
+            // `use_resource` wraps the async result in an outer `Option`
+            // (None = still loading), so the inner `Option<HomeGardenPlant>`
+            // tells us whether the user actually has a plant.
+            {
+                match &*garden_resource.read() {
+                    Some(Some(plant)) => {
+                        let lang = crate::ui::lang::current_lang();
+                        let progress = calculate_progress(&Plant::from(plant),
+                            js_sys::Date::now() as i64,
+                        );
+                        let emoji = progress.stage_emoji;
+                        let stage_label = progress.stage_name;
+                        let pct = progress.total_progress;
+                        let cta = if progress.is_ready_to_harvest {
+                            t(lang, T_HOME_GARDEN_HARVEST).to_string()
+                        } else if progress.can_water {
+                            t(lang, T_HOME_GARDEN_WATER).to_string()
+                        } else {
+                            t(lang, T_HOME_GARDEN_CTA).to_string()
+                        };
+                        let growing = t(lang, T_HOME_GARDEN_GROWING).to_string();
+                        let strain = plant.strain_name.clone();
+                        rsx! {
+                            Link {
+                                to: Route::Garden {},
+                                style: "text-decoration:none;",
+                                div { style: "margin:0 16px 16px;background:linear-gradient(135deg,#1a1a2e,#16213e);border:4px solid #39ff14;box-shadow:4px 4px 0 #000;padding:14px;cursor:pointer;display:flex;align-items:center;gap:12px;",
+                                    div { style: "font-size:36px;line-height:1;", "{emoji}" }
+                                    div { style: "flex:1;min-width:0;",
+                                        div { style: "display:flex;align-items:center;gap:8px;margin-bottom:4px;",
+                                            span { style: "font-size:12px;font-weight:700;color:#39ff14;text-transform:uppercase;letter-spacing:1px;", {t(lang, T_HOME_GARDEN_TITLE)} }
+                                            span { style: "font-size:11px;color:#8b8b9e;", "{stage_label}" }
+                                        }
+                                        div { style: "font-size:14px;font-weight:700;color:#e8e8e8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:6px;", "{strain}" }
+                                        div { style: "display:flex;align-items:center;gap:8px;",
+                                            div { style: "flex:1;height:8px;background:#2a2a4a;border:2px solid #2a2a4a;overflow:hidden;",
+                                                div { style: "width:{pct}%;height:100%;background:linear-gradient(90deg,#39ff14,#2d9e0f);" }
+                                            }
+                                            span { style: "font-size:12px;font-weight:700;color:#8b8b9e;min-width:38px;text-align:right;", "{pct}% {growing}" }
+                                        }
+                                    }
+                                    div { style: "background:#39ff14;color:#000;padding:8px 12px;border:3px solid #2d9e0f;font-size:12px;font-weight:700;box-shadow:2px 2px 0 #000;white-space:nowrap;", "{cta}" }
+                                }
+                            }
+                        }
+                    }
+                    // No plant yet (or not authenticated): keep the home
+                    // screen clean rather than nagging.
+                    Some(None) | None => rsx! {},
+                }
             }
 
             // Packs carousel — FIRST content block (flagship of the shop).

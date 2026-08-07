@@ -558,6 +558,15 @@ pub const T_PROFILE_PROGRESS: Key = "profile.progress";
 pub const T_PROFILE_MORE_TO_UNLOCK: Key = "profile.more_to_unlock";
 pub const T_PROFILE_CONTACTS: Key = "profile.contacts";
 pub const T_PROFILE_OPEN_MAP: Key = "profile.open_map";
+pub const T_PROFILE_BONUS_HISTORY: Key = "profile.bonus_history";
+pub const T_PROFILE_BONUS_HISTORY_EMPTY: Key = "profile.bonus_history_empty";
+pub const T_PROFILE_BONUS_CREDIT: Key = "profile.bonus_credit";
+pub const T_PROFILE_BONUS_DEBIT: Key = "profile.bonus_debit";
+pub const T_PROFILE_BONUS_REFERRAL: Key = "profile.bonus_referral";
+pub const T_PROFILE_BONUS_GARDEN: Key = "profile.bonus_garden";
+pub const T_PROFILE_BONUS_CASHBACK: Key = "profile.bonus_cashback";
+pub const T_PROFILE_BONUS_ADMIN: Key = "profile.bonus_admin";
+pub const T_PROFILE_BONUS_OTHER: Key = "profile.bonus_other";
 
 // Modal hard-coded strings
 pub const T_MODAL_CLOSE: Key = "modal.close";
@@ -614,6 +623,12 @@ pub const T_HOME_SOMMELIER: Key = "home.sommelier";
 pub const T_HOME_GAME: Key = "home.game";
 pub const T_HOME_SHARE: Key = "home.share";
 pub const T_HOME_WATCH_VIDEO: Key = "home.watch_video";
+pub const T_HOME_GARDEN_TITLE: Key = "home.garden.title";
+pub const T_HOME_GARDEN_WATER: Key = "home.garden.water";
+pub const T_HOME_GARDEN_HARVEST: Key = "home.garden.harvest";
+pub const T_HOME_GARDEN_GROWING: Key = "home.garden.growing";
+pub const T_HOME_GARDEN_EMPTY: Key = "home.garden.empty";
+pub const T_HOME_GARDEN_CTA: Key = "home.garden.cta";
 
 // Events screen hard-coded strings
 pub const T_EVENTS_TIME: Key = "events.time";
@@ -1175,6 +1190,15 @@ fn get_ru_translation(key: Key) -> Value {
         T_PROFILE_MORE_TO_UNLOCK => "Ещё {0} до {1}",
         T_PROFILE_CONTACTS => "📍 Контакты",
         T_PROFILE_OPEN_MAP => "Открыть на карте",
+        T_PROFILE_BONUS_HISTORY => "📜 История бонусов",
+        T_PROFILE_BONUS_HISTORY_EMPTY => "Пока нет начислений",
+        T_PROFILE_BONUS_CREDIT => "Зачисление",
+        T_PROFILE_BONUS_DEBIT => "Списание",
+        T_PROFILE_BONUS_REFERRAL => "Реферальный бонус",
+        T_PROFILE_BONUS_GARDEN => "Награда из сада",
+        T_PROFILE_BONUS_CASHBACK => "Кэшбэк с заказа",
+        T_PROFILE_BONUS_ADMIN => "Админ-начисление",
+        T_PROFILE_BONUS_OTHER => "Бонус",
         // Modal
         T_MODAL_CLOSE => "Закрыть",
         T_MODAL_CONFIRM => "Да",
@@ -1226,6 +1250,12 @@ fn get_ru_translation(key: Key) -> Value {
         T_HOME_GAME => "Игра",
         T_HOME_SHARE => "Поделиться",
         T_HOME_WATCH_VIDEO => "Смотреть видео",
+        T_HOME_GARDEN_TITLE => "🌱 Мой сад",
+        T_HOME_GARDEN_WATER => "💧 Полить",
+        T_HOME_GARDEN_HARVEST => "🏆 Собрать",
+        T_HOME_GARDEN_GROWING => "растёт",
+        T_HOME_GARDEN_EMPTY => "Посадите семя из заказа — получите скидку",
+        T_HOME_GARDEN_CTA => "В сад",
         // Events screen
         T_EVENTS_TIME => "🕒 {0}",
         T_EVENTS_SOLD_OUT_BADGE => "МЕСТ НЕТ",
@@ -1775,6 +1805,15 @@ fn get_en_translation(key: Key) -> Value {
         T_PROFILE_MORE_TO_UNLOCK => "{0} more to unlock {1}",
         T_PROFILE_CONTACTS => "📍 Contacts",
         T_PROFILE_OPEN_MAP => "Open map",
+        T_PROFILE_BONUS_HISTORY => "📜 Bonus History",
+        T_PROFILE_BONUS_HISTORY_EMPTY => "No transactions yet",
+        T_PROFILE_BONUS_CREDIT => "Credit",
+        T_PROFILE_BONUS_DEBIT => "Debit",
+        T_PROFILE_BONUS_REFERRAL => "Referral bonus",
+        T_PROFILE_BONUS_GARDEN => "Garden reward",
+        T_PROFILE_BONUS_CASHBACK => "Order cashback",
+        T_PROFILE_BONUS_ADMIN => "Admin grant",
+        T_PROFILE_BONUS_OTHER => "Bonus",
         // Modal
         T_MODAL_CLOSE => "Close",
         T_MODAL_CONFIRM => "Yes",
@@ -1826,6 +1865,12 @@ fn get_en_translation(key: Key) -> Value {
         T_HOME_GAME => "Game",
         T_HOME_SHARE => "Share",
         T_HOME_WATCH_VIDEO => "Watch video",
+        T_HOME_GARDEN_TITLE => "🌱 My Garden",
+        T_HOME_GARDEN_WATER => "💧 Water",
+        T_HOME_GARDEN_HARVEST => "🏆 Harvest",
+        T_HOME_GARDEN_GROWING => "growing",
+        T_HOME_GARDEN_EMPTY => "Plant a seed from your order to earn a discount",
+        T_HOME_GARDEN_CTA => "Open Garden",
         // Events screen
         T_EVENTS_TIME => "🕒 {0}",
         T_EVENTS_SOLD_OUT_BADGE => "SOLD OUT",

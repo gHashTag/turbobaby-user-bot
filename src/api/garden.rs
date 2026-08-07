@@ -36,6 +36,126 @@ pub(crate) fn routes() -> Router<AppState> {
         .route("/garden/force-seed", post(force_seed))
 }
 
+/// Cycle #10: spawn a background loop that sends garden watering/harvest
+/// reminders. Runs on server builds only; not WASM.
+#[cfg(not(target_arch = "wasm32"))]
+#[allow(dead_code)]
+pub(crate) fn spawn_garden_reminder_loop(
+    orm: sea_orm::DatabaseConnection,
+    bot: std::sync::Arc<teloxide::Bot>,
+    config: std::sync::Arc<crate::config::Config>,
+    interval_secs: u64,
+) {
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(interval_secs));
+        interval.tick().await; // discard cold-start tick
+        loop {
+            interval.tick().await;
+            match send_garden_reminders(&orm, &bot, &config).await {
+                Ok(0) => {}
+                Ok(n) => tracing::info!("garden reminders: sent {} reminder(s)", n),
+                Err(e) => tracing::warn!("garden reminders sweep failed: {}", e),
+            }
+        }
+    });
+}
+
+/// Send reminders for plants that:
+/// - have no reminder_sent_at, OR last reminder was > 24h ago,
+/// - are not harvested,
+/// - and either can_water now (cooldown expired) or are ready to harvest.
+///
+/// Updates `garden_plants.reminder_sent_at` to avoid spam.
+#[cfg(not(target_arch = "wasm32"))]
+async fn send_garden_reminders(
+    orm: &sea_orm::DatabaseConnection,
+    bot: &teloxide::Bot,
+    config: &crate::config::Config,
+) -> Result<usize, sea_orm::DbErr> {
+    use sea_orm::{ConnectionTrait, DbBackend, Statement};
+
+    let now = chrono::Utc::now().timestamp_millis();
+    // 24h window between reminders per plant.
+    let reminder_cooldown_ms = 24i64 * 60 * 60 * 1000;
+    let min_last_reminder = now.saturating_sub(reminder_cooldown_ms);
+
+    // We need the language per user to localise the message. The DB stores
+    // `user_languages.telegram_id` for registered users; unrecognised users get
+    // English.
+    let rows = orm.query_all(Statement::from_sql_and_values(
+        DbBackend::Postgres,
+        "SELECT p.id, p.user_id, p.is_completed, p.harvested_at, p.last_watered_at, \
+                COALESCE(ul.lang, 'en') AS lang \
+         FROM garden_plants p \
+         LEFT JOIN user_languages ul ON ul.telegram_id = p.user_id::bigint \
+         WHERE p.harvested_at IS NULL \
+           AND p.is_completed = false \
+           AND (p.reminder_sent_at IS NULL OR p.reminder_sent_at <= $1) \
+           AND (p.last_watered_at IS NULL OR p.last_watered_at <= $2) \
+           AND p.water_count < 13 \
+         LIMIT 500",
+        [min_last_reminder.into(), (now - crate::trios::garden::WATER_COOLDOWN_MS).into()],
+    )).await?;
+
+    let mut sent = 0usize;
+    for r in rows {
+        let user_id: String = r.try_get("", "user_id").unwrap_or_default();
+        let tid = match user_id.parse::<i64>() {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+        if tid == 0 {
+            continue;
+        }
+        let plant_id: String = r.try_get("", "id").unwrap_or_default();
+
+        crate::bot::notify::notify_garden_reminder(bot, &std::sync::Arc::new(crate::db::Database::from_conn(orm.clone())), &std::sync::Arc::new(config.clone()), tid, "water").await;
+        sent += 1;
+
+        // Mark reminder sent.
+        orm.execute(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            "UPDATE garden_plants SET reminder_sent_at = $1 WHERE id = $2",
+            [now.into(), plant_id.into()],
+        )).await?;
+    }
+
+    // Harvest reminders: plants that are completed but not yet harvested.
+    let harvest_rows = orm.query_all(Statement::from_sql_and_values(
+        DbBackend::Postgres,
+        "SELECT p.id, p.user_id \
+         FROM garden_plants p \
+         WHERE p.is_completed = true \
+           AND p.harvested_at IS NULL \
+           AND (p.reminder_sent_at IS NULL OR p.reminder_sent_at <= $1) \
+         LIMIT 500",
+        [min_last_reminder.into()],
+    )).await?;
+
+    for r in harvest_rows {
+        let user_id: String = r.try_get("", "user_id").unwrap_or_default();
+        let tid = match user_id.parse::<i64>() {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+        if tid == 0 {
+            continue;
+        }
+        let plant_id: String = r.try_get("", "id").unwrap_or_default();
+
+        crate::bot::notify::notify_garden_reminder(bot, &std::sync::Arc::new(crate::db::Database::from_conn(orm.clone())), &std::sync::Arc::new(config.clone()), tid, "harvest").await;
+        sent += 1;
+
+        orm.execute(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            "UPDATE garden_plants SET reminder_sent_at = $1 WHERE id = $2",
+            [now.into(), plant_id.into()],
+        )).await?;
+    }
+
+    Ok(sent)
+}
+
 // ── Request/Response Types ────────────────────────────────────────
 
 #[derive(Debug, Deserialize)]

@@ -253,6 +253,10 @@ const MIGRATIONS: &[(&str, &str)] = &[
         "057_order_checkout_compliance.sql",
         include_str!("../../migrations/057_order_checkout_compliance.sql"),
     ),
+    (
+        "058_garden_plants_reminder_sent_at.sql",
+        include_str!("../../migrations/058_garden_plants_reminder_sent_at.sql"),
+    ),
 ];
 
 /// Columns the catalog endpoints SELECT that were added by *later* migrations
@@ -343,6 +347,12 @@ pub(crate) fn parse_db_pool_max_env(raw: Option<String>) -> Result<u32> {
 }
 
 impl Database {
+    /// Cycle #10: used by background loops that only have an ORM handle
+    /// but need a `Database` to call `get_user_lang`.
+    pub fn from_conn(orm: sea_orm::DatabaseConnection) -> Self {
+        Self { orm }
+    }
+
     pub async fn connect(database_url: &str) -> Result<Self> {
         // SeaORM connects via sqlx; sslmode=require in the URL is handled
         // automatically. The `channel_binding=require` knob that Neon /

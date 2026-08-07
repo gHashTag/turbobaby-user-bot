@@ -1,14 +1,16 @@
 use crate::trios::core::Lang;
 use crate::trios::i18n::{
     t, tf,
-    T_PROFILE_BONUS, T_PROFILE_CASHBACK_LABEL, T_PROFILE_CONTACTS, T_PROFILE_COPY,
-    T_PROFILE_COPY_LINK, T_PROFILE_EARN_PER_REF, T_PROFILE_FRIENDS_INVITED,
-    T_PROFILE_MEMBERSHIP, T_PROFILE_MORE_TO_UNLOCK, T_PROFILE_MY_GARDEN, T_PROFILE_MY_ORDERS,
-    T_PROFILE_OPEN_MAP, T_PROFILE_PROGRESS, T_PROFILE_QR_CODE, T_PROFILE_QUICK_ACTIONS,
-    T_PROFILE_REFERRAL_LINK, T_PROFILE_REFERRAL_PROGRAM, T_PROFILE_SHARE, T_PROFILE_SPENT,
-    T_PROFILE_STARS, T_PROFILE_TIER_BENEFITS, T_PROFILE_TIER_BRONZE, T_PROFILE_TIER_GOLD,
-    T_PROFILE_TIER_SILVER, T_PROFILE_TIER_STARTER, T_PROFILE_TITLE, T_PROFILE_QUESTS,
-    T_PROFILE_INVITED,
+    T_PROFILE_BONUS, T_PROFILE_BONUS_ADMIN, T_PROFILE_BONUS_CASHBACK, T_PROFILE_BONUS_DEBIT,
+    T_PROFILE_BONUS_GARDEN, T_PROFILE_BONUS_HISTORY,
+    T_PROFILE_BONUS_HISTORY_EMPTY, T_PROFILE_BONUS_OTHER, T_PROFILE_BONUS_REFERRAL,
+    T_PROFILE_CASHBACK_LABEL, T_PROFILE_CONTACTS, T_PROFILE_COPY, T_PROFILE_COPY_LINK,
+    T_PROFILE_EARN_PER_REF, T_PROFILE_FRIENDS_INVITED, T_PROFILE_MEMBERSHIP,
+    T_PROFILE_MORE_TO_UNLOCK, T_PROFILE_MY_GARDEN, T_PROFILE_MY_ORDERS, T_PROFILE_OPEN_MAP,
+    T_PROFILE_PROGRESS, T_PROFILE_QR_CODE, T_PROFILE_QUICK_ACTIONS, T_PROFILE_REFERRAL_LINK,
+    T_PROFILE_REFERRAL_PROGRAM, T_PROFILE_SHARE, T_PROFILE_SPENT, T_PROFILE_STARS,
+    T_PROFILE_TIER_BENEFITS, T_PROFILE_TIER_BRONZE, T_PROFILE_TIER_GOLD, T_PROFILE_TIER_SILVER,
+    T_PROFILE_TIER_STARTER, T_PROFILE_TITLE, T_PROFILE_QUESTS, T_PROFILE_INVITED,
 };
 use crate::ui::api::context::api_base_url;
 use crate::ui::assets;
@@ -42,6 +44,25 @@ struct LoyaltyProfileData {
 #[derive(Debug, Clone, Deserialize)]
 struct StarsBalanceResp {
     balance: i64,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct BonusHistoryResponse {
+    transactions: Vec<BonusTransaction>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[allow(dead_code)] // API fields kept for future deep-links / receipts.
+struct BonusTransaction {
+    id: String,
+    amount: f64,
+    tx_type: String,
+    #[serde(default)]
+    description: Option<String>,
+    #[serde(default)]
+    related_order_id: Option<String>,
+    #[serde(default)]
+    created_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -161,6 +182,27 @@ fn render_profile_skeleton(_lang: Lang) -> Element {
     }
 }
 
+fn bonus_tx_label(lang: Lang, tx_type: &str) -> String {
+    match tx_type {
+        "referral_bonus" => t(lang, T_PROFILE_BONUS_REFERRAL).to_string(),
+        "garden_harvest" | "garden_reward" => t(lang, T_PROFILE_BONUS_GARDEN).to_string(),
+        "order_cashback" | "cashback" => t(lang, T_PROFILE_BONUS_CASHBACK).to_string(),
+        "admin_grant" | "manual_grant" => t(lang, T_PROFILE_BONUS_ADMIN).to_string(),
+        "admin_deduction" => t(lang, T_PROFILE_BONUS_DEBIT).to_string(),
+        _ => t(lang, T_PROFILE_BONUS_OTHER).to_string(),
+    }
+}
+
+fn format_bonus_date(iso: Option<&str>) -> String {
+    iso.and_then(|s| {
+        // Try ISO-8601 timestamp, return "dd.mm.yyyy" in shop timezone.
+        chrono::DateTime::parse_from_rfc3339(s)
+            .ok()
+            .map(|dt| dt.format("%d.%m.%Y").to_string())
+    })
+    .unwrap_or_default()
+}
+
 #[component]
 pub fn ProfileScreen() -> Element {
     let cart = use_context::<Signal<Cart>>();
@@ -170,6 +212,7 @@ pub fn ProfileScreen() -> Element {
     let init_data = use_telegram_init_data();
     let init_data_for_loyalty = init_data.clone();
     let init_data_for_stars = init_data.clone();
+    let init_data_for_bonus_history = init_data.clone();
 
     let loyalty_resource = use_resource(move || {
         let init = init_data_for_loyalty.clone();
@@ -218,6 +261,27 @@ pub fn ProfileScreen() -> Element {
         }
     });
     let stars_balance = stars_balance_res.read().clone().flatten().unwrap_or(0);
+
+    let bonus_history_res = use_resource(move || {
+        let init = init_data_for_bonus_history.clone();
+        async move {
+            if telegram_id == 0 {
+                return None;
+            }
+            let url = format!("{}/api/loyalty/{}/bonus-history", api_base_url(), telegram_id);
+            let client = crate::ui::api::local_client::LocalClient::new();
+            let resp = client
+                .get(&url)
+                .header("X-Telegram-Init-Data", init)
+                .send()
+                .await;
+            match resp {
+                Ok(r) => r.json::<BonusHistoryResponse>().await.ok().map(|r| r.transactions),
+                Err(_) => None,
+            }
+        }
+    });
+    let bonus_history = bonus_history_res.read().clone().flatten().unwrap_or_default();
 
     let current_tier = loyalty_data
         .as_ref()
@@ -595,6 +659,45 @@ pub fn ProfileScreen() -> Element {
                             span { style: "font-size: 15px;", "{t(lang, T_PROFILE_REFERRAL_PROGRAM)}" }
                         }
                         span { style: "font-size: 15px; color: #8b8b9e;", "→" }
+                    }
+                }
+            }
+
+            // Bonus transaction history
+            div { style: "padding: 0 16px 16px;",
+                div { style: "font-size: 13px; font-weight: 700; color: #ffe600; text-transform: uppercase; letter-spacing: 1px; text-shadow: 2px 2px 0 #000; margin-bottom: 10px;", "{t(lang, T_PROFILE_BONUS_HISTORY)}" }
+                div { style: "background: #16213e; border: 4px solid #2a2a4a; box-shadow: 4px 4px 0 #000; padding: 12px;",
+                    if bonus_history.is_empty() {
+                        div { style: "font-size: 13px; color: #8b8b9e; text-align: center; padding: 8px 0;", "{t(lang, T_PROFILE_BONUS_HISTORY_EMPTY)}" }
+                    } else {
+                        div { style: "display: flex; flex-direction: column; gap: 8px;",
+                            for tx in bonus_history.iter().take(20) {
+                                {
+                                    let amount = if tx.amount.is_finite() { tx.amount } else { 0.0 };
+                                    let is_credit = amount >= 0.0;
+                                    let sign = if is_credit { "+" } else { "" };
+                                    let color = if is_credit { "#39ff14" } else { "#ff4757" };
+                                    let label = bonus_tx_label(lang, &tx.tx_type);
+                                    let date = format_bonus_date(tx.created_at.as_deref());
+                                    let amount_str = crate::trios::pricing::format_baht(amount.abs());
+                                    let desc = tx.description.as_deref().unwrap_or("");
+                                    rsx! {
+                                        div { style: "display: flex; justify-content: space-between; align-items: flex-start; gap: 8px;",
+                                            div { style: "min-width: 0;",
+                                                div { style: "font-size: 13px; font-weight: 700; color: #e8e8e8;", "{label}" }
+                                                if !desc.is_empty() {
+                                                    div { style: "font-size: 11px; color: #8b8b9e; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;", "{desc}" }
+                                                }
+                                                if !date.is_empty() {
+                                                    div { style: "font-size: 11px; color: #6b6b7e; margin-top: 2px;", "{date}" }
+                                                }
+                                            }
+                                            div { style: "font-size: 14px; font-weight: 800; color: {color}; white-space: nowrap;", "{sign}{amount_str}" }
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }

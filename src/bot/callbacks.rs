@@ -415,7 +415,7 @@ pub(crate) async fn handle_callback(
                 }
                 // Cycle #79: notify the customer their order was confirmed.
                 if let Some(cid) = customer_telegram_id {
-                    notify::notify_order_status(&bot, &db, &config, cid, order_id, "confirmed")
+                    notify::notify_order_status(&bot, &db, &config, cid, order_id, "confirmed", None)
                         .await;
                 }
             } else if let Some(msg) = q.message.as_ref().and_then(|m| match m {
@@ -558,6 +558,7 @@ pub(crate) async fn handle_callback(
                 completion.customer_telegram_id,
                 order_id,
                 "completed",
+                completion.cashback_credited.map(|(_, amount)| amount),
             )
             .await;
         }
@@ -722,8 +723,10 @@ pub(crate) async fn handle_callback(
             // Cycle #79: notify the customer their order was rejected.
             if rejected {
                 if let Some(tid) = customer_telegram_id {
-                    notify::notify_order_status(&bot, &db, &config, tid, _order_id, "rejected")
-                        .await;
+                    notify::notify_order_status(
+                        &bot, &db, &config, tid, _order_id, "rejected", None,
+                    )
+                    .await;
                 }
             }
             if let Some(msg) = q.message.as_ref().and_then(|m| match m {

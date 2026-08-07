@@ -508,6 +508,20 @@ async fn main() -> Result<()> {
         crate::api::events::spawn_event_reminder_loop(reminder_orm, reminder_bot, 24, 300);
     }
 
+    // Cycle #10: garden watering/harvest reminders. Every 6 hours look for
+    // plants whose cooldown has passed and that haven't been reminded recently.
+    {
+        let garden_reminder_bot = bot_arc_for_state.clone();
+        let garden_reminder_orm = db.orm.clone();
+        let garden_reminder_config = config.clone();
+        crate::api::garden::spawn_garden_reminder_loop(
+            garden_reminder_orm,
+            garden_reminder_bot,
+            garden_reminder_config,
+            21_600,
+        );
+    }
+
     tokio::spawn(async move {
         use teloxide::types::AllowedUpdate;
         use teloxide::update_listeners::Polling;

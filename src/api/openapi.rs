@@ -29,6 +29,24 @@ pub(crate) async fn get_leaderboard_doc() {}
 )]
 pub(crate) async fn get_loyalty_profile_doc() {}
 
+/// GET /api/loyalty/{telegram_id}/bonus-history
+#[utoipa::path(
+    get,
+    path = "/api/loyalty/{telegram_id}/bonus-history",
+    params(
+        ("telegram_id" = i64, Path, description = "Telegram user ID"),
+        ("limit" = Option<i64>, Query, description = "Page size (max 100, default 50)"),
+        ("offset" = Option<i64>, Query, description = "Rows to skip (default 0)"),
+    ),
+    responses(
+        (status = 200, description = "Bonus transaction ledger for user", body = serde_json::Value),
+        (status = 401, description = "Unauthorized"),
+        (status = 500, description = "Internal server error"),
+    ),
+    tag = "loyalty"
+)]
+pub(crate) async fn get_bonus_history_doc() {}
+
 /// GET /api/sets
 #[utoipa::path(
     get,
@@ -129,6 +147,7 @@ pub(crate) async fn get_loyalty_tiers_doc() {}
     paths(
         get_leaderboard_doc,
         get_loyalty_profile_doc,
+        get_bonus_history_doc,
         get_loyalty_tiers_doc,
         get_sets_doc,
         get_quest_places_doc,
