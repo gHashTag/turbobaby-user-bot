@@ -86,7 +86,7 @@ pub(crate) fn cashback_pct_for_tier(config: &serde_json::Value, tier: &str) -> f
     let raw = config
         .get(key)
         .cloned()
-        .unwrap_or_else(|| serde_json::json!(null));
+        .unwrap_or(serde_json::Value::Null);
     let pct = if raw.is_array() {
         // `progressive_cashback` is an array indexed by completed-order
         // count. Without that context, use the first (lowest) value.

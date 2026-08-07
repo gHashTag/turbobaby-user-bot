@@ -1431,7 +1431,7 @@ fn validate_set_request(req: &SetRequest) -> Result<(), StatusCode> {
 fn normalize_badge(badge: Option<String>) -> String {
     badge
         .map(|b| {
-            crate::trios::packs::PackBadge::from_str(&b)
+            crate::trios::packs::PackBadge::parse(&b)
                 .as_str()
                 .to_string()
         })

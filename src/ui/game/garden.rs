@@ -1,6 +1,7 @@
 use crate::trios::garden::{calculate_progress, GrowthStage, Plant};
 use crate::trios::i18n::{
-    t, tf, T_BTN_WATER, T_CLOSE, T_GARDEN_CANCEL, T_GARDEN_CAT_ACCESSORY,
+    t, tf, T_BTN_WATER, T_CLOSE, T_GARDEN_ACHIEVEMENTS_EMPTY, T_GARDEN_ACHIEVEMENTS_NEW,
+    T_GARDEN_ACHIEVEMENTS_TITLE, T_GARDEN_CANCEL, T_GARDEN_CAT_ACCESSORY,
     T_GARDEN_CAT_ACCESSORY_SET, T_GARDEN_CAT_OTHER, T_GARDEN_CAT_SET, T_GARDEN_CAT_STRAIN,
     T_GARDEN_CAT_TEA, T_GARDEN_CAT_TEA_SET, T_GARDEN_CHANGE_PRODUCT, T_GARDEN_CHOOSER_EMPTY,
     T_GARDEN_CHOOSER_ERROR, T_GARDEN_CHOOSER_LOADING, T_GARDEN_CHOOSER_TITLE,
@@ -8,12 +9,15 @@ use crate::trios::i18n::{
     T_GARDEN_COOLDOWN, T_GARDEN_DIAGNOSTICS_COPIED, T_GARDEN_DIAGNOSTICS_COPY,
     T_GARDEN_DISCOUNT_BADGE, T_GARDEN_EMPTY_CTA, T_GARDEN_EMPTY_LABEL, T_GARDEN_ERROR_COOLDOWN,
     T_GARDEN_ERROR_HARVEST, T_GARDEN_ERROR_PRODUCT_UNAVAILABLE, T_GARDEN_ERROR_RESET,
-    T_GARDEN_HARVEST, T_GARDEN_LOADING, T_GARDEN_NEXT_WATER_IN, T_GARDEN_PLANT_ALT,
-    T_GARDEN_PRODUCT_ALT, T_GARDEN_READY, T_GARDEN_RESET_CONFIRM_BODY,
-    T_GARDEN_RESET_CONFIRM_TITLE, T_GARDEN_RESET_PROGRESS, T_GARDEN_REWARD_EXPIRES_IN,
+    T_GARDEN_HARVEST, T_GARDEN_LEADERBOARD_RANK, T_GARDEN_LEADERBOARD_TAB_HARVEST,
+    T_GARDEN_LEADERBOARD_TAB_STREAK, T_GARDEN_LEADERBOARD_TITLE, T_GARDEN_LEADERBOARD_YOU,
+    T_GARDEN_LOADING, T_GARDEN_NEXT_WATER_IN, T_GARDEN_PLANT_ALT, T_GARDEN_PRODUCT_ALT,
+    T_GARDEN_READY, T_GARDEN_RESET_CONFIRM_BODY, T_GARDEN_RESET_CONFIRM_TITLE,
+    T_GARDEN_RESET_PROGRESS, T_GARDEN_REWARD_EXPIRES_IN, T_GARDEN_SHARE_CTA,
     T_GARDEN_STREAK_BEST, T_GARDEN_STREAK_DAYS, T_GARDEN_SUBTITLE, T_GARDEN_TITLE,
     T_GARDEN_WATER_NOW,
 };
+use crate::ui::share::share_garden;
 use crate::ui::api::context::api_base_url;
 use crate::ui::api::http::post_client_event;
 use crate::ui::components::ErrorBanner;
@@ -120,6 +124,8 @@ struct WaterPlantResponse {
     streak: u32,
     #[serde(default)]
     max_streak: u32,
+    #[serde(default)]
+    new_achievements: Vec<String>,
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
@@ -134,6 +140,47 @@ struct HarvestPlantResponse {
     success: bool,
     #[serde(default)]
     error: Option<String>,
+    #[serde(default)]
+    new_achievements: Vec<String>,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+struct Achievement {
+    id: String,
+    name: String,
+    description: String,
+    icon: String,
+    xp_reward: i32,
+    requirement: String,
+    category: String,
+    #[serde(default)]
+    unlocked_at: Option<i64>,
+    #[serde(default)]
+    notified: bool,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+struct AchievementsResponse {
+    achievements: Vec<Achievement>,
+    #[serde(default)]
+    unnotified: Vec<String>,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+struct LeaderboardEntry {
+    rank: i64,
+    display_name: String,
+    score: i64,
+    #[serde(default)]
+    is_you: bool,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+struct LeaderboardResponse {
+    kind: String,
+    entries: Vec<LeaderboardEntry>,
+    #[serde(default)]
+    user: Option<serde_json::Value>,
 }
 
 /// Fetch the user's plants. On failure the `Err` carries the HTTP status so the
@@ -186,6 +233,57 @@ async fn fetch_garden_products() -> Result<Vec<GardenProduct>, String> {
     serde_json::from_str::<GardenProductsResponse>(&text)
         .map_err(|e| format!("Parse error: {e}"))
         .map(|r| r.products)
+}
+
+async fn fetch_achievements(
+    telegram_id: i64,
+    init_data: &str,
+) -> Result<AchievementsResponse, String> {
+    let base = api_base_url();
+    let url = format!("{}/api/garden/achievements?telegram_id={}", base, telegram_id);
+    let text = crate::ui::api::http::fetch_text_authed(&url, init_data).await?;
+    serde_json::from_str::<AchievementsResponse>(&text).map_err(|e| format!("Parse error: {e}"))
+}
+
+async fn fetch_leaderboard(
+    telegram_id: i64,
+    kind: &str,
+    init_data: &str,
+) -> Result<LeaderboardResponse, String> {
+    let base = api_base_url();
+    let url = format!(
+        "{}/api/garden/leaderboard?telegram_id={}&kind={}",
+        base,
+        telegram_id,
+        urlencoding::encode(kind)
+    );
+    let text = crate::ui::api::http::fetch_text_authed(&url, init_data).await?;
+    serde_json::from_str::<LeaderboardResponse>(&text).map_err(|e| format!("Parse error: {e}"))
+}
+
+async fn mark_achievements_notified(telegram_id: i64, init_data: &str) {
+    let base = api_base_url();
+    let url = format!("{}/api/garden/achievements/notified", base);
+    let body = serde_json::json!({ "telegram_id": telegram_id }).to_string();
+    let _ = crate::ui::api::http::post_json_authed(&url, init_data, &body).await;
+}
+
+async fn log_share_event(
+    telegram_id: i64,
+    init_data: &str,
+    content_kind: &str,
+    content_id: &str,
+) {
+    let base = api_base_url();
+    let url = format!("{}/api/garden/share-events", base);
+    let body = serde_json::json!({
+        "telegram_id": telegram_id,
+        "channel": "telegram_chat",
+        "content_kind": content_kind,
+        "content_id": content_id,
+    })
+    .to_string();
+    let _ = crate::ui::api::http::post_json_authed(&url, init_data, &body).await;
 }
 
 /// Copy text to the browser clipboard. Returns true on apparent success.
@@ -251,7 +349,7 @@ async fn water_plant_api(plant_id: &str, init_data: &str) -> Result<WaterPlantRe
     serde_json::from_str::<WaterPlantResponse>(&text).map_err(|e| format!("Parse error: {e}"))
 }
 
-async fn harvest_plant_api(plant_id: &str, init_data: &str) -> Result<(), String> {
+async fn harvest_plant_api(plant_id: &str, init_data: &str) -> Result<HarvestPlantResponse, String> {
     let base = api_base_url();
     let url = format!(
         "{}/api/garden/plants/{}/harvest",
@@ -262,7 +360,7 @@ async fn harvest_plant_api(plant_id: &str, init_data: &str) -> Result<(), String
     let resp: HarvestPlantResponse =
         serde_json::from_str(&text).map_err(|e| format!("Parse error: {e}"))?;
     if resp.success {
-        Ok(())
+        Ok(resp)
     } else {
         Err(resp.error.unwrap_or_else(|| "Harvest failed".into()))
     }
@@ -371,6 +469,10 @@ pub fn Garden() -> Element {
     let streak = use_signal(|| None::<GardenStreakResponse>);
     let mut show_chooser = use_signal(|| false);
     let mut show_reset_warning = use_signal(|| false);
+    let mut show_achievements = use_signal(|| false);
+    let mut show_leaderboard = use_signal(|| false);
+    let leaderboard_kind = use_signal(|| "streak".to_string());
+    let new_achievements = use_signal(Vec::<String>::new);
     let telegram_id = use_telegram_id().unwrap_or(0);
     let init_data = use_telegram_init_data();
     let tg = use_telegram();
@@ -502,10 +604,31 @@ pub fn Garden() -> Element {
     let cooldown_text = t(lang, T_GARDEN_COOLDOWN);
     let harvest_text = t(lang, T_GARDEN_HARVEST);
     let water_now_text = t(lang, T_GARDEN_WATER_NOW).to_string();
-    let next_water_in_text = t(lang, T_GARDEN_NEXT_WATER_IN).to_string();
+    let _next_water_in_text = t(lang, T_GARDEN_NEXT_WATER_IN).to_string();
     let streak_days_text = t(lang, T_GARDEN_STREAK_DAYS).to_string();
     let streak_best_text = t(lang, T_GARDEN_STREAK_BEST).to_string();
-    let reward_expires_in_text = t(lang, T_GARDEN_REWARD_EXPIRES_IN).to_string();
+    let _reward_expires_in_text = t(lang, T_GARDEN_REWARD_EXPIRES_IN).to_string();
+    let share_cta = t(lang, T_GARDEN_SHARE_CTA).to_string();
+    let achievements_title = t(lang, T_GARDEN_ACHIEVEMENTS_TITLE).to_string();
+    let leaderboard_title = t(lang, T_GARDEN_LEADERBOARD_TITLE).to_string();
+
+    let init_share = init_for_closures.clone();
+    let share_tid = telegram_id;
+    let share_click = move |_| {
+        let init = init_share.clone();
+        spawn(async move {
+            log_share_event(share_tid, &init, "garden", "garden").await;
+            share_garden();
+        });
+    };
+
+    let new_achievements_signal = new_achievements;
+    let dismiss_achievement = move |id: String| {
+        let mut ns = new_achievements_signal;
+        move |_| {
+            ns.write().retain(|a| a != &id);
+        }
+    };
 
     rsx! {
         div { style: "min-height: 100vh; background: {bg}; color: #e8e8e8; font-family: 'Press Start 2P', monospace; padding-bottom: 80px;",
@@ -521,6 +644,46 @@ pub fn Garden() -> Element {
                 }
                 p { style: "font-size: 11px; color: #8b8b9e; margin-top: 4px;",
                     "{subtitle_text}"
+                }
+
+                // Loop #18: social actions.
+                div { style: "display:flex; gap:8px; justify-content:center; margin-top: 12px; flex-wrap: wrap;",
+                    button {
+                        style: "padding:8px 12px;background:#1a1a2e;color:#e8e8e8;border:2px solid #39ff14;border-radius:20px;font-size:11px;font-weight:700;cursor:pointer;min-height:44px;display:flex;align-items:center;gap:4px;",
+                        onclick: share_click,
+                        "{share_cta}"
+                    }
+                    button {
+                        style: "width:44px;height:44px;background:#1a1a2e;color:#ffd700;border:2px solid #ffd700;border-radius:50%;font-size:18px;cursor:pointer;",
+                        "aria-label": "{achievements_title}",
+                        onclick: move |_| show_achievements.set(true),
+                        "🏅"
+                    }
+                    button {
+                        style: "width:44px;height:44px;background:#1a1a2e;color:#00e5ff;border:2px solid #00e5ff;border-radius:50%;font-size:18px;cursor:pointer;",
+                        "aria-label": "{leaderboard_title}",
+                        onclick: move |_| show_leaderboard.set(true),
+                        "🏆"
+                    }
+                }
+
+                // Loop #18: achievement unlock toasts.
+                {
+                    let toasts: Vec<String> = new_achievements.read().iter().cloned().collect();
+                    if !toasts.is_empty() {
+                        rsx! {
+                            div { style: "display:flex; flex-direction:column; gap:6px; margin-top:12px;",
+                                for id in toasts {
+                                    div { style: "background:#ffd700;color:#000;padding:8px 12px;border-radius:8px;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:6px;",
+                                        "{t(lang, T_GARDEN_ACHIEVEMENTS_NEW)} {id}"
+                                        button { style: "background:transparent;border:none;font-weight:700;cursor:pointer;", "aria-label": "{t(lang, T_CLOSE)}", onclick: dismiss_achievement(id.clone()), "✕" }
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        rsx! {}
+                    }
                 }
             }
 
@@ -658,6 +821,7 @@ pub fn Garden() -> Element {
 
                         let plants_signal = plants;
                         let error_signal = error_msg;
+                        let mut ach_signal_water = new_achievements;
                         let pid_for_water = pid.clone();
                         let init_water = init_for_closures.clone();
                         let water_click = move |_| {
@@ -688,6 +852,9 @@ pub fn Garden() -> Element {
                                             }
                                             crate::ui::telegram::TelegramApp::init().haptic_notification(crate::ui::telegram::HapticNotification::Success);
                                             let _ = post_client_event(&api_base_url(), "garden_water_tapped", "").await;
+                                            if !resp.new_achievements.is_empty() {
+                                                ach_signal_water.write().extend(resp.new_achievements);
+                                            }
                                         } else {
                                             es.set(resp.error.unwrap_or_else(|| "Water failed".into()));
                                         }
@@ -699,6 +866,7 @@ pub fn Garden() -> Element {
 
                         let plants_signal_h = plants;
                         let error_signal_h = error_msg;
+                        let mut ach_signal_harvest = new_achievements;
                         let pid_for_harvest = pid.clone();
                         let init_harvest = init_for_closures.clone();
                         let harvest_click = move |_| {
@@ -708,10 +876,13 @@ pub fn Garden() -> Element {
                             let init = init_harvest.clone();
                             spawn(async move {
                                 match harvest_plant_api(&plant_id, &init).await {
-                                    Ok(()) => {
+                                    Ok(resp) => {
                                         ps.write().retain(|p| p.id != plant_id);
                                         crate::ui::telegram::TelegramApp::init().haptic_notification(crate::ui::telegram::HapticNotification::Success);
                                         let _ = post_client_event(&api_base_url(), "garden_harvest_tapped", "").await;
+                                        if !resp.new_achievements.is_empty() {
+                                            ach_signal_harvest.write().extend(resp.new_achievements);
+                                        }
                                     }
                                     Err(e) => { es.set(tf(lang, T_GARDEN_ERROR_HARVEST, &[e])); }
                                 }
@@ -877,6 +1048,15 @@ pub fn Garden() -> Element {
                     }
                 }
             }
+
+            // Loop #18: social modals.
+            if show_achievements() {
+                AchievementsModal { telegram_id, init_data: init_data.clone(), open: show_achievements }
+            }
+
+            if show_leaderboard() {
+                LeaderboardModal { telegram_id, init_data: init_data.clone(), open: show_leaderboard, kind: leaderboard_kind }
+            }
         }
     }
 }
@@ -986,6 +1166,210 @@ fn GardenChooser(
                         None => rsx! { div { style: "text-align:center;padding:30px;color:#8b8b9e;", "{t(lang, T_GARDEN_CHOOSER_LOADING)}" } },
                     }
                 }
+            }
+        }
+    }
+}
+
+/// Loop #18: modal showing all garden achievements and recent unlocks.
+#[component]
+fn AchievementsModal(
+    telegram_id: i64,
+    init_data: String,
+    open: Signal<bool>,
+) -> Element {
+    let init_for_resource = init_data.clone();
+    let data = use_resource(move || {
+        let init = init_for_resource.clone();
+        async move { fetch_achievements(telegram_id, &init).await }
+    });
+    let lang = crate::ui::lang::current_lang();
+
+    // Mark all garden achievements as notified when the modal is opened,
+    // so the same unlocks don't keep flashing every time the user returns.
+    {
+        let init = init_data.clone();
+        use_effect(move || {
+            let init = init.clone();
+            spawn(async move {
+                mark_achievements_notified(telegram_id, &init).await;
+            });
+        });
+    }
+
+    let content: Element = match &*data.read() {
+        Some(Ok(resp)) if !resp.achievements.is_empty() => {
+            rsx! {
+                div { style: "display:flex;flex-direction:column;gap:10px;",
+                    {
+                        resp.achievements.iter().map(|a| {
+                            let border = if a.unlocked_at.is_some() {
+                                "#ffd700"
+                            } else {
+                                "#2a2a4a"
+                            };
+                            let opacity = if a.unlocked_at.is_some() { "1" } else { "0.45" };
+                            let style = format!(
+                                "display:flex;align-items:center;gap:12px;background:#1a1a2e;border:2px solid {border};border-radius:10px;padding:12px;opacity:{opacity};"
+                            );
+                            let unlocked = a.unlocked_at.is_some();
+                            let xp = a.xp_reward;
+                            let icon = a.icon.clone();
+                            let name = a.name.clone();
+                            let desc = a.description.clone();
+                            rsx! {
+                                div { style: "{style}",
+                                    div { style: "font-size:28px;", "{icon}" }
+                                    div { style: "flex:1;",
+                                        div { style: "font-size:13px;font-weight:700;color:#e8e8e8;", "{name}" }
+                                        div { style: "font-size:11px;color:#8b8b9e;margin-top:2px;", "{desc}" }
+                                    }
+                                    if unlocked {
+                                        div { style: "font-size:11px;color:#ffd700;font-weight:700;", "+{xp} XP" }
+                                    }
+                                }
+                            }
+                        })
+                    }
+                }
+            }
+        }
+        Some(Ok(_)) => rsx! {
+            div { style: "text-align:center;padding:40px;color:#8b8b9e;",
+                "{t(lang, T_GARDEN_ACHIEVEMENTS_EMPTY)}"
+            }
+        },
+        Some(Err(_)) => rsx! { div { style: "text-align:center;padding:40px;color:#ff6b7a;", "Load failed" } },
+        None => rsx! { div { style: "text-align:center;padding:40px;color:#8b8b9e;", "Loading..." } },
+    };
+
+    rsx! {
+        div {
+            style: "position:fixed;inset:0;z-index:1002;background:rgba(0,0,0,0.85);display:flex;align-items:flex-end;justify-content:center;",
+            onclick: move |_| open.set(false),
+            div {
+                style: "background:#0f0f1a;width:100%;max-width:520px;max-height:85vh;overflow:auto;border-top:4px solid #ffd700;padding:16px;",
+                onclick: move |e: Event<MouseData>| e.stop_propagation(),
+                div { style: "display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;",
+                    div { style: "font-size:15px;font-weight:700;color:#ffd700;", "{t(lang, T_GARDEN_ACHIEVEMENTS_TITLE)}" }
+                    button { style: "width:44px;height:44px;background:transparent;border:none;color:#8b8b9e;font-size:20px;cursor:pointer;",
+                        "aria-label": "{t(lang, T_CLOSE)}", onclick: move |_| open.set(false), "✕" }
+                }
+                { content }
+            }
+        }
+    }
+}
+
+/// Loop #18: modal showing the garden leaderboard by streak or harvest.
+#[component]
+fn LeaderboardModal(
+    telegram_id: i64,
+    init_data: String,
+    open: Signal<bool>,
+    kind: Signal<String>,
+) -> Element {
+    let kind_read = kind.read().clone();
+    let data = use_resource(move || {
+        let init = init_data.clone();
+        let k = kind_read.clone();
+        async move { fetch_leaderboard(telegram_id, &k, &init).await }
+    });
+    let lang = crate::ui::lang::current_lang();
+
+    let content: Element = match &*data.read() {
+        Some(Ok(resp)) if !resp.entries.is_empty() => {
+            let user_row: Element = if let Some(ref u) = resp.user {
+                if let (Some(rank), Some(score)) = (
+                    u.get("rank").and_then(|v| v.as_i64()),
+                    u.get("score").and_then(|v| v.as_i64()),
+                ) {
+                    let you_label = t(lang, T_GARDEN_LEADERBOARD_YOU).to_string();
+                    let rank_label = t(lang, T_GARDEN_LEADERBOARD_RANK).to_string();
+                    rsx! {
+                        div { style: "margin-top:12px;padding:10px;background:#16213e;border:2px solid #00e5ff;border-radius:10px;text-align:center;font-size:12px;color:#e8e8e8;",
+                            "{you_label} — {rank_label}{rank} — {score}"
+                        }
+                    }
+                } else {
+                    rsx! {}
+                }
+            } else {
+                rsx! {}
+            };
+            rsx! {
+                div { style: "display:flex;flex-direction:column;gap:8px;",
+                    {
+                        resp.entries.iter().map(|e| {
+                            let bg = if e.is_you { "#16213e" } else { "#1a1a2e" };
+                            let border = if e.is_you { "#00e5ff" } else { "#2a2a4a" };
+                            let style = format!(
+                                "display:flex;align-items:center;gap:10px;background:{bg};border:2px solid {border};border-radius:10px;padding:10px 12px;"
+                            );
+                            let name = if e.is_you {
+                                t(lang, T_GARDEN_LEADERBOARD_YOU).to_string()
+                            } else {
+                                e.display_name.clone()
+                            };
+                            let rank = e.rank;
+                            let score = e.score;
+                            let rank_label = t(lang, T_GARDEN_LEADERBOARD_RANK).to_string();
+                            rsx! {
+                                div { style: "{style}",
+                                    div { style: "font-size:13px;font-weight:700;color:#8b8b9e;min-width:30px;text-align:center;",
+                                        "{rank_label}{rank}"
+                                    }
+                                    div { style: "flex:1;font-size:13px;font-weight:700;color:#e8e8e8;", "{name}" }
+                                    div { style: "font-size:13px;font-weight:700;color:#39ff14;", "{score}" }
+                                }
+                            }
+                        })
+                    }
+                    { user_row }
+                }
+            }
+        }
+        Some(Ok(_)) => rsx! { div { style: "text-align:center;padding:40px;color:#8b8b9e;", "No entries yet" } },
+        Some(Err(_)) => rsx! { div { style: "text-align:center;padding:40px;color:#ff6b7a;", "Load failed" } },
+        None => rsx! { div { style: "text-align:center;padding:40px;color:#8b8b9e;", "Loading..." } },
+    };
+
+    rsx! {
+        div {
+            style: "position:fixed;inset:0;z-index:1002;background:rgba(0,0,0,0.85);display:flex;align-items:flex-end;justify-content:center;",
+            onclick: move |_| open.set(false),
+            div {
+                style: "background:#0f0f1a;width:100%;max-width:520px;max-height:85vh;overflow:auto;border-top:4px solid #00e5ff;padding:16px;",
+                onclick: move |e: Event<MouseData>| e.stop_propagation(),
+                div { style: "display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;",
+                    div { style: "font-size:15px;font-weight:700;color:#00e5ff;", "{t(lang, T_GARDEN_LEADERBOARD_TITLE)}" }
+                    button { style: "width:44px;height:44px;background:transparent;border:none;color:#8b8b9e;font-size:20px;cursor:pointer;",
+                        "aria-label": "{t(lang, T_CLOSE)}", onclick: move |_| open.set(false), "✕" }
+                }
+
+                // Tabs
+                div { style: "display:flex;gap:8px;margin-bottom:12px;",
+                    button {
+                        style: if kind.read().as_str() == "streak" {
+                            "flex:1;padding:10px;background:#00e5ff;color:#000;border:2px solid #00e5ff;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;"
+                        } else {
+                            "flex:1;padding:10px;background:transparent;color:#8b8b9e;border:2px solid #2a2a4a;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;"
+                        },
+                        onclick: move |_| kind.set("streak".to_string()),
+                        "{t(lang, T_GARDEN_LEADERBOARD_TAB_STREAK)}"
+                    }
+                    button {
+                        style: if kind.read().as_str() == "harvest" {
+                            "flex:1;padding:10px;background:#39ff14;color:#000;border:2px solid #39ff14;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;"
+                        } else {
+                            "flex:1;padding:10px;background:transparent;color:#8b8b9e;border:2px solid #2a2a4a;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;"
+                        },
+                        onclick: move |_| kind.set("harvest".to_string()),
+                        "{t(lang, T_GARDEN_LEADERBOARD_TAB_HARVEST)}"
+                    }
+                }
+
+                { content }
             }
         }
     }

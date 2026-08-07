@@ -209,7 +209,7 @@ fn sanitize_request(req: ClientErrorRequest) -> Result<SanitizedError, StatusCod
     let message = req
         .message
         .as_deref()
-        .map(|s| sanitize_telemetry_text(s))
+        .map(sanitize_telemetry_text)
         .map(|s| truncate_chars(&s, MAX_MESSAGE_LEN))
         .unwrap_or_default();
     if message.trim().is_empty() {
@@ -218,12 +218,12 @@ fn sanitize_request(req: ClientErrorRequest) -> Result<SanitizedError, StatusCod
     let stack = req
         .stack
         .as_deref()
-        .map(|s| sanitize_telemetry_text(s))
+        .map(sanitize_telemetry_text)
         .map(|s| truncate_chars(&s, MAX_STACK_LEN));
     let url_path = req
         .url_path
         .as_deref()
-        .map(|s| sanitize_telemetry_text(s))
+        .map(sanitize_telemetry_text)
         .map(|s| truncate_chars(&s, MAX_URL_PATH_LEN));
     if let Some(ref p) = url_path {
         if p.len() > MAX_URL_PATH_LEN {
@@ -233,7 +233,7 @@ fn sanitize_request(req: ClientErrorRequest) -> Result<SanitizedError, StatusCod
     let user_agent = req
         .user_agent
         .as_deref()
-        .map(|s| sanitize_telemetry_text(s))
+        .map(sanitize_telemetry_text)
         .map(|s| truncate_chars(&s, MAX_USER_AGENT_LEN));
     let telegram_id = req.telegram_id.filter(|&id| id > 0);
 

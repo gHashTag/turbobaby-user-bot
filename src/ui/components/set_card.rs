@@ -84,7 +84,7 @@ pub fn render_uniform_set_card(
 
     let is_available = set.is_available.unwrap_or(true);
 
-    let badge = crate::trios::packs::PackBadge::from_str(&set.badge);
+    let badge = crate::trios::packs::PackBadge::parse(&set.badge);
     let badge_label = badge.label().map(|(ru, en)| lang::localized(ru, Some(en)));
     let badge_color = badge.color();
     let strain_word = lang::localized("сортов", Some("strains"));

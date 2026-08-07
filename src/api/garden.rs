@@ -1,6 +1,6 @@
 //! Garden API endpoints
 
-use crate::api::auth::{check_admin, check_not_blocked, validate_telegram_id_param};
+use crate::api::auth::{check_admin, check_not_blocked, check_owner_lenient, validate_telegram_id_param};
 use crate::trios::garden;
 use crate::AppState;
 use axum::{
@@ -35,6 +35,11 @@ pub(crate) fn routes() -> Router<AppState> {
         .route("/garden/config", get(get_config))
         .route("/garden/config", put(update_config))
         .route("/garden/force-seed", post(force_seed))
+        // Loop #18: social
+        .route("/garden/achievements", get(get_user_achievements))
+        .route("/garden/achievements/notified", post(mark_achievements_notified))
+        .route("/garden/leaderboard", get(get_garden_leaderboard))
+        .route("/garden/share-events", post(log_share_event))
 }
 
 /// Cycle #10: spawn a background loop that sends garden watering/harvest
@@ -709,14 +714,48 @@ async fn water_plant(
     }
     crate::metrics::garden_streak_milestone(new_streak as i64);
 
+    // Loop #18: evaluate garden achievements after the water is persisted.
+    let new_achievements = match evaluate_and_persist_achievements(
+        &state.db.orm,
+        tid,
+        GardenStats {
+            water_count: new_count,
+            harvest_count: fetch_garden_user_stats(&state.db.orm, &user_id).await
+                .map_err(|e| { tracing::error!("water_plant stats: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?
+                .harvest_count,
+            max_streak: new_max_streak,
+        },
+    )
+    .await
+    {
+        Ok(v) => v,
+        Err(e) => {
+            tracing::error!("water_plant achievement unlock: {e}");
+            Vec::new()
+        }
+    };
+
     Ok(Json(json!({
         "success": true,
         "water_count": new_count,
         "current_stage": new_stage,
         "is_completed": new_completed,
         "streak": new_streak,
-        "max_streak": new_max_streak
+        "max_streak": new_max_streak,
+        "new_achievements": new_achievements,
     })))
+}
+
+/// Loop #18: convenience wrapper that computes achievement unlocks and persists
+/// the delta. Swallowing errors inside the wrapper keeps the primary action
+/// (water/harvest) from failing because of an achievement bookkeeping issue.
+async fn evaluate_and_persist_achievements(
+    orm: &sea_orm::DatabaseConnection,
+    telegram_id: i64,
+    stats: GardenStats,
+) -> Result<Vec<String>, sea_orm::DbErr> {
+    let ids = garden_achievements_to_unlock(stats);
+    persist_achievement_unlocks(orm, telegram_id, &ids).await
 }
 
 async fn harvest_plant(
@@ -894,6 +933,7 @@ async fn harvest_plant(
     let config = state.config.clone();
     let notify_discount = discount_percent;
     let notify_bonus = bonus_points;
+    let notify_user_id = user_id.clone();
     tokio::spawn(async move {
         // Cycle #149: notify_admins now sends with parse_mode=Html, so
         // user-controlled fields must be escaped at the format site.
@@ -901,19 +941,42 @@ async fn harvest_plant(
         // could enter "Critical <Mass>" — escape to be safe.
         let text = format!(
             "\u{1F33F} Garden reward \u{0432}\u{044B}\u{0434}\u{0430}\u{043D}\n\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\n\u{1F194} {}\n\u{1F381} {} ({}% / {}pts)",
-            user_id, crate::util::html_escape(&strain_name), notify_discount, notify_bonus
+            notify_user_id, crate::util::html_escape(&strain_name), notify_discount, notify_bonus
         );
         crate::notify::notify_admins(&bot, &config, &text).await;
     });
 
     crate::metrics::garden_reward_claimed();
 
+    // Loop #18: evaluate garden achievements after harvest is persisted.
+    let new_achievements = match fetch_garden_user_stats(&state.db.orm, &user_id).await
+    {
+        Ok(stats) => match evaluate_and_persist_achievements(
+            &state.db.orm,
+            tid,
+            stats,
+        )
+        .await
+        {
+            Ok(v) => v,
+            Err(e) => {
+                tracing::error!("harvest_plant achievement unlock: {e}");
+                Vec::new()
+            }
+        },
+        Err(e) => {
+            tracing::error!("harvest_plant stats: {e}");
+            Vec::new()
+        }
+    };
+
     Ok(Json(json!({
         "success": true,
         "reward_id": reward_id,
         "discount_percent": discount_percent,
         "bonus_points": bonus_points,
-        "expires_at": expires_at
+        "expires_at": expires_at,
+        "new_achievements": new_achievements,
     })))
 }
 
@@ -1069,6 +1132,7 @@ async fn use_reward(
     // `<= now`: a reward at exactly its expiry is expired — unified with the
     // rewards-list `reward_is_active` boundary (which uses `expires_at > now`).
     if !garden::reward_is_active(is_used, expires_at, now) {
+        crate::metrics::garden_reward_expired();
         return Ok(Json(json!({ "success": false, "error": "Reward expired" })));
     }
 
@@ -1262,6 +1326,423 @@ async fn update_config(
         .await
         .map_err(|e| {
             tracing::error!("update_config: {e}");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    Ok(Json(json!({ "success": true })))
+}
+
+// ── Loop #18: garden social (achievements, leaderboard, sharing) ──
+
+/// Loop #18: per-user garden achievement unlock logic.
+#[derive(Debug, Clone, Copy)]
+struct GardenStats {
+    water_count: u32,
+    harvest_count: u32,
+    max_streak: u32,
+}
+
+/// Given the current garden stats, return the IDs of all garden
+/// achievements whose predicates are satisfied. Kept pure so it is
+/// unit-testable without a DB.
+fn garden_achievements_to_unlock(stats: GardenStats) -> Vec<&'static str> {
+    let GardenStats {
+        water_count,
+        harvest_count,
+        max_streak,
+    } = stats;
+    let mut ids = Vec::new();
+    if water_count >= 1 {
+        ids.push("garden_first_water");
+    }
+    if harvest_count >= 1 {
+        ids.push("garden_first_harvest");
+    }
+    if max_streak >= 3 {
+        ids.push("garden_streak_3");
+    }
+    if max_streak >= 7 {
+        ids.push("garden_streak_7");
+    }
+    if max_streak >= 14 {
+        ids.push("garden_streak_14");
+    }
+    if harvest_count >= 5 {
+        ids.push("garden_harvest_5");
+    }
+    if harvest_count >= 25 {
+        ids.push("garden_harvest_25");
+    }
+    // "Perfect grow" = reached harvest with no missed days. A full grow
+    // requires 13 consecutive waters (seed -> final), so max_streak
+    // must be at least 13 at the moment of harvest.
+    if harvest_count >= 1 && max_streak >= 13 {
+        ids.push("garden_zero_miss");
+    }
+    ids
+}
+
+/// Fetch garden aggregate stats for a user from the DB.
+async fn fetch_garden_user_stats(
+    orm: &sea_orm::DatabaseConnection,
+    user_id: &str,
+) -> Result<GardenStats, sea_orm::DbErr> {
+    use sea_orm::{ConnectionTrait, DbBackend, Statement};
+    let row = orm
+        .query_one(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            "SELECT \
+                    COALESCE(MAX(water_count), 0) AS water_count, \
+                    COALESCE(MAX(max_streak), 0) AS max_streak, \
+                    COUNT(*) FILTER (WHERE harvested_at IS NOT NULL) AS harvest_count \
+             FROM garden_plants \
+             WHERE user_id = $1",
+            [user_id.into()],
+        ))
+        .await?;
+    let Some(r) = row else {
+        return Ok(GardenStats {
+            water_count: 0,
+            harvest_count: 0,
+            max_streak: 0,
+        });
+    };
+    Ok(GardenStats {
+        water_count: r.try_get::<i32>("", "water_count").unwrap_or(0).max(0) as u32,
+        harvest_count: r.try_get::<i64>("", "harvest_count").unwrap_or(0).max(0) as u32,
+        max_streak: r.try_get::<i32>("", "max_streak").unwrap_or(0).max(0) as u32,
+    })
+}
+
+/// Persist any missing achievement unlocks and return the IDs that were
+/// actually inserted (new unlocks). Does not touch already-unlocked rows.
+async fn persist_achievement_unlocks(
+    orm: &sea_orm::DatabaseConnection,
+    telegram_id: i64,
+    achievement_ids: &[&str],
+) -> Result<Vec<String>, sea_orm::DbErr> {
+    if achievement_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+    use sea_orm::{ConnectionTrait, DbBackend, Statement};
+
+    // Read what is already unlocked so we insert only the delta.
+    let existing_rows = orm
+        .query_all(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            "SELECT achievement_id FROM user_achievements WHERE telegram_id = $1",
+            [telegram_id.into()],
+        ))
+        .await?;
+    let existing: std::collections::HashSet<String> = existing_rows
+        .iter()
+        .filter_map(|r| r.try_get::<String>("", "achievement_id").ok())
+        .collect();
+
+    let new_ids: Vec<&str> = achievement_ids
+        .iter()
+        .copied()
+        .filter(|id| !existing.contains(*id))
+        .collect();
+    if new_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let now = chrono::Utc::now().timestamp_millis();
+    for id in &new_ids {
+        orm.execute(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            "INSERT INTO user_achievements (telegram_id, achievement_id, unlocked_at, notified) \
+             VALUES ($1, $2, to_timestamp($3 / 1000.0), false) \
+             ON CONFLICT (telegram_id, achievement_id) DO NOTHING",
+            [telegram_id.into(), (*id).into(), now.into()],
+        ))
+        .await?;
+        crate::metrics::garden_achievement_unlocked(id);
+    }
+    Ok(new_ids.into_iter().map(|s| s.to_string()).collect())
+}
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct LeaderboardQuery {
+    pub telegram_id: i64,
+    #[serde(default = "leaderboard_default_kind")]
+    pub kind: String,
+    #[serde(default = "leaderboard_default_limit")]
+    pub limit: u32,
+}
+
+fn leaderboard_default_kind() -> String {
+    "streak".to_string()
+}
+
+fn leaderboard_default_limit() -> u32 {
+    10
+}
+
+fn anonymize_leaderboard_name(telegram_id: i64) -> String {
+    // Do not expose raw telegram_ids to other users; use a stable,
+    // anonymous handle derived from the last 4 digits of the id.
+    format!("Grower #{:04}", telegram_id.rem_euclid(10000))
+}
+
+/// GET /api/garden/leaderboard — top growers by streak or harvest count.
+///
+/// Returns an anonymised top-N list plus the requesting user's rank/score.
+async fn get_garden_leaderboard(
+    Query(query): Query<LeaderboardQuery>,
+    State(state): State<AppState>,
+) -> Result<Json<Value>, StatusCode> {
+    validate_telegram_id_param(query.telegram_id)?;
+    let kind = match query.kind.as_str() {
+        "streak" | "harvest" => query.kind.as_str(),
+        _ => return Err(StatusCode::BAD_REQUEST),
+    };
+    let limit = query.limit.clamp(1, 100) as i64;
+    use sea_orm::{ConnectionTrait, DbBackend, Statement};
+
+    let (sql, rank_sql) = if kind == "streak" {
+        (
+            "SELECT user_id::bigint AS telegram_id, MAX(max_streak) AS score \
+             FROM garden_plants \
+             GROUP BY user_id \
+             HAVING MAX(max_streak) > 0 \
+             ORDER BY score DESC, MIN(planted_at) ASC \
+             LIMIT $1",
+            "SELECT COUNT(*) + 1 AS rank, (SELECT MAX(max_streak) FROM garden_plants WHERE user_id = $1) AS score \
+             FROM garden_plants p \
+             WHERE user_id <> $1 AND max_streak > (SELECT COALESCE(MAX(max_streak),0) FROM garden_plants WHERE user_id = $1)",
+        )
+    } else {
+        (
+            "SELECT user_id::bigint AS telegram_id, COUNT(*) AS score \
+             FROM garden_plants \
+             WHERE harvested_at IS NOT NULL \
+             GROUP BY user_id \
+             ORDER BY score DESC, MIN(harvested_at) ASC \
+             LIMIT $1",
+            "SELECT COUNT(*) + 1 AS rank, (SELECT COUNT(*) FROM garden_plants WHERE user_id = $1 AND harvested_at IS NOT NULL) AS score \
+             FROM garden_plants p \
+             WHERE user_id <> $1 AND harvested_at IS NOT NULL \
+               AND (SELECT COUNT(*) FROM garden_plants WHERE user_id = $1 AND harvested_at IS NOT NULL) < \
+                   (SELECT COUNT(*) FROM garden_plants WHERE user_id = p.user_id AND harvested_at IS NOT NULL)",
+        )
+    };
+
+    let rows = state
+        .db
+        .orm
+        .query_all(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            sql,
+            [limit.into()],
+        ))
+        .await
+        .map_err(|e| {
+            tracing::error!("get_garden_leaderboard {}: {e}", kind);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    let mut entries = Vec::with_capacity(rows.len());
+    for (rank, r) in (1i64..).zip(rows) {
+        let tid: i64 = r.try_get("", "telegram_id").unwrap_or(0);
+        let score: i64 = r.try_get("", "score").unwrap_or(0);
+        entries.push(json!({
+            "rank": rank,
+            "display_name": anonymize_leaderboard_name(tid),
+            "score": score,
+            "is_you": tid == query.telegram_id,
+        }));
+    }
+
+    let user_id = query.telegram_id.to_string();
+    let user_rank = state
+        .db
+        .orm
+        .query_one(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            rank_sql,
+            [user_id.into()],
+        ))
+        .await
+        .map_err(|e| {
+            tracing::error!("get_garden_leaderboard rank: {e}");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+    let user = user_rank.map(|r| {
+        let rank: i64 = r.try_get("", "rank").unwrap_or(0);
+        let score: i64 = r.try_get("", "score").unwrap_or(0);
+        json!({
+            "rank": if rank <= 0 { serde_json::Value::Null } else { rank.into() },
+            "score": score,
+            "display_name": anonymize_leaderboard_name(query.telegram_id),
+        })
+    });
+
+    crate::metrics::garden_leaderboard_viewed(kind);
+
+    Ok(Json(json!({
+        "kind": kind,
+        "entries": entries,
+        "user": user,
+    })))
+}
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct LogShareEventRequest {
+    pub telegram_id: i64,
+    pub channel: String,
+    pub content_kind: String,
+    pub content_id: String,
+}
+
+/// POST /api/garden/share-events — log a share for viral attribution.
+///
+/// The endpoint is authenticated (owner) but intentionally light; the
+/// share itself happens via Telegram's native picker on the client.
+async fn log_share_event(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    Json(req): Json<LogShareEventRequest>,
+) -> Result<Json<Value>, StatusCode> {
+    validate_telegram_id_param(req.telegram_id)?;
+    check_owner_lenient(&headers, &state, req.telegram_id, "garden")?;
+
+    fn safe_label(s: &str, max: usize) -> bool {
+        !s.is_empty()
+            && s.len() <= max
+            && s.bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
+    }
+    if !safe_label(&req.channel, 20)
+        || !safe_label(&req.content_kind, 30)
+        || req.content_id.is_empty()
+        || req.content_id.len() > 200
+    {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    use sea_orm::{ConnectionTrait, DbBackend, Statement};
+    let id = uuid::Uuid::new_v4().to_string();
+    let now = chrono::Utc::now().timestamp_millis();
+    let content_kind = req.content_kind.clone();
+    state
+        .db
+        .orm
+        .execute(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            "INSERT INTO share_events (id, telegram_id, channel, content_kind, content_id, shared_at) \
+             VALUES ($1, $2, $3, $4, $5, to_timestamp($6 / 1000.0))",
+            [
+                id.into(),
+                req.telegram_id.into(),
+                req.channel.into(),
+                req.content_kind.into(),
+                req.content_id.clone().into(),
+                now.into(),
+            ],
+        ))
+        .await
+        .map_err(|e| {
+            tracing::error!("log_share_event: {e}");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    crate::metrics::share_event_logged(&content_kind);
+
+    Ok(Json(json!({ "success": true })))
+}
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct AchievementsQuery {
+    pub telegram_id: i64,
+}
+
+/// GET /api/garden/achievements — all garden achievements with unlock state.
+async fn get_user_achievements(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    Query(query): Query<AchievementsQuery>,
+) -> Result<Json<Value>, StatusCode> {
+    validate_telegram_id_param(query.telegram_id)?;
+    check_owner_lenient(&headers, &state, query.telegram_id, "garden")?;
+
+    use sea_orm::{ConnectionTrait, DbBackend, Statement};
+
+    let rows = state
+        .db
+        .orm
+        .query_all(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            "SELECT \
+                    a.id, a.name, a.description, a.icon, a.xp_reward, a.requirement, a.category, \
+                    ua.unlocked_at, ua.notified \
+             FROM achievements a \
+             LEFT JOIN user_achievements ua ON ua.achievement_id = a.id AND ua.telegram_id = $1 \
+             WHERE a.category = 'garden' \
+             ORDER BY a.xp_reward ASC, a.id ASC",
+            [query.telegram_id.into()],
+        ))
+        .await
+        .map_err(|e| {
+            tracing::error!("get_user_achievements: {e}");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    let mut achievements = Vec::with_capacity(rows.len());
+    let mut unnotified = Vec::new();
+    for r in rows {
+        let id: String = r.try_get("", "id").unwrap_or_default();
+        let unlocked_at: Option<i64> = r
+            .try_get::<Option<chrono::DateTime<chrono::Utc>>>("", "unlocked_at")
+            .ok()
+            .flatten()
+            .map(|dt| dt.timestamp_millis());
+        let notified: bool = r.try_get("", "notified").unwrap_or(true);
+        if unlocked_at.is_some() && !notified {
+            unnotified.push(id.clone());
+        }
+        achievements.push(json!({
+            "id": id,
+            "name": r.try_get::<String>("", "name").unwrap_or_default(),
+            "description": r.try_get::<String>("", "description").unwrap_or_default(),
+            "icon": r.try_get::<String>("", "icon").unwrap_or_default(),
+            "xp_reward": r.try_get::<i32>("", "xp_reward").unwrap_or(0),
+            "requirement": r.try_get::<String>("", "requirement").unwrap_or_default(),
+            "category": r.try_get::<String>("", "category").unwrap_or_default(),
+            "unlocked_at": unlocked_at,
+            "notified": notified,
+        }));
+    }
+
+    Ok(Json(json!({
+        "achievements": achievements,
+        "unnotified": unnotified,
+    })))
+}
+
+/// POST /api/garden/achievements/notified — mark all garden achievement
+/// unlocks as seen by the user.
+async fn mark_achievements_notified(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    Json(req): Json<AchievementsQuery>,
+) -> Result<Json<Value>, StatusCode> {
+    validate_telegram_id_param(req.telegram_id)?;
+    check_owner_lenient(&headers, &state, req.telegram_id, "garden")?;
+
+    use sea_orm::{ConnectionTrait, DbBackend, Statement};
+    state
+        .db
+        .orm
+        .execute(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            "UPDATE user_achievements SET notified = true WHERE telegram_id = $1",
+            [req.telegram_id.into()],
+        ))
+        .await
+        .map_err(|e| {
+            tracing::error!("mark_achievements_notified: {e}");
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
@@ -2074,4 +2555,71 @@ mod tests {
     // handler. The forward-write of garden_plants happens inside
     // `complete_order_and_update_loyalty` (cycle #168) and is
     // covered by `tests/integration_garden_seed.rs`.
+
+    // Loop #18: achievement predicate tests.
+    use super::GardenStats;
+
+    #[test]
+    fn achievement_first_water_requires_one_water() {
+        assert!(super::garden_achievements_to_unlock(GardenStats {
+            water_count: 1,
+            harvest_count: 0,
+            max_streak: 0,
+        })
+        .contains(&"garden_first_water"));
+        assert!(!super::garden_achievements_to_unlock(GardenStats {
+            water_count: 0,
+            harvest_count: 0,
+            max_streak: 0,
+        })
+        .contains(&"garden_first_water"));
+    }
+
+    #[test]
+    fn achievement_streak_milestones_are_tiered() {
+        let ids = super::garden_achievements_to_unlock(GardenStats {
+            water_count: 5,
+            harvest_count: 1,
+            max_streak: 14,
+        });
+        assert!(ids.contains(&"garden_streak_3"));
+        assert!(ids.contains(&"garden_streak_7"));
+        assert!(ids.contains(&"garden_streak_14"));
+        assert!(ids.contains(&"garden_zero_miss"));
+    }
+
+    #[test]
+    fn achievement_harvest_milestones_stack() {
+        let ids = super::garden_achievements_to_unlock(GardenStats {
+            water_count: 10,
+            harvest_count: 25,
+            max_streak: 10,
+        });
+        assert!(ids.contains(&"garden_first_harvest"));
+        assert!(ids.contains(&"garden_harvest_5"));
+        assert!(ids.contains(&"garden_harvest_25"));
+    }
+
+    #[test]
+    fn achievement_perfect_grow_needs_harvest_and_streak_13() {
+        let without_harvest = super::garden_achievements_to_unlock(GardenStats {
+            water_count: 13,
+            harvest_count: 0,
+            max_streak: 13,
+        });
+        assert!(!without_harvest.contains(&"garden_zero_miss"));
+        let with_harvest = super::garden_achievements_to_unlock(GardenStats {
+            water_count: 13,
+            harvest_count: 1,
+            max_streak: 13,
+        });
+        assert!(with_harvest.contains(&"garden_zero_miss"));
+    }
+
+    #[test]
+    fn leaderboard_name_anonymizes() {
+        assert_eq!(super::anonymize_leaderboard_name(123456789), "Grower #6789");
+        assert_eq!(super::anonymize_leaderboard_name(42), "Grower #0042");
+        assert_eq!(super::anonymize_leaderboard_name(-1), "Grower #9999");
+    }
 }

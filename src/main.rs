@@ -612,7 +612,7 @@ async fn main() -> Result<()> {
                 let scheme = &raw[..pos];
                 let after_scheme = &raw[pos + 3..];
                 let authority_end = after_scheme
-                    .find(|c| c == '/' || c == '?' || c == '#')
+                    .find(['/', '?', '#'])
                     .unwrap_or(after_scheme.len());
                 let authority = &after_scheme[..authority_end];
                 format!("{}://{}", scheme, authority)
@@ -2485,22 +2485,43 @@ mod schema_drift_tests {
                     }
                     let table = String::from_utf8_lossy(name).to_lowercase();
                     j += name.len();
-                    j = skip_ws(bytes, j);
-                    if upper_bytes[j..].starts_with(b"ADD COLUMN") {
-                        j += b"ADD COLUMN".len();
-                        j = skip_ws(bytes, j);
-                        if upper_bytes[j..].starts_with(b"IF NOT EXISTS") {
-                            j += b"IF NOT EXISTS".len();
-                            j = skip_ws(bytes, j);
+                    // Some migrations bundle multiple `ADD COLUMN` clauses in
+                    // a single `ALTER TABLE` statement, so scan the whole
+                    // statement (up to the next semicolon or DDL boundary)
+                    // for every `ADD COLUMN` clause rather than stopping at
+                    // the first one.
+                    let stmt_end = {
+                        let mut k = j;
+                        while k < bytes.len()
+                            && bytes[k] != b';'
+                            && !upper_bytes[k..].starts_with(b"CREATE TABLE")
+                            && !upper_bytes[k..].starts_with(b"ALTER TABLE")
+                        {
+                            k += 1;
                         }
-                        let col = read_ident(bytes, j);
-                        if !col.is_empty() {
-                            let col_str = String::from_utf8_lossy(col).to_lowercase();
-                            schema.entry(table).or_default().insert(col_str);
+                        k
+                    };
+                    let mut p = j;
+                    while p < stmt_end {
+                        if upper_bytes[p..].starts_with(b"ADD COLUMN") {
+                            let mut q = p + b"ADD COLUMN".len();
+                            q = skip_ws(bytes, q);
+                            if upper_bytes[q..].starts_with(b"IF NOT EXISTS") {
+                                q += b"IF NOT EXISTS".len();
+                                q = skip_ws(bytes, q);
+                            }
+                            let col = read_ident(bytes, q);
+                            if !col.is_empty() {
+                                let col_str = String::from_utf8_lossy(col).to_lowercase();
+                                schema.entry(table.clone()).or_default().insert(col_str);
+                            }
+                            p = q + col.len().max(1);
+                        } else {
+                            p += 1;
                         }
-                        i = j + 1;
-                        continue;
                     }
+                    i = stmt_end + 1;
+                    continue;
                 }
                 i += 1;
             }

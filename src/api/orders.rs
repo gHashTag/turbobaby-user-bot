@@ -712,7 +712,9 @@ async fn create_order(
                 );
                 return Err(StatusCode::UNPROCESSABLE_ENTITY);
             }
-            let target = target.unwrap();
+            let Some(target) = target else {
+                return Err(StatusCode::UNPROCESSABLE_ENTITY);
+            };
             // The reward's target product must actually be in the cart.
             if !req.items.iter().any(|i| item_matches_id(i, &target)) {
                 return Err(StatusCode::UNPROCESSABLE_ENTITY);

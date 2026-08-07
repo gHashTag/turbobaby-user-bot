@@ -6,6 +6,9 @@
 // Controls: ArrowLeft/Right or A/D keys, tap lane on mobile
 // State managed via Dioxus Signals + gloo-timers game loop
 
+use crate::trios::i18n::{t, T_CLOSE, T_GARDEN_GAME_HIGH_SCORES, T_GARDEN_GAME_NO_SCORES};
+use crate::ui::api::context::api_base_url;
+use crate::ui::telegram::{use_telegram_id, use_telegram_init_data};
 use dioxus::prelude::*;
 use gloo_timers::future::TimeoutFuture;
 use wasm_bindgen::prelude::*;
@@ -74,6 +77,54 @@ fn set_high_score(score: u32) {
     }
 }
 
+// ── Global leaderboard helpers ────────────────────────────────────────────────
+
+#[derive(Debug, Clone, serde::Deserialize)]
+struct GlobalHighScoreEntry {
+    rank: i64,
+    display_name: String,
+    high_score: i64,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+struct GlobalHighScoresResponse {
+    entries: Vec<GlobalHighScoreEntry>,
+    #[serde(default)]
+    total: i64,
+}
+
+async fn fetch_global_high_scores(limit: u32) -> Result<GlobalHighScoresResponse, String> {
+    let base = api_base_url();
+    let url = format!("{}/api/game/high-scores?limit={}", base, limit);
+    let text = crate::ui::api::http::fetch_text(&url).await?;
+    serde_json::from_str::<GlobalHighScoresResponse>(&text)
+        .map_err(|e| format!("Parse error: {e}"))
+}
+
+async fn submit_global_high_score(
+    telegram_id: i64,
+    init_data: &str,
+    score: u64,
+) -> Result<(i64, i64), String> {
+    let base = api_base_url();
+    let url = format!("{}/api/game/high-scores", base);
+    let body = serde_json::json!({
+        "telegram_id": telegram_id,
+        "score": score as i64,
+        "display_name": format!("Player {}", telegram_id),
+    })
+    .to_string();
+    let text = crate::ui::api::http::post_json_authed(&url, init_data, &body).await?;
+    let resp: serde_json::Value =
+        serde_json::from_str(&text).map_err(|e| format!("Parse error: {e}"))?;
+    if !resp.get("success").and_then(|v| v.as_bool()).unwrap_or(false) {
+        return Err("submit_failed".into());
+    }
+    let rank = resp.get("rank").and_then(|v| v.as_i64()).unwrap_or(0);
+    let high_score = resp.get("high_score").and_then(|v| v.as_i64()).unwrap_or(0);
+    Ok((rank, high_score))
+}
+
 /// Pseudo-random u32 using js Math.random() under WASM
 fn rand_u32() -> u32 {
     let v: f64 = js_sys::Math::random();
@@ -135,6 +186,13 @@ pub fn WoodyCatch() -> Element {
     let buds = use_signal(Vec::<Bud>::new);
     let next_id = use_signal(|| 0u32);
     let high_score = use_signal(get_high_score);
+
+    // Loop #18: global high-score integration.
+    let mut show_scores = use_signal(|| false);
+    let score_submitted = use_signal(|| false);
+    let user_rank = use_signal(|| None::<i64>);
+    let telegram_id = use_telegram_id().unwrap_or(0);
+    let init_data = use_telegram_init_data();
 
     // Timing: track spawn countdown in ticks (each tick ~16ms)
     let spawn_ticks = use_signal(|| 0u32);
@@ -313,6 +371,8 @@ pub fn WoodyCatch() -> Element {
         let mut lane = lane;
         let mut buds = buds;
         let mut spawn_ticks = spawn_ticks;
+        let mut score_submitted = score_submitted;
+        let mut user_rank = user_rank;
         *score.write() = 0;
         *lives.write() = 3;
         *level.write() = 1;
@@ -321,8 +381,32 @@ pub fn WoodyCatch() -> Element {
         *game_over.write() = false;
         *lane.write() = 1;
         *spawn_ticks.write() = 0;
+        score_submitted.set(false);
+        user_rank.set(None);
         buds.write().clear();
     });
+
+    // Loop #18: submit final score to the global leaderboard once per game-over.
+    {
+        let mut submitted = score_submitted;
+        let mut rank = user_rank;
+        let init = init_data.clone();
+        let tid = telegram_id;
+        use_effect(move || {
+            let over = *game_over.read();
+            let score = *score.read();
+            let already = *submitted.read();
+            if over && score > 0 && tid != 0 && !already {
+                submitted.set(true);
+                let init = init.clone();
+                spawn(async move {
+                    if let Ok((r, _)) = submit_global_high_score(tid, &init, score as u64).await {
+                        rank.set(Some(r));
+                    }
+                });
+            }
+        });
+    }
 
     // ── Computed values for render ───────────────────────────────────────────
     let cur_score = *score.read();
@@ -335,6 +419,8 @@ pub fn WoodyCatch() -> Element {
     let is_over = *game_over.read();
     let mult = (1.0 + (cur_combo / 5) as f32 * 0.5).min(3.0);
     let buds_list = buds.read().clone();
+
+    let lang = crate::ui::lang::current_lang();
 
     // ── Render ───────────────────────────────────────────────────────────────
     rsx! {
@@ -589,6 +675,11 @@ pub fn WoodyCatch() -> Element {
                             ",
                                 "▶ ИГРАТЬ"
                             }
+                            button {
+                                style: "margin-top:10px;padding:8px 16px;background:transparent;border:2px solid rgba(255,255,255,0.2);border-radius:20px;color:#fff;font-size:11px;font-weight:700;cursor:pointer;",
+                                onclick: move |_| show_scores.set(true),
+                                "🏆 {t(lang, T_GARDEN_GAME_HIGH_SCORES)}"
+                            }
                             p { style: "color: rgba(255,255,255,0.3); font-size: 9px; margin-top: 12px;",
                                 "Тап по дорожке или ← →"
                             }
@@ -632,6 +723,11 @@ pub fn WoodyCatch() -> Element {
                                 onclick: move |e| start_game.call(e),
                                 "🔄 ЕЩЁ РАЗ"
                             }
+                            button {
+                                style: "margin-top:10px;padding:8px 16px;background:transparent;border:2px solid rgba(255,255,255,0.2);border-radius:20px;color:#fff;font-size:11px;font-weight:700;cursor:pointer;",
+                                onclick: move |_| show_scores.set(true),
+                                "🏆 {t(lang, T_GARDEN_GAME_HIGH_SCORES)}"
+                            }
                         }
                     }
                 }
@@ -643,6 +739,62 @@ pub fn WoodyCatch() -> Element {
                 font-size: 9px; color: rgba(255,255,255,0.3);
             ",
                 "🏆 Рекорд: {cur_hs}  •  ← → или тап по дорожке"
+            }
+
+            // Loop #18: global leaderboard modal.
+            if show_scores() {
+                HighScoresModal { open: show_scores, lang }
+            }
+        }
+    }
+}
+
+/// Loop #18: public Woody Catch leaderboard overlay.
+#[component]
+fn HighScoresModal(open: Signal<bool>, lang: crate::trios::Lang) -> Element {
+    let data = use_resource(|| async move { fetch_global_high_scores(20).await });
+
+    rsx! {
+        div {
+            style: "position:fixed;inset:0;z-index:1001;background:rgba(0,0,0,0.92);display:flex;align-items:center;justify-content:center;padding:16px;",
+            onclick: move |_| open.set(false),
+            div {
+                style: "background:#1a1a2e;max-width:380px;width:100%;max-height:80vh;overflow:auto;border:4px solid #22c55e;box-shadow:4px 4px 0 #000;padding:20px;border-radius:12px;text-align:center;",
+                onclick: move |e: Event<MouseData>| e.stop_propagation(),
+                div { style: "font-size:36px;margin-bottom:12px;", "🏆" }
+                div { style: "font-size:15px;font-weight:700;color:#22c55e;margin-bottom:16px;", "{t(lang, T_GARDEN_GAME_HIGH_SCORES)}" }
+                {
+                    match &*data.read() {
+                        Some(Ok(resp)) if !resp.entries.is_empty() => {
+                            let entries = resp.entries.clone();
+                            rsx! {
+                                div { style: "display:flex;flex-direction:column;gap:8px;margin-bottom:16px;",
+                                    for e in entries {
+                                        div { style: "display:flex;align-items:center;gap:10px;background:#0f0f1a;border:2px solid #2a2a4a;border-radius:10px;padding:10px 12px;",
+                                            div { style: "font-size:13px;font-weight:700;color:#8b8b9e;min-width:30px;text-align:center;", "#{e.rank}" }
+                                            div { style: "flex:1;text-align:left;font-size:13px;font-weight:700;color:#e8e8e8;", "{e.display_name}" }
+                                            div { style: "font-size:13px;font-weight:700;color:#fbbf24;", "{e.high_score}" }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        Some(Ok(_)) => rsx! {
+                            div { style: "color:#8b8b9e;font-size:12px;margin-bottom:16px;", "{t(lang, T_GARDEN_GAME_NO_SCORES)}" }
+                        },
+                        Some(Err(_)) => rsx! {
+                            div { style: "color:#ff6b7a;font-size:12px;margin-bottom:16px;", "Load failed" }
+                        },
+                        None => rsx! {
+                            div { style: "color:#8b8b9e;font-size:12px;margin-bottom:16px;", "Loading..." }
+                        },
+                    }
+                }
+                button {
+                    style: "padding:10px 20px;background:transparent;color:#e8e8e8;border:2px solid #2a2a4a;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;",
+                    onclick: move |_| open.set(false),
+                    "{t(lang, T_CLOSE)}"
+                }
             }
         }
     }

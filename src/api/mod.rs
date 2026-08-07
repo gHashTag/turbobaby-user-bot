@@ -12,6 +12,7 @@ pub(crate) mod catalog;
 pub(crate) mod client_errors;
 pub(crate) mod debug;
 pub(crate) mod events;
+pub(crate) mod game;
 pub(crate) mod garden;
 pub(crate) mod happy_hour;
 pub(crate) mod loyalty;
@@ -101,6 +102,7 @@ fn api_routes() -> Router<AppState> {
         .merge(quest::routes())
         .merge(happy_hour::routes())
         .merge(garden::routes())
+        .merge(game::routes())
         .merge(client_errors::routes())
         .merge(referrals::routes())
         .merge(reviews::routes())

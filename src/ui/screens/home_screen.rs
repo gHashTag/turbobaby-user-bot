@@ -349,7 +349,7 @@ fn render_home_pack_card(p: HomePack) -> Element {
     let has_image = img.starts_with("http://")
         || img.starts_with("https://")
         || (img.starts_with('/') && !img.starts_with("//"));
-    let badge = crate::trios::packs::PackBadge::from_str(&p.badge);
+    let badge = crate::trios::packs::PackBadge::parse(&p.badge);
     let badge_label = badge
         .label()
         .map(|(ru, en)| crate::ui::lang::localized(ru, Some(en)));

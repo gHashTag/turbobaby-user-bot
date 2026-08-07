@@ -285,6 +285,10 @@ const MIGRATIONS: &[(&str, &str)] = &[
         "065_garden_streaks.sql",
         include_str!("../../migrations/065_garden_streaks.sql"),
     ),
+    (
+        "066_garden_social.sql",
+        include_str!("../../migrations/066_garden_social.sql"),
+    ),
 ];
 
 /// Columns the catalog endpoints SELECT that were added by *later* migrations
@@ -1066,22 +1070,6 @@ mod orphan_table_tests {
         // would require a new migration + prod coordination. Re-evaluate
         // when location quests are revisited.
         "hunt_checkpoints",
-        // Cycle #144: created in migration 027 to back Woody Catch
-        // cross-device high-score persistence. The backend code that
-        // would have read/written it (`src/api/game.rs`, 244 lines)
-        // was deleted this cycle because it had been orphaned since
-        // cycle #91 — `pub mod game` was never declared, so the file
-        // wasn't even compiled, and the UI (src/ui/game/woody_catch.rs)
-        // stores scores in browser localStorage instead. The
-        // route-wiring defense added in cycle #143 surfaced the orphan;
-        // this allowlist entry replaces the previous false-negative
-        // (the textual `game_high_scores` reference inside the
-        // unbuilt game.rs that fooled this very test). Dropping the
-        // table requires a new migration + prod coordination; the
-        // idempotent CREATE TABLE IF NOT EXISTS in migration 027
-        // costs nothing on each startup. Re-evaluate if Woody Catch
-        // gains server-side leaderboards.
-        "game_high_scores",
     ];
 
     fn migration_tables() -> Vec<String> {

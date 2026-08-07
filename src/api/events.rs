@@ -120,6 +120,7 @@ fn booking_id_ok(id: &str) -> Result<(), StatusCode> {
 }
 
 /// Validates a create/update payload. Returns a sanitized `is_public` default.
+#[allow(clippy::type_complexity)]
 fn validate_event_request(
     req: &CreateEventRequest,
 ) -> Result<(bool, DateTime<Utc>, Option<DateTime<Utc>>), (StatusCode, String)> {
@@ -187,17 +188,17 @@ fn validate_event_request(
     };
 
     if let Some(cap) = req.max_seats {
-        if cap < 0 || cap > 1_000_000 {
+        if !(0..=1_000_000).contains(&cap) {
             return Err(bad(format!("max_seats вне диапазона 0..1e6 ({cap})")));
         }
     }
     if let Some(price) = req.price_baht {
-        if !price.is_finite() || price < 0.0 || price > 1_000_000.0 {
+        if !price.is_finite() || !(0.0..=1_000_000.0).contains(&price) {
             return Err(bad(format!("price_baht вне диапазона 0..1e6 ({price})")));
         }
     }
     if let Some(stars) = req.price_stars {
-        if stars < 0 || stars > 1_000_000_000 {
+        if !(0..=1_000_000_000).contains(&stars) {
             return Err(bad(format!("price_stars вне диапазона 0..1e9 ({stars})")));
         }
     }
@@ -205,6 +206,7 @@ fn validate_event_request(
     Ok((is_public, starts_at, ends_at))
 }
 
+#[allow(clippy::type_complexity)]
 fn validate_update_request(
     req: &UpdateEventRequest,
 ) -> Result<
@@ -286,17 +288,17 @@ fn validate_update_request(
     }
 
     if let Some(cap) = req.max_seats {
-        if cap < 0 || cap > 1_000_000 {
+        if !(0..=1_000_000).contains(&cap) {
             return Err(bad(format!("max_seats вне диапазона 0..1e6 ({cap})")));
         }
     }
     if let Some(price) = req.price_baht {
-        if !price.is_finite() || price < 0.0 || price > 1_000_000.0 {
+        if !price.is_finite() || !(0.0..=1_000_000.0).contains(&price) {
             return Err(bad(format!("price_baht вне диапазона 0..1e6 ({price})")));
         }
     }
     if let Some(stars) = req.price_stars {
-        if stars < 0 || stars > 1_000_000_000 {
+        if !(0..=1_000_000_000).contains(&stars) {
             return Err(bad(format!("price_stars вне диапазона 0..1e9 ({stars})")));
         }
     }
@@ -1570,8 +1572,11 @@ pub(crate) async fn send_event_reminders(
         let starts_at: chrono::DateTime<chrono::Utc> = r
             .try_get("", "starts_at")
             .unwrap_or_else(|_| chrono::Utc::now());
-        let starts_local =
-            starts_at.with_timezone(&chrono::FixedOffset::east_opt(7 * 3600).unwrap());
+        // Bangkok is UTC+7. The `east_opt` argument is a fixed valid offset, so
+        // the unwrap is safe; we isolate the unwrap to this one row.
+        #[allow(clippy::unwrap_used)]
+        let bangkok_offset = chrono::FixedOffset::east_opt(7 * 3600).unwrap();
+        let starts_local = starts_at.with_timezone(&bangkok_offset);
         let starts_text = starts_local.format("%d.%m.%Y %H:%M (Bangkok)").to_string();
         let body = crate::trios::i18n::tf(
             crate::trios::core::Lang::Russian,

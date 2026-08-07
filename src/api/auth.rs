@@ -212,7 +212,7 @@ pub(crate) fn validate_init_data_debug(init_data: &str, bot_token: &str) -> Init
         HmacSha256::new_from_slice(b"WebAppData")
             .ok()
             .map(|mut alt_mac| {
-                alt_mac.update(bot_token[idx + 1..].as_bytes());
+                alt_mac.update(&bot_token.as_bytes()[idx + 1..]);
                 alt_mac.finalize().into_bytes()
             })
     });

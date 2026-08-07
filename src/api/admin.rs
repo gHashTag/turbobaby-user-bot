@@ -865,7 +865,7 @@ async fn create_lab_cert(
         thc_percent: Set(req.thc_percent),
         cbd_percent: Set(req.cbd_percent),
         uploaded_by_telegram_id: Set(Some(admin_id)),
-        created_at: Set(now.into()),
+        created_at: Set(now),
     };
     active.insert(&state.db.orm).await.map_err(|e| {
         tracing::error!("create_lab_cert insert error: {}", e);

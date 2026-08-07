@@ -157,7 +157,7 @@ async fn create_review(
         return Err(StatusCode::CONFLICT);
     }
 
-    let clean_comment = crate::util::html_escape(&req.comment.trim())
+    let clean_comment = crate::util::html_escape(req.comment.trim())
         .trim()
         .to_string();
 
@@ -170,7 +170,7 @@ async fn create_review(
         order_id: Set(order_id.clone()),
         rating: Set(req.rating),
         comment: Set(clean_comment),
-        created_at: Set(now.into()),
+        created_at: Set(now),
         approved: Set(true),
     };
 

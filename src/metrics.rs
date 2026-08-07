@@ -156,6 +156,39 @@ pub fn garden_reset_tapped() {
     counter!("garden_reset_tapped_total").increment(1);
 }
 
+/// Loop #18: a garden achievement was unlocked.
+pub fn garden_achievement_unlocked(achievement_id: &str) {
+    counter!(
+        "garden_achievement_unlocked_total",
+        "achievement_id" => achievement_id.to_string()
+    )
+    .increment(1);
+}
+
+/// Loop #18: a user viewed the garden leaderboard.
+pub fn garden_leaderboard_viewed(kind: &str) {
+    counter!(
+        "garden_leaderboard_viewed_total",
+        "kind" => kind.to_string()
+    )
+    .increment(1);
+}
+
+/// Loop #18: a share event was logged by the client.
+pub fn share_event_logged(content_kind: &str) {
+    counter!(
+        "share_event_logged_total",
+        "content_kind" => content_kind.to_string()
+    )
+    .increment(1);
+}
+
+/// Loop #18: a Woody Catch high score was submitted to the server.
+pub fn game_high_score_submitted(score: u64) {
+    counter!("game_high_score_submitted_total").increment(1);
+    gauge!("game_high_score_value").set(score as f64);
+}
+
 /// Increment when a QR code is scanned in the location quest.
 ///
 /// `is_final` indicates whether this was the last location in the quest.
@@ -368,6 +401,18 @@ mod tests {
     fn test_rate_limit_blocked_does_not_panic() {
         rate_limit_blocked("anon_order");
         rate_limit_blocked("upload");
+    }
+
+    #[test]
+    fn test_garden_social_metrics_do_not_panic() {
+        garden_achievement_unlocked("garden_first_water");
+        garden_leaderboard_viewed("streak");
+        share_event_logged("garden");
+    }
+
+    #[test]
+    fn test_game_high_score_submitted_does_not_panic() {
+        game_high_score_submitted(42);
     }
 
     #[test]

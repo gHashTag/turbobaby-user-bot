@@ -329,7 +329,7 @@ async fn add_cart_item(
     let cart = get_or_create_cart(&state.db.orm, req.telegram_id).await?;
     use crate::db::entities::cart_item::{Column as ItemCol, Entity as ItemEntity};
     let existing = ItemEntity::find()
-        .filter(ItemCol::CartId.eq(cart.id.clone()))
+        .filter(ItemCol::CartId.eq(cart.id))
         .filter(ItemCol::Kind.eq(kind))
         .filter(ItemCol::CatalogId.eq(req.catalog_id.clone()))
         .one(&state.db.orm)
@@ -366,7 +366,6 @@ async fn add_cart_item(
             image_url: Set(image_url.clone()),
             created_at: Set(Some(chrono::DateTime::from(Utc::now()))),
             updated_at: Set(Some(chrono::DateTime::from(Utc::now()))),
-            ..Default::default()
         };
         am.insert(&state.db.orm).await.map_err(|e| {
             tracing::error!("cart item insert: {e}");
@@ -400,7 +399,7 @@ async fn update_cart_item(
         })?
         .ok_or(StatusCode::NOT_FOUND)?;
 
-    let cart = crate::db::entities::cart::Entity::find_by_id(item.cart_id.clone())
+    let cart = crate::db::entities::cart::Entity::find_by_id(item.cart_id)
         .one(&state.db.orm)
         .await
         .map_err(|e| {
@@ -539,7 +538,7 @@ async fn merge_cart(
     for (kind, catalog_id, quantity, name, unit_price, image_url) in to_insert {
         use crate::db::entities::cart_item::{Column as ItemCol, Entity as ItemEntity};
         let existing = ItemEntity::find()
-            .filter(ItemCol::CartId.eq(cart.id.clone()))
+            .filter(ItemCol::CartId.eq(cart.id))
             .filter(ItemCol::Kind.eq(kind))
             .filter(ItemCol::CatalogId.eq(catalog_id.clone()))
             .one(&tx)
@@ -563,7 +562,7 @@ async fn merge_cart(
         } else {
             let am = crate::db::entities::cart_item::ActiveModel {
                 id: Set(uuid::Uuid::new_v4()),
-                cart_id: Set(cart.id.clone()),
+                cart_id: Set(cart.id),
                 kind: Set(kind.to_string()),
                 catalog_id: Set(catalog_id),
                 quantity: Set(quantity),
@@ -572,7 +571,6 @@ async fn merge_cart(
                 image_url: Set(image_url),
                 created_at: Set(Some(chrono::DateTime::from(Utc::now()))),
                 updated_at: Set(Some(chrono::DateTime::from(Utc::now()))),
-                ..Default::default()
             };
             am.insert(&tx).await.map_err(|e| {
                 tracing::error!("cart merge insert: {e}");

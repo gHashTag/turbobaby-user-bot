@@ -18,15 +18,24 @@ pub enum PackBadge {
     Limited,
 }
 
-impl PackBadge {
+impl std::str::FromStr for PackBadge {
+    type Err = std::convert::Infallible;
+
     /// Parse the DB / API string value. Unknown / empty → `None` (fail safe).
-    pub fn from_str(s: &str) -> Self {
-        match s.trim().to_lowercase().as_str() {
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(match s.trim().to_lowercase().as_str() {
             "sale" => PackBadge::Sale,
             "special" => PackBadge::Special,
             "limited" => PackBadge::Limited,
             _ => PackBadge::None,
-        }
+        })
+    }
+}
+
+impl PackBadge {
+    /// Parse wrapper for call sites that expect the badge directly.
+    pub fn parse(s: &str) -> Self {
+        std::str::FromStr::from_str(s).unwrap_or(PackBadge::None)
     }
 
     /// Canonical DB value.
@@ -71,7 +80,7 @@ impl PackBadge {
 /// A pack is "promotional" (sorts into the carousel, shown first) if it carries
 /// a badge OR a positive discount.
 pub fn is_promo(badge: &str, discount_percent: f64) -> bool {
-    PackBadge::from_str(badge) != PackBadge::None
+    PackBadge::parse(badge) != PackBadge::None
         || (discount_percent.is_finite() && discount_percent > 0.0)
 }
 
@@ -129,12 +138,12 @@ mod tests {
             PackBadge::Special,
             PackBadge::Limited,
         ] {
-            assert_eq!(PackBadge::from_str(b.as_str()), b);
+            assert_eq!(PackBadge::parse(b.as_str()), b);
         }
-        assert_eq!(PackBadge::from_str("SALE"), PackBadge::Sale);
-        assert_eq!(PackBadge::from_str(" limited "), PackBadge::Limited);
-        assert_eq!(PackBadge::from_str("bogus"), PackBadge::None);
-        assert_eq!(PackBadge::from_str(""), PackBadge::None);
+        assert_eq!(PackBadge::parse("SALE"), PackBadge::Sale);
+        assert_eq!(PackBadge::parse(" limited "), PackBadge::Limited);
+        assert_eq!(PackBadge::parse("bogus"), PackBadge::None);
+        assert_eq!(PackBadge::parse(""), PackBadge::None);
     }
 
     #[test]

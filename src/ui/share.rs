@@ -8,7 +8,9 @@
 //! `Telegram.WebApp.openTelegramLink` so it stays inside Telegram instead of
 //! falling back to an external browser.
 
-use crate::trios::i18n::{tf, T_SHARE_MESSAGE};
+use crate::trios::i18n::{
+    tf, T_GARDEN_SHARE_TEXT, T_GARDEN_SHARE_TITLE, T_SHARE_MESSAGE,
+};
 use crate::ui::lang::current_lang;
 use crate::ui::routes::Route;
 
@@ -208,6 +210,37 @@ pub fn reorder_deep_link(order_id: &str) -> String {
         bot_username(),
         reorder_start_param(order_id)
     )
+}
+
+/// Build a `startapp` parameter that opens the Mini App on the garden screen.
+pub fn garden_start_param() -> String {
+    "garden".to_string()
+}
+
+/// Raw `t.me` deep link that opens the Mini App in the garden.
+pub fn garden_deep_link() -> String {
+    format!(
+        "https://t.me/{}?startapp={}",
+        bot_username(),
+        garden_start_param()
+    )
+}
+
+/// Open Telegram's native share picker for the garden.
+pub fn share_garden() {
+    let link = garden_deep_link();
+    let lang = current_lang();
+    let text = format!(
+        "{}\n{}",
+        tf(lang, T_GARDEN_SHARE_TITLE, &[]),
+        tf(lang, T_GARDEN_SHARE_TEXT, &[])
+    );
+    let share_url = format!(
+        "https://t.me/share/url?url={}&text={}",
+        urlencoding::encode(&link),
+        urlencoding::encode(&text)
+    );
+    open_telegram_link(&share_url);
 }
 
 /// Parse a reorder `startapp` value (`reorder__{order_id}`). Unknown prefixes
