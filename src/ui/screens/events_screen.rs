@@ -7,7 +7,10 @@
 use crate::trios::i18n::{
     t, tf, T_BACK, T_EVENTS_ALREADY_BOOKED, T_EVENTS_BOOK, T_EVENTS_BOOKED, T_EVENTS_BOOK_FREE,
     T_EVENTS_CANCEL, T_EVENTS_CAPACITY, T_EVENTS_DATE, T_EVENTS_ERROR, T_EVENTS_EVENT_NOT_FOUND,
-    T_EVENTS_FREE_BADGE, T_EVENTS_GALLERY, T_EVENTS_INSUFFICIENT_STARS,
+    T_EVENTS_FREE_BADGE, T_EVENTS_GALLERY, T_EVENTS_INSUFFICIENT_STARS, T_EVENTS_MONTH_APR,
+    T_EVENTS_MONTH_AUG, T_EVENTS_MONTH_DEC, T_EVENTS_MONTH_FEB, T_EVENTS_MONTH_JAN, T_EVENTS_MONTH_JUL,
+    T_EVENTS_MONTH_JUN, T_EVENTS_MONTH_MAR, T_EVENTS_MONTH_MAY, T_EVENTS_MONTH_NOV,
+    T_EVENTS_MONTH_OCT, T_EVENTS_MONTH_SEP,
     T_EVENTS_MY_BOOKINGS, T_EVENTS_NEXT_PHOTO, T_EVENTS_NO_BOOKINGS, T_EVENTS_NO_EVENTS,
     T_EVENTS_OK, T_EVENTS_OPEN_DETAILS, T_EVENTS_PHOTO_N, T_EVENTS_PREV_PHOTO, T_EVENTS_PRICE,
     T_EVENTS_PRICE_STARS, T_EVENTS_RETRY, T_EVENTS_SEAT, T_EVENTS_SEATS, T_EVENTS_SHARE_EVENT,
@@ -79,39 +82,26 @@ fn weekday_label(wd: Weekday, lang: crate::trios::core::Lang) -> String {
     t(lang, key).to_string()
 }
 
+fn month_key(month: u32) -> crate::trios::i18n::Key {
+    match month {
+        1 => T_EVENTS_MONTH_JAN,
+        2 => T_EVENTS_MONTH_FEB,
+        3 => T_EVENTS_MONTH_MAR,
+        4 => T_EVENTS_MONTH_APR,
+        5 => T_EVENTS_MONTH_MAY,
+        6 => T_EVENTS_MONTH_JUN,
+        7 => T_EVENTS_MONTH_JUL,
+        8 => T_EVENTS_MONTH_AUG,
+        9 => T_EVENTS_MONTH_SEP,
+        10 => T_EVENTS_MONTH_OCT,
+        11 => T_EVENTS_MONTH_NOV,
+        12 => T_EVENTS_MONTH_DEC,
+        _ => T_EVENTS_MONTH_JAN,
+    }
+}
+
 fn month_day_label(date: NaiveDate, lang: crate::trios::core::Lang) -> String {
-    let month = match lang {
-        crate::trios::core::Lang::Russian => match date.month() {
-            1 => "янв",
-            2 => "фев",
-            3 => "мар",
-            4 => "апр",
-            5 => "май",
-            6 => "июн",
-            7 => "июл",
-            8 => "авг",
-            9 => "сен",
-            10 => "окт",
-            11 => "ноя",
-            12 => "дек",
-            _ => "",
-        },
-        _ => match date.month() {
-            1 => "Jan",
-            2 => "Feb",
-            3 => "Mar",
-            4 => "Apr",
-            5 => "May",
-            6 => "Jun",
-            7 => "Jul",
-            8 => "Aug",
-            9 => "Sep",
-            10 => "Oct",
-            11 => "Nov",
-            12 => "Dec",
-            _ => "",
-        },
-    };
+    let month = t(lang, month_key(date.month()));
     format!("{} {}", date.day(), month)
 }
 

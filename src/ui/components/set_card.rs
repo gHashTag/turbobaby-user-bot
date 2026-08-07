@@ -7,7 +7,7 @@
 //! the same height because the height is derived from the width via
 //! `aspect-ratio`.
 
-use crate::trios::i18n::{t, T_ADD_TO_CART};
+use crate::trios::i18n::{t, T_ADD_TO_CART, T_MENU_SOLD_OUT, T_SET_BADGE};
 use crate::ui::components::product_detail_modal::ProductDetailModal;
 use crate::ui::components::video_modal::VideoModal;
 use crate::ui::lang;
@@ -61,7 +61,10 @@ pub fn render_uniform_set_card(
     accent: &'static str,
 ) -> Element {
     let mut cart = cart;
-    let add_to_cart_label = t(lang::current_lang(), T_ADD_TO_CART).to_string();
+    let lang = lang::current_lang();
+    let add_to_cart_label = t(lang, T_ADD_TO_CART).to_string();
+    let sold_out_label = t(lang, T_MENU_SOLD_OUT);
+    let set_badge_label = t(lang, T_SET_BADGE);
     let price = set.effective_price();
     let has_discount = set.discount_percent > 0.0 && set.discount_percent.is_finite();
     let original_price_str = crate::trios::pricing::format_baht(set.total_price);
@@ -147,7 +150,7 @@ pub fn render_uniform_set_card(
                 }
                 // Badge stack top-left.
                 div { style: "position:absolute;top:8px;left:8px;display:flex;flex-direction:column;gap:4px;z-index:4;align-items:flex-start;",
-                    span { style: "font-size:12px;font-weight:700;background:{accent};color:#000;padding:3px 7px;box-shadow:2px 2px 0 #000;", "📦 SET" }
+                    span { style: "font-size:12px;font-weight:700;background:{accent};color:#000;padding:3px 7px;box-shadow:2px 2px 0 #000;", "{set_badge_label}" }
                     if let Some(bl) = badge_label.clone() {
                         span { style: "font-size:10px;font-weight:700;background:{badge_color};color:#fff;padding:2px 6px;box-shadow:2px 2px 0 #000;", "{bl}" }
                     }
@@ -207,7 +210,7 @@ pub fn render_uniform_set_card(
                             border:3px solid #2a2a4a;
                             box-shadow:2px 2px 0 #000;
                             cursor:not-allowed;
-                        ", "Sold Out" }
+                        ", "{sold_out_label}" }
                     }
                 }
             }

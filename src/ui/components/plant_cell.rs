@@ -1,8 +1,11 @@
 use crate::trios::garden::{GrowthStage, Plant};
+use crate::trios::i18n::{t, T_GARDEN_HARVEST, T_GARDEN_PLANT};
+use crate::ui::lang;
 use dioxus::prelude::*;
 
 #[component]
 pub fn PlantCell(plant: Plant, on_harvest: EventHandler<String>) -> Element {
+    let lang = lang::current_lang();
     let img_idx = (plant.water_count % 14) + 1;
     let img_src = format!("/assets/game/{}.png", img_idx);
     let emoji = plant.current_stage.emoji();
@@ -33,7 +36,7 @@ pub fn PlantCell(plant: Plant, on_harvest: EventHandler<String>) -> Element {
                 button {
                     class: "btn btn-green harvest-btn",
                     onclick: move |_| on_harvest.call(pid.clone()),
-                    "HARVEST"
+                    "{t(lang, T_GARDEN_HARVEST)}"
                 }
             }
         }
@@ -42,13 +45,14 @@ pub fn PlantCell(plant: Plant, on_harvest: EventHandler<String>) -> Element {
 
 #[component]
 pub fn EmptyPlotCell(on_plant: EventHandler<usize>) -> Element {
+    let lang = lang::current_lang();
     rsx! {
         div { class: "plant-cell empty",
             div { class: "empty-plot-icon", "🕳️" }
             button {
                 class: "btn btn-green plant-btn",
                 onclick: move |_| on_plant.call(0),
-                "PLANT"
+                "{t(lang, T_GARDEN_PLANT)}"
             }
         }
     }

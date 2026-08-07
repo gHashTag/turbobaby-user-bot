@@ -13,6 +13,8 @@
 //! behaves inside Telegram/iOS WebViews (same reason the inline card videos
 //! carry them) instead of forcing fullscreen.
 
+use crate::trios::i18n::{t, T_MODAL_CLOSE};
+use crate::ui::lang;
 use dioxus::prelude::*;
 
 #[derive(Props, PartialEq, Clone)]
@@ -25,6 +27,7 @@ pub struct VideoModalProps {
 
 #[component]
 pub fn VideoModal(props: VideoModalProps) -> Element {
+    let lang = lang::current_lang();
     let on_close = props.on_close;
     let url = props.url.clone();
     rsx! {
@@ -60,7 +63,7 @@ pub fn VideoModal(props: VideoModalProps) -> Element {
                 button {
                     style: "padding:8px 16px;background:#2a2a4a;color:#e8e8e8;border:none;border-radius:4px;cursor:pointer;",
                     onclick: move |e: Event<MouseData>| { e.stop_propagation(); on_close.call(()); },
-                    "Закрыть"
+                    "{t(lang, T_MODAL_CLOSE)}"
                 }
             }
         }

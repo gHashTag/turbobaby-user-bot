@@ -1,6 +1,8 @@
 // Strain Card Component for Menu
+use crate::trios::i18n::{t, T_MENU_SOLD_OUT, T_STRAIN_BADGE_BEST, T_STRAIN_BADGE_NEW, T_STRAIN_BADGE_SALE, T_STRAIN_BADGE_SOTD, T_ADD_TO_CART};
 use crate::ui::api::types::Strain;
 use crate::ui::components::{Button, ButtonVariant};
+use crate::ui::lang;
 use dioxus::prelude::*;
 
 #[derive(Props, PartialEq, Clone)]
@@ -13,12 +15,15 @@ pub struct StrainCardProps {
 
 #[component]
 pub fn StrainCard(props: StrainCardProps) -> Element {
+    let lang = lang::current_lang();
     let is_available = props.strain.is_available;
     let is_strain_of_day = props.strain.is_strain_of_day;
     let strain_for_callback = props.strain.clone();
     let thc_text = props.strain.thc_display();
     let cbd_text = props.strain.cbd_display();
     let name = props.strain.name.clone();
+    let add_label = t(lang, T_ADD_TO_CART);
+    let sold_label = t(lang, T_MENU_SOLD_OUT);
 
     // Cycle #131: marketing flag rendering, mirroring menu_screen.rs's
     // render_strain_card. Pre-#131 only the SOTD badge rendered — Sale,
@@ -69,16 +74,16 @@ pub fn StrainCard(props: StrainCardProps) -> Element {
 
             // TZ #2 badge stack — same precedence as menu_screen.
             if is_strain_of_day {
-                div { class: "sod-badge", "🌟 Strain of Day" }
+                div { class: "sod-badge", "{t(lang, T_STRAIN_BADGE_SOTD)}" }
             }
             if new_live {
-                div { class: "new-badge", "🆕 New Arrival" }
+                div { class: "new-badge", "{t(lang, T_STRAIN_BADGE_NEW)}" }
             }
             if is_best {
-                div { class: "best-badge", "⭐ Best Seller" }
+                div { class: "best-badge", "{t(lang, T_STRAIN_BADGE_BEST)}" }
             }
             if sale_live {
-                div { class: "sale-badge", "🔥 Sale" }
+                div { class: "sale-badge", "{t(lang, T_STRAIN_BADGE_SALE)}" }
             }
 
             // Image
@@ -142,9 +147,9 @@ pub fn StrainCard(props: StrainCardProps) -> Element {
                         props.on_add_to_cart.call(strain_for_callback.clone());
                     },
                     if is_available {
-                        "Add to Cart 🛒"
+                        "{add_label} 🛒"
                     } else {
-                        "Sold Out"
+                        "{sold_label}"
                     }
                 }
             }
