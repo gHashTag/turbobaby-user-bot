@@ -13,7 +13,8 @@ use crate::trios::i18n::{
     T_EVENTS_MONTH_OCT, T_EVENTS_MONTH_SEP,
     T_EVENTS_MY_BOOKINGS, T_EVENTS_NEXT_PHOTO, T_EVENTS_NO_BOOKINGS, T_EVENTS_NO_EVENTS,
     T_EVENTS_OK, T_EVENTS_OPEN_DETAILS, T_EVENTS_PHOTO_N, T_EVENTS_PREV_PHOTO, T_EVENTS_PRICE,
-    T_EVENTS_PRICE_STARS, T_EVENTS_RETRY, T_EVENTS_SEAT, T_EVENTS_SEATS, T_EVENTS_SHARE_EVENT,
+    T_EVENTS_PRICE_STARS, T_EVENTS_RETRY, T_EVENTS_SEAT, T_EVENTS_SEATS, T_EVENTS_SELECT_SEATS,
+    T_EVENTS_SHARE_EVENT,
     T_EVENTS_SOLD_OUT, T_EVENTS_SOLD_OUT_BADGE, T_EVENTS_SUBTITLE, T_EVENTS_TELEGRAM_REQUIRED,
     T_EVENTS_TIME, T_EVENTS_TITLE, T_EVENTS_VIDEO, T_EVENTS_WEEKDAY_FRI, T_EVENTS_WEEKDAY_MON,
     T_EVENTS_WEEKDAY_SAT, T_EVENTS_WEEKDAY_SUN, T_EVENTS_WEEKDAY_THU, T_EVENTS_WEEKDAY_TUE,
@@ -291,6 +292,7 @@ fn EventBookingModal(props: EventBookingModalProps) -> Element {
         })
         .is_some();
     let mut selected_photo = use_signal(|| 0usize);
+    let mut seats_to_book = use_signal(|| 1u32);
 
     let starts = parse_event_start(&ev.starts_at);
     let has_started = starts.map_or(false, |dt| Utc::now() >= dt.with_timezone(&Utc));
@@ -351,7 +353,8 @@ fn EventBookingModal(props: EventBookingModalProps) -> Element {
     } else if props.telegram_id.is_none() {
         telegram_required
     } else if has_stars_price {
-        format!("{} ({} ⭐)", book_label, ev.price_stars.unwrap_or(0))
+        let seats = seats_to_book().max(1);
+        format!("{} ({} ⭐)", book_label, ev.price_stars.unwrap_or(0) * seats as i64)
     } else {
         book_label
     };
@@ -360,6 +363,40 @@ fn EventBookingModal(props: EventBookingModalProps) -> Element {
         "margin-top:20px;width:100%;padding:14px;background:#39ff14;color:#000;border:none;font-size:14px;font-weight:800;box-shadow:3px 3px 0 #000;cursor:pointer;"
     } else {
         "margin-top:20px;width:100%;padding:14px;background:#2a2a4a;color:#888;border:none;font-size:14px;font-weight:800;cursor:not-allowed;"
+    };
+
+    let max_available = ev.seats_available.map(|a| a.max(1) as u32).unwrap_or(10);
+    let seat_selector = if can_book {
+        let cur = seats_to_book().clamp(1, max_available);
+        let at_min = cur <= 1;
+        let at_max = cur >= max_available;
+        let min_op = if at_min { "0.35" } else { "1" };
+        let min_cur = if at_min { "not-allowed" } else { "pointer" };
+        let max_op = if at_max { "0.35" } else { "1" };
+        let max_cur = if at_max { "not-allowed" } else { "pointer" };
+        let seats_label = t(lang, T_EVENTS_SELECT_SEATS).to_string();
+        rsx! {
+            div { style: "margin-top:16px;",
+                div { style: "font-size:12px;color:#8b8b9e;margin-bottom:6px;", "{seats_label}" }
+                div { style: "display:flex;align-items:center;justify-content:center;gap:12px;",
+                    button {
+                        style: "width:44px;height:44px;font-size:22px;font-weight:800;background:#2a2a4a;color:#e8e8e8;border:4px solid #1a1a2e;box-shadow:2px 2px 0 #000;line-height:1;opacity:{min_op};cursor:{min_cur};",
+                        disabled: at_min,
+                        onclick: move |e: Event<MouseData>| { e.stop_propagation(); seats_to_book.set(seats_to_book().saturating_sub(1).max(1)); },
+                        "−"
+                    }
+                    span { style: "font-size:20px;font-weight:800;color:#fff;min-width:40px;text-align:center;", "{cur}" }
+                    button {
+                        style: "width:44px;height:44px;font-size:22px;font-weight:800;background:#2a2a4a;color:#e8e8e8;border:4px solid #1a1a2e;box-shadow:2px 2px 0 #000;line-height:1;opacity:{max_op};cursor:{max_cur};",
+                        disabled: at_max,
+                        onclick: move |e: Event<MouseData>| { e.stop_propagation(); seats_to_book.set((seats_to_book() + 1).min(max_available)); },
+                        "+"
+                    }
+                }
+            }
+        }
+    } else {
+        rsx! {}
     };
 
     let ev_for_book = ev.clone();
@@ -380,12 +417,13 @@ fn EventBookingModal(props: EventBookingModalProps) -> Element {
                             // session create distinct attempts, while retries of an accidental
                             // double-tap are still collapsed by the server-side duplicate guard.
                             let idempotency_key = format!("evt_{}_{}_{}", ev_clone.id, tid, js_sys::Date::now() as u64);
-                            let body = json!({ "telegram_id": tid, "seats": 1 }).to_string();
+                            let seats = seats_to_book().clamp(1, max_available) as i32;
+                            let body = json!({ "telegram_id": tid, "seats": seats }).to_string();
                             track_event("booking_attempted", "B");
                             match post_json_authed_idempotent_full(&url, &init, &idempotency_key, &body).await {
                                 Ok((status, _)) if (200..300).contains(&status) => {
                                     track_event("booking_succeeded", "B");
-                                    state.set(BookingState::Done { seats: 1 });
+                                    state.set(BookingState::Done { seats });
                                 }
                                 Ok((status, body)) => {
                                     if status == 402 {
@@ -554,6 +592,7 @@ fn EventBookingModal(props: EventBookingModalProps) -> Element {
                     { cap_badge }
                     { price_badge }
                 }
+                { seat_selector }
                 { booking_area }
             }
         }

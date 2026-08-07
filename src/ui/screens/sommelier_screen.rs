@@ -1,9 +1,12 @@
 use crate::trios::core::Lang;
 use crate::trios::i18n::{
-    t, T_ADD_TO_CART, T_SOMM_DESC, T_SOMM_EXP, T_SOMM_EXP_BEGINNER, T_SOMM_EXP_EXPERT,
+    t, tf, T_ADD_TO_CART, T_SOMM_DESC, T_SOMM_EXP, T_SOMM_EXP_BEGINNER, T_SOMM_EXP_EXPERT,
     T_SOMM_EXP_MEDIUM, T_SOMM_GET_RECOMMENDATIONS, T_SOMM_MATCH, T_SOMM_MOOD, T_SOMM_MOOD_CREATIVE,
     T_SOMM_MOOD_ENERGY, T_SOMM_MOOD_RELAX, T_SOMM_MOOD_SLEEP, T_SOMM_MOOD_STRONG, T_SOMM_MOOD_TASTE,
-    T_SOMM_NO_RECOMMENDATIONS, T_SOMM_RECOMMENDED_FOR_YOU, T_SOMM_RECOMMENDED_SETS,
+    T_SOMM_NO_RECOMMENDATIONS, T_SOMM_REASON_CREATIVE, T_SOMM_REASON_DEFAULT,
+    T_SOMM_REASON_FLAVOR, T_SOMM_REASON_HYBRID_MELLOW, T_SOMM_REASON_HYBRID_UP,
+    T_SOMM_REASON_INDICA_RELAX, T_SOMM_REASON_SATIVA_ENERGY, T_SOMM_REASON_SLEEP,
+    T_SOMM_REASON_THC, T_SOMM_RECOMMENDED_FOR_YOU, T_SOMM_RECOMMENDED_SETS,
     T_SOMM_RECOMMENDED_STRAINS, T_SOMM_RESTART, T_SOMM_TIME, T_SOMM_TIME_ANY, T_SOMM_TIME_DAY,
     T_SOMM_TIME_EVENING, T_SOMM_TITLE,
 };
@@ -131,6 +134,7 @@ struct StrainsCatalog {
 /// instead of always returning "no recommendations". Heuristics: mood → category
 /// + effect keywords, time → sativa(day)/indica(evening), experience → THC band.
 fn score_strain(
+    lang: Lang,
     s: &CatalogStrain,
     mood: Option<Mood>,
     time: TimeOfDay,
@@ -155,10 +159,10 @@ fn score_strain(
             Mood::Relax => {
                 if is_indica {
                     score += 25;
-                    reason = "Indica · relaxing".into();
+                    reason = t(lang, T_SOMM_REASON_INDICA_RELAX).to_string();
                 } else if is_hybrid {
                     score += 12;
-                    reason = "Hybrid · mellow".into();
+                    reason = t(lang, T_SOMM_REASON_HYBRID_MELLOW).to_string();
                 }
                 if eff.contains("relax") || eff.contains("calm") || eff.contains("chill") {
                     score += 15;
@@ -167,10 +171,10 @@ fn score_strain(
             Mood::Energy => {
                 if is_sativa {
                     score += 25;
-                    reason = "Sativa · energizing".into();
+                    reason = t(lang, T_SOMM_REASON_SATIVA_ENERGY).to_string();
                 } else if is_hybrid {
                     score += 12;
-                    reason = "Hybrid · uplifting".into();
+                    reason = t(lang, T_SOMM_REASON_HYBRID_UP).to_string();
                 }
                 if eff.contains("energ") || eff.contains("uplift") || eff.contains("focus") {
                     score += 15;
@@ -179,7 +183,7 @@ fn score_strain(
             Mood::Creative => {
                 if is_sativa || is_hybrid {
                     score += 18;
-                    reason = "Creative & focused".into();
+                    reason = t(lang, T_SOMM_REASON_CREATIVE).to_string();
                 }
                 if eff.contains("creativ") || eff.contains("focus") || eff.contains("euphor") {
                     score += 18;
@@ -188,7 +192,7 @@ fn score_strain(
             Mood::Sleep => {
                 if is_indica {
                     score += 25;
-                    reason = "Indica · for sleep".into();
+                    reason = t(lang, T_SOMM_REASON_SLEEP).to_string();
                 }
                 if thc >= 22.0 {
                     score += 10;
@@ -200,12 +204,12 @@ fn score_strain(
             Mood::Strong => {
                 let bonus = ((thc - 18.0).max(0.0) as i32).min(35);
                 score += bonus;
-                reason = format!("High THC · {}%", thc as i32);
+                reason = tf(lang, T_SOMM_REASON_THC, &[(thc as i32).to_string()]);
             }
             Mood::Taste => {
                 if has_flavor {
                     score += 22;
-                    reason = "Rich flavor".into();
+                    reason = t(lang, T_SOMM_REASON_FLAVOR).to_string();
                 }
                 score += 8;
             }
@@ -243,7 +247,7 @@ fn score_strain(
     }
 
     if reason.is_empty() {
-        reason = "Good match".into();
+        reason = t(lang, T_SOMM_REASON_DEFAULT).to_string();
     }
     (score.clamp(35, 99), reason)
 }
@@ -300,7 +304,7 @@ pub fn SommelierScreen() -> Element {
             .into_iter()
             .filter(|s| s.is_available.unwrap_or(true))
             .map(|s| {
-                let (score, reason) = score_strain(&s, mood, time, exp);
+                let (score, reason) = score_strain(lang, &s, mood, time, exp);
                 (
                     score,
                     RecommendedStrain {

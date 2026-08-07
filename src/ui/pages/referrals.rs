@@ -1,3 +1,11 @@
+use crate::trios::i18n::{
+    t, tf,
+    T_LOADING, T_REFERRAL_COPIED, T_REFERRAL_COPY, T_REFERRAL_EMPTY_LEADERBOARD,
+    T_REFERRAL_ID_MASK, T_REFERRAL_LINK_LABEL, T_REFERRAL_ROW_META, T_REFERRAL_SHARE,
+    T_REFERRAL_SHARE_TEXT, T_REFERRAL_STAT_BONUS, T_REFERRAL_STAT_CONFIRMED,
+    T_REFERRAL_STAT_INVITED, T_REFERRAL_STAT_PENDING, T_REFERRAL_SUBTITLE, T_REFERRAL_TITLE,
+    T_REFERRAL_TOP,
+};
 use crate::ui::api::context::api_base_url;
 use crate::ui::telegram::{use_telegram_id, use_telegram_init_data};
 use dioxus::prelude::*;
@@ -74,6 +82,7 @@ fn urlencoding_simple(s: &str) -> String {
 #[component]
 pub fn Referrals() -> Element {
     let telegram_id = use_telegram_id().unwrap_or(0i64);
+    let lang = crate::ui::lang::current_lang();
     let referral_me = use_signal(ReferralMe::default);
     let leaderboard = use_signal(Vec::<TopReferrer>::new);
     let loading = use_signal(|| true);
@@ -155,17 +164,17 @@ pub fn Referrals() -> Element {
                 style: "padding: 20px 16px 12px; text-align: center;",
                 h1 {
                     style: "font-size: 24px; font-weight: 800; color: #39ff14; text-shadow: 2px 2px 0 #000;",
-                    "\u{1F381} Referral Program"
+                    "{t(lang, T_REFERRAL_TITLE)}"
                 }
                 p {
                     style: "font-size: 15px; color: #888; margin-top: 6px;",
-                    "Invite friends \u{2014} earn bonuses"
+                    "{t(lang, T_REFERRAL_SUBTITLE)}"
                 }
             }
 
             if *loading.read() {
                 div { style: "text-align: center; padding: 30px;",
-                    span { style: "font-size: 15px; color: #39ff14;", "Loading..." }
+                    span { style: "font-size: 15px; color: #39ff14;", "{t(lang, T_LOADING)}" }
                 }
             } else {
                 div {
@@ -177,7 +186,7 @@ pub fn Referrals() -> Element {
                     ",
                     p {
                         style: "font-size: 13px; font-weight: 700; color: #888; margin-bottom: 8px;",
-                        "YOUR REFERRAL LINK"
+                        "{t(lang, T_REFERRAL_LINK_LABEL)}"
                     }
                     div {
                         style: "
@@ -212,14 +221,15 @@ pub fn Referrals() -> Element {
                                 copy_to_clipboard(&link_for_copy);
                                 copied.set(true);
                             },
-                            if *copied.read() { "\u{2705} Copied!" } else { "\u{1F4CB} Copy" }
+                            if *copied.read() { "{t(lang, T_REFERRAL_COPIED)}" } else { "{t(lang, T_REFERRAL_COPY)}" }
                         }
 
                         {
+                            let share_text = t(lang, T_REFERRAL_SHARE_TEXT);
                             let share_url = format!(
                                 "https://t.me/share/url?url={}&text={}",
                                 urlencoding_simple(&link),
-                                urlencoding_simple("\u{1FAB5} Join Woody Weed and get bonuses!")
+                                urlencoding_simple(&share_text)
                             );
                             rsx! {
                                 button {
@@ -238,7 +248,7 @@ pub fn Referrals() -> Element {
                                     onclick: move |_| {
                                         open_telegram_link(&share_url);
                                     },
-                                    "\u{1F4E4} Share"
+                                    "{t(lang, T_REFERRAL_SHARE)}"
                                 }
                             }
                         }
@@ -250,13 +260,10 @@ pub fn Referrals() -> Element {
                         max-width: 380px; margin: 0 auto 16px; padding: 0 16px;
                         display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;
                     ",
-                    {stat_card("\u{1F465}", "Invited", &stats.total_invited.to_string())}
-                    {stat_card("\u{2705}", "Confirmed", &stats.confirmed.to_string())}
-                    {stat_card("\u{23F3}", "Pending", &stats.pending.to_string())}
-                    // Bare `let` is illegal inside `rsx!` macro; compute the
-                    // sanitized value inline in the format-arg expression instead.
-                    {stat_card("\u{1F4B0}", "Bonus", &format!(
-                        "{:.0} \u{0E3F}",
+                    {stat_card("\u{1F465}", &t(lang, T_REFERRAL_STAT_INVITED), &stats.total_invited.to_string())}
+                    {stat_card("\u{2705}", &t(lang, T_REFERRAL_STAT_CONFIRMED), &stats.confirmed.to_string())}
+                    {stat_card("\u{23F3}", &t(lang, T_REFERRAL_STAT_PENDING), &stats.pending.to_string())}
+                    {stat_card("\u{1F4B0}", &t(lang, T_REFERRAL_STAT_BONUS), &crate::trios::pricing::format_baht(
                         if stats.total_bonus_earned.is_finite() {
                             stats.total_bonus_earned.max(0.0)
                         } else { 0.0 }
@@ -268,19 +275,19 @@ pub fn Referrals() -> Element {
 
                     h2 {
                         style: "font-size: 13px; font-weight: 700; color: #ffd700; margin-bottom: 12px; text-align: center;",
-                        "\u{1F3C6} Top Referrers"
+                        "{t(lang, T_REFERRAL_TOP)}"
                     }
 
                     if board.is_empty() {
                         div {
                             style: "text-align: center; color: #555; font-size: 15px; padding: 20px;",
-                            "No data yet \u{2014} be the first!"
+                            "{t(lang, T_REFERRAL_EMPTY_LEADERBOARD)}"
                         }
                     } else {
                         div {
                             style: "display: flex; flex-direction: column; gap: 6px;",
                             for (idx, entry) in board.iter().enumerate() {
-                                {leaderboard_row(idx + 1, entry.telegram_id, entry.referral_count, entry.total_bonus_earned)}
+                                {leaderboard_row(lang, idx + 1, entry.telegram_id, entry.referral_count, entry.total_bonus_earned)}
                             }
                         }
                     }
@@ -310,7 +317,13 @@ fn stat_card(icon: &str, label: &str, value: &str) -> Element {
     }
 }
 
-fn leaderboard_row(rank: usize, telegram_id: i64, referral_count: i64, bonus: f64) -> Element {
+fn leaderboard_row(
+    lang: crate::trios::core::Lang,
+    rank: usize,
+    telegram_id: i64,
+    referral_count: i64,
+    bonus: f64,
+) -> Element {
     let medal = match rank {
         1 => "\u{1F947}",
         2 => "\u{1F948}",
@@ -329,6 +342,16 @@ fn leaderboard_row(rank: usize, telegram_id: i64, referral_count: i64, bonus: f6
     } else {
         0.0
     };
+    let id_short = telegram_id % 10000;
+    let id_text = tf(lang, T_REFERRAL_ID_MASK, &[format!("{id_short}")]);
+    let meta_text = tf(
+        lang,
+        T_REFERRAL_ROW_META,
+        &[
+            referral_count.to_string(),
+            crate::trios::pricing::format_baht(safe_bonus),
+        ],
+    );
     rsx! {
         div {
             style: "
@@ -341,12 +364,8 @@ fn leaderboard_row(rank: usize, telegram_id: i64, referral_count: i64, bonus: f6
             span { style: "font-size: 14px; width: 20px; flex-shrink: 0;", "{medal}" }
             span { style: "font-size: 15px; font-weight: 700; color: {rank_color};", "#{rank}" }
             div { style: "flex: 1;",
-                div { style: "font-size: 15px; color: #e8e8e8;",
-                    {format!("ID: \u{2026}{}", telegram_id % 10000)}
-                }
-                div { style: "font-size: 15px; color: #555; margin-top: 2px;",
-                    {format!("{} invited \u{2022} {:.0} \u{0E3F} earned", referral_count, safe_bonus)}
-                }
+                div { style: "font-size: 15px; color: #e8e8e8;", "{id_text}" }
+                div { style: "font-size: 15px; color: #555; margin-top: 2px;", "{meta_text}" }
             }
         }
     }

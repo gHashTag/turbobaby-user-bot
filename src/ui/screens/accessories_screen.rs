@@ -1,4 +1,10 @@
-use crate::trios::i18n::{t, tf, T_ACC_DESC, T_ACC_TITLE, T_ADD_TO_CART, T_CATALOG_EMPTY, T_CATALOG_ERROR, T_FILTER_ALL, T_LOW_STOCK, T_MENU_SOLD_OUT};
+use crate::trios::i18n::{
+    t, tf,
+    T_ACC_CAT_BONG, T_ACC_CAT_CLOTHING, T_ACC_CAT_GRINDER, T_ACC_CAT_LIGHTER, T_ACC_CAT_OTHER,
+    T_ACC_CAT_PAPERS, T_ACC_CAT_PIPE, T_ACC_CAT_SOUVENIR, T_ACC_CAT_STORAGE, T_ACC_DESC,
+    T_ACC_TITLE, T_ADD_TO_CART, T_CATALOG_EMPTY, T_CATALOG_ERROR, T_FILTER_ALL, T_LOW_STOCK,
+    T_MENU_SOLD_OUT,
+};
 use crate::ui::api::context::api_base_url;
 use crate::ui::components::bottom_nav::BottomNav;
 use crate::ui::components::card_media::CardMedia;
@@ -65,6 +71,21 @@ fn category_color(cat: &str) -> &'static str {
     }
 }
 
+fn localized_category_label(lang: crate::trios::core::Lang, cat: &str) -> String {
+    match cat.to_lowercase().as_str() {
+        "all" => t(lang, T_FILTER_ALL).to_string(),
+        "grinder" => t(lang, T_ACC_CAT_GRINDER).to_string(),
+        "papers" => t(lang, T_ACC_CAT_PAPERS).to_string(),
+        "pipe" => t(lang, T_ACC_CAT_PIPE).to_string(),
+        "bong" => t(lang, T_ACC_CAT_BONG).to_string(),
+        "storage" => t(lang, T_ACC_CAT_STORAGE).to_string(),
+        "lighter" => t(lang, T_ACC_CAT_LIGHTER).to_string(),
+        "clothing" => t(lang, T_ACC_CAT_CLOTHING).to_string(),
+        "souvenir" => t(lang, T_ACC_CAT_SOUVENIR).to_string(),
+        _ => t(lang, T_ACC_CAT_OTHER).to_string(),
+    }
+}
+
 const CATEGORIES: &[&str] = &[
     "All", "Grinder", "Papers", "Pipe", "Bong", "Storage", "Lighter", "Clothing", "Souvenir",
     "Other",
@@ -78,7 +99,6 @@ pub fn AccessoriesScreen() -> Element {
     let lang = crate::ui::lang::current_lang();
     let acc_title = t(lang, T_ACC_TITLE);
     let acc_desc = t(lang, T_ACC_DESC);
-    let filter_all = t(lang, T_FILTER_ALL);
     let add_to_cart = t(lang, T_ADD_TO_CART);
     let catalog_empty = t(lang, T_CATALOG_EMPTY);
     let catalog_error = t(lang, T_CATALOG_ERROR);
@@ -160,7 +180,7 @@ pub fn AccessoriesScreen() -> Element {
                         let bg = if is_active { "#00e5ff" } else { "transparent" };
                         let color = if is_active { "#000" } else { "#888" };
                         let border = if is_active { "#00e5ff" } else { "#2a2a4a" };
-                        let label = if *cat == "All" { filter_all.to_string() } else { cat.to_string() };
+                        let label = localized_category_label(lang, cat);
                         let cat_val = cat.to_string();
                         rsx! {
                             button {

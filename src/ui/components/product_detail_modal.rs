@@ -13,9 +13,10 @@
 //! meta fields are optional because accessories/tea/sets have no THC etc.
 
 use crate::trios::i18n::{
-    t, T_ADD_TO_CART, T_LAB_CERTS, T_LAB_CERT_CBD, T_LAB_CERT_EMPTY, T_LAB_CERT_TESTED,
-    T_LAB_CERT_THC, T_MODAL_CERTIFICATE, T_MODAL_CLOSE, T_MODAL_DECREASE_QTY,
-    T_MODAL_INCREASE_QTY, T_REVIEWS_AVG, T_REVIEWS_EMPTY, T_REVIEWS_TITLE, T_SHARE,
+    t, T_ADD_TO_CART, T_FULFILLMENT_DINE_IN, T_FULFILLMENT_LABEL, T_FULFILLMENT_TAKEAWAY,
+    T_LAB_CERTS, T_LAB_CERT_CBD, T_LAB_CERT_EMPTY, T_LAB_CERT_TESTED, T_LAB_CERT_THC,
+    T_MODAL_CERTIFICATE, T_MODAL_CLOSE, T_MODAL_DECREASE_QTY, T_MODAL_INCREASE_QTY,
+    T_REVIEWS_AVG, T_REVIEWS_EMPTY, T_REVIEWS_TITLE, T_SHARE,
 };
 use crate::ui::api::context::use_api_client;
 use crate::ui::api::types::LabCertificate;
@@ -64,6 +65,17 @@ pub struct ProductDetailModalProps {
     /// quantity (caller pushes the item into the cart). The modal closes
     /// itself afterwards.
     pub on_add_to_cart: EventHandler<u32>,
+    /// Optional drink fulfillment selector. Pass `["dine_in", "takeaway"]` for
+    /// tea/drink items; omit (empty) for strains/accessories/sets.
+    #[props(default)]
+    pub fulfillment_options: Vec<String>,
+    /// Pre-selected fulfillment value. Falls back to `"takeaway"` when omitted.
+    #[props(default)]
+    pub initial_fulfillment: Option<String>,
+    /// Called whenever the user changes the fulfillment toggle.
+    /// The parent can mirror the choice into its own add-to-cart state.
+    #[props(default)]
+    pub on_fulfillment_change: Option<EventHandler<String>>,
     /// When provided, render a "Share" button that calls `on_share`.
     /// Pass `None` for non-admin users so the button is hidden.
     #[props(default)]
@@ -215,6 +227,12 @@ pub fn ProductDetailModal(props: ProductDetailModalProps) -> Element {
     let description = props.description.clone();
     // Quantity selector state (1..=99). Only meaningful when `can_add`.
     let mut qty = use_signal(|| 1u32);
+    let initial_fulfillment = props.initial_fulfillment.clone();
+    let mut fulfillment = use_signal(move || {
+        initial_fulfillment.clone().unwrap_or_else(|| "takeaway".to_string())
+    });
+    let fulfillment_options = props.fulfillment_options.clone();
+    let on_fulfillment_change = props.on_fulfillment_change.clone();
     let mut lightbox_open = use_signal(|| false);
     let lightbox_src = img.clone();
     let lightbox_alt = alt.clone();
@@ -354,6 +372,43 @@ pub fn ProductDetailModal(props: ProductDetailModalProps) -> Element {
                                 "+"
                             }
                         }
+
+                        if !fulfillment_options.is_empty() {
+                            div { style: "margin-bottom:10px;",
+                                div { style: "font-size:12px;color:#8b8b9e;margin-bottom:6px;", "{t(current_lang(), T_FULFILLMENT_LABEL)}" }
+                                div { style: "display:flex;gap:8px;",
+                                    for opt in fulfillment_options.iter() {
+                                    {
+                                        let opt = opt.clone();
+                                        let selected = fulfillment() == opt;
+                                        let border = if selected { "#39ff14" } else { "#2a2a4a" };
+                                        let color = if selected { "#fff" } else { "#8b8b9e" };
+                                        let bg = if selected { "#0f2a0f" } else { "#0f0f1a" };
+                                        let label = match opt.as_str() {
+                                            "dine_in" => t(current_lang(), T_FULFILLMENT_DINE_IN).to_string(),
+                                            _ => t(current_lang(), T_FULFILLMENT_TAKEAWAY).to_string(),
+                                        };
+                                        let opt_for_handler = opt.clone();
+                                        let handler = on_fulfillment_change.clone();
+                                        rsx! {
+                                            button {
+                                                style: "flex:1;padding:10px;border:3px solid {border};background:{bg};color:{color};font-size:13px;font-weight:700;cursor:pointer;",
+                                                onclick: move |e: Event<MouseData>| {
+                                                    e.stop_propagation();
+                                                    fulfillment.set(opt.clone());
+                                                    if let Some(ref h) = handler {
+                                                        h.call(opt_for_handler.clone());
+                                                    }
+                                                },
+                                                "{label}"
+                                            }
+                                        }
+                                    }
+                                }
+                                }
+                            }
+                        }
+
                         button {
                             style: "font-size:14px;font-weight:700;width:100%;padding:12px 20px;margin-bottom:8px;background:#39ff14;color:#000;border:4px solid #2d9e0f;box-shadow:3px 3px 0 #000;cursor:pointer;",
                             onclick: move |e: Event<MouseData>| { e.stop_propagation(); on_add_to_cart.call(qty()); on_close.call(()); },

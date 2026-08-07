@@ -47,6 +47,8 @@ pub fn TeaScreen() -> Element {
     let mut selected_tea = use_signal(|| None::<ApiTea>);
     // Full-screen video modal for tea product videos (hoisted to screen level).
     let mut selected_tea_video = use_signal(|| None::<String>);
+    // Default drink orders to takeaway; the modal lets the user switch to dine-in.
+    let mut selected_fulfillment = use_signal(|| "takeaway".to_string());
 
     let lang = crate::ui::lang::current_lang();
     let tea_title = t(lang, T_TEA_TITLE);
@@ -334,15 +336,18 @@ pub fn TeaScreen() -> Element {
                         price_line: Some(price_str),
                         can_add: avail,
                         add_to_cart_label: Some(format!("{add_to_cart}")),
+                        fulfillment_options: vec!["dine_in".to_string(), "takeaway".to_string()],
+                        initial_fulfillment: Some(selected_fulfillment()),
+                        on_fulfillment_change: Some(EventHandler::new(move |f: String| selected_fulfillment.set(f))),
                         on_add_to_cart: move |q: u32| {
                             cart.write().add_item(CartItem {
                                 id: add_id.clone(),
                                 name: add_name.clone(),
                                 price: t_price,
                                 quantity: q,
-                                image_url: None,
+                                image_url: tea.image_url.clone(),
                                 item_type: CartItemType::Tea,
-                                fulfillment: None,
+                                fulfillment: Some(selected_fulfillment()),
                             });
                             crate::ui::telegram::TelegramApp::init().haptic_notification(crate::ui::telegram::HapticNotification::Success);
                         },

@@ -2,8 +2,8 @@ use crate::trios::i18n::{
     t, tf,
     T_SUCCESS_BACK_MENU, T_SUCCESS_CASH_ON_DELIVERY, T_SUCCESS_CONFIRMED,
     T_SUCCESS_CONTACT_SHORTLY, T_SUCCESS_DELIVERY_ESTIMATE, T_SUCCESS_ETA,
-    T_SUCCESS_MY_ORDERS, T_SUCCESS_ORDER_RECEIVED, T_SUCCESS_PAYMENT,
-    T_SUCCESS_STATUS, T_SUCCESS_TITLE,
+    T_SUCCESS_ETA_VALUE, T_SUCCESS_MY_ORDERS, T_SUCCESS_ORDER_RECEIVED,
+    T_SUCCESS_PAYMENT, T_SUCCESS_STATUS, T_SUCCESS_TITLE,
 };
 use crate::ui::routes::Route;
 use crate::ui::telegram::TelegramApp;
@@ -23,6 +23,23 @@ pub fn SuccessScreen(id: String) -> Element {
     let cash_on_delivery = t(lang, T_SUCCESS_CASH_ON_DELIVERY).to_string();
     let back_menu = t(lang, T_SUCCESS_BACK_MENU).to_string();
     let my_orders = t(lang, T_SUCCESS_MY_ORDERS).to_string();
+
+    // Load the delivery zone written by checkout so the ETA is real, not a
+    // hard-coded "30-45 min" fallback.
+    let mut zone_name = use_signal(|| Option::<String>::None);
+    let mut zone_eta = use_signal(|| Option::<String>::None);
+    use_effect(move || {
+        if let Some(window) = web_sys::window() {
+            if let Ok(Some(storage)) = window.local_storage() {
+                if let Ok(Some(name)) = storage.get_item("woody_last_zone_name") {
+                    zone_name.set(Some(name));
+                }
+                if let Ok(Some(eta)) = storage.get_item("woody_last_zone_eta") {
+                    zone_eta.set(Some(eta));
+                }
+            }
+        }
+    });
 
     // Hide native Telegram chrome on this terminal screen; all navigation is
     // handled by the two large in-app CTAs.
@@ -83,14 +100,17 @@ pub fn SuccessScreen(id: String) -> Element {
                 margin-bottom: 24px;
                 box-shadow: 4px 4px 0 #000;
             ",
-                div { style: "font-size: 13px; font-weight: 700; color: #00e5ff; text-transform: uppercase; letter-spacing: 1px; text-shadow: 2px 2px 0 #000; margin-bottom: 10px;", "{delivery_estimate}" }
+                div { style: "font-size: 13px; font-weight: 700; color: #00e5ff; text-transform: uppercase; letter-spacing: 1px; text-shadow: 2px 2px 0 #000; margin-bottom: 4px;", "{delivery_estimate}" }
+                if let Some(name) = zone_name().as_deref() {
+                    div { style: "font-size: 12px; color: #8b8b9e; margin-bottom: 8px;", "{name}" }
+                }
                 div { style: "display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 13px;",
                     span { style: "color: #8b8b9e;", "{status_label}" }
                     span { style: "color: #39ff14;", "{confirmed}" }
                 }
                 div { style: "display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 13px;",
                     span { style: "color: #8b8b9e;", "{eta_label}" }
-                    span { "30-45 min" }
+                    span { "{zone_eta().as_deref().map(|eta| tf(lang, T_SUCCESS_ETA_VALUE, &[eta.to_string()])).unwrap_or_else(|| \"30-45 min\".to_string())}" }
                 }
                 div { style: "display: flex; justify-content: space-between; font-size: 13px;",
                     span { style: "color: #8b8b9e;", "{payment_label}" }

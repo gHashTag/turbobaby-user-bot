@@ -119,6 +119,46 @@ impl TelegramApp {
         let _ = document::eval("if(window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.MainButton) { window.Telegram.WebApp.MainButton.disable(); }");
     }
 
+    /// Show the MainButton activity indicator (spinner) and keep the given text.
+    /// Call this right before starting an async submit so the user sees the
+    /// app is working and can't double-tap.
+    pub fn show_main_button_progress(&self, text: &str, leave_active: bool) {
+        let escaped = Self::js_escape(text);
+        let leave = if leave_active { "true" } else { "false" };
+        let _ = document::eval(&format!(
+            r#"if(window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.MainButton) {{ window.Telegram.WebApp.MainButton.setText("{}"); window.Telegram.WebApp.MainButton.showProgress({}); }}"#,
+            escaped, leave
+        ));
+    }
+
+    /// Hide the MainButton activity indicator and restore the given text.
+    pub fn hide_main_button_progress(&self, text: &str) {
+        let escaped = Self::js_escape(text);
+        let _ = document::eval(&format!(
+            r#"if(window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.MainButton) {{ window.Telegram.WebApp.MainButton.hideProgress(); window.Telegram.WebApp.MainButton.setText("{}"); }}"#,
+            escaped
+        ));
+    }
+
+    /// Prevent accidental close while the user is in the middle of a form.
+    pub fn enable_closing_confirmation(&self) {
+        let _ = document::eval("if(window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.enableClosingConfirmation){ window.Telegram.WebApp.enableClosingConfirmation(); }");
+    }
+
+    /// Re-allow the Telegram swipe-to-close gesture.
+    pub fn disable_closing_confirmation(&self) {
+        let _ = document::eval("if(window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.disableClosingConfirmation){ window.Telegram.WebApp.disableClosingConfirmation(); }");
+    }
+
+    /// Tint the native Telegram header to match the current screen theme.
+    pub fn set_header_color(&self, color: &str) {
+        let escaped = Self::js_escape(color);
+        let _ = document::eval(&format!(
+            r#"if(window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.setHeaderColor){{ window.Telegram.WebApp.setHeaderColor("{}"); }}"#,
+            escaped
+        ));
+    }
+
     /// Wire Telegram MainButton.onClick to a DOM CustomEvent that Rust can
     /// listen to reliably. Telegram only exposes a single onClick callback, so
     /// this overwrites any previous JS handler with a dispatcher.

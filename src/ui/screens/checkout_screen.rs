@@ -212,10 +212,9 @@ pub fn CheckoutScreen() -> Element {
     let telegram_username = use_telegram_username();
     let init_data = use_telegram_init_data();
     let tg = TelegramApp::init();
-    tg.set_main_button_text(&t(crate::ui::lang::current_lang(), T_PLACE_ORDER));
     tg.show_back_button();
     // Prevent accidental close while the user is filling the checkout form.
-    let _ = document::eval("if(window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.enableClosingConfirmation){ window.Telegram.WebApp.enableClosingConfirmation(); }");
+    tg.enable_closing_confirmation();
 
     // Cycle #73 / A: lang is now resolved once at WASM startup
     // (lib.rs::run via pick_lang) and stored in OnceLock; just read it.
@@ -353,7 +352,29 @@ pub fn CheckoutScreen() -> Element {
         ),
     };
 
+    // Sync the native Telegram MainButton with the live total and form validity.
+    use_effect(move || {
+        let lang = crate::ui::lang::current_lang();
+        let total_str = crate::trios::pricing::format_baht(effective_total);
+        tg.set_main_button_text(&format!("{} — {}", t(lang, T_PLACE_ORDER), total_str));
+        let valid = telegram_id.is_some()
+            && age_confirmed()
+            && !customer_name().trim().is_empty()
+            && name_error().is_none()
+            && !customer_phone().trim().is_empty()
+            && phone_error().is_none()
+            && !delivery_address().trim().is_empty()
+            && address_error().is_none()
+            && !is_processing();
+        if valid {
+            tg.enable_main_button();
+        } else {
+            tg.disable_main_button();
+        }
+    });
+
     let submit_cart_items = cart_items.clone();
+    let submit_selected_zone = selected_zone.clone();
     let submit_order = use_callback(move |_: ()| {
         if is_processing() {
             return;
@@ -387,6 +408,15 @@ pub fn CheckoutScreen() -> Element {
         }
         is_processing.set(true);
         order_error.set(None);
+
+        // Show the native Telegram MainButton spinner while the network request runs.
+        tg.show_main_button_progress(&t(lang, T_CHECKOUT_PROCESSING), true);
+        let restore_text = format!(
+            "{} — {}",
+            t(lang, T_PLACE_ORDER),
+            crate::trios::pricing::format_baht(effective_total)
+        );
+        let zone_info = submit_selected_zone.clone();
 
         let base = api_base_url();
         let client = crate::ui::api::local_client::LocalClient::new();
@@ -489,8 +519,21 @@ pub fn CheckoutScreen() -> Element {
                                         "woody_last_zone_id",
                                         delivery_zone_id().as_deref().unwrap_or(""),
                                     );
+                                    if let Some(ref z) = zone_info {
+                                        let _ = storage.set_item(
+                                            "woody_last_zone_name",
+                                            &zone_display_name(z),
+                                        );
+                                        let _ = storage.set_item(
+                                            "woody_last_zone_eta",
+                                            &format!("{}-{}", z.min_eta_minutes, z.max_eta_minutes),
+                                        );
+                                    }
                                 }
                             }
+                            // Stop the spinner and hide the native button before leaving the screen.
+                            tg.hide_main_button_progress(&restore_text);
+                            tg.hide_main_button();
                             // Navigate to success and clear cart
                             cart.write().clear();
                             tg.haptic_notification(HapticNotification::Success);
@@ -516,6 +559,8 @@ pub fn CheckoutScreen() -> Element {
                     order_error.set(Some(t(lang, T_CHECKOUT_ERR_NETWORK).to_string()));
                 }
             }
+            // Restore the MainButton label and stop the spinner on any error.
+            tg.hide_main_button_progress(&restore_text);
             is_processing.set(false);
         });
     });
@@ -551,14 +596,21 @@ pub fn CheckoutScreen() -> Element {
                         p { style: "font-size: 15px; color: #8b8b9e; text-align: center; padding: 10px;", "{t(lang, T_CHECKOUT_CART_EMPTY)}" }
                     } else {
                         for item in cart_items.iter() {
-                            div { style: "display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 13px;",
-                                span { "{item.name}" }
-                                span { style: "color: #8b8b9e;", "x{item.quantity}" }
-                                {
-                                    let line_str = crate::trios::pricing::format_baht(
-                                        item.price * item.quantity as f64,
-                                    );
-                                    rsx! { span { "{line_str}" } }
+                            div { style: "display:flex; gap:10px; align-items:center; margin-bottom:10px;",
+                                if let Some(url) = item.image_url.as_ref() {
+                                    img {
+                                        src: "{url}",
+                                        alt: "{item.name}",
+                                        style: "width:44px; height:44px; object-fit:cover; border:2px solid #2a2a4a; flex-shrink:0;",
+                                        loading: "lazy",
+                                    }
+                                }
+                                div { style: "flex:1; min-width:0;",
+                                    div { style: "font-size:13px; color:#e8e8e8; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;", "{item.name}" }
+                                    div { style: "font-size:12px; color:#8b8b9e;", "x{item.quantity}" }
+                                }
+                                div { style: "font-size:13px; font-weight:700; color:#e8e8e8;",
+                                    { crate::trios::pricing::format_baht(item.price * item.quantity as f64) }
                                 }
                             }
                         }

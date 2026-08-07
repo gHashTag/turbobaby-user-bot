@@ -41,6 +41,7 @@ pub fn CartScreen() -> Element {
     });
     if !items.is_empty() {
         tg.set_main_button_text(&format!("{} — {}", t(lang, T_PLACE_ORDER), total_str));
+        tg.enable_main_button();
         tg.show_back_button();
     } else {
         tg.hide_main_button();
