@@ -20,6 +20,7 @@ use crate::trios::i18n::{
 };
 use crate::trios::store::validate_checkout;
 use crate::ui::api::context::api_base_url;
+use crate::ui::api::http::{fetch_text_authed_full, post_json_authed_idempotent_full};
 use crate::ui::api::types::{DeliveryZone, DeliveryZonesResponse};
 use crate::ui::components::error_banner::ErrorBanner;
 use crate::ui::routes::Route;
@@ -56,6 +57,89 @@ struct RewardsResp {
 #[derive(serde::Deserialize)]
 struct StarsBalanceResp {
     balance: i64,
+}
+
+/// Cycle #77: outcome of the idempotent checkout submission with retry.
+enum SubmitResult {
+    Success(String), // order_id
+    HttpError(u16, String),
+    NetworkError,
+    ParseError,
+}
+
+/// Cycle #77: retry checkout submission with exponential backoff.
+/// Retries on 5xx/network errors up to 3 attempts (delays 1s, 2s, 4s).
+/// 409 Conflict is treated as "already accepted" and we recover the
+/// order id from the user's recent orders so the customer lands on the
+/// success screen instead of an error banner.
+async fn submit_order_with_retry(
+    url: &str,
+    init_data: &str,
+    idempotency_key: &str,
+    body: &str,
+    base: &str,
+    telegram_id: i64,
+) -> SubmitResult {
+    const DELAYS_MS: [u32; 3] = [1_000, 2_000, 4_000];
+    let mut last_status = 0u16;
+    let mut last_body = String::new();
+    let mut had_network_error = false;
+
+    for (attempt, delay_ms) in std::iter::once(0).chain(DELAYS_MS.iter().copied()).enumerate() {
+        if attempt > 0 {
+            gloo_timers::future::TimeoutFuture::new(delay_ms).await;
+        }
+
+        match post_json_authed_idempotent_full(url, init_data, idempotency_key, body).await {
+            Ok((status, response_body)) => {
+                last_status = status;
+                last_body.clone_from(&response_body);
+
+                if (200..300).contains(&status) {
+                    if let Ok(val) = serde_json::from_str::<serde_json::Value>(&response_body) {
+                        if let Some(id) = val.get("order_id").and_then(|v| v.as_str()) {
+                            return SubmitResult::Success(id.to_string());
+                        }
+                    }
+                    return SubmitResult::ParseError;
+                }
+
+                if status == 409 {
+                    let recent_url = format!("{}/api/orders/user/{}", base, telegram_id);
+                    if let Ok((200, orders_body)) = fetch_text_authed_full(&recent_url, init_data).await {
+                        if let Ok(val) = serde_json::from_str::<serde_json::Value>(&orders_body) {
+                            if let Some(arr) = val.get("orders").and_then(|v| v.as_array()) {
+                                if let Some(first) = arr.first() {
+                                    if let Some(id) = first.get("id").and_then(|v| v.as_str()) {
+                                        return SubmitResult::Success(id.to_string());
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    return SubmitResult::HttpError(status, response_body);
+                }
+
+                if (500..600).contains(&status) {
+                    continue;
+                }
+
+                return SubmitResult::HttpError(status, response_body);
+            }
+            Err(_) => {
+                had_network_error = true;
+                continue;
+            }
+        }
+    }
+
+    if last_status >= 500 && last_status <= 599 {
+        SubmitResult::HttpError(last_status, last_body)
+    } else if had_network_error {
+        SubmitResult::NetworkError
+    } else {
+        SubmitResult::NetworkError
+    }
 }
 
 fn zone_display_name(zone: &DeliveryZone) -> String {
@@ -554,7 +638,6 @@ pub fn CheckoutScreen() -> Element {
         let zone_info = submit_selected_zone.clone();
 
         let base = api_base_url();
-        let client = crate::ui::api::local_client::LocalClient::new();
         let url = format!("{}/api/orders", base);
 
         // Generate or reuse the idempotency key (cycle #57). The signal stays
@@ -631,96 +714,95 @@ pub fn CheckoutScreen() -> Element {
         });
 
         let init_data_clone = init_data.clone();
-        spawn(async move {
-            let res = client
-                .post(&url)
-                .header("Content-Type", "application/json")
-                .header("X-Telegram-Init-Data", init_data_clone)
-                .header("X-Idempotency-Key", key)
-                .json(&body)
-                .send()
-                .await;
+        let key_clone = key.clone();
+        let body_text = body.to_string();
+        let restore_text_clone = restore_text.clone();
+        let base_clone = base.clone();
+        let telegram_id_for_retry = telegram_id.unwrap_or(0);
 
-            match res {
-                Ok(resp) if resp.status().is_success() => {
-                    if let Ok(val) = resp.json::<serde_json::Value>().await {
-                        if let Some(id) = val.get("order_id").and_then(|v| v.as_str()) {
-                            let order_id = id.to_string();
-                            // Persist last used delivery details for next checkout.
-                            if let Some(window) = web_sys::window() {
-                                if let Ok(Some(storage)) = window.local_storage() {
-                                    let _ = storage.set_item("woody_last_name", &customer_name());
-                                    let _ = storage.set_item("woody_last_phone", &customer_phone());
-                                    let _ =
-                                        storage.set_item("woody_last_address", &delivery_address());
-                                    let _ = storage.set_item(
-                                        "woody_last_zone_id",
-                                        delivery_zone_id().as_deref().unwrap_or(""),
-                                    );
-                                    if let Some(ref z) = zone_info {
-                                        let _ = storage.set_item(
-                                            "woody_last_zone_name",
-                                            &zone_display_name(z),
-                                        );
-                                        let _ = storage.set_item(
-                                            "woody_last_zone_eta",
-                                            &format!("{}-{}", z.min_eta_minutes, z.max_eta_minutes),
-                                        );
-                                    }
-                                    let _ = storage.set_item("woody_last_notes", &delivery_notes());
-                                    let _ = storage
-                                        .set_item("woody_last_stars", &submit_stars.to_string());
-                                    let _ = storage.set_item(
-                                        "woody_last_reward_id",
-                                        applied_reward
-                                            .read()
-                                            .as_ref()
-                                            .map(|(id, _)| id.as_str())
-                                            .unwrap_or(""),
-                                    );
-                                    let _ = storage.set_item(
-                                        "woody_last_age_confirmed",
-                                        if age_confirmed() { "true" } else { "false" },
-                                    );
-                                }
+        spawn(async move {
+            let result = submit_order_with_retry(
+                &url,
+                &init_data_clone,
+                &key_clone,
+                &body_text,
+                &base_clone,
+                telegram_id_for_retry,
+            )
+            .await;
+
+            match result {
+                SubmitResult::Success(order_id) => {
+                    // Persist last used delivery details for next checkout.
+                    if let Some(window) = web_sys::window() {
+                        if let Ok(Some(storage)) = window.local_storage() {
+                            let _ = storage.set_item("woody_last_name", &customer_name());
+                            let _ = storage.set_item("woody_last_phone", &customer_phone());
+                            let _ = storage.set_item("woody_last_address", &delivery_address());
+                            let _ = storage.set_item(
+                                "woody_last_zone_id",
+                                delivery_zone_id().as_deref().unwrap_or(""),
+                            );
+                            if let Some(ref z) = zone_info {
+                                let _ = storage.set_item("woody_last_zone_name", &zone_display_name(z));
+                                let _ = storage.set_item(
+                                    "woody_last_zone_eta",
+                                    &format!("{}-{}", z.min_eta_minutes, z.max_eta_minutes),
+                                );
                             }
-                            // Stop the spinner and hide the native button before leaving the screen.
-                            tg.hide_main_button_progress(&restore_text);
-                            tg.hide_main_button();
-                            // The user is leaving the form; allow Telegram swipe-to-close again.
-                            tg.disable_closing_confirmation();
-                            // Navigate to success and clear cart
-                            cart.write().clear();
-                            tg.haptic_notification(HapticNotification::Success);
-                            nav.push(Route::Success { id: order_id });
-                            return;
+                            let _ = storage.set_item("woody_last_notes", &delivery_notes());
+                            let _ = storage.set_item("woody_last_stars", &submit_stars.to_string());
+                            let _ = storage.set_item(
+                                "woody_last_reward_id",
+                                applied_reward
+                                    .read()
+                                    .as_ref()
+                                    .map(|(id, _)| id.as_str())
+                                    .unwrap_or(""),
+                            );
+                            let _ = storage.set_item(
+                                "woody_last_age_confirmed",
+                                if age_confirmed() { "true" } else { "false" },
+                            );
                         }
                     }
+                    // Stop the spinner and hide the native button before leaving the screen.
+                    tg.hide_main_button_progress(&restore_text_clone);
+                    tg.hide_main_button();
+                    // The user is leaving the form; allow Telegram swipe-to-close again.
+                    tg.disable_closing_confirmation();
+                    // Navigate to success and clear cart.
+                    cart.write().clear();
+                    tg.haptic_notification(HapticNotification::Success);
+                    nav.push(Route::Success { id: order_id });
+                }
+                SubmitResult::ParseError => {
                     tg.haptic_notification(HapticNotification::Error);
                     order_error.set(Some(t(lang, T_CHECKOUT_ERR_PARSE).to_string()));
+                    tg.hide_main_button_progress(&restore_text_clone);
+                    is_processing.set(false);
                 }
-                Ok(resp) => {
-                    let status = resp.status().as_u16();
-                    let body_text = resp.text().await.unwrap_or_default();
+                SubmitResult::HttpError(status, response_body) => {
                     tg.haptic_notification(HapticNotification::Error);
                     // Loop #7: if the server returned a stable `error` code in
                     // the JSON body, surface a per-field sentence before
                     // falling back to the generic status mapper.
-                    let code_msg = serde_json::from_str::<serde_json::Value>(&body_text)
+                    let code_msg = serde_json::from_str::<serde_json::Value>(&response_body)
                         .ok()
                         .and_then(|v| v.get("error").and_then(|e| e.as_str()).map(String::from))
                         .and_then(|code| friendly_order_error_code(lang, &code));
                     let msg = code_msg.unwrap_or_else(|| friendly_order_error(lang, status));
                     order_error.set(Some(msg));
+                    tg.hide_main_button_progress(&restore_text_clone);
+                    is_processing.set(false);
                 }
-                Err(_) => {
+                SubmitResult::NetworkError => {
                     tg.haptic_notification(HapticNotification::Error);
                     order_error.set(Some(t(lang, T_CHECKOUT_ERR_NETWORK).to_string()));
+                    tg.hide_main_button_progress(&restore_text_clone);
+                    is_processing.set(false);
                 }
             }
-            // Restore the MainButton label and stop the spinner on any error.
-            tg.hide_main_button_progress(&restore_text);
-            is_processing.set(false);
         });
     });
 
