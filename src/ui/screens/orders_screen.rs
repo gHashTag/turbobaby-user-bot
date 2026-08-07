@@ -1,6 +1,14 @@
 use crate::trios::i18n::{
-    t, T_LOADING, T_ORDERS_TITLE, T_REORDER, T_REVIEW_COMMENT, T_REVIEW_LEAVE, T_REVIEW_RATING,
-    T_REVIEW_SUBMIT, T_REVIEW_THANKS,
+    t, tf,
+    T_LOADING, T_MODAL_CLOSE, T_ORDERS_BROWSE_SETS, T_ORDERS_FILTER_ACTIVE,
+    T_ORDERS_FILTER_ALL, T_ORDERS_FILTER_CANCELLED, T_ORDERS_FILTER_COMPLETED,
+    T_ORDERS_HISTORY, T_ORDERS_NO_ORDERS, T_ORDERS_ORDER, T_ORDERS_STATUS_CANCELLED,
+    T_ORDERS_STATUS_CONFIRMED, T_ORDERS_STATUS_DELIVERED, T_ORDERS_STATUS_OUT_FOR_DELIVERY,
+    T_ORDERS_STATUS_PENDING, T_ORDERS_STATUS_PREPARING, T_ORDERS_STATUS_READY,
+    T_ORDERS_STATUS_UNKNOWN, T_ORDERS_STEP_CONFIRMED, T_ORDERS_STEP_DELIVERED,
+    T_ORDERS_STEP_ON_THE_WAY, T_ORDERS_STEP_PREPARING, T_ORDERS_STEP_READY,
+    T_ORDERS_STEP_RECEIVED, T_ORDERS_TITLE, T_REORDER, T_REVIEW_COMMENT, T_REVIEW_LEAVE,
+    T_REVIEW_RATING, T_REVIEW_SUBMIT, T_REVIEW_THANKS,
 };
 use crate::ui::state::{Cart, CartItem, CartItemType};
 use crate::ui::api::context::{api_base_url, use_api_client};
@@ -24,10 +32,15 @@ struct ApiOrder {
 struct ApiOrderItem {
     strain_id: Option<String>,
     strain_name: Option<String>,
+    accessory_id: Option<String>,
     accessory_name: Option<String>,
+    tea_id: Option<String>,
     tea_name: Option<String>,
+    set_id: Option<String>,
     set_name: Option<String>,
     quantity: f64,
+    #[serde(default)]
+    unit_price: Option<f64>,
 }
 
 fn item_name(item: &ApiOrderItem) -> String {
@@ -53,16 +66,29 @@ const ORDER_PIPELINE: &[&str] = &[
     "delivered",
 ];
 
-fn status_style(status: &str) -> (&'static str, &'static str) {
+fn status_color(status: &str) -> &'static str {
     match status.to_lowercase().as_str() {
-        "pending" => ("#ffe600", "⏳ Pending"),
-        "confirmed" => ("#00e5ff", "✅ Confirmed"),
-        "preparing" => ("#ff9d00", "🔥 Preparing"),
-        "ready" => ("#39ff14", "📦 Ready"),
-        "out_for_delivery" => ("#00e5ff", "🚗 Out for Delivery"),
-        "completed" | "delivered" => ("#39ff14", "✅ Delivered"),
-        "cancelled" | "rejected" => ("#ff4757", "❌ Cancelled"),
-        _ => ("#8b8b9e", "📋 Unknown"),
+        "pending" => "#ffe600",
+        "confirmed" => "#00e5ff",
+        "preparing" => "#ff9d00",
+        "ready" => "#39ff14",
+        "out_for_delivery" => "#00e5ff",
+        "completed" | "delivered" => "#39ff14",
+        "cancelled" | "rejected" => "#ff4757",
+        _ => "#8b8b9e",
+    }
+}
+
+fn status_label_key(status: &str) -> crate::trios::i18n::Key {
+    match status.to_lowercase().as_str() {
+        "pending" => T_ORDERS_STATUS_PENDING,
+        "confirmed" => T_ORDERS_STATUS_CONFIRMED,
+        "preparing" => T_ORDERS_STATUS_PREPARING,
+        "ready" => T_ORDERS_STATUS_READY,
+        "out_for_delivery" => T_ORDERS_STATUS_OUT_FOR_DELIVERY,
+        "completed" | "delivered" => T_ORDERS_STATUS_DELIVERED,
+        "cancelled" | "rejected" => T_ORDERS_STATUS_CANCELLED,
+        _ => T_ORDERS_STATUS_UNKNOWN,
     }
 }
 
@@ -75,13 +101,14 @@ enum StatusFilter {
 }
 
 impl StatusFilter {
-    fn label(&self) -> &'static str {
-        match self {
-            Self::All => "All",
-            Self::Active => "🔄 Active",
-            Self::Completed => "✅ Completed",
-            Self::Cancelled => "❌ Cancelled",
-        }
+    fn label(&self, lang: crate::trios::core::Lang) -> String {
+        let key = match self {
+            Self::All => T_ORDERS_FILTER_ALL,
+            Self::Active => T_ORDERS_FILTER_ACTIVE,
+            Self::Completed => T_ORDERS_FILTER_COMPLETED,
+            Self::Cancelled => T_ORDERS_FILTER_CANCELLED,
+        };
+        t(lang, key).to_string()
     }
     fn matches(&self, status: &str) -> bool {
         match self {
@@ -104,17 +131,17 @@ fn pipeline_index(status: &str) -> usize {
         .unwrap_or(ORDER_PIPELINE.len())
 }
 
-fn status_progress(status: &str) -> (&str, &str) {
-    // (label for step, emoji)
-    match status {
-        "pending" => ("Received", "📥"),
-        "confirmed" => ("Confirmed", "✅"),
-        "preparing" => ("Preparing", "🔥"),
-        "ready" => ("Ready", "📦"),
-        "out_for_delivery" => ("On the way", "🚗"),
-        "delivered" | "completed" => ("Delivered", "🎉"),
-        _ => (status, ""),
-    }
+fn status_progress(status: &str, lang: crate::trios::core::Lang) -> (String, &str) {
+    let (key, emoji) = match status {
+        "pending" => (T_ORDERS_STEP_RECEIVED, "📥"),
+        "confirmed" => (T_ORDERS_STEP_CONFIRMED, "✅"),
+        "preparing" => (T_ORDERS_STEP_PREPARING, "🔥"),
+        "ready" => (T_ORDERS_STEP_READY, "📦"),
+        "out_for_delivery" => (T_ORDERS_STEP_ON_THE_WAY, "🚗"),
+        "delivered" | "completed" => (T_ORDERS_STEP_DELIVERED, "🎉"),
+        _ => return (status.to_string(), ""),
+    };
+    (t(lang, key).to_string(), emoji)
 }
 
 #[component]
@@ -138,10 +165,11 @@ fn PipelineSegment(i: usize, current: usize, last: bool) -> Element {
 /// Compact horizontal progress tracker for the delivery pipeline.
 #[component]
 fn StatusProgress(status: String) -> Element {
+    let lang = crate::ui::lang::current_lang();
     let current = pipeline_index(&status);
     let _terminal = is_terminal_status(&status);
     let cancelled = status == "cancelled" || status == "rejected";
-    let (step_label, emoji) = status_progress(&status);
+    let (step_label, emoji) = status_progress(&status, lang);
     rsx! {
         div { style: "margin-bottom: 8px;",
             div { style: "font-size: 12px; color: #8b8b9e; margin-bottom: 4px;",
@@ -250,7 +278,7 @@ fn ReviewForm(props: ReviewFormProps) -> Element {
                 button {
                     style: "font-size:14px;font-weight:700;width:100%;padding:12px 20px;background:#2a2a4a;color:#e8e8e8;border:4px solid #1a1a2e;box-shadow:3px 3px 0 #000;cursor:pointer;",
                     onclick: move |e: Event<MouseData>| { e.stop_propagation(); props.on_close.call(()); },
-                    "Закрыть"
+                    "{t(lang, T_MODAL_CLOSE)}"
                 }
             }
         }
@@ -301,8 +329,9 @@ pub fn OrdersScreen() -> Element {
         _ => Vec::new(),
     };
 
-    let orders_title = t(crate::ui::lang::current_lang(), T_ORDERS_TITLE);
-    let loading_text = t(crate::ui::lang::current_lang(), T_LOADING);
+    let lang = crate::ui::lang::current_lang();
+    let orders_title = t(lang, T_ORDERS_TITLE);
+    let loading_text = t(lang, T_LOADING);
 
     rsx! {
         div { style: "
@@ -313,7 +342,7 @@ pub fn OrdersScreen() -> Element {
         ",
             div { style: "padding: 20px 16px 16px; text-align: center;",
                 h1 { style: "font-size: 24px; font-weight: 800; color: #39ff14; text-shadow: 3px 3px 0 #000, 0 0 10px rgba(57,255,20,0.5); letter-spacing: 2px;", "{orders_title}" }
-                p { style: "font-size: 15px; color: #8b8b9e; margin-top: 4px;", "Your order history" }
+                p { style: "font-size: 15px; color: #8b8b9e; margin-top: 4px;", "{t(lang, T_ORDERS_HISTORY)}" }
             }
 
             // Status filters (pill chips)
@@ -324,7 +353,7 @@ pub fn OrdersScreen() -> Element {
                         let bg = if is_active { "#39ff14" } else { "transparent" };
                         let color = if is_active { "#000" } else { "#8b8b9e" };
                         let border = if is_active { "#39ff14" } else { "#2a2a4a" };
-                        let label = filter.label();
+                        let label = filter.label(lang);
                         rsx! {
                             button {
                                 style: "
@@ -347,14 +376,14 @@ pub fn OrdersScreen() -> Element {
                         Some(Ok(orders)) if orders.is_empty() => rsx! {
                             div { style: "text-align: center; padding: 40px 16px;",
                                 div { style: "font-size: 70px; margin-bottom: 12px;", "📦" }
-                                p { style: "font-size: 13px; color: #8b8b9e; margin-bottom: 16px;", "No orders yet" }
+                                p { style: "font-size: 13px; color: #8b8b9e; margin-bottom: 16px;", "{t(lang, T_ORDERS_NO_ORDERS)}" }
                                 Link { to: Route::Sets {},
                                     button { style: "
                                         font-size: 14px; font-weight: 700; padding: 12px 20px;
                                         background: #39ff14; color: #000;
                                         border: 4px solid #2d9e0f; border-radius: 0; cursor: pointer;
                                         box-shadow: 3px 3px 0 #000;
-                                    ", "Browse Sets 🎁" }
+                                    ", "{t(lang, T_ORDERS_BROWSE_SETS)}" }
                                 }
                             }
                         },
@@ -364,7 +393,8 @@ pub fn OrdersScreen() -> Element {
                                     {
                                         let o = order.clone();
                                         let short_id: String = o.id.chars().rev().take(6).collect::<Vec<_>>().into_iter().rev().collect();
-                                        let (status_color, status_label) = status_style(&o.status);
+                                        let status_color = status_color(&o.status);
+                                        let status_label = t(lang, status_label_key(&o.status));
                                         let date_str = o.created_at.split('T').next().unwrap_or(&o.created_at).to_string();
                                         let shop = o.shop_id.as_deref().unwrap_or("Woody Shop");
                                         let total_str = crate::trios::pricing::format_baht(o.total);
@@ -383,7 +413,7 @@ pub fn OrdersScreen() -> Element {
                                             ",
                                                 StatusProgress { status: o.status.clone() }
                                                 div { style: "display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;",
-                                                    span { style: "font-size: 15px; color: #e8e8e8;", "Order #{short_id}" }
+                                                    span { style: "font-size: 15px; color: #e8e8e8;", "{tf(lang, T_ORDERS_ORDER, &[short_id])}" }
                                                     span { style: "
                                                         font-size: 13px; padding: 3px 8px;
                                                         border-radius: 0;
@@ -442,13 +472,15 @@ pub fn OrdersScreen() -> Element {
                                                                         reorder_cart.write().clear();
                                                                         for item in order_for_reorder.items.iter() {
                                                                             let (id, name, item_type, price_hint) = if let Some(ref sid) = item.strain_id {
-                                                                                (sid.clone(), item.strain_name.clone().unwrap_or_else(|| "Strain".into()), CartItemType::Strain, 0.0)
-                                                                            } else if item.set_name.is_some() {
-                                                                                (format!("set-{}", order_for_reorder.id), item.set_name.clone().unwrap_or_else(|| "Set".into()), CartItemType::Set, 0.0)
-                                                                            } else if item.accessory_name.is_some() {
-                                                                                (format!("acc-{}", order_for_reorder.id), item.accessory_name.clone().unwrap_or_else(|| "Accessory".into()), CartItemType::Accessory, 0.0)
+                                                                                (sid.clone(), item.strain_name.clone().unwrap_or_else(|| "Strain".into()), CartItemType::Strain, item.unit_price.unwrap_or(0.0))
+                                                                            } else if let Some(ref set_id) = item.set_id {
+                                                                                (set_id.clone(), item.set_name.clone().unwrap_or_else(|| "Set".into()), CartItemType::Set, item.unit_price.unwrap_or(0.0))
+                                                                            } else if let Some(ref aid) = item.accessory_id {
+                                                                                (aid.clone(), item.accessory_name.clone().unwrap_or_else(|| "Accessory".into()), CartItemType::Accessory, item.unit_price.unwrap_or(0.0))
+                                                                            } else if let Some(ref tid) = item.tea_id {
+                                                                                (tid.clone(), item.tea_name.clone().unwrap_or_else(|| "Drink".into()), CartItemType::Tea, item.unit_price.unwrap_or(0.0))
                                                                             } else {
-                                                                                (format!("tea-{}", order_for_reorder.id), item.tea_name.clone().unwrap_or_else(|| "Drink".into()), CartItemType::Tea, 0.0)
+                                                                                continue;
                                                                             };
                                                                             let qty = item.quantity.max(1.0) as u32;
                                                                             reorder_cart.write().add_item(CartItem {

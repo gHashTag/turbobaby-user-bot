@@ -352,6 +352,10 @@ pub struct OrderItem {
     pub set_id: Option<String>,
     pub set_name: Option<String>,
     pub quantity: f64,
+    /// Unit price captured at the time the order was created. Lets the
+    /// "reorder" feature rebuild the cart without fetching every catalog.
+    #[serde(default)]
+    pub unit_price: Option<f64>,
     pub is_set: Option<bool>,
     pub is_accessory: Option<bool>,
     pub is_tea: Option<bool>,

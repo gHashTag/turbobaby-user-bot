@@ -1,6 +1,9 @@
 use crate::trios::i18n::{
-    t, T_ADD_TO_CART, T_HOME_SUBTITLE, T_NAV_ACCESSORIES, T_NAV_GARDEN, T_NAV_MENU, T_NAV_SETS,
-    T_NAV_TEA, T_TRUST_AGE, T_TRUST_GACP, T_TRUST_MEDICAL, T_TRUST_SUPPORT,
+    t, tf, T_ADD_TO_CART, T_HOME_ADVENTURES, T_HOME_AR_HUNT, T_HOME_CATEGORIES, T_HOME_DAILY_QUEST,
+    T_HOME_GAME, T_HOME_LOADING, T_HOME_LOCATION_QUEST, T_HOME_NO_SOTD, T_HOME_SETS_PACKS,
+    T_HOME_SHARE, T_HOME_SOMMELIER, T_HOME_SOTD, T_HOME_SUBTITLE, T_HOME_TREASURE_HUNT,
+    T_HOME_WATCH_VIDEO, T_MENU_OFF, T_MENU_SET_LABEL, T_MENU_THC, T_NAV_ACCESSORIES, T_NAV_GARDEN,
+    T_NAV_MENU, T_NAV_SETS, T_NAV_TEA, T_TRUST_AGE, T_TRUST_GACP, T_TRUST_MEDICAL, T_TRUST_SUPPORT,
 };
 use crate::ui::api::context::api_base_url;
 use crate::ui::assets;
@@ -96,6 +99,11 @@ fn render_home_pack_card(p: HomePack) -> Element {
         total
     };
     let price_str = crate::trios::pricing::format_baht(price);
+    let off_label = if has_discount {
+        tf(crate::ui::lang::current_lang(), T_MENU_OFF, &[(discount as i32).to_string()])
+    } else {
+        String::new()
+    };
     let icon = p
         .icon
         .clone()
@@ -126,7 +134,7 @@ fn render_home_pack_card(p: HomePack) -> Element {
                     div { style: "position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:40px;background:linear-gradient(135deg,#1a1a2e,#16213e);", "{icon}" }
                 }
                 // Top-left SET label and discount badge.
-                span { style: "position:absolute;top:6px;left:6px;z-index:2;font-size:11px;font-weight:700;background:#b388ff;color:#000;padding:3px 6px;box-shadow:2px 2px 0 #000;", "📦 SET" }
+                span { style: "position:absolute;top:6px;left:6px;z-index:2;font-size:11px;font-weight:700;background:#b388ff;color:#000;padding:3px 6px;box-shadow:2px 2px 0 #000;", {t(crate::ui::lang::current_lang(), T_MENU_SET_LABEL)} }
                 if let Some(bl) = badge_label.clone() {
                     span { style: "position:absolute;top:32px;left:6px;z-index:2;font-size:10px;font-weight:700;background:{badge_color};color:#fff;padding:2px 6px;box-shadow:2px 2px 0 #000;", "{bl}" }
                 }
@@ -139,7 +147,7 @@ fn render_home_pack_card(p: HomePack) -> Element {
                     rsx! {
                         button {
                             style: "position:absolute;top:2px;right:2px;z-index:3;width:44px;height:44px;border-radius:50%;background:rgba(0,0,0,0.55);border:1px solid #fff;color:#fff;font-size:18px;display:flex;align-items:center;justify-content:center;cursor:pointer;",
-                            "aria-label": "Share",
+                            "aria-label": t(crate::ui::lang::current_lang(), T_HOME_SHARE),
                             onclick: move |e: Event<MouseData>| {
                                 e.stop_propagation();
                                 share_product(ProductKind::Set, &share_id, &share_name);
@@ -149,7 +157,7 @@ fn render_home_pack_card(p: HomePack) -> Element {
                     }
                 }
                 if has_discount {
-                    span { style: "position:absolute;top:52px;right:6px;z-index:2;font-size:11px;font-weight:700;background:#b388ff;color:#000;padding:3px 6px;box-shadow:2px 2px 0 #000;", "{discount as i32}% OFF" }
+                    span { style: "position:absolute;top:52px;right:6px;z-index:2;font-size:11px;font-weight:700;background:#b388ff;color:#000;padding:3px 6px;box-shadow:2px 2px 0 #000;", "{off_label}" }
                 }
                 // Bottom text overlay with a dark gradient so the white text is readable over any image.
                 div { style: "position:absolute;left:0;right:0;bottom:0;z-index:2;padding:10px 12px;background:linear-gradient(to top,rgba(0,0,0,0.85) 0%,rgba(0,0,0,0.5) 60%,transparent 100%);display:flex;flex-direction:column;justify-content:flex-end;min-height:0;",
@@ -268,7 +276,7 @@ pub fn HomeScreen() -> Element {
                             if crate::trios::packs::is_promo(&p.badge, p.discount_percent) { 0 } else { 1 }
                         });
                         let count = list.len();
-                        let packs_hdr = crate::ui::lang::localized("📦 Наборы", Some("📦 Packs"));
+                        let packs_hdr = t(crate::ui::lang::current_lang(), T_HOME_SETS_PACKS).to_string();
                         rsx! {
                             div { style: "padding:0 16px 8px;",
                                 h2 { style: "font-size:13px;font-weight:700;color:#b388ff;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;text-shadow:2px 2px 0 #000;",
@@ -319,6 +327,7 @@ pub fn HomeScreen() -> Element {
                         }
                     },
                     Some(Ok(_)) => {
+                        let no_sotd = t(crate::ui::lang::current_lang(), T_HOME_NO_SOTD).to_string();
                         rsx! {
                             div { style: "
                                 margin:0 16px 16px;
@@ -327,11 +336,13 @@ pub fn HomeScreen() -> Element {
                                 padding:20px;text-align:center;
                             ",
                                 p { style: "font-size:20px;margin-bottom:8px;", "🌟" }
-                                p { style: "font-size:15px;color:#888;", "No strain of the day yet" }
+                                p { style: "font-size:15px;color:#888;", "{no_sotd}" }
                             }
                         }
                     },
                     Some(Err(_)) | None => {
+                        let sotd_hdr = t(crate::ui::lang::current_lang(), T_HOME_SOTD).to_string();
+                        let loading = t(crate::ui::lang::current_lang(), T_HOME_LOADING).to_string();
                         rsx! {
                             div { style: "
                                 margin:0 16px 16px;
@@ -339,8 +350,8 @@ pub fn HomeScreen() -> Element {
                                 box-shadow:4px 4px 0 #000;
                                 padding:16px;min-height:100px;
                             ",
-                                div { style: "font-size:13px;font-weight:700;color:#ffe600;text-shadow:2px 2px 0 #000;margin-bottom:10px;", "⭐ Strain of the Day" }
-                                div { style: "font-size:15px;color:#888;", "Loading..." }
+                                div { style: "font-size:13px;font-weight:700;color:#ffe600;text-shadow:2px 2px 0 #000;margin-bottom:10px;", "{sotd_hdr}" }
+                                div { style: "font-size:15px;color:#888;", "{loading}" }
                             }
                         }
                     },
@@ -349,7 +360,7 @@ pub fn HomeScreen() -> Element {
 
             div { style: "padding:0 16px 16px;",
                 h2 { style: "font-size:13px;font-weight:700;color:#00e5ff;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;text-shadow:2px 2px 0 #000;",
-                    "Categories"
+                    {t(crate::ui::lang::current_lang(), T_HOME_CATEGORIES)}
                 }
                 div { style: "display:grid;grid-template-columns:repeat(3,1fr);gap:12px;",
                     Link { to: Route::Menu {},
@@ -379,7 +390,7 @@ pub fn HomeScreen() -> Element {
                             padding:14px 8px;text-align:center;cursor:pointer;
                         ",
                             div { style: "font-size:28px;margin-bottom:6px;", "🍷" }
-                            div { style: "font-size:13px;font-weight:700;color:#e8e8e8;", "Sommelier" }
+                            div { style: "font-size:13px;font-weight:700;color:#e8e8e8;", {t(crate::ui::lang::current_lang(), T_HOME_SOMMELIER)} }
                         }
                     }
                     Link { to: Route::Accessories {},
@@ -419,7 +430,7 @@ pub fn HomeScreen() -> Element {
                             padding:14px 8px;text-align:center;cursor:pointer;
                         ",
                             div { style: "font-size:28px;margin-bottom:6px;", "🎮" }
-                            div { style: "font-size:13px;font-weight:700;color:#e8e8e8;", "Game" }
+                            div { style: "font-size:13px;font-weight:700;color:#e8e8e8;", {t(crate::ui::lang::current_lang(), T_HOME_GAME)} }
                         }
                     }
                 }
@@ -427,7 +438,7 @@ pub fn HomeScreen() -> Element {
 
             div { style: "padding:0 16px 16px;",
                 h2 { style: "font-size:13px;font-weight:700;color:#b388ff;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;text-shadow:2px 2px 0 #000;",
-                    "🎯 Adventures"
+                    {t(crate::ui::lang::current_lang(), T_HOME_ADVENTURES)}
                 }
                 div { style: "display:grid;grid-template-columns:1fr 1fr;gap:12px;",
                     Link { to: Route::Quest { id: "daily".to_string() },
@@ -438,7 +449,7 @@ pub fn HomeScreen() -> Element {
                             padding:12px;text-align:center;cursor:pointer;
                         ",
                             div { style: "font-size:28px;margin-bottom:4px;", "🎯" }
-                            div { style: "font-size:13px;font-weight:700;color:#00e5ff;", "Daily Quest" }
+                            div { style: "font-size:13px;font-weight:700;color:#00e5ff;", {t(crate::ui::lang::current_lang(), T_HOME_DAILY_QUEST)} }
                         }
                     }
                     Link { to: Route::TreasureHunt {},
@@ -449,7 +460,7 @@ pub fn HomeScreen() -> Element {
                             padding:12px;text-align:center;cursor:pointer;
                         ",
                             div { style: "font-size:28px;margin-bottom:4px;", "🏴‍☠️" }
-                            div { style: "font-size:13px;font-weight:700;color:#ffe600;", "Treasure Hunt" }
+                            div { style: "font-size:13px;font-weight:700;color:#ffe600;", {t(crate::ui::lang::current_lang(), T_HOME_TREASURE_HUNT)} }
                         }
                     }
                     Link { to: Route::ArHunt {},
@@ -460,7 +471,7 @@ pub fn HomeScreen() -> Element {
                             padding:12px;text-align:center;cursor:pointer;
                         ",
                             div { style: "font-size:28px;margin-bottom:4px;", "🔮" }
-                            div { style: "font-size:13px;font-weight:700;color:#ff6b9d;", "AR Hunt" }
+                            div { style: "font-size:13px;font-weight:700;color:#ff6b9d;", {t(crate::ui::lang::current_lang(), T_HOME_AR_HUNT)} }
                         }
                     }
                     Link { to: Route::LocationQuest {},
@@ -471,7 +482,7 @@ pub fn HomeScreen() -> Element {
                             padding:12px;text-align:center;cursor:pointer;
                         ",
                             div { style: "font-size:28px;margin-bottom:4px;", "📍" }
-                            div { style: "font-size:13px;font-weight:700;color:#4ecdc4;", "Location Quest" }
+                            div { style: "font-size:13px;font-weight:700;color:#4ecdc4;", {t(crate::ui::lang::current_lang(), T_HOME_LOCATION_QUEST)} }
                         }
                     }
                 }
@@ -527,10 +538,11 @@ fn render_sotd_card(s: SotdStrain, mut cart: Signal<Cart>, add_to_cart_label: St
     let cat = s.category.as_deref().unwrap_or("Hybrid");
     let emoji = category_emoji(cat);
     let has_discount = discount > 0.0;
+    let lang = crate::ui::lang::current_lang();
     let discount_label = if has_discount {
-        format!("🔥 {}% OFF", discount as i32)
+        tf(lang, T_MENU_OFF, &[(discount as i32).to_string()])
     } else {
-        "⭐ SOTD".to_string()
+        t(lang, T_HOME_SOTD).to_string()
     };
     let unit_price = if has_discount {
         (price * (1.0 - discount / 100.0)).max(0.0)
@@ -540,7 +552,7 @@ fn render_sotd_card(s: SotdStrain, mut cart: Signal<Cart>, add_to_cart_label: St
     let display_price = format_price(unit_price);
     let thc_str = s
         .thc_percent
-        .map(|t| format!("THC {}%", t as i32))
+        .map(|t| tf(lang, T_MENU_THC, &[(t as i32).to_string()]))
         .unwrap_or_default();
     let badge_label = format!("{} {}", emoji, cat);
     let s_name = crate::ui::lang::localized(&s.name, s.name_en.as_deref());
@@ -562,7 +574,7 @@ fn render_sotd_card(s: SotdStrain, mut cart: Signal<Cart>, add_to_cart_label: St
         ",
             div { style: "display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;position:relative;",
                 h2 { style: "font-size:13px;font-weight:700;color:#fff;text-transform:uppercase;letter-spacing:1px;text-shadow:2px 2px 0 #000;",
-                    "⭐ Strain of the Day"
+                    {t(lang, T_HOME_SOTD)}
                 }
                 span { style: "
                     font-size:13px;font-weight:700;
@@ -582,7 +594,7 @@ fn render_sotd_card(s: SotdStrain, mut cart: Signal<Cart>, add_to_cart_label: St
                     if has_video {
                         button {
                             style: "width:44px;height:44px;border-radius:50%;background:rgba(0,0,0,0.45);border:2px solid #fff;color:#fff;font-size:16px;display:flex;align-items:center;justify-content:center;cursor:pointer;",
-                            "aria-label": "Смотреть видео",
+                            "aria-label": t(lang, T_HOME_WATCH_VIDEO),
                             onclick: move |_| show_video.set(true),
                             "▶️"
                         }

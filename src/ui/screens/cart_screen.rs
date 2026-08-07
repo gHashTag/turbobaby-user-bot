@@ -1,5 +1,11 @@
 // Cart Screen — Interactive with global Cart signal
-use crate::trios::i18n::{t, T_CART_BROWSE_MENU, T_CART_BROWSE_SETS, T_CART_EMPTY, T_CART_EMPTY_DESC, T_CART_TITLE, T_PLACE_ORDER};
+use crate::trios::i18n::{
+    t, tf,
+    T_CART_BACK_MENU, T_CART_BROWSE_MENU, T_CART_BROWSE_SETS, T_CART_CHECKOUT,
+    T_CART_DECREASE_QTY, T_CART_DELIVERY, T_CART_DELIVERY_FREE, T_CART_DINE_IN,
+    T_CART_EMPTY, T_CART_EMPTY_DESC, T_CART_ITEMS, T_CART_SUBTOTAL, T_CART_TAKEAWAY,
+    T_CART_TITLE, T_PLACE_ORDER, T_TOTAL,
+};
 use crate::ui::components::bottom_nav::BottomNav;
 use crate::ui::routes::Route;
 use crate::ui::state::{Cart, CartItem, CartItemType};
@@ -17,15 +23,17 @@ pub fn CartScreen() -> Element {
     let items = cart.read().items.clone();
     let total = cart.read().total;
     let item_count: u32 = items.iter().map(|i| i.quantity).sum();
-    let cart_title = t(crate::ui::lang::current_lang(), T_CART_TITLE);
-    let cart_empty = t(crate::ui::lang::current_lang(), T_CART_EMPTY);
-    let cart_empty_desc = t(crate::ui::lang::current_lang(), T_CART_EMPTY_DESC);
-    let browse_menu = t(crate::ui::lang::current_lang(), T_CART_BROWSE_MENU);
-    let browse_sets = t(crate::ui::lang::current_lang(), T_CART_BROWSE_SETS);
+    let lang = crate::ui::lang::current_lang();
+    let cart_title = t(lang, T_CART_TITLE);
+    let cart_empty = t(lang, T_CART_EMPTY);
+    let cart_empty_desc = t(lang, T_CART_EMPTY_DESC);
+    let browse_menu = t(lang, T_CART_BROWSE_MENU);
+    let browse_sets = t(lang, T_CART_BROWSE_SETS);
+    let items_label = tf(lang, T_CART_ITEMS, &[item_count.to_string()]);
     let tg = TelegramApp::init();
     let total_str = crate::trios::pricing::format_baht(total);
     if !items.is_empty() {
-        tg.set_main_button_text(&format!("{} — {}", t(crate::ui::lang::current_lang(), T_PLACE_ORDER), total_str));
+        tg.set_main_button_text(&format!("{} — {}", t(lang, T_PLACE_ORDER), total_str));
         tg.show_back_button();
     } else {
         tg.hide_main_button();
@@ -46,7 +54,7 @@ pub fn CartScreen() -> Element {
             div { style: "padding: 20px 16px 16px; text-align: center;",
                 h1 { style: "font-size: 24px; font-weight: 800; color: #39ff14; text-shadow: 3px 3px 0 #000, 0 0 10px rgba(57,255,20,0.5); letter-spacing: 2px;", "{cart_title}" }
                 if !items.is_empty() {
-                    p { style: "font-size: 15px; color: #8b8b9e; margin-top: 4px;", "{item_count} items" }
+                    p { style: "font-size: 15px; color: #8b8b9e; margin-top: 4px;", "{items_label}" }
                 }
             }
 
@@ -85,7 +93,7 @@ pub fn CartScreen() -> Element {
                         rsx! {
                             {
                                 items.into_iter().map(|item| {
-                                    cart_item_row(item)
+                                    cart_item_row(item, lang)
                                 })
                             }
 
@@ -96,15 +104,15 @@ pub fn CartScreen() -> Element {
                                 box-shadow: 4px 4px 0 #000; margin-top: 8px;
                             ",
                                 div { style: "display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 15px;",
-                                    span { style: "color: #8b8b9e;", "Subtotal:" }
+                                    span { style: "color: #8b8b9e;", "{t(lang, T_CART_SUBTOTAL)}" }
                                     span { "{format_price(total)}" }
                                 }
                                 div { style: "display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 15px;",
-                                    span { style: "color: #8b8b9e;", "Delivery:" }
-                                    span { style: "color: #39ff14;", "Free" }
+                                    span { style: "color: #8b8b9e;", "{t(lang, T_CART_DELIVERY)}" }
+                                    span { style: "color: #39ff14;", "{t(lang, T_CART_DELIVERY_FREE)}" }
                                 }
                                 div { style: "display: flex; justify-content: space-between; font-size: 15px; font-weight: 800; padding-top: 6px; border-top: 1px solid #2a2a4a; margin-top: 6px;",
-                                    span { "Total:" }
+                                    span { "{t(lang, T_TOTAL)}" }
                                     span { style: "font-size: 20px; font-weight: 800; color: #ffe600; text-shadow: 2px 2px 0 #000;", "{format_price(total)}" }
                                 }
                             }
@@ -118,7 +126,7 @@ pub fn CartScreen() -> Element {
                                         border: 4px solid #2a2a4a; border-radius: 0;
                                         cursor: pointer; box-shadow: 3px 3px 0 #000;
                                         transition: transform 0.1s, box-shadow 0.1s;
-                                    ", "← Menu" }
+                                    ", "{t(lang, T_CART_BACK_MENU)}" }
                                 }
                                 Link { to: Route::Checkout {},
                                     button { style: "
@@ -127,7 +135,7 @@ pub fn CartScreen() -> Element {
                                         border: 4px solid #2d9e0f; border-radius: 0;
                                         cursor: pointer; box-shadow: 3px 3px 0 #000;
                                         transition: transform 0.1s, box-shadow 0.1s;
-                                    ", "Checkout →" }
+                                    ", "{t(lang, T_CART_CHECKOUT)}" }
                                 }
                             }
                         }
@@ -140,7 +148,7 @@ pub fn CartScreen() -> Element {
     }
 }
 
-fn cart_item_row(item: CartItem) -> Element {
+fn cart_item_row(item: CartItem, lang: crate::trios::core::Lang) -> Element {
     let mut cart = use_context::<Signal<Cart>>();
     let item_id_for_minus = item.id.clone();
     let item_id_for_plus = item.id.clone();
@@ -195,7 +203,7 @@ fn cart_item_row(item: CartItem) -> Element {
                                             it.fulfillment = Some("dine_in".to_string());
                                         }
                                     },
-                                    "🍽 На месте"
+                                    "{t(lang, T_CART_DINE_IN)}"
                                 }
                                 button {
                                     style: "{take_style}",
@@ -205,7 +213,7 @@ fn cart_item_row(item: CartItem) -> Element {
                                             it.fulfillment = Some("takeaway".to_string());
                                         }
                                     },
-                                    "🥡 С собой"
+                                    "{t(lang, T_CART_TAKEAWAY)}"
                                 }
                             }
                         }
@@ -222,7 +230,7 @@ fn cart_item_row(item: CartItem) -> Element {
                         box-shadow: 3px 3px 0 #000;
                         transition: transform 0.1s, box-shadow 0.1s;
                     ",
-                    "aria-label": "Убавить количество",
+                    "aria-label": "{t(lang, T_CART_DECREASE_QTY)}",
                     onclick: move |_| {
                         let mut c = cart.write();
                         if let Some(item) = c.items.iter_mut().find(|i| i.id == item_id_for_minus) {

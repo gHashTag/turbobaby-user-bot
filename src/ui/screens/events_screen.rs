@@ -5,12 +5,16 @@
 // handling is wired.
 
 use crate::trios::i18n::{
-    t, T_BACK, T_EVENTS_ALREADY_BOOKED, T_EVENTS_BOOK, T_EVENTS_BOOKED, T_EVENTS_BOOK_FREE,
-    T_EVENTS_CAPACITY, T_EVENTS_DATE, T_EVENTS_ERROR, T_EVENTS_GALLERY, T_EVENTS_INSUFFICIENT_STARS,
-    T_EVENTS_LOADING, T_EVENTS_NO_EVENTS, T_EVENTS_PRICE, T_EVENTS_PRICE_STARS, T_EVENTS_SOLD_OUT,
-    T_EVENTS_SUBTITLE, T_EVENTS_TITLE, T_EVENTS_VIDEO, T_EVENTS_WEEKDAY_FRI, T_EVENTS_WEEKDAY_MON,
+    t, tf, T_BACK, T_EVENTS_ALREADY_BOOKED, T_EVENTS_BOOK, T_EVENTS_BOOKED, T_EVENTS_BOOK_FREE,
+    T_EVENTS_CANCEL, T_EVENTS_CAPACITY, T_EVENTS_DATE, T_EVENTS_ERROR, T_EVENTS_EVENT_NOT_FOUND,
+    T_EVENTS_FREE_BADGE, T_EVENTS_GALLERY, T_EVENTS_INSUFFICIENT_STARS, T_EVENTS_LOADING,
+    T_EVENTS_MY_BOOKINGS, T_EVENTS_NEXT_PHOTO, T_EVENTS_NO_BOOKINGS, T_EVENTS_NO_EVENTS,
+    T_EVENTS_OK, T_EVENTS_OPEN_DETAILS, T_EVENTS_PHOTO_N, T_EVENTS_PREV_PHOTO, T_EVENTS_PRICE,
+    T_EVENTS_PRICE_STARS, T_EVENTS_RETRY, T_EVENTS_SEAT, T_EVENTS_SEATS, T_EVENTS_SHARE_EVENT,
+    T_EVENTS_SOLD_OUT, T_EVENTS_SOLD_OUT_BADGE, T_EVENTS_SUBTITLE, T_EVENTS_TELEGRAM_REQUIRED,
+    T_EVENTS_TIME, T_EVENTS_TITLE, T_EVENTS_VIDEO, T_EVENTS_WEEKDAY_FRI, T_EVENTS_WEEKDAY_MON,
     T_EVENTS_WEEKDAY_SAT, T_EVENTS_WEEKDAY_SUN, T_EVENTS_WEEKDAY_THU, T_EVENTS_WEEKDAY_TUE,
-    T_EVENTS_WEEKDAY_WED,
+    T_EVENTS_WEEKDAY_WED, T_LOADING,
 };
 use crate::ui::api::context::api_base_url;
 use crate::ui::api::http::{
@@ -193,6 +197,9 @@ fn EventCard(props: EventCardProps) -> Element {
     } else {
         None
     };
+    let lang = crate::ui::lang::current_lang();
+    let time_line = start_label.as_ref().map(|label| tf(lang, T_EVENTS_TIME, &[label.clone()]));
+    let avail_label = avail.map(|a| tf(lang, T_EVENTS_SEATS, &[a.to_string()]));
 
     let share_id = ev.id.clone();
     let share_name = ev.display_title();
@@ -202,7 +209,7 @@ fn EventCard(props: EventCardProps) -> Element {
     rsx! {
         div {
             role: "button",
-            "aria-label": "Open event details",
+            "aria-label": t(lang, T_EVENTS_OPEN_DETAILS),
             style: "width:100%;min-height:300px;text-align:left;background:#1a1a2e;border:3px solid #2a2a4a;border-radius:12px;overflow:hidden;cursor:pointer;box-shadow:3px 3px 0 #000;position:relative;display:flex;flex-direction:column;",
             onclick: move |_| props.on_select.call(ev.clone()),
             // Full-card cover image like strain cards.
@@ -218,7 +225,7 @@ fn EventCard(props: EventCardProps) -> Element {
             // Share button floats above the image.
             button {
                 style: "position:absolute;top:8px;right:8px;z-index:2;background:rgba(0,0,0,0.5);border:2px solid #39ff14;color:#39ff14;border-radius:50%;font-size:18px;cursor:pointer;width:44px;height:44px;display:flex;align-items:center;justify-content:center;",
-                "aria-label": "Share event",
+                "aria-label": t(lang, T_EVENTS_SHARE_EVENT),
                 onclick: move |e| {
                     e.stop_propagation();
                     track_event("shared", "event");
@@ -231,20 +238,20 @@ fn EventCard(props: EventCardProps) -> Element {
                 div { style: "display:flex;justify-content:space-between;align-items:flex-start;",
                     div { style: "font-size:17px;font-weight:800;color:#fff;text-shadow:2px 2px 0 #000;", "{ev.display_title()}" }
                 }
-                if let Some(ref label) = start_label {
-                    div { style: "font-size:13px;color:#e8e8e8;text-shadow:1px 1px 0 #000;", "🕒 {label}" }
+                if let Some(ref line) = time_line {
+                    div { style: "font-size:13px;color:#e8e8e8;text-shadow:1px 1px 0 #000;", "{line}" }
                 }
                 if let Some(ref loc) = ev.location_text {
                     div { style: "font-size:12px;color:#b388ff;text-shadow:1px 1px 0 #000;", "📍 {loc}" }
                 }
                 div { style: "display:flex;gap:8px;flex-wrap:wrap;margin-top:4px;",
                     if ev.is_sold_out() {
-                        span { style: "font-size:10px;color:#ff4757;background:rgba(0,0,0,0.5);border:2px solid #ff4757;padding:2px 6px;", "SOLD OUT" }
-                    } else if let Some(a) = avail {
-                        span { style: "font-size:10px;color:#39ff14;background:rgba(0,0,0,0.5);border:2px solid #39ff14;padding:2px 6px;", "{a} seats" }
+                        span { style: "font-size:10px;color:#ff4757;background:rgba(0,0,0,0.5);border:2px solid #ff4757;padding:2px 6px;", {t(lang, T_EVENTS_SOLD_OUT_BADGE)} }
+                    } else if let Some(ref seats_line) = avail_label {
+                        span { style: "font-size:10px;color:#39ff14;background:rgba(0,0,0,0.5);border:2px solid #39ff14;padding:2px 6px;", "{seats_line}" }
                     }
                     if is_free {
-                        span { style: "font-size:10px;color:#39ff14;background:rgba(0,0,0,0.5);border:2px solid #39ff14;padding:2px 6px;", "FREE" }
+                        span { style: "font-size:10px;color:#39ff14;background:rgba(0,0,0,0.5);border:2px solid #39ff14;padding:2px 6px;", {t(lang, T_EVENTS_FREE_BADGE)} }
                     } else if let Some(ref p) = price_label {
                         span { style: "font-size:10px;color:#ffe600;background:rgba(0,0,0,0.5);border:2px solid #ffe600;padding:2px 6px;", "{p}" }
                     }
@@ -343,6 +350,7 @@ fn EventBookingModal(props: EventBookingModalProps) -> Element {
     let book_label = t(lang, T_EVENTS_BOOK).to_string();
     let sold_label = t(lang, T_EVENTS_SOLD_OUT).to_string();
     let started_label = t(lang, T_EVENTS_DATE).to_string();
+    let telegram_required = t(lang, T_EVENTS_TELEGRAM_REQUIRED).to_string();
     let book_button_text = if matches!(&*state.read(), BookingState::Loading) {
         "⏳".to_string()
     } else if ev.is_sold_out() {
@@ -350,7 +358,7 @@ fn EventBookingModal(props: EventBookingModalProps) -> Element {
     } else if has_started {
         started_label
     } else if props.telegram_id.is_none() {
-        "Telegram required".to_string()
+        telegram_required
     } else if has_stars_price {
         format!("{} ({} ⭐)", book_label, ev.price_stars.unwrap_or(0))
     } else {
@@ -416,9 +424,11 @@ fn EventBookingModal(props: EventBookingModalProps) -> Element {
         },
         BookingState::Done { seats } => {
             let booked = t(lang, T_EVENTS_BOOKED).to_string();
+            let seat_word = t(lang, T_EVENTS_SEAT).to_string();
+            let ok = t(lang, T_EVENTS_OK).to_string();
             rsx! {
                 div { style: "margin-top:20px;padding:14px;background:rgba(57,255,20,0.15);border:2px solid #39ff14;color:#39ff14;font-size:13px;text-align:center;",
-                    "✅ {booked} ({seats} seat)"
+                    "✅ {booked} ({seats} {seat_word})"
                 }
                 button {
                     style: "margin-top:12px;width:100%;padding:12px;background:#1a1a2e;color:#e8e8e8;border:2px solid #39ff14;font-size:13px;cursor:pointer;",
@@ -426,12 +436,13 @@ fn EventBookingModal(props: EventBookingModalProps) -> Element {
                         state.set(BookingState::Idle);
                         props.on_booked.call(());
                     },
-                    "OK"
+                    "{ok}"
                 }
             }
         }
         BookingState::Error(msg) => {
             let err_text = t(lang, T_EVENTS_ERROR).to_string();
+            let retry = t(lang, T_EVENTS_RETRY).to_string();
             rsx! {
                 div { style: "margin-top:20px;padding:12px;background:rgba(255,71,87,0.15);border:2px solid #ff4757;color:#ff4757;font-size:12px;",
                     "⚠ {err_text}: {msg}"
@@ -439,7 +450,7 @@ fn EventBookingModal(props: EventBookingModalProps) -> Element {
                 button {
                     style: "margin-top:12px;width:100%;padding:12px;background:#1a1a2e;color:#e8e8e8;border:2px solid #39ff14;font-size:13px;cursor:pointer;",
                     onclick: move |_| state.set(BookingState::Idle),
-                    "Retry"
+                    "{retry}"
                 }
             }
         }
@@ -498,7 +509,7 @@ fn EventBookingModal(props: EventBookingModalProps) -> Element {
                                     if has_many {
                                         button {
                                             style: "position:absolute;left:4px;top:50%;transform:translateY(-50%);width:32px;height:32px;background:rgba(0,0,0,0.6);color:#e8e8e8;border:none;border-radius:50%;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;",
-                                            "aria-label": "Previous photo",
+                                            "aria-label": t(lang, T_EVENTS_PREV_PHOTO),
                                             onclick: move |_| {
                                                 let next = selected_photo.read().saturating_sub(1);
                                                 selected_photo.set(next);
@@ -507,7 +518,7 @@ fn EventBookingModal(props: EventBookingModalProps) -> Element {
                                         }
                                         button {
                                             style: "position:absolute;right:4px;top:50%;transform:translateY(-50%);width:32px;height:32px;background:rgba(0,0,0,0.6);color:#e8e8e8;border:none;border-radius:50%;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;",
-                                            "aria-label": "Next photo",
+                                            "aria-label": t(lang, T_EVENTS_NEXT_PHOTO),
                                             onclick: move |_| {
                                                 let next = (*selected_photo.read() + 1).min(photo_count - 1);
                                                 selected_photo.set(next);
@@ -528,7 +539,7 @@ fn EventBookingModal(props: EventBookingModalProps) -> Element {
                                                 button {
                                                     key: "{i}",
                                                     style: if active { "width:8px;height:8px;border-radius:50%;border:none;background:#39ff14;cursor:pointer;" } else { "width:8px;height:8px;border-radius:50%;border:none;background:#2a2a4a;cursor:pointer;" },
-                                                    "aria-label": format!("Photo {}", i + 1),
+                                                    "aria-label": tf(lang, T_EVENTS_PHOTO_N, &[(i + 1).to_string()]),
                                                     onclick: move |_| selected_photo.set(i),
                                                 }
                                             }
@@ -696,13 +707,14 @@ pub fn EventsScreen() -> Element {
                     None => rsx! { div { style: "text-align:center;padding:40px 0;color:#888;font-size:12px;", "{loading}" } },
                     Some(Err(e)) => {
                         let err_msg = e.clone();
+                        let retry = t(lang, T_EVENTS_RETRY).to_string();
                         rsx! {
                             div { style: "text-align:center;padding:40px 0;",
                                 p { style: "color:#ff4757;font-size:12px;", "{err_msg}" }
                                 button {
                                     style: "margin-top:12px;padding:8px 16px;background:#1a1a2e;border:2px solid #39ff14;color:#39ff14;font-size:12px;cursor:pointer;",
                                     onclick: refresh,
-                                    "↻ Retry"
+                                    "↻ {retry}"
                                 }
                             }
                         }
@@ -739,7 +751,7 @@ pub fn EventDetailScreen(id: String) -> Element {
                     {
                         event.set(Some(e));
                     } else {
-                        error.set(Some("Event not found".to_string()));
+                        error.set(Some(t(crate::ui::lang::current_lang(), T_EVENTS_EVENT_NOT_FOUND).to_string()));
                     }
                 }
                 Ok((status, _)) => error.set(Some(format!("HTTP {status}"))),
@@ -753,10 +765,12 @@ pub fn EventDetailScreen(id: String) -> Element {
     let go_back = move |_| {
         nav.push(Route::Events {});
     };
+    let lang = crate::ui::lang::current_lang();
+    let loading_label = t(lang, T_LOADING).to_string();
     rsx! {
         div { style: "min-height:100vh;background:#0f0f1a;color:#e8e8e8;padding-bottom:80px;",
             if *loading.read() {
-                div { style: "text-align:center;padding:40px 0;color:#888;font-size:12px;", "Loading..." }
+                div { style: "text-align:center;padding:40px 0;color:#888;font-size:12px;", "{loading_label}" }
             } else if let Some(err) = error.read().clone() {
                 div { style: "text-align:center;padding:40px 0;color:#ff4757;font-size:12px;", "{err}" }
             } else if let Some(ev) = ev {
@@ -838,6 +852,10 @@ pub fn MyBookingsScreen() -> Element {
 
     let lang = crate::ui::lang::current_lang();
     let back_label = t(lang, T_BACK).to_string();
+    let my_bookings_title = t(lang, T_EVENTS_MY_BOOKINGS).to_string();
+    let loading_label = t(lang, T_LOADING).to_string();
+    let no_bookings = t(lang, T_EVENTS_NO_BOOKINGS).to_string();
+    let cancel_label = t(lang, T_EVENTS_CANCEL).to_string();
     let nav = use_navigator();
 
     let list = bookings.read().clone();
@@ -872,14 +890,14 @@ pub fn MyBookingsScreen() -> Element {
                     onclick: move |_| { nav.push(Route::Events {}); },
                     "←"
                 }
-                h1 { style: "font-size:20px;font-weight:800;color:#39ff14;text-shadow:2px 2px 0 #000;", "My bookings" }
+                h1 { style: "font-size:20px;font-weight:800;color:#39ff14;text-shadow:2px 2px 0 #000;", "{my_bookings_title}" }
             }
             if *loading.read() {
-                div { style: "text-align:center;padding:40px 0;color:#888;font-size:12px;", "Loading..." }
+                div { style: "text-align:center;padding:40px 0;color:#888;font-size:12px;", "{loading_label}" }
             } else if let Some(err) = error.read().clone() {
                 div { style: "text-align:center;padding:40px 0;color:#ff4757;font-size:12px;", "{err}" }
             } else if !has_bookings {
-                div { style: "text-align:center;padding:40px 0;color:#888;font-size:12px;", "No bookings yet" }
+                div { style: "text-align:center;padding:40px 0;color:#888;font-size:12px;", "{no_bookings}" }
             } else {
                 div { style: "padding:0 16px;display:flex;flex-direction:column;gap:10px;",
                     {
@@ -905,7 +923,7 @@ pub fn MyBookingsScreen() -> Element {
                                         button {
                                             style: "margin-top:6px;padding:8px 12px;background:#ff4757;color:#fff;border:none;border-radius:4px;font-size:12px;cursor:pointer;",
                                             onclick: move |_| cancel(bid.clone()),
-                                            "Cancel"
+                                            "{cancel_label}"
                                         }
                                     }
                                 }

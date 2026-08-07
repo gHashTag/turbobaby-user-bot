@@ -80,7 +80,7 @@ async fn get_profile(
     use sea_orm::{ConnectionTrait, DbBackend, Statement};
     let stmt = Statement::from_sql_and_values(
         DbBackend::Postgres,
-        "SELECT telegram_id, total_spent::float8 AS total_spent, bonus_balance::float8 AS bonus_balance, tier, referral_code, referred_by, referral_count, first_purchase_at, manager_telegram_id, is_blocked FROM loyalty_profiles WHERE telegram_id = $1",
+        "SELECT lp.telegram_id, lp.total_spent::float8 AS total_spent, lp.bonus_balance::float8 AS bonus_balance, lp.tier, lp.referral_code, lp.referred_by, lp.referral_count, lp.first_purchase_at, lp.manager_telegram_id, lp.is_blocked, COUNT(o.id)::int4 AS orders_count FROM loyalty_profiles lp LEFT JOIN orders o ON o.telegram_id = lp.telegram_id WHERE lp.telegram_id = $1 GROUP BY lp.telegram_id",
         [telegram_id.into()],
     );
     let row = state.db.orm.query_one(stmt).await.map_err(|e| {
@@ -112,6 +112,7 @@ async fn get_profile(
                 "first_purchase_at": r.try_get::<Option<chrono::DateTime<chrono::Utc>>>("", "first_purchase_at").ok().flatten(),
                 "manager_telegram_id": r.try_get::<Option<i64>>("", "manager_telegram_id").ok().flatten(),
                 "is_blocked": r.try_get::<bool>("", "is_blocked").unwrap_or(false),
+                "orders_count": r.try_get::<i32>("", "orders_count").unwrap_or(0),
             });
             Ok(Json(json!({ "profile": profile })))
         }

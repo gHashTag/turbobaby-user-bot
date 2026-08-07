@@ -316,7 +316,7 @@ pub fn calculate_cart_total(
 }
 
 /// Validate checkout data
-pub fn validate_checkout(name: &str, phone: &str, items: &[CartItem]) -> Result<()> {
+pub fn validate_checkout(name: &str, phone: &str, address: &str, items: &[CartItem]) -> Result<()> {
     if name.trim().is_empty() {
         return Err(Error::Validation("Name is required".to_string()));
     }
@@ -329,13 +329,19 @@ pub fn validate_checkout(name: &str, phone: &str, items: &[CartItem]) -> Result<
     if phone.trim().len() > 50 {
         return Err(Error::Validation("Phone is too long".to_string()));
     }
-    if items.is_empty() {
-        return Err(Error::Validation("Cart cannot be empty".to_string()));
-    }
     // Simple phone validation - at least 5 digits
     let digits: String = phone.chars().filter(|c| c.is_ascii_digit()).collect();
     if digits.len() < 5 {
         return Err(Error::Validation("Invalid phone number".to_string()));
+    }
+    if address.trim().is_empty() {
+        return Err(Error::Validation("Delivery address is required".to_string()));
+    }
+    if address.trim().len() > 500 {
+        return Err(Error::Validation("Delivery address is too long".to_string()));
+    }
+    if items.is_empty() {
+        return Err(Error::Validation("Cart cannot be empty".to_string()));
     }
     Ok(())
 }
@@ -551,30 +557,36 @@ mod tests {
     #[test]
     fn test_validate_checkout_valid() {
         let items = vec![CartItem::new_strain("strain1".to_string(), 1)];
-        assert!(validate_checkout("John", "12345", &items).is_ok());
+        assert!(validate_checkout("John", "12345", "Koh Phangan", &items).is_ok());
     }
 
     #[test]
     fn test_validate_checkout_empty_name() {
         let items = vec![CartItem::new_strain("strain1".to_string(), 1)];
-        assert!(validate_checkout("", "12345", &items).is_err());
+        assert!(validate_checkout("", "12345", "Koh Phangan", &items).is_err());
     }
 
     #[test]
     fn test_validate_checkout_empty_phone() {
         let items = vec![CartItem::new_strain("strain1".to_string(), 1)];
-        assert!(validate_checkout("John", "", &items).is_err());
+        assert!(validate_checkout("John", "", "Koh Phangan", &items).is_err());
+    }
+
+    #[test]
+    fn test_validate_checkout_empty_address() {
+        let items = vec![CartItem::new_strain("strain1".to_string(), 1)];
+        assert!(validate_checkout("John", "12345", "", &items).is_err());
     }
 
     #[test]
     fn test_validate_checkout_empty_cart() {
-        assert!(validate_checkout("John", "12345", &[]).is_err());
+        assert!(validate_checkout("John", "12345", "Koh Phangan", &[]).is_err());
     }
 
     #[test]
     fn test_validate_checkout_invalid_phone() {
         let items = vec![CartItem::new_strain("strain1".to_string(), 1)];
-        assert!(validate_checkout("John", "123", &items).is_err());
+        assert!(validate_checkout("John", "123", "Koh Phangan", &items).is_err());
     }
 
     #[test]

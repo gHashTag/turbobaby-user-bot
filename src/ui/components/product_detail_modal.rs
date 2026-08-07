@@ -13,8 +13,9 @@
 //! meta fields are optional because accessories/tea/sets have no THC etc.
 
 use crate::trios::i18n::{
-    t, T_LAB_CERTS, T_LAB_CERT_CBD, T_LAB_CERT_EMPTY, T_LAB_CERT_TESTED, T_LAB_CERT_THC,
-    T_REVIEWS_AVG, T_REVIEWS_EMPTY, T_REVIEWS_TITLE, T_SHARE,
+    t, T_ADD_TO_CART, T_LAB_CERTS, T_LAB_CERT_CBD, T_LAB_CERT_EMPTY, T_LAB_CERT_TESTED,
+    T_LAB_CERT_THC, T_MODAL_CERTIFICATE, T_MODAL_CLOSE, T_MODAL_DECREASE_QTY,
+    T_MODAL_INCREASE_QTY, T_REVIEWS_AVG, T_REVIEWS_EMPTY, T_REVIEWS_TITLE, T_SHARE,
 };
 use crate::ui::api::context::use_api_client;
 use crate::ui::api::types::LabCertificate;
@@ -175,7 +176,7 @@ fn render_variant_c_sections(
                                         style: "display:inline-block;margin-top:6px;font-size:13px;color:#b388ff;text-decoration:underline;",
                                         href: "{url}",
                                         target: "_blank",
-                                        "📄 Certificate"
+                                        "{t(current_lang(), T_MODAL_CERTIFICATE)}"
                                     }
                                 }
                             }
@@ -200,7 +201,7 @@ pub fn ProductDetailModal(props: ProductDetailModalProps) -> Element {
     let add_label = props
         .add_to_cart_label
         .clone()
-        .unwrap_or_else(|| "В корзину 🛒".to_string());
+        .unwrap_or_else(|| t(current_lang(), T_ADD_TO_CART).to_string());
     let share_label = props
         .share_label
         .clone()
@@ -262,7 +263,7 @@ pub fn ProductDetailModal(props: ProductDetailModalProps) -> Element {
                 // Close (✕) — top-right, always reachable while scrolling.
                 button {
                     style: "position:absolute;top:8px;right:8px;width:44px;height:44px;border-radius:50%;background:rgba(0,0,0,0.6);border:1px solid #fff;color:#fff;font-size:18px;line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:2;",
-                    "aria-label": "Закрыть",
+                    "aria-label": "{t(current_lang(), T_MODAL_CLOSE)}",
                     onclick: move |e: Event<MouseData>| { e.stop_propagation(); on_close.call(()); },
                     "✕"
                 }
@@ -339,7 +340,7 @@ pub fn ProductDetailModal(props: ProductDetailModalProps) -> Element {
                         div { style: "display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:10px;",
                             button {
                                 style: "width:44px;height:44px;font-size:22px;font-weight:800;background:#2a2a4a;color:#e8e8e8;border:4px solid #1a1a2e;box-shadow:2px 2px 0 #000;line-height:1;opacity:{min_op};cursor:{min_cur};",
-                                "aria-label": "Убавить количество",
+                                "aria-label": "{t(current_lang(), T_MODAL_DECREASE_QTY)}",
                                 disabled: at_min,
                                 onclick: move |e: Event<MouseData>| { e.stop_propagation(); qty.set(qty().saturating_sub(1).max(1)); },
                                 "−"
@@ -347,7 +348,7 @@ pub fn ProductDetailModal(props: ProductDetailModalProps) -> Element {
                             span { style: "font-size:20px;font-weight:800;color:#fff;min-width:40px;text-align:center;", "{cur}" }
                             button {
                                 style: "width:44px;height:44px;font-size:22px;font-weight:800;background:#2a2a4a;color:#e8e8e8;border:4px solid #1a1a2e;box-shadow:2px 2px 0 #000;line-height:1;opacity:{max_op};cursor:{max_cur};",
-                                "aria-label": "Добавить количество",
+                                "aria-label": "{t(current_lang(), T_MODAL_INCREASE_QTY)}",
                                 disabled: at_max,
                                 onclick: move |e: Event<MouseData>| { e.stop_propagation(); qty.set((qty() + 1).min(99)); },
                                 "+"
@@ -375,7 +376,7 @@ pub fn ProductDetailModal(props: ProductDetailModalProps) -> Element {
                     button {
                         style: "font-size:14px;font-weight:700;width:100%;padding:12px 20px;background:#2a2a4a;color:#e8e8e8;border:4px solid #1a1a2e;box-shadow:3px 3px 0 #000;cursor:pointer;",
                         onclick: move |e: Event<MouseData>| { e.stop_propagation(); on_close.call(()); },
-                        "Закрыть"
+                        "{t(current_lang(), T_MODAL_CLOSE)}"
                     }
 
                     {render_variant_c_sections(props.strain_id.clone(), &reviews_resource)}

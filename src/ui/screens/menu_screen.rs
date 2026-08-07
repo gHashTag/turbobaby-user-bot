@@ -1,4 +1,11 @@
-use crate::trios::i18n::{t, T_ADD_TO_CART, T_LOADING, T_MENU_DESC, T_MENU_TITLE, T_SEARCH_PLACEHOLDER};
+use crate::trios::i18n::{
+    t, tf, T_ADD_TO_CART, T_FILTER_ALL, T_LOADING, T_MENU_BEST_BADGE, T_MENU_CBD, T_MENU_DESC,
+    T_MENU_FILTER_HYBRID, T_MENU_FILTER_INDICA, T_MENU_FILTER_SATIVA, T_MENU_FLAVOR_PREFIX,
+    T_MENU_NEW_ARRIVALS, T_MENU_NEW_BADGE, T_MENU_NO_RESULTS, T_MENU_PER_GRAM, T_MENU_PRICE_REQUEST,
+    T_MENU_SALE_BADGE, T_MENU_SOLD_OUT, T_MENU_SOTD_BADGE, T_MENU_SOTD_HERO, T_MENU_SORT_NAME,
+    T_MENU_SORT_PRICE_ASC, T_MENU_SORT_PRICE_DESC, T_MENU_SORT_THC, T_MENU_SORT_TOP, T_MENU_THC,
+    T_MENU_TITLE, T_SEARCH_PLACEHOLDER,
+};
 use crate::ui::api::context::api_base_url;
 use crate::ui::components::bottom_nav::BottomNav;
 use crate::ui::components::card_media::CardMedia;
@@ -203,6 +210,8 @@ pub fn MenuScreen() -> Element {
         }
     });
 
+    let lang = crate::ui::lang::current_lang();
+
     rsx! {
         div { style: "min-height:100vh;background:#0f0f1a;color:#e8e8e8;padding-bottom:80px;",
 
@@ -229,7 +238,7 @@ pub fn MenuScreen() -> Element {
             div { style: "padding:0 16px 12px;",
                 input {
                     r#type: "text",
-                    placeholder: "{t(crate::ui::lang::current_lang(), T_SEARCH_PLACEHOLDER)}",
+                    placeholder: "{t(lang, T_SEARCH_PLACEHOLDER)}",
                     value: "{search_query()}",
                     style: "
                         width:100%;box-sizing:border-box;
@@ -245,22 +254,22 @@ pub fn MenuScreen() -> Element {
                 button {
                     style: filter_tab_style(active_filter() == "All"),
                     onclick: move |_| active_filter.set("All".to_string()),
-                    "All"
+                    {t(lang, T_FILTER_ALL)}
                 }
                 button {
                     style: filter_tab_style(active_filter() == "Sativa"),
                     onclick: move |_| active_filter.set("Sativa".to_string()),
-                    "☀️ Sativa"
+                    {t(lang, T_MENU_FILTER_SATIVA)}
                 }
                 button {
                     style: filter_tab_style(active_filter() == "Indica"),
                     onclick: move |_| active_filter.set("Indica".to_string()),
-                    "🌙 Indica"
+                    {t(lang, T_MENU_FILTER_INDICA)}
                 }
                 button {
                     style: filter_tab_style(active_filter() == "Hybrid"),
                     onclick: move |_| active_filter.set("Hybrid".to_string()),
-                    "⚖️ Hybrid"
+                    {t(lang, T_MENU_FILTER_HYBRID)}
                 }
             }
 
@@ -268,27 +277,27 @@ pub fn MenuScreen() -> Element {
                 button {
                     style: filter_tab_style(active_sort() == "default"),
                     onclick: move |_| active_sort.set("default".to_string()),
-                    "✨ Top"
+                    {t(lang, T_MENU_SORT_TOP)}
                 }
                 button {
                     style: filter_tab_style(active_sort() == "price-asc"),
                     onclick: move |_| active_sort.set("price-asc".to_string()),
-                    "💰 ↑"
+                    {t(lang, T_MENU_SORT_PRICE_ASC)}
                 }
                 button {
                     style: filter_tab_style(active_sort() == "price-desc"),
                     onclick: move |_| active_sort.set("price-desc".to_string()),
-                    "💰 ↓"
+                    {t(lang, T_MENU_SORT_PRICE_DESC)}
                 }
                 button {
                     style: filter_tab_style(active_sort() == "name"),
                     onclick: move |_| active_sort.set("name".to_string()),
-                    "A–Z"
+                    {t(lang, T_MENU_SORT_NAME)}
                 }
                 button {
                     style: filter_tab_style(active_sort() == "thc"),
                     onclick: move |_| active_sort.set("thc".to_string()),
-                    "🔥 THC"
+                    {t(lang, T_MENU_SORT_THC)}
                 }
             }
 
@@ -334,7 +343,7 @@ pub fn MenuScreen() -> Element {
                             rsx! {
                                 div { style: "text-align:center;padding:48px 16px;",
                                     p { style: "font-size:20px;margin-bottom:12px;", "🔍" }
-                                    p { style: "font-size:15px;color:#888;", "No {f} strains found" }
+                                    p { style: "font-size:15px;color:#888;", {tf(lang, T_MENU_NO_RESULTS, &[f])} }
                                 }
                             }
                         } else {
@@ -370,13 +379,13 @@ pub fn MenuScreen() -> Element {
                                         div { key: "hero-sotd",
                                             style: "padding:8px 16px 4px;",
                                             div { style: "font-size:13px;font-weight:800;color:#ffe600;text-shadow:2px 2px 0 #000;letter-spacing:1px;margin-bottom:8px;",
-                                                "🔥 STRAIN OF THE DAY"
+                                                {t(lang, T_MENU_SOTD_HERO)}
                                             }
                                             div { key: "{_sid}",
                                                 style: "max-width:380px;margin:0 auto;",
                                                 {
                                                     let s_select = s.clone();
-                                                    render_strain_card(s, cart, move || selected_strain.set(Some(s_select.clone())), move |url| selected_strain_video.set(Some(url)))
+                                                    render_strain_card(s, cart, move || selected_strain.set(Some(s_select.clone())), move |url| selected_strain_video.set(Some(url)), lang)
                                                 }
                                             }
                                         }
@@ -387,12 +396,12 @@ pub fn MenuScreen() -> Element {
                                     div { key: "hero-new",
                                         style: "padding:12px 16px 4px;",
                                         div { style: "font-size:13px;font-weight:800;color:#00e5ff;text-shadow:2px 2px 0 #000;letter-spacing:1px;margin-bottom:8px;",
-                                            "🆕 NEW ARRIVALS"
+                                            {t(lang, T_MENU_NEW_ARRIVALS)}
                                         }
                                         div { style: "display:grid;grid-template-columns:1fr 1fr;gap:12px;",
                                             {new_arrivals.into_iter().map(move |s| {
                                                 let s_select = s.clone();
-                                                render_strain_card(s, cart, move || selected_strain.set(Some(s_select.clone())), move |url| selected_strain_video.set(Some(url)))
+                                                render_strain_card(s, cart, move || selected_strain.set(Some(s_select.clone())), move |url| selected_strain_video.set(Some(url)), lang)
                                             })}
                                         }
                                     }
@@ -401,7 +410,7 @@ pub fn MenuScreen() -> Element {
                                 div { style: "display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:8px 16px 0;",
                                     {rest.into_iter().map(move |s| {
                                         let s_select = s.clone();
-                                        render_strain_card(s, cart, move || selected_strain.set(Some(s_select.clone())), move |url| selected_strain_video.set(Some(url)))
+                                        render_strain_card(s, cart, move || selected_strain.set(Some(s_select.clone())), move |url| selected_strain_video.set(Some(url)), lang)
                                     })}
                                 }
                             }
@@ -441,8 +450,14 @@ pub fn MenuScreen() -> Element {
                 let cat = strain.category.as_deref().unwrap_or("Hybrid");
                 let emoji = category_emoji(cat);
                 let badge_label = format!("{} {}", emoji, cat);
-                let thc_str = strain.thc_percent.map(|t| format!("THC {:.0}%", t)).unwrap_or_default();
-                let cbd_str = strain.cbd_percent.map(|c| format!("CBD {:.1}%", c)).unwrap_or_default();
+                let thc_str = strain
+                    .thc_percent
+                    .map(|t| tf(lang, T_MENU_THC, &[t.round().to_string()]))
+                    .unwrap_or_default();
+                let cbd_str = strain
+                    .cbd_percent
+                    .map(|c| tf(lang, T_MENU_CBD, &[c.to_string()]))
+                    .unwrap_or_default();
                 let effect_str = crate::ui::lang::localized(
                     &strain.effect.clone().unwrap_or_default(),
                     strain.effect_en.as_deref(),
@@ -484,7 +499,7 @@ pub fn MenuScreen() -> Element {
                         cbd: (!cbd_str.is_empty()).then(|| cbd_str),
                         effect: (!effect_str.is_empty()).then(|| effect_str),
                         flavor: (!flavor_str.is_empty()).then(|| flavor_str),
-                        price_line: has_real_price.then(|| format!("{}/g", crate::trios::pricing::format_baht(effective_price))),
+                        price_line: has_real_price.then(|| format!("{}{}", crate::trios::pricing::format_baht(effective_price), t(lang, T_MENU_PER_GRAM))),
                         can_add: avail,
                         add_to_cart_label: Some(format!("{add_label} 🛒")),
                         strain_id: Some(strain.id.clone()),
@@ -520,6 +535,7 @@ fn render_strain_card<S, V>(
     mut cart: Signal<Cart>,
     mut on_select: S,
     mut on_video: V,
+    lang: crate::trios::core::Lang,
 ) -> Element
 where
     S: FnMut() + 'static,
@@ -591,11 +607,11 @@ where
 
     let thc_str = strain
         .thc_percent
-        .map(|t| format!("THC {:.0}%", t))
+        .map(|t| tf(lang, T_MENU_THC, &[t.round().to_string()]))
         .unwrap_or_default();
     let cbd_str = strain
         .cbd_percent
-        .map(|c| format!("CBD {:.1}%", c))
+        .map(|c| tf(lang, T_MENU_CBD, &[c.to_string()]))
         .unwrap_or_default();
     let effect_str = crate::ui::lang::localized(
         &strain.effect.clone().unwrap_or_default(),
@@ -642,25 +658,25 @@ where
                         span { style: "
                             font-size:13px;font-weight:700;background:#ffe600;color:#000;
                             padding:4px 8px;box-shadow:2px 2px 0 #000;
-                        ", "⭐ SOTD" }
+                        ", {t(lang, T_MENU_SOTD_BADGE)} }
                     })}
                     {new_live.then(|| rsx! {
                         span { style: "
                             font-size:13px;font-weight:700;background:#00e5ff;color:#000;
                             padding:4px 8px;box-shadow:2px 2px 0 #000;
-                        ", "🆕 NEW" }
+                        ", {t(lang, T_MENU_NEW_BADGE)} }
                     })}
                     {is_best.then(|| rsx! {
                         span { style: "
                             font-size:13px;font-weight:700;background:#ff9d00;color:#000;
                             padding:4px 8px;box-shadow:2px 2px 0 #000;
-                        ", "⭐ BEST" }
+                        ", {t(lang, T_MENU_BEST_BADGE)} }
                     })}
                     {sale_live.then(|| rsx! {
                         span { style: "
                             font-size:13px;font-weight:700;background:#ff4757;color:#fff;
                             padding:4px 8px;box-shadow:2px 2px 0 #000;
-                        ", "🔥 SALE" }
+                        ", {t(lang, T_MENU_SALE_BADGE)} }
                     })}
                 }
             }
@@ -684,14 +700,14 @@ where
                 })}
                 {(!flavor_str.is_empty()).then(|| rsx! {
                     div { style: "font-size:13px;color:#888;margin-bottom:8px;line-height:1.35;",
-                        "🍃 {flavor_str}"
+                        {tf(lang, T_MENU_FLAVOR_PREFIX, &[flavor_str.clone()])}
                     }
                 })}
                 div { style: "display:flex;gap:6px;align-items:baseline;margin-bottom:6px;",
                     {if has_real_price {
                         rsx! {
                             span { style: "font-size:20px;font-weight:800;color:#ffe600;text-shadow:2px 2px 0 #000;", "{display_price}" }
-                            span { style: "font-size:13px;color:#888;", "/g" }
+                            span { style: "font-size:13px;color:#888;", {t(lang, T_MENU_PER_GRAM)} }
                             {has_discount.then(|| rsx! {
                                 span { style: "font-size:13px;color:#888;text-decoration:line-through;margin-left:4px;",
                                     "{original_price}"
@@ -700,7 +716,7 @@ where
                         }
                     } else {
                         rsx! {
-                            span { style: "font-size:13px;color:#888;font-style:italic;", "Price on request" }
+                            span { style: "font-size:13px;color:#888;font-style:italic;", {t(lang, T_MENU_PRICE_REQUEST)} }
                         }
                     }}
                 }
@@ -748,7 +764,7 @@ where
                             border:4px solid #2a2a4a;
                             box-shadow:3px 3px 0 #000;
                             cursor:not-allowed;
-                        ", "Sold Out" }
+                        ", {t(lang, T_MENU_SOLD_OUT)} }
                     }
                 }}
             }

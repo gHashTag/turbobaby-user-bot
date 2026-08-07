@@ -1,12 +1,21 @@
 use crate::trios::core::Lang;
-use crate::trios::i18n::{t, T_PROFILE_TITLE};
+use crate::trios::i18n::{
+    t, tf,
+    T_PROFILE_BONUS, T_PROFILE_CASHBACK_LABEL, T_PROFILE_CONTACTS, T_PROFILE_COPY,
+    T_PROFILE_COPY_LINK, T_PROFILE_EARN_PER_REF, T_PROFILE_FRIENDS_INVITED,
+    T_PROFILE_MEMBERSHIP, T_PROFILE_MORE_TO_UNLOCK, T_PROFILE_MY_GARDEN, T_PROFILE_MY_ORDERS,
+    T_PROFILE_OPEN_MAP, T_PROFILE_PROGRESS, T_PROFILE_QR_CODE, T_PROFILE_QUICK_ACTIONS,
+    T_PROFILE_REFERRAL_LINK, T_PROFILE_REFERRAL_PROGRAM, T_PROFILE_SHARE, T_PROFILE_SPENT,
+    T_PROFILE_STARS, T_PROFILE_TIER_BENEFITS, T_PROFILE_TITLE, T_PROFILE_QUESTS,
+    T_PROFILE_INVITED,
+};
 use crate::ui::api::context::api_base_url;
 use crate::ui::assets;
 use crate::ui::components::bottom_nav::BottomNav;
 use crate::ui::lang::{current_lang, set_app_lang};
 use crate::ui::routes::Route;
 use crate::ui::state::Cart;
-use crate::ui::telegram::{use_telegram_id, use_telegram_init_data};
+use crate::ui::telegram::{use_telegram_id, use_telegram_init_data, TelegramApp};
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use dioxus::prelude::*;
 use qrcode::QrCode;
@@ -25,6 +34,7 @@ struct LoyaltyProfileData {
     bonus_balance: Option<f64>,
     referral_code: Option<String>,
     referral_count: Option<i32>,
+    orders_count: Option<i32>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -178,20 +188,20 @@ pub fn ProfileScreen() -> Element {
         .as_ref()
         .and_then(|d| d.tier.as_deref())
         .map(Tier::from_str)
-        .unwrap_or(Tier::Silver);
+        .unwrap_or(Tier::Starter);
 
     let total_spent = loyalty_data
         .as_ref()
         .and_then(|d| d.total_spent)
         .filter(|v| v.is_finite())
-        .unwrap_or(750.0)
+        .unwrap_or(0.0)
         .max(0.0);
 
     let bonus_balance = loyalty_data
         .as_ref()
         .and_then(|d| d.bonus_balance)
         .filter(|v| v.is_finite())
-        .unwrap_or(150.0)
+        .unwrap_or(0.0)
         .max(0.0);
 
     // Single source of truth for the ฿ stat (was an inline `as i32` narrowing).
@@ -212,11 +222,12 @@ pub fn ProfileScreen() -> Element {
     let referral_count = loyalty_data
         .as_ref()
         .and_then(|d| d.referral_count)
-        .unwrap_or(3);
+        .unwrap_or(0);
 
-    // Orders count would need to come from orders API endpoint
-    // For now, using a default value
-    let orders_count = 24;
+    let orders_count = loyalty_data
+        .as_ref()
+        .and_then(|d| d.orders_count)
+        .unwrap_or(0);
 
     let next_tier = current_tier.next();
     let progress_pct = if let Some(next) = next_tier {
@@ -231,7 +242,8 @@ pub fn ProfileScreen() -> Element {
     };
     let remaining = next_tier.map(|t| (t.threshold() - total_spent).max(0.0));
 
-    let profile_title = t(crate::ui::lang::current_lang(), T_PROFILE_TITLE);
+    let lang = crate::ui::lang::current_lang();
+    let profile_title = t(lang, T_PROFILE_TITLE);
 
     rsx! {
         div { style: "
@@ -242,7 +254,7 @@ pub fn ProfileScreen() -> Element {
         ",
             div { style: "padding: 20px 16px 16px; text-align: center;",
                 h1 { style: "font-size: 24px; font-weight: 800; color: #39ff14; text-shadow: 3px 3px 0 #000, 0 0 10px rgba(57,255,20,0.5); letter-spacing: 2px;", "{profile_title}" }
-                p { style: "font-size: 13px; color: #8b8b9e; margin-top: 4px;", "Your membership status" }
+                p { style: "font-size: 13px; color: #8b8b9e; margin-top: 4px;", "{t(lang, T_PROFILE_MEMBERSHIP)}" }
             }
 
             // Tier strip — all 4 tiers
@@ -304,7 +316,8 @@ pub fn ProfileScreen() -> Element {
 
             // QR Code Card
             {
-                let qr_value = format!("https://t.me/Woody_WeedPecker_bot?start=ref_{}", referral_code);
+                let bot_user = TelegramApp::init().bot_username().unwrap_or_else(|| "Woody_WeedPecker_bot".to_string());
+                let qr_value = format!("https://t.me/{bot_user}?start=ref_{referral_code}");
                 let qr_data_uri = QrCode::new(qr_value.as_bytes())
                     .ok()
                     .map(|code| {
@@ -319,7 +332,7 @@ pub fn ProfileScreen() -> Element {
                     })
                     .unwrap_or_default();
                 let _qr_title = t(crate::ui::lang::current_lang(), T_PROFILE_TITLE);
-                let ref_link = format!("https://t.me/Woody_WeedPecker_bot?start=ref_{}", referral_code);
+                let ref_link = format!("https://t.me/{bot_user}?start=ref_{referral_code}");
                 let ref_link_copy = ref_link.clone();
                 let ref_link_share = ref_link.clone();
                 rsx! {
@@ -340,14 +353,14 @@ pub fn ProfileScreen() -> Element {
                             img {
                                 src: "{qr_data_uri}",
                                 style: "width: 200px; height: 200px; display: block;",
-                                alt: "Referral QR"
+                                alt: "{t(lang, T_PROFILE_QR_CODE)}"
                             }
                         }
                         div { style: "
                             font-size: 14px; font-weight: 800; color: #39ff14;
                             margin-top: 16px; margin-bottom: 16px;
                             text-shadow: 2px 2px 0 #000;
-                        ", "Your QR Code" }
+                        ", "{t(lang, T_PROFILE_QR_CODE)}" }
                         // Action buttons — Copy + Share
                         div { style: "display: flex; gap: 10px; margin-top: 16px;",
                             button {
@@ -365,7 +378,7 @@ pub fn ProfileScreen() -> Element {
                                             .write_text(&format!("🎁 Get bonus at Woody Weed!\n{}", ref_link_copy));
                                     });
                                 },
-                                "Copy Link"
+                                "{t(lang, T_PROFILE_COPY_LINK)}"
                             }
                             button {
                                 style: "
@@ -384,12 +397,12 @@ pub fn ProfileScreen() -> Element {
                                     );
                                     let _ = web_sys::window().and_then(|w| w.open_with_url_and_target(&share_url, "_blank").ok());
                                 },
-                                "Share"
+                                "{t(lang, T_PROFILE_SHARE)}"
                             }
                         }
                         div { style: "
                             font-size: 13px; color: #8b8b9e; margin-top: 14px;
-                        ", "👥 {referral_count} friends invited" }
+                        ", "{tf(lang, T_PROFILE_FRIENDS_INVITED, &[referral_count.to_string()])}" }
                     }
                 }
             }
@@ -398,19 +411,19 @@ pub fn ProfileScreen() -> Element {
             div { style: "display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; padding: 0 16px 16px;",
                 div { style: "text-align: center; padding: 10px 4px; background: #16213e; border: 4px solid #2a2a4a; border-radius: 0; box-shadow: 4px 4px 0 #000;",
                     div { style: "font-size: 20px; font-weight: 800; color: {current_tier.color()}; text-shadow: 2px 2px 0 #000; margin-bottom: 4px;", "{total_spent_str}" }
-                    div { style: "font-size: 13px; color: #8b8b9e;", "SPENT" }
+                    div { style: "font-size: 13px; color: #8b8b9e;", "{t(lang, T_PROFILE_SPENT)}" }
                 }
                 div { style: "text-align: center; padding: 10px 4px; background: #16213e; border: 4px solid #2a2a4a; border-radius: 0; box-shadow: 4px 4px 0 #000;",
                     div { style: "font-size: 20px; font-weight: 800; color: #39ff14; text-shadow: 2px 2px 0 #000; margin-bottom: 4px;", "B{bonus_balance as i32}" }
-                    div { style: "font-size: 13px; color: #8b8b9e;", "BONUS" }
+                    div { style: "font-size: 13px; color: #8b8b9e;", "{t(lang, T_PROFILE_BONUS)}" }
                 }
                 div { style: "text-align: center; padding: 10px 4px; background: #16213e; border: 4px solid #2a2a4a; border-radius: 0; box-shadow: 4px 4px 0 #000;",
                     div { style: "font-size: 20px; font-weight: 800; color: #7dd3fc; text-shadow: 2px 2px 0 #000; margin-bottom: 4px;", "⭐{stars_balance}" }
-                    div { style: "font-size: 13px; color: #8b8b9e;", "STARS" }
+                    div { style: "font-size: 13px; color: #8b8b9e;", "{t(lang, T_PROFILE_STARS)}" }
                 }
                 div { style: "text-align: center; padding: 10px 4px; background: #16213e; border: 4px solid #2a2a4a; border-radius: 0; box-shadow: 4px 4px 0 #000;",
                     div { style: "font-size: 20px; font-weight: 800; color: #ffe600; text-shadow: 2px 2px 0 #000; margin-bottom: 4px;", "{cashback_pct as i32}%" }
-                    div { style: "font-size: 13px; color: #8b8b9e;", "CASHBACK" }
+                    div { style: "font-size: 13px; color: #8b8b9e;", "{t(lang, T_PROFILE_CASHBACK_LABEL)}" }
                 }
             }
 
@@ -423,7 +436,7 @@ pub fn ProfileScreen() -> Element {
                         box-shadow: 4px 4px 0 #000;
                     ",
                         div { style: "display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 6px;",
-                            span { style: "color: #8b8b9e;", "Progress to {next.label()}" }
+                            span { style: "color: #8b8b9e;", "{tf(lang, T_PROFILE_PROGRESS, &[next.label().to_string()])}" }
                             span { style: "color: {next.color()};", "{progress_pct}%" }
                         }
                         div { style: "height: 8px; background: rgba(0,0,0,0.4); border-radius: 0; overflow: hidden;",
@@ -434,7 +447,7 @@ pub fn ProfileScreen() -> Element {
                                 let rem_str = crate::trios::pricing::format_baht(rem);
                                 rsx! {
                                     div { style: "font-size: 13px; color: #8b8b9e; margin-top: 6px; text-align: center;",
-                                        "{rem_str} more to unlock {next.label()}"
+                                        "{tf(lang, T_PROFILE_MORE_TO_UNLOCK, &[rem_str, next.label().to_string()])}"
                                     }
                                 }
                             }
@@ -450,13 +463,18 @@ pub fn ProfileScreen() -> Element {
                 border-radius: 0; padding: 12px;
                 box-shadow: 4px 4px 0 #000;
             ",
-                div { style: "font-size: 13px; font-weight: 700; color: #00e5ff; text-transform: uppercase; letter-spacing: 1px; text-shadow: 2px 2px 0 #000; margin-bottom: 8px;", "🔗 Referral Link" }
+                div { style: "font-size: 13px; font-weight: 700; color: #00e5ff; text-transform: uppercase; letter-spacing: 1px; text-shadow: 2px 2px 0 #000; margin-bottom: 8px;", "{t(lang, T_PROFILE_REFERRAL_LINK)}" }
                 div { style: "
                     display: flex; gap: 6px; align-items: center;
                     background: #0f0f1a; border: 4px solid #2a2a4a;
                     border-radius: 0; padding: 6px 8px; margin-bottom: 8px;
                 ",
-                    span { style: "font-size: 15px; color: #39ff14; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;", "t.me/Woody_WeedPecker_bot?start=ref_{referral_code}" }
+                    {
+                        let bot_user2 = TelegramApp::init().bot_username().unwrap_or_else(|| "Woody_WeedPecker_bot".to_string());
+                        rsx! {
+                            span { style: "font-size: 15px; color: #39ff14; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;", "t.me/{bot_user2}?start=ref_{referral_code}" }
+                        }
+                    }
                     button {
                         style: "
                             font-size: 13px; padding: 4px 8px;
@@ -465,23 +483,24 @@ pub fn ProfileScreen() -> Element {
                             box-shadow: 3px 3px 0 #000;
                         ",
                         onclick: move |_| {
+                            let bot_user = TelegramApp::init().bot_username().unwrap_or_else(|| "Woody_WeedPecker_bot".to_string());
                             let _ = web_sys::window().map(|w| {
                                 let _ = w.navigator().clipboard()
-                                    .write_text(&format!("https://t.me/Woody_WeedPecker_bot?start=ref_{}", referral_code));
+                                    .write_text(&format!("https://t.me/{bot_user}?start=ref_{referral_code}"));
                             });
                         },
-                        "Copy"
+                        "{t(lang, T_PROFILE_COPY)}"
                     }
                 }
                 div { style: "display: flex; gap: 12px; font-size: 13px;",
-                    span { style: "color: #8b8b9e;", "👥 {referral_count} invited" }
-                    span { style: "color: #39ff14;", "Earn ฿100 per referral" }
+                    span { style: "color: #8b8b9e;", "{tf(lang, T_PROFILE_INVITED, &[referral_count.to_string()])}" }
+                    span { style: "color: #39ff14;", "{t(lang, T_PROFILE_EARN_PER_REF)}" }
                 }
             }
 
             // Quick actions
             div { style: "padding: 0 16px;",
-                div { style: "font-size: 13px; font-weight: 700; color: #00e5ff; text-transform: uppercase; letter-spacing: 1px; text-shadow: 2px 2px 0 #000; margin-bottom: 10px;", "Quick Actions" }
+                div { style: "font-size: 13px; font-weight: 700; color: #00e5ff; text-transform: uppercase; letter-spacing: 1px; text-shadow: 2px 2px 0 #000; margin-bottom: 10px;", "{t(lang, T_PROFILE_QUICK_ACTIONS)}" }
                 Link { to: Route::Orders {},
                     div { style: "
                         background: #16213e; border: 4px solid #2a2a4a;
@@ -491,7 +510,7 @@ pub fn ProfileScreen() -> Element {
                     ",
                         div { style: "display: flex; align-items: center; gap: 10px;",
                             span { style: "font-size: 14px;", "📋" }
-                            span { style: "font-size: 15px;", "My Orders" }
+                            span { style: "font-size: 15px;", "{t(lang, T_PROFILE_MY_ORDERS)}" }
                             span { style: "font-size: 13px; color: #8b8b9e;", "({orders_count})" }
                         }
                         span { style: "font-size: 15px; color: #8b8b9e;", "→" }
@@ -506,7 +525,7 @@ pub fn ProfileScreen() -> Element {
                     ",
                         div { style: "display: flex; align-items: center; gap: 10px;",
                             span { style: "font-size: 14px;", "🌱" }
-                            span { style: "font-size: 15px;", "My Garden" }
+                            span { style: "font-size: 15px;", "{t(lang, T_PROFILE_MY_GARDEN)}" }
                         }
                         span { style: "font-size: 15px; color: #8b8b9e;", "→" }
                     }
@@ -520,7 +539,7 @@ pub fn ProfileScreen() -> Element {
                     ",
                         div { style: "display: flex; align-items: center; gap: 10px;",
                             span { style: "font-size: 14px;", "🎯" }
-                            span { style: "font-size: 15px;", "Quests" }
+                            span { style: "font-size: 15px;", "{t(lang, T_PROFILE_QUESTS)}" }
                         }
                         span { style: "font-size: 15px; color: #8b8b9e;", "→" }
                     }
@@ -534,7 +553,7 @@ pub fn ProfileScreen() -> Element {
                     ",
                         div { style: "display: flex; align-items: center; gap: 10px;",
                             span { style: "font-size: 14px;", "🔗" }
-                            span { style: "font-size: 15px;", "Referral Program" }
+                            span { style: "font-size: 15px;", "{t(lang, T_PROFILE_REFERRAL_PROGRAM)}" }
                         }
                         span { style: "font-size: 15px; color: #8b8b9e;", "→" }
                     }
@@ -543,7 +562,7 @@ pub fn ProfileScreen() -> Element {
 
             // Tier benefits grid
             div { style: "padding: 16px;",
-                div { style: "font-size: 13px; font-weight: 700; color: #ffe600; text-transform: uppercase; letter-spacing: 1px; text-shadow: 2px 2px 0 #000; margin-bottom: 10px;", "💎 Tier Benefits" }
+                div { style: "font-size: 13px; font-weight: 700; color: #ffe600; text-transform: uppercase; letter-spacing: 1px; text-shadow: 2px 2px 0 #000; margin-bottom: 10px;", "{t(lang, T_PROFILE_TIER_BENEFITS)}" }
                 div { style: "display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;",
                     for tier in [Tier::Bronze, Tier::Silver, Tier::Gold] {
                         {
@@ -630,7 +649,7 @@ pub fn ProfileScreen() -> Element {
                 border-radius: 0; padding: 14px;
                 box-shadow: 4px 4px 0 #000;
             ",
-                div { style: "font-size: 13px; font-weight: 700; color: #00e5ff; text-transform: uppercase; letter-spacing: 1px; text-shadow: 2px 2px 0 #000; margin-bottom: 10px;", "📍 Контакты" }
+                div { style: "font-size: 13px; font-weight: 700; color: #00e5ff; text-transform: uppercase; letter-spacing: 1px; text-shadow: 2px 2px 0 #000; margin-bottom: 10px;", "{t(lang, T_PROFILE_CONTACTS)}" }
                 div { style: "font-size: 15px; margin-bottom: 2px;", "Woody Weed Pecker" }
                 div { style: "font-size: 13px; color: #8b8b9e; margin-bottom: 8px;", "Koh Phangan, Thailand" }
                 div {
@@ -638,7 +657,7 @@ pub fn ProfileScreen() -> Element {
                     onclick: move |_| {
                         let _ = web_sys::window().and_then(|w| w.open_with_url_and_target("https://www.google.com/maps/place/Woody+Weed+Pecker/@9.7124562,99.9877309,17z/data=!3m1!4b1!4m6!3m5!1s0x3054ffe9f6df4edf:0xf8735a84f5193e1a!8m2!3d9.7124562!4d99.9877309!16s%2Fg%2F11x314fym6!18m1!1e1?entry=ttu&g_ep=EgoyMDI2MDUxMy4wIKXMDSoASAFQAw%3D%3D", "_blank").ok());
                     },
-                    "Открыть на карте"
+                    "{t(lang, T_PROFILE_OPEN_MAP)}"
                 }
             }
 

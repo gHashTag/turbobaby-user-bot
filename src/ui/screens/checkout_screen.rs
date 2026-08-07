@@ -1,11 +1,18 @@
 use crate::trios::core::Lang;
 use crate::trios::i18n::{
-    t, T_BACK, T_CHECKOUT_ERR_400, T_CHECKOUT_ERR_ITEMS, T_CHECKOUT_ERR_NAME,
-    T_CHECKOUT_ERR_NAME_LONG, T_CHECKOUT_ERR_NETWORK, T_CHECKOUT_ERR_NO_TELEGRAM,
-    T_CHECKOUT_ERR_PARSE, T_CHECKOUT_ERR_PHONE, T_CHECKOUT_ERR_PHONE_INVALID,
-    T_CHECKOUT_ERR_PHONE_LONG, T_CHECKOUT_TITLE, T_DELIVERY, T_DELIVERY_ETA, T_DELIVERY_FEE,
-    T_DELIVERY_ZONE, T_PAYMENT, T_PICKUP_LOCATION, T_PLACE_ORDER, T_TOTAL, T_YOUR_INFO,
-    T_YOUR_ORDER,
+    t, tf,
+    T_BACK, T_CHECKOUT_CART_EMPTY, T_CHECKOUT_CASH_ON_DELIVERY, T_CHECKOUT_ERR_400,
+    T_CHECKOUT_ERR_ADDRESS, T_CHECKOUT_ERR_ADDRESS_LONG, T_CHECKOUT_ERR_ITEMS,
+    T_CHECKOUT_ERR_NAME, T_CHECKOUT_ERR_NAME_LONG, T_CHECKOUT_ERR_NETWORK,
+    T_CHECKOUT_ERR_NO_TELEGRAM, T_CHECKOUT_ERR_PARSE, T_CHECKOUT_ERR_PHONE,
+    T_CHECKOUT_ERR_PHONE_INVALID, T_CHECKOUT_ERR_PHONE_LONG, T_CHECKOUT_GARDEN_DISCOUNT,
+    T_CHECKOUT_GARDEN_DISCOUNT_PCT, T_CHECKOUT_NAME_LABEL, T_CHECKOUT_NAME_PLACEHOLDER,
+    T_CHECKOUT_NOTES_LABEL, T_CHECKOUT_NOTES_PLACEHOLDER, T_CHECKOUT_OPEN_MAP,
+    T_CHECKOUT_PAY_ON_RECEIVE, T_CHECKOUT_PHONE_LABEL, T_CHECKOUT_PHONE_PLACEHOLDER,
+    T_CHECKOUT_PROCESSING, T_CHECKOUT_STARS, T_CHECKOUT_STARS_AVAILABLE, T_CHECKOUT_STARS_MINUS,
+    T_CHECKOUT_TITLE, T_CHECKOUT_ADDRESS_LABEL, T_CHECKOUT_ADDRESS_PLACEHOLDER,
+    T_DELIVERY, T_DELIVERY_ETA, T_DELIVERY_FEE, T_DELIVERY_ZONE, T_PAYMENT,
+    T_PICKUP_LOCATION, T_PLACE_ORDER, T_TOTAL, T_YOUR_INFO, T_YOUR_ORDER,
 };
 use crate::trios::store::validate_checkout;
 use crate::ui::api::context::api_base_url;
@@ -216,8 +223,8 @@ pub fn CheckoutScreen() -> Element {
             (eta_text, fee_text)
         }
         None => (
-            "⏰ 30-45 min delivery".to_string(),
-            "💰 Free delivery over ฿1,000".to_string(),
+            tf(lang, T_DELIVERY_ETA, &["30-45".to_string()]),
+            tf(lang, T_DELIVERY_FEE, &["0".to_string()]),
         ),
     };
 
@@ -232,13 +239,15 @@ pub fn CheckoutScreen() -> Element {
             return;
         }
         let trios_items = to_trios_items(&submit_cart_items);
-        if let Err(e) = validate_checkout(&customer_name(), &customer_phone(), &trios_items) {
+        if let Err(e) = validate_checkout(&customer_name(), &customer_phone(), &delivery_address(), &trios_items) {
             let key = match e {
                 crate::trios::core::Error::Validation(msg) if msg.contains("Name is required") => T_CHECKOUT_ERR_NAME,
                 crate::trios::core::Error::Validation(msg) if msg.contains("Name is too long") => T_CHECKOUT_ERR_NAME_LONG,
                 crate::trios::core::Error::Validation(msg) if msg.contains("Phone is required") => T_CHECKOUT_ERR_PHONE,
                 crate::trios::core::Error::Validation(msg) if msg.contains("Phone is too long") => T_CHECKOUT_ERR_PHONE_LONG,
                 crate::trios::core::Error::Validation(msg) if msg.contains("Invalid phone number") => T_CHECKOUT_ERR_PHONE_INVALID,
+                crate::trios::core::Error::Validation(msg) if msg.contains("Delivery address is required") => T_CHECKOUT_ERR_ADDRESS,
+                crate::trios::core::Error::Validation(msg) if msg.contains("Delivery address is too long") => T_CHECKOUT_ERR_ADDRESS_LONG,
                 crate::trios::core::Error::Validation(msg) if msg.contains("Cart cannot be empty") => T_CHECKOUT_ERR_ITEMS,
                 _ => T_CHECKOUT_ERR_400,
             };
@@ -274,16 +283,19 @@ pub fn CheckoutScreen() -> Element {
                     "strain_id": item.id,
                     "strain_name": item.name,
                     "quantity": item.quantity,
+                    "unit_price": item.price,
                 }),
                 CartItemType::Accessory => json!({
                     "accessory_id": item.id,
                     "accessory_name": item.name,
                     "quantity": item.quantity,
+                    "unit_price": item.price,
                 }),
                 CartItemType::Tea => json!({
                     "tea_id": item.id,
                     "tea_name": item.name,
                     "quantity": item.quantity,
+                    "unit_price": item.price,
                     // A3: carry the drink's dine-in/takeaway choice (default
                     // takeaway if the customer never toggled it).
                     "fulfillment": item.fulfillment.clone().unwrap_or_else(|| "takeaway".to_string()),
@@ -292,6 +304,7 @@ pub fn CheckoutScreen() -> Element {
                     "set_id": item.id,
                     "set_name": item.name,
                     "quantity": item.quantity,
+                    "unit_price": item.price,
                 }),
             })
             .collect();
@@ -385,7 +398,7 @@ pub fn CheckoutScreen() -> Element {
                 ",
                     h2 { style: "font-size: 13px; font-weight: 700; color: #00e5ff; text-transform: uppercase; letter-spacing: 1px; text-shadow: 2px 2px 0 #000; margin-bottom: 10px;", "{your_order}" }
                     if cart_items.is_empty() {
-                        p { style: "font-size: 15px; color: #8b8b9e; text-align: center; padding: 10px;", "Cart is empty" }
+                        p { style: "font-size: 15px; color: #8b8b9e; text-align: center; padding: 10px;", "{t(lang, T_CHECKOUT_CART_EMPTY)}" }
                     } else {
                         for item in cart_items.iter() {
                             div { style: "display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 13px;",
@@ -402,7 +415,7 @@ pub fn CheckoutScreen() -> Element {
                         // B4: garden discount picker — toggle a product-scoped reward.
                         if !applicable_rewards.is_empty() {
                             div { style: "border-top:1px solid #2a2a4a;margin-top:8px;padding-top:8px;",
-                                div { style: "font-size:12px;color:#39ff14;font-weight:700;margin-bottom:6px;", "🌱 Скидка из сада" }
+                                div { style: "font-size:12px;color:#39ff14;font-weight:700;margin-bottom:6px;", "{t(lang, T_CHECKOUT_GARDEN_DISCOUNT)}" }
                                 for (r, disc, tname) in applicable_rewards.iter() {
                                     {
                                         let rid = r.id.clone();
@@ -413,6 +426,7 @@ pub fn CheckoutScreen() -> Element {
                                         let disc_str = crate::trios::pricing::format_baht(d);
                                         let border = if is_on { "#39ff14" } else { "#2a2a4a" };
                                         let amt_style = if is_on { "font-size:12px;color:#39ff14;font-weight:700;" } else { "font-size:12px;color:#8b8b9e;" };
+                                        let reward_label = tf(lang, T_CHECKOUT_GARDEN_DISCOUNT_PCT, &[pct.to_string(), tname]);
                                         rsx! {
                                             div {
                                                 style: "display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px;border:3px solid {border};cursor:pointer;margin-bottom:6px;",
@@ -423,7 +437,7 @@ pub fn CheckoutScreen() -> Element {
                                                         applied_reward.set(Some((rid.clone(), d)));
                                                     }
                                                 },
-                                                span { style: "font-size:12px;color:#e8e8e8;", "{pct}% на {tname}" }
+                                                span { style: "font-size:12px;color:#e8e8e8;", "{reward_label}" }
                                                 span { style: "{amt_style}", "−{disc_str}" }
                                             }
                                         }
@@ -435,8 +449,8 @@ pub fn CheckoutScreen() -> Element {
                         if stars_balance > 0 && pre_stars_total > 0.0 {
                             div { style: "border-top:1px solid #2a2a4a;margin-top:8px;padding-top:8px;",
                                 div { style: "display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;",
-                                    div { style: "font-size:12px;color:#7dd3fc;font-weight:700;", "⭐ Stars" }
-                                    div { style: "font-size:12px;color:#8b8b9e;", "доступно {stars_balance}" }
+                                    div { style: "font-size:12px;color:#7dd3fc;font-weight:700;", "{t(lang, T_CHECKOUT_STARS)}" }
+                                    div { style: "font-size:12px;color:#8b8b9e;", "{tf(lang, T_CHECKOUT_STARS_AVAILABLE, &[stars_balance.to_string()])}" }
                                 }
                                 div { style: "display:flex;align-items:center;gap:8px;",
                                     input {
@@ -450,7 +464,7 @@ pub fn CheckoutScreen() -> Element {
                                             stars_to_use.set(v.clamp(0, max_stars));
                                         }
                                     }
-                                    span { style: "font-size:12px;color:#7dd3fc;", "−{stars_val} ฿" }
+                                    span { style: "font-size:12px;color:#7dd3fc;", "{tf(lang, T_CHECKOUT_STARS_MINUS, &[stars_val.to_string()])}" }
                                 }
                             }
                         }
@@ -472,7 +486,7 @@ pub fn CheckoutScreen() -> Element {
                 ",
                     h2 { style: "font-size: 13px; font-weight: 700; color: #00e5ff; text-transform: uppercase; letter-spacing: 1px; text-shadow: 2px 2px 0 #000; margin-bottom: 10px;", "{your_info}" }
                     div { style: "margin-bottom: 8px;",
-                        label { style: "font-size: 13px; color: #8b8b9e; display: block; margin-bottom: 4px;", "Name *" }
+                        label { style: "font-size: 13px; color: #8b8b9e; display: block; margin-bottom: 4px;", "{t(lang, T_CHECKOUT_NAME_LABEL)}" }
                         input {
                             style: "
                                 font-size: 15px; width: 100%; padding: 10px 12px;
@@ -481,13 +495,13 @@ pub fn CheckoutScreen() -> Element {
                                 box-sizing: border-box;
                             ",
                             r#type: "text",
-                            placeholder: "Enter your name",
+                            placeholder: "{t(lang, T_CHECKOUT_NAME_PLACEHOLDER)}",
                             value: "{customer_name}",
                             oninput: move |e| customer_name.set(e.value()),
                         }
                     }
                     div { style: "margin-bottom: 8px;",
-                        label { style: "font-size: 13px; color: #8b8b9e; display: block; margin-bottom: 4px;", "Phone *" }
+                        label { style: "font-size: 13px; color: #8b8b9e; display: block; margin-bottom: 4px;", "{t(lang, T_CHECKOUT_PHONE_LABEL)}" }
                         input {
                             style: "
                                 font-size: 15px; width: 100%; padding: 10px 12px;
@@ -496,7 +510,7 @@ pub fn CheckoutScreen() -> Element {
                                 box-sizing: border-box;
                             ",
                             r#type: "tel",
-                            placeholder: "+66 xxx xxx xxxx",
+                            placeholder: "{t(lang, T_CHECKOUT_PHONE_PLACEHOLDER)}",
                             value: "{customer_phone}",
                             oninput: move |e| customer_phone.set(e.value()),
                         }
@@ -537,7 +551,7 @@ pub fn CheckoutScreen() -> Element {
                         onclick: move |_| {
                             let _ = window().and_then(|w| w.open_with_url_and_target("https://www.google.com/maps/place/Woody+Weed+Pecker/@9.7124562,99.9877309,17z/data=!3m1!4b1!4m6!3m5!1s0x3054ffe9f6df4edf:0xf8735a84f5193e1a!8m2!3d9.7124562!4d99.9877309!16s%2Fg%2F11x314fym6!18m1!1e1?entry=ttu&g_ep=EgoyMDI2MDUxMy4wIKXMDSoASAFQAw%3D%3D", "_blank").ok());
                         },
-                        "📍 Открыть на карте"
+                        "{t(lang, T_CHECKOUT_OPEN_MAP)}"
                     }
                 }
 
@@ -549,7 +563,7 @@ pub fn CheckoutScreen() -> Element {
                 ",
                     h2 { style: "font-size: 13px; font-weight: 700; color: #00e5ff; text-transform: uppercase; letter-spacing: 1px; text-shadow: 2px 2px 0 #000; margin-bottom: 10px;", "{delivery}" }
                     div { style: "margin-bottom: 8px;",
-                        label { style: "font-size: 13px; color: #8b8b9e; display: block; margin-bottom: 4px;", "Delivery address *" }
+                        label { style: "font-size: 13px; color: #8b8b9e; display: block; margin-bottom: 4px;", "{t(lang, T_CHECKOUT_ADDRESS_LABEL)}" }
                         input {
                             style: "
                                 font-size: 15px; width: 100%; padding: 10px 12px;
@@ -558,13 +572,13 @@ pub fn CheckoutScreen() -> Element {
                                 box-sizing: border-box;
                             ",
                             r#type: "text",
-                            placeholder: "Hotel / condo / street address",
+                            placeholder: "{t(lang, T_CHECKOUT_ADDRESS_PLACEHOLDER)}",
                             value: "{delivery_address}",
                             oninput: move |e| delivery_address.set(e.value()),
                         }
                     }
                     div { style: "margin-bottom: 8px;",
-                        label { style: "font-size: 13px; color: #8b8b9e; display: block; margin-bottom: 4px;", "Notes" }
+                        label { style: "font-size: 13px; color: #8b8b9e; display: block; margin-bottom: 4px;", "{t(lang, T_CHECKOUT_NOTES_LABEL)}" }
                         input {
                             style: "
                                 font-size: 15px; width: 100%; padding: 10px 12px;
@@ -573,7 +587,7 @@ pub fn CheckoutScreen() -> Element {
                                 box-sizing: border-box;
                             ",
                             r#type: "text",
-                            placeholder: "Room number, lobby, meet at gate…",
+                            placeholder: "{t(lang, T_CHECKOUT_NOTES_PLACEHOLDER)}",
                             value: "{delivery_notes}",
                             oninput: move |e| delivery_notes.set(e.value()),
                         }
@@ -628,8 +642,8 @@ pub fn CheckoutScreen() -> Element {
                     ",
                         div { style: "font-size: 13px;", "💳" }
                         div { style: "flex: 1;",
-                            div { style: "font-size: 15px; color: #39ff14;", "Cash on Delivery" }
-                            div { style: "font-size: 13px; color: #8b8b9e; margin-top: 2px;", "Pay when you receive" }
+                            div { style: "font-size: 15px; color: #39ff14;", "{t(lang, T_CHECKOUT_CASH_ON_DELIVERY)}" }
+                            div { style: "font-size: 13px; color: #8b8b9e; margin-top: 2px;", "{t(lang, T_CHECKOUT_PAY_ON_RECEIVE)}" }
                         }
                     }
                 }
@@ -658,7 +672,7 @@ pub fn CheckoutScreen() -> Element {
                     {
                         let trios_items = to_trios_items(&cart_items);
                         let can_order = telegram_id.is_some()
-                            && validate_checkout(&customer_name(), &customer_phone(), &trios_items).is_ok()
+                            && validate_checkout(&customer_name(), &customer_phone(), &delivery_address(), &trios_items).is_ok()
                             && !is_processing();
                         let btn_bg = if can_order { "#39ff14" } else { "#2a2a4a" };
                         let btn_color = if can_order { "#000" } else { "#8b8b9e" };
@@ -679,7 +693,7 @@ pub fn CheckoutScreen() -> Element {
                                 ",
                                 disabled: !can_order,
                                 onclick: submit_order,
-                                if processing { "⏳ Оформление..." } else { "{place_order}" }
+                                if processing { "{t(lang, T_CHECKOUT_PROCESSING)}" } else { "{place_order}" }
                             }
                         }
                     }
