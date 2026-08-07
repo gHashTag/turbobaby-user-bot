@@ -1,9 +1,9 @@
 use crate::trios::i18n::{
     t, tf, T_ADD_TO_CART, T_HOME_ADVENTURES, T_HOME_AR_HUNT, T_HOME_CATEGORIES, T_HOME_DAILY_QUEST,
-    T_HOME_GAME, T_HOME_LOCATION_QUEST, T_HOME_NO_SOTD, T_HOME_SETS_PACKS,
-    T_HOME_SHARE, T_HOME_SOMMELIER, T_HOME_SOTD, T_HOME_SUBTITLE, T_HOME_TREASURE_HUNT,
-    T_HOME_WATCH_VIDEO, T_MENU_OFF, T_MENU_SET_LABEL, T_MENU_THC, T_NAV_ACCESSORIES, T_NAV_GARDEN,
-    T_NAV_MENU, T_NAV_SETS, T_NAV_TEA, T_TRUST_AGE, T_TRUST_GACP, T_TRUST_MEDICAL, T_TRUST_SUPPORT,
+    T_HOME_GAME, T_HOME_LOCATION_QUEST, T_HOME_NO_SOTD, T_HOME_SETS_PACKS, T_HOME_SHARE,
+    T_HOME_SOMMELIER, T_HOME_SOTD, T_HOME_SUBTITLE, T_HOME_TREASURE_HUNT, T_HOME_WATCH_VIDEO,
+    T_MENU_OFF, T_MENU_SET_LABEL, T_MENU_THC, T_NAV_ACCESSORIES, T_NAV_GARDEN, T_NAV_MENU,
+    T_NAV_SETS, T_NAV_TEA, T_TRUST_AGE, T_TRUST_GACP, T_TRUST_MEDICAL, T_TRUST_SUPPORT,
 };
 use crate::ui::api::context::api_base_url;
 use crate::ui::assets;
@@ -101,7 +101,11 @@ fn render_home_pack_card(p: HomePack) -> Element {
     };
     let price_str = crate::trios::pricing::format_baht(price);
     let off_label = if has_discount {
-        tf(crate::ui::lang::current_lang(), T_MENU_OFF, &[(discount as i32).to_string()])
+        tf(
+            crate::ui::lang::current_lang(),
+            T_MENU_OFF,
+            &[(discount as i32).to_string()],
+        )
     } else {
         String::new()
     };
@@ -183,7 +187,7 @@ pub fn HomeScreen() -> Element {
     // Deep-link landing: when the app opens with a shared product, navigate
     // from the home route to the catalog screen that owns the product.
     let pending = use_context::<Signal<Option<SharedProduct>>>();
-    let pending_order = use_context::<Signal<Option<String>>>();
+    let mut pending_order = use_context::<Signal<Option<String>>>();
     let nav = navigator();
     use_effect(move || {
         if let Some(target) = pending.read().clone() {
@@ -191,7 +195,8 @@ pub fn HomeScreen() -> Element {
             // The target screen will open the product modal and clear the target.
             nav.push(target.kind.route());
         }
-        if let Some(order_id) = pending_order.read().clone() {
+        let order_id = pending_order.read().clone();
+        if let Some(order_id) = order_id {
             // Cycle #80: order deep link opens the dedicated detail screen.
             pending_order.set(None);
             nav.push(Route::OrderDetail { id: order_id });

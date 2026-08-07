@@ -5,12 +5,11 @@
 // the orders list.
 
 use crate::trios::i18n::{
-    t, tf,
-    T_CART_DELIVERY, T_CART_SUBTOTAL, T_ORDER_DETAIL_BACK, T_ORDER_DETAIL_BONUS,
-    T_ORDER_DETAIL_NOT_FOUND, T_ORDER_DETAIL_STARS, T_ORDER_DETAIL_TOTAL, T_ORDERS_ORDER,
-    T_ORDERS_STATUS_CANCELLED, T_ORDERS_STATUS_CONFIRMED, T_ORDERS_STATUS_DELIVERED,
-    T_ORDERS_STATUS_OUT_FOR_DELIVERY, T_ORDERS_STATUS_PENDING, T_ORDERS_STATUS_PREPARING,
-    T_ORDERS_STATUS_READY, T_ORDERS_STATUS_UNKNOWN, T_ORDERS_TITLE, T_REORDER,
+    t, tf, T_CART_DELIVERY, T_CART_SUBTOTAL, T_ORDERS_ORDER, T_ORDERS_STATUS_CANCELLED,
+    T_ORDERS_STATUS_CONFIRMED, T_ORDERS_STATUS_DELIVERED, T_ORDERS_STATUS_OUT_FOR_DELIVERY,
+    T_ORDERS_STATUS_PENDING, T_ORDERS_STATUS_PREPARING, T_ORDERS_STATUS_READY,
+    T_ORDERS_STATUS_UNKNOWN, T_ORDERS_TITLE, T_ORDER_DETAIL_BACK, T_ORDER_DETAIL_BONUS,
+    T_ORDER_DETAIL_NOT_FOUND, T_ORDER_DETAIL_STARS, T_ORDER_DETAIL_TOTAL, T_REORDER,
 };
 use crate::ui::api::context::api_base_url;
 use crate::ui::components::bottom_nav::BottomNav;
@@ -18,7 +17,9 @@ use crate::ui::components::skeleton::{Skeleton, SkeletonShape};
 use crate::ui::components::StatusStepper;
 use crate::ui::routes::Route;
 use crate::ui::state::{Cart, CartItem, CartItemType};
-use crate::ui::telegram::{use_telegram_id, use_telegram_init_data, HapticNotification, TelegramApp};
+use crate::ui::telegram::{
+    use_telegram_id, use_telegram_init_data, HapticNotification, TelegramApp,
+};
 use dioxus::prelude::*;
 use serde::Deserialize;
 
@@ -35,8 +36,6 @@ struct ApiOrderDetail {
     shop_id: Option<String>,
     delivery_address: Option<String>,
     delivery_notes: Option<String>,
-    delivery_zone_id: Option<String>,
-    customer_name: Option<String>,
     customer_phone: Option<String>,
 }
 
@@ -113,7 +112,10 @@ pub fn OrderDetailScreen(id: String) -> Element {
                 return Err("No telegram_id".to_string());
             }
             let base = api_base_url();
-            let url = format!("{}/api/orders/{}/details?telegram_id={}", base, oid, telegram_id);
+            let url = format!(
+                "{}/api/orders/{}/details?telegram_id={}",
+                base, oid, telegram_id
+            );
             crate::ui::api::local_client::LocalClient::new()
                 .get(&url)
                 .header("X-Telegram-Init-Data", init)
@@ -187,7 +189,7 @@ pub fn OrderDetailScreen(id: String) -> Element {
 
                                     div { style: "margin-bottom: 12px;",
                                         div { style: "font-size: 12px; color: #8b8b9e; margin-bottom: 6px;",
-                                            "{t(lang, crate::trios::i18n::T_CART_ITEMS).replace("{0}", &order.items.len().to_string())}"
+                                            "{tf(lang, crate::trios::i18n::T_CART_ITEMS, &[order.items.len().to_string()])}"
                                         }
                                         for item in order.items.iter() {
                                             div { style: "display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 4px;",
@@ -228,13 +230,13 @@ pub fn OrderDetailScreen(id: String) -> Element {
 
                                     div { style: "border-top: 1px dashed #2a2a4a; padding-top: 12px; margin-bottom: 12px; font-size: 13px; color: #8b8b9e;",
                                         if let Some(addr) = &order.delivery_address {
-                                            div { style: "margin-bottom: 4px;", "📍 {addr}" }
+                                            div { style: "margin-bottom: 4px;", "📍 {addr.clone()}" }
                                         }
                                         if let Some(notes) = &order.delivery_notes {
-                                            div { style: "margin-bottom: 4px;", "📝 {notes}" }
+                                            div { style: "margin-bottom: 4px;", "📝 {notes.clone()}" }
                                         }
                                         if let Some(phone) = &order.customer_phone {
-                                            div { style: "margin-bottom: 4px;", "📞 {phone}" }
+                                            div { style: "margin-bottom: 4px;", "📞 {phone.clone()}" }
                                         }
                                         div { style: "margin-top: 4px;", "🕒 {date_str}" }
                                     }
