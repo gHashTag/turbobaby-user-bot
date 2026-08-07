@@ -6,6 +6,29 @@
 // v0.4 DJ zone, grill zone, random events.
 // Pure emoji/CSS visuals inside the existing Dioxus/WASM Telegram Mini App.
 
+use crate::trios::i18n::{
+    t, tf, T_GAME_CLEAN, T_GAME_CONFIRM_RESET, T_GAME_EVENT_BIG_TIP, T_GAME_EVENT_DEFAULT,
+    T_GAME_EVENT_DJ_ENERGY, T_GAME_EVENT_GRILL_DEMAND, T_GAME_EVENT_HERB_DELIVERY,
+    T_GAME_EVENT_RUSH_HOUR, T_GAME_FARM_EMPTY, T_GAME_FARM_GROWN, T_GAME_FARM_PLANTED,
+    T_GAME_FARM_TITLE, T_GAME_FARM_WATER, T_GAME_FARM_WATERED, T_GAME_FLOW, T_GAME_GRILL,
+    T_GAME_GRILL_COOK,
+    T_GAME_GRILL_COOKING, T_GAME_GRILL_DESC, T_GAME_GRILL_STOCK, T_GAME_GRILL_TIP,
+    T_GAME_GRILL_TITLE, T_GAME_HARVESTED, T_GAME_LOG_CLEANING, T_GAME_LOG_COOKING_STARTED,
+    T_GAME_LOG_CUSTOMER_LEFT, T_GAME_LOG_FARM_GREW, T_GAME_LOG_GRILLED_LEFT,
+    T_GAME_LOG_HARVEST, T_GAME_LOG_MOVED_TO_TABLE, T_GAME_LOG_NEW_CUSTOMER,
+    T_GAME_LOG_PARTY_STARTED, T_GAME_LOG_PLANTED_SEED, T_GAME_LOG_QUICK_GRILL,
+    T_GAME_LOG_READY_AT_TABLE, T_GAME_LOG_RESET, T_GAME_LOG_SERVING, T_GAME_LOG_TABLE_CLEANED,
+    T_GAME_LOG_TAKING_ORDER, T_GAME_LOG_WATERING, T_GAME_ORDER, T_GAME_PARTY_ON,
+    T_GAME_PARTY_START, T_GAME_PARTY_STATUS_OFF, T_GAME_PARTY_STATUS_ON, T_GAME_PARTY_TIP,
+    T_GAME_PARTY_TITLE, T_GAME_RESET, T_GAME_SERVE, T_GAME_SERVED, T_GAME_SHOP_TITLE,
+    T_GAME_SPEED, T_GAME_TAB_DJ, T_GAME_TAB_FARM, T_GAME_TAB_GRILL,
+    T_GAME_TAB_SHOP, T_GAME_TABLES, T_GAME_TABLE_DIRTY, T_GAME_TABLE_EATING,
+    T_GAME_UPGRADES,
+    T_GAME_TABLE_FREE, T_GAME_TABLE_PREPARING, T_GAME_TABLE_READY, T_GAME_TABLE_WAITING,
+    T_GAME_TIP,
+    T_GAME_UPGRADE_FLOW, T_GAME_UPGRADE_LEVEL_COST, T_GAME_UPGRADE_MAX,
+    T_GAME_UPGRADE_SPEED, T_GAME_UPGRADE_TABLES, T_GARDEN_HARVEST, T_GARDEN_PLANT,
+};
 use crate::ui::api::context::api_base_url;
 use crate::ui::telegram::{use_telegram_id, use_telegram_init_data};
 use dioxus::prelude::*;
@@ -302,15 +325,17 @@ fn rand_vip() -> bool {
     rand_u32() % 100 < 20
 }
 
-fn rand_event() -> &'static str {
-    match rand_u32() % 5 {
-        0 => "🎉 Rush hour! More customers coming!",
-        1 => "💰 Big tip! +20 coins",
-        2 => "🌿 Herb delivery! All farm plots watered",
-        3 => "🎵 DJ energy up! Party lasts longer",
-        4 => "🍔 Grill demand! Free food stock",
-        _ => "🎉 Event!",
-    }
+fn rand_event(lang: crate::trios::core::Lang) -> String {
+    let idx = rand_u32() % 5;
+    let key = match idx {
+        0 => T_GAME_EVENT_RUSH_HOUR,
+        1 => T_GAME_EVENT_BIG_TIP,
+        2 => T_GAME_EVENT_HERB_DELIVERY,
+        3 => T_GAME_EVENT_DJ_ENERGY,
+        4 => T_GAME_EVENT_GRILL_DEMAND,
+        _ => T_GAME_EVENT_DEFAULT,
+    };
+    t(lang, key).to_string()
 }
 
 fn haptic_light() {
@@ -336,6 +361,7 @@ fn haptic_error() {
 pub fn WoodyShop() -> Element {
     let mut state = use_signal(ShopState::load);
     let logs = use_signal(|| Vec::<String>::new());
+    let lang = crate::ui::lang::current_lang();
 
     // Persist game progress to localStorage on every state change.
     {
@@ -400,7 +426,7 @@ pub fn WoodyShop() -> Element {
                     if l.len() > 6 {
                         l.remove(0);
                     }
-                    l.push("New customer arrived".into());
+                    l.push(t(lang, T_GAME_LOG_NEW_CUSTOMER).to_string());
                 });
             }
         });
@@ -435,7 +461,7 @@ pub fn WoodyShop() -> Element {
                         if l.len() > 6 {
                             l.remove(0);
                         }
-                        l.push("Farm grew a step".into());
+                        l.push(t(lang, T_GAME_LOG_FARM_GREW).to_string());
                     });
                 }
             }
@@ -470,7 +496,7 @@ pub fn WoodyShop() -> Element {
         use_future(move || async move {
             loop {
                 TimeoutFuture::new(EVENT_INTERVAL_MS).await;
-                let event = rand_event();
+                let event = rand_event(lang);
                 state.with_mut(|s| {
                     match rand_u32() % 5 {
                         0 => {
@@ -643,7 +669,7 @@ pub fn WoodyShop() -> Element {
         state.set(ShopState::new());
         logs.with_mut(|l| {
             l.clear();
-            l.push("Progress reset".into());
+            l.push(t(lang, T_GAME_LOG_RESET).to_string());
         });
     };
 
@@ -673,17 +699,17 @@ pub fn WoodyShop() -> Element {
                 }
                 div {
                     style: "font-size: 12px; color: #888; text-align: right;",
-                    div { span { "Served: " }
+                    div { span { "{t(lang, T_GAME_SERVED)}: " }
                         span { style: "color: #39ff14; font-weight: 700;", "{served}" }
                     }
-                    div { span { "Harvest: " }
+                    div { span { "{t(lang, T_GAME_HARVESTED)}: " }
                         span { style: "color: #b388ff; font-weight: 700;", "{harvested}" }
                     }
                 }
             }
 
             // Zone tabs
-            ZoneTabs { active_zone, state }
+            ZoneTabs { active_zone, state, lang }
 
             // Event banner
             if let Some(text) = event_text {
@@ -721,6 +747,7 @@ pub fn WoodyShop() -> Element {
                             woody_total_ms,
                             grill_stock,
                             on_floater: move |evt: (String, u32)| spawn_floater(evt.0, evt.1),
+                            lang,
                         }
                     },
                     ActiveZone::Farm => rsx! {
@@ -732,13 +759,14 @@ pub fn WoodyShop() -> Element {
                             farm_water_ms,
                             coins,
                             on_floater: move |evt: (String, u32)| spawn_floater(evt.0, evt.1),
+                            lang,
                         }
                     },
                     ActiveZone::Party => rsx! {
-                        PartyZone { state, logs, party_active, party_timer_ms }
+                        PartyZone { state, logs, party_active, party_timer_ms, lang }
                     },
                     ActiveZone::Grill => rsx! {
-                        GrillZone { state, logs, grill_stock, grill_cooking: state.read().grill_cooking, grill_timer_ms }
+                        GrillZone { state, logs, grill_stock, grill_cooking: state.read().grill_cooking, grill_timer_ms, lang }
                     },
                 }
             }
@@ -749,7 +777,7 @@ pub fn WoodyShop() -> Element {
                     margin-top: 10px; background: rgba(0,0,0,0.35);
                     border: 2px solid #2a2a4a; border-radius: 12px; padding: 10px;
                 ",
-                div { style: "font-size: 13px; font-weight: 700; color: #888; margin-bottom: 8px;", "🆙 UPGRADES" }
+                div { style: "font-size: 13px; font-weight: 700; color: #888; margin-bottom: 8px;", "{t(lang, T_GAME_UPGRADES)}" }
                 if coins < 30 && upgrades.spawn_level == 1 && upgrades.speed_level == 1 {
                     div {
                         style: "
@@ -757,13 +785,13 @@ pub fn WoodyShop() -> Element {
                             background: rgba(57,255,20,0.08); border-radius: 6px;
                             padding: 4px 8px;
                         ",
-                        "💡 Tip: serve customers to earn coins, then buy upgrades."
+                        "{t(lang, T_GAME_TIP)}"
                     }
                 }
                 div {
                     style: "display: flex; gap: 8px;",
                     UpgradeButton {
-                        label: "🪑 Tables",
+                        label: t(lang, T_GAME_TABLES),
                         level: upgrades.table_count_level,
                         cost: Upgrades::cost_table_count(upgrades.table_count_level),
                         maxed: upgrades.table_count_level >= (MAX_TABLES - INITIAL_TABLES + 1) as u32,
@@ -772,12 +800,13 @@ pub fn WoodyShop() -> Element {
                             let spawn_floater = move |t: String, y: u32| spawn_floater(t, y);
                             move |_| {
                                 buy_upgrade("tables");
-                                spawn_floater("🪑 Tables upgraded!".to_string(), 240);
+                                spawn_floater(t(lang, T_GAME_UPGRADE_TABLES).to_string(), 240);
                             }
                         },
+                        lang,
                     }
                     UpgradeButton {
-                        label: "⚡ Speed",
+                        label: t(lang, T_GAME_SPEED),
                         level: upgrades.speed_level,
                         cost: Upgrades::cost_speed(upgrades.speed_level),
                         maxed: upgrades.speed_level >= 5,
@@ -786,12 +815,13 @@ pub fn WoodyShop() -> Element {
                             let spawn_floater = move |t: String, y: u32| spawn_floater(t, y);
                             move |_| {
                                 buy_upgrade("speed");
-                                spawn_floater("⚡ Faster service!".to_string(), 240);
+                                spawn_floater(t(lang, T_GAME_UPGRADE_SPEED).to_string(), 240);
                             }
                         },
+                        lang,
                     }
                     UpgradeButton {
-                        label: "🚪 Flow",
+                        label: t(lang, T_GAME_FLOW),
                         level: upgrades.spawn_level,
                         cost: Upgrades::cost_spawn(upgrades.spawn_level),
                         maxed: upgrades.spawn_level >= 5,
@@ -800,9 +830,10 @@ pub fn WoodyShop() -> Element {
                             let spawn_floater = move |t: String, y: u32| spawn_floater(t, y);
                             move |_| {
                                 buy_upgrade("spawn");
-                                spawn_floater("🚪 More customers!".to_string(), 240);
+                                spawn_floater(t(lang, T_GAME_UPGRADE_FLOW).to_string(), 240);
                             }
                         },
+                        lang,
                     }
                 }
             }
@@ -826,7 +857,8 @@ pub fn WoodyShop() -> Element {
                             border-radius: 6px; cursor: pointer;
                         ",
                         onclick: move |_| {
-                            if js_sys::eval("confirm('Reset all progress? This cannot be undone.')")
+                            let confirm_text = serde_json::Value::String(t(lang, T_GAME_CONFIRM_RESET).to_string()).to_string();
+                            if js_sys::eval(&format!("confirm({confirm_text})"))
                                 .ok()
                                 .and_then(|v| v.as_bool())
                                 .unwrap_or(false)
@@ -834,7 +866,7 @@ pub fn WoodyShop() -> Element {
                                 reset_game(());
                             }
                         },
-                        "🔄 Reset"
+                        "{t(lang, T_GAME_RESET)}"
                     }
                 }
             }
@@ -861,8 +893,8 @@ pub fn WoodyShop() -> Element {
 // ── Zone tabs ──────────────────────────────────────────────────────────────────
 
 #[component]
-fn ZoneTabs(active_zone: ActiveZone, state: Signal<ShopState>) -> Element {
-    let make_tab = |zone: ActiveZone, emoji: &str, label: &str| {
+fn ZoneTabs(active_zone: ActiveZone, state: Signal<ShopState>, lang: crate::trios::core::Lang) -> Element {
+    let make_tab = |zone: ActiveZone, label: &str| {
         let is_active = active_zone == zone;
         let bg = if is_active { "#39ff14" } else { "#2a2a4a" };
         let fg = if is_active { "#000" } else { "#888" };
@@ -882,7 +914,7 @@ fn ZoneTabs(active_zone: ActiveZone, state: Signal<ShopState>) -> Element {
                     transition: all 0.15s; active: transform: scale(0.96);
                 ",
                 onclick: move |_| state.with_mut(|s| s.active_zone = z),
-                "{emoji} {label}"
+                "{label}"
             }
         }
     };
@@ -890,10 +922,10 @@ fn ZoneTabs(active_zone: ActiveZone, state: Signal<ShopState>) -> Element {
     rsx! {
         div {
             style: "display: flex; gap: 6px; margin-bottom: 12px;",
-            {make_tab(ActiveZone::Shop, "🛒", "Shop")}
-            {make_tab(ActiveZone::Farm, "🌱", "Farm")}
-            {make_tab(ActiveZone::Party, "🎧", "DJ")}
-            {make_tab(ActiveZone::Grill, "🍖", "Grill")}
+            {make_tab(ActiveZone::Shop, t(lang, T_GAME_TAB_SHOP))}
+            {make_tab(ActiveZone::Farm, t(lang, T_GAME_TAB_FARM))}
+            {make_tab(ActiveZone::Party, t(lang, T_GAME_TAB_DJ))}
+            {make_tab(ActiveZone::Grill, t(lang, T_GAME_TAB_GRILL))}
         }
     }
 }
@@ -914,6 +946,7 @@ fn ShopZone(
     woody_total_ms: u32,
     grill_stock: u32,
     on_floater: EventHandler<(String, u32)>,
+    lang: crate::trios::core::Lang,
 ) -> Element {
     let on_table_click = move |idx: usize| {
         if state.read().is_busy() {
@@ -924,7 +957,15 @@ fn ShopZone(
         let mut logs = logs;
         let current_table = state.read().woody_table;
         if current_table == idx {
-            perform_shop_action(&mut state, idx, &mut logs, reward, &upgrades, on_floater);
+            perform_shop_action(
+                &mut state,
+                idx,
+                &mut logs,
+                reward,
+                &upgrades,
+                on_floater,
+                lang,
+            );
             return;
         }
         state.with_mut(|s| s.woody_action = WoodyAction::WalkingTo(idx));
@@ -938,7 +979,7 @@ fn ShopZone(
                 if l.len() > 6 {
                     l.remove(0);
                 }
-                l.push(format!("Woody moved to table {}", idx + 1));
+                l.push(tf(lang, T_GAME_LOG_MOVED_TO_TABLE, &[(idx + 1).to_string()]));
             });
         });
     };
@@ -955,7 +996,7 @@ fn ShopZone(
                     font-size: 13px; font-weight: 700; letter-spacing: 2px;
                     color: #39ff14; text-shadow: 0 0 10px rgba(57,255,20,0.4);
                 ",
-                "WOODY SHOP"
+                "{t(lang, T_GAME_SHOP_TITLE)}"
             }
             for (idx, table) in tables.iter().enumerate() {
                 if idx < state.read().table_count() {
@@ -965,6 +1006,7 @@ fn ShopZone(
                         table: *table,
                         woody_here: woody_table == idx,
                         on_click: on_table_click.clone(),
+                        lang,
                     }
                 }
             }
@@ -984,7 +1026,7 @@ fn ShopZone(
             div {
                 style: "display: flex; gap: 8px; margin-top: 10px;",
                 ActionButton {
-                    label: "👋 Order",
+                    label: t(lang, T_GAME_ORDER).to_string(),
                     active: matches!(tables[woody_table], TableState::Seated { .. }),
                     color: "#39ff14",
                     on_click: {
@@ -993,12 +1035,20 @@ fn ShopZone(
                         let on_floater = on_floater;
                         move |_| {
                             if state.read().is_busy() { return; }
-                            perform_shop_action(&mut state, woody_table, &mut logs, reward, &upgrades, on_floater);
+                            perform_shop_action(
+                                &mut state,
+                                woody_table,
+                                &mut logs,
+                                reward,
+                                &upgrades,
+                                on_floater,
+                                lang,
+                            );
                         }
                     },
                 }
                 ActionButton {
-                    label: "🤲 Serve",
+                    label: t(lang, T_GAME_SERVE).to_string(),
                     active: matches!(tables[woody_table], TableState::Ready { .. }),
                     color: "#00e5ff",
                     on_click: {
@@ -1007,12 +1057,20 @@ fn ShopZone(
                         let on_floater = on_floater;
                         move |_| {
                             if state.read().is_busy() { return; }
-                            perform_shop_action(&mut state, woody_table, &mut logs, reward, &upgrades, on_floater);
+                            perform_shop_action(
+                                &mut state,
+                                woody_table,
+                                &mut logs,
+                                reward,
+                                &upgrades,
+                                on_floater,
+                                lang,
+                            );
                         }
                     },
                 }
                 ActionButton {
-                    label: "🧽 Clean",
+                    label: t(lang, T_GAME_CLEAN).to_string(),
                     active: matches!(tables[woody_table], TableState::Dirty),
                     color: "#ff4757",
                     on_click: {
@@ -1021,12 +1079,20 @@ fn ShopZone(
                         let on_floater = on_floater;
                         move |_| {
                             if state.read().is_busy() { return; }
-                            perform_shop_action(&mut state, woody_table, &mut logs, reward, &upgrades, on_floater);
+                            perform_shop_action(
+                                &mut state,
+                                woody_table,
+                                &mut logs,
+                                reward,
+                                &upgrades,
+                                on_floater,
+                                lang,
+                            );
                         }
                     },
                 }
                 ActionButton {
-                    label: "🍔 Grill",
+                    label: t(lang, T_GAME_GRILL).to_string(),
                     active: matches!(tables[woody_table], TableState::Seated { .. }) && grill_stock > 0,
                     color: "#ff9d00",
                     on_click: {
@@ -1035,7 +1101,7 @@ fn ShopZone(
                         let on_floater = on_floater;
                         move |_| {
                             if state.read().is_busy() { return; }
-                            quick_serve_with_grill(&mut state, woody_table, &mut logs, on_floater);
+                            quick_serve_with_grill(&mut state, woody_table, &mut logs, on_floater, lang);
                         }
                     },
                 }
@@ -1052,6 +1118,7 @@ fn TableRow(
     table: TableState,
     woody_here: bool,
     on_click: EventHandler<usize>,
+    lang: crate::trios::core::Lang,
 ) -> Element {
     let is_vip = table.is_vip();
     let customer_emoji = if matches!(table, TableState::Empty) {
@@ -1112,7 +1179,7 @@ fn TableRow(
 
             div {
                 style: "flex: 1; font-size: 14px; font-weight: 600; color: {table_color(table)};",
-                "{table_label(table)}"
+                "{table_label(lang, table)}"
             }
 
             if let Some(bubble) = order_bubble {
@@ -1140,15 +1207,15 @@ fn TableRow(
     }
 }
 
-fn table_label(table: TableState) -> String {
+fn table_label(lang: crate::trios::core::Lang, table: TableState) -> String {
     let vip = if table.is_vip() { " 👑" } else { "" };
     let base = match table {
-        TableState::Empty => "Free table",
-        TableState::Seated { .. } => "Customer waiting",
-        TableState::Preparing { .. } => "Preparing...",
-        TableState::Ready { .. } => "Order ready",
-        TableState::Eating { .. } => "Customer eating",
-        TableState::Dirty => "Dirty table",
+        TableState::Empty => t(lang, T_GAME_TABLE_FREE),
+        TableState::Seated { .. } => t(lang, T_GAME_TABLE_WAITING),
+        TableState::Preparing { .. } => t(lang, T_GAME_TABLE_PREPARING),
+        TableState::Ready { .. } => t(lang, T_GAME_TABLE_READY),
+        TableState::Eating { .. } => t(lang, T_GAME_TABLE_EATING),
+        TableState::Dirty => t(lang, T_GAME_TABLE_DIRTY),
     };
     format!("{}{}", base, vip)
 }
@@ -1183,6 +1250,7 @@ fn FarmZone(
     farm_water_ms: [u32; FARM_SLOTS],
     coins: u32,
     on_floater: EventHandler<(String, u32)>,
+    lang: crate::trios::core::Lang,
 ) -> Element {
     rsx! {
         div {
@@ -1192,7 +1260,7 @@ fn FarmZone(
                     font-size: 13px; font-weight: 700; letter-spacing: 2px;
                     color: #39ff14; text-align: center;
                 ",
-                "🌱 FARM"
+                "{t(lang, T_GAME_FARM_TITLE)}"
             }
             div {
                 style: "display: grid; grid-template-columns: 1fr 1fr; gap: 10px;",
@@ -1207,6 +1275,7 @@ fn FarmZone(
                         logs,
                         coins,
                         on_floater,
+                        lang,
                     }
                 }
             }
@@ -1224,12 +1293,13 @@ fn FarmPlot(
     logs: Signal<Vec<String>>,
     coins: u32,
     on_floater: EventHandler<(String, u32)>,
+    lang: crate::trios::core::Lang,
 ) -> Element {
     let (emoji, label, can_plant, can_water, can_harvest, accent) = match stage {
-        FarmStage::Empty => ("🟫", "Empty soil", true, false, false, "#2a2a4a"),
-        FarmStage::Planted => ("🌱", "Seedling", false, true, false, "#39ff14"),
-        FarmStage::Watered => ("🌿", "Growing fast", false, false, false, "#00e5ff"),
-        FarmStage::Grown => ("🌳", "Ready!", false, false, true, "#ffe600"),
+        FarmStage::Empty => ("🟫", t(lang, T_GAME_FARM_EMPTY).to_string(), true, false, false, "#2a2a4a"),
+        FarmStage::Planted => ("🌱", t(lang, T_GAME_FARM_PLANTED).to_string(), false, true, false, "#39ff14"),
+        FarmStage::Watered => ("🌿", t(lang, T_GAME_FARM_WATERED).to_string(), false, false, false, "#00e5ff"),
+        FarmStage::Grown => ("🌳", t(lang, T_GAME_FARM_GROWN).to_string(), false, false, true, "#ffe600"),
     };
 
     let plant_emoji = if watering { "💧" } else { emoji };
@@ -1250,7 +1320,7 @@ fn FarmPlot(
             div {
                 style: "display: flex; gap: 6px; width: 100%; margin-top: 8px;",
                 ActionButton {
-                    label: "🌱 Plant",
+                    label: t(lang, T_GARDEN_PLANT).to_string(),
                     active: can_plant && coins >= PLANT_COST,
                     color: "#39ff14",
                     on_click: {
@@ -1267,13 +1337,13 @@ fn FarmPlot(
                             on_floater.call((format!("-{PLANT_COST} 🪙"), 260));
                             logs.with_mut(|l| {
                                 if l.len() > 6 { l.remove(0); }
-                                l.push(format!("Planted seed -{}", PLANT_COST));
+                                l.push(tf(lang, T_GAME_LOG_PLANTED_SEED, &[PLANT_COST.to_string()]));
                             });
                         }
                     },
                 }
                 ActionButton {
-                    label: "💧 Water",
+                    label: t(lang, T_GAME_FARM_WATER).to_string(),
                     active: can_water,
                     color: "#00e5ff",
                     on_click: {
@@ -1289,7 +1359,7 @@ fn FarmPlot(
                             });
                             logs.with_mut(|l| {
                                 if l.len() > 6 { l.remove(0); }
-                                l.push("Watering...".into());
+                                l.push(t(lang, T_GAME_LOG_WATERING).to_string());
                             });
                             let mut state = state;
                             spawn(async move {
@@ -1304,7 +1374,7 @@ fn FarmPlot(
                     },
                 }
                 ActionButton {
-                    label: "✂️ Harvest",
+                    label: t(lang, T_GARDEN_HARVEST).to_string(),
                     active: can_harvest,
                     color: "#ffe600",
                     on_click: {
@@ -1325,7 +1395,7 @@ fn FarmPlot(
                                 on_floater.call((format!("+{} 🪙", HARVEST_REWARD), 260));
                                 logs.with_mut(|l| {
                                     if l.len() > 6 { l.remove(0); }
-                                    l.push(format!("Harvest! +{} 🪙", HARVEST_REWARD));
+                                    l.push(tf(lang, T_GAME_LOG_HARVEST, &[HARVEST_REWARD.to_string()]));
                                 });
                                 haptic_success();
                             }
@@ -1345,19 +1415,20 @@ fn PartyZone(
     logs: Signal<Vec<String>>,
     party_active: bool,
     party_timer_ms: u32,
+    lang: crate::trios::core::Lang,
 ) -> Element {
     let cost: u32 = 40;
     let seconds = party_timer_ms / 1000;
     let emoji = if party_active { "🎉" } else { "🎧" };
     let status_text = if party_active {
-        "Party ON — tips +5 🪙 per serve"
+        t(lang, T_GAME_PARTY_STATUS_ON).to_string()
     } else {
-        "Start party to boost shop income"
+        t(lang, T_GAME_PARTY_STATUS_OFF).to_string()
     };
     let button_label = if party_active {
-        "🔥 Party ON"
+        t(lang, T_GAME_PARTY_ON).to_string()
     } else {
-        "🚀 Start Party"
+        t(lang, T_GAME_PARTY_START).to_string()
     };
 
     rsx! {
@@ -1368,7 +1439,7 @@ fn PartyZone(
                     font-size: 13px; font-weight: 700; letter-spacing: 2px;
                     color: #d946ef; text-align: center;
                 ",
-                "🎧 DJ ZONE"
+                "{t(lang, T_GAME_PARTY_TITLE)}"
             }
             div {
                 style: "font-size: 72px; filter: drop-shadow(0 0 20px rgba(217,70,239,0.5)); animation: game-bounce 0.6s infinite alternate;",
@@ -1388,7 +1459,7 @@ fn PartyZone(
                 }
             }
             ActionButton {
-                label: button_label,
+                label: "{button_label}",
                 active: !party_active && state.read().coins >= cost,
                 color: "#d946ef",
                 on_click: {
@@ -1404,7 +1475,7 @@ fn PartyZone(
                         });
                         logs.with_mut(|l| {
                             if l.len() > 6 { l.remove(0); }
-                            l.push(format!("Party started! -{}", cost));
+                            l.push(tf(lang, T_GAME_LOG_PARTY_STARTED, &[cost.to_string()]));
                         });
                         haptic_success();
                     }
@@ -1412,7 +1483,7 @@ fn PartyZone(
             }
             div {
                 style: "font-size: 11px; color: #666; text-align: center;",
-                "Tip: party adds +5 🪙 per serve while active"
+                "{t(lang, T_GAME_PARTY_TIP)}"
             }
         }
     }
@@ -1427,13 +1498,14 @@ fn GrillZone(
     grill_stock: u32,
     grill_cooking: bool,
     grill_timer_ms: u32,
+    lang: crate::trios::core::Lang,
 ) -> Element {
     let cost: u32 = 10;
     let emoji = if grill_cooking { "🔥" } else { "🍖" };
     let button_label = if grill_cooking {
-        "🔥 Cooking..."
+        t(lang, T_GAME_GRILL_COOKING).to_string()
     } else {
-        "🍳 Cook"
+        t(lang, T_GAME_GRILL_COOK).to_string()
     };
 
     rsx! {
@@ -1444,7 +1516,7 @@ fn GrillZone(
                     font-size: 13px; font-weight: 700; letter-spacing: 2px;
                     color: #ff9d00; text-align: center;
                 ",
-                "🍖 VERANDA GRILL"
+                "{t(lang, T_GAME_GRILL_TITLE)}"
             }
             div {
                 style: "font-size: 72px; filter: drop-shadow(0 0 20px rgba(255,157,0,0.4));",
@@ -1452,15 +1524,15 @@ fn GrillZone(
             }
             div {
                 style: "font-size: 16px; font-weight: 700; color: #ff9d00;",
-                "Stock: {grill_stock}"
+                "{tf(lang, T_GAME_GRILL_STOCK, &[grill_stock.to_string()])}"
             }
             div {
                 style: "font-size: 13px; color: #888; text-align: center;",
-                "Cook food. Serves hungry customers instantly when in shop."
+                "{t(lang, T_GAME_GRILL_DESC)}"
             }
             div {
                 style: "font-size: 11px; color: #666; text-align: center;",
-                "Tip: grilled food auto-serves hungry customers"
+                "{t(lang, T_GAME_GRILL_TIP)}"
             }
             if grill_cooking {
                 div { style: "width: 100%;",
@@ -1470,7 +1542,7 @@ fn GrillZone(
             div {
                 style: "display: flex; gap: 8px; width: 100%;",
                 ActionButton {
-                    label: button_label,
+                    label: "{button_label}",
                     active: !grill_cooking && state.read().coins >= cost,
                     color: "#ff9d00",
                     on_click: {
@@ -1486,7 +1558,7 @@ fn GrillZone(
                             });
                             logs.with_mut(|l| {
                                 if l.len() > 6 { l.remove(0); }
-                                l.push(format!("Cooking started -{}", cost));
+                                l.push(tf(lang, T_GAME_LOG_COOKING_STARTED, &[cost.to_string()]));
                             });
                             let mut state = state;
                             spawn(async move {
@@ -1515,6 +1587,7 @@ fn UpgradeButton(
     maxed: bool,
     coins: u32,
     on_click: EventHandler<()>,
+    lang: crate::trios::core::Lang,
 ) -> Element {
     let bg = if maxed {
         "#1a3a1a"
@@ -1543,7 +1616,7 @@ fn UpgradeButton(
             onclick: move |_| on_click.call(()),
             div { "{label}" }
             div { style: "font-size: 10px; opacity: 0.8;",
-                if maxed { "MAX" } else { "Lv{level} • {cost}🪙" }
+                if maxed { "{t(lang, T_GAME_UPGRADE_MAX)}" } else { "{tf(lang, T_GAME_UPGRADE_LEVEL_COST, &[level.to_string(), cost.to_string()])}" }
             }
         }
     }
@@ -1553,7 +1626,7 @@ fn UpgradeButton(
 
 #[component]
 fn ActionButton(
-    label: &'static str,
+    label: String,
     active: bool,
     color: &'static str,
     on_click: EventHandler<()>,
@@ -1644,6 +1717,7 @@ fn quick_serve_with_grill(
     idx: usize,
     logs: &mut Signal<Vec<String>>,
     on_floater: EventHandler<(String, u32)>,
+    lang: crate::trios::core::Lang,
 ) {
     let vip = state.with(|s| match s.tables.get(idx) {
         Some(TableState::Seated { vip }) => Some(*vip),
@@ -1667,7 +1741,7 @@ fn quick_serve_with_grill(
         if l.len() > 6 {
             l.remove(0);
         }
-        l.push(format!("Quick grill serve at table {}", idx + 1));
+        l.push(tf(lang, T_GAME_LOG_QUICK_GRILL, &[(idx + 1).to_string()]));
     });
 
     let mut state = *state;
@@ -1704,7 +1778,7 @@ fn quick_serve_with_grill(
             if l.len() > 6 {
                 l.remove(0);
             }
-            l.push(format!("Grilled customer left +{} 🪙", earned));
+            l.push(tf(lang, T_GAME_LOG_GRILLED_LEFT, &[earned.to_string()]));
         });
     });
 }
@@ -1716,6 +1790,7 @@ fn perform_shop_action(
     _reward: u32,
     upgrades: &Upgrades,
     on_floater: EventHandler<(String, u32)>,
+    lang: crate::trios::core::Lang,
 ) {
     let action: Option<(WoodyAction, String)> = state.with_mut(|s| {
         let table = s.tables.get_mut(idx)?;
@@ -1725,21 +1800,21 @@ fn perform_shop_action(
                 *table = TableState::Preparing { order, vip };
                 Some((
                     WoodyAction::PreparingAt(idx, order),
-                    format!("Taking order at table {}", idx + 1),
+                    tf(lang, T_GAME_LOG_TAKING_ORDER, &[(idx + 1).to_string()]),
                 ))
             }
             TableState::Ready { order, vip } => {
                 *table = TableState::Eating { vip };
                 Some((
                     WoodyAction::Serving(idx, order),
-                    format!("Serving at table {}", idx + 1),
+                    tf(lang, T_GAME_LOG_SERVING, &[(idx + 1).to_string()]),
                 ))
             }
             TableState::Dirty => {
                 *table = TableState::Empty;
                 Some((
                     WoodyAction::Cleaning(idx),
-                    format!("Cleaning table {}", idx + 1),
+                    tf(lang, T_GAME_LOG_CLEANING, &[(idx + 1).to_string()]),
                 ))
             }
             _ => None,
@@ -1786,7 +1861,7 @@ fn perform_shop_action(
                     if l.len() > 6 {
                         l.remove(0);
                     }
-                    l.push(format!("{} ready at table {}", order.emoji(), idx + 1));
+                    l.push(tf(lang, T_GAME_LOG_READY_AT_TABLE, &[order.emoji().to_string(), (idx + 1).to_string()]));
                 });
             }
             WoodyAction::Serving(idx, _order) => {
@@ -1821,7 +1896,7 @@ fn perform_shop_action(
                     if l.len() > 6 {
                         l.remove(0);
                     }
-                    l.push(format!("Customer left +{} 🪙", earned));
+                    l.push(tf(lang, T_GAME_LOG_CUSTOMER_LEFT, &[earned.to_string()]));
                 });
             }
             WoodyAction::Cleaning(_idx) => {
@@ -1836,7 +1911,7 @@ fn perform_shop_action(
                     if l.len() > 6 {
                         l.remove(0);
                     }
-                    l.push("Table cleaned".into());
+                    l.push(t(lang, T_GAME_LOG_TABLE_CLEANED).to_string());
                 });
             }
             _ => {}

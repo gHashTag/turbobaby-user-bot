@@ -1,4 +1,4 @@
-use crate::trios::i18n::{t, T_ACC_DESC, T_ACC_TITLE, T_ADD_TO_CART, T_FILTER_ALL};
+use crate::trios::i18n::{t, tf, T_ACC_DESC, T_ACC_TITLE, T_ADD_TO_CART, T_CATALOG_EMPTY, T_CATALOG_ERROR, T_FILTER_ALL, T_LOW_STOCK, T_MENU_SOLD_OUT};
 use crate::ui::api::context::api_base_url;
 use crate::ui::components::bottom_nav::BottomNav;
 use crate::ui::components::card_media::CardMedia;
@@ -75,10 +75,14 @@ pub fn AccessoriesScreen() -> Element {
     let mut cart = use_context::<Signal<Cart>>();
     let mut active_category = use_signal(|| "All".to_string());
 
-    let acc_title = t(crate::ui::lang::current_lang(), T_ACC_TITLE);
-    let acc_desc = t(crate::ui::lang::current_lang(), T_ACC_DESC);
-    let filter_all = t(crate::ui::lang::current_lang(), T_FILTER_ALL);
-    let add_to_cart = t(crate::ui::lang::current_lang(), T_ADD_TO_CART);
+    let lang = crate::ui::lang::current_lang();
+    let acc_title = t(lang, T_ACC_TITLE);
+    let acc_desc = t(lang, T_ACC_DESC);
+    let filter_all = t(lang, T_FILTER_ALL);
+    let add_to_cart = t(lang, T_ADD_TO_CART);
+    let catalog_empty = t(lang, T_CATALOG_EMPTY);
+    let catalog_error = t(lang, T_CATALOG_ERROR);
+    let sold_out_label = t(lang, T_MENU_SOLD_OUT);
 
     let accessories_resource = use_resource(|| async move {
         let base = api_base_url();
@@ -179,7 +183,7 @@ pub fn AccessoriesScreen() -> Element {
                     Some(Ok(accessories)) if accessories.is_empty() => rsx! {
                         div { style: "text-align:center;padding:48px 16px;",
                             div { style: "font-size:70px;margin-bottom:12px;", "🛠️" }
-                            p { style: "font-size:15px;color:#888;", "No accessories available yet" }
+                            p { style: "font-size:15px;color:#888;", "{catalog_empty}" }
                         }
                     },
                     Some(Ok(_)) => rsx! {
@@ -188,15 +192,15 @@ pub fn AccessoriesScreen() -> Element {
                                 {
                                     let a = accessory.clone();
                                     let a_select = a.clone();
-                                    render_accessory_card(a, cart, add_to_cart, move || selected_accessory.set(Some(a_select.clone())), move |url| selected_accessory_video.set(Some(url)))
+                                    render_accessory_card(a, cart, lang, add_to_cart, sold_out_label, move || selected_accessory.set(Some(a_select.clone())), move |url| selected_accessory_video.set(Some(url)))
                                 }
                             }
                         }
                     },
-                    Some(Err(e)) => rsx! {
+                    Some(Err(_e)) => rsx! {
                         div { style: "text-align:center;padding:48px 16px;",
                             div { style: "font-size:70px;margin-bottom:12px;", "⚠️" }
-                            p { style: "font-size:15px;color:#ff4757;", "Error: {e}" }
+                            p { style: "font-size:15px;color:#ff4757;", "{catalog_error}" }
                         }
                     },
                     None => rsx! {
@@ -270,7 +274,9 @@ pub fn AccessoriesScreen() -> Element {
 fn render_accessory_card<S, V>(
     a: ApiAccessory,
     mut cart: Signal<Cart>,
+    lang: crate::trios::core::Lang,
     add_to_cart: &'static str,
+    sold_out_label: &'static str,
     mut on_select: S,
     mut on_video: V,
 ) -> Element
@@ -321,7 +327,7 @@ where
                 div { style: "position:absolute;top:8px;left:8px;display:flex;flex-direction:column;gap:4px;z-index:2;align-items:flex-start;",
                     span { style: "font-size:13px;font-weight:700;background:{cat_color};color:#000;padding:4px 8px;box-shadow:2px 2px 0 #000;", "{badge_label}" }
                     {show_out_of_stock.then(|| rsx! {
-                        span { style: "font-size:13px;font-weight:700;background:#ff4757;color:#fff;padding:4px 8px;box-shadow:2px 2px 0 #000;", "SOLD OUT" }
+                        span { style: "font-size:13px;font-weight:700;background:#ff4757;color:#fff;padding:4px 8px;box-shadow:2px 2px 0 #000;", "{sold_out_label}" }
                     })}
                 }
             }
@@ -335,7 +341,7 @@ where
                     }
                 }
                 if show_low_stock && !show_out_of_stock {
-                    div { style: "font-size:13px;color:#ffe600;margin-bottom:4px;", "⚠ Only {stock} left" }
+                    div { style: "font-size:13px;color:#ffe600;margin-bottom:4px;", "{tf(lang, T_LOW_STOCK, &[stock.to_string()])}" }
                 }
                 div { style: "display:flex;gap:6px;align-items:baseline;margin-bottom:6px;",
                     span { style: "font-size:20px;font-weight:800;color:#ffe600;text-shadow:2px 2px 0 #000;", "{price_str}" }
@@ -378,7 +384,7 @@ where
                             border:4px solid #2a2a4a;
                             box-shadow:3px 3px 0 #000;
                             cursor:not-allowed;
-                        ", "Sold Out" }
+                        ", "{sold_out_label}" }
                     }
                 }}
             }

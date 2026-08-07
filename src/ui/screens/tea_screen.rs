@@ -1,8 +1,10 @@
-use crate::trios::i18n::{t, T_ADD_TO_CART, T_FILTER_ALL, T_TEA_DESC, T_TEA_TITLE};
+use crate::trios::i18n::{t, tf, T_ADD_TO_CART, T_CATALOG_EMPTY, T_CATALOG_ERROR, T_FILTER_ALL, T_LOW_STOCK, T_MENU_SOLD_OUT, T_TEA_DESC, T_TEA_TITLE};
 use crate::ui::api::context::api_base_url;
 use crate::ui::components::bottom_nav::BottomNav;
+use crate::ui::components::card_media::CardMedia;
 use crate::ui::components::product_detail_modal::ProductDetailModal;
 use crate::ui::components::skeleton::{Skeleton, SkeletonShape};
+use crate::ui::components::video_modal::VideoModal;
 use crate::ui::share::{share_product, ProductKind, SharedProduct};
 use crate::ui::state::{Cart, CartItem, CartItemType};
 use dioxus::prelude::*;
@@ -43,11 +45,17 @@ pub fn TeaScreen() -> Element {
     // Held at screen level (one modal) because the cards render inline in a
     // `for` loop, where a per-card `use_signal` would violate hook ordering.
     let mut selected_tea = use_signal(|| None::<ApiTea>);
+    // Full-screen video modal for tea product videos (hoisted to screen level).
+    let mut selected_tea_video = use_signal(|| None::<String>);
 
-    let tea_title = t(crate::ui::lang::current_lang(), T_TEA_TITLE);
-    let tea_desc = t(crate::ui::lang::current_lang(), T_TEA_DESC);
-    let filter_all = t(crate::ui::lang::current_lang(), T_FILTER_ALL);
-    let add_to_cart = t(crate::ui::lang::current_lang(), T_ADD_TO_CART);
+    let lang = crate::ui::lang::current_lang();
+    let tea_title = t(lang, T_TEA_TITLE);
+    let tea_desc = t(lang, T_TEA_DESC);
+    let filter_all = t(lang, T_FILTER_ALL);
+    let add_to_cart = t(lang, T_ADD_TO_CART);
+    let catalog_empty = t(lang, T_CATALOG_EMPTY);
+    let catalog_error = t(lang, T_CATALOG_ERROR);
+    let sold_out_label = t(lang, T_MENU_SOLD_OUT);
 
     let tea_resource = use_resource(|| async move {
         let base = api_base_url();
@@ -180,7 +188,7 @@ pub fn TeaScreen() -> Element {
                     Some(Ok(teas)) if teas.is_empty() => rsx! {
                         div { style: "text-align: center; padding: 40px 16px;",
                             div { style: "font-size: 70px; margin-bottom: 12px;", "🍵" }
-                            p { style: "font-size: 13px; color: #8b8b9e;", "No tea products available yet" }
+                            p { style: "font-size: 13px; color: #8b8b9e;", "{catalog_empty}" }
                         }
                     },
                     Some(Ok(_)) => rsx! {
@@ -213,38 +221,26 @@ pub fn TeaScreen() -> Element {
                                             opacity: {opacity}; cursor: pointer;
                                         ",
                                             onclick: move |_| selected_tea.set(Some(t_click.clone())),
-                                            div { style: "
-                                                min-height: 100px;
-                                                background: linear-gradient(135deg, #16213e, #16213e);
-                                                display: flex; align-items: center; justify-content: center;
-                                                font-size: 36px; position: relative;
-                                            ",
-                                                if let Some(ref img) = t.image_url {
-                                                    if !img.is_empty() && (img.starts_with("http://") || img.starts_with("https://") || (img.starts_with("/") && !img.starts_with("//"))) {
-                                                        img { src: "{img}", alt: "{t_name}", style: "width: 100%; height: auto; object-fit: contain; display: block;" }
-                                                    } else {
-                                                        "{emoji}"
-                                                    }
-                                                } else {
-                                                    "{emoji}"
-                                                }
-                                                if show_out_of_stock {
-                                                    span { style: "
-                                                        position: absolute; bottom: 4px; left: 50%;
-                                                        transform: translateX(-50%);
-                                                        font-size: 13px; background: #ff4757; color: white;
-                                                        padding: 1px 6px; border-radius: 0;
-                                                    ", "SOLD OUT" }
-                                                }
-                                                {if let Some(ref vid) = t.video_url {
-                                                    if !vid.is_empty() && (vid.starts_with("http://") || vid.starts_with("https://") || (vid.starts_with("/") && !vid.starts_with("//"))) {
-                                                        let vid = vid.clone();
-                                                        rsx! {
-                                                            a { href: "{vid}", target: "_blank", "aria-label": "Смотреть видео", style: "position:absolute;bottom:4px;right:4px;width:44px;height:44px;border-radius:50%;background:rgba(0,0,0,0.6);border:1px solid #fff;color:#fff;font-size:16px;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:2;text-decoration:none;",
-                                                                onclick: move |e: Event<MouseData>| { e.stop_propagation(); }, "▶️" }
+                                            {
+                                                let video_t = t.clone();
+                                                rsx! {
+                                                    CardMedia {
+                                                        image_url: t.image_url.clone(),
+                                                        video_url: t.video_url.clone(),
+                                                        emoji: emoji.to_string(),
+                                                        alt: t_name.clone(),
+                                                        aspect_ratio: Some("1/1".to_string()),
+                                                        on_video_click: move |_| selected_tea_video.set(video_t.video_url.clone()),
+                                                        if show_out_of_stock {
+                                                            span { style: "
+                                                                position: absolute; bottom: 4px; left: 50%;
+                                                                transform: translateX(-50%);
+                                                                font-size: 13px; background: #ff4757; color: white;
+                                                                padding: 1px 6px; border-radius: 0; z-index: 4;
+                                                            ", "{sold_out_label}" }
                                                         }
-                                                    } else { rsx!{ "" } }
-                                                } else { rsx!{ "" } }}
+                                                    }
+                                                }
                                             }
                                             div { style: "padding: 8px;",
                                                 div { style: "font-size: 13px; font-weight: 700; color: #b388ff; margin-bottom: 2px; text-transform: uppercase;", "{sub_disp}" }
@@ -253,7 +249,7 @@ pub fn TeaScreen() -> Element {
                                                     div { style: "font-size: 13px; color: #8b8b9e; margin-bottom: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;", "{desc}" }
                                                 }
                                                 if show_low_stock && !show_out_of_stock {
-                                                    div { style: "font-size: 13px; color: #ffe600; margin-bottom: 4px;", "⚠ Only {stock} left" }
+                                                    div { style: "font-size: 13px; color: #ffe600; margin-bottom: 4px;", "{tf(lang, T_LOW_STOCK, &[stock.to_string()])}" }
                                                 }
                                                 div { style: "font-size: 20px; font-weight: 800; color: #ffe600; text-shadow: 2px 2px 0 #000; margin-bottom: 6px;", "{price_str}" }
                                             }
@@ -263,7 +259,7 @@ pub fn TeaScreen() -> Element {
                                                         font-size: 13px; width: 100%; padding: 8px;
                                                         background: transparent; color: #8b8b9e;
                                                         border: 4px solid #2a2a4a; border-radius: 0; cursor: not-allowed;
-                                                    ", "Sold Out" }
+                                                    ", "{sold_out_label}" }
                                                 } else {
                                                     button {
                                                         style: "
@@ -297,10 +293,10 @@ pub fn TeaScreen() -> Element {
                             }
                         }
                     },
-                    Some(Err(e)) => rsx! {
+                    Some(Err(_e)) => rsx! {
                         div { style: "text-align: center; padding: 40px 16px;",
                             div { style: "font-size: 70px; margin-bottom: 12px;", "⚠️" }
-                            p { style: "font-size: 13px; color: #ff4757;", "Error: {e}" }
+                            p { style: "font-size: 13px; color: #ff4757;", "{catalog_error}" }
                         }
                     },
                     None => rsx! {
@@ -354,6 +350,10 @@ pub fn TeaScreen() -> Element {
                         on_close: move |_| selected_tea.set(None),
                     }
                 }
+            })}
+
+            {selected_tea_video().map(|url| rsx! {
+                VideoModal { url, on_close: move |_| selected_tea_video.set(None) }
             })}
 
             BottomNav {}

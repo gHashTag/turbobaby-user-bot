@@ -1,8 +1,17 @@
 use crate::trios::garden::{calculate_progress, GrowthStage, Plant};
 use crate::trios::i18n::{
-    t, T_BTN_WATER, T_GARDEN_CANCEL, T_GARDEN_CHANGE_PRODUCT, T_GARDEN_CONFIRM_RESET,
-    T_GARDEN_EMPTY_CTA, T_GARDEN_EMPTY_LABEL, T_GARDEN_LOADING, T_GARDEN_RESET_CONFIRM_BODY,
-    T_GARDEN_RESET_CONFIRM_TITLE, T_GARDEN_RESET_PROGRESS, T_GARDEN_SUBTITLE, T_GARDEN_TITLE,
+    t, tf, T_BTN_WATER, T_CLOSE, T_GARDEN_CANCEL, T_GARDEN_CHANGE_PRODUCT,
+    T_GARDEN_CAT_ACCESSORY, T_GARDEN_CAT_ACCESSORY_SET, T_GARDEN_CAT_OTHER,
+    T_GARDEN_CAT_SET, T_GARDEN_CAT_STRAIN, T_GARDEN_CAT_TEA, T_GARDEN_CAT_TEA_SET,
+    T_GARDEN_CHOOSER_EMPTY, T_GARDEN_CHOOSER_ERROR, T_GARDEN_CHOOSER_LOADING,
+    T_GARDEN_CHOOSER_TITLE, T_GARDEN_CHOOSE_PRODUCT, T_GARDEN_CHOOSE_PRODUCT_HINT,
+    T_GARDEN_COOLDOWN, T_GARDEN_CONFIRM_RESET, T_GARDEN_DIAGNOSTICS_COPIED,
+    T_GARDEN_DIAGNOSTICS_COPY, T_GARDEN_DISCOUNT_BADGE, T_GARDEN_EMPTY_CTA,
+    T_GARDEN_EMPTY_LABEL, T_GARDEN_ERROR_COOLDOWN, T_GARDEN_ERROR_HARVEST,
+    T_GARDEN_ERROR_PRODUCT_UNAVAILABLE, T_GARDEN_ERROR_RESET, T_GARDEN_HARVEST,
+    T_GARDEN_LOADING, T_GARDEN_PLANT_ALT, T_GARDEN_PRODUCT_ALT, T_GARDEN_READY,
+    T_GARDEN_RESET_CONFIRM_BODY, T_GARDEN_RESET_CONFIRM_TITLE, T_GARDEN_RESET_PROGRESS,
+    T_GARDEN_SUBTITLE, T_GARDEN_TITLE,
 };
 use crate::ui::api::context::api_base_url;
 use crate::ui::components::ErrorBanner;
@@ -389,22 +398,33 @@ pub fn Garden() -> Element {
     let is_loading = *loading.read();
     let err = error_msg.read().clone();
     let init_for_closures = init_data.clone();
+    let lang = crate::ui::lang::current_lang();
 
     let bg = "#0f0f1a";
     let bg_card = "#1a1a2e";
     let border_subtle = "rgba(255,255,255,0.1)";
-    let title_text = t(crate::ui::lang::current_lang(), T_GARDEN_TITLE);
-    let subtitle_text = t(crate::ui::lang::current_lang(), T_GARDEN_SUBTITLE);
-    let water_text = t(crate::ui::lang::current_lang(), T_BTN_WATER);
-    let loading_text = t(crate::ui::lang::current_lang(), T_GARDEN_LOADING);
-    let empty_label = t(crate::ui::lang::current_lang(), T_GARDEN_EMPTY_LABEL);
-    let empty_cta = t(crate::ui::lang::current_lang(), T_GARDEN_EMPTY_CTA);
-    let change_product_text = t(crate::ui::lang::current_lang(), T_GARDEN_CHANGE_PRODUCT);
-    let reset_progress_text = t(crate::ui::lang::current_lang(), T_GARDEN_RESET_PROGRESS);
-    let reset_confirm_title = t(crate::ui::lang::current_lang(), T_GARDEN_RESET_CONFIRM_TITLE);
-    let reset_confirm_body = t(crate::ui::lang::current_lang(), T_GARDEN_RESET_CONFIRM_BODY);
-    let cancel_text = t(crate::ui::lang::current_lang(), T_GARDEN_CANCEL);
-    let confirm_reset_text = t(crate::ui::lang::current_lang(), T_GARDEN_CONFIRM_RESET);
+    let title_text = t(lang, T_GARDEN_TITLE);
+    let subtitle_text = t(lang, T_GARDEN_SUBTITLE);
+    let water_text = t(lang, T_BTN_WATER);
+    let loading_text = t(lang, T_GARDEN_LOADING);
+    let empty_label = t(lang, T_GARDEN_EMPTY_LABEL);
+    let empty_cta = t(lang, T_GARDEN_EMPTY_CTA);
+    let choose_product_text = t(lang, T_GARDEN_CHOOSE_PRODUCT);
+    let choose_product_hint = t(lang, T_GARDEN_CHOOSE_PRODUCT_HINT);
+    let change_product_text = t(lang, T_GARDEN_CHANGE_PRODUCT);
+    let reset_progress_text = t(lang, T_GARDEN_RESET_PROGRESS);
+    let reset_confirm_title = t(lang, T_GARDEN_RESET_CONFIRM_TITLE);
+    let reset_confirm_body = t(lang, T_GARDEN_RESET_CONFIRM_BODY);
+    let cancel_text = t(lang, T_GARDEN_CANCEL);
+    let confirm_reset_text = t(lang, T_GARDEN_CONFIRM_RESET);
+    let diagnostics_copy = t(lang, T_GARDEN_DIAGNOSTICS_COPY);
+    let diagnostics_copied = t(lang, T_GARDEN_DIAGNOSTICS_COPIED);
+    let plant_alt = t(lang, T_GARDEN_PLANT_ALT);
+    let product_alt = t(lang, T_GARDEN_PRODUCT_ALT);
+    let discount_badge = t(lang, T_GARDEN_DISCOUNT_BADGE);
+    let ready_text = t(lang, T_GARDEN_READY);
+    let cooldown_text = t(lang, T_GARDEN_COOLDOWN);
+    let harvest_text = t(lang, T_GARDEN_HARVEST);
 
     rsx! {
         div { style: "min-height: 100vh; background: {bg}; color: #e8e8e8; font-family: 'Press Start 2P', monospace; padding-bottom: 80px;",
@@ -432,10 +452,11 @@ pub fn Garden() -> Element {
                         style: "padding:8px 14px;background:#ff4757;color:#fff;border:4px solid #c0392b;box-shadow:3px 3px 0 #000;font-size:11px;cursor:pointer;",
                         onclick: move |_| {
                             if copy_to_clipboard(&err) {
-                                let _ = js_sys::eval("alert('📋 Диагностика скопирована')");
+                                let alert_js = format!("alert({});", serde_json::Value::String(diagnostics_copied.to_string()));
+                                let _ = js_sys::eval(&alert_js);
                             }
                         },
-                        "📋 Скопировать диагностику"
+                        {diagnostics_copy}
                     }
                 }
             }
@@ -449,7 +470,7 @@ pub fn Garden() -> Element {
                         onclick: move |_| {
                             show_chooser.set(true);
                         },
-                        if plant_list.is_empty() { "🌱 Выбрать товар" } else { "🔄 {change_product_text}" }
+                        if plant_list.is_empty() { "🌱 {choose_product_text}" } else { "🔄 {change_product_text}" }
                     }
                     if !plant_list.is_empty() {
                         button {
@@ -473,7 +494,7 @@ pub fn Garden() -> Element {
                     div { style: "font-size: 48px; margin-bottom: 16px;", "🌱" }
                     p { style: "font-size: 11px; color: #8b8b9e; margin-bottom: 8px;", "{empty_label}" }
                     p { style: "font-size: 13px; color: #8b8b9e;", "{empty_cta}" }
-                    p { style: "font-size: 13px; color: #39ff14; margin-top: 12px;", "↑ Нажми «Выбрать товар» вверху" }
+                    p { style: "font-size: 13px; color: #39ff14; margin-top: 12px;", "↑ {choose_product_hint}" }
                 }
             } else {
                 div { style: "max-width: 400px; margin: 0 auto; padding: 0 16px;",
@@ -583,7 +604,7 @@ pub fn Garden() -> Element {
                                         ps.write().retain(|p| p.id != plant_id);
                                         crate::ui::telegram::TelegramApp::init().haptic_notification(crate::ui::telegram::HapticNotification::Success);
                                     }
-                                    Err(e) => { es.set(format!("Не удалось собрать урожай: {}", e)); }
+                                    Err(e) => { es.set(tf(lang, T_GARDEN_ERROR_HARVEST, &[e])); }
                                 }
                             });
                         };
@@ -597,15 +618,15 @@ pub fn Garden() -> Element {
                                 div { style: "position: relative; width: 100%; aspect-ratio: 1/1; overflow: hidden; background: #111;",
                                     img {
                                         src: "{img_url}",
-                                        alt: "Растение",
+                                        alt: "{plant_alt}",
                                         style: "width: 100%; height: 100%; object-fit: cover;",
                                     }
                                     // Target product thumbnail (top-left): what
                                     // discount this bush is growing.
                                     if let Some(timg) = product_thumb.clone() {
                                         div { style: "position:absolute;top:12px;left:12px;display:flex;align-items:center;gap:6px;background:rgba(0,0,0,0.65);padding:4px 8px;border-radius:8px;z-index:2;",
-                                            img { src: "{timg}", alt: "Товар", style: "width:34px;height:34px;object-fit:cover;border-radius:6px;border:1px solid #39ff14;" }
-                                            span { style: "font-size:10px;color:#39ff14;font-weight:700;", "🎯 скидка" }
+                                            img { src: "{timg}", alt: "{product_alt}", style: "width:34px;height:34px;object-fit:cover;border-radius:6px;border:1px solid #39ff14;" }
+                                            span { style: "font-size:10px;color:#39ff14;font-weight:700;", "{discount_badge}" }
                                         }
                                     }
                                     // Gradient overlay at bottom
@@ -623,7 +644,7 @@ pub fn Garden() -> Element {
                                     // Ready badge
                                     if is_ready {
                                         div { style: "position: absolute; top: 12px; right: 12px; font-size: 10px; padding: 4px 10px; border-radius: 12px; background: rgba(255,215,0,0.9); color: #000; font-weight: 700;",
-                                            "🏆 READY"
+                                            "{ready_text}"
                                         }
                                     }
                                 }
@@ -657,7 +678,7 @@ pub fn Garden() -> Element {
                                                     background: linear-gradient(135deg, #ffd700, #ff9500);
                                                 ",
                                                 onclick: harvest_click,
-                                                "🏆 HARVEST"
+                                                "{harvest_text}"
                                             }
                                         } else if can_w {
                                             button {
@@ -676,7 +697,7 @@ pub fn Garden() -> Element {
                                                 font-size: 13px; color: #555;
                                                 background: rgba(255,255,255,0.03);
                                             ",
-                                                "⏳ Cooldown..."
+                                                "{cooldown_text}"
                                             }
                                         }
                                     }
@@ -726,7 +747,7 @@ pub fn Garden() -> Element {
                                                     ps.set(p2);
                                                 }
                                             }
-                                            Err(e) => { es.set(format!("Не удалось сбросить: {}", e)); }
+                                            Err(e) => { es.set(tf(lang, T_GARDEN_ERROR_RESET, &[e])); }
                                         }
                                     });
                                 },
@@ -752,15 +773,16 @@ fn GardenChooser(
     let products = use_resource(|| async move { fetch_garden_products().await });
     let mut busy = use_signal(|| false);
     let mut err = use_signal(String::new);
+    let lang = crate::ui::lang::current_lang();
 
     let cat_label = |c: &str| match c {
-        "strain" => "🌿 Сорта",
-        "accessory" => "💨 Аксессуары",
-        "tea" => "🥤 Напитки",
-        "set" => "📦 Наборы",
-        "accessory_set" => "🔧 Сеты аксессуаров",
-        "tea_set" => "🫖 Сеты напитков",
-        _ => "Прочее",
+        "strain" => t(lang, T_GARDEN_CAT_STRAIN),
+        "accessory" => t(lang, T_GARDEN_CAT_ACCESSORY),
+        "tea" => t(lang, T_GARDEN_CAT_TEA),
+        "set" => t(lang, T_GARDEN_CAT_SET),
+        "accessory_set" => t(lang, T_GARDEN_CAT_ACCESSORY_SET),
+        "tea_set" => t(lang, T_GARDEN_CAT_TEA_SET),
+        _ => t(lang, T_GARDEN_CAT_OTHER),
     };
 
     rsx! {
@@ -771,9 +793,9 @@ fn GardenChooser(
                 style: "background:#0f0f1a;width:100%;max-width:520px;max-height:85vh;overflow:auto;border-top:4px solid #39ff14;padding:16px;",
                 onclick: move |e: Event<MouseData>| e.stop_propagation(),
                 div { style: "display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;",
-                    div { style: "font-size:15px;font-weight:700;color:#39ff14;", "Выбери товар для скидки" }
+                    div { style: "font-size:15px;font-weight:700;color:#39ff14;", "{t(lang, T_GARDEN_CHOOSER_TITLE)}" }
                     button { style: "width:44px;height:44px;background:transparent;border:none;color:#8b8b9e;font-size:20px;cursor:pointer;",
-                        "aria-label": "Закрыть", onclick: move |_| open.set(false), "✕" }
+                        "aria-label": "{t(lang, T_CLOSE)}", onclick: move |_| open.set(false), "✕" }
                 }
                 if !err.read().is_empty() {
                     div { style: "background:#2a1a1a;color:#ff6b7a;font-size:13px;padding:8px;margin-bottom:10px;border:1px solid #ff4757;", "{err}" }
@@ -812,11 +834,11 @@ fn GardenChooser(
                                                                 }
                                                                 Err(code) => {
                                                                     let msg = match code.as_str() {
-                                                                        "harvest_cooldown" => "Скидку можно растить раз в сутки — подожди после прошлого сбора.",
-                                                                        "product_not_available" => "Товар недоступен.",
-                                                                        other => other,
+                                                                        "harvest_cooldown" => t(lang, T_GARDEN_ERROR_COOLDOWN).to_string(),
+                                                                        "product_not_available" => t(lang, T_GARDEN_ERROR_PRODUCT_UNAVAILABLE).to_string(),
+                                                                        other => other.to_string(),
                                                                     };
-                                                                    err.set(msg.to_string());
+                                                                    err.set(msg);
                                                                     busy.set(false);
                                                                 }
                                                             }
@@ -839,9 +861,9 @@ fn GardenChooser(
                                 }
                             }
                         }
-                        Some(Ok(_)) => rsx! { div { style: "text-align:center;padding:30px;color:#8b8b9e;", "Нет доступных товаров" } },
-                        Some(Err(e)) => rsx! { div { style: "text-align:center;padding:30px;color:#ff6b7a;", "Ошибка: {e}" } },
-                        None => rsx! { div { style: "text-align:center;padding:30px;color:#8b8b9e;", "Загрузка..." } },
+                        Some(Ok(_)) => rsx! { div { style: "text-align:center;padding:30px;color:#8b8b9e;", "{t(lang, T_GARDEN_CHOOSER_EMPTY)}" } },
+                        Some(Err(e)) => rsx! { div { style: "text-align:center;padding:30px;color:#ff6b7a;", "{tf(lang, T_GARDEN_CHOOSER_ERROR, &[e.to_string()])}" } },
+                        None => rsx! { div { style: "text-align:center;padding:30px;color:#8b8b9e;", "{t(lang, T_GARDEN_CHOOSER_LOADING)}" } },
                     }
                 }
             }

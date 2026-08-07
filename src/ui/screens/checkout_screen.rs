@@ -1,17 +1,19 @@
 use crate::trios::core::Lang;
 use crate::trios::i18n::{
     t, tf,
-    T_BACK, T_CHECKOUT_CART_EMPTY, T_CHECKOUT_CASH_ON_DELIVERY, T_CHECKOUT_ERR_400,
-    T_CHECKOUT_ERR_ADDRESS, T_CHECKOUT_ERR_ADDRESS_LONG, T_CHECKOUT_ERR_ITEMS,
-    T_CHECKOUT_ERR_NAME, T_CHECKOUT_ERR_NAME_LONG, T_CHECKOUT_ERR_NETWORK,
-    T_CHECKOUT_ERR_NO_TELEGRAM, T_CHECKOUT_ERR_PARSE, T_CHECKOUT_ERR_PHONE,
-    T_CHECKOUT_ERR_PHONE_INVALID, T_CHECKOUT_ERR_PHONE_LONG, T_CHECKOUT_GARDEN_DISCOUNT,
-    T_CHECKOUT_GARDEN_DISCOUNT_PCT, T_CHECKOUT_NAME_LABEL, T_CHECKOUT_NAME_PLACEHOLDER,
-    T_CHECKOUT_NOTES_LABEL, T_CHECKOUT_NOTES_PLACEHOLDER, T_CHECKOUT_OPEN_MAP,
-    T_CHECKOUT_PAY_ON_RECEIVE, T_CHECKOUT_PHONE_LABEL, T_CHECKOUT_PHONE_PLACEHOLDER,
-    T_CHECKOUT_PROCESSING, T_CHECKOUT_SELECT_ZONE, T_CHECKOUT_STARS,
-    T_CHECKOUT_STARS_AVAILABLE, T_CHECKOUT_STARS_MINUS, T_CHECKOUT_STEP_CART,
-    T_CHECKOUT_STEP_DETAILS, T_CHECKOUT_STEP_CONFIRM, T_CHECKOUT_TITLE,
+    T_BACK, T_CHECKOUT_AGE_CONFIRM, T_CHECKOUT_AGE_NOTICE, T_CHECKOUT_CART_EMPTY,
+    T_CHECKOUT_CASH_ON_DELIVERY, T_CHECKOUT_ERR_400, T_CHECKOUT_ERR_ADDRESS,
+    T_CHECKOUT_ERR_ADDRESS_LONG, T_CHECKOUT_ERR_ITEMS, T_CHECKOUT_ERR_NAME,
+    T_CHECKOUT_ERR_NAME_LONG, T_CHECKOUT_ERR_NETWORK, T_CHECKOUT_ERR_NO_TELEGRAM,
+    T_CHECKOUT_ERR_PARSE, T_CHECKOUT_ERR_PHONE, T_CHECKOUT_ERR_PHONE_INVALID,
+    T_CHECKOUT_ERR_PHONE_LONG, T_CHECKOUT_GARDEN_DISCOUNT, T_CHECKOUT_GARDEN_DISCOUNT_PCT,
+    T_CHECKOUT_NAME_LABEL, T_CHECKOUT_NAME_PLACEHOLDER, T_CHECKOUT_NOTES_LABEL,
+    T_CHECKOUT_NOTES_PLACEHOLDER, T_CHECKOUT_OPEN_MAP, T_CHECKOUT_PAY_ON_RECEIVE,
+    T_CHECKOUT_PHONE_LABEL, T_CHECKOUT_PHONE_PLACEHOLDER, T_CHECKOUT_PROCESSING,
+    T_CHECKOUT_SELECT_ZONE, T_CHECKOUT_STARS, T_CHECKOUT_STARS_AVAILABLE,
+    T_CHECKOUT_STARS_MINUS, T_CHECKOUT_STEP_CART, T_CHECKOUT_STEP_DETAILS,
+    T_CHECKOUT_STEP_CONFIRM, T_CHECKOUT_TITLE, T_CHECKOUT_TRUST_COD,
+    T_CHECKOUT_TRUST_SECURE, T_CHECKOUT_TRUST_TITLE, T_CHECKOUT_TRUST_VERIFIED,
     T_CHECKOUT_ADDRESS_LABEL, T_CHECKOUT_ADDRESS_PLACEHOLDER,
     T_DELIVERY, T_DELIVERY_ETA, T_DELIVERY_FEE, T_DELIVERY_ZONE, T_PAYMENT,
     T_PICKUP_LOCATION, T_PLACE_ORDER, T_TOTAL, T_YOUR_INFO, T_YOUR_ORDER,
@@ -22,7 +24,7 @@ use crate::ui::api::types::{DeliveryZone, DeliveryZonesResponse};
 use crate::ui::components::error_banner::ErrorBanner;
 use crate::ui::routes::Route;
 use crate::ui::state::{Cart, CartItem, CartItemType};
-use crate::ui::telegram::{use_telegram_id, use_telegram_init_data, use_telegram_username, TelegramApp, HapticNotification};
+use crate::ui::telegram::{use_telegram_id, use_telegram_init_data, use_telegram_username, use_main_button_click, TelegramApp, HapticNotification};
 use dioxus::prelude::*;
 use serde_json::json;
 use web_sys::window;
@@ -57,6 +59,51 @@ fn zone_display_name(zone: &DeliveryZone) -> String {
         zone.name_en.clone().unwrap_or_else(|| zone.name.clone())
     } else {
         zone.name.clone()
+    }
+}
+
+fn phone_valid(phone: &str) -> bool {
+    let digits = phone.chars().filter(|c| c.is_ascii_digit()).count();
+    // Allow any non-empty string that starts with + and has at least 5 digits.
+    phone.starts_with('+') && digits >= 5
+}
+
+/// Real-time, per-field validation used for inline checkout feedback.
+/// Returns the translation key for the first problem, or None if the field
+/// looks acceptable so far (empty fields are reported so the user sees the
+/// required indicator while typing).
+fn validate_checkout_field(value: &str, kind: &str) -> Option<&'static str> {
+    match kind {
+        "name" => {
+            if value.trim().is_empty() {
+                Some(T_CHECKOUT_ERR_NAME)
+            } else if value.len() > 200 {
+                Some(T_CHECKOUT_ERR_NAME_LONG)
+            } else {
+                None
+            }
+        }
+        "phone" => {
+            if value.trim().is_empty() {
+                Some(T_CHECKOUT_ERR_PHONE)
+            } else if value.len() > 50 {
+                Some(T_CHECKOUT_ERR_PHONE_LONG)
+            } else if !phone_valid(value) {
+                Some(T_CHECKOUT_ERR_PHONE_INVALID)
+            } else {
+                None
+            }
+        }
+        "address" => {
+            if value.trim().is_empty() {
+                Some(T_CHECKOUT_ERR_ADDRESS)
+            } else if value.len() > 500 {
+                Some(T_CHECKOUT_ERR_ADDRESS_LONG)
+            } else {
+                None
+            }
+        }
+        _ => None,
     }
 }
 
@@ -156,6 +203,10 @@ pub fn CheckoutScreen() -> Element {
     // collapses them into one order (migration 029). Navigating away or
     // unmounting the screen resets — exactly the boundary we want.
     let mut idempotency_key = use_signal(|| Option::<String>::None);
+    // Age gate: the user must explicitly confirm they are 20+ before placing
+    // an order. This drives both the in-app primary button and Telegram
+    // MainButton enabled state.
+    let mut age_confirmed = use_signal(|| false);
     let nav = navigator();
     let telegram_id = use_telegram_id();
     let telegram_username = use_telegram_username();
@@ -170,6 +221,15 @@ pub fn CheckoutScreen() -> Element {
     // (lib.rs::run via pick_lang) and stored in OnceLock; just read it.
     // No more per-screen inline pick_lang dance.
     let lang = crate::ui::lang::current_lang();
+
+    // Real-time field-level validation feedback. These are derived from the
+    // current input values and update immediately as the user types.
+    let name_error = use_memo(move || validate_checkout_field(&customer_name(), "name").map(|k| t(lang, k).to_string()));
+    let phone_error = use_memo(move || validate_checkout_field(&customer_phone(), "phone").map(|k| t(lang, k).to_string()));
+    let address_error = use_memo(move || validate_checkout_field(&delivery_address(), "address").map(|k| t(lang, k).to_string()));
+    let name_border = if name_error().is_some() { "#ff4757" } else { "#2a2a4a" };
+    let phone_border = if phone_error().is_some() { "#ff4757" } else { "#2a2a4a" };
+    let address_border = if address_error().is_some() { "#ff4757" } else { "#2a2a4a" };
 
     let checkout_title = t(crate::ui::lang::current_lang(), T_CHECKOUT_TITLE);
     let your_order = t(crate::ui::lang::current_lang(), T_YOUR_ORDER);
@@ -294,13 +354,18 @@ pub fn CheckoutScreen() -> Element {
     };
 
     let submit_cart_items = cart_items.clone();
-    let submit_order = move |_| {
+    let submit_order = use_callback(move |_: ()| {
         if is_processing() {
             return;
         }
         if telegram_id.is_none() {
             order_error.set(Some(t(lang, T_CHECKOUT_ERR_NO_TELEGRAM).to_string()));
             tg.haptic_notification(HapticNotification::Error);
+            return;
+        }
+        if !age_confirmed() {
+            order_error.set(Some(t(lang, T_CHECKOUT_AGE_NOTICE).to_string()));
+            tg.haptic_notification(HapticNotification::Warning);
             return;
         }
         let trios_items = to_trios_items(&submit_cart_items);
@@ -453,7 +518,14 @@ pub fn CheckoutScreen() -> Element {
             }
             is_processing.set(false);
         });
-    };
+    });
+
+    // Wire the native Telegram MainButton to the same submit path as the
+    // in-app primary button. The callback is wrapped so the hook receives a
+    // zero-argument FnMut while reusing the existing submit closure.
+    use_main_button_click(move || {
+        submit_order.call(());
+    });
 
     rsx! {
         div { style: "
@@ -570,7 +642,7 @@ pub fn CheckoutScreen() -> Element {
                             style: "
                                 font-size: 15px; width: 100%; padding: 10px 12px;
                                 background: #0f0f1a; color: #e8e8e8;
-                                border: 4px solid #2a2a4a; border-radius: 0;
+                                border: 4px solid {name_border}; border-radius: 0;
                                 box-sizing: border-box;
                             ",
                             r#type: "text",
@@ -579,6 +651,9 @@ pub fn CheckoutScreen() -> Element {
                             value: "{customer_name}",
                             oninput: move |e| customer_name.set(e.value()),
                         }
+                        if let Some(err) = name_error() {
+                            p { style: "font-size: 12px; color: #ff4757; margin-top: 4px;", "{err}" }
+                        }
                     }
                     div { style: "margin-bottom: 8px;",
                         label { style: "font-size: 13px; color: #8b8b9e; display: block; margin-bottom: 4px;", "{t(lang, T_CHECKOUT_PHONE_LABEL)}" }
@@ -586,7 +661,7 @@ pub fn CheckoutScreen() -> Element {
                             style: "
                                 font-size: 15px; width: 100%; padding: 10px 12px;
                                 background: #0f0f1a; color: #e8e8e8;
-                                border: 4px solid #2a2a4a; border-radius: 0;
+                                border: 4px solid {phone_border}; border-radius: 0;
                                 box-sizing: border-box;
                             ",
                             r#type: "tel",
@@ -595,7 +670,28 @@ pub fn CheckoutScreen() -> Element {
                             value: "{customer_phone}",
                             oninput: move |e| customer_phone.set(e.value()),
                         }
+                        if let Some(err) = phone_error() {
+                            p { style: "font-size: 12px; color: #ff4757; margin-top: 4px;", "{err}" }
+                        }
                     }
+                    // Age gate: explicit 20+ confirmation required to place an order.
+                    div { style: "display: flex; align-items: flex-start; gap: 8px; margin-top: 8px;",
+                        input {
+                            r#type: "checkbox",
+                            id: "age-confirm",
+                            checked: "{age_confirmed()}",
+                            style: "width: 20px; height: 20px; margin-top: 2px; cursor: pointer; accent-color: #39ff14;",
+                            onclick: move |_| {
+                                age_confirmed.set(!age_confirmed());
+                            },
+                        }
+                        label {
+                            r#for: "age-confirm",
+                            style: "font-size: 13px; color: #8b8b9e; cursor: pointer; line-height: 1.4;",
+                            "{t(lang, T_CHECKOUT_AGE_CONFIRM)}"
+                        }
+                    }
+                    p { style: "font-size: 11px; color: #8b8b9e; margin-top: 6px; line-height: 1.4;", "{t(lang, T_CHECKOUT_AGE_NOTICE)}" }
                 }
 
                 // Shop selection
@@ -649,7 +745,7 @@ pub fn CheckoutScreen() -> Element {
                             style: "
                                 font-size: 15px; width: 100%; padding: 10px 12px;
                                 background: #0f0f1a; color: #e8e8e8;
-                                border: 4px solid #2a2a4a; border-radius: 0;
+                                border: 4px solid {address_border}; border-radius: 0;
                                 box-sizing: border-box;
                             ",
                             r#type: "text",
@@ -657,6 +753,9 @@ pub fn CheckoutScreen() -> Element {
                             placeholder: "{t(lang, T_CHECKOUT_ADDRESS_PLACEHOLDER)}",
                             value: "{delivery_address}",
                             oninput: move |e| delivery_address.set(e.value()),
+                        }
+                        if let Some(err) = address_error() {
+                            p { style: "font-size: 12px; color: #ff4757; margin-top: 4px;", "{err}" }
                         }
                     }
                     div { style: "margin-bottom: 8px;",
@@ -748,6 +847,20 @@ pub fn CheckoutScreen() -> Element {
                     }
                 }
 
+                // Trust micro-copy
+                div { style: "
+                    background: rgba(57,255,20,0.05);
+                    border: 4px solid rgba(57,255,20,0.2);
+                    border-radius: 0; padding: 12px; margin-bottom: 16px;
+                ",
+                    div { style: "font-size: 13px; color: #39ff14; font-weight: 700; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px;", "{t(lang, T_CHECKOUT_TRUST_TITLE)}" }
+                    div { style: "display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: #8b8b9e;",
+                        div { "{t(lang, T_CHECKOUT_TRUST_VERIFIED)}" }
+                        div { "{t(lang, T_CHECKOUT_TRUST_COD)}" }
+                        div { "{t(lang, T_CHECKOUT_TRUST_SECURE)}" }
+                    }
+                }
+
                 // Error display
                 ErrorBanner {
                     message: order_error.read().clone().unwrap_or_default(),
@@ -769,7 +882,13 @@ pub fn CheckoutScreen() -> Element {
                         let trios_items = to_trios_items(&cart_items);
                         let can_order = telegram_id.is_some()
                             && validate_checkout(&customer_name(), &customer_phone(), &delivery_address(), &trios_items).is_ok()
+                            && age_confirmed()
                             && !is_processing();
+                        if can_order {
+                            tg.enable_main_button();
+                        } else {
+                            tg.disable_main_button();
+                        }
                         let btn_bg = if can_order { "#39ff14" } else { "#2a2a4a" };
                         let btn_color = if can_order { "#000" } else { "#8b8b9e" };
                         let btn_cursor = if can_order { "pointer" } else { "not-allowed" };
@@ -788,7 +907,7 @@ pub fn CheckoutScreen() -> Element {
                                     opacity: {opacity};
                                 ",
                                 disabled: !can_order,
-                                onclick: submit_order,
+                                onclick: move |_| { submit_order.call(()); },
                                 if processing { "{t(lang, T_CHECKOUT_PROCESSING)}" } else { "{place_order}" }
                             }
                         }

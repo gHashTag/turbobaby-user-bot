@@ -10,7 +10,7 @@ use crate::ui::components::bottom_nav::BottomNav;
 use crate::ui::components::empty_state::EmptyState;
 use crate::ui::routes::Route;
 use crate::ui::state::{Cart, CartItem, CartItemType};
-use crate::ui::telegram::{TelegramApp, HapticNotification};
+use crate::ui::telegram::{TelegramApp, HapticNotification, use_main_button_click};
 use dioxus::prelude::*;
 
 fn format_price(price: f64) -> String {
@@ -33,6 +33,12 @@ pub fn CartScreen() -> Element {
     let items_label = tf(lang, T_CART_ITEMS, &[item_count.to_string()]);
     let tg = TelegramApp::init();
     let total_str = crate::trios::pricing::format_baht(total);
+    let nav = navigator();
+    use_main_button_click(move || {
+        if !cart.read().items.is_empty() {
+            nav.push(Route::Checkout {});
+        }
+    });
     if !items.is_empty() {
         tg.set_main_button_text(&format!("{} — {}", t(lang, T_PLACE_ORDER), total_str));
         tg.show_back_button();
@@ -40,9 +46,9 @@ pub fn CartScreen() -> Element {
         tg.hide_main_button();
         tg.hide_back_button();
     }
-    // NOTE: MainButton has no reliable onclick bridge via document::eval; we keep
-    // the in-app checkout button as the actionable element. Telegram MainButton here
-    // acts as a visible price/status hint and back navigation affordance.
+    // MainButton is now wired through a DOM CustomEvent bridge. The in-app
+    // checkout button remains as a visible, accessible fallback. Telegram
+    // MainButton acts as a native primary action and back navigation affordance.
 
     rsx! {
         div { style: "

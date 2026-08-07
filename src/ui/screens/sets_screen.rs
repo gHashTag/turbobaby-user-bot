@@ -1,4 +1,4 @@
-use crate::trios::i18n::{t, T_ADD_TO_CART, T_SETS_DESC, T_SETS_TITLE};
+use crate::trios::i18n::{t, T_ADD_TO_CART, T_CATALOG_EMPTY, T_CATALOG_ERROR, T_SETS_DESC, T_SETS_TITLE};
 use crate::ui::api::context::api_base_url;
 use crate::ui::components::bottom_nav::BottomNav;
 use crate::ui::components::product_detail_modal::ProductDetailModal;
@@ -130,9 +130,12 @@ pub fn SetsScreen() -> Element {
     let mut cart = use_context::<Signal<Cart>>();
     let mut sort_by = use_signal(|| "default".to_string());
 
-    let sets_title = t(crate::ui::lang::current_lang(), T_SETS_TITLE);
-    let sets_desc = t(crate::ui::lang::current_lang(), T_SETS_DESC);
-    let add_to_cart = t(crate::ui::lang::current_lang(), T_ADD_TO_CART);
+    let lang = crate::ui::lang::current_lang();
+    let sets_title = t(lang, T_SETS_TITLE);
+    let sets_desc = t(lang, T_SETS_DESC);
+    let add_to_cart = t(lang, T_ADD_TO_CART);
+    let catalog_empty = t(lang, T_CATALOG_EMPTY);
+    let catalog_error = t(lang, T_CATALOG_ERROR);
 
     let sets_resource = use_resource(|| async move {
         let base = api_base_url();
@@ -189,7 +192,7 @@ pub fn SetsScreen() -> Element {
                     Some(Ok(sets)) if sets.is_empty() => rsx! {
                         div { style: "text-align:center;padding:48px 16px;",
                             div { style: "font-size:36px;margin-bottom:12px;", "📦" }
-                            p { style: "font-size:15px;color:#888;", "No sets available yet" }
+                            p { style: "font-size:15px;color:#888;", "{catalog_empty}" }
                         }
                     },
                     Some(Ok(_)) => {
@@ -236,10 +239,10 @@ pub fn SetsScreen() -> Element {
                             }
                         }
                     },
-                    Some(Err(e)) => rsx! {
+                    Some(Err(_e)) => rsx! {
                         div { style: "text-align:center;padding:48px 16px;",
                             div { style: "font-size:36px;margin-bottom:12px;", "⚠️" }
-                            p { style: "font-size:15px;color:#ff4757;", "Error: {e}" }
+                            p { style: "font-size:15px;color:#ff4757;", "{catalog_error}" }
                         }
                     },
                     None => rsx! {

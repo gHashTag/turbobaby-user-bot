@@ -7238,7 +7238,9 @@ fn PhotoGalleryEditor(photos: Signal<Vec<String>>, on_change: EventHandler<Vec<S
                                             },
                                             "↑"
                                         }
-                                        button { style: "width:18px;height:18px;background:#ff4757;color:#fff;border:none;border-radius:50%;font-size:10px;cursor:pointer;padding:0;",
+                                        button {
+                                            style: "width:18px;height:18px;background:#ff4757;color:#fff;border:none;border-radius:50%;font-size:10px;cursor:pointer;padding:0;",
+                                            "aria-label": "Удалить фото",
                                             onclick: move |_| {
                                                 let u = url_for_del.clone();
                                                 let mut next = photos.read().clone();

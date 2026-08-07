@@ -3,7 +3,10 @@
 // Provides access to Telegram Mini App features using document::eval()
 
 use dioxus::prelude::*;
+use gloo_events::EventListener;
 use serde_json::Value;
+use std::cell::RefCell;
+use std::rc::Rc;
 use wasm_bindgen::JsCast;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -104,6 +107,33 @@ impl TelegramApp {
     /// Hide main button
     pub fn hide_main_button(&self) {
         let _ = document::eval("if(window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.MainButton) { window.Telegram.WebApp.MainButton.hide(); }");
+    }
+
+    /// Enable the main button
+    pub fn enable_main_button(&self) {
+        let _ = document::eval("if(window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.MainButton) { window.Telegram.WebApp.MainButton.enable(); }");
+    }
+
+    /// Disable the main button
+    pub fn disable_main_button(&self) {
+        let _ = document::eval("if(window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.MainButton) { window.Telegram.WebApp.MainButton.disable(); }");
+    }
+
+    /// Wire Telegram MainButton.onClick to a DOM CustomEvent that Rust can
+    /// listen to reliably. Telegram only exposes a single onClick callback, so
+    /// this overwrites any previous JS handler with a dispatcher.
+    pub fn enable_main_button_click_dispatch(&self) {
+        let _ = document::eval(r#"
+            (function(){
+                if(window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.MainButton){
+                    window.Telegram.WebApp.MainButton.onClick(function(){
+                        if(window.dispatchEvent){
+                            window.dispatchEvent(new CustomEvent('woody:mainbutton', { bubbles: false }));
+                        }
+                    });
+                }
+            })();
+        "#);
     }
 
     /// Show back button
@@ -397,6 +427,30 @@ pub fn use_telegram_username() -> Option<String> {
 /// Hook to get raw initData string for server validation
 pub fn use_telegram_init_data() -> String {
     use_telegram().get_init_data()
+}
+
+/// Hook that invokes the provided callback when the Telegram MainButton is
+/// clicked. The Telegram SDK only exposes a single `MainButton.onClick` JS
+/// callback, so we bridge it through a `woody:mainbutton` CustomEvent that the
+/// Rust side listens to via `gloo_events`. The JS dispatcher is overwritten on
+/// every mount so the active screen always controls the button.
+pub fn use_main_button_click<F: FnMut() + 'static>(callback: F) {
+    use_hook_with_cleanup(
+        move || {
+            TelegramApp::init().enable_main_button_click_dispatch();
+            let cb = Rc::new(RefCell::new(callback));
+            let win = web_sys::window()?;
+            let listener = EventListener::new(
+                &win,
+                "woody:mainbutton",
+                move |_event: &web_sys::Event| {
+                    cb.borrow_mut()();
+                },
+            );
+            Some(Rc::new(listener))
+        },
+        |_listener: Option<Rc<EventListener>>| {},
+    );
 }
 
 /// Component that initializes Telegram WebApp on mount

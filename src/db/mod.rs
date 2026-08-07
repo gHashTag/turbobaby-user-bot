@@ -1340,7 +1340,11 @@ mod entity_wiring_tests {
         // strictly safer than deleting them (re-deriving from the
         // schema later costs more than the 53-line allowlist tax).
         "quest_place",
-        "treasure_hunt",
+        // Cycle #5: event_photo entity mirrors the event_photos table,
+        // but src/api/events.rs reads/writes it through raw SQL for the
+        // gallery path. Wiring it to SeaORM belongs to the events SeaORM
+        // migration, not this UX loop.
+        "event_photo",
     ];
 
     /// Strip `//` line comments before the textual contains check;

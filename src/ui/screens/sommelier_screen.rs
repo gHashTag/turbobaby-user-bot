@@ -1,4 +1,12 @@
-use crate::trios::i18n::{t, T_SOMM_DESC, T_SOMM_EXP, T_SOMM_MOOD, T_SOMM_TIME, T_SOMM_TITLE};
+use crate::trios::core::Lang;
+use crate::trios::i18n::{
+    t, T_ADD_TO_CART, T_SOMM_DESC, T_SOMM_EXP, T_SOMM_EXP_BEGINNER, T_SOMM_EXP_EXPERT,
+    T_SOMM_EXP_MEDIUM, T_SOMM_GET_RECOMMENDATIONS, T_SOMM_MATCH, T_SOMM_MOOD, T_SOMM_MOOD_CREATIVE,
+    T_SOMM_MOOD_ENERGY, T_SOMM_MOOD_RELAX, T_SOMM_MOOD_SLEEP, T_SOMM_MOOD_STRONG, T_SOMM_MOOD_TASTE,
+    T_SOMM_NO_RECOMMENDATIONS, T_SOMM_RECOMMENDED_FOR_YOU, T_SOMM_RECOMMENDED_SETS,
+    T_SOMM_RECOMMENDED_STRAINS, T_SOMM_RESTART, T_SOMM_TIME, T_SOMM_TIME_ANY, T_SOMM_TIME_DAY,
+    T_SOMM_TIME_EVENING, T_SOMM_TITLE,
+};
 use crate::ui::api::context::api_base_url;
 use crate::ui::components::bottom_nav::BottomNav;
 use crate::ui::components::skeleton::{Skeleton, SkeletonShape};
@@ -16,17 +24,16 @@ enum Mood {
     Taste,
 }
 
-impl Mood {
-    fn label(&self) -> &'static str {
-        match self {
-            Self::Relax => "😌 Relax",
-            Self::Energy => "⚡ Energy",
-            Self::Creative => "🎨 Creative",
-            Self::Sleep => "😴 Sleep",
-            Self::Strong => "💪 Strong",
-            Self::Taste => "👅 Taste",
-        }
-    }
+fn mood_label(lang: Lang, mood: Mood) -> String {
+    let key = match mood {
+        Mood::Relax => T_SOMM_MOOD_RELAX,
+        Mood::Energy => T_SOMM_MOOD_ENERGY,
+        Mood::Creative => T_SOMM_MOOD_CREATIVE,
+        Mood::Sleep => T_SOMM_MOOD_SLEEP,
+        Mood::Strong => T_SOMM_MOOD_STRONG,
+        Mood::Taste => T_SOMM_MOOD_TASTE,
+    };
+    t(lang, key).to_string()
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -36,14 +43,13 @@ enum TimeOfDay {
     Any,
 }
 
-impl TimeOfDay {
-    fn label(&self) -> &'static str {
-        match self {
-            Self::Day => "☀️ Day",
-            Self::Evening => "🌙 Evening",
-            Self::Any => "🔄 Any",
-        }
-    }
+fn time_label(lang: Lang, time: TimeOfDay) -> String {
+    let key = match time {
+        TimeOfDay::Day => T_SOMM_TIME_DAY,
+        TimeOfDay::Evening => T_SOMM_TIME_EVENING,
+        TimeOfDay::Any => T_SOMM_TIME_ANY,
+    };
+    t(lang, key).to_string()
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -53,14 +59,13 @@ enum Experience {
     Expert,
 }
 
-impl Experience {
-    fn label(&self) -> &'static str {
-        match self {
-            Self::Beginner => "🌱 Beginner",
-            Self::Medium => "🌿 Medium",
-            Self::Expert => "🔥 Expert",
-        }
-    }
+fn exp_label(lang: Lang, exp: Experience) -> String {
+    let key = match exp {
+        Experience::Beginner => T_SOMM_EXP_BEGINNER,
+        Experience::Medium => T_SOMM_EXP_MEDIUM,
+        Experience::Expert => T_SOMM_EXP_EXPERT,
+    };
+    t(lang, key).to_string()
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -260,11 +265,12 @@ pub fn SommelierScreen() -> Element {
     let mut selected_exp = use_signal(|| Experience::Medium);
     let mut show_results = use_signal(|| false);
 
-    let somm_title = t(crate::ui::lang::current_lang(), T_SOMM_TITLE);
-    let somm_desc = t(crate::ui::lang::current_lang(), T_SOMM_DESC);
-    let somm_mood_label = format!("🤔 {}?", t(crate::ui::lang::current_lang(), T_SOMM_MOOD));
-    let somm_time_label = format!("🕐 {}?", t(crate::ui::lang::current_lang(), T_SOMM_TIME));
-    let somm_exp_label = format!("🎮 {}?", t(crate::ui::lang::current_lang(), T_SOMM_EXP));
+    let lang = crate::ui::lang::current_lang();
+    let somm_title = t(lang, T_SOMM_TITLE);
+    let somm_desc = t(lang, T_SOMM_DESC);
+    let somm_mood_label = format!("🤔 {}?", t(lang, T_SOMM_MOOD));
+    let somm_time_label = format!("🕐 {}?", t(lang, T_SOMM_TIME));
+    let somm_exp_label = format!("🎮 {}?", t(lang, T_SOMM_EXP));
 
     let recommendations = use_resource(move || async move {
         if !show_results() {
@@ -349,7 +355,7 @@ pub fn SommelierScreen() -> Element {
                                 let is_selected = selected_mood() == Some(mood);
                                 let border = if is_selected { "#00e5ff" } else { "#2a2a4a" };
                                 let bg = if is_selected { "rgba(0,229,255,0.15)" } else { "#16213e" };
-                                let label = mood.label();
+                                let label = mood_label(lang, mood);
                                 rsx! {
                                     button {
                                         style: "
@@ -373,7 +379,7 @@ pub fn SommelierScreen() -> Element {
                                 let is_selected = selected_time() == time;
                                 let border = if is_selected { "#ffe600" } else { "#2a2a4a" };
                                 let bg = if is_selected { "rgba(255,230,0,0.15)" } else { "#16213e" };
-                                let label = time.label();
+                                let label = time_label(lang, time);
                                 rsx! {
                                     button {
                                         style: "
@@ -397,7 +403,7 @@ pub fn SommelierScreen() -> Element {
                                 let is_selected = selected_exp() == exp;
                                 let border = if is_selected { "#b388ff" } else { "#2a2a4a" };
                                 let bg = if is_selected { "rgba(179,136,255,0.15)" } else { "#16213e" };
-                                let label = exp.label();
+                                let label = exp_label(lang, exp);
                                 rsx! {
                                     button {
                                         style: "
@@ -425,14 +431,14 @@ pub fn SommelierScreen() -> Element {
                                 transition: transform 0.1s, box-shadow 0.1s;
                             ",
                             onclick: move |_| show_results.set(true),
-                            "🔮 Get Recommendations"
+                            "{t(lang, T_SOMM_GET_RECOMMENDATIONS)}"
                         }
                     }
                 }
             } else {
                 // Results mode
                 div { style: "display: flex; justify-content: space-between; align-items: center; padding: 0 16px 12px;",
-                    div { style: "font-size: 13px; font-weight: 700; color: #39ff14; text-transform: uppercase; letter-spacing: 1px; text-shadow: 2px 2px 0 #000;", "✨ Recommended for you" }
+                    div { style: "font-size: 13px; font-weight: 700; color: #39ff14; text-transform: uppercase; letter-spacing: 1px; text-shadow: 2px 2px 0 #000;", "{t(lang, T_SOMM_RECOMMENDED_FOR_YOU)}" }
                     button {
                         style: "
                             font-size: 13px; padding: 4px 8px;
@@ -443,7 +449,7 @@ pub fn SommelierScreen() -> Element {
                         onclick: move |_| {
                             show_results.set(false);
                         },
-                        "↻ Restart"
+                        "{t(lang, T_SOMM_RESTART)}"
                     }
                 }
 
@@ -455,7 +461,7 @@ pub fn SommelierScreen() -> Element {
                             if let Some(sets) = &resp.recommended_sets {
                                 if !sets.is_empty() {
                                     elements.push(rsx! {
-                                        div { style: "font-size: 13px; font-weight: 700; color: #b388ff; padding: 0 16px 8px; text-transform: uppercase; letter-spacing: 1px; text-shadow: 2px 2px 0 #000;", "📦 Recommended Sets" }
+                                        div { style: "font-size: 13px; font-weight: 700; color: #b388ff; padding: 0 16px 8px; text-transform: uppercase; letter-spacing: 1px; text-shadow: 2px 2px 0 #000;", "{t(lang, T_SOMM_RECOMMENDED_SETS)}" }
                                     });
                                     for set in sets {
                                         let name = set.name.clone();
@@ -489,7 +495,7 @@ pub fn SommelierScreen() -> Element {
                                                             border: 4px solid #2d9e0f; border-radius: 0; cursor: pointer;
                                                             box-shadow: 3px 3px 0 #000;
                                                         ",
-                                                        "aria-label": "В корзину",
+                                                        "aria-label": "{t(lang, T_ADD_TO_CART)}",
                                                         onclick: move |_| {
                                                             let mut c = cart.write();
                                                             c.add_item(CartItem {
@@ -515,7 +521,7 @@ pub fn SommelierScreen() -> Element {
                             if let Some(strains) = &resp.recommended_strains {
                                 if !strains.is_empty() {
                                     elements.push(rsx! {
-                                        div { style: "font-size: 13px; font-weight: 700; color: #39ff14; padding: 6px 10px 8px; text-transform: uppercase; letter-spacing: 1px; text-shadow: 2px 2px 0 #000;", "🌿 Recommended Strains" }
+                                        div { style: "font-size: 13px; font-weight: 700; color: #39ff14; padding: 6px 10px 8px; text-transform: uppercase; letter-spacing: 1px; text-shadow: 2px 2px 0 #000;", "{t(lang, T_SOMM_RECOMMENDED_STRAINS)}" }
                                     });
                                     for strain in strains {
                                         let s = strain.clone();
@@ -530,6 +536,7 @@ pub fn SommelierScreen() -> Element {
                                                 || (img.starts_with('/') && !img.starts_with("//")));
                                         let match_pct = s.match_percent.unwrap_or(80);
                                         let match_color = if match_pct >= 90 { "#39ff14" } else if match_pct >= 80 { "#00e5ff" } else { "#ffe600" };
+                                        let match_label = format!("{}% {}", match_pct, t(lang, T_SOMM_MATCH));
                                         let reason = s.match_reason.clone().unwrap_or_default();
                                         let price = s.price_per_gram.filter(|v| v.is_finite()).unwrap_or(0.0).max(0.0);
                                         let price_str = crate::trios::pricing::format_baht(price);
@@ -568,7 +575,7 @@ pub fn SommelierScreen() -> Element {
                                                     }
                                                     div { style: "display: flex; justify-content: space-between; align-items: center;",
                                                         span { style: "font-size: 20px; font-weight: 800; color: #ffe600; text-shadow: 2px 2px 0 #000;", "{price_str}" }
-                                                        span { style: "font-size: 13px; color: {match_color}; background: {match_color}22; padding: 2px 6px; border-radius: 0;", "{match_pct}% Match" }
+                                                        span { style: "font-size: 13px; color: {match_color}; background: {match_color}22; padding: 2px 6px; border-radius: 0;", "{match_label}" }
                                                     }
                                                 }
                                                 if !s_id.is_empty() && s_price > 0.0 {
@@ -579,7 +586,7 @@ pub fn SommelierScreen() -> Element {
                                                             border: 4px solid #2d9e0f; border-radius: 0; cursor: pointer;
                                                             box-shadow: 3px 3px 0 #000;
                                                         ",
-                                                        "aria-label": "В корзину",
+                                                        "aria-label": "{t(lang, T_ADD_TO_CART)}",
                                                         onclick: move |_| {
                                                             let mut c = cart.write();
                                                             c.add_item(CartItem {
@@ -606,7 +613,7 @@ pub fn SommelierScreen() -> Element {
                                 rsx! {
                                     div { style: "text-align: center; padding: 40px 16px;",
                                         div { style: "font-size: 70px; margin-bottom: 12px;", "🍷" }
-                                        p { style: "font-size: 13px; color: #8b8b9e;", "No recommendations found. Try different preferences!" }
+                                        p { style: "font-size: 13px; color: #8b8b9e;", "{t(lang, T_SOMM_NO_RECOMMENDATIONS)}" }
                                     }
                                 }
                             } else {

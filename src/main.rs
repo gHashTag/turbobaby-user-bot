@@ -1672,6 +1672,18 @@ mod touch_target_tests {
         // Admin bulk-select native checkbox — native form controls are
         // conventionally smaller and covered by WCAG 2.5.8's spacing exception.
         "width:18px;height:18px;cursor:pointer;flex-shrink:0;",
+        // Admin event/strain photo gallery chips (reorder / delete) sit inside
+        // a 64px thumbnail; enlarging to 44px would cover the image. They are
+        // grouped with 2px spacing and each has a text glyph or aria-label.
+        "width:18px;height:18px;background:#2a2a4a;color:#e8e8e8;border:none;border-radius:50%;font-size:10px;cursor:pointer;padding:0;",
+        "width:18px;height:18px;background:#ff4757;color:#fff;border:none;border-radius:50%;font-size:10px;cursor:pointer;padding:0;",
+        // Event detail pagination dots: small indicators with per-dot aria-labels.
+        // The surrounding card also supports swipe/arrow navigation.
+        "width:8px;height:8px;border-radius:50%;border:none;background:#39ff14;cursor:pointer;",
+        "width:8px;height:8px;border-radius:50%;border:none;background:#2a2a4a;cursor:pointer;",
+        // Checkout age-gate / terms checkbox styled with accent-color; native
+        // checkbox hit area is supplied by the browser and spacing from label.
+        "width:20px;height:20px;margin-top:2px;cursor:pointer;accent-color:#39ff14;",
     ];
 
     /// Returns `Some((dim, px))` if a `width`/`height` declaration (exact key,

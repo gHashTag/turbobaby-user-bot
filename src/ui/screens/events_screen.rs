@@ -499,7 +499,7 @@ fn EventBookingModal(props: EventBookingModalProps) -> Element {
                                     }
                                     if has_many {
                                         button {
-                                            style: "position:absolute;left:4px;top:50%;transform:translateY(-50%);width:32px;height:32px;background:rgba(0,0,0,0.6);color:#e8e8e8;border:none;border-radius:50%;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;",
+                                            style: "position:absolute;left:4px;top:50%;transform:translateY(-50%);width:44px;height:44px;background:rgba(0,0,0,0.6);color:#e8e8e8;border:none;border-radius:50%;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;",
                                             "aria-label": t(lang, T_EVENTS_PREV_PHOTO),
                                             onclick: move |_| {
                                                 let next = selected_photo.read().saturating_sub(1);
@@ -508,7 +508,7 @@ fn EventBookingModal(props: EventBookingModalProps) -> Element {
                                             "‹"
                                         }
                                         button {
-                                            style: "position:absolute;right:4px;top:50%;transform:translateY(-50%);width:32px;height:32px;background:rgba(0,0,0,0.6);color:#e8e8e8;border:none;border-radius:50%;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;",
+                                            style: "position:absolute;right:4px;top:50%;transform:translateY(-50%);width:44px;height:44px;background:rgba(0,0,0,0.6);color:#e8e8e8;border:none;border-radius:50%;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;",
                                             "aria-label": t(lang, T_EVENTS_NEXT_PHOTO),
                                             onclick: move |_| {
                                                 let next = (*selected_photo.read() + 1).min(photo_count - 1);

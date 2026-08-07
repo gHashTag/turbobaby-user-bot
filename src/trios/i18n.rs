@@ -43,6 +43,33 @@ pub const T_GARDEN_ONBOARD_STEP1: Key = "garden.onboard.step1";
 pub const T_GARDEN_ONBOARD_STEP2: Key = "garden.onboard.step2";
 pub const T_GARDEN_ONBOARD_STEP3: Key = "garden.onboard.step3";
 pub const T_GARDEN_ONBOARD_CTA: Key = "garden.onboard.cta";
+pub const T_GARDEN_DIAGNOSTICS_COPY: Key = "garden.diagnostics.copy";
+pub const T_GARDEN_DIAGNOSTICS_COPIED: Key = "garden.diagnostics.copied";
+pub const T_GARDEN_CHOOSE_PRODUCT: Key = "garden.choose_product";
+pub const T_GARDEN_CHOOSE_PRODUCT_HINT: Key = "garden.choose_product_hint";
+pub const T_GARDEN_PLANT_ALT: Key = "garden.plant_alt";
+pub const T_GARDEN_PRODUCT_ALT: Key = "garden.product_alt";
+pub const T_GARDEN_DISCOUNT_BADGE: Key = "garden.discount_badge";
+pub const T_GARDEN_READY: Key = "garden.ready";
+pub const T_GARDEN_COOLDOWN: Key = "garden.cooldown";
+pub const T_GARDEN_CHOOSER_TITLE: Key = "garden.chooser.title";
+pub const T_GARDEN_CHOOSER_EMPTY: Key = "garden.chooser.empty";
+pub const T_GARDEN_CHOOSER_LOADING: Key = "garden.chooser.loading";
+pub const T_GARDEN_CHOOSER_ERROR: Key = "garden.chooser.error";
+pub const T_GARDEN_ERROR_HARVEST: Key = "garden.error.harvest";
+pub const T_GARDEN_ERROR_RESET: Key = "garden.error.reset";
+pub const T_GARDEN_ERROR_COOLDOWN: Key = "garden.error.cooldown";
+pub const T_GARDEN_ERROR_PRODUCT_UNAVAILABLE: Key = "garden.error.product_unavailable";
+pub const T_GARDEN_CAT_STRAIN: Key = "garden.cat.strain";
+pub const T_GARDEN_CAT_ACCESSORY: Key = "garden.cat.accessory";
+pub const T_GARDEN_CAT_TEA: Key = "garden.cat.tea";
+pub const T_GARDEN_CAT_SET: Key = "garden.cat.set";
+pub const T_GARDEN_CAT_ACCESSORY_SET: Key = "garden.cat.accessory_set";
+pub const T_GARDEN_CAT_TEA_SET: Key = "garden.cat.tea_set";
+pub const T_GARDEN_CAT_OTHER: Key = "garden.cat.other";
+
+/// Generic button translations
+pub const T_CLOSE: Key = "btn.close";
 
 /// Telegram button translations
 pub const T_BTN_CART: Key = "btn.cart";
@@ -271,6 +298,139 @@ pub const T_CHECKOUT_CASH_ON_DELIVERY: Key = "checkout.cash_on_delivery";
 pub const T_CHECKOUT_PAY_ON_RECEIVE: Key = "checkout.pay_on_receive";
 pub const T_CHECKOUT_PROCESSING: Key = "checkout.processing";
 
+// Checkout trust + age gate micro-copy
+pub const T_CHECKOUT_TRUST_TITLE: Key = "checkout.trust_title";
+pub const T_CHECKOUT_TRUST_VERIFIED: Key = "checkout.trust.verified";
+pub const T_CHECKOUT_TRUST_COD: Key = "checkout.trust.cod";
+pub const T_CHECKOUT_TRUST_SECURE: Key = "checkout.trust.secure";
+pub const T_CHECKOUT_AGE_CONFIRM: Key = "checkout.age_confirm";
+pub const T_CHECKOUT_AGE_NOTICE: Key = "checkout.age_notice";
+
+// Catalog shared strings
+pub const T_CATALOG_EMPTY: Key = "catalog.empty";
+pub const T_CATALOG_ERROR: Key = "catalog.error";
+pub const T_CATALOG_SORT_DEFAULT: Key = "catalog.sort.default";
+pub const T_CATALOG_SORT_POPULAR: Key = "catalog.sort.popular";
+pub const T_CATALOG_SORT_PRICE: Key = "catalog.sort.price";
+pub const T_CATALOG_SORT_NEW: Key = "catalog.sort.new";
+pub const T_CATALOG_SORT_DISCOUNT: Key = "catalog.sort.discount";
+pub const T_LOW_STOCK: Key = "catalog.low_stock";
+pub const T_WATCH_VIDEO: Key = "catalog.watch_video";
+
+// Sommelier strings
+pub const T_SOMM_GET_RECOMMENDATIONS: Key = "somm.get_recommendations";
+pub const T_SOMM_RECOMMENDED_FOR_YOU: Key = "somm.recommended_for_you";
+pub const T_SOMM_RESTART: Key = "somm.restart";
+pub const T_SOMM_RECOMMENDED_SETS: Key = "somm.recommended_sets";
+pub const T_SOMM_RECOMMENDED_STRAINS: Key = "somm.recommended_strains";
+pub const T_SOMM_NO_RECOMMENDATIONS: Key = "somm.no_recommendations";
+pub const T_SOMM_MATCH: Key = "somm.match";
+pub const T_SOMM_MOOD_RELAX: Key = "somm.mood.relax";
+pub const T_SOMM_MOOD_ENERGY: Key = "somm.mood.energy";
+pub const T_SOMM_MOOD_CREATIVE: Key = "somm.mood.creative";
+pub const T_SOMM_MOOD_SLEEP: Key = "somm.mood.sleep";
+pub const T_SOMM_MOOD_STRONG: Key = "somm.mood.strong";
+pub const T_SOMM_MOOD_TASTE: Key = "somm.mood.taste";
+pub const T_SOMM_TIME_DAY: Key = "somm.time.day";
+pub const T_SOMM_TIME_EVENING: Key = "somm.time.evening";
+pub const T_SOMM_TIME_ANY: Key = "somm.time.any";
+pub const T_SOMM_EXP_BEGINNER: Key = "somm.exp.beginner";
+pub const T_SOMM_EXP_MEDIUM: Key = "somm.exp.medium";
+pub const T_SOMM_EXP_EXPERT: Key = "somm.exp.expert";
+
+// Game strings
+pub const T_GAME_TITLE: Key = "game.title";
+pub const T_GAME_TAB_SHOP: Key = "game.tab.shop";
+pub const T_GAME_TAB_FARM: Key = "game.tab.farm";
+pub const T_GAME_TAB_DJ: Key = "game.tab.dj";
+pub const T_GAME_TAB_GRILL: Key = "game.tab.grill";
+pub const T_GAME_TABLE_FREE: Key = "game.table.free";
+pub const T_GAME_TABLE_WAITING: Key = "game.table.waiting";
+pub const T_GAME_TABLE_READY: Key = "game.table.ready";
+pub const T_GAME_TABLE_EATING: Key = "game.table.eating";
+pub const T_GAME_TABLE_DIRTY: Key = "game.table.dirty";
+pub const T_GAME_TABLE_PREPARING: Key = "game.table.preparing";
+pub const T_GAME_FARM_EMPTY: Key = "game.farm.empty";
+pub const T_GAME_FARM_PLANTED: Key = "game.farm.planted";
+pub const T_GAME_FARM_WATERED: Key = "game.farm.watered";
+pub const T_GAME_FARM_GROWN: Key = "game.farm.grown";
+pub const T_GAME_FARM_WATER: Key = "game.farm.water";
+pub const T_GAME_START_PARTY: Key = "game.start_party";
+pub const T_GAME_UPGRADE_MAX: Key = "game.upgrade.max";
+pub const T_GAME_UPGRADE_LEVEL_COST: Key = "game.upgrade.level_cost";
+pub const T_GAME_SERVED: Key = "game.served";
+pub const T_GAME_HARVESTED: Key = "game.harvested";
+pub const T_GAME_TIP: Key = "game.tip";
+pub const T_GAME_UPGRADES: Key = "game.upgrades";
+pub const T_GAME_TABLES: Key = "game.tables";
+pub const T_GAME_SPEED: Key = "game.speed";
+pub const T_GAME_FLOW: Key = "game.flow";
+pub const T_GAME_RESET: Key = "game.reset";
+pub const T_GAME_CONFIRM_RESET: Key = "game.confirm_reset";
+pub const T_GAME_SHOP_TITLE: Key = "game.shop.title";
+pub const T_GAME_ORDER: Key = "game.order";
+pub const T_GAME_SERVE: Key = "game.serve";
+pub const T_GAME_CLEAN: Key = "game.clean";
+pub const T_GAME_GRILL: Key = "game.grill";
+pub const T_GAME_FARM_TITLE: Key = "game.farm.title";
+pub const T_GAME_PARTY_TITLE: Key = "game.party.title";
+pub const T_GAME_PARTY_STATUS_ON: Key = "game.party.status_on";
+pub const T_GAME_PARTY_STATUS_OFF: Key = "game.party.status_off";
+pub const T_GAME_PARTY_START: Key = "game.party.start";
+pub const T_GAME_PARTY_ON: Key = "game.party.on";
+pub const T_GAME_PARTY_TIP: Key = "game.party.tip";
+pub const T_GAME_GRILL_TITLE: Key = "game.grill.title";
+pub const T_GAME_GRILL_STOCK: Key = "game.grill.stock";
+pub const T_GAME_GRILL_COOK: Key = "game.grill.cook";
+pub const T_GAME_GRILL_COOKING: Key = "game.grill.cooking";
+pub const T_GAME_GRILL_DESC: Key = "game.grill.desc";
+pub const T_GAME_GRILL_TIP: Key = "game.grill.tip";
+pub const T_GAME_LOG_NEW_CUSTOMER: Key = "game.log.new_customer";
+pub const T_GAME_LOG_FARM_GREW: Key = "game.log.farm_grew";
+pub const T_GAME_LOG_RESET: Key = "game.log.reset";
+pub const T_GAME_LOG_MOVED_TO_TABLE: Key = "game.log.moved_to_table";
+pub const T_GAME_LOG_TAKING_ORDER: Key = "game.log.taking_order";
+pub const T_GAME_LOG_SERVING: Key = "game.log.serving";
+pub const T_GAME_LOG_CLEANING: Key = "game.log.cleaning";
+pub const T_GAME_LOG_READY_AT_TABLE: Key = "game.log.ready_at_table";
+pub const T_GAME_LOG_QUICK_GRILL: Key = "game.log.quick_grill";
+pub const T_GAME_LOG_GRILLED_LEFT: Key = "game.log.grilled_left";
+pub const T_GAME_LOG_CUSTOMER_LEFT: Key = "game.log.customer_left";
+pub const T_GAME_LOG_TABLE_CLEANED: Key = "game.log.table_cleaned";
+pub const T_GAME_LOG_PARTY_STARTED: Key = "game.log.party_started";
+pub const T_GAME_LOG_COOKING_STARTED: Key = "game.log.cooking_started";
+pub const T_GAME_LOG_PLANTED_SEED: Key = "game.log.planted_seed";
+pub const T_GAME_LOG_WATERING: Key = "game.log.watering";
+pub const T_GAME_LOG_HARVEST: Key = "game.log.harvest";
+pub const T_GAME_EVENT_RUSH_HOUR: Key = "game.event.rush_hour";
+pub const T_GAME_EVENT_BIG_TIP: Key = "game.event.big_tip";
+pub const T_GAME_EVENT_HERB_DELIVERY: Key = "game.event.herb_delivery";
+pub const T_GAME_EVENT_DJ_ENERGY: Key = "game.event.dj_energy";
+pub const T_GAME_EVENT_GRILL_DEMAND: Key = "game.event.grill_demand";
+pub const T_GAME_EVENT_DEFAULT: Key = "game.event.default";
+pub const T_GAME_UPGRADE_TABLES: Key = "game.upgrade.tables";
+pub const T_GAME_UPGRADE_SPEED: Key = "game.upgrade.speed";
+pub const T_GAME_UPGRADE_FLOW: Key = "game.upgrade.flow";
+pub const T_GAME_VIP: Key = "game.vip";
+
+// Location quest screen strings
+pub const T_LOCATION_QUEST_TITLE: Key = "location_quest.title";
+pub const T_LOCATION_QUEST_SUBTITLE: Key = "location_quest.subtitle";
+pub const T_LOCATION_QUEST_EMPTY: Key = "location_quest.empty";
+pub const T_LOCATION_QUEST_EMPTY_DESC: Key = "location_quest.empty_desc";
+pub const T_LOCATION_QUEST_EXPLORE: Key = "location_quest.explore";
+pub const T_SCAN_QR_PROMPT: Key = "scan_qr_prompt";
+pub const T_QUEST_INVALID_QR: Key = "quest.invalid_qr";
+pub const T_QUEST_BAD_RESPONSE: Key = "quest.bad_response";
+pub const T_QUEST_ERROR_PREFIX: Key = "quest.error_prefix";
+pub const T_QUEST_LOADING: Key = "quest.loading";
+pub const T_QUEST_REWARD_BAT: Key = "quest.reward_bat";
+pub const T_LOCATION_QUEST_DESC: Key = "location_quest.desc";
+pub const T_LOCATION_QUEST_LOCATIONS: Key = "location_quest.locations";
+pub const T_LOCATION_QUEST_PLACES: Key = "location_quest.places";
+pub const T_LOCATION_QUEST_GO: Key = "location_quest.go";
+pub const T_LOCATION_QUEST_DEFAULT_DESC: Key = "location_quest.default_desc";
+
 // Success screen hard-coded strings
 pub const T_SUCCESS_TITLE: Key = "success.title";
 pub const T_SUCCESS_ORDER_RECEIVED: Key = "success.order_received";
@@ -473,6 +633,31 @@ fn get_ru_translation(key: Key) -> Value {
         T_GARDEN_ONBOARD_STEP2 => "2. Поливайте растение, чтобы оно росло",
         T_GARDEN_ONBOARD_STEP3 => "3. Соберите урожай и получите награды",
         T_GARDEN_ONBOARD_CTA => "Понятно",
+        T_GARDEN_DIAGNOSTICS_COPY => "📋 Скопировать диагностику",
+        T_GARDEN_DIAGNOSTICS_COPIED => "📋 Диагностика скопирована",
+        T_GARDEN_CHOOSE_PRODUCT => "🌱 Выбрать товар",
+        T_GARDEN_CHOOSE_PRODUCT_HINT => "↑ Нажми «Выбрать товар» вверху",
+        T_GARDEN_PLANT_ALT => "Растение",
+        T_GARDEN_PRODUCT_ALT => "Товар",
+        T_GARDEN_DISCOUNT_BADGE => "🎯 скидка",
+        T_GARDEN_READY => "🏆 ГОТОВО",
+        T_GARDEN_COOLDOWN => "⏳ Перерыв...",
+        T_GARDEN_CHOOSER_TITLE => "Выбери товар для скидки",
+        T_GARDEN_CHOOSER_EMPTY => "Нет доступных товаров",
+        T_GARDEN_CHOOSER_LOADING => "Загрузка...",
+        T_GARDEN_CHOOSER_ERROR => "Ошибка: {0}",
+        T_GARDEN_ERROR_HARVEST => "Не удалось собрать урожай: {0}",
+        T_GARDEN_ERROR_RESET => "Не удалось сбросить: {0}",
+        T_GARDEN_ERROR_COOLDOWN => "Скидку можно растить раз в сутки — подожди после прошлого сбора.",
+        T_GARDEN_ERROR_PRODUCT_UNAVAILABLE => "Товар недоступен.",
+        T_GARDEN_CAT_STRAIN => "🌿 Сорта",
+        T_GARDEN_CAT_ACCESSORY => "💨 Аксессуары",
+        T_GARDEN_CAT_TEA => "🥤 Напитки",
+        T_GARDEN_CAT_SET => "📦 Наборы",
+        T_GARDEN_CAT_ACCESSORY_SET => "🔧 Сеты аксессуаров",
+        T_GARDEN_CAT_TEA_SET => "🫖 Сеты напитков",
+        T_GARDEN_CAT_OTHER => "Прочее",
+        T_CLOSE => "Закрыть",
         // Telegram buttons
         T_BTN_CART => "Корзина",
         T_BTN_CHECKOUT => "Оформить",
@@ -679,6 +864,134 @@ fn get_ru_translation(key: Key) -> Value {
         T_CHECKOUT_CASH_ON_DELIVERY => "Оплата при получении",
         T_CHECKOUT_PAY_ON_RECEIVE => "Оплатите при получении",
         T_CHECKOUT_PROCESSING => "⏳ Оформление...",
+        // Checkout trust + age gate micro-copy
+        T_CHECKOUT_TRUST_TITLE => "Почему нам доверяют",
+        T_CHECKOUT_TRUST_VERIFIED => "🛡️ Проверка возраста (20+)",
+        T_CHECKOUT_TRUST_COD => "📦 Оплата при получении",
+        T_CHECKOUT_TRUST_SECURE => "🔒 Авторизация через Telegram",
+        T_CHECKOUT_AGE_CONFIRM => "Мне исполнилось 20+",
+        T_CHECKOUT_AGE_NOTICE => "Оформляя заказ, вы подтверждаете, что вам 20+, и соглашаетесь с правилами медицинского использования.",
+        // Catalog shared strings
+        T_CATALOG_EMPTY => "Пока нет товаров",
+        T_CATALOG_ERROR => "Не удалось загрузить каталог",
+        T_CATALOG_SORT_DEFAULT => "По умолчанию",
+        T_CATALOG_SORT_POPULAR => "Популярное",
+        T_CATALOG_SORT_PRICE => "Цена",
+        T_CATALOG_SORT_NEW => "Новинки",
+        T_CATALOG_SORT_DISCOUNT => "Скидки",
+        T_LOW_STOCK => "⚠ Осталось {0} шт.",
+        T_WATCH_VIDEO => "Смотреть видео",
+        // Sommelier strings
+        T_SOMM_GET_RECOMMENDATIONS => "🔮 Подобрать",
+        T_SOMM_RECOMMENDED_FOR_YOU => "✨ Рекомендации для вас",
+        T_SOMM_RESTART => "↻ Заново",
+        T_SOMM_RECOMMENDED_SETS => "📦 Рекомендуемые наборы",
+        T_SOMM_RECOMMENDED_STRAINS => "🌿 Рекомендуемые сорта",
+        T_SOMM_NO_RECOMMENDATIONS => "Ничего не нашлось. Попробуйте другие варианты!",
+        T_SOMM_MATCH => "совпадение",
+        T_SOMM_MOOD_RELAX => "😌 Расслабиться",
+        T_SOMM_MOOD_ENERGY => "⚡ Энергия",
+        T_SOMM_MOOD_CREATIVE => "🎨 Творчество",
+        T_SOMM_MOOD_SLEEP => "😴 Сон",
+        T_SOMM_MOOD_STRONG => "💪 Крепкое",
+        T_SOMM_MOOD_TASTE => "👅 Вкус",
+        T_SOMM_TIME_DAY => "☀️ День",
+        T_SOMM_TIME_EVENING => "🌙 Вечер",
+        T_SOMM_TIME_ANY => "🔄 Любое",
+        T_SOMM_EXP_BEGINNER => "🌱 Новичок",
+        T_SOMM_EXP_MEDIUM => "🌿 Средний",
+        T_SOMM_EXP_EXPERT => "🔥 Эксперт",
+        // Game strings
+        T_GAME_TITLE => "WOODY SHOP",
+        T_GAME_TAB_SHOP => "🛒 Магазин",
+        T_GAME_TAB_FARM => "🌱 Ферма",
+        T_GAME_TAB_DJ => "🎧 DJ",
+        T_GAME_TAB_GRILL => "🍖 Гриль",
+        T_GAME_TABLE_FREE => "Свободный стол",
+        T_GAME_TABLE_WAITING => "Гость ждёт",
+        T_GAME_TABLE_READY => "Заказ готов",
+        T_GAME_TABLE_EATING => "Гость ест",
+        T_GAME_TABLE_DIRTY => "Грязный стол",
+        T_GAME_TABLE_PREPARING => "Готовится...",
+        T_GAME_FARM_EMPTY => "Пустая грядка",
+        T_GAME_FARM_PLANTED => "Росток",
+        T_GAME_FARM_WATERED => "Растёт быстро",
+        T_GAME_FARM_GROWN => "Готово к сбору!",
+        T_GAME_FARM_WATER => "💧 Полить",
+        T_GAME_START_PARTY => "Запусти вечеринку, чтобы увеличить доход",
+        T_GAME_UPGRADE_MAX => "МАКС",
+        T_GAME_UPGRADE_LEVEL_COST => "Ур{0} • {1}🪙",
+        T_GAME_SERVED => "Обслужено",
+        T_GAME_HARVESTED => "Собрано",
+        T_GAME_TIP => "💡 Совет: обслуживай гостей, зарабатывай монеты и прокачивай магазин.",
+        T_GAME_UPGRADES => "🆙 УЛУЧШЕНИЯ",
+        T_GAME_TABLES => "🪑 Столы",
+        T_GAME_SPEED => "⚡ Скорость",
+        T_GAME_FLOW => "🚪 Поток",
+        T_GAME_RESET => "🔄 Сброс",
+        T_GAME_CONFIRM_RESET => "Сбросить весь прогресс? Это нельзя отменить.",
+        T_GAME_SHOP_TITLE => "WOODY SHOP",
+        T_GAME_ORDER => "👋 Заказ",
+        T_GAME_SERVE => "🤲 Подать",
+        T_GAME_CLEAN => "🧽 Убрать",
+        T_GAME_GRILL => "🍔 Гриль",
+        T_GAME_FARM_TITLE => "🌱 ФЕРМА",
+        T_GAME_PARTY_TITLE => "🎧 DJ ЗОНА",
+        T_GAME_PARTY_STATUS_ON => "Вечеринка идёт — чаевые +5 🪙 за подачу",
+        T_GAME_PARTY_STATUS_OFF => "Запусти вечеринку, чтобы увеличить доход",
+        T_GAME_PARTY_START => "🚀 Запустить вечеринку",
+        T_GAME_PARTY_ON => "🔥 Вечеринка идёт",
+        T_GAME_PARTY_TIP => "Совет: вечеринка добавляет +5 🪙 за подачу",
+        T_GAME_GRILL_TITLE => "🍖 ГРИЛЬ",
+        T_GAME_GRILL_STOCK => "Запас: {0}",
+        T_GAME_GRILL_COOK => "🍳 Готовить",
+        T_GAME_GRILL_COOKING => "🔥 Готовится...",
+        T_GAME_GRILL_DESC => "Готовь еду. Мгновенно обслуживает голодных гостей в магазине.",
+        T_GAME_GRILL_TIP => "Совет: гриль авто-обслуживает голодных гостей",
+        T_GAME_LOG_NEW_CUSTOMER => "Новый клиент пришёл",
+        T_GAME_LOG_FARM_GREW => "Ферма выросла на шаг",
+        T_GAME_LOG_RESET => "Прогресс сброшен",
+        T_GAME_LOG_MOVED_TO_TABLE => "Вуди подошёл к столу {0}",
+        T_GAME_LOG_TAKING_ORDER => "Принимает заказ у стола {0}",
+        T_GAME_LOG_SERVING => "Обслуживает стол {0}",
+        T_GAME_LOG_CLEANING => "Убирает стол {0}",
+        T_GAME_LOG_READY_AT_TABLE => "{0} готов у стола {1}",
+        T_GAME_LOG_QUICK_GRILL => "Быстрый гриль у стола {0}",
+        T_GAME_LOG_GRILLED_LEFT => "Гриль-клиент заплатил +{0} 🪙",
+        T_GAME_LOG_CUSTOMER_LEFT => "Клиент заплатил +{0} 🪙",
+        T_GAME_LOG_TABLE_CLEANED => "Стол убран",
+        T_GAME_LOG_PARTY_STARTED => "Вечеринка началась! −{0} 🪙",
+        T_GAME_LOG_COOKING_STARTED => "Готовка началась −{0} 🪙",
+        T_GAME_LOG_PLANTED_SEED => "Посажено семя −{0} 🪙",
+        T_GAME_LOG_WATERING => "Поливаем...",
+        T_GAME_LOG_HARVEST => "Урожай! +{0} 🪙",
+        T_GAME_EVENT_RUSH_HOUR => "🎉 Час пик! Ещё больше гостей!",
+        T_GAME_EVENT_BIG_TIP => "💰 Щедрые чаевые! +20 🪙",
+        T_GAME_EVENT_HERB_DELIVERY => "🌿 Доставка травы! Все грядки политы",
+        T_GAME_EVENT_DJ_ENERGY => "🎵 DJ-энергия! Вечеринка длится дольше",
+        T_GAME_EVENT_GRILL_DEMAND => "🍔 Спрос на гриль! Бесплатный запас еды",
+        T_GAME_EVENT_DEFAULT => "🎉 Событие!",
+        T_GAME_UPGRADE_TABLES => "🪑 Столы улучшены!",
+        T_GAME_UPGRADE_SPEED => "⚡ Обслуживание быстрее!",
+        T_GAME_UPGRADE_FLOW => "🚪 Больше клиентов!",
+        T_GAME_VIP => "VIP",
+        // Location quest screen strings
+        T_LOCATION_QUEST_TITLE => "📍 Локационные квесты",
+        T_LOCATION_QUEST_SUBTITLE => "Пройди квесты на настоящих локациях острова",
+        T_LOCATION_QUEST_EMPTY => "Пока нет квестов",
+        T_LOCATION_QUEST_EMPTY_DESC => "Новые квесты появятся здесь, когда станут доступны",
+        T_LOCATION_QUEST_EXPLORE => "Исследовать",
+        T_SCAN_QR_PROMPT => "Сканируй QR локации",
+        T_QUEST_INVALID_QR => "Неверный QR",
+        T_QUEST_BAD_RESPONSE => "Некорректный ответ сервера",
+        T_QUEST_ERROR_PREFIX => "Ошибка: {0}",
+        T_QUEST_LOADING => "Загрузка квеста...",
+        T_QUEST_REWARD_BAT => "🎁 +{0} BAT",
+        T_LOCATION_QUEST_DESC => "Выполняй квесты в реальных локациях острова",
+        T_LOCATION_QUEST_LOCATIONS => "🎯 Локации",
+        T_LOCATION_QUEST_PLACES => "{0} мест",
+        T_LOCATION_QUEST_GO => "📷 Вперёд",
+        T_LOCATION_QUEST_DEFAULT_DESC => "Исследуй эту локацию",
         // Success screen
         T_SUCCESS_TITLE => "Заказ оформлен!",
         T_SUCCESS_ORDER_RECEIVED => "Заказ #{0} получен",
@@ -862,6 +1175,31 @@ fn get_en_translation(key: Key) -> Value {
         T_GARDEN_ONBOARD_STEP2 => "2. Water it to grow through stages",
         T_GARDEN_ONBOARD_STEP3 => "3. Harvest and earn rewards",
         T_GARDEN_ONBOARD_CTA => "Got it",
+        T_GARDEN_DIAGNOSTICS_COPY => "📋 Copy diagnostics",
+        T_GARDEN_DIAGNOSTICS_COPIED => "📋 Diagnostics copied",
+        T_GARDEN_CHOOSE_PRODUCT => "🌱 Choose product",
+        T_GARDEN_CHOOSE_PRODUCT_HINT => "↑ Tap Choose product above",
+        T_GARDEN_PLANT_ALT => "Plant",
+        T_GARDEN_PRODUCT_ALT => "Product",
+        T_GARDEN_DISCOUNT_BADGE => "🎯 discount",
+        T_GARDEN_READY => "🏆 READY",
+        T_GARDEN_COOLDOWN => "⏳ Cooldown...",
+        T_GARDEN_CHOOSER_TITLE => "Pick a product for discount",
+        T_GARDEN_CHOOSER_EMPTY => "No products available",
+        T_GARDEN_CHOOSER_LOADING => "Loading...",
+        T_GARDEN_CHOOSER_ERROR => "Error: {0}",
+        T_GARDEN_ERROR_HARVEST => "Failed to harvest: {0}",
+        T_GARDEN_ERROR_RESET => "Failed to reset: {0}",
+        T_GARDEN_ERROR_COOLDOWN => "Discount can be grown once a day — wait until after the last harvest.",
+        T_GARDEN_ERROR_PRODUCT_UNAVAILABLE => "Product unavailable.",
+        T_GARDEN_CAT_STRAIN => "🌿 Strains",
+        T_GARDEN_CAT_ACCESSORY => "💨 Accessories",
+        T_GARDEN_CAT_TEA => "🥤 Drinks",
+        T_GARDEN_CAT_SET => "📦 Sets",
+        T_GARDEN_CAT_ACCESSORY_SET => "🔧 Accessory sets",
+        T_GARDEN_CAT_TEA_SET => "🫖 Drink sets",
+        T_GARDEN_CAT_OTHER => "Other",
+        T_CLOSE => "Close",
         // Telegram buttons
         T_BTN_CART => "Cart",
         T_BTN_CHECKOUT => "Checkout",
@@ -1068,6 +1406,134 @@ fn get_en_translation(key: Key) -> Value {
         T_CHECKOUT_CASH_ON_DELIVERY => "Cash on Delivery",
         T_CHECKOUT_PAY_ON_RECEIVE => "Pay when you receive",
         T_CHECKOUT_PROCESSING => "⏳ Processing...",
+        // Checkout trust + age gate micro-copy
+        T_CHECKOUT_TRUST_TITLE => "Fast & discreet",
+        T_CHECKOUT_TRUST_VERIFIED => "🛡️ Age-verified orders (20+)",
+        T_CHECKOUT_TRUST_COD => "📦 Cash on delivery",
+        T_CHECKOUT_TRUST_SECURE => "🔒 Telegram-secured identity",
+        T_CHECKOUT_AGE_CONFIRM => "I confirm I am 18+",
+        T_CHECKOUT_AGE_NOTICE => "By placing this order, you confirm you are 18+ and agree to medical-use terms.",
+        // Catalog shared strings
+        T_CATALOG_EMPTY => "No items yet",
+        T_CATALOG_ERROR => "Failed to load. Pull to refresh or try again.",
+        T_CATALOG_SORT_DEFAULT => "Recommended",
+        T_CATALOG_SORT_POPULAR => "Popular",
+        T_CATALOG_SORT_PRICE => "Price",
+        T_CATALOG_SORT_NEW => "New",
+        T_CATALOG_SORT_DISCOUNT => "Discount",
+        T_LOW_STOCK => "Only {0} left",
+        T_WATCH_VIDEO => "Watch video",
+        // Sommelier strings
+        T_SOMM_GET_RECOMMENDATIONS => "Get recommendations",
+        T_SOMM_RECOMMENDED_FOR_YOU => "Recommended for you",
+        T_SOMM_RESTART => "Start over",
+        T_SOMM_RECOMMENDED_SETS => "Recommended sets",
+        T_SOMM_RECOMMENDED_STRAINS => "Recommended strains",
+        T_SOMM_NO_RECOMMENDATIONS => "No recommendations for these options. Try changing mood or experience.",
+        T_SOMM_MATCH => "match",
+        T_SOMM_MOOD_RELAX => "😌 Relax",
+        T_SOMM_MOOD_ENERGY => "⚡ Energy",
+        T_SOMM_MOOD_CREATIVE => "🎨 Creative",
+        T_SOMM_MOOD_SLEEP => "😴 Sleep",
+        T_SOMM_MOOD_STRONG => "💪 Strong",
+        T_SOMM_MOOD_TASTE => "👅 Taste",
+        T_SOMM_TIME_DAY => "☀️ Day",
+        T_SOMM_TIME_EVENING => "🌙 Evening",
+        T_SOMM_TIME_ANY => "🔄 Any",
+        T_SOMM_EXP_BEGINNER => "🌱 Beginner",
+        T_SOMM_EXP_MEDIUM => "🌿 Intermediate",
+        T_SOMM_EXP_EXPERT => "🔥 Expert",
+        // Game strings
+        T_GAME_TITLE => "Woody Games",
+        T_GAME_TAB_SHOP => "🛒 Shop",
+        T_GAME_TAB_FARM => "🌱 Farm",
+        T_GAME_TAB_DJ => "🎧 DJ",
+        T_GAME_TAB_GRILL => "🍖 Grill",
+        T_GAME_TABLE_FREE => "Free table",
+        T_GAME_TABLE_WAITING => "Guest waiting",
+        T_GAME_TABLE_READY => "Order ready",
+        T_GAME_TABLE_EATING => "Guest eating",
+        T_GAME_TABLE_DIRTY => "Dirty table",
+        T_GAME_TABLE_PREPARING => "Preparing...",
+        T_GAME_FARM_EMPTY => "Empty plot",
+        T_GAME_FARM_PLANTED => "Sprout",
+        T_GAME_FARM_WATERED => "Growing fast",
+        T_GAME_FARM_GROWN => "Ready to harvest!",
+        T_GAME_FARM_WATER => "💧 Water",
+        T_GAME_START_PARTY => "Start party to boost earnings",
+        T_GAME_UPGRADE_MAX => "MAX",
+        T_GAME_UPGRADE_LEVEL_COST => "Lv{0} • {1}🪙",
+        T_GAME_SERVED => "Served",
+        T_GAME_HARVESTED => "Harvested",
+        T_GAME_TIP => "💡 Tip: serve customers to earn coins, then buy upgrades.",
+        T_GAME_UPGRADES => "🆙 UPGRADES",
+        T_GAME_TABLES => "🪑 Tables",
+        T_GAME_SPEED => "⚡ Speed",
+        T_GAME_FLOW => "🚪 Flow",
+        T_GAME_RESET => "🔄 Reset",
+        T_GAME_CONFIRM_RESET => "Reset all progress? This cannot be undone.",
+        T_GAME_SHOP_TITLE => "WOODY SHOP",
+        T_GAME_ORDER => "👋 Order",
+        T_GAME_SERVE => "🤲 Serve",
+        T_GAME_CLEAN => "🧽 Clean",
+        T_GAME_GRILL => "🍔 Grill",
+        T_GAME_FARM_TITLE => "🌱 FARM",
+        T_GAME_PARTY_TITLE => "🎧 DJ ZONE",
+        T_GAME_PARTY_STATUS_ON => "Party ON — tips +5 🪙 per serve",
+        T_GAME_PARTY_STATUS_OFF => "Start party to boost shop income",
+        T_GAME_PARTY_START => "🚀 Start Party",
+        T_GAME_PARTY_ON => "🔥 Party ON",
+        T_GAME_PARTY_TIP => "Tip: party adds +5 🪙 per serve while active",
+        T_GAME_GRILL_TITLE => "🍖 VERANDA GRILL",
+        T_GAME_GRILL_STOCK => "Stock: {0}",
+        T_GAME_GRILL_COOK => "🍳 Cook",
+        T_GAME_GRILL_COOKING => "🔥 Cooking...",
+        T_GAME_GRILL_DESC => "Cook food. Serves hungry customers instantly when in shop.",
+        T_GAME_GRILL_TIP => "Tip: grilled food auto-serves hungry customers",
+        T_GAME_LOG_NEW_CUSTOMER => "New customer arrived",
+        T_GAME_LOG_FARM_GREW => "Farm grew a step",
+        T_GAME_LOG_RESET => "Progress reset",
+        T_GAME_LOG_MOVED_TO_TABLE => "Woody moved to table {0}",
+        T_GAME_LOG_TAKING_ORDER => "Taking order at table {0}",
+        T_GAME_LOG_SERVING => "Serving at table {0}",
+        T_GAME_LOG_CLEANING => "Cleaning table {0}",
+        T_GAME_LOG_READY_AT_TABLE => "{0} ready at table {1}",
+        T_GAME_LOG_QUICK_GRILL => "Quick grill serve at table {0}",
+        T_GAME_LOG_GRILLED_LEFT => "Grilled customer left +{0} 🪙",
+        T_GAME_LOG_CUSTOMER_LEFT => "Customer left +{0} 🪙",
+        T_GAME_LOG_TABLE_CLEANED => "Table cleaned",
+        T_GAME_LOG_PARTY_STARTED => "Party started! −{0} 🪙",
+        T_GAME_LOG_COOKING_STARTED => "Cooking started −{0} 🪙",
+        T_GAME_LOG_PLANTED_SEED => "Planted seed −{0} 🪙",
+        T_GAME_LOG_WATERING => "Watering...",
+        T_GAME_LOG_HARVEST => "Harvest! +{0} 🪙",
+        T_GAME_EVENT_RUSH_HOUR => "🎉 Rush hour! More customers coming!",
+        T_GAME_EVENT_BIG_TIP => "💰 Big tip! +20 coins",
+        T_GAME_EVENT_HERB_DELIVERY => "🌿 Herb delivery! All farm plots watered",
+        T_GAME_EVENT_DJ_ENERGY => "🎵 DJ energy up! Party lasts longer",
+        T_GAME_EVENT_GRILL_DEMAND => "🍔 Grill demand! Free food stock",
+        T_GAME_EVENT_DEFAULT => "🎉 Event!",
+        T_GAME_UPGRADE_TABLES => "🪑 Tables upgraded!",
+        T_GAME_UPGRADE_SPEED => "⚡ Faster service!",
+        T_GAME_UPGRADE_FLOW => "🚪 More customers!",
+        T_GAME_VIP => "VIP",
+        // Location quest screen strings
+        T_LOCATION_QUEST_TITLE => "Location Quest",
+        T_LOCATION_QUEST_SUBTITLE => "Find nearby spots and earn bonuses",
+        T_LOCATION_QUEST_EMPTY => "No active quests in this area",
+        T_LOCATION_QUEST_EMPTY_DESC => "Move around the city or check back later",
+        T_LOCATION_QUEST_EXPLORE => "Explore",
+        T_SCAN_QR_PROMPT => "Scan location QR",
+        T_QUEST_INVALID_QR => "Invalid QR",
+        T_QUEST_BAD_RESPONSE => "Bad response",
+        T_QUEST_ERROR_PREFIX => "Error: {0}",
+        T_QUEST_LOADING => "Loading quest...",
+        T_QUEST_REWARD_BAT => "🎁 +{0} BAT",
+        T_LOCATION_QUEST_DESC => "Complete quests at real locations around the island",
+        T_LOCATION_QUEST_LOCATIONS => "🎯 Locations",
+        T_LOCATION_QUEST_PLACES => "{0} places",
+        T_LOCATION_QUEST_GO => "📷 Go",
+        T_LOCATION_QUEST_DEFAULT_DESC => "Explore this location",
         // Success screen
         T_SUCCESS_TITLE => "Order Placed!",
         T_SUCCESS_ORDER_RECEIVED => "Your order #{0} has been received",
@@ -1258,6 +1724,31 @@ pub fn get_translations(lang: Lang) -> Translations {
         T_GARDEN_RESET_CONFIRM_BODY,
         T_GARDEN_CANCEL,
         T_GARDEN_CONFIRM_RESET,
+        T_GARDEN_DIAGNOSTICS_COPY,
+        T_GARDEN_DIAGNOSTICS_COPIED,
+        T_GARDEN_CHOOSE_PRODUCT,
+        T_GARDEN_CHOOSE_PRODUCT_HINT,
+        T_GARDEN_PLANT_ALT,
+        T_GARDEN_PRODUCT_ALT,
+        T_GARDEN_DISCOUNT_BADGE,
+        T_GARDEN_READY,
+        T_GARDEN_COOLDOWN,
+        T_GARDEN_CHOOSER_TITLE,
+        T_GARDEN_CHOOSER_EMPTY,
+        T_GARDEN_CHOOSER_LOADING,
+        T_GARDEN_CHOOSER_ERROR,
+        T_GARDEN_ERROR_HARVEST,
+        T_GARDEN_ERROR_RESET,
+        T_GARDEN_ERROR_COOLDOWN,
+        T_GARDEN_ERROR_PRODUCT_UNAVAILABLE,
+        T_GARDEN_CAT_STRAIN,
+        T_GARDEN_CAT_ACCESSORY,
+        T_GARDEN_CAT_TEA,
+        T_GARDEN_CAT_SET,
+        T_GARDEN_CAT_ACCESSORY_SET,
+        T_GARDEN_CAT_TEA_SET,
+        T_GARDEN_CAT_OTHER,
+        T_CLOSE,
         // Telegram buttons
         T_BTN_CART,
         T_BTN_CHECKOUT,
@@ -1361,6 +1852,129 @@ pub fn get_translations(lang: Lang) -> Translations {
         T_SOMM_TIME,
         T_SOMM_EXP,
         T_SOMM_RESULT,
+        T_CHECKOUT_TRUST_TITLE,
+        T_CHECKOUT_TRUST_VERIFIED,
+        T_CHECKOUT_TRUST_COD,
+        T_CHECKOUT_TRUST_SECURE,
+        T_CHECKOUT_AGE_CONFIRM,
+        T_CHECKOUT_AGE_NOTICE,
+        T_CATALOG_EMPTY,
+        T_CATALOG_ERROR,
+        T_CATALOG_SORT_DEFAULT,
+        T_CATALOG_SORT_POPULAR,
+        T_CATALOG_SORT_PRICE,
+        T_CATALOG_SORT_NEW,
+        T_CATALOG_SORT_DISCOUNT,
+        T_LOW_STOCK,
+        T_WATCH_VIDEO,
+        T_SOMM_GET_RECOMMENDATIONS,
+        T_SOMM_RECOMMENDED_FOR_YOU,
+        T_SOMM_RESTART,
+        T_SOMM_RECOMMENDED_SETS,
+        T_SOMM_RECOMMENDED_STRAINS,
+        T_SOMM_NO_RECOMMENDATIONS,
+        T_SOMM_MATCH,
+        T_SOMM_MOOD_RELAX,
+        T_SOMM_MOOD_ENERGY,
+        T_SOMM_MOOD_CREATIVE,
+        T_SOMM_MOOD_SLEEP,
+        T_SOMM_MOOD_STRONG,
+        T_SOMM_MOOD_TASTE,
+        T_SOMM_TIME_DAY,
+        T_SOMM_TIME_EVENING,
+        T_SOMM_TIME_ANY,
+        T_SOMM_EXP_BEGINNER,
+        T_SOMM_EXP_MEDIUM,
+        T_SOMM_EXP_EXPERT,
+        T_GAME_TITLE,
+        T_GAME_TAB_SHOP,
+        T_GAME_TAB_FARM,
+        T_GAME_TAB_DJ,
+        T_GAME_TAB_GRILL,
+        T_GAME_TABLE_FREE,
+        T_GAME_TABLE_WAITING,
+        T_GAME_TABLE_READY,
+        T_GAME_TABLE_EATING,
+        T_GAME_TABLE_DIRTY,
+        T_GAME_TABLE_PREPARING,
+        T_GAME_FARM_EMPTY,
+        T_GAME_FARM_PLANTED,
+        T_GAME_FARM_WATERED,
+        T_GAME_FARM_GROWN,
+        T_GAME_FARM_WATER,
+        T_GAME_START_PARTY,
+        T_GAME_UPGRADE_MAX,
+        T_GAME_UPGRADE_LEVEL_COST,
+        T_GAME_SERVED,
+        T_GAME_HARVESTED,
+        T_GAME_TIP,
+        T_GAME_UPGRADES,
+        T_GAME_TABLES,
+        T_GAME_SPEED,
+        T_GAME_FLOW,
+        T_GAME_RESET,
+        T_GAME_CONFIRM_RESET,
+        T_GAME_SHOP_TITLE,
+        T_GAME_ORDER,
+        T_GAME_SERVE,
+        T_GAME_CLEAN,
+        T_GAME_GRILL,
+        T_GAME_FARM_TITLE,
+        T_GAME_PARTY_TITLE,
+        T_GAME_PARTY_STATUS_ON,
+        T_GAME_PARTY_STATUS_OFF,
+        T_GAME_PARTY_START,
+        T_GAME_PARTY_ON,
+        T_GAME_PARTY_TIP,
+        T_GAME_GRILL_TITLE,
+        T_GAME_GRILL_STOCK,
+        T_GAME_GRILL_COOK,
+        T_GAME_GRILL_COOKING,
+        T_GAME_GRILL_DESC,
+        T_GAME_GRILL_TIP,
+        T_GAME_LOG_NEW_CUSTOMER,
+        T_GAME_LOG_FARM_GREW,
+        T_GAME_LOG_RESET,
+        T_GAME_LOG_MOVED_TO_TABLE,
+        T_GAME_LOG_TAKING_ORDER,
+        T_GAME_LOG_SERVING,
+        T_GAME_LOG_CLEANING,
+        T_GAME_LOG_READY_AT_TABLE,
+        T_GAME_LOG_QUICK_GRILL,
+        T_GAME_LOG_GRILLED_LEFT,
+        T_GAME_LOG_CUSTOMER_LEFT,
+        T_GAME_LOG_TABLE_CLEANED,
+        T_GAME_LOG_PARTY_STARTED,
+        T_GAME_LOG_COOKING_STARTED,
+        T_GAME_LOG_PLANTED_SEED,
+        T_GAME_LOG_WATERING,
+        T_GAME_LOG_HARVEST,
+        T_GAME_EVENT_RUSH_HOUR,
+        T_GAME_EVENT_BIG_TIP,
+        T_GAME_EVENT_HERB_DELIVERY,
+        T_GAME_EVENT_DJ_ENERGY,
+        T_GAME_EVENT_GRILL_DEMAND,
+        T_GAME_EVENT_DEFAULT,
+        T_GAME_UPGRADE_TABLES,
+        T_GAME_UPGRADE_SPEED,
+        T_GAME_UPGRADE_FLOW,
+        T_GAME_VIP,
+        T_LOCATION_QUEST_TITLE,
+        T_LOCATION_QUEST_SUBTITLE,
+        T_LOCATION_QUEST_EMPTY,
+        T_LOCATION_QUEST_EMPTY_DESC,
+        T_LOCATION_QUEST_EXPLORE,
+        T_SCAN_QR_PROMPT,
+        T_QUEST_INVALID_QR,
+        T_QUEST_BAD_RESPONSE,
+        T_QUEST_ERROR_PREFIX,
+        T_QUEST_LOADING,
+        T_QUEST_REWARD_BAT,
+        T_LOCATION_QUEST_DESC,
+        T_LOCATION_QUEST_LOCATIONS,
+        T_LOCATION_QUEST_PLACES,
+        T_LOCATION_QUEST_GO,
+        T_LOCATION_QUEST_DEFAULT_DESC,
     ];
 
     for key in keys {

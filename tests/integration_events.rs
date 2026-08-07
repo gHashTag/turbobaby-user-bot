@@ -21,7 +21,7 @@ async fn list_events_returns_public_events() {
     // Ensure clean state for this test.
     let _ = db
         .orm
-        .execute_unprepared("TRUNCATE events, event_bookings")
+        .execute_unprepared("TRUNCATE events, event_bookings CASCADE")
         .await;
 
     let response = app
@@ -56,7 +56,7 @@ async fn list_events_with_date_range_returns_ok() {
     // Ensure clean state for this test.
     let _ = db
         .orm
-        .execute_unprepared("TRUNCATE events, event_bookings")
+        .execute_unprepared("TRUNCATE events, event_bookings CASCADE")
         .await;
 
     let response = app
@@ -90,7 +90,7 @@ async fn admin_can_create_and_list_event() {
 
     let _ = db
         .orm
-        .execute_unprepared("TRUNCATE events, event_bookings")
+        .execute_unprepared("TRUNCATE events, event_bookings CASCADE")
         .await;
 
     let init_data = common::make_init_data(42, "dummy_test_token");
@@ -284,7 +284,7 @@ async fn user_can_list_and_cancel_own_booking() {
     };
     let _ = db
         .orm
-        .execute_unprepared("TRUNCATE events, event_bookings")
+        .execute_unprepared("TRUNCATE events, event_bookings CASCADE")
         .await;
 
     let (app, event_id) = create_public_event(app, "Bookable", "2030-07-25T18:00:00Z", 10).await;
@@ -341,7 +341,7 @@ async fn admin_can_cancel_user_booking() {
     };
     let _ = db
         .orm
-        .execute_unprepared("TRUNCATE events, event_bookings")
+        .execute_unprepared("TRUNCATE events, event_bookings CASCADE")
         .await;
 
     let (app, event_id) =
@@ -382,7 +382,7 @@ async fn waitlist_opens_when_capacity_full() {
     };
     let _ = db
         .orm
-        .execute_unprepared("TRUNCATE events, event_bookings")
+        .execute_unprepared("TRUNCATE events, event_bookings CASCADE")
         .await;
 
     let (app, event_id) = create_public_event(app, "Full House", "2030-07-25T18:00:00Z", 2).await;
@@ -425,7 +425,7 @@ async fn waitlist_auto_promotes_on_cancel() {
     };
     let _ = db
         .orm
-        .execute_unprepared("TRUNCATE events, event_bookings")
+        .execute_unprepared("TRUNCATE events, event_bookings CASCADE")
         .await;
 
     let (app, event_id) = create_public_event(app, "Promote Demo", "2030-07-25T18:00:00Z", 2).await;
@@ -520,7 +520,7 @@ async fn timezone_edge_case_lists_bangkok_midnight_range() {
     };
     let _ = db
         .orm
-        .execute_unprepared("TRUNCATE events, event_bookings")
+        .execute_unprepared("TRUNCATE events, event_bookings CASCADE")
         .await;
 
     // Event at 01:00 Asia/Bangkok = 18:00 UTC the previous day.
@@ -552,7 +552,7 @@ async fn paid_event_booking_deducts_stars() {
         return;
     };
     db.orm
-        .execute_unprepared("TRUNCATE events, event_bookings, user_stars, stars_transactions, stars_idempotency_keys, loyalty_idempotency_keys, loyalty_profiles")
+        .execute_unprepared("TRUNCATE events, event_bookings, user_stars, stars_transactions, stars_idempotency_keys, loyalty_idempotency_keys, loyalty_profiles CASCADE")
         .await
         .expect("truncate test tables");
 
@@ -650,7 +650,7 @@ async fn paid_event_booking_fails_without_stars() {
         return;
     };
     db.orm
-        .execute_unprepared("TRUNCATE events, event_bookings, user_stars, stars_transactions, stars_idempotency_keys")
+        .execute_unprepared("TRUNCATE events, event_bookings, user_stars, stars_transactions, stars_idempotency_keys CASCADE")
         .await
         .expect("truncate test tables");
 
