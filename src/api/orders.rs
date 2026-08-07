@@ -101,6 +101,7 @@ pub(crate) fn routes() -> Router<AppState> {
         .route("/orders/:id/details", get(get_order_details))
         .route("/orders/:id/status", get(get_order_status))
         .route("/orders/:id/status", put(update_order_status))
+        .route("/orders/:id/cancel", post(cancel_order))
         .route("/orders/:id/promptpay-qr", get(promptpay_qr))
         .route("/orders/user/:telegram_id", get(get_user_orders))
         .route("/delivery/zones", get(list_delivery_zones))
@@ -1800,7 +1801,221 @@ async fn update_order_status(
             return Err(StatusCode::NOT_FOUND);
         }
     }
+
+    crate::metrics::order_status_changed(&req.status);
+
+    // Cycle #9: push the new status to the customer for every milestone,
+    // including non-terminal transitions (preparing/ready/out_for_delivery).
+    if let Some(customer_tid) = current.telegram_id {
+        let bot = state.bot.clone();
+        let db = state.db.clone();
+        let config = state.config.clone();
+        let status_for_notify = req.status.clone();
+        let order_id_for_notify = id.clone();
+        tokio::spawn(async move {
+            crate::bot::notify::notify_order_status(
+                &bot,
+                &db,
+                &config,
+                customer_tid,
+                &order_id_for_notify,
+                &status_for_notify,
+            )
+            .await;
+        });
+    }
+
     Ok(Json(json!({ "success": true })))
+}
+
+/// Cycle #94: customer self-service cancellation. Only allowed while the
+/// order is still `pending`. Refunds any bonus/stars spent and notifies the
+/// customer so the UI can update live.
+async fn cancel_order(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Query(params): Query<HashMap<String, String>>,
+) -> Result<Json<Value>, StatusCode> {
+    if id.len() > 200 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    let tid = params
+        .get("telegram_id")
+        .and_then(|v| v.parse::<i64>().ok())
+        .ok_or(StatusCode::BAD_REQUEST)?;
+    validate_telegram_id_param(tid)?;
+    let _owner_id = check_owner(&headers, &state, tid)?;
+    check_not_blocked(&state, tid).await?;
+
+    use crate::db::entities::{
+        loyalty_profile::{ActiveModel as LpAm, Column as LpCol, Entity as LpEntity},
+        order::{Column as OrderCol, Entity as OrderEntity},
+        stars_transaction::{ActiveModel as StarsTxAm, Entity as StarsTxEntity},
+        user_stars::{ActiveModel as UsAm, Column as UsCol, Entity as UsEntity},
+    };
+    use sea_orm::sea_query::OnConflict;
+    use sea_orm::{
+        ActiveValue::Set, ColumnTrait, EntityTrait, QueryFilter, QuerySelect, TransactionTrait,
+    };
+
+    let tx = state.db.orm.begin().await.map_err(|e| {
+        tracing::error!("cancel_order tx.begin: {:?}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+    let locked = OrderEntity::find_by_id(id.clone())
+        .lock_exclusive()
+        .one(&tx)
+        .await
+        .map_err(|e| {
+            tracing::error!("cancel_order FOR UPDATE read: {:?}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+    let Some(o) = locked else {
+        return Err(StatusCode::NOT_FOUND);
+    };
+    if o.telegram_id != Some(tid) {
+        return Err(StatusCode::NOT_FOUND);
+    }
+    if o.status != "pending" {
+        return Err(StatusCode::CONFLICT);
+    }
+
+    let bonus = if o.bonus_used.is_finite() {
+        o.bonus_used.max(0.0)
+    } else {
+        0.0
+    };
+    if bonus > 0.0 {
+        let lp_seed = LpAm {
+            telegram_id: Set(tid),
+            bonus_balance: Set(Some(0.0)),
+            total_spent: Set(Some(0.0)),
+            ..Default::default()
+        };
+        LpEntity::insert(lp_seed)
+            .on_conflict(
+                OnConflict::column(LpCol::TelegramId)
+                    .do_nothing()
+                    .to_owned(),
+            )
+            .do_nothing()
+            .exec(&tx)
+            .await
+            .map_err(|e| {
+                tracing::error!("cancel_order loyalty seed: {:?}", e);
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?;
+        LpEntity::update_many()
+            .col_expr(
+                LpCol::BonusBalance,
+                sea_orm::sea_query::Expr::cust_with_values("bonus_balance + $1", [bonus]),
+            )
+            .filter(LpCol::TelegramId.eq(tid))
+            .exec(&tx)
+            .await
+            .map_err(|e| {
+                tracing::error!("cancel_order bonus refund: {:?}", e);
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?;
+    }
+    let stars = o.stars_used.max(0);
+    if stars > 0 {
+        UsEntity::insert(UsAm {
+            telegram_id: Set(tid),
+            balance: Set(0),
+            ..Default::default()
+        })
+        .on_conflict(
+            OnConflict::column(UsCol::TelegramId)
+                .update_column(UsCol::UpdatedAt)
+                .to_owned(),
+        )
+        .exec(&tx)
+        .await
+        .map_err(|e| {
+            tracing::error!("cancel_order stars seed: {:?}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+        UsEntity::update_many()
+            .col_expr(
+                UsCol::Balance,
+                sea_orm::sea_query::Expr::cust_with_values("balance + $1", [stars]),
+            )
+            .filter(UsCol::TelegramId.eq(tid))
+            .exec(&tx)
+            .await
+            .map_err(|e| {
+                tracing::error!("cancel_order stars refund: {:?}", e);
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?;
+        let balance_after = UsEntity::find_by_id(tid)
+            .one(&tx)
+            .await
+            .map_err(|e| {
+                tracing::error!("cancel_order stars balance read: {:?}", e);
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?
+            .map(|r| r.balance)
+            .unwrap_or(0);
+        StarsTxEntity::insert(StarsTxAm {
+            id: Set(uuid::Uuid::new_v4().to_string()),
+            telegram_id: Set(tid),
+            amount: Set(stars),
+            balance_after: Set(balance_after),
+            source: Set("plot".to_string()),
+            reason: Set("cancel".to_string()),
+            external_tx_id: Set(None),
+            related_order_id: Set(Some(id.clone())),
+            ..Default::default()
+        })
+        .exec(&tx)
+        .await
+        .map_err(|e| {
+            tracing::error!("cancel_order stars transaction: {:?}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+    }
+
+    let updated = OrderEntity::update_many()
+        .col_expr(
+            OrderCol::Status,
+            sea_orm::sea_query::Expr::value("cancelled"),
+        )
+        .filter(OrderCol::Id.eq(id.clone()))
+        .exec(&tx)
+        .await
+        .map_err(|e| {
+            tracing::error!("cancel_order status update: {:?}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+    if updated.rows_affected == 0 {
+        return Err(StatusCode::NOT_FOUND);
+    }
+    tx.commit().await.map_err(|e| {
+        tracing::error!("cancel_order commit: {:?}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    let bot = state.bot.clone();
+    let config = state.config.clone();
+    let db = state.db.clone();
+    let order_id = id.clone();
+    tokio::spawn(async move {
+        crate::bot::notify::notify_order_status(
+            &bot,
+            &db,
+            &config,
+            tid,
+            &order_id,
+            "cancelled",
+        )
+        .await;
+    });
+
+    crate::metrics::order_cancelled_by_user();
+
+    Ok(Json(json!({ "success": true, "status": "cancelled" })))
 }
 
 async fn get_user_orders(

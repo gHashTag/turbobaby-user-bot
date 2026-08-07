@@ -5,13 +5,30 @@ use crate::trios::i18n::{
     T_ORDERS_STATUS_READY, T_ORDERS_STATUS_UNKNOWN, T_SUCCESS_BACK_MENU,
     T_SUCCESS_CASH_ON_DELIVERY, T_SUCCESS_CONFIRMED, T_SUCCESS_CONTACT_SHORTLY,
     T_SUCCESS_DELIVERY_ESTIMATE, T_SUCCESS_ETA, T_SUCCESS_ETA_VALUE, T_SUCCESS_MY_ORDERS,
-    T_SUCCESS_ORDER_RECEIVED, T_SUCCESS_PAYMENT, T_SUCCESS_STATUS, T_SUCCESS_TITLE,
+    T_SUCCESS_ORDER_RECEIVED, T_SUCCESS_PAYMENT, T_SUCCESS_REWARDS_BONUS, T_SUCCESS_REWARDS_GARDEN,
+    T_SUCCESS_REWARDS_TITLE, T_SUCCESS_SHARE_REFERRAL, T_SUCCESS_STATUS, T_SUCCESS_TITLE,
+    T_SUCCESS_TRACK_ORDER,
 };
 use crate::ui::api::context::api_base_url;
 use crate::ui::api::http::fetch_text_authed;
 use crate::ui::routes::Route;
+use crate::ui::share::{open_telegram_link, order_deep_link};
 use crate::ui::telegram::{use_telegram_id, use_telegram_init_data, TelegramApp};
 use dioxus::prelude::*;
+
+/// Backend metrics are unavailable in the WASM build; this wrapper no-ops there
+/// and delegates to `crate::metrics` when the backend feature is compiled.
+#[cfg(target_arch = "wasm32")]
+fn track_event(_name: &str, _detail: &str) {}
+
+#[cfg(all(not(target_arch = "wasm32"), feature = "backend"))]
+fn track_event(name: &str, detail: &str) {
+    match name {
+        "order_tracked" => crate::metrics::order_tracked(),
+        "referral_prompt_clicked" => crate::metrics::referral_prompt_clicked(detail),
+        _ => {}
+    }
+}
 
 fn order_status_label(lang: Lang, status: &str) -> String {
     let key = match status {
@@ -38,6 +55,16 @@ struct OrderStatusResp {
     max_eta_minutes: Option<u32>,
 }
 
+#[derive(Clone, serde::Deserialize)]
+struct LoyaltyProfileWrapper {
+    profile: LoyaltyProfile,
+}
+
+#[derive(Clone, serde::Deserialize)]
+struct LoyaltyProfile {
+    bonus_balance: f64,
+}
+
 #[component]
 pub fn SuccessScreen(id: String) -> Element {
     let lang = crate::ui::lang::current_lang();
@@ -51,6 +78,10 @@ pub fn SuccessScreen(id: String) -> Element {
     let cash_on_delivery = t(lang, T_SUCCESS_CASH_ON_DELIVERY).to_string();
     let back_menu = t(lang, T_SUCCESS_BACK_MENU).to_string();
     let my_orders = t(lang, T_SUCCESS_MY_ORDERS).to_string();
+    let track_order = t(lang, T_SUCCESS_TRACK_ORDER).to_string();
+    let rewards_title = t(lang, T_SUCCESS_REWARDS_TITLE).to_string();
+    let rewards_garden = t(lang, T_SUCCESS_REWARDS_GARDEN).to_string();
+    let share_referral = t(lang, T_SUCCESS_SHARE_REFERRAL).to_string();
 
     let telegram_id = use_telegram_id();
     let init_data = use_telegram_init_data();
@@ -102,6 +133,19 @@ pub fn SuccessScreen(id: String) -> Element {
         }
     });
 
+    let profile_res = {
+        let init = init_data.clone();
+        use_resource(move || {
+            let init = init.clone();
+            async move {
+                let tid = telegram_id?;
+                let url = format!("{}/api/loyalty/{tid}", api_base_url());
+                let text = fetch_text_authed(&url, &init).await.ok()?;
+                serde_json::from_str::<LoyaltyProfileWrapper>(&text).ok()
+            }
+        })
+    };
+
     let status_ref = status_res.read();
     let status_opt = status_ref.as_ref().and_then(|opt| opt.as_ref());
     let status_text = status_opt
@@ -118,8 +162,28 @@ pub fn SuccessScreen(id: String) -> Element {
         .and_then(|s| s.delivery_zone_name.clone())
         .or_else(|| zone_name().as_ref().map(Clone::clone));
 
+    let bonus_balance = profile_res
+        .read()
+        .as_ref()
+        .and_then(|opt| opt.as_ref())
+        .map(|w| w.profile.bonus_balance)
+        .unwrap_or(0.0);
+    let bonus_text = tf(lang, T_SUCCESS_REWARDS_BONUS, &[format!("{bonus_balance:.0}")]);
+
+    let track_link = order_deep_link(&id);
+    let on_track_order = move |_| {
+        track_event("order_tracked", "");
+        open_telegram_link(&track_link);
+    };
+
+    let nav = use_navigator();
+    let on_share_referral = move |_| {
+        track_event("referral_prompt_clicked", "success_screen");
+        nav.push(Route::Referrals {});
+    };
+
     // Hide native Telegram chrome on this terminal screen; all navigation is
-    // handled by the two large in-app CTAs.
+    // handled by the large in-app CTAs.
     let tg = TelegramApp::init();
     tg.hide_main_button();
     tg.hide_back_button();
@@ -195,8 +259,23 @@ pub fn SuccessScreen(id: String) -> Element {
                 }
             }
 
+            // Track Order CTA opens the order deep-link so the customer gets
+            // live Telegram push updates for every status milestone.
+            button {
+                style: "
+                    font-size: 14px; font-weight: 700; width: 100%; max-width: 320px;
+                    padding: 12px 20px; margin-bottom: 12px;
+                    background: #00e5ff; color: #000;
+                    border: 4px solid #008db1; border-radius: 0;
+                    cursor: pointer; box-shadow: 3px 3px 0 #000;
+                    transition: transform 0.1s, box-shadow 0.1s;
+                ",
+                onclick: on_track_order,
+                "{track_order}"
+            }
+
             // Actions
-            div { style: "display: flex; gap: 10px; width: 100%; max-width: 320px;",
+            div { style: "display: flex; gap: 10px; width: 100%; max-width: 320px; margin-bottom: 16px;",
                 Link { to: Route::Menu {},
                     button { style: "
                         font-size: 14px; font-weight: 700; flex: 1; padding: 12px 20px;
@@ -215,6 +294,38 @@ pub fn SuccessScreen(id: String) -> Element {
                         transition: transform 0.1s, box-shadow 0.1s;
                     ", "{my_orders}" }
                 }
+            }
+
+            // Rewards card: surface garden seed progress and current bonus
+            // balance right after checkout to reinforce retention value.
+            div { style: "
+                background: #16213e;
+                border: 4px solid #2a2a4a;
+                border-radius: 0;
+                padding: 14px 16px;
+                width: 100%;
+                max-width: 320px;
+                margin-bottom: 12px;
+                box-shadow: 4px 4px 0 #000;
+                text-align: left;
+            ",
+                div { style: "font-size: 13px; font-weight: 700; color: #39ff14; text-transform: uppercase; letter-spacing: 1px; text-shadow: 2px 2px 0 #000; margin-bottom: 8px;", "{rewards_title}" }
+                div { style: "font-size: 13px; color: #e8e8e8; margin-bottom: 6px;", "{rewards_garden}" }
+                div { style: "font-size: 13px; color: #e8e8e8;", "{bonus_text}" }
+            }
+
+            // Share / referral prompt.
+            button {
+                style: "
+                    font-size: 13px; font-weight: 700; width: 100%; max-width: 320px;
+                    padding: 10px 16px;
+                    background: transparent; color: #00e5ff;
+                    border: 3px solid #2a2a4a; border-radius: 0;
+                    cursor: pointer; box-shadow: 3px 3px 0 #000;
+                    transition: transform 0.1s, box-shadow 0.1s;
+                ",
+                onclick: on_share_referral,
+                "{share_referral}"
             }
         }
     }

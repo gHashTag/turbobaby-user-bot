@@ -39,8 +39,12 @@ pub(crate) async fn notify_order_status(
 
     let status_text = match status {
         "confirmed" => &locale.order_status_confirmed,
-        "completed" => &locale.order_status_completed,
+        "preparing" => &locale.order_status_preparing,
+        "ready" => &locale.order_status_ready,
+        "out_for_delivery" => &locale.order_status_out_for_delivery,
+        "completed" | "delivered" => &locale.order_status_completed,
         "rejected" => &locale.order_status_rejected,
+        "cancelled" => &locale.order_status_cancelled,
         _ => "Order status updated",
     };
 
@@ -77,8 +81,12 @@ mod tests {
     fn status_text_uses_locale_for_known_statuses() {
         let locale = get_locale("ru");
         assert!(!locale.order_status_confirmed.is_empty());
+        assert!(!locale.order_status_preparing.is_empty());
+        assert!(!locale.order_status_ready.is_empty());
+        assert!(!locale.order_status_out_for_delivery.is_empty());
         assert!(!locale.order_status_completed.is_empty());
         assert!(!locale.order_status_rejected.is_empty());
+        assert!(!locale.order_status_cancelled.is_empty());
         assert!(!locale.order_open_app.is_empty());
     }
 }

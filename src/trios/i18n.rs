@@ -488,6 +488,11 @@ pub const T_SUCCESS_PAYMENT: Key = "success.payment";
 pub const T_SUCCESS_CASH_ON_DELIVERY: Key = "success.cash_on_delivery";
 pub const T_SUCCESS_BACK_MENU: Key = "success.back_menu";
 pub const T_SUCCESS_MY_ORDERS: Key = "success.my_orders";
+pub const T_SUCCESS_TRACK_ORDER: Key = "success.track_order";
+pub const T_SUCCESS_REWARDS_TITLE: Key = "success.rewards.title";
+pub const T_SUCCESS_REWARDS_GARDEN: Key = "success.rewards.garden";
+pub const T_SUCCESS_REWARDS_BONUS: Key = "success.rewards.bonus";
+pub const T_SUCCESS_SHARE_REFERRAL: Key = "success.share_referral";
 
 // Orders screen hard-coded strings
 pub const T_ORDERS_HISTORY: Key = "orders.history";
@@ -520,6 +525,10 @@ pub const T_ORDER_DETAIL_BACK: Key = "order.detail.back";
 pub const T_ORDER_DETAIL_TOTAL: Key = "order.detail.total";
 pub const T_ORDER_DETAIL_BONUS: Key = "order.detail.bonus";
 pub const T_ORDER_DETAIL_STARS: Key = "order.detail.stars";
+pub const T_ORDER_DETAIL_LIVE: Key = "order.detail.live";
+pub const T_ORDER_DETAIL_CANCEL: Key = "order.detail.cancel";
+pub const T_ORDER_DETAIL_CANCEL_CONFIRM: Key = "order.detail.cancel_confirm";
+pub const T_ORDER_DETAIL_CANCELLED_BY_USER: Key = "order.detail.cancelled_by_user";
 
 // Profile screen hard-coded strings
 pub const T_PROFILE_MEMBERSHIP: Key = "profile.membership";
@@ -552,6 +561,8 @@ pub const T_PROFILE_OPEN_MAP: Key = "profile.open_map";
 
 // Modal hard-coded strings
 pub const T_MODAL_CLOSE: Key = "modal.close";
+pub const T_MODAL_CONFIRM: Key = "modal.confirm";
+pub const T_MODAL_CANCEL: Key = "modal.cancel";
 pub const T_MODAL_DECREASE_QTY: Key = "modal.decrease_qty";
 pub const T_MODAL_INCREASE_QTY: Key = "modal.increase_qty";
 pub const T_MODAL_CERTIFICATE: Key = "modal.certificate";
@@ -1098,6 +1109,11 @@ fn get_ru_translation(key: Key) -> Value {
         T_SUCCESS_CASH_ON_DELIVERY => "Наличными при получении",
         T_SUCCESS_BACK_MENU => "🌿 В меню",
         T_SUCCESS_MY_ORDERS => "📋 Мои заказы",
+        T_SUCCESS_TRACK_ORDER => "🔔 Отслеживать",
+        T_SUCCESS_REWARDS_TITLE => "🎁 Что вы получите",
+        T_SUCCESS_REWARDS_GARDEN => "🌱 Семя сада за strain-заказ",
+        T_SUCCESS_REWARDS_BONUS => "⭐ Бонусные баллы: {0}",
+        T_SUCCESS_SHARE_REFERRAL => "👥 Пригласить друга",
         // Orders screen
         T_ORDERS_HISTORY => "История заказов",
         T_ORDERS_NO_ORDERS => "Пока нет заказов",
@@ -1127,6 +1143,10 @@ fn get_ru_translation(key: Key) -> Value {
         T_ORDER_DETAIL_TOTAL => "Итого",
         T_ORDER_DETAIL_BONUS => "Бонусы",
         T_ORDER_DETAIL_STARS => "Звёзды",
+        T_ORDER_DETAIL_LIVE => "Обновляется live",
+        T_ORDER_DETAIL_CANCEL => "Отменить заказ",
+        T_ORDER_DETAIL_CANCEL_CONFIRM => "Отменить заказ? Бонусы и звёзды вернутся на счёт.",
+        T_ORDER_DETAIL_CANCELLED_BY_USER => "Вы отменили заказ",
         // Profile screen
         T_PROFILE_MEMBERSHIP => "Ваш статус",
         T_PROFILE_QR_CODE => "Ваш QR-код",
@@ -1157,6 +1177,8 @@ fn get_ru_translation(key: Key) -> Value {
         T_PROFILE_OPEN_MAP => "Открыть на карте",
         // Modal
         T_MODAL_CLOSE => "Закрыть",
+        T_MODAL_CONFIRM => "Да",
+        T_MODAL_CANCEL => "Нет",
         T_MODAL_DECREASE_QTY => "Убавить количество",
         T_MODAL_INCREASE_QTY => "Добавить количество",
         T_MODAL_CERTIFICATE => "📄 Сертификат",
@@ -1687,6 +1709,11 @@ fn get_en_translation(key: Key) -> Value {
         T_SUCCESS_CASH_ON_DELIVERY => "Cash on delivery",
         T_SUCCESS_BACK_MENU => "Back to Menu",
         T_SUCCESS_MY_ORDERS => "My Orders",
+        T_SUCCESS_TRACK_ORDER => "🔔 Track Order",
+        T_SUCCESS_REWARDS_TITLE => "🎁 Your Rewards",
+        T_SUCCESS_REWARDS_GARDEN => "🌱 Garden seed for strain orders",
+        T_SUCCESS_REWARDS_BONUS => "⭐ Bonus points: {0}",
+        T_SUCCESS_SHARE_REFERRAL => "👥 Invite a friend",
         // Orders screen
         T_ORDERS_HISTORY => "Your order history",
         T_ORDERS_NO_ORDERS => "No orders yet",
@@ -1716,6 +1743,10 @@ fn get_en_translation(key: Key) -> Value {
         T_ORDER_DETAIL_TOTAL => "Total",
         T_ORDER_DETAIL_BONUS => "Bonus",
         T_ORDER_DETAIL_STARS => "Stars",
+        T_ORDER_DETAIL_LIVE => "Live updates",
+        T_ORDER_DETAIL_CANCEL => "Cancel order",
+        T_ORDER_DETAIL_CANCEL_CONFIRM => "Cancel order? Bonus and stars will be refunded.",
+        T_ORDER_DETAIL_CANCELLED_BY_USER => "You cancelled the order",
         // Profile screen
         T_PROFILE_MEMBERSHIP => "Your membership status",
         T_PROFILE_QR_CODE => "Your QR Code",
@@ -1746,6 +1777,8 @@ fn get_en_translation(key: Key) -> Value {
         T_PROFILE_OPEN_MAP => "Open map",
         // Modal
         T_MODAL_CLOSE => "Close",
+        T_MODAL_CONFIRM => "Yes",
+        T_MODAL_CANCEL => "No",
         T_MODAL_DECREASE_QTY => "Decrease quantity",
         T_MODAL_INCREASE_QTY => "Increase quantity",
         T_MODAL_CERTIFICATE => "📄 Certificate",

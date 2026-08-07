@@ -10,6 +10,35 @@ pub fn order_created() {
     counter!("orders_created_total").increment(1);
 }
 
+/// Cycle #9: customer self-service cancellation completed successfully.
+pub fn order_cancelled_by_user() {
+    counter!("orders_cancelled_by_user_total").increment(1);
+}
+
+/// Cycle #9: admin/status worker moved an order to a new milestone. Labelled
+/// by terminal status so Grafana can split preparing/ready/delivered/cancelled.
+pub fn order_status_changed(status: &str) {
+    counter!(
+        "orders_status_changed_total",
+        "status" => status.to_string()
+    )
+    .increment(1);
+}
+
+/// Cycle #9: user clicked "Track Order" on the success screen.
+pub fn order_tracked() {
+    counter!("orders_tracked_total").increment(1);
+}
+
+/// Cycle #9: user clicked the share/referral prompt from the success screen.
+pub fn referral_prompt_clicked(source: &str) {
+    counter!(
+        "referral_prompt_clicked_total",
+        "source" => source.to_string()
+    )
+    .increment(1);
+}
+
 /// Set once at startup to the number of expected catalog columns missing from
 /// the live DB (see `Database::missing_critical_columns`). Non-zero means prod
 /// is behind on migrations and catalog endpoints (e.g. `/api/sets`) will
