@@ -8,11 +8,14 @@ use crate::trios::i18n::{
     T_GARDEN_COOLDOWN, T_GARDEN_DIAGNOSTICS_COPIED, T_GARDEN_DIAGNOSTICS_COPY,
     T_GARDEN_DISCOUNT_BADGE, T_GARDEN_EMPTY_CTA, T_GARDEN_EMPTY_LABEL, T_GARDEN_ERROR_COOLDOWN,
     T_GARDEN_ERROR_HARVEST, T_GARDEN_ERROR_PRODUCT_UNAVAILABLE, T_GARDEN_ERROR_RESET,
-    T_GARDEN_HARVEST, T_GARDEN_LOADING, T_GARDEN_PLANT_ALT, T_GARDEN_PRODUCT_ALT, T_GARDEN_READY,
-    T_GARDEN_RESET_CONFIRM_BODY, T_GARDEN_RESET_CONFIRM_TITLE, T_GARDEN_RESET_PROGRESS,
-    T_GARDEN_SUBTITLE, T_GARDEN_TITLE,
+    T_GARDEN_HARVEST, T_GARDEN_LOADING, T_GARDEN_NEXT_WATER_IN, T_GARDEN_PLANT_ALT,
+    T_GARDEN_PRODUCT_ALT, T_GARDEN_READY, T_GARDEN_RESET_CONFIRM_BODY,
+    T_GARDEN_RESET_CONFIRM_TITLE, T_GARDEN_RESET_PROGRESS, T_GARDEN_REWARD_EXPIRES_IN,
+    T_GARDEN_STREAK_BEST, T_GARDEN_STREAK_DAYS, T_GARDEN_SUBTITLE, T_GARDEN_TITLE,
+    T_GARDEN_WATER_NOW,
 };
 use crate::ui::api::context::api_base_url;
+use crate::ui::api::http::post_client_event;
 use crate::ui::components::ErrorBanner;
 use crate::ui::telegram::{use_telegram, use_telegram_id, use_telegram_init_data};
 use dioxus::prelude::*;
@@ -30,6 +33,10 @@ struct ApiPlant {
     #[serde(default)]
     last_watered_at: Option<i64>,
     reward_claimed: bool,
+    #[serde(default)]
+    streak: u32,
+    #[serde(default)]
+    max_streak: u32,
     // B3: chosen target product (seed = its photo).
     #[serde(default)]
     target_name: Option<String>,
@@ -77,6 +84,25 @@ struct GardenResponse {
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
+struct GardenStreakResponse {
+    has_plant: bool,
+    #[serde(default)]
+    plant_id: String,
+    #[serde(default)]
+    strain_name: String,
+    #[serde(default)]
+    streak: u32,
+    #[serde(default)]
+    max_streak: u32,
+    #[serde(default)]
+    next_water_at: i64,
+    #[serde(default)]
+    is_ready_to_harvest: bool,
+    #[serde(default)]
+    reward_expires_at: Option<i64>,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
 #[allow(dead_code)]
 struct WaterPlantResponse {
     success: bool,
@@ -90,6 +116,10 @@ struct WaterPlantResponse {
     error: Option<String>,
     #[serde(default)]
     next_water_at: Option<i64>,
+    #[serde(default)]
+    streak: u32,
+    #[serde(default)]
+    max_streak: u32,
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
@@ -122,6 +152,18 @@ async fn fetch_plants(telegram_id: i64, init_data: &str) -> Result<Vec<ApiPlant>
     serde_json::from_str::<GardenResponse>(&body)
         .map(|r| r.plants)
         .map_err(|_| 0u16)
+}
+
+async fn fetch_garden_streak(telegram_id: i64, init_data: &str) -> Option<GardenStreakResponse> {
+    let base = api_base_url();
+    let url = format!("{}/api/garden/streak?telegram_id={}", base, telegram_id);
+    let (status, body) = crate::ui::api::http::fetch_text_authed_full(&url, init_data)
+        .await
+        .ok()?;
+    if !(200..300).contains(&status) {
+        return None;
+    }
+    serde_json::from_str::<GardenStreakResponse>(&body).ok()
 }
 
 /// Ask the backend WHY it rejected this initData via the debug endpoint added on
@@ -255,6 +297,8 @@ fn mock_plants() -> Vec<ApiPlant> {
         reward_claimed: false,
         water_count: 5,
         last_watered_at: Some(now.saturating_sub(120000)),
+        streak: 2,
+        max_streak: 3,
         target_name: None,
         target_image_url: None,
     }]
@@ -266,6 +310,21 @@ fn mock_plants() -> Vec<ApiPlant> {
 fn stage_image_url(stage_index: usize) -> String {
     let n = (stage_index + 1).clamp(1, 14);
     format!("/assets/game/{}.png", n)
+}
+
+/// Loop #17: format remaining millis as "Xh Ym" (or "0m" if under a minute).
+fn format_countdown_ms(remaining_ms: i64) -> String {
+    if remaining_ms <= 0 {
+        return "0m".to_string();
+    }
+    let total_minutes = remaining_ms / (60 * 1000);
+    let hours = total_minutes / 60;
+    let minutes = total_minutes % 60;
+    if hours > 0 {
+        format!("{}h {}m", hours, minutes)
+    } else {
+        format!("{}m", minutes)
+    }
 }
 
 fn stage_color(stage: &GrowthStage) -> &'static str {
@@ -309,16 +368,30 @@ pub fn Garden() -> Element {
     let loading = use_signal(|| true);
     let error_msg = use_signal(String::new);
     let now_ms = use_signal(|| chrono::Utc::now().timestamp_millis());
+    let streak = use_signal(|| None::<GardenStreakResponse>);
     let mut show_chooser = use_signal(|| false);
     let mut show_reset_warning = use_signal(|| false);
     let telegram_id = use_telegram_id().unwrap_or(0);
     let init_data = use_telegram_init_data();
     let tg = use_telegram();
 
+    // Loop #17: screen-open metric. Fire once after initial mount; don't block
+    // on failure.
+    {
+        let base = api_base_url();
+        use_effect(move || {
+            let b = base.clone();
+            spawn(async move {
+                let _ = post_client_event(&b, "garden_screen_opened", "garden_tab").await;
+            });
+        });
+    }
+
     {
         let mut plants_c = plants;
         let mut loading_c = loading;
         let mut error_c = error_msg;
+        let mut streak_c = streak;
         let tid = telegram_id;
         let init = init_data.clone();
         use_future(move || {
@@ -342,6 +415,9 @@ pub fn Garden() -> Element {
                     attempt_init = tg.get_init_data();
                 }
                 let lang = crate::ui::lang::current_lang();
+                if let Some(s) = fetch_garden_streak(tid, &value).await {
+                    streak_c.set(Some(s));
+                }
                 match fetch_plants(tid, &attempt_init).await {
                     Ok(p) => {
                         plants_c.set(p);
@@ -396,6 +472,7 @@ pub fn Garden() -> Element {
     let now = *now_ms.read();
     let is_loading = *loading.read();
     let err = error_msg.read().clone();
+    let streak_opt = streak.read().clone();
     let init_for_closures = init_data.clone();
     let lang = crate::ui::lang::current_lang();
 
@@ -424,13 +501,23 @@ pub fn Garden() -> Element {
     let ready_text = t(lang, T_GARDEN_READY);
     let cooldown_text = t(lang, T_GARDEN_COOLDOWN);
     let harvest_text = t(lang, T_GARDEN_HARVEST);
+    let water_now_text = t(lang, T_GARDEN_WATER_NOW).to_string();
+    let next_water_in_text = t(lang, T_GARDEN_NEXT_WATER_IN).to_string();
+    let streak_days_text = t(lang, T_GARDEN_STREAK_DAYS).to_string();
+    let streak_best_text = t(lang, T_GARDEN_STREAK_BEST).to_string();
+    let reward_expires_in_text = t(lang, T_GARDEN_REWARD_EXPIRES_IN).to_string();
 
     rsx! {
         div { style: "min-height: 100vh; background: {bg}; color: #e8e8e8; font-family: 'Press Start 2P', monospace; padding-bottom: 80px;",
 
             div { style: "padding: 20px 16px 12px; text-align: center;",
-                h1 { style: "font-size: 18px; color: #39ff14; text-shadow: 0 0 8px rgba(57,255,20,0.5);",
+                h1 { style: "font-size: 18px; color: #39ff14; text-shadow: 0 0 8px rgba(57,255,20,0.5); display:flex; align-items:center; justify-content:center; gap:8px;",
                     "{title_text}"
+                    if let Some(ref s) = streak_opt {
+                        if s.has_plant {
+                            span { style: "font-size:12px;background:#ff4757;color:#fff;padding:2px 8px;border-radius:10px;white-space:nowrap;", "🔥 {s.streak}" }
+                        }
+                    }
                 }
                 p { style: "font-size: 11px; color: #8b8b9e; margin-top: 4px;",
                     "{subtitle_text}"
@@ -467,6 +554,7 @@ pub fn Garden() -> Element {
                     button {
                         style: "padding:10px 16px;background:#39ff14;color:#000;border:4px solid #2d9e0f;box-shadow:3px 3px 0 #000;font-size:12px;font-weight:700;cursor:pointer;",
                         onclick: move |_| {
+                            let _ = post_client_event(&api_base_url(), "garden_choose_product_tapped", "");
                             show_chooser.set(true);
                         },
                         if plant_list.is_empty() { "🌱 {choose_product_text}" } else { "🔄 {change_product_text}" }
@@ -475,6 +563,7 @@ pub fn Garden() -> Element {
                         button {
                             style: "padding:10px 16px;background:#ff4757;color:#fff;border:4px solid #c0392b;box-shadow:3px 3px 0 #000;font-size:12px;font-weight:700;cursor:pointer;",
                             onclick: move |_| {
+                                let _ = post_client_event(&api_base_url(), "garden_reset_tapped", "");
                                 show_reset_warning.set(true);
                             },
                             "⏪ {reset_progress_text}"
@@ -532,6 +621,23 @@ pub fn Garden() -> Element {
                         let is_active = progress.stage_index > 0 && !progress.is_ready_to_harvest;
                         let can_w = progress.can_water;
                         let is_ready = progress.is_ready_to_harvest;
+                        let status_countdown_text = if is_ready {
+                            ready_text.to_string()
+                        } else if can_w {
+                            water_now_text.clone()
+                        } else {
+                            let remaining = progress.next_water_at.saturating_sub(now);
+                            let cd = format_countdown_ms(remaining);
+                            tf(lang, T_GARDEN_NEXT_WATER_IN, &[cd])
+                        };
+                        let reward_expiry_text = streak_opt.as_ref().and_then(|s| s.reward_expires_at).and_then(|expires_at| {
+                            let remaining_ms = expires_at.saturating_sub(now);
+                            if remaining_ms > 0 {
+                                Some(tf(lang, T_GARDEN_REWARD_EXPIRES_IN, &[format_countdown_ms(remaining_ms)]))
+                            } else {
+                                None
+                            }
+                        });
 
                         let border = if is_ready {
                             "1px solid #ffd700".to_string()
@@ -572,6 +678,8 @@ pub fn Garden() -> Element {
                                                     }
                                                 }
                                                 p.is_completed = resp.is_completed;
+                                                p.streak = resp.streak;
+                                                p.max_streak = resp.max_streak;
                                                 // Update last_watered_at locally so the UI
                                                 // immediately disables the water button for the
                                                 // 24h cooldown instead of staying enabled until
@@ -579,6 +687,7 @@ pub fn Garden() -> Element {
                                                 p.last_watered_at = Some(chrono::Utc::now().timestamp_millis());
                                             }
                                             crate::ui::telegram::TelegramApp::init().haptic_notification(crate::ui::telegram::HapticNotification::Success);
+                                            let _ = post_client_event(&api_base_url(), "garden_water_tapped", "").await;
                                         } else {
                                             es.set(resp.error.unwrap_or_else(|| "Water failed".into()));
                                         }
@@ -602,6 +711,7 @@ pub fn Garden() -> Element {
                                     Ok(()) => {
                                         ps.write().retain(|p| p.id != plant_id);
                                         crate::ui::telegram::TelegramApp::init().haptic_notification(crate::ui::telegram::HapticNotification::Success);
+                                        let _ = post_client_event(&api_base_url(), "garden_harvest_tapped", "").await;
                                     }
                                     Err(e) => { es.set(tf(lang, T_GARDEN_ERROR_HARVEST, &[e])); }
                                 }
@@ -663,6 +773,17 @@ pub fn Garden() -> Element {
                                         }
                                         div { style: "height: 6px; background: rgba(255,255,255,0.08); border-radius: 6px; overflow: hidden;",
                                             div { style: "height: 100%; width: {pct_str}; border-radius: 6px; background: {gradient}; transition: width 0.3s ease;" }
+                                        }
+                                    }
+
+                                    // Loop #17: status + streak + reward expiry line.
+                                    div { style: "display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; font-size: 11px; color: #8b8b9e;",
+                                        span { "{status_countdown_text}" }
+                                        span { "🔥 {plant.streak} {streak_days_text} · {streak_best_text} {plant.max_streak}" }
+                                    }
+                                    if let Some(exp_text) = reward_expiry_text.clone() {
+                                        div { style: "margin-bottom: 10px; padding: 6px 10px; background: rgba(255,71,87,0.15); border: 1px solid rgba(255,71,87,0.4); border-radius: 8px; font-size: 11px; color: #ff6b7a; text-align: center;",
+                                            "{exp_text}"
                                         }
                                     }
 

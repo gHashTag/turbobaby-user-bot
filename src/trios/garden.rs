@@ -343,6 +343,64 @@ pub fn reward_is_active(is_used: bool, expires_at: i64, now: i64) -> bool {
     !is_used && expires_at > now
 }
 
+/// Outcome of updating a streak when a new water action happens.
+/// `last_streak_water` is the epoch millis of the last water that counted
+/// toward the streak; `now` is the current epoch millis. The streak advances
+/// if the user waters within 48 h of the previous streak water (allowing a
+/// full day plus tolerance), resets to 1 if more than 48 h passed, and stays
+/// unchanged if the user already watered within the current 24 h window.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum StreakUpdate {
+    Advanced { streak: u32, max_streak: u32 },
+    Broken { streak: u32, max_streak: u32 },
+    Unchanged { streak: u32, max_streak: u32 },
+}
+
+/// Pure decision for streak update on a water action.
+/// `current_streak` and `current_max` are the persisted values.
+/// `last_streak_water_ms` is 0 if the user has never had a streak water.
+pub fn update_streak_on_water(
+    current_streak: u32,
+    current_max: u32,
+    last_streak_water_ms: i64,
+    now_ms: i64,
+) -> StreakUpdate {
+    // Defensive: negative or zero last streak water means first-ever streak water.
+    if last_streak_water_ms <= 0 {
+        let streak = 1;
+        return StreakUpdate::Advanced {
+            streak,
+            max_streak: current_max.max(streak),
+        };
+    }
+
+    let delta = now_ms.saturating_sub(last_streak_water_ms);
+    const ONE_DAY_MS: i64 = 24 * 60 * 60 * 1000;
+    const TWO_DAYS_MS: i64 = 2 * ONE_DAY_MS;
+
+    if delta <= ONE_DAY_MS {
+        // Same 24 h window — do not inflate streak by spamming water.
+        StreakUpdate::Unchanged {
+            streak: current_streak,
+            max_streak: current_max,
+        }
+    } else if delta <= TWO_DAYS_MS {
+        // Next-day water within tolerance — streak continues.
+        let streak = current_streak.saturating_add(1);
+        StreakUpdate::Advanced {
+            streak,
+            max_streak: current_max.max(streak),
+        }
+    } else {
+        // Missed more than one day — streak breaks.
+        let streak = 1;
+        StreakUpdate::Broken {
+            streak,
+            max_streak: current_max.max(streak),
+        }
+    }
+}
+
 /// Calculate plant progress
 pub fn calculate_progress(plant: &Plant, now: Timestamp) -> PlantProgress {
     if plant.is_completed {
@@ -669,6 +727,53 @@ mod tests {
                 other => panic!("count {wc} should Advance, got {other:?}"),
             }
         }
+    }
+
+    #[test]
+    fn test_update_streak_first_water_starts_streak() {
+        assert_eq!(
+            update_streak_on_water(0, 0, 0, 1_000_000),
+            StreakUpdate::Advanced {
+                streak: 1,
+                max_streak: 1,
+            }
+        );
+    }
+
+    #[test]
+    fn test_update_streak_next_day_advances() {
+        const DAY: i64 = 24 * 60 * 60 * 1000;
+        assert_eq!(
+            update_streak_on_water(3, 3, 1_000_000, 1_000_000 + DAY + 1_000),
+            StreakUpdate::Advanced {
+                streak: 4,
+                max_streak: 4,
+            }
+        );
+    }
+
+    #[test]
+    fn test_update_streak_same_day_unchanged() {
+        const DAY: i64 = 24 * 60 * 60 * 1000;
+        assert_eq!(
+            update_streak_on_water(5, 5, 1_000_000, 1_000_000 + DAY - 1_000),
+            StreakUpdate::Unchanged {
+                streak: 5,
+                max_streak: 5,
+            }
+        );
+    }
+
+    #[test]
+    fn test_update_streak_missed_two_days_resets() {
+        const DAY: i64 = 24 * 60 * 60 * 1000;
+        assert_eq!(
+            update_streak_on_water(7, 7, 1_000_000, 1_000_000 + 3 * DAY),
+            StreakUpdate::Broken {
+                streak: 1,
+                max_streak: 7,
+            }
+        );
     }
 
     #[test]

@@ -89,6 +89,73 @@ pub fn garden_reward_claimed() {
     counter!("garden_rewards_claimed_total").increment(1);
 }
 
+/// Loop #17: a garden water/harvest/expiry reminder was sent by the server sweep.
+pub fn garden_reminder_sent(kind: &str) {
+    counter!(
+        "garden_reminder_sent_total",
+        "kind" => kind.to_string()
+    )
+    .increment(1);
+}
+
+/// Loop #17: a garden streak was broken (user missed >48h between waters).
+pub fn garden_streak_broken() {
+    counter!("garden_streak_broken_total").increment(1);
+}
+
+/// Loop #17: a streak milestone was reached (3, 7, 14, 30, …). The streak
+/// value is emitted as a label so dashboards can track milestone distribution.
+pub fn garden_streak_milestone(streak: i64) {
+    counter!(
+        "garden_streak_milestone_total",
+        "streak" => streak.to_string()
+    )
+    .increment(1);
+}
+
+/// Loop #17: a garden reward expired unused.
+pub fn garden_reward_expired() {
+    counter!("garden_rewards_expired_total").increment(1);
+}
+
+/// Loop #17: a reward expiry FOMO nudge was sent (24h or 4h before expiry).
+pub fn garden_reward_expiry_nudge_sent(hours_before: i64) {
+    counter!(
+        "garden_reward_expiry_nudge_sent_total",
+        "hours" => hours_before.to_string()
+    )
+    .increment(1);
+}
+
+/// Loop #17: customer opened the garden screen.
+pub fn garden_screen_opened(source: &str) {
+    counter!(
+        "garden_screen_opened_total",
+        "source" => source.to_string()
+    )
+    .increment(1);
+}
+
+/// Loop #17: customer tapped the water CTA in the garden UI.
+pub fn garden_water_tapped() {
+    counter!("garden_water_tapped_total").increment(1);
+}
+
+/// Loop #17: customer tapped the harvest CTA in the garden UI.
+pub fn garden_harvest_tapped() {
+    counter!("garden_harvest_tapped_total").increment(1);
+}
+
+/// Loop #17: customer tapped the choose-product CTA to start a new plant.
+pub fn garden_choose_product_tapped() {
+    counter!("garden_choose_product_tapped_total").increment(1);
+}
+
+/// Loop #17: customer reset their garden plant.
+pub fn garden_reset_tapped() {
+    counter!("garden_reset_tapped_total").increment(1);
+}
+
 /// Increment when a QR code is scanned in the location quest.
 ///
 /// `is_final` indicates whether this was the last location in the quest.

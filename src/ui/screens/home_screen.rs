@@ -1,13 +1,14 @@
 use crate::trios::garden::{calculate_progress, GrowthStage, Plant};
 use crate::trios::i18n::{
-    t, tf, T_ADD_TO_CART, T_GARDEN_HARVEST_CTA, T_GARDEN_WATER_CTA, T_HOME_ADVENTURES,
-    T_HOME_AR_HUNT, T_HOME_CATEGORIES, T_HOME_DAILY_QUEST, T_HOME_GAME, T_HOME_GARDEN_CTA,
-    T_HOME_GARDEN_GROWING, T_HOME_GARDEN_HARVEST, T_HOME_GARDEN_TITLE, T_HOME_GARDEN_WATER,
-    T_HOME_LOCATION_QUEST, T_HOME_NO_SOTD, T_HOME_REORDER_CTA, T_HOME_REORDER_LAST,
-    T_HOME_REORDER_STATUS, T_HOME_SETS_PACKS, T_HOME_SHARE, T_HOME_SOMMELIER, T_HOME_SOTD,
-    T_HOME_SUBTITLE, T_HOME_TREASURE_HUNT, T_HOME_WATCH_VIDEO, T_MENU_OFF, T_MENU_SET_LABEL,
-    T_MENU_THC, T_NAV_ACCESSORIES, T_NAV_GARDEN, T_NAV_MENU, T_NAV_SETS, T_NAV_TEA, T_TRUST_AGE,
-    T_TRUST_GACP, T_TRUST_MEDICAL, T_TRUST_SUPPORT,
+    t, tf, T_ADD_TO_CART, T_GARDEN_HARVEST_CTA, T_GARDEN_START_FIRST_GARDEN,
+    T_GARDEN_START_FIRST_GARDEN_CTA, T_GARDEN_WATER_CTA, T_HOME_ADVENTURES, T_HOME_AR_HUNT,
+    T_HOME_CATEGORIES, T_HOME_DAILY_QUEST, T_HOME_GAME, T_HOME_GARDEN_CTA, T_HOME_GARDEN_GROWING,
+    T_HOME_GARDEN_HARVEST, T_HOME_GARDEN_TITLE, T_HOME_GARDEN_WATER, T_HOME_LOCATION_QUEST,
+    T_HOME_NO_SOTD, T_HOME_REORDER_CTA, T_HOME_REORDER_LAST, T_HOME_REORDER_STATUS,
+    T_HOME_SETS_PACKS, T_HOME_SHARE, T_HOME_SOMMELIER, T_HOME_SOTD, T_HOME_SUBTITLE,
+    T_HOME_TREASURE_HUNT, T_HOME_WATCH_VIDEO, T_MENU_OFF, T_MENU_SET_LABEL, T_MENU_THC,
+    T_NAV_ACCESSORIES, T_NAV_GARDEN, T_NAV_MENU, T_NAV_SETS, T_NAV_TEA, T_TRUST_AGE, T_TRUST_GACP,
+    T_TRUST_MEDICAL, T_TRUST_SUPPORT,
 };
 use crate::ui::api::context::api_base_url;
 use crate::ui::api::http::{fetch_text_authed, merge_server_cart, post_client_event};
@@ -192,6 +193,40 @@ struct HomeOrder {
 #[derive(Debug, Deserialize)]
 struct HomeOrdersResponse {
     orders: Vec<HomeOrder>,
+}
+
+/// Loop #17: compact streak snapshot for the Home garden widget. Extra fields
+/// are kept in sync with the API response for forward-compatibility.
+#[derive(Debug, Clone, Deserialize)]
+#[allow(dead_code)]
+struct HomeGardenStreak {
+    has_plant: bool,
+    #[serde(default)]
+    plant_id: String,
+    #[serde(default)]
+    strain_name: String,
+    #[serde(default)]
+    streak: u32,
+    #[serde(default)]
+    max_streak: u32,
+    #[serde(default)]
+    next_water_at: i64,
+    #[serde(default)]
+    is_ready_to_harvest: bool,
+    #[serde(default)]
+    reward_expires_at: Option<i64>,
+}
+
+async fn fetch_home_garden_streak(telegram_id: i64, init_data: &str) -> Option<HomeGardenStreak> {
+    let base = api_base_url();
+    let url = format!("{}/api/garden/streak?telegram_id={}", base, telegram_id);
+    let (status, body) = crate::ui::api::http::fetch_text_authed_full(&url, init_data)
+        .await
+        .ok()?;
+    if !(200..300).contains(&status) {
+        return None;
+    }
+    serde_json::from_str::<HomeGardenStreak>(&body).ok()
 }
 
 async fn fetch_home_last_order(
@@ -536,6 +571,19 @@ pub fn HomeScreen() -> Element {
         }
     });
 
+    // Loop #17: garden streak/urgency snapshot for the Home widget.
+    let init_data_for_garden_streak = init_data.clone();
+    let garden_streak_resource = use_resource(move || {
+        let tid = telegram_id;
+        let init = init_data_for_garden_streak.clone();
+        async move {
+            match tid {
+                Some(id) if id > 0 => fetch_home_garden_streak(id, &init).await,
+                _ => None,
+            }
+        }
+    });
+
     rsx! {
         div { style: "min-height:100vh;background:#0f0f1a;color:#e8e8e8;padding-bottom:80px;",
 
@@ -553,12 +601,10 @@ pub fn HomeScreen() -> Element {
             }
 
             // Compact garden progress widget — retention surface for the
-            // daily watering loop. Only renders once we know the user has a
-            // plant (or no plant at all); hidden while loading.
-            // `use_resource` wraps the async result in an outer `Option`
-            // (None = still loading), so the inner `Option<HomeGardenPlant>`
-            // tells us whether the user actually has a plant.
+            // daily watering loop. Uses the streak snapshot for urgency and
+            // the plant snapshot for visuals.
             {
+                let streak_opt = garden_streak_resource.read_unchecked().clone().flatten();
                 match &*garden_resource.read() {
                     Some(Some(plant)) => {
                         let lang = crate::ui::lang::current_lang();
@@ -582,6 +628,8 @@ pub fn HomeScreen() -> Element {
                         };
                         let growing = t(lang, T_HOME_GARDEN_GROWING).to_string();
                         let strain = plant.strain_name.clone();
+                        let streak = streak_opt.as_ref().map(|s| s.streak).unwrap_or(0);
+                        let _max_streak = streak_opt.as_ref().map(|s| s.max_streak).unwrap_or(0);
                         rsx! {
                             {
                                 let garden_kind = if progress.is_ready_to_harvest { "harvest" } else { "water" };
@@ -602,6 +650,9 @@ pub fn HomeScreen() -> Element {
                                                 div { style: "display:flex;align-items:center;gap:8px;margin-bottom:4px;",
                                                     span { style: "font-size:12px;font-weight:700;color:#39ff14;text-transform:uppercase;letter-spacing:1px;", {t(lang, T_HOME_GARDEN_TITLE)} }
                                                     span { style: "font-size:11px;color:#8b8b9e;", "{stage_label}" }
+                                                    if streak > 0 {
+                                                        span { style: "font-size:11px;background:#ff4757;color:#fff;padding:2px 6px;border-radius:8px;", "🔥 {streak}" }
+                                                    }
                                                 }
                                                 div { style: "font-size:14px;font-weight:700;color:#e8e8e8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:6px;", "{strain}" }
                                                 div { style: "display:flex;align-items:center;gap:8px;",
@@ -628,9 +679,39 @@ pub fn HomeScreen() -> Element {
                             }
                         }
                     }
-                    // No plant yet (or not authenticated): keep the home
-                    // screen clean rather than nagging.
-                    Some(None) | None => rsx! {},
+                    // Loop #17: no plant yet — show an acquisition surface so the
+                    // home screen still drives users into the garden loop.
+                    Some(None) => {
+                        if let Some(ref s) = streak_opt {
+                            if !s.has_plant {
+                                let lang = crate::ui::lang::current_lang();
+                                rsx! {
+                                    Link {
+                                        to: Route::Garden {},
+                                        style: "text-decoration:none;",
+                                        onclick: move |_| {
+                                            let base = api_base_url();
+                                            spawn(async move {
+                                                let _ = post_client_event(&base, "garden_choose_product_tapped", "home_empty").await;
+                                            });
+                                        },
+                                        div { style: "margin:0 16px 16px;background:linear-gradient(135deg,#1a1a2e,#16213e);border:4px dashed #39ff14;box-shadow:4px 4px 0 #000;padding:14px;cursor:pointer;display:flex;align-items:center;gap:12px;",
+                                            div { style: "font-size:36px;line-height:1;", "🌱" }
+                                            div { style: "flex:1;min-width:0;",
+                                                div { style: "font-size:14px;font-weight:700;color:#e8e8e8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:4px;", {t(lang, T_GARDEN_START_FIRST_GARDEN)} }
+                                                div { style: "font-size:12px;color:#8b8b9e;", {t(lang, T_GARDEN_START_FIRST_GARDEN_CTA)} }
+                                            }
+                                        }
+                                    }
+                                }
+                            } else {
+                                rsx! {}
+                            }
+                        } else {
+                            rsx! {}
+                        }
+                    }
+                    None => rsx! {},
                 }
             }
 

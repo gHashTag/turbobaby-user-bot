@@ -24,6 +24,7 @@ pub(crate) fn routes() -> Router<AppState> {
         .route("/garden/eligible", put(set_garden_eligible))
         .route("/garden/plants/choose", post(choose_plant))
         .route("/garden/plants", get(get_user_plants))
+        .route("/garden/streak", get(get_garden_streak))
         .route("/garden/plants/:id/water", post(water_plant))
         .route("/garden/plants/:id/harvest", post(harvest_plant))
         .route("/garden/plants/:id/reset", post(reset_plant))
@@ -122,6 +123,7 @@ async fn send_garden_reminders(
             "water",
         )
         .await;
+        crate::metrics::garden_reminder_sent("water");
         sent += 1;
 
         // Mark reminder sent.
@@ -166,12 +168,108 @@ async fn send_garden_reminders(
             "harvest",
         )
         .await;
+        crate::metrics::garden_reminder_sent("harvest");
         sent += 1;
 
         orm.execute(Statement::from_sql_and_values(
             DbBackend::Postgres,
             "UPDATE garden_plants SET reminder_sent_at = $1 WHERE id = $2",
             [now.into(), plant_id.into()],
+        ))
+        .await?;
+    }
+
+    Ok(sent)
+}
+
+/// Loop #17: reminder loop for garden rewards nearing expiration.
+#[cfg(not(target_arch = "wasm32"))]
+#[allow(dead_code)]
+pub(crate) fn spawn_garden_reward_expiry_loop(
+    orm: sea_orm::DatabaseConnection,
+    bot: std::sync::Arc<teloxide::Bot>,
+    config: std::sync::Arc<crate::config::Config>,
+    interval_secs: u64,
+) {
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(interval_secs));
+        interval.tick().await;
+        loop {
+            interval.tick().await;
+            match send_garden_reward_expiry_nudges(&orm, &bot, &config).await {
+                Ok(0) => {}
+                Ok(n) => tracing::info!("garden reward expiry: sent {} nudge(s)", n),
+                Err(e) => tracing::warn!("garden reward expiry sweep failed: {}", e),
+            }
+        }
+    });
+}
+
+/// Send expiry nudges for active rewards that expire within 24h or 4h and have
+/// not been nudged recently. Marks `expiry_nudge_sent_at` to avoid spam.
+#[cfg(not(target_arch = "wasm32"))]
+async fn send_garden_reward_expiry_nudges(
+    orm: &sea_orm::DatabaseConnection,
+    bot: &teloxide::Bot,
+    config: &crate::config::Config,
+) -> Result<usize, sea_orm::DbErr> {
+    use sea_orm::{ConnectionTrait, DbBackend, Statement};
+
+    let now_ms = chrono::Utc::now().timestamp_millis();
+    let four_hours_ms = 4i64 * 60 * 60 * 1000;
+    let twenty_four_hours_ms = 24i64 * 60 * 60 * 1000;
+    let nudge_cooldown_ms = twenty_four_hours_ms;
+    let min_last_nudge = now_ms.saturating_sub(nudge_cooldown_ms);
+
+    // Select rewards expiring between 4h and 24h from now that haven't been
+    // nudged in the last 24h. We deliberately skip rewards expiring in <4h to
+    // avoid spamming users who can't react in time.
+    let rows = orm
+        .query_all(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            "SELECT r.id, r.user_id, r.expires_at \
+             FROM garden_rewards r \
+             WHERE r.is_used = false \
+               AND r.expires_at > $1 \
+               AND r.expires_at <= $2 \
+               AND (r.expiry_nudge_sent_at IS NULL OR r.expiry_nudge_sent_at <= $3) \
+             LIMIT 500",
+            [
+                (now_ms + four_hours_ms).into(),
+                (now_ms + twenty_four_hours_ms).into(),
+                min_last_nudge.into(),
+            ],
+        ))
+        .await?;
+
+    let mut sent = 0usize;
+    for r in rows {
+        let user_id: String = r.try_get("", "user_id").unwrap_or_default();
+        let tid = match user_id.parse::<i64>() {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+        if tid == 0 {
+            continue;
+        }
+        let reward_id: String = r.try_get("", "id").unwrap_or_default();
+        let expires_at: i64 = r.try_get("", "expires_at").unwrap_or(now_ms);
+        let hours_before = ((expires_at - now_ms) / (60 * 60 * 1000)).max(4);
+
+        crate::bot::notify::notify_garden_reward_expiry(
+            bot,
+            &std::sync::Arc::new(crate::db::Database::from_conn(orm.clone())),
+            &std::sync::Arc::new(config.clone()),
+            tid,
+        )
+        .await;
+        crate::metrics::garden_reward_expiry_nudge_sent(hours_before);
+        sent += 1;
+
+        orm.execute(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            "UPDATE garden_rewards SET expiry_nudge_sent_at = $1 WHERE id = $2",
+            [now_ms.into(), reward_id.into()],
         ))
         .await?;
     }
@@ -334,6 +432,99 @@ async fn get_user_plants(
     Ok(Json(json!({ "plants": plants })))
 }
 
+/// Loop #17: compact streak/urgency snapshot for the active plant.
+async fn get_garden_streak(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    Query(query): Query<UserPlantsQuery>,
+) -> Result<Json<Value>, StatusCode> {
+    validate_telegram_id_param(query.telegram_id)?;
+    crate::api::auth::check_owner_lenient(&headers, &state, query.telegram_id, "garden")?;
+    check_not_blocked(&state, query.telegram_id).await?;
+
+    use sea_orm::{ConnectionTrait, DbBackend, Statement};
+    let user_id = query.telegram_id.to_string();
+    let now = chrono::Utc::now().timestamp_millis();
+
+    let plant_row = state
+        .db
+        .orm
+        .query_one(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            "SELECT id, user_id, strain_id, strain_name, current_stage, planted_at, \
+                    is_completed, harvested_at, reward_claimed, water_count, last_watered_at, \
+                    streak, max_streak \
+             FROM garden_plants \
+             WHERE user_id = $1 AND harvested_at IS NULL \
+             ORDER BY planted_at DESC LIMIT 1",
+            [user_id.clone().into()],
+        ))
+        .await
+        .map_err(|e| {
+            tracing::error!(user_id = %user_id, error = %e, "get_garden_streak plant query failed");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    let Some(r) = plant_row else {
+        return Ok(Json(json!({
+            "has_plant": false,
+            "streak": 0,
+            "max_streak": 0,
+        })));
+    };
+
+    let db_stage = r.try_get::<String>("", "current_stage").unwrap_or_default();
+    let current_stage =
+        garden::GrowthStage::from_db_name(&db_stage).unwrap_or(garden::GrowthStage::Final);
+    let plant = garden::Plant {
+        id: r.try_get("", "id").unwrap_or_default(),
+        user_id: r.try_get("", "user_id").unwrap_or_default(),
+        strain_id: r.try_get("", "strain_id").unwrap_or_default(),
+        strain_name: r.try_get("", "strain_name").unwrap_or_default(),
+        current_stage,
+        planted_at: r.try_get("", "planted_at").unwrap_or(0),
+        is_completed: r.try_get("", "is_completed").unwrap_or(false),
+        harvested_at: r.try_get("", "harvested_at").ok(),
+        reward_claimed: r.try_get("", "reward_claimed").unwrap_or(false),
+        water_count: r.try_get("", "water_count").unwrap_or(0),
+        last_watered_at: r.try_get("", "last_watered_at").ok(),
+    };
+    let progress = garden::calculate_progress(&plant, now);
+    let streak: i32 = r.try_get("", "streak").unwrap_or(0);
+    let max_streak: i32 = r.try_get("", "max_streak").unwrap_or(0);
+
+    // Nearest unused reward expiration drives the FOMO countdown.
+    let reward_row = state
+        .db
+        .orm
+        .query_one(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            "SELECT expires_at FROM garden_rewards \
+             WHERE user_id = $1 AND is_used = false AND expires_at > $2 \
+             ORDER BY expires_at ASC LIMIT 1",
+            [user_id.clone().into(), now.into()],
+        ))
+        .await
+        .map_err(|e| {
+            tracing::error!(user_id = %user_id, error = %e, "get_garden_streak reward query failed");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    let reward_expires_at: Option<i64> =
+        reward_row.and_then(|r| r.try_get::<Option<i64>>("", "expires_at").ok().flatten());
+
+    Ok(Json(json!({
+        "has_plant": true,
+        "plant_id": plant.id,
+        "strain_name": plant.strain_name,
+        "streak": streak,
+        "max_streak": max_streak,
+        "next_water_at": progress.next_water_at,
+        "is_ready_to_harvest": progress.is_ready_to_harvest,
+        "reward_expires_at": reward_expires_at,
+    })))
+}
+
 // Cycle #169: `plant_seed` handler + `validate_plant_seed_request`
 // validator removed. The forward-write of `garden_plants` is now
 // the cycle-#168 side-effect of `complete_order_and_update_loyalty`
@@ -361,7 +552,8 @@ async fn water_plant(
     let row = tx
         .query_one(Statement::from_sql_and_values(
             DbBackend::Postgres,
-            "SELECT user_id, current_stage, is_completed, water_count, last_watered_at \
+            "SELECT user_id, current_stage, is_completed, water_count, last_watered_at, \
+                    streak, max_streak, streak_last_watered_at \
              FROM garden_plants \
              WHERE id = $1 \
              FOR UPDATE",
@@ -400,6 +592,9 @@ async fn water_plant(
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
     let last_watered_at: Option<i64> = r.try_get("", "last_watered_at").ok();
+    let streak: i32 = r.try_get("", "streak").unwrap_or(0);
+    let max_streak: i32 = r.try_get("", "max_streak").unwrap_or(0);
+    let streak_last_watered_at: Option<i64> = r.try_get("", "streak_last_watered_at").ok();
 
     if is_completed {
         return Ok(Json(
@@ -431,6 +626,25 @@ async fn water_plant(
             return Err(StatusCode::INTERNAL_SERVER_ERROR);
         }
     };
+    // Loop #17: streak update. We compute it before the UPDATE so we can
+    // persist the new streak atomically with the water action.
+    let streak_update = garden::update_streak_on_water(
+        streak as u32,
+        max_streak as u32,
+        streak_last_watered_at.unwrap_or(0),
+        now,
+    );
+    let new_streak = match &streak_update {
+        garden::StreakUpdate::Advanced { streak, .. }
+        | garden::StreakUpdate::Broken { streak, .. } => *streak,
+        garden::StreakUpdate::Unchanged { streak, .. } => *streak,
+    };
+    let new_max_streak = match &streak_update {
+        garden::StreakUpdate::Advanced { max_streak, .. }
+        | garden::StreakUpdate::Broken { max_streak, .. }
+        | garden::StreakUpdate::Unchanged { max_streak, .. } => *max_streak,
+    };
+
     let cooldown_ms = garden::WATER_COOLDOWN_MS;
     let max_last_water = now.saturating_sub(cooldown_ms);
 
@@ -438,12 +652,16 @@ async fn water_plant(
         .execute(Statement::from_sql_and_values(
             DbBackend::Postgres,
             "UPDATE garden_plants \
-             SET water_count = $1, current_stage = $2, is_completed = $3, last_watered_at = $4 \
-             WHERE id = $5 AND (last_watered_at IS NULL OR last_watered_at <= $6)",
+             SET water_count = $1, current_stage = $2, is_completed = $3, last_watered_at = $4, \
+                 streak = $5, max_streak = $6, streak_last_watered_at = $7 \
+             WHERE id = $8 AND (last_watered_at IS NULL OR last_watered_at <= $9)",
             [
                 (new_count as i32).into(),
                 new_stage.clone().into(),
                 new_completed.into(),
+                now.into(),
+                (new_streak as i32).into(),
+                (new_max_streak as i32).into(),
                 now.into(),
                 id.clone().into(),
                 max_last_water.into(),
@@ -479,14 +697,25 @@ async fn water_plant(
         new_water_count = new_count,
         new_stage = %new_stage,
         is_completed = new_completed,
+        new_streak = new_streak,
+        new_max_streak = new_max_streak,
         "water_plant: watered"
     );
+
+    // Loop #17: streak metrics. Broken streaks and milestones are re-engagement
+    // signals; emit them after the tx commits so DB errors don't drop metrics.
+    if matches!(streak_update, garden::StreakUpdate::Broken { .. }) {
+        crate::metrics::garden_streak_broken();
+    }
+    crate::metrics::garden_streak_milestone(new_streak as i64);
 
     Ok(Json(json!({
         "success": true,
         "water_count": new_count,
         "current_stage": new_stage,
-        "is_completed": new_completed
+        "is_completed": new_completed,
+        "streak": new_streak,
+        "max_streak": new_max_streak
     })))
 }
 

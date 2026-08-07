@@ -524,6 +524,20 @@ async fn main() -> Result<()> {
         );
     }
 
+    // Loop #17: garden reward expiry FOMO nudges. Every 4 hours look for active
+    // rewards expiring within 4-24h and send one nudge per reward per day.
+    {
+        let garden_expiry_bot = bot_arc_for_state.clone();
+        let garden_expiry_orm = db.orm.clone();
+        let garden_expiry_config = config.clone();
+        crate::api::garden::spawn_garden_reward_expiry_loop(
+            garden_expiry_orm,
+            garden_expiry_bot,
+            garden_expiry_config,
+            14_400,
+        );
+    }
+
     // Loop #12: abandoned-cart reminders. Every 5 minutes look for carts
     // with items that haven't been touched in 10 minutes and send one nudge.
     {

@@ -61,6 +61,40 @@ pub(crate) async fn notify_garden_reminder(
     }
 }
 
+/// Loop #17: reminder that an unused garden reward is about to expire.
+pub(crate) async fn notify_garden_reward_expiry(
+    bot: &Bot,
+    db: &Arc<Database>,
+    config: &Arc<Config>,
+    customer_telegram_id: i64,
+) {
+    if customer_telegram_id == 0 {
+        return;
+    }
+
+    let lang = db
+        .get_user_lang(customer_telegram_id)
+        .await
+        .unwrap_or_else(|| "en".to_string());
+    let locale = get_locale(&lang);
+    let text = locale.garden_reward_expiry.clone();
+    let deep_link = miniapp_deep_link(&config.bot_username, "garden");
+    let markup =
+        InlineKeyboardMarkup::new(vec![vec![url_btn(&locale.garden_open_app, &deep_link)]]);
+
+    if let Err(e) = bot
+        .send_message(ChatId(customer_telegram_id), text)
+        .reply_markup(markup)
+        .await
+    {
+        tracing::warn!(
+            "notify_garden_reward_expiry failed: customer_telegram_id={} err={}",
+            customer_telegram_id,
+            e
+        );
+    }
+}
+
 /// Cycle #79: notify the customer that their order status changed.
 ///
 /// `status` must be one of: "confirmed", "completed", "rejected".

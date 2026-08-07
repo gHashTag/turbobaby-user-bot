@@ -281,6 +281,10 @@ const MIGRATIONS: &[(&str, &str)] = &[
         "064_bonus_tx_related_order_index.sql",
         include_str!("../../migrations/064_bonus_tx_related_order_index.sql"),
     ),
+    (
+        "065_garden_streaks.sql",
+        include_str!("../../migrations/065_garden_streaks.sql"),
+    ),
 ];
 
 /// Columns the catalog endpoints SELECT that were added by *later* migrations
