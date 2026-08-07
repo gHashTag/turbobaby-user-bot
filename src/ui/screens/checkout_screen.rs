@@ -59,6 +59,33 @@ struct StarsBalanceResp {
     balance: i64,
 }
 
+/// Cycle #78: checkout form draft persisted to Telegram CloudStorage so the
+/// customer doesn't lose their place if the Mini App is closed mid-checkout.
+#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize, PartialEq)]
+struct CheckoutDraft {
+    #[serde(default)]
+    name: String,
+    #[serde(default)]
+    phone: String,
+    #[serde(default)]
+    address: String,
+    #[serde(default)]
+    zone_id: Option<String>,
+    #[serde(default)]
+    notes: String,
+    #[serde(default)]
+    stars: i64,
+    #[serde(default)]
+    reward_id: Option<String>,
+    #[serde(default)]
+    reward_discount: f64,
+    #[serde(default)]
+    age_confirmed: bool,
+}
+
+const CHECKOUT_DRAFT_LOCAL_KEY: &str = "woody_checkout_draft";
+const CHECKOUT_DRAFT_CLOUD_KEY: &str = "wwb_checkout_draft";
+
 /// Cycle #77: outcome of the idempotent checkout submission with retry.
 enum SubmitResult {
     Success(String), // order_id
@@ -304,26 +331,181 @@ pub fn CheckoutScreen() -> Element {
     let mut delivery_address = use_signal(String::new);
     let mut delivery_notes = use_signal(String::new);
     let mut delivery_zone_id = use_signal(|| Option::<String>::None);
-    // Restore the customer's last used delivery details so repeat buyers don't
-    // retype name/phone/address every order.
+    // Age gate: the user must explicitly confirm they are 20+ before placing
+    // an order. This drives both the in-app primary button and Telegram
+    // MainButton enabled state.
+    let mut age_confirmed = use_signal(|| false);
+    // B4: fetch the user's garden rewards; show a toggle for any product-scoped,
+    // still-active reward whose target product is in this cart.
+    let mut applied_reward = use_signal(|| Option::<(String, f64)>::None);
+    // Stars (⭐) the user wants to spend as internal-currency discount.
+    let mut stars_to_use = use_signal(|| 0i64);
+    // Cycle #78: tracks the draft we loaded from localStorage so the async
+    // CloudStorage restore can decide whether the user has already edited it.
+    let mut loaded_draft = use_signal(|| Option::<CheckoutDraft>::None);
+
+    // Cycle #78: restore the checkout draft. Prefer the consolidated JSON key,
+    // then fall back to the legacy individual keys written by previous cycles.
     use_effect(move || {
+        let mut draft = CheckoutDraft::default();
         if let Some(window) = web_sys::window() {
             if let Ok(Some(storage)) = window.local_storage() {
-                if let Ok(Some(v)) = storage.get_item("woody_last_name") {
-                    customer_name.set(v);
+                if let Ok(Some(json)) = storage.get_item(CHECKOUT_DRAFT_LOCAL_KEY) {
+                    if let Ok(parsed) = serde_json::from_str::<CheckoutDraft>(&json) {
+                        draft = parsed;
+                    }
                 }
-                if let Ok(Some(v)) = storage.get_item("woody_last_phone") {
-                    customer_phone.set(v);
+                // Legacy individual-key fallback only if the consolidated key
+                // wasn't present or didn't have a field.
+                if draft.name.is_empty() {
+                    if let Ok(Some(v)) = storage.get_item("woody_last_name") {
+                        draft.name = v;
+                    }
                 }
-                if let Ok(Some(v)) = storage.get_item("woody_last_address") {
-                    delivery_address.set(v);
+                if draft.phone.is_empty() {
+                    if let Ok(Some(v)) = storage.get_item("woody_last_phone") {
+                        draft.phone = v;
+                    }
                 }
-                if let Ok(Some(v)) = storage.get_item("woody_last_zone_id") {
-                    delivery_zone_id.set(Some(v));
+                if draft.address.is_empty() {
+                    if let Ok(Some(v)) = storage.get_item("woody_last_address") {
+                        draft.address = v;
+                    }
+                }
+                if draft.zone_id.is_none() {
+                    if let Ok(Some(v)) = storage.get_item("woody_last_zone_id") {
+                        draft.zone_id = Some(v);
+                    }
+                }
+                if draft.notes.is_empty() {
+                    if let Ok(Some(v)) = storage.get_item("woody_last_notes") {
+                        draft.notes = v;
+                    }
+                }
+                if draft.stars == 0 {
+                    if let Ok(Some(v)) = storage.get_item("woody_last_stars") {
+                        if let Ok(n) = v.parse::<i64>() {
+                            draft.stars = n;
+                        }
+                    }
+                }
+                if draft.reward_id.is_none() {
+                    if let Ok(Some(v)) = storage.get_item("woody_last_reward_id") {
+                        if !v.is_empty() {
+                            draft.reward_id = Some(v);
+                            // Discount can't be recovered from legacy storage; the
+                            // reward picker below will re-apply it if still active.
+                        }
+                    }
+                }
+                if !draft.age_confirmed {
+                    if let Ok(Some(v)) = storage.get_item("woody_last_age_confirmed") {
+                        draft.age_confirmed = v == "true";
+                    }
                 }
             }
         }
+        customer_name.set(draft.name.clone());
+        customer_phone.set(draft.phone.clone());
+        delivery_address.set(draft.address.clone());
+        delivery_zone_id.set(draft.zone_id.clone());
+        delivery_notes.set(draft.notes.clone());
+        stars_to_use.set(draft.stars);
+        if let Some(rid) = draft.reward_id.clone() {
+            applied_reward.set(Some((rid, draft.reward_discount)));
+        }
+        age_confirmed.set(draft.age_confirmed);
+        loaded_draft.set(Some(draft));
     });
+
+    // Cycle #78: async restore from Telegram CloudStorage. We only apply it if
+    // the user hasn't edited the draft we just loaded from localStorage, so a
+    // slow callback can't clobber an in-progress form fill.
+    #[cfg(target_arch = "wasm32")]
+    use_hook(move || {
+        let mut name_sig = customer_name.clone();
+        let mut phone_sig = customer_phone.clone();
+        let mut address_sig = delivery_address.clone();
+        let mut zone_sig = delivery_zone_id.clone();
+        let mut notes_sig = delivery_notes.clone();
+        let mut stars_sig = stars_to_use.clone();
+        let mut reward_sig = applied_reward.clone();
+        let mut age_sig = age_confirmed.clone();
+        let loaded = loaded_draft.clone();
+        spawn(async move {
+            let tg = TelegramApp;
+            if let Some(json) = tg.cloud_storage_get(CHECKOUT_DRAFT_CLOUD_KEY).await {
+                if let Ok(draft) = serde_json::from_str::<CheckoutDraft>(&json) {
+                    let should_apply = match loaded.read().clone() {
+                        Some(ld) => {
+                            let current = CheckoutDraft {
+                                name: name_sig(),
+                                phone: phone_sig(),
+                                address: address_sig(),
+                                zone_id: zone_sig(),
+                                notes: notes_sig(),
+                                stars: stars_sig(),
+                                reward_id: reward_sig.read().as_ref().map(|(id, _)| id.clone()),
+                                reward_discount: reward_sig
+                                    .read()
+                                    .as_ref()
+                                    .map(|(_, d)| *d)
+                                    .unwrap_or(0.0),
+                                age_confirmed: age_sig(),
+                            };
+                            current == ld
+                        }
+                        None => true,
+                    };
+                    if should_apply {
+                        name_sig.set(draft.name);
+                        phone_sig.set(draft.phone);
+                        address_sig.set(draft.address);
+                        zone_sig.set(draft.zone_id);
+                        notes_sig.set(draft.notes);
+                        stars_sig.set(draft.stars);
+                        if let Some(rid) = draft.reward_id {
+                            reward_sig.set(Some((rid, draft.reward_discount)));
+                        }
+                        age_sig.set(draft.age_confirmed);
+                    }
+                }
+            }
+        });
+    });
+
+    // Cycle #78: persist the checkout draft on every change so the customer can
+    // close the Mini App mid-form and resume later. localStorage is the browser
+    // fallback; CloudStorage follows the Telegram account across devices.
+    use_effect(move || {
+        let draft = CheckoutDraft {
+            name: customer_name(),
+            phone: customer_phone(),
+            address: delivery_address(),
+            zone_id: delivery_zone_id(),
+            notes: delivery_notes(),
+            stars: stars_to_use(),
+            reward_id: applied_reward.read().as_ref().map(|(id, _)| id.clone()),
+            reward_discount: applied_reward
+                .read()
+                .as_ref()
+                .map(|(_, d)| *d)
+                .unwrap_or(0.0),
+            age_confirmed: age_confirmed(),
+        };
+        #[cfg(target_arch = "wasm32")]
+        {
+            let json = serde_json::to_string(&draft).unwrap_or_default();
+            if let Some(window) = web_sys::window() {
+                if let Ok(Some(storage)) = window.local_storage() {
+                    let _ = storage.set_item(CHECKOUT_DRAFT_LOCAL_KEY, &json);
+                }
+            }
+            let tg = TelegramApp;
+            tg.cloud_storage_set(CHECKOUT_DRAFT_CLOUD_KEY, &json);
+        }
+    });
+
     let mut shop_selected = use_signal(|| 0usize);
     let mut is_processing = use_signal(|| false);
     let mut order_error = use_signal(|| Option::<String>::None);
@@ -332,10 +514,6 @@ pub fn CheckoutScreen() -> Element {
     // collapses them into one order (migration 029). Navigating away or
     // unmounting the screen resets — exactly the boundary we want.
     let mut idempotency_key = use_signal(|| Option::<String>::None);
-    // Age gate: the user must explicitly confirm they are 20+ before placing
-    // an order. This drives both the in-app primary button and Telegram
-    // MainButton enabled state.
-    let mut age_confirmed = use_signal(|| false);
     let nav = navigator();
     let telegram_id = use_telegram_id();
     let telegram_username = use_telegram_username();
@@ -394,36 +572,6 @@ pub fn CheckoutScreen() -> Element {
         "44, 129, Koh Phangan, Surat Thani 84280",
     )];
 
-    // B4: fetch the user's garden rewards; show a toggle for any product-scoped,
-    // still-active reward whose target product is in this cart.
-    let mut applied_reward = use_signal(|| Option::<(String, f64)>::None);
-    // Stars (⭐) the user wants to spend as internal-currency discount.
-    let mut stars_to_use = use_signal(|| 0i64);
-    // Restore the rest of the checkout form (notes, stars, reward, age,
-    // zone) after the signals they mutate are declared.
-    use_effect(move || {
-        if let Some(window) = web_sys::window() {
-            if let Ok(Some(storage)) = window.local_storage() {
-                if let Ok(Some(v)) = storage.get_item("woody_last_notes") {
-                    delivery_notes.set(v);
-                }
-                if let Ok(Some(v)) = storage.get_item("woody_last_stars") {
-                    if let Ok(n) = v.parse::<i64>() {
-                        stars_to_use.set(n);
-                    }
-                }
-                if let Ok(Some(v)) = storage.get_item("woody_last_reward_id") {
-                    // We can't restore the discount amount here without the
-                    // rewards list, so we persist only the id; the picker
-                    // below re-applies it when the reward is active.
-                    applied_reward.set(Some((v, 0.0)));
-                }
-                if let Ok(Some(v)) = storage.get_item("woody_last_age_confirmed") {
-                    age_confirmed.set(v == "true");
-                }
-            }
-        }
-    });
     let stars_balance_res = {
         let init = init_data.clone();
         use_resource(move || {

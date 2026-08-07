@@ -12,6 +12,7 @@ use dioxus::prelude::*;
 use web_sys;
 
 const CART_STORAGE_KEY: &str = "wwb_cart";
+const CART_CLOUD_KEY: &str = "wwb_cart_cloud";
 
 #[component]
 pub fn App() -> Element {
@@ -39,21 +40,42 @@ pub fn App() -> Element {
         Signal::new(cart)
     });
 
-    // Persist cart to localStorage on every change
+    // Persist cart to localStorage and Telegram CloudStorage on every change.
     let cart = use_context::<Signal<Cart>>();
+    let initial_cart_for_cloud = cart.read().clone();
     use_effect(move || {
         let cart_data = cart.read().clone();
         #[cfg(target_arch = "wasm32")]
         {
+            let json = serde_json::to_string(&cart_data).unwrap_or_default();
             if let Some(window) = web_sys::window() {
                 if let Ok(Some(storage)) = window.local_storage() {
-                    let _ = storage.set_item(
-                        CART_STORAGE_KEY,
-                        &serde_json::to_string(&cart_data).unwrap_or_default(),
-                    );
+                    let _ = storage.set_item(CART_STORAGE_KEY, &json);
                 }
             }
+            let tg = crate::ui::telegram::TelegramApp;
+            tg.cloud_storage_set(CART_CLOUD_KEY, &json);
         }
+    });
+
+    // Cycle #78: restore cart from Telegram CloudStorage asynchronously. We only
+    // overwrite the locally-stored cart if the user hasn't modified it yet, so a
+    // slow CloudStorage callback doesn't clobber an in-flight shopping session.
+    #[cfg(target_arch = "wasm32")]
+    use_hook(move || {
+        let mut cart_signal = cart.clone();
+        let initial = initial_cart_for_cloud;
+        spawn(async move {
+            let tg = crate::ui::telegram::TelegramApp;
+            if let Some(json) = tg.cloud_storage_get(CART_CLOUD_KEY).await {
+                if let Ok(parsed) = serde_json::from_str::<Cart>(&json) {
+                    let current = cart_signal.read().clone();
+                    if current == initial {
+                        cart_signal.set(parsed);
+                    }
+                }
+            }
+        });
     });
 
     // Global error overlay state
