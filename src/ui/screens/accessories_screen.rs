@@ -2,6 +2,7 @@ use crate::trios::i18n::{t, T_ACC_DESC, T_ACC_TITLE, T_ADD_TO_CART, T_FILTER_ALL
 use crate::ui::api::context::api_base_url;
 use crate::ui::components::bottom_nav::BottomNav;
 use crate::ui::components::card_media::CardMedia;
+use crate::ui::components::skeleton::{Skeleton, SkeletonShape};
 use crate::ui::components::product_detail_modal::ProductDetailModal;
 use crate::ui::components::video_modal::VideoModal;
 use crate::ui::share::{share_product, ProductKind, SharedProduct};
@@ -199,9 +200,13 @@ pub fn AccessoriesScreen() -> Element {
                         }
                     },
                     None => rsx! {
-                        div { style: "text-align:center;padding:48px 16px;",
-                            p { style: "font-size:24px;", "🛠️" }
-                            p { style: "font-size:15px;color:#888;margin-top:12px;", "Loading..." }
+                        div { style: "padding:0 16px;display:grid;grid-template-columns:repeat(2,1fr);gap:12px;",
+                            Skeleton { shape: SkeletonShape::Card }
+                            Skeleton { shape: SkeletonShape::Card }
+                            Skeleton { shape: SkeletonShape::Card }
+                            Skeleton { shape: SkeletonShape::Card }
+                            Skeleton { shape: SkeletonShape::Card }
+                            Skeleton { shape: SkeletonShape::Card }
                         }
                     },
                 }

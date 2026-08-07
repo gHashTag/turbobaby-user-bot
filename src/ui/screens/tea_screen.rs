@@ -2,6 +2,7 @@ use crate::trios::i18n::{t, T_ADD_TO_CART, T_FILTER_ALL, T_TEA_DESC, T_TEA_TITLE
 use crate::ui::api::context::api_base_url;
 use crate::ui::components::bottom_nav::BottomNav;
 use crate::ui::components::product_detail_modal::ProductDetailModal;
+use crate::ui::components::skeleton::{Skeleton, SkeletonShape};
 use crate::ui::share::{share_product, ProductKind, SharedProduct};
 use crate::ui::state::{Cart, CartItem, CartItemType};
 use dioxus::prelude::*;
@@ -304,15 +305,10 @@ pub fn TeaScreen() -> Element {
                     },
                     None => rsx! {
                         div { style: "display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 0 16px;",
-                            for _ in 0..4 {
-                                div { style: "
-                                    background: #16213e; border: 4px solid #2a2a4a;
-                                    border-radius: 0; padding: 20px; text-align: center;
-                                    box-shadow: 4px 4px 0 #000; min-height: 140px;
-                                ",
-                                    div { style: "font-size: 13px; color: #8b8b9e;", "Loading..." }
-                                }
-                            }
+                            Skeleton { shape: SkeletonShape::Card }
+                            Skeleton { shape: SkeletonShape::Card }
+                            Skeleton { shape: SkeletonShape::Card }
+                            Skeleton { shape: SkeletonShape::Card }
                         }
                     },
                 }

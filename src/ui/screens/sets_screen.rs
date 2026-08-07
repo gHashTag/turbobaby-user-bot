@@ -2,6 +2,7 @@ use crate::trios::i18n::{t, T_ADD_TO_CART, T_SETS_DESC, T_SETS_TITLE};
 use crate::ui::api::context::api_base_url;
 use crate::ui::components::bottom_nav::BottomNav;
 use crate::ui::components::product_detail_modal::ProductDetailModal;
+use crate::ui::components::skeleton::{Skeleton, SkeletonShape};
 use crate::ui::components::set_card::{render_uniform_set_card, SetCardData};
 use crate::ui::share::{share_product, ProductKind, SharedProduct};
 use crate::ui::state::{Cart, CartItem, CartItemType};
@@ -243,13 +244,8 @@ pub fn SetsScreen() -> Element {
                     },
                     None => rsx! {
                         div { style: "display:flex;flex-direction:column;gap:12px;padding:0 16px;",
-                            div { style: "
-                                background:#16213e;border:4px solid #2a2a4a;
-                                box-shadow:4px 4px 0 #000;
-                                padding:20px;text-align:center;min-height:120px;
-                            ",
-                                div { style: "font-size:15px;color:#b388ff;margin-bottom:8px;", "Loading sets..." }
-                            }
+                            Skeleton { shape: SkeletonShape::Pack }
+                            Skeleton { shape: SkeletonShape::Pack }
                         }
                     },
                 }

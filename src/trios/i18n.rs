@@ -91,7 +91,6 @@ pub const T_POINT_5: Key = "point_5";
 /// Events calendar translations
 pub const T_EVENTS_TITLE: Key = "events.title";
 pub const T_EVENTS_SUBTITLE: Key = "events.subtitle";
-pub const T_EVENTS_LOADING: Key = "events.loading";
 pub const T_EVENTS_NO_EVENTS: Key = "events.no_events";
 pub const T_EVENTS_DATE: Key = "events.date";
 pub const T_EVENTS_LOCATION: Key = "events.location";
@@ -298,6 +297,10 @@ pub const T_PROFILE_MY_GARDEN: Key = "profile.my_garden";
 pub const T_PROFILE_QUESTS: Key = "profile.quests";
 pub const T_PROFILE_REFERRAL_PROGRAM: Key = "profile.referral_program";
 pub const T_PROFILE_TIER_BENEFITS: Key = "profile.tier_benefits";
+pub const T_PROFILE_TIER_STARTER: Key = "profile.tier_starter";
+pub const T_PROFILE_TIER_BRONZE: Key = "profile.tier_bronze";
+pub const T_PROFILE_TIER_SILVER: Key = "profile.tier_silver";
+pub const T_PROFILE_TIER_GOLD: Key = "profile.tier_gold";
 pub const T_PROFILE_SPENT: Key = "profile.spent";
 pub const T_PROFILE_BONUS: Key = "profile.bonus";
 pub const T_PROFILE_STARS: Key = "profile.stars";
@@ -344,7 +347,6 @@ pub const T_HOME_CATEGORIES: Key = "home.categories";
 pub const T_HOME_SETS_PACKS: Key = "home.sets_packs";
 pub const T_HOME_SOTD: Key = "home.sotd";
 pub const T_HOME_NO_SOTD: Key = "home.no_sotd";
-pub const T_HOME_LOADING: Key = "home.loading";
 pub const T_HOME_ADVENTURES: Key = "home.adventures";
 pub const T_HOME_DAILY_QUEST: Key = "home.daily_quest";
 pub const T_HOME_TREASURE_HUNT: Key = "home.treasure_hunt";
@@ -465,7 +467,6 @@ fn get_ru_translation(key: Key) -> Value {
         // Events calendar
         T_EVENTS_TITLE => "📅 События",
         T_EVENTS_SUBTITLE => "Календарь мероприятий Woody",
-        T_EVENTS_LOADING => "Загружаем события...",
         T_EVENTS_NO_EVENTS => "На этот день ничего не запланировано",
         T_EVENTS_DATE => "Мероприятие уже началось",
         T_EVENTS_LOCATION => "Локация",
@@ -656,6 +657,10 @@ fn get_ru_translation(key: Key) -> Value {
         T_PROFILE_QUESTS => "Квесты",
         T_PROFILE_REFERRAL_PROGRAM => "Реферальная программа",
         T_PROFILE_TIER_BENEFITS => "💎 Привилегии уровня",
+        T_PROFILE_TIER_STARTER => "Новичок",
+        T_PROFILE_TIER_BRONZE => "Бронзовый бутон",
+        T_PROFILE_TIER_SILVER => "Серебряный бутон",
+        T_PROFILE_TIER_GOLD => "Золотой бутон",
         T_PROFILE_SPENT => "ПОТРАЧЕНО",
         T_PROFILE_BONUS => "БОНУСЫ",
         T_PROFILE_STARS => "ЗВЁЗДЫ",
@@ -699,7 +704,6 @@ fn get_ru_translation(key: Key) -> Value {
         T_HOME_SETS_PACKS => "📦 Наборы",
         T_HOME_SOTD => "⭐ Сорт дня",
         T_HOME_NO_SOTD => "Сорт дня пока не выбран",
-        T_HOME_LOADING => "Загрузка...",
         T_HOME_ADVENTURES => "🎯 Приключения",
         T_HOME_DAILY_QUEST => "Ежедневный квест",
         T_HOME_TREASURE_HUNT => "Охота за сокровищами",
@@ -808,7 +812,6 @@ fn get_en_translation(key: Key) -> Value {
         // Events calendar
         T_EVENTS_TITLE => "📅 Events",
         T_EVENTS_SUBTITLE => "Woody events calendar",
-        T_EVENTS_LOADING => "Loading events...",
         T_EVENTS_NO_EVENTS => "Nothing planned for this day",
         T_EVENTS_DATE => "Event already started",
         T_EVENTS_LOCATION => "Location",
@@ -999,6 +1002,10 @@ fn get_en_translation(key: Key) -> Value {
         T_PROFILE_QUESTS => "Quests",
         T_PROFILE_REFERRAL_PROGRAM => "Referral Program",
         T_PROFILE_TIER_BENEFITS => "💎 Tier Benefits",
+        T_PROFILE_TIER_STARTER => "Starter",
+        T_PROFILE_TIER_BRONZE => "Bronze Bud",
+        T_PROFILE_TIER_SILVER => "Silver Bud",
+        T_PROFILE_TIER_GOLD => "Gold Bud",
         T_PROFILE_SPENT => "SPENT",
         T_PROFILE_BONUS => "BONUS",
         T_PROFILE_STARS => "STARS",
@@ -1042,7 +1049,6 @@ fn get_en_translation(key: Key) -> Value {
         T_HOME_SETS_PACKS => "📦 Packs",
         T_HOME_SOTD => "⭐ Strain of the Day",
         T_HOME_NO_SOTD => "No strain of the day yet",
-        T_HOME_LOADING => "Loading...",
         T_HOME_ADVENTURES => "🎯 Adventures",
         T_HOME_DAILY_QUEST => "Daily Quest",
         T_HOME_TREASURE_HUNT => "Treasure Hunt",
@@ -1162,7 +1168,6 @@ pub fn get_translations(lang: Lang) -> Translations {
         // Events calendar
         T_EVENTS_TITLE,
         T_EVENTS_SUBTITLE,
-        T_EVENTS_LOADING,
         T_EVENTS_NO_EVENTS,
         T_EVENTS_DATE,
         T_EVENTS_LOCATION,

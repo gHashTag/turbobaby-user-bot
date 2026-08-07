@@ -1,5 +1,5 @@
 use crate::trios::i18n::{
-    t, tf, T_ADD_TO_CART, T_FILTER_ALL, T_LOADING, T_MENU_BEST_BADGE, T_MENU_CBD, T_MENU_DESC,
+    t, tf, T_ADD_TO_CART, T_FILTER_ALL, T_MENU_BEST_BADGE, T_MENU_CBD, T_MENU_DESC,
     T_MENU_FILTER_HYBRID, T_MENU_FILTER_INDICA, T_MENU_FILTER_SATIVA, T_MENU_FLAVOR_PREFIX,
     T_MENU_NEW_ARRIVALS, T_MENU_NEW_BADGE, T_MENU_NO_RESULTS, T_MENU_PER_GRAM, T_MENU_PRICE_REQUEST,
     T_MENU_SALE_BADGE, T_MENU_SOLD_OUT, T_MENU_SOTD_BADGE, T_MENU_SOTD_HERO, T_MENU_SORT_NAME,
@@ -9,6 +9,7 @@ use crate::trios::i18n::{
 use crate::ui::api::context::api_base_url;
 use crate::ui::components::bottom_nav::BottomNav;
 use crate::ui::components::card_media::CardMedia;
+use crate::ui::components::skeleton::{Skeleton, SkeletonShape};
 use crate::ui::components::product_detail_modal::ProductDetailModal;
 use crate::ui::components::video_modal::VideoModal;
 use crate::ui::routes::Route;
@@ -137,7 +138,6 @@ pub fn MenuScreen() -> Element {
 
     let menu_title = t(crate::ui::lang::current_lang(), T_MENU_TITLE).to_string();
     let menu_desc = t(crate::ui::lang::current_lang(), T_MENU_DESC).to_string();
-    let loading_label = t(crate::ui::lang::current_lang(), T_LOADING).to_string();
 
     let strains_resource: Resource<Result<Vec<ApiStrain>, String>> = use_resource(move || {
         async move {
@@ -430,9 +430,13 @@ pub fn MenuScreen() -> Element {
                     },
                     None => {
                         rsx! {
-                            div { style: "text-align:center;padding:48px 16px;",
-                                p { style: "font-size:24px;", "🌿" }
-                                p { style: "font-size:15px;color:#888;margin-top:12px;", "{loading_label}" }
+                            div { style: "padding:0 16px;display:grid;grid-template-columns:repeat(2,1fr);gap:12px;",
+                                Skeleton { shape: SkeletonShape::Card }
+                                Skeleton { shape: SkeletonShape::Card }
+                                Skeleton { shape: SkeletonShape::Card }
+                                Skeleton { shape: SkeletonShape::Card }
+                                Skeleton { shape: SkeletonShape::Card }
+                                Skeleton { shape: SkeletonShape::Card }
                             }
                         }
                     },

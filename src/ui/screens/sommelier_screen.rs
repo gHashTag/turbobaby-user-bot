@@ -1,6 +1,7 @@
 use crate::trios::i18n::{t, T_SOMM_DESC, T_SOMM_EXP, T_SOMM_MOOD, T_SOMM_TIME, T_SOMM_TITLE};
 use crate::ui::api::context::api_base_url;
 use crate::ui::components::bottom_nav::BottomNav;
+use crate::ui::components::skeleton::{Skeleton, SkeletonShape};
 use crate::ui::state::{Cart, CartItem, CartItemType};
 use dioxus::prelude::*;
 use serde::Deserialize;
@@ -619,9 +620,10 @@ pub fn SommelierScreen() -> Element {
                             }
                         },
                         None => rsx! {
-                            div { style: "text-align: center; padding: 40px 16px;",
-                                div { style: "font-size: 70px; margin-bottom: 8px;", "🔮" }
-                                p { style: "font-size: 13px; color: #8b8b9e;", "Consulting the sommelier..." }
+                            div { style: "padding:0 16px;display:flex;flex-direction:column;gap:12px;",
+                                Skeleton { shape: SkeletonShape::Card }
+                                Skeleton { shape: SkeletonShape::Card }
+                                Skeleton { shape: SkeletonShape::Card }
                             }
                         },
                     }

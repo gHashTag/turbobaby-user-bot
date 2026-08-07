@@ -1,6 +1,6 @@
 use crate::trios::i18n::{
     t, tf, T_ADD_TO_CART, T_HOME_ADVENTURES, T_HOME_AR_HUNT, T_HOME_CATEGORIES, T_HOME_DAILY_QUEST,
-    T_HOME_GAME, T_HOME_LOADING, T_HOME_LOCATION_QUEST, T_HOME_NO_SOTD, T_HOME_SETS_PACKS,
+    T_HOME_GAME, T_HOME_LOCATION_QUEST, T_HOME_NO_SOTD, T_HOME_SETS_PACKS,
     T_HOME_SHARE, T_HOME_SOMMELIER, T_HOME_SOTD, T_HOME_SUBTITLE, T_HOME_TREASURE_HUNT,
     T_HOME_WATCH_VIDEO, T_MENU_OFF, T_MENU_SET_LABEL, T_MENU_THC, T_NAV_ACCESSORIES, T_NAV_GARDEN,
     T_NAV_MENU, T_NAV_SETS, T_NAV_TEA, T_TRUST_AGE, T_TRUST_GACP, T_TRUST_MEDICAL, T_TRUST_SUPPORT,
@@ -8,6 +8,7 @@ use crate::trios::i18n::{
 use crate::ui::api::context::api_base_url;
 use crate::ui::assets;
 use crate::ui::components::bottom_nav::BottomNav;
+use crate::ui::components::skeleton::{Skeleton, SkeletonShape};
 use crate::ui::components::video_modal::VideoModal;
 use crate::ui::routes::Route;
 use crate::ui::share::{share_product, ProductKind, SharedProduct};
@@ -297,7 +298,23 @@ pub fn HomeScreen() -> Element {
                             }
                         }
                     },
-                    // No packs / loading / error: render nothing (home stays clean).
+                    // Loading state: shimmer pack placeholders so the first paint
+                    // doesn't collapse vertically while the hero content streams in.
+                    None => {
+                        let packs_hdr = t(crate::ui::lang::current_lang(), T_HOME_SETS_PACKS).to_string();
+                        rsx! {
+                            div { style: "padding:0 16px 8px;",
+                                h2 { style: "font-size:13px;font-weight:700;color:#b388ff;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;text-shadow:2px 2px 0 #000;",
+                                    "{packs_hdr}"
+                                }
+                            }
+                            div { style: "display:flex;overflow-x:auto;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;gap:12px;padding:0 16px 8px;align-items:stretch;",
+                                Skeleton { shape: SkeletonShape::Pack }
+                                Skeleton { shape: SkeletonShape::Pack }
+                            }
+                        }
+                    },
+                    // No packs / error: render nothing (home stays clean).
                     _ => rsx! {},
                 }
             }
@@ -342,16 +359,14 @@ pub fn HomeScreen() -> Element {
                     },
                     Some(Err(_)) | None => {
                         let sotd_hdr = t(crate::ui::lang::current_lang(), T_HOME_SOTD).to_string();
-                        let loading = t(crate::ui::lang::current_lang(), T_HOME_LOADING).to_string();
                         rsx! {
-                            div { style: "
-                                margin:0 16px 16px;
-                                background:#16213e;border:4px solid #2a2a4a;
-                                box-shadow:4px 4px 0 #000;
-                                padding:16px;min-height:100px;
-                            ",
-                                div { style: "font-size:13px;font-weight:700;color:#ffe600;text-shadow:2px 2px 0 #000;margin-bottom:10px;", "{sotd_hdr}" }
-                                div { style: "font-size:15px;color:#888;", "{loading}" }
+                            div { style: "padding:0 16px 8px;",
+                                h2 { style: "font-size:13px;font-weight:700;color:#ffe600;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;text-shadow:2px 2px 0 #000;",
+                                    "{sotd_hdr}"
+                                }
+                            }
+                            div { style: "margin:0 16px 16px;",
+                                Skeleton { shape: SkeletonShape::Sotd }
                             }
                         }
                     },

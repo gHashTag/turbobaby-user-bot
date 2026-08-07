@@ -7,14 +7,14 @@
 use crate::trios::i18n::{
     t, tf, T_BACK, T_EVENTS_ALREADY_BOOKED, T_EVENTS_BOOK, T_EVENTS_BOOKED, T_EVENTS_BOOK_FREE,
     T_EVENTS_CANCEL, T_EVENTS_CAPACITY, T_EVENTS_DATE, T_EVENTS_ERROR, T_EVENTS_EVENT_NOT_FOUND,
-    T_EVENTS_FREE_BADGE, T_EVENTS_GALLERY, T_EVENTS_INSUFFICIENT_STARS, T_EVENTS_LOADING,
+    T_EVENTS_FREE_BADGE, T_EVENTS_GALLERY, T_EVENTS_INSUFFICIENT_STARS,
     T_EVENTS_MY_BOOKINGS, T_EVENTS_NEXT_PHOTO, T_EVENTS_NO_BOOKINGS, T_EVENTS_NO_EVENTS,
     T_EVENTS_OK, T_EVENTS_OPEN_DETAILS, T_EVENTS_PHOTO_N, T_EVENTS_PREV_PHOTO, T_EVENTS_PRICE,
     T_EVENTS_PRICE_STARS, T_EVENTS_RETRY, T_EVENTS_SEAT, T_EVENTS_SEATS, T_EVENTS_SHARE_EVENT,
     T_EVENTS_SOLD_OUT, T_EVENTS_SOLD_OUT_BADGE, T_EVENTS_SUBTITLE, T_EVENTS_TELEGRAM_REQUIRED,
     T_EVENTS_TIME, T_EVENTS_TITLE, T_EVENTS_VIDEO, T_EVENTS_WEEKDAY_FRI, T_EVENTS_WEEKDAY_MON,
     T_EVENTS_WEEKDAY_SAT, T_EVENTS_WEEKDAY_SUN, T_EVENTS_WEEKDAY_THU, T_EVENTS_WEEKDAY_TUE,
-    T_EVENTS_WEEKDAY_WED, T_LOADING,
+    T_EVENTS_WEEKDAY_WED,
 };
 use crate::ui::api::context::api_base_url;
 use crate::ui::api::http::{
@@ -22,6 +22,7 @@ use crate::ui::api::http::{
 };
 use crate::ui::api::types::Event as CalendarEvent;
 use crate::ui::components::bottom_nav::BottomNav;
+use crate::ui::components::skeleton::{Skeleton, SkeletonShape};
 use crate::ui::routes::Route;
 use crate::ui::share::{ProductKind, SharedProduct};
 use crate::ui::telegram::{use_telegram_id, use_telegram_init_data};
@@ -595,7 +596,6 @@ pub fn EventsScreen() -> Element {
 
     let title = t(lang, T_EVENTS_TITLE).to_string();
     let subtitle = t(lang, T_EVENTS_SUBTITLE).to_string();
-    let loading = t(lang, T_EVENTS_LOADING).to_string();
     let no_events = t(lang, T_EVENTS_NO_EVENTS).to_string();
 
     let mut events_resource: Resource<Result<Vec<CalendarEvent>, String>> =
@@ -704,7 +704,15 @@ pub fn EventsScreen() -> Element {
             WeekSelector { selected, today }
             div { style: "padding:0 16px;",
                 match &*events_resource.read() {
-                    None => rsx! { div { style: "text-align:center;padding:40px 0;color:#888;font-size:12px;", "{loading}" } },
+                    None => {
+                        rsx! {
+                            div { style: "display:flex;flex-direction:column;gap:12px;",
+                                Skeleton { shape: SkeletonShape::Event }
+                                Skeleton { shape: SkeletonShape::Event }
+                                Skeleton { shape: SkeletonShape::Event }
+                            }
+                        }
+                    },
                     Some(Err(e)) => {
                         let err_msg = e.clone();
                         let retry = t(lang, T_EVENTS_RETRY).to_string();
@@ -765,12 +773,14 @@ pub fn EventDetailScreen(id: String) -> Element {
     let go_back = move |_| {
         nav.push(Route::Events {});
     };
-    let lang = crate::ui::lang::current_lang();
-    let loading_label = t(lang, T_LOADING).to_string();
     rsx! {
         div { style: "min-height:100vh;background:#0f0f1a;color:#e8e8e8;padding-bottom:80px;",
             if *loading.read() {
-                div { style: "text-align:center;padding:40px 0;color:#888;font-size:12px;", "{loading_label}" }
+                div { style: "padding:0 16px;",
+                    Skeleton { shape: SkeletonShape::Sotd }
+                    div { style: "margin-top:12px;", Skeleton { shape: SkeletonShape::Text, width: Some("60%".into()) } }
+                    div { style: "margin-top:8px;", Skeleton { shape: SkeletonShape::TextSm, width: Some("80%".into()) } }
+                }
             } else if let Some(err) = error.read().clone() {
                 div { style: "text-align:center;padding:40px 0;color:#ff4757;font-size:12px;", "{err}" }
             } else if let Some(ev) = ev {
@@ -853,7 +863,6 @@ pub fn MyBookingsScreen() -> Element {
     let lang = crate::ui::lang::current_lang();
     let back_label = t(lang, T_BACK).to_string();
     let my_bookings_title = t(lang, T_EVENTS_MY_BOOKINGS).to_string();
-    let loading_label = t(lang, T_LOADING).to_string();
     let no_bookings = t(lang, T_EVENTS_NO_BOOKINGS).to_string();
     let cancel_label = t(lang, T_EVENTS_CANCEL).to_string();
     let nav = use_navigator();
@@ -893,7 +902,11 @@ pub fn MyBookingsScreen() -> Element {
                 h1 { style: "font-size:20px;font-weight:800;color:#39ff14;text-shadow:2px 2px 0 #000;", "{my_bookings_title}" }
             }
             if *loading.read() {
-                div { style: "text-align:center;padding:40px 0;color:#888;font-size:12px;", "{loading_label}" }
+                div { style: "padding:0 16px;",
+                    Skeleton { shape: SkeletonShape::Orders }
+                    Skeleton { shape: SkeletonShape::Orders }
+                    Skeleton { shape: SkeletonShape::Orders }
+                }
             } else if let Some(err) = error.read().clone() {
                 div { style: "text-align:center;padding:40px 0;color:#ff4757;font-size:12px;", "{err}" }
             } else if !has_bookings {

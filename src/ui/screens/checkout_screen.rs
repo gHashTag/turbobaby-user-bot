@@ -83,6 +83,26 @@ pub fn CheckoutScreen() -> Element {
     let mut delivery_address = use_signal(String::new);
     let mut delivery_notes = use_signal(String::new);
     let mut delivery_zone_id = use_signal(|| Option::<String>::None);
+    // Restore the customer's last used delivery details so repeat buyers don't
+    // retype name/phone/address every order.
+    use_effect(move || {
+        if let Some(window) = web_sys::window() {
+            if let Ok(Some(storage)) = window.local_storage() {
+                if let Ok(Some(v)) = storage.get_item("woody_last_name") {
+                    customer_name.set(v);
+                }
+                if let Ok(Some(v)) = storage.get_item("woody_last_phone") {
+                    customer_phone.set(v);
+                }
+                if let Ok(Some(v)) = storage.get_item("woody_last_address") {
+                    delivery_address.set(v);
+                }
+                if let Ok(Some(v)) = storage.get_item("woody_last_zone_id") {
+                    delivery_zone_id.set(Some(v));
+                }
+            }
+        }
+    });
     let mut shop_selected = use_signal(|| 0usize);
     let mut is_processing = use_signal(|| false);
     let mut order_error = use_signal(|| Option::<String>::None);
@@ -349,6 +369,18 @@ pub fn CheckoutScreen() -> Element {
                     if let Ok(val) = resp.json::<serde_json::Value>().await {
                         if let Some(id) = val.get("order_id").and_then(|v| v.as_str()) {
                             let order_id = id.to_string();
+                            // Persist last used delivery details for next checkout.
+                            if let Some(window) = web_sys::window() {
+                                if let Ok(Some(storage)) = window.local_storage() {
+                                    let _ = storage.set_item("woody_last_name", &customer_name());
+                                    let _ = storage.set_item("woody_last_phone", &customer_phone());
+                                    let _ = storage.set_item("woody_last_address", &delivery_address());
+                                    let _ = storage.set_item(
+                                        "woody_last_zone_id",
+                                        delivery_zone_id().as_deref().unwrap_or(""),
+                                    );
+                                }
+                            }
                             // Navigate to success and clear cart
                             cart.write().clear();
                             tg.haptic_notification(HapticNotification::Success);

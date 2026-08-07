@@ -1,6 +1,6 @@
 use crate::trios::i18n::{
     t, tf,
-    T_LOADING, T_MODAL_CLOSE, T_ORDERS_BROWSE_SETS, T_ORDERS_FILTER_ACTIVE,
+    T_MODAL_CLOSE, T_ORDERS_BROWSE_SETS, T_ORDERS_FILTER_ACTIVE,
     T_ORDERS_FILTER_ALL, T_ORDERS_FILTER_CANCELLED, T_ORDERS_FILTER_COMPLETED,
     T_ORDERS_HISTORY, T_ORDERS_NO_ORDERS, T_ORDERS_ORDER, T_ORDERS_STATUS_CANCELLED,
     T_ORDERS_STATUS_CONFIRMED, T_ORDERS_STATUS_DELIVERED, T_ORDERS_STATUS_OUT_FOR_DELIVERY,
@@ -13,6 +13,7 @@ use crate::trios::i18n::{
 use crate::ui::state::{Cart, CartItem, CartItemType};
 use crate::ui::api::context::{api_base_url, use_api_client};
 use crate::ui::components::bottom_nav::BottomNav;
+use crate::ui::components::skeleton::{Skeleton, SkeletonShape};
 use crate::ui::routes::Route;
 use crate::ui::telegram::{use_telegram_id, use_telegram_init_data, TelegramApp, HapticNotification};
 use dioxus::prelude::*;
@@ -331,7 +332,6 @@ pub fn OrdersScreen() -> Element {
 
     let lang = crate::ui::lang::current_lang();
     let orders_title = t(lang, T_ORDERS_TITLE);
-    let loading_text = t(lang, T_LOADING);
 
     rsx! {
         div { style: "
@@ -413,7 +413,7 @@ pub fn OrdersScreen() -> Element {
                                             ",
                                                 StatusProgress { status: o.status.clone() }
                                                 div { style: "display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;",
-                                                    span { style: "font-size: 15px; color: #e8e8e8;", "{tf(lang, T_ORDERS_ORDER, &[short_id])}" }
+                                                    span { style: "font-size: 15px; color: #e8e8e8;", "{tf(lang, T_ORDERS_ORDER, &[short_id.clone()])}" }
                                                     span { style: "
                                                         font-size: 13px; padding: 3px 8px;
                                                         border-radius: 0;
@@ -515,16 +515,10 @@ pub fn OrdersScreen() -> Element {
                             }
                         },
                         None => rsx! {
-                            div { style: "display: flex; flex-direction: column; gap: 10px;",
-                                for _ in 0..3 {
-                                    div { style: "
-                                        background: #16213e; border: 4px solid #2a2a4a;
-                                        border-radius: 0; padding: 20px;
-                                        box-shadow: 4px 4px 0 #000;
-                                    ",
-                                        div { style: "font-size: 13px; color: #8b8b9e;", "{loading_text}" }
-                                    }
-                                }
+                            div { style: "display:flex;flex-direction:column;gap:12px;",
+                                Skeleton { shape: SkeletonShape::Orders }
+                                Skeleton { shape: SkeletonShape::Orders }
+                                Skeleton { shape: SkeletonShape::Orders }
                             }
                         },
                     }

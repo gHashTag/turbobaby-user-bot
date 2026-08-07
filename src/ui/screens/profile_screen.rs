@@ -6,12 +6,14 @@ use crate::trios::i18n::{
     T_PROFILE_MEMBERSHIP, T_PROFILE_MORE_TO_UNLOCK, T_PROFILE_MY_GARDEN, T_PROFILE_MY_ORDERS,
     T_PROFILE_OPEN_MAP, T_PROFILE_PROGRESS, T_PROFILE_QR_CODE, T_PROFILE_QUICK_ACTIONS,
     T_PROFILE_REFERRAL_LINK, T_PROFILE_REFERRAL_PROGRAM, T_PROFILE_SHARE, T_PROFILE_SPENT,
-    T_PROFILE_STARS, T_PROFILE_TIER_BENEFITS, T_PROFILE_TITLE, T_PROFILE_QUESTS,
+    T_PROFILE_STARS, T_PROFILE_TIER_BENEFITS, T_PROFILE_TIER_BRONZE, T_PROFILE_TIER_GOLD,
+    T_PROFILE_TIER_SILVER, T_PROFILE_TIER_STARTER, T_PROFILE_TITLE, T_PROFILE_QUESTS,
     T_PROFILE_INVITED,
 };
 use crate::ui::api::context::api_base_url;
 use crate::ui::assets;
 use crate::ui::components::bottom_nav::BottomNav;
+use crate::ui::components::skeleton::{Skeleton, SkeletonShape};
 use crate::ui::lang::{current_lang, set_app_lang};
 use crate::ui::routes::Route;
 use crate::ui::state::Cart;
@@ -59,13 +61,14 @@ impl Tier {
             _ => Self::Starter,
         }
     }
-    fn label(&self) -> &'static str {
-        match self {
-            Self::Starter => "Starter",
-            Self::Bronze => "Bronze Bud",
-            Self::Silver => "Silver Bud",
-            Self::Gold => "Gold Bud",
-        }
+    fn label(&self, lang: Lang) -> String {
+        let key = match self {
+            Self::Starter => T_PROFILE_TIER_STARTER,
+            Self::Bronze => T_PROFILE_TIER_BRONZE,
+            Self::Silver => T_PROFILE_TIER_SILVER,
+            Self::Gold => T_PROFILE_TIER_GOLD,
+        };
+        t(lang, key).to_string()
     }
     fn emoji(&self) -> &'static str {
         match self {
@@ -123,6 +126,38 @@ impl Tier {
     }
     fn all() -> &'static [Tier] {
         &[Self::Starter, Self::Bronze, Self::Silver, Self::Gold]
+    }
+}
+
+fn render_profile_skeleton(_lang: Lang) -> Element {
+    rsx! {
+        div { style: "padding:0 16px 16px;display:flex;gap:6px;overflow-x:auto;",
+            Skeleton { shape: SkeletonShape::AvatarLg }
+            Skeleton { shape: SkeletonShape::AvatarLg }
+            Skeleton { shape: SkeletonShape::AvatarLg }
+            Skeleton { shape: SkeletonShape::AvatarLg }
+        }
+        div { style: "max-width:380px;margin:0 auto 16px;padding:0 16px;",
+            Skeleton { shape: SkeletonShape::MemberCard }
+        }
+        div { style: "padding:0 16px 16px;",
+            div { style: "display:grid;grid-template-columns:repeat(3,1fr);gap:8px;",
+                Skeleton { shape: SkeletonShape::Card }
+                Skeleton { shape: SkeletonShape::Card }
+                Skeleton { shape: SkeletonShape::Card }
+            }
+        }
+        div { style: "padding:0 16px 16px;",
+            Skeleton { shape: SkeletonShape::Title, width: Some("60%".into()) }
+            div { style: "margin-top:8px;background:#16213e;border:4px solid #2a2a4a;padding:14px;",
+                Skeleton { shape: SkeletonShape::Text, width: Some("80%".into()) }
+                Skeleton { shape: SkeletonShape::TextSm, width: Some("50%".into()) }
+            }
+        }
+        div { style: "padding:0 16px;display:flex;flex-direction:column;gap:8px;",
+            Skeleton { shape: SkeletonShape::Button }
+            Skeleton { shape: SkeletonShape::Button }
+        }
     }
 }
 
@@ -244,6 +279,7 @@ pub fn ProfileScreen() -> Element {
 
     let lang = crate::ui::lang::current_lang();
     let profile_title = t(lang, T_PROFILE_TITLE);
+    let is_loading = loyalty_resource.read().is_none();
 
     rsx! {
         div { style: "
@@ -257,6 +293,9 @@ pub fn ProfileScreen() -> Element {
                 p { style: "font-size: 13px; color: #8b8b9e; margin-top: 4px;", "{t(lang, T_PROFILE_MEMBERSHIP)}" }
             }
 
+            if is_loading {
+                { render_profile_skeleton(lang) }
+            } else {
             // Tier strip — all 4 tiers
             div { style: "display: flex; gap: 6px; padding: 0 16px 16px; overflow-x: auto;",
                 for tier in Tier::all() {
@@ -265,7 +304,7 @@ pub fn ProfileScreen() -> Element {
                         let is_unlocked = tier.threshold() <= total_spent;
                         let border = if is_current { tier.color() } else { "#2a2a4a" };
                         let opacity = if is_unlocked { "1.0" } else { "0.4" };
-                        let label = tier.label();
+                        let label = tier.label(lang);
                         let _emoji = tier.emoji();
                         let cb = tier.cashback();
                         let thresh = tier.threshold();
@@ -286,7 +325,7 @@ pub fn ProfileScreen() -> Element {
                                     if is_unlocked {
                                         img {
                                             src: "{tier.bud_image()}",
-                                            alt: "{tier.label()}",
+                                            alt: "{tier.label(lang)}",
                                             style: "max-width: 100%; max-height: 100%; object-fit: contain; filter: drop-shadow(0 0 4px {tier.color()}80);"
                                         }
                                     } else {
@@ -436,7 +475,7 @@ pub fn ProfileScreen() -> Element {
                         box-shadow: 4px 4px 0 #000;
                     ",
                         div { style: "display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 6px;",
-                            span { style: "color: #8b8b9e;", "{tf(lang, T_PROFILE_PROGRESS, &[next.label().to_string()])}" }
+                            span { style: "color: #8b8b9e;", "{tf(lang, T_PROFILE_PROGRESS, &[next.label(lang).to_string()])}" }
                             span { style: "color: {next.color()};", "{progress_pct}%" }
                         }
                         div { style: "height: 8px; background: rgba(0,0,0,0.4); border-radius: 0; overflow: hidden;",
@@ -447,7 +486,7 @@ pub fn ProfileScreen() -> Element {
                                 let rem_str = crate::trios::pricing::format_baht(rem);
                                 rsx! {
                                     div { style: "font-size: 13px; color: #8b8b9e; margin-top: 6px; text-align: center;",
-                                        "{tf(lang, T_PROFILE_MORE_TO_UNLOCK, &[rem_str, next.label().to_string()])}"
+                                        "{tf(lang, T_PROFILE_MORE_TO_UNLOCK, &[rem_str.clone(), next.label(lang).to_string()])}"
                                     }
                                 }
                             }
@@ -577,11 +616,11 @@ pub fn ProfileScreen() -> Element {
                                     div { style: "display: flex; justify-content: center; margin-bottom: 6px; height: 32px; align-items: center;",
                                         img {
                                             src: "{tier.bud_image()}",
-                                            alt: "{tier.label()}",
+                                            alt: "{tier.label(lang)}",
                                             style: "max-width: 100%; max-height: 100%; object-fit: contain; filter: drop-shadow(0 0 4px {tier.color()}80);"
                                         }
                                     }
-                                    div { style: "font-size: 15px; color: {tier.color()}; margin-bottom: 4px;", "{tier.label()}" }
+                                    div { style: "font-size: 15px; color: {tier.color()}; margin-bottom: 4px;", "{tier.label(lang)}" }
                                     div { style: "font-size: 13px; color: #8b8b9e; margin-bottom: 2px;", "{tier.cashback()}% cashback" }
                                     {
                                         let threshold_str = crate::trios::pricing::format_baht(tier.threshold() as f64);
@@ -659,6 +698,7 @@ pub fn ProfileScreen() -> Element {
                     },
                     "{t(lang, T_PROFILE_OPEN_MAP)}"
                 }
+            }
             }
 
             BottomNav { cart_count }

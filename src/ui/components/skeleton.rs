@@ -13,6 +13,16 @@ pub enum SkeletonShape {
     AvatarLg,
     Card,
     Button,
+    /// Home promo-pack carousel placeholder (aspect-ratio card).
+    Pack,
+    /// Strain-of-the-day banner placeholder.
+    Sotd,
+    /// Event list item placeholder.
+    Event,
+    /// Order history card placeholder.
+    Orders,
+    /// Credit-card / membership card placeholder.
+    MemberCard,
 }
 
 impl SkeletonShape {
@@ -26,6 +36,11 @@ impl SkeletonShape {
             Self::AvatarLg => "skeleton-loader skeleton-avatar-lg",
             Self::Card => "skeleton-loader skeleton-card",
             Self::Button => "skeleton-loader skeleton-btn",
+            Self::Pack => "skeleton-loader skeleton-pack",
+            Self::Sotd => "skeleton-loader skeleton-sotd",
+            Self::Event => "skeleton-loader skeleton-event",
+            Self::Orders => "skeleton-loader skeleton-orders",
+            Self::MemberCard => "skeleton-loader skeleton-member-card",
         }
     }
 }
