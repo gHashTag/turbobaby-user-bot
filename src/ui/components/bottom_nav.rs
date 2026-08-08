@@ -6,12 +6,15 @@
 //! is layout, not fewer tabs — `.bottom-nav > *` gets `flex: 1 1 0` and
 //! `min-width: 0` in `styles/main.css`, so every slot is exactly one tenth of
 //! the row on any width, and labels ellipsis rather than push the row wide.
+//!
+//! Every tab is a plain emoji glyph, so they share one rendering path and one
+//! optical size. Accessories used to be the exception (an inline SVG grinder)
+//! and needed its own CSS sizing rule to stop looking taller than the rest.
 
 use crate::trios::i18n::{
     t, T_NAV_ACCESSORIES, T_NAV_CART, T_NAV_EVENTS, T_NAV_GAME, T_NAV_GARDEN, T_NAV_HOME,
     T_NAV_MENU, T_NAV_PROFILE, T_NAV_SETS, T_NAV_TEA,
 };
-use crate::ui::components::AccessoriesIcon;
 use crate::ui::prefetch;
 use crate::ui::routes::Route;
 use dioxus::prelude::*;
@@ -58,7 +61,7 @@ pub fn BottomNav(#[props(default)] cart_count: u32) -> Element {
             Link { to: Route::Accessories {},
                 div { class: if is_accessories { "nav-item active" } else { "nav-item" },
                     onmouseenter: move |_| { prefetch::prefetch_route(&Route::Accessories {}); },
-                    span { class: "nav-icon", AccessoriesIcon {} }
+                    span { class: "nav-icon", "🛠️" }
                     span { class: "nav-label", "{t(lang, T_NAV_ACCESSORIES)}" }
                 }
             }
