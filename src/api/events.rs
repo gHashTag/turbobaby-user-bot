@@ -327,7 +327,7 @@ fn event_row(r: &sea_orm::QueryResult) -> Value {
         "image_url": r.try_get::<Option<String>>("", "image_url").ok().flatten(),
         "video_url": r.try_get::<Option<String>>("", "video_url").ok().flatten(),
         "max_seats": max_seats,
-        "price_baht": price_baht.and_then(|p| if p.is_finite() { Some(p) } else { None }),
+        "price_baht": price_baht.filter(|p| p.is_finite()),
         "price_stars": price_stars,
         "is_public": r.try_get::<bool>("", "is_public").unwrap_or(true),
         "seats_taken": seats_taken,

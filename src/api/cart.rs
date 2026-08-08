@@ -62,6 +62,11 @@ pub(crate) struct MergeCartReq {
     pub items: Vec<CartItemResp>,
 }
 
+/// Upper bound on lines accepted by `POST /api/cart/merge`. The local cart
+/// the client replays is user-controlled, and each line costs one catalog
+/// lookup, so an unbounded payload is a cheap way to tie up a DB connection.
+const MAX_MERGE_ITEMS: usize = 200;
+
 pub(crate) fn routes() -> Router<AppState> {
     Router::new()
         .route(
@@ -90,6 +95,33 @@ fn validate_quantity(q: i32) -> Result<(), StatusCode> {
         return Err(StatusCode::BAD_REQUEST);
     }
     Ok(())
+}
+
+/// Collapse a client-supplied merge payload into one row per
+/// `(kind, catalog_id)`, dropping lines that fail validation.
+///
+/// A local cart replayed from storage can legitimately carry the same line
+/// twice. Passing duplicates straight through used to mean two writes to the
+/// same `UNIQUE (cart_id, kind, catalog_id)` row inside one transaction;
+/// folding them here also saves one catalog lookup per duplicate.
+fn collapse_merge_items(items: Vec<CartItemResp>) -> Vec<(&'static str, String, i32)> {
+    let mut out: Vec<(&'static str, String, i32)> = Vec::new();
+    for item in items {
+        let Ok(kind) = parse_kind(&item.kind) else {
+            continue;
+        };
+        if validate_id(&item.catalog_id).is_err() || validate_quantity(item.quantity).is_err() {
+            continue;
+        }
+        match out
+            .iter_mut()
+            .find(|(k, id, _)| *k == kind && *id == item.catalog_id)
+        {
+            Some((_, _, qty)) => *qty = qty.saturating_add(item.quantity).min(1_000_000),
+            None => out.push((kind, item.catalog_id, item.quantity)),
+        }
+    }
+    out
 }
 
 fn validate_id(id: &str) -> Result<(), StatusCode> {
@@ -212,36 +244,101 @@ async fn resolve_catalog_snapshot(
     Ok(row)
 }
 
+/// Fetch the caller's cart, creating it if missing.
+///
+/// `carts.telegram_id` is UNIQUE, so the old read-then-insert shape was racy:
+/// two concurrent requests for the same user (a double-tapped "reorder"
+/// button fires two `POST /api/cart/merge` at once) both missed the SELECT,
+/// both INSERTed, and the loser got a duplicate-key error surfaced as HTTP
+/// 500. The insert is now an `ON CONFLICT DO NOTHING` upsert followed by a
+/// re-read, so the loser simply picks up the winner's row.
 async fn get_or_create_cart(
     db: &sea_orm::DatabaseConnection,
     telegram_id: i64,
 ) -> Result<crate::db::entities::cart::Model, StatusCode> {
     use crate::db::entities::cart::{Column as CartCol, Entity as CartEntity};
-    let existing = CartEntity::find()
-        .filter(CartCol::TelegramId.eq(telegram_id))
-        .one(db)
-        .await
-        .map_err(|e| {
-            tracing::error!("cart lookup: {e}");
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
-    if let Some(c) = existing {
-        return Ok(c);
+    use sea_orm::{ConnectionTrait, DbBackend, Statement};
+
+    for attempt in 0..2 {
+        let existing = CartEntity::find()
+            .filter(CartCol::TelegramId.eq(telegram_id))
+            .one(db)
+            .await
+            .map_err(|e| {
+                tracing::error!("cart lookup: {e}");
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?;
+        if let Some(c) = existing {
+            return Ok(c);
+        }
+        if attempt == 0 {
+            db.execute(Statement::from_sql_and_values(
+                DbBackend::Postgres,
+                "INSERT INTO carts (id, telegram_id, created_at, updated_at, expires_at) \
+                 VALUES (gen_random_uuid(), $1, now(), now(), now() + interval '30 days') \
+                 ON CONFLICT (telegram_id) DO NOTHING",
+                [telegram_id.into()],
+            ))
+            .await
+            .map_err(|e| {
+                tracing::error!("cart insert: {e}");
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?;
+        }
     }
-    let am = crate::db::entities::cart::ActiveModel {
-        id: Set(uuid::Uuid::new_v4()),
-        telegram_id: Set(telegram_id),
-        created_at: Set(Some(chrono::DateTime::from(Utc::now()))),
-        updated_at: Set(Some(chrono::DateTime::from(Utc::now()))),
-        expires_at: Set(Some(chrono::DateTime::from(
-            Utc::now() + chrono::Duration::days(30),
-        ))),
-        ..Default::default()
-    };
-    am.insert(db).await.map_err(|e| {
-        tracing::error!("cart insert: {e}");
+
+    tracing::error!("cart get_or_create: row still missing after upsert for {telegram_id}");
+    Err(StatusCode::INTERNAL_SERVER_ERROR)
+}
+
+/// Add `quantity` of one catalog item to a cart, atomically.
+///
+/// `cart_items` has `UNIQUE (cart_id, kind, catalog_id)`, so the previous
+/// find-then-insert-or-update shape raced the same way `get_or_create_cart`
+/// did — and inside a transaction the duplicate-key error also aborted every
+/// preceding write in that transaction. A single `ON CONFLICT DO UPDATE`
+/// statement lets Postgres serialize concurrent writers for us. The quantity
+/// cap mirrors `validate_quantity`.
+#[allow(clippy::too_many_arguments)]
+async fn upsert_cart_item<C: sea_orm::ConnectionTrait>(
+    conn: &C,
+    cart_id: uuid::Uuid,
+    kind: &str,
+    catalog_id: &str,
+    quantity: i32,
+    unit_price: f64,
+    name: &str,
+    image_url: Option<String>,
+) -> Result<(), StatusCode> {
+    use sea_orm::{DbBackend, Statement};
+
+    conn.execute(Statement::from_sql_and_values(
+        DbBackend::Postgres,
+        "INSERT INTO cart_items \
+           (id, cart_id, kind, catalog_id, quantity, unit_price, name, image_url, created_at, updated_at) \
+         VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, now(), now()) \
+         ON CONFLICT (cart_id, kind, catalog_id) DO UPDATE SET \
+           quantity   = LEAST(cart_items.quantity + EXCLUDED.quantity, 1000000), \
+           unit_price = EXCLUDED.unit_price, \
+           name       = EXCLUDED.name, \
+           image_url  = EXCLUDED.image_url, \
+           updated_at = now()",
+        [
+            cart_id.into(),
+            kind.into(),
+            catalog_id.into(),
+            quantity.into(),
+            unit_price.into(),
+            name.into(),
+            image_url.into(),
+        ],
+    ))
+    .await
+    .map_err(|e| {
+        tracing::error!("cart item upsert: {e}");
         StatusCode::INTERNAL_SERVER_ERROR
-    })
+    })?;
+    Ok(())
 }
 
 async fn load_cart_items(
@@ -327,51 +424,17 @@ async fn add_cart_item(
     let (name, unit_price, image_url) = snapshot.ok_or(StatusCode::UNPROCESSABLE_ENTITY)?;
 
     let cart = get_or_create_cart(&state.db.orm, req.telegram_id).await?;
-    use crate::db::entities::cart_item::{Column as ItemCol, Entity as ItemEntity};
-    let existing = ItemEntity::find()
-        .filter(ItemCol::CartId.eq(cart.id))
-        .filter(ItemCol::Kind.eq(kind))
-        .filter(ItemCol::CatalogId.eq(req.catalog_id.clone()))
-        .one(&state.db.orm)
-        .await
-        .map_err(|e| {
-            tracing::error!("cart item existing lookup: {e}");
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
-
-    if let Some(item) = existing {
-        let new_qty = item.quantity.saturating_add(req.quantity).min(1_000_000);
-        if new_qty <= 0 {
-            return Err(StatusCode::BAD_REQUEST);
-        }
-        let mut am: crate::db::entities::cart_item::ActiveModel = item.into();
-        am.quantity = Set(new_qty);
-        am.unit_price = Set(unit_price);
-        am.name = Set(name);
-        am.image_url = Set(image_url.clone());
-        am.updated_at = Set(Some(chrono::DateTime::from(Utc::now())));
-        am.update(&state.db.orm).await.map_err(|e| {
-            tracing::error!("cart item update: {e}");
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
-    } else {
-        let am = crate::db::entities::cart_item::ActiveModel {
-            id: Set(uuid::Uuid::new_v4()),
-            cart_id: Set(cart.id),
-            kind: Set(kind.to_string()),
-            catalog_id: Set(req.catalog_id.clone()),
-            quantity: Set(req.quantity),
-            unit_price: Set(unit_price),
-            name: Set(name),
-            image_url: Set(image_url.clone()),
-            created_at: Set(Some(chrono::DateTime::from(Utc::now()))),
-            updated_at: Set(Some(chrono::DateTime::from(Utc::now()))),
-        };
-        am.insert(&state.db.orm).await.map_err(|e| {
-            tracing::error!("cart item insert: {e}");
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
-    }
+    upsert_cart_item(
+        &state.db.orm,
+        cart.id,
+        kind,
+        &req.catalog_id,
+        req.quantity,
+        unit_price,
+        &name,
+        image_url,
+    )
+    .await?;
 
     // Refresh cart timestamp so the client can detect stale caches.
     let cart = get_or_create_cart(&state.db.orm, req.telegram_id).await?;
@@ -504,29 +567,23 @@ async fn merge_cart(
     State(state): State<AppState>,
     Json(req): Json<MergeCartReq>,
 ) -> Result<Json<CartResp>, StatusCode> {
+    validate_telegram_id_param(req.telegram_id)?;
     check_owner(&headers, &state, req.telegram_id)?;
     check_not_blocked(&state, req.telegram_id).await?;
+
+    if req.items.len() > MAX_MERGE_ITEMS {
+        return Err(StatusCode::PAYLOAD_TOO_LARGE);
+    }
 
     let cart = get_or_create_cart(&state.db.orm, req.telegram_id).await?;
 
     // Resolve each item; skip unknown/unavailable rather than failing the whole merge.
     let mut to_insert = Vec::new();
-    for item in req.items {
-        if let Ok(kind) = parse_kind(&item.kind) {
-            if validate_id(&item.catalog_id).is_ok() && validate_quantity(item.quantity).is_ok() {
-                if let Some((name, unit_price, image_url)) =
-                    resolve_catalog_snapshot(&state, kind, &item.catalog_id).await?
-                {
-                    to_insert.push((
-                        kind,
-                        item.catalog_id,
-                        item.quantity,
-                        name,
-                        unit_price,
-                        image_url,
-                    ));
-                }
-            }
+    for (kind, catalog_id, quantity) in collapse_merge_items(req.items) {
+        if let Some((name, unit_price, image_url)) =
+            resolve_catalog_snapshot(&state, kind, &catalog_id).await?
+        {
+            to_insert.push((kind, catalog_id, quantity, name, unit_price, image_url));
         }
     }
 
@@ -536,47 +593,17 @@ async fn merge_cart(
     })?;
 
     for (kind, catalog_id, quantity, name, unit_price, image_url) in to_insert {
-        use crate::db::entities::cart_item::{Column as ItemCol, Entity as ItemEntity};
-        let existing = ItemEntity::find()
-            .filter(ItemCol::CartId.eq(cart.id))
-            .filter(ItemCol::Kind.eq(kind))
-            .filter(ItemCol::CatalogId.eq(catalog_id.clone()))
-            .one(&tx)
-            .await
-            .map_err(|e| {
-                tracing::error!("cart merge existing lookup: {e}");
-                StatusCode::INTERNAL_SERVER_ERROR
-            })?;
-        if let Some(ex) = existing {
-            let new_qty = ex.quantity.saturating_add(quantity).min(1_000_000);
-            let mut am: crate::db::entities::cart_item::ActiveModel = ex.into();
-            am.quantity = Set(new_qty);
-            am.unit_price = Set(unit_price);
-            am.name = Set(name);
-            am.image_url = Set(image_url.clone());
-            am.updated_at = Set(Some(chrono::DateTime::from(Utc::now())));
-            am.update(&tx).await.map_err(|e| {
-                tracing::error!("cart merge update: {e}");
-                StatusCode::INTERNAL_SERVER_ERROR
-            })?;
-        } else {
-            let am = crate::db::entities::cart_item::ActiveModel {
-                id: Set(uuid::Uuid::new_v4()),
-                cart_id: Set(cart.id),
-                kind: Set(kind.to_string()),
-                catalog_id: Set(catalog_id),
-                quantity: Set(quantity),
-                unit_price: Set(unit_price),
-                name: Set(name),
-                image_url: Set(image_url),
-                created_at: Set(Some(chrono::DateTime::from(Utc::now()))),
-                updated_at: Set(Some(chrono::DateTime::from(Utc::now()))),
-            };
-            am.insert(&tx).await.map_err(|e| {
-                tracing::error!("cart merge insert: {e}");
-                StatusCode::INTERNAL_SERVER_ERROR
-            })?;
-        }
+        upsert_cart_item(
+            &tx,
+            cart.id,
+            kind,
+            &catalog_id,
+            quantity,
+            unit_price,
+            &name,
+            image_url,
+        )
+        .await?;
     }
 
     tx.commit().await.map_err(|e| {
@@ -630,5 +657,52 @@ mod tests {
             validate_id(&"a".repeat(201)).unwrap_err(),
             StatusCode::BAD_REQUEST
         );
+    }
+
+    fn item(kind: &str, catalog_id: &str, quantity: i32) -> CartItemResp {
+        CartItemResp {
+            id: String::new(),
+            kind: kind.to_string(),
+            catalog_id: catalog_id.to_string(),
+            quantity,
+            unit_price: 0.0,
+            name: String::new(),
+            image_url: None,
+        }
+    }
+
+    #[test]
+    fn collapse_merges_duplicate_lines() {
+        let out = collapse_merge_items(vec![
+            item("strain", "a", 2),
+            item("strain", "a", 3),
+            item("tea", "a", 1),
+        ]);
+        // Same catalog_id under a different kind stays a separate line.
+        assert_eq!(
+            out,
+            vec![("strain", "a".to_string(), 5), ("tea", "a".to_string(), 1)]
+        );
+    }
+
+    #[test]
+    fn collapse_drops_invalid_lines_without_failing_the_merge() {
+        let out = collapse_merge_items(vec![
+            item("bogus", "a", 1),
+            item("strain", "", 1),
+            item("strain", "b", 0),
+            item("strain", "b", -5),
+            item("strain", "c", 1),
+        ]);
+        assert_eq!(out, vec![("strain", "c".to_string(), 1)]);
+    }
+
+    #[test]
+    fn collapse_caps_summed_quantity() {
+        let out = collapse_merge_items(vec![
+            item("set", "s", 1_000_000),
+            item("set", "s", 1_000_000),
+        ]);
+        assert_eq!(out, vec![("set", "s".to_string(), 1_000_000)]);
     }
 }
