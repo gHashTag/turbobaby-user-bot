@@ -356,9 +356,8 @@ async fn spend_stars(
     use crate::db::entities::{
         order_idempotency_key::{ActiveModel as OrderIdemAm, Entity as OrderIdemEntity},
         stars_transaction::{ActiveModel as TxAm, Entity as TxEntity},
-        user_stars::{ActiveModel as UsAm, Column as UsCol, Entity as UsEntity},
+        user_stars::{Column as UsCol, Entity as UsEntity},
     };
-    use sea_orm::sea_query::OnConflict;
     use sea_orm::{
         ActiveValue::Set, ColumnTrait, ConnectionTrait, DbBackend, EntityTrait, QueryFilter,
         Statement, TransactionTrait,
@@ -401,24 +400,12 @@ async fn spend_stars(
         }
     }
 
-    // Ensure row exists with 0 balance before trying to debit (better error).
-    let us_am = UsAm {
-        telegram_id: Set(req.telegram_id),
-        balance: Set(0),
-        ..Default::default()
-    };
-    UsEntity::insert(us_am)
-        .on_conflict(
-            OnConflict::column(UsCol::TelegramId)
-                .update_column(UsCol::UpdatedAt)
-                .to_owned(),
-        )
-        .exec(&tx)
-        .await
-        .map_err(|e| {
-            tracing::error!("stars spend user_stars upsert: {:?}", e);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
+    // No row provisioning here. `user_stars.telegram_id` is FK'd to
+    // `loyalty_profiles`, so inserting a zero-balance row for someone who has
+    // never earned a Star violated the constraint and turned "you have no
+    // Stars" into HTTP 500. A debit has no business creating an account
+    // anyway: a missing row means a zero balance, which the guard below
+    // already reports as 402.
 
     // Atomic debit with guard balance >= amount.
     let updated = UsEntity::update_many()
