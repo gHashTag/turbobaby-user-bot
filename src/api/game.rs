@@ -55,7 +55,11 @@ async fn get_high_scores(
         .orm
         .query_all(Statement::from_sql_and_values(
             DbBackend::Postgres,
-            "SELECT display_name, high_score \
+            // `high_score` is INTEGER in the schema but read as i64 below.
+            // Without the cast the decode failed and `unwrap_or(0)` turned
+            // every real score into 0 — the public leaderboard showed the
+            // whole table tied at zero while the rows underneath were fine.
+            "SELECT display_name, high_score::bigint AS high_score \
              FROM game_high_scores \
              ORDER BY high_score DESC, updated_at ASC \
              LIMIT $1",
