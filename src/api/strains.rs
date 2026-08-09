@@ -567,16 +567,23 @@ async fn set_strain_of_day(
     //   enable  — set is_strain_of_day=true, discount, set_at=NOW()
     //   disable — set is_strain_of_day=false (leave discount/set_at as audit history)
     use crate::db::entities::strain::{Column as StrainCol, Entity as StrainEntity};
-    use sea_orm::{ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter};
+    use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
     // Carousel cap: at most 3 featured strains. When enabling, reject if 3 OTHER
-    // strains are already set — the owner must unset one first. Disabling is
-    // always allowed. (The read side also limits to 3, but enforcing here keeps
-    // the admin UI honest instead of silently dropping the 4th.)
+    // strains already occupy a slot — the owner must unset one first. Disabling
+    // is always allowed.
+    //
+    // The count must match `Database::get_strains_of_day`, which also requires
+    // `is_available = true`. It previously did not: a strain flagged as
+    // strain-of-day and then taken off sale kept holding a slot while being
+    // invisible in the carousel. Three of those deadlocked the admin screen —
+    // every pick returned 409 naming strains the owner could not see anywhere
+    // to unset. Only strains that can actually appear consume a slot.
     if enabled {
-        let others = StrainEntity::find()
+        let blockers = StrainEntity::find()
             .filter(StrainCol::IsStrainOfDay.eq(true))
+            .filter(StrainCol::IsAvailable.eq(true))
             .filter(StrainCol::Id.ne(id.clone()))
-            .count(&state.db.orm)
+            .all(&state.db.orm)
             .await
             .map_err(|e| {
                 tracing::error!("SOTD cap count error: {:?}", e);
@@ -585,12 +592,19 @@ async fn set_strain_of_day(
                     Json(json!({ "error": "count failed" })),
                 )
             })?;
-        if others >= 3 {
+        if blockers.len() >= 3 {
+            // Name them: a cap the owner cannot act on is indistinguishable
+            // from the feature being broken.
+            let names: Vec<String> = blockers.iter().map(|s| s.name.clone()).collect();
             return Err((
                 StatusCode::CONFLICT,
                 Json(json!({
                     "error": "sotd_limit",
-                    "message": "Максимум 3 сорта дня. Снимите отметку с одного."
+                    "message": format!(
+                        "Максимум 3 сорта дня. Сейчас выбраны: {}. Снимите отметку с одного.",
+                        names.join(", ")
+                    ),
+                    "current": names,
                 })),
             ));
         }
