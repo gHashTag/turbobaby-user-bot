@@ -80,6 +80,11 @@ pub fn CardMedia(
                     "playsinline": "true",
                     "webkit-playsinline": "true",
                     preload: "auto",
+                    // `muted: true` above only sets the content attribute, which
+                    // seeds `.muted` at parse time only — Dioxus creates the node
+                    // first and sets attributes after, so the element mounts
+                    // audible. Set the live property on mount.
+                    onmounted: move |e: Event<MountedData>| crate::ui::components::mute_media_element(&e),
                     // poster = the product image until the first frame paints.
                     poster: if has_image { "{img}" } else { "" },
                     // cross-origin (S3/Railway bucket) videos need this to paint.

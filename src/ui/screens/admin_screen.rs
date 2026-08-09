@@ -4080,7 +4080,14 @@ fn EditStrainCard(
                            // "YYYY-MM-DDTHH:MM" without timezone — server expects RFC3339,
                            // so we append ":00Z" only when the field is non-empty.
                            let sotd_b = *is_sotd.read();
-                           let sotd_pct = sotd_discount.read().trim().parse::<f64>().ok().filter(|v| v.is_finite() && *v >= 0.0).unwrap_or(0.0);
+                           // Clamp to the server's accepted range (0..=100). An
+                           // out-of-range value made `extract_discount` reject the
+                           // whole request with 400, so the discount silently never
+                           // landed.
+                           let sotd_pct = sotd_discount.read().trim().parse::<f64>().ok()
+                               .filter(|v| v.is_finite())
+                               .map(|v| v.clamp(0.0, 100.0))
+                               .unwrap_or(0.0);
                            let sale_b = *sale_active.read();
                            let dp = discount_percent.read().trim().parse::<f64>().ok().filter(|v| v.is_finite() && *v >= 0.0);
                            let sp = sale_price.read().trim().parse::<f64>().ok().filter(|v| v.is_finite() && *v > 0.0);
@@ -4147,8 +4154,19 @@ fn EditStrainCard(
                                });
                                // SOTD toggle goes through its dedicated endpoint
                                // (preserves the strain_of_day_set_at audit column).
-                               // Fire-and-forget alongside the main update.
-                               if sotd_b != item.is_strain_of_day {
+                               //
+                               // Previously this was gated on `sotd_b != item.is_strain_of_day`
+                               // and fire-and-forget. Two bugs followed:
+                               //   * editing ONLY the discount of an already-featured strain
+                               //     sent no request at all — the new percent was written to
+                               //     the local cache, shown as "✅ Сохранено", and lost on reload;
+                               //   * a rejected request (409 `sotd_limit` when 3 strains are
+                               //     already featured, 400, 401) was swallowed, so "сорт дня"
+                               //     appeared to be set but never was.
+                               // Now: always send when the flag is on or is being turned off,
+                               // and surface the server's answer.
+                               let mut sotd_error: Option<String> = None;
+                               if sotd_b || item.is_strain_of_day {
                                    let sotd_url = format!("{}/api/strains/{}/strain-of-day", api_base_url(), id);
                                    let sotd_body = if sotd_b {
                                        json!({ "is_strain_of_day": true, "discount": sotd_pct })
@@ -4156,11 +4174,24 @@ fn EditStrainCard(
                                        json!({ "is_strain_of_day": false, "discount": 0 })
                                    };
                                    let init_for_sotd = init_data.read().clone();
-                                   let _ = HTTP_CLIENT.clone().put(&sotd_url)
+                                   let sotd_res = HTTP_CLIENT.clone().put(&sotd_url)
                                        .header("X-Telegram-Init-Data", init_for_sotd)
                                        .header("X-Admin-Token", admin_token())
                                        .header("X-Admin-Telegram-Id", telegram_id.to_string())
                                        .json(&sotd_body).send().await;
+                                   sotd_error = match sotd_res {
+                                       Ok(r) if r.status().is_success() => None,
+                                       Ok(r) => {
+                                           let code = r.status().as_u16();
+                                           let msg = r.json::<serde_json::Value>().await.ok()
+                                               .and_then(|v| v.get("message")
+                                                   .or_else(|| v.get("error"))
+                                                   .and_then(|m| m.as_str())
+                                                   .map(|s| s.to_string()));
+                                           Some(msg.unwrap_or_else(|| format!("сорт дня не сохранён ({code})")))
+                                       }
+                                       Err(_) => Some("сорт дня не сохранён (нет связи)".into()),
+                                   };
                                }
                                let url = format!("{}/api/strains/{}", api_base_url(), id);
                                let res = HTTP_CLIENT.clone().put(&url)
@@ -4175,8 +4206,23 @@ fn EditStrainCard(
                                };
                                if success {
                                    on_saved.call(());
-                                   status.set("✅ Сохранено".into());
-                                   TelegramApp::init().haptic_notification(HapticNotification::Success);
+                                   match &sotd_error {
+                                       None => {
+                                           status.set("✅ Сохранено".into());
+                                           TelegramApp::init().haptic_notification(HapticNotification::Success);
+                                       }
+                                       Some(err) => {
+                                           // The strain itself saved, but the SOTD flag/discount
+                                           // did not — roll the featured state back in the cache
+                                           // so the UI stops showing a value the server rejected.
+                                           if let Some(s) = cache.write().iter_mut().find(|s| s.id == id) {
+                                               s.is_strain_of_day = item.is_strain_of_day;
+                                               s.strain_of_day_discount = item.strain_of_day_discount;
+                                           }
+                                           status.set(format!("⚠️ Сохранено, но {err}"));
+                                           TelegramApp::init().haptic_notification(HapticNotification::Error);
+                                       }
+                                   }
                                } else {
                                    TelegramApp::init().haptic_notification(HapticNotification::Error);
                                    if let Some(orig) = original {

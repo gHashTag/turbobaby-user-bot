@@ -131,6 +131,9 @@ pub fn render_uniform_set_card(
                         "playsinline": "true",
                         "webkit-playsinline": "true",
                         preload: "auto",
+                        // The `muted` attribute alone leaves the element audible
+                        // when the node is script-created; set the live property.
+                        onmounted: move |e: Event<MountedData>| crate::ui::components::mute_media_element(&e),
                         poster: if has_image { "{img_url}" } else { "" },
                         crossorigin: "anonymous",
                     }

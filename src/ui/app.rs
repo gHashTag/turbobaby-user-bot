@@ -10,7 +10,7 @@ use crate::ui::components::{install_error_handlers, ErrorOverlay, JsErrorItem};
 use crate::ui::routes::Routes;
 use crate::ui::share::{
     parse_cart_start_param, parse_garden_start_param, parse_order_start_param,
-    parse_reorder_start_param, parse_start_param, SharedProduct,
+    parse_reorder_start_param, parse_start_param, PendingOrder, PendingReorder, SharedProduct,
 };
 use crate::ui::state::{Cart, CartItem};
 use crate::ui::telegram::TelegramProvider;
@@ -128,8 +128,8 @@ pub fn App() -> Element {
 
     // Order deep-link target parsed from Telegram.WebApp.initDataUnsafe.start_param.
     // OrdersScreen / OrderDetailScreen read this signal to open the referenced order.
-    use_context_provider(|| Signal::new(None::<String>));
-    let pending_order = use_context::<Signal<Option<String>>>();
+    use_context_provider(|| Signal::new(PendingOrder::default()));
+    let pending_order = use_context::<Signal<PendingOrder>>();
 
     // Cart deep-link target parsed from Telegram.WebApp.initDataUnsafe.start_param.
     // Routes renders a small navigator that sends the user to /cart when true.
@@ -139,8 +139,8 @@ pub fn App() -> Element {
     // Reorder deep-link target: `startapp=reorder__{order_id}`. The home screen
     // fetches the order details, merges them into the server cart, and navigates
     // to the cart for one-tap review.
-    use_context_provider(|| Signal::new(None::<String>));
-    let pending_reorder = use_context::<Signal<Option<String>>>();
+    use_context_provider(|| Signal::new(PendingReorder::default()));
+    let pending_reorder = use_context::<Signal<PendingReorder>>();
 
     // Garden invite deep-link target: `startapp=garden__{referrer_id}[__{source}]`.
     // GardenScreen reads this signal to show a welcome modal and record the
@@ -163,9 +163,9 @@ pub fn App() -> Element {
         spawn(async move {
             for _ in 0..30 {
                 if pending.read().is_some()
-                    || pending_order_id.read().is_some()
+                    || pending_order_id.read().0.is_some()
                     || pending_cart_flag()
-                    || pending_reorder_id.read().is_some()
+                    || pending_reorder_id.read().0.is_some()
                     || pending_garden_invite_id.read().is_some()
                 {
                     return;
@@ -176,7 +176,7 @@ pub fn App() -> Element {
                         web_sys::console::log_1(
                             &format!("[deeplink] resolved reorder {}", order_id).into(),
                         );
-                        pending_reorder_id.set(Some(order_id));
+                        pending_reorder_id.set(PendingReorder(Some(order_id)));
                         return;
                     }
                     if let Some(attribution) = parse_cart_start_param(&param) {
@@ -213,7 +213,7 @@ pub fn App() -> Element {
                         web_sys::console::log_1(
                             &format!("[deeplink] resolved order {}", order_id).into(),
                         );
-                        pending_order_id.set(Some(order_id));
+                        pending_order_id.set(PendingOrder(Some(order_id)));
                         return;
                     }
                     if let Some((referrer_id, source)) = parse_garden_start_param(&param) {

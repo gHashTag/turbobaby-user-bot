@@ -21,7 +21,9 @@ use crate::ui::components::bottom_nav::BottomNav;
 use crate::ui::components::skeleton::{Skeleton, SkeletonShape};
 use crate::ui::components::video_modal::VideoModal;
 use crate::ui::routes::Route;
-use crate::ui::share::{share_garden, share_product, ProductKind, SharedProduct};
+use crate::ui::share::{
+    share_garden, share_product, PendingOrder, PendingReorder, ProductKind, SharedProduct,
+};
 use crate::ui::state::{Cart, CartItem, CartItemType};
 use crate::ui::telegram::{use_telegram_id, use_telegram_init_data};
 use dioxus::prelude::*;
@@ -422,9 +424,9 @@ pub fn HomeScreen() -> Element {
     // Deep-link landing: when the app opens with a shared product, navigate
     // from the home route to the catalog screen that owns the product.
     let pending = use_context::<Signal<Option<SharedProduct>>>();
-    let mut pending_order = use_context::<Signal<Option<String>>>();
+    let mut pending_order = use_context::<Signal<PendingOrder>>();
     let mut pending_cart = use_context::<Signal<bool>>();
-    let mut pending_reorder = use_context::<Signal<Option<String>>>();
+    let mut pending_reorder = use_context::<Signal<PendingReorder>>();
     let nav = navigator();
     let telegram_id = use_telegram_id();
     let init_data = use_telegram_init_data();
@@ -436,10 +438,10 @@ pub fn HomeScreen() -> Element {
             // The target screen will open the product modal and clear the target.
             nav.push(target.kind.route());
         }
-        let order_id = pending_order.read().clone();
+        let order_id = pending_order.read().0.clone();
         if let Some(order_id) = order_id {
             // Cycle #80: order deep link opens the dedicated detail screen.
-            pending_order.set(None);
+            pending_order.set(PendingOrder(None));
             nav.push(Route::OrderDetail { id: order_id });
         }
         // Loop #12: cart deep link sends the user straight to the cart.
@@ -449,9 +451,9 @@ pub fn HomeScreen() -> Element {
         }
         // Loop #15: proactive reorder deep-link loads the order items into the
         // server-side cart with current DB prices and lands on /cart.
-        let maybe_reorder = pending_reorder.read().clone();
+        let maybe_reorder = pending_reorder.read().0.clone();
         if let Some(order_id) = maybe_reorder {
-            pending_reorder.set(None);
+            pending_reorder.set(PendingReorder(None));
             let tid = telegram_id.unwrap_or(0);
             let init = init_data.clone();
             let mut cart_sig = cart_for_reorder.clone();
@@ -1030,57 +1032,10 @@ pub fn HomeScreen() -> Element {
                 }
             }
 
-            div { style: "padding:0 16px 16px;",
-                h2 { style: "font-size:13px;font-weight:700;color:#b388ff;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;text-shadow:2px 2px 0 #000;",
-                    {t(crate::ui::lang::current_lang(), T_HOME_ADVENTURES)}
-                }
-                div { style: "display:grid;grid-template-columns:1fr 1fr;gap:12px;",
-                    Link { to: Route::Quest { id: "daily".to_string() },
-                        div { style: "
-                            background:linear-gradient(135deg,rgba(0,229,255,0.1),rgba(57,255,20,0.1));
-                            border:4px solid #00e5ff;
-                            box-shadow:4px 4px 0 #000;
-                            padding:12px;text-align:center;cursor:pointer;
-                        ",
-                            div { style: "font-size:28px;margin-bottom:4px;", "🎯" }
-                            div { style: "font-size:13px;font-weight:700;color:#00e5ff;", {t(crate::ui::lang::current_lang(), T_HOME_DAILY_QUEST)} }
-                        }
-                    }
-                    Link { to: Route::TreasureHunt {},
-                        div { style: "
-                            background:linear-gradient(135deg,rgba(255,230,0,0.1),rgba(255,150,0,0.1));
-                            border:4px solid #ffe600;
-                            box-shadow:4px 4px 0 #000;
-                            padding:12px;text-align:center;cursor:pointer;
-                        ",
-                            div { style: "font-size:28px;margin-bottom:4px;", "🏴‍☠️" }
-                            div { style: "font-size:13px;font-weight:700;color:#ffe600;", {t(crate::ui::lang::current_lang(), T_HOME_TREASURE_HUNT)} }
-                        }
-                    }
-                    Link { to: Route::ArHunt {},
-                        div { style: "
-                            background:linear-gradient(135deg,rgba(255,107,157,0.1),rgba(200,80,192,0.1));
-                            border:4px solid #ff6b9d;
-                            box-shadow:4px 4px 0 #000;
-                            padding:12px;text-align:center;cursor:pointer;
-                        ",
-                            div { style: "font-size:28px;margin-bottom:4px;", "🔮" }
-                            div { style: "font-size:13px;font-weight:700;color:#ff6b9d;", {t(crate::ui::lang::current_lang(), T_HOME_AR_HUNT)} }
-                        }
-                    }
-                    Link { to: Route::LocationQuest {},
-                        div { style: "
-                            background:linear-gradient(135deg,rgba(0,229,255,0.1),rgba(78,205,196,0.1));
-                            border:4px solid #4ecdc4;
-                            box-shadow:4px 4px 0 #000;
-                            padding:12px;text-align:center;cursor:pointer;
-                        ",
-                            div { style: "font-size:28px;margin-bottom:4px;", "📍" }
-                            div { style: "font-size:13px;font-weight:700;color:#4ecdc4;", {t(crate::ui::lang::current_lang(), T_HOME_LOCATION_QUEST)} }
-                        }
-                    }
-                }
-            }
+            // Раздел «Приключения» (ежедневный квест, охота за сокровищами,
+            // AR-охота, локационный квест) убран с главной по просьбе владельца:
+            // разделы не работали. Маршруты и экраны сохранены в routes/screens,
+            // так что блок можно вернуть, когда квесты будут доделаны.
 
             // Tech Tree временно скрыт (по просьбе владельца). Код сохранён в routes/screens.
             // div { style: "padding:0 16px 16px;",

@@ -1,6 +1,13 @@
 //! Product sharing helpers for Telegram Mini App deep links.
 //!
-//! Any sellable item can be shared as `https://t.me/{bot}?startapp=p_{kind}_{id}`.
+//! Any sellable item can be shared as `https://t.me/{bot}?start=p_{kind}_{id}`.
+//!
+//! `?start=` (a classic bot deep link), not `?startapp=`: the latter only
+//! launches the Mini App when the bot has a **Main Mini App** configured in
+//! BotFather, otherwise Telegram just opens the bot chat — which is why a
+//! reposted card used to land on the bot's home screen. With `?start=` the bot
+//! always receives the payload and answers with a Mini App button that carries
+//! it through (see `src/bot/commands.rs`).
 //! The recipient's Mini App reads `Telegram.WebApp.initDataUnsafe.start_param`,
 //! navigates to the right catalog screen and opens the product detail modal.
 //!
@@ -121,7 +128,7 @@ fn bot_username() -> String {
 /// Build the `t.me` deep link that opens the mini-app with this product.
 fn deep_link_url(kind: ProductKind, id: &str) -> String {
     format!(
-        "https://t.me/{}?startapp={}_{}",
+        "https://t.me/{}?start={}_{}",
         bot_username(),
         kind.payload_prefix(),
         id
@@ -146,7 +153,7 @@ pub fn order_start_param(order_id: &str) -> String {
 /// Raw `t.me` deep link that opens a specific order.
 pub fn order_deep_link(order_id: &str) -> String {
     format!(
-        "https://t.me/{}?startapp={}",
+        "https://t.me/{}?start={}",
         bot_username(),
         order_start_param(order_id)
     )
@@ -160,11 +167,25 @@ pub fn cart_start_param() -> String {
 /// Raw `t.me` deep link that opens the cart.
 pub fn cart_deep_link() -> String {
     format!(
-        "https://t.me/{}?startapp={}",
+        "https://t.me/{}?start={}",
         bot_username(),
         cart_start_param()
     )
 }
+
+/// Deep-link target for a single order (`o_{order_id}`).
+///
+/// A newtype, not a bare `Option<String>`: Dioxus keys context by type, so
+/// providing two `Signal<Option<String>>` contexts in the same scope made the
+/// second one (reorder) shadow the first, and order deep links silently
+/// resolved to the reorder signal.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct PendingOrder(pub Option<String>);
+
+/// Deep-link target for a reorder (`reorder__{order_id}`). See [`PendingOrder`]
+/// for why this is a distinct newtype.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct PendingReorder(pub Option<String>);
 
 /// Parse an order `startapp` value (`o_{order_id}`). Unknown prefixes and
 /// payloads that are too long are rejected so malformed links degrade gracefully.
@@ -206,7 +227,7 @@ pub fn reorder_start_param(order_id: &str) -> String {
 /// Raw `t.me` deep link that opens the Mini App in reorder mode.
 pub fn reorder_deep_link(order_id: &str) -> String {
     format!(
-        "https://t.me/{}?startapp={}",
+        "https://t.me/{}?start={}",
         bot_username(),
         reorder_start_param(order_id)
     )
@@ -225,7 +246,7 @@ pub fn garden_start_param(referrer_id: Option<i64>) -> String {
 /// Raw `t.me` deep link that opens the Mini App in the garden.
 pub fn garden_deep_link(referrer_id: Option<i64>) -> String {
     format!(
-        "https://t.me/{}?startapp={}",
+        "https://t.me/{}?start={}",
         bot_username(),
         garden_start_param(referrer_id)
     )
@@ -401,7 +422,7 @@ mod tests {
     #[test]
     fn deep_link_contains_startapp() {
         let url = deep_link_url(ProductKind::Tea, "t42");
-        assert!(url.contains("startapp=p_tea_t42"));
+        assert!(url.contains("start=p_tea_t42"));
         assert!(url.starts_with("https://t.me/Woody_WeedPecker_bot"));
     }
 
@@ -424,7 +445,7 @@ mod tests {
         ];
         for (kind, id) in cases {
             let link = product_deep_link(kind, id);
-            let start_param = link.split("startapp=").nth(1).unwrap();
+            let start_param = link.split("start=").nth(1).unwrap();
             let parsed = parse_start_param(start_param).unwrap();
             assert_eq!(parsed.kind, kind);
             assert_eq!(parsed.id, id);
@@ -453,7 +474,7 @@ mod tests {
     fn order_deep_link_round_trips() {
         let id = "abc-123";
         let url = order_deep_link(id);
-        let start_param = url.split("startapp=").nth(1).unwrap();
+        let start_param = url.split("start=").nth(1).unwrap();
         assert_eq!(parse_order_start_param(start_param).unwrap(), id);
     }
 
@@ -468,7 +489,7 @@ mod tests {
     fn reorder_deep_link_round_trips() {
         let id = "abc-123";
         let url = reorder_deep_link(id);
-        let start_param = url.split("startapp=").nth(1).unwrap();
+        let start_param = url.split("start=").nth(1).unwrap();
         assert_eq!(parse_reorder_start_param(start_param).unwrap(), id);
     }
 
@@ -518,7 +539,7 @@ mod tests {
     #[test]
     fn garden_deep_link_round_trips() {
         let url = garden_deep_link(Some(12345));
-        let start_param = url.split("startapp=").nth(1).unwrap();
+        let start_param = url.split("start=").nth(1).unwrap();
         assert_eq!(
             parse_garden_start_param(start_param),
             Some((Some(12345), None))

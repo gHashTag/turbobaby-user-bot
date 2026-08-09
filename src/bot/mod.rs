@@ -125,11 +125,50 @@ pub(crate) fn url_btn(text: &str, url: &str) -> InlineKeyboardButton {
 /// Telegram client parses `startapp` and launches the bot's Mini App with the
 /// same parameter.
 pub(crate) fn miniapp_deep_link(bot_username: &str, start_param: &str) -> String {
+    // `?start=` (not `?startapp=`) — see `is_miniapp_start_payload` for why.
     format!(
-        "https://t.me/{}?startapp={}",
+        "https://t.me/{}?start={}",
         urlencoding::encode(bot_username),
         urlencoding::encode(start_param)
     )
+}
+
+/// Maximum length Telegram allows for a `start` / `startapp` payload.
+/// Must stay in sync with `src/ui/share.rs::MAX_START_PARAM_LEN`.
+pub(crate) const MAX_START_PARAM_LEN: usize = 64;
+
+/// Does this `/start` payload address a Mini App target (product card, order,
+/// cart, reorder, garden invite) rather than a plain chat start?
+///
+/// Shared links use `t.me/<bot>?start=<payload>` rather than `?startapp=`:
+/// `?startapp=` only launches the Mini App when the bot has a **Main Mini App**
+/// configured in BotFather, and without it Telegram just opens the bot chat —
+/// which is why shared cards landed on the bot's home screen. `?start=` always
+/// reaches the bot, and the handler answers with a Mini App button carrying the
+/// payload through to the app.
+///
+/// Prefixes must stay in sync with the parsers in `src/ui/share.rs`.
+pub(crate) fn is_miniapp_start_payload(payload: &str) -> bool {
+    if payload.is_empty() || payload.len() > MAX_START_PARAM_LEN {
+        return false;
+    }
+    if !payload
+        .bytes()
+        .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
+    {
+        return false;
+    }
+    const PREFIXES: [&str; 8] = [
+        "p_strain_",
+        "p_acc_",
+        "p_set_",
+        "p_tea_",
+        "p_event_",
+        "o_",
+        "reorder__",
+        "garden__",
+    ];
+    payload == "cart" || PREFIXES.iter().any(|p| payload.starts_with(p))
 }
 
 /// Build a `startapp` parameter for a catalog product.
@@ -229,12 +268,11 @@ mod deep_link_tests {
     use super::{miniapp_deep_link, product_start_param};
 
     #[test]
-    fn miniapp_deep_link_contains_startapp() {
+    fn miniapp_deep_link_uses_start_not_startapp() {
+        // `?startapp=` needs a Main Mini App registered in BotFather; without
+        // it Telegram opened the bot's home screen instead of the shared card.
         let url = miniapp_deep_link("Woody_WeedPecker_bot", "p_set_abc123");
-        assert_eq!(
-            url,
-            "https://t.me/Woody_WeedPecker_bot?startapp=p_set_abc123"
-        );
+        assert_eq!(url, "https://t.me/Woody_WeedPecker_bot?start=p_set_abc123");
     }
 
     #[test]

@@ -78,7 +78,10 @@ reqwest = { version = "0.11", features = ["json"], default-features = false, opt
 web-sys = { version = "0.3", features = [
     "Window", "Storage", "Navigator", "Clipboard", "Location",
     "Document", "Element", "HtmlElement", "Event", "EventTarget",
-    "KeyboardEvent", "MouseEvent", "console", "Url"
+    "KeyboardEvent", "MouseEvent", "console", "Url",
+    # Autoplaying card previews are muted via the live JS property on mount;
+    # the `muted` HTML attribute alone does not silence a script-created node.
+    "HtmlMediaElement", "HtmlVideoElement"
 ] }
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"

@@ -59,6 +59,20 @@ pub(crate) enum Command {
 use crate::util::html_escape;
 
 pub(crate) fn build_app_url(base_url: &str, lang: &str, page: Option<&str>) -> String {
+    build_app_url_with_start(base_url, lang, page, None)
+}
+
+/// Same as [`build_app_url`], plus an optional `startapp` payload.
+///
+/// Used when the bot answers a `t.me/<bot>?start=<payload>` deep link: the
+/// Mini App reads `startapp` from its own URL and opens the shared card
+/// instead of the home screen.
+pub(crate) fn build_app_url_with_start(
+    base_url: &str,
+    lang: &str,
+    page: Option<&str>,
+    start_param: Option<&str>,
+) -> String {
     // Split the base URL at the fragment first, then the query string, so we
     // can insert the page path component BEFORE them. Appending the page after
     // `?cache=180` produced URLs like `/?cache=180/sets&lang=ru&v=4`, which
@@ -82,7 +96,14 @@ pub(crate) fn build_app_url(base_url: &str, lang: &str, page: Option<&str>) -> S
         None => path_part.to_string(),
     };
 
-    let lang_params = format!("lang={}&v=4", lang);
+    let lang_params = match start_param {
+        Some(sp) => format!(
+            "lang={}&v=4&startapp={}",
+            lang,
+            urlencoding::encode(sp)
+        ),
+        None => format!("lang={}&v=4", lang),
+    };
     match (query, fragment) {
         (Some(q), Some(f)) => format!("{}{}&{}{}", path, q, lang_params, f),
         (Some(q), None) => format!("{}{}&{}", path, q, lang_params),
@@ -182,6 +203,33 @@ pub(crate) async fn handle_command(
                     vec![web_app_btn(&format!("🛒 {}", locale.open_menu), &build_app_url(base, &lang, None))]
                 ]))
                 .await?;
+                return Ok(());
+            }
+
+            // Shared card / order / cart deep link: `t.me/<bot>?start=<payload>`.
+            // Answer with a Mini App button whose URL carries `startapp`, so the
+            // app opens the exact card instead of the home screen. See
+            // `crate::bot::is_miniapp_start_payload` for why `?start=` is used.
+            if crate::bot::is_miniapp_start_payload(&args) {
+                let _ = ref_db::get_or_create_referral_code(&db.orm, user_id).await;
+                let (title, btn) = if lang == "ru" {
+                    (
+                        "🔗 <b>Ссылка получена</b>\n━━━━━━━━━━━━━━━━\nНажмите кнопку ниже — откроется именно та карточка, которой с вами поделились.",
+                        "👀 Открыть карточку",
+                    )
+                } else {
+                    (
+                        "🔗 <b>Shared link</b>\n━━━━━━━━━━━━━━━━\nTap the button below to open the exact card that was shared with you.",
+                        "👀 Open the card",
+                    )
+                };
+                bot.send_message(msg.chat.id, title)
+                    .parse_mode(teloxide::types::ParseMode::Html)
+                    .reply_markup(InlineKeyboardMarkup::new(vec![vec![web_app_btn(
+                        btn,
+                        &build_app_url_with_start(base, &lang, None, Some(&args)),
+                    )]]))
+                    .await?;
                 return Ok(());
             }
 
@@ -727,7 +775,9 @@ pub(crate) async fn handle_command(
 
 #[cfg(test)]
 mod tests {
-    use super::{build_admin_url, build_app_url, calculate_discounted_price};
+    use super::{
+        build_admin_url, build_app_url, build_app_url_with_start, calculate_discounted_price,
+    };
 
     #[test]
     fn test_build_app_url_basic() {
@@ -779,6 +829,66 @@ mod tests {
             ),
             "https://app.com/profile?cache=180&lang=ru&v=4#tgWebAppData=xyz"
         );
+    }
+
+    #[test]
+    fn test_build_app_url_with_start_param() {
+        // The shared-card payload must survive into the Mini App URL so the
+        // app can open the exact card instead of the home screen.
+        assert_eq!(
+            build_app_url_with_start("https://app.com", "ru", None, Some("p_strain_abc123")),
+            "https://app.com?lang=ru&v=4&startapp=p_strain_abc123"
+        );
+    }
+
+    #[test]
+    fn test_build_app_url_with_start_param_keeps_fragment_last() {
+        assert_eq!(
+            build_app_url_with_start(
+                "https://app.com/?cache=180#tgWebAppData=xyz",
+                "en",
+                None,
+                Some("o_42")
+            ),
+            "https://app.com?cache=180&lang=en&v=4&startapp=o_42#tgWebAppData=xyz"
+        );
+    }
+
+    #[test]
+    fn test_miniapp_start_payloads_are_recognised() {
+        for good in [
+            "p_strain_abc",
+            "p_acc_1",
+            "p_set_x",
+            "p_tea_t42",
+            "p_event_e1",
+            "o_7f3a",
+            "reorder__7f3a",
+            "garden__1234",
+            "cart",
+        ] {
+            assert!(
+                crate::bot::is_miniapp_start_payload(good),
+                "{good} should be treated as a Mini App deep link"
+            );
+        }
+        for bad in [
+            "",
+            "channel",
+            "ref_WOODY123",
+            "p_strain_abc def",
+            "p_strain_\u{43e}\u{43f}",
+        ] {
+            assert!(
+                !crate::bot::is_miniapp_start_payload(bad),
+                "{bad:?} should NOT be treated as a Mini App deep link"
+            );
+        }
+        // Over the 64-char Telegram limit.
+        assert!(!crate::bot::is_miniapp_start_payload(&format!(
+            "p_strain_{}",
+            "a".repeat(64)
+        )));
     }
 
     #[test]

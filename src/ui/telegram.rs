@@ -353,14 +353,46 @@ impl TelegramApp {
         None
     }
 
-    /// Read the `start_param` Telegram passes when the Mini App is opened via a
-    /// `t.me/{bot}?startapp=...` deep link. Empty/missing values return `None`.
+    /// Read the deep-link payload the Mini App was opened with.
+    ///
+    /// Three sources, in order:
+    /// 1. `initDataUnsafe.start_param` — set by `t.me/{bot}?startapp=...`, which
+    ///    only works when the bot has a Main Mini App configured in BotFather.
+    /// 2. `tgWebAppStartParam` in the page URL (query or hash) — Telegram
+    ///    forwards it here in some clients.
+    /// 3. `startapp` in the page URL — set by the bot itself when it answers a
+    ///    `t.me/{bot}?start=<payload>` link with a `web_app` button, and by
+    ///    admin channel posts (`src/api/admin.rs::build_web_app_url`).
+    ///
+    /// Without (2)/(3) a shared card opened the home screen, because a
+    /// `web_app` button never populates `initDataUnsafe.start_param`.
+    /// Empty/missing values return `None`.
     pub fn start_param(&self) -> Option<String> {
         let js = r#"(function(){try{
             if(window.Telegram && window.Telegram.WebApp){
                 var p = window.Telegram.WebApp.initDataUnsafe;
                 if(p && typeof p.start_param === 'string' && p.start_param.length > 0){
                     return p.start_param;
+                }
+            }
+            var keys = ['tgWebAppStartParam','startapp'];
+            var blobs = [];
+            try{ blobs.push(window.location.search || ''); }catch(e){}
+            try{ blobs.push(window.location.hash || ''); }catch(e){}
+            for(var b=0;b<blobs.length;b++){
+                var raw = blobs[b];
+                var q = raw.indexOf('?');
+                if(q >= 0){ raw = raw.slice(q+1); }
+                else if(raw.charAt(0) === '?' || raw.charAt(0) === '#'){ raw = raw.slice(1); }
+                var parts = raw.split('&');
+                for(var i=0;i<parts.length;i++){
+                    var eq = parts[i].indexOf('=');
+                    if(eq < 0){ continue; }
+                    var k = parts[i].slice(0, eq);
+                    if(keys.indexOf(k) < 0){ continue; }
+                    var v = parts[i].slice(eq+1);
+                    try{ v = decodeURIComponent(v.replace(/\+/g,' ')); }catch(e){}
+                    if(v.length > 0){ return v; }
                 }
             }
             return '';

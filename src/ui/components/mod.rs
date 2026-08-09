@@ -20,6 +20,7 @@ pub mod set_card;
 pub mod strain_card;
 pub mod strain_grid;
 pub mod video_modal;
+pub mod video_mute;
 
 // ---------------------------------------------------------------------------
 // New design-system components (feat/design-system)
@@ -73,3 +74,4 @@ pub use toast::{Toast, ToastContainer, ToastContainerProps, ToastKind, ToastProp
 
 // Re-export types from state for convenience
 pub use crate::ui::state::CartItem as CartItemType;
+pub use video_mute::mute_media_element;
