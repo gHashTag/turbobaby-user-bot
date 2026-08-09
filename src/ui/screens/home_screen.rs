@@ -675,9 +675,9 @@ pub fn HomeScreen() -> Element {
                                             div { style: "margin:0 16px 16px;background:linear-gradient(135deg,#1a1a2e,#16213e);border:4px solid #39ff14;box-shadow:4px 4px 0 #000;padding:14px;cursor:pointer;display:flex;align-items:center;gap:12px;",
                                             div { style: "font-size:36px;line-height:1;", "{emoji}" }
                                             div { style: "flex:1;min-width:0;",
-                                                div { style: "display:flex;align-items:center;gap:8px;margin-bottom:4px;",
-                                                    span { style: "font-size:12px;font-weight:700;color:#39ff14;text-transform:uppercase;letter-spacing:1px;", {t(lang, T_HOME_GARDEN_TITLE)} }
-                                                    span { style: "font-size:11px;color:#8b8b9e;", "{stage_label}" }
+                                                div { style: "display:flex;align-items:baseline;flex-wrap:wrap;gap:2px 8px;margin-bottom:4px;min-width:0;",
+                                                    span { style: "font-size:12px;font-weight:700;color:#39ff14;text-transform:uppercase;letter-spacing:1px;white-space:nowrap;", {t(lang, T_HOME_GARDEN_TITLE)} }
+                                                    span { style: "font-size:11px;color:#8b8b9e;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;", "{stage_label}" }
                                                     if streak > 0 {
                                                         span { style: "font-size:11px;background:#ff4757;color:#fff;padding:2px 6px;border-radius:8px;", "🔥 {streak}" }
                                                     }
@@ -689,14 +689,20 @@ pub fn HomeScreen() -> Element {
                                                     }
                                                     span { style: "font-size:12px;font-weight:700;color:#8b8b9e;min-width:38px;text-align:right;", "{pct}% {growing}" }
                                                 }
-                                                div { style: "display:flex;justify-content:space-between;align-items:center;margin-top:6px;",
-                                                    span { style: "font-size:11px;color:#8b8b9e;", "⏳ {countdown_text}" }
+                                                // `space-between` with no wrap squeezed these two
+                                                // sentences into narrow columns that broke mid-word
+                                                // ("Можно / полить / сейчас"). Let them wrap onto
+                                                // their own lines instead of fighting for width.
+                                                div { style: "display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:2px 8px;margin-top:6px;min-width:0;",
+                                                    span { style: "font-size:11px;color:#8b8b9e;min-width:0;", "⏳ {countdown_text}" }
                                                     if !milestone_text.is_empty() {
-                                                        span { style: "font-size:11px;color:#39ff14;", "🎯 {milestone_text}" }
+                                                        span { style: "font-size:11px;color:#39ff14;min-width:0;", "🎯 {milestone_text}" }
                                                     }
                                                 }
                                             }
-                                            div { style: "background:#39ff14;color:#000;padding:8px 12px;border:3px solid #2d9e0f;font-size:12px;font-weight:700;box-shadow:2px 2px 0 #000;white-space:nowrap;", "{cta}" }
+                                            // `flex:0 0 auto` — the CTA keeps its own width instead
+                                            // of being squeezed by the text beside it.
+                                            div { style: "flex:0 0 auto;background:#39ff14;color:#000;padding:8px 12px;border:3px solid #2d9e0f;font-size:12px;font-weight:700;box-shadow:2px 2px 0 #000;white-space:nowrap;", "{cta}" }
                                         }
                                         if reminder_visible {
                                             {
@@ -796,9 +802,13 @@ pub fn HomeScreen() -> Element {
                                     style: "display:flex;align-items:center;gap:12px;flex:1;min-width:0;text-decoration:none;",
                                     div { style: "font-size:36px;line-height:1;", "🔄" }
                                     div { style: "flex:1;min-width:0;",
-                                        div { style: "display:flex;align-items:center;gap:8px;margin-bottom:4px;",
-                                            span { style: "font-size:12px;font-weight:700;color:{status_color};text-transform:uppercase;letter-spacing:1px;", {t(lang, T_HOME_REORDER_LAST)} }
-                                            span { style: "font-size:11px;color:#8b8b9e;", "{t(lang, T_HOME_REORDER_STATUS)}: {t(lang, status_label)}" }
+                                        // `flex-wrap` + `min-width:0` on the row: without them the
+                                        // label and the status refuse to shrink below their content,
+                                        // and a long status ("Ожидает подтверждения") overflowed the
+                                        // Link box and ran underneath the reorder button.
+                                        div { style: "display:flex;align-items:baseline;flex-wrap:wrap;gap:2px 8px;margin-bottom:4px;min-width:0;",
+                                            span { style: "font-size:12px;font-weight:700;color:{status_color};text-transform:uppercase;letter-spacing:1px;white-space:nowrap;", {t(lang, T_HOME_REORDER_LAST)} }
+                                            span { style: "font-size:11px;color:#8b8b9e;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;", "{t(lang, T_HOME_REORDER_STATUS)}: {t(lang, status_label)}" }
                                         }
                                         div { style: "font-size:14px;font-weight:700;color:#e8e8e8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:6px;",
                                             "{tf(lang, crate::trios::i18n::T_ORDERS_ORDER, &[short_id.clone()])} · {total_str}"
@@ -806,7 +816,9 @@ pub fn HomeScreen() -> Element {
                                     }
                                 }
                                 button {
-                                    style: "background:#39ff14;color:#000;padding:8px 12px;border:3px solid #2d9e0f;font-size:12px;font-weight:700;box-shadow:2px 2px 0 #000;white-space:nowrap;cursor:pointer;",
+                                    // `flex:0 0 auto` so the button keeps its own width instead of
+                                    // being squeezed — or overlapped — by the text beside it.
+                                    style: "flex:0 0 auto;background:#39ff14;color:#000;padding:8px 12px;border:3px solid #2d9e0f;font-size:12px;font-weight:700;box-shadow:2px 2px 0 #000;white-space:nowrap;cursor:pointer;",
                                     onclick: move |e: Event<MouseData>| {
                                         e.stop_propagation();
                                         let oid = order_id_for_reorder.clone();

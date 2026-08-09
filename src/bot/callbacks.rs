@@ -23,6 +23,92 @@ pub(crate) fn is_callback_data_valid(data: &str) -> bool {
     data.len() <= 200
 }
 
+/// What a button press asks the bot to do.
+///
+/// Extracted from `handle_callback`'s dispatch so the routing table can be
+/// tested. Previously the mapping lived inside an 850-line async function that
+/// needs a live Telegram connection to run at all, which meant a prefix arm
+/// shadowing another — or an admin gate attached to the wrong action — could
+/// only be caught in production.
+///
+/// Ordering matters and is preserved from the original match: the exact-match
+/// arms are tried before the prefix arms, and the prefix arms in their original
+/// sequence. `strip_prefix` also keeps payloads intact, so an order id that
+/// itself begins with another keyword (`confirm_complete_7`) still routes to
+/// `ConfirmOrder("complete_7")` rather than being re-parsed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum CallbackAction {
+    /// Tell a joke (initial button or "another one").
+    Joke,
+    /// Share a fact (initial button or "another one").
+    Fact,
+    /// Show the language picker.
+    ShowLanguagePicker,
+    /// Switch the user's locale to this language code.
+    SetLanguage(String),
+    /// Page through the strain-of-day carousel.
+    StrainOfDayPage { next: bool, current: usize },
+    /// Admin-only: confirm an order.
+    ConfirmOrder(String),
+    /// Admin-only: mark an order completed.
+    CompleteOrder(String),
+    /// Admin-only: reject an order and refund any bonus.
+    RejectOrder(String),
+    /// Anything unrecognised — acknowledged and logged, never acted on.
+    Unknown,
+}
+
+impl CallbackAction {
+    /// Whether this action may only be performed by a configured admin.
+    ///
+    /// Stated once here rather than repeated inside each arm, so "which
+    /// buttons are privileged" is a fact a test can assert instead of a
+    /// property spread across three copy-pasted guards.
+    pub(crate) fn requires_admin(&self) -> bool {
+        matches!(
+            self,
+            Self::ConfirmOrder(_) | Self::CompleteOrder(_) | Self::RejectOrder(_)
+        )
+    }
+}
+
+/// Map raw `callback_data` to the action it requests.
+pub(crate) fn route_callback(data: &str) -> CallbackAction {
+    match data {
+        "start_joke" | "more_joke" => return CallbackAction::Joke,
+        "start_fact" | "more_fact" => return CallbackAction::Fact,
+        "show_lang" => return CallbackAction::ShowLanguagePicker,
+        _ => {}
+    }
+    if let Some(code) = data.strip_prefix("set_lang_") {
+        return CallbackAction::SetLanguage(code.to_string());
+    }
+    // The page index is the trailing segment; a missing or unparsable one
+    // falls back to 0, matching the original `unwrap_or(0)`.
+    if data.starts_with("sotd_next_") {
+        return CallbackAction::StrainOfDayPage {
+            next: true,
+            current: parse_pagination_index(data).unwrap_or(0),
+        };
+    }
+    if data.starts_with("sotd_prev_") {
+        return CallbackAction::StrainOfDayPage {
+            next: false,
+            current: parse_pagination_index(data).unwrap_or(0),
+        };
+    }
+    if let Some(id) = data.strip_prefix("confirm_") {
+        return CallbackAction::ConfirmOrder(id.to_string());
+    }
+    if let Some(id) = data.strip_prefix("complete_") {
+        return CallbackAction::CompleteOrder(id.to_string());
+    }
+    if let Some(id) = data.strip_prefix("reject_") {
+        return CallbackAction::RejectOrder(id.to_string());
+    }
+    CallbackAction::Unknown
+}
+
 pub(crate) fn parse_pagination_index(data: &str) -> Option<usize> {
     data.split('_').next_back().and_then(|s| s.parse().ok())
 }
@@ -92,8 +178,24 @@ pub(crate) async fn handle_callback(
         "⏳ Too fast! Wait a few seconds."
     };
 
-    match data.as_str() {
-        "start_joke" | "more_joke" => {
+    let action = route_callback(&data);
+
+    // One admin gate for every privileged action, instead of the same guard
+    // copy-pasted into three arms. `requires_admin` is the single statement of
+    // which buttons are privileged, and it is asserted by tests — a new
+    // admin-only action can no longer ship without its check.
+    if action.requires_admin() && !config.admin_ids.contains(&user_id) {
+        tracing::warn!(
+            "callback: {:?} rejected for non-admin user_id={}",
+            action,
+            user_id
+        );
+        bot.answer_callback_query(q.id).text("⛔ Admin only").await?;
+        return Ok(());
+    }
+
+    match action {
+        CallbackAction::Joke => {
             bot.answer_callback_query(q.id).await?;
             let prompt = get_random_joke_prompt(&locale.joke_prompt, None);
             if let Some(msg) = q.message.as_ref().and_then(|m| match m {
@@ -134,7 +236,7 @@ pub(crate) async fn handle_callback(
             }
         }
 
-        "start_fact" | "more_fact" => {
+        CallbackAction::Fact => {
             bot.answer_callback_query(q.id).await?;
             let prompt = get_random_fact_prompt(&locale.fact_prompt);
             if let Some(msg) = q.message.as_ref().and_then(|m| match m {
@@ -171,7 +273,7 @@ pub(crate) async fn handle_callback(
             }
         }
 
-        "show_lang" => {
+        CallbackAction::ShowLanguagePicker => {
             bot.answer_callback_query(q.id).await?;
             let btns: Vec<Vec<InlineKeyboardButton>> = supported_langs()
                 .iter()
@@ -197,8 +299,8 @@ pub(crate) async fn handle_callback(
             }
         }
 
-        d if d.starts_with("set_lang_") => {
-            let new_lang = &d["set_lang_".len()..];
+        CallbackAction::SetLanguage(new_lang) => {
+            let new_lang = new_lang.as_str();
             // Cycle #76: was `.ok()` — user toggled language and UI said
             // "changed" even when the DB write failed silently, leaving
             // the user with their old locale on next session. We still
@@ -230,10 +332,8 @@ pub(crate) async fn handle_callback(
             }
         }
 
-        d if d.starts_with("sotd_next_") || d.starts_with("sotd_prev_") => {
+        CallbackAction::StrainOfDayPage { next: is_next, current } => {
             bot.answer_callback_query(q.id).await?;
-            let is_next = d.starts_with("sotd_next_");
-            let current = parse_pagination_index(d).unwrap_or(0);
             let new_idx = if is_next {
                 current + 1
             } else {
@@ -283,18 +383,8 @@ pub(crate) async fn handle_callback(
             }
         }
 
-        d if d.starts_with("confirm_") => {
-            if !config.admin_ids.contains(&user_id) {
-                tracing::warn!(
-                    "callback: confirm rejected for non-admin user_id={}",
-                    user_id
-                );
-                bot.answer_callback_query(q.id)
-                    .text("⛔ Admin only")
-                    .await?;
-                return Ok(());
-            }
-            let order_id = &d["confirm_".len()..];
+        CallbackAction::ConfirmOrder(order_id) => {
+            let order_id = order_id.as_str();
             // Cycle #96: SeaORM tx. FOR UPDATE row lock + conditional
             // status flip + commit. Drop = auto-rollback on early-return.
             let mut customer_telegram_id: Option<i64> = None;
@@ -443,18 +533,8 @@ pub(crate) async fn handle_callback(
             }
         }
 
-        d if d.starts_with("complete_") => {
-            if !config.admin_ids.contains(&user_id) {
-                tracing::warn!(
-                    "callback: complete rejected for non-admin user_id={}",
-                    user_id
-                );
-                bot.answer_callback_query(q.id)
-                    .text("⛔ Admin only")
-                    .await?;
-                return Ok(());
-            }
-            let order_id = &d["complete_".len()..];
+        CallbackAction::CompleteOrder(order_id) => {
+            let order_id = order_id.as_str();
             tracing::info!("callback: complete order_id={}", order_id);
             bot.answer_callback_query(q.id)
                 .text("📦 Completed!")
@@ -576,18 +656,8 @@ pub(crate) async fn handle_callback(
             .await;
         }
 
-        d if d.starts_with("reject_") => {
-            if !config.admin_ids.contains(&user_id) {
-                tracing::warn!(
-                    "callback: reject rejected for non-admin user_id={}",
-                    user_id
-                );
-                bot.answer_callback_query(q.id)
-                    .text("⛔ Admin only")
-                    .await?;
-                return Ok(());
-            }
-            let _order_id = &d["reject_".len()..];
+        CallbackAction::RejectOrder(order_id) => {
+            let _order_id = order_id.as_str();
             tracing::info!("callback: reject order_id={}", _order_id);
             bot.answer_callback_query(q.id)
                 .text(format!("❌ {}", locale.order_rejected))
@@ -755,7 +825,7 @@ pub(crate) async fn handle_callback(
             }
         }
 
-        _ => {
+        CallbackAction::Unknown => {
             tracing::warn!("callback: unknown data='{}' from user_id={}", data, user_id);
             bot.answer_callback_query(q.id).await?;
         }
@@ -767,8 +837,218 @@ pub(crate) async fn handle_callback(
 #[cfg(test)]
 mod tests {
     use super::{
-        can_confirm_order, is_callback_data_valid, parse_pagination_index, should_refund_bonus,
+        can_confirm_order, is_callback_data_valid, parse_pagination_index, route_callback,
+        should_refund_bonus, CallbackAction,
     };
+
+    // ---- Routing table --------------------------------------------------
+    //
+    // These pin the mapping that used to live inside an 850-line async
+    // function requiring a live Telegram connection to exercise at all.
+
+    #[test]
+    fn every_button_the_bot_builds_routes_somewhere() {
+        // The failure this prevents: a button is emitted with a payload the
+        // dispatcher has no arm for, so pressing it silently does nothing.
+        // Every literal here is a payload constructed somewhere in src/ —
+        // see the `callback_btn` / `format!` call sites.
+        for data in [
+            "start_joke",
+            "start_fact",
+            "show_lang",
+            "sotd_next_0",
+            "sotd_prev_1",
+            "set_lang_ru",
+            "confirm_7f3a",
+            "complete_7f3a",
+            "reject_7f3a",
+        ] {
+            assert_ne!(
+                route_callback(data),
+                CallbackAction::Unknown,
+                "{data} is emitted as a button but routes nowhere"
+            );
+        }
+    }
+
+    #[test]
+    fn exact_match_buttons_route_to_their_action() {
+        assert_eq!(route_callback("start_joke"), CallbackAction::Joke);
+        assert_eq!(route_callback("more_joke"), CallbackAction::Joke);
+        assert_eq!(route_callback("start_fact"), CallbackAction::Fact);
+        assert_eq!(route_callback("more_fact"), CallbackAction::Fact);
+        assert_eq!(
+            route_callback("show_lang"),
+            CallbackAction::ShowLanguagePicker
+        );
+    }
+
+    #[test]
+    fn language_code_is_carried_verbatim() {
+        assert_eq!(
+            route_callback("set_lang_ru"),
+            CallbackAction::SetLanguage("ru".into())
+        );
+        assert_eq!(
+            route_callback("set_lang_en"),
+            CallbackAction::SetLanguage("en".into())
+        );
+    }
+
+    #[test]
+    fn strain_of_day_paging_carries_direction_and_index() {
+        assert_eq!(
+            route_callback("sotd_next_3"),
+            CallbackAction::StrainOfDayPage {
+                next: true,
+                current: 3
+            }
+        );
+        assert_eq!(
+            route_callback("sotd_prev_2"),
+            CallbackAction::StrainOfDayPage {
+                next: false,
+                current: 2
+            }
+        );
+    }
+
+    #[test]
+    fn strain_of_day_paging_falls_back_to_the_first_page() {
+        // Matches the original `unwrap_or(0)`: a malformed index must page to
+        // the start rather than refuse the press.
+        for data in ["sotd_next_", "sotd_next_abc", "sotd_prev_-1"] {
+            assert_eq!(
+                route_callback(data),
+                CallbackAction::StrainOfDayPage {
+                    next: data.starts_with("sotd_next_"),
+                    current: 0
+                },
+                "{data} should page to 0"
+            );
+        }
+    }
+
+    #[test]
+    fn order_actions_carry_the_order_id() {
+        assert_eq!(
+            route_callback("confirm_7f3a"),
+            CallbackAction::ConfirmOrder("7f3a".into())
+        );
+        assert_eq!(
+            route_callback("complete_7f3a"),
+            CallbackAction::CompleteOrder("7f3a".into())
+        );
+        assert_eq!(
+            route_callback("reject_7f3a"),
+            CallbackAction::RejectOrder("7f3a".into())
+        );
+    }
+
+    #[test]
+    fn prefixes_do_not_shadow_one_another() {
+        // `confirm_` is tried before `complete_` and `reject_`. An order id
+        // that happens to start with another keyword must stay part of the id
+        // rather than being re-parsed into a different action.
+        assert_eq!(
+            route_callback("confirm_complete_7"),
+            CallbackAction::ConfirmOrder("complete_7".into())
+        );
+        assert_eq!(
+            route_callback("confirm_reject_7"),
+            CallbackAction::ConfirmOrder("reject_7".into())
+        );
+        assert_eq!(
+            route_callback("complete_confirm_7"),
+            CallbackAction::CompleteOrder("confirm_7".into())
+        );
+    }
+
+    #[test]
+    fn an_id_containing_underscores_survives_intact() {
+        // UUID-ish and slug ids both occur in this database.
+        assert_eq!(
+            route_callback("confirm_7f3a-1b2c_4d5e"),
+            CallbackAction::ConfirmOrder("7f3a-1b2c_4d5e".into())
+        );
+    }
+
+    #[test]
+    fn an_empty_payload_still_routes_to_its_action() {
+        // The arms handle an empty id themselves (the DB lookup misses);
+        // routing must not silently reclassify it as Unknown.
+        assert_eq!(
+            route_callback("confirm_"),
+            CallbackAction::ConfirmOrder(String::new())
+        );
+        assert_eq!(
+            route_callback("set_lang_"),
+            CallbackAction::SetLanguage(String::new())
+        );
+    }
+
+    #[test]
+    fn unrecognised_data_is_unknown() {
+        for data in [
+            "",
+            "confirm",
+            "CONFIRM_7",
+            "delete_everything",
+            "set_language_ru",
+            "sotd_",
+        ] {
+            assert_eq!(
+                route_callback(data),
+                CallbackAction::Unknown,
+                "{data:?} must not route to a real action"
+            );
+        }
+    }
+
+    #[test]
+    fn exactly_the_order_actions_are_admin_only() {
+        // The three order buttons carry an admin gate; nothing else may, and
+        // none of them may lose it. Previously this was three copy-pasted
+        // guards with nothing asserting the set.
+        for admin in [
+            CallbackAction::ConfirmOrder("x".into()),
+            CallbackAction::CompleteOrder("x".into()),
+            CallbackAction::RejectOrder("x".into()),
+        ] {
+            assert!(admin.requires_admin(), "{admin:?} must be admin-only");
+        }
+        for public in [
+            CallbackAction::Joke,
+            CallbackAction::Fact,
+            CallbackAction::ShowLanguagePicker,
+            CallbackAction::SetLanguage("ru".into()),
+            CallbackAction::StrainOfDayPage {
+                next: true,
+                current: 0
+            },
+            CallbackAction::Unknown,
+        ] {
+            assert!(
+                !public.requires_admin(),
+                "{public:?} must not require admin"
+            );
+        }
+    }
+
+    #[test]
+    fn routing_never_panics_on_hostile_input() {
+        // callback_data comes straight off the wire. It is length-capped by
+        // `is_callback_data_valid`, but nothing else sanitises it.
+        for data in [
+            "\u{0}\u{0}\u{0}",
+            "confirm_\u{1f600}",
+            "set_lang_\u{4f60}\u{597d}",
+            "sotd_next_99999999999999999999",
+            &"x".repeat(200),
+        ] {
+            let _ = route_callback(data);
+        }
+    }
 
     #[test]
     fn test_is_callback_data_valid_ok() {
