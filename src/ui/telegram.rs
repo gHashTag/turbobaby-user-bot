@@ -510,6 +510,48 @@ impl TelegramApp {
     }
 }
 
+impl TelegramApp {
+    /// Whether this Telegram client can send a prepared inline message.
+    ///
+    /// `shareMessage` arrived in Bot API 8.0 / WebApp 8.0. Older clients
+    /// simply don't expose the function, and calling it there throws — so the
+    /// caller must fall back to a plain link share rather than leave the
+    /// share button doing nothing.
+    pub fn supports_share_message(&self) -> bool {
+        let js = r#"(function(){try{
+            return !!(window.Telegram && window.Telegram.WebApp
+                      && typeof window.Telegram.WebApp.shareMessage === 'function');
+        }catch(e){ return false; }})()"#;
+        js_sys::eval(js)
+            .ok()
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false)
+    }
+
+    /// Hand a `prepared_message_id` to Telegram's native "send to…" picker.
+    ///
+    /// Returns `false` when the call could not be made at all, so the caller
+    /// can fall back. A user who opens the picker and cancels is *not* a
+    /// failure and reports `true`.
+    pub fn share_message(&self, prepared_message_id: &str) -> bool {
+        let js = format!(
+            r#"(function(){{try{{
+                if(window.Telegram && window.Telegram.WebApp
+                   && typeof window.Telegram.WebApp.shareMessage === 'function'){{
+                    window.Telegram.WebApp.shareMessage({});
+                    return true;
+                }}
+                return false;
+            }}catch(e){{ return false; }}}})()"#,
+            serde_json::to_string(prepared_message_id).unwrap_or_else(|_| "\"\"".into())
+        );
+        js_sys::eval(&js)
+            .ok()
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false)
+    }
+}
+
 /// Hook to access Telegram instance
 pub fn use_telegram() -> TelegramApp {
     TelegramApp::init()

@@ -23,6 +23,7 @@ pub(crate) mod quest;
 pub(crate) mod rate_limit;
 pub(crate) mod referrals;
 pub(crate) mod reviews;
+pub(crate) mod share;
 pub(crate) mod stars;
 pub(crate) mod strains;
 pub(crate) mod tech_tree;
@@ -109,7 +110,8 @@ fn api_routes() -> Router<AppState> {
         .merge(stars::routes())
         .merge(tech_tree::routes())
         .merge(users::routes())
-        .merge(cart::routes());
+        .merge(cart::routes())
+        .merge(share::routes());
 
     // Apply 2MB body limit to all non-upload routes.
     // Upload routes are merged AFTER this layer so their own 110MB limit remains effective.

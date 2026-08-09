@@ -365,11 +365,23 @@ pub fn open_telegram_link(url: &str) {
     }
 }
 
-/// Open Telegram's native share picker for a product.
+/// Wire name for `kind`, matching `api::share::ShareKind::parse`.
+fn share_kind_wire(kind: ProductKind) -> &'static str {
+    match kind {
+        ProductKind::Strain => "strain",
+        ProductKind::Accessory => "accessory",
+        ProductKind::Set => "set",
+        ProductKind::Tea => "tea",
+        ProductKind::Event => "event",
+    }
+}
+
+/// Fallback share: hands Telegram a plain link.
 ///
-/// `name` should be the localized product name; the share text is localized
-/// automatically via `T_SHARE_MESSAGE`.
-pub fn share_product(kind: ProductKind, id: &str, name: &str) {
+/// Telegram previews that link, and the link points at the bot — so the
+/// recipient sees the bot's own profile card, not the product. Only used when
+/// the rich path is unavailable (old client, server refusal).
+fn share_product_link_only(kind: ProductKind, id: &str, name: &str) {
     let link = deep_link_url(kind, id);
     let lang = current_lang();
     let text = tf(lang, T_SHARE_MESSAGE, &[name.to_string()]);
@@ -379,6 +391,57 @@ pub fn share_product(kind: ProductKind, id: &str, name: &str) {
         urlencoding::encode(&text)
     );
     open_telegram_link(&share_url);
+}
+
+/// Share a product as a real Telegram card: photo, name, price, description
+/// and an "Open product" button that deep-links back to this exact item.
+///
+/// Asks the server to build the card (`POST /api/share/prepare`) and hands the
+/// returned `prepared_message_id` to `WebApp.shareMessage()`. The card content
+/// is built from the database, so a shared price is always the real one.
+///
+/// Falls back to the plain-link share when anything is missing — an old
+/// Telegram client without `shareMessage`, a product the server can't find, a
+/// network failure. Sharing something is always better than a dead button.
+pub fn share_product(kind: ProductKind, id: &str, name: &str) {
+    #[cfg(target_arch = "wasm32")]
+    {
+        let id = id.to_string();
+        let name = name.to_string();
+        dioxus::prelude::spawn(async move {
+            let tg = crate::ui::telegram::TelegramApp::init();
+            if tg.supports_share_message() {
+                let body = format!(
+                    r#"{{"kind":"{}","id":"{}"}}"#,
+                    share_kind_wire(kind),
+                    id.replace('"', "")
+                );
+                let url = format!("{}/api/share/prepare", crate::ui::api::context::api_base_url());
+                let init_data = tg.get_init_data();
+                if let Ok(resp) =
+                    crate::ui::api::http::post_json_authed(&url, &init_data, &body).await
+                {
+                    if let Some(prepared) = serde_json::from_str::<serde_json::Value>(&resp)
+                        .ok()
+                        .and_then(|v| {
+                            v.get("prepared_message_id")
+                                .and_then(|p| p.as_str())
+                                .map(String::from)
+                        })
+                    {
+                        if tg.share_message(&prepared) {
+                            return;
+                        }
+                    }
+                }
+            }
+            share_product_link_only(kind, &id, &name);
+        });
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        share_product_link_only(kind, id, name);
+    }
 }
 
 #[cfg(test)]
