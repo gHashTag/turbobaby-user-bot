@@ -251,6 +251,13 @@ pub const T_CHECKOUT_ERR_ADDRESS: Key = "checkout.error.address_required";
 pub const T_CHECKOUT_ERR_ADDRESS_LONG: Key = "checkout.error.address_long";
 pub const T_CHECKOUT_ERR_ITEMS: Key = "checkout.error.items_empty";
 pub const T_CHECKOUT_ERR_NO_TELEGRAM: Key = "checkout.error.no_telegram";
+/// Heading for the list of reasons the order button is not clickable yet.
+/// Without it a disabled button gives the customer nothing to act on.
+pub const T_CHECKOUT_BLOCKED_TITLE: Key = "checkout.blocked_title";
+pub const T_CHECKOUT_FULFILLMENT: Key = "checkout.fulfillment";
+pub const T_CHECKOUT_FULFILLMENT_DELIVERY: Key = "checkout.fulfillment.delivery";
+pub const T_CHECKOUT_FULFILLMENT_PICKUP: Key = "checkout.fulfillment.pickup";
+pub const T_CHECKOUT_ERR_AGE: Key = "checkout.error.age";
 pub const T_CHECKOUT_ERR_NETWORK: Key = "checkout.error.network";
 pub const T_CHECKOUT_ERR_PARSE: Key = "checkout.error.parse";
 pub const T_CHECKOUT_RETRY: Key = "checkout.retry";
@@ -966,7 +973,12 @@ fn get_ru_translation(key: Key) -> Value {
         T_CHECKOUT_ERR_NAME_LONG => "Имя слишком длинное (макс. 200 символов)",
         T_CHECKOUT_ERR_PHONE => "Укажите номер телефона",
         T_CHECKOUT_ERR_PHONE_LONG => "Телефон слишком длинный (макс. 50 символов)",
-        T_CHECKOUT_ERR_PHONE_INVALID => "Введите корректный номер (мин. 5 цифр)",
+        T_CHECKOUT_ERR_PHONE_INVALID => "Проверьте номер — например 0812345678 или +66 81 234 5678",
+        T_CHECKOUT_BLOCKED_TITLE => "Чтобы оформить заказ:",
+        T_CHECKOUT_FULFILLMENT => "Способ получения",
+        T_CHECKOUT_FULFILLMENT_DELIVERY => "🛵 Доставка",
+        T_CHECKOUT_FULFILLMENT_PICKUP => "🏪 Самовывоз",
+        T_CHECKOUT_ERR_AGE => "Подтвердите, что вам есть 20 лет",
         T_CHECKOUT_ERR_ADDRESS => "Укажите адрес доставки",
         T_CHECKOUT_ERR_ADDRESS_LONG => "Адрес слишком длинный (макс. 500 символов)",
         T_CHECKOUT_ERR_ITEMS => "Корзина пуста — добавьте товары",
@@ -1644,7 +1656,12 @@ fn get_en_translation(key: Key) -> Value {
         T_CHECKOUT_ERR_NAME_LONG => "Name is too long (max 200 characters)",
         T_CHECKOUT_ERR_PHONE => "Please enter your phone number",
         T_CHECKOUT_ERR_PHONE_LONG => "Phone number is too long (max 50 characters)",
-        T_CHECKOUT_ERR_PHONE_INVALID => "Please enter a valid phone number (min 5 digits)",
+        T_CHECKOUT_ERR_PHONE_INVALID => "Check the number — e.g. 0812345678 or +66 81 234 5678",
+        T_CHECKOUT_BLOCKED_TITLE => "To place your order:",
+        T_CHECKOUT_FULFILLMENT => "How you get it",
+        T_CHECKOUT_FULFILLMENT_DELIVERY => "🛵 Delivery",
+        T_CHECKOUT_FULFILLMENT_PICKUP => "🏪 Pickup",
+        T_CHECKOUT_ERR_AGE => "Confirm that you are 20 or older",
         T_CHECKOUT_ERR_ADDRESS => "Please enter a delivery address",
         T_CHECKOUT_ERR_ADDRESS_LONG => "Address is too long (max 500 characters)",
         T_CHECKOUT_ERR_ITEMS => "Your cart is empty — add items to continue",

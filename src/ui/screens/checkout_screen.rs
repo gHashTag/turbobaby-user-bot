@@ -8,7 +8,9 @@ use crate::trios::i18n::{
     T_CHECKOUT_ERR_ADDRESS_LONG, T_CHECKOUT_ERR_ITEMS, T_CHECKOUT_ERR_NAME,
     T_CHECKOUT_ERR_NAME_LONG, T_CHECKOUT_ERR_NETWORK, T_CHECKOUT_ERR_NO_TELEGRAM,
     T_CHECKOUT_ERR_PARSE, T_CHECKOUT_ERR_PHONE, T_CHECKOUT_ERR_PHONE_INVALID,
-    T_CHECKOUT_ERR_PHONE_LONG, T_CHECKOUT_GARDEN_DISCOUNT, T_CHECKOUT_GARDEN_DISCOUNT_PCT,
+    T_CHECKOUT_ERR_PHONE_LONG, T_CHECKOUT_BLOCKED_TITLE, T_CHECKOUT_ERR_AGE,
+    T_CHECKOUT_FULFILLMENT, T_CHECKOUT_FULFILLMENT_DELIVERY, T_CHECKOUT_FULFILLMENT_PICKUP,
+    T_CHECKOUT_GARDEN_DISCOUNT, T_CHECKOUT_GARDEN_DISCOUNT_PCT,
     T_CHECKOUT_NAME_LABEL, T_CHECKOUT_NAME_PLACEHOLDER, T_CHECKOUT_NOTES_LABEL,
     T_CHECKOUT_NOTES_PLACEHOLDER, T_CHECKOUT_OPEN_MAP, T_CHECKOUT_PAY_ON_RECEIVE,
     T_CHECKOUT_PHONE_LABEL, T_CHECKOUT_PHONE_PLACEHOLDER, T_CHECKOUT_PROCESSING, T_CHECKOUT_RETRY,
@@ -19,7 +21,9 @@ use crate::trios::i18n::{
     T_DELIVERY_FEE, T_DELIVERY_ZONE, T_PAYMENT, T_PICKUP_LOCATION, T_PLACE_ORDER, T_TOTAL,
     T_YOUR_INFO, T_YOUR_ORDER,
 };
-use crate::trios::store::validate_checkout;
+use crate::trios::store::{
+    checkout_blockers, normalize_phone, validate_checkout_for, Fulfillment,
+};
 use crate::ui::api::context::api_base_url;
 use crate::ui::api::http::{
     delete_authed, fetch_text_authed_full, post_json_authed_idempotent_full,
@@ -261,15 +265,18 @@ fn fill_address_from_geolocation(mut set_address: Signal<String>) {
 }
 
 fn phone_valid(phone: &str) -> bool {
-    let digits = phone.chars().filter(|c| c.is_ascii_digit()).count();
-    // Allow any non-empty string that starts with + and has at least 5 digits.
-    phone.starts_with('+') && digits >= 5
+    // Single source of truth, shared with the server (`api/orders.rs`) so the
+    // two gates can never drift apart again.
+    crate::trios::store::normalize_phone(phone).is_some()
 }
 
 /// Real-time, per-field validation used for inline checkout feedback.
 /// Returns the translation key for the first problem, or None if the field
 /// looks acceptable so far (empty fields are reported so the user sees the
 /// required indicator while typing).
+///
+/// `address` is only checked for emptiness when the order is delivered; see
+/// [`checkout_blockers`].
 fn validate_checkout_field(value: &str, kind: &str) -> Option<&'static str> {
     match kind {
         "name" => {
@@ -575,6 +582,9 @@ pub fn CheckoutScreen() -> Element {
     });
 
     let mut shop_selected = use_signal(|| 0usize);
+    // Delivery vs pickup. Pickup orders carry no address, which is why the
+    // address gate below is conditional rather than unconditional.
+    let mut fulfillment = use_signal(Fulfillment::default);
     let mut is_processing = use_signal(|| false);
     let mut order_error = use_signal(|| Option::<String>::None);
     // Cycle #57: stable idempotency key per logical submit. Lazy-init on the
@@ -604,8 +614,14 @@ pub fn CheckoutScreen() -> Element {
     let phone_error = use_memo(move || {
         validate_checkout_field(&customer_phone(), "phone").map(|k| t(lang, k).to_string())
     });
+    // Pickup orders have nothing to deliver to, so an empty address is not an
+    // error there — only an over-long one is.
     let address_error = use_memo(move || {
-        validate_checkout_field(&delivery_address(), "address").map(|k| t(lang, k).to_string())
+        let value = delivery_address();
+        if !fulfillment().requires_address() && value.trim().is_empty() {
+            return None;
+        }
+        validate_checkout_field(&value, "address").map(|k| t(lang, k).to_string())
     });
     let name_border = if name_error().is_some() {
         "#ff4757"
@@ -848,18 +864,24 @@ pub fn CheckoutScreen() -> Element {
     };
 
     // Sync the native Telegram MainButton with the live total and form validity.
+    let cart_len = cart_items.len();
     use_effect(move || {
         let lang = crate::ui::lang::current_lang();
         let total_str = crate::trios::pricing::format_baht(effective_total);
         tg.set_main_button_text(&format!("{} — {}", t(lang, T_PLACE_ORDER), total_str));
-        let valid = telegram_id.is_some()
-            && age_confirmed()
-            && !customer_name().trim().is_empty()
-            && name_error().is_none()
-            && !customer_phone().trim().is_empty()
-            && phone_error().is_none()
-            && !delivery_address().trim().is_empty()
-            && address_error().is_none()
+        // Same gate as the in-page button — one source of truth, so the native
+        // MainButton and the on-screen button can never disagree about whether
+        // the order is placeable.
+        let valid = checkout_blockers(
+            telegram_id.is_some(),
+            &customer_name(),
+            &customer_phone(),
+            &delivery_address(),
+            fulfillment(),
+            cart_len,
+            age_confirmed(),
+        )
+        .is_empty()
             && !is_processing();
         if valid {
             tg.enable_main_button();
@@ -885,11 +907,12 @@ pub fn CheckoutScreen() -> Element {
             return;
         }
         let trios_items = to_trios_items(&submit_cart_items);
-        if let Err(e) = validate_checkout(
+        if let Err(e) = validate_checkout_for(
             &customer_name(),
             &customer_phone(),
             &delivery_address(),
             &trios_items,
+            fulfillment(),
         ) {
             let key = match e {
                 crate::trios::core::Error::Validation(msg) if msg.contains("Name is required") => {
@@ -1005,7 +1028,9 @@ pub fn CheckoutScreen() -> Element {
         let body = json!({
             "telegram_id": telegram_id,
             "customer_name": customer_name(),
-            "customer_phone": customer_phone(),
+            // Send E.164 so the courier-facing number is unambiguous; the
+            // customer keeps seeing whatever they typed.
+            "customer_phone": normalize_phone(&customer_phone()).unwrap_or_else(|| customer_phone()),
             "customer_telegram": telegram_username.clone(),
             "items": items_json,
             "subtotal": cart_total,
@@ -1014,6 +1039,7 @@ pub fn CheckoutScreen() -> Element {
             "total": order_total,
             "garden_reward_id": garden_reward_id,
             "shop_id": shops[shop_selected()].0,
+            "fulfillment": fulfillment().as_str(),
             "delivery_address": delivery_address(),
             "delivery_notes": delivery_notes(),
             "age_confirmed": age_confirmed(),
@@ -1385,6 +1411,43 @@ pub fn CheckoutScreen() -> Element {
                         }
                     }
 
+                    // Fulfillment mode. Pickup drops the address requirement —
+                    // before this existed an in-store order could not be placed.
+                    div { style: "
+                    background: #16213e; border: 4px solid #2a2a4a;
+                    border-radius: 0; padding: 14px; margin-bottom: 12px;
+                    box-shadow: 4px 4px 0 #000;
+                ",
+                        h2 { style: "font-size: 13px; font-weight: 700; color: #00e5ff; text-transform: uppercase; letter-spacing: 1px; text-shadow: 2px 2px 0 #000; margin-bottom: 10px;", "{t(lang, T_CHECKOUT_FULFILLMENT)}" }
+                        div { style: "display:flex; gap:8px;",
+                            for (mode, label) in [
+                                (Fulfillment::Delivery, t(lang, T_CHECKOUT_FULFILLMENT_DELIVERY)),
+                                (Fulfillment::Pickup, t(lang, T_CHECKOUT_FULFILLMENT_PICKUP)),
+                            ] {
+                                {
+                                    let is_on = fulfillment() == mode;
+                                    let border = if is_on { "#39ff14" } else { "#2a2a4a" };
+                                    let bg = if is_on { "rgba(57,255,20,0.08)" } else { "transparent" };
+                                    let color = if is_on { "#39ff14" } else { "#8b8b9e" };
+                                    rsx! {
+                                        button {
+                                            r#type: "button",
+                                            style: "
+                                            flex: 1; font-size: 14px; font-weight: 700;
+                                            padding: 12px 8px; min-height: 44px;
+                                            background: {bg}; color: {color};
+                                            border: 4px solid {border}; border-radius: 0;
+                                            cursor: pointer;
+                                        ",
+                                            onclick: move |_| fulfillment.set(mode),
+                                            "{label}"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
                     // Delivery info
                     div { style: "
                     background: #16213e; border: 4px solid #2a2a4a;
@@ -1562,6 +1625,40 @@ pub fn CheckoutScreen() -> Element {
                         }
                     }
 
+                    // Why the order button is not clickable yet. A disabled
+                    // button on its own told the customer nothing, so an
+                    // unticked age box or a rejected phone looked like the app
+                    // being broken.
+                    {
+                        let blockers = checkout_blockers(
+                            telegram_id.is_some(),
+                            &customer_name(),
+                            &customer_phone(),
+                            &delivery_address(),
+                            fulfillment(),
+                            cart_items.len(),
+                            age_confirmed(),
+                        );
+                        if blockers.is_empty() {
+                            rsx! {}
+                        } else {
+                            rsx! {
+                                div { style: "
+                                background: rgba(255,71,87,0.08);
+                                border: 4px solid rgba(255,71,87,0.35);
+                                border-radius: 0; padding: 12px; margin-bottom: 12px;
+                            ",
+                                    div { style: "font-size: 12px; color: #ff4757; font-weight: 700; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 1px;", "{t(lang, T_CHECKOUT_BLOCKED_TITLE)}" }
+                                    ul { style: "margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px;",
+                                        for b in blockers.iter() {
+                                            li { style: "font-size: 13px; color: #e8e8e8;", "{t(lang, b.message_key())}" }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
                     // Actions
                     div { style: "display: flex; gap: 10px;",
                         Link { to: Route::Cart {},
@@ -1574,16 +1671,16 @@ pub fn CheckoutScreen() -> Element {
                         ", "{back}" }
                         }
                         {
-                            let trios_items = to_trios_items(&cart_items);
-                            let can_order = telegram_id.is_some()
-                                && validate_checkout(&customer_name(), &customer_phone(), &delivery_address(), &trios_items).is_ok()
-                                && age_confirmed()
-                                && !is_processing();
-                            if can_order {
-                                tg.enable_main_button();
-                            } else {
-                                tg.disable_main_button();
-                            }
+                            let blockers = checkout_blockers(
+                                telegram_id.is_some(),
+                                &customer_name(),
+                                &customer_phone(),
+                                &delivery_address(),
+                                fulfillment(),
+                                cart_items.len(),
+                                age_confirmed(),
+                            );
+                            let can_order = blockers.is_empty() && !is_processing();
                             let btn_bg = if can_order { "#39ff14" } else { "#2a2a4a" };
                             let btn_color = if can_order { "#000" } else { "#8b8b9e" };
                             let btn_cursor = if can_order { "pointer" } else { "not-allowed" };
@@ -1612,3 +1709,4 @@ pub fn CheckoutScreen() -> Element {
             }
         }
 }
+

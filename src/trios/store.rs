@@ -315,8 +315,182 @@ pub fn calculate_cart_total(
     total
 }
 
-/// Validate checkout data
+/// Default country calling code. The shop is on Koh Phangan, so a bare local
+/// number typed by a customer is Thai unless it says otherwise.
+const DEFAULT_COUNTRY_CODE: &str = "66";
+
+/// How the customer receives the order.
+///
+/// Pickup is a real, separate flow: the customer chooses a shop and collects
+/// in person, so there is no address to give. Modelling it explicitly is what
+/// lets [`validate_checkout_for`] stop demanding one.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Fulfillment {
+    /// Courier delivery to `address` — the address is mandatory.
+    #[default]
+    Delivery,
+    /// Customer collects at the shop — no address needed.
+    Pickup,
+}
+
+impl Fulfillment {
+    /// Wire value sent to the server and stored on the order.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Delivery => "delivery",
+            Self::Pickup => "pickup",
+        }
+    }
+
+    /// Whether a delivery address must be supplied for this mode.
+    pub fn requires_address(self) -> bool {
+        matches!(self, Self::Delivery)
+    }
+}
+
+/// Normalise a customer-typed phone number to E.164 (`+<digits>`).
+///
+/// Customers type what their phone shows them: `081 234 5678` in Thailand,
+/// `8 999 123-45-67` in Russia, `0066…` from a landline. Requiring a literal
+/// leading `+` rejected every one of those while the on-screen error only said
+/// "min 5 digits", so the order button stayed dead with no way to find out why.
+/// Accept the common shapes and convert; reject only what has no chance of
+/// being a phone number.
+///
+/// Returns `None` when the input cannot be read as a phone number.
+pub fn normalize_phone(raw: &str) -> Option<String> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() || trimmed.len() > 50 {
+        return None;
+    }
+    // Anything that is not a digit or a leading '+' is formatting noise:
+    // spaces, dashes, dots, parentheses, non-breaking spaces.
+    let had_plus = trimmed.starts_with('+');
+    let digits: String = trimmed.chars().filter(|c| c.is_ascii_digit()).collect();
+    if digits.len() < 5 || digits.len() > 15 {
+        return None;
+    }
+
+    // Already international: `+66812345678`.
+    if had_plus {
+        return Some(format!("+{digits}"));
+    }
+    // IDD prefix: `0066812345678` → `+66812345678`.
+    if let Some(rest) = digits.strip_prefix("00") {
+        if rest.len() >= 5 {
+            return Some(format!("+{rest}"));
+        }
+        return None;
+    }
+    // Russian national format: `8XXXXXXXXXX` (11 digits) → `+7XXXXXXXXXX`.
+    if digits.len() == 11 && digits.starts_with('8') {
+        return Some(format!("+7{}", &digits[1..]));
+    }
+    // National trunk prefix: `081…` → `+6681…`. Thai mobiles are 10 digits
+    // with the trunk 0, landlines 9.
+    if let Some(rest) = digits.strip_prefix('0') {
+        if rest.len() >= 5 {
+            return Some(format!("+{DEFAULT_COUNTRY_CODE}{rest}"));
+        }
+        return None;
+    }
+    // Bare international without the plus: `66812345678`.
+    Some(format!("+{digits}"))
+}
+
+/// A single reason an order cannot be placed right now.
+///
+/// The checkout screen used to express this as a bare `disabled` attribute: if
+/// any one of six conditions failed the button greyed out and said nothing, so
+/// a customer with — say — an unticked age box had no way to find out why
+/// nothing happened. Naming each reason lets the UI list them all.
+///
+/// Lives in `trios` rather than in the screen so it compiles (and is tested)
+/// on the host target, not only under wasm.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CheckoutBlocker {
+    NoTelegram,
+    EmptyCart,
+    Name,
+    Phone,
+    Address,
+    Age,
+}
+
+impl CheckoutBlocker {
+    /// Translation key describing how to clear this blocker.
+    pub fn message_key(self) -> crate::trios::i18n::Key {
+        use crate::trios::i18n::{
+            T_CHECKOUT_ERR_ADDRESS, T_CHECKOUT_ERR_AGE, T_CHECKOUT_ERR_ITEMS,
+            T_CHECKOUT_ERR_NAME, T_CHECKOUT_ERR_NO_TELEGRAM, T_CHECKOUT_ERR_PHONE_INVALID,
+        };
+        match self {
+            Self::NoTelegram => T_CHECKOUT_ERR_NO_TELEGRAM,
+            Self::EmptyCart => T_CHECKOUT_ERR_ITEMS,
+            Self::Name => T_CHECKOUT_ERR_NAME,
+            Self::Phone => T_CHECKOUT_ERR_PHONE_INVALID,
+            Self::Address => T_CHECKOUT_ERR_ADDRESS,
+            Self::Age => T_CHECKOUT_ERR_AGE,
+        }
+    }
+}
+
+/// Everything standing between the customer and a placed order.
+///
+/// Pure and side-effect free, so the gate that silently decided no request
+/// would be sent is fully testable. Returned in form order, so the list reads
+/// top-to-bottom like the screen does.
+pub fn checkout_blockers(
+    has_telegram_id: bool,
+    name: &str,
+    phone: &str,
+    address: &str,
+    fulfillment: Fulfillment,
+    item_count: usize,
+    age_confirmed: bool,
+) -> Vec<CheckoutBlocker> {
+    let mut out = Vec::new();
+    if !has_telegram_id {
+        out.push(CheckoutBlocker::NoTelegram);
+    }
+    if item_count == 0 {
+        out.push(CheckoutBlocker::EmptyCart);
+    }
+    if name.trim().is_empty() || name.len() > 200 {
+        out.push(CheckoutBlocker::Name);
+    }
+    if normalize_phone(phone).is_none() || phone.len() > 50 {
+        out.push(CheckoutBlocker::Phone);
+    }
+    if (fulfillment.requires_address() && address.trim().is_empty()) || address.len() > 500 {
+        out.push(CheckoutBlocker::Address);
+    }
+    if !age_confirmed {
+        out.push(CheckoutBlocker::Age);
+    }
+    out
+}
+
+/// Validate checkout data for a courier delivery.
+///
+/// Kept as the delivery-shaped wrapper so existing callers are unchanged;
+/// see [`validate_checkout_for`] for the pickup variant.
 pub fn validate_checkout(name: &str, phone: &str, address: &str, items: &[CartItem]) -> Result<()> {
+    validate_checkout_for(name, phone, address, items, Fulfillment::Delivery)
+}
+
+/// Validate checkout data for a given fulfillment mode.
+///
+/// The address is only required when the order is delivered. A pickup order
+/// with an empty address is valid — previously it was not, which made it
+/// impossible to place an in-store order at all.
+pub fn validate_checkout_for(
+    name: &str,
+    phone: &str,
+    address: &str,
+    items: &[CartItem],
+    fulfillment: Fulfillment,
+) -> Result<()> {
     if name.trim().is_empty() {
         return Err(Error::Validation("Name is required".to_string()));
     }
@@ -329,13 +503,10 @@ pub fn validate_checkout(name: &str, phone: &str, address: &str, items: &[CartIt
     if phone.trim().len() > 50 {
         return Err(Error::Validation("Phone is too long".to_string()));
     }
-    // Phone must start with '+' and contain at least 5 digits. Matches the
-    // frontend mask (+66...) and prevents empty/malformed strings from passing.
-    let digits: String = phone.chars().filter(|c| c.is_ascii_digit()).collect();
-    if !phone.starts_with('+') || digits.len() < 5 {
+    if normalize_phone(phone).is_none() {
         return Err(Error::Validation("Invalid phone number".to_string()));
     }
-    if address.trim().is_empty() {
+    if fulfillment.requires_address() && address.trim().is_empty() {
         return Err(Error::Validation(
             "Delivery address is required".to_string(),
         ));
@@ -592,6 +763,325 @@ mod tests {
     fn test_validate_checkout_invalid_phone() {
         let items = vec![CartItem::new_strain("strain1".to_string(), 1)];
         assert!(validate_checkout("John", "+123", "Koh Phangan", &items).is_err());
+    }
+
+    // ---- Phone normalisation -------------------------------------------
+    //
+    // These are the inputs that used to leave the "Place order" button dead:
+    // every one of them is what a customer's own phone shows them.
+
+    #[test]
+    fn normalize_phone_accepts_thai_local_mobile() {
+        // The single most common real input on Koh Phangan.
+        assert_eq!(
+            normalize_phone("0812345678").as_deref(),
+            Some("+66812345678")
+        );
+    }
+
+    #[test]
+    fn normalize_phone_strips_formatting_noise() {
+        for raw in ["081 234 5678", "081-234-5678", "(081) 234.5678"] {
+            assert_eq!(
+                normalize_phone(raw).as_deref(),
+                Some("+66812345678"),
+                "{raw} should normalise to the same number"
+            );
+        }
+    }
+
+    #[test]
+    fn normalize_phone_keeps_international_input() {
+        assert_eq!(
+            normalize_phone("+66 81 234 5678").as_deref(),
+            Some("+66812345678")
+        );
+    }
+
+    #[test]
+    fn normalize_phone_converts_idd_prefix() {
+        assert_eq!(
+            normalize_phone("0066812345678").as_deref(),
+            Some("+66812345678")
+        );
+    }
+
+    #[test]
+    fn normalize_phone_converts_russian_national_format() {
+        assert_eq!(
+            normalize_phone("8 999 123-45-67").as_deref(),
+            Some("+79991234567")
+        );
+    }
+
+    #[test]
+    fn normalize_phone_adds_plus_to_bare_international() {
+        assert_eq!(
+            normalize_phone("66812345678").as_deref(),
+            Some("+66812345678")
+        );
+    }
+
+    #[test]
+    fn normalize_phone_rejects_junk() {
+        for raw in ["", "   ", "abc", "12", "+1", "0", "00"] {
+            assert!(
+                normalize_phone(raw).is_none(),
+                "{raw:?} should not be accepted as a phone number"
+            );
+        }
+    }
+
+    #[test]
+    fn normalize_phone_rejects_absurdly_long_input() {
+        // 16 digits exceeds E.164's maximum of 15.
+        assert!(normalize_phone("1234567890123456").is_none());
+    }
+
+    #[test]
+    fn normalize_phone_is_idempotent() {
+        let once = normalize_phone("0812345678").expect("first pass normalises");
+        let twice = normalize_phone(&once).expect("second pass normalises");
+        assert_eq!(once, twice);
+    }
+
+    // ---- Checkout gate --------------------------------------------------
+
+    #[test]
+    fn validate_checkout_accepts_local_phone() {
+        // Regression: this exact combination produced a permanently disabled
+        // "Place order" button and no request ever reached the server.
+        let items = vec![CartItem::new_strain("strain1".to_string(), 1)];
+        assert!(validate_checkout("John", "0812345678", "Koh Phangan", &items).is_ok());
+    }
+
+    #[test]
+    fn validate_checkout_pickup_does_not_require_address() {
+        // Regression: an in-store (offline) order was impossible because the
+        // delivery address was demanded unconditionally.
+        let items = vec![CartItem::new_strain("strain1".to_string(), 1)];
+        assert!(
+            validate_checkout_for("John", "+66812345678", "", &items, Fulfillment::Pickup).is_ok()
+        );
+    }
+
+    #[test]
+    fn validate_checkout_delivery_still_requires_address() {
+        let items = vec![CartItem::new_strain("strain1".to_string(), 1)];
+        assert!(
+            validate_checkout_for("John", "+66812345678", "", &items, Fulfillment::Delivery)
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn validate_checkout_pickup_still_requires_name_phone_and_items() {
+        let items = vec![CartItem::new_strain("strain1".to_string(), 1)];
+        assert!(
+            validate_checkout_for("", "+66812345678", "", &items, Fulfillment::Pickup).is_err(),
+            "name is required for pickup too"
+        );
+        assert!(
+            validate_checkout_for("John", "", "", &items, Fulfillment::Pickup).is_err(),
+            "phone is required for pickup too"
+        );
+        assert!(
+            validate_checkout_for("John", "+66812345678", "", &[], Fulfillment::Pickup).is_err(),
+            "an empty cart is never orderable"
+        );
+    }
+
+    #[test]
+    fn validate_checkout_rejects_over_long_address_even_for_pickup() {
+        let items = vec![CartItem::new_strain("strain1".to_string(), 1)];
+        let long = "x".repeat(501);
+        assert!(
+            validate_checkout_for("John", "+66812345678", &long, &items, Fulfillment::Pickup)
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn fulfillment_wire_values_are_stable() {
+        // The server stores these verbatim; changing them silently would
+        // reclassify historical orders.
+        assert_eq!(Fulfillment::Delivery.as_str(), "delivery");
+        assert_eq!(Fulfillment::Pickup.as_str(), "pickup");
+        assert!(Fulfillment::Delivery.requires_address());
+        assert!(!Fulfillment::Pickup.requires_address());
+        assert_eq!(Fulfillment::default(), Fulfillment::Delivery);
+    }
+
+    // ---- The order gate ------------------------------------------------
+    //
+    // This is the logic that silently decided no POST /api/orders would ever
+    // be sent. Each case below is a form a real customer can produce.
+
+    #[test]
+    fn local_phone_and_address_place_the_order() {
+        // Regression for the reported bug: this exact form produced a
+        // permanently disabled button and no request ever left the client.
+        let blockers = checkout_blockers(
+            true,
+            "Дмитрий",
+            "0812345678",
+            "Baan Tai, Koh Phangan",
+            Fulfillment::Delivery,
+            1,
+            true,
+        );
+        assert_eq!(blockers, Vec::new());
+    }
+
+    #[test]
+    fn pickup_needs_no_address() {
+        // Regression: ordering offline (collect in store) was impossible.
+        let blockers = checkout_blockers(
+            true,
+            "Дмитрий",
+            "+66812345678",
+            "",
+            Fulfillment::Pickup,
+            1,
+            true,
+        );
+        assert_eq!(blockers, Vec::new());
+    }
+
+    #[test]
+    fn delivery_without_address_is_blocked() {
+        let blockers = checkout_blockers(
+            true,
+            "Дмитрий",
+            "+66812345678",
+            "",
+            Fulfillment::Delivery,
+            1,
+            true,
+        );
+        assert_eq!(blockers, vec![CheckoutBlocker::Address]);
+    }
+
+    #[test]
+    fn unticked_age_box_is_reported() {
+        // The one blocker that previously had no on-screen indicator at all.
+        let blockers = checkout_blockers(
+            true,
+            "Дмитрий",
+            "0812345678",
+            "Baan Tai",
+            Fulfillment::Delivery,
+            1,
+            false,
+        );
+        assert_eq!(blockers, vec![CheckoutBlocker::Age]);
+    }
+
+    #[test]
+    fn empty_cart_is_reported() {
+        let blockers = checkout_blockers(
+            true,
+            "Дмитрий",
+            "0812345678",
+            "Baan Tai",
+            Fulfillment::Delivery,
+            0,
+            true,
+        );
+        assert_eq!(blockers, vec![CheckoutBlocker::EmptyCart]);
+    }
+
+    #[test]
+    fn missing_telegram_id_is_reported() {
+        let blockers = checkout_blockers(
+            false,
+            "Дмитрий",
+            "0812345678",
+            "Baan Tai",
+            Fulfillment::Delivery,
+            1,
+            true,
+        );
+        assert_eq!(blockers, vec![CheckoutBlocker::NoTelegram]);
+    }
+
+    #[test]
+    fn every_blocker_is_listed_not_just_the_first() {
+        // An empty form must name all six problems at once; surfacing them
+        // one at a time is what made the screen feel broken.
+        let blockers = checkout_blockers(false, "", "", "", Fulfillment::Delivery, 0, false);
+        assert_eq!(
+            blockers,
+            vec![
+                CheckoutBlocker::NoTelegram,
+                CheckoutBlocker::EmptyCart,
+                CheckoutBlocker::Name,
+                CheckoutBlocker::Phone,
+                CheckoutBlocker::Address,
+                CheckoutBlocker::Age,
+            ]
+        );
+    }
+
+    #[test]
+    fn over_long_address_is_blocked_even_for_pickup() {
+        let long = "x".repeat(501);
+        let blockers = checkout_blockers(
+            true,
+            "Дмитрий",
+            "0812345678",
+            &long,
+            Fulfillment::Pickup,
+            1,
+            true,
+        );
+        assert_eq!(blockers, vec![CheckoutBlocker::Address]);
+    }
+
+    #[test]
+    fn gate_agrees_with_validate_checkout_for() {
+        // Two gates guard the same submit path — the button state and the
+        // click handler. If they disagree the button is clickable and the
+        // click does nothing, which is exactly the failure being fixed.
+        let items = vec![CartItem::new_strain("strain1".to_string(), 1)];
+        for (name, phone, address, mode) in [
+            ("Дмитрий", "0812345678", "Baan Tai", Fulfillment::Delivery),
+            ("Дмитрий", "+66812345678", "", Fulfillment::Pickup),
+            ("", "0812345678", "Baan Tai", Fulfillment::Delivery),
+            ("Дмитрий", "junk", "Baan Tai", Fulfillment::Delivery),
+            ("Дмитрий", "0812345678", "", Fulfillment::Delivery),
+        ] {
+            let gate_ok =
+                checkout_blockers(true, name, phone, address, mode, items.len(), true).is_empty();
+            let validate_ok = validate_checkout_for(name, phone, address, &items, mode).is_ok();
+            assert_eq!(
+                gate_ok, validate_ok,
+                "gate and validator disagree for {name:?}/{phone:?}/{address:?}/{mode:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn blocker_messages_are_translated_in_both_languages() {
+        // A blocker the customer cannot read is no better than a silent one.
+        use crate::trios::core::Lang;
+        use crate::trios::i18n::t;
+        for b in [
+            CheckoutBlocker::NoTelegram,
+            CheckoutBlocker::EmptyCart,
+            CheckoutBlocker::Name,
+            CheckoutBlocker::Phone,
+            CheckoutBlocker::Address,
+            CheckoutBlocker::Age,
+        ] {
+            for lang in [Lang::Russian, Lang::English] {
+                let msg = t(lang, b.message_key());
+                assert!(
+                    !msg.is_empty() && msg != b.message_key(),
+                    "{b:?} has no {lang:?} translation"
+                );
+            }
+        }
     }
 
     #[test]

@@ -128,11 +128,12 @@ fn validate_create_order(req: &CreateOrderRequest) -> Result<ValidatedPayment, S
         if phone.len() > 50 {
             return Err(StatusCode::BAD_REQUEST);
         }
-        // Loop #7: align server validation with the UI — the phone must
-        // start with '+' and contain at least 5 digits. Catches malformed
-        // or empty inputs that previously passed the loose digit-only rule.
-        let digits = phone.chars().filter(|c| c.is_ascii_digit()).count();
-        if !phone.starts_with('+') || digits < 5 {
+        // Accept every shape a customer's own phone displays — local Thai
+        // `081…`, Russian `8…`, IDD `0066…` — and reject only what cannot be
+        // a phone number. Requiring a literal leading '+' here (and in the UI
+        // gate that mirrors it) is what made the order button unclickable for
+        // anyone typing their number the normal way.
+        if crate::trios::store::normalize_phone(phone).is_none() {
             return Err(StatusCode::BAD_REQUEST);
         }
     }
@@ -1280,7 +1281,14 @@ async fn create_order(
         id: Set(id.clone()),
         telegram_id: Set(req.telegram_id),
         customer_name: Set(req.customer_name.clone()),
-        customer_phone: Set(req.customer_phone.clone()),
+        // Store E.164, not what was typed: the courier calls this number and
+        // admin search matches on it, so `081…` and `+6681…` must not become
+        // two different customers.
+        customer_phone: Set(req
+            .customer_phone
+            .as_deref()
+            .and_then(crate::trios::store::normalize_phone)
+            .or_else(|| req.customer_phone.clone())),
         customer_telegram: Set(req.customer_telegram.clone()),
         items: Set(items_json.clone()),
         subtotal: Set(req.subtotal),
@@ -2775,6 +2783,75 @@ mod tests {
                 fulfillment: None,
             })
             .collect();
+        assert_eq!(
+            validate_create_order(&req).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
+    }
+
+    #[test]
+    fn validate_accepts_the_phone_shapes_customers_actually_type() {
+        // Server and UI share `normalize_phone`, so anything the customer can
+        // now get past the order button must also pass here. Before this the
+        // server demanded a literal leading '+'.
+        for phone in [
+            "0812345678",
+            "081 234 5678",
+            "081-234-5678",
+            "+66812345678",
+            "+66 81 234 5678",
+            "0066812345678",
+            "8 999 123-45-67",
+        ] {
+            let mut req = valid_req();
+            req.customer_phone = Some(phone.to_string());
+            assert!(
+                validate_create_order(&req).is_ok(),
+                "{phone} should be accepted"
+            );
+        }
+    }
+
+    #[test]
+    fn validate_still_rejects_non_phone_input() {
+        for phone in ["", "abc", "12", "+1"] {
+            let mut req = valid_req();
+            req.customer_phone = Some(phone.to_string());
+            assert_eq!(
+                validate_create_order(&req).unwrap_err(),
+                StatusCode::BAD_REQUEST,
+                "{phone:?} should be rejected"
+            );
+        }
+    }
+
+    #[test]
+    fn validate_allows_pickup_order_without_address() {
+        // An in-store order carries no delivery address. The server must not
+        // be the thing that blocks it.
+        let mut req = valid_req();
+        req.delivery_address = None;
+        assert!(validate_create_order(&req).is_ok());
+    }
+
+    #[test]
+    fn validate_requires_explicit_age_confirmation() {
+        // Compliance gate: never inferred, never defaulted.
+        for age in [None, Some(false)] {
+            let mut req = valid_req();
+            req.age_confirmed = age;
+            assert_eq!(
+                validate_create_order(&req).unwrap_err(),
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "age_confirmed={age:?} must not create an order"
+            );
+        }
+    }
+
+    #[test]
+    fn validate_rejects_empty_cart() {
+        let mut req = valid_req();
+        req.items = Vec::new();
         assert_eq!(
             validate_create_order(&req).unwrap_err(),
             StatusCode::BAD_REQUEST
