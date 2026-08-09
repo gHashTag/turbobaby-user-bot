@@ -1,4 +1,4 @@
-// Events calendar screen — weekly day picker + event list + booking modal.
+// Events calendar screen — month day picker + event list + booking modal.
 //
 // MVP booking is free: users reserve a seat; capacity and idempotency are
 // enforced server-side. Paid flow will reuse the same endpoint once price
@@ -29,7 +29,7 @@ use crate::ui::components::skeleton::{Skeleton, SkeletonShape};
 use crate::ui::routes::Route;
 use crate::ui::share::{ProductKind, SharedProduct};
 use crate::ui::telegram::{use_telegram_id, use_telegram_init_data};
-use chrono::{Datelike, Days, FixedOffset, NaiveDate, Utc, Weekday};
+use chrono::{Datelike, FixedOffset, NaiveDate, Utc, Weekday};
 use dioxus::prelude::*;
 use serde_json::json;
 
@@ -100,36 +100,60 @@ fn month_key(month: u32) -> crate::trios::i18n::Key {
     }
 }
 
-fn month_day_label(date: NaiveDate, lang: crate::trios::core::Lang) -> String {
-    let month = t(lang, month_key(date.month()));
-    format!("{} {}", date.day(), month)
-}
-
-fn this_week_monday(today: NaiveDate) -> NaiveDate {
-    let wd = today.weekday().num_days_from_monday() as i64;
-    today
-        .checked_sub_days(Days::new(wd as u64))
-        .unwrap_or(today)
-}
-
 #[derive(Props, PartialEq, Clone)]
 struct WeekSelectorProps {
     selected: Signal<NaiveDate>,
     today: NaiveDate,
 }
 
+/// Day picker covering a whole month, with month-to-month navigation.
+///
+/// Was a seven-day strip anchored on this week's Monday, which made the rest
+/// of the month unreachable — you could not schedule an event for the 28th.
+/// The strip now spans the selected month and scrolls horizontally.
 #[component]
 fn WeekSelector(props: WeekSelectorProps) -> Element {
     let mut selected = props.selected;
     let today = props.today;
-    let monday = this_week_monday(today);
     let lang = crate::ui::lang::current_lang();
 
+    // Which month the strip is showing. Follows `selected` so picking a day in
+    // September and coming back keeps you in September.
+    let anchor = crate::trios::calendar::first_of_month(*selected.read());
+    let month_title = format!(
+        "{} {}",
+        t(lang, month_key(anchor.month())),
+        anchor.year()
+    );
+
     rsx! {
-        div { style: "display:flex;justify-content:space-between;gap:6px;padding:0 12px 12px;overflow-x:auto;",
+        div { style: "display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 12px 8px;",
+            button {
+                style: "min-width:44px;min-height:44px;background:#1a1a2e;color:#39ff14;border:2px solid #2a2a4a;border-radius:10px;cursor:pointer;font-size:16px;",
+                aria_label: "previous month",
+                onclick: move |_| {
+                    let prev = crate::trios::calendar::shift_month(*selected.read(), -1);
+                    selected.set(prev);
+                },
+                "‹"
+            }
+            span { style: "flex:1;text-align:center;font-size:12px;font-weight:700;color:#39ff14;text-transform:uppercase;letter-spacing:1px;",
+                "{month_title}"
+            }
+            button {
+                style: "min-width:44px;min-height:44px;background:#1a1a2e;color:#39ff14;border:2px solid #2a2a4a;border-radius:10px;cursor:pointer;font-size:16px;",
+                aria_label: "next month",
+                onclick: move |_| {
+                    let next = crate::trios::calendar::shift_month(*selected.read(), 1);
+                    selected.set(next);
+                },
+                "›"
+            }
+        }
+        div { style: "display:flex;gap:6px;padding:0 12px 12px;overflow-x:auto;-webkit-overflow-scrolling:touch;",
             {
-                (0..7)
-                    .filter_map(|i| monday.checked_add_days(Days::new(i)))
+                crate::trios::calendar::month_days(anchor)
+                    .into_iter()
                     .map(|day| {
                         let is_selected = day == *selected.read();
                         let is_today = day == today;
@@ -141,10 +165,16 @@ fn WeekSelector(props: WeekSelectorProps) -> Element {
                             ("#1a1a2e", "#2a2a4a", "#e8e8e8")
                         };
                         let label = weekday_label(day.weekday(), lang);
-                        let md = month_day_label(day, lang);
+                        // Day number only: the month name now lives in the
+                        // header, and 31 "9 августа" chips would not scroll
+                        // usably on a phone.
+                        let md = day.day().to_string();
                         rsx! {
                             button {
-                                style: "flex:1;min-width:44px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:8px 4px;border:2px solid {border};background:{bg};color:{color};border-radius:10px;cursor:pointer;font-family:'Press Start 2P',monospace;",
+                                // `flex:0 0 auto` — with `flex:1` a 31-day strip
+                                // would squeeze every chip below the 44px tap
+                                // target instead of scrolling.
+                                style: "flex:0 0 auto;min-width:44px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:8px 6px;border:2px solid {border};background:{bg};color:{color};border-radius:10px;cursor:pointer;font-family:'Press Start 2P',monospace;",
                                 onclick: move |_| selected.set(day),
                                 span { style: "font-size:10px;text-transform:uppercase;", "{label}" }
                                 span { style: "font-size:12px;font-weight:700;margin-top:2px;", "{md}" }
