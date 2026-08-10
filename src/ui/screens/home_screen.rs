@@ -709,7 +709,13 @@ pub fn HomeScreen() -> Element {
                                             {
                                                 let reminder = reminder_text.clone();
                                                 rsx! {
-                                                    div { style: "margin-top:8px;background:#0f0f1a;border:2px dashed #ffe600;padding:8px 12px;font-size:12px;color:#ffe600;text-align:center;",
+                                                    // Side margins to match the 16px gutter every
+                                    // card on this screen uses. Without them the
+                                    // banner sat flush against both edges while
+                                    // the cards above and below were inset — it
+                                    // reads as a rendering fault rather than as
+                                    // part of the same list.
+                                    div { style: "margin:8px 16px 0;background:#0f0f1a;border:2px dashed #ffe600;padding:8px 12px;font-size:12px;color:#ffe600;text-align:center;",
                                                         "{reminder}"
                                                     }
                                                 }
@@ -722,7 +728,8 @@ pub fn HomeScreen() -> Element {
                                                 let viral_text = t(lang, T_GARDEN_HOME_VIRAL_CTA).to_string();
                                                 rsx! {
                                                     div {
-                                                        style: "margin-top:8px;background:#1a1a2e;border:2px solid #ff4757;padding:8px 12px;font-size:12px;color:#ff4757;text-align:center;cursor:pointer;",
+                                                        // Same 16px gutter as the cards.
+                                                        style: "margin:8px 16px 0;background:#1a1a2e;border:2px solid #ff4757;padding:8px 12px;font-size:12px;color:#ff4757;text-align:center;cursor:pointer;",
                                                         onclick: move |e: Event<MouseData>| {
                                                             e.stop_propagation();
                                                             share_garden(Some(tid), Some("home_viral"));
