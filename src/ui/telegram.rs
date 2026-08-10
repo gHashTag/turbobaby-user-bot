@@ -548,16 +548,50 @@ impl TelegramApp {
     }
 
     /// Get Telegram initData string (for server-side validation)
+    /// Whether `get_init_data` had to rebuild the payload rather than use the
+    /// signed string Telegram provided.
+    ///
+    /// A rebuilt payload cannot pass HMAC validation, so this distinguishes
+    /// "this client is unusual" from "this signature is wrong" — which is the
+    /// difference between a bug to fix and an attack to block.
+    pub fn is_reconstructed_init_data(&self) -> bool {
+        let js = r#"(function(){try{
+            if(window.Telegram && window.Telegram.WebApp){
+                var w = window.Telegram.WebApp;
+                var d = w.initData;
+                if(typeof d === 'string' && d.length > 0) return false;
+                return !!(w.initDataUnsafe && w.initDataUnsafe.hash);
+            }
+            return false;
+        }catch(e){ return false; }})()"#;
+        js_sys::eval(js)
+            .ok()
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false)
+    }
+
     pub fn get_init_data(&self) -> String {
         let js = r#"(function(){try{
             if(window.Telegram && window.Telegram.WebApp){
                 var w = window.Telegram.WebApp;
                 var d = w.initData;
                 if(typeof d === 'string' && d.length > 0) return d;
-                // Fallback: reconstruct from initDataUnsafe if initData string is missing.
-                // Some WebViews populate initDataUnsafe before initData. We build the
-                // data_check_string the same way Telegram does (sorted keys, user JSON
-                // URL-encoded) and append the provided hash so the server can validate.
+                // Fallback: rebuild from initDataUnsafe when the initData string
+                // is missing. Some WebViews populate initDataUnsafe first.
+                //
+                // This can NEVER pass signature validation, and pretending
+                // otherwise is what forced the server to accept unsigned
+                // requests. `JSON.stringify` cannot reproduce the exact bytes
+                // Telegram signed: key order comes from however the SDK built
+                // the object, fields the SDK dropped are gone, and `receiver` /
+                // `chat` are filtered out here even when they were part of the
+                // signed payload.
+                //
+                // It is still sent, because the users on this path would
+                // otherwise be locked out — but `is_reconstructed_init_data`
+                // lets the client label it so the server can count how many
+                // requests actually depend on it. Once that number is known the
+                // fabrication and the lenient fallback can be removed together.
                 var u = w.initDataUnsafe;
                 if(u && u.hash){
                     var parts = [];

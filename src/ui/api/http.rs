@@ -42,6 +42,14 @@ pub async fn fetch_text(url: &str) -> Result<String, String> {
 pub async fn fetch_text_authed(url: &str, init_data: &str) -> Result<String, String> {
     let resp = Request::get(url)
         .header("x-telegram-init-data", init_data)
+        .header(
+            "x-telegram-init-data-reconstructed",
+            if crate::ui::telegram::TelegramApp::init().is_reconstructed_init_data() {
+                "1"
+            } else {
+                "0"
+            },
+        )
         .send()
         .await
         .map_err(|e| format!("Network error: {e}"))?;
@@ -76,6 +84,14 @@ pub async fn fetch_text_full(url: &str) -> Result<(u16, String), String> {
 pub async fn fetch_text_authed_full(url: &str, init_data: &str) -> Result<(u16, String), String> {
     let resp = Request::get(url)
         .header("x-telegram-init-data", init_data)
+        .header(
+            "x-telegram-init-data-reconstructed",
+            if crate::ui::telegram::TelegramApp::init().is_reconstructed_init_data() {
+                "1"
+            } else {
+                "0"
+            },
+        )
         .send()
         .await
         .map_err(|e| format!("Network error: {e}"))?;
@@ -123,6 +139,14 @@ pub async fn post_json_authed(url: &str, init_data: &str, body: &str) -> Result<
     let resp = Request::post(url)
         .header("content-type", "application/json")
         .header("x-telegram-init-data", init_data)
+        .header(
+            "x-telegram-init-data-reconstructed",
+            if crate::ui::telegram::TelegramApp::init().is_reconstructed_init_data() {
+                "1"
+            } else {
+                "0"
+            },
+        )
         .body(body.to_string())
         .map_err(|e| format!("Build error: {e}"))?
         .send()
@@ -151,6 +175,14 @@ pub async fn post_json_authed_idempotent(
     let resp = Request::post(url)
         .header("content-type", "application/json")
         .header("x-telegram-init-data", init_data)
+        .header(
+            "x-telegram-init-data-reconstructed",
+            if crate::ui::telegram::TelegramApp::init().is_reconstructed_init_data() {
+                "1"
+            } else {
+                "0"
+            },
+        )
         .header("x-idempotency-key", idempotency_key)
         .body(body.to_string())
         .map_err(|e| format!("Build error: {e}"))?
@@ -182,6 +214,14 @@ pub async fn post_json_authed_idempotent_full(
     let resp = Request::post(url)
         .header("content-type", "application/json")
         .header("x-telegram-init-data", init_data)
+        .header(
+            "x-telegram-init-data-reconstructed",
+            if crate::ui::telegram::TelegramApp::init().is_reconstructed_init_data() {
+                "1"
+            } else {
+                "0"
+            },
+        )
         .header("x-idempotency-key", idempotency_key)
         .body(body.to_string())
         .map_err(|e| format!("Build error: {e}"))?
@@ -221,6 +261,14 @@ pub async fn post_admin_token(
 pub async fn delete_authed(url: &str, init_data: &str) -> Result<String, String> {
     let resp = Request::delete(url)
         .header("x-telegram-init-data", init_data)
+        .header(
+            "x-telegram-init-data-reconstructed",
+            if crate::ui::telegram::TelegramApp::init().is_reconstructed_init_data() {
+                "1"
+            } else {
+                "0"
+            },
+        )
         .send()
         .await
         .map_err(|e| format!("Network error: {e}"))?;
@@ -244,6 +292,14 @@ pub async fn put_json_authed(
     let resp = Request::put(url)
         .header("content-type", "application/json")
         .header("x-telegram-init-data", init_data)
+        .header(
+            "x-telegram-init-data-reconstructed",
+            if crate::ui::telegram::TelegramApp::init().is_reconstructed_init_data() {
+                "1"
+            } else {
+                "0"
+            },
+        )
         .body(body.to_string())
         .map_err(|e| format!("Build error: {e}"))?
         .send()

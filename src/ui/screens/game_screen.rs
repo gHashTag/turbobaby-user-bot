@@ -10,7 +10,7 @@ pub fn GameScreen() -> Element {
             background: #0f0f1a;
             display: flex; flex-direction: column;
             align-items: center;
-            padding-bottom: 80px;
+            padding-bottom: calc(96px + env(safe-area-inset-bottom));
         ",
             WoodyShop {}
             BottomNav {}

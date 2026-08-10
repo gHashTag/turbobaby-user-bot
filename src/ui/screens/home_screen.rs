@@ -591,7 +591,7 @@ pub fn HomeScreen() -> Element {
     });
 
     rsx! {
-        div { style: "min-height:100vh;background:#0f0f1a;color:#e8e8e8;padding-bottom:80px;",
+        div { style: "min-height:100vh;background:#0f0f1a;color:#e8e8e8;padding-bottom:calc(96px + env(safe-area-inset-bottom));",
 
             div { style: "text-align:center;padding:20px 16px 16px;position:relative;z-index:1;",
                 img {

@@ -784,7 +784,7 @@ pub fn EventsScreen() -> Element {
     });
 
     rsx! {
-        div { style: "min-height:100vh;background:#0f0f1a;color:#e8e8e8;padding-bottom:80px;",
+        div { style: "min-height:100vh;background:#0f0f1a;color:#e8e8e8;padding-bottom:calc(96px + env(safe-area-inset-bottom));",
             div { style: "padding:20px 16px 8px;text-align:center;",
                 h1 { style: "font-size:22px;font-weight:800;color:#39ff14;text-shadow:3px 3px 0 #000;letter-spacing:2px;", "{title}" }
                 p { style: "font-size:12px;color:#888;margin-top:4px;", "{subtitle}" }
@@ -865,7 +865,7 @@ pub fn EventDetailScreen(id: String) -> Element {
         nav.push(Route::Events {});
     };
     rsx! {
-        div { style: "min-height:100vh;background:#0f0f1a;color:#e8e8e8;padding-bottom:80px;",
+        div { style: "min-height:100vh;background:#0f0f1a;color:#e8e8e8;padding-bottom:calc(96px + env(safe-area-inset-bottom));",
             if *loading.read() {
                 div { style: "padding:0 16px;",
                     Skeleton { shape: SkeletonShape::Sotd }
@@ -982,7 +982,7 @@ pub fn MyBookingsScreen() -> Element {
     });
 
     rsx! {
-        div { style: "min-height:100vh;background:#0f0f1a;color:#e8e8e8;padding-bottom:80px;",
+        div { style: "min-height:100vh;background:#0f0f1a;color:#e8e8e8;padding-bottom:calc(96px + env(safe-area-inset-bottom));",
             div { style: "padding:20px 16px 16px;text-align:center;position:relative;",
                 button {
                     style: "position:absolute;left:16px;top:20px;background:transparent;border:none;color:#e8e8e8;font-size:20px;width:44px;height:44px;display:flex;align-items:center;justify-content:center;cursor:pointer;",

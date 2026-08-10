@@ -100,7 +100,7 @@ pub fn LocationQuestScreen() -> Element {
             background: #0f0f1a;
             color: #e8e8e8;
             padding: 20px 16px;
-            padding-bottom: 80px;
+            padding-bottom: calc(96px + env(safe-area-inset-bottom));
         ",
             div { style: "padding: 20px 16px 16px; text-align: center; margin-bottom: 20px;",
                 h1 { style: "font-size: 24px; font-weight: 800; color: #4caf50; text-shadow: 3px 3px 0 #000, 0 0 10px rgba(76,175,80,0.5); letter-spacing: 2px;",

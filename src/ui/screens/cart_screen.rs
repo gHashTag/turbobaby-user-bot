@@ -146,7 +146,7 @@ pub fn CartScreen() -> Element {
             min-height: 100vh;
             background: #0f0f1a;
             color: #e8e8e8;
-            padding-bottom: 80px;
+            padding-bottom: calc(96px + env(safe-area-inset-bottom));
         ",
             // Header
             div { style: "padding: 20px 16px 16px; text-align: center;",

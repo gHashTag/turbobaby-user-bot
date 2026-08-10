@@ -483,23 +483,37 @@ async fn load_event_photos(
         .collect())
 }
 
+/// Booking refusals carry a stable code.
+///
+/// Three quite different situations answered a bare 409 — the event has already
+/// started, you are already on the list, and there are no seats left. The
+/// customer saw one indistinguishable failure, and so did the log: a 409 in
+/// production could not be told apart without reproducing it.
+fn booking_err(code: StatusCode, slug: &str) -> (StatusCode, Json<Value>) {
+    (code, Json(json!({ "error": slug })))
+}
+
 async fn book_event(
     headers: HeaderMap,
     State(state): State<AppState>,
     Path(id): Path<String>,
     Json(req): Json<BookEventRequest>,
-) -> Result<Json<Value>, StatusCode> {
-    event_id_ok(&id)?;
-    validate_telegram_id_param(req.telegram_id)?;
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    event_id_ok(&id).map_err(|c| booking_err(c, "invalid_event_id"))?;
+    validate_telegram_id_param(req.telegram_id)
+        .map_err(|c| booking_err(c, "invalid_telegram_id"))?;
 
     // Cycle #169: fall back to lenient Telegram ownership check (user id + fresh
     // auth_date, without strict HMAC) because production initData HMAC validation
     // still fails for some Telegram clients (same root cause as garden-401).
     // Booking as another user remains impossible: the initData user.id must match
     // the requested telegram_id.
-    let _owner_id = check_owner_lenient(&headers, &state, req.telegram_id, "event_book")?;
+    let _owner_id = check_owner_lenient(&headers, &state, req.telegram_id, "event_book")
+        .map_err(|c| booking_err(c, "unauthorized"))?;
     let (booker_username, booker_first_name) = booker_identity(&headers, &state);
-    check_not_blocked(&state, req.telegram_id).await?;
+    check_not_blocked(&state, req.telegram_id)
+        .await
+        .map_err(|c| booking_err(c, "blocked"))?;
 
     // Rate-limit event bookings per telegram id.
     let rate_key = format!("event_book:{}", req.telegram_id);
@@ -514,7 +528,7 @@ async fn book_event(
     {
         crate::metrics::rate_limit_blocked("event_booking");
         tracing::warn!("book_event: rate-limit exceeded tid={}", req.telegram_id);
-        return Err(StatusCode::TOO_MANY_REQUESTS);
+        return Err(booking_err(StatusCode::TOO_MANY_REQUESTS, "too_fast"));
     }
 
     // MVP: one seat per booking. Keep the field for forward compatibility,
@@ -522,7 +536,7 @@ async fn book_event(
     let seats = match req.seats {
         None => 1,
         Some(1) => 1,
-        Some(_) => return Err(StatusCode::BAD_REQUEST),
+        Some(_) => return Err(booking_err(StatusCode::BAD_REQUEST, "invalid_request")),
     };
 
     let idem_key: Option<String> = headers
@@ -532,7 +546,7 @@ async fn book_event(
         .filter(|s| !s.is_empty());
     if let Some(ref k) = idem_key {
         if !is_valid_idempotency_key(k) {
-            return Err(StatusCode::BAD_REQUEST);
+            return Err(booking_err(StatusCode::BAD_REQUEST, "invalid_request"));
         }
     }
 
@@ -545,7 +559,7 @@ async fn book_event(
             "SELECT id, event_id, telegram_id, seats, status, order_id, stars_paid, stars_tx_id, created_at FROM event_bookings \
              WHERE event_id = $1 AND telegram_id = $2 AND idempotency_key = $3",
             [id.clone().into(), req.telegram_id.into(), k.clone().into()],
-        )).await.map_err(|e| { tracing::error!("book_event idempotency lookup: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?;
+        )).await.map_err(|e| { tracing::error!("book_event idempotency lookup: {e}"); booking_err(StatusCode::INTERNAL_SERVER_ERROR, "server_error") })?;
         if let Some(r) = existing {
             return Ok(Json(json!({
                 "success": true,
@@ -559,7 +573,7 @@ async fn book_event(
     let booking_id = uuid::Uuid::new_v4().to_string();
     let tx = state.db.orm.begin().await.map_err(|e| {
         tracing::error!("book_event tx.begin: {e}");
-        StatusCode::INTERNAL_SERVER_ERROR
+        booking_err(StatusCode::INTERNAL_SERVER_ERROR, "server_error")
     })?;
 
     // Lock event row, ensure it is public and has not started.
@@ -567,16 +581,16 @@ async fn book_event(
         DbBackend::Postgres,
         "SELECT id, max_seats, starts_at, price_stars FROM events WHERE id = $1 AND is_public = TRUE FOR UPDATE",
         [id.clone().into()],
-    )).await.map_err(|e| { tracing::error!("book_event lock event: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?;
+    )).await.map_err(|e| { tracing::error!("book_event lock event: {e}"); booking_err(StatusCode::INTERNAL_SERVER_ERROR, "server_error") })?;
 
     let Some(ev) = ev else {
         let _ = tx.rollback().await;
-        return Err(StatusCode::NOT_FOUND);
+        return Err(booking_err(StatusCode::NOT_FOUND, "event_not_found"));
     };
     let starts_at: DateTime<Utc> = ev.try_get("", "starts_at").unwrap_or_else(|_| Utc::now());
     if Utc::now() >= starts_at {
         let _ = tx.rollback().await;
-        return Err(StatusCode::CONFLICT);
+        return Err(booking_err(StatusCode::CONFLICT, "event_started"));
     }
 
     // Prevent duplicate active booking per user per event (MVP guard).
@@ -584,10 +598,10 @@ async fn book_event(
         DbBackend::Postgres,
         "SELECT 1 FROM event_bookings WHERE event_id = $1 AND telegram_id = $2 AND status = 'confirmed'",
         [id.clone().into(), req.telegram_id.into()],
-    )).await.map_err(|e| { tracing::error!("book_event dup check: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?;
+    )).await.map_err(|e| { tracing::error!("book_event dup check: {e}"); booking_err(StatusCode::INTERNAL_SERVER_ERROR, "server_error") })?;
     if dup.is_some() {
         let _ = tx.rollback().await;
-        return Err(StatusCode::CONFLICT);
+        return Err(booking_err(StatusCode::CONFLICT, "already_booked"));
     }
 
     // Capacity check.
@@ -597,13 +611,13 @@ async fn book_event(
             DbBackend::Postgres,
             "SELECT COALESCE(SUM(seats), 0)::int AS taken FROM event_bookings WHERE event_id = $1 AND status = 'confirmed'",
             [id.clone().into()],
-        )).await.map_err(|e| { tracing::error!("book_event capacity check: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?;
+        )).await.map_err(|e| { tracing::error!("book_event capacity check: {e}"); booking_err(StatusCode::INTERNAL_SERVER_ERROR, "server_error") })?;
         let taken: i32 = taken_row
             .and_then(|r| r.try_get("", "taken").ok())
             .unwrap_or(0);
         if taken + seats > cap {
             let _ = tx.rollback().await;
-            return Err(StatusCode::CONFLICT);
+            return Err(booking_err(StatusCode::CONFLICT, "sold_out"));
         }
     }
 
@@ -638,7 +652,7 @@ async fn book_event(
             .await
             .map_err(|e| {
                 tracing::error!("book_event loyalty_profile upsert: {e}");
-                StatusCode::INTERNAL_SERVER_ERROR
+                booking_err(StatusCode::INTERNAL_SERVER_ERROR, "server_error")
             })?;
 
         let us_am = UsAm {
@@ -656,7 +670,7 @@ async fn book_event(
             .await
             .map_err(|e| {
                 tracing::error!("book_event user_stars upsert: {e}");
-                StatusCode::INTERNAL_SERVER_ERROR
+                booking_err(StatusCode::INTERNAL_SERVER_ERROR, "server_error")
             })?;
 
         let debited = UsEntity::update_many()
@@ -670,11 +684,14 @@ async fn book_event(
             .await
             .map_err(|e| {
                 tracing::error!("book_event stars debit: {e}");
-                StatusCode::INTERNAL_SERVER_ERROR
+                booking_err(StatusCode::INTERNAL_SERVER_ERROR, "server_error")
             })?;
         if debited.rows_affected == 0 {
             let _ = tx.rollback().await;
-            return Err(StatusCode::PAYMENT_REQUIRED);
+            return Err(booking_err(
+                StatusCode::PAYMENT_REQUIRED,
+                "insufficient_stars",
+            ));
         }
 
         let balance_after = UsEntity::find_by_id(req.telegram_id)
@@ -682,7 +699,7 @@ async fn book_event(
             .await
             .map_err(|e| {
                 tracing::error!("book_event stars balance read: {e}");
-                StatusCode::INTERNAL_SERVER_ERROR
+                booking_err(StatusCode::INTERNAL_SERVER_ERROR, "server_error")
             })?
             .map(|r| r.balance)
             .unwrap_or(0);
@@ -703,7 +720,7 @@ async fn book_event(
         .await
         .map_err(|e| {
             tracing::error!("book_event stars transaction insert: {e}");
-            StatusCode::INTERNAL_SERVER_ERROR
+            booking_err(StatusCode::INTERNAL_SERVER_ERROR, "server_error")
         })?;
         stars_tx_id = Some(tx_id);
     }
@@ -724,12 +741,12 @@ async fn book_event(
         ],
     )).await.map_err(|e| {
         tracing::error!("book_event insert: {e}");
-        StatusCode::INTERNAL_SERVER_ERROR
+        booking_err(StatusCode::INTERNAL_SERVER_ERROR, "server_error")
     })?;
 
     tx.commit().await.map_err(|e| {
         tracing::error!("book_event commit: {e}");
-        StatusCode::INTERNAL_SERVER_ERROR
+        booking_err(StatusCode::INTERNAL_SERVER_ERROR, "server_error")
     })?;
 
     crate::metrics::event_booking_created("confirmed");

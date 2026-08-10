@@ -556,13 +556,43 @@ pub(crate) fn check_owner(
         }
     }
 
-    // Strict HMAC validation failed. Fall back to user-id + auth_date freshness,
-    // mirroring the garden endpoint policy, so production Mini Apps keep working
-    // while the HMAC drift is root-caused.
+    // Strict HMAC validation failed. Fall back to user-id + auth_date freshness
+    // so production Mini Apps keep working while the cause is root-caused.
+    //
+    // The log distinguishes the two cases, because they call for opposite
+    // responses and were previously indistinguishable:
+    //
+    //   reconstructed — the client had no `WebApp.initData` and rebuilt the
+    //     payload from `initDataUnsafe`. That can never match a signature, so
+    //     it is a client-compatibility problem, not an attack. This is the
+    //     cohort that has to keep working until the rebuild is removed.
+    //
+    //   signed-but-wrong — the client sent a payload it claims Telegram
+    //     signed, and it does not verify. That is either tampering or a real
+    //     validation bug, and it is the case that must eventually be refused.
+    //
+    // Counting them is what makes removing this fallback a decision instead of
+    // a gamble: today every rejection looks the same, so nobody can tell how
+    // many real users the strict path would lock out.
+    let reconstructed = headers
+        .get("X-Telegram-Init-Data-Reconstructed")
+        .and_then(|v| v.to_str().ok())
+        .map(|v| v == "1")
+        .unwrap_or(false);
     tracing::warn!(
-        "owner strict HMAC failed for telegram_id={}, trying lenient fallback",
-        expected_telegram_id
+        "owner strict HMAC failed for telegram_id={} kind={} — using lenient fallback",
+        expected_telegram_id,
+        if reconstructed {
+            "reconstructed-initdata"
+        } else {
+            "signed-but-invalid"
+        }
     );
+    crate::metrics::auth_failure(if reconstructed {
+        "lenient_reconstructed"
+    } else {
+        "lenient_signed_invalid"
+    });
     lenient_owner_verify(init_data, expected_telegram_id)
 }
 

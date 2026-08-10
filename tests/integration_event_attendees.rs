@@ -407,3 +407,89 @@ async fn the_guest_list_cannot_be_sent_to_a_non_admin_chat() {
         "a non-admin chat id must be refused, not messaged"
     );
 }
+
+/// A refusal has to say which refusal it is.
+///
+/// Three unrelated situations answered a bare 409 — the event has already
+/// started, you are already on the list, and there are no seats left. The
+/// customer saw one indistinguishable failure and so did the log; a 409 in
+/// production could not be told apart without reproducing it.
+#[tokio::test]
+#[ignore = "needs DATABASE_URL env var; run with --ignored"]
+async fn booking_refusals_carry_a_distinct_reason() {
+    let Some((app, db)) = common::make_app_with_db().await else {
+        eprintln!("DATABASE_URL not set — skipping");
+        return;
+    };
+
+    // Already booked.
+    let event_id = seed_event(&db, 10).await;
+    let tid = 999_640_000 + (suffix() as i64 % 100_000);
+    let init = init_data_with_username(tid, &format!("dup{}", suffix()));
+    assert_eq!(
+        book(app.clone(), &event_id, tid, &init).await.status,
+        StatusCode::OK
+    );
+    let dup = book(app.clone(), &event_id, tid, &init).await;
+    assert_eq!(dup.status, StatusCode::CONFLICT);
+    assert_eq!(
+        dup.body["error"], "already_booked",
+        "a repeat booking must say so: {}",
+        dup.body
+    );
+
+    // Sold out: a one-seat event taken by someone else.
+    let small = seed_event(&db, 1).await;
+    let first = 999_650_000 + (suffix() as i64 % 100_000);
+    let second = first + 1;
+    assert_eq!(
+        book(
+            app.clone(),
+            &small,
+            first,
+            &init_data_with_username(first, &format!("one{}", suffix()))
+        )
+        .await
+        .status,
+        StatusCode::OK
+    );
+    let full = book(
+        app.clone(),
+        &small,
+        second,
+        &init_data_with_username(second, &format!("two{}", suffix())),
+    )
+    .await;
+    assert_eq!(full.status, StatusCode::CONFLICT);
+    assert_eq!(
+        full.body["error"], "sold_out",
+        "a full event must say so rather than look like a duplicate: {}",
+        full.body
+    );
+
+    // Already started — seeded in the past.
+    let past = uuid::Uuid::new_v4().to_string();
+    db.orm
+        .execute(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            "INSERT INTO events (id, title, description, starts_at, max_seats, is_public) \
+             VALUES ($1, $2, 'past', NOW() - INTERVAL '1 hour', 10, TRUE)",
+            [past.clone().into(), format!("past-{}", suffix()).into()],
+        ))
+        .await
+        .expect("seed past event");
+    let late_tid = 999_660_000 + (suffix() as i64 % 100_000);
+    let late = book(
+        app,
+        &past,
+        late_tid,
+        &init_data_with_username(late_tid, &format!("late{}", suffix())),
+    )
+    .await;
+    assert_eq!(late.status, StatusCode::CONFLICT);
+    assert_eq!(
+        late.body["error"], "event_started",
+        "a finished event must say so, not look full: {}",
+        late.body
+    );
+}

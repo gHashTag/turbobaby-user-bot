@@ -541,7 +541,7 @@ pub fn ProfileScreen() -> Element {
             min-height: 100vh;
             background: #0f0f1a;
             color: #e8e8e8;
-            padding-bottom: 80px;
+            padding-bottom: calc(96px + env(safe-area-inset-bottom));
         ",
             div { style: "padding: 20px 16px 16px; text-align: center;",
                 h1 { style: "font-size: 24px; font-weight: 800; color: #39ff14; text-shadow: 3px 3px 0 #000, 0 0 10px rgba(57,255,20,0.5); letter-spacing: 2px;", "{profile_title}" }

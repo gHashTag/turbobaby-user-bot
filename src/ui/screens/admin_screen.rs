@@ -597,7 +597,7 @@ pub fn AdminScreen() -> Element {
     });
 
     rsx! {
-        div { style: "min-height:100vh;background:#0f0f1a;color:#e8e8e8;padding:16px;padding-bottom:80px;",
+        div { style: "min-height:100vh;background:#0f0f1a;color:#e8e8e8;padding:16px;padding-bottom:calc(96px + env(safe-area-inset-bottom));",
             h1 { style: "font-size:22px;color:#ff4757;margin-bottom:4px;", "🔧 Admin" }
             div { style: "font-size:10px;color:#444;margin-bottom:16px;font-family:monospace;", "v{build_version}" }
             match &*access.read() {

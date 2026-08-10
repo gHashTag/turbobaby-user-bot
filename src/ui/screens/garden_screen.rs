@@ -160,7 +160,7 @@ pub fn GardenScreen() -> Element {
     };
 
     rsx! {
-        div { style: "min-height: 100vh; background: #0f0f1a; color: #e8e8e8; padding-bottom: 80px;",
+        div { style: "min-height: 100vh; background: #0f0f1a; color: #e8e8e8; padding-bottom: calc(96px + env(safe-area-inset-bottom));",
 
             // Toggle between Garden and Game
             div { style: "display: flex; gap: 8px; padding: 12px 16px; justify-content: center;",
