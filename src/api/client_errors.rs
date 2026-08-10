@@ -15,10 +15,10 @@
 //!     flooding the table.
 
 use axum::{
-    extract::{Json, State},
+    extract::{Json, Query, State},
     http::{HeaderMap, StatusCode},
-    routing::post,
-    Router,
+    routing::{get, post},
+    Json as AxumJson, Router,
 };
 use serde::Deserialize;
 // Payload is deserialized by `Json<ClientErrorRequest>`; no manual Value needed.
@@ -54,6 +54,7 @@ const MAX_USER_AGENT_LEN: usize = 500;
 pub(crate) fn routes() -> Router<AppState> {
     Router::new()
         .route("/client-errors", post(log_client_error))
+        .route("/admin/client-errors", get(list_client_errors))
         .route("/client-events", post(log_client_event))
 }
 
@@ -86,6 +87,91 @@ pub(crate) struct ClientEventRequest {
 
 /// Normalize source to one of the allowed enum values; unknown values
 /// become `"unknown"` so a malicious client can't force arbitrary labels.
+/// How many recent errors to return by default.
+const CLIENT_ERROR_PAGE: u64 = 50;
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct ClientErrorQuery {
+    #[serde(default)]
+    pub limit: Option<u64>,
+    /// Only errors newer than this many hours. Defaults to the last day.
+    #[serde(default)]
+    pub hours: Option<i64>,
+}
+
+/// `GET /api/admin/client-errors` — recent front-end failures, newest first.
+///
+/// Client errors were write-only: the app posted them, they landed in
+/// `client_error_logs`, and the only way to read them back was direct database
+/// access. During a production incident that meant the one record of what
+/// actually broke was unreachable, so diagnosis fell back to guessing.
+///
+/// Grouped by message hash so a single bug hitting a hundred users reads as
+/// one row with a count, not a hundred rows burying everything else.
+async fn list_client_errors(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    Query(q): Query<ClientErrorQuery>,
+) -> Result<AxumJson<serde_json::Value>, StatusCode> {
+    crate::api::auth::check_admin(&headers, &state)?;
+    let limit = q.limit.unwrap_or(CLIENT_ERROR_PAGE).clamp(1, 500) as i64;
+    let hours = q.hours.unwrap_or(24).clamp(1, 24 * 30);
+
+    use sea_orm::{ConnectionTrait, DbBackend, Statement};
+    let rows = state
+        .db
+        .orm
+        .query_all(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            "SELECT message_hash, \
+                    COUNT(*)::bigint       AS occurrences, \
+                    MAX(created_at)        AS last_seen, \
+                    MIN(created_at)        AS first_seen, \
+                    MAX(source)            AS source, \
+                    MAX(message)           AS message, \
+                    MAX(url_path)          AS url_path, \
+                    MAX(stack)             AS stack, \
+                    COUNT(DISTINCT telegram_id)::bigint AS affected_users \
+             FROM client_error_logs \
+             WHERE created_at > NOW() - ($1 || ' hours')::interval \
+             GROUP BY message_hash \
+             ORDER BY MAX(created_at) DESC \
+             LIMIT $2",
+            [hours.to_string().into(), limit.into()],
+        ))
+        .await
+        .map_err(|e| {
+            tracing::error!("list_client_errors: {e}");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    let errors: Vec<serde_json::Value> = rows
+        .iter()
+        .map(|r| {
+            let last: chrono::DateTime<chrono::Utc> =
+                r.try_get("", "last_seen").unwrap_or_else(|_| chrono::Utc::now());
+            let first: chrono::DateTime<chrono::Utc> =
+                r.try_get("", "first_seen").unwrap_or_else(|_| chrono::Utc::now());
+            serde_json::json!({
+                "message_hash": r.try_get::<String>("", "message_hash").unwrap_or_default(),
+                "occurrences": r.try_get::<i64>("", "occurrences").unwrap_or(0),
+                "affected_users": r.try_get::<i64>("", "affected_users").unwrap_or(0),
+                "source": r.try_get::<String>("", "source").unwrap_or_default(),
+                "message": r.try_get::<String>("", "message").unwrap_or_default(),
+                "url_path": r.try_get::<Option<String>>("", "url_path").ok().flatten(),
+                "stack": r.try_get::<Option<String>>("", "stack").ok().flatten(),
+                "last_seen": last.to_rfc3339(),
+                "first_seen": first.to_rfc3339(),
+            })
+        })
+        .collect();
+
+    Ok(AxumJson(serde_json::json!({
+        "errors": errors,
+        "window_hours": hours,
+    })))
+}
+
 fn normalize_source(raw: Option<String>) -> String {
     match raw.as_deref() {
         Some("wasm") => "wasm".to_string(),
