@@ -553,7 +553,21 @@ fn EventBookingModal(props: EventBookingModalProps) -> Element {
                         }
                     }
                 } else if let Some(ref url) = thumb {
-                    img { src: "{url}", alt: "{title}", style: "width:100%;max-height:200px;object-fit:cover;border-radius:8px;margin-top:12px;" }
+                    // The poster is the whole point of an event listing — a
+                    // time, a place and a face on a flyer. `object-fit:cover`
+                    // in a 200px letterbox cropped the top and bottom off
+                    // every portrait poster, which is exactly where that
+                    // information sits.
+                    //
+                    // `height:auto` keeps the natural aspect ratio, so nothing
+                    // is cut; `max-height` in viewport units stops a very tall
+                    // flyer from pushing the booking button off-screen, and
+                    // `contain` keeps the ratio when that cap bites.
+                    img {
+                        src: "{url}",
+                        alt: "{title}",
+                        style: "width:100%;height:auto;max-height:60vh;object-fit:contain;background:#0f0f1a;border-radius:8px;margin-top:12px;display:block;",
+                    }
                 }
                 if has_gallery {
                     div { style: "margin-top:12px;",
@@ -563,13 +577,19 @@ fn EventBookingModal(props: EventBookingModalProps) -> Element {
                             let photo_count = photos.len();
                             let has_many = photo_count > 1;
                             rsx! {
-                                div { style: "position:relative;width:100%;height:180px;background:#0f0f1a;border-radius:8px;overflow:hidden;border:1px solid #2a2a4a;",
+                                // Gallery frames stay fixed-height so the
+                                // prev/next controls do not jump between
+                                // photos of different shapes; the photo itself
+                                // is `contain`, so a portrait shot letterboxes
+                                // against the dark background instead of
+                                // losing its edges.
+                                div { style: "position:relative;width:100%;height:260px;background:#0f0f1a;border-radius:8px;overflow:hidden;border:1px solid #2a2a4a;",
                                     {
                                         let idx = *selected_photo.read();
                                         if let Some(url) = photos.get(idx) {
                                             let u = url.clone();
                                             let alt = title.clone();
-                                            rsx! { img { src: "{u}", alt: "{alt}", style: "width:100%;height:100%;object-fit:cover;" } }
+                                            rsx! { img { src: "{u}", alt: "{alt}", style: "width:100%;height:100%;object-fit:contain;" } }
                                         } else {
                                             rsx! {}
                                         }

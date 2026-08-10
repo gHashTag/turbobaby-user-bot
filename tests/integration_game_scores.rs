@@ -81,7 +81,55 @@ async fn leaderboard(app: axum::Router, limit: &str) -> Resp {
     .await
 }
 
+/// What is actually stored for this player.
+///
+/// The leaderboard endpoint returns only the top 100, so once the table has
+/// accumulated rows a modest test score stops being visible there. Storage
+/// semantics — personal best kept, one row per player, blank name replaced —
+/// have to be asserted against the row itself, or the test quietly turns into
+/// a test of how full the board is.
+async fn stored_score(db: &woody_weed_bot::db::Database, tid: i64) -> Option<i64> {
+    use sea_orm::{ConnectionTrait, DbBackend, Statement};
+    db.orm
+        .query_one(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            "SELECT high_score::bigint AS high_score FROM game_high_scores WHERE telegram_id = $1",
+            [tid.into()],
+        ))
+        .await
+        .expect("stored score query")
+        .and_then(|r| r.try_get::<i64>("", "high_score").ok())
+}
+
+async fn stored_rows(db: &woody_weed_bot::db::Database, tid: i64) -> i64 {
+    use sea_orm::{ConnectionTrait, DbBackend, Statement};
+    db.orm
+        .query_one(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            "SELECT COUNT(*)::bigint AS n FROM game_high_scores WHERE telegram_id = $1",
+            [tid.into()],
+        ))
+        .await
+        .expect("row count query")
+        .and_then(|r| r.try_get::<i64>("", "n").ok())
+        .unwrap_or(0)
+}
+
+async fn stored_name(db: &woody_weed_bot::db::Database, tid: i64) -> Option<String> {
+    use sea_orm::{ConnectionTrait, DbBackend, Statement};
+    db.orm
+        .query_one(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            "SELECT display_name FROM game_high_scores WHERE telegram_id = $1",
+            [tid.into()],
+        ))
+        .await
+        .expect("display name query")
+        .and_then(|r| r.try_get::<String>("", "display_name").ok())
+}
+
 /// Find a player's score on the board, if present.
+#[allow(dead_code)]
 fn score_of(board: &Value, name: &str) -> Option<i64> {
     board["entries"]
         .as_array()?
@@ -95,7 +143,7 @@ fn score_of(board: &Value, name: &str) -> Option<i64> {
 async fn a_worse_later_run_never_lowers_a_personal_best() {
     // The whole point of the GREATEST upsert. Without it, one bad run after a
     // great one would silently destroy the player's record.
-    let Some(app) = common::make_app().await else {
+    let Some((app, db)) = common::make_app_with_db().await else {
         eprintln!("DATABASE_URL not set — skipping");
         return;
     };
@@ -106,15 +154,10 @@ async fn a_worse_later_run_never_lowers_a_personal_best() {
         submit(app.clone(), tid, 5_000, &name).await.status,
         StatusCode::OK
     );
-    assert_eq!(
-        submit(app.clone(), tid, 10, &name).await.status,
-        StatusCode::OK
-    );
+    assert_eq!(submit(app, tid, 10, &name).await.status, StatusCode::OK);
 
-    let board = leaderboard(app, "100").await;
-    assert_eq!(board.status, StatusCode::OK);
     assert_eq!(
-        score_of(&board.body, &name),
+        stored_score(&db, tid).await,
         Some(5_000),
         "the personal best must survive a worse run"
     );
@@ -123,7 +166,7 @@ async fn a_worse_later_run_never_lowers_a_personal_best() {
 #[tokio::test]
 #[ignore = "needs DATABASE_URL env var; run with --ignored"]
 async fn a_better_run_replaces_the_previous_best() {
-    let Some(app) = common::make_app().await else {
+    let Some((app, db)) = common::make_app_with_db().await else {
         eprintln!("DATABASE_URL not set — skipping");
         return;
     };
@@ -131,10 +174,9 @@ async fn a_better_run_replaces_the_previous_best() {
     let name = format!("improve-{tid}");
 
     submit(app.clone(), tid, 100, &name).await;
-    submit(app.clone(), tid, 900, &name).await;
+    submit(app, tid, 900, &name).await;
 
-    let board = leaderboard(app, "100").await;
-    assert_eq!(score_of(&board.body, &name), Some(900));
+    assert_eq!(stored_score(&db, tid).await, Some(900));
 }
 
 #[tokio::test]
@@ -142,7 +184,7 @@ async fn a_better_run_replaces_the_previous_best() {
 async fn a_player_occupies_exactly_one_leaderboard_row() {
     // Repeated submissions must upsert, not append — otherwise one player
     // would fill the whole board.
-    let Some(app) = common::make_app().await else {
+    let Some((app, db)) = common::make_app_with_db().await else {
         eprintln!("DATABASE_URL not set — skipping");
         return;
     };
@@ -153,14 +195,11 @@ async fn a_player_occupies_exactly_one_leaderboard_row() {
         submit(app.clone(), tid, score, &name).await;
     }
 
-    let board = leaderboard(app, "100").await;
-    let rows = board.body["entries"]
-        .as_array()
-        .expect("entries array")
-        .iter()
-        .filter(|e| e["display_name"] == name.as_str())
-        .count();
-    assert_eq!(rows, 1, "three submissions must leave one row, not three");
+    assert_eq!(
+        stored_rows(&db, tid).await,
+        1,
+        "three submissions must leave one row, not three"
+    );
 }
 
 #[tokio::test]
@@ -202,23 +241,16 @@ async fn an_over_long_display_name_is_refused() {
 #[tokio::test]
 #[ignore = "needs DATABASE_URL env var; run with --ignored"]
 async fn a_blank_display_name_falls_back_to_player() {
-    let Some(app) = common::make_app().await else {
+    let Some((app, db)) = common::make_app_with_db().await else {
         eprintln!("DATABASE_URL not set — skipping");
         return;
     };
     let tid = fresh_telegram_id();
-    assert_eq!(
-        submit(app.clone(), tid, 7, "   ").await.status,
-        StatusCode::OK
-    );
+    assert_eq!(submit(app, tid, 7, "   ").await.status, StatusCode::OK);
 
-    let board = leaderboard(app, "100").await;
-    assert!(
-        board.body["entries"]
-            .as_array()
-            .expect("entries array")
-            .iter()
-            .any(|e| e["display_name"] == "Player"),
+    assert_eq!(
+        stored_name(&db, tid).await.as_deref(),
+        Some("Player"),
         "a blank name must be stored as the Player placeholder, not empty"
     );
 }

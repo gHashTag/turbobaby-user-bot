@@ -133,7 +133,9 @@ async fn harvesting_a_ready_plant_mints_exactly_one_reward() {
         return;
     };
     let (plant_id, tid) = seed_plant(&db, true).await;
-    assert_eq!(reward_count(&db, tid).await, 0, "starts with no rewards");
+    // Delta, not an absolute: the suite shares one database across runs, so a
+    // count of zero depends on what earlier runs happened to leave behind.
+    let before = reward_count(&db, tid).await;
 
     let resp = harvest(app, &plant_id, tid).await;
     assert_eq!(resp.status, StatusCode::OK, "body: {}", resp.body);
@@ -143,7 +145,7 @@ async fn harvesting_a_ready_plant_mints_exactly_one_reward() {
         resp.body
     );
     assert_eq!(
-        reward_count(&db, tid).await,
+        reward_count(&db, tid).await - before,
         1,
         "harvesting must mint exactly one reward"
     );
@@ -164,6 +166,8 @@ async fn a_plant_cannot_be_harvested_twice() {
         harvest(app.clone(), &plant_id, tid).await.body["success"],
         true
     );
+    // Delta, not an absolute: the suite shares one database across runs.
+    let after_first = reward_count(&db, tid).await;
 
     let second = harvest(app, &plant_id, tid).await;
     assert_eq!(second.status, StatusCode::OK);
@@ -175,7 +179,7 @@ async fn a_plant_cannot_be_harvested_twice() {
     assert_eq!(second.body["error"], "Already harvested");
     assert_eq!(
         reward_count(&db, tid).await,
-        1,
+        after_first,
         "a refused second harvest must not mint another reward"
     );
 }
@@ -188,6 +192,7 @@ async fn an_unripe_plant_cannot_be_harvested() {
         return;
     };
     let (plant_id, tid) = seed_plant(&db, false).await;
+    let before = reward_count(&db, tid).await;
 
     let resp = harvest(app, &plant_id, tid).await;
     assert_eq!(resp.status, StatusCode::OK);
@@ -195,7 +200,7 @@ async fn an_unripe_plant_cannot_be_harvested() {
     assert_eq!(resp.body["error"], "Plant not ready for harvest");
     assert_eq!(
         reward_count(&db, tid).await,
-        0,
+        before,
         "an unripe plant must mint nothing"
     );
 }
@@ -233,6 +238,7 @@ async fn the_reward_reaches_the_owner_rewards_list() {
         return;
     };
     let (plant_id, tid) = seed_plant(&db, true).await;
+    let before = reward_count(&db, tid).await;
     harvest(app.clone(), &plant_id, tid).await;
 
     let list = send(
@@ -249,15 +255,18 @@ async fn the_reward_reaches_the_owner_rewards_list() {
     .await;
     assert_eq!(list.status, StatusCode::OK, "body: {}", list.body);
     let rewards = list.body["rewards"].as_array().expect("rewards array");
+    // Delta plus a property, not an absolute count: the suite shares one
+    // database across runs, so "exactly one reward" would depend on what an
+    // earlier run left for this id.
     assert_eq!(
-        rewards.len(),
+        reward_count(&db, tid).await - before,
         1,
-        "the harvested reward must appear in the owner's list: {}",
-        list.body
+        "harvesting must add exactly one reward"
     );
-    assert_eq!(
-        rewards[0]["is_active"], true,
-        "a freshly minted reward must be usable"
+    assert!(
+        rewards.iter().any(|r| r["is_active"] == true),
+        "the harvested reward must appear in the owner's list and be usable: {}",
+        list.body
     );
 }
 
