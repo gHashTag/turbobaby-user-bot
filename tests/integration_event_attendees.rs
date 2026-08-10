@@ -327,3 +327,84 @@ async fn the_attendee_list_is_admin_only() {
         "no attendee data may leak to an unauthenticated caller"
     );
 }
+
+/// The "send the guest list to Telegram" path exists because a guest without
+/// an @username cannot be opened from the Mini App at all. The send itself
+/// needs a live Telegram token, so this asserts the parts that can be checked
+/// without one: who is allowed to ask, and for what.
+#[tokio::test]
+#[ignore = "needs DATABASE_URL env var; run with --ignored"]
+async fn sending_the_guest_list_is_admin_only_and_scoped_to_a_real_event() {
+    let Some((app, db)) = common::make_app_with_db().await else {
+        eprintln!("DATABASE_URL not set — skipping");
+        return;
+    };
+    let event_id = seed_event(&db, 10).await;
+
+    let anon = send(
+        app.clone(),
+        Request::builder()
+            .method("POST")
+            .uri(format!("/api/admin/events/{event_id}/bookings/send"))
+            .body(Body::empty())
+            .unwrap(),
+    )
+    .await;
+    assert!(
+        matches!(
+            anon.status,
+            StatusCode::UNAUTHORIZED | StatusCode::TOO_MANY_REQUESTS
+        ),
+        "an unauthenticated caller must not make the bot send anything (got {})",
+        anon.status
+    );
+
+    // Admin, but an event that does not exist: 404 rather than an empty
+    // message sent into the owner's chat.
+    let missing = send(
+        app,
+        Request::builder()
+            .method("POST")
+            .uri(format!(
+                "/api/admin/events/{}/bookings/send",
+                uuid::Uuid::new_v4()
+            ))
+            .header("X-Admin-Token", admin_token())
+            // 42 is the only admin in the test config (tests/common/mod.rs).
+            .header("X-Admin-Telegram-Id", "42")
+            .body(Body::empty())
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(missing.status, StatusCode::NOT_FOUND);
+}
+
+/// The password-auth path reports admin id 0, so the target chat comes from a
+/// header. That header must be checked against the admin list, or anyone
+/// holding the admin password could make the bot message arbitrary chats.
+#[tokio::test]
+#[ignore = "needs DATABASE_URL env var; run with --ignored"]
+async fn the_guest_list_cannot_be_sent_to_a_non_admin_chat() {
+    let Some((app, db)) = common::make_app_with_db().await else {
+        eprintln!("DATABASE_URL not set — skipping");
+        return;
+    };
+    let event_id = seed_event(&db, 10).await;
+
+    let resp = send(
+        app,
+        Request::builder()
+            .method("POST")
+            .uri(format!("/api/admin/events/{event_id}/bookings/send"))
+            .header("X-Admin-Token", admin_token())
+            .header("X-Admin-Telegram-Id", "999999999")
+            .body(Body::empty())
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(
+        resp.status,
+        StatusCode::FORBIDDEN,
+        "a non-admin chat id must be refused, not messaged"
+    );
+}

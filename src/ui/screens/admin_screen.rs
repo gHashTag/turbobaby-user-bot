@@ -6682,6 +6682,8 @@ fn EventsTab() -> Element {
     let mut booking_target: Signal<Option<AdminEvent>> = use_signal(|| None);
     let mut bookings: Signal<Vec<EventBooking>> = use_signal(Vec::new);
     let mut bookings_loading = use_signal(|| false);
+    // Result of the "send guest list to Telegram" action, shown under the button.
+    let mut send_list_status = use_signal(String::new);
 
     fn admin_event_headers(init: String, telegram_id: i64) -> Vec<(&'static str, String)> {
         vec![
@@ -7008,11 +7010,20 @@ fn EventsTab() -> Element {
                             rsx! {
                                 div { key: "{b.id}", style: "display:flex;justify-content:space-between;align-items:center;gap:8px;background:#1a1a2e;padding:8px;border:1px solid #2a2a4a;",
                                     div { style: "font-size:13px;min-width:0;",
-                                        a {
-                                            href: "{who.url}",
-                                            target: "_blank",
-                                            style: "color:{who_color};font-weight:700;text-decoration:underline;word-break:break-all;",
-                                            "{who.label}"
+                                        // Only a real @handle gets a link. `tg://user?id=…` renders
+                                        // as an "Open link?" prompt in the Telegram webview and then
+                                        // does nothing, so a link there would be a lie — use the
+                                        // "send to Telegram" button below, where the same id becomes
+                                        // a working inline mention.
+                                        if who.reachable_by_handle {
+                                            a {
+                                                href: "{who.url}",
+                                                target: "_blank",
+                                                style: "color:{who_color};font-weight:700;text-decoration:underline;word-break:break-all;",
+                                                "{who.label}"
+                                            }
+                                        } else {
+                                            span { style: "color:{who_color};font-weight:700;word-break:break-all;", "{who.label}" }
                                         }
                                         span { style: "color:#888;margin-left:8px;", "{b.status}" }
                                         span { style: "color:#39ff14;margin-left:8px;", "+{b.seats}" }
@@ -7208,6 +7219,44 @@ fn EventsTab() -> Element {
                         Skeleton { shape: SkeletonShape::Text, width: Some("60%".into()) }
                     } else {
                         { booking_rows }
+                        // The only way to reach a guest who has no @username:
+                        // in a bot message `tg://user?id=…` is a real inline
+                        // mention and opens the profile, whereas in this
+                        // webview it does nothing.
+                        {
+                            let send_event_id = ev.id.clone();
+                            rsx! {
+                                button {
+                                    style: "width:100%;padding:10px;background:#39ff14;color:#000;border:3px solid #2d9e0f;font-size:13px;font-weight:700;cursor:pointer;box-shadow:2px 2px 0 #000;",
+                                    onclick: move |_| {
+                                        let init = init_data.read().clone();
+                                        let eid = send_event_id.clone();
+                                        let mut status = send_list_status;
+                                        spawn(async move {
+                                            status.set("Отправляю…".to_string());
+                                            let url = format!(
+                                                "{}/api/admin/events/{}/bookings/send",
+                                                api_base_url(), eid
+                                            );
+                                            let res = HTTP_CLIENT.clone().post(&url)
+                                                .headers(admin_event_headers(init, telegram_id))
+                                                .send().await;
+                                            match res {
+                                                Ok(r) if r.status().is_success() =>
+                                                    status.set("✅ Список отправлен вам в Telegram".to_string()),
+                                                Ok(r) =>
+                                                    status.set(format!("Не отправилось ({})", r.status().as_u16())),
+                                                Err(_) => status.set("Не отправилось (нет связи)".to_string()),
+                                            }
+                                        });
+                                    },
+                                    "📨 Прислать список в Telegram"
+                                }
+                            }
+                        }
+                        if !send_list_status.read().is_empty() {
+                            p { style: "font-size:12px;color:#8b8b9e;margin:0;", "{send_list_status}" }
+                        }
                     }
                 }
             }

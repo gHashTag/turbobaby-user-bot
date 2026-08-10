@@ -48,6 +48,20 @@ pub fn shift_month(date: NaiveDate, delta: i32) -> NaiveDate {
     NaiveDate::from_ymd_opt(year, month, 1).unwrap_or(date)
 }
 
+/// Days of `anchor`'s month that are worth showing, given today's date.
+///
+/// The picker exists to schedule things, so days already past are dead space:
+/// on the 10th, a strip starting at the 1st wastes a third of its width before
+/// the first tappable day. In the current month it starts at `today`; in any
+/// other month the whole month is shown, so stepping back to review an earlier
+/// month still works.
+pub fn visible_month_days(anchor: NaiveDate, today: NaiveDate) -> Vec<NaiveDate> {
+    month_days(anchor)
+        .into_iter()
+        .filter(|d| first_of_month(*d) != first_of_month(today) || *d >= today)
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -113,6 +127,58 @@ mod tests {
         let days = month_days(d(2026, 2, 14));
         assert_eq!(days.len(), 28);
         assert_eq!(*days.last().expect("non-empty"), d(2026, 2, 28));
+    }
+
+    #[test]
+    fn the_current_month_starts_at_today_not_the_first() {
+        // Dead space: on the 10th a strip beginning at the 1st burns a third
+        // of its width on days nothing can be scheduled into.
+        let today = d(2026, 8, 10);
+        let days = visible_month_days(today, today);
+        assert_eq!(days[0], today, "must start at today");
+        assert_eq!(*days.last().expect("non-empty"), d(2026, 8, 31));
+        assert_eq!(days.len(), 22, "10th..31st inclusive");
+    }
+
+    #[test]
+    fn today_itself_is_still_selectable() {
+        let today = d(2026, 8, 10);
+        assert!(
+            visible_month_days(today, today).contains(&today),
+            "an event can be added for today"
+        );
+    }
+
+    #[test]
+    fn a_future_month_shows_from_its_first_day() {
+        let today = d(2026, 8, 10);
+        let days = visible_month_days(d(2026, 9, 1), today);
+        assert_eq!(days[0], d(2026, 9, 1));
+        assert_eq!(days.len(), 30);
+    }
+
+    #[test]
+    fn a_past_month_still_shows_in_full() {
+        // Stepping back to review what already happened must not show an
+        // empty strip.
+        let today = d(2026, 8, 10);
+        let days = visible_month_days(d(2026, 7, 1), today);
+        assert_eq!(days.len(), 31, "July is fully visible when looking back");
+        assert_eq!(days[0], d(2026, 7, 1));
+    }
+
+    #[test]
+    fn the_last_day_of_a_month_leaves_exactly_one_day() {
+        let today = d(2026, 8, 31);
+        assert_eq!(visible_month_days(today, today), vec![today]);
+    }
+
+    #[test]
+    fn the_same_day_number_in_another_year_does_not_truncate() {
+        // Filtering on day-of-month alone would wrongly trim August 2027.
+        let today = d(2026, 8, 10);
+        let days = visible_month_days(d(2027, 8, 1), today);
+        assert_eq!(days.len(), 31, "a different year is not the current month");
     }
 
     #[test]

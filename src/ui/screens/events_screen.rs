@@ -152,7 +152,7 @@ fn WeekSelector(props: WeekSelectorProps) -> Element {
         }
         div { style: "display:flex;gap:6px;padding:0 12px 12px;overflow-x:auto;-webkit-overflow-scrolling:touch;",
             {
-                crate::trios::calendar::month_days(anchor)
+                crate::trios::calendar::visible_month_days(anchor, today)
                     .into_iter()
                     .map(|day| {
                         let is_selected = day == *selected.read();

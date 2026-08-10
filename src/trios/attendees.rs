@@ -80,9 +80,182 @@ pub fn attendee_link(
     }
 }
 
+/// One person on an event's guest list.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Attendee {
+    pub telegram_id: i64,
+    pub username: Option<String>,
+    pub first_name: Option<String>,
+    pub seats: i32,
+}
+
+/// Escape text for Telegram's HTML parse mode.
+///
+/// Guest names are user-controlled. An unescaped `<` breaks the message, and
+/// Telegram rejects the whole send — the owner would see nothing at all.
+fn escape_html(s: &str) -> String {
+    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
+}
+
+/// Render the guest list as a Telegram message in HTML parse mode.
+///
+/// Every guest is tappable, including people with no @username: in a bot
+/// message `tg://user?id=…` is a real inline mention, which Telegram resolves
+/// to a profile. That is why this exists at all — the same URL in the Mini
+/// App's webview just shows an "Open link?" prompt and then does nothing.
+pub fn format_attendee_message(event_title: &str, attendees: &[Attendee]) -> String {
+    if attendees.is_empty() {
+        return format!(
+            "🎟 <b>{}</b>\n\nПока никто не забронировал.",
+            escape_html(event_title)
+        );
+    }
+    let total_seats: i32 = attendees.iter().map(|a| a.seats).sum();
+    let mut out = format!(
+        "🎟 <b>{}</b>\nЗабронировали: {} чел. · {} мест\n\n",
+        escape_html(event_title),
+        attendees.len(),
+        total_seats
+    );
+    for (i, a) in attendees.iter().enumerate() {
+        let link = attendee_link(a.username.as_deref(), a.first_name.as_deref(), a.telegram_id);
+        // A handle links to the public profile; everyone else gets an inline
+        // mention, which works even without a username.
+        let anchor = if link.reachable_by_handle {
+            format!(
+                "<a href=\"{}\">{}</a>",
+                link.url,
+                escape_html(&link.label)
+            )
+        } else {
+            let name = a
+                .first_name
+                .as_deref()
+                .map(str::trim)
+                .filter(|n| !n.is_empty())
+                .map(escape_html)
+                .unwrap_or_else(|| format!("id {}", a.telegram_id));
+            format!(
+                "<a href=\"tg://user?id={}\">{}</a>",
+                a.telegram_id, name
+            )
+        };
+        let seats = if a.seats > 1 {
+            format!(" · {} мест", a.seats)
+        } else {
+            String::new()
+        };
+        out.push_str(&format!("{}. {}{}\n", i + 1, anchor, seats));
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn att(id: i64, username: Option<&str>, first: Option<&str>, seats: i32) -> Attendee {
+        Attendee {
+            telegram_id: id,
+            username: username.map(String::from),
+            first_name: first.map(String::from),
+            seats,
+        }
+    }
+
+    #[test]
+    fn a_guest_without_a_username_still_gets_a_tappable_mention() {
+        // The whole reason this formatter exists: `tg://user?id=` does nothing
+        // in the Mini App webview, but in a bot message it is a real inline
+        // mention that opens the profile.
+        let msg = format_attendee_message("DJ SET", &[att(284352897, None, Some("Аня"), 1)]);
+        assert!(
+            msg.contains(r#"<a href="tg://user?id=284352897">Аня</a>"#),
+            "expected an inline mention, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn a_guest_with_a_username_links_to_their_profile() {
+        let msg = format_attendee_message("DJ SET", &[att(1, Some("vibee_dev"), None, 1)]);
+        assert!(
+            msg.contains(r#"<a href="https://t.me/vibee_dev">@vibee_dev</a>"#),
+            "got: {msg}"
+        );
+    }
+
+    #[test]
+    fn a_guest_with_neither_falls_back_to_their_id_but_stays_tappable() {
+        let msg = format_attendee_message("DJ SET", &[att(77, None, None, 1)]);
+        assert!(msg.contains(r#"<a href="tg://user?id=77">id 77</a>"#), "got: {msg}");
+    }
+
+    #[test]
+    fn the_header_counts_people_and_seats_separately() {
+        // Four bookings can be more than four seats; the owner plans capacity
+        // on seats and the guest list on people.
+        let msg = format_attendee_message(
+            "DJ SET",
+            &[att(1, Some("a_user"), None, 2), att(2, None, Some("B"), 3)],
+        );
+        assert!(msg.contains("2 чел."), "people count missing: {msg}");
+        assert!(msg.contains("5 мест"), "seat total missing: {msg}");
+    }
+
+    #[test]
+    fn guests_are_numbered_in_order() {
+        let msg = format_attendee_message(
+            "DJ SET",
+            &[att(1, Some("first_one"), None, 1), att(2, Some("second_one"), None, 1)],
+        );
+        let first = msg.find("1. ").expect("first entry");
+        let second = msg.find("2. ").expect("second entry");
+        assert!(first < second, "entries must keep their order: {msg}");
+    }
+
+    #[test]
+    fn an_empty_list_says_so_instead_of_sending_a_bare_header() {
+        let msg = format_attendee_message("DJ SET", &[]);
+        assert!(msg.contains("Пока никто не забронировал"), "got: {msg}");
+    }
+
+    #[test]
+    fn names_and_titles_are_escaped() {
+        // Telegram rejects a malformed HTML message outright, so an unescaped
+        // "<" in someone's name would mean the owner receives nothing at all.
+        let msg = format_attendee_message("<b>DJ</b> & co", &[att(1, None, Some("<script>"), 1)]);
+        assert!(!msg.contains("<b>DJ</b>"), "title not escaped: {msg}");
+        assert!(!msg.contains("<script>"), "name not escaped: {msg}");
+        assert!(msg.contains("&amp;"), "ampersand not escaped: {msg}");
+    }
+
+    #[test]
+    fn seat_counts_are_only_shown_when_they_matter() {
+        // Asserted on the guest's own line — the header always carries a seat
+        // total, so searching the whole message would match either way.
+        fn guest_line(msg: &str) -> String {
+            msg.lines()
+                .find(|l| l.starts_with("1. "))
+                .expect("a numbered guest line")
+                .to_string()
+        }
+        let single = guest_line(&format_attendee_message(
+            "E",
+            &[att(1, Some("only_one"), None, 1)],
+        ));
+        assert!(
+            !single.contains("мест"),
+            "a single seat should be implicit: {single}"
+        );
+        let multi = guest_line(&format_attendee_message(
+            "E",
+            &[att(1, Some("only_one"), None, 3)],
+        ));
+        assert!(
+            multi.contains("3 мест"),
+            "a multi-seat booking must be visible: {multi}"
+        );
+    }
 
     #[test]
     fn a_username_becomes_a_tappable_handle() {

@@ -46,6 +46,10 @@ pub(crate) fn routes() -> Router<AppState> {
         )
         .route("/admin/events/:id/bookings", get(list_event_bookings))
         .route(
+            "/admin/events/:id/bookings/send",
+            post(send_event_bookings),
+        )
+        .route(
             "/admin/events/:id/bookings/:booking_id/cancel",
             put(cancel_booking),
         )
@@ -1546,6 +1550,100 @@ async fn list_event_bookings(
     )).await.map_err(|e| { tracing::error!("list_event_bookings: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?;
     let bookings: Vec<Value> = rows.iter().map(booking_row).collect();
     Ok(Json(json!({ "bookings": bookings })))
+}
+
+/// `POST /api/admin/events/:id/bookings/send` — deliver the guest list to the
+/// admin as a Telegram message.
+///
+/// Exists because the Mini App cannot open a person who has no @username: the
+/// webview turns `tg://user?id=…` into an "Open link?" prompt that then does
+/// nothing. In a *bot message* the same URL is a real inline mention, so every
+/// guest becomes tappable regardless of whether they have a handle.
+async fn send_event_bookings(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<Value>, StatusCode> {
+    event_id_ok(&id)?;
+    let admin_id = check_admin(&headers, &state)?;
+
+    // The password-auth path reports 0, so fall back to the header — but only
+    // for an id that is actually an admin. Without that check, anyone holding
+    // the admin password could use this endpoint to send messages to arbitrary
+    // chats.
+    let target = if admin_id > 0 {
+        admin_id
+    } else {
+        let claimed = headers
+            .get("X-Admin-Telegram-Id")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.parse::<i64>().ok())
+            .ok_or(StatusCode::BAD_REQUEST)?;
+        if !state.config.admin_ids.contains(&claimed) {
+            return Err(StatusCode::FORBIDDEN);
+        }
+        claimed
+    };
+
+    use sea_orm::{ConnectionTrait, DbBackend, Statement};
+    let title = state
+        .db
+        .orm
+        .query_one(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            "SELECT title FROM events WHERE id = $1",
+            [id.clone().into()],
+        ))
+        .await
+        .map_err(|e| {
+            tracing::error!("send_event_bookings title: {e}");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?
+        .and_then(|r| r.try_get::<String>("", "title").ok())
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    let rows = state
+        .db
+        .orm
+        .query_all(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            "SELECT telegram_id, username, first_name, seats FROM event_bookings \
+             WHERE event_id = $1 AND status = 'confirmed' \
+             ORDER BY created_at ASC",
+            [id.clone().into()],
+        ))
+        .await
+        .map_err(|e| {
+            tracing::error!("send_event_bookings rows: {e}");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    let attendees: Vec<crate::trios::attendees::Attendee> = rows
+        .iter()
+        .map(|r| crate::trios::attendees::Attendee {
+            telegram_id: r.try_get::<i64>("", "telegram_id").unwrap_or(0),
+            username: r.try_get::<Option<String>>("", "username").ok().flatten(),
+            first_name: r.try_get::<Option<String>>("", "first_name").ok().flatten(),
+            seats: r.try_get::<i32>("", "seats").unwrap_or(1),
+        })
+        .collect();
+    let count = attendees.len();
+    let text = crate::trios::attendees::format_attendee_message(&title, &attendees);
+
+    use teloxide::payloads::SendMessageSetters;
+    use teloxide::prelude::Requester;
+    use teloxide::types::ChatId;
+    state
+        .bot
+        .send_message(ChatId(target), text)
+        .parse_mode(teloxide::types::ParseMode::Html)
+        .await
+        .map_err(|e| {
+            tracing::error!("send_event_bookings send: {e}");
+            StatusCode::BAD_GATEWAY
+        })?;
+
+    Ok(Json(json!({ "success": true, "sent": count })))
 }
 
 async fn cancel_booking(
