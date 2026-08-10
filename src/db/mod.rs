@@ -306,6 +306,10 @@ const MIGRATIONS: &[(&str, &str)] = &[
         "070_event_bookings_username.sql",
         include_str!("../../migrations/070_event_bookings_username.sql"),
     ),
+    (
+        "071_delivery_zones_koh_phangan.sql",
+        include_str!("../../migrations/071_delivery_zones_koh_phangan.sql"),
+    ),
 ];
 
 /// Columns the catalog endpoints SELECT that were added by *later* migrations
