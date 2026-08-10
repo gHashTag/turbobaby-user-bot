@@ -27,7 +27,8 @@ pub fn spawn_notification_worker(
 ) {
     tokio::spawn(async move {
         let db = Arc::new(Database::from_conn(orm.clone()));
-        let mut interval = tokio::time::interval(std::time::Duration::from_secs(POLL_INTERVAL_SECS));
+        let mut interval =
+            tokio::time::interval(std::time::Duration::from_secs(POLL_INTERVAL_SECS));
         interval.tick().await; // discard cold-start tick
         loop {
             interval.tick().await;
@@ -56,7 +57,9 @@ async fn process_batch(
         let payload = row.payload.clone();
 
         if telegram_id == 0 {
-            crate::db::notifications::mark_delivered(orm, row.id).await.ok();
+            crate::db::notifications::mark_delivered(orm, row.id)
+                .await
+                .ok();
             continue;
         }
 
@@ -66,16 +69,10 @@ async fn process_batch(
             .unwrap_or_else(|| "en".to_string());
         let locale = get_locale(&lang);
 
-        let text = build_message(&kind,
-            &payload,
-            &locale,
-            &config.bot_username,
-        );
+        let text = build_message(&kind, &payload, &locale, &config.bot_username);
         let markup = InlineKeyboardMarkup::new(vec![vec![url_btn(
             &locale.garden_open_app,
-            &miniapp_deep_link(&config.bot_username,
-            "garden",
-        ),
+            &miniapp_deep_link(&config.bot_username, "garden"),
         )]]);
 
         match bot
@@ -127,7 +124,11 @@ fn build_message(
         .unwrap_or("Friend");
 
     match kind {
-        "friend_joined" => format!("{}\n\n{}", locale.garden_friend_joined.replace("{name}", name), locale.garden_invite_progress_hint),
+        "friend_joined" => format!(
+            "{}\n\n{}",
+            locale.garden_friend_joined.replace("{name}", name),
+            locale.garden_invite_progress_hint
+        ),
         "friend_watered" => {
             let streak = payload.get("streak").and_then(|v| v.as_i64()).unwrap_or(0);
             let body = locale
@@ -137,10 +138,7 @@ fn build_message(
             format!("{}\n\n{}", body, locale.garden_invite_progress_hint)
         }
         "friend_ordered" => {
-            let bonus = payload
-                .get("bonus")
-                .and_then(|v| v.as_f64())
-                .unwrap_or(0.0);
+            let bonus = payload.get("bonus").and_then(|v| v.as_f64()).unwrap_or(0.0);
             let body = locale
                 .garden_friend_ordered
                 .replace("{name}", name)
@@ -148,7 +146,10 @@ fn build_message(
             format!("{}\n\n{}", body, locale.garden_invite_progress_hint)
         }
         "milestone" => {
-            let milestone = payload.get("milestone").and_then(|v| v.as_i64()).unwrap_or(0);
+            let milestone = payload
+                .get("milestone")
+                .and_then(|v| v.as_i64())
+                .unwrap_or(0);
             let bonus = payload
                 .get("bonus_amount")
                 .and_then(|v| v.as_f64())

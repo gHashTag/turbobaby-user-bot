@@ -56,7 +56,10 @@ async fn add_stars(app: axum::Router, tid: i64, amount: i64, external_tx_id: &st
         .method("POST")
         .uri("/api/stars/add")
         .header("content-type", "application/json")
-        .header("X-Telegram-Init-Data", common::make_init_data(tid, BOT_TOKEN))
+        .header(
+            "X-Telegram-Init-Data",
+            common::make_init_data(tid, BOT_TOKEN),
+        )
         .body(Body::from(
             serde_json::to_vec(&json!({
                 "telegram_id": tid,
@@ -76,7 +79,10 @@ async fn spend_stars(app: axum::Router, tid: i64, amount: i64) -> Resp {
         .method("POST")
         .uri("/api/stars/spend")
         .header("content-type", "application/json")
-        .header("X-Telegram-Init-Data", common::make_init_data(tid, BOT_TOKEN))
+        .header(
+            "X-Telegram-Init-Data",
+            common::make_init_data(tid, BOT_TOKEN),
+        )
         .body(Body::from(
             serde_json::to_vec(&json!({
                 "telegram_id": tid,
@@ -92,7 +98,10 @@ async fn spend_stars(app: axum::Router, tid: i64, amount: i64) -> Resp {
 async fn balance(app: axum::Router, tid: i64) -> Resp {
     let request = Request::builder()
         .uri(format!("/api/stars/balance/{tid}"))
-        .header("X-Telegram-Init-Data", common::make_init_data(tid, BOT_TOKEN))
+        .header(
+            "X-Telegram-Init-Data",
+            common::make_init_data(tid, BOT_TOKEN),
+        )
         .body(Body::empty())
         .unwrap();
     send(app, request).await
@@ -109,13 +118,7 @@ async fn crediting_stars_raises_the_balance_and_writes_a_ledger_row() {
     };
     let tid = fresh_telegram_id();
 
-    let resp = add_stars(
-        app.clone(),
-        tid,
-        250,
-        &uuid::Uuid::new_v4().to_string(),
-    )
-    .await;
+    let resp = add_stars(app.clone(), tid, 250, &uuid::Uuid::new_v4().to_string()).await;
     assert_eq!(resp.status, StatusCode::OK, "body: {}", resp.body);
 
     assert_eq!(balance(app.clone(), tid).await.body["balance"], 250);
@@ -125,13 +128,18 @@ async fn crediting_stars_raises_the_balance_and_writes_a_ledger_row() {
         app,
         Request::builder()
             .uri(format!("/api/stars/history/{tid}"))
-            .header("X-Telegram-Init-Data", common::make_init_data(tid, BOT_TOKEN))
+            .header(
+                "X-Telegram-Init-Data",
+                common::make_init_data(tid, BOT_TOKEN),
+            )
             .body(Body::empty())
             .unwrap(),
     )
     .await;
     assert_eq!(history.status, StatusCode::OK);
-    let txs = history.body["transactions"].as_array().expect("ledger array");
+    let txs = history.body["transactions"]
+        .as_array()
+        .expect("ledger array");
     assert_eq!(txs.len(), 1, "expected exactly one ledger row");
     assert_eq!(txs[0]["amount"], 250);
     assert_eq!(
@@ -273,7 +281,10 @@ async fn spending_the_exact_balance_is_allowed() {
     let tid = fresh_telegram_id();
 
     add_stars(app.clone(), tid, 75, &uuid::Uuid::new_v4().to_string()).await;
-    assert_eq!(spend_stars(app.clone(), tid, 75).await.status, StatusCode::OK);
+    assert_eq!(
+        spend_stars(app.clone(), tid, 75).await.status,
+        StatusCode::OK
+    );
     assert_eq!(balance(app, tid).await.body["balance"], 0);
 }
 

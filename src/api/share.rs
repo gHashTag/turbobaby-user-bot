@@ -139,7 +139,11 @@ pub(crate) fn build_inline_result(
     });
     let caption = build_caption(card);
 
-    match card.image_url.as_deref().filter(|u| u.starts_with("https://")) {
+    match card
+        .image_url
+        .as_deref()
+        .filter(|u| u.starts_with("https://"))
+    {
         Some(url) => json!({
             "type": "photo",
             "id": result_id,
@@ -368,7 +372,10 @@ mod tests {
         // `?startapp=` silently opens the bot chat unless a Main Mini App is
         // configured in BotFather — that is the bug this replaced.
         let link = deep_link("Woody_WeedPecker_bot", ShareKind::Set, "abc-123");
-        assert_eq!(link, "https://t.me/Woody_WeedPecker_bot?start=p_set_abc-123");
+        assert_eq!(
+            link,
+            "https://t.me/Woody_WeedPecker_bot?start=p_set_abc-123"
+        );
         assert!(!link.contains("startapp"));
     }
 

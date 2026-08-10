@@ -102,7 +102,10 @@ async fn harvest(app: axum::Router, plant_id: &str, tid: i64) -> Resp {
         Request::builder()
             .method("POST")
             .uri(format!("/api/garden/plants/{plant_id}/harvest"))
-            .header("X-Telegram-Init-Data", common::make_init_data(tid, BOT_TOKEN))
+            .header(
+                "X-Telegram-Init-Data",
+                common::make_init_data(tid, BOT_TOKEN),
+            )
             .body(Body::empty())
             .unwrap(),
     )
@@ -157,7 +160,10 @@ async fn a_plant_cannot_be_harvested_twice() {
     };
     let (plant_id, tid) = seed_plant(&db, true).await;
 
-    assert_eq!(harvest(app.clone(), &plant_id, tid).await.body["success"], true);
+    assert_eq!(
+        harvest(app.clone(), &plant_id, tid).await.body["success"],
+        true
+    );
 
     let second = harvest(app, &plant_id, tid).await;
     assert_eq!(second.status, StatusCode::OK);
@@ -233,7 +239,10 @@ async fn the_reward_reaches_the_owner_rewards_list() {
         app,
         Request::builder()
             .uri(format!("/api/garden/rewards?telegram_id={tid}"))
-            .header("X-Telegram-Init-Data", common::make_init_data(tid, BOT_TOKEN))
+            .header(
+                "X-Telegram-Init-Data",
+                common::make_init_data(tid, BOT_TOKEN),
+            )
             .body(Body::empty())
             .unwrap(),
     )

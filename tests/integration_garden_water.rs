@@ -52,10 +52,9 @@ async fn water(
     let bytes = axum::body::to_bytes(resp.into_body(), 1 << 20)
         .await
         .unwrap();
-    let json = serde_json::from_slice::<serde_json::Value>(&bytes)
-        .unwrap_or(serde_json::Value::String(
-            String::from_utf8_lossy(&bytes).to_string(),
-        ));
+    let json = serde_json::from_slice::<serde_json::Value>(&bytes).unwrap_or(
+        serde_json::Value::String(String::from_utf8_lossy(&bytes).to_string()),
+    );
     (status, json)
 }
 

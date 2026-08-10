@@ -55,12 +55,7 @@ async fn complete_node(app: axum::Router, id: &str, authed: bool) -> Resp {
 }
 
 /// Insert a node. `deps` are ids this node waits on.
-async fn seed_node(
-    db: &woody_weed_bot::db::Database,
-    id: &str,
-    status: &str,
-    deps: &[&str],
-) {
+async fn seed_node(db: &woody_weed_bot::db::Database, id: &str, status: &str, deps: &[&str]) {
     let deps_literal = format!(
         "{{{}}}",
         deps.iter()

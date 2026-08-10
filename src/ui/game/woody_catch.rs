@@ -97,8 +97,7 @@ async fn fetch_global_high_scores(limit: u32) -> Result<GlobalHighScoresResponse
     let base = api_base_url();
     let url = format!("{}/api/game/high-scores?limit={}", base, limit);
     let text = crate::ui::api::http::fetch_text(&url).await?;
-    serde_json::from_str::<GlobalHighScoresResponse>(&text)
-        .map_err(|e| format!("Parse error: {e}"))
+    serde_json::from_str::<GlobalHighScoresResponse>(&text).map_err(|e| format!("Parse error: {e}"))
 }
 
 async fn submit_global_high_score(
@@ -117,7 +116,11 @@ async fn submit_global_high_score(
     let text = crate::ui::api::http::post_json_authed(&url, init_data, &body).await?;
     let resp: serde_json::Value =
         serde_json::from_str(&text).map_err(|e| format!("Parse error: {e}"))?;
-    if !resp.get("success").and_then(|v| v.as_bool()).unwrap_or(false) {
+    if !resp
+        .get("success")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false)
+    {
         return Err("submit_failed".into());
     }
     let rank = resp.get("rank").and_then(|v| v.as_i64()).unwrap_or(0);

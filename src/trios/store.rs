@@ -421,8 +421,8 @@ impl CheckoutBlocker {
     /// Translation key describing how to clear this blocker.
     pub fn message_key(self) -> crate::trios::i18n::Key {
         use crate::trios::i18n::{
-            T_CHECKOUT_ERR_ADDRESS, T_CHECKOUT_ERR_AGE, T_CHECKOUT_ERR_ITEMS,
-            T_CHECKOUT_ERR_NAME, T_CHECKOUT_ERR_NO_TELEGRAM, T_CHECKOUT_ERR_PHONE_INVALID,
+            T_CHECKOUT_ERR_ADDRESS, T_CHECKOUT_ERR_AGE, T_CHECKOUT_ERR_ITEMS, T_CHECKOUT_ERR_NAME,
+            T_CHECKOUT_ERR_NO_TELEGRAM, T_CHECKOUT_ERR_PHONE_INVALID,
         };
         match self {
             Self::NoTelegram => T_CHECKOUT_ERR_NO_TELEGRAM,

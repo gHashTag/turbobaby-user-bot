@@ -1,6 +1,8 @@
 //! Garden API endpoints
 
-use crate::api::auth::{check_admin, check_not_blocked, check_owner_lenient, validate_telegram_id_param};
+use crate::api::auth::{
+    check_admin, check_not_blocked, check_owner_lenient, validate_telegram_id_param,
+};
 use crate::trios::garden;
 use crate::AppState;
 use axum::{
@@ -37,7 +39,10 @@ pub(crate) fn routes() -> Router<AppState> {
         .route("/garden/force-seed", post(force_seed))
         // Loop #18: social
         .route("/garden/achievements", get(get_user_achievements))
-        .route("/garden/achievements/notified", post(mark_achievements_notified))
+        .route(
+            "/garden/achievements/notified",
+            post(mark_achievements_notified),
+        )
         .route("/garden/leaderboard", get(get_garden_leaderboard))
         .route("/garden/share-events", post(log_share_event))
 }
@@ -717,7 +722,10 @@ async fn water_plant(
     // Loop #21: notify the referrer when their friend waters the plant.
     if let Some(referrer_id) = crate::db::referrals::get_referrer_of(&state.db.orm, tid)
         .await
-        .map_err(|e| { tracing::error!("water_plant get_referrer_of: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?
+        .map_err(|e| {
+            tracing::error!("water_plant get_referrer_of: {e}");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?
     {
         let name = crate::db::users::first_name_for(&state.db.orm, tid)
             .await
@@ -741,8 +749,12 @@ async fn water_plant(
         tid,
         GardenStats {
             water_count: new_count,
-            harvest_count: fetch_garden_user_stats(&state.db.orm, &user_id).await
-                .map_err(|e| { tracing::error!("water_plant stats: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?
+            harvest_count: fetch_garden_user_stats(&state.db.orm, &user_id)
+                .await
+                .map_err(|e| {
+                    tracing::error!("water_plant stats: {e}");
+                    StatusCode::INTERNAL_SERVER_ERROR
+                })?
                 .harvest_count,
             max_streak: new_max_streak,
         },
@@ -970,15 +982,8 @@ async fn harvest_plant(
     crate::metrics::garden_reward_claimed();
 
     // Loop #18: evaluate garden achievements after harvest is persisted.
-    let new_achievements = match fetch_garden_user_stats(&state.db.orm, &user_id).await
-    {
-        Ok(stats) => match evaluate_and_persist_achievements(
-            &state.db.orm,
-            tid,
-            stats,
-        )
-        .await
-        {
+    let new_achievements = match fetch_garden_user_stats(&state.db.orm, &user_id).await {
+        Ok(stats) => match evaluate_and_persist_achievements(&state.db.orm, tid, stats).await {
             Ok(v) => v,
             Err(e) => {
                 tracing::error!("harvest_plant achievement unlock: {e}");

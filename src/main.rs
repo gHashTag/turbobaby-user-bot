@@ -18,9 +18,9 @@ mod locales;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod metrics;
 #[cfg(not(target_arch = "wasm32"))]
-pub mod notify;
-#[cfg(not(target_arch = "wasm32"))]
 pub mod notification_queue;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod notify;
 #[cfg(all(not(target_arch = "wasm32"), feature = "backend"))]
 mod promptpay;
 #[cfg(not(target_arch = "wasm32"))]
@@ -502,6 +502,39 @@ async fn main() -> Result<()> {
     spawn_ttl_sweep(db.orm.clone(), "block_history", 86_400, |orm| async move {
         crate::db::orders::cleanup_old_block_history(&orm, 90).await
     });
+
+    // Six-hourly health digest to admins. The server sends it, not a machine
+    // on someone's desk: a monitor that only runs while a laptop is open is
+    // exactly the monitor that misses an overnight outage.
+    //
+    // Sent unconditionally, including when the window is clean — a report that
+    // only arrives on failure is indistinguishable from a broken reporter.
+    {
+        let digest_bot = bot_arc_for_state.clone();
+        let digest_db = db.clone();
+        let digest_config = config.clone();
+        const DIGEST_WINDOW_HOURS: i64 = 6;
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(std::time::Duration::from_secs(6 * 3600));
+            interval.tick().await; // skip the cold-start tick
+            loop {
+                interval.tick().await;
+                let text = match digest_db
+                    .recent_client_errors(DIGEST_WINDOW_HOURS, 50)
+                    .await
+                {
+                    Ok(groups) => {
+                        crate::trios::health::format_health_digest(DIGEST_WINDOW_HOURS, &groups)
+                    }
+                    Err(e) => {
+                        tracing::warn!("health digest query failed: {}", e);
+                        continue;
+                    }
+                };
+                crate::notify::notify_admins(&digest_bot, &digest_config, &text).await;
+            }
+        });
+    }
 
     // A3: background event reminders. Check every 5 minutes for events
     // starting within the next 24 hours; send one Telegram reminder per

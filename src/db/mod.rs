@@ -715,6 +715,48 @@ impl Database {
     }
 }
 
+impl Database {
+    /// Recent front-end failures, grouped by message, newest first.
+    ///
+    /// Shared by the `/errors` bot command and the periodic health digest, so
+    /// both report exactly the same thing.
+    pub async fn recent_client_errors(
+        &self,
+        hours: i64,
+        limit: i64,
+    ) -> Result<Vec<crate::trios::health::ErrorGroup>> {
+        use sea_orm::{ConnectionTrait, DbBackend, Statement};
+        let rows = self
+            .orm
+            .query_all(Statement::from_sql_and_values(
+                DbBackend::Postgres,
+                "SELECT COUNT(*)::bigint AS occurrences, \
+                        COUNT(DISTINCT telegram_id)::bigint AS affected_users, \
+                        MAX(source)   AS source, \
+                        MAX(message)  AS message, \
+                        MAX(url_path) AS url_path \
+                 FROM client_error_logs \
+                 WHERE created_at > NOW() - ($1 || ' hours')::interval \
+                 GROUP BY message_hash \
+                 ORDER BY COUNT(*) DESC \
+                 LIMIT $2",
+                [hours.to_string().into(), limit.into()],
+            ))
+            .await
+            .context("recent_client_errors")?;
+        Ok(rows
+            .iter()
+            .map(|r| crate::trios::health::ErrorGroup {
+                message: r.try_get::<String>("", "message").unwrap_or_default(),
+                source: r.try_get::<String>("", "source").unwrap_or_default(),
+                url_path: r.try_get::<Option<String>>("", "url_path").ok().flatten(),
+                occurrences: r.try_get::<i64>("", "occurrences").unwrap_or(0),
+                affected_users: r.try_get::<i64>("", "affected_users").unwrap_or(0),
+            })
+            .collect())
+    }
+}
+
 /// Убирает из connection-URL параметры, которые sqlx-postgres не понимает
 /// и пишет про них WARN (например channel_binding=require у Neon/Supabase).
 ///

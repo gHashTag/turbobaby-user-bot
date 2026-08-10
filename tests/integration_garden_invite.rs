@@ -63,20 +63,13 @@ async fn garden_invite_records_pending_referral() {
         .unwrap()
         .expect("referral_event row should exist");
 
+    assert_eq!(row.try_get::<i64>("", "referrer_id").unwrap(), referrer_id);
+    assert_eq!(row.try_get::<i64>("", "referred_id").unwrap(), referred_id);
+    assert_eq!(row.try_get::<String>("", "status").unwrap(), "pending");
     assert_eq!(
-        row.try_get::<i64>("", "referrer_id").unwrap(),
-        referrer_id
-    );
-    assert_eq!(
-        row.try_get::<i64>("", "referred_id").unwrap(),
-        referred_id
-    );
-    assert_eq!(
-        row.try_get::<String>("", "status").unwrap(),
-        "pending"
-    );
-    assert_eq!(
-        row.try_get::<Option<String>>("", "source").unwrap().as_deref(),
+        row.try_get::<Option<String>>("", "source")
+            .unwrap()
+            .as_deref(),
         Some("utm_a")
     );
 }

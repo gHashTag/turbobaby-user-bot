@@ -7,11 +7,12 @@ pub mod checkout_errors;
 pub mod core;
 pub mod drink_categories;
 pub mod garden;
+pub mod health;
 pub mod i18n;
 pub mod packs;
 pub mod pricing;
-pub mod referrals;
 pub mod quest;
+pub mod referrals;
 pub mod store;
 pub mod validation;
 

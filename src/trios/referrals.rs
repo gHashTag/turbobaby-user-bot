@@ -31,8 +31,7 @@ mod tests {
     #[test]
     fn test_assign_share_source_balances_groups() {
         let sources = vec!["utm_a".to_string(), "utm_b".to_string()];
-        let mut counts: std::collections::HashMap<String, usize> =
-            std::collections::HashMap::new();
+        let mut counts: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
         for tid in 1..=100 {
             *counts
                 .entry(assign_share_source(tid, &sources))

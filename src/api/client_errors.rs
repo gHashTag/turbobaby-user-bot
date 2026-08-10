@@ -148,10 +148,12 @@ async fn list_client_errors(
     let errors: Vec<serde_json::Value> = rows
         .iter()
         .map(|r| {
-            let last: chrono::DateTime<chrono::Utc> =
-                r.try_get("", "last_seen").unwrap_or_else(|_| chrono::Utc::now());
-            let first: chrono::DateTime<chrono::Utc> =
-                r.try_get("", "first_seen").unwrap_or_else(|_| chrono::Utc::now());
+            let last: chrono::DateTime<chrono::Utc> = r
+                .try_get("", "last_seen")
+                .unwrap_or_else(|_| chrono::Utc::now());
+            let first: chrono::DateTime<chrono::Utc> = r
+                .try_get("", "first_seen")
+                .unwrap_or_else(|_| chrono::Utc::now());
             serde_json::json!({
                 "message_hash": r.try_get::<String>("", "message_hash").unwrap_or_default(),
                 "occurrences": r.try_get::<i64>("", "occurrences").unwrap_or(0),

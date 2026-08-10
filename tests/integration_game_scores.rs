@@ -54,7 +54,10 @@ async fn submit(app: axum::Router, tid: i64, score: i64, name: &str) -> Resp {
         .method("POST")
         .uri("/api/game/high-scores")
         .header("content-type", "application/json")
-        .header("X-Telegram-Init-Data", common::make_init_data(tid, BOT_TOKEN))
+        .header(
+            "X-Telegram-Init-Data",
+            common::make_init_data(tid, BOT_TOKEN),
+        )
         .body(Body::from(
             serde_json::to_vec(&json!({
                 "telegram_id": tid,
@@ -99,8 +102,14 @@ async fn a_worse_later_run_never_lowers_a_personal_best() {
     let tid = fresh_telegram_id();
     let name = format!("best-{tid}");
 
-    assert_eq!(submit(app.clone(), tid, 5_000, &name).await.status, StatusCode::OK);
-    assert_eq!(submit(app.clone(), tid, 10, &name).await.status, StatusCode::OK);
+    assert_eq!(
+        submit(app.clone(), tid, 5_000, &name).await.status,
+        StatusCode::OK
+    );
+    assert_eq!(
+        submit(app.clone(), tid, 10, &name).await.status,
+        StatusCode::OK
+    );
 
     let board = leaderboard(app, "100").await;
     assert_eq!(board.status, StatusCode::OK);
@@ -198,7 +207,10 @@ async fn a_blank_display_name_falls_back_to_player() {
         return;
     };
     let tid = fresh_telegram_id();
-    assert_eq!(submit(app.clone(), tid, 7, "   ").await.status, StatusCode::OK);
+    assert_eq!(
+        submit(app.clone(), tid, 7, "   ").await.status,
+        StatusCode::OK
+    );
 
     let board = leaderboard(app, "100").await;
     assert!(

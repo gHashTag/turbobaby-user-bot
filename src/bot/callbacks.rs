@@ -190,7 +190,9 @@ pub(crate) async fn handle_callback(
             action,
             user_id
         );
-        bot.answer_callback_query(q.id).text("⛔ Admin only").await?;
+        bot.answer_callback_query(q.id)
+            .text("⛔ Admin only")
+            .await?;
         return Ok(());
     }
 
@@ -332,7 +334,10 @@ pub(crate) async fn handle_callback(
             }
         }
 
-        CallbackAction::StrainOfDayPage { next: is_next, current } => {
+        CallbackAction::StrainOfDayPage {
+            next: is_next,
+            current,
+        } => {
             bot.answer_callback_query(q.id).await?;
             let new_idx = if is_next {
                 current + 1
@@ -545,35 +550,34 @@ pub(crate) async fn handle_callback(
             // referral bonus (cycle #171 lifted the referral credit
             // INTO complete_order_and_update_loyalty — this callsite
             // only owns the user-facing Telegram notification now).
-            let completion =
-                match crate::db::orders::complete_order_and_update_loyalty(
-                    &db.orm,
-                    order_id,
-                    config.referral_welcome_bonus,
-                )
-                .await
-                {
-                    Ok(Some(c)) => c,
-                    Ok(None) => {
-                        // No customer attribution or already completed — nothing more to do.
-                        if let Some(msg) = q.message.as_ref().and_then(|m| match m {
-                            teloxide::types::MaybeInaccessibleMessage::Regular(msg) => Some(msg),
-                            _ => None,
-                        }) {
-                            bot.edit_message_reply_markup(msg.chat.id, msg.id)
-                                .reply_markup(InlineKeyboardMarkup::new::<
-                                    Vec<Vec<InlineKeyboardButton>>,
-                                >(vec![]))
-                                .await
-                                .ok();
-                        }
-                        return Ok(());
+            let completion = match crate::db::orders::complete_order_and_update_loyalty(
+                &db.orm,
+                order_id,
+                config.referral_welcome_bonus,
+            )
+            .await
+            {
+                Ok(Some(c)) => c,
+                Ok(None) => {
+                    // No customer attribution or already completed — nothing more to do.
+                    if let Some(msg) = q.message.as_ref().and_then(|m| match m {
+                        teloxide::types::MaybeInaccessibleMessage::Regular(msg) => Some(msg),
+                        _ => None,
+                    }) {
+                        bot.edit_message_reply_markup(msg.chat.id, msg.id)
+                            .reply_markup(
+                                InlineKeyboardMarkup::new::<Vec<Vec<InlineKeyboardButton>>>(vec![]),
+                            )
+                            .await
+                            .ok();
                     }
-                    Err(e) => {
-                        tracing::error!("callback: complete_order_and_update_loyalty error: {}", e);
-                        return Ok(());
-                    }
-                };
+                    return Ok(());
+                }
+                Err(e) => {
+                    tracing::error!("callback: complete_order_and_update_loyalty error: {}", e);
+                    return Ok(());
+                }
+            };
 
             // Notify referrer if the bonus was credited inside the
             // completion function. Cycle #171: the lookup + credit
@@ -1024,7 +1028,7 @@ mod tests {
             CallbackAction::SetLanguage("ru".into()),
             CallbackAction::StrainOfDayPage {
                 next: true,
-                current: 0
+                current: 0,
             },
             CallbackAction::Unknown,
         ] {

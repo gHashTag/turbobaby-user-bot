@@ -35,7 +35,10 @@ async fn share_source_returns_default_variant() {
         .unwrap();
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
     let source = json["source"].as_str().expect("source present");
-    assert!(source == "utm_a" || source == "utm_b", "unexpected source: {source}");
+    assert!(
+        source == "utm_a" || source == "utm_b",
+        "unexpected source: {source}"
+    );
 }
 
 #[tokio::test]
@@ -63,5 +66,8 @@ async fn share_source_assigns_known_variant() {
         .unwrap();
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
     let source = json["source"].as_str().expect("source present");
-    assert!(source == "utm_a" || source == "utm_b", "unexpected source: {source}");
+    assert!(
+        source == "utm_a" || source == "utm_b",
+        "unexpected source: {source}"
+    );
 }

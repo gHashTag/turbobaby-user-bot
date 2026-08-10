@@ -9,22 +9,20 @@ use crate::trios::i18n::{
     T_GARDEN_COOLDOWN, T_GARDEN_DIAGNOSTICS_COPIED, T_GARDEN_DIAGNOSTICS_COPY,
     T_GARDEN_DISCOUNT_BADGE, T_GARDEN_EMPTY_CTA, T_GARDEN_EMPTY_LABEL, T_GARDEN_ERROR_COOLDOWN,
     T_GARDEN_ERROR_HARVEST, T_GARDEN_ERROR_PRODUCT_UNAVAILABLE, T_GARDEN_ERROR_RESET,
-    T_GARDEN_HARVEST, T_GARDEN_INVITEE_JOINED, T_GARDEN_INVITEE_ORDERED,
-    T_GARDEN_INVITEES_EMPTY, T_GARDEN_INVITEES_TITLE, T_GARDEN_INVITEE_WATERING,
-    T_GARDEN_REFERRAL_MILESTONE_TITLE, T_GARDEN_REFERRAL_MILESTONE_SUBTITLE,
-    T_GARDEN_REFERRAL_MILESTONE_AWARDED,
-    T_GARDEN_LEADERBOARD_RANK, T_GARDEN_LEADERBOARD_TAB_HARVEST,
-    T_GARDEN_LEADERBOARD_TAB_STREAK, T_GARDEN_LEADERBOARD_TITLE, T_GARDEN_LEADERBOARD_YOU,
-    T_GARDEN_LOADING, T_GARDEN_MILESTONE_HINT, T_GARDEN_NEXT_WATER_IN, T_GARDEN_PLANT_ALT,
-    T_GARDEN_PRODUCT_ALT, T_GARDEN_READY, T_GARDEN_RESET_CONFIRM_BODY,
-    T_GARDEN_RESET_CONFIRM_TITLE, T_GARDEN_RESET_PROGRESS, T_GARDEN_REWARD_EXPIRES_IN,
-    T_GARDEN_SHARE_CTA, T_GARDEN_STREAK_BEST, T_GARDEN_STREAK_DAYS, T_GARDEN_SUBTITLE,
-    T_GARDEN_TITLE, T_GARDEN_WATER_NOW,
+    T_GARDEN_HARVEST, T_GARDEN_INVITEES_EMPTY, T_GARDEN_INVITEES_TITLE, T_GARDEN_INVITEE_JOINED,
+    T_GARDEN_INVITEE_ORDERED, T_GARDEN_INVITEE_WATERING, T_GARDEN_LEADERBOARD_RANK,
+    T_GARDEN_LEADERBOARD_TAB_HARVEST, T_GARDEN_LEADERBOARD_TAB_STREAK, T_GARDEN_LEADERBOARD_TITLE,
+    T_GARDEN_LEADERBOARD_YOU, T_GARDEN_LOADING, T_GARDEN_MILESTONE_HINT, T_GARDEN_NEXT_WATER_IN,
+    T_GARDEN_PLANT_ALT, T_GARDEN_PRODUCT_ALT, T_GARDEN_READY, T_GARDEN_REFERRAL_MILESTONE_AWARDED,
+    T_GARDEN_REFERRAL_MILESTONE_SUBTITLE, T_GARDEN_REFERRAL_MILESTONE_TITLE,
+    T_GARDEN_RESET_CONFIRM_BODY, T_GARDEN_RESET_CONFIRM_TITLE, T_GARDEN_RESET_PROGRESS,
+    T_GARDEN_REWARD_EXPIRES_IN, T_GARDEN_SHARE_CTA, T_GARDEN_STREAK_BEST, T_GARDEN_STREAK_DAYS,
+    T_GARDEN_SUBTITLE, T_GARDEN_TITLE, T_GARDEN_WATER_NOW,
 };
-use crate::ui::share::share_garden;
 use crate::ui::api::context::api_base_url;
 use crate::ui::api::http::post_client_event;
 use crate::ui::components::ErrorBanner;
+use crate::ui::share::share_garden;
 use crate::ui::telegram::{use_telegram, use_telegram_id, use_telegram_init_data};
 use dioxus::prelude::*;
 use gloo_timers::future::TimeoutFuture;
@@ -272,7 +270,10 @@ async fn fetch_achievements(
     init_data: &str,
 ) -> Result<AchievementsResponse, String> {
     let base = api_base_url();
-    let url = format!("{}/api/garden/achievements?telegram_id={}", base, telegram_id);
+    let url = format!(
+        "{}/api/garden/achievements?telegram_id={}",
+        base, telegram_id
+    );
     let text = crate::ui::api::http::fetch_text_authed(&url, init_data).await?;
     serde_json::from_str::<AchievementsResponse>(&text).map_err(|e| format!("Parse error: {e}"))
 }
@@ -296,7 +297,9 @@ async fn fetch_leaderboard(
 async fn fetch_share_source(telegram_id: i64, init_data: &str) -> Option<String> {
     let base = api_base_url();
     let url = format!("{}/api/referrals/me/{}/share-source", base, telegram_id);
-    let text = crate::ui::api::http::fetch_text_authed(&url, init_data).await.ok()?;
+    let text = crate::ui::api::http::fetch_text_authed(&url, init_data)
+        .await
+        .ok()?;
     serde_json::from_str::<ShareSourceResponse>(&text)
         .ok()
         .map(|r| r.source)
@@ -311,10 +314,7 @@ async fn fetch_invitees(telegram_id: i64, init_data: &str) -> Result<Vec<Invitee
         .map_err(|e| format!("Parse error: {e}"))
 }
 
-async fn fetch_milestones(
-    telegram_id: i64,
-    init_data: &str,
-) -> Result<MilestonesResponse, String> {
+async fn fetch_milestones(telegram_id: i64, init_data: &str) -> Result<MilestonesResponse, String> {
     let base = api_base_url();
     let url = format!("{}/api/referrals/me/{}/milestones", base, telegram_id);
     let text = crate::ui::api::http::fetch_text_authed(&url, init_data).await?;
@@ -328,12 +328,7 @@ async fn mark_achievements_notified(telegram_id: i64, init_data: &str) {
     let _ = crate::ui::api::http::post_json_authed(&url, init_data, &body).await;
 }
 
-async fn log_share_event(
-    telegram_id: i64,
-    init_data: &str,
-    content_kind: &str,
-    content_id: &str,
-) {
+async fn log_share_event(telegram_id: i64, init_data: &str, content_kind: &str, content_id: &str) {
     let base = api_base_url();
     let url = format!("{}/api/garden/share-events", base);
     let body = serde_json::json!({
@@ -409,7 +404,10 @@ async fn water_plant_api(plant_id: &str, init_data: &str) -> Result<WaterPlantRe
     serde_json::from_str::<WaterPlantResponse>(&text).map_err(|e| format!("Parse error: {e}"))
 }
 
-async fn harvest_plant_api(plant_id: &str, init_data: &str) -> Result<HarvestPlantResponse, String> {
+async fn harvest_plant_api(
+    plant_id: &str,
+    init_data: &str,
+) -> Result<HarvestPlantResponse, String> {
     let base = api_base_url();
     let url = format!(
         "{}/api/garden/plants/{}/harvest",
@@ -715,9 +713,12 @@ pub fn Garden() -> Element {
         let init = init_share.clone();
         // Loop #20: use the server-assigned source if already loaded; otherwise
         // fall back to a deterministic local default so the share never blocks.
-        let source = share_source_for_click
-            .clone()
-            .unwrap_or_else(|| crate::trios::referrals::assign_share_source(share_tid, &["utm_a".to_string(), "utm_b".to_string()]));
+        let source = share_source_for_click.clone().unwrap_or_else(|| {
+            crate::trios::referrals::assign_share_source(
+                share_tid,
+                &["utm_a".to_string(), "utm_b".to_string()],
+            )
+        });
         spawn(async move {
             log_share_event(share_tid, &init, "garden", "garden").await;
             share_garden(Some(share_tid), Some(&source));
@@ -1387,11 +1388,7 @@ fn GardenChooser(
 
 /// Loop #18: modal showing all garden achievements and recent unlocks.
 #[component]
-fn AchievementsModal(
-    telegram_id: i64,
-    init_data: String,
-    open: Signal<bool>,
-) -> Element {
+fn AchievementsModal(telegram_id: i64, init_data: String, open: Signal<bool>) -> Element {
     let init_for_resource = init_data.clone();
     let data = use_resource(move || {
         let init = init_for_resource.clone();
@@ -1453,8 +1450,12 @@ fn AchievementsModal(
                 "{t(lang, T_GARDEN_ACHIEVEMENTS_EMPTY)}"
             }
         },
-        Some(Err(_)) => rsx! { div { style: "text-align:center;padding:40px;color:#ff6b7a;", "Load failed" } },
-        None => rsx! { div { style: "text-align:center;padding:40px;color:#8b8b9e;", "Loading..." } },
+        Some(Err(_)) => {
+            rsx! { div { style: "text-align:center;padding:40px;color:#ff6b7a;", "Load failed" } }
+        }
+        None => {
+            rsx! { div { style: "text-align:center;padding:40px;color:#8b8b9e;", "Loading..." } }
+        }
     };
 
     rsx! {
@@ -1543,9 +1544,15 @@ fn LeaderboardModal(
                 }
             }
         }
-        Some(Ok(_)) => rsx! { div { style: "text-align:center;padding:40px;color:#8b8b9e;", "No entries yet" } },
-        Some(Err(_)) => rsx! { div { style: "text-align:center;padding:40px;color:#ff6b7a;", "Load failed" } },
-        None => rsx! { div { style: "text-align:center;padding:40px;color:#8b8b9e;", "Loading..." } },
+        Some(Ok(_)) => {
+            rsx! { div { style: "text-align:center;padding:40px;color:#8b8b9e;", "No entries yet" } }
+        }
+        Some(Err(_)) => {
+            rsx! { div { style: "text-align:center;padding:40px;color:#ff6b7a;", "Load failed" } }
+        }
+        None => {
+            rsx! { div { style: "text-align:center;padding:40px;color:#8b8b9e;", "Loading..." } }
+        }
     };
 
     rsx! {

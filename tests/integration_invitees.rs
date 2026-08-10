@@ -107,7 +107,11 @@ async fn invitees_returns_referred_progress() {
         .await
         .unwrap();
     if status != StatusCode::OK {
-        eprintln!("invitees response: {} {}", status, String::from_utf8_lossy(&body));
+        eprintln!(
+            "invitees response: {} {}",
+            status,
+            String::from_utf8_lossy(&body)
+        );
     }
     assert_eq!(status, StatusCode::OK);
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();

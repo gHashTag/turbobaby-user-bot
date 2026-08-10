@@ -94,7 +94,9 @@ pub struct Attendee {
 /// Guest names are user-controlled. An unescaped `<` breaks the message, and
 /// Telegram rejects the whole send — the owner would see nothing at all.
 fn escape_html(s: &str) -> String {
-    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
 }
 
 /// Render the guest list as a Telegram message in HTML parse mode.
@@ -118,15 +120,15 @@ pub fn format_attendee_message(event_title: &str, attendees: &[Attendee]) -> Str
         total_seats
     );
     for (i, a) in attendees.iter().enumerate() {
-        let link = attendee_link(a.username.as_deref(), a.first_name.as_deref(), a.telegram_id);
+        let link = attendee_link(
+            a.username.as_deref(),
+            a.first_name.as_deref(),
+            a.telegram_id,
+        );
         // A handle links to the public profile; everyone else gets an inline
         // mention, which works even without a username.
         let anchor = if link.reachable_by_handle {
-            format!(
-                "<a href=\"{}\">{}</a>",
-                link.url,
-                escape_html(&link.label)
-            )
+            format!("<a href=\"{}\">{}</a>", link.url, escape_html(&link.label))
         } else {
             let name = a
                 .first_name
@@ -135,10 +137,7 @@ pub fn format_attendee_message(event_title: &str, attendees: &[Attendee]) -> Str
                 .filter(|n| !n.is_empty())
                 .map(escape_html)
                 .unwrap_or_else(|| format!("id {}", a.telegram_id));
-            format!(
-                "<a href=\"tg://user?id={}\">{}</a>",
-                a.telegram_id, name
-            )
+            format!("<a href=\"tg://user?id={}\">{}</a>", a.telegram_id, name)
         };
         let seats = if a.seats > 1 {
             format!(" · {} мест", a.seats)
@@ -187,7 +186,10 @@ mod tests {
     #[test]
     fn a_guest_with_neither_falls_back_to_their_id_but_stays_tappable() {
         let msg = format_attendee_message("DJ SET", &[att(77, None, None, 1)]);
-        assert!(msg.contains(r#"<a href="tg://user?id=77">id 77</a>"#), "got: {msg}");
+        assert!(
+            msg.contains(r#"<a href="tg://user?id=77">id 77</a>"#),
+            "got: {msg}"
+        );
     }
 
     #[test]
@@ -206,7 +208,10 @@ mod tests {
     fn guests_are_numbered_in_order() {
         let msg = format_attendee_message(
             "DJ SET",
-            &[att(1, Some("first_one"), None, 1), att(2, Some("second_one"), None, 1)],
+            &[
+                att(1, Some("first_one"), None, 1),
+                att(2, Some("second_one"), None, 1),
+            ],
         );
         let first = msg.find("1. ").expect("first entry");
         let second = msg.find("2. ").expect("second entry");

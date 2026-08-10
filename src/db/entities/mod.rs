@@ -30,9 +30,9 @@ pub mod loyalty_idempotency_key;
 #[allow(unreachable_pub)]
 pub mod loyalty_profile;
 #[allow(unreachable_pub)]
-pub mod order;
-#[allow(unreachable_pub)]
 pub mod notification_queue;
+#[allow(unreachable_pub)]
+pub mod order;
 #[allow(unreachable_pub)]
 pub mod order_fraud_event;
 #[allow(unreachable_pub)]

@@ -264,7 +264,9 @@ pub(crate) async fn record_referral(
         let name = crate::db::users::first_name_for(orm, referred_id)
             .await
             .unwrap_or_else(|_| "Friend".to_string());
-        if let Err(e) = crate::db::notifications::enqueue_friend_joined(orm, referrer_id, &name).await {
+        if let Err(e) =
+            crate::db::notifications::enqueue_friend_joined(orm, referrer_id, &name).await
+        {
             tracing::warn!("record_referral: failed to enqueue friend_joined: {}", e);
         }
     }
@@ -438,7 +440,9 @@ pub(crate) async fn confirm_referral(
             telegram_id: Set(referred_id),
             amount: Set(welcome_bonus),
             tx_type: Set("referral_welcome".to_string()),
-            description: Set(Some("Welcome bonus from a friend's garden invite".to_string())),
+            description: Set(Some(
+                "Welcome bonus from a friend's garden invite".to_string(),
+            )),
             related_order_id: Set(None),
             ..Default::default()
         };
@@ -450,10 +454,7 @@ pub(crate) async fn confirm_referral(
         let referred_updated = LoyaltyProfileEntity::update_many()
             .col_expr(
                 LpCol::BonusBalance,
-                sea_orm::sea_query::Expr::cust_with_values(
-                    "bonus_balance + $1",
-                    [welcome_bonus],
-                ),
+                sea_orm::sea_query::Expr::cust_with_values("bonus_balance + $1", [welcome_bonus]),
             )
             .filter(LpCol::TelegramId.eq(referred_id))
             .exec(&tx)
@@ -623,11 +624,15 @@ pub(crate) async fn get_invitees(
         .iter()
         .map(|r| {
             let referred_id: i64 = r.try_get::<i64>("", "referred_id").unwrap_or(0);
-            let first_name: String = r.try_get::<String>("", "first_name").unwrap_or_else(|_| "Friend".into());
+            let first_name: String = r
+                .try_get::<String>("", "first_name")
+                .unwrap_or_else(|_| "Friend".into());
             let handle = format!("#{:04}", referred_id.rem_euclid(10000));
             Invitee {
                 display_name: format!("{} {}", first_name, handle),
-                status: r.try_get::<String>("", "status").unwrap_or_else(|_| "pending".into()),
+                status: r
+                    .try_get::<String>("", "status")
+                    .unwrap_or_else(|_| "pending".into()),
                 streak: r.try_get::<i32>("", "streak").unwrap_or(0) as i64,
                 has_ordered: r.try_get::<i32>("", "has_ordered").unwrap_or(0) == 1,
                 source: r.try_get::<String>("", "source").ok(),
@@ -641,7 +646,9 @@ pub(crate) async fn get_referral_milestones(
     orm: &sea_orm::DatabaseConnection,
     referrer_id: i64,
 ) -> Result<(Vec<i32>, i64)> {
-    use crate::db::entities::referral_milestone::{Column as MilestoneCol, Entity as MilestoneEntity};
+    use crate::db::entities::referral_milestone::{
+        Column as MilestoneCol, Entity as MilestoneEntity,
+    };
     use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QueryOrder};
 
     let achieved = MilestoneEntity::find()
@@ -753,7 +760,10 @@ pub(crate) async fn maybe_award_referral_milestones(
             related_order_id: Set(None),
             ..Default::default()
         };
-        BonusTxEntity::insert(bt_am).exec(&tx).await.context("insert milestone bonus tx")?;
+        BonusTxEntity::insert(bt_am)
+            .exec(&tx)
+            .await
+            .context("insert milestone bonus tx")?;
 
         let updated = LoyaltyProfileEntity::update_many()
             .col_expr(
@@ -779,8 +789,14 @@ pub(crate) async fn maybe_award_referral_milestones(
     // Queue notifications outside the tx so a Telegram failure can't roll back credits.
     for (milestone, bonus) in &awarded {
         crate::metrics::milestone_awarded(*milestone);
-        if let Err(e) = crate::db::notifications::enqueue_milestone(orm, referrer_id, *milestone, *bonus).await {
-            tracing::warn!("maybe_award_referral_milestones: enqueue failed for {}: {}", referrer_id, e);
+        if let Err(e) =
+            crate::db::notifications::enqueue_milestone(orm, referrer_id, *milestone, *bonus).await
+        {
+            tracing::warn!(
+                "maybe_award_referral_milestones: enqueue failed for {}: {}",
+                referrer_id,
+                e
+            );
         }
     }
 
@@ -815,7 +831,11 @@ async fn milestone_bonus_amounts(
 
     for milestone in [1, 3, 5] {
         let key = format!("milestone_bonus_{}", milestone);
-        if let Some(v) = config.get(&key).and_then(|v| v.as_f64()).filter(|v| v.is_finite() && *v > 0.0) {
+        if let Some(v) = config
+            .get(&key)
+            .and_then(|v| v.as_f64())
+            .filter(|v| v.is_finite() && *v > 0.0)
+        {
             out.insert(milestone, v);
         }
     }

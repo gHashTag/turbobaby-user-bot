@@ -54,6 +54,8 @@ pub(crate) enum Command {
     Unblock(String),
     #[command(description = "List currently blocked users (admin)")]
     Blocks,
+    #[command(description = "Recent app errors (admin)")]
+    Errors,
 }
 
 use crate::util::html_escape;
@@ -97,11 +99,7 @@ pub(crate) fn build_app_url_with_start(
     };
 
     let lang_params = match start_param {
-        Some(sp) => format!(
-            "lang={}&v=4&startapp={}",
-            lang,
-            urlencoding::encode(sp)
-        ),
+        Some(sp) => format!("lang={}&v=4&startapp={}", lang, urlencoding::encode(sp)),
         None => format!("lang={}&v=4", lang),
     };
     match (query, fragment) {
@@ -690,6 +688,27 @@ pub(crate) async fn handle_command(
                 Err(e) => {
                     tracing::error!("/blocks DB error: {}", e);
                     "❌ DB error querying blocked users".to_string()
+                }
+            };
+            bot.send_message(msg.chat.id, text)
+                .parse_mode(teloxide::types::ParseMode::Html)
+                .await?;
+        }
+
+        Command::Errors => {
+            // Front-end failures used to be readable only with direct database
+            // access, which the hosting provider redacts — so during an outage
+            // the one record of what broke was unreachable. This puts it where
+            // the owner already is.
+            if !config.admin_ids.contains(&user_id) {
+                return Ok(());
+            }
+            const WINDOW_HOURS: i64 = 24;
+            let text = match db.recent_client_errors(WINDOW_HOURS, 50).await {
+                Ok(groups) => crate::trios::health::format_health_digest(WINDOW_HOURS, &groups),
+                Err(e) => {
+                    tracing::error!("/errors DB error: {}", e);
+                    "❌ Не удалось прочитать журнал ошибок".to_string()
                 }
             };
             bot.send_message(msg.chat.id, text)

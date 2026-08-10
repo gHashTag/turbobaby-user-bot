@@ -45,10 +45,7 @@ pub(crate) fn routes() -> Router<AppState> {
             get(get_admin_event).put(update_event).delete(delete_event),
         )
         .route("/admin/events/:id/bookings", get(list_event_bookings))
-        .route(
-            "/admin/events/:id/bookings/send",
-            post(send_event_bookings),
-        )
+        .route("/admin/events/:id/bookings/send", post(send_event_bookings))
         .route(
             "/admin/events/:id/bookings/:booking_id/cancel",
             put(cancel_booking),

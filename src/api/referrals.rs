@@ -22,10 +22,19 @@ use crate::AppState;
 pub(crate) fn routes() -> Router<AppState> {
     Router::new()
         .route("/referrals/me/:telegram_id", get(get_my_referrals))
-        .route("/referrals/me/:telegram_id/share-source", get(get_share_source))
+        .route(
+            "/referrals/me/:telegram_id/share-source",
+            get(get_share_source),
+        )
         .route("/referrals/me/:telegram_id/invitees", get(get_my_invitees))
-        .route("/referrals/me/:telegram_id/milestones", get(get_my_milestones))
-        .route("/referrals/me/:telegram_id/garden-invite", post(post_garden_invite))
+        .route(
+            "/referrals/me/:telegram_id/milestones",
+            get(get_my_milestones),
+        )
+        .route(
+            "/referrals/me/:telegram_id/garden-invite",
+            post(post_garden_invite),
+        )
         .route("/referrals/leaderboard", get(get_leaderboard))
 }
 
@@ -184,14 +193,12 @@ async fn post_garden_invite(
     }
 
     // Ensure the referrer has a code; reuse it as the attribution code.
-    let code = get_or_create_referral_code(&state.db.orm,
-        body.referrer_id,
-    )
-    .await
-    .map_err(|e| {
-        tracing::error!("DB error getting referrer code: {:?}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
+    let code = get_or_create_referral_code(&state.db.orm, body.referrer_id)
+        .await
+        .map_err(|e| {
+            tracing::error!("DB error getting referrer code: {:?}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
 
     match record_referral(
         &state.db.orm,
@@ -205,10 +212,7 @@ async fn post_garden_invite(
         Ok(_) => {
             crate::metrics::garden_invite_accepted(body.source.as_deref().unwrap_or(""));
             let bot_username = &state.config.bot_username;
-            let link = format!(
-                "https://t.me/{}?start=ref_{}",
-                bot_username, code
-            );
+            let link = format!("https://t.me/{}?start=ref_{}", bot_username, code);
             Ok(Json(json!({
                 "success": true,
                 "code": code,
@@ -227,10 +231,7 @@ async fn post_garden_invite(
             // benign race — report success without leaking internal state.
             if err_str.contains("duplicate key") || err_str.contains("unique constraint") {
                 let bot_username = &state.config.bot_username;
-                let link = format!(
-                    "https://t.me/{}?start=ref_{}",
-                    bot_username, code
-                );
+                let link = format!("https://t.me/{}?start=ref_{}", bot_username, code);
                 return Ok(Json(json!({
                     "success": true,
                     "code": code,

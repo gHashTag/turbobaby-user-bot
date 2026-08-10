@@ -82,14 +82,10 @@ fn init_data_with_username(user_id: i64, username: &str) -> String {
     use hmac::{Hmac, Mac};
     use sha2::{Digest, Sha256};
 
-    let user_json = format!(
-        r#"{{"id":{user_id},"first_name":"Тест","username":"{username}"}}"#
-    );
+    let user_json = format!(r#"{{"id":{user_id},"first_name":"Тест","username":"{username}"}}"#);
     let auth_date = chrono::Utc::now().timestamp();
     // Data-check string: sorted `key=value` pairs joined by \n, hash excluded.
-    let check = format!(
-        "auth_date={auth_date}\nuser={user_json}",
-    );
+    let check = format!("auth_date={auth_date}\nuser={user_json}",);
     let mut secret = Hmac::<Sha256>::new_from_slice(b"WebAppData").expect("hmac key");
     secret.update(BOT_TOKEN.as_bytes());
     let secret_key = secret.finalize().into_bytes();
@@ -208,7 +204,10 @@ async fn every_attendee_appears_in_the_event_list() {
         .filter_map(|b| b["username"].as_str().map(String::from))
         .collect();
     for h in &handles {
-        assert!(got.contains(h), "{h} missing from the attendee list: {got:?}");
+        assert!(
+            got.contains(h),
+            "{h} missing from the attendee list: {got:?}"
+        );
     }
 
     let empty = attendees(app, &other_event).await;

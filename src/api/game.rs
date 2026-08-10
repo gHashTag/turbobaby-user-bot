@@ -175,14 +175,12 @@ mod tests {
             score: 100,
             display_name: "a".repeat(51),
         };
-        assert!(
-            (if req.display_name.len() > MAX_DISPLAY_NAME_LEN {
-                Err(StatusCode::BAD_REQUEST)
-            } else {
-                Ok(())
-            })
-            .is_err()
-        );
+        assert!((if req.display_name.len() > MAX_DISPLAY_NAME_LEN {
+            Err(StatusCode::BAD_REQUEST)
+        } else {
+            Ok(())
+        })
+        .is_err());
     }
 
     #[test]

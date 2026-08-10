@@ -120,11 +120,7 @@ fn WeekSelector(props: WeekSelectorProps) -> Element {
     // Which month the strip is showing. Follows `selected` so picking a day in
     // September and coming back keeps you in September.
     let anchor = crate::trios::calendar::first_of_month(*selected.read());
-    let month_title = format!(
-        "{} {}",
-        t(lang, month_key(anchor.month())),
-        anchor.year()
-    );
+    let month_title = format!("{} {}", t(lang, month_key(anchor.month())), anchor.year());
 
     rsx! {
         div { style: "display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 12px 8px;",

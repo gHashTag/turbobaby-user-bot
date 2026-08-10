@@ -205,7 +205,11 @@ pub(crate) fn parse_garden_share_sources(raw: Option<&str>) -> Vec<String> {
     let parts: Vec<String> = trimmed
         .split(',')
         .map(|p| p.trim().to_string())
-        .filter(|p| !p.is_empty() && p.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-'))
+        .filter(|p| {
+            !p.is_empty()
+                && p.bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
+        })
         .collect();
     if parts.is_empty() {
         defaults()

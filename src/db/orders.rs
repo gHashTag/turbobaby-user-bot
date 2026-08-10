@@ -83,10 +83,7 @@ pub(crate) fn cashback_pct_for_tier(config: &serde_json::Value, tier: &str) -> f
         "bronze" => 5.0,
         _ => 2.0,
     };
-    let raw = config
-        .get(key)
-        .cloned()
-        .unwrap_or(serde_json::Value::Null);
+    let raw = config.get(key).cloned().unwrap_or(serde_json::Value::Null);
     let pct = if raw.is_array() {
         // `progressive_cashback` is an array indexed by completed-order
         // count. Without that context, use the first (lowest) value.
@@ -445,10 +442,9 @@ pub async fn complete_order_and_update_loyalty(
                     .ok()
                     .flatten()
                 {
-                    if let Err(e) = crate::db::referrals::maybe_award_referral_milestones(
-                        orm, referrer_id,
-                    )
-                    .await
+                    if let Err(e) =
+                        crate::db::referrals::maybe_award_referral_milestones(orm, referrer_id)
+                            .await
                     {
                         tracing::warn!(
                             "complete_order: maybe_award_referral_milestones failed for referrer={}: {}",
@@ -459,13 +455,17 @@ pub async fn complete_order_and_update_loyalty(
                         .await
                         .unwrap_or_else(|_| "Friend".to_string());
                     if let Err(e) = crate::db::notifications::enqueue_friend_ordered(
-                        orm, referrer_id, &name, bonus,
+                        orm,
+                        referrer_id,
+                        &name,
+                        bonus,
                     )
                     .await
                     {
                         tracing::warn!(
                             "complete_order: enqueue_friend_ordered failed for referrer={}: {}",
-                            referrer_id, e
+                            referrer_id,
+                            e
                         );
                     }
                     crate::metrics::garden_invite_funnel("ordered");

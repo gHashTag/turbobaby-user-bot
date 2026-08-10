@@ -15,9 +15,7 @@
 //! `Telegram.WebApp.openTelegramLink` so it stays inside Telegram instead of
 //! falling back to an external browser.
 
-use crate::trios::i18n::{
-    tf, T_GARDEN_SHARE_TEXT, T_GARDEN_SHARE_TITLE, T_SHARE_MESSAGE,
-};
+use crate::trios::i18n::{tf, T_GARDEN_SHARE_TEXT, T_GARDEN_SHARE_TITLE, T_SHARE_MESSAGE};
 use crate::ui::lang::current_lang;
 use crate::ui::routes::Route;
 
@@ -416,7 +414,10 @@ pub fn share_product(kind: ProductKind, id: &str, name: &str) {
                     share_kind_wire(kind),
                     id.replace('"', "")
                 );
-                let url = format!("{}/api/share/prepare", crate::ui::api::context::api_base_url());
+                let url = format!(
+                    "{}/api/share/prepare",
+                    crate::ui::api::context::api_base_url()
+                );
                 let init_data = tg.get_init_data();
                 if let Ok(resp) =
                     crate::ui::api::http::post_json_authed(&url, &init_data, &body).await
