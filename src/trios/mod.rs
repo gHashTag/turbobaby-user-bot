@@ -1,6 +1,7 @@
 //! Trios ecosystem - business logic modules
 
 pub mod api_errors;
+pub mod attendees;
 pub mod calendar;
 pub mod checkout_errors;
 pub mod core;

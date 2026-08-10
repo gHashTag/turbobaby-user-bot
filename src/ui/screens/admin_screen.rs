@@ -6997,10 +6997,23 @@ fn EventsTab() -> Element {
                         list.into_iter().map(move |b| {
                             let cancel_id = b.id.clone();
                             let event_id = b.event_id.clone();
+                            // Show a handle the owner can tap to message the person,
+                            // not a bare telegram_id that identifies nobody.
+                            let who = crate::trios::attendees::attendee_link(
+                                b.username.as_deref(),
+                                b.first_name.as_deref(),
+                                b.telegram_id,
+                            );
+                            let who_color = if who.reachable_by_handle { "#39ff14" } else { "#8b8b9e" };
                             rsx! {
-                                div { key: "{b.id}", style: "display:flex;justify-content:space-between;align-items:center;background:#1a1a2e;padding:8px;border:1px solid #2a2a4a;",
-                                    div { style: "font-size:13px;",
-                                        span { style: "color:#e8e8e8;", "{b.telegram_id}" }
+                                div { key: "{b.id}", style: "display:flex;justify-content:space-between;align-items:center;gap:8px;background:#1a1a2e;padding:8px;border:1px solid #2a2a4a;",
+                                    div { style: "font-size:13px;min-width:0;",
+                                        a {
+                                            href: "{who.url}",
+                                            target: "_blank",
+                                            style: "color:{who_color};font-weight:700;text-decoration:underline;word-break:break-all;",
+                                            "{who.label}"
+                                        }
                                         span { style: "color:#888;margin-left:8px;", "{b.status}" }
                                         span { style: "color:#39ff14;margin-left:8px;", "+{b.seats}" }
                                     }

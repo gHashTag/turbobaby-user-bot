@@ -302,6 +302,10 @@ const MIGRATIONS: &[(&str, &str)] = &[
         "069_fix_streak_last_watered_at_type.sql",
         include_str!("../../migrations/069_fix_streak_last_watered_at_type.sql"),
     ),
+    (
+        "070_event_bookings_username.sql",
+        include_str!("../../migrations/070_event_bookings_username.sql"),
+    ),
 ];
 
 /// Columns the catalog endpoints SELECT that were added by *later* migrations

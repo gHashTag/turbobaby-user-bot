@@ -390,6 +390,13 @@ pub struct EventBooking {
     pub id: String,
     pub event_id: String,
     pub telegram_id: i64,
+    /// Telegram handle captured from validated initData when the seat was
+    /// booked. `None` for people who have no username set, and for bookings
+    /// made before this was recorded.
+    #[serde(default)]
+    pub username: Option<String>,
+    #[serde(default)]
+    pub first_name: Option<String>,
     pub seats: i32,
     pub status: String,
     #[serde(default)]

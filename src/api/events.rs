@@ -336,12 +336,30 @@ fn event_row(r: &sea_orm::QueryResult) -> Value {
     })
 }
 
+/// The handle to show an admin for a booking, taken from the *validated*
+/// initData rather than the request body.
+///
+/// A client-supplied username would let anyone book under someone else's
+/// handle, which is worse than no handle at all: the owner would message the
+/// wrong person. `validate_init_data` has already checked the HMAC, so
+/// whatever it reports is what Telegram signed.
+fn booker_identity(headers: &HeaderMap, state: &AppState) -> (Option<String>, Option<String>) {
+    headers
+        .get("X-Telegram-Init-Data")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|d| crate::api::auth::validate_init_data(d, &state.config.bot_token))
+        .map(|u| (u.username, u.first_name))
+        .unwrap_or((None, None))
+}
+
 fn booking_row(r: &sea_orm::QueryResult) -> Value {
     let created_at: DateTime<Utc> = r.try_get("", "created_at").unwrap_or_else(|_| Utc::now());
     json!({
         "id": r.try_get::<String>("", "id").unwrap_or_default(),
         "event_id": r.try_get::<String>("", "event_id").unwrap_or_default(),
         "telegram_id": r.try_get::<i64>("", "telegram_id").unwrap_or(0),
+        "username": r.try_get::<Option<String>>("", "username").ok().flatten(),
+        "first_name": r.try_get::<Option<String>>("", "first_name").ok().flatten(),
         "seats": r.try_get::<i32>("", "seats").unwrap_or(1),
         "status": r.try_get::<String>("", "status").unwrap_or_default(),
         "order_id": r.try_get::<Option<String>>("", "order_id").ok().flatten(),
@@ -479,6 +497,7 @@ async fn book_event(
     // Booking as another user remains impossible: the initData user.id must match
     // the requested telegram_id.
     let _owner_id = check_owner_lenient(&headers, &state, req.telegram_id, "event_book")?;
+    let (booker_username, booker_first_name) = booker_identity(&headers, &state);
     check_not_blocked(&state, req.telegram_id).await?;
 
     // Rate-limit event bookings per telegram id.
@@ -690,7 +709,7 @@ async fn book_event(
 
     tx.execute(Statement::from_sql_and_values(
         DbBackend::Postgres,
-        "INSERT INTO event_bookings (id, event_id, telegram_id, seats, status, idempotency_key, stars_paid, stars_tx_id) VALUES ($1,$2,$3,$4,'confirmed',$5,$6,$7)",
+        "INSERT INTO event_bookings (id, event_id, telegram_id, seats, status, idempotency_key, stars_paid, stars_tx_id, username, first_name) VALUES ($1,$2,$3,$4,'confirmed',$5,$6,$7,$8,$9)",
         [
             booking_id.clone().into(),
             id.clone().into(),
@@ -699,6 +718,8 @@ async fn book_event(
             idem_key.into(),
             stars_cost.into(),
             stars_tx_id.into(),
+            booker_username.clone().into(),
+            booker_first_name.clone().into(),
         ],
     )).await.map_err(|e| {
         tracing::error!("book_event insert: {e}");
@@ -1162,6 +1183,7 @@ async fn join_waitlist(
     event_id_ok(&id)?;
     validate_telegram_id_param(req.telegram_id)?;
     check_owner_lenient(&headers, &state, req.telegram_id, "event_waitlist")?;
+    let (booker_username, booker_first_name) = booker_identity(&headers, &state);
     check_not_blocked(&state, req.telegram_id).await?;
 
     use sea_orm::{ConnectionTrait, DbBackend, Statement};
@@ -1232,8 +1254,14 @@ async fn join_waitlist(
         .orm
         .execute(Statement::from_sql_and_values(
             DbBackend::Postgres,
-            "INSERT INTO event_bookings (id, event_id, telegram_id, seats, status) VALUES ($1,$2,$3,1,'waitlisted')",
-            [booking_id.clone().into(), id.into(), req.telegram_id.into()],
+            "INSERT INTO event_bookings (id, event_id, telegram_id, seats, status, username, first_name) VALUES ($1,$2,$3,1,'waitlisted',$4,$5)",
+            [
+                booking_id.clone().into(),
+                id.into(),
+                req.telegram_id.into(),
+                booker_username.into(),
+                booker_first_name.into(),
+            ],
         ))
         .await
         .map_err(|e| {
@@ -1511,7 +1539,7 @@ async fn list_event_bookings(
     use sea_orm::{ConnectionTrait, DbBackend, Statement};
     let rows = state.db.orm.query_all(Statement::from_sql_and_values(
         DbBackend::Postgres,
-        "SELECT id, event_id, telegram_id, seats, status, order_id, stars_paid, stars_tx_id, created_at FROM event_bookings \
+        "SELECT id, event_id, telegram_id, username, first_name, seats, status, order_id, stars_paid, stars_tx_id, created_at FROM event_bookings \
          WHERE event_id = $1 \
          ORDER BY created_at DESC",
         [id.into()],
