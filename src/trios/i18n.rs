@@ -258,6 +258,8 @@ pub const T_CHECKOUT_FULFILLMENT: Key = "checkout.fulfillment";
 pub const T_CHECKOUT_FULFILLMENT_DELIVERY: Key = "checkout.fulfillment.delivery";
 pub const T_CHECKOUT_FULFILLMENT_PICKUP: Key = "checkout.fulfillment.pickup";
 pub const T_CHECKOUT_ERR_AGE: Key = "checkout.error.age";
+pub const T_CHECKOUT_CHANGE: Key = "checkout.change";
+pub const T_CHECKOUT_PHONE_FROM_TELEGRAM: Key = "checkout.phone_from_telegram";
 pub const T_CHECKOUT_ERR_NETWORK: Key = "checkout.error.network";
 pub const T_CHECKOUT_ERR_PARSE: Key = "checkout.error.parse";
 pub const T_CHECKOUT_RETRY: Key = "checkout.retry";
@@ -979,6 +981,8 @@ fn get_ru_translation(key: Key) -> Value {
         T_CHECKOUT_FULFILLMENT_DELIVERY => "🛵 Доставка",
         T_CHECKOUT_FULFILLMENT_PICKUP => "🏪 Самовывоз",
         T_CHECKOUT_ERR_AGE => "Подтвердите, что вам есть 20 лет",
+        T_CHECKOUT_CHANGE => "изменить",
+        T_CHECKOUT_PHONE_FROM_TELEGRAM => "📱 Взять номер из Telegram",
         T_CHECKOUT_ERR_ADDRESS => "Укажите адрес доставки",
         T_CHECKOUT_ERR_ADDRESS_LONG => "Адрес слишком длинный (макс. 500 символов)",
         T_CHECKOUT_ERR_ITEMS => "Корзина пуста — добавьте товары",
@@ -1662,6 +1666,8 @@ fn get_en_translation(key: Key) -> Value {
         T_CHECKOUT_FULFILLMENT_DELIVERY => "🛵 Delivery",
         T_CHECKOUT_FULFILLMENT_PICKUP => "🏪 Pickup",
         T_CHECKOUT_ERR_AGE => "Confirm that you are 20 or older",
+        T_CHECKOUT_CHANGE => "change",
+        T_CHECKOUT_PHONE_FROM_TELEGRAM => "📱 Use my Telegram number",
         T_CHECKOUT_ERR_ADDRESS => "Please enter a delivery address",
         T_CHECKOUT_ERR_ADDRESS_LONG => "Address is too long (max 500 characters)",
         T_CHECKOUT_ERR_ITEMS => "Your cart is empty — add items to continue",

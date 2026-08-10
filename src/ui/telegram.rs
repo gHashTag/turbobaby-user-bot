@@ -297,6 +297,82 @@ impl TelegramApp {
         Some(s)
     }
 
+    /// The user's display name from Telegram — `first_name` plus `last_name`
+    /// when present.
+    ///
+    /// Always available inside the Mini App, which is why the checkout no
+    /// longer asks for it: making someone type a name Telegram already told
+    /// us is a field that only creates a way to fail.
+    pub fn get_full_name(&self) -> Option<String> {
+        let js = r#"(function(){try{
+            if(window.Telegram && window.Telegram.WebApp){
+                var u = window.Telegram.WebApp.initDataUnsafe;
+                if(u && u.user){
+                    var parts = [];
+                    if(u.user.first_name) parts.push(u.user.first_name);
+                    if(u.user.last_name) parts.push(u.user.last_name);
+                    return parts.join(' ');
+                }
+            }
+            return '';
+        }catch(e){return '';}})()"#;
+        let val = js_sys::eval(js).ok()?;
+        let s = val.as_string()?;
+        let trimmed = s.trim();
+        if trimmed.is_empty() {
+            return None;
+        }
+        Some(trimmed.to_string())
+    }
+
+    /// Whether this Telegram client can be asked to share the user's phone.
+    ///
+    /// `requestContact` arrived in WebApp 6.9. Unlike the name, the phone
+    /// number is **not** in initData — Telegram never hands it over without
+    /// the user agreeing, so the best we can do is one tap instead of typing.
+    pub fn supports_request_contact(&self) -> bool {
+        let js = r#"(function(){try{
+            return !!(window.Telegram && window.Telegram.WebApp
+                      && typeof window.Telegram.WebApp.requestContact === 'function');
+        }catch(e){ return false; }})()"#;
+        js_sys::eval(js)
+            .ok()
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false)
+    }
+
+    /// Ask Telegram for the user's phone number.
+    ///
+    /// Shows Telegram's own consent dialog. The number arrives asynchronously,
+    /// so the result is published on a `woody:contact` CustomEvent carrying
+    /// the phone as its `detail`; the caller listens for it. Returns false if
+    /// the call could not be made at all.
+    pub fn request_contact(&self) -> bool {
+        let js = r#"(function(){try{
+            if(!(window.Telegram && window.Telegram.WebApp
+                 && typeof window.Telegram.WebApp.requestContact === 'function')) return false;
+            window.Telegram.WebApp.requestContact(function(granted, result){
+                var phone = '';
+                try {
+                    // Telegram has shipped two shapes for this callback.
+                    if (result && result.responseUnsafe && result.responseUnsafe.contact) {
+                        phone = result.responseUnsafe.contact.phone_number || '';
+                    } else if (result && result.contact) {
+                        phone = result.contact.phone_number || '';
+                    }
+                } catch(e) {}
+                if (granted && phone) {
+                    window.dispatchEvent(new CustomEvent('woody:contact', {detail: phone}));
+                }
+            });
+            return true;
+        }catch(e){ return false; }})()"#;
+        js_sys::eval(js)
+            .ok()
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false)
+    }
+
     /// Telegram-client locale code (`"ru"`, `"en"`, `"th"`, …) read from
     /// `initDataUnsafe.user.language_code`. Cycle #71 — used by the
     /// checkout screen to localise error banners on mobile where opening

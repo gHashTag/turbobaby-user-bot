@@ -4,21 +4,21 @@ use crate::trios::i18n::{
     t, tf, T_BACK, T_CHECKOUT_ADDRESS_LABEL, T_CHECKOUT_ADDRESS_PLACEHOLDER,
     T_CHECKOUT_AGE_CONFIRM, T_CHECKOUT_AGE_NOTICE, T_CHECKOUT_BLOCKED_TITLE, T_CHECKOUT_BONUS,
     T_CHECKOUT_BONUS_APPLIED, T_CHECKOUT_BONUS_AVAILABLE, T_CHECKOUT_BONUS_MAX,
-    T_CHECKOUT_CART_EMPTY, T_CHECKOUT_CASH_ON_DELIVERY, T_CHECKOUT_ERR_400, T_CHECKOUT_ERR_ADDRESS,
-    T_CHECKOUT_ERR_ADDRESS_LONG, T_CHECKOUT_ERR_ITEMS, T_CHECKOUT_ERR_NAME,
+    T_CHECKOUT_CART_EMPTY, T_CHECKOUT_CASH_ON_DELIVERY, T_CHECKOUT_CHANGE, T_CHECKOUT_ERR_400,
+    T_CHECKOUT_ERR_ADDRESS, T_CHECKOUT_ERR_ADDRESS_LONG, T_CHECKOUT_ERR_ITEMS, T_CHECKOUT_ERR_NAME,
     T_CHECKOUT_ERR_NAME_LONG, T_CHECKOUT_ERR_NETWORK, T_CHECKOUT_ERR_NO_TELEGRAM,
     T_CHECKOUT_ERR_PARSE, T_CHECKOUT_ERR_PHONE, T_CHECKOUT_ERR_PHONE_INVALID,
     T_CHECKOUT_ERR_PHONE_LONG, T_CHECKOUT_FULFILLMENT, T_CHECKOUT_FULFILLMENT_DELIVERY,
     T_CHECKOUT_FULFILLMENT_PICKUP, T_CHECKOUT_GARDEN_DISCOUNT, T_CHECKOUT_GARDEN_DISCOUNT_PCT,
     T_CHECKOUT_NAME_LABEL, T_CHECKOUT_NAME_PLACEHOLDER, T_CHECKOUT_NOTES_LABEL,
     T_CHECKOUT_NOTES_PLACEHOLDER, T_CHECKOUT_OPEN_MAP, T_CHECKOUT_PAY_ON_RECEIVE,
-    T_CHECKOUT_PHONE_LABEL, T_CHECKOUT_PHONE_PLACEHOLDER, T_CHECKOUT_PROCESSING, T_CHECKOUT_RETRY,
-    T_CHECKOUT_SELECT_ZONE, T_CHECKOUT_STARS, T_CHECKOUT_STARS_AVAILABLE, T_CHECKOUT_STARS_MINUS,
-    T_CHECKOUT_STEP_CART, T_CHECKOUT_STEP_CONFIRM, T_CHECKOUT_STEP_DETAILS, T_CHECKOUT_TITLE,
-    T_CHECKOUT_TRUST_COD, T_CHECKOUT_TRUST_SECURE, T_CHECKOUT_TRUST_TITLE,
-    T_CHECKOUT_TRUST_VERIFIED, T_CHECKOUT_USE_MY_LOCATION, T_DELIVERY, T_DELIVERY_ETA,
-    T_DELIVERY_FEE, T_DELIVERY_ZONE, T_PAYMENT, T_PICKUP_LOCATION, T_PLACE_ORDER, T_TOTAL,
-    T_YOUR_INFO, T_YOUR_ORDER,
+    T_CHECKOUT_PHONE_FROM_TELEGRAM, T_CHECKOUT_PHONE_LABEL, T_CHECKOUT_PHONE_PLACEHOLDER,
+    T_CHECKOUT_PROCESSING, T_CHECKOUT_RETRY, T_CHECKOUT_SELECT_ZONE, T_CHECKOUT_STARS,
+    T_CHECKOUT_STARS_AVAILABLE, T_CHECKOUT_STARS_MINUS, T_CHECKOUT_STEP_CART,
+    T_CHECKOUT_STEP_CONFIRM, T_CHECKOUT_STEP_DETAILS, T_CHECKOUT_TITLE, T_CHECKOUT_TRUST_COD,
+    T_CHECKOUT_TRUST_SECURE, T_CHECKOUT_TRUST_TITLE, T_CHECKOUT_TRUST_VERIFIED,
+    T_CHECKOUT_USE_MY_LOCATION, T_DELIVERY, T_DELIVERY_ETA, T_DELIVERY_FEE, T_DELIVERY_ZONE,
+    T_PAYMENT, T_PICKUP_LOCATION, T_PLACE_ORDER, T_TOTAL, T_YOUR_INFO, T_YOUR_ORDER,
 };
 use crate::trios::store::{checkout_blockers, normalize_phone, validate_checkout_for, Fulfillment};
 use crate::ui::api::context::api_base_url;
@@ -578,7 +578,46 @@ pub fn CheckoutScreen() -> Element {
         }
     });
 
+    // Name comes from Telegram; the field is only shown when it does not.
+    let telegram_name = TelegramApp::init().get_full_name();
+    let can_request_contact = TelegramApp::init().supports_request_contact();
+    let mut editing_name = use_signal(|| false);
     let mut shop_selected = use_signal(|| 0usize);
+
+    // Fill the name from Telegram once, and only into an empty field so a
+    // restored draft or a correction the customer typed is never overwritten.
+    {
+        let tg_name = telegram_name.clone();
+        use_effect(move || {
+            if let Some(ref n) = tg_name {
+                if customer_name().trim().is_empty() {
+                    customer_name.set(n.clone());
+                }
+            }
+        });
+    }
+
+    // `requestContact` answers asynchronously through Telegram's own consent
+    // dialog; `TelegramApp::request_contact` republishes the number as a
+    // `woody:contact` event so it can be picked up here.
+    #[cfg(target_arch = "wasm32")]
+    use_hook(move || {
+        use wasm_bindgen::JsCast;
+        let Some(win) = web_sys::window() else {
+            return;
+        };
+        let listener = gloo_events::EventListener::new(&win, "woody:contact", move |event| {
+            let phone = event
+                .dyn_ref::<web_sys::CustomEvent>()
+                .and_then(|e| e.detail().as_string())
+                .unwrap_or_default();
+            if !phone.trim().is_empty() {
+                customer_phone.set(phone);
+            }
+        });
+        // Held for the lifetime of the screen; dropping it would unsubscribe.
+        listener.forget();
+    });
     // Delivery vs pickup. Pickup orders carry no address, which is why the
     // address gate below is conditional rather than unconditional.
     let mut fulfillment = use_signal(Fulfillment::default);
@@ -1300,29 +1339,46 @@ pub fn CheckoutScreen() -> Element {
                     box-shadow: 4px 4px 0 #000;
                 ",
                         h2 { style: "font-size: 13px; font-weight: 700; color: #00e5ff; text-transform: uppercase; letter-spacing: 1px; text-shadow: 2px 2px 0 #000; margin-bottom: 10px;", "{your_info}" }
-                        div { style: "margin-bottom: 8px;",
-                            label {
-                                r#for: "checkout-name",
-                                style: "font-size: 13px; color: #8b8b9e; display: block; margin-bottom: 4px;",
-                                "{t(lang, T_CHECKOUT_NAME_LABEL)}"
+                        // Telegram already told us the name, so we do not ask
+                        // for it. The field only appears when we genuinely have
+                        // nothing — asking for data we hold is a field whose
+                        // only possible outcome is failing to fill it in.
+                        if telegram_name.is_some() && !editing_name() {
+                            div { style: "display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin-bottom:8px;min-width:0;",
+                                span { style: "font-size:13px;color:#8b8b9e;", "{t(lang, T_CHECKOUT_NAME_LABEL)}" }
+                                span { style: "font-size:15px;color:#e8e8e8;font-weight:700;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;", "{customer_name}" }
+                                button {
+                                    r#type: "button",
+                                    style: "background:transparent;border:none;color:#39ff14;font-size:13px;text-decoration:underline;cursor:pointer;padding:0;min-height:44px;",
+                                    onclick: move |_| editing_name.set(true),
+                                    "{t(lang, T_CHECKOUT_CHANGE)}"
+                                }
                             }
-                            input {
-                                id: "checkout-name",
-                                style: "
-                                font-size: 15px; width: 100%; padding: 10px 12px;
-                                background: #0f0f1a; color: #e8e8e8;
-                                border: 4px solid {name_border}; border-radius: 0;
-                                box-sizing: border-box;
-                            ",
-                                r#type: "text",
-                                autocomplete: "name",
-                                placeholder: "{t(lang, T_CHECKOUT_NAME_PLACEHOLDER)}",
-                                aria_label: "{t(lang, T_CHECKOUT_NAME_LABEL)}",
-                                value: "{customer_name}",
-                                oninput: move |e| customer_name.set(e.value()),
-                            }
-                            if let Some(err) = name_error() {
-                                p { style: "font-size: 12px; color: #ff4757; margin-top: 4px;", "{err}" }
+                        } else {
+                            div { style: "margin-bottom: 8px;",
+                                label {
+                                    r#for: "checkout-name",
+                                    style: "font-size: 13px; color: #8b8b9e; display: block; margin-bottom: 4px;",
+                                    "{t(lang, T_CHECKOUT_NAME_LABEL)}"
+                                }
+                                input {
+                                    id: "checkout-name",
+                                    style: "
+                                    font-size: 15px; width: 100%; padding: 10px 12px;
+                                    background: #0f0f1a; color: #e8e8e8;
+                                    border: 4px solid {name_border}; border-radius: 0;
+                                    box-sizing: border-box;
+                                ",
+                                    r#type: "text",
+                                    autocomplete: "name",
+                                    placeholder: "{t(lang, T_CHECKOUT_NAME_PLACEHOLDER)}",
+                                    aria_label: "{t(lang, T_CHECKOUT_NAME_LABEL)}",
+                                    value: "{customer_name}",
+                                    oninput: move |e| customer_name.set(e.value()),
+                                }
+                                if let Some(err) = name_error() {
+                                    p { style: "font-size: 12px; color: #ff4757; margin-top: 4px;", "{err}" }
+                                }
                             }
                         }
                         div { style: "margin-bottom: 8px;",
@@ -1330,6 +1386,20 @@ pub fn CheckoutScreen() -> Element {
                                 r#for: "checkout-phone",
                                 style: "font-size: 13px; color: #8b8b9e; display: block; margin-bottom: 4px;",
                                 "{t(lang, T_CHECKOUT_PHONE_LABEL)}"
+                            }
+                            // Telegram never puts the phone number in initData —
+                            // it is only handed over if the user agrees. So this
+                            // cannot be filled silently like the name; the best
+                            // available is one tap instead of typing it out.
+                            if can_request_contact && customer_phone().trim().is_empty() {
+                                button {
+                                    r#type: "button",
+                                    style: "width:100%;padding:12px;margin-bottom:6px;background:#39ff14;color:#000;border:3px solid #2d9e0f;font-size:14px;font-weight:700;cursor:pointer;box-shadow:2px 2px 0 #000;",
+                                    onclick: move |_| {
+                                        TelegramApp::init().request_contact();
+                                    },
+                                    "{t(lang, T_CHECKOUT_PHONE_FROM_TELEGRAM)}"
+                                }
                             }
                             input {
                                 id: "checkout-phone",
