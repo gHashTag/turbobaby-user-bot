@@ -42,8 +42,8 @@
     
     
 <script type="module">
-import init, * as bindings from '/woody-weed-bot-6238cdc1dea5a880.js';
-const wasm = await init({ module_or_path: '/woody-weed-bot-6238cdc1dea5a880_bg.wasm' });
+import init, * as bindings from '/woody-weed-bot-62f53c701c221f2.js';
+const wasm = await init({ module_or_path: '/woody-weed-bot-62f53c701c221f2_bg.wasm' });
 
 
 window.wasmBindings = bindings;
@@ -138,20 +138,57 @@ dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
         }
     </style>
     <script>
-    // Error catcher — shows errors on screen before WASM loads
+    // Error catcher — shows errors on screen before WASM loads.
+    //
+    // Its ONLY job is diagnosing a failure to boot: if the wasm module cannot
+    // load there is no Rust UI to report anything, so this box is the last
+    // resort. Once the app has booted, the Rust overlay owns error display —
+    // and it filters. Two rules keep this from becoming the bug it caused on
+    // 2026-08-10:
+    //
+    //   1. Benign cancellations never open the box. Aborted fetches and
+    //      interrupted <video> previews are normal during navigation. They
+    //      used to reach this catcher unfiltered, because the Rust side
+    //      installs its unhandledrejection handler with addEventListener and
+    //      therefore does NOT replace `window.onunhandledrejection` here.
+    //   2. After boot the box never opens at all. It is `position:fixed`
+    //      across the top half of the screen at z-index 100000, so while it is
+    //      visible it swallows every tap underneath it — which is how a
+    //      harmless AbortError left customers unable to reach the order
+    //      button.
     window.__errors = [];
-    window.onerror = function(msg, url, line, col, err) {
-        window.__errors.push({msg: msg, url: url, line: line, col: col, stack: err && err.stack});
+    window.__benignError = function(msg) {
+        msg = (msg || '').toString();
+        return msg.indexOf('AbortError') !== -1
+            || msg.indexOf('operation was aborted') !== -1
+            || msg.indexOf('play() request was interrupted') !== -1
+            || msg.indexOf('request is not allowed by the user agent') !== -1
+            || msg.indexOf('ResizeObserver loop') !== -1;
+    };
+    window.__recordBootError = function(entry) {
+        window.__errors.push(entry);
+        if (window.__benignError(entry.msg)) return;
+        // `__wasm_booted` is set by the Rust error handlers once the app is
+        // running; from then on the Rust overlay reports errors instead.
+        if (window.__wasm_booted) return;
         var box = document.getElementById('error-box');
         if (box) box.style.display = 'block';
+        var closeBtn = document.getElementById('error-box-close');
+        if (closeBtn) {
+            closeBtn.style.display = 'block';
+            closeBtn.onclick = function () {
+                if (box) box.style.display = 'none';
+                closeBtn.style.display = 'none';
+            };
+        }
         updateErrorBox();
+    };
+    window.onerror = function(msg, url, line, col, err) {
+        window.__recordBootError({msg: msg, url: url, line: line, col: col, stack: err && err.stack});
         return false;
     };
     window.onunhandledrejection = function(e) {
-        window.__errors.push({msg: 'Unhandled: ' + e.reason, stack: ''});
-        var box = document.getElementById('error-box');
-        if (box) box.style.display = 'block';
-        updateErrorBox();
+        window.__recordBootError({msg: 'Unhandled: ' + e.reason, stack: ''});
     };
     function updateErrorBox() {
         var box = document.getElementById('error-box');
@@ -243,7 +280,7 @@ dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
         }, true);
     });
     </script>
-<link rel="modulepreload" href="/woody-weed-bot-6238cdc1dea5a880.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-web-bf44d47c344f35d0/inline1.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-interpreter-js-53424282ea002554/src/js/hydrate.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-interpreter-js-53424282ea002554/src/js/patch_console.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-web-bf44d47c344f35d0/src/js/eval.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-interpreter-js-53424282ea002554/src/js/common.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-interpreter-js-53424282ea002554/inline0.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-web-bf44d47c344f35d0/inline0.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-cli-config-24e80746d3c500cd/inline0.js" crossorigin="anonymous"><link rel="preload" href="/woody-weed-bot-6238cdc1dea5a880_bg.wasm" crossorigin="anonymous" as="fetch" type="application/wasm"></head>
+<link rel="modulepreload" href="/woody-weed-bot-62f53c701c221f2.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-cli-config-24e80746d3c500cd/inline0.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-web-bf44d47c344f35d0/src/js/eval.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-web-bf44d47c344f35d0/inline0.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-interpreter-js-53424282ea002554/src/js/common.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-interpreter-js-53424282ea002554/src/js/hydrate.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-web-bf44d47c344f35d0/inline1.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-interpreter-js-53424282ea002554/inline0.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-interpreter-js-53424282ea002554/src/js/patch_console.js" crossorigin="anonymous"><link rel="preload" href="/woody-weed-bot-62f53c701c221f2_bg.wasm" crossorigin="anonymous" as="fetch" type="application/wasm"></head>
 <body>
     <div id="preloader">
         <div class="spinner"></div>
@@ -252,7 +289,8 @@ dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
             <div id="loader-progress-bar" style="width:0%;height:100%;background:#39ff14;transition:width .3s ease;"></div>
         </div>
     </div>
-    <div id="error-box" style="display:none;position:fixed;top:0;left:0;width:100%;max-height:50vh;background:#1a1a2e;color:#e8e8e8;padding:12px;font-family:monospace;font-size:12px;z-index:100000;overflow:auto;border-bottom:2px solid #ff4757;"></div>
+    <div id="error-box" style="display:none;position:fixed;top:0;left:0;width:100%;max-height:40vh;background:#1a1a2e;color:#e8e8e8;padding:12px;font-family:monospace;font-size:12px;z-index:100000;overflow:auto;border-bottom:2px solid #ff4757;"></div>
+    <button id="error-box-close" style="display:none;position:fixed;top:6px;right:6px;z-index:100001;background:#ff4757;color:#fff;border:none;border-radius:4px;padding:6px 10px;font-size:14px;font-weight:700;cursor:pointer;" aria-label="close errors">✕</button>
     <div id="main"></div>
     <script>
         // WASM load tracker — shows granular progress and handles failures

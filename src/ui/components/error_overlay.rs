@@ -150,6 +150,16 @@ pub fn install_error_handlers(errors: Signal<Vec<JsErrorItem>>) {
     #[cfg(target_arch = "wasm32")]
     {
         if let Some(window) = web_sys::window() {
+            // Tell the pre-boot catcher in index.html to stand down. It exists
+            // only to diagnose a wasm module that never loads; from here the
+            // Rust overlay reports errors, and it filters benign cancellations.
+            // Leaving both active is what let a harmless AbortError open a
+            // fixed, tap-swallowing panel across the top of every screen.
+            let _ = js_sys::Reflect::set(
+                &window,
+                &wasm_bindgen::JsValue::from_str("__wasm_booted"),
+                &wasm_bindgen::JsValue::from_bool(true),
+            );
             // window.onerror
             let errors_clone = errors;
             let onerror = Closure::wrap(Box::new(move |event: Event| {
