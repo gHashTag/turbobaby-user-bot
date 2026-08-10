@@ -355,17 +355,26 @@ fn message_hash(message: &str) -> String {
 }
 
 /// True when the error looks operationally important enough to page admins.
-fn should_alert(source: &str, message: &str) -> bool {
+fn should_alert(source: &str, message: &str, url_path: &str) -> bool {
     // Rust panic hook output starts with "PANIC:" (see lib.rs wasm start).
     // WASM `RuntimeError` / "unreachable" usually mean a Rust panic or a
     // wasm-bindgen mismatch. "Importing binding name" is the classic
     // stale-dist error after a trunk/wasm-bindgen version drift.
     let lower = message.to_ascii_lowercase();
-    source == "window.onerror"
+    let fatal = source == "window.onerror"
         && (message.starts_with("PANIC:")
             || lower.contains("runtimeerror")
             || lower.contains("unreachable")
-            || lower.contains("importing binding name"))
+            || lower.contains("importing binding name"));
+
+    // Anything on the purchase path, whatever its shape. Orders broke three
+    // times without a single alert, because the failures arrived as
+    // unhandledrejection rather than as a panic — and the only record of them
+    // sat in a table nobody could read during the incident. A customer who
+    // cannot pay is the one error worth waking someone for.
+    let on_purchase_path = url_path.contains("/checkout") || url_path.contains("/cart");
+
+    fatal || on_purchase_path
 }
 
 async fn log_client_error(
@@ -417,7 +426,11 @@ async fn log_client_error(
 
     crate::metrics::client_error_received(&err.source);
 
-    if should_alert(&err.source, &err.message) {
+    if should_alert(
+        &err.source,
+        &err.message,
+        err.url_path.as_deref().unwrap_or_default(),
+    ) {
         let should_page = {
             let mut last = LAST_CLIENT_ERROR_ALERT.lock().await;
             let now = Instant::now();
@@ -654,22 +667,52 @@ mod tests {
 
     #[test]
     fn should_alert_detects_panic_prefix() {
-        assert!(should_alert("window.onerror", "PANIC: oh no"));
-        assert!(!should_alert("window.onerror", "network timeout"));
-        assert!(!should_alert("unhandledrejection", "PANIC: ignored"));
+        assert!(should_alert("window.onerror", "PANIC: oh no", "/"));
+        assert!(!should_alert("window.onerror", "network timeout", "/"));
+        assert!(!should_alert("unhandledrejection", "PANIC: ignored", "/"));
     }
 
     #[test]
     fn should_alert_detects_runtime_error() {
-        assert!(should_alert("window.onerror", "RuntimeError: unreachable"));
+        assert!(should_alert(
+            "window.onerror",
+            "RuntimeError: unreachable",
+            "/"
+        ));
     }
 
     #[test]
     fn should_alert_detects_wasm_bindgen_mismatch() {
         assert!(should_alert(
             "window.onerror",
-            "Importing binding name 'foo' not found"
+            "Importing binding name 'foo' not found",
+            "/"
         ));
+    }
+
+    #[test]
+    fn any_error_on_the_purchase_path_alerts() {
+        // Orders broke three times and never raised an alert: the failures
+        // arrived as unhandledrejection, not as a panic.
+        for path in ["/checkout", "/cart", "/cart?x=1"] {
+            assert!(
+                should_alert("unhandledrejection", "TypeError: whatever", path),
+                "{path} must alert"
+            );
+        }
+    }
+
+    #[test]
+    fn ordinary_pages_still_only_alert_on_fatal_errors() {
+        // The purchase path is special-cased on purpose; widening this to
+        // every page would make the alert channel unreadable.
+        assert!(!should_alert(
+            "unhandledrejection",
+            "TypeError: x",
+            "/garden"
+        ));
+        assert!(!should_alert("window.onerror", "some warning", "/menu"));
+        assert!(should_alert("window.onerror", "PANIC: boom", "/garden"));
     }
 
     #[test]

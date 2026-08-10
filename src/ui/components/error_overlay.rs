@@ -22,9 +22,31 @@ pub struct JsErrorItem {
 pub fn ErrorOverlay() -> Element {
     let mut errors = use_context::<Signal<Vec<JsErrorItem>>>();
     let items = errors.read().clone();
+    // Collapsed by default. The expanded panel is `position:fixed` across the
+    // top half of the screen at z-index 99999, so while it is open it swallows
+    // every tap underneath — which turned reported errors into an unusable
+    // shop twice. A diagnostic must never cost the customer the checkout
+    // button, so it now sits as a small badge until someone asks to read it.
+    let mut expanded = use_signal(|| false);
 
     if items.is_empty() {
         return rsx! {};
+    }
+
+    if !expanded() {
+        return rsx! {
+            button {
+                style: "
+                    position: fixed; top: 6px; right: 6px; z-index: 99999;
+                    background: #ff4757; color: #fff; border: none;
+                    border-radius: 14px; padding: 4px 10px;
+                    font-family: 'Inter', monospace; font-size: 11px; font-weight: 700;
+                    box-shadow: 0 2px 6px rgba(0,0,0,0.4); cursor: pointer;
+                ",
+                onclick: move |_| expanded.set(true),
+                "🚨 {items.len()}"
+            }
+        };
     }
 
     rsx! {
@@ -41,11 +63,23 @@ pub fn ErrorOverlay() -> Element {
                 span { style: "font-weight: 700; font-size: 13px;", "🚨 {items.len()} browser error(s)" }
                 button {
                     style: "
+                        background: rgba(255,255,255,0.2); color: #fff; border: none;
+                        padding: 4px 10px; font-weight: 700; cursor: pointer;
+                        font-size: 11px; border-radius: 4px; margin-left: auto; margin-right: 8px;
+                    ",
+                    onclick: move |_| expanded.set(false),
+                    "▲ Свернуть"
+                }
+                button {
+                    style: "
                         background: #fff; color: #ff4757; border: none;
                         padding: 4px 10px; font-weight: 700; cursor: pointer;
                         font-size: 11px; border-radius: 4px;
                     ",
-                    onclick: move |_| errors.write().clear(),
+                    onclick: move |_| {
+                        errors.write().clear();
+                        expanded.set(false);
+                    },
                     "✕ Clear All"
                 }
             }
@@ -102,22 +136,6 @@ fn push_error(mut errors: Signal<Vec<JsErrorItem>>, mut item: JsErrorItem) {
     if vec.len() > MAX_ERRORS {
         vec.remove(0);
     }
-}
-
-/// Benign, non-actionable JS errors that must NOT pop the error overlay.
-/// `AbortError` / "operation was aborted" / "play() request was interrupted"
-/// come from autoplay `<video>` previews on cards: when a card re-renders or
-/// scrolls out, the browser cancels the in-flight media load — expected, not a
-/// bug. `ResizeObserver loop` is the classic harmless browser warning. These are
-/// cancellations, not failures, so filtering them is safe (real fetch failures
-/// surface as TypeError/NetworkError, which still show).
-#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
-fn is_benign_js_error(msg: &str) -> bool {
-    msg.contains("AbortError")
-        || msg.contains("operation was aborted")
-        || msg.contains("play() request was interrupted")
-        || msg.contains("request is not allowed by the user agent")
-        || msg.contains("ResizeObserver loop")
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -183,7 +201,7 @@ pub fn install_error_handlers(errors: Signal<Vec<JsErrorItem>>) {
                     .unwrap_or(0);
                 let stack = get_stack_from_event(&event);
                 let full_msg = format!("{} at {}:{}:{}", msg, filename, lineno, colno);
-                if is_benign_js_error(&full_msg) {
+                if !crate::trios::js_errors::onerror_is_reportable(&msg, &filename, lineno, colno) {
                     return;
                 }
                 let item = JsErrorItem {
@@ -195,7 +213,24 @@ pub fn install_error_handlers(errors: Signal<Vec<JsErrorItem>>) {
                 send_error_telemetry(&item);
                 push_error(errors_clone, item);
             }) as Box<dyn FnMut(_)>);
-            window.set_onerror(Some(onerror.as_ref().unchecked_ref()));
+            // Registered as a listener, not as `window.onerror`.
+            //
+            // The `onerror` *property* is invoked with five positional
+            // arguments — (message, source, lineno, colno, error) — but this
+            // closure takes a single value, so it received the message string
+            // and then read `.message` / `.filename` / `.lineno` off a string,
+            // which have no such properties. Every real error therefore
+            // arrived as "Unknown error at :0:0": thirteen of them were logged
+            // against /cart on 2026-08-10, stripped of the very text needed to
+            // diagnose them, and the resulting noise opened the tap-blocking
+            // error panel.
+            //
+            // `addEventListener("error", …)` delivers a real `ErrorEvent`, so
+            // the fields below are populated. It also fires for failed
+            // resource loads, where there genuinely is no message — those are
+            // the opaque case the filter is for.
+            let _ =
+                window.add_event_listener_with_callback("error", onerror.as_ref().unchecked_ref());
             onerror.forget();
 
             // unhandledrejection
@@ -224,7 +259,7 @@ pub fn install_error_handlers(errors: Signal<Vec<JsErrorItem>>) {
                         }
                     })
                     .unwrap_or_else(|| "Promise rejected".into());
-                if is_benign_js_error(&reason) {
+                if crate::trios::js_errors::is_benign_js_error(&reason) {
                     return;
                 }
                 let item = JsErrorItem {

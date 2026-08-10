@@ -9,6 +9,7 @@ pub mod drink_categories;
 pub mod garden;
 pub mod health;
 pub mod i18n;
+pub mod js_errors;
 pub mod packs;
 pub mod pricing;
 pub mod quest;
