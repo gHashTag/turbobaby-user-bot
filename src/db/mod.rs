@@ -736,7 +736,7 @@ impl Database {
                         MAX(message)  AS message, \
                         MAX(url_path) AS url_path \
                  FROM client_error_logs \
-                 WHERE created_at > NOW() - ($1 || ' hours')::interval \
+                 WHERE occurred_at > NOW() - ($1 || ' hours')::interval \
                  GROUP BY message_hash \
                  ORDER BY COUNT(*) DESC \
                  LIMIT $2",

@@ -30,6 +30,37 @@ pre-push:
           fi
         done
 
+    full-tests:
+      # pre-commit runs only the defensive slice (db:: + metric wiring) to keep
+      # commits fast. That leaves ~780 unit tests — including every pricing,
+      # checkout-gate and callback-routing test — running nowhere before code
+      # reaches main. They take under a second once compiled, so the only
+      # sensible place for them is here.
+      run: cargo test --offline --features backend --lib --quiet
+      fail_text: |
+        Unit tests failed. Run `cargo test --features backend --lib` to see them.
+
+    clippy-backend:
+      # clippy has caught real defects here (an unused admin-gate helper that
+      # revealed three copy-pasted guards). It ran in no hook at all.
+      run: cargo clippy --offline --features backend --bin woody-weed-bot-server -- -D warnings
+      fail_text: |
+        clippy failed on the server binary. Fix the lints before pushing.
+
+    integration-tests:
+      # DB-backed suites — orders, stars, catalog, garden, events, strain-of-day.
+      # Skipped when DATABASE_URL is unset so a clone without Postgres can still
+      # push; when it IS set, these are the tests that have caught every
+      # production defect this month, so they must not be optional.
+      run: |
+        if [ -z "$DATABASE_URL" ]; then
+          echo "  DATABASE_URL unset — skipping DB-backed integration tests."
+          exit 0
+        fi
+        cargo test --offline --features backend --tests --quiet -- --include-ignored --test-threads=1
+      fail_text: |
+        Integration tests failed against $DATABASE_URL.
+
     frontend-smoke:
       # When a rebuilt WASM bundle is in the push, prove it actually LOADS in a
       # browser before it can ship. cargo/trunk only COMPILE the wasm + emit the

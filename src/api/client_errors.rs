@@ -125,17 +125,17 @@ async fn list_client_errors(
             DbBackend::Postgres,
             "SELECT message_hash, \
                     COUNT(*)::bigint       AS occurrences, \
-                    MAX(created_at)        AS last_seen, \
-                    MIN(created_at)        AS first_seen, \
+                    MAX(occurred_at)       AS last_seen, \
+                    MIN(occurred_at)      AS first_seen, \
                     MAX(source)            AS source, \
                     MAX(message)           AS message, \
                     MAX(url_path)          AS url_path, \
                     MAX(stack)             AS stack, \
                     COUNT(DISTINCT telegram_id)::bigint AS affected_users \
              FROM client_error_logs \
-             WHERE created_at > NOW() - ($1 || ' hours')::interval \
+             WHERE occurred_at > NOW() - ($1 || ' hours')::interval \
              GROUP BY message_hash \
-             ORDER BY MAX(created_at) DESC \
+             ORDER BY MAX(occurred_at) DESC \
              LIMIT $2",
             [hours.to_string().into(), limit.into()],
         ))
