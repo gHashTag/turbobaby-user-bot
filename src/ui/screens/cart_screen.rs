@@ -276,8 +276,12 @@ fn cart_item_row(item: CartItem, lang: crate::trios::core::Lang) -> Element {
     rsx! {
         div {
             key: "{row_key}",
+            // `flex-wrap` matters: three 44px controls plus a count need ~162px,
+            // and a long product name needs the rest. On a narrow phone they do
+            // not both fit, and without wrapping the row simply overflowed the
+            // card — the delete button was clipped off the right edge.
             style: "
-            display: flex; align-items: center; gap: 10px;
+            display: flex; align-items: center; flex-wrap: wrap; gap: 10px;
             background: #16213e; border: 4px solid #2a2a4a;
             border-radius: 0; padding: 10px; margin-bottom: 8px;
             box-shadow: 4px 4px 0 #000;
@@ -295,9 +299,14 @@ fn cart_item_row(item: CartItem, lang: crate::trios::core::Lang) -> Element {
                     justify-content: center; font-size: 22px; flex-shrink: 0;
                 ", "🌿" }
             }
-            div { style: "flex: 1;",
-                div { style: "font-size: 17px; font-weight: 700; margin-bottom: 2px;", "{item.name}" }
-                div { style: "font-size: 15px; color: #8b8b9e;", "{price_str} each · {line_total_str}" }
+            // `min-width: 0` is the whole fix for the text column: a flex item
+            // defaults to `min-width: auto`, so it refuses to shrink below its
+            // own content and a long name pushes everything else out of the
+            // card. The basis keeps it from collapsing to nothing once the row
+            // is allowed to wrap.
+            div { style: "flex: 1 1 150px; min-width: 0;",
+                div { style: "font-size: 16px; font-weight: 700; margin-bottom: 2px; overflow-wrap: anywhere;", "{item.name}" }
+                div { style: "font-size: 14px; color: #8b8b9e;", "{price_str} each · {line_total_str}" }
                 // A3: per-drink dine-in / takeaway toggle (drinks only).
                 if item.item_type == CartItemType::Tea {
                     {
@@ -344,7 +353,10 @@ fn cart_item_row(item: CartItem, lang: crate::trios::core::Lang) -> Element {
                     }
                 }
             }
-            div { style: "display: flex; align-items: center; gap: 6px;",
+            // `flex: 0 0 auto` so the controls keep their own width instead of
+            // being squeezed; `margin-left: auto` keeps them right-aligned both
+            // on one line and when they wrap onto their own.
+            div { style: "display: flex; align-items: center; gap: 6px; flex: 0 0 auto; margin-left: auto;",
                 button {
                     style: "
                         width: 44px; height: 44px;
