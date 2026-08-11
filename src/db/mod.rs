@@ -310,6 +310,10 @@ const MIGRATIONS: &[(&str, &str)] = &[
         "071_delivery_zones_koh_phangan.sql",
         include_str!("../../migrations/071_delivery_zones_koh_phangan.sql"),
     ),
+    (
+        "072_fix_garden_reminder_timestamp_types.sql",
+        include_str!("../../migrations/072_fix_garden_reminder_timestamp_types.sql"),
+    ),
 ];
 
 /// Columns the catalog endpoints SELECT that were added by *later* migrations
