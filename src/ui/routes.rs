@@ -8,7 +8,8 @@ use crate::ui::screens::{
     ARHuntScreen, AccessoriesScreen, AdminScreen, CartScreen, CheckoutScreen, EventDetailScreen,
     EventsScreen, GameScreen, GardenScreen, HomeScreen, LocationQuestScreen, MenuScreen,
     MyBookingsScreen, OrderDetailScreen, OrdersScreen, ProfileScreen, QuestScreen, ReferralsScreen,
-    SetsScreen, SommelierScreen, SuccessScreen, TeaScreen, TechTreeScreen, TreasureHuntScreen,
+    SetsScreen, SkateScreen, SommelierScreen, SuccessScreen, TeaScreen, TechTreeScreen,
+    TreasureHuntScreen,
 };
 use dioxus::prelude::*;
 
@@ -59,6 +60,8 @@ pub enum Route {
     Quest { id: String },
     #[route("/game")]
     Game {},
+    #[route("/skate")]
+    Skate {},
     #[route("/referrals")]
     Referrals {},
     #[route("/treasure-hunt")]
@@ -228,6 +231,16 @@ fn Quest(id: String) -> Element {
         LazyScreen {
             QuestScreen { id }
         }
+    }
+}
+
+#[component]
+fn Skate() -> Element {
+    // Not wrapped in LazyScreen: the screen already defers its own weight by
+    // importing three.js at runtime, and a second loading shell just delays
+    // the canvas the player is waiting for.
+    rsx! {
+        SkateScreen {}
     }
 }
 

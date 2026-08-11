@@ -501,6 +501,13 @@ pub fn HomeScreen() -> Element {
     let nav_accessories = t(crate::ui::lang::current_lang(), T_NAV_ACCESSORIES).to_string();
     let nav_tea = t(crate::ui::lang::current_lang(), T_NAV_TEA).to_string();
     let nav_garden = t(crate::ui::lang::current_lang(), T_NAV_GARDEN).to_string();
+    // Not in the shared translation table: one screen, two words, and adding a
+    // key there means touching every language file for a single tile.
+    let nav_skate = if crate::ui::lang::current_lang() == crate::trios::core::Lang::English {
+        "Woody Skate"
+    } else {
+        "Woody Скейт"
+    };
     let add_to_cart_label = t(crate::ui::lang::current_lang(), T_ADD_TO_CART).to_string();
 
     // Secret admin entry: 5 rapid taps on the logo navigates to /admin.
@@ -1046,6 +1053,16 @@ pub fn HomeScreen() -> Element {
                         ",
                             div { style: "font-size:28px;margin-bottom:6px;", "🎮" }
                             div { style: "font-size:13px;font-weight:700;color:#e8e8e8;", {t(crate::ui::lang::current_lang(), T_HOME_GAME)} }
+                        }
+                    }
+                    Link { to: Route::Skate {},
+                        div { style: "
+                            background:#16213e;border:4px solid #39ff14;
+                            box-shadow:4px 4px 0 #000;
+                            padding:14px 8px;text-align:center;cursor:pointer;
+                        ",
+                            div { style: "font-size:28px;margin-bottom:6px;", "🛹" }
+                            div { style: "font-size:13px;font-weight:700;color:#e8e8e8;", "{nav_skate}" }
                         }
                     }
                 }

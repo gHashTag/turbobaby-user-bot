@@ -218,6 +218,58 @@ async fn add_stars(
         })));
     }
 
+    // Trim a game payout to what today's cap still allows.
+    //
+    // Stars are money at checkout, and this endpoint will credit whatever it
+    // is asked for. The cap is applied here, inside the same transaction that
+    // reads the running total, so two requests racing cannot both see an empty
+    // ledger and both pay out.
+    //
+    // Over the cap the request still succeeds, reporting `capped`. Failing it
+    // would end a player's run with an error for doing nothing wrong.
+    let amount = if crate::trios::stars_cap::is_game_source(&req.source) {
+        let today_row = tx
+            .query_one(Statement::from_sql_and_values(
+                DbBackend::Postgres,
+                "SELECT COALESCE(SUM(amount), 0)::bigint AS paid \
+                 FROM stars_transactions \
+                 WHERE telegram_id = $1 AND source = $2 AND amount > 0 \
+                   AND created_at > NOW() - INTERVAL '24 hours'",
+                [req.telegram_id.into(), req.source.clone().into()],
+            ))
+            .await
+            .map_err(|e| {
+                tracing::error!("stars add cap lookup: {:?}", e);
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?;
+        let already = today_row
+            .and_then(|r| r.try_get::<i64>("", "paid").ok())
+            .unwrap_or(0);
+        let allowed = crate::trios::stars_cap::allowed_credit(req.amount, already);
+        if allowed < req.amount {
+            tracing::info!(
+                "stars cap: source={} telegram_id={} requested={} already={} paid={}",
+                req.source,
+                req.telegram_id,
+                req.amount,
+                already,
+                allowed
+            );
+        }
+        if allowed == 0 {
+            tx.commit().await.ok();
+            return Ok(Json(json!({
+                "success": true,
+                "capped": true,
+                "telegram_id": req.telegram_id,
+                "amount": 0,
+            })));
+        }
+        allowed
+    } else {
+        req.amount
+    };
+
     // Ensure loyalty_profile exists (FK target).
     let lp_am = LpAm {
         telegram_id: Set(req.telegram_id),
@@ -262,7 +314,7 @@ async fn add_stars(
     let updated = UsEntity::update_many()
         .col_expr(
             UsCol::Balance,
-            sea_orm::sea_query::Expr::cust_with_values("balance + $1", [req.amount]),
+            sea_orm::sea_query::Expr::cust_with_values("balance + $1", [amount]),
         )
         .filter(UsCol::TelegramId.eq(req.telegram_id))
         .exec(&tx)
@@ -283,13 +335,13 @@ async fn add_stars(
             tracing::error!("stars add balance read: {:?}", e);
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
-    let balance_after = new_balance_row.map(|r| r.balance).unwrap_or(req.amount);
+    let balance_after = new_balance_row.map(|r| r.balance).unwrap_or(amount);
 
     let tx_id = uuid::Uuid::new_v4().to_string();
     let tx_am = TxAm {
         id: Set(tx_id.clone()),
         telegram_id: Set(req.telegram_id),
-        amount: Set(req.amount),
+        amount: Set(amount),
         balance_after: Set(balance_after),
         source: Set(req.source.clone()),
         reason: Set(req.reason.clone()),

@@ -14,6 +14,7 @@ pub mod packs;
 pub mod pricing;
 pub mod quest;
 pub mod referrals;
+pub mod stars_cap;
 pub mod store;
 pub mod validation;
 
