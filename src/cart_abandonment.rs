@@ -28,12 +28,18 @@ pub(crate) fn spawn_cart_abandonment_reminder_loop(
         loop {
             interval.tick().await;
             match send_cart_abandonment_reminders(&orm, &bot, &config).await {
+                // silent-tick: deliberate, not an omission -- ticks every 300s = 288 lines/day per sweep, and a quiet shop is the normal case.
+                // Reporting "nothing due" here would announce health where there may be
+                // total delivery failure, which is worse than the silence it replaced.
                 Ok(0) => {}
                 Ok(n) => tracing::info!("cart abandonment reminders: sent {} reminder(s)", n),
                 Err(e) => tracing::warn!("cart abandonment sweep failed: {}", e),
             }
             match send_cart_second_nudges(&orm, &bot, &config).await {
-                Ok(0) => {}
+                // A tick that found nothing must still say so: a loop whose only
+                // evidence of life is an occasional line is indistinguishable from a
+                // loop that stopped. Both garden sweeps were broken for months this way.
+                Ok(0) => tracing::info!("cart abandonment second nudges: nothing due (tick ok)"),
                 Ok(n) => tracing::info!("cart abandonment second nudges: sent {} reminder(s)", n),
                 Err(e) => tracing::warn!("cart abandonment second nudge sweep failed: {}", e),
             }

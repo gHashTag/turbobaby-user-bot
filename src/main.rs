@@ -245,7 +245,10 @@ fn spawn_ttl_sweep<F, Fut>(
         loop {
             interval.tick().await;
             match cleanup(orm.clone()).await {
-                Ok(0) => {}
+                // A tick that found nothing must still say so: a loop whose only evidence
+                // of life is an occasional line is indistinguishable from one that stopped.
+                // Both garden sweeps were broken for months exactly this way.
+                Ok(0) => info!("{}: TTL sweep found nothing (tick ok)", label),
                 Ok(deleted) => {
                     info!(deleted, "{}: TTL sweep removed expired rows", label);
                 }

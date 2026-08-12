@@ -1769,6 +1769,9 @@ pub(crate) fn spawn_event_reminder_loop(
         loop {
             interval.tick().await;
             match send_event_reminders(&orm, &bot, hours).await {
+                // silent-tick: deliberate, not an omission -- ticks every 300s (spawn_event_reminder_loop(.., 24, 300)); `sent` increments only after a successful Telegram send, so Ok(0) can mean every send FAILED.
+                // Reporting "nothing due" here would announce health where there may be
+                // total delivery failure, which is worse than the silence it replaced.
                 Ok(0) => {}
                 Ok(n) => tracing::info!("event reminders: sent {} reminder(s)", n),
                 Err(e) => tracing::warn!("event reminders sweep failed: {}", e),

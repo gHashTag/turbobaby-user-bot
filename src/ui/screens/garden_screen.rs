@@ -1,4 +1,5 @@
-// Garden Screen — Plant growing + Woody Catch game
+// Garden Screen — plant growing plus both games, so everything playable
+// sits behind one tab bar instead of being scattered across the home grid.
 use crate::trios::i18n::{
     t, T_GARDEN_INVITE_ACCEPT, T_GARDEN_INVITE_BODY, T_GARDEN_INVITE_SKIP, T_GARDEN_INVITE_TITLE,
     T_GARDEN_ONBOARD_CTA, T_GARDEN_ONBOARD_STEP1, T_GARDEN_ONBOARD_STEP2, T_GARDEN_ONBOARD_STEP3,
@@ -10,6 +11,7 @@ use crate::ui::components::lazy_screen::LazyScreen;
 use crate::ui::game::Garden;
 use crate::ui::game::WoodyCatch;
 use crate::ui::lang;
+use crate::ui::screens::skate_screen::SkateGame;
 use crate::ui::telegram::{use_telegram_id, use_telegram_init_data};
 use dioxus::prelude::*;
 
@@ -19,23 +21,33 @@ use gloo_storage::{LocalStorage, Storage};
 const GARDEN_TAB_KEY: &str = "wwb_garden_tab";
 const GARDEN_ONBOARDED_KEY: &str = "wwb_garden_onboarded";
 
+/// Which of the three tabs is showing: 0 garden, 1 Woody Catch, 2 Woody Skate.
+/// A separate key from `GARDEN_TAB_KEY`, which held a bool — reading a bool
+/// back as a number fails, and falling back to the garden tab once after the
+/// update is nicer than a broken read on every visit.
+const GARDEN_TAB_V2_KEY: &str = "wwb_garden_tab_v2";
+
+const TAB_GARDEN: u8 = 0;
+const TAB_CATCH: u8 = 1;
+const TAB_SKATE: u8 = 2;
+
 #[cfg(target_arch = "wasm32")]
-fn load_garden_tab() -> bool {
-    LocalStorage::get(GARDEN_TAB_KEY).unwrap_or(false)
+fn load_garden_tab() -> u8 {
+    LocalStorage::get(GARDEN_TAB_V2_KEY).unwrap_or(TAB_GARDEN)
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn load_garden_tab() -> bool {
-    false
+fn load_garden_tab() -> u8 {
+    TAB_GARDEN
 }
 
 #[cfg(target_arch = "wasm32")]
-fn save_garden_tab(show_game: bool) {
-    let _ = LocalStorage::set(GARDEN_TAB_KEY, show_game);
+fn save_garden_tab(tab: u8) {
+    let _ = LocalStorage::set(GARDEN_TAB_V2_KEY, tab);
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn save_garden_tab(_show_game: bool) {}
+fn save_garden_tab(_tab: u8) {}
 
 #[cfg(target_arch = "wasm32")]
 fn load_onboarded() -> bool {
@@ -58,7 +70,7 @@ fn save_onboarded(_value: bool) {}
 #[component]
 pub fn GardenScreen() -> Element {
     let lang = lang::current_lang();
-    let mut show_game = use_signal(load_garden_tab);
+    let mut tab = use_signal(load_garden_tab);
     let mut onboarded = use_signal(load_onboarded);
     let cart_count = 0u32;
     let telegram_id = use_telegram_id().unwrap_or(0);
@@ -67,9 +79,9 @@ pub fn GardenScreen() -> Element {
     let mut show_invite_modal = use_signal(|| pending_invite.read().is_some());
 
     {
-        let show_game = show_game;
+        let tab = tab;
         use_effect(move || {
-            save_garden_tab(*show_game.read());
+            save_garden_tab(*tab.read());
         });
     }
 
@@ -84,18 +96,24 @@ pub fn GardenScreen() -> Element {
         });
     }
 
-    let is_game = *show_game.read();
+    let current = *tab.read();
 
-    let garden_style = if is_game {
-        "padding: 10px 16px; background: rgba(22,33,62,0.15); color: #8b8b9e; border: 4px solid #2a2a4a; font-size: 13px; font-weight: 700; cursor: pointer; border-radius: 20px;"
-    } else {
-        "padding: 10px 16px; background: #39ff14; color: #000; border: 4px solid #2d9e0f; font-size: 13px; font-weight: 700; cursor: pointer; border-radius: 20px;"
+    // Three tabs no longer fit at the old padding on a 375px screen, so the
+    // buttons are a little tighter than the two-tab version was.
+    let tab_style = |selected: bool| {
+        if selected {
+            "padding: 10px 12px; background: #39ff14; color: #000; border: 4px solid #2d9e0f; font-size: 13px; font-weight: 700; cursor: pointer; border-radius: 20px; white-space: nowrap;"
+        } else {
+            "padding: 10px 12px; background: rgba(22,33,62,0.15); color: #8b8b9e; border: 4px solid #2a2a4a; font-size: 13px; font-weight: 700; cursor: pointer; border-radius: 20px; white-space: nowrap;"
+        }
     };
-
-    let game_style = if !is_game {
-        "padding: 10px 16px; background: rgba(22,33,62,0.15); color: #8b8b9e; border: 4px solid #2a2a4a; font-size: 13px; font-weight: 700; cursor: pointer; border-radius: 20px;"
+    let garden_style = tab_style(current == TAB_GARDEN);
+    let game_style = tab_style(current == TAB_CATCH);
+    let skate_style = tab_style(current == TAB_SKATE);
+    let skate_label = if lang == crate::trios::core::Lang::English {
+        "🛹 Skate"
     } else {
-        "padding: 10px 16px; background: #39ff14; color: #000; border: 4px solid #2d9e0f; font-size: 13px; font-weight: 700; cursor: pointer; border-radius: 20px;"
+        "🛹 Скейт"
     };
 
     let invite_modal = {
@@ -162,17 +180,23 @@ pub fn GardenScreen() -> Element {
     rsx! {
         div { style: "min-height: 100vh; background: #0f0f1a; color: #e8e8e8; padding-bottom: calc(96px + env(safe-area-inset-bottom));",
 
-            // Toggle between Garden and Game
-            div { style: "display: flex; gap: 8px; padding: 12px 16px; justify-content: center;",
+            // Garden and both games side by side, so there is one place to
+            // look for anything playable.
+            div { style: "display: flex; gap: 6px; padding: 12px 12px; justify-content: center;",
                 button {
                     style: "{garden_style}",
-                    onclick: move |_| show_game.set(false),
+                    onclick: move |_| tab.set(TAB_GARDEN),
                     "🌱 {t(lang, T_GARDEN_TAB_GARDEN)}"
                 }
                 button {
                     style: "{game_style}",
-                    onclick: move |_| show_game.set(true),
+                    onclick: move |_| tab.set(TAB_CATCH),
                     "🎮 {t(lang, T_GARDEN_TAB_GAME)}"
+                }
+                button {
+                    style: "{skate_style}",
+                    onclick: move |_| tab.set(TAB_SKATE),
+                    "{skate_label}"
                 }
             }
 
@@ -207,10 +231,12 @@ pub fn GardenScreen() -> Element {
             {invite_modal}
 
             // Show content based on selection
-            if !is_game {
+            if current == TAB_GARDEN {
                 Garden {}
-            } else {
+            } else if current == TAB_CATCH {
                 LazyScreen { heavy: true, WoodyCatch {} }
+            } else {
+                LazyScreen { heavy: true, SkateGame {} }
             }
         }
 

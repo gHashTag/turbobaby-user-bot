@@ -26,8 +26,12 @@ fn ru_en(lang: crate::trios::core::Lang, ru: &'static str, en: &'static str) -> 
     }
 }
 
+/// The game itself, with no page chrome. Sized to fill whatever it is dropped
+/// into rather than the viewport, because it is embedded as a tab on the
+/// garden screen — which owns the tab bar and the bottom nav — as well as
+/// being reachable on its own route.
 #[component]
-pub fn SkateScreen() -> Element {
+pub fn SkateGame() -> Element {
     let telegram_id = use_telegram_id();
     let init_data = use_telegram_init_data();
     let lang = crate::ui::lang::current_lang();
@@ -38,9 +42,6 @@ pub fn SkateScreen() -> Element {
     let mut running = use_signal(|| false);
     let mut finished = use_signal(|| false);
     let mut payout_note = use_signal(String::new);
-
-    let tg = TelegramApp::init();
-    tg.show_back_button();
 
     // Listen for the game's events. Installed once for the life of the screen.
     #[cfg(target_arch = "wasm32")]
@@ -215,7 +216,10 @@ pub fn SkateScreen() -> Element {
     );
 
     rsx! {
-        div { style: "min-height:100vh;background:#d8eef5;color:#123;position:relative;overflow:hidden;",
+        // `position: relative` matters: the canvas and every HUD layer below is
+        // absolutely positioned against this box, so without it they would
+        // escape the tab and cover the whole page.
+        div { style: "position:relative;width:100%;height:calc(100vh - 152px - env(safe-area-inset-bottom));min-height:340px;background:#d8eef5;color:#123;overflow:hidden;",
 
             // The canvas lives here; the HUD floats above it.
             div { id: "skate-host", style: "position:absolute;inset:0;" }
@@ -279,6 +283,20 @@ pub fn SkateScreen() -> Element {
                 }
             }
 
+        }
+    }
+}
+
+/// Standalone route. The game now lives as a tab next to the garden, but
+/// `/skate` stays reachable so any link already shared keeps working.
+#[component]
+pub fn SkateScreen() -> Element {
+    let tg = TelegramApp::init();
+    tg.show_back_button();
+
+    rsx! {
+        div { style: "min-height:100vh;background:#0f0f1a;padding-bottom:calc(96px + env(safe-area-inset-bottom));",
+            SkateGame {}
             BottomNav { cart_count: 0 }
         }
     }

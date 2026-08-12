@@ -63,7 +63,10 @@ pub(crate) fn spawn_garden_reminder_loop(
         loop {
             interval.tick().await;
             match send_garden_reminders(&orm, &bot, &config).await {
-                Ok(0) => {}
+                // A tick that found nothing must still say so: a loop whose only
+                // evidence of life is an occasional line is indistinguishable from a
+                // loop that stopped. Both garden sweeps were broken for months this way.
+                Ok(0) => tracing::info!("garden reminders: nothing due (tick ok)"),
                 Ok(n) => tracing::info!("garden reminders: sent {} reminder(s)", n),
                 Err(e) => tracing::warn!("garden reminders sweep failed: {}", e),
             }
@@ -207,7 +210,10 @@ pub(crate) fn spawn_garden_reward_expiry_loop(
         loop {
             interval.tick().await;
             match send_garden_reward_expiry_nudges(&orm, &bot, &config).await {
-                Ok(0) => {}
+                // A tick that found nothing must still say so: a loop whose only
+                // evidence of life is an occasional line is indistinguishable from a
+                // loop that stopped. Both garden sweeps were broken for months this way.
+                Ok(0) => tracing::info!("garden reward expiry: nothing due (tick ok)"),
                 Ok(n) => tracing::info!("garden reward expiry: sent {} nudge(s)", n),
                 Err(e) => tracing::warn!("garden reward expiry sweep failed: {}", e),
             }

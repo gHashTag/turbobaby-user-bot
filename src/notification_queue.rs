@@ -33,6 +33,9 @@ pub fn spawn_notification_worker(
         loop {
             interval.tick().await;
             match process_batch(&orm, &bot, &config, &db, BATCH_SIZE).await {
+                // silent-tick: deliberate, not an omission -- ticks every 30s (POLL_INTERVAL_SECS) = 2880 lines/day, and Ok(0) here means zero messages DELIVERED, not zero due.
+                // Reporting "nothing due" here would announce health where there may be
+                // total delivery failure, which is worse than the silence it replaced.
                 Ok(0) => {}
                 Ok(n) => tracing::info!("notification worker: delivered {} message(s)", n),
                 Err(e) => tracing::warn!("notification worker batch failed: {}", e),
