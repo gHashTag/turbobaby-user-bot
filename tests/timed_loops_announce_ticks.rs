@@ -148,3 +148,58 @@ fn a_file_does_not_both_silence_and_announce() {
         mixed.join("\n  ")
     );
 }
+
+/// What these two guards cannot judge, said out loud.
+///
+/// Borrowed from `timestamptz_columns_are_not_bound.rs`, which prints the three
+/// column names it cannot decide about. The reasoning there applies here exactly:
+/// **an uncovered case that goes unmentioned reads as coverage.**
+///
+/// Both guards above key on an `Ok(0)` arm. A timed loop whose sweep returns `()`
+/// or `bool`, or that matches only `Err`, has no such arm — it is equally
+/// unobservable and equally invisible to them. This test never fails; it reports,
+/// so the reader of a green run knows what green did not cover.
+#[test]
+fn report_the_loops_these_guards_cannot_judge() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let mut files = Vec::new();
+    sources(&root, &mut files);
+    assert!(
+        files.len() > 10,
+        "source scan found only {} files",
+        files.len()
+    );
+
+    let mut spawned_with_interval = 0usize;
+    let mut unjudged = Vec::new();
+
+    for path in &files {
+        let text = fs::read_to_string(path).expect("readable source file");
+        // A timed loop, for this purpose, is a spawn whose body builds an interval.
+        if !(text.contains("tokio::spawn") && text.contains("tokio::time::interval")) {
+            continue;
+        }
+        spawned_with_interval += 1;
+        let has_arm = text.contains("Ok(0)");
+        if !has_arm {
+            unjudged.push(path.display().to_string());
+        }
+    }
+
+    println!(
+        "  {} file(s) spawn an interval loop; {} carry no Ok(0) arm and are therefore \
+         outside both guards above.",
+        spawned_with_interval,
+        unjudged.len()
+    );
+    for u in &unjudged {
+        println!("    not judged: {u}");
+    }
+    if unjudged.is_empty() {
+        println!("    every interval loop in src/ is within reach of the two guards.");
+    }
+    println!(
+        "  Neither guard can see a sweep that returns () or bool, or matches only Err. \
+         Silence about an uncovered case reads as coverage, so it is printed here."
+    );
+}

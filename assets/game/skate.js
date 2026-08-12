@@ -10,7 +10,11 @@
 // context and removes its listeners, because a Mini App screen can be opened
 // and left many times in one session.
 
-import * as THREE from '/assets/vendor/three.module.min.js';
+import {
+  THREE, createStage, addLights, skyTexture, flat, mesh, buildWoody,
+  contactShadow, Dust, horizontalInput, rand, pick,
+  CREST, FEATHER, BEAK, HOODIE, HOODIE_DARK, TRIM, FOOT, NEON,
+} from '/assets/game/engine.js';
 
 // ── Palette ─────────────────────────────────────────────────────────────────
 // Taken off assets/logo.jpg so the rider in the game and the avatar in the bot
@@ -26,14 +30,7 @@ const GRASS = 0x86c95f;
 const FOLIAGE = [0x3f9142, 0x4faa4b, 0x2f7d3a];
 const TRUNK = 0x8a5a3b;
 
-const CREST = 0xf24b3a;        // the bright red comb
-const FEATHER = 0xe0342a;      // head and tail
-const BEAK = 0xf2a327;
-const HOODIE = 0x2f63d8;
-const HOODIE_DARK = 0x1f47a8;
-const TRIM = 0xf6f8ff;
-const FOOT = 0xe8902a;
-const DECK = 0x39ff14;         // the shop's neon green
+const DECK = NEON;         // the shop's neon green
 const WHEEL = 0xf3e04a;
 
 // ── Feel ────────────────────────────────────────────────────────────────────
@@ -54,75 +51,23 @@ const LANES = [-4, -2, 0, 2, 4];
 const BANDS = 2;                // obstacle rows per slab
 const DUST = 36;
 
-function rand(a, b) { return a + Math.random() * (b - a); }
-function pick(arr) { return arr[(Math.random() * arr.length) | 0]; }
 
-/// A vertical gradient used as the sky. Four pixels wide because only the
-/// vertical axis carries any information.
-function skyTexture() {
-  const c = document.createElement('canvas');
-  c.width = 4; c.height = 256;
-  const g = c.getContext('2d');
-  const grad = g.createLinearGradient(0, 0, 0, 256);
-  // The pale stop has to land on the horizon, which sits a little above the
-  // middle of the frame — otherwise the sky is still blue where the fog has
-  // already gone white and the seam shows as a band.
-  grad.addColorStop(0, SKY_TOP);
-  grad.addColorStop(0.38, SKY_MID);
-  grad.addColorStop(0.52, SKY_LOW);
-  grad.addColorStop(1, SKY_LOW);
-  g.fillStyle = grad;
-  g.fillRect(0, 0, 4, 256);
-  const t = new THREE.CanvasTexture(c);
-  t.colorSpace = THREE.SRGBColorSpace;
-  return t;
-}
 
 export function start(container, opts = {}) {
   const onStar = opts.onStar || function () { };
   const onEnd = opts.onEnd || function () { };
   const onTick = opts.onTick || function () { };
 
-  // The container is often still unlaid-out on the frame the screen mounts, so
-  // `clientWidth` reads 0 and the canvas is created 0x0 — the game then runs
-  // perfectly and draws nothing. Measure with a fallback, and keep watching.
-  function measure() {
-    const w = container.clientWidth || container.parentElement?.clientWidth || window.innerWidth;
-    const h = container.clientHeight || container.parentElement?.clientHeight || window.innerHeight;
-    return { w: Math.max(1, w), h: Math.max(1, h) };
-  }
+  const stage = createStage(container, { fov: 62, far: 500 });
+  const { renderer, scene, camera } = stage;
 
-  const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'low-power' });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  renderer.outputColorSpace = THREE.SRGBColorSpace;
-  {
-    const { w, h } = measure();
-    renderer.setSize(w, h);
-  }
-  container.appendChild(renderer.domElement);
-
-  const scene = new THREE.Scene();
-  scene.background = skyTexture();
+  scene.background = skyTexture(SKY_TOP, SKY_MID, SKY_LOW);
   // Fog hides the point where the recycled world ends, so the road reads as
   // endless rather than as a strip that stops. Its colour has to be the sky's
   // horizon colour or the seam becomes visible again as a band.
   scene.fog = new THREE.Fog(HORIZON, 70, 260);
+  addLights(scene);
 
-  const camera = new THREE.PerspectiveCamera(62, measure().w / measure().h, 0.1, 500);
-
-  // Three lights, each doing one job: hemisphere for the ambient sky/ground
-  // bounce, a warm key for shape, a dim cool fill so the shadowed sides do not
-  // go flat black.
-  scene.add(new THREE.HemisphereLight(0xd8f0ff, 0x6f8f5a, 1.0));
-  const sun = new THREE.DirectionalLight(0xfff2d0, 0.85);
-  sun.position.set(-8, 16, 6);
-  scene.add(sun);
-  const fill = new THREE.DirectionalLight(0x9fd0ff, 0.25);
-  fill.position.set(7, 6, -8);
-  scene.add(fill);
-
-  const flat = (color) => new THREE.MeshLambertMaterial({ color, flatShading: true });
-  const mesh = (geo, color) => new THREE.Mesh(geo, flat(color));
 
   // ── Sky furniture ────────────────────────────────────────────────────────
   // Unfogged and far away, so the horizon has something in it. Parented to a
@@ -345,102 +290,10 @@ export function start(container, opts = {}) {
     board.position.y = 0.3;
   }
 
-  const bird = new THREE.Group();
-  const headGroup = new THREE.Group();
-  const tail = new THREE.Group();
-  const armL = new THREE.Group();
-  const armR = new THREE.Group();
-  {
-    for (const sx of [-0.2, 0.2]) {
-      const leg = mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.42, 6), FOOT);
-      leg.position.set(sx, 0.26, 0);
-      bird.add(leg);
-      const foot = mesh(new THREE.BoxGeometry(0.3, 0.09, 0.52), FOOT);
-      foot.position.set(sx, 0.06, 0);
-      bird.add(foot);
-    }
-
-    const body = mesh(new THREE.CapsuleGeometry(0.42, 0.42, 3, 8), HOODIE);
-    body.position.y = 0.95;
-    bird.add(body);
-
-    // Hood bunched at the back, and the white fur trim from the logo.
-    const hood = mesh(new THREE.IcosahedronGeometry(0.3, 0), HOODIE_DARK);
-    hood.position.set(0, 1.24, 0.3);
-    bird.add(hood);
-    const collar = mesh(new THREE.TorusGeometry(0.34, 0.11, 4, 10), TRIM);
-    collar.rotation.x = Math.PI / 2;
-    collar.position.y = 1.3;
-    bird.add(collar);
-    const zip = mesh(new THREE.BoxGeometry(0.07, 0.62, 0.04), TRIM);
-    zip.position.set(0, 0.95, -0.41);
-    bird.add(zip);
-
-    // Arms out for balance; each in its own group so it can swing about the
-    // shoulder rather than about its own centre.
-    for (const [group, sx] of [[armL, -1], [armR, 1]]) {
-      const upper = mesh(new THREE.BoxGeometry(0.17, 0.52, 0.17), HOODIE);
-      upper.position.y = -0.26;
-      const cuff = mesh(new THREE.BoxGeometry(0.19, 0.1, 0.19), TRIM);
-      cuff.position.y = -0.5;
-      const glove = mesh(new THREE.IcosahedronGeometry(0.16, 0), TRIM);
-      glove.position.y = -0.62;
-      group.add(upper, cuff, glove);
-      group.position.set(sx * 0.45, 1.15, 0);
-      group.rotation.z = sx * 0.95;
-      bird.add(group);
-    }
-
-    // Tail feathers, fanned.
-    for (let i = -1; i <= 1; i++) {
-      const feather = mesh(new THREE.BoxGeometry(0.15, 0.06, 0.8), FEATHER);
-      feather.position.set(i * 0.14, 0, 0.4);
-      feather.rotation.set(-0.25, i * 0.22, 0);
-      tail.add(feather);
-    }
-    tail.position.set(0, 0.78, 0.32);
-    bird.add(tail);
-
-    const neck = mesh(new THREE.CylinderGeometry(0.15, 0.19, 0.3, 7), FEATHER);
-    neck.position.y = 1.44;
-    bird.add(neck);
-
-    const head = mesh(new THREE.IcosahedronGeometry(0.33, 0), FEATHER);
-    headGroup.add(head);
-
-    const upperBeak = mesh(new THREE.ConeGeometry(0.13, 0.66, 5), BEAK);
-    upperBeak.rotation.x = -Math.PI / 2;
-    upperBeak.position.set(0, 0.02, -0.5);
-    const lowerBeak = mesh(new THREE.ConeGeometry(0.1, 0.5, 5), 0xd98a15);
-    lowerBeak.rotation.x = -Math.PI / 2;
-    lowerBeak.position.set(0, -0.12, -0.42);
-    headGroup.add(upperBeak, lowerBeak);
-
-    for (const sx of [-1, 1]) {
-      const white = mesh(new THREE.IcosahedronGeometry(0.13, 0), 0xffffff);
-      white.position.set(sx * 0.19, 0.1, -0.22);
-      const pupil = mesh(new THREE.IcosahedronGeometry(0.06, 0), 0x11131a);
-      pupil.position.set(sx * 0.22, 0.1, -0.31);
-      headGroup.add(white, pupil);
-    }
-
-    // The comb: three cones sweeping back over the skull. This is the shape
-    // people read as "Woody" from fifty metres away.
-    const crestSizes = [[0.17, 0.62, 0.16, -0.9], [0.15, 0.52, 0.36, -1.15], [0.12, 0.4, 0.54, -1.35]];
-    for (const [r, h, z, tilt] of crestSizes) {
-      const spike = mesh(new THREE.ConeGeometry(r, h, 5), CREST);
-      spike.position.set(0, 0.3, z);
-      spike.rotation.x = tilt;
-      headGroup.add(spike);
-    }
-
-    headGroup.position.y = 1.78;
-    headGroup.rotation.y = -0.75;   // turned enough that the beak shows in profile
-    bird.add(headGroup);
-
-    bird.position.y = 0.42;
-    bird.rotation.y = -0.3;         // skate stance, without hiding the crest
-  }
+  // The mascot comes from the engine so a change to Woody reaches every game.
+  const { bird, headGroup, tail, armL, armR } = buildWoody({ headTurn: -0.75 });
+  bird.position.y = 0.42;
+  bird.rotation.y = -0.3;         // skate stance, without hiding the crest
 
   rider.add(board, bird);
   scene.add(rider);
@@ -448,74 +301,20 @@ export function start(container, opts = {}) {
   // A fake contact shadow. Real shadow maps cost far more than this on a phone
   // and buy nothing here, but without *something* the rider looks like it is
   // hovering rather than rolling.
-  const shadow = new THREE.Mesh(
-    new THREE.CircleGeometry(1, 16),
-    new THREE.MeshBasicMaterial({ color: 0x0a1a08, transparent: true, opacity: 0.28, depthWrite: false }));
-  shadow.rotation.x = -Math.PI / 2;
-  shadow.scale.set(0.75, 1.5, 1);
+  const shadow = contactShadow(0.75, 1.5);
   scene.add(shadow);
 
   // ── Dust ─────────────────────────────────────────────────────────────────
   // Kicked up behind the wheels. One instanced mesh, so one draw call, and it
   // does more for the sense of speed than any amount of extra scenery.
-  const dust = new THREE.InstancedMesh(
-    new THREE.IcosahedronGeometry(0.09, 0),
-    // Unlit, or the motes turn into little grey pebbles bouncing off the road.
-    new THREE.MeshBasicMaterial({ color: 0xf3f7ee, transparent: true, opacity: 0.4, depthWrite: false }),
-    DUST);
-  dust.frustumCulled = false;
-  scene.add(dust);
-  const motes = [];
-  for (let i = 0; i < DUST; i++) motes.push({ x: 0, y: 0, z: 0, life: 0, vx: 0, vy: 0, scale: 1 });
+  const dust = new Dust(scene, DUST);
 
   // ── Input ────────────────────────────────────────────────────────────────
   // Steering is a target the rider eases toward, so a touch that jumps across
   // the screen does not teleport the board.
   let steer = 0;                 // -1..1
   let steerShown = 0;            // eased, drives the visual lean
-  let pointerActive = false;
-
-  const setSteerFromX = (clientX) => {
-    const rect = renderer.domElement.getBoundingClientRect();
-    const t = (clientX - rect.left) / rect.width;      // 0..1
-    steer = Math.max(-1, Math.min(1, (t - 0.5) * 2.4));
-  };
-  const onDown = (e) => { pointerActive = true; setSteerFromX(e.touches ? e.touches[0].clientX : e.clientX); };
-  const onMove = (e) => { if (pointerActive) setSteerFromX(e.touches ? e.touches[0].clientX : e.clientX); };
-  const onUp = () => { pointerActive = false; steer = 0; };
-  const onKey = (e, down) => {
-    if (e.key === 'ArrowLeft' || e.key === 'a') steer = down ? -1 : 0;
-    if (e.key === 'ArrowRight' || e.key === 'd') steer = down ? 1 : 0;
-  };
-  const keyDown = (e) => onKey(e, true);
-  const keyUp = (e) => onKey(e, false);
-
-  const el = renderer.domElement;
-  el.style.display = 'block';
-  el.addEventListener('touchstart', onDown, { passive: true });
-  el.addEventListener('touchmove', onMove, { passive: true });
-  el.addEventListener('touchend', onUp, { passive: true });
-  el.addEventListener('mousedown', onDown);
-  window.addEventListener('mousemove', onMove);
-  window.addEventListener('mouseup', onUp);
-  window.addEventListener('keydown', keyDown);
-  window.addEventListener('keyup', keyUp);
-
-  const onResize = () => {
-    const { w, h } = measure();
-    camera.aspect = w / h;
-    camera.updateProjectionMatrix();
-    renderer.setSize(w, h);
-  };
-  window.addEventListener('resize', onResize);
-  // A window `resize` never fires when the element itself is laid out late,
-  // which is exactly the case that produced the 0x0 canvas.
-  let ro = null;
-  if (typeof ResizeObserver !== 'undefined') {
-    ro = new ResizeObserver(onResize);
-    ro.observe(container);
-  }
-  requestAnimationFrame(onResize);
+  const detachInput = horizontalInput(renderer.domElement, (v) => { steer = v; });
 
   // ── Loop ─────────────────────────────────────────────────────────────────
   let x = 0, speed = START_SPEED, travelled = 0, stars = 0, alive = true, raf = 0;
@@ -532,14 +331,7 @@ export function start(container, opts = {}) {
   function spawnDust(dt) {
     // Roughly one mote per 25ms at full speed, scaled by how fast we are going.
     if (Math.random() > dt * 40 * (speed / MAX_SPEED)) return;
-    const m = motes[(Math.random() * DUST) | 0];
-    m.x = x + rand(-0.4, 0.4);
-    m.y = 0.15;
-    m.z = 1.4;
-    m.vx = rand(-1.2, 1.2);
-    m.vy = rand(1.2, 3.0);
-    m.life = 1;
-    m.scale = rand(0.6, 1.4);
+    dust.spawn(x, 0.15, 1.4);
   }
 
   function frame(now) {
@@ -650,23 +442,7 @@ export function start(container, opts = {}) {
 
     // ── Dust ──
     if (alive) spawnDust(dt);
-    for (let i = 0; i < DUST; i++) {
-      const m = motes[i];
-      if (m.life <= 0) { dummy.scale.setScalar(0); dummy.position.set(0, -50, 0); }
-      else {
-        m.life -= dt * 1.6;
-        m.x += m.vx * dt;
-        m.y += m.vy * dt;
-        m.vy -= 3.2 * dt;
-        m.z += speed * dt * 0.55;
-        dummy.position.set(m.x, Math.max(0.06, m.y), m.z);
-        dummy.scale.setScalar(Math.max(0, m.life) * m.scale);
-      }
-      dummy.rotation.set(m.life * 4, m.life * 3, 0);
-      dummy.updateMatrix();
-      dust.setMatrixAt(i, dummy.matrix);
-    }
-    dust.instanceMatrix.needsUpdate = true;
+    dust.update(dt, speed * 0.55);
 
     if (alive) onTick({ distance: Math.floor(travelled), stars, speed: Math.round(speed) });
     renderer.render(scene, camera);
@@ -676,19 +452,7 @@ export function start(container, opts = {}) {
   return function stop() {
     alive = false;
     cancelAnimationFrame(raf);
-    el.removeEventListener('touchstart', onDown);
-    el.removeEventListener('touchmove', onMove);
-    el.removeEventListener('touchend', onUp);
-    el.removeEventListener('mousedown', onDown);
-    window.removeEventListener('mousemove', onMove);
-    window.removeEventListener('mouseup', onUp);
-    window.removeEventListener('keydown', keyDown);
-    window.removeEventListener('keyup', keyUp);
-    window.removeEventListener('resize', onResize);
-    if (ro) ro.disconnect();
-    // Without this the GL context leaks; a few screen visits and the browser
-    // starts refusing to create new ones.
-    renderer.dispose();
-    if (el.parentNode) el.parentNode.removeChild(el);
+    detachInput();
+    stage.dispose();
   };
 }

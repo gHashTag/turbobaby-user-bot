@@ -10,21 +10,10 @@ use crate::trios::i18n::{t, T_CLOSE, T_GARDEN_GAME_HIGH_SCORES, T_GARDEN_GAME_NO
 use crate::ui::api::context::api_base_url;
 use crate::ui::telegram::{use_telegram_id, use_telegram_init_data};
 use dioxus::prelude::*;
-use gloo_timers::future::TimeoutFuture;
 use wasm_bindgen::prelude::*;
 use web_sys::window;
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-
-#[derive(Clone, PartialEq, Debug)]
-pub struct Bud {
-    pub id: u32,
-    pub lane: u8,
-    pub y: f32,
-    pub speed: f32,
-    pub type_idx: u8,
-    pub rot: f32,
-}
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct BudType {
@@ -128,52 +117,6 @@ async fn submit_global_high_score(
     Ok((rank, high_score))
 }
 
-/// Pseudo-random u32 using js Math.random() under WASM
-fn rand_u32() -> u32 {
-    let v: f64 = js_sys::Math::random();
-    (v * (u32::MAX as f64)) as u32
-}
-
-fn rand_f32() -> f32 {
-    js_sys::Math::random() as f32
-}
-
-fn rand_lane() -> u8 {
-    (rand_u32() % 4) as u8
-}
-
-fn rand_type(level: u32) -> u8 {
-    let r = rand_f32();
-    // Higher levels: slightly more rare drops
-    if level > 5 {
-        if r > 0.94 {
-            3
-        } else if r > 0.84 {
-            2
-        } else if r > 0.68 {
-            1
-        } else {
-            0
-        }
-    } else {
-        if r > 0.96 {
-            3
-        } else if r > 0.88 {
-            2
-        } else if r > 0.72 {
-            1
-        } else {
-            0
-        }
-    }
-}
-
-/// Attempt to trigger Telegram WebApp haptic feedback
-fn haptic_impact() {
-    let _ =
-        js_sys::eval("try { Telegram.WebApp.HapticFeedback.impactOccurred('light'); } catch(e) {}");
-}
-
 // ── Game component ────────────────────────────────────────────────────────────
 
 #[component]
@@ -185,9 +128,6 @@ pub fn WoodyCatch() -> Element {
     let combo = use_signal(|| 0u32);
     let playing = use_signal(|| false);
     let game_over = use_signal(|| false);
-    let lane = use_signal(|| 1u32); // 0-3
-    let buds = use_signal(Vec::<Bud>::new);
-    let next_id = use_signal(|| 0u32);
     let high_score = use_signal(get_high_score);
 
     // Loop #18: global high-score integration.
@@ -197,10 +137,13 @@ pub fn WoodyCatch() -> Element {
     let telegram_id = use_telegram_id().unwrap_or(0);
     let init_data = use_telegram_init_data();
 
-    // Timing: track spawn countdown in ticks (each tick ~16ms)
-    let spawn_ticks = use_signal(|| 0u32);
-
-    // ── Game loop via use_future ─────────────────────────────────────────────
+    // ── Bridge to the 3D game ────────────────────────────────────────────────
+    // The game itself is assets/game/catch.js on the shared three.js engine.
+    // This component keeps only what a canvas cannot own: the HUD, the
+    // leaderboard, and the score submission. Events come back over a
+    // `woody:catch` CustomEvent, matching how the skate game and the Telegram
+    // contact bridge already talk to Rust.
+    #[cfg(target_arch = "wasm32")]
     {
         let mut score = score;
         let mut lives = lives;
@@ -208,162 +151,59 @@ pub fn WoodyCatch() -> Element {
         let mut combo = combo;
         let mut playing = playing;
         let mut game_over = game_over;
-        let mut buds = buds;
-        let mut next_id = next_id;
         let mut high_score = high_score;
-        let mut spawn_ticks = spawn_ticks;
-
-        use_future(move || async move {
-            loop {
-                TimeoutFuture::new(16).await; // ~60fps
-
-                if !*playing.read() || *game_over.read() {
-                    continue;
-                }
-
-                let cur_level = *level.read();
-                let cur_lane = *lane.read() as u8;
-                let cur_combo = *combo.read();
-
-                // ── Spawn logic ──────────────────────────────────────────────
-                // spawn interval: max(900 - level*50, 280) ms → in ticks (÷16)
-                let spawn_interval_ms =
-                    (900u32.saturating_sub(cur_level.saturating_mul(50))).max(280);
-                let spawn_interval_ticks = spawn_interval_ms / 16;
-
-                // Dioxus signals can't hold a Write guard while .read() — snapshot first.
-                let prev_spawn = *spawn_ticks.read();
-                *spawn_ticks.write() = prev_spawn.saturating_add(1);
-                if *spawn_ticks.read() >= spawn_interval_ticks {
-                    *spawn_ticks.write() = 0;
-                    let id = *next_id.read();
-                    *next_id.write() = id.saturating_add(1);
-                    let speed = 0.8 + cur_level as f32 * 0.12 + rand_f32() * 0.2;
-                    buds.write().push(Bud {
-                        id,
-                        lane: rand_lane(),
-                        y: -5.0,
-                        speed,
-                        type_idx: rand_type(cur_level),
-                        rot: rand_f32() * 360.0,
-                    });
-
-                    // Double-spawn at level > 3
-                    if cur_level > 3 && rand_f32() > 0.6 {
-                        let id2 = *next_id.read();
-                        *next_id.write() = id2.saturating_add(1);
-                        buds.write().push(Bud {
-                            id: id2,
-                            lane: rand_lane(),
-                            y: -5.0,
-                            speed: 0.8 + cur_level as f32 * 0.12,
-                            type_idx: 0,
-                            rot: 0.0,
-                        });
+        use_hook(move || {
+            let Some(win) = window() else { return };
+            let listener = gloo_events::EventListener::new(&win, "woody:catch", move |event| {
+                let detail = event
+                    .dyn_ref::<web_sys::CustomEvent>()
+                    .map(|e| e.detail())
+                    .unwrap_or(wasm_bindgen::JsValue::NULL);
+                let num = |k: &str| {
+                    js_sys::Reflect::get(&detail, &wasm_bindgen::JsValue::from_str(k))
+                        .ok()
+                        .and_then(|v| v.as_f64())
+                        .unwrap_or(0.0) as u32
+                };
+                let kind = js_sys::Reflect::get(&detail, &wasm_bindgen::JsValue::from_str("kind"))
+                    .ok()
+                    .and_then(|v| v.as_string())
+                    .unwrap_or_default();
+                match kind.as_str() {
+                    "tick" => {
+                        score.set(num("score"));
+                        lives.set(num("lives"));
+                        level.set(num("level"));
+                        combo.set(num("combo"));
                     }
-                }
-
-                // ── Move & collide ───────────────────────────────────────────
-                let mut caught_pts: Option<(u32, &'static str)> = None;
-                let mut missed = false;
-
-                let updated: Vec<Bud> = buds
-                    .read()
-                    .iter()
-                    .filter_map(|b| {
-                        let ny = b.y + b.speed;
-
-                        // Catch zone: y in [72, 88] and same lane
-                        if (72.0..=88.0).contains(&ny) && b.lane == cur_lane {
-                            let type_idx =
-                                (b.type_idx as usize).min(BUD_TYPES.len().saturating_sub(1));
-                            let bt = &BUD_TYPES[type_idx];
-                            let mult = (1.0 + (cur_combo / 5) as f32 * 0.5).min(3.0);
-                            let earned = (bt.pts as f32 * mult) as u32;
-                            caught_pts = Some((earned, bt.color));
-                            return None; // remove bud
+                    "end" => {
+                        let final_score = num("score");
+                        score.set(final_score);
+                        level.set(num("level"));
+                        playing.set(false);
+                        game_over.set(true);
+                        if final_score > *high_score.read() {
+                            high_score.set(final_score);
+                            set_high_score(final_score);
                         }
-
-                        // Past bottom edge
-                        if ny > 102.0 {
-                            missed = true;
-                            return None;
-                        }
-
-                        Some(Bud {
-                            y: ny,
-                            rot: b.rot + b.speed * 3.0,
-                            ..b.clone()
-                        })
-                    })
-                    .collect();
-
-                *buds.write() = updated;
-
-                if let Some((earned, _color)) = caught_pts {
-                    haptic_impact();
-                    *combo.write() += 1;
-                    let new_score = score.read().saturating_add(earned);
-                    *score.write() = new_score;
-                    *level.write() = new_score / 100 + 1;
-                    if new_score > *high_score.read() {
-                        set_high_score(new_score);
-                        *high_score.write() = new_score;
                     }
+                    _ => {}
                 }
-
-                if missed {
-                    *combo.write() = 0;
-                    let new_lives = lives.read().saturating_sub(1);
-                    *lives.write() = new_lives;
-                    if new_lives == 0 {
-                        *game_over.write() = true;
-                        *playing.write() = false;
-                    }
-                }
-            }
+            });
+            listener.forget();
         });
     }
 
-    // ── Keyboard handler (RAII via gloo-events, auto-removed on unmount) ─────
-    {
-        let mut lane = lane;
-        use_hook_with_cleanup(
-            move || {
-                let win = match window() {
-                    Some(w) => w,
-                    None => return None,
-                };
-                let listener =
-                    gloo_events::EventListener::new(&win, "keydown", move |e: &web_sys::Event| {
-                        let e: &web_sys::KeyboardEvent = match e.dyn_ref() {
-                            Some(k) => k,
-                            None => return,
-                        };
-                        if !*playing.read() || *game_over.read() {
-                            return;
-                        }
-                        let key = e.key();
-                        if key == "ArrowLeft" || key == "a" || key == "A" {
-                            let cur = *lane.read();
-                            if cur > 0 {
-                                *lane.write() = cur - 1;
-                            }
-                        }
-                        if key == "ArrowRight" || key == "d" || key == "D" {
-                            let cur = *lane.read();
-                            if cur < 3 {
-                                *lane.write() = cur + 1;
-                            }
-                        }
-                    });
-                Some(std::rc::Rc::new(listener))
-            },
-            |_: Option<std::rc::Rc<gloo_events::EventListener>>| {},
+    // Stop the game when the tab goes away, or it keeps rendering — and holding
+    // a GL context — behind the rest of the app.
+    #[cfg(target_arch = "wasm32")]
+    use_drop(move || {
+        let _ = js_sys::eval(
+            "if(window.__catchStop){try{window.__catchStop();}catch(e){}window.__catchStop=null;}",
         );
-    }
+    });
 
-    // ── Start / Restart helper (Copy via use_callback so it can be reused) ───
+    // ── Start / Restart ──────────────────────────────────────────────────────
     let start_game = use_callback(move |_: dioxus::prelude::Event<MouseData>| {
         let mut score = score;
         let mut lives = lives;
@@ -371,9 +211,6 @@ pub fn WoodyCatch() -> Element {
         let mut combo = combo;
         let mut playing = playing;
         let mut game_over = game_over;
-        let mut lane = lane;
-        let mut buds = buds;
-        let mut spawn_ticks = spawn_ticks;
         let mut score_submitted = score_submitted;
         let mut user_rank = user_rank;
         *score.write() = 0;
@@ -382,11 +219,37 @@ pub fn WoodyCatch() -> Element {
         *combo.write() = 0;
         *playing.write() = true;
         *game_over.write() = false;
-        *lane.write() = 1;
-        *spawn_ticks.write() = 0;
         score_submitted.set(false);
         user_rank.set(None);
-        buds.write().clear();
+
+        // Dynamic import: three.js is fetched now, not as part of the shop's
+        // wasm bundle that every customer downloads.
+        #[cfg(target_arch = "wasm32")]
+        {
+            let js = r#"(function(){
+                var host = document.getElementById('catch-host');
+                if(!host) return;
+                if (window.__catchStop) { try { window.__catchStop(); } catch(e) {} }
+                host.innerHTML = '';
+                import('/assets/game/catch.js').then(function(m){
+                    window.__catchStop = m.start(host, {
+                        onTick: function(s){
+                            window.dispatchEvent(new CustomEvent('woody:catch',
+                                {detail: {kind:'tick', score:s.score, lives:s.lives, level:s.level, combo:s.combo}}));
+                        },
+                        onEnd: function(s){
+                            window.dispatchEvent(new CustomEvent('woody:catch',
+                                {detail: {kind:'end', score:s.score, level:s.level}}));
+                        }
+                    });
+                }).catch(function(e){
+                    window.dispatchEvent(new CustomEvent('woody:catch',
+                        {detail: {kind:'end', score:0, level:1}}));
+                    console.error('catch load failed', e);
+                });
+            })()"#;
+            let _ = js_sys::eval(js);
+        }
     });
 
     // Loop #18: submit final score to the global leaderboard once per game-over.
@@ -416,12 +279,10 @@ pub fn WoodyCatch() -> Element {
     let cur_lives = *lives.read();
     let cur_level = *level.read();
     let cur_combo = *combo.read();
-    let cur_lane = *lane.read();
     let cur_hs = *high_score.read();
     let is_playing = *playing.read();
     let is_over = *game_over.read();
     let mult = (1.0 + (cur_combo / 5) as f32 * 0.5).min(3.0);
-    let buds_list = buds.read().clone();
 
     let lang = crate::ui::lang::current_lang();
 
@@ -505,135 +366,13 @@ pub fn WoodyCatch() -> Element {
                 box-shadow: inset 0 0 40px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.05);
             ",
 
-                // ── Lane columns ────────────────────────────────────────────
-                for i in 0u32..4u32 {
-                    {
-                        let mut lane_sig = lane;
-                        let start_game_click = start_game;
-                        let is_active_lane = cur_lane == i;
-                        let border_style = if i < 3 { "1px solid rgba(255,255,255,0.03)" } else { "none" };
-                        let bg_style = if is_active_lane {
-                            "linear-gradient(180deg, transparent 0%, rgba(34,197,94,0.08) 60%, rgba(34,197,94,0.2) 80%, rgba(34,197,94,0.08) 100%)"
-                        } else {
-                            "transparent"
-                        };
-                        rsx! {
-                            div {
-                                key: "{i}",
-                                style: "
-                                    position: absolute; left: {i * 25}%; width: 25%; height: 100%;
-                                    cursor: pointer; border-right: {border_style};
-                                    background: {bg_style}; transition: background 0.15s;
-                                ",
-                                onclick: move |evt| {
-                                    if is_playing && !is_over {
-                                        *lane_sig.write() = i;
-                                    } else {
-                                        start_game_click.call(evt);
-                                    }
-                                },
-                                // Tree decoration
-                                div { style: "
-                                    position: absolute; top: 28px; left: 50%;
-                                    transform: translateX(-50%);
-                                    font-size: 36px;
-                                    filter: drop-shadow(0 4px 8px rgba(0,0,0,0.4));
-                                ", "🌲" }
-                            }
-                        }
-                    }
-                }
+                // ── 3D canvas ───────────────────────────────────────────────
+                // Everything that used to be absolutely-positioned emoji —
+                // lanes, falling drops, the basket, the lane arrows — is now
+                // drawn by assets/game/catch.js. `position: relative` on the
+                // parent keeps the canvas inside this card.
+                div { id: "catch-host", style: "position:absolute;inset:0;" }
 
-                // ── Falling buds ─────────────────────────────────────────────
-                for bud in buds_list.iter() {
-                    {
-                        let type_idx = (bud.type_idx as usize).min(BUD_TYPES.len().saturating_sub(1));
-                        let bt = &BUD_TYPES[type_idx];
-                        let left_pct = (bud.lane as f32 + 0.5) * 25.0;
-                        let top_pct  = bud.y;
-                        let rot      = bud.rot;
-                        let glow     = bt.glow;
-                        let emoji    = bt.emoji;
-                        rsx! {
-                            div {
-                                key: "{bud.id}",
-                                style: "
-                                    position: absolute;
-                                    left: {left_pct}%;
-                                    top: {top_pct}%;
-                                    transform: translate(-50%, -50%) rotate({rot}deg);
-                                    font-size: 28px;
-                                    filter: drop-shadow(0 0 12px {glow});
-                                    pointer-events: none;
-                                    transition: transform 0.03s linear;
-                                ",
-                                "{emoji}"
-                            }
-                        }
-                    }
-                }
-
-                // ── Catch zone line ──────────────────────────────────────────
-                div { style: "
-                    position: absolute; bottom: 68px; left: 0; right: 0; height: 2px;
-                    background: linear-gradient(90deg, transparent, rgba(34,197,94,0.3), transparent);
-                " }
-
-                // ── Player (basket + bird) ───────────────────────────────────
-                div { style: "
-                    position: absolute; bottom: 28px;
-                    left: {(cur_lane as f32 + 0.5) * 25.0}%;
-                    transform: translateX(-50%);
-                    transition: left 0.08s ease-out; z-index: 5;
-                ",
-                    div { style: "font-size: 44px; filter: drop-shadow(0 4px 12px rgba(0,0,0,0.5));", "🧺" }
-                    div { style: "
-                        position: absolute; top: -24px; left: 50%;
-                        transform: translateX(-50%); font-size: 32px;
-                    ", "🐦" }
-                }
-
-                // ── Mobile touch buttons ─────────────────────────────────────
-                if is_playing && !is_over {
-                    div { style: "
-                        position: absolute; bottom: 8px; left: 0; right: 0;
-                        display: flex; justify-content: space-between;
-                        padding: 0 8px; z-index: 15; pointer-events: none;
-                    ",
-                        button {
-                            style: "
-                                font-size: 22px; background: rgba(255,255,255,0.08);
-                                border: 2px solid rgba(255,255,255,0.15);
-                                border-radius: 8px; padding: 6px 18px; cursor: pointer;
-                                pointer-events: all; color: white;
-                            ",
-                            onclick: {
-                                let mut lane = lane;
-                                move |_| {
-                                    let cur = *lane.read();
-                                    if cur > 0 { *lane.write() = cur - 1; }
-                                }
-                            },
-                            "◀"
-                        }
-                        button {
-                            style: "
-                                font-size: 22px; background: rgba(255,255,255,0.08);
-                                border: 2px solid rgba(255,255,255,0.15);
-                                border-radius: 8px; padding: 6px 18px; cursor: pointer;
-                                pointer-events: all; color: white;
-                            ",
-                            onclick: {
-                                let mut lane = lane;
-                                move |_| {
-                                    let cur = *lane.read();
-                                    if cur < 3 { *lane.write() = cur + 1; }
-                                }
-                            },
-                            "▶"
-                        }
-                    }
-                }
 
                 // ── Start overlay ────────────────────────────────────────────
                 if !is_playing && !is_over {
