@@ -2180,10 +2180,13 @@ async fn choose_plant(
     let updated = tx
         .execute(Statement::from_sql_and_values(
             DbBackend::Postgres,
+            // `updated_at` is TIMESTAMPTZ; see the note in `reset_plant`. This
+            // one 500-ed `POST /api/garden/plants/choose` for every customer
+            // who already had a growing plant.
             "UPDATE garden_plants \
              SET strain_id = $2, strain_name = $3, \
                  target_catalog = $4, target_product_id = $2, target_name = $3, target_image_url = $5, \
-                 updated_at = $6 \
+                 updated_at = NOW() \
              WHERE user_id = $1 AND harvested_at IS NULL",
             [
                 user_id.clone().into(),
@@ -2191,7 +2194,6 @@ async fn choose_plant(
                 name.clone().into(),
                 req.catalog.clone().into(),
                 image_url.clone().into(),
-                now.into(),
             ],
         ))
         .await
@@ -2320,10 +2322,13 @@ async fn reset_plant(
 
     tx.execute(Statement::from_sql_and_values(
         DbBackend::Postgres,
+        // `updated_at` is TIMESTAMPTZ (migration 056) while every other time on
+        // this table is epoch-millis BIGINT. Binding millis here is a type
+        // error, not a value error: Postgres rejects the statement outright.
         "UPDATE garden_plants \
-         SET water_count = 0, current_stage = 'seed', is_completed = false, last_watered_at = NULL, updated_at = $2 \
+         SET water_count = 0, current_stage = 'seed', is_completed = false, last_watered_at = NULL, updated_at = NOW() \
          WHERE id = $1 AND harvested_at IS NULL",
-        [id.clone().into(), chrono::Utc::now().timestamp_millis().into()],
+        [id.clone().into()],
     ))
     .await
     .map_err(|e| {
