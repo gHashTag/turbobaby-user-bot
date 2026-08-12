@@ -12,8 +12,8 @@
 //! and needed its own CSS sizing rule to stop looking taller than the rest.
 
 use crate::trios::i18n::{
-    t, T_NAV_ACCESSORIES, T_NAV_CART, T_NAV_EVENTS, T_NAV_GAME, T_NAV_GARDEN, T_NAV_HOME,
-    T_NAV_MENU, T_NAV_PROFILE, T_NAV_SETS, T_NAV_TEA,
+    t, T_NAV_ACCESSORIES, T_NAV_CART, T_NAV_EVENTS, T_NAV_GARDEN, T_NAV_HOME, T_NAV_MENU,
+    T_NAV_PROFILE, T_NAV_SETS, T_NAV_TEA,
 };
 use crate::ui::prefetch;
 use crate::ui::routes::Route;
@@ -33,7 +33,6 @@ pub fn BottomNav(#[props(default)] cart_count: u32) -> Element {
     let is_events = matches!(route, Route::Events {});
     let is_cart = matches!(route, Route::Cart {});
     let is_profile = matches!(route, Route::Profile {});
-    let is_game = matches!(route, Route::Game {});
 
     rsx! {
         nav { class: "bottom-nav",
@@ -103,13 +102,6 @@ pub fn BottomNav(#[props(default)] cart_count: u32) -> Element {
                     onmouseenter: move |_| { prefetch::prefetch_route(&Route::Profile {}); },
                     span { class: "nav-icon", "👤" }
                     span { class: "nav-label", "{t(lang, T_NAV_PROFILE)}" }
-                }
-            }
-            Link { to: Route::Game {},
-                div { class: if is_game { "nav-item active" } else { "nav-item" },
-                    onmouseenter: move |_| { prefetch::prefetch_route(&Route::Game {}); },
-                    span { class: "nav-icon", "🎮" }
-                    span { class: "nav-label", "{t(lang, T_NAV_GAME)}" }
                 }
             }
         }

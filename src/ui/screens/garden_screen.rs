@@ -10,6 +10,7 @@ use crate::ui::components::bottom_nav::BottomNav;
 use crate::ui::components::lazy_screen::LazyScreen;
 use crate::ui::game::Garden;
 use crate::ui::game::WoodyCatch;
+use crate::ui::game::WoodyShop;
 use crate::ui::lang;
 use crate::ui::screens::skate_screen::SkateGame;
 use crate::ui::telegram::{use_telegram_id, use_telegram_init_data};
@@ -30,6 +31,7 @@ const GARDEN_TAB_V2_KEY: &str = "wwb_garden_tab_v2";
 const TAB_GARDEN: u8 = 0;
 const TAB_CATCH: u8 = 1;
 const TAB_SKATE: u8 = 2;
+const TAB_SHOP: u8 = 3;
 
 #[cfg(target_arch = "wasm32")]
 fn load_garden_tab() -> u8 {
@@ -98,22 +100,33 @@ pub fn GardenScreen() -> Element {
 
     let current = *tab.read();
 
-    // Three tabs no longer fit at the old padding on a 375px screen, so the
-    // buttons are a little tighter than the two-tab version was.
+    // Four labels need 383px at the two-tab sizing and the narrowest phone
+    // gives 375, so the buttons are tighter. The row still scrolls sideways as
+    // a fallback for longer translations.
     let tab_style = |selected: bool| {
         if selected {
-            "padding: 10px 12px; background: #39ff14; color: #000; border: 4px solid #2d9e0f; font-size: 13px; font-weight: 700; cursor: pointer; border-radius: 20px; white-space: nowrap;"
+            "padding: 9px 9px; background: #39ff14; color: #000; border: 3px solid #2d9e0f; font-size: 12px; font-weight: 700; cursor: pointer; border-radius: 18px; white-space: nowrap;"
         } else {
-            "padding: 10px 12px; background: rgba(22,33,62,0.15); color: #8b8b9e; border: 4px solid #2a2a4a; font-size: 13px; font-weight: 700; cursor: pointer; border-radius: 20px; white-space: nowrap;"
+            "padding: 9px 9px; background: rgba(22,33,62,0.15); color: #8b8b9e; border: 3px solid #2a2a4a; font-size: 12px; font-weight: 700; cursor: pointer; border-radius: 18px; white-space: nowrap;"
         }
     };
     let garden_style = tab_style(current == TAB_GARDEN);
     let game_style = tab_style(current == TAB_CATCH);
     let skate_style = tab_style(current == TAB_SKATE);
-    let skate_label = if lang == crate::trios::core::Lang::English {
+    let shop_style = tab_style(current == TAB_SHOP);
+    let english = lang == crate::trios::core::Lang::English;
+    let skate_label = if english {
         "🛹 Skate"
     } else {
         "🛹 Скейт"
+    };
+    // The tycoon game used to be the bottom nav's "Игра", which collided with
+    // this tab bar's own "Игра" (Woody Catch). Naming it after the shop it
+    // simulates is the only way both can sit in one row.
+    let shop_label = if english {
+        "🏪 Shop"
+    } else {
+        "🏪 Магазин"
     };
 
     let invite_modal = {
@@ -182,7 +195,9 @@ pub fn GardenScreen() -> Element {
 
             // Garden and both games side by side, so there is one place to
             // look for anything playable.
-            div { style: "display: flex; gap: 6px; padding: 12px 12px; justify-content: center;",
+            // Scrolls sideways rather than wrapping: four labels do not fit on a
+            // 375px screen, and a wrapped second row pushes the game down.
+            div { style: "display: flex; gap: 6px; padding: 12px 12px; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none;",
                 button {
                     style: "{garden_style}",
                     onclick: move |_| tab.set(TAB_GARDEN),
@@ -197,6 +212,11 @@ pub fn GardenScreen() -> Element {
                     style: "{skate_style}",
                     onclick: move |_| tab.set(TAB_SKATE),
                     "{skate_label}"
+                }
+                button {
+                    style: "{shop_style}",
+                    onclick: move |_| tab.set(TAB_SHOP),
+                    "{shop_label}"
                 }
             }
 
@@ -235,8 +255,10 @@ pub fn GardenScreen() -> Element {
                 Garden {}
             } else if current == TAB_CATCH {
                 LazyScreen { heavy: true, WoodyCatch {} }
-            } else {
+            } else if current == TAB_SKATE {
                 LazyScreen { heavy: true, SkateGame {} }
+            } else {
+                LazyScreen { heavy: true, WoodyShop {} }
             }
         }
 
