@@ -39,7 +39,11 @@ pub(crate) fn spawn_cart_abandonment_reminder_loop(
                 // A tick that found nothing must still say so: a loop whose only
                 // evidence of life is an occasional line is indistinguishable from a
                 // loop that stopped. Both garden sweeps were broken for months this way.
-                Ok(0) => tracing::info!("cart abandonment second nudges: nothing due (tick ok)"),
+                // silent-tick: deliberate, same reason as the first arm above -- this loop
+                // ticks every 300s, so a line per tick is ~288/day, and a quiet shop is
+                // the normal case. Measured in production 2026-08-12: this arm alone
+                // produced 21 lines in 1.7 hours before it was silenced.
+                Ok(0) => {}
                 Ok(n) => tracing::info!("cart abandonment second nudges: sent {} reminder(s)", n),
                 Err(e) => tracing::warn!("cart abandonment second nudge sweep failed: {}", e),
             }

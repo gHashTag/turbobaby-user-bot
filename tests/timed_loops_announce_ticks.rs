@@ -96,3 +96,55 @@ fn no_timed_loop_swallows_its_empty_tick() {
         offenders.join("\n  ")
     );
 }
+
+/// The opposite defect: a voice where silence was decided.
+///
+/// `no_timed_loop_swallows_its_empty_tick` fails on a bare arm — silence where a
+/// line was wanted. It says nothing about the reverse, and the reverse shipped:
+/// `cart_abandonment.rs` holds TWO `Ok(0)` arms, a revert regex matched only the
+/// first, and the second announced an empty tick every 300 seconds for four hours
+/// in production before anyone measured it. The diff showed the file had changed.
+/// It had changed halfway.
+///
+/// The rule this enforces: within one file the loops share their interval, so they
+/// share the decision. If any arm there is justified silent, they all must be.
+/// A file that both silences and announces is a half-applied edit until its author
+/// says otherwise — and saying otherwise means a `silent-tick:` note on each.
+#[test]
+fn a_file_does_not_both_silence_and_announce() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let mut files = Vec::new();
+    sources(&root, &mut files);
+    assert!(
+        files.len() > 10,
+        "source scan found only {} files",
+        files.len()
+    );
+
+    let mut mixed = Vec::new();
+    for path in &files {
+        let text = fs::read_to_string(path).expect("readable source file");
+        let silent = text.contains("silent-tick:");
+        let announcing: Vec<usize> = text
+            .lines()
+            .enumerate()
+            .filter(|(_, l)| l.contains("Ok(0) => tracing::info!") || l.contains("Ok(0) => info!"))
+            .map(|(i, _)| i + 1)
+            .collect();
+        if silent && !announcing.is_empty() {
+            mixed.push(format!(
+                "{} silences one tick and announces another at line(s) {:?}",
+                path.display(),
+                announcing
+            ));
+        }
+    }
+
+    assert!(
+        mixed.is_empty(),
+        "a file decided silence for one loop and a line for another:\n  {}\n\n\
+         Loops in one file share an interval, so they share the decision. Either \
+         silence them all with a `// silent-tick:` note each, or announce them all.",
+        mixed.join("\n  ")
+    );
+}
