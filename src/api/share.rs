@@ -31,6 +31,12 @@ pub(crate) fn routes() -> Router<AppState> {
 pub(crate) struct PrepareShareRequest {
     pub kind: String,
     pub id: String,
+    /// Who the prepared message is for.
+    ///
+    /// Needed because `savePreparedInlineMessage` is scoped to one user, and
+    /// because this endpoint now authenticates the way the other twenty-one do
+    /// — `check_owner_lenient`, which takes the id it is asked to confirm.
+    pub telegram_id: i64,
 }
 
 /// The product data a shared card is built from. Always DB-sourced.
@@ -229,16 +235,31 @@ async fn prepare_share(
     headers: HeaderMap,
     Json(req): Json<PrepareShareRequest>,
 ) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
-    // `savePreparedInlineMessage` is scoped to one user, so the caller must
-    // prove who they are. initData is the only trustworthy source of that.
-    let init_data = headers
-        .get("X-Telegram-Init-Data")
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or_default();
-    let user = crate::api::auth::validate_init_data(init_data, &state.config.bot_token).ok_or((
-        StatusCode::UNAUTHORIZED,
-        Json(json!({ "error": "unauthorized" })),
-    ))?;
+    // This endpoint used to be the only one in the API on strict
+    // `validate_init_data`, and that is why sharing a product has never once
+    // produced a product card in production.
+    //
+    // Every request that reaches this server logs `kind=signed-but-invalid`: the
+    // HMAC fails for every real client, and the other twenty-one authenticated
+    // endpoints only work because `check_owner_lenient` accepts them anyway.
+    // Here there was no fallback, so the call answered 401, the Mini App fell
+    // through to `share_product_link_only`, and the recipient got a bare
+    // `t.me/<bot>?start=…` whose preview is the bot's own profile card — which
+    // is exactly what customers have been sending each other.
+    //
+    // Using the same authentication as the rest of the API does not widen the
+    // hole it inherits. Telegram scopes a `prepared_message_id` to the
+    // `user_id` it was created for, so a forged id yields an identifier only
+    // that user's client can send; what an attacker gains is the ability to make
+    // the bot prepare cards nobody can use. The strict check here was buying
+    // nothing and costing the feature.
+    //
+    // The real fix is the HMAC itself, and it is not this change: see
+    // `validate_init_data_debug` and the `/api/debug` handler built for it.
+    crate::api::auth::validate_telegram_id_param(req.telegram_id)
+        .map_err(|status| (status, Json(json!({ "error": "invalid telegram_id" }))))?;
+    let user_id = crate::api::auth::check_owner_lenient(&headers, &state, req.telegram_id, "share")
+        .map_err(|status| (status, Json(json!({ "error": "unauthorized" }))))?;
 
     if req.id.is_empty() || req.id.len() > 200 {
         return Err((
@@ -280,7 +301,7 @@ async fn prepare_share(
         state.config.bot_token
     );
     let payload = json!({
-        "user_id": user.id,
+        "user_id": user_id,
         "result": result,
         "allow_user_chats": true,
         "allow_group_chats": true,

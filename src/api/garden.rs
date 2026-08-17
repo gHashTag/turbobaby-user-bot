@@ -59,7 +59,18 @@ pub(crate) fn spawn_garden_reminder_loop(
 ) {
     tokio::spawn(async move {
         let mut interval = tokio::time::interval(std::time::Duration::from_secs(interval_secs));
-        interval.tick().await; // discard cold-start tick
+        // NOT discarded. Measured 2026-08-12: ten deploys in 18.2 hours, median
+        // uptime 22 minutes in working hours. A 6-hour timer reached its first
+        // tick in 1 of 9 restarts and a 4-hour one in 2 of 9 — in memory, the
+        // period is an upper bound on how often a sweep runs, and the real rate
+        // is min(interval, process lifetime). Watering reminders were therefore
+        // not sent during any active development day, whatever the SQL did.
+        //
+        // Running at startup is safe because the sweep is data-driven, not
+        // clock-driven: it selects on `reminder_sent_at IS NULL OR <= now-24h`
+        // and writes that column, so a restart cannot duplicate a message. The
+        // data holds the schedule; the timer only decides how often we ask.
+        interval.tick().await;
         loop {
             interval.tick().await;
             match send_garden_reminders(&orm, &bot, &config).await {
@@ -206,6 +217,11 @@ pub(crate) fn spawn_garden_reward_expiry_loop(
 ) {
     tokio::spawn(async move {
         let mut interval = tokio::time::interval(std::time::Duration::from_secs(interval_secs));
+        // NOT discarded, same reasoning as the reminder loop above: with a median
+        // uptime of 22 minutes this 4-hour timer reached its first tick in 2 of 9
+        // restarts. This sweep is data-driven too — it selects on
+        // `expiry_nudge_sent_at IS NULL OR <= $3` and writes that column — so a
+        // restart asks again without nudging anyone twice.
         interval.tick().await;
         loop {
             interval.tick().await;

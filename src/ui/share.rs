@@ -409,10 +409,20 @@ pub fn share_product(kind: ProductKind, id: &str, name: &str) {
         dioxus::prelude::spawn(async move {
             let tg = crate::ui::telegram::TelegramApp::init();
             if tg.supports_share_message() {
+                // The id goes in the body because the endpoint authenticates
+                // the way the rest of the API does — `check_owner_lenient`,
+                // which confirms an id rather than deriving one. Without a
+                // user there is nobody to prepare a message for, so fall
+                // straight through to the link share.
+                let Some(tid) = tg.get_user_id() else {
+                    share_product_link_only(kind, &id, &name);
+                    return;
+                };
                 let body = format!(
-                    r#"{{"kind":"{}","id":"{}"}}"#,
+                    r#"{{"kind":"{}","id":"{}","telegram_id":{}}}"#,
                     share_kind_wire(kind),
-                    id.replace('"', "")
+                    id.replace('"', ""),
+                    tid
                 );
                 let url = format!(
                     "{}/api/share/prepare",
