@@ -186,6 +186,68 @@ pub fn parse(payload: &str) -> Option<Target> {
     None
 }
 
+/// Build the payload for any target — the exact inverse of [`parse`].
+///
+/// One builder beside the one parser, because the four shapes this replaces
+/// (`cart__`, `o_`, `reorder__`, `garden__`) were written in `src/ui/share.rs`,
+/// whose `#[cfg(test)] mod tests` holds 22 assertions and runs **none of them**:
+/// `src/ui` is `#[cfg(target_arch = "wasm32")]`, so `cargo test` never reaches
+/// it. The parse side was covered here and the build side was not, so a builder
+/// emitting `garden_<id>` instead of `garden__<id>` would have shipped green.
+///
+/// Returns `None` for a target that cannot be transported — an id carrying a
+/// character Telegram rejects, or a payload over 64 bytes — rather than
+/// producing a link that silently opens the home screen.
+pub fn payload_for(target: &Target) -> Option<String> {
+    let payload = match target {
+        Target::Product { kind, id } => product_payload(*kind, id),
+        Target::Order(id) => format!("o_{id}"),
+        Target::Reorder(id) => format!("reorder__{id}"),
+        Target::Cart { source } if source.is_empty() => "cart".to_string(),
+        Target::Cart { source } => format!("cart__{source}"),
+        Target::Garden {
+            referrer: None,
+            source: _,
+        } => "garden".to_string(),
+        Target::Garden {
+            referrer: Some(id),
+            source: None,
+        } => format!("garden__{id}"),
+        Target::Garden {
+            referrer: Some(id),
+            source: Some(s),
+        } => format!("garden__{id}__{s}"),
+    };
+    transportable(&payload).then_some(payload)
+}
+
+/// Where a target is supposed to land the customer.
+///
+/// Written here, as an exhaustive `match`, because the app forgot one. Every
+/// other target reached its screen — the product screens, the cart, the order,
+/// the reorder — and `Garden` had a resolver, an analytics event and an invite
+/// signal but **no navigation**, so `startapp=garden` (the link the watering
+/// reminder sends) resolved correctly and left the customer on the home screen.
+///
+/// A sixth variant cannot be added without the compiler stopping here, which is
+/// the only guarantee available: the wiring itself lives in `src/ui`, and no
+/// test in this repository can execute that.
+pub fn destination(target: &Target) -> &'static str {
+    match target {
+        Target::Product { kind, .. } => match kind {
+            Kind::Strain => "/menu",
+            Kind::Accessory => "/accessories",
+            Kind::Set => "/sets",
+            Kind::Tea => "/tea",
+            Kind::Event => "/events",
+        },
+        Target::Order(_) => "/orders",
+        Target::Reorder(_) => "/cart",
+        Target::Cart { .. } => "/cart",
+        Target::Garden { .. } => "/garden",
+    }
+}
+
 /// Does this payload address the Mini App?
 ///
 /// The bot answers a `/start` with a Mini App button exactly when this is true,
@@ -208,6 +270,190 @@ mod tests {
         "42",
         "a",
     ];
+
+    /// Every target names a screen, and none of them names the home screen.
+    ///
+    /// "Landed on the home screen" is precisely how a broken deep link looks to
+    /// a customer: no error, no 404, just the wrong place. `Garden` shipped in
+    /// exactly that state.
+    #[test]
+    fn every_target_names_a_screen_that_is_not_the_home_screen() {
+        let mut seen = std::collections::BTreeSet::new();
+        for kind in Kind::ALL {
+            seen.insert(destination(&Target::Product {
+                kind,
+                id: "x".into(),
+            }));
+        }
+        for t in [
+            Target::Order("x".into()),
+            Target::Reorder("x".into()),
+            Target::Cart {
+                source: String::new(),
+            },
+            Target::Garden {
+                referrer: None,
+                source: None,
+            },
+            Target::Garden {
+                referrer: Some(7),
+                source: Some("tg".into()),
+            },
+        ] {
+            seen.insert(destination(&t));
+        }
+        for d in &seen {
+            assert!(
+                d.starts_with('/') && *d != "/",
+                "{d:?} is the home screen, which is what a broken link looks like"
+            );
+        }
+        // Each product kind gets its OWN screen — a copy-paste pointing two
+        // kinds at one catalog would open the wrong list with no error. Said
+        // directly rather than as a total, so the assertion does not have to be
+        // re-counted every time a non-product target is added. (`Reorder` and
+        // `Cart` share `/cart` deliberately: a reorder fills the cart.)
+        let per_kind: Vec<&str> = Kind::ALL
+            .iter()
+            .map(|k| {
+                destination(&Target::Product {
+                    kind: *k,
+                    id: "x".into(),
+                })
+            })
+            .collect();
+        let unique: std::collections::BTreeSet<_> = per_kind.iter().collect();
+        assert_eq!(
+            unique.len(),
+            Kind::ALL.len(),
+            "two product kinds share a screen: {per_kind:?}"
+        );
+    }
+
+    /// Build every target, parse it back, and require the same target.
+    ///
+    /// This is the assertion the repository did not have. `src/ui/share.rs`
+    /// writes the same four shapes by hand and its test module never runs, so
+    /// nothing checked that what the app *builds* is what the app *reads*.
+    /// Sweeping `Kind::ALL` rather than listing kinds means a sixth kind cannot
+    /// be added without landing here.
+    #[test]
+    fn every_target_survives_being_built_and_read_back() {
+        let mut targets: Vec<Target> = Vec::new();
+        for kind in Kind::ALL {
+            for id in IDS {
+                targets.push(Target::Product {
+                    kind,
+                    id: id.to_string(),
+                });
+            }
+        }
+        for id in IDS {
+            targets.push(Target::Order(id.to_string()));
+            targets.push(Target::Reorder(id.to_string()));
+        }
+        targets.push(Target::Cart {
+            source: String::new(),
+        });
+        targets.push(Target::Cart {
+            source: "utm_instagram".to_string(),
+        });
+        targets.push(Target::Garden {
+            referrer: None,
+            source: None,
+        });
+        targets.push(Target::Garden {
+            referrer: Some(144_022_504),
+            source: None,
+        });
+        targets.push(Target::Garden {
+            referrer: Some(144_022_504),
+            source: Some("tg".to_string()),
+        });
+
+        for t in &targets {
+            let payload = payload_for(t)
+                .unwrap_or_else(|| panic!("{t:?} could not be turned into a payload at all"));
+            assert_eq!(
+                parse(&payload).as_ref(),
+                Some(t),
+                "built {payload:?} for {t:?} and read back something else"
+            );
+            assert!(
+                is_miniapp_payload(&payload),
+                "the bot would not answer {payload:?}, so the link opens the home screen"
+            );
+            assert!(
+                payload.len() <= MAX_START_PARAM_LEN,
+                "{payload:?} is {} bytes; Telegram truncates over {MAX_START_PARAM_LEN}",
+                payload.len()
+            );
+        }
+        assert_eq!(targets.len(), 5 * IDS.len() + 2 * IDS.len() + 5);
+    }
+
+    /// The shapes `src/ui/share.rs` writes by hand, pinned here where a test
+    /// can see them. If a builder there drifts, this is the file that says so.
+    #[test]
+    fn the_wire_shapes_are_exactly_what_the_app_writes() {
+        let cases: [(Target, &str); 7] = [
+            (
+                Target::Cart {
+                    source: String::new(),
+                },
+                "cart",
+            ),
+            (
+                Target::Cart {
+                    source: "utm_x".into(),
+                },
+                "cart__utm_x",
+            ),
+            (Target::Order("abc".into()), "o_abc"),
+            (Target::Reorder("abc".into()), "reorder__abc"),
+            (
+                Target::Garden {
+                    referrer: None,
+                    source: None,
+                },
+                "garden",
+            ),
+            (
+                Target::Garden {
+                    referrer: Some(7),
+                    source: None,
+                },
+                "garden__7",
+            ),
+            (
+                Target::Garden {
+                    referrer: Some(7),
+                    source: Some("tg".into()),
+                },
+                "garden__7__tg",
+            ),
+        ];
+        for (t, want) in cases {
+            assert_eq!(payload_for(&t).as_deref(), Some(want), "{t:?}");
+        }
+    }
+
+    /// A link that cannot be transported is refused, not emitted broken. An id
+    /// with a space or a slash produces a `t.me` URL Telegram will not carry,
+    /// and the recipient lands on the home screen with no error anywhere.
+    #[test]
+    fn an_untransportable_target_yields_no_link() {
+        for bad in ["has space", "a/b", "emoji🌿", &"x".repeat(70)] {
+            assert_eq!(
+                payload_for(&Target::Product {
+                    kind: Kind::Set,
+                    id: bad.to_string()
+                }),
+                None,
+                "{bad:?} was turned into a link anyway"
+            );
+        }
+    }
 
     #[test]
     fn a_product_payload_survives_the_round_trip_for_every_kind() {

@@ -74,7 +74,10 @@ pub fn BottomNav(#[props(default)] cart_count: u32) -> Element {
             Link { to: Route::Garden {},
                 div { class: if is_garden { "nav-item active" } else { "nav-item" },
                     onmouseenter: move |_| { prefetch::prefetch_route(&Route::Garden {}); },
-                    span { class: "nav-icon", "🌱" }
+                    // A joystick, not a seedling: this tab is where every game
+                    // lives — skate, catch, tycoon — and the garden is one of
+                    // them rather than the whole of it.
+                    span { class: "nav-icon", "🕹️" }
                     span { class: "nav-label", "{t(lang, T_NAV_GARDEN)}" }
                 }
             }

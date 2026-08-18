@@ -48,6 +48,17 @@ impl ProductKind {
         }
     }
 
+    /// This kind, as the shared vocabulary spells it.
+    pub fn to_core(self) -> crate::trios::deeplink::Kind {
+        match self {
+            Self::Strain => crate::trios::deeplink::Kind::Strain,
+            Self::Accessory => crate::trios::deeplink::Kind::Accessory,
+            Self::Set => crate::trios::deeplink::Kind::Set,
+            Self::Tea => crate::trios::deeplink::Kind::Tea,
+            Self::Event => crate::trios::deeplink::Kind::Event,
+        }
+    }
+
     /// The same kind, as the shared vocabulary spells it.
     pub fn from_core(kind: crate::trios::deeplink::Kind) -> Self {
         match kind {
@@ -112,12 +123,16 @@ fn bot_username() -> String {
 
 /// Build the `t.me` deep link that opens the mini-app with this product.
 fn deep_link_url(kind: ProductKind, id: &str) -> String {
-    format!(
-        "https://t.me/{}?start={}_{}",
-        bot_username(),
-        kind.payload_prefix(),
-        id
-    )
+    let payload = crate::trios::deeplink::payload_for(&crate::trios::deeplink::Target::Product {
+        kind: kind.to_core(),
+        id: id.to_string(),
+    });
+    match payload {
+        Some(p) => format!("https://t.me/{}?start={}", bot_username(), p),
+        // An id Telegram cannot carry. Send them to the shop rather than to a
+        // link that opens the home screen and looks like a broken share.
+        None => format!("https://t.me/{}", bot_username()),
+    }
 }
 
 /// Public accessor for the raw `t.me` deep-link URL.
@@ -128,11 +143,27 @@ pub fn product_deep_link(kind: ProductKind, id: &str) -> String {
     deep_link_url(kind, id)
 }
 
+/// Every payload below is built by `crate::trios::deeplink::payload_for`, not
+/// spelled out here.
+///
+/// The shapes used to be written by hand in this file, and this file's
+/// `#[cfg(test)] mod tests` — 22 assertions, several of them about exactly
+/// these strings — runs **none of them**, because `src/ui` is
+/// `#[cfg(target_arch = "wasm32")]` and `cargo test` never reaches it. The
+/// parser was already shared; the builder was not, so a drift between
+/// `garden__<id>` and `garden_<id>` would have shipped green.
+///
+/// `payload_for` returns `None` for something Telegram cannot carry. These
+/// wrappers keep their `String` return so no caller changes, and fall back to
+/// the plain screen — a link to the cart is better than a link to nothing.
+
 /// Build a `startapp` parameter that opens the Mini App on the order detail
-/// screen. Format: `o_{order_id}`. Order IDs are UUID-like, so the prefix keeps
-/// them disjoint from product shares.
+/// screen. Format: `o_{order_id}`.
 pub fn order_start_param(order_id: &str) -> String {
-    format!("o_{}", order_id)
+    crate::trios::deeplink::payload_for(&crate::trios::deeplink::Target::Order(
+        order_id.to_string(),
+    ))
+    .unwrap_or_else(|| "cart".to_string())
 }
 
 /// Raw `t.me` deep link that opens a specific order.
@@ -146,7 +177,10 @@ pub fn order_deep_link(order_id: &str) -> String {
 
 /// Build a `startapp` parameter that opens the Mini App on the cart screen.
 pub fn cart_start_param() -> String {
-    "cart".to_string()
+    crate::trios::deeplink::payload_for(&crate::trios::deeplink::Target::Cart {
+        source: String::new(),
+    })
+    .unwrap_or_else(|| "cart".to_string())
 }
 
 /// Raw `t.me` deep link that opens the cart.
@@ -171,6 +205,17 @@ pub struct PendingOrder(pub Option<String>);
 /// for why this is a distinct newtype.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct PendingReorder(pub Option<String>);
+
+/// A garden deep link is waiting to be opened.
+///
+/// Separate from the invite signal below it, because the two answer different
+/// questions: *go to the garden* is true for both `garden` and
+/// `garden__<referrer>`, while *show the invite modal* is true only for the
+/// second. Conflating them is what left `startapp=garden` resolving correctly
+/// and then doing nothing at all — the parser said "garden", the analytics
+/// event fired, and the customer stayed on the home screen.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct PendingGarden(pub bool);
 
 /// Parse an order `startapp` value (`o_{order_id}`). Unknown prefixes and
 /// payloads that are too long are rejected so malformed links degrade gracefully.
@@ -199,7 +244,10 @@ pub fn parse_cart_start_param(param: &str) -> Option<&str> {
 /// customer's last order into their cart for one-tap reorder.
 /// Format: `reorder__{order_id}`.
 pub fn reorder_start_param(order_id: &str) -> String {
-    format!("reorder__{}", order_id)
+    crate::trios::deeplink::payload_for(&crate::trios::deeplink::Target::Reorder(
+        order_id.to_string(),
+    ))
+    .unwrap_or_else(|| "cart".to_string())
 }
 
 /// Raw `t.me` deep link that opens the Mini App in reorder mode.
@@ -215,10 +263,11 @@ pub fn reorder_deep_link(order_id: &str) -> String {
 /// When `referrer_id` is provided, the invitee can be attributed back to the
 /// referrer for a two-sided garden-referral reward.
 pub fn garden_start_param(referrer_id: Option<i64>) -> String {
-    match referrer_id {
-        Some(id) => format!("garden__{}", id),
-        None => "garden".to_string(),
-    }
+    crate::trios::deeplink::payload_for(&crate::trios::deeplink::Target::Garden {
+        referrer: referrer_id,
+        source: None,
+    })
+    .unwrap_or_else(|| "garden".to_string())
 }
 
 /// Raw `t.me` deep link that opens the Mini App in the garden.

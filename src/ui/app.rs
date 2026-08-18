@@ -10,7 +10,8 @@ use crate::ui::components::{install_error_handlers, ErrorOverlay, JsErrorItem};
 use crate::ui::routes::Routes;
 use crate::ui::share::{
     parse_cart_start_param, parse_garden_start_param, parse_order_start_param,
-    parse_reorder_start_param, parse_start_param, PendingOrder, PendingReorder, SharedProduct,
+    parse_reorder_start_param, parse_start_param, PendingGarden, PendingOrder, PendingReorder,
+    SharedProduct,
 };
 use crate::ui::state::{Cart, CartItem};
 use crate::ui::telegram::TelegramProvider;
@@ -148,6 +149,14 @@ pub fn App() -> Element {
     use_context_provider(|| Signal::new(None::<(i64, String)>));
     let pending_garden_invite = use_context::<Signal<Option<(i64, String)>>>();
 
+    // Garden deep-link target: `startapp=garden` or `garden__{referrer}`.
+    // HomeScreen navigates on this the way it already does for cart, order and
+    // reorder. Without it the payload resolved, the event fired, the invite was
+    // stored — and the customer was left on the home screen, including for the
+    // `garden` link the shop itself sends in its watering reminders.
+    use_context_provider(|| Signal::new(PendingGarden::default()));
+    let pending_garden = use_context::<Signal<PendingGarden>>();
+
     use_effect(move || {
         install_error_handlers(errors);
     });
@@ -160,6 +169,7 @@ pub fn App() -> Element {
         let mut pending_cart_flag = pending_cart.clone();
         let mut pending_reorder_id = pending_reorder.clone();
         let mut pending_garden_invite_id = pending_garden_invite.clone();
+        let mut pending_garden_flag = pending_garden.clone();
         spawn(async move {
             for _ in 0..30 {
                 if pending.read().is_some()
@@ -167,6 +177,7 @@ pub fn App() -> Element {
                     || pending_cart_flag()
                     || pending_reorder_id.read().0.is_some()
                     || pending_garden_invite_id.read().is_some()
+                    || pending_garden_flag.read().0
                 {
                     return;
                 }
@@ -236,6 +247,9 @@ pub fn App() -> Element {
                             )
                             .await;
                         });
+                        // Go to the garden either way — that is what the link
+                        // says. The invite modal is a second, narrower thing.
+                        pending_garden_flag.set(PendingGarden(true));
                         // Only show the invite modal when there is an actual referrer.
                         if let Some(rid) = referrer_id.filter(|id| *id > 0) {
                             pending_garden_invite_id.set(Some((rid, source_str)));

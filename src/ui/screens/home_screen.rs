@@ -21,7 +21,8 @@ use crate::ui::components::skeleton::{Skeleton, SkeletonShape};
 use crate::ui::components::video_modal::VideoModal;
 use crate::ui::routes::Route;
 use crate::ui::share::{
-    share_garden, share_product, PendingOrder, PendingReorder, ProductKind, SharedProduct,
+    share_garden, share_product, PendingGarden, PendingOrder, PendingReorder, ProductKind,
+    SharedProduct,
 };
 use crate::ui::state::{Cart, CartItem, CartItemType};
 use crate::ui::telegram::{use_telegram_id, use_telegram_init_data};
@@ -426,6 +427,7 @@ pub fn HomeScreen() -> Element {
     let mut pending_order = use_context::<Signal<PendingOrder>>();
     let mut pending_cart = use_context::<Signal<bool>>();
     let mut pending_reorder = use_context::<Signal<PendingReorder>>();
+    let mut pending_garden = use_context::<Signal<PendingGarden>>();
     let nav = navigator();
     let telegram_id = use_telegram_id();
     let init_data = use_telegram_init_data();
@@ -447,6 +449,18 @@ pub fn HomeScreen() -> Element {
         if pending_cart() {
             pending_cart.set(false);
             nav.push(Route::Cart {});
+        }
+        // The garden deep link had every step of this except the last one: it
+        // resolved, reported the open and stored the invite, and then left the
+        // customer on this screen. `startapp=garden` is the link the watering
+        // reminder sends, so the reminder led nowhere.
+        //
+        // The invite signal is deliberately NOT cleared here — GardenScreen
+        // reads it to show the welcome modal, and it can only do that once the
+        // customer is actually on it.
+        if pending_garden.read().0 {
+            pending_garden.set(PendingGarden(false));
+            nav.push(Route::Garden {});
         }
         // Loop #15: proactive reorder deep-link loads the order items into the
         // server-side cart with current DB prices and lands on /cart.
