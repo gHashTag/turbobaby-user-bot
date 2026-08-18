@@ -44,6 +44,13 @@ struct LoyaltyProfileData {
     bonus_balance: Option<f64>,
     referral_code: Option<String>,
     referral_count: Option<i32>,
+    /// Everyone who followed the link, whatever they did next.
+    ///
+    /// `referral_count` is a different number: it is written only when an
+    /// invited friend's order completes, so under a label that says *invited*
+    /// it read zero for anyone whose friends had not yet bought anything.
+    #[serde(default)]
+    invited_count: Option<i32>,
     orders_count: Option<i32>,
 }
 
@@ -506,9 +513,10 @@ pub fn ProfileScreen() -> Element {
         .and_then(|d| d.referral_code.clone())
         .unwrap_or_else(|| telegram_id.to_string());
 
-    let referral_count = loyalty_data
+    // The label says "invited", so the number has to be the invited one.
+    let invited_count = loyalty_data
         .as_ref()
-        .and_then(|d| d.referral_count)
+        .and_then(|d| d.invited_count)
         .unwrap_or(0);
 
     let orders_count = loyalty_data
@@ -724,7 +732,7 @@ pub fn ProfileScreen() -> Element {
                         }
                         div { style: "
                             font-size: 13px; color: #8b8b9e; margin-top: 14px;
-                        ", "{tf(lang, T_PROFILE_FRIENDS_INVITED, &[referral_count.to_string()])}" }
+                        ", "{tf(lang, T_PROFILE_FRIENDS_INVITED, &[invited_count.to_string()])}" }
                     }
                 }
             }
@@ -815,7 +823,7 @@ pub fn ProfileScreen() -> Element {
                     }
                 }
                 div { style: "display: flex; gap: 12px; font-size: 13px;",
-                    span { style: "color: #8b8b9e;", "{tf(lang, T_PROFILE_INVITED, &[referral_count.to_string()])}" }
+                    span { style: "color: #8b8b9e;", "{tf(lang, T_PROFILE_INVITED, &[invited_count.to_string()])}" }
                     span { style: "color: #39ff14;", "{t(lang, T_PROFILE_EARN_PER_REF)}" }
                 }
             }

@@ -880,3 +880,155 @@ mod tests {
         assert!(!is_self_referral(1, -1));
     }
 }
+
+#[cfg(test)]
+mod chain_tests {
+    //! The referral chain, walked the way production walks it.
+    //!
+    //! `tests/referrals.rs` tests a *copy* of the code generator declared in
+    //! the test file, and `tests/integration_invitees.rs` seeds
+    //! `referral_events` with raw SQL. Neither has ever run the path a shared
+    //! link actually takes: mint a code, put it in `ref_<code>`, strip it the
+    //! way the bot does, look the referrer up, record, and count. Every link in
+    //! that chain is `pub(crate)`, which is why the test has to live here.
+    //!
+    //! Run with:
+    //! ```sh
+    //! DATABASE_URL=postgres://…/woody_test cargo test --features backend --lib \
+    //!   chain_tests -- --ignored --test-threads=1
+    //! ```
+    use super::*;
+
+    async fn db() -> Option<sea_orm::DatabaseConnection> {
+        let url = std::env::var("DATABASE_URL").ok()?;
+        assert!(
+            url.contains("localhost") || url.contains("127.0.0.1") || url.contains("test"),
+            "refusing to run against {url:?}: this test writes rows"
+        );
+        sea_orm::Database::connect(&url).await.ok()
+    }
+
+    /// How the bot turns `/start ref_<code>` back into a code.
+    fn code_from_payload(payload: &str) -> &str {
+        payload.trim_start_matches("ref_")
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn a_shared_referral_link_reaches_the_counter() {
+        let Some(orm) = db().await else {
+            eprintln!("DATABASE_URL unset — skipping");
+            return;
+        };
+        use sea_orm::{ConnectionTrait, DbBackend, Statement};
+
+        let referrer = 990_001i64;
+        let invitee = 990_002i64;
+        for id in [referrer, invitee] {
+            let _ = orm
+                .execute(Statement::from_sql_and_values(
+                    DbBackend::Postgres,
+                    "DELETE FROM referral_events WHERE referrer_id = $1 OR referred_id = $1",
+                    [id.into()],
+                ))
+                .await;
+            let _ = orm
+                .execute(Statement::from_sql_and_values(
+                    DbBackend::Postgres,
+                    "DELETE FROM loyalty_profiles WHERE telegram_id = $1",
+                    [id.into()],
+                ))
+                .await;
+        }
+
+        // 1. The referrer opens the bot and is minted a code.
+        let code = get_or_create_referral_code(&orm, referrer)
+            .await
+            .expect("mint a code");
+
+        // 2. That code goes into a link, and the bot strips it back out.
+        let payload = format!("ref_{code}");
+        assert_eq!(
+            code_from_payload(&payload),
+            code,
+            "the bot must recover the code it shared"
+        );
+
+        // 3. The bot calls `/start` for the referrer again before the invitee
+        //    ever taps — every `/start` does this. If it re-mints, every link
+        //    already sent stops resolving and the counter never moves.
+        let again = get_or_create_referral_code(&orm, referrer)
+            .await
+            .expect("second /start");
+        assert_eq!(
+            again, code,
+            "the code changed between two /start calls: every link already shared is dead"
+        );
+
+        // 4. The invitee taps. The bot looks the referrer up by the code.
+        let found = find_referrer_by_code(&orm, code_from_payload(&payload))
+            .await
+            .expect("lookup");
+        assert_eq!(
+            found,
+            Some(referrer),
+            "the shared code did not resolve to its owner"
+        );
+
+        // 5. And records the referral.
+        record_referral(
+            &orm,
+            referrer,
+            invitee,
+            code_from_payload(&payload),
+            Some("telegram_start"),
+        )
+        .await
+        .expect("record");
+
+        // 6. The counter the profile screen reads.
+        let stats = get_referrer_stats(&orm, referrer).await.expect("stats");
+        assert_eq!(stats.total_invited, 1, "the invite counter did not move");
+
+        let invitees = get_invitees(&orm, referrer).await.expect("invitees");
+        assert_eq!(invitees.len(), 1, "the invitee list is empty");
+    }
+
+    /// A second tap by the same person must not inflate the count.
+    #[tokio::test]
+    #[ignore]
+    async fn tapping_the_same_link_twice_counts_once() {
+        let Some(orm) = db().await else { return };
+        use sea_orm::{ConnectionTrait, DbBackend, Statement};
+        let referrer = 990_011i64;
+        let invitee = 990_012i64;
+        for id in [referrer, invitee] {
+            let _ = orm
+                .execute(Statement::from_sql_and_values(
+                    DbBackend::Postgres,
+                    "DELETE FROM referral_events WHERE referrer_id = $1 OR referred_id = $1",
+                    [id.into()],
+                ))
+                .await;
+            let _ = orm
+                .execute(Statement::from_sql_and_values(
+                    DbBackend::Postgres,
+                    "DELETE FROM loyalty_profiles WHERE telegram_id = $1",
+                    [id.into()],
+                ))
+                .await;
+        }
+        let code = get_or_create_referral_code(&orm, referrer)
+            .await
+            .expect("code");
+        for _ in 0..3 {
+            let _ = record_referral(&orm, referrer, invitee, &code, Some("telegram_start")).await;
+        }
+        let stats = get_referrer_stats(&orm, referrer).await.expect("stats");
+        assert_eq!(
+            stats.total_invited, 1,
+            "one friend counted {} times",
+            stats.total_invited
+        );
+    }
+}

@@ -111,7 +111,20 @@ async fn get_profile(
 
     let stmt = Statement::from_sql_and_values(
         DbBackend::Postgres,
-        "SELECT lp.telegram_id, lp.total_spent::float8 AS total_spent, lp.bonus_balance::float8 AS bonus_balance, lp.tier, lp.referral_code, lp.referred_by, lp.referral_count, lp.first_purchase_at, lp.manager_telegram_id, lp.is_blocked, COUNT(o.id)::int4 AS orders_count FROM loyalty_profiles lp LEFT JOIN orders o ON o.telegram_id = lp.telegram_id WHERE lp.telegram_id = $1 GROUP BY lp.telegram_id",
+        // `referral_count` counts friends whose order COMPLETED: it is written
+        // only by `confirm_referral`, which only `complete_order` calls. The
+        // profile screen was printing it under "Приглашено друзей", so somebody
+        // who invited ten friends who all arrived and browsed saw zero. The
+        // sentence and the number were about different things.
+        //
+        // `invited_count` is the number the label promises — everyone who
+        // followed the link, whatever they did next. It is a subquery rather
+        // than another denormalised column because a count that is stored is a
+        // count that can drift from the rows it counts, which is the defect
+        // being fixed.
+        "SELECT lp.telegram_id, lp.total_spent::float8 AS total_spent, lp.bonus_balance::float8 AS bonus_balance, lp.tier, lp.referral_code, lp.referred_by, lp.referral_count, \
+                (SELECT COUNT(*)::int4 FROM referral_events re WHERE re.referrer_id = lp.telegram_id) AS invited_count, \
+                lp.first_purchase_at, lp.manager_telegram_id, lp.is_blocked, COUNT(o.id)::int4 AS orders_count FROM loyalty_profiles lp LEFT JOIN orders o ON o.telegram_id = lp.telegram_id WHERE lp.telegram_id = $1 GROUP BY lp.telegram_id",
         [telegram_id.into()],
     );
     let row = state.db.orm.query_one(stmt).await.map_err(|e| {
@@ -179,6 +192,7 @@ async fn get_profile(
                 "referral_code": r.try_get::<Option<String>>("", "referral_code").ok().flatten(),
                 "referred_by": r.try_get::<Option<i64>>("", "referred_by").ok().flatten(),
                 "referral_count": r.try_get::<i32>("", "referral_count").unwrap_or(0),
+                "invited_count": r.try_get::<i32>("", "invited_count").unwrap_or(0),
                 "first_purchase_at": r.try_get::<Option<chrono::DateTime<chrono::Utc>>>("", "first_purchase_at").ok().flatten(),
                 "manager_telegram_id": r.try_get::<Option<i64>>("", "manager_telegram_id").ok().flatten(),
                 "is_blocked": r.try_get::<bool>("", "is_blocked").unwrap_or(false),
