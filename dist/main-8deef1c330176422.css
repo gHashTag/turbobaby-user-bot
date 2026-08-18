@@ -73,6 +73,21 @@ body {
    colour so the tab styling below is the only thing that paints it. */
 .bottom-nav > a,
 .nav-bar > a { text-decoration: none; color: inherit; -webkit-tap-highlight-color: transparent; }
+
+/* Every other link in the app, which until now had no rule at all.
+ *
+ * Dioxus `Link` renders a plain `<a href>`, and an `<a>` nobody colours takes
+ * the user agent's blue with an underline. On this app's cards — `#16213e`,
+ * dark blue — that is blue on blue: the profile's Quick Actions rows read as
+ * broken rather than as links. The nav bar had a copy of this fix for its own
+ * slots and nothing else did.
+ *
+ * An element selector, so anything that sets its own colour — the support
+ * link, the referral link, a class, an inline style — still wins. This only
+ * paints the links that were being left to the browser. */
+a { color: var(--green); text-decoration: none; -webkit-tap-highlight-color: transparent; }
+a:visited { color: var(--green); }
+a:hover, a:focus-visible { color: var(--cyan); }
 .nav-item {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   width: 100%; min-width: 0;

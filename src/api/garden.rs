@@ -1991,14 +1991,34 @@ fn garden_catalog_table(catalog: &str) -> Option<&'static str> {
 /// no user data), mirrors `/api/sets` resilience: degrade each source to empty.
 async fn get_garden_products(State(state): State<AppState>) -> Result<Json<Value>, StatusCode> {
     use sea_orm::{ConnectionTrait, DbBackend, Statement};
+    // Seeds first.
+    //
+    // This used to be `ORDER BY catalog, name`, which sorts by the SPELLING of
+    // the category — and alphabetically `accessory` comes before `strain`.
+    // Measured against production: 70 accessories, then 7 sets, then the 18
+    // strains at positions 77-94, then 31 teas. The picker is a two-column grid
+    // in an 85vh sheet, so reaching a seed meant scrolling past about
+    // thirty-nine rows of grinders and rolling papers. Nothing was broken and
+    // nobody could find a seed.
+    //
+    // In a garden the thing you plant is a seed. `strain` is the seed, a `set`
+    // contains strains, nothing else is a plant at all — so that is the rank,
+    // written down rather than left to the alphabet.
+    //
+    // The union is wrapped: Postgres refuses an expression in `ORDER BY` over a
+    // UNION ("Only result column names can be used"), which is a thing this
+    // learned by being told so rather than by guessing.
     let sql = "\
+    SELECT * FROM ( \
         SELECT 'strain'        AS catalog, id, name, image_url, price_per_gram::float8 AS price FROM strains        WHERE is_available AND garden_eligible \
         UNION ALL SELECT 'accessory',     id, name, image_url, price::float8        FROM accessories    WHERE is_available AND garden_eligible \
         UNION ALL SELECT 'tea',           id, name, image_url, price::float8        FROM tea_products   WHERE is_available AND garden_eligible \
         UNION ALL SELECT 'set',           id, name, image_url, total_price::float8  FROM sets           WHERE is_available AND garden_eligible \
         UNION ALL SELECT 'accessory_set', id, name, image_url, total_price::float8  FROM accessory_sets WHERE is_available AND garden_eligible \
         UNION ALL SELECT 'tea_set',       id, name, image_url, total_price::float8  FROM tea_sets       WHERE is_available AND garden_eligible \
-        ORDER BY catalog, name LIMIT 3000";
+    ) q \
+    ORDER BY CASE q.catalog WHEN 'strain' THEN 0 WHEN 'set' THEN 1 ELSE 2 END, q.catalog, q.name \
+    LIMIT 3000";
     let rows = state
         .db
         .orm
