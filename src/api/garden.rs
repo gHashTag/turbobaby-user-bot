@@ -364,6 +364,35 @@ pub(crate) struct RewardResponse {
 
 // ── Plant Endpoints ───────────────────────────────────────────────
 
+/// Read a Postgres `INTEGER` column into the `u32` the garden model uses.
+///
+/// The trap this closes: `Plant.water_count` is `u32`, the column is `int4`, and
+/// sqlx will not decode one into the other. Written as
+/// `r.try_get("", "water_count").unwrap_or(0)` the target type is *inferred*
+/// from the field, so the decode failed on every row and the `unwrap_or` turned
+/// that failure into a plausible zero — a plant came back from a reload
+/// unwatered while the database held the real count. It is the same shape as
+/// the leaderboard reading an INTEGER as `i64` and showing every score as zero.
+///
+/// Going through `i32` makes the decode the one the column actually supports,
+/// and `try_get_warn!` says so in the log when a future migration changes the
+/// column under it, instead of printing a believable wrong number.
+fn int_column_as_u32(row: &sea_orm::QueryResult, column: &'static str) -> u32 {
+    let stored: i32 = match row.try_get("", column) {
+        Ok(v) => v,
+        Err(e) => {
+            tracing::warn!(
+                target: "db.schema_drift",
+                column = column,
+                error = %e,
+                "int column did not decode as i32 — reporting 0"
+            );
+            0
+        }
+    };
+    stored.max(0) as u32
+}
+
 async fn get_user_plants(
     headers: HeaderMap,
     State(state): State<AppState>,
@@ -419,7 +448,7 @@ async fn get_user_plants(
                 is_completed: r.try_get("", "is_completed").unwrap_or(false),
                 harvested_at: r.try_get("", "harvested_at").ok(),
                 reward_claimed: r.try_get("", "reward_claimed").unwrap_or(false),
-                water_count: r.try_get("", "water_count").unwrap_or(0),
+                water_count: int_column_as_u32(r, "water_count"),
                 last_watered_at: r.try_get("", "last_watered_at").ok(),
             };
 
@@ -518,7 +547,7 @@ async fn get_garden_streak(
         is_completed: r.try_get("", "is_completed").unwrap_or(false),
         harvested_at: r.try_get("", "harvested_at").ok(),
         reward_claimed: r.try_get("", "reward_claimed").unwrap_or(false),
-        water_count: r.try_get("", "water_count").unwrap_or(0),
+        water_count: int_column_as_u32(&r, "water_count"),
         last_watered_at: r.try_get("", "last_watered_at").ok(),
     };
     let progress = garden::calculate_progress(&plant, now);
