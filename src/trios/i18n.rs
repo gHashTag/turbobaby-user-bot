@@ -36,7 +36,6 @@ pub const T_GARDEN_RESET_CONFIRM_BODY: Key = "garden.reset_confirm_body";
 pub const T_GARDEN_CANCEL: Key = "garden.cancel";
 pub const T_GARDEN_CONFIRM_RESET: Key = "garden.confirm_reset";
 pub const T_GARDEN_TAB_GARDEN: Key = "garden.tab.garden";
-pub const T_GARDEN_TAB_GAME: Key = "garden.tab.game";
 pub const T_GARDEN_HARVEST: Key = "garden.harvest";
 pub const T_GARDEN_PLANT: Key = "garden.plant";
 pub const T_GARDEN_ONBOARD_TITLE: Key = "garden.onboard.title";
@@ -780,7 +779,6 @@ fn get_ru_translation(key: Key) -> Value {
         T_GARDEN_CANCEL => "Отмена",
         T_GARDEN_CONFIRM_RESET => "Сбросить прогресс",
         T_GARDEN_TAB_GARDEN => "Сад",
-        T_GARDEN_TAB_GAME => "Игра",
         T_GARDEN_HARVEST => "Собрать",
         T_GARDEN_PLANT => "Посадить",
         T_GARDEN_ONBOARD_TITLE => "Как работает сад",
@@ -1466,7 +1464,6 @@ fn get_en_translation(key: Key) -> Value {
         T_GARDEN_CANCEL => "Cancel",
         T_GARDEN_CONFIRM_RESET => "Reset progress",
         T_GARDEN_TAB_GARDEN => "Garden",
-        T_GARDEN_TAB_GAME => "Game",
         T_GARDEN_HARVEST => "Harvest",
         T_GARDEN_PLANT => "Plant",
         T_GARDEN_ONBOARD_TITLE => "How Garden works",

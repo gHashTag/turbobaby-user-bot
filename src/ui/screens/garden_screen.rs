@@ -3,13 +3,12 @@
 use crate::trios::i18n::{
     t, T_GARDEN_INVITE_ACCEPT, T_GARDEN_INVITE_BODY, T_GARDEN_INVITE_SKIP, T_GARDEN_INVITE_TITLE,
     T_GARDEN_ONBOARD_CTA, T_GARDEN_ONBOARD_STEP1, T_GARDEN_ONBOARD_STEP2, T_GARDEN_ONBOARD_STEP3,
-    T_GARDEN_ONBOARD_TITLE, T_GARDEN_TAB_GAME, T_GARDEN_TAB_GARDEN,
+    T_GARDEN_ONBOARD_TITLE, T_GARDEN_TAB_GARDEN,
 };
 use crate::ui::api::context::api_base_url;
 use crate::ui::components::bottom_nav::BottomNav;
 use crate::ui::components::lazy_screen::LazyScreen;
 use crate::ui::game::Garden;
-use crate::ui::game::WoodyCatch;
 use crate::ui::game::WoodyShop;
 use crate::ui::lang;
 use crate::ui::screens::skate_screen::SkateGame;
@@ -29,13 +28,21 @@ const GARDEN_ONBOARDED_KEY: &str = "wwb_garden_onboarded";
 const GARDEN_TAB_V2_KEY: &str = "wwb_garden_tab_v2";
 
 const TAB_GARDEN: u8 = 0;
-const TAB_CATCH: u8 = 1;
+// 1 was Woody Catch, removed. The remaining numbers keep their values rather
+// than being compacted: a customer with `1` in local storage would otherwise
+// silently reopen on Skate, and `load_garden_tab` sends them to the garden.
 const TAB_SKATE: u8 = 2;
 const TAB_SHOP: u8 = 3;
 
 #[cfg(target_arch = "wasm32")]
 fn load_garden_tab() -> u8 {
-    LocalStorage::get(GARDEN_TAB_V2_KEY).unwrap_or(TAB_GARDEN)
+    let stored: u8 = LocalStorage::get(GARDEN_TAB_V2_KEY).unwrap_or(TAB_GARDEN);
+    // Anything that is not a tab any more — 1, which was Woody Catch, or a
+    // value from a future build — opens the garden rather than nothing at all.
+    match stored {
+        TAB_GARDEN | TAB_SKATE | TAB_SHOP => stored,
+        _ => TAB_GARDEN,
+    }
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -111,7 +118,6 @@ pub fn GardenScreen() -> Element {
         }
     };
     let garden_style = tab_style(current == TAB_GARDEN);
-    let game_style = tab_style(current == TAB_CATCH);
     let skate_style = tab_style(current == TAB_SKATE);
     let shop_style = tab_style(current == TAB_SHOP);
     let english = lang == crate::trios::core::Lang::English;
@@ -193,20 +199,14 @@ pub fn GardenScreen() -> Element {
     rsx! {
         div { style: "min-height: 100vh; background: #0f0f1a; color: #e8e8e8; padding-bottom: calc(96px + env(safe-area-inset-bottom));",
 
-            // Garden and both games side by side, so there is one place to
-            // look for anything playable.
-            // Scrolls sideways rather than wrapping: four labels do not fit on a
-            // 375px screen, and a wrapped second row pushes the game down.
+            // Garden and the games side by side, so there is one place to look
+            // for anything playable. Still scrolls sideways rather than
+            // wrapping: a wrapped second row pushes the game down.
             div { style: "display: flex; gap: 6px; padding: 12px 12px; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none;",
                 button {
                     style: "{garden_style}",
                     onclick: move |_| tab.set(TAB_GARDEN),
                     "🌱 {t(lang, T_GARDEN_TAB_GARDEN)}"
-                }
-                button {
-                    style: "{game_style}",
-                    onclick: move |_| tab.set(TAB_CATCH),
-                    "🎮 {t(lang, T_GARDEN_TAB_GAME)}"
                 }
                 button {
                     style: "{skate_style}",
@@ -253,8 +253,6 @@ pub fn GardenScreen() -> Element {
             // Show content based on selection
             if current == TAB_GARDEN {
                 Garden {}
-            } else if current == TAB_CATCH {
-                LazyScreen { heavy: true, WoodyCatch {} }
             } else if current == TAB_SKATE {
                 LazyScreen { heavy: true, SkateGame {} }
             } else {

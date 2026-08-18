@@ -115,6 +115,24 @@ pub(crate) fn build_caption(card: &ShareCard) -> String {
     out
 }
 
+/// A reqwest error with the bot token taken out of it.
+///
+/// `reqwest::Error`'s `Debug` includes the full request URL, and a Bot API URL
+/// carries the token in its path. Logging it verbatim put the live bot token in
+/// plaintext in the production log — anyone who can read logs could then post as
+/// the shop. Found while diagnosing the 502 this module was returning, in the
+/// very line that reported it.
+///
+/// The token is replaced rather than the whole URL dropped: which Bot API method
+/// failed is the useful half, and it is not a secret.
+fn without_token(e: &reqwest::Error, bot_token: &str) -> String {
+    let text = format!("{e:?}");
+    if bot_token.is_empty() {
+        return text;
+    }
+    text.replace(bot_token, "<bot_token>")
+}
+
 /// Deep link that reopens this exact card in the Mini App.
 ///
 /// `?start=` rather than `?startapp=`: the latter only launches the Mini App
@@ -314,7 +332,10 @@ async fn prepare_share(
         .send()
         .await
         .map_err(|e| {
-            tracing::error!("savePreparedInlineMessage transport error: {:?}", e);
+            tracing::error!(
+                "savePreparedInlineMessage transport error: {}",
+                without_token(&e, &state.config.bot_token)
+            );
             (
                 StatusCode::BAD_GATEWAY,
                 Json(json!({ "error": "telegram unreachable" })),
@@ -322,7 +343,10 @@ async fn prepare_share(
         })?;
 
     let body: Value = response.json().await.map_err(|e| {
-        tracing::error!("savePreparedInlineMessage decode error: {:?}", e);
+        tracing::error!(
+            "savePreparedInlineMessage decode error: {}",
+            without_token(&e, &state.config.bot_token)
+        );
         (
             StatusCode::BAD_GATEWAY,
             Json(json!({ "error": "telegram bad response" })),
@@ -356,6 +380,61 @@ pub(crate) fn extract_prepared_message_id(body: &Value) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A Bot API URL carries the token in its path, and `reqwest::Error`'s
+    /// `Debug` prints the URL. The production log for the 502 this module
+    /// returned contained the live token in plaintext.
+    #[test]
+    fn an_error_log_never_carries_the_bot_token() {
+        // A real error, built the way one arrives: an unroutable host so the
+        // request fails at connect and the URL ends up in the Debug output.
+        let token = "8366670807:AAH6YdhtqMJ0DXhSbvwKdJT2oXH979a3fOQ";
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("runtime");
+        let err = rt.block_on(async {
+            reqwest::Client::new()
+                .get(format!("http://127.0.0.1:1/bot{token}/getMe"))
+                .send()
+                .await
+                .expect_err("a request to a closed port must fail")
+        });
+
+        let raw = format!("{err:?}");
+        assert!(
+            raw.contains(token),
+            "this test is not exercising the leak it claims to: the token was \
+             not in the raw error to begin with. Raw: {raw}"
+        );
+
+        let safe = without_token(&err, token);
+        assert!(
+            !safe.contains(token),
+            "the bot token survived redaction: {safe}"
+        );
+        assert!(
+            safe.contains("<bot_token>") && safe.contains("getMe"),
+            "redaction ate the useful half — which method failed must survive: {safe}"
+        );
+    }
+
+    /// An empty token must not turn every log line into a redaction of "".
+    #[test]
+    fn an_absent_token_redacts_nothing() {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("runtime");
+        let err = rt.block_on(async {
+            reqwest::Client::new()
+                .get("http://127.0.0.1:1/getMe")
+                .send()
+                .await
+                .expect_err("must fail")
+        });
+        assert_eq!(without_token(&err, ""), format!("{err:?}"));
+    }
 
     fn card() -> ShareCard {
         ShareCard {

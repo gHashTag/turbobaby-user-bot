@@ -316,6 +316,29 @@ pub(crate) struct UserPlantsQuery {
     pub telegram_id: i64,
 }
 
+/// Refuse a garden action, out loud.
+///
+/// Every refusal in this file answers **HTTP 200** with `success: false`. That
+/// is right for the client — a cooldown is not a server error — but it made the
+/// log unable to answer the only question anybody ever asks it. A customer
+/// reports "I cannot water" or "I cannot choose", and the request stream shows
+/// `POST /api/garden/plants/choose 200` next to a hundred other 200s. Nothing
+/// distinguishes "planted" from "refused, come back tomorrow".
+///
+/// Twenty-two refusals in this module logged nothing at all. They now say who
+/// was refused and why, at `warn` — a refusal is not an error, but it is the
+/// thing worth finding when somebody asks what happened to them.
+fn refuse(user: &str, action: &'static str, reason: &'static str) -> serde_json::Value {
+    tracing::warn!(
+        target: "garden.refused",
+        user_id = %user,
+        action = action,
+        reason = reason,
+        "garden action refused"
+    );
+    json!({ "success": false, "error": reason })
+}
+
 // Cycle #169: `PlantSeedRequest` removed alongside the handler.
 // Forward-write of garden_plants is done inside
 // `complete_order_and_update_loyalty` (cycle #168) using the order's
@@ -738,12 +761,12 @@ async fn water_plant(
         let next_water_at = last_watered_at
             .map(|t| t.saturating_add(garden::WATER_COOLDOWN_MS))
             .unwrap_or(now);
-        // tx drops → auto-rollback.
-        return Ok(Json(json!({
-            "success": false,
-            "error": "Cooldown active",
-            "next_water_at": next_water_at
-        })));
+        // tx drops → auto-rollback. `next_water_at` is what the client needs,
+        // so this one keeps its extra field rather than going through `refuse`
+        // — but it says the same thing in the same place in the log.
+        let mut body = refuse(&user_id, "water_plant", "Cooldown active");
+        body["next_water_at"] = json!(next_water_at);
+        return Ok(Json(body));
     }
 
     tx.commit().await.map_err(|e| {
@@ -2200,9 +2223,11 @@ async fn choose_plant(
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
     let Some(row) = row else {
-        return Ok(Json(
-            json!({ "success": false, "error": "product_not_available" }),
-        ));
+        return Ok(Json(refuse(
+            &req.telegram_id.to_string(),
+            "choose_plant",
+            "product_not_available",
+        )));
     };
     let name: String = row.try_get("", "name").unwrap_or_default();
     let image_url: Option<String> = row
@@ -2235,9 +2260,7 @@ async fn choose_plant(
         .and_then(|r| r.try_get::<bool>("", "c").ok())
         .unwrap_or(false);
     if in_cooldown {
-        return Ok(Json(
-            json!({ "success": false, "error": "harvest_cooldown" }),
-        ));
+        return Ok(Json(refuse(&user_id, "choose_plant", "harvest_cooldown")));
     }
 
     // Try to update an existing un-harvested plant first: change WHAT the user is
@@ -2419,7 +2442,30 @@ async fn reset_plant(
 
 #[cfg(test)]
 mod tests {
-    use super::{validate_garden_config_update, ConfigUpdateRequest};
+    use super::{refuse, validate_garden_config_update, ConfigUpdateRequest};
+
+    /// The strings the client switches on, pinned.
+    ///
+    /// `src/ui/game/garden.rs` matches `"harvest_cooldown"` and
+    /// `"product_not_available"` verbatim to choose the message a customer
+    /// reads. It is `#[cfg(target_arch = "wasm32")]`, so `cargo test` cannot
+    /// reach that match — renaming one of these here would leave the client
+    /// falling through to a generic message with nothing failing anywhere.
+    ///
+    /// Adding the refusal logging is precisely when that nearly happened: the
+    /// watering string was rewritten to `cooldown_active` in passing.
+    #[test]
+    fn the_refusal_strings_the_client_reads_do_not_move() {
+        for reason in ["harvest_cooldown", "product_not_available"] {
+            let body = refuse("1", "choose_plant", reason);
+            assert_eq!(
+                body["error"].as_str(),
+                Some(reason),
+                "the wire string changed; src/ui/game/garden.rs matches it verbatim"
+            );
+            assert_eq!(body["success"].as_bool(), Some(false));
+        }
+    }
     use crate::trios::garden::first_seedable_item;
     use axum::http::StatusCode;
     use serde_json::json;

@@ -74,7 +74,21 @@ dioxus = { version = "0.6", default-features = false, features = ["web", "router
 gloo-timers = { version = "0.3", features = ["futures"] }
 gloo-storage = "0.3"
 gloo-events = "0.3"
-reqwest = { version = "0.11", features = ["json"], default-features = false, optional = true }
+# `rustls-tls` is NOT optional decoration. With `default-features = false` and
+# no TLS backend, reqwest's connector is plain HTTP and every `https://` URL
+# fails at connect with `hyper::Error(Connect, "invalid URL, scheme is not
+# http")` — which is exactly how `POST /api/share/prepare` returned 502 in
+# production: the call to `savePreparedInlineMessage` could never leave the box.
+#
+# teloxide pulls its own reqwest 0.12 WITH tls, so the bot could talk to
+# Telegram the whole time. Different majors do not unify features, so that
+# said nothing about this one.
+#
+# rustls rather than native-tls so the Docker image needs no system OpenSSL.
+reqwest = { version = "0.11", features = [
+    "json",
+    "rustls-tls",
+], default-features = false, optional = true }
 web-sys = { version = "0.3", features = [
     "Window", "Storage", "Navigator", "Clipboard", "Location",
     "Document", "Element", "HtmlElement", "Event", "EventTarget",
