@@ -412,7 +412,7 @@ async fn log_client_error(
                 err.source.clone().into(),
                 hash.clone().into(),
                 err.message.clone().into(),
-                err.stack.into(),
+                err.stack.clone().into(),
                 err.url_path.clone().into(),
                 err.user_agent.clone().into(),
                 err.telegram_id.into(),
@@ -456,15 +456,17 @@ async fn log_client_error(
                 .map(crate::util::html_escape)
                 .unwrap_or_else(|| "unknown".to_string());
             let safe_source = crate::util::html_escape(&err.source);
-            let snippet: String = safe_message.chars().take(200).collect();
+
+            let stack_for_alert = err.stack.clone();
             tokio::spawn(async move {
-                let text = format!(
-                    "\u{1F6A8} Client panic / WASM crash\n\
-                     \u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\n\
-                     \u{1F4CD} {}\n\
-                     \u{1F4E1} {}\n\
-                     \u{1F4A3} {}",
-                    safe_path, safe_source, snippet
+                let text = compose_crash_alert(
+                    &safe_path,
+                    &safe_source,
+                    &safe_message,
+                    stack_for_alert
+                        .as_deref()
+                        .map(crate::util::html_escape)
+                        .as_deref(),
                 );
                 crate::notify::notify_admins(&bot, &config, &text).await;
             });
@@ -472,6 +474,34 @@ async fn log_client_error(
     }
 
     Ok(StatusCode::ACCEPTED)
+}
+
+/// Compose the admin alert for a client crash.
+///
+/// Extracted so it can be executed. The version this replaces cut the message
+/// at 200 characters — a real alert ended `...railway.app/w`, naming neither a
+/// file nor a line — and omitted the stack entirely, although the stack was
+/// being written to `client_error_logs` two lines earlier. Two wasm traps were
+/// reported from `/cart` and neither alert identified anything at all.
+///
+/// Everything arriving here is already HTML-escaped by the caller.
+fn compose_crash_alert(path: &str, source: &str, message: &str, stack: Option<&str>) -> String {
+    let snippet: String = message.chars().take(700).collect();
+    let stack_block = stack
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(|s| {
+            let cut: String = s.chars().take(2500).collect();
+            format!("\n\u{1F4DA} <pre>{cut}</pre>")
+        })
+        .unwrap_or_default();
+    format!(
+        "\u{1F6A8} Client panic / WASM crash\n\
+         \u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\n\
+         \u{1F4CD} {path}\n\
+         \u{1F4E1} {source}\n\
+         \u{1F4A3} {snippet}{stack_block}"
+    )
 }
 
 /// Loop #13: lightweight conversion/event telemetry sink. Unlike
@@ -593,6 +623,69 @@ fn sanitize_event_name(raw: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The alert must name where the crash happened.
+    ///
+    /// Two production reports of a wasm trap on `/cart` arrived carrying a
+    /// message cut at 200 characters — one ended mid-URL at `...railway.app/w`
+    /// — and no stack at all, though the stack was in the database. Neither
+    /// alert identified a file, a line or a function.
+    #[test]
+    fn the_alert_carries_the_stack_and_does_not_cut_the_location() {
+        let message = "RuntimeError: Unreachable code should not be executed \
+            (evaluating 'wasm.__wasm_bindgen_func_elem_13031(arg0, arg1, \
+            addBorrowedObject(arg2))') at \
+            https://woody-weed-bot-production-370f.up.railway.app/woody-weed-bot-abc.js:12:34";
+        let stack = "at cart_screen::CartScreen::handler (woody.wasm:1:9999)\n\
+                     at dioxus_core::scope (woody.wasm:1:8888)";
+
+        let alert = compose_crash_alert("/cart", "window.onerror", message, Some(stack));
+
+        assert!(
+            alert.contains("cart_screen::CartScreen::handler"),
+            "the stack is missing, so the alert names no crash site: {alert}"
+        );
+        assert!(
+            alert.contains("woody-weed-bot-abc.js:12:34"),
+            "the message was cut before the file and line — the exact defect \
+             this replaces: {alert}"
+        );
+        assert!(alert.contains("/cart"), "the route vanished: {alert}");
+        assert!(
+            alert.len() < 4096,
+            "Telegram refuses a message over 4096 characters; this one is {}",
+            alert.len()
+        );
+    }
+
+    /// An error with no stack must still produce a well-formed alert rather
+    /// than an empty trailer or a stray heading.
+    #[test]
+    fn an_alert_without_a_stack_is_still_well_formed() {
+        let alert = compose_crash_alert("/cart", "window.onerror", "boom", None);
+        assert!(
+            alert.ends_with("boom"),
+            "trailing junk after the message: {alert}"
+        );
+        assert!(
+            !alert.contains("<pre>"),
+            "an empty stack block was printed: {alert}"
+        );
+    }
+
+    /// A pathological stack must not push the alert past Telegram's limit —
+    /// an over-long message is rejected outright, so a truncated alert beats
+    /// no alert.
+    #[test]
+    fn a_huge_stack_is_cut_rather_than_losing_the_whole_alert() {
+        let alert = compose_crash_alert("/cart", "s", &"m".repeat(5000), Some(&"s".repeat(9000)));
+        assert!(
+            alert.len() < 4096,
+            "the alert grew to {} characters and Telegram would refuse it",
+            alert.len()
+        );
+        assert!(alert.contains("/cart"));
+    }
 
     #[test]
     fn normalize_source_accepts_known_values() {

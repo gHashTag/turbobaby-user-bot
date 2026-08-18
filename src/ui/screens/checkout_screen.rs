@@ -606,13 +606,18 @@ pub fn CheckoutScreen() -> Element {
         let Some(win) = web_sys::window() else {
             return;
         };
+        // Same hazard as the main button: this fires from raw JS with no
+        // Dioxus scope. See `crate::ui::telegram::in_dioxus_scope`.
+        let scope = current_scope_id().ok();
         let listener = gloo_events::EventListener::new(&win, "woody:contact", move |event| {
             let phone = event
                 .dyn_ref::<web_sys::CustomEvent>()
                 .and_then(|e| e.detail().as_string())
                 .unwrap_or_default();
             if !phone.trim().is_empty() {
-                customer_phone.set(phone);
+                crate::ui::telegram::in_dioxus_scope(scope, "contact", || {
+                    customer_phone.set(phone);
+                });
             }
         });
         // Held for the lifetime of the screen; dropping it would unsubscribe.

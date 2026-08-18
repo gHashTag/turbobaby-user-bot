@@ -50,6 +50,9 @@ pub fn SkateGame() -> Element {
         let Some(win) = web_sys::window() else {
             return;
         };
+        // Same hazard as the main button: raw JS, no Dioxus scope. See
+        // `crate::ui::telegram::in_dioxus_scope`.
+        let scope = current_scope_id().ok();
         let listener = gloo_events::EventListener::new(&win, "woody:skate", move |event| {
             let detail = event
                 .dyn_ref::<web_sys::CustomEvent>()
@@ -65,7 +68,7 @@ pub fn SkateGame() -> Element {
                 .ok()
                 .and_then(|v| v.as_string())
                 .unwrap_or_default();
-            match kind.as_str() {
+            crate::ui::telegram::in_dioxus_scope(scope, "skate", || match kind.as_str() {
                 "tick" => {
                     distance.set(get("distance"));
                     stars.set(get("stars"));
@@ -78,7 +81,7 @@ pub fn SkateGame() -> Element {
                     finished.set(true);
                 }
                 _ => {}
-            }
+            });
         });
         listener.forget();
     });

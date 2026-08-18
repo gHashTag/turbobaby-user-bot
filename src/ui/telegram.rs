@@ -682,6 +682,37 @@ pub fn use_telegram_init_data() -> String {
     use_telegram().get_init_data()
 }
 
+/// Run a closure inside the Dioxus runtime, from a raw JS callback.
+///
+/// `gloo_events` hands control straight from the browser into Rust, outside the
+/// VirtualDom, so there is **no current scope**. Anything the closure touches
+/// that needs one panics — in production, from `/cart`:
+///
+/// ```text
+/// panicked at dioxus-core-0.6.3/src/global_context.rs:82:70:
+/// called `Result::unwrap()` on an `Err` value
+/// ```
+///
+/// which is `provide_root_context` failing inside
+/// `Runtime::with_current_scope`. Reading a signal, pushing a route, or first
+/// touching a `GlobalSignal` all reach it.
+///
+/// Capture `scope` with `current_scope_id()` while still inside the component;
+/// `on_scope` then installs the runtime guard and pushes it for the duration of
+/// the call, which is what an ordinary `onclick` would have done.
+///
+/// A missing runtime — the app tearing down — drops the event rather than
+/// trapping. One lost tap is recoverable; a wasm trap is not.
+#[cfg(target_arch = "wasm32")]
+pub fn in_dioxus_scope(scope: Option<ScopeId>, what: &str, f: impl FnOnce()) {
+    match (scope, Runtime::current()) {
+        (Some(id), Ok(rt)) => rt.on_scope(id, f),
+        _ => web_sys::console::warn_1(
+            &format!("{what} fired with no Dioxus runtime; ignoring").into(),
+        ),
+    }
+}
+
 /// Hook that invokes the provided callback when the Telegram MainButton is
 /// clicked. The Telegram SDK only exposes a single `MainButton.onClick` JS
 /// callback, so we bridge it through a `woody:mainbutton` CustomEvent that the
@@ -693,6 +724,10 @@ pub fn use_main_button_click<F: FnMut() + 'static>(callback: F) {
             TelegramApp::init().enable_main_button_click_dispatch();
             let cb = Rc::new(RefCell::new(callback));
             let win = web_sys::window()?;
+            // The scope this hook belongs to, captured while we are still
+            // inside it. The listener below fires from raw JS, where Dioxus has
+            // no current scope at all — see the note on `on_scope`.
+            let scope = current_scope_id().ok();
             let listener =
                 EventListener::new(&win, "woody:mainbutton", move |_event: &web_sys::Event| {
                     // Hold the cell open for the duration of the call.
@@ -721,7 +756,29 @@ pub fn use_main_button_click<F: FnMut() + 'static>(callback: F) {
                     // customer losing one tap is recoverable; a trap is not.
                     let borrowed = alive.try_borrow_mut();
                     if let Ok(mut f) = borrowed {
-                        f();
+                        // Re-enter the Dioxus runtime before calling.
+                        //
+                        // This listener is a raw JS callback: `gloo_events`
+                        // hands control straight from the browser into Rust,
+                        // outside the VirtualDom entirely, so there is no
+                        // current scope. Anything the callback touches that
+                        // needs one then panics — in production, from `/cart`:
+                        //
+                        //     panicked at dioxus-core-0.6.3/global_context.rs:82
+                        //     called `Result::unwrap()` on an `Err` value
+                        //
+                        // which is `provide_root_context` failing on
+                        // `Runtime::with_current_scope`. The cart's callback
+                        // reads a signal and pushes a route, and the router
+                        // re-renders synchronously right there.
+                        //
+                        // `on_scope` installs the runtime guard and pushes the
+                        // scope for the duration of the call, which is what a
+                        // normal `onclick` would have done.
+                        //
+                        // If the runtime is gone — the app is tearing down —
+                        // the click is dropped rather than trapped.
+                        in_dioxus_scope(scope, "main button", || f());
                     } else {
                         web_sys::console::warn_1(
                             &"main button clicked re-entrantly; ignoring the second call".into(),
