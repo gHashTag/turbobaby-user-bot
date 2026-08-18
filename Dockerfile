@@ -38,7 +38,7 @@ RUN apk add --no-cache ca-certificates curl
 COPY --from=backend /app/target/x86_64-unknown-linux-musl/release/woody-weed-bot-server ./
 
 # Force Railway to rebuild the COPY layer — busts Docker cache when dist changes.
-ARG DIST_CACHE_BUST=72
+ARG DIST_CACHE_BUST=73
 ENV DIST_CACHE_BUST=$DIST_CACHE_BUST
 
 # Freshly built WASM frontend (pre-built in CI or committed to repo)

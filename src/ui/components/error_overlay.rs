@@ -162,6 +162,40 @@ fn send_error_telemetry(item: &JsErrorItem) {
 #[cfg(not(target_arch = "wasm32"))]
 fn send_error_telemetry(_item: &JsErrorItem) {}
 
+/// Report a Rust panic through the same pipe as a JS error.
+///
+/// The panic hook in `src/lib.rs` printed `PANIC: {info}` — with the file, the
+/// line and the message — to the console and to a full-screen overlay, and sent
+/// **none of it** anywhere. The only thing that reached telemetry was
+/// `window.onerror`, which for a wasm panic under `panic = "abort"` sees
+/// nothing but
+///
+/// ```text
+/// RuntimeError: Unreachable code should not be executed
+/// ```
+///
+/// So a production panic report named the URL and nothing else: no message, no
+/// file, no line. The one artefact that says what actually broke was the one
+/// artefact not collected.
+///
+/// `pub` and free-standing so the hook, which runs before any component exists
+/// and cannot hold a `Signal`, can call it.
+#[cfg(target_arch = "wasm32")]
+pub fn report_panic(message: String, location: String) {
+    send_error_telemetry(&JsErrorItem {
+        id: js_sys::Date::now() as u64,
+        message: format!("{message} at {location}"),
+        // A wasm panic has no JS stack worth keeping — the Rust location is
+        // the stack. Kept as a distinct source so these are separable from
+        // ordinary JS noise when reading the table.
+        stack: Some(location),
+        source: "rust.panic".into(),
+    });
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub fn report_panic(_message: String, _location: String) {}
+
 /// Install global JS error handlers and Rust panic hook.
 /// Call this once inside App or a top-level provider.
 pub fn install_error_handlers(errors: Signal<Vec<JsErrorItem>>) {

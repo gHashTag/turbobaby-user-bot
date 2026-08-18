@@ -24,6 +24,18 @@ pub fn run() {
     std::panic::set_hook(Box::new(|info| {
         let msg = format!("PANIC: {}", info);
         web_sys::console::error_1(&msg.clone().into());
+
+        // Send it. Until this line, a Rust panic reached the server as
+        // `window.onerror` and nothing else — which under `panic = "abort"` on
+        // wasm is the bare string "RuntimeError: Unreachable code should not be
+        // executed", with no message, no file and no line. A production report
+        // could name the URL and nothing more. The file and line are right
+        // here, in `info`, and were being thrown away.
+        let location = info
+            .location()
+            .map(|l| format!("{}:{}:{}", l.file(), l.line(), l.column()))
+            .unwrap_or_else(|| "unknown location".to_string());
+        crate::ui::components::report_panic(msg.clone(), location);
         if let Some(window) = web_sys::window() {
             if let Some(document) = window.document() {
                 if let Some(body) = document.body() {

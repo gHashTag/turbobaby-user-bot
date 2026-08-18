@@ -695,7 +695,38 @@ pub fn use_main_button_click<F: FnMut() + 'static>(callback: F) {
             let win = web_sys::window()?;
             let listener =
                 EventListener::new(&win, "woody:mainbutton", move |_event: &web_sys::Event| {
-                    cb.borrow_mut()();
+                    // Hold the cell open for the duration of the call.
+                    //
+                    // Both callers of this hook navigate away — the cart pushes
+                    // Checkout, checkout pushes onward — which unmounts the
+                    // component that owns this `EventListener`, which drops this
+                    // very closure, which drops the `Rc` it captured. If that
+                    // was the last strong reference, the `RefCell` is freed
+                    // while `borrow_mut()` is still live on the stack: a
+                    // use-after-free that traps as
+                    //
+                    //     RuntimeError: Unreachable code should not be executed
+                    //
+                    // with no Rust panic message, reported from `/cart`. Taking
+                    // a second reference first means the cell outlives the call
+                    // no matter what the callback does to the component tree.
+                    let alive = Rc::clone(&cb);
+                    // Bound to a `let` rather than written inline in the `if`:
+                    // an `if let` keeps its scrutinee temporary alive to the end
+                    // of the statement, which outlives `alive` itself and does
+                    // not compile.
+                    // And `try_` rather than `borrow_mut`, so a re-entrant
+                    // dispatch — the same event fired again from inside the
+                    // handler — is a dropped click instead of a panic. A
+                    // customer losing one tap is recoverable; a trap is not.
+                    let borrowed = alive.try_borrow_mut();
+                    if let Ok(mut f) = borrowed {
+                        f();
+                    } else {
+                        web_sys::console::warn_1(
+                            &"main button clicked re-entrantly; ignoring the second call".into(),
+                        );
+                    }
                 });
             Some(Rc::new(listener))
         },

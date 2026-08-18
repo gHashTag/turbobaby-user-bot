@@ -63,7 +63,7 @@ pub use badge::{Badge, BadgeProps, BadgeSize, BadgeVariant};
 pub use chip::{Chip, ChipColor, ChipGroup, ChipGroupProps, ChipProps};
 pub use empty_state::{EmptyState, EmptyStateProps};
 pub use error_banner::{ErrorBanner, ErrorBannerProps};
-pub use error_overlay::{install_error_handlers, ErrorOverlay, JsErrorItem};
+pub use error_overlay::{install_error_handlers, report_panic, ErrorOverlay, JsErrorItem};
 pub use id_picker::{IdPicker, IdPickerProps};
 pub use lazy_screen::LazyScreen;
 pub use progress_bar::{ProgressBar, ProgressBarProps, ProgressColor, ProgressSize};
