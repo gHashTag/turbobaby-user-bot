@@ -48,6 +48,17 @@ impl ProductKind {
         }
     }
 
+    /// The same kind, as the shared vocabulary spells it.
+    pub fn from_core(kind: crate::trios::deeplink::Kind) -> Self {
+        match kind {
+            crate::trios::deeplink::Kind::Strain => Self::Strain,
+            crate::trios::deeplink::Kind::Accessory => Self::Accessory,
+            crate::trios::deeplink::Kind::Set => Self::Set,
+            crate::trios::deeplink::Kind::Tea => Self::Tea,
+            crate::trios::deeplink::Kind::Event => Self::Event,
+        }
+    }
+
     /// Route the recipient should land on.
     pub fn route(self) -> Route {
         match self {
@@ -72,42 +83,18 @@ pub struct SharedProduct {
 /// Format: `{prefix}_{id}`. Unknown prefixes and payloads that are too long
 /// are rejected so malformed links degrade gracefully.
 pub fn parse_start_param(param: &str) -> Option<SharedProduct> {
-    if param.is_empty() || param.len() > MAX_START_PARAM_LEN {
-        return None;
+    // One vocabulary, in `trios::deeplink`, which the host test suite can see.
+    // This file is `#[cfg(target_arch = "wasm32")]`, so anything decided here
+    // is decided where no test on the host can reach it — and the bot kept a
+    // second list of the same prefixes that disagreed with this one about
+    // twelve payloads.
+    match crate::trios::deeplink::parse(param)? {
+        crate::trios::deeplink::Target::Product { kind, id } => Some(SharedProduct {
+            kind: ProductKind::from_core(kind),
+            id,
+        }),
+        _ => None,
     }
-    // Only allow safe characters: alphanumerics, underscores, hyphens.
-    if !param
-        .bytes()
-        .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
-    {
-        return None;
-    }
-
-    // The payload format is `{prefix}_{id}`. Prefixes themselves contain an
-    // underscore (e.g. "p_set"), so split_once('_') on the first underscore
-    // would mis-parse "p_set_xxx" into prefix "p" and id "set_xxx". Use
-    // strip_prefix instead, then validate the remaining id.
-    let (kind, id) = if let Some(id) = param.strip_prefix("p_strain_") {
-        (ProductKind::Strain, id)
-    } else if let Some(id) = param.strip_prefix("p_acc_") {
-        (ProductKind::Accessory, id)
-    } else if let Some(id) = param.strip_prefix("p_set_") {
-        (ProductKind::Set, id)
-    } else if let Some(id) = param.strip_prefix("p_tea_") {
-        (ProductKind::Tea, id)
-    } else if let Some(id) = param.strip_prefix("p_event_") {
-        (ProductKind::Event, id)
-    } else {
-        return None;
-    };
-
-    if id.is_empty() {
-        return None;
-    }
-    Some(SharedProduct {
-        kind,
-        id: id.to_string(),
-    })
 }
 
 /// Runtime bot username. On WASM reads from Telegram initData so test/staging
@@ -188,31 +175,24 @@ pub struct PendingReorder(pub Option<String>);
 /// Parse an order `startapp` value (`o_{order_id}`). Unknown prefixes and
 /// payloads that are too long are rejected so malformed links degrade gracefully.
 pub fn parse_order_start_param(param: &str) -> Option<String> {
-    if param.is_empty() || param.len() > MAX_START_PARAM_LEN {
-        return None;
+    match crate::trios::deeplink::parse(param)? {
+        crate::trios::deeplink::Target::Order(id) => Some(id),
+        _ => None,
     }
-    if !param
-        .bytes()
-        .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
-    {
-        return None;
-    }
-    param.strip_prefix("o_").map(|id| id.to_string())
 }
 
 /// Parse a cart `startapp` value. Accepts plain `cart` or attribution
 /// variants like `cart__<source>` so we can track which campaign drove the
 /// open. The source segment must be safe characters only.
 pub fn parse_cart_start_param(param: &str) -> Option<&str> {
-    if param == "cart" {
-        return Some("");
+    // The decision comes from the shared vocabulary; the borrow stays here so
+    // the callers keep their signature.
+    match crate::trios::deeplink::parse(param)? {
+        crate::trios::deeplink::Target::Cart { .. } => {
+            Some(param.strip_prefix("cart__").unwrap_or(""))
+        }
+        _ => None,
     }
-    param.strip_prefix("cart__").filter(|s| {
-        !s.is_empty()
-            && s.len() <= 50
-            && s.bytes()
-                .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
-    })
 }
 
 /// Build a `startapp` parameter that opens the Mini App and pre-loads the
@@ -254,42 +234,15 @@ pub fn garden_deep_link(referrer_id: Option<i64>) -> String {
 /// `garden__{id}[__{source}]` returns the referrer id and optional source.
 /// The id segment must be a valid i64 and the optional source is safe chars only.
 pub fn parse_garden_start_param(param: &str) -> Option<(Option<i64>, Option<&str>)> {
-    if param.is_empty() || param.len() > MAX_START_PARAM_LEN {
-        return None;
-    }
-    if !param
-        .bytes()
-        .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
-    {
-        return None;
-    }
-    if param == "garden" {
-        return Some((None, None));
-    }
-    let rest = param.strip_prefix("garden__")?;
-    if rest.is_empty() {
-        return None;
-    }
-    // Split optional UTM source: garden__123__utm_a
-    let (id_part, source) = match rest.find("__") {
-        Some(idx) => (&rest[..idx], Some(&rest[idx + 2..])),
-        None => (rest, None),
-    };
-    if let Some(s) = source {
-        if s.is_empty()
-            || s.len() > 50
-            || !s
-                .bytes()
-                .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
-        {
-            return None;
+    match crate::trios::deeplink::parse(param)? {
+        crate::trios::deeplink::Target::Garden { referrer, .. } => {
+            let source = param
+                .strip_prefix("garden__")
+                .and_then(|rest| rest.find("__").map(|at| &rest[at + 2..]));
+            Some((referrer, source))
         }
+        _ => None,
     }
-    let referrer_id = id_part.parse::<i64>().ok()?;
-    if referrer_id <= 0 {
-        return None;
-    }
-    Some((Some(referrer_id), source))
 }
 
 /// Open Telegram's native share picker for the garden.
@@ -322,16 +275,10 @@ pub fn share_garden(referrer_id: Option<i64>, source: Option<&str>) {
 /// and payloads that are too long are rejected so malformed links degrade
 /// gracefully.
 pub fn parse_reorder_start_param(param: &str) -> Option<String> {
-    if param.is_empty() || param.len() > MAX_START_PARAM_LEN {
-        return None;
+    match crate::trios::deeplink::parse(param)? {
+        crate::trios::deeplink::Target::Reorder(id) => Some(id),
+        _ => None,
     }
-    if !param
-        .bytes()
-        .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
-    {
-        return None;
-    }
-    param.strip_prefix("reorder__").map(|id| id.to_string())
 }
 
 /// Open a `t.me` URL using Telegram's native method, falling back to a plain

@@ -5,6 +5,7 @@ pub mod attendees;
 pub mod calendar;
 pub mod checkout_errors;
 pub mod core;
+pub mod deeplink;
 pub mod drink_categories;
 pub mod garden;
 pub mod health;

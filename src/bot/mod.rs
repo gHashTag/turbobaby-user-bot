@@ -133,9 +133,9 @@ pub(crate) fn miniapp_deep_link(bot_username: &str, start_param: &str) -> String
     )
 }
 
-/// Maximum length Telegram allows for a `start` / `startapp` payload.
-/// Must stay in sync with `src/ui/share.rs::MAX_START_PARAM_LEN`.
-pub(crate) const MAX_START_PARAM_LEN: usize = 64;
+// Telegram's `start` cap lives in `trios::deeplink::MAX_START_PARAM_LEN`,
+// with the parser that enforces it. A second copy here was a second thing to
+// keep in sync, which is the defect this whole area just paid for.
 
 /// Does this `/start` payload address a Mini App target (product card, order,
 /// cart, reorder, garden invite) rather than a plain chat start?
@@ -149,26 +149,21 @@ pub(crate) const MAX_START_PARAM_LEN: usize = 64;
 ///
 /// Prefixes must stay in sync with the parsers in `src/ui/share.rs`.
 pub(crate) fn is_miniapp_start_payload(payload: &str) -> bool {
-    if payload.is_empty() || payload.len() > MAX_START_PARAM_LEN {
-        return false;
-    }
-    if !payload
-        .bytes()
-        .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
-    {
-        return false;
-    }
-    const PREFIXES: [&str; 8] = [
-        "p_strain_",
-        "p_acc_",
-        "p_set_",
-        "p_tea_",
-        "p_event_",
-        "o_",
-        "reorder__",
-        "garden__",
-    ];
-    payload == "cart" || PREFIXES.iter().any(|p| payload.starts_with(p))
+    // Delegates. This used to be a second list of prefixes, and the two lists
+    // disagreed about twelve payloads out of a forty-six-payload sweep — a
+    // disagreement nothing could see, because the other list lives in
+    // `src/ui`, which is `#[cfg(target_arch = "wasm32")]`.
+    //
+    // Both directions were live defects and both read to a customer as "the
+    // link does not work":
+    //
+    //   cart__<source>   the app opens it, the bot refused to answer -> every
+    //                    campaign cart link landed on the plain welcome
+    //   garden           same, for a garden invite carrying no referrer id
+    //   p_set_, o_,      the bot answered with a Mini App button for payloads
+    //   reorder__,       the app cannot parse, so the button opened the home
+    //   garden__0, ...   screen instead of the card
+    crate::trios::deeplink::is_miniapp_payload(payload)
 }
 
 /// Build a `startapp` parameter for a catalog product.
@@ -292,5 +287,99 @@ mod deep_link_tests {
         assert!(!url.contains(' '));
         assert!(url.contains("bot%20name"));
         assert!(url.contains("p_set%3Aa%20b"));
+    }
+    /// The two implementations of "is this a Mini App target" — the bot's, and
+    /// the one the Mini App parses with — swept against each other.
+    ///
+    /// They were written in different files, one of which (`src/ui`) is
+    /// `#[cfg(target_arch = "wasm32")]` and therefore invisible to this suite,
+    /// so nothing has ever compared them. A disagreement is not a cosmetic
+    /// drift: where the bot says no, the customer taps a shared link and gets
+    /// the ordinary welcome instead of the card; where the app says no, the
+    /// button opens the home screen. Both read as "the link does not work".
+    #[test]
+    fn the_classifier_agrees_with_the_parser_the_app_uses() {
+        use crate::bot::is_miniapp_start_payload;
+        use crate::trios::deeplink;
+
+        let mut corpus: Vec<String> = Vec::new();
+        for kind in deeplink::Kind::ALL {
+            for id in [
+                "fe346171-aa5b-4f88-93ed-8be0ec38aa6c",
+                "black-heavy-hit-pack",
+                "42",
+                "",
+                "set_x",
+            ] {
+                corpus.push(format!("{}_{}", kind.prefix(), id));
+            }
+        }
+        for other in [
+            "cart",
+            "cart__utm_a",
+            "cart__",
+            "o_7f3a",
+            "o_",
+            "reorder__7f3a",
+            "reorder__",
+            "garden",
+            "garden__123",
+            "garden__123__utm_a",
+            "garden__0",
+            "garden__-5",
+            "garden__abc",
+            "ref_0u3KYyAT",
+            "channel",
+            "",
+            "p_set_a b",
+            "p_set_\u{43e}\u{43f}",
+            &"x".repeat(65),
+            &format!("p_set_{}", "x".repeat(58)),
+            &format!("p_set_{}", "x".repeat(59)),
+        ] {
+            corpus.push(other.to_string());
+        }
+
+        let mut disagreements = Vec::new();
+        for payload in &corpus {
+            let bot_says = is_miniapp_start_payload(payload);
+            let app_says = deeplink::is_miniapp_payload(payload);
+            if bot_says != app_says {
+                disagreements.push(format!(
+                    "{payload:?}: bot answers {bot_says}, app parses {app_says}"
+                ));
+            }
+        }
+        assert!(
+            corpus.len() >= 45,
+            "the sweep only built {} payloads; a scan that checks nothing is clean by default",
+            corpus.len()
+        );
+        // The sweep above compares one function with itself now that the bot
+        // delegates, so on its own it is vacuous. These two are not: each was
+        // FALSE under the bot's old list and TRUE in the app, and each is a
+        // link customers actually send. They fail against any re-introduced
+        // second list that forgets them, which is the only way this defect
+        // comes back.
+        assert!(
+            is_miniapp_start_payload("cart__utm_a"),
+            "a campaign cart link must be answered with a Mini App button"
+        );
+        assert!(
+            is_miniapp_start_payload("garden"),
+            "a garden invite with no referrer must still open the garden"
+        );
+        assert!(
+            !is_miniapp_start_payload("p_set_"),
+            "a prefix with no id must not produce a button that opens the home screen"
+        );
+
+        assert!(
+            disagreements.is_empty(),
+            "the bot and the Mini App disagree about {} of {} payloads:\n  {}",
+            disagreements.len(),
+            corpus.len(),
+            disagreements.join("\n  ")
+        );
     }
 } // mod deep_link_tests
