@@ -26,6 +26,10 @@ pub(crate) async fn handle_text(
     config: Arc<Config>,
     ai_client: Arc<crate::ai::AiClient>,
 ) -> Result<(), teloxide::RequestError> {
+    if let Some(u) = msg.from.as_ref() {
+        crate::bot::remember_who(&db, u).await;
+    }
+
     let text = match msg.text() {
         Some(t) => t.to_string(),
         None => return Ok(()),

@@ -314,6 +314,10 @@ const MIGRATIONS: &[(&str, &str)] = &[
         "072_fix_garden_reminder_timestamp_types.sql",
         include_str!("../../migrations/072_fix_garden_reminder_timestamp_types.sql"),
     ),
+    (
+        "073_user_identity.sql",
+        include_str!("../../migrations/073_user_identity.sql"),
+    ),
 ];
 
 /// Columns the catalog endpoints SELECT that were added by *later* migrations
@@ -647,30 +651,62 @@ impl Database {
         Ok(())
     }
 
-    /// Cycle #79: SeaORM upsert (see [`Self::set_user_lang`] for pattern).
-    /// Note: the original raw SQL didn't bump `updated_at` for this path,
-    /// preserved here for behaviour parity — the upsert only writes
-    /// `first_name`.
-    pub async fn save_user_name(&self, telegram_id: i64, first_name: &str) -> Result<()> {
-        use sea_orm::sea_query::OnConflict;
-        use sea_orm::{ActiveValue::Set, EntityTrait};
-        let trimmed = crate::util::truncate_string(first_name, 200);
-        let am = entities::user::ActiveModel {
-            telegram_id: Set(telegram_id),
-            first_name: Set(Some(trimmed.clone())),
-            // `language` column is NOT NULL with default 'en' — Set::default
-            // skips it on insert, letting the DB default fire.
-            ..Default::default()
+    /// Record who a person is, from whatever Telegram just told us.
+    ///
+    /// This replaces `save_user_name`, which wrote only `first_name` and — the
+    /// reason the garden called everybody "Friend #6794" — was never called
+    /// from anywhere. A writer with no callers is not a writer; the column it
+    /// filled was empty in production and the display did the only thing an
+    /// empty column allows.
+    ///
+    /// A field that is `None` is *not written*. Telegram omits `username`
+    /// entirely for people who have not set one, and omits `last_name` for
+    /// most; treating "not sent" as "cleared" would erase a good handle the
+    /// first time somebody sends a message from a client that trims the
+    /// payload. `COALESCE(EXCLUDED.x, existing.x)` is the whole point of this
+    /// function.
+    pub async fn save_user_identity(
+        &self,
+        telegram_id: i64,
+        first_name: Option<&str>,
+        last_name: Option<&str>,
+        username: Option<&str>,
+    ) -> Result<()> {
+        use sea_orm::{ConnectionTrait, DbBackend, Statement};
+
+        let clean = |v: Option<&str>| -> Option<String> {
+            let t = v.map(str::trim).filter(|s| !s.is_empty())?;
+            Some(crate::util::truncate_string(t, 200))
         };
-        entities::user::Entity::insert(am)
-            .on_conflict(
-                OnConflict::column(entities::user::Column::TelegramId)
-                    .update_columns([entities::user::Column::FirstName])
-                    .to_owned(),
-            )
-            .exec(&self.orm)
+        let (f, l) = (clean(first_name), clean(last_name));
+        // The handle is normalised by the same rule that prints it, so what is
+        // stored and what is shown can never disagree.
+        let u = crate::trios::person::handle(username);
+
+        if f.is_none() && l.is_none() && u.is_none() {
+            return Ok(());
+        }
+
+        // Written as SQL rather than an ActiveModel because SeaORM's
+        // `update_columns` sets a column to whatever the model holds — `NULL`
+        // included — and `COALESCE` on the excluded row is exactly the
+        // behaviour described above.
+        let sql = "\
+            INSERT INTO user_languages (telegram_id, first_name, last_name, username) \
+            VALUES ($1, $2, $3, $4) \
+            ON CONFLICT (telegram_id) DO UPDATE SET \
+                first_name = COALESCE(EXCLUDED.first_name, user_languages.first_name), \
+                last_name  = COALESCE(EXCLUDED.last_name,  user_languages.last_name), \
+                username   = COALESCE(EXCLUDED.username,   user_languages.username), \
+                updated_at = NOW()";
+        self.orm
+            .execute(Statement::from_sql_and_values(
+                DbBackend::Postgres,
+                sql,
+                [telegram_id.into(), f.into(), l.into(), u.into()],
+            ))
             .await
-            .context("save_user_name upsert")?;
+            .context("save_user_identity upsert")?;
         Ok(())
     }
 

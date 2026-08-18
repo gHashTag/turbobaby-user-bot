@@ -128,6 +128,11 @@ pub(crate) async fn handle_callback(
     config: Arc<Config>,
     ai_client: Arc<crate::ai::AiClient>,
 ) -> Result<(), teloxide::RequestError> {
+    // A button tap is the other authentic sighting of a person. See
+    // `crate::bot::remember_who` for why this is not done at the Mini App
+    // boundary instead.
+    crate::bot::remember_who(&db, &q.from).await;
+
     let data = match q.data.as_deref() {
         Some(d) => {
             if !is_callback_data_valid(d) {

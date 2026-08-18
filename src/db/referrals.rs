@@ -28,9 +28,20 @@ pub(crate) struct TopReferrer {
 }
 
 /// Loop #20: a single invitee's visible progress for the garden viral panel.
+///
+/// `display_name` stays a single ready-to-print string so nothing that already
+/// reads it breaks, but the parts are carried alongside it now: the screen
+/// wants the handle in its own muted colour, and a client that only has the
+/// joined string cannot get it back out.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct Invitee {
     pub display_name: String,
+    /// The Telegram handle without its `@`, when the person has one.
+    pub username: Option<String>,
+    /// True when nothing about this person was ever recorded, so the client
+    /// can print "friend" in its own language instead of the English noun the
+    /// old `COALESCE(first_name, 'Friend')` baked into the database layer.
+    pub is_anonymous: bool,
     pub status: String,
     pub streak: i64,
     pub has_ordered: bool,
@@ -594,9 +605,16 @@ pub(crate) async fn get_top_referrers(
 }
 
 /// Loop #20: list invitees for a referrer with their garden streak and
-/// order status. Privacy-safe: telegram_id is not exposed; display_name is
-/// `COALESCE(first_name, 'Friend')` plus an anonymized handle derived from the
-/// last 4 digits of referred_id.
+/// order status.
+///
+/// The name is decided by `crate::trios::person`, which has the three cases
+/// written down and tested; this function only supplies what the database
+/// knows. `telegram_id` is still not exposed — the handle is, because it is
+/// the thing the owner of the list asked to see and these are people they
+/// personally invited, but the numeric id stays out of the response.
+///
+/// Before this, the query said `COALESCE(first_name, 'Friend')` and the column
+/// was empty for everybody, so the panel was a list of identical strangers.
 pub(crate) async fn get_invitees(
     orm: &sea_orm::DatabaseConnection,
     referrer_id: i64,
@@ -607,7 +625,9 @@ pub(crate) async fn get_invitees(
             re.referred_id                                        AS referred_id,
             re.status                                             AS status,
             re.source                                             AS source,
-            COALESCE(MAX(ul.first_name), 'Friend')                AS first_name,
+            MAX(ul.first_name)                                    AS first_name,
+            MAX(ul.last_name)                                     AS last_name,
+            MAX(ul.username)                                      AS username,
             COALESCE(MAX(gp.max_streak), 0)                       AS streak,
             MAX(CASE WHEN o.id IS NOT NULL THEN 1 ELSE 0 END)   AS has_ordered
         FROM referral_events re
@@ -624,12 +644,31 @@ pub(crate) async fn get_invitees(
         .iter()
         .map(|r| {
             let referred_id: i64 = r.try_get::<i64>("", "referred_id").unwrap_or(0);
-            let first_name: String = r
-                .try_get::<String>("", "first_name")
-                .unwrap_or_else(|_| "Friend".into());
-            let handle = format!("#{:04}", referred_id.rem_euclid(10000));
+            let first_name: Option<String> =
+                r.try_get::<Option<String>>("", "first_name").ok().flatten();
+            let last_name: Option<String> =
+                r.try_get::<Option<String>>("", "last_name").ok().flatten();
+            let username: Option<String> =
+                r.try_get::<Option<String>>("", "username").ok().flatten();
+
+            // `person` decides this, not the query: the rule is exercised by
+            // `cargo test`, and neither this module nor the component that
+            // renders it is.
+            let known = crate::trios::person::Known {
+                first_name: first_name.as_deref(),
+                last_name: last_name.as_deref(),
+                username: username.as_deref(),
+            };
+            let naming = crate::trios::person::name_for(&known, referred_id);
+            let is_anonymous = matches!(naming, crate::trios::person::Naming::Anonymous { .. });
+            // "Friend" only ever reaches the wire as the last resort, and the
+            // client is told so via `is_anonymous` and may say it its own way.
+            let display_name = crate::trios::person::one_line(&known, referred_id, "Friend");
+
             Invitee {
-                display_name: format!("{} {}", first_name, handle),
+                display_name,
+                username: crate::trios::person::handle(username.as_deref()),
+                is_anonymous,
                 status: r
                     .try_get::<String>("", "status")
                     .unwrap_or_else(|_| "pending".into()),
@@ -905,7 +944,15 @@ mod chain_tests {
             url.contains("localhost") || url.contains("127.0.0.1") || url.contains("test"),
             "refusing to run against {url:?}: this test writes rows"
         );
-        sea_orm::Database::connect(&url).await.ok()
+        // Migrate first, the way `tests/common`'s harness does. Connecting raw
+        // meant this test ran against whatever schema the database happened to
+        // be left at: adding `user_languages.username` in migration 073 broke
+        // it with `column ul.last_name does not exist`, which is a stale test
+        // database and not a defect in the code under test. A test that reads
+        // the schema has to be the thing that establishes it.
+        let db = crate::db::Database::connect(&url).await.ok()?;
+        db.run_migrations().await.ok()?;
+        Some(db.orm)
     }
 
     /// How the bot turns `/start ref_<code>` back into a code.

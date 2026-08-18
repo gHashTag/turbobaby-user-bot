@@ -10,14 +10,14 @@ use crate::trios::i18n::{
     T_GARDEN_DISCOUNT_BADGE, T_GARDEN_EMPTY_CTA, T_GARDEN_EMPTY_LABEL, T_GARDEN_ERROR_COOLDOWN,
     T_GARDEN_ERROR_HARVEST, T_GARDEN_ERROR_PRODUCT_UNAVAILABLE, T_GARDEN_ERROR_RESET,
     T_GARDEN_HARVEST, T_GARDEN_INVITEES_EMPTY, T_GARDEN_INVITEES_TITLE, T_GARDEN_INVITEE_JOINED,
-    T_GARDEN_INVITEE_ORDERED, T_GARDEN_INVITEE_WATERING, T_GARDEN_LEADERBOARD_RANK,
-    T_GARDEN_LEADERBOARD_TAB_HARVEST, T_GARDEN_LEADERBOARD_TAB_STREAK, T_GARDEN_LEADERBOARD_TITLE,
-    T_GARDEN_LEADERBOARD_YOU, T_GARDEN_LOADING, T_GARDEN_MILESTONE_HINT, T_GARDEN_NEXT_WATER_IN,
-    T_GARDEN_PLANT_ALT, T_GARDEN_PRODUCT_ALT, T_GARDEN_READY, T_GARDEN_REFERRAL_MILESTONE_AWARDED,
-    T_GARDEN_REFERRAL_MILESTONE_SUBTITLE, T_GARDEN_REFERRAL_MILESTONE_TITLE,
-    T_GARDEN_RESET_CONFIRM_BODY, T_GARDEN_RESET_CONFIRM_TITLE, T_GARDEN_RESET_PROGRESS,
-    T_GARDEN_REWARD_EXPIRES_IN, T_GARDEN_SHARE_CTA, T_GARDEN_STREAK_BEST, T_GARDEN_STREAK_DAYS,
-    T_GARDEN_SUBTITLE, T_GARDEN_TITLE, T_GARDEN_WATER_NOW,
+    T_GARDEN_INVITEE_ORDERED, T_GARDEN_INVITEE_UNKNOWN, T_GARDEN_INVITEE_WATERING,
+    T_GARDEN_LEADERBOARD_RANK, T_GARDEN_LEADERBOARD_TAB_HARVEST, T_GARDEN_LEADERBOARD_TAB_STREAK,
+    T_GARDEN_LEADERBOARD_TITLE, T_GARDEN_LEADERBOARD_YOU, T_GARDEN_LOADING,
+    T_GARDEN_MILESTONE_HINT, T_GARDEN_NEXT_WATER_IN, T_GARDEN_PLANT_ALT, T_GARDEN_PRODUCT_ALT,
+    T_GARDEN_READY, T_GARDEN_REFERRAL_MILESTONE_AWARDED, T_GARDEN_REFERRAL_MILESTONE_SUBTITLE,
+    T_GARDEN_REFERRAL_MILESTONE_TITLE, T_GARDEN_RESET_CONFIRM_BODY, T_GARDEN_RESET_CONFIRM_TITLE,
+    T_GARDEN_RESET_PROGRESS, T_GARDEN_REWARD_EXPIRES_IN, T_GARDEN_SHARE_CTA, T_GARDEN_STREAK_BEST,
+    T_GARDEN_STREAK_DAYS, T_GARDEN_SUBTITLE, T_GARDEN_TITLE, T_GARDEN_WATER_NOW,
 };
 use crate::ui::api::context::api_base_url;
 use crate::ui::api::http::post_client_event;
@@ -188,6 +188,16 @@ struct LeaderboardResponse {
 #[derive(Debug, Clone, serde::Deserialize)]
 struct Invitee {
     display_name: String,
+    /// The Telegram handle without its `@`. Kept apart from `display_name` so
+    /// the row can print it in its own muted colour instead of running the
+    /// name and the handle together in one weight.
+    #[serde(default)]
+    username: Option<String>,
+    /// The server could not name this person at all. The word for "friend" is
+    /// then chosen here, in the reader's language, rather than arriving as an
+    /// English noun from the database.
+    #[serde(default)]
+    is_anonymous: bool,
     status: String,
     streak: i64,
     has_ordered: bool,
@@ -856,11 +866,34 @@ pub fn Garden() -> Element {
                                             } else {
                                                 joined_label.clone()
                                             };
-                                            let name = inv.display_name.clone();
+                                            // Three states, and the third is
+                                            // said in the reader's language:
+                                            // `display_name` carries the
+                                            // server's English fallback only
+                                            // for clients that cannot do this.
+                                            let handle = inv.username.clone();
+                                            let name = if inv.is_anonymous {
+                                                t(lang, T_GARDEN_INVITEE_UNKNOWN).to_string()
+                                            } else if handle.is_some() {
+                                                // The handle is printed on its
+                                                // own beside the name, so strip
+                                                // the copy the server glued on.
+                                                inv.display_name
+                                                    .rsplit_once(" @")
+                                                    .map(|(n, _)| n.to_string())
+                                                    .unwrap_or_else(|| inv.display_name.clone())
+                                            } else {
+                                                inv.display_name.clone()
+                                            };
                                             rsx! {
-                                                div { style: "display:flex;align-items:center;justify-content:space-between;font-size:11px;color:#e8e8e8;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.05);",
-                                                    span { "{name}" }
-                                                    span { style: "display:flex;align-items:center;gap:4px;color:#8b8b9e;", "{status_emoji} {status_text}" }
+                                                div { style: "display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:11px;color:#e8e8e8;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.05);",
+                                                    span { style: "display:flex;align-items:baseline;gap:5px;min-width:0;",
+                                                        span { style: "overflow:hidden;text-overflow:ellipsis;white-space:nowrap;", "{name}" }
+                                                        if let Some(h) = handle {
+                                                            span { style: "color:#8b8b9e;font-size:10px;white-space:nowrap;", "@{h}" }
+                                                        }
+                                                    }
+                                                    span { style: "display:flex;align-items:center;gap:4px;color:#8b8b9e;white-space:nowrap;", "{status_emoji} {status_text}" }
                                                 }
                                             }
                                         })

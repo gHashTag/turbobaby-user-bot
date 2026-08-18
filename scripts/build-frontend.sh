@@ -47,23 +47,53 @@ echo "${hash}" > "dist/version.txt"
 echo "  ✓ wrote dist/version.txt (${hash})"
 
 # Pre-compress static assets so the server can serve brotli/gzip sidecars without
-# runtime CPU cost. Skip files already smaller than the compressed form would be.
+# runtime CPU cost.
+#
+# Only what compression actually helps. The comment above this block used to
+# claim it skipped files that would not shrink; it did not, and once the shop
+# had videos uploaded the build stalled for hours on `brotli -q 11` over them.
+# Measured on this repo's own dist/:
+#
+#   main.css        27954 ->  5496   (5.1x)
+#   the wasm bundle  4.7M ->  733K   (6.4x)
+#   video-...936412157.mp4  3213125 -> 3213137   (12 bytes LARGER)
+#   video-...918953840.mp4  2377800 -> 2377809   (9 bytes larger)
+#
+# That is not a tuning question. MP4, JPEG, PNG, WebP and WOFF2 are already
+# entropy-coded, so a second pass has nothing left to find — and a sidecar
+# bigger than its original means the server sends MORE bytes to a client that
+# asked for compression.
+SKIP_COMPRESSION_RE='\.(mp4|webm|mov|m4v|avi|jpe?g|png|gif|webp|avif|ico|woff2?|mp3|ogg|opus|zip|gz|br|pdf)$'
+
 echo "▶ pre-compressing static assets"
 (
   cd dist
-  compressed=0
   find . -type f -not -name "*.br" -not -name "*.gz" -print0 | while IFS= read -r -d '' f; do
     base="${f#./}"
+    if printf '%s' "$base" | grep -qiE "$SKIP_COMPRESSION_RE"; then
+      continue
+    fi
+
     if command -v brotli >/dev/null 2>&1 && [ ! -f "${base}.br" ]; then
       brotli -q 11 -o "${base}.br" "$base" 2>/dev/null || true
+      # Belt and braces: the extension list is a prediction, this is a
+      # measurement. A sidecar that did not shrink is deleted rather than
+      # shipped, so no future file type can quietly cost bytes.
+      if [ -f "${base}.br" ] && [ ! "${base}.br" -ot "$base" ] &&
+         [ "$(wc -c <"${base}.br")" -ge "$(wc -c <"$base")" ]; then
+        rm -f "${base}.br"
+      fi
     fi
     if [ ! -f "${base}.gz" ]; then
       if gzip -k -9 "$base" 2>/dev/null; then :; else
         gzip -9 -c "$base" > "${base}.gz"
       fi
+      if [ -f "${base}.gz" ] && [ "$(wc -c <"${base}.gz")" -ge "$(wc -c <"$base")" ]; then
+        rm -f "${base}.gz"
+      fi
     fi
   done
 )
-echo "  ✓ pre-compressed dist/ sidecars ready"
+echo "  ✓ pre-compressed dist/ sidecars ready (media skipped — see the note above)"
 
 echo "✅ frontend built. Next: ./scripts/predeploy-smoke.sh --no-build  (then commit dist/ + deploy)"

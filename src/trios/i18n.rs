@@ -91,6 +91,9 @@ pub const T_GARDEN_INVITEES_EMPTY: Key = "garden.invitees.empty";
 pub const T_GARDEN_INVITEE_JOINED: Key = "garden.invitee.joined";
 pub const T_GARDEN_INVITEE_WATERING: Key = "garden.invitee.watering";
 pub const T_GARDEN_INVITEE_ORDERED: Key = "garden.invitee.ordered";
+/// Printed instead of a name only when nothing about the person was ever
+/// recorded — see `crate::trios::person::Naming::Anonymous`.
+pub const T_GARDEN_INVITEE_UNKNOWN: Key = "garden.invitee.unknown";
 pub const T_GARDEN_REFERRAL_MILESTONE_TITLE: Key = "garden.referral_milestone.title";
 pub const T_GARDEN_REFERRAL_MILESTONE_SUBTITLE: Key = "garden.referral_milestone.subtitle";
 pub const T_GARDEN_REFERRAL_MILESTONE_AWARDED: Key = "garden.referral_milestone.awarded";
@@ -832,6 +835,7 @@ fn get_ru_translation(key: Key) -> Value {
         T_GARDEN_INVITEE_JOINED => "присоединился",
         T_GARDEN_INVITEE_WATERING => "стрик {0}",
         T_GARDEN_INVITEE_ORDERED => "оформил заказ",
+        T_GARDEN_INVITEE_UNKNOWN => "Друг",
         T_GARDEN_REFERRAL_MILESTONE_TITLE => "Рубежи друзей",
         T_GARDEN_REFERRAL_MILESTONE_SUBTITLE => "{0}/{1} друзей",
         T_GARDEN_REFERRAL_MILESTONE_AWARDED => "🏆 {0} друзей — +{1}฿",
@@ -1517,6 +1521,7 @@ fn get_en_translation(key: Key) -> Value {
         T_GARDEN_INVITEE_JOINED => "joined",
         T_GARDEN_INVITEE_WATERING => "streak {0}",
         T_GARDEN_INVITEE_ORDERED => "placed an order",
+        T_GARDEN_INVITEE_UNKNOWN => "Friend",
         T_GARDEN_REFERRAL_MILESTONE_TITLE => "Friend milestones",
         T_GARDEN_REFERRAL_MILESTONE_SUBTITLE => "{0}/{1} friends",
         T_GARDEN_REFERRAL_MILESTONE_AWARDED => "🏆 {0} friends — +{1}฿",

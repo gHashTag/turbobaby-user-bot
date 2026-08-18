@@ -9,6 +9,8 @@
 ///   language     VARCHAR(10)   NOT NULL DEFAULT 'en'
 ///   timezone     VARCHAR(50)   DEFAULT 'Asia/Bangkok'
 ///   first_name   TEXT
+///   last_name    TEXT          (073_user_identity.sql)
+///   username     TEXT          (073_user_identity.sql)
 ///   updated_at   TIMESTAMPTZ   DEFAULT NOW()
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -22,6 +24,8 @@ pub struct Model {
     pub language: String,
     pub timezone: Option<String>,
     pub first_name: Option<String>,
+    pub last_name: Option<String>,
+    pub username: Option<String>,
     pub updated_at: Option<DateTimeWithTimeZone>,
 }
 

@@ -148,6 +148,14 @@ pub(crate) async fn handle_command(
         return Ok(());
     }
 
+    // Here rather than inside `/start`, because it is the one place every
+    // command passes through — and a referral arrives as `/start ref_<code>`,
+    // so the friend whose name the panel was missing is named at the exact
+    // moment they follow the link. See `crate::bot::remember_who`.
+    if let Some(u) = msg.from.as_ref() {
+        crate::bot::remember_who(&db, u).await;
+    }
+
     let existing_lang = db.get_user_lang(user_id).await;
     let is_new_user = existing_lang.is_none();
     let lang = existing_lang.unwrap_or_else(|| {

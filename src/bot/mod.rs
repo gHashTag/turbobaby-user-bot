@@ -88,6 +88,44 @@ use teloxide::dispatching::UpdateHandler;
 use teloxide::prelude::*;
 use teloxide::types::{InlineKeyboardButton, WebAppInfo};
 
+/// Remember who somebody is, from an update Telegram itself delivered.
+///
+/// The garden's friends panel printed `Friend #6794` for everybody because
+/// `user_languages.first_name` was empty in production — the only writer,
+/// `save_user_name`, had no callers at all. Telegram hands the name over on
+/// every single update; the shop discarded it on all of them.
+///
+/// Called from all three places an update arrives — commands, plain text and
+/// button taps — because a friend who joined via `/start ref_<code>` before
+/// this existed is named again the next time they touch the bot at all, and
+/// making only one of the three do it would leave that depending on which
+/// button they happened to press.
+///
+/// **Only from Telegram.** This is deliberately not done at the Mini App
+/// boundary: `initData` arrives from the client, its HMAC does not currently
+/// verify in production, and a name written from an unverified request is a
+/// name any caller could put on somebody else's row. A webhook update is
+/// Telegram's own word for who sent it.
+///
+/// Never fatal — failing to learn a name must not stop anyone using the bot.
+pub(crate) async fn remember_who(db: &crate::db::Database, user: &teloxide::types::User) {
+    let id = user.id.0 as i64;
+    if id == 0 {
+        return;
+    }
+    if let Err(e) = db
+        .save_user_identity(
+            id,
+            Some(user.first_name.as_str()),
+            user.last_name.as_deref(),
+            user.username.as_deref(),
+        )
+        .await
+    {
+        tracing::warn!("save_user_identity failed for user_id={}: {}", id, e);
+    }
+}
+
 #[allow(clippy::expect_used)] // Fallback URL `https://t.me` is a static literal; parse is infallible.
 pub(crate) fn web_app_btn(text: &str, url: &str) -> InlineKeyboardButton {
     match url.parse() {
