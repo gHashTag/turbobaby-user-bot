@@ -56,6 +56,8 @@ pub(crate) enum Command {
     Blocks,
     #[command(description = "Recent app errors (admin)")]
     Errors,
+    #[command(description = "Promo sales report (admin)")]
+    Promo,
 }
 
 use crate::util::html_escape;
@@ -717,6 +719,31 @@ pub(crate) async fn handle_command(
                 Err(e) => {
                     tracing::error!("/errors DB error: {}", e);
                     "❌ Не удалось прочитать журнал ошибок".to_string()
+                }
+            };
+            bot.send_message(msg.chat.id, text)
+                .parse_mode(teloxide::types::ParseMode::Html)
+                .await?;
+        }
+
+        Command::Promo => {
+            // The sales report used to be readable only by curl against the
+            // admin API, while the owner presses Publish in Telegram — the
+            // answer to "did it sell" lived in a different room than the
+            // question. Same 30-day window as the API default, so the two
+            // never disagree.
+            if !config.admin_ids.contains(&user_id) {
+                return Ok(());
+            }
+            const DAYS: i64 = 30;
+            let text = match crate::promo::report(&db, DAYS).await {
+                Ok(rows) => crate::trios::promo::format_promo_digest(
+                    DAYS,
+                    &rows.into_iter().map(Into::into).collect::<Vec<_>>(),
+                ),
+                Err(e) => {
+                    tracing::error!("/promo report query failed: {e}");
+                    "❌ Не удалось прочитать отчёт промо".to_string()
                 }
             };
             bot.send_message(msg.chat.id, text)

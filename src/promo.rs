@@ -817,6 +817,18 @@ pub struct PromoResult {
     pub revenue: f64,
 }
 
+impl From<PromoResult> for crate::trios::promo::DigestRow {
+    fn from(r: PromoResult) -> Self {
+        Self {
+            kind: r.kind,
+            name: r.subject_name,
+            openers: r.openers,
+            orders: r.orders,
+            revenue: r.revenue,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

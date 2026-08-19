@@ -369,6 +369,146 @@ pub fn attribution(subject: &Subject) -> String {
     format!("promo_{}", subject.kind())
 }
 
+/// One published post's measured result, as `/promo` shows it to the owner.
+///
+/// A mirror of the backend's `PromoResult` under a platform-free name: this
+/// module compiles for WASM too, and the report row type lives behind the
+/// backend gate next to the query that produces it.
+pub struct DigestRow {
+    pub kind: String,
+    pub name: String,
+    pub openers: i32,
+    pub orders: i32,
+    pub revenue: f64,
+}
+
+/// Rows one digest message shows at most.
+///
+/// Telegram rejects a message over 4096 characters outright, and a month of
+/// posts with long names would sail past it — an uncapped digest is a command
+/// that stops working on the first busy month. When the cap bites, the message
+/// says so: a silent cap reads as "that was everything".
+pub const DIGEST_MAX_ROWS: usize = 25;
+
+/// Longest name shown, measured in characters like every Telegram limit here.
+pub const DIGEST_MAX_NAME_CHARS: usize = 32;
+
+/// The icon a kind shows in the digest — the same one its posts use, so the
+/// owner reads a row the way they already read the drafts.
+fn digest_icon(kind: &str) -> &'static str {
+    match kind {
+        "set" => "🎁",
+        "strain" => "🌿",
+        "event" => "📅",
+        "event_soon" => "⏰",
+        "bestseller" => "🔥",
+        "tea" => "🥤",
+        "accessory" => "📦",
+        _ => "📣",
+    }
+}
+
+/// Russian plural for a count: `1 пост`, `2 поста`, `5 постов`.
+fn ru_plural(n: i64, one: &str, few: &str, many: &str) -> String {
+    let abs = n.abs();
+    let last_two = abs % 100;
+    let word = if (11..=14).contains(&last_two) {
+        many
+    } else {
+        match abs % 10 {
+            1 => one,
+            2..=4 => few,
+            _ => many,
+        }
+    };
+    format!("{n} {word}")
+}
+
+/// Baht without a tail of zeros: `3900 ฿`, not `3900.00 ฿`.
+fn baht(v: f64) -> String {
+    if (v - v.round()).abs() < f64::EPSILON {
+        format!("{} ฿", v.round() as i64)
+    } else {
+        format!("{v:.2} ฿")
+    }
+}
+
+/// Local copy of the escaping `trios::health` also keeps: this module compiles
+/// for WASM too, and `crate::util` sits behind the backend gate. The digest is
+/// sent with ParseMode::Html, and Telegram rejects malformed HTML outright.
+fn escape_html(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+}
+
+/// The owner-facing `/promo` digest: what each published post sold.
+///
+/// Zero posts and zero sales are different states and read differently here —
+/// "nothing was published" must not look like "posts sold nothing". The
+/// causality caveat travels with every table because the numbers invite
+/// exactly the reading they cannot support: orders *after* an opening, not
+/// orders *because of* it.
+pub fn format_promo_digest(days: i64, rows: &[DigestRow]) -> String {
+    let mut out = format!("📊 Промо за {}\n", ru_plural(days, "день", "дня", "дней"));
+    if rows.is_empty() {
+        out.push_str("\nЗа этот период не опубликовано ни одного поста.");
+        return out;
+    }
+
+    let total_orders: i64 = rows.iter().map(|r| r.orders as i64).sum();
+    let total_revenue: f64 = rows.iter().map(|r| r.revenue).sum();
+
+    out.push('\n');
+    for row in rows.iter().take(DIGEST_MAX_ROWS) {
+        // The reminder is a different post about the same row the announcement
+        // already covered; the suffix keeps the owner from reading two rows as
+        // two events.
+        let reminder = if row.kind == "event_soon" {
+            " (напом.)"
+        } else {
+            ""
+        };
+        let name: String = row.name.chars().take(DIGEST_MAX_NAME_CHARS).collect();
+        let cut = if row.name.chars().count() > DIGEST_MAX_NAME_CHARS {
+            "…"
+        } else {
+            ""
+        };
+        out.push_str(&format!(
+            "{} {}{cut}{reminder} — {} откр · {} зак · {}\n",
+            digest_icon(&row.kind),
+            escape_html(&name),
+            row.openers,
+            row.orders,
+            baht(row.revenue),
+        ));
+    }
+    if rows.len() > DIGEST_MAX_ROWS {
+        out.push_str(&format!(
+            "… и ещё {}\n",
+            ru_plural(
+                (rows.len() - DIGEST_MAX_ROWS) as i64,
+                "пост",
+                "поста",
+                "постов"
+            )
+        ));
+    }
+
+    out.push_str(&format!(
+        "\nИтого: {} · {} · {}\n",
+        ru_plural(rows.len() as i64, "пост", "поста", "постов"),
+        ru_plural(total_orders, "заказ", "заказа", "заказов"),
+        baht(total_revenue),
+    ));
+    out.push_str(
+        "\n⚠️ Заказы в течение 24 ч после открытия ссылки,\n\
+         тем же покупателем — верхняя оценка, не причинность.",
+    );
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -723,5 +863,103 @@ mod tests {
             p.contains("медицинского"),
             "no rule against health claims, which a cannabis shop cannot publish"
         );
+    }
+
+    fn row(kind: &str, name: &str, openers: i32, orders: i32, revenue: f64) -> DigestRow {
+        DigestRow {
+            kind: kind.into(),
+            name: name.into(),
+            openers,
+            orders,
+            revenue,
+        }
+    }
+
+    /// Zero posts and zero sales must not read the same: "nothing was
+    /// published" is a pipeline state, "posts sold nothing" is a sales
+    /// result, and confusing them sends the owner looking for the wrong bug.
+    #[test]
+    fn a_month_without_posts_says_so_without_a_table() {
+        let d = format_promo_digest(30, &[]);
+        assert!(d.contains("не опубликовано ни одного поста"));
+        assert!(!d.contains("Итого"), "an empty month rendered a total: {d}");
+        assert!(
+            !d.contains("причинность"),
+            "a caveat about orders makes no sense when there were no posts: {d}"
+        );
+    }
+
+    #[test]
+    fn posts_with_no_sales_still_show_the_table_and_the_caveat() {
+        let d = format_promo_digest(30, &[row("event_soon", "UFC NIGHT", 21, 0, 0.0)]);
+        assert!(d.contains("⏰ UFC NIGHT (напом.) — 21 откр · 0 зак · 0 ฿"));
+        assert!(d.contains("1 пост · 0 заказов · 0 ฿"));
+        assert!(d.contains("верхняя оценка, не причинность"));
+    }
+
+    /// The whole point of the digest is the money line, and the caveat is the
+    /// only thing stopping it from being read as causation. A digest that
+    /// loses either has stopped being an answer.
+    #[test]
+    fn rows_render_with_icons_and_the_causality_caveat() {
+        let rows = [
+            row("set", "Party Pack", 12, 3, 3600.0),
+            row("strain", "DA FUNK", 8, 1, 300.0),
+            row("event_soon", "UFC NIGHT", 21, 0, 0.0),
+        ];
+        let d = format_promo_digest(30, &rows);
+        assert!(d.starts_with("📊 Промо за 30 дней"));
+        assert!(d.contains("🎁 Party Pack — 12 откр · 3 зак · 3600 ฿"));
+        assert!(d.contains("🌿 DA FUNK — 8 откр · 1 зак · 300 ฿"));
+        assert!(d.contains("Итого: 3 поста · 4 заказа · 3900 ฿"));
+        assert!(d.contains("24 ч после открытия ссылки"));
+    }
+
+    /// Names come from the shop's data and go into an HTML-parsed message.
+    #[test]
+    fn names_are_html_escaped() {
+        let d = format_promo_digest(30, &[row("tea", "<b>Americano</b>", 1, 0, 0.0)]);
+        assert!(
+            d.contains("&lt;b&gt;Americano&lt;/b&gt;"),
+            "raw HTML leaked: {d}"
+        );
+        assert!(!d.contains("<b>"));
+    }
+
+    /// The message is sent with ParseMode::Html — over 4096 characters
+    /// Telegram rejects it and the command just fails. The cap must be
+    /// spoken, not silent: a silent cap reads as "that was everything".
+    #[test]
+    fn a_long_month_is_capped_out_loud_and_fits_telegram() {
+        let rows: Vec<DigestRow> = (0..40)
+            .map(|i| {
+                row(
+                    "strain",
+                    &format!("Very Long Strain Name Number {i}"),
+                    3,
+                    1,
+                    100.0,
+                )
+            })
+            .collect();
+        let d = format_promo_digest(30, &rows);
+        assert!(
+            d.contains("… и ещё 15 постов"),
+            "the cap was silent: tail of {d}"
+        );
+        assert!(d.chars().count() < 4096, "digest would not send");
+        // All 40 still count in the totals — capped display, not capped truth.
+        assert!(d.contains("40 постов"));
+    }
+
+    /// `Итого` must agree with the rows it stands over; a total computed from
+    /// the capped 25 instead of all rows would understate the month.
+    #[test]
+    fn the_total_counts_capped_rows_too() {
+        let rows: Vec<DigestRow> = (0..30)
+            .map(|_| row("accessory", "Grinder", 1, 1, 50.0))
+            .collect();
+        let d = format_promo_digest(30, &rows);
+        assert!(d.contains("1500 ฿"), "total ignored capped rows: {d}");
     }
 }
