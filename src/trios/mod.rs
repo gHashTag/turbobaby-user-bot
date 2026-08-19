@@ -14,6 +14,7 @@ pub mod js_errors;
 pub mod packs;
 pub mod person;
 pub mod pricing;
+pub mod promo;
 pub mod quest;
 pub mod referrals;
 pub mod stars_cap;

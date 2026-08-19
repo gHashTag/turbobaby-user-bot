@@ -21,6 +21,11 @@ pub mod metrics;
 pub mod notification_queue;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod notify;
+
+/// The promoter. Finds new products, sets and events, writes a post about each
+/// with z.ai, and hands it to the owners with a Publish button. Nothing here
+/// posts publicly on its own.
+pub mod promo;
 #[cfg(all(not(target_arch = "wasm32"), feature = "backend"))]
 mod promptpay;
 #[cfg(not(target_arch = "wasm32"))]
@@ -419,6 +424,37 @@ async fn main() -> Result<()> {
     let db_for_bot = db.clone();
     let config_for_bot = config.clone();
     let ai_client_for_bot = ai_client.clone();
+
+    // The promoter. Every fifteen minutes it looks for a product, set or event
+    // nobody has posted about, and for an event happening tomorrow, writes each
+    // one up and sends the draft to the owners with a Publish button.
+    //
+    // Fifteen minutes rather than hourly because a new item added at opening
+    // time should be promotable within the same shift; and nothing here reaches
+    // a customer without a human tap, so the frequency costs a database scan,
+    // not a risk.
+    {
+        let db_promo = db.clone();
+        let bot_promo = bot.clone();
+        let config_promo = config.clone();
+        let ai_promo = ai_client.clone();
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(std::time::Duration::from_secs(15 * 60));
+            // Discard the immediate first tick so a cold start is not competing
+            // with migrations and the first requests.
+            interval.tick().await;
+            loop {
+                interval.tick().await;
+                crate::promo::sweep(
+                    db_promo.clone(),
+                    bot_promo.clone(),
+                    config_promo.clone(),
+                    ai_promo.clone(),
+                )
+                .await;
+            }
+        });
+    }
 
     // Keep the Telegram menu button in sync with the current Web App URL.
     // Railway can change the public domain on redeploy; if the menu button

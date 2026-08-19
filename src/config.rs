@@ -10,6 +10,13 @@ pub struct Config {
     pub is_production: bool,
     pub admin_ids: Vec<i64>,
     pub bot_username: String,
+    /// Where the promoter publishes when an owner presses the button.
+    ///
+    /// Optional, and absent today. Rather than silently doing nothing, the
+    /// button says so: a post that looks published and was not is worse than a
+    /// post that admits it has nowhere to go. Set `PROMO_CHANNEL_ID` (e.g.
+    /// `-1001234567890`) and add the bot to the channel's admins to enable it.
+    pub promo_channel_id: Option<i64>,
     pub database_url: String,
     pub grok_api_key: String,
     pub glm_api_key: String,
@@ -127,6 +134,9 @@ impl Config {
                     trimmed.to_string()
                 }
             },
+            promo_channel_id: std::env::var("PROMO_CHANNEL_ID")
+                .ok()
+                .and_then(|v| v.trim().parse::<i64>().ok()),
             database_url,
             grok_api_key: std::env::var("GROK_API_KEY").unwrap_or_default(),
             glm_api_key: std::env::var("GLM_API_KEY").unwrap_or_default(),
@@ -446,6 +456,7 @@ mod tests {
             is_production: false,
             admin_ids: vec![],
             bot_username: String::new(),
+            promo_channel_id: None,
             database_url: String::new(),
             grok_api_key: String::new(),
             glm_api_key: String::new(),
@@ -507,6 +518,7 @@ mod tests {
             is_production: false,
             admin_ids: vec![],
             bot_username: String::new(),
+            promo_channel_id: None,
             database_url: String::new(),
             grok_api_key: String::new(),
             glm_api_key: String::new(),

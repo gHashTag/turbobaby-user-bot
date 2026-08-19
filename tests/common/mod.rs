@@ -146,6 +146,7 @@ fn test_config(database_url: &str) -> Config {
         app_url: "http://localhost".into(),
         is_production: false,
         admin_ids: vec![42],
+        promo_channel_id: None,
         bot_username: "test_bot".into(),
         database_url: database_url.to_string(),
         grok_api_key: "".into(),

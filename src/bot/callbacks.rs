@@ -133,6 +133,29 @@ pub(crate) async fn handle_callback(
     // boundary instead.
     crate::bot::remember_who(&db, &q.from).await;
 
+    // The promoter's Publish button. Handled before the general routing below
+    // because it is the one callback that posts publicly, and it must not fall
+    // through to a menu action if the routing table ever changes.
+    if let Some(key) = q
+        .data
+        .as_deref()
+        .and_then(|d| d.strip_prefix(crate::promo::PUBLISH_CALLBACK))
+    {
+        let answer = crate::promo::publish(
+            db.clone(),
+            bot.clone(),
+            config.clone(),
+            key,
+            q.from.id.0 as i64,
+        )
+        .await;
+        bot.answer_callback_query(q.id)
+            .text(answer)
+            .show_alert(true)
+            .await?;
+        return Ok(());
+    }
+
     let data = match q.data.as_deref() {
         Some(d) => {
             if !is_callback_data_valid(d) {

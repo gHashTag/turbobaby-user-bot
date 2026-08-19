@@ -159,7 +159,10 @@ fn build_system_prompt(persona: &str, lang_instruction: &str) -> String {
     )
 }
 
-pub(crate) struct AiClient {
+/// `pub` rather than `pub(crate)` because `promo::sweep` takes one and is
+/// itself public — the module is already exported as `pub mod ai`, so this
+/// widens the signature, not the surface.
+pub struct AiClient {
     client: Client,
     grok_api_key: String,
     glm_api_key: String,

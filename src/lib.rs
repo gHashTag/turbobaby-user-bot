@@ -130,3 +130,9 @@ pub struct AppState {
     pub bot: std::sync::Arc<teloxide::Bot>,
     pub cache: std::sync::Arc<crate::api::cache::ETagCache>,
 }
+
+// Beside `bot`, and under the same gate: `bot::callbacks` calls into it for the
+// Publish button. The rules it applies live in `trios::promo`, which is
+// platform-free and is what the tests reach for.
+#[cfg(all(not(target_arch = "wasm32"), feature = "backend"))]
+pub mod promo;
