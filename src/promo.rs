@@ -65,11 +65,27 @@ pub async fn sweep(db: Arc<Database>, bot: Bot, config: Arc<Config>, ai: Arc<cra
         Ok(mut v) => found.append(&mut v),
         Err(e) => tracing::warn!("promo: reminder scan failed: {e}"),
     }
+    // Not only what is new. What already sells is never news and is the thing
+    // most worth posting about.
+    match bestsellers(&db).await {
+        Ok(mut v) => found.append(&mut v),
+        Err(e) => tracing::warn!("promo: bestseller scan failed: {e}"),
+    }
 
     if found.is_empty() {
         tracing::info!("promo: nothing new to promote (tick ok)");
         return;
     }
+
+    // Best first, by the money a post can plausibly move — not by whichever
+    // row happened to be created earliest. With a per-tick cap, oldest-first
+    // meant a 150 ฿ accessory could delay a 1200 ฿ set for hours.
+    let mut scored: Vec<(Subject, Option<f64>)> = Vec::with_capacity(found.len());
+    for s in found {
+        let price = price_of(&s, &db).await;
+        scored.push((s, price));
+    }
+    let mut found = crate::trios::promo::rank(scored);
 
     let capped = found.len() > MAX_DRAFTS_PER_TICK;
     if capped {
@@ -267,6 +283,101 @@ async fn events_happening_tomorrow(db: &Database) -> Result<Vec<Subject>, sea_or
         .collect())
 }
 
+/// What actually sells, from the orders themselves.
+///
+/// The agent was motivated by newness, which is not a sales signal: the
+/// best-selling set in the shop is never news and is the thing most worth
+/// posting about. This reads `orders.items` — a JSONB array of lines, each
+/// with an `id` — and counts the last week.
+///
+/// The dedup key carries the ISO week, so a bestseller can return next week
+/// and cannot return twice in this one.
+async fn bestsellers(db: &Database) -> Result<Vec<Subject>, sea_orm::DbErr> {
+    let period = crate::trios::promo::weekly_period(chrono::Utc::now());
+    let rows = db
+        .orm
+        .query_all(Statement::from_string(
+            DbBackend::Postgres,
+            "SELECT line->>'id' AS item_id, COUNT(*)::int8 AS sold \
+             FROM orders o, LATERAL jsonb_array_elements(o.items) AS line \
+             WHERE o.created_at > NOW() - INTERVAL '7 days' \
+               AND o.status <> 'cancelled' \
+               AND line->>'id' IS NOT NULL \
+             GROUP BY line->>'id' \
+             HAVING COUNT(*) >= 2 \
+             ORDER BY sold DESC \
+             LIMIT 5"
+                .to_string(),
+        ))
+        .await?;
+
+    let mut out = Vec::new();
+    for r in rows {
+        let Ok(item_id) = r.try_get::<String>("", "item_id") else {
+            continue;
+        };
+        let sold: i64 = r.try_get("", "sold").unwrap_or(0);
+        // Which catalog it is, and whether it is still on sale. Promoting
+        // something the shop has stopped selling is worse than saying nothing.
+        for (table, kind) in [
+            ("strains", crate::trios::promo::BestsellerKind::Strain),
+            ("sets", crate::trios::promo::BestsellerKind::Set),
+        ] {
+            let sql =
+                format!("SELECT name FROM {table} WHERE id::text = $1 AND is_available = TRUE");
+            if let Ok(Some(row)) = db
+                .orm
+                .query_one(Statement::from_sql_and_values(
+                    DbBackend::Postgres,
+                    &sql,
+                    [item_id.clone().into()],
+                ))
+                .await
+            {
+                if let Ok(name) = row.try_get::<String>("", "name") {
+                    out.push(Subject::Bestseller {
+                        id: item_id.clone(),
+                        name,
+                        kind,
+                        sold,
+                        period: period.clone(),
+                    });
+                    break;
+                }
+            }
+        }
+    }
+    Ok(out)
+}
+
+/// The price a subject would move, for ranking. `None` when the shop has no
+/// price for it — an event, or a row that has gone missing.
+async fn price_of(subject: &Subject, db: &Database) -> Option<f64> {
+    let (table, col) = match subject {
+        Subject::Strain { .. } => ("strains", "price_per_gram"),
+        Subject::Accessory { .. } => ("accessories", "price"),
+        Subject::Tea { .. } => ("tea_products", "price"),
+        Subject::Set { .. } => ("sets", "total_price"),
+        Subject::Bestseller { kind, .. } => match kind {
+            crate::trios::promo::BestsellerKind::Strain => ("strains", "price_per_gram"),
+            crate::trios::promo::BestsellerKind::Set => ("sets", "total_price"),
+        },
+        Subject::Event { .. } | Subject::EventSoon { .. } => ("events", "price_baht"),
+    };
+    let sql = format!("SELECT {col}::float8 AS p FROM {table} WHERE id::text = $1");
+    db.orm
+        .query_one(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            &sql,
+            [subject.id().into()],
+        ))
+        .await
+        .ok()
+        .flatten()
+        .and_then(|r| r.try_get("", "p").ok())
+        .flatten()
+}
+
 /// Take this subject, or find that somebody already has.
 ///
 /// `ON CONFLICT DO NOTHING` on the UNIQUE key is what makes "promote once"
@@ -347,6 +458,10 @@ async fn facts_for(subject: &Subject, db: &Database) -> String {
         Subject::Accessory { .. } => ("accessories", "price"),
         Subject::Tea { .. } => ("tea_products", "price"),
         Subject::Set { .. } => ("sets", "total_price"),
+        Subject::Bestseller { kind, .. } => match kind {
+            crate::trios::promo::BestsellerKind::Strain => ("strains", "price_per_gram"),
+            crate::trios::promo::BestsellerKind::Set => ("sets", "total_price"),
+        },
         Subject::Event { .. } | Subject::EventSoon { .. } => {
             return match subject {
                 Subject::EventSoon { when, .. } => {
@@ -388,6 +503,10 @@ async fn image_for(subject: &Subject, db: &Database) -> Option<String> {
         Subject::Accessory { .. } => ("accessories", "image_url"),
         Subject::Tea { .. } => ("tea_products", "image_url"),
         Subject::Set { .. } => ("sets", "image_url"),
+        Subject::Bestseller { kind, .. } => match kind {
+            crate::trios::promo::BestsellerKind::Strain => ("strains", "image_url"),
+            crate::trios::promo::BestsellerKind::Set => ("sets", "image_url"),
+        },
         Subject::Event { .. } | Subject::EventSoon { .. } => ("events", "image_url"),
     };
     let sql = format!("SELECT {col} AS url FROM {table} WHERE id::text = $1");
@@ -616,6 +735,86 @@ pub async fn unmute(db: &Database, who: i64) -> bool {
         ))
         .await
         .is_ok()
+}
+
+/// What each published post actually sold.
+///
+/// The chain: a post is published, a customer opens its link (which carries
+/// the campaign and the subject, so `client_event_logs` records
+/// `promo_link_opened` with `promo_<kind>:<subject id>`), and an order from the
+/// same `telegram_id` follows within a day.
+///
+/// Joined on the **subject**, not the kind. On the kind alone, two sets
+/// promoted in the same month both claim every set-link open, and the question
+/// "which post sold what" can only be answered per category — which was the
+/// question.
+///
+/// This is the only thing that makes the agent answerable to sales rather than
+/// to newness. Without it every claim about whether promotion works is a
+/// guess — and the previous version of this agent shipped with the attribution
+/// printed to the owner and never carried in the link, which is exactly the
+/// shape of a metric nobody can compute.
+///
+/// **The window is a choice, and a generous one.** 24 hours after the open,
+/// same customer. It cannot prove the post caused the order — somebody who was
+/// going to buy anyway also taps links — so this is an upper bound on the
+/// effect, and it is reported as "orders after" rather than "orders caused".
+pub async fn report(db: &Database, days: i64) -> Result<Vec<PromoResult>, sea_orm::DbErr> {
+    let rows = db
+        .orm
+        .query_all(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            "WITH published AS ( \
+                 SELECT dedup_key, kind, subject_id, subject_name, published_at \
+                 FROM promo_posts \
+                 WHERE published_at IS NOT NULL AND published_at > NOW() - ($1 || ' days')::interval \
+             ), opens AS ( \
+                 SELECT p.dedup_key, e.telegram_id, e.occurred_at \
+                 FROM published p \
+                 JOIN client_event_logs e \
+                   ON e.event = 'promo_link_opened' \
+                  AND e.detail = 'promo_' || p.kind || ':' || p.subject_id \
+                  AND e.occurred_at >= p.published_at \
+                 WHERE e.telegram_id IS NOT NULL \
+             ) \
+             SELECT p.dedup_key, p.kind, p.subject_name, \
+                    COUNT(DISTINCT o.telegram_id)::int4          AS openers, \
+                    COUNT(DISTINCT ord.id)::int4                 AS orders, \
+                    COALESCE(SUM(DISTINCT ord.total), 0)::float8 AS revenue \
+             FROM published p \
+             LEFT JOIN opens o ON o.dedup_key = p.dedup_key \
+             LEFT JOIN orders ord \
+                    ON ord.telegram_id = o.telegram_id \
+                   AND ord.created_at BETWEEN o.occurred_at AND o.occurred_at + INTERVAL '24 hours' \
+             GROUP BY p.dedup_key, p.kind, p.subject_name, p.published_at \
+             ORDER BY revenue DESC, orders DESC",
+            [days.to_string().into()],
+        ))
+        .await?;
+
+    Ok(rows
+        .into_iter()
+        .map(|r| PromoResult {
+            kind: r.try_get("", "kind").unwrap_or_default(),
+            subject_name: r.try_get("", "subject_name").unwrap_or_default(),
+            openers: r.try_get("", "openers").unwrap_or(0),
+            orders: r.try_get("", "orders").unwrap_or(0),
+            revenue: r.try_get("", "revenue").unwrap_or(0.0),
+        })
+        .collect())
+}
+
+/// One published post and what followed it.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct PromoResult {
+    pub kind: String,
+    pub subject_name: String,
+    /// Distinct people who opened the link.
+    pub openers: i32,
+    /// Orders from those people within a day. **After**, not *because of* —
+    /// somebody who was going to buy anyway also taps links.
+    pub orders: i32,
+    pub revenue: f64,
 }
 
 #[cfg(test)]

@@ -55,6 +55,7 @@ pub(crate) fn routes() -> Router<AppState> {
     Router::new()
         .route("/client-errors", post(log_client_error))
         .route("/admin/client-errors", get(list_client_errors))
+        .route("/admin/promo-report", get(promo_report))
         .route("/client-events", post(log_client_event))
 }
 
@@ -502,6 +503,42 @@ fn compose_crash_alert(path: &str, source: &str, message: &str, stack: Option<&s
          \u{1F4E1} {source}\n\
          \u{1F4A3} {snippet}{stack_block}"
     )
+}
+
+/// `GET /api/admin/promo-report` — what each published promo post sold.
+///
+/// Lives here beside the other admin read for the same reason that one does:
+/// data written and never readable back is data that gets guessed about during
+/// an incident. The promoter is supposed to be answerable to sales, and this
+/// is where the answer is read.
+async fn promo_report(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    Query(q): Query<PromoReportQuery>,
+) -> Result<AxumJson<serde_json::Value>, StatusCode> {
+    crate::api::auth::check_admin(&headers, &state)?;
+    let days = q.days.unwrap_or(30).clamp(1, 365);
+    let rows = crate::promo::report(&state.db, days).await.map_err(|e| {
+        tracing::error!("promo_report: {e}");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+    let total_revenue: f64 = rows.iter().map(|r| r.revenue).sum();
+    let total_orders: i32 = rows.iter().map(|r| r.orders).sum();
+    Ok(AxumJson(serde_json::json!({
+        "days": days,
+        "posts": rows.len(),
+        "orders": total_orders,
+        "revenue": total_revenue,
+        // Said out loud in the payload, so nobody reads this as proof the
+        // posts caused the orders. It is what followed them.
+        "note": "orders placed within 24h after opening a promo link, by the same customer — an upper bound, not causation",
+        "results": rows,
+    })))
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct PromoReportQuery {
+    days: Option<i64>,
 }
 
 /// Loop #13: lightweight conversion/event telemetry sink. Unlike

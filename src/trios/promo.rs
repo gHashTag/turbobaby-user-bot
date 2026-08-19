@@ -21,6 +21,8 @@
 //!    a sales lever, it is a hope. Every post carries a deep link whose payload
 //!    the app already understands.
 
+use chrono::Datelike;
+
 /// A reason to write a post.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Subject {
@@ -44,6 +46,23 @@ pub enum Subject {
         id: String,
         name: String,
     },
+    /// Something that already sells, promoted again.
+    ///
+    /// The agent was motivated by newness, which is not a sales signal: the
+    /// best-selling set in the shop is never news and is the thing most worth
+    /// posting about. `period` is what keeps this from repeating forever —
+    /// it goes into the dedup key, so the same bestseller can return at most
+    /// once per period and never twice in one.
+    Bestseller {
+        id: String,
+        name: String,
+        kind: BestsellerKind,
+        /// Units sold in the window that qualified it. Goes to the model as a
+        /// fact and is never invented.
+        sold: i64,
+        /// `2026-W34`. See `weekly_period`.
+        period: String,
+    },
     /// An event happening soon. Separate from `Event` because the reason to
     /// post is the clock, not the row appearing, and the same event legitimately
     /// gets both — once when it is announced and once the day before.
@@ -56,6 +75,24 @@ pub enum Subject {
     },
 }
 
+/// Which catalog a bestseller lives in, so its link opens the right screen.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BestsellerKind {
+    Strain,
+    Set,
+}
+
+/// The period a recurring post belongs to.
+///
+/// ISO week rather than "30 days ago", because a rolling window makes the
+/// dedup key move every tick and the same bestseller would be posted every
+/// fifteen minutes. A week is a bucket: one post per bestseller per week, and
+/// the key says which week it was.
+pub fn weekly_period(now: chrono::DateTime<chrono::Utc>) -> String {
+    let iso = now.iso_week();
+    format!("{}-W{:02}", iso.year(), iso.week())
+}
+
 impl Subject {
     pub fn id(&self) -> &str {
         match self {
@@ -64,6 +101,7 @@ impl Subject {
             | Subject::Tea { id, .. }
             | Subject::Set { id, .. }
             | Subject::Event { id, .. }
+            | Subject::Bestseller { id, .. }
             | Subject::EventSoon { id, .. } => id,
         }
     }
@@ -75,6 +113,7 @@ impl Subject {
             | Subject::Tea { name, .. }
             | Subject::Set { name, .. }
             | Subject::Event { name, .. }
+            | Subject::Bestseller { name, .. }
             | Subject::EventSoon { name, .. } => name,
         }
     }
@@ -90,6 +129,7 @@ impl Subject {
             Subject::Set { .. } => "set",
             Subject::Event { .. } => "event",
             Subject::EventSoon { .. } => "event_soon",
+            Subject::Bestseller { .. } => "bestseller",
         }
     }
 
@@ -102,6 +142,10 @@ impl Subject {
             Subject::Tea { .. } => Kind::Tea,
             Subject::Set { .. } => Kind::Set,
             Subject::Event { .. } | Subject::EventSoon { .. } => Kind::Event,
+            Subject::Bestseller { kind, .. } => match kind {
+                BestsellerKind::Strain => Kind::Strain,
+                BestsellerKind::Set => Kind::Set,
+            },
         };
         Some(Target::Product {
             kind,
@@ -120,7 +164,14 @@ impl Subject {
 /// two legitimate posts about one row. Keyed on the id alone, announcing an
 /// event would silently suppress its reminder.
 pub fn dedup_key(subject: &Subject) -> String {
-    format!("{}:{}", subject.kind(), subject.id())
+    match subject {
+        // A recurring post is keyed by period as well, so it can come back
+        // next week and cannot come back twice this week.
+        Subject::Bestseller { id, period, .. } => {
+            format!("{}:{}:{}", subject.kind(), id, period)
+        }
+        _ => format!("{}:{}", subject.kind(), subject.id()),
+    }
 }
 
 /// Longest post the promoter will send.
@@ -143,6 +194,9 @@ pub fn prompt_for(subject: &Subject, lang: &str, facts: &str) -> String {
         Subject::Tea { name, .. } => format!("новая позиция в напитках — «{name}»"),
         Subject::Set { name, .. } => format!("новый набор «{name}» со скидкой"),
         Subject::Event { name, .. } => format!("новое мероприятие «{name}»"),
+        Subject::Bestseller { name, sold, .. } => {
+            format!("«{name}» — один из самых заказываемых за неделю ({sold} шт.)")
+        }
         Subject::EventSoon {
             name,
             when,
@@ -197,6 +251,9 @@ pub fn fallback_copy(subject: &Subject) -> String {
         Subject::Event { name, .. } => {
             format!("📅 Новое мероприятие — {name}\n\nМеста можно занять заранее.")
         }
+        Subject::Bestseller { name, sold, .. } => {
+            format!("🔥 Берут чаще всего — {name}\n\nЗа неделю заказали {sold} раз.")
+        }
         Subject::EventSoon {
             name,
             when,
@@ -242,6 +299,64 @@ pub fn usable_copy(model_output: &str, subject: &Subject) -> String {
         return fallback_copy(subject);
     }
     text.to_string()
+}
+
+/// What a post is worth, so the best one goes out first.
+///
+/// The agent used to take whatever was oldest. Age is not a sales signal: a
+/// 150 ฿ accessory added on Monday beat a 1200 ฿ set added on Tuesday, and the
+/// per-tick cap meant the set might wait hours. This ranks by the money a post
+/// can plausibly move.
+///
+/// Deliberately crude, and crude in a way that is honest: the shop has no
+/// margin data, so price stands in for value, and the multipliers below are
+/// stated preferences rather than measurements. They are here to be replaced
+/// once `promo_posts` has enough published rows to say which kind actually
+/// converts — which is what the attribution shipped in #94 is for.
+pub fn score(subject: &Subject, price_baht: Option<f64>) -> f64 {
+    let price = price_baht
+        .filter(|p| p.is_finite() && *p > 0.0)
+        .unwrap_or(0.0);
+
+    let weight = match subject {
+        // A sold-out event is worth nothing to post about: there is nothing
+        // left to sell and the post would spend the day's attention on it.
+        Subject::EventSoon {
+            seats_left: Some(0),
+            ..
+        } => return 0.0,
+        // Perishable. A seat unsold when the event starts is revenue that
+        // cannot be recovered, so among things of similar value it goes first.
+        Subject::EventSoon { .. } => 3.0,
+        // The biggest single basket the shop sells.
+        Subject::Set { .. } => 2.0,
+        // Already proven to sell; the only open question is reach.
+        Subject::Bestseller { sold, .. } => 1.8 + (*sold as f64).min(50.0) * 0.02,
+        Subject::Event { .. } => 1.5,
+        Subject::Strain { .. } => 1.0,
+        Subject::Tea { .. } => 0.6,
+        Subject::Accessory { .. } => 0.5,
+    };
+
+    // Price enters logarithmically. A 2000 ฿ set is worth more to post about
+    // than a 300 ฿ strain, but not seven times more — far fewer people buy it.
+    // Under a linear or even square-root price, one expensive item would win
+    // every tick forever and the rest of the shop would never be posted.
+    // With `ln`, a 300x price difference is barely a 2x difference in rank.
+    weight * (1.0 + (1.0 + price).ln())
+}
+
+/// Best first.
+///
+/// Ties keep their original order, which is oldest-first — so among equals the
+/// thing that has waited longest still goes first.
+pub fn rank(mut candidates: Vec<(Subject, Option<f64>)>) -> Vec<Subject> {
+    candidates.sort_by(|a, b| {
+        score(&b.0, b.1)
+            .partial_cmp(&score(&a.0, a.1))
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    candidates.into_iter().map(|(s, _)| s).collect()
 }
 
 /// The attribution source recorded against this post.
@@ -440,6 +555,152 @@ mod tests {
                 "{src} would be rejected by the deep-link parser"
             );
         }
+    }
+
+    /// The money decides, not the calendar.
+    ///
+    /// A cheap accessory added first used to beat an expensive set added
+    /// second, and with a per-tick cap the set could wait hours.
+    #[test]
+    fn an_expensive_set_outranks_a_cheap_accessory_added_earlier() {
+        let acc = Subject::Accessory {
+            id: "a".into(),
+            name: "rolling papers".into(),
+        };
+        let set = Subject::Set {
+            id: "k".into(),
+            name: "party pack".into(),
+        };
+        let order = rank(vec![
+            (acc.clone(), Some(150.0)),
+            (set.clone(), Some(1200.0)),
+        ]);
+        assert_eq!(order.first().map(|s| s.kind()), Some("set"), "{order:?}");
+    }
+
+    /// Between two events, the one with seats left wins — the other has
+    /// nothing left to sell.
+    ///
+    /// Note what this does NOT claim: that a free event outranks an expensive
+    /// set. It does not, and asserting so would be a preference with nothing
+    /// behind it. A set moves 2000 ฿ that the data can see; a free event moves
+    /// footfall that it cannot. Perishability breaks ties among comparable
+    /// things rather than overriding revenue.
+    #[test]
+    fn between_two_events_the_one_with_seats_left_wins() {
+        let with_seats = Subject::EventSoon {
+            id: "e1".into(),
+            name: "UFC".into(),
+            when: "20:00".into(),
+            seats_left: Some(6),
+        };
+        let sold_out = Subject::EventSoon {
+            id: "e2".into(),
+            name: "Yoga".into(),
+            when: "09:00".into(),
+            seats_left: Some(0),
+        };
+        let order = rank(vec![(sold_out, Some(500.0)), (with_seats.clone(), None)]);
+        assert_eq!(order.first().map(|s| s.kind()), Some("event_soon"));
+        assert_eq!(order.first().map(|s| s.id()), Some("e1"), "{order:?}");
+    }
+
+    /// And an event ranks above a strain of the same price — perishable first
+    /// among comparable things.
+    #[test]
+    fn an_expiring_event_beats_an_evergreen_product_of_equal_value() {
+        let soon = Subject::EventSoon {
+            id: "e".into(),
+            name: "UFC".into(),
+            when: "20:00".into(),
+            seats_left: Some(6),
+        };
+        let strain = Subject::Strain {
+            id: "s".into(),
+            name: "DA FUNK".into(),
+        };
+        let order = rank(vec![(strain, Some(500.0)), (soon, Some(500.0))]);
+        assert_eq!(
+            order.first().map(|s| s.kind()),
+            Some("event_soon"),
+            "{order:?}"
+        );
+    }
+
+    /// A sold-out event is worth nothing to post about — there is nothing left
+    /// to sell, and the post would spend the day's attention on it.
+    #[test]
+    fn a_sold_out_event_scores_zero() {
+        let full = Subject::EventSoon {
+            id: "e".into(),
+            name: "UFC".into(),
+            when: "20:00".into(),
+            seats_left: Some(0),
+        };
+        assert_eq!(score(&full, None), 0.0);
+        let strain = Subject::Strain {
+            id: "s".into(),
+            name: "DA FUNK".into(),
+        };
+        assert!(score(&strain, Some(300.0)) > score(&full, None));
+    }
+
+    /// Price must not let one item crowd out the whole shop.
+    ///
+    /// Stated as a ratio rather than an ordering, because the ordering across
+    /// categories is a preference and the flattening is a property: a 333x
+    /// price difference must not become a 333x difference in rank, or the gold
+    /// grinder is the only thing ever posted.
+    #[test]
+    fn one_expensive_item_does_not_dwarf_the_whole_shop() {
+        let cheap = Subject::Accessory {
+            id: "a1".into(),
+            name: "papers".into(),
+        };
+        let dear = Subject::Accessory {
+            id: "a2".into(),
+            name: "gold grinder".into(),
+        };
+        let (lo, hi) = (score(&cheap, Some(150.0)), score(&dear, Some(50_000.0)));
+        assert!(hi > lo, "the expensive one should still rank higher");
+        assert!(
+            hi / lo < 2.5,
+            "a 333x price difference became a {:.1}x rank difference; one item \
+             would win every tick forever",
+            hi / lo
+        );
+    }
+
+    /// A recurring post returns next week and not twice this week.
+    #[test]
+    fn a_bestseller_can_come_back_but_not_twice_in_one_week() {
+        let mk = |period: &str| Subject::Bestseller {
+            id: "k1".into(),
+            name: "Snickers Cake".into(),
+            kind: BestsellerKind::Set,
+            sold: 12,
+            period: period.into(),
+        };
+        assert_eq!(dedup_key(&mk("2026-W34")), dedup_key(&mk("2026-W34")));
+        assert_ne!(dedup_key(&mk("2026-W34")), dedup_key(&mk("2026-W35")));
+        assert!(dedup_key(&mk("2026-W34")).contains("2026-W34"));
+    }
+
+    /// The period is a bucket, not a rolling window — a rolling one would move
+    /// on every tick and repost the same bestseller every fifteen minutes.
+    #[test]
+    fn the_period_is_stable_within_a_week() {
+        let monday = chrono::DateTime::parse_from_rfc3339("2026-08-17T01:00:00+00:00")
+            .expect("date")
+            .with_timezone(&chrono::Utc);
+        let friday = chrono::DateTime::parse_from_rfc3339("2026-08-21T23:00:00+00:00")
+            .expect("date")
+            .with_timezone(&chrono::Utc);
+        let next_monday = chrono::DateTime::parse_from_rfc3339("2026-08-24T01:00:00+00:00")
+            .expect("date")
+            .with_timezone(&chrono::Utc);
+        assert_eq!(weekly_period(monday), weekly_period(friday));
+        assert_ne!(weekly_period(monday), weekly_period(next_monday));
     }
 
     /// The prompt must carry the facts and must forbid inventing the rest.

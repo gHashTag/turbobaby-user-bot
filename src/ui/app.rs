@@ -216,15 +216,23 @@ pub fn App() -> Element {
                     // the promoter's attribution is a label nobody can count.
                     if let Some(crate::trios::deeplink::Target::Product {
                         source: Some(campaign),
+                        id,
                         ..
                     }) = crate::trios::deeplink::parse(&param)
                     {
+                        // `<campaign>:<subject id>`, not the campaign alone.
+                        // The campaign says which *kind* of post it was, and
+                        // two sets promoted in the same month would then be
+                        // indistinguishable — "which post sold what" could only
+                        // be answered per category. The id is already in the
+                        // link, so this costs nothing to carry.
+                        let detail = format!("{campaign}:{id}");
                         let base = api_base_url();
                         spawn(async move {
                             let _ = crate::ui::api::http::post_client_event(
                                 &base,
                                 "promo_link_opened",
-                                &campaign,
+                                &detail,
                             )
                             .await;
                         });
