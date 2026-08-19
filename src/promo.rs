@@ -39,6 +39,9 @@ const MAX_DRAFTS_PER_TICK: usize = 5;
 /// The prefix on the Publish button's callback data.
 pub const PUBLISH_CALLBACK: &str = "promo_pub:";
 
+/// The callback data on the "stop sending these" button.
+pub const MUTE_CALLBACK: &str = "promo_mute";
+
 /// Find, write, and hand over. One tick.
 pub async fn sweep(db: Arc<Database>, bot: Bot, config: Arc<Config>, ai: Arc<crate::ai::AiClient>) {
     let since = match watching_since(&db).await {
@@ -93,10 +96,11 @@ pub async fn sweep(db: Arc<Database>, bot: Bot, config: Arc<Config>, ai: Arc<cra
         }
 
         let (body, source) = write_copy(&subject, &db, &ai).await;
+        let image = image_for(&subject, &db).await;
         if let Err(e) = record_body(&db, &subject, &body, source).await {
             tracing::warn!("promo: could not record the body: {e}");
         }
-        send_draft(&bot, &config, &subject, &body).await;
+        send_draft(&bot, &db, &config, &subject, &body, image.as_deref()).await;
         drafted += 1;
     }
 
@@ -370,38 +374,115 @@ async fn facts_for(subject: &Subject, db: &Database) -> String {
     }
 }
 
+/// The cover image for a subject.
+///
+/// A post without one is a wall of text in a feed of pictures. The owner asked
+/// for the picture to be there always, and they are right about why: the same
+/// offer reads as more expensive with it. When a row genuinely has no image the
+/// draft still goes — a post that says nothing because it lacks a photo is
+/// worse than a plain one — and the message says the picture is missing so the
+/// owner can add it before publishing.
+async fn image_for(subject: &Subject, db: &Database) -> Option<String> {
+    let (table, col) = match subject {
+        Subject::Strain { .. } => ("strains", "image_url"),
+        Subject::Accessory { .. } => ("accessories", "image_url"),
+        Subject::Tea { .. } => ("tea_products", "image_url"),
+        Subject::Set { .. } => ("sets", "image_url"),
+        Subject::Event { .. } | Subject::EventSoon { .. } => ("events", "image_url"),
+    };
+    let sql = format!("SELECT {col} AS url FROM {table} WHERE id::text = $1");
+    let url: Option<String> = db
+        .orm
+        .query_one(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            &sql,
+            [subject.id().into()],
+        ))
+        .await
+        .ok()
+        .flatten()
+        .and_then(|r| r.try_get("", "url").ok())
+        .flatten();
+    // Telegram fetches the photo itself, so only an absolute http(s) URL is
+    // any use: a relative path would fail the send and take the whole draft
+    // with it.
+    url.filter(|u| u.starts_with("https://") || u.starts_with("http://"))
+}
+
 /// Hand the draft to the owners, with the link a customer would follow and a
 /// button that publishes it.
-async fn send_draft(bot: &Bot, config: &Config, subject: &Subject, body: &str) {
+async fn send_draft(
+    bot: &Bot,
+    db: &Database,
+    config: &Config,
+    subject: &Subject,
+    body: &str,
+    image: Option<&str>,
+) {
     let link = subject
         .deeplink_target()
         .and_then(|t| crate::trios::deeplink::payload_for(&t))
         .map(|p| crate::bot::miniapp_deep_link(&config.bot_username, &p))
         .unwrap_or_default();
 
+    // A draft with no picture says so, rather than looking finished. The same
+    // offer reads as more expensive with one, and a missing image is something
+    // the owner can fix in the admin panel before publishing.
+    let missing_photo = if image.is_none() {
+        "\n⚠️ Без картинки — добавьте обложку в админке, с ней пост выглядит дороже"
+    } else {
+        ""
+    };
     let text = format!(
         "📣 <b>Черновик поста</b> — {kind}\n\
          ━━━━━━━━━━━━━━━━\n\
          {body}\n\n\
          🔗 {link}\n\
-         📊 Метка: <code>{src}</code>",
+         📊 Метка: <code>{src}</code>{missing_photo}",
         kind = crate::util::html_escape(subject.kind()),
         body = crate::util::html_escape(body),
         link = crate::util::html_escape(&link),
         src = crate::util::html_escape(&promo::attribution(subject)),
     );
 
-    let keyboard = InlineKeyboardMarkup::new(vec![vec![InlineKeyboardButton::callback(
-        "📢 Опубликовать",
-        format!("{PUBLISH_CALLBACK}{}", promo::dedup_key(subject)),
-    )]]);
+    let keyboard = InlineKeyboardMarkup::new(vec![
+        vec![InlineKeyboardButton::callback(
+            "📢 Опубликовать",
+            format!("{PUBLISH_CALLBACK}{}", promo::dedup_key(subject)),
+        )],
+        // Switching the agent off has to be one tap away, in the message
+        // itself. An owner who wants it to stop and has to go looking for how
+        // will instead learn to ignore it, which is the same outcome with none
+        // of the signal.
+        vec![InlineKeyboardButton::callback(
+            "🔕 Отключить рассылку",
+            MUTE_CALLBACK.to_string(),
+        )],
+    ]);
 
     for admin in &config.admin_ids {
-        let sent = bot
-            .send_message(ChatId(*admin), &text)
-            .parse_mode(teloxide::types::ParseMode::Html)
-            .reply_markup(keyboard.clone())
-            .await;
+        if is_muted(db, *admin).await {
+            continue;
+        }
+        // A photo with the text as its caption, so the draft looks like the
+        // post it will become rather than like a notification about one.
+        // Telegram caps a caption at 1024 characters; `MAX_POST_LEN` plus this
+        // envelope stays inside it.
+        let sent = match image.and_then(|u| u.parse::<reqwest::Url>().ok()) {
+            Some(url) => bot
+                .send_photo(ChatId(*admin), teloxide::types::InputFile::url(url))
+                .caption(&text)
+                .parse_mode(teloxide::types::ParseMode::Html)
+                .reply_markup(keyboard.clone())
+                .await
+                .map(|_| ()),
+            None => bot
+                .send_message(ChatId(*admin), &text)
+                .parse_mode(teloxide::types::ParseMode::Html)
+                .reply_markup(keyboard.clone())
+                .await
+                .map(|_| ()),
+        };
         if let Err(e) = sent {
             tracing::warn!("promo: could not reach admin {admin}: {e}");
         }
@@ -480,6 +561,61 @@ pub async fn publish(
             "Telegram отклонил публикацию".to_string()
         }
     }
+}
+
+/// Has this owner asked the promoter to stop?
+///
+/// Failing open — a database hiccup means the draft is sent — because an owner
+/// who muted it will mute it again, whereas silence caused by an error looks
+/// exactly like an agent that has stopped working. Both garden sweeps in this
+/// project were mistaken for dead that way.
+async fn is_muted(db: &Database, admin: i64) -> bool {
+    db.orm
+        .query_one(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            "SELECT 1 AS x FROM promo_muted WHERE telegram_id = $1",
+            [admin.into()],
+        ))
+        .await
+        .map(|r| r.is_some())
+        .unwrap_or(false)
+}
+
+/// An owner pressed **Отключить рассылку**.
+pub async fn mute(db: Arc<Database>, who: i64) -> String {
+    match db
+        .orm
+        .execute(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            "INSERT INTO promo_muted (telegram_id) VALUES ($1) \
+             ON CONFLICT (telegram_id) DO NOTHING",
+            [who.into()],
+        ))
+        .await
+    {
+        Ok(_) => {
+            tracing::info!(who, "promo: muted for this admin");
+            // Saying how to undo it, because a switch with no visible way back
+            // is one nobody dares press.
+            "Больше не присылаю. Включить обратно: /promo_on".to_string()
+        }
+        Err(e) => {
+            tracing::warn!("promo: could not mute {who}: {e}");
+            "Не удалось отключить, попробуйте ещё раз".to_string()
+        }
+    }
+}
+
+/// And back on again.
+pub async fn unmute(db: &Database, who: i64) -> bool {
+    db.orm
+        .execute(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            "DELETE FROM promo_muted WHERE telegram_id = $1",
+            [who.into()],
+        ))
+        .await
+        .is_ok()
 }
 
 #[cfg(test)]

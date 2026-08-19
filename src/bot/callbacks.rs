@@ -156,6 +156,18 @@ pub(crate) async fn handle_callback(
         return Ok(());
     }
 
+    // The promoter's mute button, beside its Publish button and for the same
+    // reason: it is in the message, so stopping the drafts is one tap and not
+    // a hunt through settings.
+    if q.data.as_deref() == Some(crate::promo::MUTE_CALLBACK) {
+        let answer = crate::promo::mute(db.clone(), q.from.id.0 as i64).await;
+        bot.answer_callback_query(q.id)
+            .text(answer)
+            .show_alert(true)
+            .await?;
+        return Ok(());
+    }
+
     let data = match q.data.as_deref() {
         Some(d) => {
             if !is_callback_data_valid(d) {

@@ -76,6 +76,14 @@ pub enum Target {
     Product {
         kind: Kind,
         id: String,
+        /// Where this link was published, when it was published deliberately.
+        ///
+        /// The promoter needs it: a post that cannot be traced to an order
+        /// cannot show it produced any, and the agent is meant to be driven by
+        /// sales rather than by newness. `None` for an ordinary share between
+        /// two customers, which is not a campaign and must not be counted as
+        /// one.
+        source: Option<String>,
     },
     Order(String),
     /// `cart`, or `cart__<source>` carrying the campaign that drove the open.
@@ -111,6 +119,18 @@ pub fn product_payload(kind: Kind, id: &str) -> String {
     format!("{}_{}", kind.prefix(), id)
 }
 
+/// The same, carrying where it was published.
+///
+/// `__` separates it, the way `cart__<source>` already does, so one convention
+/// covers both. Ids in this shop are UUIDs and hyphenated slugs, neither of
+/// which contains `__`.
+pub fn product_payload_from(kind: Kind, id: &str, source: Option<&str>) -> String {
+    match source.filter(|s| usable_source(s)) {
+        Some(src) => format!("{}_{}__{}", kind.prefix(), id, src),
+        None => product_payload(kind, id),
+    }
+}
+
 /// Read a payload back into the thing it opens.
 ///
 /// `strip_prefix` rather than `split_once('_')`: the prefixes contain an
@@ -127,9 +147,18 @@ pub fn parse(payload: &str) -> Option<Target> {
             if id.is_empty() {
                 return None;
             }
+            // A trailing `__<source>` is the campaign that published the
+            // link, not part of the id.
+            let (bare, source) = match id.split_once("__") {
+                Some((left, src)) if usable_source(src) && !left.is_empty() => {
+                    (left, Some(src.to_string()))
+                }
+                _ => (id, None),
+            };
             return Some(Target::Product {
                 kind,
-                id: id.to_string(),
+                id: bare.to_string(),
+                source,
             });
         }
     }
@@ -200,7 +229,7 @@ pub fn parse(payload: &str) -> Option<Target> {
 /// producing a link that silently opens the home screen.
 pub fn payload_for(target: &Target) -> Option<String> {
     let payload = match target {
-        Target::Product { kind, id } => product_payload(*kind, id),
+        Target::Product { kind, id, source } => product_payload_from(*kind, id, source.as_deref()),
         Target::Order(id) => format!("o_{id}"),
         Target::Reorder(id) => format!("reorder__{id}"),
         Target::Cart { source } if source.is_empty() => "cart".to_string(),
@@ -283,6 +312,7 @@ mod tests {
             seen.insert(destination(&Target::Product {
                 kind,
                 id: "x".into(),
+                source: None,
             }));
         }
         for t in [
@@ -319,6 +349,7 @@ mod tests {
                 destination(&Target::Product {
                     kind: *k,
                     id: "x".into(),
+                    source: None,
                 })
             })
             .collect();
@@ -328,6 +359,63 @@ mod tests {
             Kind::ALL.len(),
             "two product kinds share a screen: {per_kind:?}"
         );
+    }
+
+    /// A promo link carries the campaign that published it, and reads it back.
+    ///
+    /// This was shipped once with the campaign printed to the owner and **not**
+    /// in the link — a label nobody could count. The whole point of the
+    /// promoter is sales, and a post that cannot be joined to an order cannot
+    /// show it produced any.
+    #[test]
+    fn a_published_link_carries_its_campaign_and_stays_transportable() {
+        for kind in Kind::ALL {
+            for id in IDS {
+                let with = Target::Product {
+                    kind,
+                    id: id.to_string(),
+                    source: Some("promo_event_soon".to_string()),
+                };
+                let payload = payload_for(&with)
+                    .unwrap_or_else(|| panic!("{kind:?}/{id} produced no link with a campaign"));
+                assert_eq!(
+                    parse(&payload).as_ref(),
+                    Some(&with),
+                    "{payload} lost its campaign on the way back"
+                );
+                assert!(
+                    is_miniapp_payload(&payload),
+                    "the bot would not answer {payload}, so the post leads nowhere"
+                );
+                // The longest real case: the longest prefix, a UUID, and the
+                // longest campaign name. Over 64 bytes Telegram truncates the
+                // start parameter and the link opens the home screen.
+                assert!(
+                    payload.len() <= MAX_START_PARAM_LEN,
+                    "{payload} is {} bytes, over Telegram's {MAX_START_PARAM_LEN}",
+                    payload.len()
+                );
+            }
+        }
+    }
+
+    /// An ordinary share between two customers is not a campaign.
+    ///
+    /// Counting it as one would put word of mouth into the promoter's numbers
+    /// and make every post look like it worked.
+    #[test]
+    fn a_plain_share_carries_no_campaign() {
+        let plain = Target::Product {
+            kind: Kind::Set,
+            id: "fe346171-aa5b-4f88-93ed-8be0ec38aa6c".into(),
+            source: None,
+        };
+        let payload = payload_for(&plain).expect("link");
+        assert!(
+            !payload.contains("__"),
+            "a plain share got a campaign: {payload}"
+        );
+        assert_eq!(parse(&payload).as_ref(), Some(&plain));
     }
 
     /// Build every target, parse it back, and require the same target.
@@ -345,6 +433,7 @@ mod tests {
                 targets.push(Target::Product {
                     kind,
                     id: id.to_string(),
+                    source: None,
                 });
             }
         }
@@ -447,7 +536,8 @@ mod tests {
             assert_eq!(
                 payload_for(&Target::Product {
                     kind: Kind::Set,
-                    id: bad.to_string()
+                    id: bad.to_string(),
+                    source: None,
                 }),
                 None,
                 "{bad:?} was turned into a link anyway"
@@ -467,7 +557,8 @@ mod tests {
                     back,
                     Target::Product {
                         kind,
-                        id: id.to_string()
+                        id: id.to_string(),
+                        source: None,
                     },
                     "{payload} came back as something else"
                 );
@@ -560,7 +651,8 @@ mod tests {
             parse("p_set_set_x"),
             Some(Target::Product {
                 kind: Kind::Set,
-                id: "set_x".to_string()
+                id: "set_x".to_string(),
+                source: None,
             })
         );
     }

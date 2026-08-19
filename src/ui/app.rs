@@ -210,6 +210,25 @@ pub fn App() -> Element {
                         });
                         return;
                     }
+                    // A promo link carries the campaign that published it.
+                    // Report it before opening the card: this event is the only
+                    // thing that later joins a post to an order, and without it
+                    // the promoter's attribution is a label nobody can count.
+                    if let Some(crate::trios::deeplink::Target::Product {
+                        source: Some(campaign),
+                        ..
+                    }) = crate::trios::deeplink::parse(&param)
+                    {
+                        let base = api_base_url();
+                        spawn(async move {
+                            let _ = crate::ui::api::http::post_client_event(
+                                &base,
+                                "promo_link_opened",
+                                &campaign,
+                            )
+                            .await;
+                        });
+                    }
                     if let Some(product) = parse_start_param(&param) {
                         #[cfg(target_arch = "wasm32")]
                         web_sys::console::log_1(

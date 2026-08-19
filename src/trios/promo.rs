@@ -106,6 +106,10 @@ impl Subject {
         Some(Target::Product {
             kind,
             id: self.id().to_string(),
+            // The campaign this post is. Without it the link is
+            // indistinguishable from a customer sharing the same card, and the
+            // agent could never tell which of its posts sold anything.
+            source: Some(attribution(self)),
         })
     }
 }

@@ -235,3 +235,71 @@ async fn a_draft_starts_unpublished() {
          GLM_API_KEY is unset in production"
     );
 }
+
+/// Muting is per owner and survives a restart.
+///
+/// A button that says "больше не присылаю" and forgets on the next deploy is
+/// worse than no button: the owner stops trusting the switch and starts
+/// ignoring the messages instead, which is the same silence with none of the
+/// signal.
+#[tokio::test]
+#[ignore]
+async fn muting_is_per_owner_and_persists() {
+    let Some((_app, db)) = make_app_with_db().await else {
+        return;
+    };
+    let (quiet, loud) = (975_001i64, 975_002i64);
+    for id in [quiet, loud] {
+        db.orm
+            .execute(Statement::from_sql_and_values(
+                DbBackend::Postgres,
+                "DELETE FROM promo_muted WHERE telegram_id = $1",
+                [id.into()],
+            ))
+            .await
+            .expect("clean");
+    }
+
+    db.orm
+        .execute(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            "INSERT INTO promo_muted (telegram_id) VALUES ($1) ON CONFLICT DO NOTHING",
+            [quiet.into()],
+        ))
+        .await
+        .expect("mute");
+
+    let is_muted = |id: i64| {
+        let db = &db;
+        async move {
+            db.orm
+                .query_one(Statement::from_sql_and_values(
+                    DbBackend::Postgres,
+                    "SELECT 1 AS x FROM promo_muted WHERE telegram_id = $1",
+                    [id.into()],
+                ))
+                .await
+                .map(|r| r.is_some())
+                .unwrap_or(false)
+        }
+    };
+
+    assert!(
+        is_muted(quiet).await,
+        "the owner who muted it still gets drafts"
+    );
+    assert!(
+        !is_muted(loud).await,
+        "one owner muting the promoter silenced another"
+    );
+
+    // Pressing twice is ordinary and must not error.
+    db.orm
+        .execute(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            "INSERT INTO promo_muted (telegram_id) VALUES ($1) ON CONFLICT DO NOTHING",
+            [quiet.into()],
+        ))
+        .await
+        .expect("muting twice must be harmless");
+}

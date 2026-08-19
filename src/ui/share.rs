@@ -100,7 +100,10 @@ pub fn parse_start_param(param: &str) -> Option<SharedProduct> {
     // second list of the same prefixes that disagreed with this one about
     // twelve payloads.
     match crate::trios::deeplink::parse(param)? {
-        crate::trios::deeplink::Target::Product { kind, id } => Some(SharedProduct {
+        // `source` is deliberately dropped here: it says which campaign
+        // published the link, and the screen only needs to know which card to
+        // open. It is reported separately, in `app.rs`, as a client event.
+        crate::trios::deeplink::Target::Product { kind, id, .. } => Some(SharedProduct {
             kind: ProductKind::from_core(kind),
             id,
         }),
@@ -126,6 +129,9 @@ fn deep_link_url(kind: ProductKind, id: &str) -> String {
     let payload = crate::trios::deeplink::payload_for(&crate::trios::deeplink::Target::Product {
         kind: kind.to_core(),
         id: id.to_string(),
+        // A customer sharing a card is not a campaign, and counting it as one
+        // would put the promoter's numbers in with ordinary word of mouth.
+        source: None,
     });
     match payload {
         Some(p) => format!("https://t.me/{}?start={}", bot_username(), p),
