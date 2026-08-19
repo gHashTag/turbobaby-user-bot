@@ -249,7 +249,17 @@ impl AiClient {
     }
 
     async fn call_glm(&self, prompt: &str, system: &str) -> Result<String> {
-        let models = ["glm-4-flash", "glm-4-plus"];
+        // Model names checked against both live endpoints with a real key.
+        //
+        // `glm-4-flash` was in this list and **does not exist on either**:
+        // z.ai answers `Unknown Model, please check the model code` and
+        // bigmodel.cn answers the same in Chinese. Every call spent the first
+        // attempt on a name no server knows, which is invisible when the
+        // fallback quietly covers for it.
+        //
+        // Cheapest first, so a working account is not billed for the largest
+        // model to write four lines about a new strain.
+        let models = ["glm-4.5-air", "glm-4.5", "glm-4-plus"];
         let endpoints = [
             "https://open.bigmodel.cn/api/paas/v4/chat/completions",
             "https://api.z.ai/api/paas/v4/chat/completions",
