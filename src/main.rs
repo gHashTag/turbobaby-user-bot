@@ -2413,6 +2413,12 @@ mod schema_drift_tests {
         // `events` table. Allow it here; the column is declared in
         // migration 043.
         "seats",
+        // `taken` is the output alias of `SUM(seats)::int4 AS taken` in a
+        // LEFT JOIN subquery over `event_bookings` (promo event
+        // reminders). The parser attributes it to the outer `events`
+        // table and to the subquery's own `event_bookings`; it is a
+        // column of neither — the source column is `seats`.
+        "taken",
     ];
 
     fn collect_files_with_ext(root: &Path, ext: &str, out: &mut Vec<PathBuf>) {

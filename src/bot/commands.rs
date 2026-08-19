@@ -985,3 +985,44 @@ mod tests {
         assert_eq!(calculate_discounted_price(99.0, 33.33), 66.0);
     }
 }
+
+#[cfg(test)]
+mod deep_link_button_tests {
+    use super::build_app_url_with_start;
+
+    /// The URL the bot actually puts on the Mini App button must parse.
+    ///
+    /// `web_app_btn` falls back to a plain button pointing at `https://t.me`
+    /// when `url.parse()` fails — Telegram's own homepage, which is a tap that
+    /// goes nowhere and reads exactly like "the link does not work". The
+    /// fallback logs, but nothing asserted that the real production base ever
+    /// reaches it, so this pins the shapes that matter: the live
+    /// `WEB_APP_URL` (which carries `?cache=NNN`), a base with no query at all,
+    /// and a base arriving with Telegram's own fragment already attached.
+    #[test]
+    fn the_button_url_for_a_shared_card_parses() {
+        let payload = "p_set_fe346171-aa5b-4f88-93ed-8be0ec38aa6c";
+        for base in [
+            "https://woody-weed-bot-production-370f.up.railway.app/?cache=181",
+            "https://woody-weed-bot-production-370f.up.railway.app/",
+            "https://woody-weed-bot-production-370f.up.railway.app",
+            "https://woody-weed-bot-production-370f.up.railway.app/?cache=181#tgWebAppData=xyz",
+        ] {
+            let built = build_app_url_with_start(base, "ru", None, Some(payload));
+            let parsed = built.parse::<url::Url>();
+            assert!(
+                parsed.is_ok(),
+                "the bot would have sent a button to https://t.me instead of the \
+                 card: base {base} produced {built} ({:?})",
+                parsed.err()
+            );
+            let parsed = parsed.expect("checked above");
+            assert_eq!(parsed.scheme(), "https", "built {built}");
+            assert!(
+                built.contains(&format!("startapp={payload}")),
+                "the payload has to survive into the button URL, or the app opens \
+                 the home screen: {built}"
+            );
+        }
+    }
+}
