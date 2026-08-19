@@ -104,6 +104,12 @@ fn month_key(month: u32) -> crate::trios::i18n::Key {
 struct WeekSelectorProps {
     selected: Signal<NaiveDate>,
     today: NaiveDate,
+    /// How many events each day holds, so the strip can say which dates have
+    /// anything at all. Without it every chip looked identical and finding an
+    /// event meant tapping all thirty-one — which is also why one date looked
+    /// as though it could only hold one event: nothing on the strip could have
+    /// said otherwise.
+    counts: std::collections::BTreeMap<NaiveDate, usize>,
 }
 
 /// Day picker covering a whole month, with month-to-month navigation.
@@ -153,12 +159,15 @@ fn WeekSelector(props: WeekSelectorProps) -> Element {
                     .map(|day| {
                         let is_selected = day == *selected.read();
                         let is_today = day == today;
-                        let (bg, border, color) = if is_selected {
-                            ("#39ff14", "#39ff14", "#000")
+                        // `dot` is the marker colour: on the selected chip the
+                        // background is the same green, so the marker has to
+                        // invert or it disappears exactly where it is being read.
+                        let (bg, border, color, dot) = if is_selected {
+                            ("#39ff14", "#39ff14", "#000", "#000")
                         } else if is_today {
-                            ("rgba(57,255,20,0.15)", "#39ff14", "#39ff14")
+                            ("rgba(57,255,20,0.15)", "#39ff14", "#39ff14", "#39ff14")
                         } else {
-                            ("#1a1a2e", "#2a2a4a", "#e8e8e8")
+                            ("#1a1a2e", "#2a2a4a", "#e8e8e8", "#39ff14")
                         };
                         let label = weekday_label(day.weekday(), lang);
                         // Day number only: the month name now lives in the
@@ -174,6 +183,24 @@ fn WeekSelector(props: WeekSelectorProps) -> Element {
                                 onclick: move |_| selected.set(day),
                                 span { style: "font-size:10px;text-transform:uppercase;", "{label}" }
                                 span { style: "font-size:12px;font-weight:700;margin-top:2px;", "{md}" }
+                                // A dot for a day with one event, the count for
+                                // a day with several. An empty day gets a
+                                // same-size transparent spacer rather than
+                                // nothing, so chips do not change height and
+                                // the strip stops jumping as events load.
+                                match crate::trios::calendar::day_mark(
+                                    props.counts.get(&day).copied().unwrap_or(0),
+                                ) {
+                                    crate::trios::calendar::DayMark::Empty => rsx! {
+                                        span { style: "font-size:9px;margin-top:3px;color:transparent;", "•" }
+                                    },
+                                    crate::trios::calendar::DayMark::One => rsx! {
+                                        span { style: "font-size:9px;margin-top:3px;color:{dot};", "•" }
+                                    },
+                                    crate::trios::calendar::DayMark::Several(n) => rsx! {
+                                        span { style: "font-size:9px;margin-top:3px;font-weight:700;color:{dot};", "{n}" }
+                                    },
+                                }
                             }
                         }
                     })
@@ -200,7 +227,19 @@ struct EventCardProps {
 fn EventCard(props: EventCardProps) -> Element {
     let ev = props.ev;
     let start = parse_event_start(&ev.starts_at);
-    let start_label = start.map(|s| s.format("%H:%M").to_string());
+    // Start AND end. The card printed only the start, so a day holding
+    // 09:00, 15:00, 18:00 and 21:00 told a customer when each began and never
+    // when any of them finished — although `ends_at` was stored and sent all
+    // along. See `trios::calendar::time_range`.
+    let start_label = start.map(|s| {
+        let from = s.format("%H:%M").to_string();
+        let to = ev
+            .ends_at
+            .as_deref()
+            .and_then(parse_event_start)
+            .map(|e| e.format("%H:%M").to_string());
+        crate::trios::calendar::time_range(&from, to.as_deref())
+    });
     let avail = ev
         .max_seats
         .map(|cap| cap.saturating_sub(ev.seats_taken as i32));
@@ -686,6 +725,46 @@ pub fn EventsScreen() -> Element {
     let subtitle = t(lang, T_EVENTS_SUBTITLE).to_string();
     let no_events = t(lang, T_EVENTS_NO_EVENTS).to_string();
 
+    // Everything in the visible month, for the day strip's markers.
+    //
+    // A second request rather than widening `events_resource`: that one is
+    // keyed on the selected day and is what the day list renders, and making it
+    // month-wide would refetch the whole month on every tap. This one is keyed
+    // on the month, so it fetches once per month and is quiet while the
+    // customer moves between days.
+    let month_resource: Resource<Result<Vec<CalendarEvent>, String>> = {
+        use_resource(use_reactive!(|selected| {
+            let anchor = crate::trios::calendar::first_of_month(*selected.read());
+            let next = crate::trios::calendar::shift_month(anchor, 1);
+            async move {
+                let base = api_base_url();
+                let url = format!(
+                    "{}/api/events?from={}T00:00:00%2B07:00&to={}T00:00:00%2B07:00",
+                    base, anchor, next
+                );
+                match crate::ui::api::http::fetch_text_full(&url).await {
+                    Ok((status, body)) if (200..300).contains(&status) => {
+                        // Same shape the day resource reads: a lenient parse, so
+                        // one malformed row does not blank the whole strip.
+                        let parsed: serde_json::Value =
+                            serde_json::from_str(&body).unwrap_or_default();
+                        Ok(parsed
+                            .get("events")
+                            .and_then(|v| v.as_array())
+                            .map(|arr| {
+                                arr.iter()
+                                    .filter_map(|v| serde_json::from_value(v.clone()).ok())
+                                    .collect()
+                            })
+                            .unwrap_or_default())
+                    }
+                    Ok((status, _)) => Err(format!("HTTP {status}")),
+                    Err(e) => Err(e),
+                }
+            }
+        }))
+    };
+
     let mut events_resource: Resource<Result<Vec<CalendarEvent>, String>> =
         use_resource(use_reactive!(|selected| {
             let from = selected.to_string();
@@ -746,6 +825,24 @@ pub fn EventsScreen() -> Element {
     let list = events_for_day.read().clone();
     let has_events = !list.is_empty();
 
+    // How many events each day of the visible month holds.
+    //
+    // From `month_resource`, not `events_resource`: the latter asks the server
+    // for the **selected day only** (`?from=<day>&to=<day+1>`), so tallying it
+    // could only ever mark the day already highlighted. That is what it did —
+    // one dot, on the chip you were standing on.
+    let day_counts: std::collections::BTreeMap<NaiveDate, usize> = {
+        let mut counts = std::collections::BTreeMap::new();
+        if let Some(Ok(all)) = &*month_resource.read() {
+            for e in all {
+                if let Some(dt) = parse_event_start(&e.starts_at) {
+                    *counts.entry(dt.date_naive()).or_insert(0) += 1;
+                }
+            }
+        }
+        counts
+    };
+
     let event_nodes = if has_events {
         rsx! {
             div { style: "display:flex;flex-direction:column;gap:12px;",
@@ -789,7 +886,7 @@ pub fn EventsScreen() -> Element {
                 h1 { style: "font-size:22px;font-weight:800;color:#39ff14;text-shadow:3px 3px 0 #000;letter-spacing:2px;", "{title}" }
                 p { style: "font-size:12px;color:#888;margin-top:4px;", "{subtitle}" }
             }
-            WeekSelector { selected, today }
+            WeekSelector { selected, today, counts: day_counts.clone() }
             div { style: "padding:0 16px;",
                 match &*events_resource.read() {
                     None => {

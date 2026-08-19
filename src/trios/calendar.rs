@@ -215,3 +215,99 @@ mod tests {
         }
     }
 }
+
+/// The time a single event occupies, as one label.
+///
+/// The day list printed only the start — `🕒 09:00` — for every event on a
+/// date. With one event per day that reads as "the event is at nine". With
+/// four, a customer choosing between 09:00, 15:00, 18:00 and 21:00 cannot tell
+/// which of them is still running when they arrive, and the end time was
+/// recorded, stored and sent the whole time.
+///
+/// `None` for the end is a real state, not a defect: `ends_at` is optional in
+/// the schema and the admin form labels it «Окончание (необязательно)». An
+/// event with no end prints its start alone rather than an empty dash.
+///
+/// An en dash with thin spaces, because `09:00-12:00` on a phone reads as one
+/// token and wraps badly.
+pub fn time_range(start: &str, end: Option<&str>) -> String {
+    match end {
+        Some(e) if !e.trim().is_empty() && e != start => format!("{start} – {e}"),
+        _ => start.to_string(),
+    }
+}
+
+/// How many events a day holds, as the calendar marks it.
+///
+/// The day strip gave no sign which dates had anything at all: every chip was
+/// a weekday and a number, so finding an event meant tapping all thirty-one.
+/// That is also why one date looked like it could only hold one event — there
+/// was nothing on the strip that could have said otherwise.
+///
+/// Zero is its own case and gets no marker: a dot on every day would say as
+/// little as a dot on none.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DayMark {
+    /// Nothing scheduled.
+    Empty,
+    /// Exactly one event — a dot is enough.
+    One,
+    /// Several; the count is worth printing, because it is the thing the
+    /// customer cannot otherwise discover without opening the day.
+    Several(usize),
+}
+
+pub fn day_mark(count: usize) -> DayMark {
+    match count {
+        0 => DayMark::Empty,
+        1 => DayMark::One,
+        n => DayMark::Several(n),
+    }
+}
+
+#[cfg(test)]
+mod schedule_tests {
+    use super::*;
+
+    #[test]
+    fn a_range_needs_both_ends() {
+        assert_eq!(time_range("09:00", Some("12:00")), "09:00 – 12:00");
+        assert_eq!(time_range("09:00", None), "09:00");
+        // An optional end left blank in the admin form arrives as an empty
+        // string, not as `None`.
+        assert_eq!(time_range("09:00", Some("")), "09:00");
+        assert_eq!(time_range("09:00", Some("   ")), "09:00");
+        // An end equal to the start is not a range worth printing.
+        assert_eq!(time_range("09:00", Some("09:00")), "09:00");
+    }
+
+    /// The four events from the report, each keeping its own hours.
+    #[test]
+    fn a_days_schedule_reads_as_distinct_slots() {
+        let day = [
+            ("09:00", Some("12:00")),
+            ("15:00", Some("17:00")),
+            ("18:00", Some("19:30")),
+            ("21:00", None),
+        ];
+        let labels: Vec<String> = day.iter().map(|(s, e)| time_range(s, *e)).collect();
+        assert_eq!(
+            labels,
+            vec!["09:00 – 12:00", "15:00 – 17:00", "18:00 – 19:30", "21:00"]
+        );
+        let unique: std::collections::BTreeSet<&String> = labels.iter().collect();
+        assert_eq!(
+            unique.len(),
+            labels.len(),
+            "two slots printed the same: {labels:?}"
+        );
+    }
+
+    #[test]
+    fn only_a_day_with_something_is_marked() {
+        assert_eq!(day_mark(0), DayMark::Empty);
+        assert_eq!(day_mark(1), DayMark::One);
+        assert_eq!(day_mark(2), DayMark::Several(2));
+        assert_eq!(day_mark(9), DayMark::Several(9));
+    }
+}
