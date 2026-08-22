@@ -113,7 +113,7 @@ pub async fn sweep(db: Arc<Database>, bot: Bot, config: Arc<Config>, ai: Arc<cra
 
         let (body, source) = write_copy(&subject, &db, &ai).await;
         let image = image_for(&subject, &db).await;
-        if let Err(e) = record_body(&db, &subject, &body, source).await {
+        if let Err(e) = record_body(&db, &subject, &body, source, image.as_deref()).await {
             tracing::warn!("promo: could not record the body: {e}");
         }
         send_draft(&bot, &db, &config, &subject, &body, image.as_deref()).await;
@@ -406,12 +406,27 @@ async fn record_body(
     subject: &Subject,
     body: &str,
     source: &str,
+    image: Option<&str>,
 ) -> Result<(), sea_orm::DbErr> {
+    // The deep-link payload is written down here because `publish` knows the
+    // post only by its dedup key: a `bestseller` is about a strain or a set,
+    // and the `kind` column alone cannot say which. Here the full `Subject`
+    // is still in hand.
+    let payload = subject
+        .deeplink_target()
+        .and_then(|t| crate::trios::deeplink::payload_for(&t));
     db.orm
         .execute(Statement::from_sql_and_values(
             DbBackend::Postgres,
-            "UPDATE promo_posts SET body = $2, source = $3 WHERE dedup_key = $1",
-            [promo::dedup_key(subject).into(), body.into(), source.into()],
+            "UPDATE promo_posts SET body = $2, source = $3, link_payload = $4, image_url = $5 \
+             WHERE dedup_key = $1",
+            [
+                promo::dedup_key(subject).into(),
+                body.into(),
+                source.into(),
+                payload.into(),
+                image.map(str::to_string).into(),
+            ],
         ))
         .await?;
     Ok(())
@@ -610,8 +625,13 @@ async fn send_draft(
 
 /// An owner pressed **Опубликовать**.
 ///
-/// The only place in this file that posts publicly, and it runs because a
+/// The only place in this file that messages clients, and it runs because a
 /// human tapped it. Everything before this is a draft in the owner's chat.
+///
+/// The mailing is carried by the bot itself — a direct message per client —
+/// because `PROMO_CHANNEL_ID` has sat unset since the agent shipped and a
+/// publish that depends on it is a publish that never happens (#96). A
+/// channel, when one is configured, is posted to as well, best-effort.
 pub async fn publish(
     db: Arc<Database>,
     bot: Bot,
@@ -628,7 +648,8 @@ pub async fn publish(
         .orm
         .query_one(Statement::from_sql_and_values(
             DbBackend::Postgres,
-            "SELECT body, subject_name, published_at FROM promo_posts WHERE dedup_key = $1",
+            "SELECT body, subject_name, published_at, link_payload, image_url \
+             FROM promo_posts WHERE dedup_key = $1",
             [dedup_key.into()],
         ))
         .await;
@@ -640,45 +661,271 @@ pub async fn publish(
         row.try_get("", "published_at").ok().flatten();
     if already.is_some() {
         // Pressing twice is ordinary — the message stays in the chat with its
-        // button. Saying so beats posting the same thing to the channel again.
+        // button. Saying so beats posting the same thing to every client again.
         return "Уже опубликовано".to_string();
     }
 
-    let Some(channel) = config.promo_channel_id else {
-        // Refusing out loud. A button that reports success and posted nowhere
-        // is worse than one that says the channel is not set up.
-        tracing::warn!("promo: publish pressed but PROMO_CHANNEL_ID is unset");
-        return "Канал не настроен: задайте PROMO_CHANNEL_ID и добавьте бота в админы канала"
-            .to_string();
-    };
-
-    match bot
-        .send_message(ChatId(channel), &body)
-        .parse_mode(teloxide::types::ParseMode::Html)
+    // Marked published *before* the fan-out starts. A broadcast takes minutes
+    // and must not be launchable twice off the same button; the summary says
+    // what actually went out, so a total failure never reads as success.
+    if let Err(e) = db
+        .orm
+        .execute(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            "UPDATE promo_posts SET published_at = NOW(), published_by = $2 \
+             WHERE dedup_key = $1",
+            [dedup_key.into(), by.into()],
+        ))
         .await
     {
-        Ok(_) => {
-            // Recorded only after Telegram accepted it, so a failed send never
-            // reads as published.
-            if let Err(e) = db
-                .orm
-                .execute(Statement::from_sql_and_values(
-                    DbBackend::Postgres,
-                    "UPDATE promo_posts SET published_at = NOW(), published_by = $2 \
-                     WHERE dedup_key = $1",
-                    [dedup_key.into(), by.into()],
-                ))
-                .await
-            {
-                tracing::warn!("promo: published but could not record it: {e}");
-            }
-            tracing::info!(dedup_key, by, "promo: published to the channel");
-            "Опубликовано ✅".to_string()
+        tracing::warn!("promo: could not mark the post published: {e}");
+    }
+
+    let subject_name: String = row.try_get("", "subject_name").unwrap_or_default();
+    let link_payload: Option<String> = row.try_get("", "link_payload").ok().flatten();
+    let image_url: Option<String> = row.try_get("", "image_url").ok().flatten();
+
+    // The channel, when there is one, is posted to as well — but its failure
+    // must not take the direct mailing down with it.
+    if let Some(channel) = config.promo_channel_id {
+        match bot
+            .send_message(ChatId(channel), &body)
+            .parse_mode(teloxide::types::ParseMode::Html)
+            .await
+        {
+            Ok(_) => tracing::info!(dedup_key, "promo: posted to the channel too"),
+            Err(e) => tracing::warn!("promo: channel send failed (broadcast continues): {e}"),
         }
+    }
+
+    let recipients = match broadcast_recipients(&db, &config.admin_ids).await {
+        Ok(r) => r,
         Err(e) => {
-            tracing::warn!("promo: channel send failed: {e}");
-            "Telegram отклонил публикацию".to_string()
+            tracing::error!("promo: could not read the client list: {e}");
+            return "Не удалось прочитать список клиентов".to_string();
         }
+    };
+    if recipients.is_empty() {
+        return "Некому отправлять: в базе нет клиентов".to_string();
+    }
+    let total = recipients.len();
+    let post = BroadcastPost {
+        dedup_key: dedup_key.to_string(),
+        subject_name,
+        body,
+        link: link_payload
+            .map(|p| crate::bot::miniapp_deep_link(&config.bot_username, &p))
+            .filter(|l| !l.is_empty()),
+        image: image_url,
+    };
+    tracing::info!(dedup_key, by, total, "promo: broadcast starting");
+    tokio::spawn(async move {
+        broadcast_post(db, bot, config, post, recipients).await;
+    });
+    format!("Рассылка запущена: {total} получателей")
+}
+
+/// What a broadcast carries, lifted out of the row so the background task owns
+/// one value rather than re-reading the database mid-send.
+struct BroadcastPost {
+    dedup_key: String,
+    subject_name: String,
+    body: String,
+    /// The Mini App link a customer opens. `None` only for rows drafted before
+    /// migration 076 — those go out without the open button.
+    link: Option<String>,
+    image: Option<String>,
+}
+
+/// Everyone the bot may write to directly: every user it has seen, minus those
+/// who asked it to stop, those blocked for fraud, and the owners themselves
+/// (they already have the draft in their chat).
+async fn broadcast_recipients(db: &Database, admins: &[i64]) -> Result<Vec<i64>, sea_orm::DbErr> {
+    let rows = db
+        .orm
+        .query_all(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            "SELECT u.telegram_id FROM user_languages u \
+             WHERE NOT EXISTS (SELECT 1 FROM promo_muted m \
+                               WHERE m.telegram_id = u.telegram_id) \
+               AND NOT COALESCE((SELECT p.is_blocked FROM loyalty_profiles p \
+                                 WHERE p.telegram_id = u.telegram_id), FALSE) \
+               AND u.telegram_id <> ALL($1) \
+             ORDER BY u.telegram_id",
+            [admins.to_vec().into()],
+        ))
+        .await?;
+    Ok(rows
+        .iter()
+        .filter_map(|r| r.try_get::<i64>("", "telegram_id").ok())
+        .collect())
+}
+
+/// The keyboard under a broadcast message. The mute button is in the message
+/// itself for the same reason it is on the drafts: an opt-out the customer has
+/// to go looking for is an opt-out Telegram bans bots for not having. A link
+/// that does not parse drops its button rather than the whole message.
+fn broadcast_keyboard(link: Option<&str>) -> InlineKeyboardMarkup {
+    let open = link
+        .and_then(|l| reqwest::Url::parse(l).ok())
+        .map(|u| vec![InlineKeyboardButton::url("🛒 Открыть", u)]);
+    let mut rows: Vec<Vec<InlineKeyboardButton>> = open.into_iter().collect();
+    rows.push(vec![InlineKeyboardButton::callback(
+        "🔕 Отключить рассылку",
+        MUTE_CALLBACK.to_string(),
+    )]);
+    InlineKeyboardMarkup::new(rows)
+}
+
+/// How long to wait between two clients' messages.
+///
+/// Telegram's ceiling is ~30 messages a second, but a bot mailing hundreds of
+/// people at that pace is the profile of a spammer, and the account is the
+/// shop's. Half a second per client is undetectable to a customer and keeps a
+/// thousand-person list inside ten minutes.
+const BROADCAST_DELAY: std::time::Duration = std::time::Duration::from_millis(500);
+
+async fn send_once(
+    bot: &Bot,
+    chat: i64,
+    post: &BroadcastPost,
+) -> Result<(), teloxide::RequestError> {
+    let keyboard = broadcast_keyboard(post.link.as_deref());
+    match post
+        .image
+        .as_deref()
+        .and_then(|u| u.parse::<reqwest::Url>().ok())
+    {
+        Some(url) => bot
+            .send_photo(ChatId(chat), teloxide::types::InputFile::url(url))
+            .caption(&post.body)
+            .parse_mode(teloxide::types::ParseMode::Html)
+            .reply_markup(keyboard)
+            .await
+            .map(|_| ()),
+        None => bot
+            .send_message(ChatId(chat), &post.body)
+            .parse_mode(teloxide::types::ParseMode::Html)
+            .reply_markup(keyboard)
+            .await
+            .map(|_| ()),
+    }
+}
+
+/// One `Retry-After` is survived, not retried forever: a single 429 with its
+/// requested wait honoured once, then the client is recorded by outcome.
+async fn send_to_client(
+    bot: &Bot,
+    chat: i64,
+    post: &BroadcastPost,
+) -> Result<(), teloxide::RequestError> {
+    match send_once(bot, chat, post).await {
+        Err(teloxide::RequestError::RetryAfter(wait)) => {
+            tracing::warn!("promo: rate-limited, waiting {wait:?} as asked");
+            tokio::time::sleep(wait.duration()).await;
+            send_once(bot, chat, post).await
+        }
+        other => other,
+    }
+}
+
+/// The fan-out itself. Runs in the background because a thousand half-second
+/// sends cannot live inside a button press, and reports to the owners when it
+/// ends — a mailing whose outcome nobody sees is a mailing nobody can trust.
+async fn broadcast_post(
+    db: Arc<Database>,
+    bot: Bot,
+    config: Arc<Config>,
+    post: BroadcastPost,
+    recipients: Vec<i64>,
+) {
+    let mut sent = 0usize;
+    let mut failed = 0usize;
+    let mut blocked = 0usize;
+    for who in &recipients {
+        let outcome = send_to_client(&bot, *who, &post).await;
+        let (status, detail) = match outcome {
+            Ok(()) => {
+                sent += 1;
+                ("sent", None)
+            }
+            Err(teloxide::RequestError::Api(teloxide::errors::ApiError::BotBlocked)) => {
+                failed += 1;
+                blocked += 1;
+                ("failed", Some("blocked the bot"))
+            }
+            Err(_) => {
+                failed += 1;
+                ("failed", Some("unreachable"))
+            }
+        };
+        if let Err(e) = db
+            .orm
+            .execute(Statement::from_sql_and_values(
+                DbBackend::Postgres,
+                "INSERT INTO promo_deliveries (dedup_key, telegram_id, status, detail) \
+                 VALUES ($1, $2, $3, $4) \
+                 ON CONFLICT (dedup_key, telegram_id) \
+                 DO UPDATE SET status = $3, detail = $4, sent_at = NOW()",
+                [
+                    post.dedup_key.clone().into(),
+                    (*who).into(),
+                    status.into(),
+                    detail.map(str::to_string).into(),
+                ],
+            ))
+            .await
+        {
+            // A delivery row is reporting, not gating: the send already
+            // happened, and losing the record must not lose the mailing.
+            tracing::warn!("promo: could not record delivery to {who}: {e}");
+        }
+        tokio::time::sleep(BROADCAST_DELAY).await;
+    }
+
+    let summary = broadcast_summary(&post.subject_name, sent, failed, blocked, recipients.len());
+    tracing::info!(dedup_key = %post.dedup_key, sent, failed, blocked, "promo: broadcast finished");
+    for admin in &config.admin_ids {
+        if is_muted(&db, *admin).await {
+            continue;
+        }
+        let text = format!("📣 <b>Рассылка завершена</b>\n{summary}");
+        if let Err(e) = bot
+            .send_message(ChatId(*admin), &text)
+            .parse_mode(teloxide::types::ParseMode::Html)
+            .await
+        {
+            tracing::warn!("promo: could not reach admin {admin} with the summary: {e}");
+        }
+    }
+}
+
+/// What the owners read when a mailing ends. Extracted to be executed.
+pub(crate) fn broadcast_summary(
+    subject_name: &str,
+    sent: usize,
+    failed: usize,
+    blocked: usize,
+    total: usize,
+) -> String {
+    let line = format!(
+        "«{}» — доставлено {} из {}",
+        crate::util::html_escape(subject_name),
+        sent,
+        total
+    );
+    if failed == 0 {
+        format!("{line}. Все сообщения дошли.")
+    } else if blocked == failed {
+        format!(
+            "{line}, не дошло {failed}. Все {blocked} заблокировали бота — \
+             рассылка к ним больше не идёт сама по себе."
+        )
+    } else {
+        format!(
+            "{line}, не дошло {failed} (из них {blocked} заблокировали бота). \
+             Обычно это значит, что чат недоступен."
+        )
     }
 }
 
@@ -852,5 +1099,72 @@ mod tests {
             "callback data is {} bytes; Telegram drops the button over 64: {data}",
             data.len()
         );
+    }
+
+    /// A mailing the owners cannot see the end of is a mailing they cannot
+    /// trust. The summary must say how many were reached — and distinguish a
+    /// client who blocked the bot (gone for good) from a chat that merely
+    /// failed, because only one of those is a reason to clean the list.
+    #[test]
+    fn the_broadcast_summary_counts_and_explains() {
+        let all_sent = broadcast_summary("Party Pack", 30, 0, 0, 30);
+        assert!(all_sent.contains("доставлено 30 из 30"));
+        assert!(all_sent.contains("Все сообщения дошли"));
+
+        let all_blocked = broadcast_summary("Party Pack", 28, 2, 2, 30);
+        assert!(all_blocked.contains("не дошло 2"));
+        assert!(all_blocked.contains("заблокировали бота"));
+
+        let mixed = broadcast_summary("Party Pack", 27, 3, 1, 30);
+        assert!(mixed.contains("не дошло 3"));
+        assert!(mixed.contains("из них 1 заблокировали"));
+    }
+
+    /// The subject name reaches the summary through HTML parse mode; a name
+    /// with markup in it must not turn into markup.
+    #[test]
+    fn the_broadcast_summary_escapes_the_subject_name() {
+        let s = broadcast_summary("<b>Sets & More</b>", 1, 0, 0, 1);
+        assert!(
+            s.contains("&lt;b&gt;Sets &amp; More&lt;/b&gt;"),
+            "leaked: {s}"
+        );
+        assert!(!s.contains("<b>"));
+    }
+
+    /// The broadcast message always carries the mute button, with or without
+    /// a link — an opt-out that only ships when the link is parseable is not
+    /// an opt-out.
+    #[test]
+    fn the_broadcast_keyboard_always_has_the_mute_button() {
+        use teloxide::types::InlineKeyboardButtonKind;
+        let has_mute = |kb: &InlineKeyboardMarkup| {
+            kb.inline_keyboard
+                .iter()
+                .flatten()
+                .any(|b| b.kind == InlineKeyboardButtonKind::CallbackData(MUTE_CALLBACK.into()))
+        };
+        let has_url = |kb: &InlineKeyboardMarkup| {
+            kb.inline_keyboard
+                .iter()
+                .flatten()
+                .any(|b| matches!(b.kind, InlineKeyboardButtonKind::Url(_)))
+        };
+        for link in [
+            Some("https://t.me/woody_bot/app?startapp=p_set_abc"),
+            None,
+            Some("not a url at all"),
+        ] {
+            let kb = broadcast_keyboard(link);
+            assert!(
+                has_mute(&kb),
+                "no mute button in the broadcast for {link:?}"
+            );
+            assert_eq!(
+                has_url(&kb),
+                link == Some("https://t.me/woody_bot/app?startapp=p_set_abc"),
+                "open button presence wrong for {link:?}"
+            );
+        }
     }
 }

@@ -326,6 +326,10 @@ const MIGRATIONS: &[(&str, &str)] = &[
         "075_promo_muted.sql",
         include_str!("../../migrations/075_promo_muted.sql"),
     ),
+    (
+        "076_promo_broadcast.sql",
+        include_str!("../../migrations/076_promo_broadcast.sql"),
+    ),
 ];
 
 /// Columns the catalog endpoints SELECT that were added by *later* migrations

@@ -22,7 +22,10 @@ use crate::{
 };
 
 #[derive(BotCommands, Clone)]
-#[command(rename_rule = "lowercase", description = "Woody Bot commands:")]
+// snake_case so `PromoOn` parses as `/promo_on` — the name the mute button
+// has been promising since it shipped. Every other variant here is a single
+// lowercase word, so for them the rule changes nothing.
+#[command(rename_rule = "snake_case", description = "Woody Bot commands:")]
 pub(crate) enum Command {
     #[command(description = "Start")]
     Start(String),
@@ -58,6 +61,8 @@ pub(crate) enum Command {
     Errors,
     #[command(description = "Promo sales report (admin)")]
     Promo,
+    #[command(description = "Turn promo messages back on")]
+    PromoOn,
 }
 
 use crate::util::html_escape;
@@ -749,6 +754,20 @@ pub(crate) async fn handle_command(
             bot.send_message(msg.chat.id, text)
                 .parse_mode(teloxide::types::ParseMode::Html)
                 .await?;
+        }
+
+        Command::PromoOn => {
+            // The mute button has answered "Включить обратно: /promo_on" since
+            // it shipped, and until now that command did not exist — a promise
+            // with no way to keep it. Not admin-gated: a customer who muted the
+            // mailing is exactly who this is for.
+            if crate::promo::unmute(&db, user_id).await {
+                bot.send_message(msg.chat.id, "Промо-сообщения снова включены ✅")
+                    .await?;
+            } else {
+                bot.send_message(msg.chat.id, "Не получилось, попробуйте ещё раз")
+                    .await?;
+            }
         }
 
         Command::Unblock(arg) => {
