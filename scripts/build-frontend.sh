@@ -58,6 +58,16 @@ if ! grep -q 'await window.__telegramReady;' dist/index.html; then
 fi
 echo "  ✓ WASM waits asynchronously for Telegram SDK"
 
+# Trunk emits a top-level `await init(...)`. Safari turns any interrupted WASM
+# transfer into an unhandled `TypeError: Load failed`, so route init through the
+# bounded retry helper defined in index.html.
+echo "▶ wrapping WASM fetch with WebKit network retries"
+perl -0pi -e 's#const wasm = await init\(\{ module_or_path: (.*?) \}\);#const wasm = await window.__loadWasmWithRetry(init, $1);#s' dist/index.html
+if ! grep -q 'const wasm = await window.__loadWasmWithRetry' dist/index.html; then
+  echo "✖ could not wrap WASM init in dist/index.html"; exit 1
+fi
+echo "  ✓ WASM fetch retries enabled"
+
 # Cycle #170: write a live build-version token for the WebView cache-bust loader.
 # The loader in index.html fetches /version.txt and redirects to ?v=<hash> when
 # the embedded JS hash no longer matches the server's current build.

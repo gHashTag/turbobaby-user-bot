@@ -53,6 +53,67 @@
     <link data-trunk rel="css" href="styles/main.css"/>
     <link data-trunk rel="css" href="styles/admin.css"/>
     <link data-trunk rel="copy-dir" href="assets" data-target-path="assets"/>
+    <script>
+    // Safari/WKWebView reports an interrupted fetch as the opaque
+    // `TypeError: Load failed`. Fetch the WASM explicitly so the transfer has
+    // a deadline and can be retried instead of escaping as an unhandled
+    // top-level module rejection. The generated Trunk module calls this helper.
+    window.__loadWasmWithRetry = async function(initFn, moduleUrl) {
+      var attempts = 3;
+      // MacIntel WebKit may legitimately spend 15–25 seconds compiling after
+      // the body arrives. Keep the network deadline above that cold-start
+      // window so the retry guard never aborts healthy compilation.
+      var timeoutMs = 45000;
+      var lastError;
+
+      function setStatus(attempt) {
+        var step = document.getElementById('loader-step');
+        var bar = document.getElementById('loader-progress-bar');
+        if (bar) bar.style.width = (20 + attempt * 20) + '%';
+        if (step && attempt > 0) {
+          step.textContent = 'Соединение прервалось — повтор загрузки ' + attempt + '/' + (attempts - 1) + '…';
+        }
+      }
+
+      for (var attempt = 0; attempt < attempts; attempt++) {
+        var controller = new AbortController();
+        var timer = setTimeout(function() { controller.abort(); }, timeoutMs);
+        try {
+          setStatus(attempt);
+          var response = await fetch(moduleUrl, {
+            cache: attempt === 0 ? 'default' : 'reload',
+            credentials: 'same-origin',
+            signal: controller.signal
+          });
+          if (!response.ok) throw new Error('WASM HTTP ' + response.status);
+          // Keep instantiateStreaming: buffering the whole 4.6 MB module before
+          // compilation made low-end WebKit start noticeably later. The abort
+          // signal still cancels the Response body if the stream stalls.
+          var wasm = await initFn({ module_or_path: response });
+          clearTimeout(timer);
+          return wasm;
+        } catch (error) {
+          clearTimeout(timer);
+          lastError = error;
+          var message = String(error && (
+            (error.name ? error.name + ': ' : '') + (error.message || error)
+          ));
+          var retryable = message.indexOf('Load failed') !== -1
+            || message.indexOf('Failed to fetch') !== -1
+            || message.indexOf('NetworkError') !== -1
+            || message.indexOf('AbortError') !== -1
+            || message.indexOf('WASM HTTP 408') !== -1
+            || message.indexOf('WASM HTTP 429') !== -1
+            || /WASM HTTP 5\d\d/.test(message);
+          if (!retryable || attempt === attempts - 1) throw error;
+          await new Promise(function(resolve) {
+            setTimeout(resolve, 400 * (attempt + 1));
+          });
+        }
+      }
+      throw lastError;
+    };
+    </script>
     <link data-trunk rel="rust" data-target-name="woody_weed_bot" data-wasm-opt="0" />
     <script>
     // Cycle #170: Telegram/WebView aggressively caches index.html across deploys.
