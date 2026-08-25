@@ -20,7 +20,9 @@ pub mod ui;
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen::prelude::wasm_bindgen(start)]
 pub fn run() {
-    web_sys::console::log_1(&"[WASM] Step 1: run() called".into());
+    // Keep a build revision in the binary so loader-only fixes produce a new
+    // Trunk content hash and cannot be hidden by Telegram's stale HTML cache.
+    web_sys::console::log_1(&"[WASM] Step 1: run() called (sin-retry-1)".into());
     std::panic::set_hook(Box::new(|info| {
         let msg = format!("PANIC: {}", info);
         web_sys::console::error_1(&msg.clone().into());

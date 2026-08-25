@@ -42,7 +42,9 @@ CHROME = os.environ.get(
     "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
 )
 PORT = int(os.environ.get("CDP_PORT", str(random.randint(9210, 9790))))
-SETTLE_S = float(os.environ.get("SMOKE_WAIT_S", "6"))
+# A cold MacIntel/WebKit-style WASM compile can take 15–25 seconds even after
+# the local body has arrived. The smoke gate must cover that valid window.
+SETTLE_S = float(os.environ.get("SMOKE_WAIT_S", "20"))
 MIN_DOM = 120  # floor only; the real mount signal is the marker (below)
 
 if not os.path.exists(CHROME):
@@ -199,6 +201,49 @@ while time.time() < edl:
             dom = None
         break
 
+# Exercise the Safari network-retry wrapper without depending on a real flaky
+# edge: the first synthetic fetch throws WebKit's opaque `Load failed`, the
+# second returns three bytes, and a fake init function reports their length.
+retry_expr = """(async function () {
+  const originalFetch = window.fetch;
+  let calls = 0;
+  try {
+    window.fetch = async function () {
+      calls += 1;
+      if (calls === 1) throw new TypeError('Load failed');
+      return new Response(new Uint8Array([0, 1, 2]));
+    };
+    const bytes = await window.__loadWasmWithRetry(
+      async function (opts) {
+        return (await opts.module_or_path.arrayBuffer()).byteLength;
+      },
+      '/__retry_probe__.wasm'
+    );
+    return {calls: calls, bytes: bytes};
+  } finally {
+    window.fetch = originalFetch;
+  }
+})()"""
+retry_id = send("Runtime.evaluate", {
+    "expression": retry_expr,
+    "awaitPromise": True,
+    "returnByValue": True,
+})
+retry_probe = None
+edl = time.time() + 8
+while time.time() < edl:
+    ws.settimeout(1.0)
+    try:
+        msg = json.loads(ws.recv())
+    except websocket.WebSocketTimeoutException:
+        continue
+    except Exception:
+        break
+    classify(msg)
+    if msg.get("id") == retry_id:
+        retry_probe = msg.get("result", {}).get("result", {}).get("value")
+        break
+
 try:
     ws.close()
 except Exception:
@@ -218,6 +263,9 @@ elif not dom.get("marker"):
                     f"(DOM text len {dom.get('len')})")
 elif dom.get("len", 0) < MIN_DOM:
     problems.append(f"DOM suspiciously small (len {dom.get('len')} < {MIN_DOM})")
+if retry_probe != {"calls": 2, "bytes": 3}:
+    problems.append("WASM network retry probe failed "
+                    f"(expected calls=2, bytes=3; got {retry_probe!r})")
 
 cleanup()
 

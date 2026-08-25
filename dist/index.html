@@ -53,11 +53,72 @@
     <link rel="stylesheet" href="/main-8deef1c330176422.css"/>
     <link rel="stylesheet" href="/admin-1a8278f17259b522.css"/>
     
+    <script>
+    // Safari/WKWebView reports an interrupted fetch as the opaque
+    // `TypeError: Load failed`. Fetch the WASM explicitly so the transfer has
+    // a deadline and can be retried instead of escaping as an unhandled
+    // top-level module rejection. The generated Trunk module calls this helper.
+    window.__loadWasmWithRetry = async function(initFn, moduleUrl) {
+      var attempts = 3;
+      // MacIntel WebKit may legitimately spend 15–25 seconds compiling after
+      // the body arrives. Keep the network deadline above that cold-start
+      // window so the retry guard never aborts healthy compilation.
+      var timeoutMs = 45000;
+      var lastError;
+
+      function setStatus(attempt) {
+        var step = document.getElementById('loader-step');
+        var bar = document.getElementById('loader-progress-bar');
+        if (bar) bar.style.width = (20 + attempt * 20) + '%';
+        if (step && attempt > 0) {
+          step.textContent = 'Соединение прервалось — повтор загрузки ' + attempt + '/' + (attempts - 1) + '…';
+        }
+      }
+
+      for (var attempt = 0; attempt < attempts; attempt++) {
+        var controller = new AbortController();
+        var timer = setTimeout(function() { controller.abort(); }, timeoutMs);
+        try {
+          setStatus(attempt);
+          var response = await fetch(moduleUrl, {
+            cache: attempt === 0 ? 'default' : 'reload',
+            credentials: 'same-origin',
+            signal: controller.signal
+          });
+          if (!response.ok) throw new Error('WASM HTTP ' + response.status);
+          // Keep instantiateStreaming: buffering the whole 4.6 MB module before
+          // compilation made low-end WebKit start noticeably later. The abort
+          // signal still cancels the Response body if the stream stalls.
+          var wasm = await initFn({ module_or_path: response });
+          clearTimeout(timer);
+          return wasm;
+        } catch (error) {
+          clearTimeout(timer);
+          lastError = error;
+          var message = String(error && (
+            (error.name ? error.name + ': ' : '') + (error.message || error)
+          ));
+          var retryable = message.indexOf('Load failed') !== -1
+            || message.indexOf('Failed to fetch') !== -1
+            || message.indexOf('NetworkError') !== -1
+            || message.indexOf('AbortError') !== -1
+            || message.indexOf('WASM HTTP 408') !== -1
+            || message.indexOf('WASM HTTP 429') !== -1
+            || /WASM HTTP 5\d\d/.test(message);
+          if (!retryable || attempt === attempts - 1) throw error;
+          await new Promise(function(resolve) {
+            setTimeout(resolve, 400 * (attempt + 1));
+          });
+        }
+      }
+      throw lastError;
+    };
+    </script>
     
 <script type="module">
-import init, * as bindings from '/woody-weed-bot-4e9d64c8684e46c8.js?v=4e9d64c8684e46c8';
+import init, * as bindings from '/woody-weed-bot-ec9cf03030c89e0b.js?v=ec9cf03030c89e0b';
 await window.__telegramReady;
-const wasm = await init({ module_or_path: '/woody-weed-bot-4e9d64c8684e46c8_bg.wasm?v=4e9d64c8684e46c8' });
+const wasm = await window.__loadWasmWithRetry(init, '/woody-weed-bot-ec9cf03030c89e0b_bg.wasm?v=ec9cf03030c89e0b');
 
 
 window.wasmBindings = bindings;
@@ -294,7 +355,7 @@ dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
         }, true);
     });
     </script>
-<link rel="modulepreload" href="/woody-weed-bot-4e9d64c8684e46c8.js?v=4e9d64c8684e46c8" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-interpreter-js-53424282ea002554/src/js/hydrate.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-web-bf44d47c344f35d0/inline1.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-interpreter-js-53424282ea002554/src/js/patch_console.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-cli-config-24e80746d3c500cd/inline0.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-web-bf44d47c344f35d0/inline0.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-web-bf44d47c344f35d0/src/js/eval.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-interpreter-js-53424282ea002554/inline0.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-interpreter-js-53424282ea002554/src/js/common.js" crossorigin="anonymous"><link rel="preload" href="/woody-weed-bot-4e9d64c8684e46c8_bg.wasm?v=4e9d64c8684e46c8" crossorigin="anonymous" as="fetch" type="application/wasm"></head>
+<link rel="modulepreload" href="/woody-weed-bot-ec9cf03030c89e0b.js?v=ec9cf03030c89e0b" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-web-bf44d47c344f35d0/inline1.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-interpreter-js-53424282ea002554/inline0.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-interpreter-js-53424282ea002554/src/js/common.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-cli-config-24e80746d3c500cd/inline0.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-web-bf44d47c344f35d0/src/js/eval.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-interpreter-js-53424282ea002554/src/js/hydrate.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-interpreter-js-53424282ea002554/src/js/patch_console.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-web-bf44d47c344f35d0/inline0.js" crossorigin="anonymous"><link rel="preload" href="/woody-weed-bot-ec9cf03030c89e0b_bg.wasm?v=ec9cf03030c89e0b" crossorigin="anonymous" as="fetch" type="application/wasm"></head>
 <body>
     <div id="preloader">
         <div class="spinner"></div>

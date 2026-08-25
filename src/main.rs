@@ -3731,6 +3731,29 @@ mod wasm_boot_html_tests {
     }
 
     #[test]
+    fn wasm_network_failures_are_retried_before_becoming_fatal() {
+        let html = index_html();
+        assert!(html.contains("window.__loadWasmWithRetry = async function"));
+        assert!(html.contains("message.indexOf('Load failed')"));
+        assert!(html.contains("var attempts = 3"));
+
+        let build = std::fs::read_to_string(
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("scripts/build-frontend.sh"),
+        )
+        .expect("read build script");
+        assert!(build.contains("const wasm = await window.__loadWasmWithRetry"));
+    }
+
+    #[test]
+    fn railway_runs_close_to_southeast_asia_users() {
+        let railway =
+            std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("railway.toml"))
+                .expect("read railway.toml");
+        assert!(railway.contains("asia-southeast1-eqsg3a"));
+        assert!(!railway.contains("\"sfo\""));
+    }
+
+    #[test]
     fn slow_wasm_transfer_is_not_a_fatal_error() {
         let html = index_html();
         assert!(html.contains("Медленное соединение — загрузка продолжается…"));
