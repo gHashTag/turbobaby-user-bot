@@ -155,6 +155,13 @@ def classify(msg):
 send("Runtime.enable")
 send("Log.enable")
 send("Page.enable")
+# The static smoke must be deterministic and must not depend on telegram.org.
+# Blocking the external SDK exercises its `onerror` path; that path must release
+# the readiness promise and boot the ordinary-browser/admin fallback.
+send("Network.enable")
+send("Network.setBlockedURLs", {
+    "urls": ["https://telegram.org/js/telegram-web-app.js*"]
+})
 send("Page.navigate", {"url": URL})
 
 # Pump events while the page loads + wasm initialises.

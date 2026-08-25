@@ -40,6 +40,24 @@ while IFS= read -r js; do
 done < <(find dist -name '*.js' -type f)
 echo "  ✓ busted snippet imports in ${busted} file(s)"
 
+# Main JS/WASM names are already content-hashed. Add the same hash as a query
+# too, so even a WebView with a broken filename cache sees a new full URL on
+# every build. This makes long-lived immutable caching safe.
+echo "▶ cache-busting main bundle URLs with ?v=${hash}"
+sed -i '' -E "s#(/woody-weed-bot-${hash}(_bg)?\.(js|wasm))(['\"])#\1?v=${hash}\4#g" dist/index.html
+echo "  ✓ main JS/WASM URLs versioned"
+
+# Trunk owns the generated module script. Make it wait for the async Telegram
+# SDK promise declared in index.html: the loader can paint immediately, while
+# the Rust app still starts with initData available. `onerror` resolves the
+# promise so ordinary browsers are not held hostage by a blocked Telegram CDN.
+echo "▶ preserving Telegram SDK-before-WASM ordering"
+perl -0pi -e 's/const wasm = await init/await window.__telegramReady;\nconst wasm = await init/' dist/index.html
+if ! grep -q 'await window.__telegramReady;' dist/index.html; then
+  echo "✖ could not inject Telegram readiness wait into dist/index.html"; exit 1
+fi
+echo "  ✓ WASM waits asynchronously for Telegram SDK"
+
 # Cycle #170: write a live build-version token for the WebView cache-bust loader.
 # The loader in index.html fetches /version.txt and redirects to ?v=<hash> when
 # the embedded JS hash no longer matches the server's current build.

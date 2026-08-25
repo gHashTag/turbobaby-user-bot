@@ -966,19 +966,18 @@ async fn main() -> Result<()> {
                     // caused stale snippet exports (get_select_data) to be cached
                     // forever in Safari/WebView. Immutable now requires the hash
                     // to be in the file name itself, not just the parent dir.
-                    // Cycle #171: Telegram/WebView sometimes serves a stale cached
-                    // JS/WASM file even though the hashed filename changed. Use
-                    // no-store for the main bundle so the WebView always fetches the
-                    // file the fresh HTML asked for. Snippets and CSS stay immutable
-                    // because they are rarely the stale-cache culprit.
+                    // Main JS/WASM names are content-hashed and the generated HTML
+                    // also appends `?v=<hash>`, so they are safe to cache forever.
+                    // This is essential on Telegram/WebKit: `no-store` forced every
+                    // app open to download the 730 KB Brotli WASM again through a
+                    // Railway edge observed at <2 KB/s. Stable-name snippets remain
+                    // no-store unless their own filename contains a hash.
                     let cache_header = if exact.is_some() {
                         let file_name = std::path::Path::new(path)
                             .file_name()
                             .and_then(|n| n.to_str())
                             .unwrap_or("");
-                        if file_name.starts_with("woody-weed-bot-") {
-                            "no-store, no-cache, must-revalidate, max-age=0"
-                        } else if file_name.contains('-') {
+                        if file_name.contains('-') {
                             "public, max-age=31536000, immutable"
                         } else {
                             "no-store, no-cache, must-revalidate, max-age=0"
@@ -3706,6 +3705,37 @@ mod html_lang_tests {
             lower.contains("<html lang=\"") || lower.contains("<html lang='"),
             "index.html <html> must declare a `lang` attribute (WCAG 3.1.1) — got the bare <html> tag"
         );
+    }
+}
+
+/// A slow edge must never be reported as a WASM crash. The production edge
+/// has taken more than two minutes to stream the compressed bundle, while the
+/// module was still healthy and downloading.
+#[cfg(test)]
+mod wasm_boot_html_tests {
+    use std::path::Path;
+
+    fn index_html() -> String {
+        std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("index.html"))
+            .expect("read index.html")
+    }
+
+    #[test]
+    fn telegram_sdk_does_not_block_document_parsing() {
+        let html = index_html();
+        assert!(html.contains("window.__telegramReady = new Promise"));
+        assert!(
+            html.contains("<script async src=\"https://telegram.org/js/telegram-web-app.js?v=4\"")
+        );
+        assert!(html.contains("onerror=\"window.__resolveTelegramReady()\""));
+    }
+
+    #[test]
+    fn slow_wasm_transfer_is_not_a_fatal_error() {
+        let html = index_html();
+        assert!(html.contains("Медленное соединение — загрузка продолжается…"));
+        assert!(html.contains("Сеть очень медленная. Можно подождать или повторить."));
+        assert!(!html.contains("WASM не запустился за 30 секунд"));
     }
 }
 

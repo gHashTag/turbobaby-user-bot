@@ -1,7 +1,18 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-    <script src="https://telegram.org/js/telegram-web-app.js?v=4"></script>
+    <!-- Paint the loader immediately even when telegram.org is slow. The
+         generated WASM module awaits this promise, so Telegram initData is
+         still available before the Rust app starts. A hard SDK network error
+         resolves too, preserving the ordinary-browser/admin fallback. -->
+    <script>
+      window.__telegramReady = new Promise(function (resolve) {
+        window.__resolveTelegramReady = resolve;
+      });
+    </script>
+    <script async src="https://telegram.org/js/telegram-web-app.js?v=4"
+            onload="window.__resolveTelegramReady(); window.dispatchEvent(new Event('woody:telegram-ready'))"
+            onerror="window.__resolveTelegramReady()"></script>
     <script>
     // Telegram lifecycle: keep the mini-app EXPANDED with a dark header/background
     // so it doesn't "go dark"/collapse when you switch apps or return from
@@ -19,6 +30,8 @@
         try { if (w.disableVerticalSwipes) w.disableVerticalSwipes(); } catch (e) {}
       }
       applyTg();
+      window.addEventListener('woody:telegram-ready', applyTg);
+      document.addEventListener('DOMContentLoaded', applyTg);
       document.addEventListener('visibilitychange', function () {
         if (!document.hidden) applyTg();
       });
@@ -42,8 +55,9 @@
     
     
 <script type="module">
-import init, * as bindings from '/woody-weed-bot-5d98fb4fde036d3c.js';
-const wasm = await init({ module_or_path: '/woody-weed-bot-5d98fb4fde036d3c_bg.wasm' });
+import init, * as bindings from '/woody-weed-bot-4e9d64c8684e46c8.js?v=4e9d64c8684e46c8';
+await window.__telegramReady;
+const wasm = await init({ module_or_path: '/woody-weed-bot-4e9d64c8684e46c8_bg.wasm?v=4e9d64c8684e46c8' });
 
 
 window.wasmBindings = bindings;
@@ -280,7 +294,7 @@ dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
         }, true);
     });
     </script>
-<link rel="modulepreload" href="/woody-weed-bot-5d98fb4fde036d3c.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-web-bf44d47c344f35d0/src/js/eval.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-web-bf44d47c344f35d0/inline1.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-cli-config-24e80746d3c500cd/inline0.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-interpreter-js-53424282ea002554/src/js/hydrate.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-web-bf44d47c344f35d0/inline0.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-interpreter-js-53424282ea002554/src/js/common.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-interpreter-js-53424282ea002554/src/js/patch_console.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-interpreter-js-53424282ea002554/inline0.js" crossorigin="anonymous"><link rel="preload" href="/woody-weed-bot-5d98fb4fde036d3c_bg.wasm" crossorigin="anonymous" as="fetch" type="application/wasm"></head>
+<link rel="modulepreload" href="/woody-weed-bot-4e9d64c8684e46c8.js?v=4e9d64c8684e46c8" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-interpreter-js-53424282ea002554/src/js/hydrate.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-web-bf44d47c344f35d0/inline1.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-interpreter-js-53424282ea002554/src/js/patch_console.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-cli-config-24e80746d3c500cd/inline0.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-web-bf44d47c344f35d0/inline0.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-web-bf44d47c344f35d0/src/js/eval.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-interpreter-js-53424282ea002554/inline0.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-interpreter-js-53424282ea002554/src/js/common.js" crossorigin="anonymous"><link rel="preload" href="/woody-weed-bot-4e9d64c8684e46c8_bg.wasm?v=4e9d64c8684e46c8" crossorigin="anonymous" as="fetch" type="application/wasm"></head>
 <body>
     <div id="preloader">
         <div class="spinner"></div>
@@ -306,6 +320,7 @@ dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
             setProgress(10, steps[0]);
 
             window.addEventListener('TrunkApplicationStarted', function() {
+                clearInterval(stepTimer);
                 setProgress(100, 'Готово!');
                 setTimeout(function() {
                     var preloader = document.getElementById('preloader');
@@ -322,29 +337,35 @@ dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
                 if (step >= steps.length) clearInterval(stepTimer);
             }, 1500);
 
-            // 30-second fail-safe: WASM compilation on macOS WebKit for a 2.7MB
-            // binary can take 15–25s on older hardware. Cycle #169: raised from
-            // 10s after production reports of premature timeout on MacIntel.
+            // A slow transfer is not a boot failure. Railway was observed
+            // returning only 224 KB of the 730 KB Brotli WASM in two minutes;
+            // the old 30s fatal overlay covered a download still in progress.
             setTimeout(function() {
                 var preloader = document.getElementById('preloader');
                 if (preloader && !preloader.classList.contains('hidden')) {
-                    var ua = navigator.userAgent || '';
-                    var platform = navigator.platform || '';
-                    var isIOS = /iPad|iPhone|iPod/.test(ua) || (platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-                    var diag = document.createElement('div');
-                    diag.style.cssText = 'position:fixed;inset:0;background:#0f0f1a;color:#e8e8e8;padding:24px;font-family:monospace;font-size:13px;z-index:100000;overflow:auto;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;';
-                    diag.innerHTML = '<h2 style="color:#ff4757;margin-bottom:12px;">⚠️ Не удалось загрузить приложение</h2>' +
-                        '<p style="max-width:320px;margin-bottom:16px;">WASM не запустился за 30 секунд. Попробуй перезагрузить или проверь соединение.</p>' +
-                        '<div style="background:#1a1a2e;padding:12px;border-radius:8px;margin-bottom:16px;text-align:left;font-size:11px;max-width:320px;">' +
-                        '<div>platform: ' + platform + '</div>' +
-                        '<div>ios: ' + isIOS + '</div>' +
-                        '<div>userAgent: ' + ua.substring(0,80) + '…</div>' +
-                        '</div>' +
-                        '<button id="reload-btn" style="padding:10px 20px;background:#39ff14;color:#000;border:none;border-radius:6px;font-weight:700;cursor:pointer;">Перезагрузить</button>';
-                    document.body.appendChild(diag);
-                    document.getElementById('reload-btn').onclick = function() { location.reload(); };
+                    setProgress(85, 'Медленное соединение — загрузка продолжается…');
                 }
             }, 30000);
+
+            // If the edge is exceptionally slow, keep waiting and offer a
+            // cache-busted retry. Do not cover the page with a false fatal
+            // error; real JS/WASM failures are reported by the catcher above.
+            setTimeout(function() {
+                var preloader = document.getElementById('preloader');
+                if (!preloader || preloader.classList.contains('hidden')) return;
+                setProgress(90, 'Сеть очень медленная. Можно подождать или повторить.');
+                if (document.getElementById('loader-retry')) return;
+                var retry = document.createElement('button');
+                retry.id = 'loader-retry';
+                retry.textContent = 'Повторить загрузку';
+                retry.style.cssText = 'margin-top:18px;padding:10px 20px;background:#39ff14;color:#000;border:none;border-radius:6px;font-weight:700;cursor:pointer;';
+                retry.onclick = function() {
+                    var url = new URL(location.href);
+                    url.searchParams.set('retry', Date.now().toString());
+                    location.replace(url.toString());
+                };
+                preloader.appendChild(retry);
+            }, 120000);
         })();
     </script>
 </body>
