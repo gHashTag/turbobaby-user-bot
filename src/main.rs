@@ -3760,6 +3760,32 @@ mod wasm_boot_html_tests {
         assert!(html.contains("Сеть очень медленная. Можно подождать или повторить."));
         assert!(!html.contains("WASM не запустился за 30 секунд"));
     }
+
+    #[test]
+    fn boot_loader_keeps_long_status_copy_centered_and_touchable() {
+        let html = index_html();
+        assert!(html.contains(".loading-text"));
+        assert!(html.contains("max-width: 360px"));
+        assert!(html.contains("text-align: center"));
+        assert!(html.contains("#loader-retry"));
+        assert!(html.contains("width: min(100%, 312px)"));
+        assert!(html.contains("min-height: 48px"));
+        assert!(html.contains("var(--tg-viewport-stable-height, 100dvh)"));
+    }
+
+    #[test]
+    fn every_route_uses_the_same_centered_mini_app_shell() {
+        let css =
+            std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("styles/main.css"))
+                .expect("read main css");
+        assert!(css.contains("--app-max-width: 480px"));
+        assert!(css.contains("#main {"));
+        assert!(css.contains("max-width: var(--app-max-width)"));
+        assert!(css.contains("margin-inline: auto"));
+        assert!(css.contains("overflow-x: hidden"));
+        assert!(css.contains("left: 50%"));
+        assert!(css.contains("transform: translateX(-50%)"));
+    }
 }
 
 /// SQL-injection guard. `Statement::from_string(..)` takes NO bind parameters,
