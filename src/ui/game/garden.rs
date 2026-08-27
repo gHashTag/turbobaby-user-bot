@@ -1087,6 +1087,11 @@ pub fn Garden() -> Element {
                                                 // the next 5s tick / refetch.
                                                 p.last_watered_at = Some(chrono::Utc::now().timestamp_millis());
                                             }
+                                            // A Dioxus Signal is backed by a runtime RefCell.
+                                            // Never carry its mutable guard across the analytics
+                                            // await: rendering can run while suspended and then
+                                            // `plants.read()` panics with AlreadyBorrowedMut.
+                                            drop(list);
                                             crate::ui::telegram::TelegramApp::init().haptic_notification(crate::ui::telegram::HapticNotification::Success);
                                             let _ = post_client_event(&api_base_url(), "garden_water_tapped", "").await;
                                             if !resp.new_achievements.is_empty() {
