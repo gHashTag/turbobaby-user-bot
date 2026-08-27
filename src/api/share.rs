@@ -17,6 +17,7 @@
 //! shop does not actually charge.
 
 use axum::{extract::State, http::HeaderMap, http::StatusCode, routing::post, Json, Router};
+use chrono::{DateTime, Datelike, Duration, Timelike, Utc};
 use sea_orm::{ConnectionTrait, DbBackend, Statement};
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -43,6 +44,8 @@ pub(crate) struct PrepareShareRequest {
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct ShareCard {
     pub title: String,
+    /// Human-readable event date/time. `None` for catalog products.
+    pub schedule: Option<String>,
     pub description: String,
     pub price_baht: Option<f64>,
     pub image_url: Option<String>,
@@ -105,6 +108,9 @@ pub(crate) fn short_description(raw: &str, max_chars: usize) -> String {
 /// as markup.
 pub(crate) fn build_caption(card: &ShareCard) -> String {
     let mut out = format!("<b>{}</b>", crate::util::html_escape(&card.title));
+    if let Some(schedule) = card.schedule.as_deref().filter(|s| !s.is_empty()) {
+        out.push_str(&format!("\n📅 {}", crate::util::html_escape(schedule)));
+    }
     if let Some(price) = card.price_baht.filter(|p| p.is_finite() && *p > 0.0) {
         out.push_str(&format!("\n💸 {:.0} ฿", price));
     }
@@ -113,6 +119,63 @@ pub(crate) fn build_caption(card: &ShareCard) -> String {
         out.push_str(&format!("\n\n{}", crate::util::html_escape(&desc)));
     }
     out
+}
+
+/// Format an event schedule in the shop's local timezone (Koh Phangan).
+/// Same-day events show one date and a compact time range; multi-day events
+/// retain both dates so the invitation is never ambiguous.
+pub(crate) fn format_event_schedule(
+    starts_at: DateTime<Utc>,
+    ends_at: Option<DateTime<Utc>>,
+) -> String {
+    let starts = starts_at + Duration::hours(7);
+    let start = format!(
+        "{:02}.{:02}.{} · {:02}:{:02}",
+        starts.day(),
+        starts.month(),
+        starts.year(),
+        starts.hour(),
+        starts.minute()
+    );
+    match ends_at.map(|dt| dt + Duration::hours(7)) {
+        Some(ends) if ends.date_naive() == starts.date_naive() => {
+            format!("{}–{:02}:{:02}", start, ends.hour(), ends.minute())
+        }
+        Some(ends) => format!(
+            "{} — {:02}.{:02}.{} · {:02}:{:02}",
+            start,
+            ends.day(),
+            ends.month(),
+            ends.year(),
+            ends.hour(),
+            ends.minute()
+        ),
+        None => start,
+    }
+}
+
+/// Telegram photo results require an absolute HTTPS URL. Event posters are
+/// commonly stored as `/uploads/...`, so resolve them against the public Mini
+/// App origin instead of silently degrading the invitation to a text article.
+pub(crate) fn absolute_share_image_url(web_app_url: &str, raw: &str) -> Option<String> {
+    if raw.starts_with("https://") {
+        return url::Url::parse(raw).ok().map(|url| url.to_string());
+    }
+    if !raw.starts_with('/') {
+        return None;
+    }
+    let base = url::Url::parse(web_app_url).ok()?;
+    if base.scheme() != "https" {
+        return None;
+    }
+    base.join(raw).ok().map(|url| url.to_string())
+}
+
+pub(crate) fn share_button_text(kind: ShareKind) -> &'static str {
+    match kind {
+        ShareKind::Event => "Открыть мероприятие",
+        _ => "🛒 Открыть товар / Open",
+    }
 }
 
 /// A reqwest error with the bot token taken out of it.
@@ -220,7 +283,8 @@ async fn load_card(
         }
         ShareKind::Event => {
             "SELECT title AS title, COALESCE(description, '') AS description, \
-             price_baht::float8 AS price, image_url FROM events WHERE id = $1"
+             price_baht::float8 AS price, image_url, starts_at, ends_at \
+             FROM events WHERE id = $1"
         }
     };
     let row = state
@@ -235,14 +299,30 @@ async fn load_card(
     let Some(row) = row else {
         return Ok(None);
     };
+    let schedule = if kind == ShareKind::Event {
+        row.try_get::<DateTime<Utc>>("", "starts_at")
+            .ok()
+            .map(|starts| {
+                let ends = row
+                    .try_get::<Option<DateTime<Utc>>>("", "ends_at")
+                    .ok()
+                    .flatten();
+                format_event_schedule(starts, ends)
+            })
+    } else {
+        None
+    };
+    let image_url = row
+        .try_get::<Option<String>>("", "image_url")
+        .unwrap_or(None)
+        .filter(|u| !u.is_empty())
+        .and_then(|url| absolute_share_image_url(&state.config.web_app_url, &url));
     Ok(Some(ShareCard {
         title: row.try_get::<String>("", "title").unwrap_or_default(),
+        schedule,
         description: row.try_get::<String>("", "description").unwrap_or_default(),
         price_baht: row.try_get::<Option<f64>>("", "price").unwrap_or(None),
-        image_url: row
-            .try_get::<Option<String>>("", "image_url")
-            .unwrap_or(None)
-            .filter(|u| !u.is_empty()),
+        image_url,
     }))
 }
 
@@ -308,9 +388,7 @@ async fn prepare_share(
     let result = build_inline_result(
         &uuid::Uuid::new_v4().to_string(),
         &card,
-        // The recipient's client language is unknown here, so the button
-        // carries both words rather than guessing wrong.
-        "🛒 Открыть товар / Open",
+        share_button_text(kind),
         &link,
     );
 
@@ -439,6 +517,7 @@ mod tests {
     fn card() -> ShareCard {
         ShareCard {
             title: "KING JUICE".into(),
+            schedule: None,
             description: "King Juice is a premium sativa-dominant hybrid.".into(),
             price_baht: Some(350.0),
             image_url: Some("https://cdn.example/king.png".into()),
@@ -477,6 +556,63 @@ mod tests {
             "https://t.me/Woody_WeedPecker_bot?start=p_set_abc-123"
         );
         assert!(!link.contains("startapp"));
+    }
+
+    #[test]
+    fn event_schedule_is_rendered_in_bangkok_time() {
+        let starts = "2026-08-27T12:30:00Z".parse().expect("starts_at");
+        let ends = "2026-08-27T14:00:00Z".parse().expect("ends_at");
+        assert_eq!(
+            format_event_schedule(starts, Some(ends)),
+            "27.08.2026 · 19:30–21:00"
+        );
+    }
+
+    #[test]
+    fn event_button_opens_the_event_not_a_generic_product() {
+        assert_eq!(share_button_text(ShareKind::Event), "Открыть мероприятие");
+        assert_eq!(share_button_text(ShareKind::Set), "🛒 Открыть товар / Open");
+    }
+
+    #[test]
+    fn event_card_contains_title_schedule_description_photo_and_button() {
+        let mut event = card();
+        event.title = "Sunset Session".into();
+        event.schedule = Some("27.08.2026 · 19:30–21:00".into());
+        event.description = "Музыка, закат и камерная встреча.".into();
+        event.image_url = Some("https://cdn.example/event.jpg".into());
+        let link = deep_link("Woody_WeedPecker_bot", ShareKind::Event, "event-42");
+        let result = build_inline_result(
+            "event-result",
+            &event,
+            share_button_text(ShareKind::Event),
+            &link,
+        );
+
+        assert_eq!(result["type"], "photo");
+        assert_eq!(result["photo_url"], "https://cdn.example/event.jpg");
+        let caption = result["caption"].as_str().expect("photo caption");
+        assert!(caption.contains("Sunset Session"));
+        assert!(caption.contains("27.08.2026 · 19:30–21:00"));
+        assert!(caption.contains("Музыка, закат"));
+        let button = &result["reply_markup"]["inline_keyboard"][0][0];
+        assert_eq!(button["text"], "Открыть мероприятие");
+        assert_eq!(
+            button["url"],
+            "https://t.me/Woody_WeedPecker_bot?start=p_event_event-42"
+        );
+    }
+
+    #[test]
+    fn relative_event_poster_becomes_a_public_https_url() {
+        assert_eq!(
+            absolute_share_image_url(
+                "https://woody.example/app?lang=ru",
+                "/uploads/events/poster.jpg"
+            )
+            .as_deref(),
+            Some("https://woody.example/uploads/events/poster.jpg")
+        );
     }
 
     #[test]

@@ -3788,6 +3788,33 @@ mod wasm_boot_html_tests {
     }
 }
 
+/// A Dioxus `Signal::write()` guard is a runtime RefCell borrow. If that guard
+/// survives across an `.await`, the scheduler may render while it is still
+/// held and `Signal::read()` panics with `AlreadyBorrowedMut`.
+#[cfg(test)]
+mod garden_signal_borrow_tests {
+    use std::path::Path;
+
+    #[test]
+    fn water_update_releases_the_plants_write_guard_before_awaiting() {
+        let src = std::fs::read_to_string(
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("src/ui/game/garden.rs"),
+        )
+        .expect("read garden source");
+        let start = src
+            .find("let mut list = ps.write();")
+            .expect("water update write guard");
+        let await_at = src[start..]
+            .find("post_client_event(&api_base_url(), \"garden_water_tapped\"")
+            .map(|offset| start + offset)
+            .expect("water analytics await");
+        assert!(
+            src[start..await_at].contains("drop(list);"),
+            "the plants Signal write guard must be dropped before the analytics await"
+        );
+    }
+}
+
 /// SQL-injection guard. `Statement::from_string(..)` takes NO bind parameters,
 /// so its SQL text MUST be fully static — any `format!`-interpolated value in a
 /// `from_string` call is a parameter that should have gone through
