@@ -1678,6 +1678,29 @@ async fn cancel_booking(
 
 // ── Reminders ──────────────────────────────────────────────────
 
+fn build_event_reminder_body(
+    title: &str,
+    starts_at: chrono::DateTime<chrono::Utc>,
+    location_text: Option<&str>,
+) -> String {
+    // Koh Phangan uses UTC+7 year-round. Describe it as local time rather than
+    // "Bangkok": customers read the timezone label as the event address.
+    let starts_local = starts_at + chrono::Duration::hours(7);
+    let starts_text = format!(
+        "{} по местному времени",
+        starts_local.format("%d.%m.%Y %H:%M")
+    );
+    let location = location_text
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("Место проведения уточняется");
+    crate::trios::i18n::tf(
+        crate::trios::core::Lang::Russian,
+        crate::trios::i18n::T_EVENTS_REMINDER_BODY,
+        &[title.to_string(), starts_text, location.to_string()],
+    )
+}
+
 /// A3: send one reminder per confirmed booking for events starting
 /// within the next `hours` window and not already reminded.
 /// Returns the number of successfully delivered reminders.
@@ -1692,7 +1715,8 @@ pub(crate) async fn send_event_reminders(
     let rows = orm
         .query_all(Statement::from_sql_and_values(
             DbBackend::Postgres,
-            "SELECT b.id AS booking_id, b.telegram_id, e.id AS event_id, e.title, e.starts_at \
+            "SELECT b.id AS booking_id, b.telegram_id, e.id AS event_id, e.title, \
+                    e.starts_at, e.location_text \
              FROM event_bookings b \
              JOIN events e ON e.id = b.event_id \
              WHERE b.status = 'confirmed' \
@@ -1712,17 +1736,10 @@ pub(crate) async fn send_event_reminders(
         let starts_at: chrono::DateTime<chrono::Utc> = r
             .try_get("", "starts_at")
             .unwrap_or_else(|_| chrono::Utc::now());
-        // Bangkok is UTC+7. The `east_opt` argument is a fixed valid offset, so
-        // the unwrap is safe; we isolate the unwrap to this one row.
-        #[allow(clippy::unwrap_used)]
-        let bangkok_offset = chrono::FixedOffset::east_opt(7 * 3600).unwrap();
-        let starts_local = starts_at.with_timezone(&bangkok_offset);
-        let starts_text = starts_local.format("%d.%m.%Y %H:%M (Bangkok)").to_string();
-        let body = crate::trios::i18n::tf(
-            crate::trios::core::Lang::Russian,
-            crate::trios::i18n::T_EVENTS_REMINDER_BODY,
-            &[title.clone(), starts_text],
-        );
+        let location_text = r
+            .try_get::<Option<String>>("", "location_text")
+            .unwrap_or(None);
+        let body = build_event_reminder_body(&title, starts_at, location_text.as_deref());
 
         // Best-effort send; failures are logged but don't break the sweep.
         use teloxide::prelude::Requester;
@@ -1785,6 +1802,23 @@ pub(crate) fn spawn_event_reminder_loop(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn event_reminder_uses_the_real_location_not_the_timezone_name() {
+        let starts_at = chrono::DateTime::parse_from_rfc3339("2026-08-28T13:00:00Z")
+            .expect("valid timestamp")
+            .with_timezone(&chrono::Utc);
+        let body = build_event_reminder_body(
+            "CANNABIS SOMMELIER NIGHT",
+            starts_at,
+            Some("WoodyWeedPecker, Koh Phangan"),
+        );
+
+        assert!(body.contains("28.08.2026 20:00"));
+        assert!(body.contains("WoodyWeedPecker, Koh Phangan"));
+        assert!(body.contains("по местному времени"));
+        assert!(!body.contains("Bangkok"));
+    }
 
     #[test]
     fn parse_iso_timestamp_accepts_rfc3339() {
