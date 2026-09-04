@@ -60,6 +60,44 @@ fn rust_sources(dir: &std::path::Path, out: &mut Vec<(String, String)>) {
     }
 }
 
+/// Does `line` bind a parameter to exactly the column `col`?
+///
+/// Matches `<col> = $` only where `col` starts at an identifier boundary, so a
+/// column name that is a suffix of a longer one (`at` inside
+/// `last_watered_at`) cannot masquerade as it.
+fn binds_column(line: &str, col: &str) -> bool {
+    let needle = format!("{col} = $");
+    let mut from = 0;
+    while let Some(rel) = line[from..].find(&needle) {
+        let start = from + rel;
+        let prev_ok = line[..start]
+            .chars()
+            .next_back()
+            .is_none_or(|c| !c.is_alphanumeric() && c != '_');
+        if prev_ok {
+            return true;
+        }
+        from = start + 1;
+    }
+    false
+}
+
+#[test]
+fn a_column_name_that_is_a_suffix_of_another_is_not_confused_for_it() {
+    // The exact four false positives this guard used to produce.
+    assert!(!binds_column("SET last_watered_at = $4,", "at"));
+    assert!(!binds_column("SET harvested_at = $1 WHERE id = $2", "at"));
+    assert!(!binds_column(
+        "UPDATE garden_rewards SET expiry_nudge_sent_at = $1",
+        "sent_at"
+    ));
+    // …while the real thing still matches, at either kind of boundary.
+    assert!(binds_column("UPDATE queen_report SET at = $1", "at"));
+    assert!(binds_column("(at = $1)", "at"));
+    assert!(binds_column("SET sent_at = $2", "sent_at"));
+    assert!(binds_column("SET updated_at = $1", "updated_at"));
+}
+
 #[tokio::test]
 #[ignore]
 async fn no_timestamptz_column_is_written_from_a_bound_parameter() {
@@ -136,7 +174,15 @@ async fn no_timestamptz_column_is_written_from_a_bound_parameter() {
         for (i, line) in lines.iter().enumerate() {
             for col in &columns {
                 // `<col> = $` — a bound parameter, as opposed to `= NOW()`.
-                if !line.contains(&format!("{col} = $")) {
+                //
+                // Anchored at an identifier boundary, because this schema has
+                // columns literally named `at` (queen_report, queen_transcript)
+                // and `sent_at` (promo_deliveries). A plain substring test made
+                // every `last_watered_at = $4` and `expiry_nudge_sent_at = $1`
+                // read as one of those — four false accusations against BIGINT
+                // columns that bind epoch millis entirely correctly. A guard
+                // that cries wolf gets deleted, so it has to be precise.
+                if !binds_column(line, col) {
                     continue;
                 }
                 // An explicit, written-down exemption on one of the preceding
