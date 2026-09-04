@@ -126,6 +126,11 @@ fn validate_event_request(
     req: &CreateEventRequest,
 ) -> Result<(bool, DateTime<Utc>, Option<DateTime<Utc>>), (StatusCode, String)> {
     fn bad(msg: String) -> (StatusCode, String) {
+        // A rejected create used to be invisible from both ends: the handler
+        // logged nothing on 400 and the admin UI collapsed every failure into
+        // "Ошибка сохранения". Log the reason so a failed save is diagnosable
+        // from the server logs alone.
+        tracing::warn!("create_event rejected: {msg}");
         (StatusCode::BAD_REQUEST, msg)
     }
     let title = req.title.trim();
@@ -219,6 +224,7 @@ fn validate_update_request(
     (StatusCode, String),
 > {
     fn bad(msg: String) -> (StatusCode, String) {
+        tracing::warn!("update_event rejected: {msg}");
         (StatusCode::BAD_REQUEST, msg)
     }
     if let Some(ref t) = req.title {

@@ -62,9 +62,101 @@ pub fn visible_month_days(anchor: NaiveDate, today: NaiveDate) -> Vec<NaiveDate>
         .collect()
 }
 
+/// Turn an `<input type="datetime-local">` value into an RFC 3339 timestamp.
+///
+/// The admin form used to build this by hand — `format!("{value}:00+07:00")` —
+/// which assumes the widget always yields `YYYY-MM-DDTHH:MM`. The HTML spec
+/// does not promise that: a value whose seconds are non-zero (or an input with
+/// `step` under 60) is `YYYY-MM-DDTHH:MM:SS`, and iOS pickers do emit it.
+/// Concatenating then produced `…T19:30:00:00+07:00`, which the server rejects
+/// with a 400 that logged nothing and surfaced as a bare "Ошибка сохранения".
+///
+/// Both shapes are accepted here, and the result is parsed back before being
+/// returned, so a malformed value fails as `None` at the call site instead of
+/// travelling to the server as garbage. `offset` is the suffix to attach
+/// (e.g. `"+07:00"` for Asia/Bangkok, `"Z"` for UTC).
+pub fn datetime_local_to_rfc3339(value: &str, offset: &str) -> Option<String> {
+    let v = value.trim();
+    if v.is_empty() {
+        return None;
+    }
+    // Count the colons in the time part to tell HH:MM from HH:MM:SS.
+    let time_part = v.split('T').nth(1)?;
+    let candidate = match time_part.matches(':').count() {
+        1 => format!("{v}:00{offset}"),
+        2 => format!("{v}{offset}"),
+        _ => return None,
+    };
+    // Only hand back something that actually parses as the instant we claim.
+    candidate
+        .parse::<chrono::DateTime<chrono::FixedOffset>>()
+        .ok()
+        .map(|_| candidate)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn datetime_local_without_seconds_is_padded() {
+        assert_eq!(
+            datetime_local_to_rfc3339("2026-09-05T19:30", "+07:00").as_deref(),
+            Some("2026-09-05T19:30:00+07:00")
+        );
+    }
+
+    /// The regression: an iOS picker returning seconds used to be concatenated
+    /// into `…T19:30:00:00+07:00` and rejected by the server.
+    #[test]
+    fn datetime_local_with_seconds_is_not_double_suffixed() {
+        assert_eq!(
+            datetime_local_to_rfc3339("2026-09-05T19:30:00", "+07:00").as_deref(),
+            Some("2026-09-05T19:30:00+07:00")
+        );
+        assert_eq!(
+            datetime_local_to_rfc3339("2026-09-05T19:30:45", "+07:00").as_deref(),
+            Some("2026-09-05T19:30:45+07:00")
+        );
+    }
+
+    #[test]
+    fn utc_offset_suffix_is_honoured() {
+        assert_eq!(
+            datetime_local_to_rfc3339("2026-09-05T19:30", "Z").as_deref(),
+            Some("2026-09-05T19:30:00Z")
+        );
+    }
+
+    #[test]
+    fn empty_and_malformed_values_are_rejected_not_forwarded() {
+        assert_eq!(datetime_local_to_rfc3339("", "+07:00"), None);
+        assert_eq!(datetime_local_to_rfc3339("   ", "+07:00"), None);
+        assert_eq!(datetime_local_to_rfc3339("2026-09-05", "+07:00"), None);
+        assert_eq!(datetime_local_to_rfc3339("not a date", "+07:00"), None);
+        // Shape is right, instant is not — must not reach the server.
+        assert_eq!(
+            datetime_local_to_rfc3339("2026-13-45T99:99", "+07:00"),
+            None
+        );
+    }
+
+    /// Whatever comes back must be parseable by the same parser the server
+    /// uses (`str::parse::<DateTime<Utc>>` in `api::events`).
+    #[test]
+    fn output_parses_the_way_the_server_parses_it() {
+        for raw in [
+            "2026-09-05T19:30",
+            "2026-09-05T19:30:00",
+            "2026-01-01T00:00",
+        ] {
+            let s = datetime_local_to_rfc3339(raw, "+07:00").expect("valid");
+            assert!(
+                s.parse::<chrono::DateTime<chrono::Utc>>().is_ok(),
+                "server would reject {s} (from {raw})"
+            );
+        }
+    }
 
     fn d(y: i32, m: u32, day: u32) -> NaiveDate {
         NaiveDate::from_ymd_opt(y, m, day).expect("valid date")
