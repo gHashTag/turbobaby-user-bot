@@ -4076,9 +4076,11 @@ fn EditStrainCard(
                            let d = description(); let ef = effect(); let fp = flavor_profile(); let img = image_url(); let vid = video_url();
                            let ne = name_en(); let de = description_en(); let ee = effect_en();
                            let fpe = flavor_profile_en(); let ste = strain_type_en();
-                           // Marketing values (TZ #2). datetime-local widget returns
-                           // "YYYY-MM-DDTHH:MM" without timezone — server expects RFC3339,
-                           // so we append ":00Z" only when the field is non-empty.
+                           // Marketing values (TZ #2). The server wants RFC3339; the
+                           // datetime-local widget's value is only "YYYY-MM-DDTHH:MM" by
+                           // convention, so the conversion goes through the shared,
+                           // tested helper instead of string concatenation — see
+                           // trios::calendar::datetime_local_to_rfc3339.
                            let sotd_b = *is_sotd.read();
                            // Clamp to the server's accepted range (0..=100). An
                            // out-of-range value made `extract_discount` reject the
@@ -4092,11 +4094,23 @@ fn EditStrainCard(
                            let dp = discount_percent.read().trim().parse::<f64>().ok().filter(|v| v.is_finite() && *v >= 0.0);
                            let sp = sale_price.read().trim().parse::<f64>().ok().filter(|v| v.is_finite() && *v > 0.0);
                            let su = sale_until().trim().to_string();
-                           let su_rfc = if su.is_empty() { None } else { Some(format!("{}:00Z", su)) };
+                           let su_rfc = if su.is_empty() { None } else {
+                               match crate::trios::calendar::datetime_local_to_rfc3339(&su, "Z") {
+                                   Some(s) => Some(s),
+                                   // Dropping it silently would save the product with no
+                                   // sale end date at all, which reads as success.
+                                   None => { status.set(format!("❌ Не понял дату конца скидки: «{su}»")); return; }
+                               }
+                           };
                            let best_b = *is_best_seller.read();
                            let new_b = *is_new_arrival.read();
                            let nu = new_until().trim().to_string();
-                           let nu_rfc = if nu.is_empty() { None } else { Some(format!("{}:00Z", nu)) };
+                           let nu_rfc = if nu.is_empty() { None } else {
+                               match crate::trios::calendar::datetime_local_to_rfc3339(&nu, "Z") {
+                                   Some(s) => Some(s),
+                                   None => { status.set(format!("❌ Не понял дату конца «новинки»: «{nu}»")); return; }
+                               }
+                           };
                            let ord = display_order.read().trim().parse::<i32>().ok().unwrap_or(0);
                            let id = item_id.clone();
                            let original = cache.read().iter().find(|s| s.id == id).cloned();
