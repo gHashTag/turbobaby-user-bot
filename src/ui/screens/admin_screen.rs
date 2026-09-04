@@ -6784,6 +6784,45 @@ fn EventsTab() -> Element {
             );
             return;
         }
+        // Build the timestamps BEFORE `submitting` is latched: an early return
+        // past that point would leave the Save button disabled for good.
+        //
+        // Admin input is interpreted as Asia/Bangkok (UTC+7), not browser local
+        // time. The conversion is shared and tested (`trios::calendar`) rather
+        // than a `format!` here — a datetime-local value carrying seconds used
+        // to be concatenated into an unparseable timestamp and rejected by the
+        // server with an error nobody could see.
+        const SHOP_OFFSET: &str = "+07:00";
+        let starts_at_api =
+            match crate::trios::calendar::datetime_local_to_rfc3339(&starts_at.read(), SHOP_OFFSET)
+            {
+                Some(s) => s,
+                None => {
+                    push_toast(
+                        toasts,
+                        format!("Не понял дату начала: «{}»", starts_at.read()),
+                        ToastKind::Error,
+                    );
+                    return;
+                }
+            };
+        let ends_at_raw = ends_at.read().trim().to_string();
+        let ends_at_api = if ends_at_raw.is_empty() {
+            None
+        } else {
+            match crate::trios::calendar::datetime_local_to_rfc3339(&ends_at_raw, SHOP_OFFSET) {
+                Some(s) => Some(s),
+                None => {
+                    push_toast(
+                        toasts,
+                        format!("Не понял дату окончания: «{ends_at_raw}»"),
+                        ToastKind::Error,
+                    );
+                    return;
+                }
+            }
+        };
+
         submitting.set(true);
         let init = init_data.read().clone();
         // "Add" opens the modal with editing_id = Some(""), so treat an empty id as create.
@@ -6793,12 +6832,6 @@ fn EventsTab() -> Element {
         let title_en_clone = title_en.read().clone();
         let description_clone = description.read().clone();
         let description_en_clone = description_en.read().clone();
-        let starts_at_api = format!("{}:00+07:00", starts_at.read().clone());
-        let ends_at_api = if ends_at.read().trim().is_empty() {
-            None
-        } else {
-            Some(format!("{}:00+07:00", ends_at.read().clone()))
-        };
         let location_text_clone = location_text.read().clone();
         let image_url_clone = image_url.read().clone();
         let video_url_clone = video_url.read().clone();
@@ -6812,9 +6845,10 @@ fn EventsTab() -> Element {
             "title_en": if title_en.read().trim().is_empty() { serde_json::Value::Null } else { title_en.read().clone().into() },
             "description": if description.read().trim().is_empty() { serde_json::Value::Null } else { description.read().clone().into() },
             "description_en": if description_en.read().trim().is_empty() { serde_json::Value::Null } else { description_en.read().clone().into() },
-            // Admin input is interpreted as Asia/Bangkok (UTC+7), not browser local time.
-            "starts_at": format!("{}:00+07:00", starts_at.read().clone()),
-            "ends_at": if ends_at.read().trim().is_empty() { serde_json::Value::Null } else { format!("{}:00+07:00", ends_at.read().clone()).into() },
+            // Reuse the values validated above — building them a second time
+            // here let the request and the optimistic cache entry drift apart.
+            "starts_at": starts_at_api.clone(),
+            "ends_at": match ends_at_api.clone() { Some(s) => serde_json::Value::String(s), None => serde_json::Value::Null },
             "location_text": if location_text.read().trim().is_empty() { serde_json::Value::Null } else { location_text.read().clone().into() },
             "image_url": if image_url.read().trim().is_empty() { serde_json::Value::Null } else { image_url.read().clone().into() },
             "video_url": if video_url.read().trim().is_empty() { serde_json::Value::Null } else { video_url.read().clone().into() },
@@ -6900,8 +6934,31 @@ fn EventsTab() -> Element {
                     reload.set(next);
                     push_toast(toasts, "Сохранено".into(), ToastKind::Success);
                 }
-                _ => {
-                    push_toast(toasts, "Ошибка сохранения".into(), ToastKind::Error);
+                // The server already explains itself — `validate_event_request`
+                // returns messages like "starts_at не ISO-8601" or
+                // "photos[2] невалиден". Collapsing every failure into a bare
+                // "Ошибка сохранения" threw that away and left a failed save
+                // undiagnosable from either end. Show status + reason.
+                Ok(r) => {
+                    let status = r.status().as_u16();
+                    let body = r.text().await.unwrap_or_default();
+                    let reason = body.trim();
+                    let msg = if reason.is_empty() {
+                        format!("Ошибка сохранения ({status})")
+                    } else {
+                        // Bodies are short validation strings; cap anyway so a
+                        // stray HTML error page cannot fill the screen.
+                        let short: String = reason.chars().take(300).collect();
+                        format!("Ошибка сохранения ({status}): {short}")
+                    };
+                    push_toast(toasts, msg, ToastKind::Error);
+                }
+                Err(e) => {
+                    push_toast(
+                        toasts,
+                        format!("Сеть недоступна, событие не сохранено: {e}"),
+                        ToastKind::Error,
+                    );
                 }
             }
         });
