@@ -3873,5 +3873,208 @@ mod sql_injection_guard_tests {
     }
 }
 
+/// A Dioxus `Signal::write()` guard bound to a `let` keeps the underlying
+/// `RefCell` mutably borrowed until the end of its block. Inside an `async`
+/// task that block can span an `.await`: while the future is suspended the
+/// component re-renders (garden alone ticks every 5s and polls every 30s) and
+/// the render's `signal.read()` panics with `AlreadyBorrowedMut`.
+///
+/// That is exactly the 2026-08-23 garden crash (`ui/game/garden.rs`: the water
+/// handler held `ps.write()` across `post_client_event(...).await`). Only *bound*
+/// guards are checked — `sig.write().push(x);` is a temporary dropped at the
+/// semicolon and is safe. Scoped to `src/ui`, where signals live.
+#[cfg(test)]
+mod signal_write_guard_tests {
+    /// Drop line comments and string-literal contents so brace counting and
+    /// `.await` detection see code, not `style: "…{bg}…"` or prose.
+    fn strip(line: &str) -> String {
+        let mut out = String::new();
+        let mut chars = line.chars().peekable();
+        let mut in_str = false;
+        while let Some(c) = chars.next() {
+            if in_str {
+                if c == '\\' {
+                    chars.next();
+                } else if c == '"' {
+                    in_str = false;
+                }
+                continue;
+            }
+            match c {
+                '"' => in_str = true,
+                '/' if chars.peek() == Some(&'/') => break,
+                _ => out.push(c),
+            }
+        }
+        out
+    }
+
+    /// 1-based line numbers of `let … = <sig>.write();` guards whose enclosing
+    /// block reaches an `.await` before it closes.
+    fn offenders(src: &str) -> Vec<usize> {
+        let lines: Vec<&str> = src.lines().collect();
+        let mut hits = Vec::new();
+        for (i, raw) in lines.iter().enumerate() {
+            let code = strip(raw);
+            let t = code.trim();
+            if !(t.starts_with("let ") && t.ends_with(".write();")) {
+                continue;
+            }
+            // The binding name, so an explicit `drop(name)` can be recognised as
+            // releasing the borrow. Releasing by hand is a legitimate fix — it
+            // is how the same defect was fixed independently on main — and must
+            // not read as a violation.
+            let binding = t
+                .trim_start_matches("let ")
+                .trim_start_matches("mut ")
+                .split(|c: char| c == ':' || c == '=')
+                .next()
+                .map(str::trim)
+                .unwrap_or("");
+            let released = format!("drop({binding})");
+            // Walk to the end of the guard's block; flag an `.await` on the way.
+            let mut depth: i32 = 0;
+            for line in lines.iter().skip(i + 1) {
+                let code = strip(line);
+                if !binding.is_empty() && code.contains(&released) {
+                    break;
+                }
+                if code.contains(".await") {
+                    hits.push(i + 1);
+                    break;
+                }
+                for ch in code.chars() {
+                    match ch {
+                        '{' => depth += 1,
+                        '}' => depth -= 1,
+                        _ => {}
+                    }
+                }
+                if depth < 0 {
+                    break;
+                }
+            }
+        }
+        hits
+    }
+
+    /// Calibrate the scanner before trusting its silence: it must flag the real
+    /// bug shape and stay quiet on the safe ones.
+    #[test]
+    fn scanner_flags_a_guard_held_across_await() {
+        let bad = "\
+async fn f() {
+    if ok {
+        let mut list = ps.write();
+        list.push(1);
+        other().await;
+    }
+}";
+        assert_eq!(offenders(bad), vec![3], "missed a guard held across .await");
+
+        let scoped = "\
+async fn f() {
+    {
+        let mut list = ps.write();
+        list.push(1);
+    }
+    other().await;
+}";
+        assert!(
+            offenders(scoped).is_empty(),
+            "false positive on a scoped guard"
+        );
+
+        let commented = "\
+async fn f() {
+    let mut list = ps.write();
+    // drop before the .await below
+    list.push(1);
+}";
+        assert!(
+            offenders(commented).is_empty(),
+            "comments and strings must not be scanned for .await"
+        );
+
+        // Releasing the guard by hand is the other valid fix; flagging it would
+        // send someone chasing a bug they had already fixed.
+        let dropped = "\
+async fn f() {
+    let mut list = ps.write();
+    list.push(1);
+    drop(list);
+    other().await;
+}";
+        assert!(
+            offenders(dropped).is_empty(),
+            "false positive on an explicitly dropped guard"
+        );
+
+        // But dropping a DIFFERENT guard must not excuse this one.
+        let wrong_drop = "\
+async fn f() {
+    let mut list = ps.write();
+    drop(other_guard);
+    other().await;
+}";
+        assert_eq!(
+            offenders(wrong_drop),
+            vec![2],
+            "dropping some other binding must not clear the borrow"
+        );
+    }
+
+    #[test]
+    fn no_signal_write_guard_is_held_across_an_await() {
+        let ui = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/ui");
+        let mut bad = Vec::new();
+        let mut guards = 0usize;
+
+        fn walk(p: &std::path::Path, f: &mut dyn FnMut(&std::path::Path, &str)) {
+            for e in std::fs::read_dir(p)
+                .expect("readable")
+                .filter_map(|e| e.ok())
+            {
+                let path = e.path();
+                if path.is_dir() {
+                    walk(&path, f);
+                } else if path.extension().and_then(|s| s.to_str()) == Some("rs") {
+                    if let Ok(src) = std::fs::read_to_string(&path) {
+                        f(&path, &src);
+                    }
+                }
+            }
+        }
+
+        walk(&ui, &mut |path, src| {
+            guards += src
+                .lines()
+                .filter(|l| {
+                    let t = strip(l);
+                    let t = t.trim();
+                    t.starts_with("let ") && t.ends_with(".write();")
+                })
+                .count();
+            for line in offenders(src) {
+                bad.push(format!("{}:{}", path.display(), line));
+            }
+        });
+
+        assert!(
+            guards > 0,
+            "no bound write() guards found — scanner broken?"
+        );
+        assert!(
+            bad.is_empty(),
+            "{} Signal::write() guard(s) stay borrowed across an .await — the \
+             component re-renders while suspended and read() panics with \
+             AlreadyBorrowedMut. Wrap the mutation in its own `{{ … }}` block so \
+             the guard drops before the await:\n  {}",
+            bad.len(),
+            bad.join("\n  ")
+        );
+    }
+}
+
 // WASM entry point is now in src/lib.rs via #[wasm_bindgen(start)]
 // This file is only used for the native backend (Axum server)
