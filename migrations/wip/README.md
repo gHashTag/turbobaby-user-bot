@@ -22,7 +22,10 @@ if wired in as-is.
 To finish it:
 
 1. `git stash pop` and re-apply the quest.rs work.
-2. Move this file up to `migrations/` (it is already numbered correctly).
+2. Move this file up to `migrations/` — **and renumber it first.** 077 is no longer
+   free: the bike catalog migrations took 077 onward (see `DECISIONS.md` D1, forced by
+   the gap-free numbering test). Take the next free slot above the highest
+   `migrations/*.sql` on disk at the time you promote this.
 3. Point the `include_str!` in `src/db/mod.rs` at `077_quest_progress.sql` —
    the stash still names `039_quest_progress.sql`.
 4. Cover the ordering gate and the restart-survival claim with tests; extend
