@@ -197,3 +197,64 @@ The internal sources carry, and the public repo must never contain in any form:
 
 Only aggregate, de-identified signal is used: published tariffs, deposit tiers, term
 patterns, unit counts, model years, colours, and the scooter/motorcycle class split.
+
+## D15 — One implementation of the price arithmetic, and it is shared
+
+Found by compiling, not by reading: `cargo check --features backend` reports
+`unused import: bikes::*` and then 14 more never-used items from `src/db/bikes.rs`. The
+694-line typed data-access layer for the bike domain is reached by **nothing**.
+`src/api/bikes.rs` — the code that actually answers customers — issues its own raw
+`Statement`s and carries its own `publishable_money` / `publishable_fraction`.
+
+Both are correct. That is precisely the problem: D9 and D11 are now asserted in three
+separate places, each with its own tests and its own chance to drift.
+
+| copy | location | what it holds |
+| --- | --- | --- |
+| server, typed | `src/db/bikes.rs` | `round_half_up_baht`, `apply_class_discount`, `usable_discount`, `discount_for_class` — all unreachable |
+| server, HTTP | `src/api/bikes.rs` | `publishable_money`, `publishable_fraction`; deliberately computes **no** client rate (D11) |
+| client, WASM | `src/ui/screens/catalog_screen.rs` | `discount_fraction` plus its own half-up client rate |
+
+The rule, and it binds every worker touching a price:
+
+- The arithmetic — class discount, term discount, half-up rounding to the baht — lives
+  **once**, in `src/trios/pricing.rs`. That module is already the shared, dependency-free
+  home both the Axum server and the Dioxus/WASM client compile against; `src/db/bikes.rs`
+  cannot be it, because it pulls in `sea_orm` and the UI cannot link that.
+- The **honesty filters** (absent stays absent; NaN, infinity and negatives become absent,
+  never `0.0`) live there too, as one pair of functions, not three.
+- A `.t27` spec pins the arithmetic, so the two language runtimes are checked against one
+  written contract rather than against each other.
+
+Why this is worth a decision rather than a cleanup ticket: the recurring defect in this
+kind of tree is the hand-copied computation. Three copies of a *price* is the worst place
+to have it — D11 makes price provenance the most sensitive rule in the repository, and a
+drift between the number the API serves and the number the catalog screen renders is
+invisible to every test that only ever exercises one of them.
+
+## D16 — A gate whose input can reach zero must pin a floor
+
+`src/api/mod.rs::route_wiring_tests::every_routes_fn_is_declared_and_merged` was added on
+**2026-06-02** to catch "added a routes file but forgot to wire it". It finds its subjects
+by matching the source text `pub fn routes(`.
+
+On **2026-06-06**, `baf77cc` ("refactor(api): tighten 59 pub items to pub(crate)") rewrote
+every one of those declarations to `pub(crate) fn routes(`. The needle matched nothing from
+that day on. `modules_with_pub_fn_routes()` returned an empty vector, both assertions ran
+against empty vectors, and the test passed — for three months, while checking nothing.
+Measured today: **0 of 19** route modules were visible to it.
+
+The gate had been made blind by exactly the bug class it existed to catch, and nothing
+reported it, because a passing test and a vacuous test look identical from the outside.
+
+Two fixes, both landed:
+
+1. The recogniser accepts any visibility on the declaration.
+2. A companion test, `routes_fns_are_found`, asserts the subject list holds at least 10
+   modules. The floor is well below the real 19 so that deleting a module is not a failure;
+   only *losing the ability to see modules* is.
+
+The general rule for this repository: **every source-walking gate must assert that it found
+something.** `orphan_table_tests` and `entity_wiring_tests` already do (`assert!(!
+tables.is_empty())`, `assert!(!entities.is_empty())`) — this one did not, and it is the one
+that broke. A count is not a decision, but a count of zero is always a bug.

@@ -7,13 +7,15 @@ pub(crate) mod admin;
 pub mod auth;
 #[allow(unreachable_pub)]
 pub mod cache;
+// The bike catalog: families, units and the two published discount tables.
+// It replaces `strains`, which is gone with its migrations-083 tables.
+pub(crate) mod bikes;
 pub(crate) mod cart;
 pub(crate) mod catalog;
 pub(crate) mod client_errors;
 pub(crate) mod debug;
 pub(crate) mod events;
 pub(crate) mod game;
-pub(crate) mod garden;
 pub(crate) mod happy_hour;
 pub(crate) mod loyalty;
 #[cfg(feature = "utoipa")]
@@ -25,7 +27,6 @@ pub(crate) mod referrals;
 pub(crate) mod reviews;
 pub(crate) mod share;
 pub(crate) mod stars;
-pub(crate) mod strains;
 pub(crate) mod tech_tree;
 pub(crate) mod upload;
 pub(crate) mod users;
@@ -95,14 +96,13 @@ fn api_routes() -> Router<AppState> {
         .route("/ping", get(ping_handler))
         .merge(debug::routes())
         .merge(orders::routes())
-        .merge(strains::routes())
+        .merge(bikes::routes())
         .merge(loyalty::routes())
         .merge(admin::routes())
         .merge(catalog::routes())
         .merge(events::routes())
         .merge(quest::routes())
         .merge(happy_hour::routes())
-        .merge(garden::routes())
         .merge(game::routes())
         .merge(client_errors::routes())
         .merge(referrals::routes())
@@ -386,14 +386,54 @@ mod route_wiring_tests {
             let Ok(src) = std::fs::read_to_string(&path) else {
                 continue;
             };
-            let has_routes = src
-                .lines()
-                .any(|l| l.trim_start().starts_with("pub fn routes("));
+            // Match any visibility on the declaration, not just bare `pub`.
+            //
+            // This test was added on 2026-06-02 looking for `pub fn routes(`.
+            // On 2026-06-06, `baf77cc` ("tighten 59 pub items to pub(crate)")
+            // rewrote every one of them to `pub(crate) fn routes(`, and the
+            // needle stopped matching anything at all. The list went empty,
+            // both assertions below were then over empty vectors, and the gate
+            // reported success for three months while checking nothing — the
+            // exact bug class it was written to catch, now in the catcher.
+            // Hence `routes_fns_are_found` below: a gate whose input can go to
+            // zero silently is not a gate.
+            let has_routes = src.lines().any(|l| {
+                let l = l.trim_start();
+                l.starts_with("fn routes(")
+                    || l.starts_with("pub fn routes(")
+                    || (l.starts_with("pub(") && l.contains(") fn routes("))
+            });
             if has_routes {
                 out.push(module);
             }
         }
         out
+    }
+
+    /// The guard the original test lacked.
+    ///
+    /// `modules_with_pub_fn_routes` locates its subjects by matching source
+    /// text, so any change to how a `routes()` function is declared can empty
+    /// it — and an empty subject list makes
+    /// `every_routes_fn_is_declared_and_merged` pass unconditionally. Pinning a
+    /// floor means the next such refactor fails here, loudly, instead of
+    /// quietly switching the wiring check off.
+    ///
+    /// The floor is deliberately well under the real count (19 at the time of
+    /// writing) so that deleting a module is not a test failure; only losing
+    /// the ability to see modules at all is.
+    #[test]
+    fn routes_fns_are_found() {
+        let found = modules_with_pub_fn_routes();
+        assert!(
+            found.len() >= 10,
+            "only {} src/api/*.rs modules were recognised as declaring `routes()`: {:?}\n\
+             The recogniser in `modules_with_pub_fn_routes` has gone blind — fix its \
+             pattern rather than this floor. Every module merged in `api_routes()` \
+             must be visible to it, or the wiring check silently covers nothing.",
+            found.len(),
+            found,
+        );
     }
 
     #[test]

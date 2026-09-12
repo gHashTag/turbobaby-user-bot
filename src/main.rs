@@ -584,33 +584,11 @@ async fn main() -> Result<()> {
         crate::api::events::spawn_event_reminder_loop(reminder_orm, reminder_bot, 24, 300);
     }
 
-    // Cycle #10: garden watering/harvest reminders. Every 6 hours look for
-    // plants whose cooldown has passed and that haven't been reminded recently.
-    {
-        let garden_reminder_bot = bot_arc_for_state.clone();
-        let garden_reminder_orm = db.orm.clone();
-        let garden_reminder_config = config.clone();
-        crate::api::garden::spawn_garden_reminder_loop(
-            garden_reminder_orm,
-            garden_reminder_bot,
-            garden_reminder_config,
-            21_600,
-        );
-    }
-
-    // Loop #17: garden reward expiry FOMO nudges. Every 4 hours look for active
-    // rewards expiring within 4-24h and send one nudge per reward per day.
-    {
-        let garden_expiry_bot = bot_arc_for_state.clone();
-        let garden_expiry_orm = db.orm.clone();
-        let garden_expiry_config = config.clone();
-        crate::api::garden::spawn_garden_reward_expiry_loop(
-            garden_expiry_orm,
-            garden_expiry_bot,
-            garden_expiry_config,
-            14_400,
-        );
-    }
+    // The two garden reminder loops that stood here are gone with the garden
+    // mechanic (DECISIONS.md D5). They watered a virtual plant granted by a
+    // cannabis purchase; a motorbike rental has no botanical analogue, and a
+    // background loop that pushes Telegram messages about a feature that no
+    // longer exists is worse than no loop at all.
 
     // Loop #12: abandoned-cart reminders. Every 5 minutes look for carts
     // with items that haven't been touched in 10 minutes and send one nudge.

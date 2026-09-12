@@ -5,7 +5,20 @@
 // pub items unconditionally).
 #[allow(unreachable_pub)]
 pub mod accessory;
+// The bike domain. `bike` is the family a customer chooses, `bike_unit` the
+// machine the shop hands over, and `class_discount` / `rental_term` the two
+// published discount tables the client price is computed from.
+#[allow(unreachable_pub)]
+pub mod bike;
+#[allow(unreachable_pub)]
+pub mod bike_service_record;
+#[allow(unreachable_pub)]
+pub mod bike_unit;
 pub mod block_history;
+#[allow(unreachable_pub)]
+pub mod class_discount;
+#[allow(unreachable_pub)]
+pub mod rental_term;
 #[allow(unreachable_pub)]
 pub mod cart;
 #[allow(unreachable_pub)]
