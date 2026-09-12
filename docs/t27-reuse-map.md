@@ -95,8 +95,15 @@ whose contract drives a live workflow. TurboBaby follows both:
    claims about the whole module that no single example can carry.
 9. **L3 PURITY**: ASCII only, English identifiers only. This is why `data/fleet_seed.json`
    carries transliterated colour names and no Cyrillic.
-10. **L4 TESTABILITY**: every `.t27` must hold at least one `test`, `invariant` or `bench`.
-    A spec of bare constants is rejected by the law, and separately proves nothing.
+10. **L4 TESTABILITY**: every `.t27` should hold at least one `test`, `invariant` or `bench`.
+    Measured, not assumed: of the **694** vendored spec files, **507** carry one and **187
+    (27%) carry none** — including all **27** of `specs/agents/*.t27`. So the law is declared
+    but not mechanically enforced, and a spec of bare constants is published today rather
+    than rejected. The corpus splits by purpose: *card* specs (an agent, a catalog entry)
+    are pure constants whose provenance lives in `;` comments and whose JSON the site
+    generates; *contract* specs (`hello_world.t27`, `discovery.t27`) carry tests. The six
+    TurboBaby specs are contracts, so they carry tests and invariants — which puts them in
+    the 507 and costs nothing.
 
 `discovery.t27` also demonstrates the habit worth copying most: it states what the scan
 **never** does, and it explains why a cheap check is insufficient — "the compiler accepts any

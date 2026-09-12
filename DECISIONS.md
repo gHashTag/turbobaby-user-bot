@@ -258,3 +258,54 @@ The general rule for this repository: **every source-walking gate must assert th
 something.** `orphan_table_tests` and `entity_wiring_tests` already do (`assert!(!
 tables.is_empty())`, `assert!(!entities.is_empty())`) — this one did not, and it is the one
 that broke. A count is not a decision, but a count of zero is always a bug.
+
+---
+
+## D17 — Where an issue and the seed disagree, the seed wins, and the disagreement is recorded
+
+The six spec issues (#16–#21) were written before `data/fleet_seed.json` was reconciled.
+Three of them state a premise the seed refutes. Writing the spec the issue asked for would
+have published a false claim in a file whose whole purpose is to be citable, so in each
+case the spec was written against the measurement and the issue's figure was recorded
+inside the spec's `WHY` paragraph rather than quietly dropped.
+
+**#18 asked for a function that cannot exist.** It specifies
+`deposit_for(engine_cc, class)` and tiers of "3,000 / 5,000 / 10,000–20,000". Measured:
+
+| family | class | `displacement_cc` | `deposit_thb` |
+| --- | --- | --- | --- |
+| `xmax-300` | scooter | 300 | 5000 |
+| `xmax-300-new` | scooter | 300 | **7000** |
+
+Two families agreeing on both arguments and disagreeing on the result. A function of
+`(class, displacement_cc)` cannot return two values, so the signature the issue asks for
+is not implementable against this fleet — not difficult, *impossible*. The real distinct
+deposits are 3,000 / 5,000 / 7,000 / 15,000 / 20,000 / 25,000; **10,000 never appears.**
+The deposit is therefore modelled as a per-family published attribute with a closed set of
+legal tier values, and the totality invariant runs over the family-key domain — every
+offered family maps to exactly one tier — not over a displacement band that provably does
+not exist. Also, the field is `displacement_cc`; `engine_cc` appears nowhere in the seed.
+
+**#21's count is off by four.** It says "five of thirteen families have no measured rate".
+Exactly **one** of fourteen in-stock families lacks a rate — `click-125`, whose
+`base_rate_thb_day` is null and whose `offered` is `false`, so it is not bookable either.
+The seed's own `totals.families_without_published_rate` is `1`. The larger and more
+interesting absence is the **mirror** defect the issue did not mention: **seven**
+price-list-only families carry a published rate and **zero** stock. Both failure modes are
+real and they point opposite ways — stock without a rate (1), a rate without stock (7) —
+and the spec that exists to forbid "an absent measurement rendered as a confident number"
+is the wrong place to carry an unreproducible number of its own.
+
+**#17's bands are not disjoint.** The published term discounts are ranges, not multipliers:
+week `[0.06, 0.15]`, two weeks `[0.15, 0.25]`, month `[0.35, 0.5]`. Consecutive bands
+**touch at 0.15**, so "a longer term carries a strictly larger discount" is false exactly
+at that edge. Monotonicity is stated on a well-defined representative of each band instead,
+and the touching edge is named in the header so a later reader does not file it as a bug in
+the tariff. The term ladder itself checks out: `observed_terms_days` is
+`[7, 30, 90, 120, 150, 180]`, which is the issue's "7 days, 1, 3, 4, 5, 6 months".
+
+The rule: **an issue is a brief, not a measurement.** A spec may not inherit a number from
+the prose that commissioned it. Where they differ the spec cites the seed, states the
+issue's figure, and says which one was reproducible — because the alternative is a
+published number whose only provenance is that someone typed it into a ticket, which is
+the defect [D9](#d9) and [D11](#d11) exist to forbid, arriving through the front door.
