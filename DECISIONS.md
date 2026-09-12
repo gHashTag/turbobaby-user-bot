@@ -91,6 +91,28 @@ would stop a customer renting two bikes of the same family for different dates.
 - `rental_start` / `rental_end` on the line
 - the constraint widens to `UNIQUE (cart_id, kind, catalog_id, rental_start, rental_end)`
 
+### D8 amendment — two things the decision above missed
+
+Recorded because D8 as first written would have shipped a defect.
+
+**1. There is a second constraint, and it is unnamed.** `059_cart_tables.sql:16` declares
+`kind TEXT NOT NULL CHECK (kind IN ('strain', 'set', 'accessory', 'tea'))` **inline**, so its
+name is whatever Postgres generated. `bike_rental` violates it and every add-to-cart would fail
+at the database with a `23514`. It must be dropped by looking the constraint up by the column
+it constrains — a guessed name aborts the migration on any database ever patched by hand — and
+the four cannabis kinds must stay in the replacement list, because `ADD CONSTRAINT` validates
+existing rows and would abort on a live cart still holding one.
+
+**2. Widening the UNIQUE constraint silently un-does what 059 was written to prevent.**
+Postgres treats NULLs in a UNIQUE constraint as **distinct**, so once the dates join the key,
+`(cart, 'accessory', id, NULL, NULL)` no longer conflicts with itself and every legacy kind can
+be added to a cart twice. The widened constraint therefore needs a companion partial unique
+index on `(cart_id, kind, catalog_id) WHERE rental_start IS NULL AND rental_end IS NULL`.
+`UNIQUE NULLS NOT DISTINCT` expresses this in one clause but requires Postgres 15 and nothing
+in this repository pins the server version, so the portable form is used.
+
+Both are implemented in `migrations/081_cart_rental_lines.sql`.
+
 ## D9 — Money fields are nullable, and absent stays absent
 
 Three separate constructs in this tree turn an unknown number into a confident zero:
@@ -109,6 +131,20 @@ three constructs above. Absent renders as a dash — never 0, never an average, 
 `try_get_warn!` is the single most dangerous construct during this rename: it is
 fail-open by design, so a half-migrated column renders as `0` / `false` / `""` with a log
 line as the only evidence. Grep every call site before renaming any column it reads.
+
+### A fourth construct, found while widening the cart
+
+`059_cart_tables.sql:19` declares `unit_price DOUBLE PRECISION NOT NULL CHECK (unit_price >= 0)`.
+A cart line **cannot** hold an absent price: the column rejects NULL, and the only value that
+satisfies the constraint without inventing a number is `0`, which renders as free.
+
+The resolution is not a schema change. A family with no published rate is **not addable to a
+cart** — the call refuses, and the catalog says a human quotes this price (D11). That is the
+honest behaviour anyway: a machine whose price nobody has set is a machine we cannot yet take
+money for. CLICK 125 is the live instance, and it is already closed to new rentals by D12.
+
+What this forbids is the tempting shortcut of inserting `0.0` to get past the constraint and
+"fixing up the display later". The zero would then be a real row in a real cart.
 
 ## D10 — `bikes` and `bike_units` join `CRITICAL_COLUMNS`
 
