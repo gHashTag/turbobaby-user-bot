@@ -5,54 +5,54 @@ use serde_json::{json, Value};
 use tracing::{error, warn};
 
 const JOKE_STYLES: &[&str] = &[
-    "a pun about cannabis strain names",
-    "a one-liner about getting high on a tropical island",
-    "a dad joke about weed",
-    "a knock-knock joke about cannabis",
-    "a joke about munchies after smoking",
-    "a pirate joke about weed (Koh Phangan style)",
-    "a joke comparing cannabis strains to people",
-    "a short absurd joke about THC levels",
-    "a joke about forgetting things after smoking",
-    "a joke about a stoner on a tropical island",
-    "a joke about CBD vs THC personality",
-    "a joke about cannabis edibles taking too long to kick in",
-    "a joke about tolerance breaks",
-    "a joke about explaining weed to your grandma",
-    "a joke about naming cannabis strains",
-    "a joke about buying weed at a Thai weed shop",
-    "a joke about rolling the perfect joint",
-    "a joke about sativa vs indica personality types",
-    "a joke about a budtender recommending strains",
-    "a joke about hotboxing a tuk-tuk",
-    "a joke about ordering too many edibles",
-    "a joke about weed sommelier pretending to be fancy",
-    "a joke about stoner philosophy at sunset",
+    "a pun about motorbike model names",
+    "a one-liner about scooter life on a tropical island",
+    "a dad joke about motorbikes",
+    "a knock-knock joke about motorbikes",
+    "a joke about forgetting where you parked your scooter",
+    "a pirate joke about motorbikes (Koh Phangan style)",
+    "a joke comparing bike classes to people",
+    "a short absurd joke about engine displacement",
+    "a joke about potholes after the monsoon rain",
+    "a joke about a first-time rider on a tropical island",
+    "a joke about automatic vs manual rider personalities",
+    "a joke about rental deposits and beach sand",
+    "a joke about fuel gauges and optimism",
+    "a joke about explaining your scooter to your grandma",
+    "a joke about naming motorbike models",
+    "a joke about renting a bike at a Thai beach shop",
+    "a joke about the perfect island road with zero traffic",
+    "a joke about Full Moon Party parking",
+    "a joke about a mechanic recommending helmets",
+    "a joke about a tuk-tuk racing a scooter uphill",
+    "a joke about ordering one more bike for a friend",
+    "a joke about a motorbike sommelier pretending to be fancy",
+    "a joke about riding philosophy at sunset",
 ];
 
 const FACT_TOPICS: &[&str] = &[
-    "history of cannabis cultivation",
-    "cannabis terpenes and their effects",
-    "cannabis in ancient civilizations",
-    "CBD vs THC differences",
-    "cannabis strain origins and genetics",
-    "endocannabinoid system in humans",
-    "cannabis and cooking/edibles",
-    "medical cannabis research breakthroughs",
-    "cannabis plant biology and growth cycles",
-    "hemp industrial uses",
-    "cannabis on Koh Phangan and Thailand legalization",
-    "cannabis trichomes and resin production",
-    "indica vs sativa vs hybrid differences",
-    "cannabis extraction methods (rosin, BHO, ice hash)",
-    "history of cannabis prohibition and legalization",
-    "cannabis culture in different countries",
-    "famous cannabis strains and how they got their names",
-    "cannabis and music/art culture",
-    "cannabis dosing and microdosing",
-    "entourage effect and cannabinoids working together",
-    "cannabis growing techniques (LST, SOG, SCROG)",
-    "Thai cannabis traditions and local strains",
+    "history of the motor scooter",
+    "how two-stroke and four-stroke engines differ",
+    "why island air corrodes bikes faster",
+    "riding conditions on Koh Phangan roads",
+    "motorcycle culture in Thailand and driving on the left",
+    "helmet standards and why they matter",
+    "how drum and disc brakes differ",
+    "motorbike tire wear on sandy roads",
+    "history of the underbone motorcycle",
+    "fuel types sold in Thailand (gasohol 91/95)",
+    "how motorbike rental deposits work",
+    "why kickstands sink into sand",
+    "battery care on seldom-ridden island bikes",
+    "electric scooters vs petrol scooters",
+    "the big-bike scene in Thailand",
+    "how chain maintenance keeps a bike alive",
+    "full-face vs open-face helmets",
+    "how monsoon season changes island riding",
+    "famous viewpoint loops on Koh Phangan",
+    "why island bikes need more frequent service",
+    "the story of the Honda Wave in Southeast Asia",
+    "motorbike safety gear for tropical weather",
 ];
 
 pub(crate) fn get_random_joke_prompt(base_prompt: &str, order_context: Option<&str>) -> String {
@@ -153,7 +153,7 @@ fn build_system_prompt(persona: &str, lang_instruction: &str) -> String {
     let safe_persona =
         crate::util::truncate_string(&sanitize_user_text(persona), MAX_AI_PERSONA_CHARS);
     format!(
-        "You are Woody, a friendly cannabis shop assistant on Koh Phangan, Thailand. \
+        "You are TurboBaby, a friendly motorbike rental assistant on Koh Phangan, Thailand. \
          Persona: {}. {}. Keep responses under 200 words.",
         safe_persona, lang_instruction
     )
@@ -191,7 +191,7 @@ impl AiClient {
         let clean_prompt = sanitize_user_text(prompt);
         if clean_prompt == "[filtered]" {
             return Some(
-                "I can't process that request. Let's talk about our strains! 🌿".to_string(),
+                "I can't process that request. Let's talk about our bikes! 🏍️".to_string(),
             );
         }
         // Defense-in-depth: cap length at the paid-API boundary, independent of

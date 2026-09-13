@@ -13,87 +13,16 @@ use crate::config::Config;
 use crate::db::Database;
 use crate::locales::get_locale;
 
-/// Cycle #10: reminder to water or harvest the garden plant.
-/// `kind` is "water" or "harvest".
-pub(crate) async fn notify_garden_reminder(
-    bot: &Bot,
-    db: &Arc<Database>,
-    config: &Arc<Config>,
-    customer_telegram_id: i64,
-    kind: &str,
-) {
-    if customer_telegram_id == 0 {
-        return;
-    }
-
-    let lang = db
-        .get_user_lang(customer_telegram_id)
-        .await
-        .unwrap_or_else(|| "en".to_string());
-    let locale = get_locale(&lang);
-
-    let (text, btn_label) = match kind {
-        "harvest" => (
-            locale.garden_harvest_ready.clone(),
-            locale.garden_open_app.clone(),
-        ),
-        _ => (
-            locale.garden_water_reminder.clone(),
-            locale.garden_open_app.clone(),
-        ),
-    };
-
-    // Deep-link straight into the garden screen.
-    let deep_link = miniapp_deep_link(&config.bot_username, "garden");
-    let markup = InlineKeyboardMarkup::new(vec![vec![url_btn(&btn_label, &deep_link)]]);
-
-    if let Err(e) = bot
-        .send_message(ChatId(customer_telegram_id), text)
-        .reply_markup(markup)
-        .await
-    {
-        tracing::warn!(
-            "notify_garden_reminder failed: customer_telegram_id={} kind={} err={}",
-            customer_telegram_id,
-            kind,
-            e
-        );
-    }
-}
-
-/// Loop #17: reminder that an unused garden reward is about to expire.
-pub(crate) async fn notify_garden_reward_expiry(
-    bot: &Bot,
-    db: &Arc<Database>,
-    config: &Arc<Config>,
-    customer_telegram_id: i64,
-) {
-    if customer_telegram_id == 0 {
-        return;
-    }
-
-    let lang = db
-        .get_user_lang(customer_telegram_id)
-        .await
-        .unwrap_or_else(|| "en".to_string());
-    let locale = get_locale(&lang);
-    let text = locale.garden_reward_expiry.clone();
-    let deep_link = miniapp_deep_link(&config.bot_username, "garden");
-    let markup =
-        InlineKeyboardMarkup::new(vec![vec![url_btn(&locale.garden_open_app, &deep_link)]]);
-
-    if let Err(e) = bot
-        .send_message(ChatId(customer_telegram_id), text)
-        .reply_markup(markup)
-        .await
-    {
-        tracing::warn!(
-            "notify_garden_reward_expiry failed: customer_telegram_id={} err={}",
-            customer_telegram_id,
-            e
-        );
-    }
-}
+// `notify_garden_reminder` and `notify_garden_reward_expiry` stood here: the
+// water/harvest nudge and the reward-expiry nudge. Their only callers were the
+// two reminder loops in main.rs, which went with the garden mechanic (D5), so
+// both were dead code — and CI runs clippy with `-D warnings`, so dead code
+// here is a failed build, not a cosmetic complaint.
+//
+// The locale strings they read (`garden_water_reminder`, `garden_harvest_ready`,
+// `garden_reward_expiry`) are deliberately still in src/locales.rs: the
+// notification worker renders queued rows by `kind`, and a deployed database
+// can still hold unsent garden rows. See DECISIONS.md D18.
 
 /// Cycle #79: notify the customer that their order status changed.
 ///

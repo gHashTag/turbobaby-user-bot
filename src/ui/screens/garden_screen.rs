@@ -11,27 +11,25 @@ use crate::ui::components::lazy_screen::LazyScreen;
 use crate::ui::game::Garden;
 use crate::ui::game::WoodyShop;
 use crate::ui::lang;
-use crate::ui::screens::skate_screen::SkateGame;
+use crate::ui::screens::ride_screen::RideGame;
 use crate::ui::telegram::{use_telegram_id, use_telegram_init_data};
 use dioxus::prelude::*;
 
 #[cfg(target_arch = "wasm32")]
 use gloo_storage::{LocalStorage, Storage};
 
-const GARDEN_TAB_KEY: &str = "wwb_garden_tab";
 const GARDEN_ONBOARDED_KEY: &str = "wwb_garden_onboarded";
 
-/// Which of the three tabs is showing: 0 garden, 1 Woody Catch, 2 Woody Skate.
-/// A separate key from `GARDEN_TAB_KEY`, which held a bool — reading a bool
-/// back as a number fails, and falling back to the garden tab once after the
-/// update is nicer than a broken read on every visit.
+/// Which of the three tabs is showing: 0 garden, 2 TurboBaby Ride, 3 shop.
+/// Value 2 deliberately survives the Skate-to-Ride cutover so an existing
+/// localStorage selection opens the replacement game rather than another tab.
 const GARDEN_TAB_V2_KEY: &str = "wwb_garden_tab_v2";
 
 const TAB_GARDEN: u8 = 0;
 // 1 was Woody Catch, removed. The remaining numbers keep their values rather
 // than being compacted: a customer with `1` in local storage would otherwise
-// silently reopen on Skate, and `load_garden_tab` sends them to the garden.
-const TAB_SKATE: u8 = 2;
+// silently reopen on Ride, and `load_garden_tab` sends them to the garden.
+const TAB_RIDE: u8 = 2;
 const TAB_SHOP: u8 = 3;
 
 #[cfg(target_arch = "wasm32")]
@@ -40,7 +38,7 @@ fn load_garden_tab() -> u8 {
     // Anything that is not a tab any more — 1, which was Woody Catch, or a
     // value from a future build — opens the garden rather than nothing at all.
     match stored {
-        TAB_GARDEN | TAB_SKATE | TAB_SHOP => stored,
+        TAB_GARDEN | TAB_RIDE | TAB_SHOP => stored,
         _ => TAB_GARDEN,
     }
 }
@@ -118,13 +116,13 @@ pub fn GardenScreen() -> Element {
         }
     };
     let garden_style = tab_style(current == TAB_GARDEN);
-    let skate_style = tab_style(current == TAB_SKATE);
+    let ride_style = tab_style(current == TAB_RIDE);
     let shop_style = tab_style(current == TAB_SHOP);
     let english = lang == crate::trios::core::Lang::English;
-    let skate_label = if english {
-        "🛹 Skate"
+    let ride_label = if english {
+        "🏍️ Ride"
     } else {
-        "🛹 Скейт"
+        "🏍️ Заезд"
     };
     // The tycoon game used to be the bottom nav's "Игра", which collided with
     // this tab bar's own "Игра" (Woody Catch). Naming it after the shop it
@@ -209,9 +207,9 @@ pub fn GardenScreen() -> Element {
                     "🌱 {t(lang, T_GARDEN_TAB_GARDEN)}"
                 }
                 button {
-                    style: "{skate_style}",
-                    onclick: move |_| tab.set(TAB_SKATE),
-                    "{skate_label}"
+                    style: "{ride_style}",
+                    onclick: move |_| tab.set(TAB_RIDE),
+                    "{ride_label}"
                 }
                 button {
                     style: "{shop_style}",
@@ -253,8 +251,8 @@ pub fn GardenScreen() -> Element {
             // Show content based on selection
             if current == TAB_GARDEN {
                 Garden {}
-            } else if current == TAB_SKATE {
-                LazyScreen { heavy: true, SkateGame {} }
+            } else if current == TAB_RIDE {
+                LazyScreen { heavy: true, RideGame {} }
             } else {
                 LazyScreen { heavy: true, WoodyShop {} }
             }

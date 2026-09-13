@@ -21,6 +21,9 @@ pub mod metrics;
 pub mod notification_queue;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod notify;
+#[cfg(not(target_arch = "wasm32"))]
+#[path = "api/observability.rs"]
+mod observability;
 
 /// The promoter. Finds new products, sets and events, writes a post about each
 /// with z.ai, and hands it to the owners with a Publish button. Nothing here
@@ -70,7 +73,7 @@ use tower_http::services::ServeDir;
 #[cfg(not(target_arch = "wasm32"))]
 use tower_http::set_header::SetResponseHeaderLayer;
 #[cfg(not(target_arch = "wasm32"))]
-use tracing::info;
+use tracing::{info, Instrument};
 
 #[cfg(not(target_arch = "wasm32"))]
 use crate::api::cache::ETagCache;
@@ -108,6 +111,42 @@ struct CachedFile {
 static LAST_5XX_ALERT: std::sync::LazyLock<tokio::sync::Mutex<Option<std::time::Instant>>> =
     std::sync::LazyLock::new(|| tokio::sync::Mutex::new(None));
 
+/// Bound request-controlled correlation data before it enters an admin alert.
+#[cfg(not(target_arch = "wasm32"))]
+const MAX_ALERT_REQUEST_ID_CHARS: usize = 128;
+
+#[cfg(not(target_arch = "wasm32"))]
+fn request_id_for_alert(req: &Request<axum::body::Body>) -> Option<String> {
+    req.extensions()
+        .get::<observability::RequestId>()
+        .map(|request_id| {
+            request_id
+                .0
+                .chars()
+                .take(MAX_ALERT_REQUEST_ID_CHARS)
+                .collect()
+        })
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn alert_5xx_text(method: &str, path: &str, status: u16, request_id: Option<&str>) -> String {
+    let safe_method: String = method.chars().take(20).collect();
+    let safe_path: String = path.chars().take(200).collect();
+    let safe_request_id: String = request_id
+        .filter(|value| !value.is_empty())
+        .unwrap_or("unknown")
+        .chars()
+        .take(MAX_ALERT_REQUEST_ID_CHARS)
+        .collect();
+    format!(
+        "\u{1F6A8} 5xx Error on prod\n\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\n\u{1F4CD} {} {}\n\u{1F4A5} HTTP {}\n\u{1F9ED} Request ID: {}",
+        crate::util::html_escape(&safe_method),
+        crate::util::html_escape(&safe_path),
+        status,
+        crate::util::html_escape(&safe_request_id),
+    )
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 async fn alert_5xx_middleware(
     axum::extract::State(state): axum::extract::State<AppState>,
@@ -116,6 +155,8 @@ async fn alert_5xx_middleware(
 ) -> axum::response::Response {
     let method = req.method().to_string();
     let path = req.uri().path().to_string();
+    let request_id = request_id_for_alert(&req);
+    let request_span = tracing::Span::current();
     let resp = next.run(req).await;
     if resp.status().is_server_error() {
         let should_alert = {
@@ -137,20 +178,18 @@ async fn alert_5xx_middleware(
             let bot = state.bot.clone();
             let config = state.config.clone();
             let status = resp.status().as_u16();
-            let safe_method: String = method.chars().take(20).collect();
-            let safe_path: String = path.chars().take(200).collect();
-            tokio::spawn(async move {
-                // Cycle #149: notify_admins sends with parse_mode=Html now.
-                // `safe_path` is request-URI-derived; could contain `<` or
-                // `&` (path traversal probes, malformed URIs). Escape.
-                let text = format!(
-                    "\u{1F6A8} 5xx Error on prod\n\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\n\u{1F4CD} {} {}\n\u{1F4A5} HTTP {}",
-                    crate::util::html_escape(&safe_method),
-                    crate::util::html_escape(&safe_path),
-                    status
-                );
-                crate::notify::notify_admins(&bot, &config, &text).await;
-            });
+            // Cycle #149: notify_admins sends with parse_mode=Html. The helper
+            // bounds and escapes every request-controlled field before it
+            // reaches Telegram.
+            let text = alert_5xx_text(&method, &path, status, request_id.as_deref());
+            tokio::spawn(
+                async move {
+                    crate::notify::notify_admins(&bot, &config, &text).await;
+                }
+                // Tokio tasks do not inherit the caller's tracing span. Carry
+                // the request span explicitly so notify failures retain the id.
+                .instrument(request_span),
+            );
         }
     }
     resp
@@ -176,6 +215,24 @@ fn looks_like_static_asset(path: &str) -> bool {
         .map(|e| e.to_lowercase())
         .map(|e| static_exts.contains(&e.as_str()))
         .unwrap_or(false)
+}
+
+/// Extract the content hash from Trunk's top-level JavaScript bundle without
+/// coupling the cache-buster to a Cargo package or binary name.
+///
+/// Trunk emits `<target>-<hex hash>.js`. Splitting on characters that cannot
+/// occur in an asset path also strips quotes and the optional `?v=...` query.
+/// A 16-character floor rejects ordinary names such as `runtime.js` and short
+/// fixture-like suffixes such as `app-deadbeef.js`.
+#[cfg(not(target_arch = "wasm32"))]
+fn extract_trunk_bundle_hash(html: &str) -> Option<String> {
+    html.split(|character: char| {
+        !(character.is_ascii_alphanumeric() || matches!(character, '/' | '-' | '_' | '.'))
+    })
+    .filter_map(|token| token.strip_suffix(".js"))
+    .filter_map(|stem| stem.rsplit_once('-').map(|(_, hash)| hash))
+    .find(|hash| hash.len() >= 16 && hash.chars().all(|character| character.is_ascii_hexdigit()))
+    .map(str::to_owned)
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -880,7 +937,7 @@ async fn main() -> Result<()> {
         .layer(nosniff_layer());
 
     // Trunk emits hashed JS/WASM/CSS at the root of dist/ with absolute paths
-    // (e.g. /woody-weed-bot-<hash>.js). We serve dist/ as the root static dir;
+    // (e.g. /turbobaby-bot-<hash>.js). We serve dist/ as the root static dir;
     // when a request doesn't match a file, ServeDir falls back to index.html
     // (which is NOT hashed, so we need to override caching for it separately).
     //
@@ -986,7 +1043,7 @@ async fn main() -> Result<()> {
     // producing a blank screen with "Steps reached: none".
     //
     // Cache-busting:
-    //   * Trunk content-hashes every asset filename (woody-weed-bot-<hash>.js
+    //   * Trunk content-hashes every asset filename (turbobaby-bot-<hash>.js
     //     / _bg.wasm), so a new build is a new URL.
     //   * The HTML itself is served `no-store` below, so the WebView always
     //     re-fetches it and picks up the new hashed asset names.
@@ -1026,17 +1083,7 @@ async fn main() -> Result<()> {
                 .get("index.html")
                 .and_then(|file| {
                     let html = String::from_utf8_lossy(&file.raw);
-                    html.lines().find_map(|line| {
-                        line.split_once("/woody-weed-bot-")
-                            .and_then(|(_, rest)| rest.split_once(".js"))
-                            .map(|(hash, _)| {
-                                // Cycle #171: index.html may include ?v=... after the filename.
-                                // Take only the leading hex hash (before any '?' or non-hex).
-                                hash.chars()
-                                    .take_while(|c| c.is_ascii_hexdigit())
-                                    .collect::<String>()
-                            })
-                    })
+                    extract_trunk_bundle_hash(&html)
                 })
                 .unwrap_or_else(|| "unknown".to_string());
             (
@@ -1103,10 +1150,18 @@ async fn main() -> Result<()> {
     #[cfg(not(feature = "utoipa"))]
     let openapi_router: Router = Router::new();
 
-    let api_router = api::router(app_state.clone()).layer(axum::middleware::from_fn_with_state(
-        app_state.clone(),
-        alert_5xx_middleware,
-    ));
+    let api_router = api::router(app_state.clone())
+        .layer(axum::middleware::from_fn_with_state(
+            app_state.clone(),
+            alert_5xx_middleware,
+        ))
+        // Outermost on the API, so the `request_id` span also wraps the 5xx
+        // alerter above and its warnings carry the id the client was told.
+        // Scoped to the API router (including `/health`) on purpose: layering
+        // it globally would open a span per CSS and JS file on every page load.
+        .layer(axum::middleware::from_fn(
+            observability::request_id_middleware,
+        ));
 
     let mut app = Router::new()
         .merge(openapi_router)
@@ -1183,12 +1238,37 @@ async fn shutdown_signal() {
 
 #[cfg(test)]
 mod tests {
-    use super::{content_type_for, looks_like_static_asset};
+    use super::{
+        alert_5xx_text, content_type_for, extract_trunk_bundle_hash, looks_like_static_asset,
+        request_id_for_alert,
+    };
+    use axum::{body::Body, http::Request};
     use std::path::Path;
 
     #[test]
+    fn five_xx_alert_includes_escaped_bounded_request_id_from_extension() {
+        let raw_request_id = format!("<&{}", "x".repeat(200));
+        let mut request = Request::new(Body::empty());
+        request
+            .extensions_mut()
+            .insert(crate::observability::RequestId(raw_request_id));
+
+        let request_id = request_id_for_alert(&request);
+        let alert = alert_5xx_text("GET", "/api/fail", 500, request_id.as_deref());
+        let request_id_line = alert
+            .lines()
+            .find(|line| line.starts_with("🧭 Request ID: "))
+            .expect("5xx alert must carry a request ID line");
+
+        assert_eq!(
+            request_id_line,
+            format!("🧭 Request ID: &lt;&amp;{}", "x".repeat(126))
+        );
+    }
+
+    #[test]
     fn test_looks_like_static_asset_positive() {
-        assert!(looks_like_static_asset("woody-weed-bot-abc123.js"));
+        assert!(looks_like_static_asset("turbobaby-bot-abc123.js"));
         assert!(looks_like_static_asset("app_bg.wasm"));
         assert!(looks_like_static_asset("style.css"));
         assert!(looks_like_static_asset(
@@ -1203,6 +1283,31 @@ mod tests {
         assert!(!looks_like_static_asset("sets"));
         assert!(!looks_like_static_asset("cart"));
         assert!(!looks_like_static_asset(""));
+    }
+
+    #[test]
+    fn trunk_bundle_hash_is_derived_from_shape_not_product_name() {
+        let html = r#"
+            <script src="https://telegram.org/js/telegram-web-app.js"></script>
+            <script type="module">
+                import init from '/any-future-product-a5d5700b71dc4d45.js?v=a5d5700b71dc4d45';
+            </script>
+        "#;
+
+        assert_eq!(
+            extract_trunk_bundle_hash(html).as_deref(),
+            Some("a5d5700b71dc4d45")
+        );
+    }
+
+    #[test]
+    fn trunk_bundle_hash_rejects_unhashed_and_short_javascript_names() {
+        let html = r#"
+            <script src="/assets/runtime.js"></script>
+            <script type="module">import init from '/app-deadbeef.js';</script>
+        "#;
+
+        assert_eq!(extract_trunk_bundle_hash(html), None);
     }
 
     #[test]
@@ -2180,7 +2285,7 @@ mod module_wiring_tests {
     /// `lib.rs`, or `main.rs` (the three Rust-idiomatic homes for
     /// module-tree declarations). `subtree_root` is the `.rs` file
     /// for single-file modules or the directory for folder modules.
-    fn all_pub_mod_decls() -> Vec<(PathBuf, String, PathBuf)> {
+    fn all_mod_decls() -> Vec<(PathBuf, String, PathBuf)> {
         let manifest = env!("CARGO_MANIFEST_DIR");
         let src_root = Path::new(manifest).join("src");
         let mut mod_files = Vec::new();
@@ -2202,7 +2307,8 @@ mod module_wiring_tests {
                 Some(p) => p,
                 None => continue,
             };
-            for line in src.lines() {
+            let lines: Vec<&str> = src.lines().collect();
+            for (line_index, line) in lines.iter().enumerate() {
                 let trimmed = line.trim_start();
                 // Strip a `//` line comment so commented-out
                 // declarations don't trigger.
@@ -2215,10 +2321,23 @@ mod module_wiring_tests {
                 // `pub(super) mod NAME;`, and plain `mod NAME;`. The
                 // visibility flavour doesn't change wiring semantics
                 // — only the *existence* of the declaration matters.
+                //
+                // The plain `mod ` arm was missing until the orphan gate
+                // below reported `src/cart_abandonment.rs` as undeclared
+                // when `main.rs:9` declares it. The comment above already
+                // promised this arm, so nine modules were exempt from the
+                // wiring gate while it claimed to cover them: `ai`, `api`,
+                // `bot`, `cart_abandonment`, `config`, `db`, `delivery`,
+                // `locales` and `promptpay` — which is most of the server.
+                // Keep the arms in this order: the `pub*` prefixes are
+                // tried first because `strip_prefix("mod ")` cannot match
+                // a line that starts with `pub`, and an inline `mod x {`
+                // is filtered out later by the subtree existence check.
                 let rest = code
                     .strip_prefix("pub mod ")
                     .or_else(|| code.strip_prefix("pub(crate) mod "))
-                    .or_else(|| code.strip_prefix("pub(super) mod "));
+                    .or_else(|| code.strip_prefix("pub(super) mod "))
+                    .or_else(|| code.strip_prefix("mod "));
                 let rest = match rest {
                     Some(r) => r,
                     None => continue,
@@ -2227,9 +2346,34 @@ mod module_wiring_tests {
                     Some(n) if !n.is_empty() => n.trim(),
                     _ => continue,
                 };
+                // A crate root may deliberately own a module whose source is
+                // kept in a subdirectory via `#[path = "..."]`. Walk only the
+                // contiguous attributes immediately above this declaration;
+                // an older, unrelated path attribute must never bind to it.
+                let explicit_form = lines[..line_index]
+                    .iter()
+                    .rev()
+                    .map(|line| line.trim())
+                    .take_while(|line| line.starts_with("#["))
+                    .find_map(|attribute| {
+                        let value = attribute
+                            .strip_prefix("#[path")?
+                            .trim_start()
+                            .strip_prefix('=')?
+                            .trim_start()
+                            .strip_prefix('"')?;
+                        let (relative, tail) = value.split_once('"')?;
+                        if relative.is_empty() || tail.trim() != "]" {
+                            return None;
+                        }
+                        Some(parent.join(relative))
+                    });
                 let file_form = parent.join(format!("{name}.rs"));
                 let dir_form = parent.join(name);
-                let subtree = if file_form.is_file() {
+                let subtree = if explicit_form.as_ref().is_some_and(|path| path.is_file()) {
+                    // Safe because the predicate above just proved it is Some.
+                    explicit_form.expect("checked explicit module path")
+                } else if file_form.is_file() {
                     file_form
                 } else if dir_form.is_dir() {
                     dir_form
@@ -2303,7 +2447,7 @@ mod module_wiring_tests {
 
     #[test]
     fn every_pub_mod_has_an_external_reference() {
-        let decls = all_pub_mod_decls();
+        let decls = all_mod_decls();
         assert!(!decls.is_empty(), "no pub mod declarations parsed");
 
         let manifest = env!("CARGO_MANIFEST_DIR");
@@ -2349,6 +2493,116 @@ mod module_wiring_tests {
              the name in ALLOWED_UNWIRED_MODS with a rationale.",
             unwired.len(),
             unwired
+        );
+    }
+
+    /// Every file Cargo compiles as a crate root, and so is declared by no
+    /// `mod` statement anywhere.
+    ///
+    /// Read from the manifest instead of hardcoded, because this crate has
+    /// three and the third is the one a hand-written list forgets: besides
+    /// `src/main.rs` and `src/lib.rs`, `src/web.rs` is a second `[[bin]]`.
+    fn crate_root_files() -> Vec<PathBuf> {
+        let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+        // The implicit defaults exist whether or not the manifest names them.
+        let mut roots = vec![
+            manifest_dir.join("src/main.rs"),
+            manifest_dir.join("src/lib.rs"),
+        ];
+        if let Ok(manifest) = std::fs::read_to_string(manifest_dir.join("Cargo.toml")) {
+            for line in manifest.lines() {
+                let t = line.trim();
+                let Some(rest) = t.strip_prefix("path") else {
+                    continue;
+                };
+                let Some(rest) = rest.trim_start().strip_prefix('=') else {
+                    continue;
+                };
+                let value = rest.trim().trim_matches('"');
+                if value.ends_with(".rs") {
+                    roots.push(manifest_dir.join(value));
+                }
+            }
+        }
+        roots
+    }
+
+    /// The inverse of [`every_pub_mod_has_an_external_reference`]: that test
+    /// asks whether a *declared* module is used, this one asks whether a file
+    /// on disk is declared at all.
+    ///
+    /// The gap this closes is the widest one in the tree, because an undeclared
+    /// file is not merely unused — it is not compiled, so it is not type-checked,
+    /// not linted, and none of its `#[test]`s exist. Every other gate here is
+    /// therefore blind to it, and so is the reviewer reading a green CI run.
+    ///
+    /// Three files were sitting undeclared when this was written, all of them
+    /// finished work that had silently never shipped:
+    ///   * `src/ui/screens/catalog_screen.rs` (1111 lines) — the bike catalog,
+    ///   * `src/ui/screens/bike_detail.rs` (641 lines) — the family detail view,
+    ///   * `src/api/observability.rs` (159 lines) — request-id middleware plus
+    ///     11 tests that had never run.
+    ///
+    /// The first two were not even latent: `menu_screen.rs` imported
+    /// `CatalogScreen`, so the wasm target failed with E0432 and CI's wasm gates
+    /// had been red the whole time. The third was worse than red — it compiled
+    /// fine without it, and the server simply ran with no request correlation.
+    #[test]
+    fn every_source_file_is_declared_by_its_parent() {
+        let manifest = env!("CARGO_MANIFEST_DIR");
+        let src_root = Path::new(manifest).join("src");
+        let mut all_rs = Vec::new();
+        collect_rs_files(&src_root, &mut all_rs);
+        assert!(
+            !all_rs.is_empty(),
+            "no .rs files found under src/ — the walker is broken, not the tree"
+        );
+
+        let decls = all_mod_decls();
+        // `all_mod_decls` resolves each declaration to its "subtree": the
+        // `NAME.rs` file for a single-file module, the `NAME/` directory for a
+        // folder module. Mapping a file to the same form makes this a set
+        // comparison rather than a second parser.
+        let declared: Vec<&Path> = decls
+            .iter()
+            .map(|(_, _, subtree)| subtree.as_path())
+            .collect();
+        assert!(
+            !declared.is_empty(),
+            "no module declarations parsed — the parser is broken, not the tree"
+        );
+
+        let roots = crate_root_files();
+        let mut orphans = Vec::new();
+        for file in &all_rs {
+            if roots.iter().any(|r| r == file) {
+                continue;
+            }
+            let target: &Path = if file.file_name().and_then(|s| s.to_str()) == Some("mod.rs") {
+                match file.parent() {
+                    Some(p) => p,
+                    None => continue,
+                }
+            } else {
+                file.as_path()
+            };
+            if !declared.contains(&target) {
+                let rel = file.strip_prefix(manifest).unwrap_or(file);
+                orphans.push(rel.display().to_string());
+            }
+        }
+        orphans.sort();
+
+        assert!(
+            orphans.is_empty(),
+            "Source files that no parent module declares ({}): {:?}\n\
+             Rust does not compile these, so nothing else in this suite sees \
+             them. Add the `mod` declaration to the parent `mod.rs` (or a crate \
+             root), or delete the file. If a file is genuinely meant to sit \
+             outside the module tree, give it a `[[bin]]`/`path` entry in \
+             Cargo.toml so it is compiled as its own root.",
+            orphans.len(),
+            orphans
         );
     }
 }
@@ -3149,22 +3403,179 @@ mod schema_drift_tests {
         );
     }
 
+    /// `{table → (entity module, Model field names)}` from src/db/entities/*.rs.
+    ///
+    /// The discriminator is SeaORM's own `#[sea_orm(table_name = "…")]`, so the
+    /// table a Rust type maps to is read from the declaration rather than
+    /// guessed from the file name (`bike.rs` maps `bikes`, `bike_unit.rs` maps
+    /// `bike_units` — the plural is not mechanical).
+    fn entity_field_map() -> HashMap<String, (String, HashSet<String>)> {
+        let manifest = env!("CARGO_MANIFEST_DIR");
+        let mut files = Vec::new();
+        collect_files_with_ext(
+            &Path::new(manifest).join("src/db/entities"),
+            "rs",
+            &mut files,
+        );
+        files.sort();
+
+        let mut map = HashMap::new();
+        for f in files {
+            let module = match f.file_stem().and_then(|s| s.to_str()) {
+                Some("mod") | None => continue,
+                Some(s) => s.to_string(),
+            };
+            let src = match std::fs::read_to_string(&f) {
+                Ok(s) => s,
+                Err(_) => continue,
+            };
+            let needle = "table_name = \"";
+            let Some(at) = src.find(needle) else { continue };
+            let rest = &src[at + needle.len()..];
+            let Some(end) = rest.find('"') else { continue };
+            let table = rest[..end].to_string();
+
+            // Fields of `pub struct Model { … }`: the `pub <name>:` lines up to
+            // the closing brace. Attributes and doc comments are skipped by the
+            // `pub ` prefix requirement.
+            let mut fields = HashSet::new();
+            if let Some(s) = rest[end..].find("pub struct Model {") {
+                let body = &rest[end + s..];
+                for line in body.lines().skip(1) {
+                    let t = line.trim();
+                    if t == "}" {
+                        break;
+                    }
+                    if let Some(decl) = t.strip_prefix("pub ") {
+                        if let Some((name, _)) = decl.split_once(':') {
+                            fields.insert(name.trim().to_string());
+                        }
+                    }
+                }
+            }
+            map.insert(table, (module, fields));
+        }
+        map
+    }
+
+    /// Entity modules that some non-entity source actually queries.
+    ///
+    /// Recognises the two idioms in this tree: `use …entities::<m>::{Entity as
+    /// A, …}` followed by `A::find`, and the unaliased `<m>::Entity::find`. A
+    /// module nobody queries does not count as reading anything, which is what
+    /// stops a field declaration alone from satisfying the gate.
+    fn queried_entity_modules() -> HashSet<String> {
+        let manifest = env!("CARGO_MANIFEST_DIR");
+        let mut files = Vec::new();
+        collect_files_with_ext(&Path::new(manifest).join("src"), "rs", &mut files);
+
+        let mut queried = HashSet::new();
+        for f in files {
+            if f.components().any(|c| c.as_os_str() == "entities") {
+                continue;
+            }
+            let Ok(src) = std::fs::read_to_string(&f) else {
+                continue;
+            };
+            let marker = "entities::";
+            let mut from = 0;
+            while let Some(rel) = src[from..].find(marker) {
+                let s = from + rel + marker.len();
+                from = s;
+                let module: String = src[s..]
+                    .chars()
+                    .take_while(|c| c.is_alphanumeric() || *c == '_')
+                    .collect();
+                if module.is_empty() {
+                    continue;
+                }
+                let tail = &src[s + module.len()..];
+                if tail.starts_with("::Entity::find") {
+                    queried.insert(module);
+                    continue;
+                }
+                // Aliased import: find `Entity as <Alias>` inside this use
+                // block, then require the alias to be queried in this file.
+                let Some(close) = tail.find('}') else {
+                    continue;
+                };
+                let block = &tail[..close];
+                let Some(a) = block.find("Entity as ") else {
+                    continue;
+                };
+                let alias: String = block[a + "Entity as ".len()..]
+                    .chars()
+                    .take_while(|c| c.is_alphanumeric() || *c == '_')
+                    .collect();
+                if !alias.is_empty() && src.contains(&format!("{alias}::find")) {
+                    queried.insert(module);
+                }
+            }
+        }
+        queried
+    }
+
     /// `db::CRITICAL_COLUMNS` (the startup schema self-check list) is hand-
     /// maintained — tie it to the source of truth so it can't silently drift.
     /// Every entry must (1) be declared in a migration for its table, and
-    /// (2) actually be SELECTed from that table by the catalog code. Otherwise
-    /// the self-check would alert on a phantom column, or a SELECT could start
+    /// (2) actually be read from that table by the code. Otherwise the
+    /// self-check would alert on a phantom column, or a read could start
     /// depending on a column the self-check never verifies. Closes W-48.
+    ///
+    /// Clause (2) accepts two read mechanisms, because this tree uses both:
+    ///
+    ///   * a raw `SELECT col … FROM table` literal, the cannabis-era idiom; and
+    ///   * a typed SeaORM entity — `Entity::find()` selects every field of
+    ///     `Model`, so a declared field on a queried entity IS fetched.
+    ///
+    /// Recognising only the first is what this gate did until 2026-09-13, and
+    /// it scanned exactly one file (src/api/catalog.rs) to do it. The bike
+    /// catalog is served from src/api/bikes.rs through typed entities, on
+    /// purpose: src/db/bikes.rs opens by explaining that it dropped the
+    /// cannabis code's `try_get_warn!` precisely because that macro is
+    /// fail-open, and that "every read below goes through a typed SeaORM
+    /// entity, so a renamed column is a query error, never a zero on a price
+    /// tag." The gate then failed all seven bike money/gating columns for
+    /// being read the safer way — a false positive that punished the fix.
+    /// Both halves of that blindness are closed here: the SELECT scan covers
+    /// the API and db layers rather than one path, and the typed path is
+    /// recognised as a read.
     #[test]
     fn critical_columns_match_migrations_and_selects() {
         let schema = parse_migration_schema();
         let manifest = env!("CARGO_MANIFEST_DIR");
-        let catalog = std::fs::read_to_string(Path::new(manifest).join("src/api/catalog.rs"))
-            .expect("read catalog.rs");
-        let selects = find_select_sites_in(&catalog);
+
+        let mut sources = Vec::new();
+        collect_files_with_ext(&Path::new(manifest).join("src/api"), "rs", &mut sources);
+        collect_files_with_ext(&Path::new(manifest).join("src/db"), "rs", &mut sources);
+        let mut selects = Vec::new();
+        for f in &sources {
+            if let Ok(src) = std::fs::read_to_string(f) {
+                selects.extend(find_select_sites_in(&src));
+            }
+        }
         assert!(
             !selects.is_empty(),
-            "no SELECT sites parsed from catalog.rs"
+            "no SELECT sites parsed from src/api or src/db — the SQL-scan side \
+             of this gate is broken, and every entry would fall through to the \
+             entity path unchecked"
+        );
+
+        let entities = entity_field_map();
+        let queried = queried_entity_modules();
+        // Floor checks on the entity side, for the same reason: a parser that
+        // returns nothing would make the typed path reject everything, and a
+        // parser that mis-binds tables would make it accept anything.
+        assert!(
+            entities.len() > 20,
+            "entity_field_map parsed only {} entities from src/db/entities — \
+             expected the full set; the table_name scan is broken",
+            entities.len()
+        );
+        assert!(
+            !queried.is_empty(),
+            "queried_entity_modules found no queried entity at all — the \
+             `Entity as Alias` scan is broken"
         );
 
         let mut errors = Vec::new();
@@ -3175,23 +3586,38 @@ mod schema_drift_tests {
                     Some(m) if m.contains(col) => {}
                     _ => errors.push(format!("{table}.{col}: not declared in any migration")),
                 }
-                // (2) actually SELECTed from this table by the catalog code
+                // (2a) fetched by a raw SELECT against this table
                 let selected = selects.iter().any(|(tabs, scols)| {
                     tabs.iter().any(|t| t.as_str() == table)
                         && scols.iter().any(|c| c.as_str() == col)
                 });
-                if !selected {
+                // (2b) a field of the queried SeaORM entity that maps this table
+                let typed = entities.get(table).is_some_and(|(module, fields)| {
+                    fields.contains(col) && queried.contains(module.as_str())
+                });
+                if !selected && !typed {
+                    let how = match entities.get(table) {
+                        None => "no SeaORM entity maps this table either".to_string(),
+                        Some((m, fields)) if !fields.contains(col) => {
+                            format!("entity `{m}` maps the table but declares no `{col}` field")
+                        }
+                        Some((m, _)) => {
+                            format!("entity `{m}` declares the field, but nothing queries `{m}`")
+                        }
+                    };
                     errors.push(format!(
-                        "{table}.{col}: in CRITICAL_COLUMNS but no catalog SELECT fetches it"
+                        "{table}.{col}: in CRITICAL_COLUMNS but nothing reads it — {how}"
                     ));
                 }
             }
         }
         assert!(
             errors.is_empty(),
-            "CRITICAL_COLUMNS drifted from migrations/SELECTs ({}): {:?}",
+            "CRITICAL_COLUMNS names columns no code reads ({}). The startup \
+             self-check would probe them for ever and never learn anything. \
+             Either drop the entry, or wire the read:\n  {}",
             errors.len(),
-            errors
+            errors.join("\n  ")
         );
     }
 }
@@ -3571,9 +3997,14 @@ mod sensitive_read_fail_loud_tests {
     use std::path::Path;
 
     /// (file, fn name) of mutations that must read sensitive columns fail-loud.
+    ///
+    /// `src/api/garden.rs::use_reward` and `::water_plant` were the first two
+    /// entries. That file was deleted with the garden mechanic (D5) and the
+    /// entries stayed, so this gate spent its runs panicking on `read
+    /// src/api/garden.rs` — which is at least loud, unlike the sibling gate
+    /// above that failed open. Both are the same defect: a hand-written path
+    /// list outliving the path.
     const SENSITIVE_FNS: &[(&str, &str)] = &[
-        ("src/api/garden.rs", "use_reward"),
-        ("src/api/garden.rs", "water_plant"),
         ("src/db/orders.rs", "complete_order_and_update_loyalty"),
         ("src/db/orders.rs", "auto_block_for_fraud"),
     ];

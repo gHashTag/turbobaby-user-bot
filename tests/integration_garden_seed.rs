@@ -30,7 +30,7 @@ mod common;
 use sea_orm::{ConnectionTrait, DbBackend, Statement};
 use serde_json::json;
 
-use woody_weed_bot::db::orders::complete_order_and_update_loyalty;
+use turbobaby_bot::db::orders::complete_order_and_update_loyalty;
 
 /// Lightweight inline row shape — there's no SeaORM `garden_plant`
 /// entity (the production reads use raw SQL in `src/api/garden.rs`).
@@ -45,7 +45,7 @@ struct PlantRow {
     water_count: i32,
 }
 
-async fn fetch_plants(db: &woody_weed_bot::db::Database, user_id: &str) -> Vec<PlantRow> {
+async fn fetch_plants(db: &turbobaby_bot::db::Database, user_id: &str) -> Vec<PlantRow> {
     let rows = db
         .orm
         .query_all(Statement::from_sql_and_values(

@@ -1,25 +1,27 @@
 //! Full-screen product detail popup, opened by tapping a catalog card.
 //!
-//! Catalog cards (menu/accessories/tea/sets) only had room for a truncated
-//! one-line description (or, for strains, none at all) — tapping a card did
+//! Catalog cards (bikes/accessories/tea/sets) only had room for a truncated
+//! one-line description (or, for bikes, none at all) — tapping a card did
 //! nothing. This modal surfaces the **full** description plus the key meta
 //! fields when a card is tapped.
 //!
 //! Structurally it mirrors the per-card video popup that already ships in
-//! `menu_screen`/`accessories_screen` (fixed `inset:0` overlay at z-index
+//! `catalog`/`accessories_screen` (fixed `inset:0` overlay at z-index
 //! 1000, tap-the-backdrop-to-close, inner container that stops propagation,
 //! explicit close button) — that pattern is proven inside the Telegram
 //! WebView, so we reuse its shape here instead of inventing a new one. All
-//! meta fields are optional because accessories/tea/sets have no THC etc.
+//! meta fields are optional because accessories/tea/sets have no spec line.
+//!
+//! The per-product reviews and lab-certificate sections were removed with the
+//! old catalog: their tables are dropped, and the motorbike counterpart —
+//! service records — is admin-only by decision (D6), because a public
+//! "serviced" badge we cannot keep accurate is exactly the kind of number the
+//! data-honesty rule forbids.
 
 use crate::trios::i18n::{
     t, T_ADD_TO_CART, T_FULFILLMENT_DINE_IN, T_FULFILLMENT_LABEL, T_FULFILLMENT_TAKEAWAY,
-    T_LAB_CERTS, T_LAB_CERT_CBD, T_LAB_CERT_EMPTY, T_LAB_CERT_TESTED, T_LAB_CERT_THC,
-    T_MODAL_CERTIFICATE, T_MODAL_CLOSE, T_MODAL_DECREASE_QTY, T_MODAL_INCREASE_QTY, T_REVIEWS_AVG,
-    T_REVIEWS_EMPTY, T_REVIEWS_TITLE, T_SHARE,
+    T_MODAL_CLOSE, T_MODAL_DECREASE_QTY, T_MODAL_INCREASE_QTY, T_SHARE,
 };
-use crate::ui::api::context::use_api_client;
-use crate::ui::api::types::LabCertificate;
 use crate::ui::components::image_lightbox::ImageLightbox;
 use crate::ui::lang::current_lang;
 use crate::ui::telegram::TelegramApp;
@@ -36,22 +38,24 @@ pub struct ProductDetailModalProps {
     /// Full, untruncated description. Empty string => description block is
     /// omitted (the modal still opens — name/price are useful on their own).
     pub description: String,
-    /// Preformatted category badge text, e.g. "🌿 Hybrid".
+    /// Preformatted category badge text, e.g. "🛵 Scooter".
     #[props(default)]
     pub category_badge: Option<String>,
-    /// Preformatted "THC 24%".
+    /// Preformatted primary spec, e.g. "155 cc".
     #[props(default)]
-    pub thc: Option<String>,
-    /// Preformatted "CBD 1.0%".
+    pub spec_primary: Option<String>,
+    /// Preformatted secondary spec, e.g. "Automatic".
     #[props(default)]
-    pub cbd: Option<String>,
+    pub spec_secondary: Option<String>,
     /// Effect line (already localized / extracted by the caller).
     #[props(default)]
     pub effect: Option<String>,
-    /// Flavor profile (caller does not prefix the leaf emoji).
+    /// Extra detail line (caller does not prefix the emoji).
     #[props(default)]
     pub flavor: Option<String>,
-    /// Preformatted price line, e.g. "฿350/g" or "฿1200".
+    /// Preformatted price line, e.g. "฿500/day" — a round placeholder, not a
+    /// tariff: the caller formats whatever the shop published, and a dash when
+    /// it published nothing.
     #[props(default)]
     pub price_line: Option<String>,
     /// When true (default), show an "add to cart" button that calls
@@ -67,7 +71,7 @@ pub struct ProductDetailModalProps {
     /// itself afterwards.
     pub on_add_to_cart: EventHandler<u32>,
     /// Optional drink fulfillment selector. Pass `["dine_in", "takeaway"]` for
-    /// tea/drink items; omit (empty) for strains/accessories/sets.
+    /// tea/drink items; omit (empty) for bikes/accessories/sets.
     #[props(default)]
     pub fulfillment_options: Vec<String>,
     /// Pre-selected fulfillment value. Falls back to `"takeaway"` when omitted.
@@ -84,10 +88,6 @@ pub struct ProductDetailModalProps {
     /// Localized label for the share button.
     #[props(default)]
     pub share_label: Option<String>,
-    /// Strain identifier; when present the modal fetches and renders
-    /// customer reviews and lab certificates for this strain.
-    #[props(default)]
-    pub strain_id: Option<String>,
     /// Called when the user taps the backdrop or the close button.
     pub on_close: EventHandler<()>,
 }
@@ -98,112 +98,6 @@ fn is_usable_src(url: &str) -> bool {
         && (url.starts_with("http://")
             || url.starts_with("https://")
             || (url.starts_with('/') && !url.starts_with("//")))
-}
-
-fn stars_for(rating: i32) -> String {
-    let clamped = rating.clamp(0, 5);
-    "★".repeat(clamped as usize) + &"☆".repeat((5 - clamped) as usize)
-}
-
-fn render_variant_c_sections(
-    strain_id: Option<String>,
-    resource: &Resource<(
-        Option<crate::ui::api::types::ReviewsList>,
-        Option<Vec<LabCertificate>>,
-    )>,
-) -> Element {
-    if strain_id.is_none() {
-        return rsx! {};
-    }
-    let lang = current_lang();
-    let data = resource.read();
-    let (reviews_opt, certs_opt) = match data.as_ref() {
-        Some(d) => (d.0.clone(), d.1.clone()),
-        None => (None, None),
-    };
-
-    let reviews_section = reviews_opt.map(|list| {
-        let avg = list.average_rating;
-        let empty = list.reviews.is_empty();
-        rsx! {
-            div { style: "margin-top:18px;padding-top:14px;border-top:1px solid #2a2a4a;",
-                div { style: "font-size:16px;font-weight:800;color:#39ff14;margin-bottom:8px;text-shadow:1px 1px 0 #000;",
-                    {t(lang, T_REVIEWS_TITLE)}
-                }
-                if empty {
-                    div { style: "font-size:13px;color:#8b8b9e;", {t(lang, T_REVIEWS_EMPTY)} }
-                } else {
-                    {avg.map(|a| rsx! {
-                        div { style: "font-size:13px;color:#ffe600;margin-bottom:8px;",
-                            {t(lang, T_REVIEWS_AVG).replace("{0}", &format!("{a:.1}"))}
-                        }
-                    })}
-                    div { style: "display:flex;flex-direction:column;gap:10px;",
-                        for review in list.reviews.iter().take(20) {
-                            div { style: "background:#1a1a2e;border:2px solid #2a2a4a;padding:10px;",
-                                div { style: "display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;",
-                                    span { style: "font-size:14px;color:#ffe600;", {stars_for(review.rating)} }
-                                    span { style: "font-size:11px;color:#8b8b9e;", {review.created_at.split('T').next().unwrap_or("").to_string()} }
-                                }
-                                if !review.comment.is_empty() {
-                                    div { style: "font-size:13px;color:#ddd;line-height:1.45;white-space:pre-wrap;", {review.comment.clone()} }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    });
-
-    let certs_section = certs_opt.map(|certs| {
-        let empty = certs.is_empty();
-        rsx! {
-            div { style: "margin-top:18px;padding-top:14px;border-top:1px solid #2a2a4a;",
-                div { style: "font-size:16px;font-weight:800;color:#00e5ff;margin-bottom:8px;text-shadow:1px 1px 0 #000;",
-                    {t(lang, T_LAB_CERTS)}
-                }
-                if empty {
-                    div { style: "font-size:13px;color:#8b8b9e;", {t(lang, T_LAB_CERT_EMPTY)} }
-                } else {
-                    div { style: "display:flex;flex-direction:column;gap:10px;",
-                        for cert in certs.iter().take(10) {
-                            div { style: "background:#1a1a2e;border:2px solid #2a2a4a;padding:10px;",
-                                div { style: "display:flex;gap:12px;flex-wrap:wrap;font-size:13px;margin-bottom:6px;",
-                                    if let Some(thc) = cert.thc_percent {
-                                        span { style: "color:#39ff14;", {format!("{}: {thc:.1}%", t(lang, T_LAB_CERT_THC))} }
-                                    }
-                                    if let Some(cbd) = cert.cbd_percent {
-                                        span { style: "color:#00e5ff;", {format!("{}: {cbd:.1}%", t(lang, T_LAB_CERT_CBD))} }
-                                    }
-                                }
-                                div { style: "font-size:11px;color:#8b8b9e;",
-                                    {format!(
-                                        "{}: {}",
-                                        t(lang, T_LAB_CERT_TESTED),
-                                        cert.tested_at.as_deref().unwrap_or("—")
-                                    )}
-                                }
-                                if let Some(url) = cert.certificate_url.as_deref().filter(|u| !u.is_empty()) {
-                                    a {
-                                        style: "display:inline-block;margin-top:6px;font-size:13px;color:#b388ff;text-decoration:underline;",
-                                        href: "{url}",
-                                        target: "_blank",
-                                        "{t(current_lang(), T_MODAL_CERTIFICATE)}"
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    });
-
-    rsx! {
-        {reviews_section}
-        {certs_section}
-    }
 }
 
 #[component]
@@ -240,23 +134,6 @@ pub fn ProductDetailModal(props: ProductDetailModalProps) -> Element {
     let lightbox_src = img.clone();
     let lightbox_alt = alt.clone();
 
-    let strain_id = props.strain_id.clone();
-    let client = use_api_client();
-    let reviews_resource = use_resource(move || {
-        let id = strain_id.clone();
-        let client = client.clone();
-        async move {
-            match id {
-                Some(sid) if !sid.is_empty() => {
-                    let reviews = client.get_strain_reviews(&sid).await.ok();
-                    let certs = client.get_strain_lab_certs(&sid).await.ok();
-                    (reviews, certs)
-                }
-                _ => (None, None),
-            }
-        }
-    });
-
     rsx! {
         div {
             style: "position:fixed;inset:0;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;z-index:1000;padding:16px;",
@@ -290,8 +167,8 @@ pub fn ProductDetailModal(props: ProductDetailModalProps) -> Element {
                 }
 
                 {has_image.then(|| rsx! {
-                    // Full image, natural aspect ratio — strain art is tall promo
-                    // cards, so the old square crop (aspect-ratio:1/1 + object-fit:
+                    // Full image, natural aspect ratio — promo art is tall,
+                    // so the old square crop (aspect-ratio:1/1 + object-fit:
                     // cover) cut off the top/bottom. width:100% + height:auto shows
                     // the WHOLE image; the dialog (max-height:85vh, overflow:auto)
                     // scrolls. Tapping opens the app-controlled lightbox because the
@@ -321,10 +198,10 @@ pub fn ProductDetailModal(props: ProductDetailModalProps) -> Element {
                         {props.category_badge.as_ref().filter(|s| !s.is_empty()).map(|b| rsx! {
                             span { style: "font-size:13px;color:#b388ff;font-weight:700;", "{b}" }
                         })}
-                        {props.thc.as_ref().filter(|s| !s.is_empty()).map(|s| rsx! {
+                        {props.spec_primary.as_ref().filter(|s| !s.is_empty()).map(|s| rsx! {
                             span { style: "font-size:13px;color:#39ff14;font-weight:700;", "{s}" }
                         })}
-                        {props.cbd.as_ref().filter(|s| !s.is_empty()).map(|s| rsx! {
+                        {props.spec_secondary.as_ref().filter(|s| !s.is_empty()).map(|s| rsx! {
                             span { style: "font-size:13px;color:#00e5ff;font-weight:600;", "{s}" }
                         })}
                     }
@@ -333,7 +210,7 @@ pub fn ProductDetailModal(props: ProductDetailModalProps) -> Element {
                         div { style: "font-size:14px;color:#aaa;margin-bottom:6px;line-height:1.4;", "{s}" }
                     })}
                     {props.flavor.as_ref().filter(|s| !s.is_empty()).map(|s| rsx! {
-                        div { style: "font-size:14px;color:#888;margin-bottom:10px;line-height:1.4;", "🍃 {s}" }
+                        div { style: "font-size:14px;color:#888;margin-bottom:10px;line-height:1.4;", "⚙️ {s}" }
                     })}
 
                     {(!description.is_empty()).then(|| rsx! {
@@ -441,8 +318,6 @@ pub fn ProductDetailModal(props: ProductDetailModalProps) -> Element {
                         onclick: move |e: Event<MouseData>| { e.stop_propagation(); on_close.call(()); },
                         "{t(current_lang(), T_MODAL_CLOSE)}"
                     }
-
-                    {render_variant_c_sections(props.strain_id.clone(), &reviews_resource)}
                 }
             }
         }

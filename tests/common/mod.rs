@@ -30,12 +30,12 @@ use std::sync::Arc;
 use axum::Router;
 use teloxide::Bot;
 
-use woody_weed_bot::api::cache::ETagCache;
-use woody_weed_bot::config::Config;
-use woody_weed_bot::db::Database;
-use woody_weed_bot::delivery::DeliveryZones;
-use woody_weed_bot::promptpay::QrConfig;
-use woody_weed_bot::AppState;
+use turbobaby_bot::api::cache::ETagCache;
+use turbobaby_bot::config::Config;
+use turbobaby_bot::db::Database;
+use turbobaby_bot::delivery::DeliveryZones;
+use turbobaby_bot::promptpay::QrConfig;
+use turbobaby_bot::AppState;
 
 /// Build a test `AppState` + `Router` against `DATABASE_URL`. Returns
 /// `None` if env var unset — callers should `return` rather than fail.
@@ -81,7 +81,7 @@ pub(crate) async fn make_app_with_db() -> Option<(Router, Arc<Database>)> {
         cache,
     };
 
-    Some((woody_weed_bot::api::router(state), db))
+    Some((turbobaby_bot::api::router(state), db))
 }
 
 /// Forge a VALID Telegram `initData` query string for `user_id`, signed with

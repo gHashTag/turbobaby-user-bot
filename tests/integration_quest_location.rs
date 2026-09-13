@@ -21,7 +21,7 @@ use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use http_body_util::BodyExt;
 use tower::ServiceExt;
-use woody_weed_bot::api::auth::generate_admin_token;
+use turbobaby_bot::api::auth::generate_admin_token;
 
 #[tokio::test]
 #[ignore = "needs DATABASE_URL env var; run with --ignored"]

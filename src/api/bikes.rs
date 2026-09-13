@@ -12,21 +12,44 @@
 //! re-hashes the payload on every call, so a 304 is only ever served when the
 //! bytes really are unchanged.
 //!
+//! ## One copy of every rule
+//!
+//! Every row here is read through [`crate::db::bikes`], never through SQL of
+//! this module's own. That layer owns the queries, the `Option<f64>` money
+//! mapping and the discount-usability test; this module owns the HTTP surface
+//! — routes, query flags, caching, and the shape of the JSON. Re-implementing
+//! either half here would give the catalog two copies of the same rule, free to
+//! drift apart, which is the defect class D9 exists to prevent.
+//!
+//! The one query this module still issues itself is the per-family unit rollup
+//! (colours, model years, counts by status), because `db::bikes` exposes an
+//! `available` count and no unit list. It goes through the `bike_unit` SeaORM
+//! entity, reading only the three columns the rollup may publish. See
+//! [`load_units`]; a `db::bikes::list_units_for_family` is the better long-term
+//! home for it.
+//!
 //! ## Money is nullable, and absent stays absent (DECISIONS.md D9)
 //!
-//! `base_rate_thb_day`, `deposit_thb`, `monthly_low_season_thb` and
-//! `sale_price_thb` are `DOUBLE PRECISION` **NULL**-able columns. They are read
-//! as `Option<f64>` and serialised as **explicit JSON `null`** — the key is
-//! always present, never omitted. `#[serde(skip_serializing_if)]` is
-//! deliberately not used: a missing key is what lets a downstream
-//! `#[serde(default)]` turn an unknown price into `0.0`, which is the exact
-//! defect D9 was written against.
+//! `base_rate_thb_day`, `deposit_thb`, `monthly_low_season_thb`,
+//! `sale_price_thb` and `client_rate_thb_day` are read as `Option<f64>` and
+//! serialised as **explicit JSON `null`** — the key is always present, never
+//! omitted. `#[serde(skip_serializing_if)]` is deliberately used **nowhere** on
+//! this path (nor on the structs in `db::bikes`): a missing key is what lets a
+//! downstream `#[serde(default)]` turn an unknown price into `0.0`, which is
+//! the exact defect D9 was written against. `class_discount`,
+//! `discount_min`/`discount_max` and `max_days` follow the same rule.
 //!
 //! None of the three zero-manufacturing constructs D9 names is on this path:
-//! no `clamp` closure, no `NOT NULL DEFAULT 0`, and no [`crate::try_get_warn!`].
-//! The reader helpers below are the deliberate opposite of `try_get_warn!` —
-//! they are *fail-closed*: an unreadable column is a 500 with the column named
-//! in the log, not a silent default served to a customer.
+//! no `clamp` closure, no `NOT NULL DEFAULT 0`, and no [`crate::try_get_warn!`]
+//! — the latter is fail-open by design and would answer a customer with `0` on
+//! a renamed column. The typed entity reads in `db::bikes` fail the query
+//! instead, and this module maps that to a 500 rather than to a default.
+//!
+//! This module also does **not** re-filter the numbers `db::bikes` hands it.
+//! The publishable range is asserted twice already — `CHECK (col IS NULL OR
+//! col > 0)` in `migrations/077_bikes.sql`, and `.filter(|v| v.is_finite())` in
+//! `Bike::from` — and a third private copy of the boundary here could only
+//! disagree with them.
 //!
 //! ## The price door (DECISIONS.md D11) — a seam, not an implementation
 //!
@@ -50,6 +73,13 @@
 //! multiplying it by `class_discount` is precisely the computation D11 forbids.
 //! The only field a customer-facing price may come from is
 //! `client_rate_thb_day`.
+//!
+//! That is why `db::bikes::apply_class_discount` and
+//! `db::bikes::round_half_up_baht` are deliberately **not** called from this
+//! module, even though they reproduce the owner's own quote sheet. They are the
+//! door's arithmetic, to be applied to what the door returns — not a fallback
+//! for its silence. Any number put in this payload will eventually be rendered,
+//! so the payload carries no computed number at all.
 
 use axum::{
     extract::{Path, Query, State},
@@ -61,8 +91,11 @@ use serde_json::{json, Value};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use crate::api::cache::make_etag_header;
+use crate::db::bikes::{
+    discount_for_class, find_family_by_key, list_class_discounts, list_offered_families,
+    list_rental_term_bands, BikeListing, ClassDiscount, RentalTermBand, UNIT_STATUS_AVAILABLE,
+};
 use crate::AppState;
-use sea_orm::{ConnectionTrait, DbBackend, QueryResult, Statement};
 
 pub(crate) fn routes() -> Router<AppState> {
     Router::new()
@@ -104,133 +137,60 @@ fn client_rate(_family_key: &str) -> (Option<f64>, &'static str) {
     (None, CLIENT_RATE_UNAVAILABLE)
 }
 
-// ── SQL ──────────────────────────────────────────────────────────
-
-/// Every column a family response is built from.
-///
-/// Every cast is deliberate, and every one of them preserves NULL — a cast can
-/// narrow a type but it can never manufacture a value:
-///
-/// * `::float8` survives a money column typed `numeric` rather than
-///   `double precision`;
-/// * `::int4` survives `smallint` or `bigint`;
-/// * `::text` on `id`, `class` and `body` survives `uuid` or a Postgres enum.
-///
-/// Without them a type the reader did not predict is a 500 on a live catalog,
-/// which is the one failure mode a read-only endpoint has no excuse for.
-///
-/// `"key"` is quoted because `key` is a keyword in some dialects; the column
-/// itself is the unquoted lowercase `key`.
-const FAMILY_COLUMNS: &str = "b.id::text AS id, b.\"key\", b.brand, b.model, b.variant_label, \
-     b.class::text AS class, b.body::text AS body, \
-     b.displacement_cc::int4 AS displacement_cc, \
-     b.base_rate_thb_day::float8 AS base_rate_thb_day, \
-     b.deposit_thb::float8 AS deposit_thb, \
-     b.monthly_low_season_thb::float8 AS monthly_low_season_thb, \
-     b.sale_price_thb::float8 AS sale_price_thb, \
-     b.offered, b.description_ru, b.description_en, b.image_url, \
-     b.sort_order::int4 AS sort_order, \
-     cd.discount::float8 AS class_discount, \
-     COALESCE(u.units_total, 0) AS units_total, \
-     COALESCE(u.units_available, 0) AS units_available";
-
-/// The family FROM clause.
-///
-/// Both joins are LEFT joins because both right-hand sides are legitimately
-/// absent: a class with no published discount row, and a family with no units.
-/// A family with a published tariff and zero units is a real state — the seed's
-/// `price_list_only` entries (PCX 150, ADV 150, …) are exactly that — so unit
-/// counts are counted, never assumed.
-///
-/// `units_total` excludes `retired`: a retired unit cannot be rented and
-/// counting it would overstate the fleet.
-const FAMILY_FROM: &str = "FROM bikes b \
-     LEFT JOIN class_discounts cd ON cd.class = b.class \
-     LEFT JOIN ( \
-         SELECT bike_id, \
-                COUNT(*) FILTER (WHERE status <> 'retired')  AS units_total, \
-                COUNT(*) FILTER (WHERE status = 'available') AS units_available \
-         FROM bike_units GROUP BY bike_id \
-     ) u ON u.bike_id = b.id";
-
-/// Build the list query for the two boolean request flags.
-///
-/// Pure and string-assembled, which is safe here because both inputs are
-/// `bool` — no request text ever reaches the SQL. The one caller that takes a
-/// value from the client (`GET /api/bikes/:key`) uses a bound `$1` parameter
-/// instead.
-fn list_sql(include_unoffered: bool, available_only: bool) -> String {
-    let mut sql = format!("SELECT {} {}", FAMILY_COLUMNS, FAMILY_FROM);
-    let mut conditions: Vec<&str> = Vec::new();
-    if !include_unoffered {
-        conditions.push("b.offered = TRUE");
-    }
-    if available_only {
-        conditions.push("COALESCE(u.units_available, 0) > 0");
-    }
-    if !conditions.is_empty() {
-        sql.push_str(" WHERE ");
-        sql.push_str(&conditions.join(" AND "));
-    }
-    // Cheapest first within the shop's own ordering: `sort_order` is the
-    // owner's hand-ranking, then displacement so a browse reads small-to-big,
-    // then a stable tiebreak so two requests never disagree.
-    sql.push_str(
-        " ORDER BY b.sort_order ASC, b.displacement_cc ASC, b.brand ASC, b.model ASC, b.\"key\" ASC \
-          LIMIT 2000",
-    );
-    sql
-}
-
 // ── handlers ─────────────────────────────────────────────────────
 
-/// `GET /api/bikes` — the offered families.
+/// `GET /api/bikes` — the offered families, in catalog order.
 ///
-/// * `?available_only=true` — only families with at least one unit in status
-///   `available`. Note this is availability *now*, not availability for a date
-///   range; a dated check belongs to the booking path, not the catalog.
-/// * `?include_unoffered=true` — also families with `offered = FALSE`
-///   (CLICK 125, D12). Deliberately **not** admin-gated: "we do not rent this
-///   one now" is a public fact the FAQ already gives out, and
-///   `GET /api/bikes/:key` serves the same row unauthenticated so the UI can
-///   render the redirect to PCX 150 / ADV 150 / NMAX 155. It is a separate
-///   ETag key so it cannot flap the default catalog's ETag.
+/// `?available_only=true` keeps only families with at least one unit in status
+/// `available`. Note this is availability *now*, not availability for a date
+/// range; a dated check belongs to the booking path, not the catalog.
+///
+/// Families with `offered = false` (CLICK 125, D12) are never listed —
+/// `db::bikes::list_offered_families` filters them — but
+/// `GET /api/bikes/:key` still serves them, so a saved link can be answered
+/// with the redirect to PCX 150 / ADV 150 / NMAX 155 instead of a 404. There is
+/// deliberately no `?include_unoffered` flag: it would fork that rule into two
+/// places.
 async fn list_bikes(
     State(state): State<AppState>,
     Query(q): Query<HashMap<String, String>>,
     headers: HeaderMap,
 ) -> Result<axum::response::Response, StatusCode> {
     let available_only = query_flag(&q, "available_only");
-    let include_unoffered = query_flag(&q, "include_unoffered");
-    let sql = list_sql(include_unoffered, available_only);
 
-    let rows = state
-        .db
-        .orm
-        .query_all(Statement::from_string(DbBackend::Postgres, sql))
+    // `{e:#}` rather than the `{e}` used elsewhere in `api::*`: `db::bikes`
+    // attaches a `.context()` to every query, and plain Display prints only
+    // that context — "list_offered_families query" — throwing away the DbErr
+    // underneath it, which is the half that says what actually broke.
+    let listings = list_offered_families(&state.db.orm, available_only)
         .await
         .map_err(|e| {
-            tracing::error!("list_bikes: {e}");
+            tracing::error!("list_bikes: {e:#}");
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
+    // One read of the discount ladder for the whole page, not one per card.
+    let discounts = list_class_discounts(&state.db.orm).await.map_err(|e| {
+        tracing::error!("list_bikes(class_discounts): {e:#}");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
     tracing::debug!(
-        "list_bikes: {} families (available_only={}, include_unoffered={})",
-        rows.len(),
-        available_only,
-        include_unoffered
+        "list_bikes: {} families (available_only={})",
+        listings.len(),
+        available_only
     );
 
-    let families = rows
+    let families = listings
         .iter()
-        .map(family_json)
+        .map(|l| family_json(l, &discounts))
         .collect::<Result<Vec<Value>, StatusCode>>()?;
     let body = json!({ "bikes": families }).to_string();
 
-    let cache_key = match (include_unoffered, available_only) {
-        (false, false) => "bikes",
-        (false, true) => "bikes_available",
-        (true, false) => "bikes_all",
-        (true, true) => "bikes_all_available",
+    // Separate keys: the filtered catalog must not flap the unfiltered one's
+    // ETag, and vice versa.
+    let cache_key = if available_only {
+        "bikes_available"
+    } else {
+        "bikes"
     };
     let (changed, etag) = state.cache.has_changed(cache_key, &body).await;
     if !changed {
@@ -267,161 +227,166 @@ async fn list_bikes(
 /// something to render for a link to CLICK 125 instead of a bare 404.
 ///
 /// Units are reported as aggregates only — counts by status, the colours and
-/// model years on record. No `unit_code`, and nothing from
-/// `bike_service_records`: service state is admin-only (D6), and a public
+/// model years on record. No `unit_code`, no `km_since_purchase`, and nothing
+/// from `bike_service_records`: service state is admin-only (D6), and a public
 /// badge we cannot keep accurate is the class of number D9 forbids.
 async fn get_bike(
     State(state): State<AppState>,
     Path(key): Path<String>,
 ) -> Result<Json<Value>, StatusCode> {
-    if key.is_empty() || key.len() > 200 {
+    if key.is_empty() || key.len() > MAX_KEY_LEN {
         return Err(StatusCode::BAD_REQUEST);
     }
-    let sql = format!(
-        "SELECT {} {} WHERE b.\"key\" = $1",
-        FAMILY_COLUMNS, FAMILY_FROM
-    );
-    let row = state
-        .db
-        .orm
-        .query_one(Statement::from_sql_and_values(
-            DbBackend::Postgres,
-            &sql,
-            [key.clone().into()],
-        ))
+    let listing = find_family_by_key(&state.db.orm, &key)
         .await
         .map_err(|e| {
-            tracing::error!("get_bike({key}): {e}");
+            tracing::error!("get_bike({key}): {e:#}");
             StatusCode::INTERNAL_SERVER_ERROR
-        })?;
-    let Some(row) = row else {
-        return Err(StatusCode::NOT_FOUND);
-    };
+        })?
+        .ok_or(StatusCode::NOT_FOUND)?;
+    let discounts = list_class_discounts(&state.db.orm).await.map_err(|e| {
+        tracing::error!("get_bike({key}, class_discounts): {e:#}");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+    let units = load_units(&state, &listing.bike.id).await?;
 
-    let mut family = family_json(&row)?;
-    let rollup = rollup_units(&load_units(&state, &key).await?);
-
-    if let Some(obj) = family.as_object_mut() {
-        // The rollup and the aggregate join read `bike_units` in two separate
-        // queries, so under a concurrent status change they can disagree by a
-        // unit. The rollup wins here: one response must not contain two
-        // different answers to "how many are available".
-        obj.insert("units_total".to_string(), json!(rollup.total));
-        obj.insert("units_available".to_string(), json!(rollup.available));
-        obj.insert("unit_status_counts".to_string(), json!(rollup.by_status));
-        obj.insert("colors".to_string(), json!(rollup.colors));
-        obj.insert(
-            "colors_available".to_string(),
-            json!(rollup.colors_available),
-        );
-        obj.insert("model_years".to_string(), json!(rollup.model_years));
-    }
-    Ok(Json(json!({ "bike": family })))
+    let bike = family_detail_json(&listing, &discounts, &units)?;
+    Ok(Json(json!({ "bike": bike })))
 }
 
 /// `GET /api/rental-terms` — the published class discounts and term bands.
 ///
-/// `term_bands` are **ranges**, not multipliers: `discount_min` / `discount_max`
-/// bracket what the shop publishes for a term, and the number a customer
-/// actually pays comes from the door (D11). Nothing here may be multiplied out
-/// into a quote.
+/// `term_bands` are **ranges**, not multipliers: `discount_min` /
+/// `discount_max` bracket what the shop publishes for a term, and the number a
+/// customer actually pays comes from the door (D11). Nothing here may be
+/// multiplied out into a quote.
 async fn get_rental_terms(State(state): State<AppState>) -> Result<Json<Value>, StatusCode> {
-    let class_rows = state
-        .db
-        .orm
-        .query_all(Statement::from_string(
-            DbBackend::Postgres,
-            "SELECT class::text AS class, discount::float8 AS discount \
-             FROM class_discounts ORDER BY class ASC"
-                .to_string(),
-        ))
-        .await
-        .map_err(|e| {
-            tracing::error!("get_rental_terms(class_discounts): {e}");
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
-    let mut class_discounts = serde_json::Map::new();
-    for r in &class_rows {
-        class_discounts.insert(text(r, "class")?, json!(fraction(r, "discount")?));
-    }
-
-    let band_rows = state
-        .db
-        .orm
-        .query_all(Statement::from_string(
-            DbBackend::Postgres,
-            "SELECT band::text AS band, \
-                    min_days::int4 AS min_days, \
-                    max_days::int4 AS max_days, \
-                    discount_min::float8 AS discount_min, \
-                    discount_max::float8 AS discount_max \
-             FROM rental_terms ORDER BY min_days ASC, band ASC"
-                .to_string(),
-        ))
-        .await
-        .map_err(|e| {
-            tracing::error!("get_rental_terms(rental_terms): {e}");
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
-    let mut term_bands: Vec<Value> = Vec::with_capacity(band_rows.len());
-    for r in &band_rows {
-        term_bands.push(json!({
-            "band": text(r, "band")?,
-            "min_days": int(r, "min_days")?,
-            // Open-ended top band (`month` and up) has no max_days.
-            "max_days": int_opt(r, "max_days")?,
-            "discount_min": fraction(r, "discount_min")?,
-            "discount_max": fraction(r, "discount_max")?,
-        }));
-    }
-
-    Ok(Json(json!({
-        "class_discounts": class_discounts,
-        "term_bands": term_bands,
-    })))
+    let class_discounts = list_class_discounts(&state.db.orm).await.map_err(|e| {
+        tracing::error!("get_rental_terms(class_discounts): {e:#}");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+    let term_bands = list_rental_term_bands(&state.db.orm).await.map_err(|e| {
+        tracing::error!("get_rental_terms(rental_terms): {e:#}");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+    Ok(Json(rental_terms_json(&class_discounts, &term_bands)?))
 }
 
 // ── row → JSON ───────────────────────────────────────────────────
 
-fn family_json(r: &QueryResult) -> Result<Value, StatusCode> {
-    let key = text(r, "key")?;
-    let (client_rate_thb_day, client_rate_source) = client_rate(&key);
+/// Longest `bikes.key` the router will look up. The real keys are
+/// `xmax-300-new` and friends; the bound only stops a pathological path
+/// segment reaching the database.
+const MAX_KEY_LEN: usize = 200;
+
+/// Serialise a family for the catalog, then attach the two things the wire
+/// shape carries and the table does not: the class discount published for its
+/// class, and the door's answer.
+///
+/// The serialisation goes through `BikeListing`'s own `Serialize`, so the money
+/// fields arrive exactly as `db::bikes` mapped them — `None` as an explicit
+/// `null`, never a missing key and never `0`.
+fn family_json(listing: &BikeListing, discounts: &[ClassDiscount]) -> Result<Value, StatusCode> {
+    let mut value = serde_json::to_value(listing).map_err(|e| {
+        tracing::error!(
+            "bikes API: family {} not serialisable: {e}",
+            listing.bike.key
+        );
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+    let obj = value.as_object_mut().ok_or_else(|| {
+        // Unreachable while BikeListing is a struct; a 500 rather than a panic
+        // if it ever stops being one.
+        tracing::error!(
+            "bikes API: family {} did not serialise to an object",
+            listing.bike.key
+        );
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    // The published class discount (scooter 0.25, motorcycle 0.15). `None`
+    // when the class has no row or its row holds an unusable number — and
+    // `null`, not `0.0`, because "unpublished" is not "full price".
+    obj.insert(
+        "class_discount".to_string(),
+        json!(discount_for_class(discounts, &listing.bike.class)),
+    );
+
+    // ── the door (D11). The only field a customer price may come from. ──
+    let (client_rate_thb_day, client_rate_source) = client_rate(&listing.bike.key);
+    obj.insert(
+        "client_rate_thb_day".to_string(),
+        json!(client_rate_thb_day),
+    );
+    obj.insert("client_rate_source".to_string(), json!(client_rate_source));
+
+    Ok(value)
+}
+
+/// One family plus its unit rollup — the `GET /api/bikes/:key` body.
+///
+/// Pure, so the contract is testable without a database.
+fn family_detail_json(
+    listing: &BikeListing,
+    discounts: &[ClassDiscount],
+    units: &[UnitRow],
+) -> Result<Value, StatusCode> {
+    let mut value = family_json(listing, discounts)?;
+    let rollup = rollup_units(units);
+    let obj = value.as_object_mut().ok_or_else(|| {
+        tracing::error!("bikes API: family detail did not serialise to an object");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+    // `units_available` arrives from `db::bikes` as a grouped COUNT, and the
+    // rollup counts the same units in a second query, so under a concurrent
+    // status change the two can disagree by a unit. The rollup wins: one
+    // response must not contain two different answers to "how many are
+    // available". These five keys are detail-only — the list has no unit query.
+    obj.insert("units_total".to_string(), json!(rollup.total));
+    obj.insert("units_available".to_string(), json!(rollup.available));
+    obj.insert("unit_status_counts".to_string(), json!(rollup.by_status));
+    obj.insert("colors".to_string(), json!(rollup.colors));
+    obj.insert(
+        "colors_available".to_string(),
+        json!(rollup.colors_available),
+    );
+    obj.insert("model_years".to_string(), json!(rollup.model_years));
+    Ok(value)
+}
+
+/// The `GET /api/rental-terms` body.
+///
+/// `class_discounts` is a **list** of `{class, discount}`, not an object keyed
+/// by class: an unseeded table is then an empty list rather than an object whose
+/// missing key a client could read as zero. Both discount fields may be `null`.
+fn rental_terms_json(
+    class_discounts: &[ClassDiscount],
+    term_bands: &[RentalTermBand],
+) -> Result<Value, StatusCode> {
+    let classes = serde_json::to_value(class_discounts).map_err(|e| {
+        tracing::error!("bikes API: class discounts not serialisable: {e}");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+    let bands = serde_json::to_value(term_bands).map_err(|e| {
+        tracing::error!("bikes API: rental term bands not serialisable: {e}");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
     Ok(json!({
-        "id": text(r, "id")?,
-        "key": key,
-        "brand": text(r, "brand")?,
-        "model": text(r, "model")?,
-        // NULL for a family with a single generation ("NMAX 155"); set where
-        // the shop sells two tariffs under one model name ("NEW 2023+").
-        "variant_label": text_opt(r, "variant_label")?,
-        "class": text(r, "class")?,
-        "body": text(r, "body")?,
-        "displacement_cc": int(r, "displacement_cc")?,
-        // ── published tariff (PRE class-discount). NOT a client price. ──
-        "base_rate_thb_day": money(r, "base_rate_thb_day")?,
-        "class_discount": fraction(r, "class_discount")?,
-        "deposit_thb": money(r, "deposit_thb")?,
-        "monthly_low_season_thb": money(r, "monthly_low_season_thb")?,
-        "sale_price_thb": money(r, "sale_price_thb")?,
-        // ── the door (D11). The only field a customer price may come from. ──
-        "client_rate_thb_day": client_rate_thb_day,
-        "client_rate_source": client_rate_source,
-        "offered": flag(r, "offered")?,
-        "description_ru": text_opt(r, "description_ru")?,
-        "description_en": text_opt(r, "description_en")?,
-        "image_url": text_opt(r, "image_url")?,
-        "sort_order": int(r, "sort_order")?,
-        "units_total": count(r, "units_total")?,
-        "units_available": count(r, "units_available")?,
+        "class_discounts": classes,
+        "term_bands": bands,
     }))
 }
 
+// ── units ────────────────────────────────────────────────────────
+
 /// One physical unit, reduced to the three fields the public catalog may show.
 ///
-/// `unit_code`, `km_since_purchase` and everything in `bike_service_records`
-/// are read by neither this struct nor its query: D6 keeps service state
-/// admin-only, and `km_since_purchase` is kilometres since TurboBaby bought
-/// the bike — not an odometer — so there is no honest public label for it.
+/// `unit_code` and `km_since_purchase` are on the entity and are deliberately
+/// not carried here, and nothing in `bike_service_records` is read at all: D6
+/// keeps service state admin-only, `unit_code` is a shop-internal slot label,
+/// and `km_since_purchase` is kilometres since TurboBaby bought the bike — not
+/// an odometer — so there is no honest public label for it. Narrowing the row
+/// at the boundary means the rollup below cannot leak a field by accident.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct UnitRow {
     status: String,
@@ -429,42 +394,37 @@ struct UnitRow {
     model_year: Option<i32>,
 }
 
-/// Load one family's units, keyed on the family `key` rather than on the id
-/// read back out of the family row: the subselect compares `bike_units.bike_id`
-/// against `bikes.id` — the same column, so the same type, whatever that type
-/// is — while the only bound parameter is the `key` text the router already
-/// handed us.
+/// Runaway guard on one family's units, not pagination: the rollup is
+/// order-insensitive and the largest family in the fleet holds ten units.
+const UNIT_QUERY_LIMIT: u64 = 1000;
+
+/// Load one family's units through the `bike_unit` entity.
 ///
-/// The query reads only the three columns the rollup needs, so it depends on
-/// no column this module does not already serve. `LIMIT` is a runaway guard,
-/// not pagination: the rollup is order-insensitive and the largest family in
-/// the fleet holds ten units.
-async fn load_units(state: &AppState, family_key: &str) -> Result<Vec<UnitRow>, StatusCode> {
-    let rows = state
-        .db
-        .orm
-        .query_all(Statement::from_sql_and_values(
-            DbBackend::Postgres,
-            "SELECT status::text AS status, color, model_year::int4 AS model_year \
-             FROM bike_units \
-             WHERE bike_id = (SELECT id FROM bikes WHERE \"key\" = $1) \
-             ORDER BY status ASC LIMIT 1000",
-            [family_key.to_string().into()],
-        ))
+/// `bike_id` comes from the family row this request already read, so the id
+/// never originates with the client. Typed entity columns rather than SQL of
+/// our own: a renamed column is then a compile error here and a query error at
+/// worst, never a default served on a price tag.
+async fn load_units(state: &AppState, bike_id: &str) -> Result<Vec<UnitRow>, StatusCode> {
+    use crate::db::entities::bike_unit::{Column as UnitCol, Entity as UnitEntity};
+    use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QueryOrder, QuerySelect};
+    let models = UnitEntity::find()
+        .filter(UnitCol::BikeId.eq(bike_id))
+        .order_by_asc(UnitCol::UnitCode)
+        .limit(UNIT_QUERY_LIMIT)
+        .all(&state.db.orm)
         .await
         .map_err(|e| {
-            tracing::error!("load_units({family_key}): {e}");
+            tracing::error!("load_units({bike_id}): {e}");
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
-    rows.iter().map(unit_row).collect()
-}
-
-fn unit_row(r: &QueryResult) -> Result<UnitRow, StatusCode> {
-    Ok(UnitRow {
-        status: text(r, "status")?,
-        color: text_opt(r, "color")?,
-        model_year: int_opt(r, "model_year")?,
-    })
+    Ok(models
+        .into_iter()
+        .map(|m| UnitRow {
+            status: m.status,
+            color: m.color,
+            model_year: m.model_year,
+        })
+        .collect())
 }
 
 /// What the public catalog says about a family's physical units.
@@ -483,9 +443,22 @@ struct UnitRollup {
     model_years: Vec<i32>,
 }
 
-/// The four statuses `bike_units.status` is constrained to. Pre-seeded into
-/// `by_status` so the UI never has to read a missing key as a zero.
-const UNIT_STATUSES: [&str; 4] = ["available", "rented", "service", "retired"];
+/// The other three values of `bike_units.status`, mirroring the CHECK in
+/// `migrations/078_bike_units.sql`. `available` is not restated — it comes from
+/// `db::bikes::UNIT_STATUS_AVAILABLE`, so the count this module publishes and
+/// the count `db::bikes` queries cannot disagree about what "available" means.
+const UNIT_STATUS_RENTED: &str = "rented";
+const UNIT_STATUS_SERVICE: &str = "service";
+const UNIT_STATUS_RETIRED: &str = "retired";
+
+/// The four statuses, pre-seeded into `by_status` so the UI never has to read a
+/// missing key as a zero.
+const UNIT_STATUSES: [&str; 4] = [
+    UNIT_STATUS_AVAILABLE,
+    UNIT_STATUS_RENTED,
+    UNIT_STATUS_SERVICE,
+    UNIT_STATUS_RETIRED,
+];
 
 fn rollup_units(units: &[UnitRow]) -> UnitRollup {
     let mut by_status: BTreeMap<String, i64> = UNIT_STATUSES
@@ -503,8 +476,8 @@ fn rollup_units(units: &[UnitRow]) -> UnitRollup {
         // if one ever does it gets its own bucket rather than being folded into
         // a known one — a surprising status must be visible, not absorbed.
         *by_status.entry(u.status.clone()).or_insert(0) += 1;
-        let retired = u.status == UNIT_STATUSES[3];
-        let is_available = u.status == UNIT_STATUSES[0];
+        let retired = u.status == UNIT_STATUS_RETIRED;
+        let is_available = u.status == UNIT_STATUS_AVAILABLE;
         if !retired {
             total += 1;
         }
@@ -545,115 +518,6 @@ fn rollup_units(units: &[UnitRow]) -> UnitRollup {
     }
 }
 
-// ── fail-closed column readers ───────────────────────────────────
-//
-// Every column these read is named in the SELECT list above, so a renamed
-// column fails the query itself. What is left is a type mismatch, and these
-// map it to a 500 with the column in the log. That is the deliberate opposite
-// of `try_get_warn!`, which is fail-open by design: it would answer a customer
-// with `0` / `false` / `""` and leave a log line as the only evidence.
-
-fn read_error(column: &str, e: &sea_orm::DbErr) -> StatusCode {
-    tracing::error!("bikes API: column `{}` unreadable: {}", column, e);
-    StatusCode::INTERNAL_SERVER_ERROR
-}
-
-fn text(r: &QueryResult, column: &'static str) -> Result<String, StatusCode> {
-    r.try_get::<String>("", column)
-        .map_err(|e| read_error(column, &e))
-}
-
-fn text_opt(r: &QueryResult, column: &'static str) -> Result<Option<String>, StatusCode> {
-    r.try_get::<Option<String>>("", column)
-        .map_err(|e| read_error(column, &e))
-}
-
-fn int(r: &QueryResult, column: &'static str) -> Result<i32, StatusCode> {
-    r.try_get::<i32>("", column)
-        .map_err(|e| read_error(column, &e))
-}
-
-fn int_opt(r: &QueryResult, column: &'static str) -> Result<Option<i32>, StatusCode> {
-    r.try_get::<Option<i32>>("", column)
-        .map_err(|e| read_error(column, &e))
-}
-
-/// `COUNT(*)` is `bigint`.
-fn count(r: &QueryResult, column: &'static str) -> Result<i64, StatusCode> {
-    r.try_get::<i64>("", column)
-        .map_err(|e| read_error(column, &e))
-}
-
-fn flag(r: &QueryResult, column: &'static str) -> Result<bool, StatusCode> {
-    r.try_get::<bool>("", column)
-        .map_err(|e| read_error(column, &e))
-}
-
-/// Read a nullable money column (D9). SQL NULL stays `None` and serialises as
-/// JSON `null`, which the UI renders as a dash.
-fn money(r: &QueryResult, column: &'static str) -> Result<Option<f64>, StatusCode> {
-    let raw = r
-        .try_get::<Option<f64>>("", column)
-        .map_err(|e| read_error(column, &e))?;
-    let out = publishable_money(raw);
-    if raw.is_some() && out.is_none() {
-        // Loud, because a stored value we refuse to publish is a data defect,
-        // not a missing price. The customer still sees a dash — the log is for
-        // us, never a substitute for correct output.
-        tracing::error!(
-            "bikes API: column `{}` holds unpublishable {:?}; serving null",
-            column,
-            raw
-        );
-    }
-    Ok(out)
-}
-
-/// Read a nullable discount fraction. `class_discounts.discount` and
-/// `rental_terms.discount_min/max` are NOT NULL in the schema, but the LEFT
-/// JOIN in [`FAMILY_FROM`] yields NULL for a class with no published row —
-/// and that is "unpublished", not "no discount". `0.0` would assert full
-/// price, a claim we have no source for.
-fn fraction(r: &QueryResult, column: &'static str) -> Result<Option<f64>, StatusCode> {
-    let raw = r
-        .try_get::<Option<f64>>("", column)
-        .map_err(|e| read_error(column, &e))?;
-    let out = publishable_fraction(raw);
-    if raw.is_some() && out.is_none() {
-        tracing::error!(
-            "bikes API: column `{}` holds unpublishable discount {:?}; serving null",
-            column,
-            raw
-        );
-    }
-    Ok(out)
-}
-
-/// What a money column is allowed to become in a response.
-///
-/// | stored | served | why |
-/// | --- | --- | --- |
-/// | NULL | `None` | the source publishes nothing (D9) |
-/// | finite, `>= 0` | verbatim | including `0.0` — the DB asserts it and this function does not rewrite asserted data. Guarding *absent* against becoming `0` is what D9 asks for, and an absent value never reaches here as `Some`. |
-/// | negative | `None` | no published tariff, deposit or sale price is negative; a dash beats a wrong number |
-/// | NaN / ±Inf | `None` | the `clamp` closure D9 names turns these into a confident `0.0`, i.e. FREE. Absent is the honest rendering. |
-fn publishable_money(raw: Option<f64>) -> Option<f64> {
-    match raw {
-        Some(v) if v.is_finite() && v >= 0.0 => Some(v),
-        _ => None,
-    }
-}
-
-/// A discount is a fraction in `0.0..=1.0` (0.25 = the 25% scooter class
-/// discount). Anything outside that, or non-finite, is not a discount we can
-/// publish.
-fn publishable_fraction(raw: Option<f64>) -> Option<f64> {
-    match raw {
-        Some(v) if v.is_finite() && (0.0..=1.0).contains(&v) => Some(v),
-        _ => None,
-    }
-}
-
 /// Boolean query flag, matching the `include_hidden` convention `api::catalog`
 /// uses (`1` / `true`), plus any casing of `true` because a Mini App query
 /// string is hand-assembled in several places.
@@ -666,100 +530,115 @@ fn query_flag(q: &HashMap<String, String>, key: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        client_rate, list_sql, publishable_fraction, publishable_money, query_flag, rollup_units,
-        UnitRow, CLIENT_RATE_UNAVAILABLE, FAMILY_COLUMNS,
+        client_rate, family_detail_json, family_json, query_flag, rental_terms_json, rollup_units,
+        UnitRow, CLIENT_RATE_UNAVAILABLE, UNIT_STATUSES,
     };
+    use crate::db::bikes::{Bike, BikeListing, ClassDiscount, RentalTermBand};
+    use serde_json::{json, Value};
     use std::collections::HashMap;
+
+    /// Every money field the wire shape carries. The rule under test is that
+    /// each one is always PRESENT and `null` when absent — a missing key is
+    /// what lets a `#[serde(default)]` downstream invent `0.0` (D9).
+    const MONEY_FIELDS: [&str; 5] = [
+        "base_rate_thb_day",
+        "deposit_thb",
+        "monthly_low_season_thb",
+        "sale_price_thb",
+        "client_rate_thb_day",
+    ];
+
+    /// Shaped like the seed's `nmax-155` row, with the money fields under the
+    /// test's control.
+    fn listing(key: &str, class: &str, base_rate_thb_day: Option<f64>) -> BikeListing {
+        BikeListing {
+            bike: Bike {
+                id: "b0000000-0000-4000-8000-000000000001".to_string(),
+                key: key.to_string(),
+                brand: "Yamaha".to_string(),
+                model: "NMAX 155".to_string(),
+                variant_label: None,
+                class: class.to_string(),
+                body: "scooter".to_string(),
+                displacement_cc: 155,
+                base_rate_thb_day,
+                deposit_thb: None,
+                monthly_low_season_thb: None,
+                sale_price_thb: None,
+                offered: true,
+                description_ru: None,
+                description_en: None,
+                image_url: None,
+                sort_order: 10,
+            },
+            units_available: 5,
+        }
+    }
+
+    fn obj_of(value: &Value) -> &serde_json::Map<String, Value> {
+        value.as_object().expect("family serialises to an object")
+    }
+
+    fn scooter_ladder() -> Vec<ClassDiscount> {
+        vec![
+            ClassDiscount {
+                class: "motorcycle".to_string(),
+                discount: Some(0.15),
+            },
+            ClassDiscount {
+                class: "scooter".to_string(),
+                discount: Some(0.25),
+            },
+        ]
+    }
 
     // ── D9: absent stays absent, and nothing becomes 0 ───────────
 
     #[test]
-    fn absent_money_stays_absent() {
-        // The whole point: NULL must not become 0.0 anywhere on this path.
-        assert_eq!(publishable_money(None), None);
-    }
-
-    #[test]
-    fn published_money_passes_through_verbatim() {
-        // NMAX 155's published base tariff, unrounded and unadjusted.
-        assert_eq!(publishable_money(Some(449.0)), Some(449.0));
-        assert_eq!(publishable_money(Some(2788.0)), Some(2788.0));
-    }
-
-    #[test]
-    fn stored_zero_is_not_rewritten() {
-        // A stored 0 is a value the DB asserts. D9's rule is that an *absent*
-        // number must not become 0 — not that a present 0 must vanish.
-        assert_eq!(publishable_money(Some(0.0)), Some(0.0));
-    }
-
-    #[test]
-    fn non_finite_money_is_absent_not_zero() {
-        // This is the `clamp` closure's failure mode (NaN -> 0.0 -> "FREE").
-        assert_eq!(publishable_money(Some(f64::NAN)), None);
-        assert_eq!(publishable_money(Some(f64::INFINITY)), None);
-        assert_eq!(publishable_money(Some(f64::NEG_INFINITY)), None);
-    }
-
-    #[test]
-    fn negative_money_is_absent() {
-        assert_eq!(publishable_money(Some(-1.0)), None);
-    }
-
-    #[test]
-    fn published_fractions_pass_through() {
-        assert_eq!(publishable_fraction(Some(0.25)), Some(0.25)); // scooter
-        assert_eq!(publishable_fraction(Some(0.15)), Some(0.15)); // motorcycle
-        assert_eq!(publishable_fraction(Some(0.0)), Some(0.0));
-        assert_eq!(publishable_fraction(Some(1.0)), Some(1.0));
-    }
-
-    #[test]
-    fn out_of_range_or_non_finite_fraction_is_absent() {
-        assert_eq!(publishable_fraction(None), None);
-        assert_eq!(publishable_fraction(Some(1.5)), None);
-        assert_eq!(publishable_fraction(Some(-0.1)), None);
-        assert_eq!(publishable_fraction(Some(f64::NAN)), None);
-        assert_eq!(publishable_fraction(Some(25.0)), None); // percent, not fraction
-    }
-
-    #[test]
-    fn money_columns_are_read_as_nullable_doubles() {
-        // Guards the SELECT list against losing a ::float8 cast (which would
-        // turn a `numeric` column into a read error) or an alias (which would
-        // turn it into a missing key downstream).
-        for column in [
-            "base_rate_thb_day",
-            "deposit_thb",
-            "monthly_low_season_thb",
-            "sale_price_thb",
-        ] {
-            let needle = format!("b.{column}::float8 AS {column}");
+    fn absent_money_is_an_explicit_null_not_a_missing_key() {
+        let value = family_json(&listing("x-adv-750", "motorcycle", None), &[]).expect("json");
+        let obj = obj_of(&value);
+        for field in MONEY_FIELDS {
             assert!(
-                FAMILY_COLUMNS.contains(&needle),
-                "FAMILY_COLUMNS lost `{needle}`"
+                obj.contains_key(field),
+                "`{field}` must be present so nothing downstream can default it"
+            );
+            assert_eq!(
+                obj.get(field),
+                Some(&Value::Null),
+                "`{field}` must be null, never 0"
             );
         }
     }
 
     #[test]
-    fn reader_types_are_pinned_by_casts() {
-        // `id` may be uuid, `class`/`body` may be enums, the integers may be
-        // smallint. Each reader asks for one concrete Rust type, so the cast
-        // is what keeps an unpredicted column type from 500-ing the catalog.
-        for needle in [
-            "b.id::text AS id",
-            "b.class::text AS class",
-            "b.body::text AS body",
-            "b.displacement_cc::int4 AS displacement_cc",
-            "b.sort_order::int4 AS sort_order",
-            "cd.discount::float8 AS class_discount",
-        ] {
-            assert!(
-                FAMILY_COLUMNS.contains(needle),
-                "FAMILY_COLUMNS lost `{needle}`"
-            );
-        }
+    fn a_published_tariff_is_served_verbatim() {
+        // No rounding, no discount, no currency conversion on the way out.
+        let value = family_json(&listing("nmax-155", "scooter", Some(449.0)), &[]).expect("json");
+        assert_eq!(obj_of(&value).get("base_rate_thb_day"), Some(&json!(449.0)));
+    }
+
+    #[test]
+    fn an_unpublished_class_discount_is_null_not_zero() {
+        // The ladder is seeded for scooter and motorcycle only. A family whose
+        // class has no row must not be told "no discount" — 0.0 would assert
+        // full price, a claim there is no source for (D11).
+        let value = family_json(
+            &listing("x-adv-750", "atv", Some(2788.0)),
+            &scooter_ladder(),
+        )
+        .expect("json");
+        assert_eq!(obj_of(&value).get("class_discount"), Some(&Value::Null));
+    }
+
+    #[test]
+    fn the_published_class_discount_is_attached_from_the_ladder() {
+        let value = family_json(
+            &listing("nmax-155", "scooter", Some(939.0)),
+            &scooter_ladder(),
+        )
+        .expect("json");
+        assert_eq!(obj_of(&value).get("class_discount"), Some(&json!(0.25)));
     }
 
     // ── D11: the door seam ───────────────────────────────────────
@@ -773,64 +652,163 @@ mod tests {
         assert_eq!(source, CLIENT_RATE_UNAVAILABLE);
     }
 
-    // ── list_sql ─────────────────────────────────────────────────
-
     #[test]
-    fn list_sql_default_is_offered_only() {
-        let sql = list_sql(false, false);
-        assert!(sql.contains("b.offered = TRUE"), "{sql}");
-        assert!(!sql.contains("units_available, 0) > 0"), "{sql}");
+    fn a_family_with_both_inputs_still_serves_no_computed_price() {
+        // 939 with a 25% class discount is the seed's reconciled row: the
+        // owner's sheet quotes 704 and the arithmetic gives 704.25. Both
+        // numbers are computable from this payload and NEITHER may be in it —
+        // `db::bikes::apply_class_discount` exists for the door's answer, not
+        // for its silence.
+        let value = family_json(
+            &listing("nmax-155", "scooter", Some(939.0)),
+            &scooter_ladder(),
+        )
+        .expect("json");
+        let obj = obj_of(&value);
+        assert_eq!(obj.get("client_rate_thb_day"), Some(&Value::Null));
+        assert_eq!(
+            obj.get("client_rate_source"),
+            Some(&json!(CLIENT_RATE_UNAVAILABLE))
+        );
+        for (name, field) in obj {
+            if let Some(n) = field.as_f64() {
+                assert!(
+                    (n - 704.25).abs() > 1e-9 && (n - 704.0).abs() > 1e-9,
+                    "`{name}` carries a computed client price: {n}"
+                );
+            }
+        }
     }
 
-    #[test]
-    fn list_sql_available_only_adds_the_stock_filter() {
-        let sql = list_sql(false, true);
-        assert!(sql.contains("b.offered = TRUE"), "{sql}");
-        assert!(sql.contains("COALESCE(u.units_available, 0) > 0"), "{sql}");
-        assert!(sql.contains(" AND "), "{sql}");
-    }
+    // ── D6 / D14: what the public catalog may not carry ──────────
 
     #[test]
-    fn list_sql_include_unoffered_drops_only_the_offered_filter() {
-        let sql = list_sql(true, false);
-        assert!(!sql.contains("b.offered = TRUE"), "{sql}");
-        // ...and still selects the column, so the client can see WHY.
-        assert!(sql.contains("b.offered,"), "{sql}");
-        assert!(!sql.contains(" WHERE "), "{sql}");
-    }
-
-    #[test]
-    fn list_sql_include_unoffered_and_available_only_combine() {
-        let sql = list_sql(true, true);
-        assert!(sql.contains("COALESCE(u.units_available, 0) > 0"), "{sql}");
-        assert!(!sql.contains("b.offered = TRUE"), "{sql}");
-    }
-
-    #[test]
-    fn list_sql_every_variant_is_bounded_and_ordered() {
-        for (unoffered, available) in [(false, false), (false, true), (true, false), (true, true)] {
-            let sql = list_sql(unoffered, available);
-            assert!(sql.contains("LIMIT 2000"), "{sql}");
-            assert!(sql.contains("ORDER BY b.sort_order ASC"), "{sql}");
-            assert!(sql.contains("FROM bikes b"), "{sql}");
-            assert!(sql.contains("class_discounts"), "{sql}");
-            assert!(sql.contains("FROM bike_units"), "{sql}");
-            // No request text is interpolated — the only inputs are booleans.
-            assert!(!sql.contains('$'), "{sql}");
+    fn no_unit_or_service_field_reaches_the_wire() {
+        let units = vec![
+            unit(UNIT_STATUSES[0], Some("black"), Some(2020)),
+            unit(UNIT_STATUSES[1], Some("green"), Some(2021)),
+        ];
+        let value = family_detail_json(
+            &listing("nmax-155", "scooter", Some(939.0)),
+            &scooter_ladder(),
+            &units,
+        )
+        .expect("json");
+        let obj = obj_of(&value);
+        for forbidden in [
+            "unit_code",
+            "km_since_purchase",
+            "current_km",
+            "last_service_km",
+            "interval_km",
+            "next_km",
+            "units",
+            "plate",
+            "renter",
+        ] {
+            assert!(
+                !obj.contains_key(forbidden),
+                "`{forbidden}` must never be in a public catalog body"
+            );
         }
     }
 
     #[test]
-    fn list_sql_counts_exclude_retired_units() {
-        let sql = list_sql(false, false);
-        assert!(
-            sql.contains("COUNT(*) FILTER (WHERE status <> 'retired')"),
-            "{sql}"
+    fn the_detail_body_carries_the_rollup_and_agrees_with_itself() {
+        let units = vec![
+            unit(UNIT_STATUSES[0], Some("black"), Some(2020)),
+            unit(UNIT_STATUSES[0], Some("blue"), Some(2020)),
+            unit(UNIT_STATUSES[1], Some("green"), Some(2021)),
+            unit(UNIT_STATUSES[3], Some("red"), Some(2014)),
+        ];
+        let value =
+            family_detail_json(&listing("nmax-155", "scooter", None), &[], &units).expect("json");
+        let obj = obj_of(&value);
+        // The fixture's `units_available` is 5 and the rollup says 2. One body
+        // must not hold two answers to the same question.
+        assert_eq!(obj.get("units_available"), Some(&json!(2)));
+        assert_eq!(obj.get("units_total"), Some(&json!(3)));
+        assert_eq!(
+            obj.get("colors"),
+            Some(&json!(["black", "blue", "green"])),
+            "a retired unit's colour is not part of the family"
         );
-        assert!(
-            sql.contains("COUNT(*) FILTER (WHERE status = 'available')"),
-            "{sql}"
+        assert_eq!(obj.get("colors_available"), Some(&json!(["black", "blue"])));
+        assert_eq!(obj.get("model_years"), Some(&json!([2020, 2021])));
+        let counts = obj
+            .get("unit_status_counts")
+            .and_then(Value::as_object)
+            .expect("unit_status_counts is an object");
+        assert_eq!(counts.get("available"), Some(&json!(2)));
+        assert_eq!(counts.get("service"), Some(&json!(0)));
+    }
+
+    #[test]
+    fn an_unoffered_family_is_still_serialisable() {
+        // D12: click-125 is closed to new rentals and the detail route serves
+        // it anyway, so the UI can redirect instead of 404-ing.
+        let mut l = listing("click-125", "scooter", Some(300.0));
+        l.bike.offered = false;
+        let value = family_json(&l, &scooter_ladder()).expect("json");
+        assert_eq!(obj_of(&value).get("offered"), Some(&json!(false)));
+    }
+
+    // ── rental terms ─────────────────────────────────────────────
+
+    #[test]
+    fn rental_terms_publishes_bands_as_ranges_with_nullable_bounds() {
+        let bands = vec![
+            RentalTermBand {
+                band: "week".to_string(),
+                min_days: 7,
+                max_days: Some(13),
+                discount_min: Some(0.06),
+                discount_max: Some(0.15),
+            },
+            RentalTermBand {
+                band: "month".to_string(),
+                min_days: 30,
+                max_days: None,
+                discount_min: None,
+                discount_max: None,
+            },
+        ];
+        let value = rental_terms_json(&scooter_ladder(), &bands).expect("json");
+        let terms = value
+            .get("term_bands")
+            .and_then(Value::as_array)
+            .expect("term_bands is an array");
+        assert_eq!(terms.len(), 2);
+        // Open-ended top band: max_days is null, and the key is present.
+        let month = obj_of(&terms[1]);
+        assert_eq!(month.get("max_days"), Some(&Value::Null));
+        assert_eq!(month.get("min_days"), Some(&json!(30)));
+        assert_eq!(month.get("discount_min"), Some(&Value::Null));
+        assert_eq!(month.get("discount_max"), Some(&Value::Null));
+        let week = obj_of(&terms[0]);
+        assert_eq!(week.get("discount_min"), Some(&json!(0.06)));
+        assert_eq!(week.get("discount_max"), Some(&json!(0.15)));
+    }
+
+    #[test]
+    fn rental_terms_serves_class_discounts_as_a_list() {
+        let value = rental_terms_json(&scooter_ladder(), &[]).expect("json");
+        assert_eq!(
+            value.get("class_discounts"),
+            Some(&json!([
+                { "class": "motorcycle", "discount": 0.15 },
+                { "class": "scooter", "discount": 0.25 },
+            ]))
         );
+        // An unseeded rental_terms table is an empty list, not a made-up band.
+        assert_eq!(value.get("term_bands"), Some(&json!([])));
+    }
+
+    #[test]
+    fn rental_terms_of_an_unseeded_database_invents_nothing() {
+        let value = rental_terms_json(&[], &[]).expect("json");
+        assert_eq!(value.get("class_discounts"), Some(&json!([])));
+        assert_eq!(value.get("term_bands"), Some(&json!([])));
     }
 
     // ── query_flag ───────────────────────────────────────────────
@@ -881,6 +859,17 @@ mod tests {
             color: color.map(str::to_string),
             model_year: year,
         }
+    }
+
+    #[test]
+    fn the_four_statuses_match_the_check_constraint() {
+        // 078_bike_units.sql: CHECK (status IN
+        // ('available','rented','service','retired')).
+        assert_eq!(
+            UNIT_STATUSES,
+            ["available", "rented", "service", "retired"],
+            "UNIT_STATUSES drifted from the CHECK constraint"
+        );
     }
 
     #[test]

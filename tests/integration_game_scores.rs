@@ -88,7 +88,7 @@ async fn leaderboard(app: axum::Router, limit: &str) -> Resp {
 /// semantics — personal best kept, one row per player, blank name replaced —
 /// have to be asserted against the row itself, or the test quietly turns into
 /// a test of how full the board is.
-async fn stored_score(db: &woody_weed_bot::db::Database, tid: i64) -> Option<i64> {
+async fn stored_score(db: &turbobaby_bot::db::Database, tid: i64) -> Option<i64> {
     use sea_orm::{ConnectionTrait, DbBackend, Statement};
     db.orm
         .query_one(Statement::from_sql_and_values(
@@ -101,7 +101,7 @@ async fn stored_score(db: &woody_weed_bot::db::Database, tid: i64) -> Option<i64
         .and_then(|r| r.try_get::<i64>("", "high_score").ok())
 }
 
-async fn stored_rows(db: &woody_weed_bot::db::Database, tid: i64) -> i64 {
+async fn stored_rows(db: &turbobaby_bot::db::Database, tid: i64) -> i64 {
     use sea_orm::{ConnectionTrait, DbBackend, Statement};
     db.orm
         .query_one(Statement::from_sql_and_values(
@@ -115,7 +115,7 @@ async fn stored_rows(db: &woody_weed_bot::db::Database, tid: i64) -> i64 {
         .unwrap_or(0)
 }
 
-async fn stored_name(db: &woody_weed_bot::db::Database, tid: i64) -> Option<String> {
+async fn stored_name(db: &turbobaby_bot::db::Database, tid: i64) -> Option<String> {
     use sea_orm::{ConnectionTrait, DbBackend, Statement};
     db.orm
         .query_one(Statement::from_sql_and_values(

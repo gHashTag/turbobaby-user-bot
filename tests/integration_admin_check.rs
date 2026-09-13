@@ -85,8 +85,7 @@ async fn admin_check_token_path_returns_sentinel_zero_not_echoed_id() {
 
     // test_config (tests/common/mod.rs) uses admin_password "test_password"
     // and bot_token "dummy_test_token".
-    let token =
-        woody_weed_bot::api::auth::generate_admin_token("test_password", "dummy_test_token");
+    let token = turbobaby_bot::api::auth::generate_admin_token("test_password", "dummy_test_token");
 
     let response = app
         .oneshot(

@@ -132,6 +132,10 @@ fn build_message(
             locale.garden_friend_joined.replace("{name}", name),
             locale.garden_invite_progress_hint
         ),
+        // No code writes this kind any more — `enqueue_friend_watered` was
+        // deleted with the garden mechanic (D5). The arm stays because rows
+        // queued before that removal may still be unsent in a deployed
+        // database, and this worker is the only thing that can deliver them.
         "friend_watered" => {
             let streak = payload.get("streak").and_then(|v| v.as_i64()).unwrap_or(0);
             let body = locale

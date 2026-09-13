@@ -627,6 +627,11 @@ pub enum DepositForm {
     Passport,
 }
 
+// The two accessors below have no caller yet: the checkout leg that will
+// read them (issue #10) is unwired; each carries an `#[allow(dead_code)]`
+// naming that. Unlike the free-function parks in db/bikes.rs, an impl
+// method with `#[expect(dead_code)]` roots itself live, so the expectation
+// cannot be used here — `allow` is the honest form.
 #[allow(unreachable_pub)] // Methods on a type reachable from the api/*.rs request bodies; pub(crate) would cascade.
 impl DepositForm {
     /// The money figure agreed, filtered through [`finite_money`] so a NaN
@@ -636,6 +641,7 @@ impl DepositForm {
     /// and also `None` for a money deposit whose figure is not agreed yet.
     /// A caller that must tell those two apart matches on the enum; that is
     /// what it is for.
+    #[allow(dead_code)] // No caller yet — the checkout leg is issue #10.
     pub fn agreed_amount(&self) -> Option<f64> {
         match self {
             DepositForm::Money { amount, .. } => finite_money(*amount),
@@ -644,6 +650,7 @@ impl DepositForm {
     }
 
     /// True when the passport is being held instead of money.
+    #[allow(dead_code)] // No caller yet — the checkout leg is issue #10.
     pub fn is_passport(&self) -> bool {
         matches!(self, DepositForm::Passport)
     }

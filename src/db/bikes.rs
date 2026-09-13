@@ -142,7 +142,7 @@ pub struct RentalTermBand {
 /// `overdue` in the ops sheet today, and a public badge the shop cannot
 /// keep accurate is the kind of number the data-honesty rule forbids.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[allow(unreachable_pub)] // Used as a field of pub structs in src/api/*.rs request/response bodies; pub(crate) would cascade.
+#[allow(unreachable_pub)] // Written for the admin endpoints of epic #31; no caller yet.
 pub struct BikeServiceRecord {
     pub id: String,
     pub bike_unit_id: String,
@@ -457,7 +457,8 @@ pub async fn list_rental_term_bands(
 ///
 /// **ADMIN ONLY (D6)** — no catalog endpoint may call this. The caller is
 /// responsible for the admin gate; this function does not check it.
-#[allow(unreachable_pub)] // Read by the admin endpoints in src/api/*.rs and by integration tests as lib consumers.
+#[allow(unreachable_pub)] // Written for the admin endpoints of epic #31; no caller yet.
+#[expect(dead_code)] // Fires the build when the fleet-admin epic wires a caller, forcing this attribute off.
 pub async fn list_service_records_for_unit(
     orm: &sea_orm::DatabaseConnection,
     bike_unit_id: &str,

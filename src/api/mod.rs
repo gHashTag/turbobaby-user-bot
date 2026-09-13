@@ -45,18 +45,6 @@ pub(crate) fn extract_bool(body: &Value, key: &str) -> Result<bool, StatusCode> 
         .ok_or(StatusCode::BAD_REQUEST)
 }
 
-/// Extract a required discount field (f64, 0..=100, finite) from a JSON body.
-pub(crate) fn extract_discount(body: &Value) -> Result<f64, StatusCode> {
-    let discount = body
-        .get("discount")
-        .and_then(|v| v.as_f64())
-        .ok_or(StatusCode::BAD_REQUEST)?;
-    if !discount.is_finite() || !(0.0..=100.0).contains(&discount) {
-        return Err(StatusCode::BAD_REQUEST);
-    }
-    Ok(discount)
-}
-
 /// Validates that a URL is either empty/None or starts with an allowed scheme.
 /// Allowed: http://, https://, /, data:image/, data:video/
 pub(crate) fn validate_url(url: &Option<String>) -> Result<(), StatusCode> {
@@ -125,7 +113,7 @@ fn api_routes() -> Router<AppState> {
 /// process is alive. Use this for "should the orchestrator restart
 /// me?" decisions — restart only on no-response / non-200.
 async fn ping_handler() -> Json<Value> {
-    Json(json!({"status": "ok", "service": "woody-weed-bot"}))
+    Json(json!({"status": "ok", "service": "turbobaby-bot"}))
 }
 
 /// `/health` — readiness probe. Returns 200 only when the backend
@@ -149,7 +137,7 @@ async fn health_handler(State(state): State<AppState>) -> Result<Json<Value>, St
         .await
     {
         Ok(_) => Ok(Json(
-            json!({"status": "ok", "service": "woody-weed-bot", "db": "ok"}),
+            json!({"status": "ok", "service": "turbobaby-bot", "db": "ok"}),
         )),
         Err(e) => {
             tracing::warn!("/health: DB ping failed: {}", e);
@@ -160,7 +148,7 @@ async fn health_handler(State(state): State<AppState>) -> Result<Json<Value>, St
 
 #[cfg(test)]
 mod tests {
-    use super::{extract_bool, extract_discount, validate_url};
+    use super::{extract_bool, validate_url};
     use axum::http::StatusCode;
     use serde_json::json;
 
@@ -265,51 +253,6 @@ mod tests {
     fn test_extract_bool_not_bool() {
         assert_eq!(
             extract_bool(&json!({"k": "true"}), "k").unwrap_err(),
-            StatusCode::BAD_REQUEST
-        );
-    }
-
-    #[test]
-    fn test_extract_discount_ok() {
-        assert_eq!(extract_discount(&json!({"discount": 15.0})).unwrap(), 15.0);
-    }
-
-    #[test]
-    fn test_extract_discount_missing() {
-        assert_eq!(
-            extract_discount(&json!({})).unwrap_err(),
-            StatusCode::BAD_REQUEST
-        );
-    }
-
-    #[test]
-    fn test_extract_discount_not_number() {
-        assert_eq!(
-            extract_discount(&json!({"discount": "ten"})).unwrap_err(),
-            StatusCode::BAD_REQUEST
-        );
-    }
-
-    #[test]
-    fn test_extract_discount_negative() {
-        assert_eq!(
-            extract_discount(&json!({"discount": -1.0})).unwrap_err(),
-            StatusCode::BAD_REQUEST
-        );
-    }
-
-    #[test]
-    fn test_extract_discount_too_high() {
-        assert_eq!(
-            extract_discount(&json!({"discount": 101.0})).unwrap_err(),
-            StatusCode::BAD_REQUEST
-        );
-    }
-
-    #[test]
-    fn test_extract_discount_nan() {
-        assert_eq!(
-            extract_discount(&json!({"discount": f64::NAN})).unwrap_err(),
             StatusCode::BAD_REQUEST
         );
     }
@@ -450,11 +393,31 @@ mod route_wiring_tests {
             if ALLOWED_UNWIRED_ROUTES.contains(&module.as_str()) {
                 continue;
             }
-            // Match `pub mod <name>;` allowing `#[cfg(...)] pub mod <name>;`
-            // by only requiring the substring.
-            let pub_mod_needle = format!("pub mod {};", module);
+            // Match the declaration at any visibility.
+            //
+            // This needle carried the same defect as the `routes()` one above,
+            // and it survived the first repair: unblinding `routes()` handed
+            // this assertion 19 subjects for the first time since 2026-06-06,
+            // and it then failed all 19 — because `baf77cc` had rewritten
+            // `pub mod orders;` to `pub(crate) mod orders;` in the same sweep.
+            // The gate was blind twice over, and fixing only the half that
+            // produced the subject list turned three months of false green into
+            // 19 false red. Both needles have to know about visibility, so the
+            // declaration is recognised the same way in both places.
+            let declares_module = |vis_prefix: &str| {
+                mod_src
+                    .lines()
+                    .map(str::trim_start)
+                    .any(|l| l.starts_with(&format!("{vis_prefix}mod {module};")))
+            };
+            let has_pub_mod = declares_module("")
+                || declares_module("pub ")
+                || mod_src
+                    .lines()
+                    .map(str::trim_start)
+                    .any(|l| l.starts_with("pub(") && l.contains(&format!(") mod {module};")));
             let merge_needle = format!(".merge({}::routes())", module);
-            if !mod_src.contains(&pub_mod_needle) {
+            if !has_pub_mod {
                 missing_pub_mod.push(module.clone());
             }
             if !mod_src.contains(&merge_needle) {
@@ -464,8 +427,8 @@ mod route_wiring_tests {
 
         assert!(
             missing_pub_mod.is_empty(),
-            "src/api/*.rs files have `pub fn routes()` but no `pub mod` declaration in src/api/mod.rs: {:?}\n\
-             Either add `pub mod <name>;` to src/api/mod.rs or add to ALLOWED_UNWIRED_ROUTES with rationale.",
+            "src/api/*.rs files declare `routes()` but have no `mod` declaration in src/api/mod.rs: {:?}\n\
+             Either add `pub(crate) mod <name>;` to src/api/mod.rs or add to ALLOWED_UNWIRED_ROUTES with rationale.",
             missing_pub_mod,
         );
 

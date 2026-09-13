@@ -158,6 +158,34 @@ pub fn effective_set_price(total_price: f64, discount_percent: f64) -> f64 {
     (base * (1.0 - pct / 100.0)).max(0.0)
 }
 
+/// Keep only a client-facing day rate returned by the authoritative door.
+///
+/// Absence and invalid money stay absent. This helper deliberately accepts no
+/// base tariff or class discount, so a silent door has no path to a computed
+/// client price (D11) and the same boundary is shared by native and WASM code
+/// (D15).
+pub fn authoritative_door_rate(client_rate_thb_day: Option<f64>) -> Option<f64> {
+    client_rate_thb_day.filter(|rate| rate.is_finite() && *rate > 0.0)
+}
+
+/// Resolve the client-facing day rate from its complete wire context.
+///
+/// `base_rate_thb_day` and `class_discount` are accepted deliberately so the
+/// native regression test can prove that populated file inputs never become a
+/// fallback. They are reference/audit facts only. A number reaches the client
+/// only when the API also identifies it as a door result (D11).
+pub fn client_day_rate(
+    client_rate_thb_day: Option<f64>,
+    client_rate_source: Option<&str>,
+    _base_rate_thb_day: Option<f64>,
+    _class_discount: Option<f64>,
+) -> Option<f64> {
+    if client_rate_source != Some("door") {
+        return None;
+    }
+    authoritative_door_rate(client_rate_thb_day)
+}
+
 /// Format a money amount (THB) for customer display: clamp NaN/inf/negative to
 /// 0, drop the fractional part (whole-baht display), prefix `฿`. Casts to `i64`
 /// (not `i32`) so a large-but-valid total can't saturate at ~2.1B — prices and
@@ -191,6 +219,41 @@ mod tests {
 
     fn now_utc() -> DateTime<Utc> {
         Utc::now()
+    }
+
+    #[test]
+    fn authoritative_door_rate_preserves_only_a_valid_door_value() {
+        assert_eq!(authoritative_door_rate(Some(704.25)), Some(704.25));
+        assert_eq!(authoritative_door_rate(None), None);
+        assert_eq!(authoritative_door_rate(Some(0.0)), None);
+        assert_eq!(authoritative_door_rate(Some(-1.0)), None);
+        assert_eq!(authoritative_door_rate(Some(f64::NAN)), None);
+        assert_eq!(authoritative_door_rate(Some(f64::INFINITY)), None);
+        assert_eq!(authoritative_door_rate(Some(f64::NEG_INFINITY)), None);
+    }
+
+    #[test]
+    fn client_day_rate_never_falls_back_to_file_inputs() {
+        assert_eq!(
+            client_day_rate(None, Some("unavailable"), Some(939.0), Some(0.25)),
+            None
+        );
+        assert_eq!(
+            client_day_rate(Some(704.25), Some("door"), Some(939.0), Some(0.25)),
+            Some(704.25)
+        );
+        assert_eq!(
+            client_day_rate(Some(704.25), None, Some(939.0), Some(0.25)),
+            None
+        );
+        assert_eq!(
+            client_day_rate(Some(704.25), Some("unavailable"), Some(939.0), Some(0.25),),
+            None
+        );
+        assert_eq!(
+            client_day_rate(Some(f64::NAN), Some("door"), Some(939.0), Some(0.25)),
+            None
+        );
     }
 
     #[test]

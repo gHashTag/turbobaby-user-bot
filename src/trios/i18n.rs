@@ -22,6 +22,9 @@ pub const T_NAV_EVENTS: Key = "nav.events";
 pub const T_NAV_CART: Key = "nav.cart";
 pub const T_NAV_PROFILE: Key = "nav.profile";
 pub const T_NAV_MORE: Key = "nav.more";
+pub const T_NAV_FLEET: Key = "nav.fleet";
+pub const T_NAV_RIDE: Key = "nav.ride";
+pub const T_NAV_ORDERS: Key = "nav.orders";
 
 /// Garden translations
 pub const T_GARDEN_TITLE: Key = "garden.title";
@@ -736,6 +739,90 @@ pub const T_EVENTS_MY_BOOKINGS: Key = "events.my_bookings";
 pub const T_EVENTS_NO_BOOKINGS: Key = "events.no_bookings";
 pub const T_EVENTS_CANCEL: Key = "events.cancel";
 
+/// Bike catalog and family detail (D13).
+///
+/// These keys were written against by `src/ui/screens/catalog_screen.rs` and
+/// `src/ui/screens/bike_detail.rs` before they existed here — both screens were
+/// undeclared in `screens/mod.rs`, so nothing compiled them and nothing noticed
+/// the 50 missing constants. Worth knowing when adding more: `t()` falls back to
+/// returning the key itself, so a key missing from a table renders the literal
+/// string `bike.price.title` on a customer's screen rather than failing a build.
+///
+/// The wording carries policy, not just labels:
+///   * D11 — when no rate is published the copy says a human quotes it. It never
+///     emits a number, a "from", an average or a range, and it is never silent.
+///   * D9 — an absent money value is `MONEY_DASH`, so nothing here says `0`.
+///   * D14 — availability is a count and a colour list, never a unit identity.
+///
+/// The `{0}`/`{1}` placeholders are positional for `tf()`, and the argument
+/// order is fixed by the call sites named beside each key below.
+pub const T_BIKE_CATALOG_TITLE: Key = "bike.catalog.title";
+pub const T_BIKE_CATALOG_DESC: Key = "bike.catalog.desc";
+pub const T_BIKE_FILTER_SCOOTER: Key = "bike.filter.scooter";
+pub const T_BIKE_FILTER_MOTORCYCLE: Key = "bike.filter.motorcycle";
+pub const T_BIKE_FILTER_FREE_NOW: Key = "bike.filter.free_now";
+pub const T_BIKE_SORT_DEFAULT: Key = "bike.sort.default";
+pub const T_BIKE_SORT_PRICE_ASC: Key = "bike.sort.price_asc";
+pub const T_BIKE_SORT_PRICE_DESC: Key = "bike.sort.price_desc";
+/// `{0}` = the active filter's own label.
+pub const T_BIKE_NO_RESULTS: Key = "bike.no_results";
+pub const T_BIKE_CLASS_SCOOTER: Key = "bike.class.scooter";
+pub const T_BIKE_CLASS_MOTORCYCLE: Key = "bike.class.motorcycle";
+/// `{0}` = engine displacement in cc.
+pub const T_BIKE_CC: Key = "bike.cc";
+pub const T_BIKE_DETAILS: Key = "bike.details";
+pub const T_BIKE_BOOK: Key = "bike.book";
+pub const T_BIKE_PRICE_TITLE: Key = "bike.price.title";
+pub const T_BIKE_RATE_PER_DAY: Key = "bike.rate_per_day";
+pub const T_BIKE_PER_DAY: Key = "bike.per_day";
+/// D11: no published rate. Names a human, emits no number, is not silence.
+pub const T_BIKE_PRICE_ON_REQUEST: Key = "bike.price.on_request";
+/// `{0}` = the published tariff, already money-formatted. Shown only when a
+/// class discount applies, so the customer can see what it was taken off.
+pub const T_BIKE_TARIFF_BEFORE_DISCOUNT: Key = "bike.tariff_before_discount";
+/// `{0}` = class discount percent.
+pub const T_BIKE_CLASS_DISCOUNT: Key = "bike.class_discount";
+pub const T_BIKE_DEPOSIT: Key = "bike.deposit";
+pub const T_BIKE_MONTHLY_LOW_SEASON: Key = "bike.monthly_low_season";
+pub const T_BIKE_QUOTE_NOTE: Key = "bike.quote_note";
+pub const T_BIKE_TERMS_TITLE: Key = "bike.terms.title";
+pub const T_BIKE_TERMS_NOTE: Key = "bike.terms.note";
+pub const T_BIKE_TERM_WEEK: Key = "bike.term.week";
+pub const T_BIKE_TERM_TWO_WEEKS: Key = "bike.term.two_weeks";
+pub const T_BIKE_TERM_MONTH: Key = "bike.term.month";
+/// `{0}` = min days, `{1}` = max days.
+pub const T_BIKE_TERM_DAYS: Key = "bike.term.days";
+/// `{0}` = min days, no upper bound published.
+pub const T_BIKE_TERM_DAYS_OPEN: Key = "bike.term.days_open";
+/// `{0}` = the single published percent for this band.
+pub const T_BIKE_TERM_DISCOUNT_ONE: Key = "bike.term.discount_one";
+/// `{0}` = low percent, `{1}` = high percent.
+pub const T_BIKE_TERM_DISCOUNT_RANGE: Key = "bike.term.discount_range";
+pub const T_BIKE_UNITS_TITLE: Key = "bike.units.title";
+pub const T_BIKE_UNITS_EMPTY: Key = "bike.units.empty";
+/// `{0}` = units free, `{1}` = units total.
+pub const T_BIKE_AVAILABILITY: Key = "bike.availability";
+/// `{0}` = units free; the total was not published.
+pub const T_BIKE_AVAILABILITY_FREE: Key = "bike.availability.free";
+/// The API said nothing about availability. Fails closed, names a human.
+pub const T_BIKE_AVAILABILITY_UNKNOWN: Key = "bike.availability.unknown";
+pub const T_BIKE_COLORS_AVAILABLE: Key = "bike.colors.available";
+pub const T_BIKE_COLORS_ALL: Key = "bike.colors.all";
+pub const T_BIKE_MODEL_YEARS: Key = "bike.model_years";
+pub const T_BIKE_SALE_TITLE: Key = "bike.sale.title";
+pub const T_BIKE_SALE_PRICE: Key = "bike.sale.price";
+pub const T_BIKE_ASK_MANAGER: Key = "bike.ask_manager";
+pub const T_BIKE_NOT_OFFERED_TITLE: Key = "bike.not_offered.title";
+/// `{0}` = the families offered instead, already joined with ` · ` (D12).
+pub const T_BIKE_NOT_OFFERED_ALTERNATIVES: Key = "bike.not_offered.alternatives";
+// The five `BookBlock` arms. Issue #9: a family that cannot be booked shows the
+// specs and a disabled control **with the reason named**, never a dead button.
+pub const T_BIKE_BOOK_BLOCKED_NOT_OFFERED: Key = "bike.book.blocked.not_offered";
+pub const T_BIKE_BOOK_BLOCKED_NO_RATE: Key = "bike.book.blocked.no_rate";
+pub const T_BIKE_BOOK_BLOCKED_NO_UNITS: Key = "bike.book.blocked.no_units";
+pub const T_BIKE_BOOK_BLOCKED_UNKNOWN_AVAILABILITY: Key = "bike.book.blocked.unknown_availability";
+pub const T_BIKE_BOOK_BLOCKED_NOT_WIRED: Key = "bike.book.blocked.not_wired";
+
 /// Get translation for a key and language
 pub fn t(lang: Lang, key: Key) -> Value {
     match lang {
@@ -766,6 +853,9 @@ fn get_ru_translation(key: Key) -> Value {
         T_NAV_CART => "Корзина",
         T_NAV_PROFILE => "Профиль",
         T_NAV_MORE => "Ещё",
+        T_NAV_FLEET => "Байки",
+        T_NAV_RIDE => "Заезд",
+        T_NAV_ORDERS => "Заказы",
         // Garden
         T_GARDEN_TITLE => "Мой сад",
         T_GARDEN_SUBTITLE => "Выращивайте и собирайте урожай",
@@ -1431,6 +1521,59 @@ fn get_ru_translation(key: Key) -> Value {
         T_EVENTS_MY_BOOKINGS => "Мои бронирования",
         T_EVENTS_NO_BOOKINGS => "Бронирований пока нет",
         T_EVENTS_CANCEL => "Отмена",
+
+        // Bikes
+        T_BIKE_CATALOG_TITLE => "Байки",
+        T_BIKE_CATALOG_DESC => "Аренда и выкуп на Панган",
+        T_BIKE_FILTER_SCOOTER => "Скутеры",
+        T_BIKE_FILTER_MOTORCYCLE => "Мотоциклы",
+        T_BIKE_FILTER_FREE_NOW => "Свободны сейчас",
+        T_BIKE_SORT_DEFAULT => "По умолчанию",
+        T_BIKE_SORT_PRICE_ASC => "Сначала дешевле",
+        T_BIKE_SORT_PRICE_DESC => "Сначала дороже",
+        T_BIKE_NO_RESULTS => "Под фильтр «{0}» ничего не подошло",
+        T_BIKE_CLASS_SCOOTER => "Скутер",
+        T_BIKE_CLASS_MOTORCYCLE => "Мотоцикл",
+        T_BIKE_CC => "{0} см³",
+        T_BIKE_DETAILS => "Подробнее",
+        T_BIKE_BOOK => "Забронировать",
+        T_BIKE_PRICE_TITLE => "Цена",
+        T_BIKE_RATE_PER_DAY => "Аренда",
+        T_BIKE_PER_DAY => "в сутки",
+        T_BIKE_PRICE_ON_REQUEST => "Цену на эту модель называет менеджер — напишите нам",
+        T_BIKE_TARIFF_BEFORE_DISCOUNT => "Тариф до скидки: {0}",
+        T_BIKE_CLASS_DISCOUNT => "Скидка класса: −{0}%",
+        T_BIKE_DEPOSIT => "Залог:",
+        T_BIKE_MONTHLY_LOW_SEASON => "Месяц в низкий сезон:",
+        T_BIKE_QUOTE_NOTE => "Итоговую сумму подтверждает менеджер: она зависит от срока, сезона и наличия.",
+        T_BIKE_TERMS_TITLE => "Сроки и скидки",
+        T_BIKE_TERMS_NOTE => "Это опубликованные скидки за срок. Точную сумму подтверждает менеджер.",
+        T_BIKE_TERM_WEEK => "Неделя",
+        T_BIKE_TERM_TWO_WEEKS => "Две недели",
+        T_BIKE_TERM_MONTH => "Месяц",
+        T_BIKE_TERM_DAYS => "{0}–{1} дней",
+        T_BIKE_TERM_DAYS_OPEN => "от {0} дней",
+        T_BIKE_TERM_DISCOUNT_ONE => "−{0}%",
+        T_BIKE_TERM_DISCOUNT_RANGE => "−{0}…−{1}%",
+        T_BIKE_UNITS_TITLE => "Наличие",
+        T_BIKE_UNITS_EMPTY => "Сейчас все байки этой модели заняты.",
+        T_BIKE_AVAILABILITY => "Свободно {0} из {1}",
+        T_BIKE_AVAILABILITY_FREE => "Свободно: {0}",
+        T_BIKE_AVAILABILITY_UNKNOWN => "Наличие уточняет менеджер",
+        T_BIKE_COLORS_AVAILABLE => "Свободные цвета:",
+        T_BIKE_COLORS_ALL => "Цвета модели:",
+        T_BIKE_MODEL_YEARS => "Годы выпуска:",
+        T_BIKE_SALE_TITLE => "Выкуп",
+        T_BIKE_SALE_PRICE => "Цена выкупа",
+        T_BIKE_ASK_MANAGER => "Написать менеджеру",
+        T_BIKE_NOT_OFFERED_TITLE => "Эта модель сейчас не сдаётся",
+        T_BIKE_NOT_OFFERED_ALTERNATIVES => "Вместо неё: {0}",
+        T_BIKE_BOOK_BLOCKED_NOT_OFFERED => "Модель закрыта для новых броней",
+        T_BIKE_BOOK_BLOCKED_NO_RATE => "Цена не опубликована — бронь оформляет менеджер",
+        T_BIKE_BOOK_BLOCKED_NO_UNITS => "Все байки этой модели заняты",
+        T_BIKE_BOOK_BLOCKED_UNKNOWN_AVAILABILITY => "Наличие не подтверждено",
+        T_BIKE_BOOK_BLOCKED_NOT_WIRED => "Бронь из приложения ещё не включена — напишите менеджеру",
+
         _ => key,
     }
 }
@@ -1451,6 +1594,9 @@ fn get_en_translation(key: Key) -> Value {
         T_NAV_CART => "Cart",
         T_NAV_PROFILE => "Profile",
         T_NAV_MORE => "More",
+        T_NAV_FLEET => "Bikes",
+        T_NAV_RIDE => "Ride",
+        T_NAV_ORDERS => "Orders",
         // Garden
         T_GARDEN_TITLE => "My Garden",
         T_GARDEN_SUBTITLE => "Grow and harvest your plants",
@@ -2116,6 +2262,59 @@ fn get_en_translation(key: Key) -> Value {
         T_EVENTS_MY_BOOKINGS => "My bookings",
         T_EVENTS_NO_BOOKINGS => "No bookings yet",
         T_EVENTS_CANCEL => "Cancel",
+
+        // Bikes
+        T_BIKE_CATALOG_TITLE => "Bikes",
+        T_BIKE_CATALOG_DESC => "Rent or buy on Koh Phangan",
+        T_BIKE_FILTER_SCOOTER => "Scooters",
+        T_BIKE_FILTER_MOTORCYCLE => "Motorcycles",
+        T_BIKE_FILTER_FREE_NOW => "Free now",
+        T_BIKE_SORT_DEFAULT => "Default",
+        T_BIKE_SORT_PRICE_ASC => "Cheapest first",
+        T_BIKE_SORT_PRICE_DESC => "Priciest first",
+        T_BIKE_NO_RESULTS => "Nothing matches the “{0}” filter",
+        T_BIKE_CLASS_SCOOTER => "Scooter",
+        T_BIKE_CLASS_MOTORCYCLE => "Motorcycle",
+        T_BIKE_CC => "{0} cc",
+        T_BIKE_DETAILS => "Details",
+        T_BIKE_BOOK => "Book",
+        T_BIKE_PRICE_TITLE => "Price",
+        T_BIKE_RATE_PER_DAY => "Rental",
+        T_BIKE_PER_DAY => "per day",
+        T_BIKE_PRICE_ON_REQUEST => "A manager quotes the price for this model — message us",
+        T_BIKE_TARIFF_BEFORE_DISCOUNT => "Tariff before discount: {0}",
+        T_BIKE_CLASS_DISCOUNT => "Class discount: −{0}%",
+        T_BIKE_DEPOSIT => "Deposit:",
+        T_BIKE_MONTHLY_LOW_SEASON => "Monthly, low season:",
+        T_BIKE_QUOTE_NOTE => "A manager confirms the final amount: it depends on term, season and availability.",
+        T_BIKE_TERMS_TITLE => "Terms and discounts",
+        T_BIKE_TERMS_NOTE => "These are the published term discounts. A manager confirms the exact amount.",
+        T_BIKE_TERM_WEEK => "Week",
+        T_BIKE_TERM_TWO_WEEKS => "Two weeks",
+        T_BIKE_TERM_MONTH => "Month",
+        T_BIKE_TERM_DAYS => "{0}–{1} days",
+        T_BIKE_TERM_DAYS_OPEN => "{0}+ days",
+        T_BIKE_TERM_DISCOUNT_ONE => "−{0}%",
+        T_BIKE_TERM_DISCOUNT_RANGE => "−{0}…−{1}%",
+        T_BIKE_UNITS_TITLE => "Availability",
+        T_BIKE_UNITS_EMPTY => "Every bike of this model is out right now.",
+        T_BIKE_AVAILABILITY => "{0} of {1} free",
+        T_BIKE_AVAILABILITY_FREE => "{0} free",
+        T_BIKE_AVAILABILITY_UNKNOWN => "A manager confirms availability",
+        T_BIKE_COLORS_AVAILABLE => "Colours free:",
+        T_BIKE_COLORS_ALL => "Model colours:",
+        T_BIKE_MODEL_YEARS => "Model years:",
+        T_BIKE_SALE_TITLE => "Buy-out",
+        T_BIKE_SALE_PRICE => "Sale price",
+        T_BIKE_ASK_MANAGER => "Message the manager",
+        T_BIKE_NOT_OFFERED_TITLE => "This model is not offered right now",
+        T_BIKE_NOT_OFFERED_ALTERNATIVES => "Offered instead: {0}",
+        T_BIKE_BOOK_BLOCKED_NOT_OFFERED => "Closed to new rentals",
+        T_BIKE_BOOK_BLOCKED_NO_RATE => "No published price — a manager takes this booking",
+        T_BIKE_BOOK_BLOCKED_NO_UNITS => "Every bike of this model is taken",
+        T_BIKE_BOOK_BLOCKED_UNKNOWN_AVAILABILITY => "Availability not confirmed",
+        T_BIKE_BOOK_BLOCKED_NOT_WIRED => "In-app booking is not live yet — message the manager",
+
         _ => key,
     }
 }
@@ -2151,6 +2350,9 @@ pub fn get_translations(lang: Lang) -> Translations {
         T_NAV_EVENTS,
         T_NAV_CART,
         T_NAV_PROFILE,
+        T_NAV_FLEET,
+        T_NAV_RIDE,
+        T_NAV_ORDERS,
         // Garden
         T_GARDEN_TITLE,
         T_GARDEN_SUBTITLE,
@@ -2492,6 +2694,108 @@ mod tests {
         assert_eq!(
             ru.translations.get(T_SUBTITLE),
             Some(&"Пройди 5 точек на Пангане".to_string())
+        );
+    }
+
+    /// This file, read back at compile time so the gate below can enumerate
+    /// the `T_*` declarations.
+    ///
+    /// `include_str!` rather than `std::fs`, because this module is also
+    /// compiled for `wasm32-unknown-unknown`, where there is no filesystem.
+    const THIS_FILE: &str = include_str!("i18n.rs");
+
+    /// Every `pub const T_NAME: Key = "key.literal";` in this file, as
+    /// `(constant_name, key_literal)`.
+    ///
+    /// The declarations are the one place that records which keys exist, so
+    /// the gate reads them instead of a hand-written list — a third copy of
+    /// 706 names would be the very defect it is trying to catch.
+    fn declared_keys() -> Vec<(&'static str, &'static str)> {
+        let mut out = Vec::new();
+        for line in THIS_FILE.lines() {
+            let Some(rest) = line.trim_start().strip_prefix("pub const T_") else {
+                continue;
+            };
+            // `NAME: Key = "key.literal";`
+            let Some((name_part, value_part)) = rest.split_once(": Key = ") else {
+                continue;
+            };
+            let value = value_part.trim();
+            let Some(literal) = value
+                .strip_prefix('"')
+                .and_then(|v| v.split_once('"'))
+                .map(|(lit, _)| lit)
+            else {
+                continue;
+            };
+            out.push((name_part.trim(), literal));
+        }
+        out
+    }
+
+    #[test]
+    fn the_declaration_parser_finds_the_whole_table() {
+        let keys = declared_keys();
+        // A floor, not the exact count: this assertion exists to fail loudly if
+        // the parser silently stops matching (a rustfmt change to the `const`
+        // layout, say) rather than to be updated every time a key is added. A
+        // broken parser would make the parity gate below vacuously green.
+        assert!(
+            keys.len() > 600,
+            "only {} `T_*` declarations parsed out of this file — the parser is \
+             broken, not the table. Every key after the break would be exempt \
+             from the parity gate.",
+            keys.len()
+        );
+        assert!(
+            keys.iter().any(|(_, k)| *k == T_TITLE),
+            "a known key is missing from the parse"
+        );
+    }
+
+    /// Every declared key must resolve in **both** hand-maintained tables.
+    ///
+    /// `get_ru_translation` and `get_en_translation` are two `match` blocks of
+    /// several hundred arms each, both ending `_ => key`. That fallback is why
+    /// this gate has to exist: a key missing from a table does not fail a
+    /// build, does not log, and does not panic — `t()` returns the key itself,
+    /// so the customer reads the literal string `bike.price.title` where the
+    /// price was meant to be. The two tables are a restated list, and nothing
+    /// until now compared them.
+    ///
+    /// Written after 50 `T_BIKE_*` keys were added to all three places by hand
+    /// (the declarations, the ru arms, the en arms). Three hand-edited lists
+    /// that must agree is exactly the shape that needs a test rather than
+    /// care.
+    ///
+    /// One known limitation, stated so it is not mistaken for coverage:
+    /// `has_translation` is `get_*_translation(key) != key`, so a translation
+    /// whose text happens to equal its own key would read as missing. No
+    /// current key has that shape, and the failure direction is safe (a false
+    /// alarm, never a silent pass).
+    #[test]
+    fn every_declared_key_has_a_russian_and_an_english_translation() {
+        let mut missing_ru = Vec::new();
+        let mut missing_en = Vec::new();
+        for (name, key) in declared_keys() {
+            if !has_translation(Lang::Russian, key) {
+                missing_ru.push(format!("T_{name} = {key:?}"));
+            }
+            if !has_translation(Lang::English, key) {
+                missing_en.push(format!("T_{name} = {key:?}"));
+            }
+        }
+        assert!(
+            missing_ru.is_empty() && missing_en.is_empty(),
+            "Declared keys with no translation.\n\
+             Missing from get_ru_translation ({}): {:#?}\n\
+             Missing from get_en_translation ({}): {:#?}\n\
+             Each of these renders as its own key on screen, because both \
+             tables end `_ => key`.",
+            missing_ru.len(),
+            missing_ru,
+            missing_en.len(),
+            missing_en
         );
     }
 

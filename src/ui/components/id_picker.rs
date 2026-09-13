@@ -1,13 +1,13 @@
 //! Multi-select picker for "comma-separated IDs" admin fields.
 //!
 //! Pre-cycle: the Sets / Accessory Sets / Tea Sets tabs asked the
-//! admin to paste comma-separated IDs of strains, accessories, and tea
+//! admin to paste comma-separated IDs of bikes, accessories, and tea
 //! products into a plain `<textarea>`. Admins had to leave the form,
 //! look up IDs in another tab, copy them back, and hope they spelled
 //! everything correctly. User-reported as «не понимаю как добавлять».
 //!
 //! This component replaces that flow with a searchable checkbox list:
-//! options come from the already-loaded catalog (`AdminStrain`,
+//! options come from the already-loaded catalog (`AdminBike`,
 //! `AdminAccessory`, …), the admin sees real names, picks with
 //! checkboxes, and the surrounding form receives a `Vec<String>` of
 //! selected IDs without any manual string handling.
@@ -16,7 +16,7 @@ use dioxus::prelude::*;
 
 #[derive(Clone, PartialEq, Props)]
 pub struct IdPickerProps {
-    /// Label shown above the picker. e.g. "Strains" or "Accessories".
+    /// Label shown above the picker. e.g. "Bikes" or "Accessories".
     pub label: String,
     /// Catalog of `(id, display_label)` pairs the admin can pick from.
     /// Order is preserved as the render order.
@@ -106,7 +106,7 @@ pub fn IdPicker(props: IdPickerProps) -> Element {
                     }
                     // Selected pills (clickable to deselect). A pill
                     // whose id doesn't resolve in the current catalog
-                    // (e.g. the underlying strain was deleted after the
+                    // (e.g. the underlying bike was deleted after the
                     // set was created) is rendered with a warning style
                     // so the admin notices and can decide whether to
                     // remove the stale reference or repopulate the

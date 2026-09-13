@@ -84,48 +84,21 @@ pub fn user_registered() {
     counter!("users_registered_total").increment(1);
 }
 
-/// Increment when a garden reward is successfully claimed.
-pub fn garden_reward_claimed() {
-    counter!("garden_rewards_claimed_total").increment(1);
-}
-
-/// Loop #17: a garden water/harvest/expiry reminder was sent by the server sweep.
-pub fn garden_reminder_sent(kind: &str) {
-    counter!(
-        "garden_reminder_sent_total",
-        "kind" => kind.to_string()
-    )
-    .increment(1);
-}
-
-/// Loop #17: a garden streak was broken (user missed >48h between waters).
-pub fn garden_streak_broken() {
-    counter!("garden_streak_broken_total").increment(1);
-}
-
-/// Loop #17: a streak milestone was reached (3, 7, 14, 30, …). The streak
-/// value is emitted as a label so dashboards can track milestone distribution.
-pub fn garden_streak_milestone(streak: i64) {
-    counter!(
-        "garden_streak_milestone_total",
-        "streak" => streak.to_string()
-    )
-    .increment(1);
-}
-
-/// Loop #17: a garden reward expired unused.
-pub fn garden_reward_expired() {
-    counter!("garden_rewards_expired_total").increment(1);
-}
-
-/// Loop #17: a reward expiry FOMO nudge was sent (24h or 4h before expiry).
-pub fn garden_reward_expiry_nudge_sent(hours_before: i64) {
-    counter!(
-        "garden_reward_expiry_nudge_sent_total",
-        "hours" => hours_before.to_string()
-    )
-    .increment(1);
-}
+// Nine metric helpers stood here and were deleted on 2026-09-13: the eight
+// garden counters (reward claimed/expired/nudged, reminder sent, streak broken,
+// streak milestone, achievement unlocked, leaderboard viewed) and
+// `share_event_logged`. D5 removed the mechanic that called them, and
+// `metric_wiring_tests::every_metric_helper_is_wired` measured all nine at zero
+// call sites.
+//
+// Deleted rather than allowlisted. A metric helper is three lines and a counter
+// name; if the garden ever returns, re-adding one costs less than carrying a
+// rationale comment that says "not wired yet" for a feature that was removed,
+// which is how `ALLOWED_UNUSED_METRICS` turns into a graveyard. It stays empty,
+// and that is the honest state: every helper this file declares is wired.
+//
+// The eleven garden helpers that remain are still called — see DECISIONS.md D18
+// for why the removal is not finished.
 
 /// Loop #17: customer opened the garden screen.
 pub fn garden_screen_opened(source: &str) {
@@ -154,33 +127,6 @@ pub fn garden_choose_product_tapped() {
 /// Loop #17: customer reset their garden plant.
 pub fn garden_reset_tapped() {
     counter!("garden_reset_tapped_total").increment(1);
-}
-
-/// Loop #18: a garden achievement was unlocked.
-pub fn garden_achievement_unlocked(achievement_id: &str) {
-    counter!(
-        "garden_achievement_unlocked_total",
-        "achievement_id" => achievement_id.to_string()
-    )
-    .increment(1);
-}
-
-/// Loop #18: a user viewed the garden leaderboard.
-pub fn garden_leaderboard_viewed(kind: &str) {
-    counter!(
-        "garden_leaderboard_viewed_total",
-        "kind" => kind.to_string()
-    )
-    .increment(1);
-}
-
-/// Loop #18: a share event was logged by the client.
-pub fn share_event_logged(content_kind: &str) {
-    counter!(
-        "share_event_logged_total",
-        "content_kind" => content_kind.to_string()
-    )
-    .increment(1);
 }
 
 /// Loop #19: a user accepted a garden invite deep-link and recorded a referral.
@@ -437,11 +383,6 @@ mod tests {
     }
 
     #[test]
-    fn test_garden_reward_claimed_does_not_panic() {
-        garden_reward_claimed();
-    }
-
-    #[test]
     fn test_qr_scanned_does_not_panic() {
         qr_scanned(true);
         qr_scanned(false);
@@ -472,11 +413,12 @@ mod tests {
         rate_limit_blocked("upload");
     }
 
+    // These smoke tests were the ONLY callers of the nine helpers deleted
+    // above, which is why `every_metric_helper_is_wired` was right to call them
+    // unwired: it counts call sites in production code and does not count its
+    // own test module, or every helper would wire itself.
     #[test]
     fn test_garden_social_metrics_do_not_panic() {
-        garden_achievement_unlocked("garden_first_water");
-        garden_leaderboard_viewed("streak");
-        share_event_logged("garden");
         garden_invite_accepted("utm_a");
         garden_invite_failed("db");
     }

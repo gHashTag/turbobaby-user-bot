@@ -4,7 +4,7 @@
 // the original `#![cfg(target_arch = "wasm32")]`-gated content from
 // before this cycle. The backend half exposes the same modules
 // `src/main.rs` already declares, so `tests/*.rs` integration tests can
-// reach `woody_weed_bot::api::router`, `woody_weed_bot::AppState`, etc.
+// reach `turbobaby_bot::api::router`, `turbobaby_bot::AppState`, etc.
 // Both halves coexist by `cfg`, so the WASM `cdylib` build pulls only
 // the WASM tree and the native `rlib` build pulls only the backend tree.
 

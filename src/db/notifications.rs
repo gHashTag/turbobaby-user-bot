@@ -24,19 +24,15 @@ pub(crate) async fn enqueue_friend_joined(
     insert_queue_row(orm, referrer_id, "friend_joined", payload).await
 }
 
-/// Queue a "your friend watered their plant" notification.
-pub(crate) async fn enqueue_friend_watered(
-    orm: &sea_orm::DatabaseConnection,
-    referrer_id: i64,
-    referred_name: &str,
-    streak: i64,
-) -> Result<()> {
-    let payload = json!({
-        "referred_name": referred_name,
-        "streak": streak,
-    });
-    insert_queue_row(orm, referrer_id, "friend_watered", payload).await
-}
+// `enqueue_friend_watered` stood here. Watering was a garden action (D5), so
+// nothing can produce that event any more and the writer was dead code.
+//
+// Its reader was NOT deleted: `render_referral_text` in
+// src/notification_queue.rs still has a `"friend_watered"` arm. The queue is a
+// Postgres table, and a deployed database can hold rows written before the
+// mechanic was removed. Deleting the arm would make those rows render as the
+// fallback text instead of the message they were queued for. Writer and reader
+// have different lifetimes here: the writer is code, the rows are data.
 
 /// Queue a "your friend placed their first order" notification.
 pub(crate) async fn enqueue_friend_ordered(

@@ -23,8 +23,8 @@ use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QueryOrder};
 use serde_json::json;
 use tower::ServiceExt;
 
-use woody_weed_bot::api::auth::generate_admin_token;
-use woody_weed_bot::db::entities::bonus_transaction::{Column as BtCol, Entity as BtEntity};
+use turbobaby_bot::api::auth::generate_admin_token;
+use turbobaby_bot::db::entities::bonus_transaction::{Column as BtCol, Entity as BtEntity};
 
 #[tokio::test]
 #[ignore = "needs DATABASE_URL env var; run with --ignored"]

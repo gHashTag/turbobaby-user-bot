@@ -287,7 +287,7 @@ pub fn BikeCard(props: BikeCardProps) -> Element {
                     variant: if can_add { ButtonVariant::Primary } else { ButtonVariant::Ghost },
                     disabled: !can_add,
                     onclick: move |_| {
-                        props.on_add_to_cart.call(bike_for_callback.clone());
+                        on_add_to_cart.call(bike_for_callback.clone());
                     },
                     if can_add {
                         "{add_label} 🛒"

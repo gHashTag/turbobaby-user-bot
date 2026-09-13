@@ -74,7 +74,7 @@ async fn plants_on_boot(app: &axum::Router) -> Vec<serde_json::Value> {
     body["plants"].as_array().cloned().unwrap_or_default()
 }
 
-async fn a_garden_eligible_strain(db: &woody_weed_bot::db::Database) -> String {
+async fn a_garden_eligible_strain(db: &turbobaby_bot::db::Database) -> String {
     db.orm
         .execute(Statement::from_string(
             DbBackend::Postgres,

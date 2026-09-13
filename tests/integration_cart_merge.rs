@@ -1,12 +1,14 @@
 //! Regression test for the `POST /api/cart/merge` 5xx on prod.
 //!
-//! Both `carts.telegram_id` and `cart_items (cart_id, kind, catalog_id)` are
-//! UNIQUE, and the handler used to read-then-insert against them. Two merges
-//! landing at once for the same user — which is exactly what a double-tapped
-//! "reorder" button produces — raced: the loser hit a duplicate-key error,
-//! which the handler mapped to `INTERNAL_SERVER_ERROR`. Inside the merge
-//! transaction the failed statement also aborted every write before it, so a
-//! multi-item cart could be silently dropped.
+//! Both `carts.telegram_id` and migration 081's partial unique index over
+//! undated `cart_items (cart_id, kind, catalog_id)` serialize writes to one
+//! logical row. The handler used to read-then-insert against the predecessor
+//! constraints. Two merges landing at once for the same user — which is
+//! exactly what a double-tapped "reorder" button produces — raced: the loser
+//! hit a duplicate-key error, which the handler mapped to
+//! `INTERNAL_SERVER_ERROR`. Inside the merge transaction the failed statement
+//! also aborted every write before it, so a multi-item cart could be silently
+//! dropped.
 //!
 //! The handler now upserts (`ON CONFLICT`) instead, so both writers succeed
 //! and Postgres serializes them.
@@ -38,9 +40,8 @@ async fn concurrent_merges_do_not_500_and_sum_quantities() {
         return;
     };
 
-    let Some(strain_id) = first_strain_id(&db).await else {
-        eprintln!("no strains seeded — skipping");
-        return;
+    let Some(accessory_id) = first_available_accessory_id(&db).await else {
+        panic!("the integration database has no available accessory fixture");
     };
     let tid: i64 = 999_800_000 + (std::process::id() as i64 % 100_000);
     cleanup(&db, tid).await;
@@ -49,8 +50,8 @@ async fn concurrent_merges_do_not_500_and_sum_quantities() {
         "telegram_id": tid,
         "items": [{
             "id": "",
-            "kind": "strain",
-            "catalog_id": strain_id,
+            "kind": "accessory",
+            "catalog_id": accessory_id,
             "quantity": 2,
             "unit_price": 0.0,
             "name": "",
@@ -84,17 +85,16 @@ async fn duplicate_lines_in_one_payload_are_summed_not_rejected() {
         return;
     };
 
-    let Some(strain_id) = first_strain_id(&db).await else {
-        eprintln!("no strains seeded — skipping");
-        return;
+    let Some(accessory_id) = first_available_accessory_id(&db).await else {
+        panic!("the integration database has no available accessory fixture");
     };
     let tid: i64 = 999_700_000 + (std::process::id() as i64 % 100_000);
     cleanup(&db, tid).await;
 
     let line = json!({
         "id": "",
-        "kind": "strain",
-        "catalog_id": strain_id,
+        "kind": "accessory",
+        "catalog_id": accessory_id,
         "quantity": 3,
         "unit_price": 0.0,
         "name": "",
@@ -134,11 +134,16 @@ async fn post_merge(app: axum::Router, tid: i64, body: serde_json::Value) -> Sta
     status
 }
 
-async fn first_strain_id(db: &woody_weed_bot::db::Database) -> Option<String> {
-    scalar::<String>(db, "SELECT id FROM strains LIMIT 1", "id").await
+async fn first_available_accessory_id(db: &turbobaby_bot::db::Database) -> Option<String> {
+    scalar::<String>(
+        db,
+        "SELECT id FROM accessories WHERE is_available = true ORDER BY id LIMIT 1",
+        "id",
+    )
+    .await
 }
 
-async fn cart_count(db: &woody_weed_bot::db::Database, tid: i64) -> i64 {
+async fn cart_count(db: &turbobaby_bot::db::Database, tid: i64) -> i64 {
     scalar::<i64>(
         db,
         &format!("SELECT count(*)::int8 AS n FROM carts WHERE telegram_id = {tid}"),
@@ -149,7 +154,7 @@ async fn cart_count(db: &woody_weed_bot::db::Database, tid: i64) -> i64 {
 }
 
 /// `(number of cart_items rows, total quantity)` for the user's cart.
-async fn cart_line_state(db: &woody_weed_bot::db::Database, tid: i64) -> (i64, i64) {
+async fn cart_line_state(db: &turbobaby_bot::db::Database, tid: i64) -> (i64, i64) {
     let sql = format!(
         "SELECT count(*)::int8 AS n, COALESCE(sum(quantity), 0)::int8 AS q \
          FROM cart_items i JOIN carts c ON c.id = i.cart_id WHERE c.telegram_id = {tid}"
@@ -167,7 +172,7 @@ async fn cart_line_state(db: &woody_weed_bot::db::Database, tid: i64) -> (i64, i
 }
 
 async fn scalar<T: TryGetable>(
-    db: &woody_weed_bot::db::Database,
+    db: &turbobaby_bot::db::Database,
     sql: &str,
     col: &str,
 ) -> Option<T> {
@@ -179,7 +184,7 @@ async fn scalar<T: TryGetable>(
         .and_then(|r| r.try_get("", col).ok())
 }
 
-async fn cleanup(db: &woody_weed_bot::db::Database, tid: i64) {
+async fn cleanup(db: &turbobaby_bot::db::Database, tid: i64) {
     // cart_items cascades from carts.
     let _ = db
         .orm

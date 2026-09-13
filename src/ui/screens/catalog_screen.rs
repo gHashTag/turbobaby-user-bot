@@ -7,8 +7,9 @@
 //!
 //! # The one money rule (D9, D11)
 //!
-//! `rate_day_thb`, `deposit_thb`, `monthly_low_season_thb` and
-//! `sale_price_thb` are nullable from the column to the pixel. A number this
+//! `client_rate_thb_day`, `base_rate_thb_day`, `deposit_thb`,
+//! `monthly_low_season_thb` and `sale_price_thb` are nullable from the column
+//! to the pixel. A number this
 //! shop has not published is rendered by [`money_thb`] as [`MONEY_DASH`] and
 //! by nothing else — there is no `unwrap_or(0.0)`, no `unwrap_or_default()`
 //! and no average in this file or in `bike_detail.rs`, because `฿0` on a
@@ -27,16 +28,14 @@
 //!
 //! `base_rate_thb_day` is the **pre**-class-discount published tariff.
 //! Showing it as "the price" overstates every scooter by 33% and every
-//! motorcycle by 18%. So the big number on a card is always the client price:
-//! `rate_day_thb` when the API carries the door's number, otherwise the
-//! published tariff with the published class discount applied and rounded
-//! half-up — the arithmetic the owner's own quote sheet uses, reconciled to
-//! the baht on six models in `data/fleet_seed.json` (`reconciliation.checks`).
-//! The pre-discount tariff appears only on a line that says it is
-//! pre-discount, and never alone.
+//! motorcycle by 18%. It and `class_discount` are reference facts, never
+//! inputs to the big number on a card. That client price exists only when
+//! `client_rate_thb_day` carries a valid number returned by the door. The
+//! pre-discount tariff may appear only beside such a door result, on a line
+//! that says it is pre-discount, and never alone.
 //!
-//! When neither number exists the screen says a manager quotes this price and
-//! emits no number at all — D11 forbids invention and silence equally.
+//! When the door returns no valid number the screen says a manager quotes this
+//! price and emits no number at all — D11 forbids invention and silence equally.
 //!
 //! # What is not here (D6, D14)
 //!
@@ -48,9 +47,9 @@
 
 use crate::trios::core::Lang;
 use crate::trios::i18n::{
-    t, tf, Key, T_BIKE_AVAILABILITY, T_BIKE_AVAILABILITY_UNKNOWN, T_BIKE_BOOK_BLOCKED_NO_RATE,
-    T_BIKE_BOOK_BLOCKED_NO_UNITS, T_BIKE_BOOK_BLOCKED_NOT_OFFERED,
-    T_BIKE_BOOK_BLOCKED_NOT_WIRED, T_BIKE_BOOK_BLOCKED_UNKNOWN_AVAILABILITY, T_BIKE_CATALOG_DESC,
+    t, tf, Key, T_BIKE_AVAILABILITY, T_BIKE_AVAILABILITY_FREE, T_BIKE_AVAILABILITY_UNKNOWN,
+    T_BIKE_BOOK_BLOCKED_NOT_OFFERED, T_BIKE_BOOK_BLOCKED_NOT_WIRED, T_BIKE_BOOK_BLOCKED_NO_RATE,
+    T_BIKE_BOOK_BLOCKED_NO_UNITS, T_BIKE_BOOK_BLOCKED_UNKNOWN_AVAILABILITY, T_BIKE_CATALOG_DESC,
     T_BIKE_CATALOG_TITLE, T_BIKE_CC, T_BIKE_CLASS_DISCOUNT, T_BIKE_CLASS_MOTORCYCLE,
     T_BIKE_CLASS_SCOOTER, T_BIKE_DEPOSIT, T_BIKE_DETAILS, T_BIKE_FILTER_FREE_NOW,
     T_BIKE_FILTER_MOTORCYCLE, T_BIKE_FILTER_SCOOTER, T_BIKE_NOT_OFFERED_ALTERNATIVES,
@@ -100,8 +99,21 @@ pub struct ApiBike {
     /// The client-facing per-day price — the door's number, post class
     /// discount. `None` when the shop publishes none (D11: then a human
     /// quotes it and the bot emits no number).
+    ///
+    /// The name is the served one: `api::bikes::family_json` inserts
+    /// `client_rate_thb_day` next to `client_rate_source`, and its
+    /// `client_rate` seam answers `(None, "unavailable")` for every family
+    /// until issue #7 wires the door — so today this is `null` on every card
+    /// and the screen says a manager quotes the price.
+    #[serde(default, alias = "rate_day_thb")]
+    pub client_rate_thb_day: Option<f64>,
+    /// `door` when the number above came from the owner's live sheet,
+    /// `unavailable` when there is none. Carried so the contract is visible
+    /// in the type; the shared boundary requires both a valid number and the
+    /// `door` source, because either field alone is still no authoritative
+    /// client price.
     #[serde(default)]
-    pub rate_day_thb: Option<f64>,
+    pub client_rate_source: Option<String>,
     /// The published tariff **before** the class discount. Never shown alone.
     #[serde(default)]
     pub base_rate_thb_day: Option<f64>,
@@ -118,7 +130,8 @@ pub struct ApiBike {
     pub sale_price_thb: Option<f64>,
     /// Whether this family is offered for sale at all. `None` means the API
     /// does not say, and the detail screen falls back to "there is a
-    /// published sale price" rather than claiming anything.
+    /// published sale price" rather than claiming anything — which is the
+    /// live case: `api::bikes` serves no `for_sale` field today.
     #[serde(default)]
     pub for_sale: Option<bool>,
     /// `Some(false)` closes the family to new rentals (D12: CLICK 125).
@@ -127,11 +140,32 @@ pub struct ApiBike {
     /// rate and a free unit exist.
     #[serde(default)]
     pub offered: Option<bool>,
+    /// Rentable units — everything except `retired`. **Detail only**:
+    /// `GET /api/bikes` runs no unit query, so on a list card this is `None`
+    /// and the availability line says only how many are free.
     #[serde(default)]
     pub units_total: Option<i64>,
+    /// Units in status `available` right now. Served by both endpoints.
     #[serde(default)]
     pub units_available: Option<i64>,
+    /// Count per unit status, all four statuses always present. Parsed so the
+    /// served contract is visible in the type and **deliberately not
+    /// rendered**: how many machines are in service is shop state a customer
+    /// cannot act on, and D6 keeps service state out of the public catalog.
+    #[serde(default)]
+    pub unit_status_counts: std::collections::BTreeMap<String, i64>,
+    /// Colours on record across the rentable units, sorted and de-duplicated.
+    #[serde(default)]
+    pub colors: Vec<String>,
+    /// Colours of the units that are free right now — a subset of `colors`.
+    #[serde(default)]
+    pub colors_available: Vec<String>,
+    /// Model years on record across the rentable units.
+    #[serde(default)]
+    pub model_years: Vec<i32>,
     /// Display names of the families offered instead of a closed one (D12).
+    /// `api::bikes` serves no such field yet, so the CLICK 125 redirect below
+    /// is what actually feeds this today.
     #[serde(default)]
     pub offer_instead: Vec<String>,
     #[serde(default)]
@@ -144,30 +178,15 @@ pub struct ApiBike {
     pub sort_order: Option<i32>,
 }
 
-/// One physical unit of a family.
-///
-/// D14: there is deliberately no field here for a renter, a handle, a phone,
-/// a debt, a key code, a TAX or insurance date, a purchase cost or a plate.
-/// Issue #8 pins the same rule on the API side: the unit payload exposes
-/// `status` and nothing about who has the bike.
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-pub struct ApiBikeUnit {
-    /// Internal unit code. **Not** a plate number (D14).
-    pub unit_code: String,
-    #[serde(default)]
-    pub model_year: Option<i32>,
-    #[serde(default)]
-    pub color: Option<String>,
-    /// Kilometres travelled **since TurboBaby bought this unit** — not the
-    /// odometer. One unit reads 2900 since purchase against 16433 on the
-    /// clock, so this must never be labelled odometer or mileage
-    /// (`fleet_seed.json:field_notes.km_since_purchase`).
-    #[serde(default)]
-    pub km_since_purchase: Option<i64>,
-    /// `available` | `rented` | `service` | `retired`.
-    #[serde(default)]
-    pub status: Option<String>,
-}
+// There is deliberately no per-unit wire type here.
+//
+// `api::bikes` narrows a unit row to `status`, `color` and `model_year` at the
+// boundary and publishes only the rollup above (counts, colours, model years):
+// `unit_code` is a shop-internal slot label, `km_since_purchase` counts the
+// kilometres ridden since TurboBaby bought the machine — not an odometer, so
+// it has no honest public label — and nothing from `bike_service_records` is
+// read at all (D6, D14). A struct with those fields in it would be a UI asking
+// for data the API is right not to serve.
 
 /// One published term band (`week` | `two_weeks` | `month`).
 ///
@@ -186,15 +205,16 @@ pub struct ApiRentalTerm {
     pub discount_max: Option<f64>,
 }
 
-/// `GET /api/bikes/:slug` — a family plus its units and its term ladder.
+/// `GET /api/bikes/:key` — `{ "bike": { …family…, …rollup… } }`.
+///
+/// The units and the term ladder are **not** in here: the rollup is flattened
+/// into the family object itself, and the bands come from
+/// `GET /api/rental-terms`, which is one document for the whole shop rather
+/// than a per-family copy of it.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct BikeDetailPayload {
     #[serde(alias = "family")]
     pub bike: ApiBike,
-    #[serde(default)]
-    pub units: Vec<ApiBikeUnit>,
-    #[serde(default)]
-    pub terms: Vec<ApiRentalTerm>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -202,18 +222,12 @@ struct BikesResponse {
     bikes: Vec<ApiBike>,
 }
 
-/// Accepts the flat detail shape (`{ key, brand, …, units, terms }`) as well
-/// as the wrapped one. Written because the API and this screen are built by
-/// two different workers in the same wave: the field *names* are the contract,
-/// the envelope is not worth a broken screen.
+/// `GET /api/rental-terms` — the published bands, plus the class ladder the
+/// family object already carries per family.
 #[derive(Debug, Deserialize)]
-struct FlatBikeDetail {
-    #[serde(flatten)]
-    bike: ApiBike,
+struct RentalTermsResponse {
     #[serde(default)]
-    units: Vec<ApiBikeUnit>,
-    #[serde(default)]
-    terms: Vec<ApiRentalTerm>,
+    term_bands: Vec<ApiRentalTerm>,
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -255,14 +269,6 @@ pub fn money_thb(value: Option<f64>) -> String {
     }
 }
 
-/// The integer twin of [`money_thb`] for counts, years, cc and kilometres.
-pub fn int_or_dash(value: Option<i64>) -> String {
-    match value {
-        Some(v) => v.to_string(),
-        None => MONEY_DASH.to_string(),
-    }
-}
-
 /// Keeps only a discount that is a fraction of 1 (0.25 = 25%).
 ///
 /// A value outside `0.0..1.0` means the field is not what this code thinks it
@@ -281,27 +287,20 @@ pub fn discount_percent(value: Option<f64>) -> Option<i64> {
     discount_fraction(value).map(|v| (v * 100.0).round() as i64)
 }
 
-/// The per-day price a client actually pays, or `None`.
+/// The authoritative per-day client price, or `None` when the door supplied
+/// no valid number.
 ///
-/// Preference order:
-/// 1. `rate_day_thb` — the door's own client-facing number (D11: the door is
-///    the authority and is never recomputed when it can be asked).
-/// 2. the published tariff with the published class discount applied, rounded
-///    half-up. `f64::round` rounds half away from zero, which for a positive
-///    price is half-up, and that reproduces the owner's quote sheet to the
-///    baht on all six reconciled models (939 -> 704, 998 -> 749, 690 -> 518,
-///    790 -> 593, 449 -> 337, 2788 -> 2091). The rounding has to happen here
-///    because `format_baht` truncates, and truncation would print 748 where
-///    the owner's sheet says 749.
-/// 3. `None` — and then the caller says a manager quotes this price and shows
-///    no number at all. It never falls back to the pre-discount tariff.
-pub fn client_rate_thb_day(bike: &ApiBike) -> Option<f64> {
-    if let Some(from_door) = finite_money(bike.rate_day_thb) {
-        return Some(from_door);
-    }
-    let base = finite_money(bike.base_rate_thb_day)?;
-    let discount = discount_fraction(bike.class_discount)?;
-    finite_money(Some((base * (1.0 - discount)).round()))
+/// D11 forbids deriving a client price from `base_rate_thb_day` and
+/// `class_discount`, so neither field enters this function's result. Until
+/// issue #7 wires the door the API serves `client_rate_thb_day: null`, and the
+/// caller says a manager quotes the price without emitting a number.
+pub fn client_day_rate(bike: &ApiBike) -> Option<f64> {
+    crate::trios::pricing::client_day_rate(
+        bike.client_rate_thb_day,
+        bike.client_rate_source.as_deref(),
+        bike.base_rate_thb_day,
+        bike.class_discount,
+    )
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -345,7 +344,7 @@ pub fn book_block(bike: &ApiBike, booking_wired: bool) -> Option<BookBlock> {
     if bike.offered == Some(false) {
         return Some(BookBlock::NotOffered);
     }
-    if client_rate_thb_day(bike).is_none() {
+    if client_day_rate(bike).is_none() {
         return Some(BookBlock::NoPublishedRate);
     }
     match bike.units_available {
@@ -410,13 +409,23 @@ fn class_badge_style(class: &str) -> String {
     )
 }
 
-/// `Свободно 5 из 10`, or "a manager confirms availability" when the API did
-/// not say. Never "0 of 0" invented from a missing field.
+/// `Свободно 5 из 10` on the detail screen, `Свободно 5` on a list card, or "a
+/// manager confirms availability" when the API did not say. Never "0 of 0"
+/// invented from a missing field.
+///
+/// The two shapes are not cosmetic: `GET /api/bikes` runs no unit query and so
+/// carries `units_available` without `units_total`, while
+/// `GET /api/bikes/:key` carries both. Printing the free count against a total
+/// that was never served would have to invent the total, so the list says only
+/// what it was told.
 pub fn availability_line(bike: &ApiBike, lang: Lang) -> String {
     match (bike.units_available, bike.units_total) {
-        (Some(free), Some(total)) if free >= 0 && total > 0 => {
-            tf(lang, T_BIKE_AVAILABILITY, &[free.to_string(), total.to_string()])
-        }
+        (Some(free), Some(total)) if free >= 0 && total > 0 => tf(
+            lang,
+            T_BIKE_AVAILABILITY,
+            &[free.to_string(), total.to_string()],
+        ),
+        (Some(free), _) if free >= 0 => tf(lang, T_BIKE_AVAILABILITY_FREE, &[free.to_string()]),
         _ => t(lang, T_BIKE_AVAILABILITY_UNKNOWN).to_string(),
     }
 }
@@ -438,10 +447,11 @@ pub fn offer_instead_labels(bike: &ApiBike) -> Vec<String> {
 /// The localised description, falling back to the Russian text (D13: ru is
 /// primary and there is no Thai). `localized` reads the language itself.
 pub fn description_for(bike: &ApiBike) -> String {
-    crate::ui::lang::localized(
-        bike.description_ru.as_deref().unwrap_or_default(),
-        bike.description_en.as_deref(),
-    )
+    let ru = match bike.description_ru.as_deref() {
+        Some(text) => text,
+        None => "",
+    };
+    crate::ui::lang::localized(ru, bike.description_en.as_deref())
 }
 
 /// Only http(s) or root-relative image paths reach `CardMedia` (the same
@@ -501,19 +511,20 @@ fn matches_query(bike: &ApiBike, query: &str) -> bool {
     if query.is_empty() {
         return true;
     }
-    let mut haystack = format!(
-        "{} {} {} {}",
-        bike.brand,
-        bike.model,
-        bike.variant_label.clone().unwrap_or_default(),
-        bike.body.clone().unwrap_or_default()
-    )
-    .to_lowercase();
+    let mut haystack = format!("{} {}", bike.brand, bike.model);
+    if let Some(variant) = bike.variant_label.as_deref() {
+        haystack.push(' ');
+        haystack.push_str(variant);
+    }
+    if let Some(body) = bike.body.as_deref() {
+        haystack.push(' ');
+        haystack.push_str(body);
+    }
     if let Some(cc) = bike.displacement_cc {
         haystack.push(' ');
         haystack.push_str(&cc.to_string());
     }
-    haystack.contains(query)
+    haystack.to_lowercase().contains(query)
 }
 
 fn filter_tab_style(is_active: bool) -> String {
@@ -557,20 +568,33 @@ pub async fn fetch_bikes() -> Result<Vec<ApiBike>, String> {
     serde_json::from_str::<Vec<ApiBike>>(&text).map_err(|_| fetch_error(0))
 }
 
-/// `GET /api/bikes/:slug` — one family with its units and term ladder.
+/// `GET /api/bikes/:key` — one family and its unit rollup.
+///
+/// Accepts the bare family object as well as the `{ "bike": … }` envelope the
+/// handler sends: the field *names* are the contract worth depending on, and
+/// an envelope rename should not blank a screen.
 pub async fn fetch_bike_detail(slug: &str) -> Result<BikeDetailPayload, String> {
     let text = get_text(&format!("{}/api/bikes/{}", api_base_url(), slug)).await?;
     if let Ok(payload) = serde_json::from_str::<BikeDetailPayload>(&text) {
         return Ok(payload);
     }
-    match serde_json::from_str::<FlatBikeDetail>(&text) {
-        Ok(flat) => Ok(BikeDetailPayload {
-            bike: flat.bike,
-            units: flat.units,
-            terms: flat.terms,
-        }),
+    match serde_json::from_str::<ApiBike>(&text) {
+        Ok(bike) => Ok(BikeDetailPayload { bike }),
         Err(_) => Err(fetch_error(0)),
     }
+}
+
+/// `GET /api/rental-terms` — the published term bands, shop-wide.
+///
+/// The bands are a *range* per term (`discount_min`…`discount_max`) and the
+/// exact number a customer pays comes from a manager (D11), so nothing here is
+/// ever multiplied into a quote.
+pub async fn fetch_rental_terms() -> Result<Vec<ApiRentalTerm>, String> {
+    let text = get_text(&format!("{}/api/rental-terms", api_base_url())).await?;
+    if let Ok(resp) = serde_json::from_str::<RentalTermsResponse>(&text) {
+        return Ok(resp.term_bands);
+    }
+    serde_json::from_str::<Vec<ApiRentalTerm>>(&text).map_err(|_| fetch_error(0))
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -708,10 +732,10 @@ pub fn CatalogScreen() -> Element {
                             .collect();
                         match sort_val.as_str() {
                             SORT_PRICE_ASC => filtered.sort_by(|a, b| {
-                                cmp_rate(client_rate_thb_day(a), client_rate_thb_day(b), false)
+                                cmp_rate(client_day_rate(a), client_day_rate(b), false)
                             }),
                             SORT_PRICE_DESC => filtered.sort_by(|a, b| {
-                                cmp_rate(client_rate_thb_day(a), client_rate_thb_day(b), true)
+                                cmp_rate(client_day_rate(a), client_day_rate(b), true)
                             }),
                             _ => filtered.sort_by(|a, b| default_sort_key(a).cmp(&default_sort_key(b))),
                         }
@@ -802,7 +826,7 @@ where
     let name = display_name(&bike);
     let emoji = class_emoji(&bike.class);
     let is_offered = bike.offered != Some(false);
-    let rate = client_rate_thb_day(&bike);
+    let rate = client_day_rate(&bike);
     let rate_str = money_thb(rate);
     let has_rate = rate.is_some();
     let deposit_str = money_thb(bike.deposit_thb);
@@ -812,7 +836,8 @@ where
     // like a second price.
     let show_tariff_before = match (rate, tariff_before) {
         (Some(client), Some(published)) => (published - client).abs() >= 1.0,
-        (None, Some(_)) => false,
+        // With no client price the pre-discount tariff must not stand in for
+        // one (D11), so it is not shown at all — not even as a "from" number.
         _ => false,
     };
     let tariff_line = tf(
@@ -953,7 +978,8 @@ mod tests {
             class: "scooter".to_string(),
             body: None,
             displacement_cc: Some(155),
-            rate_day_thb: rate,
+            client_rate_thb_day: rate,
+            client_rate_source: rate.map(|_| "door".to_string()),
             base_rate_thb_day: base,
             class_discount: discount,
             deposit_thb: None,
@@ -963,6 +989,10 @@ mod tests {
             offered: Some(true),
             units_total: Some(10),
             units_available: Some(5),
+            unit_status_counts: std::collections::BTreeMap::new(),
+            colors: Vec::new(),
+            colors_available: Vec::new(),
+            model_years: Vec::new(),
             offer_instead: Vec::new(),
             description_ru: None,
             description_en: None,
@@ -984,28 +1014,42 @@ mod tests {
     }
 
     #[test]
-    fn client_rate_applies_the_class_discount_half_up() {
-        // The six reconciled models from data/fleet_seed.json.
-        for (base, expected) in [
-            (939.0, 704.0),
-            (998.0, 749.0),
-            (690.0, 518.0),
-            (790.0, 593.0),
-            (449.0, 337.0),
-            (2788.0, 2091.0),
-        ] {
+    fn a_silent_door_never_computes_a_client_rate_from_file_inputs() {
+        // The six reconciled base tariffs are deliberately present alongside
+        // their class discount. None may become a client-facing price without
+        // a door result.
+        for base in [939.0, 998.0, 690.0, 790.0, 449.0, 2788.0] {
             let b = bike(None, Some(base), Some(0.25));
-            assert_eq!(client_rate_thb_day(&b), Some(expected));
+            assert_eq!(client_day_rate(&b), None);
         }
     }
 
     #[test]
-    fn the_door_wins_and_a_missing_discount_does_not_fall_back_to_the_tariff() {
-        assert_eq!(client_rate_thb_day(&bike(Some(700.0), Some(939.0), Some(0.25))), Some(700.0));
-        // No class discount published => no computed price, and the
-        // pre-discount tariff is NOT used as the price.
-        assert_eq!(client_rate_thb_day(&bike(None, Some(939.0), None)), None);
-        assert_eq!(client_rate_thb_day(&bike(None, None, Some(0.25))), None);
+    fn only_a_valid_door_rate_reaches_the_client() {
+        assert_eq!(
+            client_day_rate(&bike(Some(700.25), Some(939.0), Some(0.25))),
+            Some(700.25)
+        );
+        // Invalid door values remain absent even when both file inputs could
+        // be used to manufacture a plausible fallback.
+        assert_eq!(
+            client_day_rate(&bike(Some(0.0), Some(939.0), Some(0.25))),
+            None
+        );
+        assert_eq!(
+            client_day_rate(&bike(Some(-1.0), Some(939.0), Some(0.25))),
+            None
+        );
+        assert_eq!(
+            client_day_rate(&bike(Some(f64::NAN), Some(939.0), Some(0.25))),
+            None
+        );
+        assert_eq!(
+            client_day_rate(&bike(Some(f64::INFINITY), Some(939.0), Some(0.25))),
+            None
+        );
+        assert_eq!(client_day_rate(&bike(None, Some(939.0), None)), None);
+        assert_eq!(client_day_rate(&bike(None, None, Some(0.25))), None);
     }
 
     #[test]
@@ -1015,7 +1059,10 @@ mod tests {
         assert_eq!(book_block(&closed, true), Some(BookBlock::NotOffered));
 
         let priceless = bike(None, None, None);
-        assert_eq!(book_block(&priceless, true), Some(BookBlock::NoPublishedRate));
+        assert_eq!(
+            book_block(&priceless, true),
+            Some(BookBlock::NoPublishedRate)
+        );
 
         let mut none_free = bike(Some(337.0), None, None);
         none_free.units_available = Some(0);
@@ -1023,9 +1070,15 @@ mod tests {
 
         let mut unknown = bike(Some(337.0), None, None);
         unknown.units_available = None;
-        assert_eq!(book_block(&unknown, true), Some(BookBlock::UnknownAvailability));
+        assert_eq!(
+            book_block(&unknown, true),
+            Some(BookBlock::UnknownAvailability)
+        );
 
-        assert_eq!(book_block(&bike(Some(337.0), None, None), false), Some(BookBlock::NotWired));
+        assert_eq!(
+            book_block(&bike(Some(337.0), None, None), false),
+            Some(BookBlock::NotWired)
+        );
         assert_eq!(book_block(&bike(Some(337.0), None, None), true), None);
     }
 

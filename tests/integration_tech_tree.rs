@@ -41,7 +41,7 @@ async fn send(app: axum::Router, request: Request<Body>) -> Resp {
 }
 
 fn admin_token() -> String {
-    woody_weed_bot::api::auth::generate_admin_token("test_password", "dummy_test_token")
+    turbobaby_bot::api::auth::generate_admin_token("test_password", "dummy_test_token")
 }
 
 async fn complete_node(app: axum::Router, id: &str, authed: bool) -> Resp {
@@ -55,7 +55,7 @@ async fn complete_node(app: axum::Router, id: &str, authed: bool) -> Resp {
 }
 
 /// Insert a node. `deps` are ids this node waits on.
-async fn seed_node(db: &woody_weed_bot::db::Database, id: &str, status: &str, deps: &[&str]) {
+async fn seed_node(db: &turbobaby_bot::db::Database, id: &str, status: &str, deps: &[&str]) {
     let deps_literal = format!(
         "{{{}}}",
         deps.iter()
@@ -82,7 +82,7 @@ async fn seed_node(db: &woody_weed_bot::db::Database, id: &str, status: &str, de
         .expect("seed tech node INSERT");
 }
 
-async fn status_of(db: &woody_weed_bot::db::Database, id: &str) -> String {
+async fn status_of(db: &turbobaby_bot::db::Database, id: &str) -> String {
     db.orm
         .query_one(Statement::from_sql_and_values(
             DbBackend::Postgres,

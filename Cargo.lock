@@ -5183,6 +5183,56 @@ dependencies = [
 ]
 
 [[package]]
+name = "turbobaby-bot"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "aws-config",
+ "aws-sdk-s3",
+ "aws-smithy-async",
+ "axum 0.7.9",
+ "axum-prometheus",
+ "base64 0.21.7",
+ "bytes",
+ "chrono",
+ "constant_time_eq",
+ "dioxus",
+ "dotenvy",
+ "getrandom 0.2.17",
+ "gloo-events",
+ "gloo-net",
+ "gloo-storage",
+ "gloo-timers",
+ "hex",
+ "hmac 0.12.1",
+ "http-body-util",
+ "js-sys",
+ "metrics",
+ "qrcode",
+ "rand 0.8.6",
+ "reqwest 0.11.27",
+ "rustls 0.23.40",
+ "sea-orm",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "teloxide",
+ "thiserror 1.0.69",
+ "tokio",
+ "tower 0.4.13",
+ "tower-http 0.5.2",
+ "tracing",
+ "tracing-subscriber",
+ "url",
+ "urlencoding",
+ "utoipa",
+ "uuid",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+]
+
+[[package]]
 name = "typenum"
 version = "1.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5879,56 +5929,6 @@ dependencies = [
  "serde_json",
  "unicode-xid",
  "wasmparser",
-]
-
-[[package]]
-name = "woody-weed-bot"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "aws-config",
- "aws-sdk-s3",
- "aws-smithy-async",
- "axum 0.7.9",
- "axum-prometheus",
- "base64 0.21.7",
- "bytes",
- "chrono",
- "constant_time_eq",
- "dioxus",
- "dotenvy",
- "getrandom 0.2.17",
- "gloo-events",
- "gloo-net",
- "gloo-storage",
- "gloo-timers",
- "hex",
- "hmac 0.12.1",
- "http-body-util",
- "js-sys",
- "metrics",
- "qrcode",
- "rand 0.8.6",
- "reqwest 0.11.27",
- "rustls 0.23.40",
- "sea-orm",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "teloxide",
- "thiserror 1.0.69",
- "tokio",
- "tower 0.4.13",
- "tower-http 0.5.2",
- "tracing",
- "tracing-subscriber",
- "url",
- "urlencoding",
- "utoipa",
- "uuid",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "web-sys",
 ]
 
 [[package]]

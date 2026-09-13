@@ -13,7 +13,10 @@
 /// Sources whose payouts are capped because a game, not a purchase, produced
 /// them. Anything else — a manual admin credit, a refund — is deliberate and
 /// not throttled here.
-pub const GAME_SOURCES: &[&str] = &["skate", "woodshop", "game"];
+// `skate` remains for historical ledger rows and replay checks. New Ride runs
+// use `ride`; removing the old spelling would make an old idempotent retry
+// bypass the cap merely because the UI was renamed.
+pub const GAME_SOURCES: &[&str] = &["ride", "skate", "woodshop", "game"];
 
 /// Most Stars a single game source may pay one player in 24 hours.
 ///
@@ -86,6 +89,7 @@ mod tests {
 
     #[test]
     fn only_game_sources_are_capped() {
+        assert!(is_game_source("ride"));
         assert!(is_game_source("skate"));
         assert!(is_game_source("woodshop"));
         // An admin correction is deliberate and must not be silently trimmed.

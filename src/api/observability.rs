@@ -85,7 +85,13 @@ pub(crate) async fn request_id_middleware(mut req: Request<Body>, next: Next) ->
 #[cfg(test)]
 mod tests {
     use super::*;
-    use axum::http::HeaderMap;
+    use axum::{
+        http::{HeaderMap, Request},
+        middleware,
+        routing::get,
+        Router,
+    };
+    use tower::ServiceExt;
 
     #[test]
     fn parse_accepts_uuid_like() {
@@ -102,7 +108,10 @@ mod tests {
 
     #[test]
     fn parse_trims_whitespace() {
-        assert_eq!(parse_inbound_request_id("  trace-42  ").unwrap(), "trace-42");
+        assert_eq!(
+            parse_inbound_request_id("  trace-42  ").unwrap(),
+            "trace-42"
+        );
     }
 
     #[test]
@@ -155,5 +164,27 @@ mod tests {
         let id = extract_or_generate(&h);
         // Should fall through to UUID since inbound was rejected.
         assert!(uuid::Uuid::parse_str(&id).is_ok());
+    }
+
+    #[tokio::test]
+    async fn middleware_echoes_the_inbound_request_id_on_the_response() {
+        let app = Router::new()
+            .route("/", get(|| async { "ok" }))
+            .layer(middleware::from_fn(request_id_middleware));
+        let request = Request::builder()
+            .uri("/")
+            .header(REQUEST_ID_HEADER, "trace-42")
+            .body(Body::empty())
+            .expect("static request is valid");
+
+        let response = app.oneshot(request).await.expect("middleware responds");
+
+        assert_eq!(
+            response
+                .headers()
+                .get(REQUEST_ID_HEADER)
+                .and_then(|value| value.to_str().ok()),
+            Some("trace-42")
+        );
     }
 }

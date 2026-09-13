@@ -96,7 +96,7 @@ fn on_day<'a>(all: &'a [serde_json::Value], day: &str) -> Vec<&'a serde_json::Va
         .collect()
 }
 
-async fn clean(db: &woody_weed_bot::db::Database) {
+async fn clean(db: &turbobaby_bot::db::Database) {
     db.orm
         .execute(Statement::from_string(
             DbBackend::Postgres,
@@ -109,7 +109,7 @@ async fn clean(db: &woody_weed_bot::db::Database) {
 /// Insert the way `POST /api/admin/events` does — the same columns, the same
 /// table — without needing an admin session in a test.
 async fn add_event(
-    db: &woody_weed_bot::db::Database,
+    db: &turbobaby_bot::db::Database,
     title: &str,
     start: &str,
     end: &str,

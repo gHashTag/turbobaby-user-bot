@@ -65,7 +65,7 @@ fn row_with<'a>(list: &'a [serde_json::Value], needle: &str) -> Option<&'a serde
         .find(|r| r["display_name"].as_str().unwrap_or("").contains(needle))
 }
 
-async fn clean(db: &woody_weed_bot::db::Database) {
+async fn clean(db: &turbobaby_bot::db::Database) {
     for id in [REFERRER, NAMED, HANDLE_ONLY, UNKNOWN] {
         for sql in [
             "DELETE FROM referral_events WHERE referrer_id = $1 OR referred_id = $1",
@@ -83,7 +83,7 @@ async fn clean(db: &woody_weed_bot::db::Database) {
     }
 }
 
-async fn follows_the_link(db: &woody_weed_bot::db::Database, friend: i64) {
+async fn follows_the_link(db: &turbobaby_bot::db::Database, friend: i64) {
     db.orm
         .execute(Statement::from_sql_and_values(
             DbBackend::Postgres,

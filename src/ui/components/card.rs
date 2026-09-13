@@ -6,7 +6,7 @@ pub enum CardVariant {
     #[default]
     Default,
     Product,
-    Plant,
+    Bike,
     Quest,
     Member,
     // New variants (feat/design-system)
@@ -21,7 +21,7 @@ impl CardVariant {
         match self {
             Self::Default => "card card-default",
             Self::Product => "card card-product",
-            Self::Plant => "card card-plant",
+            Self::Bike => "card card-bike",
             Self::Quest => "card card-quest",
             Self::Member => "card card-member",
             Self::Glass => "card card-glass",
@@ -36,7 +36,7 @@ impl CardVariant {
         match self {
             Self::Default => "default",
             Self::Product => "product",
-            Self::Plant => "plant",
+            Self::Bike => "bike",
             Self::Quest => "quest",
             Self::Member => "member",
             Self::Glass => "glass",

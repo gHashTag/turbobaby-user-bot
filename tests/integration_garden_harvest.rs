@@ -56,7 +56,7 @@ fn rand_suffix() -> u32 {
 
 /// Seed a plant owned by a fresh user. `completed` decides whether it is
 /// ready to harvest.
-async fn seed_plant(db: &woody_weed_bot::db::Database, completed: bool) -> (String, i64) {
+async fn seed_plant(db: &turbobaby_bot::db::Database, completed: bool) -> (String, i64) {
     let suffix = rand_suffix();
     let telegram_id: i64 = 999_400_000 + (suffix as i64 % 500_000);
     let strain_id = uuid::Uuid::new_v4().to_string();
@@ -112,7 +112,7 @@ async fn harvest(app: axum::Router, plant_id: &str, tid: i64) -> Resp {
     .await
 }
 
-async fn reward_count(db: &woody_weed_bot::db::Database, tid: i64) -> i64 {
+async fn reward_count(db: &turbobaby_bot::db::Database, tid: i64) -> i64 {
     db.orm
         .query_one(Statement::from_sql_and_values(
             DbBackend::Postgres,

@@ -1,4 +1,4 @@
-/* Woody Woodpecker UI — Pixel Art Theme (matching old React bot exactly) */
+/* TURBOBABY UI — Pixel Art Theme */
 
 /* Pixel Art Variables */
 :root {
@@ -185,7 +185,7 @@ a:hover, a:focus-visible { color: var(--cyan); }
 /* Cards grid */
 .cards-grid { display: flex; flex-direction: column; gap: 12px; }
 
-/* Comet card 3D tilt (from old bot StrainCard) */
+/* Comet card 3D tilt (from the old bot's product card) */
 .comet-card {
   transition: transform 0.15s ease-out, box-shadow 0.15s ease-out;
   transform-style: preserve-3d;
@@ -195,53 +195,63 @@ a:hover, a:focus-visible { color: var(--cyan); }
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4), var(--pixel-shadow);
 }
 .set-card:active,
-.strain-card:active,
+.bike-card:active,
 .comet-card:active {
   transform: translate(2px, 2px);
   box-shadow: 2px 2px 0 #000;
 }
 
-/* Strain card */
-.strain-card {
+/* Bike card */
+.bike-card {
   background: var(--card);
   border: 4px solid var(--border);
   box-shadow: var(--pixel-shadow);
   overflow: hidden;
 }
 
-/* Strain visual (category gradient overlay) */
-.strain-visual {
+/* Bike visual (class gradient overlay) */
+.bike-visual {
   aspect-ratio: 853/1280;
   position: relative;
   overflow: hidden;
 }
-.strain-visual.sativa {
-  background: linear-gradient(135deg, rgba(255,230,0,0.2), transparent);
-}
-.strain-visual.indica {
-  background: linear-gradient(135deg, rgba(179,136,255,0.2), transparent);
-}
-.strain-visual.hybrid {
+.bike-visual.scooter {
   background: linear-gradient(135deg, rgba(57,255,20,0.2), transparent);
 }
-.strain-visual img {
+.bike-visual.motorcycle {
+  background: linear-gradient(135deg, rgba(179,136,255,0.2), transparent);
+}
+.bike-visual img {
   width: 100%; height: 100%; object-fit: cover;
   transition: opacity 0.5s ease;
 }
 
-/* Category badges */
-.type-badge { display: inline-block; padding: 2px 8px; font-size: 13px; }
-.type-badge.sativa { color: var(--yellow); }
-.type-badge.indica { color: var(--purple); }
-.type-badge.hybrid { color: var(--green); }
+/* Class badges */
+.class-badge { display: inline-block; padding: 2px 8px; font-size: 13px; }
+.class-badge.scooter { color: var(--green); }
+.class-badge.motorcycle { color: var(--purple); }
 
-/* Strain content */
-.strain-content { padding: 12px; }
-.strain-name { font-size: 17px; font-weight: 700; text-shadow: 2px 2px 0 #000; margin-bottom: 4px; }
-.strain-price { font-size: 20px; font-weight: 800; color: var(--yellow); text-shadow: 2px 2px 0 #000; }
-.strain-thc, .strain-cbd { font-size: 13px; color: var(--text2); margin-bottom: 4px; }
-.strain-description { font-size: 13px; color: var(--text2); margin-bottom: 8px; line-height: 1.4; }
-.strain-effect { font-size: 13px; color: var(--text2); }
+/* Bike content */
+.bike-content { padding: 12px; }
+.bike-name { font-size: 17px; font-weight: 700; text-shadow: 2px 2px 0 #000; margin-bottom: 4px; }
+.bike-price { font-size: 20px; font-weight: 800; color: var(--yellow); text-shadow: 2px 2px 0 #000; }
+.bike-displacement, .bike-availability { font-size: 13px; color: var(--text2); margin-bottom: 4px; }
+.bike-description { font-size: 13px; color: var(--text2); margin-bottom: 8px; line-height: 1.4; }
+.bike-variant { font-size: 13px; color: var(--text2); }
+/* New lines the bike card carries and the old card did not: the term
+   summary, the price unit, the dash an absent price renders as, and the
+   note naming who quotes it. Type scale and colours are the existing
+   tokens — no new values. */
+.bike-terms {
+  display: flex; flex-wrap: wrap; gap: 8px;
+  font-size: 13px; color: var(--text2); margin-bottom: 8px;
+}
+/* An absent price is a dash, so it must not wear the price colour: the
+   loud yellow reads as a real number at a glance. The quote note is the
+   line that actually answers the question. */
+.bike-price .price-unit { font-size: 13px; font-weight: 700; color: var(--text2); }
+.bike-price .price-absent { color: var(--text2); }
+.bike-quote-note { font-size: 13px; color: var(--cyan); margin-bottom: 8px; line-height: 1.4; }
 
 /* Set card */
 .set-card {
@@ -466,8 +476,8 @@ a:hover, a:focus-visible { color: var(--cyan); }
 .success-icon { font-size: 70px; text-align: center; }
 .success-title { font-size: 24px; font-weight: 800; color: var(--green); }
 
-/* Strain grid (menu page) */
-.strain-grid {
+/* Bike grid (catalog page) */
+.bike-grid {
   display: grid; grid-template-columns: repeat(2, 1fr);
   gap: 12px; padding: 0 16px;
 }
@@ -532,16 +542,16 @@ a:hover, a:focus-visible { color: var(--cyan); }
   padding: 0 16px;
 }
 
-/* SOTD badge */
-.sod-badge {
+/* Featured-pick badge */
+.featured-badge {
   display: inline-block; background: var(--yellow); color: #000;
   font-size: 13px; padding: 4px 8px; font-weight: 700;
   box-shadow: 2px 2px 0 #000;
 }
 
 /* TZ #2 marketing badges (cycle #132) — colours mirror the inline
-   badges in src/ui/screens/menu_screen.rs::render_strain_card so the
-   shared `StrainCard` component's visual matches the home menu. */
+   badges in the catalog screen's inline card so the shared `BikeCard`
+   component's visual matches the home catalog. */
 .new-badge {
   display: inline-block; background: #00e5ff; color: #000;
   font-size: 13px; padding: 4px 8px; font-weight: 700;
@@ -558,37 +568,37 @@ a:hover, a:focus-visible { color: var(--cyan); }
   box-shadow: 2px 2px 0 #000;
 }
 /* Sale-price strikethrough vs new-price emphasis. */
-.strain-price .price-old {
+.bike-price .price-old {
   text-decoration: line-through;
   color: #888;
   margin-right: 8px;
 }
-.strain-price .price-sale {
+.bike-price .price-sale {
   color: #ff4757;
   font-weight: 800;
 }
-.sod-card {
+.featured-card {
   background: var(--card);
   border: 4px solid var(--green);
   box-shadow: var(--pixel-shadow), 0 0 20px rgba(57,255,20,0.2);
   overflow: hidden;
 }
-.sod-image {
+.featured-image {
   aspect-ratio: 1/1;
   overflow: hidden;
   background: linear-gradient(135deg, rgba(57,255,20,0.1), transparent);
 }
-.sod-image img {
+.featured-image img {
   width: 100%; height: 100%; object-fit: cover;
 }
-.sod-content {
+.featured-content {
   padding: 12px;
 }
-.sod-name {
+.featured-name {
   font-size: 18px; font-weight: 700; text-shadow: 2px 2px 0 #000;
   margin-bottom: 4px;
 }
-.sod-type {
+.featured-type {
   font-size: 13px;
   color: var(--text2);
   margin-bottom: 8px;
@@ -689,14 +699,6 @@ a:hover, a:focus-visible { color: var(--cyan); }
   padding: 12px;
 }
 
-/* Garden plant card */
-.plant-card {
-  background: var(--card);
-  border: 4px solid var(--border);
-  border-radius: 12px;
-  padding: 14px;
-}
-
 /* Animations */
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes popIn { from { transform: scale(0); opacity: 0; } to { transform: scale(1); opacity: 1; } }
@@ -744,7 +746,7 @@ a:hover, a:focus-visible { color: var(--cyan); }
   font-weight: 700;
 }
 
-/* Deal of day / Strain of day banners (from old bot) */
+/* Deal of day / featured-model banners */
 .deal-banner {
   background: linear-gradient(135deg, #ff6b35, #f7931e);
   border: 4px solid #ff6b35;

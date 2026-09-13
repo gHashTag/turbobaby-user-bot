@@ -1,6 +1,6 @@
 [workspace]
 [package]
-name = "woody-weed-bot"
+name = "turbobaby-bot"
 version = "0.1.0"
 edition = "2021"
 # Cycle #115: not published to crates.io. cargo-deny respects this
@@ -56,16 +56,16 @@ dbg_macro = "warn"
 panic = "warn"
 
 [[bin]]
-name = "woody-weed-bot"
+name = "turbobaby-bot"
 path = "src/web.rs"
 
 [[bin]]
-name = "woody-weed-bot-server"
+name = "turbobaby-bot-server"
 path = "src/main.rs"
 required-features = ["backend"]
 
 [lib]
-name = "woody_weed_bot"
+name = "turbobaby_bot"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]

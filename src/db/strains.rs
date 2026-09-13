@@ -1,7 +1,13 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[allow(unreachable_pub)] // Used as a field of pub structs in src/api/*.rs request/response bodies; pub(crate) would cascade.
+#[allow(unreachable_pub)]
+// Used as a field of pub structs in src/api/*.rs request/response bodies; pub(crate) would cascade.
+// The bike cutover orphaned this wire type on the server path: nothing
+// constructs it since the catalog reads `bikes` (D4/D6). Named type
+// references remain in the legacy UI/promo surfaces, which rebrand epic
+// #26 retires; deletion happens there, not as a drive-by.
+#[allow(dead_code)]
 pub struct Strain {
     pub id: String,
     pub name: String,

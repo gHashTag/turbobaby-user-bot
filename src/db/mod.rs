@@ -18,12 +18,6 @@ pub(crate) mod users;
 // Glob re-export of crate-internal types (used as `crate::db::Strain` etc.); flavour-tightening would force renames everywhere.
 pub use strains::*;
 
-#[allow(unreachable_pub)]
-// Same glob idiom as `strains::*` above, for the same reason: callers say
-// `crate::db::Bike`. No name collides with the strains re-export today, and the
-// strains module leaves entirely once the rebrand lands.
-pub use bikes::*;
-
 use anyhow::{Context, Result};
 
 /// Every migration as `(name, sql)`, in apply order. Replaces the old single
@@ -1059,14 +1053,39 @@ mod schema_self_check_tests {
 
     #[test]
     fn critical_columns_list_is_sane() {
-        // Guard the const itself: non-empty, only the set-tables, no dupes.
+        // Guard the const itself: non-empty, every table real, no empty column
+        // lists, no duplicate table entries.
+        //
+        // This guard used to read `matches!(*table, "accessory_sets" |
+        // "tea_sets" | "sets")` — a second, hand-copied copy of the very list
+        // it was guarding. Adding `bikes` and `bike_units` to CRITICAL_COLUMNS
+        // for the bike domain (D10) therefore failed here, and the only way to
+        // pass was to type the new names into the copy as well. A guard that
+        // has to be edited in lockstep with its subject does not constrain the
+        // subject; it just doubles the edit, and the second copy is where the
+        // drift lands.
+        //
+        // So it asks the migrations instead. A table in CRITICAL_COLUMNS that
+        // no migration creates is the real defect — a typo'd or renamed table
+        // whose columns would be probed for ever and never found — and that is
+        // caught now, for every table, without naming any of them here.
         assert!(!CRITICAL_COLUMNS.is_empty());
+
+        let corpus = super::orphan_table_tests::migration_tables();
+        let mut seen = std::collections::BTreeSet::new();
         for (table, cols) in CRITICAL_COLUMNS {
             assert!(
-                matches!(*table, "accessory_sets" | "tea_sets" | "sets"),
-                "unexpected table in CRITICAL_COLUMNS: {table}"
+                corpus.iter().any(|t| t == table),
+                "CRITICAL_COLUMNS names `{table}`, which no migration in migrations/ \
+                 creates. Either it is misspelled, or the table was renamed and this \
+                 entry was left behind — its columns would be probed for ever and \
+                 never found. Tables the migrations do create: {corpus:?}"
             );
             assert!(!cols.is_empty(), "{table} has no columns listed");
+            assert!(
+                seen.insert(*table),
+                "`{table}` appears twice in CRITICAL_COLUMNS; merge the two entries"
+            );
         }
     }
 }
@@ -1332,9 +1351,41 @@ mod orphan_table_tests {
         // would require a new migration + prod coordination. Re-evaluate
         // when location quests are revisited.
         "hunt_checkpoints",
+        // The four garden tables, orphaned 2026-09-12 by the D5 removal of the
+        // garden mechanic. All four come from two migrations: `004_garden.sql`
+        // creates `garden_config` and `garden_rewards`, `066_garden_social.sql`
+        // creates `user_achievements` and `share_events`. Every Rust path that
+        // read or wrote them is gone — the API endpoints, the two reminder
+        // loops in main.rs, the plant cell in the UI — so they are orphans by
+        // the same measurement that says the removal happened.
+        //
+        // They are allowlisted rather than dropped, deliberately. A drop
+        // migration against these four destroys live rows in a deployed
+        // database: a customer's accrued garden rewards and their achievement
+        // history. That is the owner's call to make, not a tidy-up, and
+        // `083_drop_cannabis_catalog.sql` only earned its drop because the
+        // catalog it removed was reference data with no customer rows in it.
+        // An idempotent `CREATE TABLE IF NOT EXISTS` that nothing reads costs
+        // one statement per deploy; a wrong `DROP TABLE` costs data.
+        //
+        // The removal is also not finished, which is the more useful thing to
+        // know: `src/trios/garden.rs` is still wired at `src/trios/mod.rs:10`
+        // and 11 of the 20 garden metric helpers still have live call sites.
+        // See DECISIONS.md D18. Re-evaluate these four when that is closed —
+        // not before, because a table dropped while half the code still
+        // expects it is a worse failure than an unread table.
+        "garden_config",
+        "garden_rewards",
+        "user_achievements",
+        "share_events",
     ];
 
-    fn migration_tables() -> Vec<String> {
+    /// Every table any migration creates.
+    ///
+    /// `pub(super)` because `schema_self_check_tests::critical_columns_list_is_sane`
+    /// checks its own table list against this one rather than against a
+    /// hand-copied duplicate. One parser, two gates.
+    pub(super) fn migration_tables() -> Vec<String> {
         let manifest = env!("CARGO_MANIFEST_DIR");
         let mig_dir = std::path::Path::new(manifest).join("migrations");
         let mut out = Vec::new();

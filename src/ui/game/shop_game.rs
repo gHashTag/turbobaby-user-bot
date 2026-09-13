@@ -1,7 +1,7 @@
 // Woody Shop v0.4 — single-screen mini-app game prototype.
 //
 // v0.1 shop core: customers spawn, order, get served, leave dirty tables.
-// v0.2 farm: plant/water/harvest bushes.
+// v0.2 planters: plant/water/harvest the kitchen's own greens.
 // v0.3 upgrades: speed, tables, spawn rate.
 // v0.4 DJ zone, grill zone, random events.
 // Pure emoji/CSS visuals inside the existing Dioxus/WASM Telegram Mini App.
@@ -53,7 +53,9 @@ const STARTING_COINS: u32 = 30;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Order {
-    Weed,
+    // The shop sells coffee, a snack and something cold. It used to sell one
+    // more thing; TurboBaby rents motorbikes, and the counter's menu says so.
+    Drink,
     Coffee,
     Snack,
 }
@@ -61,7 +63,7 @@ pub enum Order {
 impl Order {
     pub fn emoji(self) -> &'static str {
         match self {
-            Order::Weed => "🌿",
+            Order::Drink => "🥤",
             Order::Coffee => "☕",
             Order::Snack => "🍪",
         }
@@ -306,7 +308,7 @@ fn rand_order() -> Order {
     match rand_u32() % 3 {
         0 => Order::Coffee,
         1 => Order::Snack,
-        _ => Order::Weed,
+        _ => Order::Drink,
     }
 }
 
@@ -314,7 +316,7 @@ fn stable_order_for_seat(idx: usize) -> Order {
     match idx % 3 {
         0 => Order::Coffee,
         1 => Order::Snack,
-        _ => Order::Weed,
+        _ => Order::Drink,
     }
 }
 
@@ -1312,7 +1314,7 @@ fn FarmPlot(
             "#39ff14",
         ),
         FarmStage::Watered => (
-            "🌿",
+            "🪴",
             t(lang, T_GAME_FARM_WATERED).to_string(),
             false,
             false,
