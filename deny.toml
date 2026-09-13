@@ -27,6 +27,7 @@ ignore = [
     { id = "RUSTSEC-2026-0098", reason = "rustls-webpki name-constraint flaw; aws-sdk-s3 legacy TLS chain, AWS-issued certs only" },
     { id = "RUSTSEC-2026-0099", reason = "rustls-webpki wildcard constraint; same aws-sdk-s3 chain, same mitigation" },
     { id = "RUSTSEC-2026-0104", reason = "rustls-webpki CRL parsing panic; we never enable CRL verification" },
+    { id = "RUSTSEC-2026-0258", reason = "h2 0.3.27 unbounded empty DATA frames; reached only as the aws-sdk legacy client toward AWS endpoints, and the 0.3 line cannot leave the tree until the SDK drops its hyper-0.14 stack" },
 ]
 
 [licenses]
