@@ -44,14 +44,14 @@
          "ловля шишек" game were triggering browser zoom). maximum-scale +
          user-scalable=no; viewport-fit=cover for safe-area. -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
-    <title>Woody Weed Bot</title>
+    <title>TurboBaby</title>
     <link rel="icon" href="/assets/favicon.svg">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/variables-f989da88235f4738.css"/>
-    <link rel="stylesheet" href="/main-42a2b71f3c7da625.css"/>
-    <link rel="stylesheet" href="/admin-1a8278f17259b522.css"/>
+    <link rel="stylesheet" href="/main-1b198c520b97a904.css"/>
+    <link rel="stylesheet" href="/admin-9741c1f3a651e018.css"/>
     
     <script>
     // Safari/WKWebView reports an interrupted fetch as the opaque
@@ -116,9 +116,9 @@
     </script>
     
 <script type="module">
-import init, * as bindings from '/woody-weed-bot-6f63ec495a7e0eb9.js?v=6f63ec495a7e0eb9';
+import init, * as bindings from '/turbobaby-bot-9277e752421c575c.js?v=9277e752421c575c';
 await window.__telegramReady;
-const wasm = await window.__loadWasmWithRetry(init, '/woody-weed-bot-6f63ec495a7e0eb9_bg.wasm?v=6f63ec495a7e0eb9');
+const wasm = await window.__loadWasmWithRetry(init, '/turbobaby-bot-9277e752421c575c_bg.wasm?v=9277e752421c575c');
 
 
 window.wasmBindings = bindings;
@@ -154,7 +154,9 @@ dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
       try {
         if (sessionStorage.getItem('__wwb_version_redirected')) return;
         var moduleScript = document.querySelector('script[type="module"]');
-        var match = moduleScript && moduleScript.textContent.match(/\/woody-weed-bot-([a-f0-9]+)\.js/);
+        // Trunk names this `<cargo target>-<content hash>.js`. Match that
+        // shape so a future product rename cannot disable version detection.
+        var match = moduleScript && moduleScript.textContent.match(/\/[^"'?\s]+-([a-f0-9]{16,})\.js(?:\?[^"'\s]*)?/i);
         var localVersion = match ? match[1] : '';
         fetch('/version.txt?cb=' + Date.now(), { cache: 'no-store', credentials: 'same-origin' })
           .then(function (r) {
@@ -391,7 +393,7 @@ dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
         }, true);
     });
     </script>
-<link rel="modulepreload" href="/woody-weed-bot-6f63ec495a7e0eb9.js?v=6f63ec495a7e0eb9" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-interpreter-js-53424282ea002554/src/js/common.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-web-bf44d47c344f35d0/inline1.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-interpreter-js-53424282ea002554/src/js/patch_console.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-web-bf44d47c344f35d0/src/js/eval.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-interpreter-js-53424282ea002554/src/js/hydrate.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-interpreter-js-53424282ea002554/inline0.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-cli-config-24e80746d3c500cd/inline0.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-web-bf44d47c344f35d0/inline0.js" crossorigin="anonymous"><link rel="preload" href="/woody-weed-bot-6f63ec495a7e0eb9_bg.wasm?v=6f63ec495a7e0eb9" crossorigin="anonymous" as="fetch" type="application/wasm"></head>
+<link rel="modulepreload" href="/turbobaby-bot-9277e752421c575c.js?v=9277e752421c575c" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-web-bf44d47c344f35d0/inline0.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-web-bf44d47c344f35d0/src/js/eval.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-web-bf44d47c344f35d0/inline1.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-interpreter-js-53424282ea002554/inline0.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-interpreter-js-53424282ea002554/src/js/patch_console.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-interpreter-js-53424282ea002554/src/js/hydrate.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-cli-config-24e80746d3c500cd/inline0.js" crossorigin="anonymous"><link rel="modulepreload" href="/snippets/dioxus-interpreter-js-53424282ea002554/src/js/common.js" crossorigin="anonymous"><link rel="preload" href="/turbobaby-bot-9277e752421c575c_bg.wasm?v=9277e752421c575c" crossorigin="anonymous" as="fetch" type="application/wasm"></head>
 <body>
     <div id="preloader">
         <div class="spinner"></div>
