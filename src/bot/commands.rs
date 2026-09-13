@@ -25,7 +25,7 @@ use crate::{
 // snake_case so `PromoOn` parses as `/promo_on` — the name the mute button
 // has been promising since it shipped. Every other variant here is a single
 // lowercase word, so for them the rule changes nothing.
-#[command(rename_rule = "snake_case", description = "Woody Bot commands:")]
+#[command(rename_rule = "snake_case", description = "TurboBaby commands:")]
 pub(crate) enum Command {
     #[command(description = "Start")]
     Start(String),
@@ -209,7 +209,7 @@ pub(crate) async fn handle_command(
             }
             if args == "channel" {
                 bot.send_message(msg.chat.id,
-                    format!("🪵 <b>Добро пожаловать из канала!</b>\n\n{}\n\n👇 <b>Нажми кнопку ниже:</b>", locale.open_menu)
+                    format!("🏍 <b>Добро пожаловать из канала!</b>\n\n{}\n\n👇 <b>Нажми кнопку ниже:</b>", locale.open_menu)
                 )
                 .parse_mode(teloxide::types::ParseMode::Html)
                 .reply_markup(InlineKeyboardMarkup::new(vec![
@@ -282,7 +282,7 @@ pub(crate) async fn handle_command(
             }
 
             let welcome = format!(
-                "🪵 <b>{}</b>\n━━━━━━━━━━━━━━━━\n{}\n\n🌿 {}\n🍷 {}\n🌱 {}\n🗺️ {}\n🛍️ {}\n💰 {}\n😜 {}\n\n👇 <i>{}</i>",
+                "🏍 <b>{}</b>\n━━━━━━━━━━━━━━━━\n{}\n\n🏍 {}\n💰 {}\n🗺️ {}\n🛡️ {}\n📲 {}\n🎁 {}\n😜 {}\n\n👇 <i>{}</i>",
                 locale.welcome, locale.start_description,
                 locale.welcome_feature1, locale.welcome_feature2, locale.welcome_feature3,
                 locale.welcome_feature4, locale.welcome_feature5, locale.welcome_feature6,
@@ -293,28 +293,12 @@ pub(crate) async fn handle_command(
                 .parse_mode(teloxide::types::ParseMode::Html)
                 .reply_markup(InlineKeyboardMarkup::new(vec![
                     vec![web_app_btn(
-                        &format!("🛒 {}", locale.open_menu),
+                        &format!("🏍 {}", locale.open_menu),
                         &build_app_url(base, &lang, None),
                     )],
                     vec![web_app_btn(
-                        &format!("🎁 {}", locale.view_sets),
-                        &build_app_url(base, &lang, Some("sets")),
-                    )],
-                    vec![web_app_btn(
-                        &format!("🍷 {}", locale.sommelier),
-                        &build_app_url(base, &lang, Some("sommelier")),
-                    )],
-                    vec![web_app_btn(
-                        &format!("🌱 {}", locale.garden),
-                        &build_app_url(base, &lang, Some("garden")),
-                    )],
-                    vec![web_app_btn(
-                        &format!("🛍️ {}", locale.accessories),
-                        &build_app_url(base, &lang, Some("accessories")),
-                    )],
-                    vec![web_app_btn(
-                        &format!("🗺️ {}", locale.quest),
-                        &build_app_url(base, &lang, Some("quest/daily")),
+                        &format!("📦 {}", locale.my_orders),
+                        &build_app_url(base, &lang, Some("orders")),
                     )],
                     vec![web_app_btn(
                         &format!("👤 {}", locale.profile),
@@ -366,28 +350,16 @@ pub(crate) async fn handle_command(
                 .parse_mode(teloxide::types::ParseMode::Html)
                 .reply_markup(InlineKeyboardMarkup::new(vec![
                     vec![web_app_btn(
-                        &format!("🛒 {}", locale.open_menu),
+                        &format!("🏍 {}", locale.open_menu),
                         &build_app_url(base, &lang, None),
-                    )],
-                    vec![web_app_btn(
-                        &format!("🎁 {}", locale.view_sets),
-                        &build_app_url(base, &lang, Some("sets")),
-                    )],
-                    vec![web_app_btn(
-                        &format!("🍷 {}", locale.sommelier),
-                        &build_app_url(base, &lang, Some("sommelier")),
-                    )],
-                    vec![web_app_btn(
-                        &format!("🌱 {}", locale.garden),
-                        &build_app_url(base, &lang, Some("garden")),
-                    )],
-                    vec![web_app_btn(
-                        &format!("🛍️ {}", locale.accessories),
-                        &build_app_url(base, &lang, Some("accessories")),
                     )],
                     vec![web_app_btn(
                         &format!("📦 {}", locale.my_orders),
                         &build_app_url(base, &lang, Some("orders")),
+                    )],
+                    vec![web_app_btn(
+                        &format!("👤 {}", locale.profile),
+                        &build_app_url(base, &lang, Some("profile")),
                     )],
                 ]))
                 .await?;
@@ -638,7 +610,7 @@ pub(crate) async fn handle_command(
                 // Share button via switch_inline_query so Telegram shows "Share" UX
                 let share_btn = InlineKeyboardButton::switch_inline_query(
                     format!("📤 {}", locale.referral_share_button),
-                    format!("🪵 Woody Weed — {invite_link}"),
+                    format!("🏍 TurboBaby — {invite_link}"),
                 );
                 bot.send_message(msg.chat.id, text)
                     .parse_mode(teloxide::types::ParseMode::Html)
