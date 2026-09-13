@@ -669,14 +669,25 @@ impl Database {
     /// error yields an empty list.
     pub async fn missing_critical_columns(&self) -> Vec<String> {
         use sea_orm::{ConnectionTrait, DbBackend, Statement};
+        // The IN-list is derived from CRITICAL_COLUMNS, not hand-copied: when the
+        // bike catalog joined the list, the hand copy below stayed three tables
+        // short and prod logged `bikes.* missing` on every boot against a fully
+        // migrated database — a false alarm that trains people to ignore the
+        // real ones. One source of truth, no second list to forget.
+        let tables = CRITICAL_COLUMNS
+            .iter()
+            .map(|(table, _)| format!("'{table}'"))
+            .collect::<Vec<_>>()
+            .join(", ");
         let rows = match self
             .orm
             .query_all(Statement::from_string(
                 DbBackend::Postgres,
-                "SELECT table_name, column_name FROM information_schema.columns \
-                 WHERE table_schema = 'public' \
-                   AND table_name IN ('accessory_sets', 'tea_sets', 'sets')"
-                    .to_string(),
+                format!(
+                    "SELECT table_name, column_name FROM information_schema.columns \
+                     WHERE table_schema = 'public' \
+                       AND table_name IN ({tables})"
+                ),
             ))
             .await
         {
