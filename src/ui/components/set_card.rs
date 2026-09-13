@@ -87,9 +87,13 @@ pub fn render_uniform_set_card(
     let badge = crate::trios::packs::PackBadge::parse(&set.badge);
     let badge_label = badge.label().map(|(ru, en)| lang::localized(ru, Some(en)));
     let badge_color = badge.color();
-    let strain_word = lang::localized("сортов", Some("strains"));
+    // Domain-neutral counter word. The `strain_count` field name below is
+    // left as-is on purpose: it is the wire field `src/api/catalog.rs` emits
+    // and `sets_screen.rs` deserializes, so renaming it here alone would
+    // half-rename a chain this component does not own.
+    let item_word = lang::localized("позиций", Some("items"));
     let weight_line =
-        crate::trios::packs::weight_line(set.total_weight_grams, set.strain_count, &strain_word);
+        crate::trios::packs::weight_line(set.total_weight_grams, set.strain_count, &item_word);
 
     let mut detail_open = use_signal(|| false);
     let mut show_video = use_signal(|| false);

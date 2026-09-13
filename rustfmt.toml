@@ -1,4 +1,4 @@
-# Pinned formatting rules for woody-weed-bot.
+# Pinned formatting rules for turbobaby-bot.
 #
 # Without this file, `cargo fmt` falls back to whatever rustfmt version the
 # contributor has installed and whatever defaults that version ships. Cycle

@@ -28,8 +28,8 @@ use sea_orm::{ColumnTrait, ConnectionTrait, DbBackend, EntityTrait, QueryFilter,
 use serde_json::json;
 use tower::ServiceExt;
 
-use woody_weed_bot::api::auth::generate_admin_token;
-use woody_weed_bot::db::entities::strain::{Column as StrainCol, Entity as StrainEntity};
+use turbobaby_bot::api::auth::generate_admin_token;
+use turbobaby_bot::db::entities::strain::{Column as StrainCol, Entity as StrainEntity};
 
 #[tokio::test]
 #[ignore = "needs DATABASE_URL env var; run with --ignored"]

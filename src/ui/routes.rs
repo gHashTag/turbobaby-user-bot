@@ -5,12 +5,13 @@
 
 use crate::ui::components::lazy_screen::LazyScreen;
 use crate::ui::screens::{
-    ARHuntScreen, AccessoriesScreen, AdminScreen, CartScreen, CheckoutScreen, EventDetailScreen,
-    EventsScreen, GameScreen, GardenScreen, HomeScreen, LocationQuestScreen, MenuScreen,
-    MyBookingsScreen, OrderDetailScreen, OrdersScreen, ProfileScreen, QuestScreen, ReferralsScreen,
-    SetsScreen, SkateScreen, SommelierScreen, SuccessScreen, TeaScreen, TechTreeScreen,
-    TreasureHuntScreen,
+    ARHuntScreen, AccessoriesScreen, AdminScreen, CartScreen, CatalogScreen, CheckoutScreen,
+    EventDetailScreen, EventsScreen, GameScreen, GardenScreen, HomeScreen, LocationQuestScreen,
+    MenuScreen, MyBookingsScreen, OrderDetailScreen, OrdersScreen, ProfileScreen, QuestScreen,
+    ReferralsScreen, RideScreen, SetsScreen, SommelierScreen, SuccessScreen, TeaScreen,
+    TechTreeScreen, TreasureHuntScreen,
 };
+use crate::ui::share::{PendingGarden, PendingOrder, PendingReorder, SharedProduct};
 use dioxus::prelude::*;
 
 /// Routes component that renders router
@@ -60,6 +61,10 @@ pub enum Route {
     Quest { id: String },
     #[route("/game")]
     Game {},
+    #[route("/ride")]
+    Ride {},
+    /// Historical compatibility alias. It renders the Ride screen and never
+    /// imports the retired skate asset.
     #[route("/skate")]
     Skate {},
     #[route("/referrals")]
@@ -83,9 +88,29 @@ pub enum Route {
 
 #[component]
 fn Home() -> Element {
+    // The public landing page is the live bike catalog. HomeScreen remains a
+    // narrow compatibility controller for historical Telegram deep links; it
+    // mounts only long enough to route a pending cart/order/reorder/product or
+    // garden payload, so cannabis-era home content is no longer reachable at
+    // `/` during an ordinary visit.
+    let pending_product = use_context::<Signal<Option<SharedProduct>>>();
+    let pending_order = use_context::<Signal<PendingOrder>>();
+    let pending_cart = use_context::<Signal<bool>>();
+    let pending_reorder = use_context::<Signal<PendingReorder>>();
+    let pending_garden = use_context::<Signal<PendingGarden>>();
+    let has_compatibility_redirect = pending_product.read().is_some()
+        || pending_order.read().0.is_some()
+        || *pending_cart.read()
+        || pending_reorder.read().0.is_some()
+        || pending_garden.read().0;
+
     rsx! {
         LazyScreen {
-            HomeScreen {}
+            if has_compatibility_redirect {
+                HomeScreen {}
+            } else {
+                CatalogScreen {}
+            }
         }
     }
 }
@@ -235,12 +260,21 @@ fn Quest(id: String) -> Element {
 }
 
 #[component]
-fn Skate() -> Element {
+fn Ride() -> Element {
     // Not wrapped in LazyScreen: the screen already defers its own weight by
     // importing three.js at runtime, and a second loading shell just delays
     // the canvas the player is waiting for.
     rsx! {
-        SkateScreen {}
+        RideScreen {}
+    }
+}
+
+#[component]
+fn Skate() -> Element {
+    // Old shared links keep working, but there is no Skate renderer or asset:
+    // this route is deliberately only a compatibility alias for Ride.
+    rsx! {
+        RideScreen {}
     }
 }
 

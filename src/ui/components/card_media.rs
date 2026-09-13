@@ -1,6 +1,6 @@
 //! Shared product-card media area (image / inline autoplay video / emoji).
 //!
-//! Extracted so strain, accessory and set cards all render the SAME media block
+//! Extracted so bike, accessory and set cards all render the SAME media block
 //! the owner asked for: a muted, looping, inline-autoplaying `<video>` preview
 //! (with the product photo as poster) when a video exists — otherwise the image,
 //! otherwise an emoji.

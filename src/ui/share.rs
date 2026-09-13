@@ -23,9 +23,6 @@ use crate::ui::routes::Route;
 /// Matches `Config::bot_username` default and the existing referral links.
 const BOT_USERNAME: &str = "Woody_WeedPecker_bot";
 
-/// Maximum length Telegram allows for `startapp` parameter.
-const MAX_START_PARAM_LEN: usize = 64;
-
 /// Product catalog kinds that support sharing.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ProductKind {
@@ -149,19 +146,24 @@ pub fn product_deep_link(kind: ProductKind, id: &str) -> String {
     deep_link_url(kind, id)
 }
 
-/// Every payload below is built by `crate::trios::deeplink::payload_for`, not
-/// spelled out here.
-///
-/// The shapes used to be written by hand in this file, and this file's
-/// `#[cfg(test)] mod tests` — 22 assertions, several of them about exactly
-/// these strings — runs **none of them**, because `src/ui` is
-/// `#[cfg(target_arch = "wasm32")]` and `cargo test` never reaches it. The
-/// parser was already shared; the builder was not, so a drift between
-/// `garden__<id>` and `garden_<id>` would have shipped green.
-///
-/// `payload_for` returns `None` for something Telegram cannot carry. These
-/// wrappers keep their `String` return so no caller changes, and fall back to
-/// the plain screen — a link to the cart is better than a link to nothing.
+// Every payload below is built by `crate::trios::deeplink::payload_for`, not
+// spelled out here.
+//
+// The shapes used to be written by hand in this file, and this file's
+// `#[cfg(test)] mod tests` — 22 assertions, several of them about exactly
+// these strings — runs **none of them**, because `src/ui` is
+// `#[cfg(target_arch = "wasm32")]` and `cargo test` never reaches it. The
+// parser was already shared; the builder was not, so a drift between
+// `garden__<id>` and `garden_<id>` would have shipped green.
+//
+// `payload_for` returns `None` for something Telegram cannot carry. These
+// wrappers keep their `String` return so no caller changes, and fall back to
+// the plain screen — a link to the cart is better than a link to nothing.
+//
+// (This was `///` until the wasm lib was first compiled with `-D warnings`:
+// a doc comment followed by a blank line documents nothing, and clippy's
+// `empty_line_after_doc_comments` is deny-by-default here. It is a section
+// note about the group, not the docs of any one function, so `//` is correct.)
 
 /// Build a `startapp` parameter that opens the Mini App on the order detail
 /// screen. Format: `o_{order_id}`.

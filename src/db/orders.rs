@@ -22,20 +22,51 @@ pub(crate) struct Order {
     pub created_at: chrono::DateTime<chrono::Utc>,
 }
 
-// Cycle #85: SeaORM `order::Model` → wire `Order` conversion. Wire shape
-// preserves the f64 finite-clamp from the old `from_row` path so a
-// `NUMERIC → DOUBLE PRECISION` migration artifact (NaN/Inf in the column)
-// can't poison clients. Entity has identical column set; `DateTimeWithTimeZone`
-// converts to `chrono::DateTime<chrono::Utc>` via `.into()` (re-zones).
+/// D9: the only conversion this module performs on a money figure.
+///
+/// An absent, NaN, infinite or negative figure **stays absent**. It is
+/// deliberately not clamped to `0.0`: a zero rate reads as "free" and a zero
+/// deposit reads as "nothing owed", while `None` reads as "not computed yet"
+/// and renders as a dash. The three constructs in this tree that turn an
+/// unknown number into a confident zero — the `clamp` closure in
+/// `db/strains.rs`, `NOT NULL DEFAULT 0` in SQL, and `try_get_warn!` (fail-open
+/// by design) — are all bypassed on purpose.
+pub(crate) fn finite_money(raw: Option<f64>) -> Option<f64> {
+    raw.filter(|v| v.is_finite() && *v >= 0.0)
+}
+
+// Cycle #85: SeaORM `order::Model` → wire `Order` conversion. Entity has
+// identical column set; `DateTimeWithTimeZone` converts to
+// `chrono::DateTime<chrono::Utc>` via `.into()` (re-zones).
 impl From<crate::db::entities::order::Model> for Order {
     fn from(m: crate::db::entities::order::Model) -> Self {
-        let clamp = |v: f64| -> f64 {
-            if v.is_finite() {
-                v.max(0.0)
-            } else {
-                0.0
+        // `subtotal` / `bonus_used` / `total` are `NOT NULL DEFAULT 0` columns
+        // (`migrations/001_initial.sql:64-66`) and 001 is frozen (D2), so this
+        // wire shape cannot express "absent" for them the way the nullable
+        // bike money on `OrderItem` can. What it can stop doing is lying
+        // quietly: the old closure turned a NaN — which Postgres
+        // `DOUBLE PRECISION` accepts and `serde_json` cannot serialise at all
+        // — into a confident `0` with no trace. Name the order and the field,
+        // then fall back to 0 only because the response must serialise. New
+        // money goes through `finite_money` and stays absent (D9).
+        let money = |v: f64, field: &'static str| -> f64 {
+            match finite_money(Some(v)) {
+                Some(ok) => ok,
+                None => {
+                    tracing::error!(
+                        order_id = %m.id,
+                        field = field,
+                        value = v,
+                        "order money column is not a finite non-negative number; \
+                         reported as 0 because the wire field cannot be null"
+                    );
+                    0.0
+                }
             }
         };
+        let subtotal = money(m.subtotal, "subtotal");
+        let bonus_used = money(m.bonus_used, "bonus_used");
+        let total = money(m.total, "total");
         Self {
             id: m.id,
             telegram_id: m.telegram_id,
@@ -43,10 +74,10 @@ impl From<crate::db::entities::order::Model> for Order {
             customer_phone: m.customer_phone,
             customer_telegram: m.customer_telegram,
             items: m.items,
-            subtotal: clamp(m.subtotal),
-            bonus_used: clamp(m.bonus_used),
+            subtotal,
+            bonus_used,
             stars_used: m.stars_used.max(0),
-            total: clamp(m.total),
+            total,
             status: m.status,
             shop_id: m.shop_id,
             delivery_address: m.delivery_address,
@@ -68,8 +99,14 @@ impl From<crate::db::entities::order::Model> for Order {
 /// total_spent on loyalty_profiles via upsert, recompute tier with a
 /// CASE-WHEN that consults loyalty_config thresholds. Drop = auto-rollback;
 /// Pure helper: extract the cashback percent for a tier from the
-/// `loyalty_config.config` JSONB value. Falls back to sane defaults and
-/// clamps to [0, 100]. Testable without a DB.
+/// `loyalty_config.config` JSONB value. Testable without a DB.
+///
+/// D9 note: unlike the bike money fields, this substitutes a default when the
+/// config is absent or malformed, because the caller credits a percentage and
+/// has no dash to render. The defaults below are the shop's standing policy,
+/// not a measurement — so every substitution is logged rather than made
+/// silently, which is how a half-migrated `loyalty_config` becomes visible
+/// instead of quietly paying everyone the bronze rate.
 pub(crate) fn cashback_pct_for_tier(config: &serde_json::Value, tier: &str) -> f64 {
     let key = match tier {
         "gold" => "gold_cashback_pct",
@@ -84,20 +121,27 @@ pub(crate) fn cashback_pct_for_tier(config: &serde_json::Value, tier: &str) -> f
         _ => 2.0,
     };
     let raw = config.get(key).cloned().unwrap_or(serde_json::Value::Null);
-    let pct = if raw.is_array() {
+    let parsed = if raw.is_array() {
         // `progressive_cashback` is an array indexed by completed-order
         // count. Without that context, use the first (lowest) value.
         raw.as_array()
             .and_then(|arr| arr.first())
             .and_then(|v| v.as_f64())
-            .unwrap_or(default)
     } else {
-        raw.as_f64().unwrap_or(default)
+        raw.as_f64()
     };
-    if pct.is_finite() && pct >= 0.0 {
-        pct
-    } else {
-        default
+    match parsed.filter(|pct| pct.is_finite() && *pct >= 0.0) {
+        Some(pct) => pct,
+        None => {
+            tracing::warn!(
+                tier = tier,
+                config_key = key,
+                default_pct = default,
+                "loyalty_config has no usable cashback percent for this tier; \
+                 crediting the standing default"
+            );
+            default
+        }
     }
 }
 
@@ -174,10 +218,18 @@ pub async fn complete_order_and_update_loyalty(
         tx.commit().await?;
         return Ok(None);
     };
-    let total = if order.total.is_finite() {
-        order.total.max(0.0)
-    } else {
-        0.0
+    // D9: `total` drives `total_spent`, the tier recompute and the cashback
+    // credit. A non-finite column value used to become `0.0` here, which
+    // completed the order, accumulated nothing and credited cashback on a
+    // number nobody owed. Refuse instead — the fn already returns `DbErr`,
+    // `validate_create_order` rejects a non-finite total at the door, and an
+    // order that cannot be priced must not be turned into loyalty money.
+    let Some(total) = finite_money(Some(order.total)) else {
+        return Err(sea_orm::DbErr::Custom(format!(
+            "complete_order: order {} has a non-finite total ({}); refusing to \
+             complete it rather than crediting loyalty on a substituted 0",
+            order_id, order.total
+        )));
     };
 
     // 2. Count prior completions BEFORE the flip — gives the correct
@@ -324,77 +376,15 @@ pub async fn complete_order_and_update_loyalty(
         }
     }
 
-    // 6. Cycle #168: seed a garden plant if this order contains a
-    //    strain AND the user has no active plant. Closes the gap
-    //    flagged by user-report — the Garden UI says "Order a strain
-    //    to get your first seed!" but `complete_order_and_update_loyalty`
-    //    never seeded plants for orders completed AFTER the cycle-#15
-    //    one-shot backfill (migration 026) ran. The backfill SQL was
-    //    documented as a forward-design but the matching forward
-    //    write was never landed.
-    //
-    //    Match migration 026's shape:
-    //      * pick the FIRST strain item in `order.items` (a JSONB array)
-    //      * stage = 'seed', water_count = 0
-    //      * INSERT ... WHERE NOT EXISTS (active plant) — preserves
-    //        the cycle-#94 one-active-plant-at-a-time invariant
-    //
-    //    Side-effect contract: an order with no strain items (pure
-    //    accessory/tea/set orders) doesn't plant — same as the
-    //    backfill, intentional.
-    // Wave #66: seed precedence is one SSOT now. This was a line-for-line
-    // logical clone of `first_seedable_item` (the `force_seed` endpoint) and
-    // migration 037's SQL backfill — three copies of "which order item becomes
-    // the seed", each drifting independently (that's the 026→036→037 hotfix
-    // history). Call the pure core so the completion side-effect, force_seed,
-    // and the backfill can't diverge again. Precedence strain→set→accessory→tea
-    // within an item is locked vs SQL 037 by `seed_keys_match_sql_backfill_037`.
-    let strain_seed = crate::trios::garden::first_seedable_item(&order.items);
-    if let Some((strain_id, strain_name)) = strain_seed {
-        let plant_id = uuid::Uuid::new_v4().to_string();
-        let planted_at = chrono::Utc::now().timestamp_millis();
-        // Bug fix (discounts too frequent): also refuse to seed within
-        // POST_HARVEST_COOLDOWN_MS of the user's most recent harvest, so a new
-        // garden discount can't be earned more than ~once per day. The existing
-        // "no active plant" guard alone allowed back-to-back reward cycles.
-        let harvest_cooldown_floor =
-            planted_at.saturating_sub(crate::trios::garden::POST_HARVEST_COOLDOWN_MS);
-        tx.execute(Statement::from_sql_and_values(
-            DbBackend::Postgres,
-            // B1: only seed a plant whose product still exists AND is available
-            // in the LIVE catalog. Order JSON is a stale snapshot — a strain the
-            // shop later deleted/hid used to be seeded as a "phantom" not in the
-            // menu. The EXISTS gate (any of the 6 catalogs, available=true) keeps
-            // the garden in sync with what's actually buyable.
-            "INSERT INTO garden_plants \
-                  (id, user_id, strain_id, strain_name, current_stage, planted_at, is_completed, water_count) \
-             SELECT $1, $2, $3, $4, 'seed', $5, false, 0 \
-             WHERE NOT EXISTS ( \
-                 SELECT 1 FROM garden_plants WHERE user_id = $2 AND harvested_at IS NULL \
-             ) \
-             AND NOT EXISTS ( \
-                 SELECT 1 FROM garden_plants \
-                 WHERE user_id = $2 AND harvested_at IS NOT NULL AND harvested_at > $6 \
-             ) \
-             AND EXISTS ( \
-                 SELECT 1 FROM strains        WHERE id = $3 AND is_available = true \
-                 UNION ALL SELECT 1 FROM sets           WHERE id = $3 AND is_available = true \
-                 UNION ALL SELECT 1 FROM accessory_sets WHERE id = $3 AND is_available = true \
-                 UNION ALL SELECT 1 FROM tea_sets       WHERE id = $3 AND is_available = true \
-                 UNION ALL SELECT 1 FROM accessories    WHERE id = $3 AND is_available = true \
-                 UNION ALL SELECT 1 FROM tea_products   WHERE id = $3 AND is_available = true \
-             )",
-            [
-                plant_id.into(),
-                cid.to_string().into(),
-                strain_id.into(),
-                strain_name.into(),
-                planted_at.into(),
-                harvest_cooldown_floor.into(),
-            ],
-        ))
-        .await?;
-    }
+    // 6. D5: the garden seed side-effect used to run here. It planted a
+    //    virtual seed for the first cannabis item in the order and gated the
+    //    INSERT on an `EXISTS` union over the six cannabis catalogs
+    //    (`strains`, `sets`, `accessory_sets`, `tea_sets`, `accessories`,
+    //    `tea_products`) — the last place in this module that named a
+    //    cannabis table. A motorbike rental has no botanical analogue, so the
+    //    mechanic is deleted rather than repointed: no bike family is planted,
+    //    watered or harvested, and completing a rental now has exactly the
+    //    loyalty side-effects above and nothing else.
 
     tx.commit().await?;
 
@@ -508,20 +498,197 @@ pub struct OrderItem {
     pub tea_name: Option<String>,
     pub set_id: Option<String>,
     pub set_name: Option<String>,
+    /// How much of this line. On a bike line (`bike.is_some()`) this is the
+    /// number of UNITS of the family being booked or bought, and the API
+    /// requires a whole number; on a legacy line it is the catalog quantity.
     pub quantity: f64,
     /// Unit price captured at the time the order was created. Lets the
     /// "reorder" feature rebuild the cart without fetching every catalog.
+    /// Not used by bike lines: a rental is priced per DAY and a sale per
+    /// unit by a human, so both live in [`BikeLine`] where they can be
+    /// absent without being mistaken for a line total.
     #[serde(default)]
     pub unit_price: Option<f64>,
     pub is_set: Option<bool>,
     pub is_accessory: Option<bool>,
     pub is_tea: Option<bool>,
     pub is_tea_set: Option<bool>,
-    /// A3: per-drink fulfillment — "dine_in" (на месте) or "takeaway" (с собой).
-    /// Only set for drink (tea) items; None for everything else. Stored in the
-    /// order `items` JSONB so staff see how each drink should be served.
+    /// D7 (`fulfillment`, two l's — the shipped spelling wins over the spec's
+    /// `fulfilment`, and a serde split here would silently drop the field on
+    /// every order): how this line is handed over.
+    ///
+    /// * legacy drink lines — "dine_in" (на месте) or "takeaway" (с собой)
+    /// * bike lines — "delivery" (to the accommodation) or "pickup" (at the
+    ///   Kamala office, which is the shop's default); the API rejects any
+    ///   other value on a bike line
+    ///
+    /// Stored in the order `items` JSONB so staff see how each line is served.
     #[serde(default)]
     pub fulfillment: Option<String>,
+    /// The bike half of the line: present on a rental or a sale, `None` on the
+    /// legacy (pre-rebrand) lines the `items` JSONB still holds.
+    #[serde(default)]
+    pub bike: Option<BikeLine>,
+}
+
+/// One bike on an order — the model the customer chose, and which kind of deal
+/// it is. Rental and sale are the same catalog family seen two ways, so they
+/// share the identity fields and differ only inside [`BikeDeal`].
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[allow(unreachable_pub)] // Reachable through `OrderItem`, which is itself pub for the api/*.rs request bodies.
+pub struct BikeLine {
+    /// `bikes.key` — the FAMILY key (`"nmax-155"`), never a
+    /// `bike_units.unit_code`. D8: the customer books a model and the shop
+    /// assigns the unit, so a line that named a unit would promise something
+    /// checkout cannot keep.
+    pub bike_key: String,
+    /// Brand + model as it read when the line was created, kept so an old
+    /// order still renders after the family is renamed. `None` falls back to
+    /// `bike_key` at render time — never to a guess at the model.
+    #[serde(default)]
+    pub bike_name: Option<String>,
+    /// Rental or sale. An enum, so no order line can carry rental dates and a
+    /// sale price at the same time.
+    pub deal: BikeDeal,
+}
+
+/// Rental or sale, tagged on the wire with the same `kind` vocabulary D8 gives
+/// `cart_items` (`bike_rental`), so a cart line maps to an order line without
+/// a translation table.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+#[allow(unreachable_pub)] // Reachable through `OrderItem`, which is itself pub for the api/*.rs request bodies.
+pub enum BikeDeal {
+    /// `kind = "bike_rental"`.
+    BikeRental {
+        /// First rental day, inclusive.
+        rental_start: chrono::NaiveDate,
+        /// Last rental day, inclusive. Equal to `rental_start` for one day.
+        rental_end: chrono::NaiveDate,
+        /// The per-day rate ACTUALLY QUOTED for this booking, in THB.
+        ///
+        /// D11: the quote comes from the door (the owner's live sheet), never
+        /// from arithmetic over a file — the published tariff in
+        /// `data/fleet_seed.json` is pre-class-discount and pre-term-discount,
+        /// and the term bands are ranges rather than multipliers. `None` means
+        /// the door was silent, i.e. a human still has to quote this rental; it
+        /// renders as a dash and must never be filled in with a computed
+        /// number, an average or a "from" price.
+        #[serde(default)]
+        rate_thb_day: Option<f64>,
+        /// The deposit actually agreed, and in which form. `None` means no
+        /// deposit has been agreed yet — not that none is owed.
+        #[serde(default)]
+        deposit: Option<DepositForm>,
+    },
+    /// `kind = "bike_sale"`.
+    BikeSale {
+        /// The sale price actually quoted for one unit, in THB. `None` means
+        /// unquoted and renders as a dash: no family in the seed publishes a
+        /// sale price, and D14 forbids deriving one from what the shop paid
+        /// for the bike, so an invented number here would be both wrong and
+        /// a leak.
+        #[serde(default)]
+        price_thb: Option<f64>,
+    },
+}
+
+/// The form a rental deposit took.
+///
+/// The seed's rule is verbatim: "Deposit is EITHER money OR the passport -
+/// never both." One enum, so the illegal state is unrepresentable — two
+/// nullable columns could hold a money amount *and* a held passport, and the
+/// staff member reading the order could not tell which one to return.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "form", rename_all = "snake_case")]
+#[allow(unreachable_pub)] // Reachable through `OrderItem`, which is itself pub for the api/*.rs request bodies.
+pub enum DepositForm {
+    /// Money was taken. It must be returned by the same method and at the same
+    /// fixed amount that was agreed, which is why the method is recorded next
+    /// to the figure rather than inferred later.
+    Money {
+        /// The figure agreed, in `currency`. `None` means it has not been
+        /// agreed or computed yet — a dash, never `0`, which would read as
+        /// "no deposit owed" (D9).
+        #[serde(default)]
+        amount: Option<f64>,
+        /// Currency of `amount` as agreed: "THB" for the published tiers, or
+        /// the USD/EUR equivalent the seed allows for a foreign-currency
+        /// deposit. `None` when nothing has been agreed.
+        #[serde(default)]
+        currency: Option<String>,
+        /// How it was taken, and therefore how it must be returned — one of
+        /// the accepted forms in the seed: cash THB, bank transfer, USDT.
+        #[serde(default)]
+        method: Option<String>,
+    },
+    /// The passport stands in place of money. Carries no amount at all: that
+    /// is the whole point of the enum.
+    Passport,
+}
+
+// The two accessors below have no caller yet: the checkout leg that will
+// read them (issue #10) is unwired; each carries an `#[allow(dead_code)]`
+// naming that. Unlike the free-function parks in db/bikes.rs, an impl
+// method with `#[expect(dead_code)]` roots itself live, so the expectation
+// cannot be used here — `allow` is the honest form.
+#[allow(unreachable_pub)] // Methods on a type reachable from the api/*.rs request bodies; pub(crate) would cascade.
+impl DepositForm {
+    /// The money figure agreed, filtered through [`finite_money`] so a NaN
+    /// written by an older client cannot reach a renderer as `0`.
+    ///
+    /// `None` for the passport form — which owes no money by construction —
+    /// and also `None` for a money deposit whose figure is not agreed yet.
+    /// A caller that must tell those two apart matches on the enum; that is
+    /// what it is for.
+    #[allow(dead_code)] // No caller yet — the checkout leg is issue #10.
+    pub fn agreed_amount(&self) -> Option<f64> {
+        match self {
+            DepositForm::Money { amount, .. } => finite_money(*amount),
+            DepositForm::Passport => None,
+        }
+    }
+
+    /// True when the passport is being held instead of money.
+    #[allow(dead_code)] // No caller yet — the checkout leg is issue #10.
+    pub fn is_passport(&self) -> bool {
+        matches!(self, DepositForm::Passport)
+    }
+}
+
+#[allow(unreachable_pub)] // Methods on a type reachable from the api/*.rs request bodies; pub(crate) would cascade.
+impl BikeDeal {
+    /// `(rental_start, rental_end)` for a rental, `None` for a sale.
+    pub fn rental_dates(&self) -> Option<(chrono::NaiveDate, chrono::NaiveDate)> {
+        match self {
+            BikeDeal::BikeRental {
+                rental_start,
+                rental_end,
+                ..
+            } => Some((*rental_start, *rental_end)),
+            BikeDeal::BikeSale { .. } => None,
+        }
+    }
+
+    /// How many calendar days the rental covers, both ends inclusive: a
+    /// booking that starts and ends on the same day is 1 day, and Monday to
+    /// Sunday is 7.
+    ///
+    /// Used only to bound the term (and to read it back to staff). It is
+    /// deliberately NOT multiplied by anything: the total a customer pays is
+    /// the door's quote, and `rate_thb_day × span_days` would be exactly the
+    /// invented number D11 forbids, since the door applies class and term
+    /// discounts this function knows nothing about.
+    pub fn span_days(&self) -> Option<i64> {
+        let (start, end) = self.rental_dates()?;
+        let span = (end - start).num_days();
+        if span < 0 {
+            // Backwards dates are rejected at the API boundary; report the
+            // span as absent rather than as a plausible-looking negative.
+            return None;
+        }
+        Some(span + 1)
+    }
 }
 
 // ─── Audit-table TTL sweeps (cycles #58 / #63 / #66) ──────────────────────
@@ -1252,7 +1419,10 @@ pub(crate) async fn fraud_stats_24h(
 
 #[cfg(test)]
 mod tests {
-    use super::{audit_sweep_sql, cashback_pct_for_tier, idempotency_sweep_sql, OrderItem};
+    use super::{
+        audit_sweep_sql, cashback_pct_for_tier, finite_money, idempotency_sweep_sql, BikeDeal,
+        BikeLine, DepositForm, OrderItem,
+    };
 
     // ── cashback_pct_for_tier (Loop #10) ───────────────────────────────
 
@@ -1681,6 +1851,7 @@ mod tests {
             is_tea: None,
             is_tea_set: None,
             fulfillment: None,
+            bike: None,
         };
         let json = serde_json::to_value(&item).unwrap();
         let back: OrderItem = serde_json::from_value(json).unwrap();
@@ -1706,8 +1877,197 @@ mod tests {
             is_tea: None,
             is_tea_set: None,
             fulfillment: None,
+            bike: None,
         };
         let json = serde_json::to_value(&item).unwrap();
         assert!(json.get("strain_id").is_some());
+    }
+
+    // ─── Bike lines: rental, sale, deposit form (issues #14 / #15) ─────────
+
+    fn d(y: i32, m: u32, day: u32) -> chrono::NaiveDate {
+        chrono::NaiveDate::from_ymd_opt(y, m, day).expect("test date is valid")
+    }
+
+    fn rental_item(deal: BikeDeal) -> OrderItem {
+        OrderItem {
+            strain_id: None,
+            strain_name: None,
+            accessory_id: None,
+            accessory_name: None,
+            tea_id: None,
+            tea_name: None,
+            set_id: None,
+            set_name: None,
+            quantity: 2.0,
+            unit_price: None,
+            is_set: None,
+            is_accessory: None,
+            is_tea: None,
+            is_tea_set: None,
+            fulfillment: Some("delivery".into()),
+            bike: Some(BikeLine {
+                bike_key: "nmax-155".into(),
+                bike_name: Some("Yamaha NMAX 155".into()),
+                deal,
+            }),
+        }
+    }
+
+    #[test]
+    fn rental_line_round_trips_with_every_field_the_shop_agreed() {
+        let item = rental_item(BikeDeal::BikeRental {
+            rental_start: d(2026, 9, 20),
+            rental_end: d(2026, 9, 26),
+            rate_thb_day: Some(337.0),
+            deposit: Some(DepositForm::Money {
+                amount: Some(3000.0),
+                currency: Some("THB".into()),
+                method: Some("cash THB".into()),
+            }),
+        });
+        let json = serde_json::to_value(&item).expect("rental line serialises");
+        // D8 vocabulary on the wire: the family key, the unit count, the two
+        // dates, and `kind = bike_rental` — the same tag `cart_items` uses.
+        assert_eq!(json["bike"]["bike_key"], "nmax-155");
+        assert_eq!(json["quantity"], 2.0);
+        assert_eq!(json["bike"]["deal"]["kind"], "bike_rental");
+        assert_eq!(json["bike"]["deal"]["rental_start"], "2026-09-20");
+        assert_eq!(json["bike"]["deal"]["rental_end"], "2026-09-26");
+        assert_eq!(json["bike"]["deal"]["deposit"]["form"], "money");
+
+        let back: OrderItem = serde_json::from_value(json).expect("rental line parses back");
+        let bike = back.bike.expect("bike half survives the round trip");
+        assert_eq!(bike.bike_key, "nmax-155");
+        assert_eq!(bike.deal.span_days(), Some(7));
+        match bike.deal {
+            BikeDeal::BikeRental {
+                rate_thb_day,
+                deposit,
+                ..
+            } => {
+                assert_eq!(rate_thb_day, Some(337.0));
+                let deposit = deposit.expect("deposit survives");
+                assert_eq!(deposit.agreed_amount(), Some(3000.0));
+                assert!(!deposit.is_passport());
+            }
+            BikeDeal::BikeSale { .. } => panic!("a rental must not parse back as a sale"),
+        }
+    }
+
+    #[test]
+    fn a_passport_deposit_carries_no_amount_at_all() {
+        // The seed's rule is "either money or the passport - never both". The
+        // enum is what enforces it: there is no field on `Passport` to put an
+        // amount in, so an order cannot claim a held passport AND held cash.
+        let json = serde_json::to_value(DepositForm::Passport).expect("passport serialises");
+        assert_eq!(json["form"], "passport");
+        assert_eq!(json.as_object().map(|o| o.len()), Some(1));
+        let back: DepositForm = serde_json::from_value(json).expect("passport parses back");
+        assert!(back.is_passport());
+        assert_eq!(back.agreed_amount(), None);
+    }
+
+    #[test]
+    fn an_unagreed_deposit_is_absent_not_zero() {
+        // "Not computed yet" must not render as "no deposit owed": the money
+        // form with no figure yields None, and so does a NaN written by an
+        // older client — never 0.0.
+        let blank = DepositForm::Money {
+            amount: None,
+            currency: None,
+            method: None,
+        };
+        assert_eq!(blank.agreed_amount(), None);
+        let nan = DepositForm::Money {
+            amount: Some(f64::NAN),
+            currency: Some("THB".into()),
+            method: None,
+        };
+        assert_eq!(nan.agreed_amount(), None);
+        let zero = DepositForm::Money {
+            amount: Some(0.0),
+            currency: Some("THB".into()),
+            method: None,
+        };
+        // A deliberate 0 is a fact the shop can state (a waived deposit); it
+        // is only the ABSENT figure that must never become one.
+        assert_eq!(zero.agreed_amount(), Some(0.0));
+    }
+
+    #[test]
+    fn an_unquoted_rental_keeps_its_rate_absent() {
+        // D11: when the door is silent the line carries no number at all —
+        // not an average, not a "from" price, not the pre-discount tariff.
+        let item = rental_item(BikeDeal::BikeRental {
+            rental_start: d(2026, 9, 20),
+            rental_end: d(2026, 9, 20),
+            rate_thb_day: None,
+            deposit: None,
+        });
+        let json = serde_json::to_value(&item).expect("serialises");
+        assert!(json["bike"]["deal"]["rate_thb_day"].is_null());
+        assert!(json["bike"]["deal"]["deposit"].is_null());
+        let bike = item.bike.expect("bike half present");
+        // Both ends inclusive: one calendar day is one day, not zero.
+        assert_eq!(bike.deal.span_days(), Some(1));
+    }
+
+    #[test]
+    fn sale_line_has_no_dates_and_rental_line_has_no_price() {
+        let sale = BikeDeal::BikeSale {
+            price_thb: Some(250_000.0),
+        };
+        assert_eq!(sale.rental_dates(), None);
+        assert_eq!(sale.span_days(), None);
+        let json = serde_json::to_value(&sale).expect("sale serialises");
+        assert_eq!(json["kind"], "bike_sale");
+        assert!(json.get("rental_start").is_none());
+
+        let rental = BikeDeal::BikeRental {
+            rental_start: d(2026, 12, 1),
+            rental_end: d(2026, 12, 31),
+            rate_thb_day: None,
+            deposit: None,
+        };
+        assert_eq!(rental.span_days(), Some(31));
+        let json = serde_json::to_value(&rental).expect("rental serialises");
+        assert!(json.get("price_thb").is_none());
+    }
+
+    #[test]
+    fn backwards_dates_report_no_span_rather_than_a_negative_one() {
+        let backwards = BikeDeal::BikeRental {
+            rental_start: d(2026, 9, 26),
+            rental_end: d(2026, 9, 20),
+            rate_thb_day: None,
+            deposit: None,
+        };
+        assert_eq!(backwards.span_days(), None);
+    }
+
+    #[test]
+    fn a_legacy_order_item_still_parses_without_a_bike_half() {
+        // Orders placed before the rebrand are still in `items` JSONB, and
+        // `api/reviews.rs` deserialises them. A missing `bike` key must be
+        // None, not a parse error.
+        let legacy = serde_json::json!({
+            "strain_id": "s1",
+            "strain_name": "Indica",
+            "quantity": 2.5,
+            "is_set": false
+        });
+        let item: OrderItem = serde_json::from_value(legacy).expect("legacy line parses");
+        assert!(item.bike.is_none());
+        assert_eq!(item.quantity, 2.5);
+    }
+
+    #[test]
+    fn finite_money_keeps_absent_absent() {
+        assert_eq!(finite_money(None), None);
+        assert_eq!(finite_money(Some(f64::NAN)), None);
+        assert_eq!(finite_money(Some(f64::INFINITY)), None);
+        assert_eq!(finite_money(Some(-1.0)), None);
+        assert_eq!(finite_money(Some(449.0)), Some(449.0));
     }
 }

@@ -1,4 +1,9 @@
 target/
+# A second build directory appears whenever someone runs clippy with
+# CARGO_TARGET_DIR set to keep it from invalidating the main cache.
+# `target/` above does not match it, so 587M of artifacts showed up in
+# `git status` as an untracked path.
+target-*/
 *.bak
 .env
 .DS_Store
@@ -8,7 +13,11 @@ target/
 !.cargo/
 .cargo/*
 !.cargo/audit.toml
-.claude/
+# Keep local Claude state ignored, but version repository agent definitions.
+.claude/*
+!.claude/agents/
+.claude/agents/*
+!.claude/agents/*.md
 
 # Trunk build output (built locally for Railway static serving; Docker path keeps
 dist/ but we commit it so Railway serves the pre-built WASM without a Docker stage)
@@ -35,3 +44,6 @@ docs/screenshots/
 .ruflo/
 .ruvector/
 .swarm/
+
+# Python scratch from local spec-verify runs; never shipped
+__pycache__/

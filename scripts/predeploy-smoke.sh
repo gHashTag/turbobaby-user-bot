@@ -24,7 +24,7 @@ NO_BUILD=0
 [ "${1:-}" = "--no-build" ] && NO_BUILD=1
 
 PORT="${SMOKE_PORT:-$((8000 + RANDOM % 1500))}"
-MARKER="${SMOKE_MARKER:-WOODY}"
+MOUNT_SELECTOR="${SMOKE_MOUNT_SELECTOR:-#turbobaby-app-mounted}"
 
 bold() { printf '\033[1m%s\033[0m\n' "$1"; }
 
@@ -46,8 +46,8 @@ if [ "${NO_BUILD}" != "1" ]; then
 
   # ── 2. build the release bundle
   bold "▶ 2/4  trunk build --release"
-  if ! trunk build --release >/tmp/wwb-smoke-trunk.log 2>&1; then
-    echo "  ✖ trunk build failed:"; tail -25 /tmp/wwb-smoke-trunk.log; exit 1
+  if ! trunk build --release >/tmp/turbobaby-smoke-trunk.log 2>&1; then
+    echo "  ✖ trunk build failed:"; tail -25 /tmp/turbobaby-smoke-trunk.log; exit 1
   fi
   echo "  ✓ built dist/"
 else
@@ -56,7 +56,7 @@ fi
 
 # ── 3. serve dist/ statically (the wasm load error is independent of the API)
 bold "▶ 3/4  serve dist/ on :${PORT}"
-( cd dist && exec python3 -m http.server "${PORT}" ) >/tmp/wwb-smoke-serve.log 2>&1 &
+( cd dist && exec python3 -m http.server "${PORT}" ) >/tmp/turbobaby-smoke-serve.log 2>&1 &
 SERVE_PID=$!
 cleanup() { kill "${SERVE_PID}" 2>/dev/null || true; }
 trap cleanup EXIT
@@ -68,7 +68,7 @@ echo "  ✓ serving"
 
 # ── 4. load it in headless Chrome; fail on any console error / unmounted app
 bold "▶ 4/4  headless browser smoke check"
-if python3 scripts/cdp_smoke.py "http://127.0.0.1:${PORT}/" "${MARKER}"; then
+if python3 scripts/cdp_smoke.py "http://127.0.0.1:${PORT}/" "${MOUNT_SELECTOR}"; then
   bold "✅ SMOKE PASS — frontend mounts, console clean. Safe to commit dist/ + deploy."
   exit 0
 else

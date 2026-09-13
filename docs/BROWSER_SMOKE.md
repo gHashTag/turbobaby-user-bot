@@ -1,45 +1,35 @@
 # Browser smoke test
 
-Visual sanity check that the WASM bundle in `dist/` actually mounts
-and renders the home screen. Catches: broken WASM build, missing
-asset, panic on init, font/CSS load failure. Does **not** test API
-calls (no backend started).
+Runtime check that the WASM bundle in `dist/` actually mounts. It catches a
+broken WASM build, missing asset, module-load exception, and regressions in the
+WebKit network-retry wrapper. It does **not** test API calls because no backend
+is started.
 
-This is the cycle #114 deliverable — first browser-side smoke after
-~13 cycles of backend-only work. Procedure is short enough to run
-locally; promote to an automated CI step (Playwright / Puppeteer) if
-visual drift becomes a recurring concern.
+The check is automated over the Chrome DevTools Protocol and fails unless the
+Rust-rendered `#turbobaby-app-mounted` sentinel exists.
 
 ## Prerequisites
 
 ```sh
-# Build the WASM bundle (release for accurate timing):
-cargo build --target wasm32-unknown-unknown --release
+# Build the release bundle and its compressed sidecars:
+./scripts/build-frontend.sh
 
-# If you've been running `cargo build` without trunk, `dist/` may
-# already be the last successful release output — `ls dist/` should
-# show index.html + woody-weed-bot-*.{js,wasm} + css.
+# `dist/` should now contain index.html, one hashed
+# turbobaby-bot-*.{js,wasm} pair, and CSS.
 ```
+
+The runner auto-detects Google Chrome, BrowserOS, Chromium, or Microsoft Edge.
+Set `CHROME_BIN` only when the browser executable lives somewhere else.
 
 ## Running
 
 ```sh
-cd dist
-python3 -m http.server 18080
-# In another tab / browser:
-open http://localhost:18080/
+./scripts/predeploy-smoke.sh --no-build
 ```
 
-Expected output (golden path, cycle #114 baseline):
-
-  * Logo + "WOODY WEEDPECKER" title + Russian subtitle render
-  * 6 category cards with emojis (Меню, Наборы, Sommelier, Аксессуары,
-    Чай, Сад)
-  * "Strain of the Day" panel shows `Loading...` (no backend)
-  * "ADVENTURES" section with two adventure cards
-  * Bottom nav bar: 9 items (Home / Menu / Sets / Gear / Tea / Garden
-    / Quest / Cart / Profile)
-  * Console: zero errors, zero warnings
+Expected output: `SMOKE OK`, the TurboBaby mount selector present, no uncaught
+JavaScript errors, and a two-call/three-byte pass from the synthetic retry
+probe. API 404s are expected on the static server and are reported as notes.
 
 ## Known limitations
 
@@ -59,11 +49,10 @@ Expected output (golden path, cycle #114 baseline):
 
 ## When this test catches something
 
-If the home screen fails to render and console has errors:
+If the app fails to mount or the console has errors:
 
-1. **WASM module fails to load** — check `dist/woody-weed-bot-*.wasm`
-   exists and is the latest build. Re-run `cargo build --target
-   wasm32-unknown-unknown --release`.
+1. **WASM module fails to load** — check `dist/turbobaby-bot-*.wasm`
+   exists and is the latest build. Re-run `./scripts/build-frontend.sh`.
 2. **Panic on init** — open DevTools console; the `panic_hook` in
    `src/lib.rs:14-32` injects a red overlay with the panic message
    into the page. Stack trace lives there too.

@@ -11,11 +11,11 @@
 #
 # Imports into Prometheus:
 #   rule_files:
-#     - /etc/prometheus/woody-weed-bot/recording-rules.yaml
-#     - /etc/prometheus/woody-weed-bot/alerts.yaml
+#     - /etc/prometheus/turbobaby-bot/recording-rules.yaml
+#     - /etc/prometheus/turbobaby-bot/alerts.yaml
 
 groups:
-  - name: woody_weed_bot_availability
+  - name: turbobaby_bot_availability
     interval: 30s
     rules:
       # ── Request rate per status class ───────────────────────────────
@@ -73,7 +73,7 @@ groups:
       - record: wwb:burn_rate:6h
         expr: wwb:error_ratio:6h / 0.005
 
-  - name: woody_weed_bot_latency
+  - name: turbobaby_bot_latency
     interval: 30s
     rules:
       - record: wwb:request_latency_p99:5m

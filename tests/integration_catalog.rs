@@ -44,7 +44,7 @@ async fn send(app: axum::Router, request: Request<Body>) -> Resp {
 }
 
 fn admin_token() -> String {
-    woody_weed_bot::api::auth::generate_admin_token("test_password", "dummy_test_token")
+    turbobaby_bot::api::auth::generate_admin_token("test_password", "dummy_test_token")
 }
 
 fn suffix() -> u32 {

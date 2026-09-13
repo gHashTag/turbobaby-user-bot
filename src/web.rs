@@ -5,5 +5,5 @@
 /// runs in the browser where tracing is wired up.
 #[allow(clippy::print_stdout)]
 fn main() {
-    println!("woody-weed-bot binary — use Trunk with library target for WASM");
+    println!("turbobaby-bot binary — use Trunk with library target for WASM");
 }

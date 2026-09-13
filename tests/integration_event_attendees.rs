@@ -46,7 +46,7 @@ async fn send(app: axum::Router, request: Request<Body>) -> Resp {
 }
 
 fn admin_token() -> String {
-    woody_weed_bot::api::auth::generate_admin_token("test_password", "dummy_test_token")
+    turbobaby_bot::api::auth::generate_admin_token("test_password", "dummy_test_token")
 }
 
 fn suffix() -> u32 {
@@ -58,7 +58,7 @@ fn suffix() -> u32 {
 }
 
 /// Seed a public event starting tomorrow with plenty of seats.
-async fn seed_event(db: &woody_weed_bot::db::Database, seats: i32) -> String {
+async fn seed_event(db: &turbobaby_bot::db::Database, seats: i32) -> String {
     let id = uuid::Uuid::new_v4().to_string();
     db.orm
         .execute(Statement::from_sql_and_values(

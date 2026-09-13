@@ -22,10 +22,8 @@ use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use serde_json::json;
 use tower::ServiceExt;
 
-use woody_weed_bot::api::auth::generate_admin_token;
-use woody_weed_bot::db::entities::loyalty_idempotency_key::{
-    Column as LikCol, Entity as LikEntity,
-};
+use turbobaby_bot::api::auth::generate_admin_token;
+use turbobaby_bot::db::entities::loyalty_idempotency_key::{Column as LikCol, Entity as LikEntity};
 
 #[tokio::test]
 #[ignore = "needs DATABASE_URL env var; run with --ignored"]

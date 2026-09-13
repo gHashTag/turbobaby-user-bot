@@ -3,7 +3,7 @@
 // Wraps any screen component with a configurable delay so the browser can
 // paint a lightweight skeleton *before* the heavy screen mounts.
 // The `heavy` flag increases the delay and yields extra time to the event loop
-// for large screens (Admin, Garden/Game, TechTree) that otherwise cause jank.
+// for large screens (Admin, Ride/Game, TechTree) that otherwise cause jank.
 
 use dioxus::prelude::*;
 

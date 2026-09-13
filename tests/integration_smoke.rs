@@ -14,7 +14,7 @@
 //! Cycle #162 unblocked this — `src/lib.rs` now exposes the backend
 //! modules under `#[cfg(all(not(target_arch = "wasm32"), feature =
 //! "backend"))]`, so `tests/*.rs` integration test binaries can reach
-//! `woody_weed_bot::api::router`, `woody_weed_bot::AppState`, etc.
+//! `turbobaby_bot::api::router`, `turbobaby_bot::AppState`, etc.
 
 #![cfg(feature = "backend")]
 
@@ -48,5 +48,5 @@ async fn smoke_ping_returns_ok() {
     let bytes = response.into_body().collect().await.unwrap().to_bytes();
     let body: serde_json::Value = serde_json::from_slice(&bytes).expect("json body");
     assert_eq!(body["status"], "ok");
-    assert_eq!(body["service"], "woody-weed-bot");
+    assert_eq!(body["service"], "turbobaby-bot");
 }

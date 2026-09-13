@@ -4,6 +4,12 @@ on: [push, pull_request]
 env:
   CARGO_TERM_COLOR: always
 
+# The server binary is `turbobaby-bot-server`, per DECISIONS.md D4 (package
+# woody-weed-bot -> turbobaby-bot, lib woody_weed_bot -> turbobaby_bot, bin
+# woody-weed-bot-server -> turbobaby-bot-server). Two jobs below name it
+# explicitly, so both fail loudly if the Cargo.toml rename is reverted rather
+# than silently linting a target that no longer exists.
+
 jobs:
   check:
     name: Check + Test
@@ -20,7 +26,7 @@ jobs:
       # clippy warnings (165 -> 0 on WASM, 4 -> 0 on backend), gate
       # future PRs to keep them clean. `-D warnings` fails the build on
       # any new lint.
-      - run: cargo clippy --features backend --bin woody-weed-bot-server -- -D warnings
+      - run: cargo clippy --features backend --bin turbobaby-bot-server -- -D warnings
       - run: cargo clippy --target wasm32-unknown-unknown --lib -- -D warnings
 
   build-wasm:
@@ -44,7 +50,7 @@ jobs:
       - run: |
           sudo apt-get update
           sudo apt-get install -y pkg-config musl-tools
-      - run: cargo build --release --target x86_64-unknown-linux-musl --features backend --bin woody-weed-bot-server
+      - run: cargo build --release --target x86_64-unknown-linux-musl --features backend --bin turbobaby-bot-server
 
   # Cycle #107: dependency vulnerability scan. Ignores are documented
   # in docs/SECURITY_AUDIT.md with rationale per advisory. A NEW
@@ -90,3 +96,36 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo install --locked cargo-machete
       - run: cargo machete
+
+  # Seed provenance. `data/fleet_seed.json` records where every published
+  # number came from; `migrations/082_bikes_seed.sql` is what actually reaches
+  # the database. Nothing but habit kept them equal, and the drift is silent in
+  # the direction that matters: a price edited in the SQL and not the JSON is
+  # served to a customer under a provenance note that no longer describes it.
+  # The checker already existed and ran in no workflow; this wires it. Python
+  # stdlib only, so no toolchain and no new dependency.
+  seed:
+    name: Fleet Seed Provenance
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 scripts/verify_fleet_seed.py -v
+
+  t27-contracts:
+    name: T27 Canonical Contracts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Check out pinned external T27 compiler
+        uses: actions/checkout@v4
+        with:
+          repository: gHashTag/t27
+          ref: 40003ed1379c8a417e13e45843de35088b88f8c0
+          path: .t27-toolchain
+      - name: Build pinned compiler
+        run: cargo build --locked --release --manifest-path .t27-toolchain/Cargo.toml -p t27c
+      - name: Parse, typecheck, test and generate every canonical contract
+        env:
+          T27C: .t27-toolchain/target/release/t27c
+        run: python3 scripts/verify_t27_specs.py --require-compiler -v

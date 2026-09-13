@@ -60,7 +60,7 @@ async fn water(
 
 /// Seed a strain + plant, return (plant_id, telegram_id).
 async fn seed_plant(
-    db: &woody_weed_bot::db::Database,
+    db: &turbobaby_bot::db::Database,
     last_watered_at: Option<i64>,
 ) -> (String, i64) {
     let suffix = rand_suffix();

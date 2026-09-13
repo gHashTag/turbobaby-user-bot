@@ -33,7 +33,7 @@ use sea_orm::{ColumnTrait, ConnectionTrait, DbBackend, EntityTrait, QueryFilter,
 use serde_json::json;
 use tower::ServiceExt;
 
-use woody_weed_bot::db::entities::order::{Column as OrderCol, Entity as OrderEntity};
+use turbobaby_bot::db::entities::order::{Column as OrderCol, Entity as OrderEntity};
 
 #[tokio::test]
 #[ignore = "needs DATABASE_URL env var; run with --ignored"]

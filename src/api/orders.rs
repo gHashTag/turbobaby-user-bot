@@ -14,13 +14,9 @@ use crate::api::rate_limit::{
     check_and_record, client_ip_from_headers, new_store, SlidingWindowStore,
 };
 use crate::db::entities::bonus_transaction::{Column as BtCol, Entity as BtEntity};
-use crate::db::orders::{Order, OrderItem};
-use crate::db::strains::Strain;
+use crate::db::orders::{BikeDeal, BikeLine, DepositForm, Order, OrderItem};
 use crate::promptpay::{build_payload, svg_qr};
-use crate::trios::pricing::{
-    effective_accessory_price, effective_set_price, effective_strain_price, effective_tea_price,
-    MarketingFlags,
-};
+use crate::trios::pricing::{effective_accessory_price, effective_set_price, effective_tea_price};
 use crate::AppState;
 use sea_orm::{ColumnTrait, QueryFilter};
 use std::collections::HashMap;
@@ -70,12 +66,11 @@ pub(crate) struct CreateOrderRequest {
     pub delivery_address: Option<String>,
     #[serde(default)]
     pub delivery_notes: Option<String>,
-    /// B4: an optional garden reward to apply (product-scoped discount). The
-    /// server loads the reward, computes the discount from DB prices, and
-    /// verifies `total = subtotal - bonus_used - stars_used - garden_discount`
-    /// — the client can't set the discount amount itself.
-    #[serde(default)]
-    pub garden_reward_id: Option<String>,
+    // D5: `garden_reward_id` is gone with the garden mechanic. The field was
+    // `#[serde(default)]`, and `CreateOrderRequest` does not deny unknown
+    // fields, so a client still sending the key gets it ignored rather than a
+    // 400 — which is what the old WASM checkout screen does until it is
+    // rebuilt.
     /// Loop #7: explicit per-order age confirmation (20+). The server
     /// rejects the request unless `true` — client-only UI checks are not
     /// enough for compliance.
@@ -213,25 +208,175 @@ fn validate_create_order(req: &CreateOrderRequest) -> Result<ValidatedPayment, S
         return Err(StatusCode::BAD_REQUEST);
     }
     let expected_total = (req.subtotal - bonus_used - stars_discount).max(0.0);
-    // B4: when a garden reward is applied the total is further reduced by a
-    // server-computed product discount, so the exact equality is deferred to
-    // create_order (which knows the discount). Here we only require the claimed
-    // total not to EXCEED the no-discount expected (a reward can only lower it).
-    if req
-        .garden_reward_id
-        .as_deref()
-        .is_some_and(|s| !s.is_empty())
-    {
-        if req.total > expected_total + 0.01 {
-            return Err(StatusCode::BAD_REQUEST);
-        }
-    } else if (req.total - expected_total).abs() > 0.01 {
+    // D5: the garden reward used to relax this into an inequality ("a reward
+    // can only lower the total"), with the exact figure re-checked later in
+    // `create_order`. With the mechanic gone the equality is strict again and
+    // there is no second, looser gate anywhere behind it.
+    if (req.total - expected_total).abs() > 0.01 {
         return Err(StatusCode::BAD_REQUEST);
     }
     Ok(ValidatedPayment {
         bonus_used,
         stars_used,
     })
+}
+
+/// Upper bound on units of one family on a single line.
+///
+/// The whole fleet is 37 units across 14 families and the largest family in
+/// `data/fleet_seed.json` holds 10 (`nmax-155`), so 20 cannot refuse a real
+/// booking while still rejecting the absurd. The generic `MAX_ITEM_QUANTITY`
+/// of 10 000 above is a grams/boxes ceiling and means nothing for machines.
+const MAX_BIKE_UNITS_PER_LINE: f64 = 20.0;
+
+/// Upper bound on a rental term, in days. The seed's longest observed term is
+/// 180 days; a year is the outer edge of plausible and keeps a typo'd date
+/// (`2206-09-14`) from being stored as a 180-year booking.
+const MAX_RENTAL_DAYS: i64 = 365;
+
+/// Upper bound on any single quoted THB figure on a bike line (per-day rate,
+/// deposit, sale price). The most expensive family rents at 2 788 ฿/day and
+/// the largest published deposit is 25 000 ฿; a used bike sells for a few
+/// hundred thousand. One million bounds all three without touching reality.
+const MAX_QUOTED_THB: f64 = 1_000_000.0;
+
+/// Shop-local today in Phuket (UTC+7), used to reject a rental that starts in
+/// the past.
+///
+/// `FixedOffset` rather than a tz database: Thailand has had no DST since 1976
+/// and the crate has no `chrono-tz`, which is also how `trios::promo` and
+/// `trios::happy_hour` read the shop's clock. `None` from `east_opt` is
+/// impossible for a constant 7 h, but it is handled rather than unwrapped
+/// (`clippy::unwrap_used`) by falling back to the UTC date — which in the hour
+/// before Bangkok midnight is yesterday, i.e. it errs towards accepting a
+/// booking, never towards refusing a valid one.
+fn shop_today() -> chrono::NaiveDate {
+    match chrono::FixedOffset::east_opt(7 * 3600) {
+        Some(tz) => chrono::Utc::now().with_timezone(&tz).date_naive(),
+        None => chrono::Utc::now().date_naive(),
+    }
+}
+
+/// Boundary validation for the bike half of every line — pure, so the rules
+/// are unit-testable without a database. `today` is the shop-local date
+/// ([`shop_today`] in production, a fixture in tests).
+///
+/// What it deliberately does NOT do: price anything. No rate is multiplied by
+/// a span, no deposit is derived from a tariff. D11 gives the quote to the
+/// door and D9 says an unquoted figure stays absent, so every money field
+/// here is optional and only *bounded* when present.
+fn validate_bike_lines(items: &[OrderItem], today: chrono::NaiveDate) -> Result<(), StatusCode> {
+    // A quoted THB figure must be a real, positive number when it is present.
+    // `None` is legitimate (the door was silent); `Some(0.0)` is not — a zero
+    // rate reads as "free" and a zero deposit as "nothing owed" (D9).
+    let quoted_ok = |v: Option<f64>| -> bool {
+        match v {
+            Some(x) => x.is_finite() && x > 0.0 && x <= MAX_QUOTED_THB,
+            None => true,
+        }
+    };
+    for item in items {
+        let Some(BikeLine {
+            bike_key,
+            bike_name,
+            deal,
+        }) = item.bike.as_ref()
+        else {
+            continue;
+        };
+        if bike_key.is_empty() || bike_key.len() > 200 {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+        if bike_name.as_ref().is_some_and(|n| n.len() > 200) {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+        // One line, one thing. A line carrying both a bike and a catalog id is
+        // malformed: the subtotal would price it as a helmet while the
+        // handover paperwork described a machine. Empty strings are treated as
+        // absent — old clients send `""` where they mean `null`.
+        let non_empty = |v: &Option<String>| v.as_deref().is_some_and(|s| !s.is_empty());
+        if non_empty(&item.strain_id)
+            || non_empty(&item.accessory_id)
+            || non_empty(&item.tea_id)
+            || non_empty(&item.set_id)
+        {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+        // Units, not grams: a line for 1.5 scooters cannot be handed over.
+        // (`validate_create_order` has already ruled out non-finite and
+        // non-positive quantities.)
+        if item.quantity.fract() != 0.0 || item.quantity > MAX_BIKE_UNITS_PER_LINE {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+        // D7: a bike is handed over at the office or delivered; the legacy
+        // drink vocabulary ("dine_in" / "takeaway") must not leak onto one.
+        if let Some(f) = item.fulfillment.as_deref() {
+            if !matches!(f, "delivery" | "pickup") {
+                return Err(StatusCode::BAD_REQUEST);
+            }
+        }
+        match deal {
+            BikeDeal::BikeRental {
+                rental_start,
+                rental_end,
+                rate_thb_day,
+                deposit,
+            } => {
+                if rental_end < rental_start {
+                    return Err(StatusCode::BAD_REQUEST);
+                }
+                // Both ends inclusive, same as `BikeDeal::span_days`.
+                if (*rental_end - *rental_start).num_days() + 1 > MAX_RENTAL_DAYS {
+                    return Err(StatusCode::BAD_REQUEST);
+                }
+                if rental_start < &today {
+                    // Not malformed — a stale cart left open overnight lands
+                    // here — so it is a 422, like the other "you cannot have
+                    // this" refusals.
+                    return Err(StatusCode::UNPROCESSABLE_ENTITY);
+                }
+                if !quoted_ok(*rate_thb_day) {
+                    return Err(StatusCode::BAD_REQUEST);
+                }
+                match deposit {
+                    Some(DepositForm::Money {
+                        amount,
+                        currency,
+                        method,
+                    }) => {
+                        if !quoted_ok(*amount) {
+                            return Err(StatusCode::BAD_REQUEST);
+                        }
+                        // "THB", or the USD/EUR equivalent the seed allows.
+                        if currency
+                            .as_ref()
+                            .is_some_and(|c| c.is_empty() || c.len() > 8)
+                        {
+                            return Err(StatusCode::BAD_REQUEST);
+                        }
+                        // How it must be returned: cash THB, bank transfer,
+                        // USDT. Free text, because the door agrees the wording
+                        // — bounded, not enumerated.
+                        if method
+                            .as_ref()
+                            .is_some_and(|m| m.is_empty() || m.len() > 50)
+                        {
+                            return Err(StatusCode::BAD_REQUEST);
+                        }
+                    }
+                    // The passport carries no amount by construction — that is
+                    // the whole point of the enum.
+                    Some(DepositForm::Passport) | None => {}
+                }
+            }
+            BikeDeal::BikeSale { price_thb } => {
+                if !quoted_ok(*price_thb) {
+                    return Err(StatusCode::BAD_REQUEST);
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 /// Load the configured max share of an order that can be paid with bonus
@@ -270,106 +415,20 @@ pub(crate) fn is_valid_idempotency_key(k: &str) -> bool {
             .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
 }
 
-/// Outcome of the server-side strain-subtotal check (cycle #56). Distinct
-/// variants so audit logs can tell stale-cart / typo / fraud apart.
-///
-/// Cycle #78: superseded in production by [`check_full_subtotal`] which
-/// covers every catalog (strains + accessories + tea + sets). The
-/// strain-only helper is kept as a focused unit-test target for the
-/// strain-portion logic — useful when adding a new strain-pricing edge
-/// case without paying the cost of building a full mixed-cart fixture.
-#[allow(dead_code)]
-#[derive(Debug, PartialEq)]
-pub(crate) enum SubtotalCheck {
-    /// Server-computed strain portion matches the client-claimed subtotal
-    /// within tolerance (strain-only orders) or fits within it (mixed orders).
-    Ok,
-    /// Item references an unknown `strain_id` — caller may be referencing a
-    /// deleted strain, or fabricated the id outright.
-    UnknownStrain(String),
-    /// Mixed order: the strain portion alone *exceeds* the claimed subtotal,
-    /// which is impossible unless the client lied about prices.
-    StrainExceedsSubtotal { strain: f64, claimed: f64 },
-    /// Strain-only order: server total disagrees with claimed by more than
-    /// `tolerance`. `expected` and `claimed` go in audit logs but MUST NOT be
-    /// echoed to the client (anti price-probing).
-    StrainOnlyMismatch { claimed: f64, expected: f64 },
-}
-
-/// Server-authoritative price check for the strain portion of an order.
-///
-/// Pure helper — does no IO. Caller fetches the strain rows and assembles
-/// the `strain_map`. Uses `trios::pricing::effective_strain_price` so the
-/// precedence rules cannot drift from the customer-facing menu.
-///
-/// Semantics:
-/// * Strain-only order (no `accessory_id` / `tea_id` / `set_id`): the server-
-///   computed strain subtotal must equal `claimed_subtotal` within `tolerance`.
-/// * Mixed order: only check that the strain portion alone does not exceed
-///   the claimed subtotal. Accessory / tea / set price authority is a
-///   separate cycle; until then, trust the client for those.
-/// * Unknown strain id: short-circuit with `UnknownStrain`.
-#[allow(dead_code)]
-pub(crate) fn check_strain_subtotal(
-    items: &[OrderItem],
-    strain_map: &HashMap<&str, &Strain>,
-    claimed_subtotal: f64,
-    tolerance: f64,
-    now: chrono::DateTime<chrono::Utc>,
-) -> SubtotalCheck {
-    let mut strain_sum = 0.0_f64;
-    let mut has_non_strain = false;
-    for item in items {
-        if let Some(sid) = item.strain_id.as_deref() {
-            let Some(strain) = strain_map.get(sid) else {
-                return SubtotalCheck::UnknownStrain(sid.to_string());
-            };
-            let flags = MarketingFlags {
-                price_per_gram: strain.price_per_gram,
-                is_strain_of_day: strain.is_strain_of_day,
-                strain_of_day_discount: strain.strain_of_day_discount,
-                sale_active: strain.sale_active,
-                sale_until: strain.sale_until.as_deref(),
-                sale_price: strain.sale_price,
-                discount_percent: strain.discount_percent,
-                is_new_arrival: strain.is_new_arrival,
-                new_until: strain.new_until.as_deref(),
-            };
-            let priced = effective_strain_price(&flags, now);
-            let qty = if item.quantity.is_finite() {
-                item.quantity.max(0.0)
-            } else {
-                0.0
-            };
-            strain_sum += priced.price * qty;
-        } else if item.accessory_id.is_some() || item.tea_id.is_some() || item.set_id.is_some() {
-            has_non_strain = true;
-        }
-    }
-    if has_non_strain {
-        if strain_sum > claimed_subtotal + tolerance {
-            return SubtotalCheck::StrainExceedsSubtotal {
-                strain: strain_sum,
-                claimed: claimed_subtotal,
-            };
-        }
-        return SubtotalCheck::Ok;
-    }
-    // Strain-only path — strict equality.
-    if (strain_sum - claimed_subtotal).abs() > tolerance {
-        return SubtotalCheck::StrainOnlyMismatch {
-            claimed: claimed_subtotal,
-            expected: strain_sum,
-        };
-    }
-    SubtotalCheck::Ok
-}
+// The strain-only `SubtotalCheck` / `check_strain_subtotal` pair (cycle #56,
+// kept as a focused unit-test target after cycle #78 superseded it) left with
+// the `strains` table: `083_drop_cannabis_catalog.sql` drops it, so there is
+// no row for the helper to price and nothing for a test to fixture.
 
 /// Catalog lookups for `check_full_subtotal` (cycle #58 / C). Built once per
-/// order from the four catalog SELECTs and handed in by reference.
+/// order from the catalog SELECTs and handed in by reference.
+///
+/// The `strains` map went with the table (`083_drop_cannabis_catalog.sql`).
+/// Accessories, tea and sets survive the rebrand and still price themselves
+/// from the DB; bikes are not in here at all, because a bike line contributes
+/// nothing to the authoritative subtotal — see [`check_full_subtotal`].
 #[derive(Debug, Default)]
 pub(crate) struct PriceCatalog<'a> {
-    pub strains: HashMap<&'a str, &'a Strain>,
     /// `id → (price, is_available)`.
     pub accessories: HashMap<&'a str, (f64, bool)>,
     pub tea_products: HashMap<&'a str, (f64, bool)>,
@@ -380,12 +439,14 @@ pub(crate) struct PriceCatalog<'a> {
 }
 
 /// Result of the full server-side price-authority check (cycle #58 / C).
-/// Strict equality across all four catalogs combined.
+/// Strict equality across every priced catalog combined.
 #[derive(Debug, PartialEq)]
 pub(crate) enum FullSubtotalCheck {
     Ok,
-    /// `catalog` is one of `"strains" | "accessories" | "tea_products" | "sets"`
-    /// so audit logs can pinpoint which catalog the missing id belongs to.
+    /// `catalog` is one of `"accessories" | "tea_products" | "sets"` so audit
+    /// logs can pinpoint which catalog the missing id belongs to. A missing
+    /// bike family is reported by [`check_bike_lines`] with `"bikes"`, not
+    /// from here — this helper is pure and never touches the fleet tables.
     UnknownItem {
         catalog: &'static str,
         id: String,
@@ -404,18 +465,34 @@ pub(crate) enum FullSubtotalCheck {
         claimed: f64,
         expected: f64,
     },
-    /// Line item is missing every `*_id` — malformed payload.
+    /// Line item is missing every `*_id` and carries no bike — malformed
+    /// payload.
     Malformed,
 }
 
-/// Server-authoritative subtotal check for every catalog: strain, accessory,
+/// Server-authoritative subtotal check for every priced catalog: accessory,
 /// tea product, set. Pure helper — caller fetches the rows in advance.
 ///
 /// Routing precedence (first match per item):
-///   1. `strain_id`     → strains (uses `trios::pricing::effective_strain_price`)
-///   2. `accessory_id`  → accessories
-///   3. `tea_id`        → tea_products
-///   4. `set_id`        → sets / accessory_sets / tea_sets (unified by UUID)
+///   1. `accessory_id`  → accessories
+///   2. `tea_id`        → tea_products
+///   3. `set_id`        → sets / accessory_sets / tea_sets (unified by UUID)
+///   4. `bike`          → contributes **zero**, see below
+///
+/// A bike line is deliberately last so that a line carrying both a catalog id
+/// and a bike is still priced by the catalog: putting the bike branch first
+/// would let a client attach an empty rental to an accessory and get it for
+/// nothing.
+///
+/// **Why a bike contributes zero.** A rental is not priced by this server at
+/// all. The tariff in `data/fleet_seed.json` is pre-class-discount, the term
+/// bands are ranges rather than multipliers, and D11 gives the number to the
+/// door — so `rate_thb_day × days` is precisely the invented figure that is
+/// forbidden. The deposit is returnable and is not revenue either. Both ride
+/// along on the line as the record of what was agreed, and the money that
+/// changes hands at the office is not this subtotal's business. The line is
+/// therefore skipped rather than treated as `Malformed`, and a bike-only cart
+/// legitimately claims a subtotal of 0.
 ///
 /// Strict equality required: a mixed order with an unauthorised price on any
 /// line item fails the check even if other lines compensate.
@@ -424,41 +501,23 @@ pub(crate) fn check_full_subtotal(
     catalog: &PriceCatalog<'_>,
     claimed_subtotal: f64,
     tolerance: f64,
-    now: chrono::DateTime<chrono::Utc>,
 ) -> FullSubtotalCheck {
     let mut sum = 0.0_f64;
     for item in items {
-        let qty = if item.quantity.is_finite() {
-            item.quantity.max(0.0)
-        } else {
-            0.0
-        };
-        let unit = if let Some(sid) = item.strain_id.as_deref() {
-            let Some(strain) = catalog.strains.get(sid) else {
-                return FullSubtotalCheck::UnknownItem {
-                    catalog: "strains",
-                    id: sid.into(),
-                };
-            };
-            if !strain.is_available {
-                return FullSubtotalCheck::Unavailable {
-                    catalog: "strains",
-                    id: sid.into(),
-                };
-            }
-            let flags = MarketingFlags {
-                price_per_gram: strain.price_per_gram,
-                is_strain_of_day: strain.is_strain_of_day,
-                strain_of_day_discount: strain.strain_of_day_discount,
-                sale_active: strain.sale_active,
-                sale_until: strain.sale_until.as_deref(),
-                sale_price: strain.sale_price,
-                discount_percent: strain.discount_percent,
-                is_new_arrival: strain.is_new_arrival,
-                new_until: strain.new_until.as_deref(),
-            };
-            effective_strain_price(&flags, now).price
-        } else if let Some(aid) = item.accessory_id.as_deref() {
+        // Fail closed on a quantity that is not a number. The boundary
+        // validator has already rejected those, but the old `else { 0.0 }`
+        // here meant that if one ever slipped through, the line would price
+        // itself at zero and a claimed subtotal of zero would be accepted.
+        if !item.quantity.is_finite() || item.quantity < 0.0 {
+            return FullSubtotalCheck::Malformed;
+        }
+        let qty = item.quantity;
+        // An empty id string counts as absent, matching `validate_bike_lines`:
+        // old clients send `""` where they mean `null`, and routing such a
+        // line into the accessory branch would refuse it as an unknown item
+        // with an empty id in the audit log. A non-bike line with nothing but
+        // `""` still lands on `Malformed` below.
+        let unit = if let Some(aid) = item.accessory_id.as_deref().filter(|s| !s.is_empty()) {
             let Some(&(price, avail)) = catalog.accessories.get(aid) else {
                 return FullSubtotalCheck::UnknownItem {
                     catalog: "accessories",
@@ -472,7 +531,7 @@ pub(crate) fn check_full_subtotal(
                 };
             }
             effective_accessory_price(price)
-        } else if let Some(tid) = item.tea_id.as_deref() {
+        } else if let Some(tid) = item.tea_id.as_deref().filter(|s| !s.is_empty()) {
             let Some(&(price, avail)) = catalog.tea_products.get(tid) else {
                 return FullSubtotalCheck::UnknownItem {
                     catalog: "tea_products",
@@ -486,7 +545,7 @@ pub(crate) fn check_full_subtotal(
                 };
             }
             effective_tea_price(price)
-        } else if let Some(sid) = item.set_id.as_deref() {
+        } else if let Some(sid) = item.set_id.as_deref().filter(|s| !s.is_empty()) {
             let Some(&(tp, dp, avail)) = catalog.sets.get(sid) else {
                 return FullSubtotalCheck::UnknownItem {
                     catalog: "sets",
@@ -500,6 +559,11 @@ pub(crate) fn check_full_subtotal(
                 };
             }
             effective_set_price(tp, dp)
+        } else if item.bike.is_some() {
+            // Rental and sale money is quoted and taken at the office; this
+            // line adds nothing to the cart total. Zero here is not a price —
+            // it is the absence of one from this subtotal's point of view.
+            0.0
         } else {
             return FullSubtotalCheck::Malformed;
         };
@@ -514,67 +578,174 @@ pub(crate) fn check_full_subtotal(
     FullSubtotalCheck::Ok
 }
 
-/// True if `item` references catalog product `id` in any of its `*_id` fields.
-pub(crate) fn item_matches_id(item: &OrderItem, id: &str) -> bool {
-    item.strain_id.as_deref() == Some(id)
-        || item.accessory_id.as_deref() == Some(id)
-        || item.tea_id.as_deref() == Some(id)
-        || item.set_id.as_deref() == Some(id)
+// `item_matches_id` and `item_unit_price` (the B4 garden product-scoped
+// discount) were only ever called from the garden-reward path in
+// `create_order`. D5 removes the mechanic rather than repointing it, so both
+// helpers and their tests go with it — under `-D warnings` a helper with no
+// callers is a build failure, and leaving one behind would also leave the
+// impression that some other code still computes a server-side discount.
+
+/// Outcome of the fleet-side check for one bike line. Mirrors
+/// [`FullSubtotalCheck`]'s vocabulary so `create_order` records the same fraud
+/// codes for a fabricated bike family as for a fabricated accessory.
+#[derive(Debug, PartialEq)]
+pub(crate) enum BikeLineCheck {
+    Ok,
+    /// No `bikes` row has this `key` — a stale cart, or an invented family.
+    UnknownFamily(String),
+    /// The family exists but `offered = false`: closed to NEW rentals. Today
+    /// that is `click-125` (D12), whose one unit is still out on a contract
+    /// that predates the decision. A sale is not blocked by this flag — the
+    /// column's documented meaning is about renting.
+    NotOffered(String),
+    /// A rental of a family that publishes no `base_rate_thb_day`. D9's
+    /// amendment: a family with no published rate is not addable to a cart —
+    /// the call refuses and the catalog says a human quotes this price (D11).
+    /// Accepting it would put a rental with no rate anywhere in the system on
+    /// the books.
+    NoPublishedRate(String),
 }
 
-/// Server-authoritative UNIT price for one order item — same catalog + effective
-/// price logic as `check_full_subtotal`, but per-item. `None` if the product is
-/// unknown or unavailable. Used by the B4 garden discount so the reduction is
-/// computed server-side (never trusting a client-sent amount).
-pub(crate) fn item_unit_price(
-    item: &OrderItem,
-    catalog: &PriceCatalog<'_>,
-    now: chrono::DateTime<chrono::Utc>,
-) -> Option<f64> {
-    if let Some(sid) = item.strain_id.as_deref() {
-        let strain = catalog.strains.get(sid)?;
-        if !strain.is_available {
-            return None;
-        }
-        let flags = MarketingFlags {
-            price_per_gram: strain.price_per_gram,
-            is_strain_of_day: strain.is_strain_of_day,
-            strain_of_day_discount: strain.strain_of_day_discount,
-            sale_active: strain.sale_active,
-            sale_until: strain.sale_until.as_deref(),
-            sale_price: strain.sale_price,
-            discount_percent: strain.discount_percent,
-            is_new_arrival: strain.is_new_arrival,
-            new_until: strain.new_until.as_deref(),
-        };
-        Some(effective_strain_price(&flags, now).price)
-    } else if let Some(aid) = item.accessory_id.as_deref() {
-        let &(price, avail) = catalog.accessories.get(aid)?;
-        if !avail {
-            return None;
-        }
-        Some(effective_accessory_price(price))
-    } else if let Some(tid) = item.tea_id.as_deref() {
-        let &(price, avail) = catalog.tea_products.get(tid)?;
-        if !avail {
-            return None;
-        }
-        Some(effective_tea_price(price))
-    } else if let Some(sid) = item.set_id.as_deref() {
-        let &(tp, dp, avail) = catalog.sets.get(sid)?;
-        if !avail {
-            return None;
-        }
-        Some(effective_set_price(tp, dp))
+/// Compare the rate the client says was quoted against the one the seed-derived
+/// tariff implies, and log any divergence of a baht or more.
+///
+/// D11: "Every priced answer logs any divergence of 1 baht or more between the
+/// door's number and the file's number", non-blocking. Here the client's
+/// `rate_thb_day` IS the door's number (the owner quoted it in the chat that
+/// produced the booking) and `base_rate_thb_day × (1 - class discount)` is the
+/// file's. Neither is corrected to match the other: the quote stands, and the
+/// log is for whoever reconciles the sheet later.
+///
+/// Pure, and it returns the pair it compared so a test can assert on it
+/// without reading a log: `Some((quoted, from_file))` when both numbers exist
+/// and differ by at least a baht.
+fn rate_divergence(
+    quoted_thb_day: Option<f64>,
+    base_rate_thb_day: Option<f64>,
+    class_discount: Option<f64>,
+) -> Option<(f64, f64)> {
+    use crate::db::bikes::{apply_class_discount, round_half_up_baht};
+    let quoted = quoted_thb_day.filter(|v| v.is_finite())?;
+    let from_file = round_half_up_baht(apply_class_discount(base_rate_thb_day, class_discount))?;
+    if (quoted - from_file).abs() >= 1.0 {
+        Some((quoted, from_file))
     } else {
         None
     }
 }
 
+/// Fleet-side authority for the bike lines of an order: the family must exist,
+/// a rental must be of a family that is still offered and that publishes a
+/// rate, and any quoted rate is reconciled against the file.
+///
+/// One `find_family_by_key` per distinct family — a cart holds one or two, and
+/// the whole fleet is 14 families, so this is cheaper and far clearer than
+/// assembling another `ANY($1)` map. `class_discounts` is read once and only
+/// when a rental line is actually present.
+///
+/// What this does NOT do is reserve anything. `units_available` counts the
+/// units sitting at base *right now*, which says nothing about a booking three
+/// weeks out, so a shortfall is logged for staff and never refuses the order —
+/// refusing a legitimate future booking on a today-only count would be worse
+/// than not checking. There is no reservation table in the schema yet.
+async fn check_bike_lines(
+    orm: &sea_orm::DatabaseConnection,
+    items: &[OrderItem],
+) -> Result<BikeLineCheck, sea_orm::DbErr> {
+    use crate::db::bikes::{discount_for_class, find_family_by_key, list_class_discounts};
+
+    // Units wanted per family, summed over the lines, and whether any line of
+    // that family is a rental.
+    let mut wanted: Vec<(&str, f64, bool)> = Vec::new();
+    for item in items {
+        let Some(bike) = item.bike.as_ref() else {
+            continue;
+        };
+        let is_rental = bike.deal.rental_dates().is_some();
+        match wanted.iter_mut().find(|(k, _, _)| *k == bike.bike_key) {
+            Some(entry) => {
+                entry.1 += item.quantity;
+                entry.2 |= is_rental;
+            }
+            None => wanted.push((bike.bike_key.as_str(), item.quantity, is_rental)),
+        }
+    }
+    if wanted.is_empty() {
+        return Ok(BikeLineCheck::Ok);
+    }
+
+    let any_rental = wanted.iter().any(|(_, _, rental)| *rental);
+    // An empty table is not "no discounts" — it is unseeded, and then
+    // `discount_for_class` returns `None` and no file-side rate is computed.
+    // That silences the divergence log; it never quotes the pre-discount
+    // tariff, which would overstate a scooter by a third.
+    let discounts = if any_rental {
+        list_class_discounts(orm)
+            .await
+            .map_err(|e| sea_orm::DbErr::Custom(format!("list_class_discounts: {e}")))?
+    } else {
+        Vec::new()
+    };
+
+    let mut found: Vec<(&str, crate::db::bikes::BikeListing)> = Vec::new();
+    for (key, units, is_rental) in &wanted {
+        let listing = find_family_by_key(orm, key)
+            .await
+            .map_err(|e| sea_orm::DbErr::Custom(format!("find_family_by_key({key}): {e}")))?;
+        let Some(listing) = listing else {
+            return Ok(BikeLineCheck::UnknownFamily((*key).to_string()));
+        };
+        if *is_rental {
+            if !listing.bike.offered {
+                return Ok(BikeLineCheck::NotOffered((*key).to_string()));
+            }
+            if listing.bike.base_rate_thb_day.is_none() {
+                return Ok(BikeLineCheck::NoPublishedRate((*key).to_string()));
+            }
+        }
+        if listing.units_available < units.ceil() as i64 {
+            tracing::info!(
+                bike_key = %key,
+                units_requested = units,
+                units_available = listing.units_available,
+                "create_order: more units booked than are at base today — not a refusal, \
+                 the availability count is point-in-time and carries no reservation"
+            );
+        }
+        found.push((key, listing));
+    }
+
+    // Reconcile each quoted rate against the file, per line, reusing the rows
+    // the gate above already read.
+    for item in items {
+        let Some(bike) = item.bike.as_ref() else {
+            continue;
+        };
+        let BikeDeal::BikeRental { rate_thb_day, .. } = &bike.deal else {
+            continue;
+        };
+        let Some((_, listing)) = found.iter().find(|(k, _)| *k == bike.bike_key) else {
+            continue;
+        };
+        let discount = discount_for_class(&discounts, &listing.bike.class);
+        if let Some((quoted, from_file)) =
+            rate_divergence(*rate_thb_day, listing.bike.base_rate_thb_day, discount)
+        {
+            tracing::info!(
+                bike_key = %bike.bike_key,
+                quoted_thb_day = quoted,
+                file_thb_day = from_file,
+                "create_order: quoted rate diverges from the file by a baht or more (D11, non-blocking)"
+            );
+        }
+    }
+    Ok(BikeLineCheck::Ok)
+}
+
 async fn create_order(
     headers: HeaderMap,
     State(state): State<AppState>,
-    Json(req): Json<CreateOrderRequest>,
+    Json(mut req): Json<CreateOrderRequest>,
 ) -> Result<Json<Value>, StatusCode> {
     // Cycle #57: X-Idempotency-Key (Stripe/AWS-style replay protection).
     // Optional — old clients without the header keep working — but when
@@ -660,83 +831,37 @@ async fn create_order(
         }
     }
 
-    // B4: load + validate an applied garden reward (product-scoped discount).
-    // Returns (reward_id, target_product_id, percent) on success. Every failure
-    // path is a 422 (the client claimed a reward it can't use) — never a silent
-    // accept. The discount AMOUNT is computed later from DB prices, not here.
-    let garden_reward: Option<(String, String, u32)> = {
-        use sea_orm::{ConnectionTrait, DbBackend, Statement};
-        if let Some(rid) = req.garden_reward_id.as_deref().filter(|s| !s.is_empty()) {
-            if rid.len() > 200 {
-                return Err(StatusCode::BAD_REQUEST);
-            }
-            let Some(uid) = req.telegram_id else {
-                // Rewards belong to an authenticated user; anon can't apply one.
-                return Err(StatusCode::UNPROCESSABLE_ENTITY);
-            };
-            let now_ms = chrono::Utc::now().timestamp_millis();
-            let row = state
-                .db
-                .orm
-                .query_one(Statement::from_sql_and_values(
-                    DbBackend::Postgres,
-                    "SELECT discount_percent, target_product_id, scope, is_used, expires_at, user_id \
-                     FROM garden_rewards WHERE id = $1",
-                    [rid.into()],
-                ))
-                .await
-                .map_err(|e| {
-                    error!("create_order: garden reward lookup failed: {e}");
-                    StatusCode::INTERNAL_SERVER_ERROR
-                })?;
-            let Some(row) = row else {
-                return Err(StatusCode::UNPROCESSABLE_ENTITY);
-            };
-            let r_user: String = row.try_get("", "user_id").unwrap_or_default();
-            let is_used: bool = row.try_get("", "is_used").unwrap_or(true);
-            let expires_at: i64 = row.try_get("", "expires_at").unwrap_or(0);
-            let scope: String = row.try_get("", "scope").unwrap_or_default();
-            let target: Option<String> = row
-                .try_get::<Option<String>>("", "target_product_id")
-                .ok()
-                .flatten();
-            let pct: i32 = row.try_get("", "discount_percent").unwrap_or(0);
-            if r_user != uid.to_string()
-                || is_used
-                || expires_at <= now_ms
-                || scope != "product"
-                || target.is_none()
-            {
-                tracing::info!(
-                    telegram_id = uid,
-                    "create_order: garden reward not applicable (used/expired/scope/owner)"
-                );
-                return Err(StatusCode::UNPROCESSABLE_ENTITY);
-            }
-            let Some(target) = target else {
-                return Err(StatusCode::UNPROCESSABLE_ENTITY);
-            };
-            // The reward's target product must actually be in the cart.
-            if !req.items.iter().any(|i| item_matches_id(i, &target)) {
-                return Err(StatusCode::UNPROCESSABLE_ENTITY);
-            }
-            Some((rid.to_string(), target, pct.clamp(0, 100) as u32))
-        } else {
-            None
-        }
-    };
-    let mut garden_discount = 0.0_f64;
+    // D8: the bike half of every line, checked before any money is touched.
+    // Pure and dateful — `shop_today()` is Phuket's date, not the server's.
+    validate_bike_lines(&req.items, shop_today())?;
 
-    // Cycle #58 / C: full server-side price authority across every catalog
-    // (strains + accessories + tea + sets). Cycle #56 covered strains only;
-    // this closes the remaining mixed-order trust path. `trios::pricing`
-    // (cycle #55) keeps the math identical to the customer-facing menu so
-    // legitimate orders never get flagged as fraud.
-    let strain_ids: Vec<String> = req
-        .items
-        .iter()
-        .filter_map(|i| i.strain_id.clone())
-        .collect();
+    // D9: a bike line's money lives in its `deal` and nowhere else. A per-day
+    // rate parked in `unit_price` renders as a line total (`rate × units`) on
+    // every screen that multiplies one by the other — an invented figure the
+    // door never quoted. Clear the field rather than trusting the client not
+    // to populate it; the stored order then says only what was agreed.
+    for item in req.items.iter_mut() {
+        if item.bike.is_some() {
+            item.unit_price = None;
+        }
+    }
+
+    // Cycle #58 / C: full server-side price authority across every priced
+    // catalog (accessories + tea + sets). `trios::pricing` (cycle #55) keeps
+    // the math identical to the customer-facing menu so legitimate orders
+    // never get flagged as fraud.
+    //
+    // The strain lookup left with the table (`083_drop_cannabis_catalog.sql`);
+    // a line that still carries a `strain_id` and nothing else now falls
+    // through to `Malformed`, which is the honest answer — that product
+    // cannot be sold any more.
+    //
+    // This block used to be skipped entirely when no catalog id was present,
+    // which meant a cart of lines referencing nothing at all never reached
+    // `check_full_subtotal` and its client-claimed subtotal was stored
+    // unchecked. It now always runs: each SELECT is still conditional on its
+    // own id list, so a bike-only cart costs no extra query and is required
+    // to claim a subtotal of 0.
     let accessory_ids: Vec<String> = req
         .items
         .iter()
@@ -744,35 +869,14 @@ async fn create_order(
         .collect();
     let tea_ids: Vec<String> = req.items.iter().filter_map(|i| i.tea_id.clone()).collect();
     let set_ids: Vec<String> = req.items.iter().filter_map(|i| i.set_id.clone()).collect();
-    if !strain_ids.is_empty()
-        || !accessory_ids.is_empty()
-        || !tea_ids.is_empty()
-        || !set_ids.is_empty()
     {
         // Cycle #90: full SeaORM. The legacy `lookup_client = state.db.pool.get()`
-        // is gone — strains go through the typed entity, accessory / tea /
-        // sets go through raw `Statement` (pattern #15). This was the last
-        // `state.db.pool` usage in api/orders.rs; after this cycle the
-        // orders endpoint is 100% off raw Pool.
+        // is gone — accessory / tea / sets go through raw `Statement`
+        // (pattern #15). This was the last `state.db.pool` usage in
+        // api/orders.rs; after this cycle the orders endpoint is 100% off raw
+        // Pool.
         use sea_orm::{ConnectionTrait, DbBackend, Statement};
         let mut catalog: PriceCatalog<'_> = PriceCatalog::default();
-        let strains: Vec<Strain> = if !strain_ids.is_empty() {
-            use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
-            let models = crate::db::entities::strain::Entity::find()
-                .filter(crate::db::entities::strain::Column::Id.is_in(strain_ids.clone()))
-                .all(&state.db.orm)
-                .await
-                .map_err(|e| {
-                    error!("price-auth strain lookup (SeaORM): {}", e);
-                    StatusCode::INTERNAL_SERVER_ERROR
-                })?;
-            models.into_iter().map(Strain::from).collect()
-        } else {
-            Vec::new()
-        };
-        for s in &strains {
-            catalog.strains.insert(s.id.as_str(), s);
-        }
         // Accessories / tea_products — read-only price-auth lookups via raw
         // `Statement` (pattern #15). Generating full entities just for a
         // 3-column SELECT in a single call site isn't a useful trade —
@@ -888,28 +992,8 @@ async fn create_order(
             catalog.sets.insert(id.as_str(), (*tp, *dp, *a));
         }
 
-        match check_full_subtotal(&req.items, &catalog, req.subtotal, 0.01, chrono::Utc::now()) {
-            FullSubtotalCheck::Ok => {
-                // B4: compute the garden product-scoped discount from server-side
-                // prices (the catalog is live here). Applied to the target line's
-                // unit × quantity. If the target product can't be priced, reject.
-                if let Some((_, ref target, pct)) = garden_reward {
-                    let now_dt = chrono::Utc::now();
-                    if let Some(ti) = req.items.iter().find(|i| item_matches_id(i, target)) {
-                        match item_unit_price(ti, &catalog, now_dt) {
-                            Some(unit) => {
-                                let qty = if ti.quantity.is_finite() {
-                                    ti.quantity.max(0.0)
-                                } else {
-                                    0.0
-                                };
-                                garden_discount = (unit * qty * (pct as f64) / 100.0).max(0.0);
-                            }
-                            None => return Err(StatusCode::UNPROCESSABLE_ENTITY),
-                        }
-                    }
-                }
-            }
+        match check_full_subtotal(&req.items, &catalog, req.subtotal, 0.01) {
+            FullSubtotalCheck::Ok => {}
             FullSubtotalCheck::UnknownItem { catalog: cat, id } => {
                 tracing::warn!(
                     telegram_id = req.telegram_id.unwrap_or(0),
@@ -1005,6 +1089,76 @@ async fn create_order(
         }
     }
 
+    // D11/D12: the fleet half of price authority. A bike line adds nothing to
+    // the subtotal, so `check_full_subtotal` cannot police it — this does. It
+    // refuses unknown families, rentals of a family the door has closed, and
+    // rentals of a family with no published rate (there is no number to quote,
+    // so the cart cannot hold one). A quoted rate that disagrees with the file
+    // is logged, never corrected: the door is authoritative, and logging must
+    // not block the answer.
+    match check_bike_lines(&state.db.orm, &req.items).await {
+        Ok(BikeLineCheck::Ok) => {}
+        Ok(BikeLineCheck::UnknownFamily(key)) => {
+            tracing::warn!(
+                telegram_id = req.telegram_id.unwrap_or(0),
+                bike_key = %key,
+                "create_order: order references a bike family that does not exist"
+            );
+            if let Err(e) = crate::db::orders::record_fraud_event(
+                &state.db.orm,
+                req.telegram_id,
+                crate::db::orders::FRAUD_CODE_UNKNOWN_ITEM,
+                Some("bikes"),
+                Some(&key),
+                None,
+                None,
+            )
+            .await
+            {
+                tracing::warn!("fraud_event audit insert failed: {}", e);
+            }
+            return Err(StatusCode::UNPROCESSABLE_ENTITY);
+        }
+        Ok(BikeLineCheck::NotOffered(key)) => {
+            // The everyday case (click-125 is closed to new rentals while the
+            // existing rental runs), so info, not warn.
+            tracing::info!(
+                telegram_id = req.telegram_id.unwrap_or(0),
+                bike_key = %key,
+                "create_order: rental requested for a family not offered"
+            );
+            if let Err(e) = crate::db::orders::record_fraud_event(
+                &state.db.orm,
+                req.telegram_id,
+                crate::db::orders::FRAUD_CODE_UNAVAILABLE,
+                Some("bikes"),
+                Some(&key),
+                None,
+                None,
+            )
+            .await
+            {
+                tracing::warn!("fraud_event audit insert failed: {}", e);
+            }
+            return Err(StatusCode::UNPROCESSABLE_ENTITY);
+        }
+        Ok(BikeLineCheck::NoPublishedRate(key)) => {
+            // Not fraud, and not an empty cart line either: the shop has no
+            // published day rate for this family, so a human quotes it. No
+            // fraud event — the client did nothing wrong.
+            tracing::info!(
+                telegram_id = req.telegram_id.unwrap_or(0),
+                bike_key = %key,
+                "create_order: rental requested for a family with no published rate"
+            );
+            return Err(StatusCode::UNPROCESSABLE_ENTITY);
+        }
+        Err(e) => {
+            error!("create_order: bike line check failed: {e}");
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    }
+
     // Loop #14: enforce the configured max_bonus_usage_pct ceiling at the
     // trust boundary. The client can send any bonus_used ≤ subtotal, but the
     // business rule caps how much of an order can be paid with bonus balance.
@@ -1022,36 +1176,10 @@ async fn create_order(
         return Err(StatusCode::UNPROCESSABLE_ENTITY);
     }
 
-    // B4: with a garden reward applied, the authoritative total is
-    // subtotal - bonus_used - stars_used - (server-computed) garden_discount.
-    // Verify the client's claimed total matches; a mismatch = tampering → reject + audit.
-    if garden_reward.is_some() {
-        let stars_discount = stars_used as f64;
-        let expected = (req.subtotal - bonus_used - stars_discount - garden_discount).max(0.0);
-        if (req.total - expected).abs() > 0.01 {
-            tracing::warn!(
-                telegram_id = req.telegram_id.unwrap_or(0),
-                claimed_total = req.total,
-                expected_total = expected,
-                garden_discount,
-                "create_order: garden-discount total mismatch — possible tampering"
-            );
-            if let Err(e) = crate::db::orders::record_fraud_event(
-                &state.db.orm,
-                req.telegram_id,
-                crate::db::orders::FRAUD_CODE_SUBTOTAL_MISMATCH,
-                None,
-                None,
-                Some(req.total),
-                Some(expected),
-            )
-            .await
-            {
-                tracing::warn!("fraud_event audit insert failed: {}", e);
-            }
-            return Err(StatusCode::UNPROCESSABLE_ENTITY);
-        }
-    }
+    // D5: the garden reward's total re-check lived here. It only ran when a
+    // reward was applied; the unconditional identity
+    // `total == subtotal - bonus_used - stars_used` is now enforced for every
+    // order by `validate_create_order`, so nothing is lost by its removal.
 
     let id = uuid::Uuid::new_v4().to_string();
     let items_json = serde_json::to_value(&req.items).map_err(|e| {
@@ -1308,26 +1436,8 @@ async fn create_order(
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
-    // B4: consume the applied garden reward atomically with the order. The
-    // `WHERE is_used = false` makes it race-safe + idempotent: if a concurrent
-    // order already used it, 0 rows → abort (tx drops → full rollback) so the
-    // discount can never be applied twice.
-    if let Some((ref rid, _, _)) = garden_reward {
-        let used = tx
-            .execute(Statement::from_sql_and_values(
-                DbBackend::Postgres,
-                "UPDATE garden_rewards SET is_used = true WHERE id = $1 AND is_used = false",
-                [rid.clone().into()],
-            ))
-            .await
-            .map_err(|e| {
-                error!("create_order: mark garden reward used: {}", e);
-                StatusCode::INTERNAL_SERVER_ERROR
-            })?;
-        if used.rows_affected() == 0 {
-            return Err(StatusCode::CONFLICT);
-        }
-    }
+    // D5: the `UPDATE garden_rewards SET is_used = true` that consumed the
+    // applied reward inside this transaction is gone with the mechanic.
 
     // Record the idempotency key inside the same tx so retries after this
     // commit see the cached order_id. The earlier advisory lock guarantees
@@ -1355,15 +1465,18 @@ async fn create_order(
     let bot = state.bot.clone();
     let config = state.config.clone();
     let order_id = id.clone();
-    let items_v = items_json.clone();
     tokio::spawn(async move {
+        // The typed items, not `items_json`: the admin card has to show a
+        // rental's dates, quoted rate and deposit form, and reading those back
+        // out of an untyped `Value` is how the old card ended up printing
+        // `unwrap_or(0.0)` for every number it could not find.
         notify_admins(
             &bot,
             &config,
             &order_id,
             &req.customer_name,
             &req.customer_telegram,
-            &items_v,
+            &req.items,
             req.subtotal,
             bonus_used,
             stars_used,
@@ -1377,6 +1490,118 @@ async fn create_order(
 
 use crate::util::html_escape;
 
+/// D9: a THB figure for the admin card, or an em dash when there is none.
+///
+/// The dash is the whole point. `0` on a deposit line would tell the person at
+/// the door that nothing is owed; the dash tells them the number has not been
+/// computed yet and that they are the one who decides it (D11).
+fn thb_or_dash(v: Option<f64>) -> String {
+    match crate::db::orders::finite_money(v) {
+        Some(x) => format!("{x} ฿"),
+        None => "—".into(),
+    }
+}
+
+/// One line of the admin order card.
+///
+/// A bike line reads as the machine, the units, the term and what was agreed;
+/// everything else keeps the short catalog form. No figure is invented: the
+/// per-day rate is printed as quoted and never multiplied by the span, because
+/// the bands in `data/fleet_seed.json` are ranges and the door owns the total
+/// (D11).
+fn admin_item_line(item: &OrderItem) -> String {
+    let qty = if item.quantity.is_finite() {
+        item.quantity
+    } else {
+        0.0
+    };
+    if let Some(bike) = item.bike.as_ref() {
+        let name = bike
+            .bike_name
+            .as_deref()
+            .filter(|n| !n.is_empty())
+            .unwrap_or(bike.bike_key.as_str());
+        let handover = match item.fulfillment.as_deref() {
+            Some("delivery") => " 🛻 доставка",
+            Some("pickup") => " 🏠 самовывоз",
+            _ => "",
+        };
+        match &bike.deal {
+            BikeDeal::BikeRental {
+                rental_start,
+                rental_end,
+                rate_thb_day,
+                deposit,
+            } => {
+                let deposit_text = match deposit {
+                    Some(DepositForm::Passport) => "паспорт".to_string(),
+                    Some(DepositForm::Money {
+                        amount,
+                        currency,
+                        method,
+                    }) => {
+                        let cur = currency.as_deref().filter(|c| !c.is_empty()).unwrap_or("฿");
+                        let figure = match crate::db::orders::finite_money(*amount) {
+                            Some(x) => format!("{x} {}", html_escape(cur)),
+                            None => "—".into(),
+                        };
+                        match method.as_deref().filter(|m| !m.is_empty()) {
+                            Some(m) => format!("{figure} ({})", html_escape(m)),
+                            None => figure,
+                        }
+                    }
+                    // Not "no deposit": not yet agreed.
+                    None => "—".into(),
+                };
+                // `span_days` is read back to staff, never multiplied by the
+                // rate — see its doc comment.
+                let span_text = match bike.deal.span_days() {
+                    Some(d) => format!("{d} дн."),
+                    None => "—".into(),
+                };
+                format!(
+                    "  • 🏍 {} × {} шт{}\n     аренда {} → {} ({}), ставка/день: {}, залог: {}",
+                    html_escape(name),
+                    qty,
+                    handover,
+                    rental_start,
+                    rental_end,
+                    span_text,
+                    thb_or_dash(*rate_thb_day),
+                    deposit_text,
+                )
+            }
+            BikeDeal::BikeSale { price_thb } => format!(
+                "  • 🏍 {} × {} шт{}\n     продажа, цена: {}",
+                html_escape(name),
+                qty,
+                handover,
+                thb_or_dash(*price_thb),
+            ),
+        }
+    } else {
+        let name = item
+            .accessory_name
+            .as_deref()
+            .or(item.tea_name.as_deref())
+            .or(item.set_name.as_deref())
+            .or(item.strain_name.as_deref())
+            .filter(|n| !n.is_empty())
+            .unwrap_or("?");
+        // D7: `fulfillment`, two l's. The drink vocabulary is kept for the
+        // catalog lines that still use it; `validate_bike_lines` keeps it off
+        // a machine.
+        let fulfillment = match item.fulfillment.as_deref() {
+            Some("dine_in") => " 🍽 на месте",
+            Some("takeaway") => " 🥡 с собой",
+            Some("delivery") => " 🛻 доставка",
+            Some("pickup") => " 🏠 самовывоз",
+            _ => "",
+        };
+        format!("  • {} × {}{}", html_escape(name), qty, fulfillment)
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 async fn notify_admins(
     bot: &teloxide::Bot,
@@ -1384,7 +1609,7 @@ async fn notify_admins(
     order_id: &str,
     customer_name: &Option<String>,
     customer_telegram: &Option<String>,
-    items: &Value,
+    items: &[OrderItem],
     subtotal: f64,
     bonus_used: f64,
     stars_used: i64,
@@ -1393,30 +1618,13 @@ async fn notify_admins(
     use teloxide::prelude::*;
     use teloxide::types::{InlineKeyboardButton, InlineKeyboardMarkup};
 
+    // The old card hard-coded `× {}g` on every line — grams, for a rebrand
+    // whose unit is a machine. The unit now comes from the line itself.
     let items_text = items
-        .as_array()
-        .map(|arr| {
-            arr.iter()
-                .map(|item| {
-                    let name = item["strain_name"]
-                        .as_str()
-                        .or(item["accessory_name"].as_str())
-                        .or(item["tea_name"].as_str())
-                        .or(item["set_name"].as_str())
-                        .unwrap_or("?");
-                    let qty = item["quantity"].as_f64().unwrap_or(0.0);
-                    // A3: show how each drink should be served.
-                    let fulfillment = match item["fulfillment"].as_str() {
-                        Some("dine_in") => " 🍽 на месте",
-                        Some("takeaway") => " 🥡 с собой",
-                        _ => "",
-                    };
-                    format!("  • {} × {}g{}", html_escape(name), qty, fulfillment)
-                })
-                .collect::<Vec<_>>()
-                .join("\n")
-        })
-        .unwrap_or_default();
+        .iter()
+        .map(admin_item_line)
+        .collect::<Vec<_>>()
+        .join("\n");
 
     let source = customer_telegram
         .as_ref()
@@ -1576,7 +1784,12 @@ async fn get_order_status(
         "delivery_zone_name": zone.as_ref().map(|z| z.name.clone()),
         "min_eta_minutes": zone.as_ref().map(|z| z.eta_min.max(0)),
         "max_eta_minutes": zone.as_ref().map(|z| z.eta_max.max(z.eta_min).max(0)),
-        "delivery_fee_baht": zone.as_ref().map(|z| if z.fee.is_finite() { z.fee.max(0.0) } else { 0.0 }),
+        // D9: a fee that is not a finite number serialises as JSON `null` and
+        // renders as a dash. The old `else { 0.0 }` told the customer that
+        // delivery to this zone was free. Only the Bangtao figure (290 ฿) is
+        // documented in `data/fleet_seed.json`; the rest of the table is
+        // `null` on purpose and must not be interpolated.
+        "delivery_fee_baht": zone.as_ref().and_then(|z| crate::db::orders::finite_money(Some(z.fee))),
     })))
 }
 
@@ -1754,10 +1967,23 @@ async fn update_order_status(
                 o.status.as_str(),
                 "rejected" | "completed" | "delivered" | "cancelled"
             ) {
-                let bonus = if o.bonus_used.is_finite() {
-                    o.bonus_used.max(0.0)
-                } else {
-                    0.0
+                // D9: a refund of an unreadable figure cannot be silently
+                // rounded to nothing. `bonus_used` is a `NOT NULL DEFAULT 0`
+                // column on the frozen migration 001, so absent is not
+                // expressible here and the refund must still skip — but it
+                // now says so, loudly, instead of looking like an order that
+                // used no bonus.
+                let bonus = match crate::db::orders::finite_money(Some(o.bonus_used)) {
+                    Some(b) => b,
+                    None => {
+                        tracing::error!(
+                            order_id = %o.id,
+                            bonus_used = o.bonus_used,
+                            "reject: bonus_used is not a finite non-negative number; \
+                             no bonus refunded — needs a manual adjustment"
+                        );
+                        0.0
+                    }
                 };
                 if bonus > 0.0 {
                     if let Some(tid) = o.telegram_id {
@@ -1982,10 +2208,19 @@ async fn cancel_order(
         return Err(StatusCode::CONFLICT);
     }
 
-    let bonus = if o.bonus_used.is_finite() {
-        o.bonus_used.max(0.0)
-    } else {
-        0.0
+    // D9: same as the reject path — skipping the refund is forced by the
+    // `NOT NULL DEFAULT 0` column, but it is recorded rather than hidden.
+    let bonus = match crate::db::orders::finite_money(Some(o.bonus_used)) {
+        Some(b) => b,
+        None => {
+            tracing::error!(
+                order_id = %o.id,
+                bonus_used = o.bonus_used,
+                "cancel_order: bonus_used is not a finite non-negative number; \
+                 no bonus refunded — needs a manual adjustment"
+            );
+            0.0
+        }
     };
     if bonus > 0.0 {
         let lp_seed = LpAm {
@@ -2171,7 +2406,11 @@ async fn list_delivery_zones(State(state): State<AppState>) -> Result<Json<Value
                 "name_en": z.name_en,
                 "min_eta_minutes": z.eta_min.max(0),
                 "max_eta_minutes": z.eta_max.max(z.eta_min).max(0),
-                "delivery_fee_baht": if z.fee.is_finite() { z.fee.max(0.0) } else { 0.0 },
+                // D9: `null`, not `0` — see `get_order_status`. A zone whose
+                // fee is undocumented renders as a dash and the customer is
+                // told a human quotes it, rather than being shown free
+                // delivery to the far end of the island.
+                "delivery_fee_baht": crate::db::orders::finite_money(Some(z.fee)),
             })
         })
         .collect();
@@ -2199,10 +2438,17 @@ async fn promptpay_qr(
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
     let order = model.ok_or(StatusCode::NOT_FOUND)?;
-    let total = if order.total.is_finite() {
-        order.total
-    } else {
-        0.0
+    // D9: a QR is a payment instruction, so there is no honest fallback. The
+    // old `else { 0.0 }` built a scannable 0-baht code for an order whose
+    // total was NaN — the customer would have paid nothing and both sides
+    // would have believed the bill was settled. Refuse loudly instead.
+    let Some(total) = crate::db::orders::finite_money(Some(order.total)) else {
+        tracing::error!(
+            order_id = %id,
+            total = order.total,
+            "promptpay_qr: order total is not a finite non-negative number; refusing to render a QR"
+        );
+        return Err(StatusCode::INTERNAL_SERVER_ERROR);
     };
     let payload = build_payload(&state.config.promptpay, total, &id);
     let svg = svg_qr(&payload).map_err(|e| {
@@ -2215,10 +2461,11 @@ async fn promptpay_qr(
 #[cfg(test)]
 mod tests {
     use super::{
-        check_and_record, check_full_subtotal, check_strain_subtotal, is_valid_idempotency_key,
-        item_matches_id, item_unit_price, new_store, validate_create_order,
+        admin_item_line, check_and_record, check_full_subtotal, is_valid_idempotency_key,
+        new_store, rate_divergence, thb_or_dash, validate_bike_lines, validate_create_order,
         validate_update_order_status, CreateOrderRequest, FullSubtotalCheck, PriceCatalog,
-        SubtotalCheck, ANON_ORDER_RL_MAX_ATTEMPTS, ANON_ORDER_RL_MAX_IPS, ANON_ORDER_RL_WINDOW,
+        ANON_ORDER_RL_MAX_ATTEMPTS, ANON_ORDER_RL_MAX_IPS, ANON_ORDER_RL_WINDOW,
+        MAX_BIKE_UNITS_PER_LINE, MAX_RENTAL_DAYS,
     };
 
     // ── Idempotency-key validator (cycle #57) ────────────────────────────
@@ -2264,44 +2511,14 @@ mod tests {
         assert!(!is_valid_idempotency_key("\"quoted\""));
     }
 
-    use crate::db::orders::OrderItem;
-    use crate::db::strains::Strain;
+    use crate::db::orders::{BikeDeal, BikeLine, DepositForm, OrderItem};
     use axum::http::StatusCode;
-    use std::collections::HashMap;
 
-    fn strain(id: &str, price: f64) -> Strain {
-        Strain {
-            id: id.into(),
-            name: id.into(),
-            category: None,
-            thc_percent: None,
-            cbd_percent: None,
-            effect: None,
-            flavor_profile: None,
-            description: None,
-            price_per_gram: price,
-            available_grams: Some(100.0),
-            image_url: None,
-            video_url: None,
-            is_available: true,
-            is_strain_of_day: false,
-            strain_of_day_discount: 0.0,
-            name_en: None,
-            description_en: None,
-            effect_en: None,
-            flavor_profile_en: None,
-            strain_type_en: None,
-            discount_percent: 0.0,
-            sale_price: None,
-            sale_active: false,
-            sale_until: None,
-            is_best_seller: false,
-            is_new_arrival: false,
-            new_until: None,
-            display_order: 0,
-        }
-    }
-
+    /// A legacy (pre-rebrand) line: it still carries a `strain_id`, which is
+    /// all the validator tests need. It is deliberately unpriceable now — the
+    /// `strains` table is gone, so `check_full_subtotal` reports it as
+    /// `Malformed`, which is the honest answer for a product that cannot be
+    /// sold any more.
     fn strain_item(id: &str, qty: f64) -> OrderItem {
         OrderItem {
             strain_id: Some(id.into()),
@@ -2319,145 +2536,67 @@ mod tests {
             is_tea: None,
             is_tea_set: None,
             fulfillment: None,
+            bike: None,
         }
     }
 
-    fn accessory_item() -> OrderItem {
+    /// A bike line. `deal` carries the whole rental-or-sale distinction, so
+    /// one fixture covers both.
+    fn bike_item(key: &str, units: f64, deal: BikeDeal) -> OrderItem {
         OrderItem {
             strain_id: None,
             strain_name: None,
-            accessory_id: Some("acc-1".into()),
-            accessory_name: Some("Grinder".into()),
+            accessory_id: None,
+            accessory_name: None,
             tea_id: None,
             tea_name: None,
             set_id: None,
             set_name: None,
-            quantity: 1.0,
+            quantity: units,
             unit_price: None,
             is_set: None,
-            is_accessory: Some(true),
+            is_accessory: None,
             is_tea: None,
             is_tea_set: None,
             fulfillment: None,
+            bike: Some(BikeLine {
+                bike_key: key.into(),
+                bike_name: None,
+                deal,
+            }),
         }
     }
 
-    fn now_utc() -> chrono::DateTime<chrono::Utc> {
-        chrono::Utc::now()
-    }
-
-    #[test]
-    fn subtotal_check_strain_only_ok_at_exact_match() {
-        let s = strain("s1", 100.0);
-        let mut map = HashMap::new();
-        map.insert(s.id.as_str(), &s);
-        // 100 * 2.5 = 250
-        let items = vec![strain_item("s1", 2.5)];
-        assert_eq!(
-            check_strain_subtotal(&items, &map, 250.0, 0.01, now_utc()),
-            SubtotalCheck::Ok
-        );
-    }
-
-    #[test]
-    fn subtotal_check_strain_only_mismatch_flags_fraud() {
-        let s = strain("s1", 350.0);
-        let mut map = HashMap::new();
-        map.insert(s.id.as_str(), &s);
-        // Client lies: 1 baht for a strain worth 350.
-        let items = vec![strain_item("s1", 1.0)];
-        match check_strain_subtotal(&items, &map, 1.0, 0.01, now_utc()) {
-            SubtotalCheck::StrainOnlyMismatch { claimed, expected } => {
-                assert!((claimed - 1.0).abs() < 1e-9);
-                assert!((expected - 350.0).abs() < 1e-9);
-            }
-            other => panic!("expected StrainOnlyMismatch, got {:?}", other),
+    fn day(y: i32, m: u32, d: u32) -> chrono::NaiveDate {
+        match chrono::NaiveDate::from_ymd_opt(y, m, d) {
+            Some(d) => d,
+            None => panic!("test fixture has an impossible date {y}-{m}-{d}"),
         }
     }
 
-    #[test]
-    fn subtotal_check_unknown_strain_short_circuits() {
-        let map: HashMap<&str, &Strain> = HashMap::new();
-        let items = vec![strain_item("missing-id", 1.0)];
-        assert_eq!(
-            check_strain_subtotal(&items, &map, 999.0, 0.01, now_utc()),
-            SubtotalCheck::UnknownStrain("missing-id".into())
-        );
-    }
-
-    #[test]
-    fn subtotal_check_mixed_within_subtotal_ok() {
-        // Strain portion: 100. Accessory adds 50 (we trust the client for
-        // non-strain in this cycle). Claimed subtotal: 150 is fine.
-        let s = strain("s1", 100.0);
-        let mut map = HashMap::new();
-        map.insert(s.id.as_str(), &s);
-        let items = vec![strain_item("s1", 1.0), accessory_item()];
-        assert_eq!(
-            check_strain_subtotal(&items, &map, 150.0, 0.01, now_utc()),
-            SubtotalCheck::Ok
-        );
-    }
-
-    #[test]
-    fn subtotal_check_mixed_strain_exceeds_claimed_flags() {
-        // Strain alone is 200 but client claimed total 100 — impossible.
-        let s = strain("s1", 100.0);
-        let mut map = HashMap::new();
-        map.insert(s.id.as_str(), &s);
-        let items = vec![strain_item("s1", 2.0), accessory_item()];
-        match check_strain_subtotal(&items, &map, 100.0, 0.01, now_utc()) {
-            SubtotalCheck::StrainExceedsSubtotal { strain, claimed } => {
-                assert!((strain - 200.0).abs() < 1e-9);
-                assert!((claimed - 100.0).abs() < 1e-9);
-            }
-            other => panic!("expected StrainExceedsSubtotal, got {:?}", other),
+    /// A 7-day rental starting the day after `today`, with the figures the
+    /// door quoted for `nmax-155` in `data/fleet_seed.json`.
+    fn rental(today: chrono::NaiveDate) -> BikeDeal {
+        BikeDeal::BikeRental {
+            rental_start: today + chrono::Duration::days(1),
+            rental_end: today + chrono::Duration::days(7),
+            rate_thb_day: Some(449.0),
+            deposit: Some(DepositForm::Money {
+                amount: Some(3000.0),
+                currency: Some("THB".into()),
+                method: Some("cash THB".into()),
+            }),
         }
     }
 
-    #[test]
-    fn subtotal_check_honors_sale_discount_from_pricing_module() {
-        // Sanity that the helper actually uses `trios::pricing` precedence:
-        // sale_active + discount 50% on a 200-baht strain should produce
-        // an expected 100-baht subtotal at qty 1.
-        let mut s = strain("s1", 200.0);
-        s.sale_active = true;
-        s.discount_percent = 50.0;
-        let mut map = HashMap::new();
-        map.insert(s.id.as_str(), &s);
-        let items = vec![strain_item("s1", 1.0)];
-        assert_eq!(
-            check_strain_subtotal(&items, &map, 100.0, 0.01, now_utc()),
-            SubtotalCheck::Ok
-        );
-    }
+    // The six `check_strain_subtotal` tests that stood here (exact match,
+    // mismatch, unknown strain, the two mixed-cart cases, and the two
+    // sale-window cases) went with the helper and the `strains` table. The
+    // sale-precedence behaviour they were really guarding lives in
+    // `trios::pricing` and is still covered for accessories, tea and sets by
+    // the `full_check_*` tests below.
 
-    #[test]
-    fn subtotal_check_expired_sale_falls_back_to_base() {
-        // Client tries to claim sale_price after sale_until expired — server
-        // must charge base price.
-        let in_past = (chrono::Utc::now() - chrono::Duration::hours(1)).to_rfc3339();
-        let mut s = strain("s1", 200.0);
-        s.sale_active = true;
-        s.sale_until = Some(in_past);
-        s.discount_percent = 50.0;
-        let mut map = HashMap::new();
-        map.insert(s.id.as_str(), &s);
-        let items = vec![strain_item("s1", 1.0)];
-        // Client thinks they got the discount: subtotal=100
-        match check_strain_subtotal(&items, &map, 100.0, 0.01, now_utc()) {
-            SubtotalCheck::StrainOnlyMismatch { claimed, expected } => {
-                assert!((claimed - 100.0).abs() < 1e-9);
-                assert!((expected - 200.0).abs() < 1e-9);
-            }
-            other => panic!(
-                "expected StrainOnlyMismatch from expired sale, got {:?}",
-                other
-            ),
-        }
-    }
-
-    // ── check_full_subtotal — every catalog (cycle #58 / C) ──────────
+    // ── check_full_subtotal — every priced catalog (cycle #58 / C) ──────────
 
     fn accessory_item_with(id: &str, qty: f64) -> OrderItem {
         OrderItem {
@@ -2476,6 +2615,7 @@ mod tests {
             is_tea: None,
             is_tea_set: None,
             fulfillment: None,
+            bike: None,
         }
     }
 
@@ -2496,6 +2636,7 @@ mod tests {
             is_tea: Some(true),
             is_tea_set: None,
             fulfillment: None,
+            bike: None,
         }
     }
 
@@ -2516,119 +2657,103 @@ mod tests {
             is_tea: None,
             is_tea_set: None,
             fulfillment: None,
+            bike: None,
         }
     }
 
     #[test]
-    fn full_check_sums_all_four_catalogs() {
-        let s = strain("s1", 100.0);
+    fn full_check_sums_every_priced_catalog() {
         let mut cat = PriceCatalog::default();
-        cat.strains.insert(s.id.as_str(), &s);
         cat.accessories.insert("a1", (250.0, true));
         cat.tea_products.insert("t1", (80.0, true));
         cat.sets.insert("set1", (1000.0, 10.0, true)); // 900
         let items = vec![
-            strain_item("s1", 2.0),         // 200
             accessory_item_with("a1", 1.0), // 250
             tea_item_with("t1", 3.0),       // 240
             set_item_with("set1", 1.0),     // 900
         ];
-        // 200 + 250 + 240 + 900 = 1590
+        // 250 + 240 + 900 = 1390
         assert_eq!(
-            check_full_subtotal(&items, &cat, 1590.0, 0.01, now_utc()),
+            check_full_subtotal(&items, &cat, 1390.0, 0.01),
             FullSubtotalCheck::Ok
         );
     }
 
-    // ── B4: garden product-scoped discount money path ──────────────
+    // The `item_unit_price` / `item_matches_id` tests and the two garden
+    // money-path tests (`validate_order_garden_reward_relaxes_total_downward_only`,
+    // `garden_discount_arithmetic`) went with the B4 mechanic under D5. The
+    // strict total identity the first of them relaxed is now asserted
+    // unconditionally by `test_validate_total_mismatch`.
+
+    // ── Bike lines contribute nothing to the subtotal (D11) ─────────────
+
     #[test]
-    fn item_unit_price_per_catalog() {
-        let s = strain("s1", 100.0);
+    fn full_check_bike_only_cart_claims_zero() {
+        // A rental is quoted at the door. Nothing about it belongs in the
+        // cart subtotal, so a bike-only cart legitimately claims 0 — and a
+        // claim of the day rate, or of rate × days, is a mismatch.
+        let cat = PriceCatalog::default();
+        let items = vec![bike_item("nmax-155", 1.0, rental(day(2026, 9, 12)))];
+        assert_eq!(
+            check_full_subtotal(&items, &cat, 0.0, 0.01),
+            FullSubtotalCheck::Ok
+        );
+        match check_full_subtotal(&items, &cat, 449.0 * 7.0, 0.01) {
+            FullSubtotalCheck::Mismatch { claimed, expected } => {
+                assert!((claimed - 3143.0).abs() < 1e-9);
+                assert!(expected.abs() < 1e-9);
+            }
+            other => panic!("expected Mismatch, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn full_check_bike_line_does_not_zero_out_an_accessory() {
+        // The attack the branch ordering exists to stop: attach an empty
+        // rental to a 250-baht helmet and claim the line is free. The
+        // accessory branch is checked first, so the catalog still prices it.
         let mut cat = PriceCatalog::default();
-        cat.strains.insert(s.id.as_str(), &s);
         cat.accessories.insert("a1", (250.0, true));
-        cat.tea_products.insert("t1", (80.0, true));
-        cat.sets.insert("set1", (1000.0, 10.0, true)); // 900 effective
+        let mut item = accessory_item_with("a1", 1.0);
+        item.bike = Some(BikeLine {
+            bike_key: "nmax-155".into(),
+            bike_name: None,
+            deal: BikeDeal::BikeSale { price_thb: None },
+        });
+        match check_full_subtotal(&[item], &cat, 0.0, 0.01) {
+            FullSubtotalCheck::Mismatch { expected, .. } => {
+                assert!((expected - 250.0).abs() < 1e-9);
+            }
+            other => panic!("expected Mismatch, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn full_check_empty_id_string_is_not_an_unknown_item() {
+        // Old clients send `""` where they mean `null`. Routing that into the
+        // accessory branch refused the order with an empty id in the audit
+        // log; a bike line carrying one is priced as a bike.
+        let cat = PriceCatalog::default();
+        let mut item = bike_item("nmax-155", 1.0, BikeDeal::BikeSale { price_thb: None });
+        item.accessory_id = Some(String::new());
         assert_eq!(
-            item_unit_price(&strain_item("s1", 2.0), &cat, now_utc()),
-            Some(100.0)
-        );
-        assert_eq!(
-            item_unit_price(&accessory_item_with("a1", 1.0), &cat, now_utc()),
-            Some(250.0)
-        );
-        assert_eq!(
-            item_unit_price(&tea_item_with("t1", 1.0), &cat, now_utc()),
-            Some(80.0)
-        );
-        assert_eq!(
-            item_unit_price(&set_item_with("set1", 1.0), &cat, now_utc()),
-            Some(900.0)
-        );
-        // Unknown + unavailable → None (so the discount path rejects).
-        assert_eq!(
-            item_unit_price(&accessory_item_with("nope", 1.0), &cat, now_utc()),
-            None
-        );
-        cat.accessories.insert("a2", (250.0, false));
-        assert_eq!(
-            item_unit_price(&accessory_item_with("a2", 1.0), &cat, now_utc()),
-            None
+            check_full_subtotal(&[item], &cat, 0.0, 0.01),
+            FullSubtotalCheck::Ok
         );
     }
 
     #[test]
-    fn item_matches_id_checks_all_id_fields() {
-        assert!(item_matches_id(&strain_item("s1", 1.0), "s1"));
-        assert!(item_matches_id(&accessory_item_with("a1", 1.0), "a1"));
-        assert!(item_matches_id(&tea_item_with("t1", 1.0), "t1"));
-        assert!(item_matches_id(&set_item_with("set1", 1.0), "set1"));
-        assert!(!item_matches_id(&strain_item("s1", 1.0), "other"));
-    }
-
-    #[test]
-    fn validate_order_garden_reward_relaxes_total_downward_only() {
-        let mut req = valid_req();
-        req.subtotal = 200.0;
-        req.bonus_used = Some(0.0);
-        // With a reward, a LOWER total (the discount) is allowed; the exact
-        // amount is verified later in create_order against DB prices.
-        req.garden_reward_id = Some("rw1".into());
-        req.total = 150.0;
-        assert!(validate_create_order(&req).is_ok());
-        // But the total can never EXCEED subtotal - bonus (a reward only lowers).
-        req.total = 250.0;
-        assert_eq!(
-            validate_create_order(&req).unwrap_err(),
-            StatusCode::BAD_REQUEST
-        );
-        // Without a reward, the total must be exact.
-        req.garden_reward_id = None;
-        req.total = 150.0;
-        assert_eq!(
-            validate_create_order(&req).unwrap_err(),
-            StatusCode::BAD_REQUEST
-        );
-        req.total = 200.0;
-        assert!(validate_create_order(&req).is_ok());
-    }
-
-    // The end-to-end discount arithmetic: discount = unit × qty × pct/100, and
-    // expected_total = subtotal - bonus - discount.
-    #[test]
-    fn garden_discount_arithmetic() {
-        let s = strain("s1", 100.0);
+    fn full_check_fails_closed_on_a_nan_quantity() {
+        // The boundary validator rejects these, but if one ever slipped past,
+        // the old `else { 0.0 }` priced the line at zero and accepted a
+        // claimed subtotal of zero with it.
         let mut cat = PriceCatalog::default();
-        cat.strains.insert(s.id.as_str(), &s);
-        let target = strain_item("s1", 2.0); // 2g × 100 = 200 line total
-        let unit = item_unit_price(&target, &cat, now_utc()).unwrap();
-        let pct = 20u32;
-        let discount = (unit * 2.0 * (pct as f64) / 100.0).max(0.0);
-        assert_eq!(discount, 40.0); // 20% of 200
-        let subtotal = 200.0;
-        let bonus = 0.0;
-        let expected_total = (subtotal - bonus - discount).max(0.0);
-        assert_eq!(expected_total, 160.0);
+        cat.accessories.insert("a1", (250.0, true));
+        let items = vec![accessory_item_with("a1", f64::NAN)];
+        assert_eq!(
+            check_full_subtotal(&items, &cat, 0.0, 0.01),
+            FullSubtotalCheck::Malformed
+        );
     }
 
     #[test]
@@ -2636,7 +2761,7 @@ mod tests {
         let mut cat = PriceCatalog::default();
         cat.accessories.insert("a1", (250.0, false));
         let items = vec![accessory_item_with("a1", 1.0)];
-        match check_full_subtotal(&items, &cat, 250.0, 0.01, now_utc()) {
+        match check_full_subtotal(&items, &cat, 250.0, 0.01) {
             FullSubtotalCheck::Unavailable { catalog: c, id } => {
                 assert_eq!(c, "accessories");
                 assert_eq!(id, "a1");
@@ -2649,7 +2774,7 @@ mod tests {
     fn full_check_flags_unknown_set() {
         let cat = PriceCatalog::default();
         let items = vec![set_item_with("missing", 1.0)];
-        match check_full_subtotal(&items, &cat, 999.0, 0.01, now_utc()) {
+        match check_full_subtotal(&items, &cat, 999.0, 0.01) {
             FullSubtotalCheck::UnknownItem { catalog: c, id } => {
                 assert_eq!(c, "sets");
                 assert_eq!(id, "missing");
@@ -2659,29 +2784,12 @@ mod tests {
     }
 
     #[test]
-    fn full_check_strain_precedence_wins_over_accessory_id() {
-        // Defensive: if a malicious client sets BOTH `strain_id` and
-        // `accessory_id` on the same item to shadow an expensive strain
-        // with a cheap accessory, the strain path must win.
-        let s = strain("s1", 1000.0);
-        let mut cat = PriceCatalog::default();
-        cat.strains.insert(s.id.as_str(), &s);
-        cat.accessories.insert("a1", (1.0, true));
-        let mut item = strain_item("s1", 1.0);
-        item.accessory_id = Some("a1".into());
-        assert_eq!(
-            check_full_subtotal(&[item], &cat, 1000.0, 0.01, now_utc()),
-            FullSubtotalCheck::Ok
-        );
-    }
-
-    #[test]
     fn full_check_mismatch_reports_expected_and_claimed() {
         let mut cat = PriceCatalog::default();
         cat.accessories.insert("a1", (250.0, true));
         let items = vec![accessory_item_with("a1", 1.0)];
         // Client claims 1 baht
-        match check_full_subtotal(&items, &cat, 1.0, 0.01, now_utc()) {
+        match check_full_subtotal(&items, &cat, 1.0, 0.01) {
             FullSubtotalCheck::Mismatch { claimed, expected } => {
                 assert!((claimed - 1.0).abs() < 1e-9);
                 assert!((expected - 250.0).abs() < 1e-9);
@@ -2691,11 +2799,23 @@ mod tests {
     }
 
     #[test]
-    fn full_check_malformed_when_no_ids() {
+    fn full_check_malformed_when_no_ids_and_no_bike() {
         let cat = PriceCatalog::default();
         let mut item = strain_item("s1", 1.0);
-        item.strain_id = None; // every *_id is None now
-        match check_full_subtotal(&[item], &cat, 0.0, 0.01, now_utc()) {
+        item.strain_id = None; // every *_id is None and there is no bike
+        match check_full_subtotal(&[item], &cat, 0.0, 0.01) {
+            FullSubtotalCheck::Malformed => {}
+            other => panic!("expected Malformed, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn full_check_malformed_for_a_line_that_still_names_a_strain() {
+        // `083_drop_cannabis_catalog.sql` took the table. A cart line that
+        // still carries only a `strain_id` cannot be priced and must not be
+        // silently treated as free.
+        let cat = PriceCatalog::default();
+        match check_full_subtotal(&[strain_item("s1", 1.0)], &cat, 0.0, 0.01) {
             FullSubtotalCheck::Malformed => {}
             other => panic!("expected Malformed, got {:?}", other),
         }
@@ -2723,13 +2843,13 @@ mod tests {
                 is_tea: None,
                 is_tea_set: None,
                 fulfillment: None,
+                bike: None,
             }],
             subtotal: 100.0,
             bonus_used: Some(10.0),
             stars_used: None,
             total: 90.0,
             shop_id: None,
-            garden_reward_id: None,
             delivery_address: Some("123 Test Lane".into()),
             delivery_notes: None,
             age_confirmed: Some(true),
@@ -2781,6 +2901,7 @@ mod tests {
                 is_tea: None,
                 is_tea_set: None,
                 fulfillment: None,
+                bike: None,
             })
             .collect();
         assert_eq!(
@@ -3085,7 +3206,6 @@ mod tests {
             stars_used: None,
             total: 100.0,
             shop_id: None,
-            garden_reward_id: None,
             delivery_address: None,
             delivery_notes: None,
             age_confirmed: Some(true),
@@ -3162,5 +3282,382 @@ mod tests {
             validate_create_order(&req).unwrap_err(),
             StatusCode::BAD_REQUEST
         );
+    }
+
+    // ── validate_bike_lines (issues #14 / #15) ───────────────────────────
+
+    /// A fixed "today" so the date rules are deterministic. Every rental
+    /// fixture is expressed relative to it.
+    fn today() -> chrono::NaiveDate {
+        day(2026, 9, 13)
+    }
+
+    #[test]
+    fn bike_lines_accept_a_plain_rental() {
+        let items = vec![bike_item("nmax-155", 2.0, rental(today()))];
+        assert!(validate_bike_lines(&items, today()).is_ok());
+    }
+
+    #[test]
+    fn bike_lines_accept_a_rental_starting_today() {
+        // Walk-in: the customer is at the counter now. The boundary must not
+        // be the thing that refuses same-day hire.
+        let items = vec![bike_item(
+            "nmax-155",
+            1.0,
+            BikeDeal::BikeRental {
+                rental_start: today(),
+                rental_end: today(),
+                rate_thb_day: Some(449.0),
+                deposit: Some(DepositForm::Passport),
+            },
+        )];
+        assert!(validate_bike_lines(&items, today()).is_ok());
+    }
+
+    #[test]
+    fn bike_lines_accept_absent_money() {
+        // D9/D11: the door was silent. That is a legitimate order — a human
+        // quotes it — and must not be turned into a number here.
+        let items = vec![
+            bike_item(
+                "xadv-750",
+                1.0,
+                BikeDeal::BikeRental {
+                    rental_start: today() + chrono::Duration::days(2),
+                    rental_end: today() + chrono::Duration::days(9),
+                    rate_thb_day: None,
+                    deposit: None,
+                },
+            ),
+            bike_item("cb-650r", 1.0, BikeDeal::BikeSale { price_thb: None }),
+        ];
+        assert!(validate_bike_lines(&items, today()).is_ok());
+    }
+
+    #[test]
+    fn bike_lines_reject_zero_money() {
+        // `Some(0.0)` is the failure D9 exists to stop: a zero rate reads as
+        // "free" and a zero deposit as "nothing owed". Absence is `None`.
+        let zero_rate = vec![bike_item(
+            "nmax-155",
+            1.0,
+            BikeDeal::BikeRental {
+                rental_start: today(),
+                rental_end: today(),
+                rate_thb_day: Some(0.0),
+                deposit: None,
+            },
+        )];
+        assert_eq!(
+            validate_bike_lines(&zero_rate, today()).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
+        let zero_deposit = vec![bike_item(
+            "nmax-155",
+            1.0,
+            BikeDeal::BikeRental {
+                rental_start: today(),
+                rental_end: today(),
+                rate_thb_day: Some(449.0),
+                deposit: Some(DepositForm::Money {
+                    amount: Some(0.0),
+                    currency: Some("THB".into()),
+                    method: Some("cash THB".into()),
+                }),
+            },
+        )];
+        assert_eq!(
+            validate_bike_lines(&zero_deposit, today()).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
+        let zero_sale = vec![bike_item(
+            "cb-650r",
+            1.0,
+            BikeDeal::BikeSale {
+                price_thb: Some(0.0),
+            },
+        )];
+        assert_eq!(
+            validate_bike_lines(&zero_sale, today()).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
+    }
+
+    #[test]
+    fn bike_lines_reject_nan_and_absurd_money() {
+        for bad in [f64::NAN, f64::INFINITY, -1.0, 1_000_000.01] {
+            let items = vec![bike_item(
+                "cb-650r",
+                1.0,
+                BikeDeal::BikeSale {
+                    price_thb: Some(bad),
+                },
+            )];
+            assert_eq!(
+                validate_bike_lines(&items, today()).unwrap_err(),
+                StatusCode::BAD_REQUEST,
+                "{bad} should be rejected"
+            );
+        }
+    }
+
+    #[test]
+    fn bike_lines_reject_a_rental_that_started_in_the_past() {
+        // A cart left open overnight, not a malformed payload — 422.
+        let items = vec![bike_item(
+            "nmax-155",
+            1.0,
+            BikeDeal::BikeRental {
+                rental_start: today() - chrono::Duration::days(1),
+                rental_end: today() + chrono::Duration::days(3),
+                rate_thb_day: Some(449.0),
+                deposit: Some(DepositForm::Passport),
+            },
+        )];
+        assert_eq!(
+            validate_bike_lines(&items, today()).unwrap_err(),
+            StatusCode::UNPROCESSABLE_ENTITY
+        );
+    }
+
+    #[test]
+    fn bike_lines_reject_backwards_and_overlong_terms() {
+        let backwards = vec![bike_item(
+            "nmax-155",
+            1.0,
+            BikeDeal::BikeRental {
+                rental_start: today() + chrono::Duration::days(5),
+                rental_end: today() + chrono::Duration::days(2),
+                rate_thb_day: None,
+                deposit: None,
+            },
+        )];
+        assert_eq!(
+            validate_bike_lines(&backwards, today()).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
+        // A typo'd year must not become a 180-year booking. Both ends are
+        // inclusive, so MAX_RENTAL_DAYS - 1 days apart is exactly the cap.
+        let at_cap = vec![bike_item(
+            "nmax-155",
+            1.0,
+            BikeDeal::BikeRental {
+                rental_start: today(),
+                rental_end: today() + chrono::Duration::days(MAX_RENTAL_DAYS - 1),
+                rate_thb_day: None,
+                deposit: None,
+            },
+        )];
+        assert!(validate_bike_lines(&at_cap, today()).is_ok());
+        let over_cap = vec![bike_item(
+            "nmax-155",
+            1.0,
+            BikeDeal::BikeRental {
+                rental_start: today(),
+                rental_end: today() + chrono::Duration::days(MAX_RENTAL_DAYS),
+                rate_thb_day: None,
+                deposit: None,
+            },
+        )];
+        assert_eq!(
+            validate_bike_lines(&over_cap, today()).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
+    }
+
+    #[test]
+    fn bike_lines_reject_fractional_and_absurd_unit_counts() {
+        let fractional = vec![bike_item("nmax-155", 1.5, rental(today()))];
+        assert_eq!(
+            validate_bike_lines(&fractional, today()).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
+        let at_cap = vec![bike_item(
+            "nmax-155",
+            MAX_BIKE_UNITS_PER_LINE,
+            rental(today()),
+        )];
+        assert!(validate_bike_lines(&at_cap, today()).is_ok());
+        let over_cap = vec![bike_item(
+            "nmax-155",
+            MAX_BIKE_UNITS_PER_LINE + 1.0,
+            rental(today()),
+        )];
+        assert_eq!(
+            validate_bike_lines(&over_cap, today()).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
+    }
+
+    #[test]
+    fn bike_lines_reject_the_drink_fulfillment_vocabulary() {
+        // D7: a machine is picked up or delivered. "dine_in" on a bike line
+        // means the cart was built by the wrong screen.
+        for bad in ["dine_in", "takeaway", "", "teleport"] {
+            let mut items = vec![bike_item("nmax-155", 1.0, rental(today()))];
+            items[0].fulfillment = Some(bad.into());
+            assert_eq!(
+                validate_bike_lines(&items, today()).unwrap_err(),
+                StatusCode::BAD_REQUEST,
+                "fulfillment={bad:?} should be rejected on a bike line"
+            );
+        }
+        for good in ["delivery", "pickup"] {
+            let mut items = vec![bike_item("nmax-155", 1.0, rental(today()))];
+            items[0].fulfillment = Some(good.into());
+            assert!(
+                validate_bike_lines(&items, today()).is_ok(),
+                "fulfillment={good:?} should be accepted"
+            );
+        }
+    }
+
+    #[test]
+    fn bike_lines_reject_a_line_that_is_also_a_catalog_item() {
+        let mut items = vec![bike_item("nmax-155", 1.0, rental(today()))];
+        items[0].accessory_id = Some("helmet-1".into());
+        assert_eq!(
+            validate_bike_lines(&items, today()).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
+        // An empty string is absence, not a catalog item.
+        items[0].accessory_id = Some(String::new());
+        assert!(validate_bike_lines(&items, today()).is_ok());
+    }
+
+    #[test]
+    fn bike_lines_require_a_family_key() {
+        let mut items = vec![bike_item("", 1.0, rental(today()))];
+        assert_eq!(
+            validate_bike_lines(&items, today()).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
+        if let Some(b) = items[0].bike.as_mut() {
+            b.bike_key = "a".repeat(201);
+        }
+        assert_eq!(
+            validate_bike_lines(&items, today()).unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
+    }
+
+    #[test]
+    fn bike_lines_ignore_legacy_lines() {
+        // The `items` JSONB still holds pre-rebrand lines with no `bike` at
+        // all. They are none of this validator's business.
+        let items = vec![strain_item("s1", 2.5), accessory_item_with("a1", 1.0)];
+        assert!(validate_bike_lines(&items, today()).is_ok());
+    }
+
+    // ── D11 divergence logging ───────────────────────────────────────────
+
+    #[test]
+    fn rate_divergence_compares_quote_against_the_discounted_file_rate() {
+        // `nmax-155` publishes 449 ฿/day PRE-discount and is a scooter (25 %),
+        // so the file implies 449 × 0.75 = 336.75 → 337 ฿. A door quote of the
+        // pre-discount figure diverges by 112 ฿ and must be logged.
+        assert_eq!(
+            rate_divergence(Some(449.0), Some(449.0), Some(0.25)),
+            Some((449.0, 337.0))
+        );
+        // The discounted figure agrees, and so does a sub-baht difference.
+        assert_eq!(rate_divergence(Some(337.0), Some(449.0), Some(0.25)), None);
+        assert_eq!(rate_divergence(Some(337.4), Some(449.0), Some(0.25)), None);
+    }
+
+    #[test]
+    fn rate_divergence_stays_silent_when_either_number_is_absent() {
+        // Nothing to reconcile, and nothing that may be invented: an unseeded
+        // discount table must never make the pre-discount tariff the
+        // "expected" number.
+        assert_eq!(rate_divergence(None, Some(449.0), Some(0.25)), None);
+        assert_eq!(rate_divergence(Some(449.0), None, Some(0.25)), None);
+        assert_eq!(rate_divergence(Some(449.0), Some(449.0), None), None);
+        assert_eq!(
+            rate_divergence(Some(f64::NAN), Some(449.0), Some(0.25)),
+            None
+        );
+    }
+
+    // ── The admin card (D9) ──────────────────────────────────────────────
+
+    #[test]
+    fn thb_or_dash_never_shows_zero_for_an_absent_figure() {
+        assert_eq!(thb_or_dash(Some(449.0)), "449 ฿");
+        assert_eq!(thb_or_dash(None), "—");
+        assert_eq!(thb_or_dash(Some(f64::NAN)), "—");
+        assert_eq!(thb_or_dash(Some(-1.0)), "—");
+        // A genuine zero is still a figure someone agreed; it is the *absent*
+        // one that must not read as zero.
+        assert_eq!(thb_or_dash(Some(0.0)), "0 ฿");
+    }
+
+    #[test]
+    fn admin_card_renders_a_rental_without_inventing_a_total() {
+        let line = admin_item_line(&bike_item("nmax-155", 2.0, rental(today())));
+        assert!(line.contains("nmax-155"), "{line}");
+        assert!(line.contains("2026-09-14"), "{line}");
+        assert!(line.contains("2026-09-20"), "{line}");
+        assert!(line.contains("7 дн."), "{line}");
+        assert!(line.contains("449 ฿"), "{line}");
+        assert!(line.contains("3000 THB"), "{line}");
+        assert!(line.contains("cash THB"), "{line}");
+        // The forbidden number: 449 × 7 = 3143.
+        assert!(!line.contains("3143"), "{line}");
+        // And no grams, whatever the rebrand left behind.
+        assert!(!line.contains('g'), "{line}");
+    }
+
+    #[test]
+    fn admin_card_dashes_an_unquoted_rental_and_names_the_passport() {
+        let line = admin_item_line(&bike_item(
+            "xadv-750",
+            1.0,
+            BikeDeal::BikeRental {
+                rental_start: today(),
+                rental_end: today(),
+                rate_thb_day: None,
+                deposit: Some(DepositForm::Passport),
+            },
+        ));
+        assert!(line.contains("ставка/день: —"), "{line}");
+        assert!(line.contains("залог: паспорт"), "{line}");
+        // The dash, not a figure: nothing about this rental is priced yet.
+        assert!(!line.contains('฿'), "no invented figure: {line}");
+    }
+
+    #[test]
+    fn admin_card_dashes_a_deposit_that_is_not_agreed_yet() {
+        // `None` is "not agreed yet", never "nothing owed".
+        let line = admin_item_line(&bike_item(
+            "nmax-155",
+            1.0,
+            BikeDeal::BikeRental {
+                rental_start: today(),
+                rental_end: today(),
+                rate_thb_day: Some(449.0),
+                deposit: None,
+            },
+        ));
+        assert!(line.contains("залог: —"), "{line}");
+    }
+
+    #[test]
+    fn admin_card_renders_a_sale_and_falls_back_to_the_family_key() {
+        let line = admin_item_line(&bike_item(
+            "cb-650r",
+            1.0,
+            BikeDeal::BikeSale { price_thb: None },
+        ));
+        assert!(line.contains("продажа"), "{line}");
+        assert!(line.contains("цена: —"), "{line}");
+        assert!(line.contains("cb-650r"), "{line}");
+    }
+
+    #[test]
+    fn admin_card_keeps_the_short_form_for_a_catalog_line() {
+        let line = admin_item_line(&accessory_item_with("a1", 3.0));
+        assert_eq!(line, "  • a1 × 3");
     }
 }

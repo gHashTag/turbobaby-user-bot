@@ -23,7 +23,7 @@ use http_body_util::BodyExt;
 use serde_json::json;
 use tower::ServiceExt;
 
-use woody_weed_bot::api::auth::generate_admin_token;
+use turbobaby_bot::api::auth::generate_admin_token;
 
 #[tokio::test]
 #[ignore = "needs DATABASE_URL env var; run with --ignored"]

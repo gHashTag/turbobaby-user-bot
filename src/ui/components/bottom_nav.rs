@@ -1,20 +1,10 @@
 //! Bottom tab bar.
 //!
-//! All ten sections are addressable directly from the bar. Loop #6 had
-//! collapsed it to four tabs plus a "More" sheet because ten content-sized
-//! slots overflowed the viewport and the trailing tabs were clipped; the fix
-//! is layout, not fewer tabs — `.bottom-nav > *` gets `flex: 1 1 0` and
-//! `min-width: 0` in `styles/main.css`, so every slot is exactly one tenth of
-//! the row on any width, and labels ellipsis rather than push the row wide.
-//!
-//! Every tab is a plain emoji glyph, so they share one rendering path and one
-//! optical size. Accessories used to be the exception (an inline SVG grinder)
-//! and needed its own CSS sizing rule to stop looking taller than the rest.
+//! The customer bar contains only the five live TurboBaby surfaces. Legacy
+//! cannabis routes remain addressable for compatibility while the migration
+//! completes, but are deliberately not advertised from the bike catalog.
 
-use crate::trios::i18n::{
-    t, T_NAV_ACCESSORIES, T_NAV_CART, T_NAV_EVENTS, T_NAV_GARDEN, T_NAV_HOME, T_NAV_MENU,
-    T_NAV_PROFILE, T_NAV_SETS, T_NAV_TEA,
-};
+use crate::trios::i18n::{t, T_NAV_CART, T_NAV_FLEET, T_NAV_ORDERS, T_NAV_PROFILE, T_NAV_RIDE};
 use crate::ui::prefetch;
 use crate::ui::routes::Route;
 use dioxus::prelude::*;
@@ -24,68 +14,33 @@ pub fn BottomNav(#[props(default)] cart_count: u32) -> Element {
     let route = use_route::<Route>();
     let lang = crate::ui::lang::current_lang();
 
-    let is_home = matches!(route, Route::Home {});
-    let is_menu = matches!(route, Route::Menu {});
-    let is_sets = matches!(route, Route::Sets {});
-    let is_accessories = matches!(route, Route::Accessories {});
-    let is_tea = matches!(route, Route::Tea {});
-    let is_garden = matches!(route, Route::Garden {});
-    let is_events = matches!(route, Route::Events {});
+    let is_fleet = matches!(route, Route::Home {} | Route::Menu {});
+    let is_ride = matches!(route, Route::Ride {} | Route::Skate {});
+    let is_orders = matches!(route, Route::Orders {} | Route::OrderDetail { .. });
     let is_cart = matches!(route, Route::Cart {});
     let is_profile = matches!(route, Route::Profile {});
 
     rsx! {
         nav { class: "bottom-nav",
             Link { to: Route::Home {},
-                div { class: if is_home { "nav-item active" } else { "nav-item" },
+                div { class: if is_fleet { "nav-item active" } else { "nav-item" },
                     onmouseenter: move |_| { prefetch::prefetch_route(&Route::Home {}); },
-                    span { class: "nav-icon", "🪵" }
-                    span { class: "nav-label", "{t(lang, T_NAV_HOME)}" }
+                    span { class: "nav-icon", "🏍️" }
+                    span { class: "nav-label", "{t(lang, T_NAV_FLEET)}" }
                 }
             }
-            Link { to: Route::Menu {},
-                div { class: if is_menu { "nav-item active" } else { "nav-item" },
-                    onmouseenter: move |_| { prefetch::prefetch_route(&Route::Menu {}); },
-                    span { class: "nav-icon", "🌿" }
-                    span { class: "nav-label", "{t(lang, T_NAV_MENU)}" }
+            Link { to: Route::Ride {},
+                div { class: if is_ride { "nav-item active" } else { "nav-item" },
+                    onmouseenter: move |_| { prefetch::prefetch_route(&Route::Ride {}); },
+                    span { class: "nav-icon", "🏁" }
+                    span { class: "nav-label", "{t(lang, T_NAV_RIDE)}" }
                 }
             }
-            Link { to: Route::Sets {},
-                div { class: if is_sets { "nav-item active" } else { "nav-item" },
-                    onmouseenter: move |_| { prefetch::prefetch_route(&Route::Sets {}); },
-                    span { class: "nav-icon", "🎁" }
-                    span { class: "nav-label", "{t(lang, T_NAV_SETS)}" }
-                }
-            }
-            Link { to: Route::Accessories {},
-                div { class: if is_accessories { "nav-item active" } else { "nav-item" },
-                    onmouseenter: move |_| { prefetch::prefetch_route(&Route::Accessories {}); },
-                    span { class: "nav-icon", "📦" }
-                    span { class: "nav-label", "{t(lang, T_NAV_ACCESSORIES)}" }
-                }
-            }
-            Link { to: Route::Tea {},
-                div { class: if is_tea { "nav-item active" } else { "nav-item" },
-                    onmouseenter: move |_| { prefetch::prefetch_route(&Route::Tea {}); },
-                    span { class: "nav-icon", "🥤" }
-                    span { class: "nav-label", "{t(lang, T_NAV_TEA)}" }
-                }
-            }
-            Link { to: Route::Garden {},
-                div { class: if is_garden { "nav-item active" } else { "nav-item" },
-                    onmouseenter: move |_| { prefetch::prefetch_route(&Route::Garden {}); },
-                    // A joystick, not a seedling: this tab is where every game
-                    // lives — skate, catch, tycoon — and the garden is one of
-                    // them rather than the whole of it.
-                    span { class: "nav-icon", "🕹️" }
-                    span { class: "nav-label", "{t(lang, T_NAV_GARDEN)}" }
-                }
-            }
-            Link { to: Route::Events {},
-                div { class: if is_events { "nav-item active" } else { "nav-item" },
-                    onmouseenter: move |_| { prefetch::prefetch_route(&Route::Events {}); },
-                    span { class: "nav-icon", "📅" }
-                    span { class: "nav-label", "{t(lang, T_NAV_EVENTS)}" }
+            Link { to: Route::Orders {},
+                div { class: if is_orders { "nav-item active" } else { "nav-item" },
+                    onmouseenter: move |_| { prefetch::prefetch_route(&Route::Orders {}); },
+                    span { class: "nav-icon", "📋" }
+                    span { class: "nav-label", "{t(lang, T_NAV_ORDERS)}" }
                 }
             }
             Link { to: Route::Cart {},

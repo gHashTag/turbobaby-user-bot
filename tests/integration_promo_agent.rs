@@ -24,11 +24,11 @@ mod common;
 
 use common::make_app_with_db;
 use sea_orm::{ConnectionTrait, DbBackend, Statement};
-use woody_weed_bot::trios::promo::{dedup_key, Subject};
+use turbobaby_bot::trios::promo::{dedup_key, Subject};
 
 const MARK: &str = "promo-agent-test";
 
-async fn clean(db: &woody_weed_bot::db::Database) {
+async fn clean(db: &turbobaby_bot::db::Database) {
     for sql in [
         format!("DELETE FROM promo_posts WHERE subject_name LIKE '{MARK}%'"),
         format!("DELETE FROM strains WHERE name LIKE '{MARK}%'"),
@@ -42,7 +42,7 @@ async fn clean(db: &woody_weed_bot::db::Database) {
 }
 
 /// The claim, exactly as `promo::claim` performs it.
-async fn claim(db: &woody_weed_bot::db::Database, subject: &Subject) -> bool {
+async fn claim(db: &turbobaby_bot::db::Database, subject: &Subject) -> bool {
     db.orm
         .execute(Statement::from_sql_and_values(
             DbBackend::Postgres,
@@ -350,9 +350,7 @@ async fn a_published_post_is_joined_to_the_orders_that_followed() {
         .await
         .expect("order");
 
-    let rows = woody_weed_bot::promo::report(&db, 30)
-        .await
-        .expect("report");
+    let rows = turbobaby_bot::promo::report(&db, 30).await.expect("report");
     let row = rows
         .iter()
         .find(|r| r.subject_name == "Party Pack")
@@ -411,9 +409,7 @@ async fn an_order_days_later_is_not_credited_to_the_post() {
         .await
         .expect("order");
 
-    let rows = woody_weed_bot::promo::report(&db, 30)
-        .await
-        .expect("report");
+    let rows = turbobaby_bot::promo::report(&db, 30).await.expect("report");
     let row = rows
         .iter()
         .find(|r| r.subject_name == "Late Tea")

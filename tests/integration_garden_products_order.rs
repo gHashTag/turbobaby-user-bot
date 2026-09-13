@@ -52,7 +52,7 @@ fn catalogs(list: &[serde_json::Value]) -> Vec<String> {
 /// Seed the catalog so the test does not depend on what the shop happens to
 /// stock. An accessory named `AAA` is the adversarial case: under the old
 /// ordering it sorted to position zero and pushed every seed down.
-async fn seed(db: &woody_weed_bot::db::Database) {
+async fn seed(db: &turbobaby_bot::db::Database) {
     for sql in [
         "INSERT INTO accessories (id, name, price, is_available, garden_eligible) \
          VALUES ('test-acc-aaa', 'AAA test accessory', 100, true, true) \

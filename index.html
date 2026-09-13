@@ -44,7 +44,7 @@
          "ловля шишек" game were triggering browser zoom). maximum-scale +
          user-scalable=no; viewport-fit=cover for safe-area. -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
-    <title>Woody Weed Bot</title>
+    <title>TurboBaby</title>
     <link rel="icon" href="/assets/favicon.svg">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -114,7 +114,7 @@
       throw lastError;
     };
     </script>
-    <link data-trunk rel="rust" data-target-name="woody_weed_bot" data-wasm-opt="0" />
+    <link data-trunk rel="rust" data-target-name="turbobaby_bot" data-wasm-opt="0" />
     <script>
     // Cycle #170: Telegram/WebView aggressively caches index.html across deploys.
     // A stale HTML loads an old JS hash, which requests old wasm-bindgen snippets
@@ -142,7 +142,9 @@
       try {
         if (sessionStorage.getItem('__wwb_version_redirected')) return;
         var moduleScript = document.querySelector('script[type="module"]');
-        var match = moduleScript && moduleScript.textContent.match(/\/woody-weed-bot-([a-f0-9]+)\.js/);
+        // Trunk names this `<cargo target>-<content hash>.js`. Match that
+        // shape so a future product rename cannot disable version detection.
+        var match = moduleScript && moduleScript.textContent.match(/\/[^"'?\s]+-([a-f0-9]{16,})\.js(?:\?[^"'\s]*)?/i);
         var localVersion = match ? match[1] : '';
         fetch('/version.txt?cb=' + Date.now(), { cache: 'no-store', credentials: 'same-origin' })
           .then(function (r) {

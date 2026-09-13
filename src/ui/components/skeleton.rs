@@ -15,7 +15,10 @@ pub enum SkeletonShape {
     Button,
     /// Home promo-pack carousel placeholder (aspect-ratio card).
     Pack,
-    /// Strain-of-the-day banner placeholder.
+    /// Featured-model hero banner placeholder.
+    ///
+    /// The `Sotd` name is legacy and is left alone deliberately: renaming it
+    /// would edit two screen files this component does not own.
     Sotd,
     /// Event list item placeholder.
     Event,

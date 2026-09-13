@@ -1,4 +1,4 @@
-# Pinned Rust toolchain for woody-weed-bot.
+# Pinned Rust toolchain for turbobaby-bot.
 #
 # Closes the "works on my machine" gap left by cycle #51: rustfmt.toml +
 # .editorconfig fix the *output*, this fixes the *tool* itself. Without it,

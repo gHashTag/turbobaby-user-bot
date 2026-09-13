@@ -299,6 +299,14 @@ pub fn App() -> Element {
     rsx! {
         TelegramProvider {
             ApiClientProvider {
+                // A stable, brand-specific mount sentinel for the headless
+                // frontend gate. Keep it hidden: the smoke test queries the
+                // node itself, so translated customer copy can change safely.
+                span {
+                    id: "turbobaby-app-mounted",
+                    "aria-hidden": "true",
+                    style: "display:none;",
+                }
                 ErrorOverlay {}
                 Routes {}
             }

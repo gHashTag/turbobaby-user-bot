@@ -67,6 +67,23 @@ pub(crate) struct MergeCartReq {
 /// lookup, so an unbounded payload is a cheap way to tie up a DB connection.
 const MAX_MERGE_ITEMS: usize = 200;
 
+/// Upsert for every cart line whose rental dates have not been selected yet.
+///
+/// Keep the conflict predicate aligned with
+/// `migrations/081_cart_rental_lines.sql::idx_cart_items_undated_line`.
+/// PostgreSQL cannot infer that partial index from the three columns alone.
+const CART_ITEM_UPSERT_SQL: &str = "INSERT INTO cart_items \
+   (id, cart_id, kind, catalog_id, quantity, unit_price, name, image_url, created_at, updated_at) \
+ VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, now(), now()) \
+ ON CONFLICT (cart_id, kind, catalog_id) \
+   WHERE rental_start IS NULL AND rental_end IS NULL \
+ DO UPDATE SET \
+   quantity   = LEAST(cart_items.quantity + EXCLUDED.quantity, 1000000), \
+   unit_price = EXCLUDED.unit_price, \
+   name       = EXCLUDED.name, \
+   image_url  = EXCLUDED.image_url, \
+   updated_at = now()";
+
 pub(crate) fn routes() -> Router<AppState> {
     Router::new()
         .route(
@@ -102,8 +119,16 @@ fn validate_quantity(q: i32) -> Result<(), StatusCode> {
 ///
 /// A local cart replayed from storage can legitimately carry the same line
 /// twice. Passing duplicates straight through used to mean two writes to the
-/// same `UNIQUE (cart_id, kind, catalog_id)` row inside one transaction;
-/// folding them here also saves one catalog lookup per duplicate.
+/// same row inside one transaction; folding them here also saves one catalog
+/// lookup per duplicate.
+///
+/// The row identity this collapses on is `idx_cart_items_undated_line`
+/// (`migrations/081_cart_rental_lines.sql`), not 059's dropped
+/// `UNIQUE (cart_id, kind, catalog_id)` — the same three columns, but only for
+/// lines with no dates, which is every line this endpoint can produce. A merge
+/// payload carrying rental dates would need `(kind, catalog_id, start, end)` as
+/// the key, because two different date ranges for one family are two lines and
+/// folding them would lose a booking.
 fn collapse_merge_items(items: Vec<CartItemResp>) -> Vec<(&'static str, String, i32)> {
     let mut out: Vec<(&'static str, String, i32)> = Vec::new();
     for item in items {
@@ -293,12 +318,38 @@ async fn get_or_create_cart(
 
 /// Add `quantity` of one catalog item to a cart, atomically.
 ///
-/// `cart_items` has `UNIQUE (cart_id, kind, catalog_id)`, so the previous
-/// find-then-insert-or-update shape raced the same way `get_or_create_cart`
-/// did — and inside a transaction the duplicate-key error also aborted every
-/// preceding write in that transaction. A single `ON CONFLICT DO UPDATE`
-/// statement lets Postgres serialize concurrent writers for us. The quantity
-/// cap mirrors `validate_quantity`.
+/// The previous find-then-insert-or-update shape raced the same way
+/// `get_or_create_cart` did — and inside a transaction the duplicate-key error
+/// also aborted every preceding write in that transaction. A single
+/// `ON CONFLICT DO UPDATE` statement lets Postgres serialize concurrent
+/// writers for us. The quantity cap mirrors `validate_quantity`.
+///
+/// # Why the conflict target carries a `WHERE`
+///
+/// `cart_items` had a plain `UNIQUE (cart_id, kind, catalog_id)` from
+/// `migrations/059_cart_tables.sql:24`, and a bare three-column conflict
+/// target inferred it. `migrations/081_cart_rental_lines.sql` **drops** that
+/// constraint (it has to: a rental line is identified by its dates too) and
+/// replaces it with a five-column `UNIQUE (cart_id, kind, catalog_id,
+/// rental_start, rental_end)` plus the partial unique index
+/// `idx_cart_items_undated_line ... WHERE rental_start IS NULL AND rental_end
+/// IS NULL`, which is what still holds 059's one-line-per-item rule for
+/// undated lines.
+///
+/// Postgres cannot infer a *partial* index from a bare conflict target: the
+/// upsert has to repeat the index predicate verbatim. Without the `WHERE`
+/// below, this statement fails with 42P10 ("no unique or exclusion constraint
+/// matching the ON CONFLICT specification") the moment 081 has run — not on
+/// some edge case, but on **every** write to a cart. The five-column target
+/// would not work either, because the NULLs this function writes never match
+/// it.
+///
+/// This function writes no dates, so every row it creates satisfies the first
+/// branch of the `cart_items_rental_dates` CHECK (both NULL) and lands in the
+/// partial index. That is deliberate and 081 blesses it: a rental line whose
+/// dates the customer has not picked yet is one line per family. When a date
+/// picker exists, a dated line needs the five-column target instead — at which
+/// point this becomes two statements, not a widened one.
 #[allow(clippy::too_many_arguments)]
 async fn upsert_cart_item<C: sea_orm::ConnectionTrait>(
     conn: &C,
@@ -314,15 +365,7 @@ async fn upsert_cart_item<C: sea_orm::ConnectionTrait>(
 
     conn.execute(Statement::from_sql_and_values(
         DbBackend::Postgres,
-        "INSERT INTO cart_items \
-           (id, cart_id, kind, catalog_id, quantity, unit_price, name, image_url, created_at, updated_at) \
-         VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, now(), now()) \
-         ON CONFLICT (cart_id, kind, catalog_id) DO UPDATE SET \
-           quantity   = LEAST(cart_items.quantity + EXCLUDED.quantity, 1000000), \
-           unit_price = EXCLUDED.unit_price, \
-           name       = EXCLUDED.name, \
-           image_url  = EXCLUDED.image_url, \
-           updated_at = now()",
+        CART_ITEM_UPSERT_SQL,
         [
             cart_id.into(),
             kind.into(),
@@ -704,5 +747,24 @@ mod tests {
             item("set", "s", 1_000_000),
         ]);
         assert_eq!(out, vec![("set", "s".to_string(), 1_000_000)]);
+    }
+
+    #[test]
+    fn undated_upsert_targets_migration_081_partial_index() {
+        let sql = CART_ITEM_UPSERT_SQL
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ");
+
+        assert!(
+            sql.contains(
+                "ON CONFLICT (cart_id, kind, catalog_id) WHERE rental_start IS NULL AND rental_end IS NULL DO UPDATE"
+            ),
+            "the upsert must repeat migration 081's partial-index predicate: {sql}"
+        );
+        assert!(
+            !sql.contains("ON CONFLICT (cart_id, kind, catalog_id, rental_start, rental_end)"),
+            "NULL rental dates cannot infer the five-column unique constraint: {sql}"
+        );
     }
 }

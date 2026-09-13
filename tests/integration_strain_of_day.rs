@@ -29,7 +29,7 @@ use serde_json::json;
 use tower::ServiceExt;
 
 /// Seed a strain and return its id.
-async fn seed_strain(db: &woody_weed_bot::db::Database, name: &str, available: bool) -> String {
+async fn seed_strain(db: &turbobaby_bot::db::Database, name: &str, available: bool) -> String {
     let id = uuid::Uuid::new_v4().to_string();
     db.orm
         .execute(Statement::from_sql_and_values(
@@ -50,7 +50,7 @@ async fn seed_strain(db: &woody_weed_bot::db::Database, name: &str, available: b
 
 /// Flag a strain as strain-of-day directly in the DB, bypassing the API —
 /// this is the state the owner's database was already in.
-async fn flag_as_sotd(db: &woody_weed_bot::db::Database, id: &str) {
+async fn flag_as_sotd(db: &turbobaby_bot::db::Database, id: &str) {
     db.orm
         .execute(Statement::from_sql_and_values(
             DbBackend::Postgres,
@@ -63,7 +63,7 @@ async fn flag_as_sotd(db: &woody_weed_bot::db::Database, id: &str) {
 }
 
 /// Clear every strain-of-day flag so each test starts from a known carousel.
-async fn clear_all_sotd(db: &woody_weed_bot::db::Database) {
+async fn clear_all_sotd(db: &turbobaby_bot::db::Database) {
     db.orm
         .execute(Statement::from_string(
             DbBackend::Postgres,
@@ -74,7 +74,7 @@ async fn clear_all_sotd(db: &woody_weed_bot::db::Database) {
 }
 
 fn admin_token() -> String {
-    woody_weed_bot::api::auth::generate_admin_token("test_password", "dummy_test_token")
+    turbobaby_bot::api::auth::generate_admin_token("test_password", "dummy_test_token")
 }
 
 struct Resp {

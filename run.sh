@@ -51,7 +51,7 @@ mkdir -p logs
 
 # Запуск бэкенда
 echo -e "${BLUE}🚀 Запуск бэкенда...${NC}"
-cargo run --features backend --bin woody-weed-bot-server > logs/backend.log 2>&1 &
+cargo run --features backend --bin turbobaby-bot-server > logs/backend.log 2>&1 &
 BACKEND_PID=$!
 
 # Ожидание запуска бэкенда

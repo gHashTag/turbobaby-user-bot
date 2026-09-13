@@ -5,7 +5,7 @@
 //! overlay provides an app-controlled zoom instead: tap +/−, double-tap to
 //! toggle, and tap the backdrop or ✕ to close.  The image is rendered at the
 //! largest size that fits the screen, then scaled up so users can read fine
-//! print (e.g. strain names on promo art).
+//! print (e.g. model names on promo art).
 
 use dioxus::prelude::*;
 

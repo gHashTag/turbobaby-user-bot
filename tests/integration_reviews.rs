@@ -11,7 +11,7 @@ use http_body_util::BodyExt;
 use sea_orm::{ColumnTrait, ConnectionTrait, DbBackend, EntityTrait, QueryFilter, Statement};
 use tower::ServiceExt;
 
-use woody_weed_bot::db::entities::strain_review::{Column as ReviewCol, Entity as ReviewEntity};
+use turbobaby_bot::db::entities::strain_review::{Column as ReviewCol, Entity as ReviewEntity};
 
 fn admin_headers() -> (String, &'static str, &'static str) {
     (
@@ -21,7 +21,7 @@ fn admin_headers() -> (String, &'static str, &'static str) {
     )
 }
 
-async fn seed_strain(db: &woody_weed_bot::db::Database, strain_id: &str, name: &str) {
+async fn seed_strain(db: &turbobaby_bot::db::Database, strain_id: &str, name: &str) {
     db.orm
         .execute(Statement::from_sql_and_values(
             DbBackend::Postgres,
@@ -33,7 +33,7 @@ async fn seed_strain(db: &woody_weed_bot::db::Database, strain_id: &str, name: &
 }
 
 async fn seed_delivered_order(
-    db: &woody_weed_bot::db::Database,
+    db: &turbobaby_bot::db::Database,
     order_id: &str,
     telegram_id: i64,
     strain_id: &str,

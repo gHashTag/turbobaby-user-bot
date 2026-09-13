@@ -1,3 +1,4 @@
+pub(crate) mod bikes;
 // Integration tests in `tests/*.rs` import `entities` and `orders`
 // as external lib consumers — they must stay `pub mod`. The bin
 // crate still flags them as unreachable_pub (it has private
@@ -330,7 +331,56 @@ const MIGRATIONS: &[(&str, &str)] = &[
         "076_promo_broadcast.sql",
         include_str!("../../migrations/076_promo_broadcast.sql"),
     ),
+    // --- The bike domain -------------------------------------------------
+    //
+    // 077 onward, contiguous, because `migration_numbers_are_sequential_and_unique`
+    // below asserts a gap-free run from 001 — a reserved gap is not an option.
+    // `migrations/wip/077_quest_progress.sql` also claims 077 but sits in a
+    // subdirectory that `migration_files()`'s non-recursive `read_dir` cannot see,
+    // so it does not collide today and it is the file that renumbers when it is
+    // promoted (DECISIONS.md D1, and the note in `migrations/wip/README.md`).
+    //
+    // Order is load-bearing twice over: 078 carries an FK to 077, and 083 drops
+    // the cannabis catalog only after 082 has seeded its replacement, so the
+    // catalog is never empty between two migrations in the same run.
+    (
+        "077_bikes.sql",
+        include_str!("../../migrations/077_bikes.sql"),
+    ),
+    (
+        "078_bike_units.sql",
+        include_str!("../../migrations/078_bike_units.sql"),
+    ),
+    (
+        "079_rental_terms.sql",
+        include_str!("../../migrations/079_rental_terms.sql"),
+    ),
+    (
+        "080_bike_service_records.sql",
+        include_str!("../../migrations/080_bike_service_records.sql"),
+    ),
+    (
+        "081_cart_rental_lines.sql",
+        include_str!("../../migrations/081_cart_rental_lines.sql"),
+    ),
+    (
+        "082_bikes_seed.sql",
+        include_str!("../../migrations/082_bikes_seed.sql"),
+    ),
+    (
+        "083_drop_cannabis_catalog.sql",
+        include_str!("../../migrations/083_drop_cannabis_catalog.sql"),
+    ),
 ];
+
+/// The last migration that shipped before the bike domain, and therefore the last
+/// one an established database can be *assumed* to have already run.
+///
+/// Used by the one-time backfill in [`Database::run_migrations`] to bound its claim.
+/// This is a historical marker, not a pointer at "the newest migration": it is
+/// correct precisely because it does not move. Adding migration 084 must NOT update
+/// it — 084 has not run anywhere, which is the whole point.
+const LAST_PRE_BIKE_MIGRATION: &str = "076_promo_broadcast.sql";
 
 /// Columns the catalog endpoints SELECT that were added by *later* migrations
 /// (016/019/024/034) — exactly the ones that go missing when a prod migration
@@ -350,6 +400,25 @@ pub(crate) const CRITICAL_COLUMNS: &[(&str, &[&str])] = &[
         "sets",
         &["image_url", "video_url", "total_weight_grams", "badge"],
     ),
+    // The bike catalog (DECISIONS.md D10). Without an entry here a bike table
+    // missing a column produces no startup warning at all, and the first symptom is
+    // a `try_get_warn!` default served to a customer — which for these columns
+    // means `0`, and a rate of 0 reads as FREE.
+    //
+    // Only the money and gating columns are listed, following the rule set by the
+    // entries above: base columns that exist whenever the table does are omitted,
+    // and what is named here is what the catalog endpoints actually SELECT.
+    (
+        "bikes",
+        &[
+            "base_rate_thb_day",
+            "deposit_thb",
+            "monthly_low_season_thb",
+            "sale_price_thb",
+            "offered",
+        ],
+    ),
+    ("bike_units", &["status", "km_since_purchase"]),
 ];
 
 /// Pure diff: which `expected` (table, column) pairs are absent from `present`
@@ -472,11 +541,32 @@ impl Database {
             .context("run_migrations: create _schema_migrations")?;
 
         // One-time transition for ALREADY-MIGRATED databases: if the tracker is
-        // empty but the DB is established (the `strains` table — created by 001 —
-        // already exists), every migration listed here has demonstrably run
-        // before (repeatedly). Mark them all applied WITHOUT re-running, so the
-        // seed/price migrations can't clobber admin data even once more. A truly
-        // fresh DB has no `strains` table → this is skipped and everything runs.
+        // empty but the DB is established, every migration that shipped BEFORE the
+        // bike domain has demonstrably run before (repeatedly). Mark those applied
+        // WITHOUT re-running, so the seed/price migrations can't clobber admin data
+        // even once more. A truly fresh DB is not established → this is skipped and
+        // everything runs.
+        //
+        // Two things here are deliberate and each closes a way to destroy data.
+        //
+        // 1. The probe asks for `public.orders`, NOT `public.strains`.
+        //    `083_drop_cannabis_catalog.sql` drops `strains`. Keyed on that table,
+        //    this probe would answer "not established" for a populated production
+        //    database the moment 083 had run, the backfill would be skipped, the
+        //    runner would conclude the database is FRESH, and it would apply
+        //    001-076 over live data. `orders` is created by `001_initial.sql:57`
+        //    and survives the rebrand, because a rental is still an order
+        //    (DECISIONS.md D3).
+        //
+        // 2. The backfill stops at `LAST_PRE_BIKE_MIGRATION` instead of walking the
+        //    whole list. The claim it encodes — "these have demonstrably run
+        //    before" — is only true of migrations that existed before this deploy.
+        //    Backfilling the entire current list would mark 077-083 applied on an
+        //    established database that has never run them, and the bike tables
+        //    would never be created: the catalog would 500 on a schema that looks
+        //    fully migrated. That window is narrow (a database established before
+        //    the tracker shipped and not booted since) but it is exactly the
+        //    long-lived production database this branch exists to protect.
         let tracked: i64 = self
             .orm
             .query_one(Statement::from_string(
@@ -492,14 +582,23 @@ impl Database {
                 .orm
                 .query_one(Statement::from_string(
                     DbBackend::Postgres,
-                    "SELECT to_regclass('public.strains') IS NOT NULL AS est".to_string(),
+                    "SELECT to_regclass('public.orders') IS NOT NULL AS est".to_string(),
                 ))
                 .await
                 .context("run_migrations: established check")?
                 .and_then(|r| r.try_get::<bool>("", "est").ok())
                 .unwrap_or(false);
             if established {
-                for (name, _) in MIGRATIONS {
+                let backfill_through = MIGRATIONS
+                    .iter()
+                    .position(|(name, _)| *name == LAST_PRE_BIKE_MIGRATION)
+                    .map(|index| index + 1)
+                    .context(
+                        "run_migrations: LAST_PRE_BIKE_MIGRATION is not in MIGRATIONS — \
+                         refusing to backfill rather than guess how much of the list \
+                         has already run",
+                    )?;
+                for (name, _) in &MIGRATIONS[..backfill_through] {
                     self.orm
                         .execute(Statement::from_sql_and_values(
                             DbBackend::Postgres,
@@ -510,9 +609,13 @@ impl Database {
                         .context("run_migrations: backfill tracker")?;
                 }
                 tracing::warn!(
-                    "run_migrations: established DB — backfilled {} migrations as applied \
-                     (one-time; future migrations run normally, seeds no longer re-run)",
-                    MIGRATIONS.len()
+                    "run_migrations: established DB — backfilled {} of {} migrations as \
+                     applied, through {} (one-time; the {} newer migrations run normally, \
+                     seeds no longer re-run)",
+                    backfill_through,
+                    MIGRATIONS.len(),
+                    LAST_PRE_BIKE_MIGRATION,
+                    MIGRATIONS.len() - backfill_through
                 );
             }
         }
@@ -950,14 +1053,39 @@ mod schema_self_check_tests {
 
     #[test]
     fn critical_columns_list_is_sane() {
-        // Guard the const itself: non-empty, only the set-tables, no dupes.
+        // Guard the const itself: non-empty, every table real, no empty column
+        // lists, no duplicate table entries.
+        //
+        // This guard used to read `matches!(*table, "accessory_sets" |
+        // "tea_sets" | "sets")` — a second, hand-copied copy of the very list
+        // it was guarding. Adding `bikes` and `bike_units` to CRITICAL_COLUMNS
+        // for the bike domain (D10) therefore failed here, and the only way to
+        // pass was to type the new names into the copy as well. A guard that
+        // has to be edited in lockstep with its subject does not constrain the
+        // subject; it just doubles the edit, and the second copy is where the
+        // drift lands.
+        //
+        // So it asks the migrations instead. A table in CRITICAL_COLUMNS that
+        // no migration creates is the real defect — a typo'd or renamed table
+        // whose columns would be probed for ever and never found — and that is
+        // caught now, for every table, without naming any of them here.
         assert!(!CRITICAL_COLUMNS.is_empty());
+
+        let corpus = super::orphan_table_tests::migration_tables();
+        let mut seen = std::collections::BTreeSet::new();
         for (table, cols) in CRITICAL_COLUMNS {
             assert!(
-                matches!(*table, "accessory_sets" | "tea_sets" | "sets"),
-                "unexpected table in CRITICAL_COLUMNS: {table}"
+                corpus.iter().any(|t| t == table),
+                "CRITICAL_COLUMNS names `{table}`, which no migration in migrations/ \
+                 creates. Either it is misspelled, or the table was renamed and this \
+                 entry was left behind — its columns would be probed for ever and \
+                 never found. Tables the migrations do create: {corpus:?}"
             );
             assert!(!cols.is_empty(), "{table} has no columns listed");
+            assert!(
+                seen.insert(*table),
+                "`{table}` appears twice in CRITICAL_COLUMNS; merge the two entries"
+            );
         }
     }
 }
@@ -1042,6 +1170,44 @@ mod migration_wiring_tests {
             gaps.is_empty(),
             "gap(s) in migration numbering (missing): {gaps:?} — files run in \
              filename order, a gap usually means a deleted or misnamed migration"
+        );
+    }
+
+    /// The backfill boundary must name a real migration, and it must not drift to
+    /// the end of the list.
+    ///
+    /// `run_migrations` uses [`LAST_PRE_BIKE_MIGRATION`] to bound the one-time
+    /// "assume these already ran" backfill on an established database. Two ways
+    /// that goes wrong, both silent in production and both caught here:
+    ///
+    /// * the constant names a file that no longer exists → `position()` returns
+    ///   `None` and the migration run aborts on every established database;
+    /// * someone "updates" it to the newest migration → that migration is marked
+    ///   applied without running, and the table it creates never exists while the
+    ///   schema looks fully migrated.
+    ///
+    /// The second is why this asserts the boundary leaves migrations behind it.
+    #[test]
+    fn backfill_boundary_is_real_and_not_the_end_of_the_list() {
+        let index = super::MIGRATIONS
+            .iter()
+            .position(|(name, _)| *name == super::LAST_PRE_BIKE_MIGRATION)
+            .unwrap_or_else(|| {
+                panic!(
+                    "LAST_PRE_BIKE_MIGRATION = `{}` is not in MIGRATIONS; \
+                     run_migrations would refuse to backfill any established database",
+                    super::LAST_PRE_BIKE_MIGRATION
+                )
+            });
+
+        let after = super::MIGRATIONS.len() - (index + 1);
+        assert!(
+            after > 0,
+            "LAST_PRE_BIKE_MIGRATION = `{}` is the last entry in MIGRATIONS. The \
+             backfill would then mark every migration applied on an established \
+             database, including ones that have never run there. This constant is a \
+             historical marker and must not be advanced when a migration is added.",
+            super::LAST_PRE_BIKE_MIGRATION
         );
     }
 }
@@ -1185,9 +1351,41 @@ mod orphan_table_tests {
         // would require a new migration + prod coordination. Re-evaluate
         // when location quests are revisited.
         "hunt_checkpoints",
+        // The four garden tables, orphaned 2026-09-12 by the D5 removal of the
+        // garden mechanic. All four come from two migrations: `004_garden.sql`
+        // creates `garden_config` and `garden_rewards`, `066_garden_social.sql`
+        // creates `user_achievements` and `share_events`. Every Rust path that
+        // read or wrote them is gone — the API endpoints, the two reminder
+        // loops in main.rs, the plant cell in the UI — so they are orphans by
+        // the same measurement that says the removal happened.
+        //
+        // They are allowlisted rather than dropped, deliberately. A drop
+        // migration against these four destroys live rows in a deployed
+        // database: a customer's accrued garden rewards and their achievement
+        // history. That is the owner's call to make, not a tidy-up, and
+        // `083_drop_cannabis_catalog.sql` only earned its drop because the
+        // catalog it removed was reference data with no customer rows in it.
+        // An idempotent `CREATE TABLE IF NOT EXISTS` that nothing reads costs
+        // one statement per deploy; a wrong `DROP TABLE` costs data.
+        //
+        // The removal is also not finished, which is the more useful thing to
+        // know: `src/trios/garden.rs` is still wired at `src/trios/mod.rs:10`
+        // and 11 of the 20 garden metric helpers still have live call sites.
+        // See DECISIONS.md D18. Re-evaluate these four when that is closed —
+        // not before, because a table dropped while half the code still
+        // expects it is a worse failure than an unread table.
+        "garden_config",
+        "garden_rewards",
+        "user_achievements",
+        "share_events",
     ];
 
-    fn migration_tables() -> Vec<String> {
+    /// Every table any migration creates.
+    ///
+    /// `pub(super)` because `schema_self_check_tests::critical_columns_list_is_sane`
+    /// checks its own table list against this one rather than against a
+    /// hand-copied duplicate. One parser, two gates.
+    pub(super) fn migration_tables() -> Vec<String> {
         let manifest = env!("CARGO_MANIFEST_DIR");
         let mig_dir = std::path::Path::new(manifest).join("migrations");
         let mut out = Vec::new();

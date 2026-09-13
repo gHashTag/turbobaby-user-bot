@@ -14,11 +14,11 @@ dev: ## Dev режим - запуск бэкенда + фронтенда с DEB
 
 backend: ## Запустить только бэкенд с DEBUG логами
 	@echo "📦 Бэкенд с DEBUG логами:"
-	@PORT=3000 RUST_LOG=debug,sqlx=debug,tower_http=debug,axum=debug cargo run --features backend --bin woody-weed-bot-server
+	@PORT=3000 RUST_LOG=debug,sqlx=debug,tower_http=debug,axum=debug cargo run --features backend --bin turbobaby-bot-server
 
 backend-quiet: ## Запустить только бэкенд без логов
 	@echo "📦 Бэкенд (тихий режим):"
-	@PORT=3000 cargo run --features backend --bin woody-weed-bot-server > /dev/null 2>&1 &
+	@PORT=3000 cargo run --features backend --bin turbobaby-bot-server > /dev/null 2>&1 &
 
 frontend: ## Запустить только фронтенд (trunk serve)
 	@echo "🎨 Trunk serve:"
@@ -51,17 +51,17 @@ logs-frontend: ## Логи только фронтенда
 logs-api: ## Запустить с фильтрацией только HTTP запросов
 	@echo "📊 HTTP запросы:"
 	@PORT=3000 RUST_LOG=tower_http=trace,axum=trace,sqlx=query,warn,error,teloxide=off,tracing=off \
-	    cargo run --features backend --bin woody-weed-bot-server 2>&1 \
+	    cargo run --features backend --bin turbobaby-bot-server 2>&1 \
 	    | grep -E "GET|POST|PUT|DELETE|PATCH|response|request" --line-buffered
 
 sql-logs: ## Запустить с логированием SQL запросов
 	@echo "📊 SQL + HTTP запросы:"
-	@PORT=3000 RUST_LOG=sqlx=debug,tower_http=trace,axum=trace,woody_weed_bot=info \
-	    cargo run --features backend --bin woody-weed-bot-server 2>&1 \
+	@PORT=3000 RUST_LOG=sqlx=debug,tower_http=trace,axum=trace,turbobaby_bot=info \
+	    cargo run --features backend --bin turbobaby-bot-server 2>&1 \
 	    | grep -E "SELECT|INSERT|UPDATE|DELETE|POST|GET|response|request|error" --line-buffered
 
 restart: ## Перезапустить (остановить и запустить)
-	@pkill -f "woody-weed-bot-server" 2>/dev/null || true
+	@pkill -f "turbobaby-bot-server" 2>/dev/null || true
 	@pkill -f "trunk" 2>/dev/null || true
 	@echo "✓ Остановлено"
 	@./dev.sh

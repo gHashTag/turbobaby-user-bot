@@ -32,7 +32,7 @@ trap cleanup SIGINT SIGTERM
 
 # Остановить существующие процессы
 echo -e "${CYAN}🧹 Очистка портов...${NC}"
-pkill -f "woody-weed-bot-server" 2>/dev/null || true
+pkill -f "turbobaby-bot-server" 2>/dev/null || true
 pkill -f "trunk" 2>/dev/null || true
 sleep 2
 
@@ -42,7 +42,7 @@ mkdir -p logs
 # Запуск бэкенда на порту 3000 с логированием
 echo -e "${CYAN}📦 Бэкенд (порт 3000):${NC}"
 PORT=3000 RUST_LOG=debug,sqlx=debug,tower_http=debug,axum=debug \
-    cargo run --features backend --bin woody-weed-bot-server 2>&1 \
+    cargo run --features backend --bin turbobaby-bot-server 2>&1 \
     | sed 's/^/[BACKEND] /' &
 BACKEND_PID=$!
 

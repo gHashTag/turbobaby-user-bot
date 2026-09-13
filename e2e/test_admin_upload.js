@@ -33,7 +33,7 @@ const { chromium } = require('playwright-core');
     videoUploadBtn.click()
   ]);
   
-  await fileChooser.setFiles('/Users/playra/woody-weed-bot/assets/favicon.svg');
+  await fileChooser.setFiles('/Users/playra/turbobaby-bot/assets/favicon.svg');
   await page.waitForTimeout(5000);
   
   await browser.close();

@@ -15,7 +15,7 @@
 
 groups:
   # ── SLO burn-rate (availability 99.5 %, error budget 0.5 %) ─────────
-  - name: woody_weed_bot_slo_burn
+  - name: turbobaby_bot_slo_burn
     rules:
       - alert: WoodyWeedBotFastBurnCritical
         # 14.4x burn → 30-day budget gone in 50 hours if sustained.
@@ -65,7 +65,7 @@ groups:
           description: "Over 6h, error ratio has averaged above the 0.5 % SLO budget. Investigate this week."
 
   # ── DB pool saturation (cycle #6 instrumentation) ───────────────────
-  - name: woody_weed_bot_db_pool
+  - name: turbobaby_bot_db_pool
     rules:
       - alert: DBPoolAcquireFailing
         # Any non-zero rate is bad — pool.get() returning Err means
@@ -107,7 +107,7 @@ groups:
           summary: "DB pool > 90 % utilised for 10m"
 
   # ── Abuse / rate-limit events ───────────────────────────────────────
-  - name: woody_weed_bot_abuse
+  - name: turbobaby_bot_abuse
     rules:
       - alert: AdminLoginRateLimitSpike
         # Sustained rate-limit blocks on /admin/login = active brute-force.
@@ -134,7 +134,7 @@ groups:
           description: "Anonymous order rate-limit blocks > 2/min for 10m."
 
   # ── Latency ─────────────────────────────────────────────────────────
-  - name: woody_weed_bot_latency
+  - name: turbobaby_bot_latency
     rules:
       - alert: HighRequestLatencyP99
         # p99 latency > 1s for any path sustained 10m. Per-path so the
@@ -150,7 +150,7 @@ groups:
           description: "5-min p99 latency exceeded 1 second sustained for 10 minutes."
 
   # ── Schema drift (DB behind on migrations) ──────────────────────────
-  - name: woody_weed_bot_schema
+  - name: turbobaby_bot_schema
     rules:
       - alert: WoodyWeedBotSchemaDrift
         # Set once at startup by Database::missing_critical_columns(): the
