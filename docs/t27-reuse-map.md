@@ -3,7 +3,14 @@
 Answers the instruction "study all the specs so we can reuse and not duplicate `.t27`
 specifications". Measured 2026-09-12 against the **published** corpus, not a local checkout.
 
-Related: [`DECISIONS.md`](../DECISIONS.md), issues #16-#21 (the six specs), #22 (publication).
+Related: [`DECISIONS.md`](../DECISIONS.md), issues #16-#21 (the initial six domain specs),
+#22 (publication), and epic #30 (the consolidated contract corpus).
+
+Local consolidation status and the exhaustive outcome for each root twin declaration are in
+[`t27-semantic-merge-matrix.md`](t27-semantic-merge-matrix.md). The canonical owners are the
+manifested files under `specs/turbobaby/` plus `specs/agents/turbobaby.t27`;
+`scripts/verify_t27_specs.py` recursively rejects any new canonical file until its module, ID
+and declaration floors are added to the manifest.
 
 ---
 
@@ -45,7 +52,7 @@ have been an import.
 ## Does the commerce domain already exist? No.
 
 The 856-spec index (`shared-core.json`) carries a `terms` array and a description per spec. I
-probed it for every term the six TurboBaby specs would claim.
+probed it for every term the initial TurboBaby domain specs would claim.
 
 **Zero hits, in terms and in descriptions:** `price`, `pricing`, `money`, `currency`, `thb`,
 `baht`, `inventory`, `stock`, `rental`, `commerce`, `shop`, `vehicle`, `bike`, `moto`,
@@ -67,8 +74,10 @@ Of 58 spec categories the largest are `tri` (150), `tools` (66), `fpga` (66), `m
 `crons` (34), `functions` (29), `agents` (28), `skills` (27). There is **no** commerce,
 catalog-of-goods, pricing or booking category anywhere in the corpus.
 
-**Conclusion:** the six TurboBaby specs duplicate nothing. This is a new domain for `.t27`, and
-the reuse the instruction asks for is available at the level of *form*, not content.
+**Conclusion:** the TurboBaby domain contracts duplicate nothing in the published corpus. This
+is a new domain for `.t27`, and the reuse the instruction asks for is available at the level of
+*form*, not content. Local ownership is narrower: ten canonical contracts divide domain,
+transport, transaction, runtime and publication boundaries without copying formulas between them.
 
 ---
 
@@ -101,8 +110,8 @@ whose contract drives a live workflow. TurboBaby follows both:
     but not mechanically enforced, and a spec of bare constants is published today rather
     than rejected. The corpus splits by purpose: *card* specs (an agent, a catalog entry)
     are pure constants whose provenance lives in `;` comments and whose JSON the site
-    generates; *contract* specs (`hello_world.t27`, `discovery.t27`) carry tests. The six
-    TurboBaby specs are contracts, so they carry tests and invariants — which puts them in
+    generates; *contract* specs (`hello_world.t27`, `discovery.t27`) carry tests. The ten
+    canonical TurboBaby specs are contracts, so they carry tests and invariants — which puts them in
     the 507 and costs nothing.
 
 `discovery.t27` also demonstrates the habit worth copying most: it states what the scan
@@ -134,7 +143,7 @@ This repository qualifies on every published criterion:
 | `MAX_FILE_BYTES` | `1048576` | far under — yes |
 
 **`SKIP_FORKS = true` is the load-bearing row.** The instruction said to fork
-`woody-weed-bot`. A GitHub fork would have carried `isFork: true` and been excluded from the
+`turbobaby-bot`. A GitHub fork would have carried `isFork: true` and been excluded from the
 catalog for ever — the specs would exist and never appear. This repository is instead a fresh
 public repo holding the upstream content and history, so `isFork` is `false` and it qualifies.
 That one property is the difference between part 7 of the request working and silently never
@@ -159,7 +168,7 @@ a change to the supervisor's board contract and to the page.
 The deployed origin the page falls back to is also not currently serving the board API.
 `DEPLOYED_QUEEN = https://trios-agent-server-production.up.railway.app` answers `/health` with
 `{"status":"ok","pid":2,"cdpConnected":false,...}` — a CDP/browser service — while
-`/api/board`, `/api/status` and `/api/queen/needs-you` all return **404**.
+`/queen/public-board`, `/api/status` and `/api/queen/needs-you` all return **404**.
 
 Issue #22 therefore splits: the spec-browser half needs nothing from us, and the Queen-board
 half needs a `repo` parameter in the board contract before it is possible at all. Recorded

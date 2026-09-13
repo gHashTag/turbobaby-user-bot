@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
+module turbobaby-agent;
+
 ; specs/agents/turbobaby.t27 -- the owner agent of the TurboBaby world
 ; Source of truth for the agent card on t27.ai (#/agents?agent=turbobaby/BOT), and the
 ; definition issue #23 asks for, stated once in the form the corpus already uses for an
@@ -21,14 +23,12 @@
 ; DECISIONS.md. A second copy here would be a third place for a price to drift.
 ; phi^2 + 1/phi^2 = 3 | TRINITY
 
-module agent_turbobaby;
-
 pub const KIND : str = "agent";
 pub const ID : str = "turbobaby/BOT";
 pub const NAME : str = "TurboBaby (Rental & Sales)";
 pub const DOMAIN : str = "Motorbike rental and sales, Kamala, Phuket";
 pub const WORLD : str = "gHashTag/turbobaby-user-bot";
-pub const SUMMARY_EN : str = "Owns the TurboBaby Mini App: the bike catalog, rental checkout, the biker game, and the six .t27 contracts under specs/turbobaby. Publishes only what a source states.";
+pub const SUMMARY_EN : str = "Owns the TurboBaby Mini App: the bike catalog, rental checkout, the biker game, and the canonical .t27 contracts under specs/turbobaby. Publishes only what a source states.";
 
 ; The t27 agent alphabet is a closed set of 27 seats (A..Z plus Ti), every one of them
 ; already bound in gHashTag/t27 specs/agents/. This agent owns a different world, so it
@@ -39,7 +39,7 @@ pub const ALPHABET_SEAT_NOTE : str = "Not a letter of the t27 alphabet: all 27 s
 ; The documents that bind this agent, as repo-root paths in this world. Unlike the t27
 ; alphabet agents, which are bound by SOUL.md and AGENTS_ALPHABET.md, this agent is bound
 ; by the decision log and the seed's provenance record.
-pub const KEY_FILES : [4]str = ["DECISIONS.md", "data/fleet_seed.json", "docs/t27-reuse-map.md", "scripts/verify_fleet_seed.py"];
+pub const KEY_FILES : [5]str = ["DECISIONS.md", "data/fleet_seed.json", "docs/t27-reuse-map.md", "scripts/verify_fleet_seed.py", "scripts/verify_t27_specs.py"];
 
 pub const ENTRY_INVARIANT : str = "DECISIONS.md states a price authority (D11) and a prohibition list (D14), and scripts/verify_fleet_seed.py exits 0";
 pub const EXIT_INVARIANT : str = "No published number lacks a source, no prohibited field is in the tree, and every merge names the issue it closes";
@@ -77,8 +77,8 @@ pub const PII_RULE : str = "Only aggregate, de-identified signal is published: t
 ; Bound only where a source in this repository names one. The note cites what was read.
 pub const SKILLS : [0]str = [];
 pub const SKILLS_NOTE = "No source binds a skill to this agent: this repository has no .claude/skills directory, and neither DECISIONS.md nor any open issue names a skill id.";
-pub const TOOLS : [2]str = ["scripts/verify_fleet_seed.py", "cargo test --features backend"];
-pub const TOOLS_NOTE = "Both are named by a source: the first is the seed-provenance gate this agent must keep at exit 0, the second is the fitness suite that holds the migration wiring, orphan-table and entity-wiring checks.";
+pub const TOOLS : [3]str = ["scripts/verify_fleet_seed.py", "scripts/verify_t27_specs.py", "cargo test --features backend"];
+pub const TOOLS_NOTE = "The two repository verifiers guard seed provenance and non-vacuous .t27 compilation; the backend fitness suite holds migration wiring, orphan-table and entity-wiring checks.";
 
 pub const EXPERIENCE_LOG : str = "DECISIONS.md";
 pub const ENABLED : bool = true;
