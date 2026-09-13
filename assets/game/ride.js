@@ -44,8 +44,8 @@ const DEFAULT_STRINGS = {
 };
 
 // == Palette ==
-// The road and the sky are the skate game's, because it is the same island and
-// two games on one stack should not look like two products.
+// The road and the sky are the skate game's, so two games on one stack
+// look like one product (the fleet is in Phuket; the skate island was not).
 const SKY_TOP = '#2f8fd8';
 const SKY_MID = '#8ec9ea';
 const SKY_LOW = '#cfeef7';

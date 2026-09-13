@@ -10,7 +10,7 @@ const JOKE_STYLES: &[&str] = &[
     "a dad joke about motorbikes",
     "a knock-knock joke about motorbikes",
     "a joke about forgetting where you parked your scooter",
-    "a pirate joke about motorbikes (Koh Phangan style)",
+    "a pirate joke about motorbikes (Phuket style)",
     "a joke comparing bike classes to people",
     "a short absurd joke about engine displacement",
     "a joke about potholes after the monsoon rain",
@@ -22,7 +22,7 @@ const JOKE_STYLES: &[&str] = &[
     "a joke about naming motorbike models",
     "a joke about renting a bike at a Thai beach shop",
     "a joke about the perfect island road with zero traffic",
-    "a joke about Full Moon Party parking",
+    "a joke about Patong beach-club parking",
     "a joke about a mechanic recommending helmets",
     "a joke about a tuk-tuk racing a scooter uphill",
     "a joke about ordering one more bike for a friend",
@@ -34,7 +34,7 @@ const FACT_TOPICS: &[&str] = &[
     "history of the motor scooter",
     "how two-stroke and four-stroke engines differ",
     "why island air corrodes bikes faster",
-    "riding conditions on Koh Phangan roads",
+    "riding conditions on Phuket roads",
     "motorcycle culture in Thailand and driving on the left",
     "helmet standards and why they matter",
     "how drum and disc brakes differ",
@@ -49,7 +49,7 @@ const FACT_TOPICS: &[&str] = &[
     "how chain maintenance keeps a bike alive",
     "full-face vs open-face helmets",
     "how monsoon season changes island riding",
-    "famous viewpoint loops on Koh Phangan",
+    "famous viewpoint loops on Phuket",
     "why island bikes need more frequent service",
     "the story of the Honda Wave in Southeast Asia",
     "motorbike safety gear for tropical weather",
@@ -153,7 +153,7 @@ fn build_system_prompt(persona: &str, lang_instruction: &str) -> String {
     let safe_persona =
         crate::util::truncate_string(&sanitize_user_text(persona), MAX_AI_PERSONA_CHARS);
     format!(
-        "You are TurboBaby, a friendly motorbike rental assistant on Koh Phangan, Thailand. \
+        "You are TurboBaby, a friendly motorbike rental assistant in Kamala, Phuket, Thailand. \
          Persona: {}. {}. Keep responses under 200 words.",
         safe_persona, lang_instruction
     )
