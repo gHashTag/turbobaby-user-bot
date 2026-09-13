@@ -18,7 +18,8 @@
 --
 --   * `description_ru` / `description_en` / `image_url`. The seed publishes no
 --     description or image. Writing marketing copy here would be inventing
---     catalog content in a data migration.
+--     catalog content in a data migration. (Images later arrive in 084, from
+--     manufacturer catalog pages — still nothing from this register.)
 --
 --   * `km_since_purchase` on every unit. The register's mileage column is not
 --     de-identified into the seed file, and the one figure it does quote is
