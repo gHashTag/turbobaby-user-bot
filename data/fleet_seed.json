@@ -14,6 +14,24 @@
   "measured_at": "2026-09-12",
   "schema_version": 2,
 
+  "market": {
+    "country_code": "TH",
+    "country_name": "Thailand",
+    "currency_code": "THB",
+    "currency_minor_digits_iso": 2,
+    "currency_minor_digits_display": 0,
+    "currency_symbol_codepoint": 3663,
+    "currency_symbol_placement": "prefix",
+    "group_separator": ",",
+    "decimal_separator": ".",
+    "timezone_name": "Asia/Bangkok",
+    "utc_offset_hours": 7,
+    "dst_observed": false,
+    "default_calling_code": "+66",
+    "languages": ["ru", "en"],
+    "note": "The deployment profile (D18). Field names and bounds follow specs/turbobaby/market_profile.t27 (contract, t27/market); the values were measured from this repository 2026-09-13: whole-baht display and the baht glyph from src/trios/pricing.rs format_baht, UTC+7/no-DST from src/api/happy_hour.rs, the calling default from src/trios/store.rs. The codepoint is decimal 3663 = U+0E3F THAI CURRENCY SYMBOL BAHT, carried as a number so the .t27 sources stay ASCII. languages is deployment data, not one of the 13 contract fields."
+  },
+
   "sources": {
     "tariff": {
       "id": "KB_faq",
