@@ -14,6 +14,7 @@ pub mod modal;
 
 pub mod cart_item;
 pub mod image_lightbox;
+pub mod open_in_telegram;
 pub mod input;
 pub mod loading;
 pub mod product_detail_modal;
@@ -49,6 +50,7 @@ pub use card::{Card, CardProps, CardVariant};
 pub use card_media::CardMedia;
 pub use cart_item::{CartItemComponent, CartItemProps};
 pub use image_lightbox::{ImageLightbox, ImageLightboxProps};
+pub use open_in_telegram::OpenInTelegramNotice;
 pub use input::{Input, InputProps, InputType};
 pub use loading::{Loading, LoadingOverlay, LoadingProps, LoadingSize};
 pub use modal::{Modal, ModalProps, ModalSize};

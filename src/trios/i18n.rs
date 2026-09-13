@@ -644,6 +644,10 @@ pub const T_PROFILE_REORDER: Key = "profile.reorder";
 
 // Modal hard-coded strings
 pub const T_MODAL_CLOSE: Key = "modal.close";
+// Shown by screens whose data depends on Telegram identity when the app is
+// opened outside Telegram (a plain browser tab has no initData).
+pub const T_OPEN_IN_TELEGRAM_TITLE: Key = "notice.open_in_telegram.title";
+pub const T_OPEN_IN_TELEGRAM_BODY: Key = "notice.open_in_telegram.body";
 pub const T_MODAL_CONFIRM: Key = "modal.confirm";
 pub const T_MODAL_CANCEL: Key = "modal.cancel";
 pub const T_MODAL_DECREASE_QTY: Key = "modal.decrease_qty";
@@ -1432,6 +1436,8 @@ fn get_ru_translation(key: Key) -> Value {
         T_REORDER_DEEP_LINK_TITLE => "🔄 Ваш последний заказ готов к повтору",
         // Modal
         T_MODAL_CLOSE => "Закрыть",
+        T_OPEN_IN_TELEGRAM_TITLE => "Откройте в Telegram",
+        T_OPEN_IN_TELEGRAM_BODY => "Это приложение работает внутри Telegram. Откройте бота TurboBaby и нажмите кнопку меню внизу экрана.",
         T_MODAL_CONFIRM => "Да",
         T_MODAL_CANCEL => "Нет",
         T_MODAL_DECREASE_QTY => "Убавить количество",
@@ -2173,6 +2179,8 @@ fn get_en_translation(key: Key) -> Value {
         T_REORDER_DEEP_LINK_TITLE => "🔄 Your last order is ready to reorder",
         // Modal
         T_MODAL_CLOSE => "Close",
+        T_OPEN_IN_TELEGRAM_TITLE => "Open in Telegram",
+        T_OPEN_IN_TELEGRAM_BODY => "This app runs inside Telegram. Open the TurboBaby bot and press the menu button at the bottom of the screen.",
         T_MODAL_CONFIRM => "Yes",
         T_MODAL_CANCEL => "No",
         T_MODAL_DECREASE_QTY => "Decrease quantity",

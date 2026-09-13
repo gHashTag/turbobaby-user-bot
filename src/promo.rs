@@ -140,7 +140,12 @@ async fn watching_since(db: &Database) -> Result<chrono::DateTime<chrono::Utc>, 
         .unwrap_or_else(chrono::Utc::now))
 }
 
-/// New strains, accessories and teas.
+/// New accessories and teas.
+///
+/// `strains` was dropped by 083_drop_cannabis_catalog; scanning it aborted the
+/// whole tick with `relation "strains" does not exist` (production WARN, every
+/// cycle, measured 2026-09-13). The tables that survive the rebrand stay in
+/// the scan — they are real, and empty means "no news", which is correct.
 async fn new_catalog_items(
     db: &Database,
     since: &chrono::DateTime<chrono::Utc>,
@@ -148,7 +153,6 @@ async fn new_catalog_items(
     let mut out = Vec::new();
     // Only what a customer could actually buy: an unavailable row is not news.
     for (table, avail) in [
-        ("strains", "is_available"),
         ("accessories", "is_available"),
         ("tea_products", "is_available"),
     ] {
@@ -172,7 +176,6 @@ async fn new_catalog_items(
                 continue;
             }
             out.push(match table {
-                "strains" => Subject::Strain { id, name },
                 "accessories" => Subject::Accessory { id, name },
                 _ => Subject::Tea { id, name },
             });
@@ -319,8 +322,8 @@ async fn bestsellers(db: &Database) -> Result<Vec<Subject>, sea_orm::DbErr> {
         let sold: i64 = r.try_get("", "sold").unwrap_or(0);
         // Which catalog it is, and whether it is still on sale. Promoting
         // something the shop has stopped selling is worse than saying nothing.
+        // `strains` left with 083; a strain bestseller can no longer resolve.
         for (table, kind) in [
-            ("strains", crate::trios::promo::BestsellerKind::Strain),
             ("sets", crate::trios::promo::BestsellerKind::Set),
         ] {
             let sql =

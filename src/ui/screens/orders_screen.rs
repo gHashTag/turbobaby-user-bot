@@ -9,6 +9,7 @@ use crate::trios::i18n::{
 use crate::ui::api::context::{api_base_url, use_api_client};
 use crate::ui::api::http::merge_server_cart;
 use crate::ui::components::bottom_nav::BottomNav;
+use crate::ui::components::open_in_telegram::OpenInTelegramNotice;
 use crate::ui::components::skeleton::{Skeleton, SkeletonShape};
 use crate::ui::components::StatusStepper;
 use crate::ui::routes::Route;
@@ -498,9 +499,15 @@ pub fn OrdersScreen() -> Element {
                             }
                         },
                         Some(Err(e)) => rsx! {
-                            div { style: "text-align: center; padding: 40px 16px;",
-                                div { style: "font-size: 70px; margin-bottom: 12px;", "⚠️" }
-                                p { style: "font-size: 13px; color: #ff4757;", "Error: {e}" }
+                            // Outside Telegram there is no identity to list orders
+                            // for; that is a supported state, not an error.
+                            if telegram_id == 0 {
+                                OpenInTelegramNotice {}
+                            } else {
+                                div { style: "text-align: center; padding: 40px 16px;",
+                                    div { style: "font-size: 70px; margin-bottom: 12px;", "⚠️" }
+                                    p { style: "font-size: 13px; color: #ff4757;", "Error: {e}" }
+                                }
                             }
                         },
                         None => rsx! {

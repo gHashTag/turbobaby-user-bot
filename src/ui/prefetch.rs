@@ -10,13 +10,20 @@ use crate::ui::routes::Route;
 fn endpoint_for(route: &Route) -> Option<String> {
     let base = api_base_url();
     let path = match route {
-        Route::Menu {} => "/api/strains",
+        // The catalog is the fleet since the rebrand; /api/strains died with
+        // the strains table (083) and every warm-up was a 404.
+        Route::Home {} | Route::Menu {} => "/api/bikes",
         Route::Sets {} => "/api/sets",
         Route::Accessories {} => "/api/accessories",
         Route::Tea {} => "/api/tea",
-        Route::Orders {} => "/api/orders",
-        Route::Profile {} => "/api/user/profile",
-        Route::Garden {} => "/api/garden",
+        // The customer's orders live at /api/orders/user/{id} and the
+        // prefetcher does not know the id; warming the admin /api/orders
+        // instead earned a 401 per hover (production logs, 2026-09-13).
+        Route::Orders {} => return None,
+        // /api/user/profile is not a route the server exposes, and the garden
+        // endpoints died with the garden tables (D5). Warming dead endpoints
+        // is log noise, not speed.
+        Route::Profile {} | Route::Garden {} => return None,
         _ => return None,
     };
     Some(format!("{}{}", base, path))
