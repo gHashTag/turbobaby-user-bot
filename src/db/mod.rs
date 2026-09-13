@@ -371,6 +371,10 @@ const MIGRATIONS: &[(&str, &str)] = &[
         "083_drop_cannabis_catalog.sql",
         include_str!("../../migrations/083_drop_cannabis_catalog.sql"),
     ),
+    (
+        "084_bikes_images.sql",
+        include_str!("../../migrations/084_bikes_images.sql"),
+    ),
 ];
 
 /// The last migration that shipped before the bike domain, and therefore the last
