@@ -309,3 +309,44 @@ the prose that commissioned it. Where they differ the spec cites the seed, state
 issue's figure, and says which one was reproducible — because the alternative is a
 published number whose only provenance is that someone typed it into a ticket, which is
 the defect [D9](#d9) and [D11](#d11) exist to forbid, arriving through the front door.
+
+## D18 — The market is a declared profile, not ambient Thailand
+
+The owner's standing instruction (2026-09-13) is that this agent runs on **any market,
+country and currency**. Measured before this decision, the deployment's market was ambient
+in the code rather than declared anywhere: the money formatter hardcoded the baht glyph,
+the comma group separator and whole-baht display (`format_baht`), the i18n templates baked
+the glyph into customer-facing sentences, the shop timezone was a hardcoded +7 in five
+files (measured 2026-09-13: `api/happy_hour.rs`, `api/share.rs`, `promo.rs`, `api/orders.rs`,
+`ui/screens/events_screen.rs`), and the checkout phone default was +66. No file stated a
+market; several stated facts of one. Under that shape, a second market could only arrive
+as a second fork of the formatter — exactly the duplication [D15](#d15) removed for price
+arithmetic.
+
+A market is therefore a **profile**: thirteen named fields (`country_code` through
+`default_calling_code`), owned as follows —
+
+- the **contract** (field set, bounds, refusals) is `specs/turbobaby/market_profile.t27`
+  (`turbobaby/market`);
+- the **deployment instance** is the `market` block in `data/fleet_seed.json`, and
+  `scripts/verify_fleet_seed.py` fails if the block disagrees with the spec's `TH_*`
+  consts, carries a field outside the contract, or violates a bound;
+- the **formatter instance** is `MarketMoneyFormat` / `THB_MARKET` in
+  `src/trios/pricing.rs`; `format_baht` is its named shortcut so no call site names a
+  currency.
+
+Three copies is one more than [D15](#d15) would like, and each copy is pinned to the
+others: the Rust tests pin the formatter to the THB profile, the seed verifier pins the
+block to the spec, and the spec's own tests run every rule over a **second, proof profile**
+(EUR — suffix symbol, two minor digits, swapped separators, DST-true) that exists solely so
+a contract shaped like one currency cannot pass as a contract for all of them. No shop
+exists at the proof profile; every value in it is a public ISO/IANA fact.
+
+Two refusals ride with the profile. A market may *display* fewer minor digits than its
+ISO exponent (Thailand: satang exist, shop prices are whole baht) but never more —
+invented precision is a lie in the other direction. And no exchange rate enters this
+repository without a source ([D11](#d11)): the deposit's foreign-currency equivalents are
+agreed by a human at the door, so the spec's rate table is empty and its length is pinned.
+What remains hardcoded (the glyph inside i18n templates, the +7 literals in five files, the
++66 default) is unwired debt tracked in #35, not a second market's problem: the profile it
+must read now exists.

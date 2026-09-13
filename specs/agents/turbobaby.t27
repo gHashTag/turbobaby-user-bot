@@ -27,6 +27,15 @@ pub const KIND : str = "agent";
 pub const ID : str = "turbobaby/BOT";
 pub const NAME : str = "TurboBaby (Rental & Sales)";
 pub const DOMAIN : str = "Motorbike rental and sales, Kamala, Phuket";
+; The market this deployment runs in, and what "any market" means. The owner's standing
+; instruction (2026-09-13) is that this agent runs on any market, country and currency.
+; The contract that makes that true is specs/turbobaby/market_profile.t27 (D18); this card
+; names the deployment instance and the contract without restating the profile's fields,
+; because no value is typed twice (the fields are owned by the market contract and the
+; seed's market block).
+pub const MARKET : str = "Thailand / THB";
+pub const MARKET_CONTRACT : str = "specs/turbobaby/market_profile.t27";
+pub const MARKET_NOTE : str = "The deployment profile is the market block in data/fleet_seed.json; a second market is a second profile against the same contract, not a fork of the money formatter.";
 pub const WORLD : str = "gHashTag/turbobaby-user-bot";
 pub const SUMMARY_EN : str = "Owns the TurboBaby Mini App: the bike catalog, rental checkout, the biker game, and the canonical .t27 contracts under specs/turbobaby. Publishes only what a source states.";
 
@@ -93,6 +102,14 @@ test the_card_is_an_agent_of_its_own_world {
 
 test no_alphabet_seat_is_claimed {
   assert ALPHABET_SEAT == "";
+}
+
+; D18: the market is a declared profile, not ambient Thailand. If the contract reference
+; is deleted this fails, and a card that names no market contract is a card whose
+; deployment facts are unowned again.
+test the_market_is_a_declared_profile_not_ambient {
+  assert MARKET_CONTRACT == "specs/turbobaby/market_profile.t27";
+  assert MARKET == "Thailand / THB";
 }
 
 test the_price_authority_is_the_door_and_silence_is_an_answer {

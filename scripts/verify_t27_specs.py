@@ -29,8 +29,8 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     AGENT_CARD: {
         "module": "turbobaby-agent",
         "id": "turbobaby/BOT",
-        "min_declarations": 31,
-        "min_checks": 7,
+        "min_declarations": 35,
+        "min_checks": 8,
     },
     "specs/turbobaby/availability.t27": {
         "module": "availability",
@@ -61,6 +61,12 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
         "id": "turbobaby/deposit-tiers",
         "min_declarations": 90,
         "min_checks": 39,
+    },
+    "specs/turbobaby/market_profile.t27": {
+        "module": "turbobaby-market",
+        "id": "turbobaby/market",
+        "min_declarations": 71,
+        "min_checks": 17,
     },
     "specs/turbobaby/pricing_honesty.t27": {
         "module": "pricing-honesty",

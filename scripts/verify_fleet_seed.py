@@ -31,6 +31,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 SEED_JSON = REPO / "data" / "fleet_seed.json"
 SEED_SQL = REPO / "migrations" / "082_bikes_seed.sql"
+MARKET_SPEC = REPO / "specs" / "turbobaby" / "market_profile.t27"
 
 # One VALUES row of the families block. The money columns and variant_label are
 # `NULL | literal` on purpose: NULL is a value this schema carries meaning in, so the
@@ -63,6 +64,111 @@ UNIT_ROW = re.compile(
 # A unit code is '<family-key>-NN': a slot label. Anything that looks like a plate
 # number would be a D14 violation, and the shape is the only cheap guard against one.
 UNIT_CODE = re.compile(r"^[a-z0-9\-]+-\d{2}$")
+
+# The market block is a profile against the contract in specs/turbobaby/market_profile.t27
+# (D18): exactly 13 contract fields, plus `languages` and `note` as documented extras.
+# Unknown keys fail so the shape stays pinned - a field the contract does not know is a
+# field nothing checks.
+MARKET_CONTRACT_FIELDS = {
+    "country_code": ("TH_COUNTRY_CODE", str),
+    "country_name": ("TH_COUNTRY_NAME", str),
+    "currency_code": ("TH_CURRENCY_CODE", str),
+    "currency_minor_digits_iso": ("TH_MINOR_DIGITS_ISO", int),
+    "currency_minor_digits_display": ("TH_MINOR_DIGITS_DISPLAY", int),
+    "currency_symbol_codepoint": ("TH_SYMBOL_CODEPOINT", int),
+    "currency_symbol_placement": ("TH_SYMBOL_PLACEMENT", str),
+    "group_separator": ("TH_GROUP_SEPARATOR", str),
+    "decimal_separator": ("TH_DECIMAL_SEPARATOR", str),
+    "timezone_name": ("TH_TIMEZONE", str),
+    "utc_offset_hours": ("TH_UTC_OFFSET_HOURS", int),
+    "dst_observed": ("TH_DST", bool),
+    "default_calling_code": ("TH_CALLING_CODE", str),
+}
+MARKET_EXTRA_KEYS = {"languages", "note"}
+
+
+def spec_const(source: str, name: str) -> str:
+    """Read one `pub const NAME : type = VALUE;` literal out of the market spec."""
+    match = re.search(rf"pub const {name}\s*:\s*\w+\s*=\s*([^;]+);", source)
+    if match is None:
+        fail(f"{MARKET_SPEC.relative_to(REPO)} no longer declares {name}")
+    return match.group(1).strip()
+
+
+def check_market_profile(seed: dict, problems: list[str]) -> None:
+    """Validate the seed's `market` block against the market contract.
+
+    Three copies of the profile exist (the spec consts, this block, and the Rust
+    formatter). Nothing but this check keeps the seed's copy equal to the spec's:
+    a market edited here without the contract would drift silently in the
+    direction a customer sees.
+    """
+    market = seed.get("market")
+    if not isinstance(market, dict):
+        problems.append("market: block is missing - the deployment profile is undeclared (D18)")
+        return
+
+    try:
+        spec_source = MARKET_SPEC.read_text()
+    except OSError:
+        fail(f"{MARKET_SPEC.relative_to(REPO)} is not readable")
+
+    unknown = set(market) - set(MARKET_CONTRACT_FIELDS) - MARKET_EXTRA_KEYS
+    if unknown:
+        problems.append(f"market: keys outside the 13-field contract: {sorted(unknown)}")
+    missing = set(MARKET_CONTRACT_FIELDS) - set(market)
+    if missing:
+        problems.append(f"market: contract fields missing from the block: {sorted(missing)}")
+
+    for field, (const, kind) in MARKET_CONTRACT_FIELDS.items():
+        if field not in market:
+            continue
+        got = market[field]
+        literal = spec_const(spec_source, const)
+        if kind is bool:
+            want = literal == "true"
+            if not isinstance(got, bool) or got != want:
+                problems.append(f"market.{field}: seed={got!r} market_profile.t27={literal}")
+            continue
+        if kind is int:
+            want = int(literal)
+            if not isinstance(got, int) or isinstance(got, bool) or got != want:
+                problems.append(f"market.{field}: seed={got!r} market_profile.t27={want}")
+            continue
+        want = literal.strip('"')
+        if not isinstance(got, str) or got != want:
+            problems.append(f"market.{field}: seed={got!r} market_profile.t27={want!r}")
+
+    # Shape rules the .t27 language cannot state (no regex there); the bounds it can
+    # state are already tested inside the spec itself.
+    iso = market.get("currency_minor_digits_iso")
+    display = market.get("currency_minor_digits_display")
+    if isinstance(iso, int) and isinstance(display, int):
+        if not 0 <= display <= iso <= 4:
+            problems.append(
+                f"market: display {display} / ISO {iso} minor digits violate the "
+                "0 <= display <= ISO <= 4 contract"
+            )
+    if market.get("currency_symbol_codepoint", 0) in range(55296, 57344):
+        problems.append("market.currency_symbol_codepoint: inside the Unicode surrogate gap")
+    if market.get("group_separator") == market.get("decimal_separator"):
+        problems.append("market: group and decimal separators are identical")
+    if market.get("currency_symbol_placement") not in ("prefix", "suffix"):
+        problems.append(f"market.currency_symbol_placement: {market.get('currency_symbol_placement')!r}")
+    for field, pattern in (
+        ("country_code", r"^[A-Z]{2}$"),
+        ("currency_code", r"^[A-Z]{3}$"),
+        ("group_separator", r"^.$"),
+        ("decimal_separator", r"^.$"),
+        ("timezone_name", r"^[A-Za-z]+(/[A-Za-z0-9_+\-]+)+$"),
+        ("default_calling_code", r"^\+\d{1,3}$"),
+    ):
+        value = market.get(field)
+        if isinstance(value, str) and not re.match(pattern, value):
+            problems.append(f"market.{field}: {value!r} fails its contract shape")
+    offset = market.get("utc_offset_hours")
+    if isinstance(offset, int) and not -12 <= offset <= 14:
+        problems.append(f"market.utc_offset_hours: {offset} is outside -12..+14")
 
 
 def fail(msg: str) -> None:
@@ -188,11 +294,15 @@ def main() -> int:
         if got != expected:
             problems.append(f"{label}: SQL={got} fleet_seed.json={expected}")
 
+    # ---- Market profile -----------------------------------------------------
+    check_market_profile(seed, problems)
+
     # ---- Report -------------------------------------------------------------
     if problems:
         print(
             f"verify_fleet_seed: {len(problems)} mismatch(es) between "
-            f"data/fleet_seed.json and migrations/082_bikes_seed.sql:",
+            f"data/fleet_seed.json, migrations/082_bikes_seed.sql "
+            f"and the market contract:",
             file=sys.stderr,
         )
         for problem in problems:
@@ -201,11 +311,14 @@ def main() -> int:
 
     if args.verbose:
         offered = sum(1 for r in sql_families if r["offered"] == "TRUE")
+        market = seed.get("market", {})
         print(
             f"verify_fleet_seed: OK — {len(sql_families)} families "
             f"({offered} offered), {len(sql_units)} units "
             f"({rented} rented, {available} available); "
-            f"{len(price_list_only)} price-list-only families correctly absent"
+            f"{len(price_list_only)} price-list-only families correctly absent; "
+            f"market profile {market.get('country_code')}/{market.get('currency_code')} "
+            "matches specs/turbobaby/market_profile.t27"
         )
     return 0
 

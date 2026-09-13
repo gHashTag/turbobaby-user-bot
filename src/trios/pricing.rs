@@ -186,27 +186,104 @@ pub fn client_day_rate(
     authoritative_door_rate(client_rate_thb_day)
 }
 
-/// Format a money amount (THB) for customer display: clamp NaN/inf/negative to
-/// 0, drop the fractional part (whole-baht display), prefix `฿`. Casts to `i64`
-/// (not `i32`) so a large-but-valid total can't saturate at ~2.1B — prices and
-/// totals are `i64` in the domain (`ProductPrice.price`, `calculate_cart_total`).
-/// Single source of truth: the customer UI previously had three identical
-/// `format_price` clones (menu/cart/home) that each narrowed to `i32`.
-pub fn format_baht(amount: f64) -> String {
-    format!("฿{}", group_thousands(sanitize_money(amount) as i64))
+/// A market's money display profile: the Rust-side instance of the contract in
+/// `specs/turbobaby/market_profile.t27` (`turbobaby/market`, D18). The owner's
+/// standing instruction is that this agent runs on any market, country and
+/// currency; the deployment profile lives in `data/fleet_seed.json` (`market`
+/// block), and this struct is the formatter's view of it. A second market is a
+/// second instance of this struct — not a second money formatter.
+pub struct MarketMoneyFormat {
+    /// ISO 4217 alphabetic code (e.g. `THB`). Identifies the profile; the
+    /// symbol below is what the customer sees.
+    pub currency_code: &'static str,
+    /// Currency symbol glyph (e.g. `฿`, U+0E3F). The spec carries this as its
+    /// decimal code point so the `.t27` file stays ASCII (L3); the glyph lives
+    /// here, where the sources are UTF-8.
+    pub symbol: char,
+    /// `false` prefixes the symbol (`฿100`), `true` suffixes it (`100€`).
+    pub symbol_suffix: bool,
+    /// Minor digits to render: 0 renders whole units only (whole-baht
+    /// practice), 2 renders cents. Never exceeds the currency's ISO exponent —
+    /// the market contract refuses such a profile, and the seed verifier
+    /// enforces it against the deployment.
+    pub minor_digits_display: u8,
+    /// Thousands group separator (`,` for THB).
+    pub group_separator: char,
+    /// Decimal separator (`.` for THB). Must differ from the group separator;
+    /// identical separators make an amount ambiguous.
+    pub decimal_separator: char,
 }
 
-/// Group a non-negative integer's digits in threes with `,` (e.g.
-/// `3000000` -> `3,000,000`). `sanitize_money` guarantees the input is `>= 0`,
-/// so no sign handling is needed. THB display uses the comma group separator.
-fn group_thousands(n: i64) -> String {
+/// The deployment's market, measured from this repository (2026-09-13): the
+/// baht glyph and comma grouping come from `format_baht`, whole-baht display
+/// from the cash practice it encodes, and every value mirrors the
+/// `specs/turbobaby/market_profile.t27` profile consts and the seed's
+/// `market` block.
+pub const THB_MARKET: MarketMoneyFormat = MarketMoneyFormat {
+    currency_code: "THB",
+    symbol: '฿',
+    symbol_suffix: false,
+    minor_digits_display: 0,
+    group_separator: ',',
+    decimal_separator: '.',
+};
+
+/// Format a money amount under a market profile: clamp NaN/inf/negative to 0,
+/// truncate to the profile's minor digits, group the whole units, place the
+/// symbol per the profile. Truncation happens on the amount's shortest
+/// round-trip decimal form (`format!("{}", f64)`), never on a binary
+/// multiply: `1234567.89 * 100.0` is `…88.9999…` in f64, so binary truncation
+/// would display a cent the amount visibly has — and rounding is equally
+/// wrong for this shop, because whole-baht display pins `350.99 -> 350`.
+/// Dropping digits from the decimal the amount displays as is the one rule
+/// that keeps both. Whole units go through `i64` (not `i32`) so a
+/// large-but-valid total can't saturate at ~2.1B — prices and totals are
+/// `i64` in the domain (`ProductPrice.price`, `calculate_cart_total`).
+pub fn format_money(amount: f64, market: &MarketMoneyFormat) -> String {
+    let sanitized = sanitize_money(amount);
+    // Shortest round-trip decimal, e.g. `350.99` (not the exact binary
+    // `350.989999999999954525264911353778839111328125`).
+    let decimal = format!("{}", sanitized);
+    let (whole_str, frac_str) = match decimal.split_once('.') {
+        Some((w, f)) => (w, f),
+        None => (decimal.as_str(), ""),
+    };
+    // A whole part beyond i64 keeps the old saturating `as i64` behaviour.
+    let whole: i64 = whole_str.parse().unwrap_or(sanitized as i64);
+    let mut out = group_digits(whole, market.group_separator);
+    if market.minor_digits_display > 0 {
+        out.push(market.decimal_separator);
+        for i in 0..market.minor_digits_display as usize {
+            out.push(frac_str.as_bytes().get(i).copied().map_or(b'0', |b| b) as char);
+        }
+    }
+    if market.symbol_suffix {
+        format!("{}{}", out, market.symbol)
+    } else {
+        format!("{}{}", market.symbol, out)
+    }
+}
+
+/// Format a money amount (THB) for customer display: the deployment market's
+/// named shortcut, so every existing call site displays the declared market
+/// without per-screen edits. Single source of truth: the customer UI
+/// previously had three identical `format_price` clones (menu/cart/home) that
+/// each narrowed to `i32`.
+pub fn format_baht(amount: f64) -> String {
+    format_money(amount, &THB_MARKET)
+}
+
+/// Group a non-negative integer's digits in threes with the profile's group
+/// separator (e.g. `3000000` -> `3,000,000` under THB). `sanitize_money`
+/// guarantees the input is `>= 0`, so no sign handling is needed.
+fn group_digits(n: i64, sep: char) -> String {
     let digits = n.max(0).to_string();
     let bytes = digits.as_bytes();
     let len = bytes.len();
     let mut out = String::with_capacity(len + len / 3);
     for (i, b) in bytes.iter().enumerate() {
         if i > 0 && (len - i).is_multiple_of(3) {
-            out.push(',');
+            out.push(sep);
         }
         out.push(*b as char);
     }
@@ -275,6 +352,54 @@ mod tests {
         assert_eq!(format_baht(big), "฿3,000,000,000");
     }
 
+    /// The proof profile from specs/turbobaby/market_profile.t27 (PROOF_*
+    /// consts): a two-minor-digit, suffix-symbol, dot-grouped market. No shop
+    /// exists at this profile — it exists so the formatter is proven not
+    /// THB-shaped, exactly as the spec's own tests prove the contract.
+    fn eur_proof_market() -> MarketMoneyFormat {
+        MarketMoneyFormat {
+            currency_code: "EUR",
+            symbol: '€',
+            symbol_suffix: true,
+            minor_digits_display: 2,
+            group_separator: '.',
+            decimal_separator: ',',
+        }
+    }
+
+    #[test]
+    fn a_two_decimal_market_renders_its_own_separators_and_suffix() {
+        assert_eq!(format_money(1234567.89, &eur_proof_market()), "1.234.567,89€");
+        assert_eq!(format_money(0.5, &eur_proof_market()), "0,50€");
+        assert_eq!(format_money(0.0, &eur_proof_market()), "0,00€");
+        // Truncation, not rounding: display never invents a higher price.
+        assert_eq!(format_money(2.999, &eur_proof_market()), "2,99€");
+        assert_eq!(format_money(-1.0, &eur_proof_market()), "0,00€");
+    }
+
+    #[test]
+    fn a_zero_minor_digit_market_groups_without_a_decimal_separator() {
+        // A whole-unit non-THB market (JPY-shaped): no fraction, and the
+        // decimal separator must not appear just because the profile has one.
+        let jpy_shaped = MarketMoneyFormat {
+            currency_code: "JPY",
+            symbol: '¥',
+            symbol_suffix: false,
+            minor_digits_display: 0,
+            group_separator: ',',
+            decimal_separator: '.',
+        };
+        assert_eq!(format_money(1234567.0, &jpy_shaped), "¥1,234,567");
+        assert_eq!(format_money(1234567.89, &jpy_shaped), "¥1,234,567");
+    }
+
+    #[test]
+    fn the_deployment_market_is_thb_and_its_shortcut_agrees() {
+        assert_eq!(THB_MARKET.currency_code, "THB");
+        assert_eq!(format_baht(1500.0), format_money(1500.0, &THB_MARKET));
+        assert_eq!(format_baht(1500.0), "฿1,500");
+    }
+
     #[test]
     fn test_format_baht_groups_thousands() {
         assert_eq!(format_baht(0.0), "฿0");
@@ -285,11 +410,14 @@ mod tests {
     }
 
     #[test]
-    fn test_group_thousands_boundaries() {
-        assert_eq!(group_thousands(0), "0");
-        assert_eq!(group_thousands(100), "100");
-        assert_eq!(group_thousands(1000), "1,000");
-        assert_eq!(group_thousands(1_000_000), "1,000,000");
+    fn test_group_digits_boundaries() {
+        // THB's comma grouping; the separators themselves are profile fields.
+        assert_eq!(group_digits(0, ','), "0");
+        assert_eq!(group_digits(100, ','), "100");
+        assert_eq!(group_digits(1000, ','), "1,000");
+        assert_eq!(group_digits(1_000_000, ','), "1,000,000");
+        // The same digits under the EUR proof profile's group separator.
+        assert_eq!(group_digits(1_000_000, '.'), "1.000.000");
     }
 
     fn base_flags<'a>() -> MarketingFlags<'a> {
