@@ -254,7 +254,7 @@ pub fn format_money(amount: f64, market: &MarketMoneyFormat) -> String {
     if market.minor_digits_display > 0 {
         out.push(market.decimal_separator);
         for i in 0..market.minor_digits_display as usize {
-            out.push(frac_str.as_bytes().get(i).copied().map_or(b'0', |b| b) as char);
+            out.push(frac_str.as_bytes().get(i).copied().unwrap_or(b'0') as char);
         }
     }
     if market.symbol_suffix {
