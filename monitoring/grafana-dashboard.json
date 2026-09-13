@@ -680,7 +680,7 @@
   ],
   "schemaVersion": 38,
   "tags": [
-    "woody-weed-bot",
+    "turbobaby-bot",
     "rust",
     "axum",
     "telegram"
@@ -709,6 +709,6 @@
   "timepicker": {},
   "timezone": "browser",
   "title": "Woody Weed Bot — Production Metrics",
-  "uid": "woody-weed-bot-metrics",
+  "uid": "turbobaby-bot-metrics",
   "version": 1
 }

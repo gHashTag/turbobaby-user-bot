@@ -447,7 +447,7 @@ Defined in `styles/components.css`:
 ## 10. File Structure
 
 ```
-woody-weed-bot/
+turbobaby-bot/
 ├── styles/
 │   ├── variables.css      ← Design tokens (expanded)
 │   ├── main.css           ← Base styles + legacy components

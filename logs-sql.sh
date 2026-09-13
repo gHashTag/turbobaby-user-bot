@@ -15,7 +15,7 @@ echo ""
 cleanup() {
     echo ""
     echo -e "${YELLOW}🛑 Остановка...${NC}"
-    pkill -f "woody-weed-bot-server" || true
+    pkill -f "turbobaby-bot-server" || true
     pkill -f "trunk serve" || true
     exit 0
 }
@@ -24,8 +24,8 @@ trap cleanup SIGINT SIGTERM
 
 # Запуск бэкенда с логированием SQL
 echo -e "${CYAN}📦 Бэкенд (SQL + HTTP):${NC}"
-RUST_LOG=sqlx=debug,tower_http=trace,axum=trace,woody_weed_bot=info \
-cargo run --features backend --bin woody-weed-bot-server 2>&1 \
+RUST_LOG=sqlx=debug,tower_http=trace,axum=trace,turbobaby_bot=info \
+cargo run --features backend --bin turbobaby-bot-server 2>&1 \
 | grep -E "SELECT|INSERT|UPDATE|DELETE|POST|GET|response|error" --line-buffered &
 BACKEND_PID=$!
 

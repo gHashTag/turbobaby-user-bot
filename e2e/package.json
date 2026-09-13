@@ -1,7 +1,7 @@
 {
-  "name": "woody-weed-bot-e2e",
+  "name": "turbobaby-bot-e2e",
   "version": "1.0.0",
-  "description": "E2E Playwright tests for woody-weed-bot admin panel",
+  "description": "E2E Playwright tests for turbobaby-bot admin panel",
   "scripts": {
     "test": "playwright test",
     "test:headed": "playwright test --headed",

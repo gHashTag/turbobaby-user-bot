@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Woody Weed Bot — Full UI Kit</title>
+    <title>TURBOBABY — Full UI Kit</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Press+Start+2P&display=swap" rel="stylesheet">
@@ -170,14 +170,14 @@
             border: 1px solid;
             text-transform: uppercase;
         }
-        .badge-sativa { color: var(--green); border-color: var(--green); background: rgba(57,255,20,0.1); }
-        .badge-indica { color: var(--cyan); border-color: var(--cyan); background: rgba(0,229,255,0.1); }
-        .badge-hybrid { color: var(--yellow); border-color: var(--yellow); background: rgba(255,230,0,0.1); }
+        .badge-scooter { color: var(--green); border-color: var(--green); background: rgba(57,255,20,0.1); }
+        .badge-motorcycle { color: var(--cyan); border-color: var(--cyan); background: rgba(0,229,255,0.1); }
+        .badge-automatic { color: var(--yellow); border-color: var(--yellow); background: rgba(255,230,0,0.1); }
         .badge-premium { color: var(--purple); border-color: var(--purple); background: rgba(179,136,255,0.1); }
         .badge-hot { color: var(--red); border-color: var(--red); background: rgba(255,71,87,0.1); }
         .badge-new { color: var(--orange); border-color: var(--orange); background: rgba(255,159,67,0.1); }
         .badge-sold-out { color: var(--text2); border-color: var(--text2); background: rgba(139,139,158,0.1); }
-        .badge-sod { color: #000; border-color: var(--yellow); background: var(--yellow); }
+        .badge-featured { color: #000; border-color: var(--yellow); background: var(--yellow); }
         .badge-row { display: flex; flex-wrap: wrap; gap: 8px; }
 
         /* ===== Cards ===== */
@@ -191,8 +191,8 @@
         .card-grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
         .card-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
 
-        /* ===== Strain Card ===== */
-        .strain-card {
+        /* ===== Bike Card ===== */
+        .bike-card {
             background: var(--card);
             border: 2px solid var(--border);
             border-radius: var(--radius-md);
@@ -200,10 +200,10 @@
             box-shadow: var(--pixel-shadow);
             transition: transform 0.15s, box-shadow 0.15s;
         }
-        .strain-card:hover { transform: translate(-2px, -2px); box-shadow: 6px 6px 0 rgba(0,0,0,0.5); }
-        .strain-card.unavailable { opacity: 0.6; }
-        .strain-card.sod { border-color: var(--yellow); }
-        .strain-image {
+        .bike-card:hover { transform: translate(-2px, -2px); box-shadow: 6px 6px 0 rgba(0,0,0,0.5); }
+        .bike-card.unavailable { opacity: 0.6; }
+        .bike-card.featured { border-color: var(--yellow); }
+        .bike-image {
             height: 120px;
             background: linear-gradient(135deg, var(--bg2), var(--card));
             display: flex;
@@ -212,7 +212,7 @@
             font-size: 48px;
             position: relative;
         }
-        .strain-sod-badge {
+        .bike-featured-badge {
             position: absolute;
             top: 8px;
             right: 8px;
@@ -223,17 +223,21 @@
             padding: 3px 6px;
             border-radius: var(--radius-sm);
         }
-        .strain-content { padding: 12px; }
-        .strain-name { font-size: var(--font-size-base); font-weight: 700; margin-bottom: 4px; }
-        .strain-type-row { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; }
-        .strain-thc { font-size: var(--font-size-xs); color: var(--text2); }
-        .strain-desc { font-size: var(--font-size-xs); color: var(--text2); margin-bottom: 8px; line-height: 1.4; }
-        .strain-price {
+        .bike-content { padding: 12px; }
+        .bike-name { font-size: var(--font-size-base); font-weight: 700; margin-bottom: 4px; }
+        .bike-class-row { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; }
+        .bike-spec { font-size: var(--font-size-xs); color: var(--text2); }
+        .bike-desc { font-size: var(--font-size-xs); color: var(--text2); margin-bottom: 8px; line-height: 1.4; }
+        .bike-price {
             font-family: 'Press Start 2P', monospace;
             font-size: 11px;
             color: var(--green);
         }
-        .strain-actions { padding: 0 12px 12px; }
+        /* A family with no published rate shows a dash, never a number, and
+           never the price colour that would make the dash read as one. */
+        .bike-price.absent { color: var(--text2); }
+        .bike-quote-note { font-size: var(--font-size-xs); color: var(--cyan); margin-top: 4px; }
+        .bike-actions { padding: 0 12px 12px; }
 
         /* ===== Order Card ===== */
         .order-card {
@@ -433,15 +437,15 @@
         .quest-desc { font-size: var(--font-size-sm); color: var(--text2); margin-bottom: 4px; }
         .quest-coords { font-size: var(--font-size-xs); color: var(--text2); font-family: monospace; }
 
-        /* ===== Plant Growth ===== */
-        .plant-stages {
+        /* ===== Rental Term Bands ===== */
+        .term-bands {
             display: flex;
             align-items: flex-end;
             gap: 8px;
             justify-content: center;
             padding: 20px;
         }
-        .plant-stage {
+        .term-band {
             text-align: center;
             padding: 8px;
             background: var(--card);
@@ -449,9 +453,9 @@
             border-radius: var(--radius-sm);
             box-shadow: var(--pixel-shadow);
         }
-        .plant-stage.active { border-color: var(--green); }
-        .plant-emoji { font-size: 28px; display: block; margin-bottom: 4px; }
-        .plant-label { font-family: 'Press Start 2P', monospace; font-size: 6px; color: var(--text2); }
+        .term-band.active { border-color: var(--green); }
+        .term-emoji { font-size: 28px; display: block; margin-bottom: 4px; }
+        .term-label { font-family: 'Press Start 2P', monospace; font-size: 6px; color: var(--text2); }
 
         /* ===== Modal Demo ===== */
         .modal-overlay {
@@ -708,8 +712,8 @@
         <!-- ===== HEADER ===== -->
         <div class="header">
             <div class="header-badge">UI Kit v2.0 — Full Component Library</div>
-            <h1>WOODY<br>WEED BOT</h1>
-            <p>Pixel Art Design System · Cannabis Delivery · Bangkok</p>
+            <h1>TURBO<br>BABY</h1>
+            <p>Pixel Art Design System · Motorbike Rental · Phuket</p>
         </div>
 
         <!-- ===== 1. TYPE SCALE ===== -->
@@ -780,87 +784,99 @@
         <div class="section">
             <div class="section-title">04 · Badges & Tags</div>
             <div class="badge-row" style="margin-bottom:12px;">
-                <span class="badge badge-sativa">☀️ Sativa</span>
-                <span class="badge badge-indica">🌙 Indica</span>
-                <span class="badge badge-hybrid">⚖️ Hybrid</span>
+                <span class="badge badge-scooter">🛵 Scooter</span>
+                <span class="badge badge-motorcycle">🏍️ Motorcycle</span>
+                <span class="badge badge-automatic">⚙️ Automatic</span>
             </div>
             <div class="badge-row" style="margin-bottom:12px;">
                 <span class="badge badge-premium">⭐ Premium</span>
                 <span class="badge badge-hot">🔥 Hot</span>
                 <span class="badge badge-new">✨ New</span>
-                <span class="badge badge-sod">🌟 SOTD</span>
+                <span class="badge badge-featured">🌟 Pick</span>
             </div>
             <div class="badge-row">
                 <span class="badge badge-sold-out">Sold Out</span>
                 <span class="badge" style="color:var(--green);border-color:var(--green);background:rgba(57,255,20,0.1);">✓ In Stock</span>
-                <span class="badge" style="color:var(--cyan);border-color:var(--cyan);background:rgba(0,229,255,0.1);">🌿 Organic</span>
+                <span class="badge" style="color:var(--cyan);border-color:var(--cyan);background:rgba(0,229,255,0.1);">🔧 In Service</span>
             </div>
         </div>
 
         <div class="pixel-divider"></div>
 
-        <!-- ===== 5. STRAIN CARDS ===== -->
+        <!-- ===== 5. BIKE CARDS ===== -->
         <div class="section">
-            <div class="section-title">05 · Strain Cards</div>
+            <div class="section-title">05 · Bike Cards</div>
+            <p style="font-size:var(--font-size-xs);color:var(--text2);margin-bottom:12px;">
+                Sample data. The rates below are round placeholders for layout, not
+                published rental prices — the live card renders whatever the owner's
+                sheet returns, and a dash when it returns nothing.
+            </p>
             <div class="card-grid-2">
-                <div class="strain-card">
-                    <div class="strain-image">🌿</div>
-                    <div class="strain-content">
-                        <div class="strain-name">Northern Lights</div>
-                        <div class="strain-type-row">
-                            <span class="badge badge-indica" style="font-size:6px;padding:2px 6px;">🌙 Indica</span>
-                            <span class="strain-thc">THC: 18%</span>
+                <div class="bike-card">
+                    <div class="bike-image">🛵</div>
+                    <div class="bike-content">
+                        <div class="bike-name">Honda PCX 160</div>
+                        <div class="bike-class-row">
+                            <span class="badge badge-scooter" style="font-size:6px;padding:2px 6px;">🛵 Scooter</span>
+                            <span class="bike-spec">160 cc</span>
                         </div>
-                        <div class="strain-desc">Classic indica with relaxing effects</div>
-                        <div class="strain-price">฿1,200</div>
+                        <div class="bike-desc">Available: 3 · Deposit ฿5,000</div>
+                        <div class="bike-price">฿500 / day</div>
                     </div>
-                    <div class="strain-actions">
-                        <button class="btn btn-primary btn-sm" style="width:100%;">Add to Cart 🛒</button>
+                    <div class="bike-actions">
+                        <button class="btn btn-primary btn-sm" style="width:100%;">🛒 Rent</button>
                     </div>
                 </div>
-                <div class="strain-card sod">
-                    <div class="strain-image">🌟<div class="strain-sod-badge">⭐ SOTD</div></div>
-                    <div class="strain-content">
-                        <div class="strain-name">Girl Scout Cookies</div>
-                        <div class="strain-type-row">
-                            <span class="badge badge-hybrid" style="font-size:6px;padding:2px 6px;">⚖️ Hybrid</span>
-                            <span class="strain-thc">THC: 24%</span>
+
+                <div class="bike-card featured">
+                    <div class="bike-image">🛵<div class="bike-featured-badge">⭐ PICK</div></div>
+                    <div class="bike-content">
+                        <div class="bike-name">Yamaha XMAX 300</div>
+                        <div class="bike-class-row">
+                            <span class="badge badge-scooter" style="font-size:6px;padding:2px 6px;">🛵 Scooter</span>
+                            <span class="bike-spec">300 cc</span>
                         </div>
-                        <div class="strain-desc">Sweet & euphoric hybrid</div>
-                        <div class="strain-price">฿1,500</div>
+                        <div class="bike-desc">Available: 2 · Deposit ฿10,000</div>
+                        <div class="bike-price">฿900 / day</div>
                     </div>
-                    <div class="strain-actions">
-                        <button class="btn btn-primary btn-sm" style="width:100%;">Add to Cart 🛒</button>
+                    <div class="bike-actions">
+                        <button class="btn btn-primary btn-sm" style="width:100%;">🛒 Rent</button>
                     </div>
                 </div>
-                <div class="strain-card">
-                    <div class="strain-image">☀️</div>
-                    <div class="strain-content">
-                        <div class="strain-name">Sour Diesel</div>
-                        <div class="strain-type-row">
-                            <span class="badge badge-sativa" style="font-size:6px;padding:2px 6px;">☀️ Sativa</span>
-                            <span class="strain-thc">THC: 22%</span>
+
+                <div class="bike-card">
+                    <div class="bike-image">🏍️</div>
+                    <div class="bike-content">
+                        <div class="bike-name">Honda X-ADV 750</div>
+                        <div class="bike-class-row">
+                            <span class="badge badge-motorcycle" style="font-size:6px;padding:2px 6px;">🏍️ Motorcycle</span>
+                            <span class="bike-spec">750 cc</span>
                         </div>
-                        <div class="strain-desc">Energizing sativa for daytime</div>
-                        <div class="strain-price">฿1,400</div>
+                        <div class="bike-desc">Available: 1 · Deposit ฿20,000</div>
+                        <div class="bike-price">฿2,000 / day</div>
                     </div>
-                    <div class="strain-actions">
-                        <button class="btn btn-primary btn-sm" style="width:100%;">Add to Cart 🛒</button>
+                    <div class="bike-actions">
+                        <button class="btn btn-primary btn-sm" style="width:100%;">🛒 Rent</button>
                     </div>
                 </div>
-                <div class="strain-card unavailable">
-                    <div class="strain-image" style="opacity:0.5;">🍂</div>
-                    <div class="strain-content">
-                        <div class="strain-name">OG Kush</div>
-                        <div class="strain-type-row">
-                            <span class="badge badge-hybrid" style="font-size:6px;padding:2px 6px;">⚖️ Hybrid</span>
-                            <span class="strain-thc">THC: 25%</span>
+
+                <!-- No published rate: the dash state. The card cannot be added
+                     to a cart, because the only number that would satisfy the
+                     cart's price column is 0 — and 0 reads as free. -->
+                <div class="bike-card unavailable">
+                    <div class="bike-image" style="opacity:0.5;">🔧</div>
+                    <div class="bike-content">
+                        <div class="bike-name">Honda CLICK 125</div>
+                        <div class="bike-class-row">
+                            <span class="badge badge-scooter" style="font-size:6px;padding:2px 6px;">🛵 Scooter</span>
+                            <span class="bike-spec">125 cc</span>
                         </div>
-                        <div class="strain-desc">Legendary earthy pine scent</div>
-                        <div class="strain-price" style="color:var(--text2);text-decoration:line-through;">฿1,600</div>
+                        <div class="bike-desc">Not rented at the moment</div>
+                        <div class="bike-price absent">—</div>
+                        <div class="bike-quote-note">A manager will quote this price</div>
                     </div>
-                    <div class="strain-actions">
-                        <button class="btn btn-ghost btn-sm" style="width:100%;" disabled>Sold Out</button>
+                    <div class="bike-actions">
+                        <button class="btn btn-ghost btn-sm" style="width:100%;" disabled>Ask a manager</button>
                     </div>
                 </div>
             </div>
@@ -912,9 +928,9 @@
         <div class="section">
             <div class="section-title">07 · Cart Items</div>
             <div class="cart-item">
-                <div class="cart-item-img">🌿</div>
+                <div class="cart-item-img">🛵</div>
                 <div class="cart-item-info">
-                    <div class="cart-item-name">Northern Lights</div>
+                    <div class="cart-item-name">Honda PCX 160</div>
                     <div class="cart-item-price">฿1,200 each</div>
                 </div>
                 <div class="cart-item-controls">
@@ -963,7 +979,7 @@
                     <div class="member-name">Guest</div>
                     <div class="member-id">ID: 123456</div>
                     <div class="member-stats">
-                        <div class="member-stat"><span class="member-stat-icon">🌿</span><span class="member-stat-value">50</span><span class="member-stat-label">Points</span></div>
+                        <div class="member-stat"><span class="member-stat-icon">⭐</span><span class="member-stat-value">50</span><span class="member-stat-label">Points</span></div>
                         <div class="member-stat"><span class="member-stat-icon">💰</span><span class="member-stat-value">50฿</span><span class="member-stat-label">Bonus</span></div>
                     </div>
                 </div>
@@ -973,7 +989,7 @@
                     <div class="member-name">Guest</div>
                     <div class="member-id">ID: 123456</div>
                     <div class="member-stats">
-                        <div class="member-stat"><span class="member-stat-icon">🌿</span><span class="member-stat-value">150</span><span class="member-stat-label">Points</span></div>
+                        <div class="member-stat"><span class="member-stat-icon">⭐</span><span class="member-stat-value">150</span><span class="member-stat-label">Points</span></div>
                         <div class="member-stat"><span class="member-stat-icon">💰</span><span class="member-stat-value">150฿</span><span class="member-stat-label">Bonus</span></div>
                     </div>
                 </div>
@@ -983,7 +999,7 @@
                     <div class="member-name">Guest</div>
                     <div class="member-id">ID: 123456</div>
                     <div class="member-stats">
-                        <div class="member-stat"><span class="member-stat-icon">🌿</span><span class="member-stat-value">500</span><span class="member-stat-label">Points</span></div>
+                        <div class="member-stat"><span class="member-stat-icon">⭐</span><span class="member-stat-value">500</span><span class="member-stat-label">Points</span></div>
                         <div class="member-stat"><span class="member-stat-icon">💰</span><span class="member-stat-value">500฿</span><span class="member-stat-label">Bonus</span></div>
                     </div>
                 </div>
@@ -1003,18 +1019,18 @@
             <div class="quest-card">
                 <div class="quest-header">
                     <span class="quest-name">🎯 Moscow Park</span>
-                    <span class="quest-reward">Reward: Sativa Seeds x5</span>
+                    <span class="quest-reward">Reward: 50 points</span>
                 </div>
-                <div class="quest-desc">Find the secret garden in the park</div>
+                <div class="quest-desc">Find the checkpoint by the lake</div>
                 <div class="quest-coords">📍 55.7558, 37.6173</div>
                 <div style="margin-top:8px;"><span class="badge" style="color:var(--yellow);border-color:var(--yellow);background:rgba(255,230,0,0.1);">Pending</span></div>
             </div>
             <div class="quest-card completed">
                 <div class="quest-header">
                     <span class="quest-name">🎯 Gorky Park</span>
-                    <span class="quest-reward">Reward: Hybrid Seeds x10</span>
+                    <span class="quest-reward">Reward: 100 points</span>
                 </div>
-                <div class="quest-desc">Discover the legendary strain</div>
+                <div class="quest-desc">Reach the viewpoint at the top</div>
                 <div class="quest-coords">📍 55.7901, 37.6812</div>
                 <div style="margin-top:8px;"><span class="badge" style="color:var(--green);border-color:var(--green);background:rgba(57,255,20,0.1);">✓ Completed</span></div>
             </div>
@@ -1022,16 +1038,19 @@
 
         <div class="pixel-divider"></div>
 
-        <!-- ===== 10. PLANT GROWTH ===== -->
+        <!-- ===== 10. RENTAL TERM BANDS ===== -->
         <div class="section">
-            <div class="section-title">10 · Plant Growth Stages</div>
-            <div class="plant-stages">
-                <div class="plant-stage"><span class="plant-emoji">🫘</span><span class="plant-label">Seed</span></div>
-                <div class="plant-stage"><span class="plant-emoji">🌱</span><span class="plant-label">Sprout</span></div>
-                <div class="plant-stage active"><span class="plant-emoji">🪴</span><span class="plant-label">Small</span></div>
-                <div class="plant-stage"><span class="plant-emoji">🌿</span><span class="plant-label">Medium</span></div>
-                <div class="plant-stage"><span class="plant-emoji">🌳</span><span class="plant-label">Mature</span></div>
-                <div class="plant-stage"><span class="plant-emoji">🌾</span><span class="plant-label">Harvest</span></div>
+            <div class="section-title">10 · Rental Term Bands</div>
+            <!-- Labels only. The band a rental falls into is a duration, not a
+                 price: the rate for each band comes from the owner's sheet, so
+                 no number is printed here. -->
+            <div class="term-bands">
+                <div class="term-band"><span class="term-emoji">🕐</span><span class="term-label">1 day</span></div>
+                <div class="term-band"><span class="term-emoji">🗓️</span><span class="term-label">3+ days</span></div>
+                <div class="term-band active"><span class="term-emoji">📅</span><span class="term-label">1 week</span></div>
+                <div class="term-band"><span class="term-emoji">📆</span><span class="term-label">2 weeks</span></div>
+                <div class="term-band"><span class="term-emoji">🌗</span><span class="term-label">1 month</span></div>
+                <div class="term-band"><span class="term-emoji">♾️</span><span class="term-label">Long term</span></div>
             </div>
         </div>
 
@@ -1109,7 +1128,7 @@
             <div class="card-grid-2">
                 <div class="card" style="text-align:center;">
                     <div class="pixel-spinner" style="margin:0 auto 12px;"></div>
-                    <p style="color:var(--text2);font-size:var(--font-size-sm);">Loading strains...</p>
+                    <p style="color:var(--text2);font-size:var(--font-size-sm);">Loading bikes...</p>
                 </div>
                 <div class="card">
                     <div class="skeleton" style="height:16px;width:60%;margin-bottom:8px;"></div>
@@ -1129,7 +1148,7 @@
                 <div>
                     <div class="input-group">
                         <label class="input-label">Search</label>
-                        <input class="input" type="text" placeholder="🔍 Search strains..." />
+                        <input class="input" type="text" placeholder="🔍 Search bikes..." />
                     </div>
                     <div class="input-group">
                         <label class="input-label">Delivery Address</label>
@@ -1156,9 +1175,9 @@
             <div class="section-title">16 · Filter Tabs</div>
             <div class="filter-tabs">
                 <button class="filter-tab active">All</button>
-                <button class="filter-tab">☀️ Sativa</button>
-                <button class="filter-tab">🌙 Indica</button>
-                <button class="filter-tab">⚖️ Hybrid</button>
+                <button class="filter-tab">🛵 Scooter</button>
+                <button class="filter-tab">🏍️ Motorcycle</button>
+                <button class="filter-tab">⚙️ Automatic</button>
             </div>
         </div>
 
@@ -1168,12 +1187,12 @@
         <div class="section">
             <div class="section-title">17 · Categories</div>
             <div class="category-grid">
-                <div class="category-card"><div class="category-icon">🌿</div><div class="category-name">Strains</div></div>
+                <div class="category-card"><div class="category-icon">🛵</div><div class="category-name">Bikes</div></div>
                 <div class="category-card"><div class="category-icon">📦</div><div class="category-name">Sets</div></div>
                 <div class="category-card"><div class="category-icon">🍷</div><div class="category-name">Sommelier</div></div>
                 <div class="category-card"><div class="category-icon">💨</div><div class="category-name">Vapes</div></div>
                 <div class="category-card"><div class="category-icon">🍵</div><div class="category-name">Tea</div></div>
-                <div class="category-card"><div class="category-icon">🌱</div><div class="category-name">Garden</div></div>
+                <div class="category-card"><div class="category-icon">🎮</div><div class="category-name">Game</div></div>
             </div>
         </div>
 
@@ -1184,12 +1203,12 @@
             <div class="section-title">18 · Bottom Navigation</div>
             <div class="bottom-nav">
                 <div class="nav-item active"><div class="nav-icon">🏠</div><div class="nav-label">Home</div></div>
-                <div class="nav-item"><div class="nav-icon">🌿</div><div class="nav-label">Menu</div></div>
+                <div class="nav-item"><div class="nav-icon">🛵</div><div class="nav-label">Menu</div></div>
                 <div class="nav-item">
                     <div class="nav-icon nav-badge">🛒<span class="nav-badge-count">3</span></div>
                     <div class="nav-label">Cart</div>
                 </div>
-                <div class="nav-item"><div class="nav-icon">🌱</div><div class="nav-label">Garden</div></div>
+                <div class="nav-item"><div class="nav-icon">🎮</div><div class="nav-label">Game</div></div>
                 <div class="nav-item"><div class="nav-icon">👤</div><div class="nav-label">Profile</div></div>
             </div>
         </div>
@@ -1227,9 +1246,9 @@
 
         <!-- ===== FOOTER ===== -->
         <div class="footer">
-            <p style="font-family:'Press Start 2P',monospace;font-size:8px;color:var(--green);margin-bottom:8px;">WOODY WEED BOT</p>
+            <p style="font-family:'Press Start 2P',monospace;font-size:8px;color:var(--green);margin-bottom:8px;">TURBOBABY</p>
             <p>UI Kit v2.0 · 20 Component Sections · Pixel Art Theme</p>
-            <p style="margin-top:4px;font-size:10px;">Typography · Colors · Buttons · Badges · Cards · Orders · Cart · Members · Quests · Plants · Modal · Toasts · States · Inputs · Filters · Categories · Navigation · Effects</p>
+            <p style="margin-top:4px;font-size:10px;">Typography · Colors · Buttons · Badges · Cards · Orders · Cart · Members · Quests · Terms · Modal · Toasts · States · Inputs · Filters · Categories · Navigation · Effects</p>
         </div>
     </div>
 </body>

@@ -19,13 +19,36 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+# clap-backed Trunk versions expect a boolean value, while many CI/agent
+# environments use the conventional NO_COLOR=1 spelling.
+if [ "${NO_COLOR:-}" = "1" ]; then
+  export NO_COLOR=true
+fi
+
 echo "▶ trunk build --release"
 trunk build --release
 
-main_js="$(ls dist/woody-weed-bot-*.js | grep -v '_bg' | head -1)"
-hash="$(basename "$main_js" | sed -E 's/^woody-weed-bot-([a-f0-9]+)\.js$/\1/')"
-if [ -z "${hash}" ]; then
-  echo "✖ could not derive bundle hash from ${main_js}"; exit 1
+main_js=""
+hash=""
+while IFS= read -r candidate; do
+  candidate_name="$(basename "$candidate")"
+  if [[ "$candidate_name" =~ ^.+-([a-f0-9]{16,})\.js$ ]]; then
+    if [ -n "$main_js" ]; then
+      echo "✖ multiple top-level Trunk bundles found: ${main_js}, ${candidate}" >&2
+      exit 1
+    fi
+    main_js="$candidate"
+    hash="${BASH_REMATCH[1]}"
+  fi
+done < <(find dist -maxdepth 1 -type f -name '*.js' -print)
+
+if [ -z "$main_js" ] || [ -z "$hash" ]; then
+  echo "✖ could not find one <target>-<hex hash>.js bundle in dist/" >&2
+  exit 1
+fi
+if [ ! -f "${main_js%.js}_bg.wasm" ]; then
+  echo "✖ matching WASM bundle is missing for ${main_js}" >&2
+  exit 1
 fi
 
 echo "▶ cache-busting snippet imports with ?v=${hash}"
@@ -44,7 +67,7 @@ echo "  ✓ busted snippet imports in ${busted} file(s)"
 # too, so even a WebView with a broken filename cache sees a new full URL on
 # every build. This makes long-lived immutable caching safe.
 echo "▶ cache-busting main bundle URLs with ?v=${hash}"
-sed -i '' -E "s#(/woody-weed-bot-${hash}(_bg)?\.(js|wasm))(['\"])#\1?v=${hash}\4#g" dist/index.html
+sed -i '' -E "s#(/[^/\"'[:space:]?]+-${hash}(_bg)?\.(js|wasm))(['\"])#\1?v=${hash}\4#g" dist/index.html
 echo "  ✓ main JS/WASM URLs versioned"
 
 # Trunk owns the generated module script. Make it wait for the async Telegram

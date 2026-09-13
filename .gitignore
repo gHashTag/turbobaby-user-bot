@@ -44,3 +44,6 @@ docs/screenshots/
 .ruflo/
 .ruvector/
 .swarm/
+
+# Python scratch from local spec-verify runs; never shipped
+__pycache__/

@@ -15,7 +15,7 @@ echo ""
 cleanup() {
     echo ""
     echo -e "${YELLOW}🛑 Остановка...${NC}"
-    pkill -f "woody-weed-bot-server" || true
+    pkill -f "turbobaby-bot-server" || true
     pkill -f "trunk serve" || true
     exit 0
 }
@@ -24,9 +24,9 @@ trap cleanup SIGINT SIGTERM
 
 # Запуск бэкенда с фильтрацией только HTTP
 echo -e "${CYAN}📦 Бэкенд (только HTTP запросы):${NC}"
-RUST_LOG=woody_weed_bot=debug,tower_http=trace,axum=trace,\
+RUST_LOG=turbobaby_bot=debug,tower_http=trace,axum=trace,\
 sqlx=query,warn,error,teloxide=off,tracing=off \
-cargo run --features backend --bin woody-weed-bot-server 2>&1 \
+cargo run --features backend --bin turbobaby-bot-server 2>&1 \
 | grep -E "GET|POST|PUT|DELETE|PATCH|response|request" --line-buffered &
 BACKEND_PID=$!
 

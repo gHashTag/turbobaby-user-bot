@@ -3,22 +3,71 @@ name: Deploy to Railway
 on:
   push:
     branches: [main]
+  # Once the token and the service name below exist, the first deploy can be
+  # triggered from the Actions tab instead of by pushing an empty commit.
+  workflow_dispatch:
 
 jobs:
   deploy:
+    name: Deploy to Railway
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
+      # The Railway target is configuration, not source. This repository has no
+      # secrets and no variables set (measured 2026-09-13), and the inherited
+      # workflow pushed to a service named after the cannabis-era bot with a
+      # token that does not exist here, so every run failed in ~11 s with
+      # "Invalid RAILWAY_TOKEN". Naming a `turbobaby-*` service instead would
+      # just swap one non-existent target for another, so the name is read from
+      # a repository variable and the job skips, loudly, until a human creates
+      # both:
+      #
+      #   secret   RAILWAY_TOKEN    - a Railway project token with deploy access
+      #   variable RAILWAY_SERVICE  - the Railway service name to deploy to
+      #
+      # Neither can be created from here: a service is created in the Railway
+      # dashboard and a token is issued there.
+      - name: Resolve the deploy target
+        id: target
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_SERVICE: ${{ vars.RAILWAY_SERVICE }}
+        run: |
+          missing=""
+          [ -n "$RAILWAY_TOKEN" ]   || missing="$missing secret:RAILWAY_TOKEN"
+          [ -n "$RAILWAY_SERVICE" ] || missing="$missing variable:RAILWAY_SERVICE"
+          if [ -n "$missing" ]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=NO DEPLOY HAPPENED::Railway is not configured on this repository. Missing:$missing"
+            {
+              echo "### NO DEPLOY HAPPENED"
+              echo
+              echo "Railway is not configured on this repository. Missing:"
+              for m in $missing; do echo "- \`$m\`"; done
+              echo
+              echo "Nothing was uploaded and nothing was restarted. Create the"
+              echo "service in the Railway dashboard, add the token as a repository"
+              echo "secret and the service name as a repository variable, then"
+              echo "re-run this workflow."
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+            echo "service=$RAILWAY_SERVICE" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Install Railway CLI
+        if: steps.target.outputs.ready == 'true'
         run: npm install -g @railway/cli
 
       - name: Deploy to Railway
+        if: steps.target.outputs.ready == 'true'
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_SERVICE: ${{ steps.target.outputs.service }}
         run: |
           # Trunk mirrors root assets into dist/assets/, and the backend already
           # serves /assets from the root assets/ directory. Removing the duplicate
           # cuts the Railway upload by ~130 MB and avoids the recent 502/413 errors.
           rm -rf dist/assets
-          railway up --service woody-weed-bot
+          railway up --service "$RAILWAY_SERVICE"

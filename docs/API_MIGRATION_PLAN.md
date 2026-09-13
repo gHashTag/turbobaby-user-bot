@@ -35,7 +35,7 @@ When you grep a new file:
 * **Aggregate with `COUNT FILTER`, `GROUP BY`, `LATERAL`, `UNION ALL`**: raw `Statement`. Typed builder in SeaORM 1.1 doesn't express these idiomatically.
 * **`ON CONFLICT DO UPDATE SET col = expr_using_existing`**: `OnConflict::value(col, Expr::cust_with_values(...))` (pattern #10).
 
-See `~/.claude/projects/-Users-playra-woody-weed-bot/memory/seaorm-patterns.md` for the full pattern catalog (21 patterns + 4 anti-patterns).
+See `~/.claude/projects/-Users-playra-turbobaby-bot/memory/seaorm-patterns.md` for the full pattern catalog (21 patterns + 4 anti-patterns).
 
 ## Suggested cycle sequence
 

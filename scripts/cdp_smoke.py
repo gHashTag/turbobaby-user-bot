@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Headless-Chrome smoke check over the DevTools Protocol.
 
-Loads a URL in real Chrome, captures console errors / thrown exceptions / error
-log entries, and confirms the Dioxus app actually mounted (DOM rendered + a known
-marker present). Exits 0 only when the console is clean AND the app rendered.
+Loads a URL in a Chromium browser, captures console errors / thrown exceptions /
+error log entries, and confirms the Dioxus app actually mounted (DOM rendered +
+a stable mount selector present). Exits 0 only when both checks pass.
 
 Why this exists: `cargo check`/`cargo test`/`trunk build` only COMPILE the wasm
 and emit the wasm-bindgen JS glue — none of them execute it. Module-load errors
@@ -11,7 +11,7 @@ and emit the wasm-bindgen JS glue — none of them execute it. Module-load error
 is not found") only surface when a browser instantiates the module. This is the
 gate that catches them before dist/ is committed. See the 2026-06-18 incident.
 
-Usage:  python3 scripts/cdp_smoke.py <url> [marker]
+Usage:  python3 scripts/cdp_smoke.py <url> [mount-selector]
 Env:    CHROME_BIN (path to Chrome), CDP_PORT, SMOKE_WAIT_S (post-load settle)
 """
 import json
@@ -32,26 +32,38 @@ except ImportError:
     sys.exit(2)
 
 URL = sys.argv[1] if len(sys.argv) > 1 else None
-MARKER = sys.argv[2] if len(sys.argv) > 2 else "WOODY"
+MOUNT_SELECTOR = (
+    sys.argv[2] if len(sys.argv) > 2 else "#turbobaby-app-mounted"
+)
 if not URL:
-    print("usage: cdp_smoke.py <url> [marker]")
+    print("usage: cdp_smoke.py <url> [mount-selector]")
     sys.exit(2)
 
-CHROME = os.environ.get(
-    "CHROME_BIN",
+browser_candidates = []
+if os.environ.get("CHROME_BIN"):
+    browser_candidates.append(os.environ["CHROME_BIN"])
+browser_candidates.extend([
     "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-)
+    "/Applications/BrowserOS.app/Contents/MacOS/BrowserOS",
+    "/Applications/Chromium.app/Contents/MacOS/Chromium",
+    "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+])
+for command in ("google-chrome", "chromium", "chromium-browser"):
+    resolved = shutil.which(command)
+    if resolved:
+        browser_candidates.append(resolved)
+CHROME = next((path for path in browser_candidates if os.path.exists(path)), None)
 PORT = int(os.environ.get("CDP_PORT", str(random.randint(9210, 9790))))
 # A cold MacIntel/WebKit-style WASM compile can take 15–25 seconds even after
 # the local body has arrived. The smoke gate must cover that valid window.
 SETTLE_S = float(os.environ.get("SMOKE_WAIT_S", "20"))
-MIN_DOM = 120  # floor only; the real mount signal is the marker (below)
+MIN_DOM = 120  # floor only; the real mount signal is the selector (below)
 
-if not os.path.exists(CHROME):
-    print(f"SMOKE FAIL: Chrome not found at '{CHROME}' (set CHROME_BIN)")
+if CHROME is None:
+    print("SMOKE FAIL: no Chromium browser found (set CHROME_BIN)")
     sys.exit(2)
 
-profile = tempfile.mkdtemp(prefix="wwb-smoke-")
+profile = tempfile.mkdtemp(prefix="turbobaby-smoke-")
 chrome = subprocess.Popen(
     [CHROME, "--headless=new", "--disable-gpu", "--no-first-run",
      "--no-default-browser-check", "--disable-extensions",
@@ -179,8 +191,8 @@ while time.time() < deadline:
 
 # Check the app actually mounted.
 expr = ("JSON.stringify({len: document.body.innerText.length, "
-        "marker: document.body.innerText.indexOf(%s) >= 0})"
-        % json.dumps(MARKER))
+        "mounted: document.querySelector(%s) !== null})"
+        % json.dumps(MOUNT_SELECTOR))
 eval_id = send("Runtime.evaluate",
                {"expression": expr, "returnByValue": True})
 dom = None
@@ -249,8 +261,8 @@ try:
 except Exception:
     pass
 
-# Verdict. The app mounting at all is proven by the marker (rendered ONLY by the
-# Rust app, never present in the index.html skeleton). Fatal JS errors fail hard.
+# Verdict. The app mounting at all is proven by the sentinel (rendered ONLY by
+# the Rust app, never present in the index.html skeleton). Fatal JS errors fail.
 problems = []
 if fatal:
     problems.append(f"{len(fatal)} fatal frontend error(s):")
@@ -258,8 +270,8 @@ if fatal:
         problems.append("   • " + e)
 if dom is None:
     problems.append("could not read the DOM (page may not have loaded)")
-elif not dom.get("marker"):
-    problems.append(f"app did NOT mount — marker '{MARKER}' absent "
+elif not dom.get("mounted"):
+    problems.append(f"app did NOT mount — selector '{MOUNT_SELECTOR}' absent "
                     f"(DOM text len {dom.get('len')})")
 elif dom.get("len", 0) < MIN_DOM:
     problems.append(f"DOM suspiciously small (len {dom.get('len')} < {MIN_DOM})")
@@ -278,6 +290,6 @@ if problems:
         print("  " + p)
     sys.exit(1)
 
-print(f"SMOKE OK: app mounted (marker '{MARKER}' present, DOM len {dom['len']}), "
+print(f"SMOKE OK: app mounted (selector '{MOUNT_SELECTOR}' present, DOM len {dom['len']}), "
       f"no uncaught JS errors")
 sys.exit(0)

@@ -47,7 +47,7 @@ allow = [
 confidence-threshold = 0.8
 
 [licenses.private]
-# Our crate (woody-weed-bot) is private and unpublished — ignore the
+# Our crate (turbobaby-bot) is private and unpublished — ignore the
 # missing license field on it. External deps are still checked.
 ignore = true
 

@@ -30,5 +30,5 @@ To finish it:
    the stash still names `039_quest_progress.sql`.
 4. Cover the ordering gate and the restart-survival claim with tests; extend
    `tests/integration_quest_location.rs`.
-5. `cargo test --features backend --bin woody-weed-bot-server -- db::` to confirm
+5. `cargo test --features backend --bin turbobaby-bot-server -- db::` to confirm
    the wiring, numbering and orphan-table guards all pass.

@@ -6,7 +6,7 @@ Configure a scrape target in `prometheus.yml`:
 
 ```yaml
 scrape_configs:
-  - job_name: 'woody-weed-bot'
+  - job_name: 'turbobaby-bot'
     scheme: 'https'
     metrics_path: '/metrics'
     static_configs:

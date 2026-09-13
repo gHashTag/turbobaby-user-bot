@@ -1,4 +1,4 @@
-# Lefthook 2.1.9 — Git hooks for woody-weed-bot.
+# Lefthook 2.1.9 — Git hooks for turbobaby-bot.
 #
 # Replaces the hand-written `.githooks/pre-commit`. Mirrors the same checks
 # but runs them through lefthook so each command can fail/skip independently
@@ -43,7 +43,7 @@ pre-push:
     clippy-backend:
       # clippy has caught real defects here (an unused admin-gate helper that
       # revealed three copy-pasted guards). It ran in no hook at all.
-      run: cargo clippy --offline --features backend --bin woody-weed-bot-server -- -D warnings
+      run: cargo clippy --offline --features backend --bin turbobaby-bot-server -- -D warnings
       fail_text: |
         clippy failed on the server binary. Fix the lints before pushing.
 
@@ -176,8 +176,8 @@ pre-commit:
       glob:
         - "*.rs"
         - "*.sql"
-      run: "cargo test --offline --features backend --bin woody-weed-bot-server --quiet -- db:: metrics::metric_wiring"
+      run: "cargo test --offline --features backend --bin turbobaby-bot-server --quiet -- db:: metrics::metric_wiring"
       fail_text: |
         Defensive tests failed (schema-truth triad / metric wiring / pure helpers).
-        Run `cargo test --features backend --bin woody-weed-bot-server -- db:: metrics::metric_wiring`
+        Run `cargo test --features backend --bin turbobaby-bot-server -- db:: metrics::metric_wiring`
         locally to see the failure details.
