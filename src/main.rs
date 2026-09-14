@@ -404,7 +404,7 @@ async fn main() -> Result<()> {
         tracing_subscriber::fmt().with_env_filter(env_filter).init();
     }
 
-    info!("🤖 Starting Woody Bot (Rust)...");
+    info!("🤖 Starting TurboBaby Bot (Rust)...");
 
     let config = Arc::new(Config::from_env()?);
     info!(
@@ -538,7 +538,7 @@ async fn main() -> Result<()> {
                         Err(_) => url,
                     };
                     let menu = MenuButton::WebApp {
-                        text: "🌿 Woody".to_string(),
+                        text: "🏍 TurboBaby".to_string(),
                         web_app: WebAppInfo { url: menu_url },
                     };
                     if let Err(e) = bot_menu.set_chat_menu_button().menu_button(menu).await {

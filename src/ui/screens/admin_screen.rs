@@ -3755,7 +3755,7 @@ fn TreasuresTab() -> Element {
                         oninput: move |e| edit_bm_desc.set(e.value()) }
                     input { class: "admin-input", placeholder: "URL постера", value: "{edit_bm_img}",
                         oninput: move |e| edit_bm_img.set(e.value()) }
-                    div { class: "admin-label", "🏴\u{200d}☠️ Стартовая точка (Woody)" }
+                    div { class: "admin-label", "🏴\u{200d}☠️ Стартовая точка (TurboBaby)" }
                     input { class: "admin-input", placeholder: "Название", value: "{edit_start_name}",
                         oninput: move |e| edit_start_name.set(e.value()) }
                     div { class: "admin-form-row-2col",

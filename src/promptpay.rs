@@ -94,7 +94,7 @@ fn amount_tlv(amount: f64) -> String {
 }
 
 fn fallback_payload(amount: f64, order_ref: &str) -> String {
-    format!("Woody Weed | Order: {order_ref} | Total: {:.2} THB", amount)
+    format!("TurboBaby | Order: {order_ref} | Total: {:.2} THB", amount)
 }
 
 /// EMVCo-style TLV: 2-digit tag + 2-digit zero-padded length + value.
@@ -189,7 +189,7 @@ mod tests {
     fn fallback_when_unconfigured() {
         let cfg = QrConfig::default();
         let payload = build_payload(&cfg, 250.0, "order-123");
-        assert!(payload.contains("Woody Weed"));
+        assert!(payload.contains("TurboBaby"));
         assert!(payload.contains("250.00"));
         assert!(payload.contains("order-123"));
     }
@@ -203,7 +203,7 @@ mod tests {
 
     #[test]
     fn svg_qr_renders_non_empty() {
-        let svg = svg_qr("Woody Weed").unwrap();
+        let svg = svg_qr("TurboBaby").unwrap();
         assert!(svg.contains("<svg"));
         assert!(svg.contains("</svg>"));
     }

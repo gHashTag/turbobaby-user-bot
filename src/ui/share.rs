@@ -21,7 +21,7 @@ use crate::ui::routes::Route;
 
 /// Hard-coded bot username used in t.me deep links and share URLs.
 /// Matches `Config::bot_username` default and the existing referral links.
-const BOT_USERNAME: &str = "Woody_WeedPecker_bot";
+const BOT_USERNAME: &str = "turboagent_phuket_bot";
 
 /// Product catalog kinds that support sharing.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -501,7 +501,7 @@ mod tests {
     fn deep_link_contains_startapp() {
         let url = deep_link_url(ProductKind::Tea, "t42");
         assert!(url.contains("start=p_tea_t42"));
-        assert!(url.starts_with("https://t.me/Woody_WeedPecker_bot"));
+        assert!(url.starts_with("https://t.me/turboagent_phuket_bot"));
     }
 
     #[test]

@@ -318,22 +318,22 @@ pub(crate) async fn handle_command(
                 msg.chat.id,
                 format!("🏍 <b>{}</b>\n━━━━━━━━━━━━━━━━", locale.menu),
             )
-                .parse_mode(teloxide::types::ParseMode::Html)
-                .reply_markup(InlineKeyboardMarkup::new(vec![
-                    vec![web_app_btn(
-                        &format!("🏍 {}", locale.open_menu),
-                        &build_app_url(base, &lang, None),
-                    )],
-                    vec![web_app_btn(
-                        &format!("📦 {}", locale.my_orders),
-                        &build_app_url(base, &lang, Some("orders")),
-                    )],
-                    vec![web_app_btn(
-                        &format!("👤 {}", locale.profile),
-                        &build_app_url(base, &lang, Some("profile")),
-                    )],
-                ]))
-                .await?;
+            .parse_mode(teloxide::types::ParseMode::Html)
+            .reply_markup(InlineKeyboardMarkup::new(vec![
+                vec![web_app_btn(
+                    &format!("🏍 {}", locale.open_menu),
+                    &build_app_url(base, &lang, None),
+                )],
+                vec![web_app_btn(
+                    &format!("📦 {}", locale.my_orders),
+                    &build_app_url(base, &lang, Some("orders")),
+                )],
+                vec![web_app_btn(
+                    &format!("👤 {}", locale.profile),
+                    &build_app_url(base, &lang, Some("profile")),
+                )],
+            ]))
+            .await?;
         }
 
         Command::Sets => {
