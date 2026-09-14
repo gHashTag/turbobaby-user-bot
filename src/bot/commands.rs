@@ -312,41 +312,14 @@ pub(crate) async fn handle_command(
         }
 
         Command::Menu => {
-            let strains = db.get_strains_of_day().await.unwrap_or_default();
-            if !strains.is_empty() {
-                let s = &strains[0];
-                let discount = s.strain_of_day_discount;
-                let discounted = calculate_discounted_price(s.price_per_gram, discount);
-                // Include the forwardable t.me deep link directly in the message
-                // text as well as the button, so the product context survives
-                // even if the recipient's client strips inline keyboards.
-                let sotd_start_param = product_start_param("p_strain", &s.id);
-                let sotd_deep_link = miniapp_deep_link(&config.bot_username, &sotd_start_param);
-                let text = format!(
-                    "🔥 <b>{}</b> (1/{})\n━━━━━━━━━━━━━━━━\n\n🌿 <b>{}</b>\n{}{}\n💰 <s>{} ฿/г</s> → <b>{} ฿/г</b>\n🔥 Скидка: -{}%\n\n👉 {}",
-                    locale.strain_of_day, strains.len(), html_escape(&s.name),
-                    s.thc_percent.map(|t| format!("⚡ THC: {}%\n", t)).unwrap_or_default(),
-                    s.category.as_ref().map(|c| format!("📁 {}\n", html_escape(c))).unwrap_or_default(),
-                    s.price_per_gram, discounted, discount,
-                    html_escape(&sotd_deep_link)
-                );
-                let mut btns: Vec<Vec<InlineKeyboardButton>> = vec![];
-                if strains.len() > 1 {
-                    btns.push(vec![callback_btn(&locale.next_strain, "sotd_next_0")]);
-                }
-                btns.push(vec![url_btn(
-                    &format!("🛒 {}", locale.open_menu),
-                    &sotd_deep_link,
-                )]);
-                bot.send_message(msg.chat.id, text)
-                    .parse_mode(teloxide::types::ParseMode::Html)
-                    .reply_markup(InlineKeyboardMarkup::new(btns))
-                    .await?;
-            } else {
-                bot.send_message(
-                    msg.chat.id,
-                    format!("🛒 <b>{}</b>\n━━━━━━━━━━━━━━━━", locale.menu),
-                )
+            // The strain-of-day card that used to live here read the `strains`
+            // table, which 083_drop_cannabis_catalog removed. Every /menu was a
+            // query that could only error into the default, so the catalog menu
+            // below is no longer an else-branch — it is the whole command.
+            bot.send_message(
+                msg.chat.id,
+                format!("🏍 <b>{}</b>\n━━━━━━━━━━━━━━━━", locale.menu),
+            )
                 .parse_mode(teloxide::types::ParseMode::Html)
                 .reply_markup(InlineKeyboardMarkup::new(vec![
                     vec![web_app_btn(
@@ -363,7 +336,6 @@ pub(crate) async fn handle_command(
                     )],
                 ]))
                 .await?;
-            }
         }
 
         Command::Sets => {
