@@ -122,7 +122,7 @@ fn sort_packs(v: &mut [ApiSet], key: &str) {
                 .unwrap_or(Ordering::Equal)
         }),
         // Most-ordered first.
-        "popularity" => v.sort_by(|a, b| b.popularity.cmp(&a.popularity)),
+        "popularity" => v.sort_by_key(|a| std::cmp::Reverse(a.popularity)),
         _ => {}
     }
 }

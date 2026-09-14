@@ -95,7 +95,7 @@ pub fn GardenScreen() -> Element {
     // Cycle #19: garden invite deep-link landed here. Show a one-time welcome
     // modal that records the referral when the user accepts.
     {
-        let pending = pending_invite.clone();
+        let pending = pending_invite;
         use_effect(move || {
             if pending.read().is_some() {
                 show_invite_modal.set(true);
@@ -136,8 +136,8 @@ pub fn GardenScreen() -> Element {
     let invite_modal = {
         if let Some((referrer_id, source)) = pending_invite.read().clone() {
             let init = init_data.clone();
-            let mut pending = pending_invite.clone();
-            let mut modal = show_invite_modal.clone();
+            let mut pending = pending_invite;
+            let mut modal = show_invite_modal;
             rsx! {
                 div {
                     style: "position:fixed;inset:0;z-index:950;background:rgba(15,15,26,0.92);display:flex;align-items:center;justify-content:center;padding:20px;",
@@ -166,8 +166,8 @@ pub fn GardenScreen() -> Element {
                                     let tid = telegram_id;
                                     let init = init.clone();
                                     let source = source.clone();
-                                    let mut pending = pending.clone();
-                                    let mut modal = modal.clone();
+                                    let mut pending = pending;
+                                    let mut modal = modal;
                                     spawn(async move {
                                         let base = api_base_url();
                                         let url = format!("{}/api/referrals/me/{}/garden-invite", base, tid);

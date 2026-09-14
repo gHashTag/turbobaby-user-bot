@@ -668,26 +668,31 @@ impl Database {
     /// instead of waiting for the first 500. Never blocks startup: a query
     /// error yields an empty list.
     pub async fn missing_critical_columns(&self) -> Vec<String> {
-        use sea_orm::{ConnectionTrait, DbBackend, Statement};
-        // The IN-list is derived from CRITICAL_COLUMNS, not hand-copied: when the
-        // bike catalog joined the list, the hand copy below stayed three tables
+        use sea_orm::{sea_query::ArrayType, ConnectionTrait, DbBackend, Statement, Value};
+        // The table list is derived from CRITICAL_COLUMNS, not hand-copied: when
+        // the bike catalog joined the list, a hand copy stayed three tables
         // short and prod logged `bikes.* missing` on every boot against a fully
         // migrated database — a false alarm that trains people to ignore the
-        // real ones. One source of truth, no second list to forget.
-        let tables = CRITICAL_COLUMNS
+        // real ones. One source of truth, no second list to forget. It travels
+        // as a bound array parameter ($1), never as interpolated SQL text.
+        let tables: Vec<Value> = CRITICAL_COLUMNS
             .iter()
-            .map(|(table, _)| format!("'{table}'"))
-            .collect::<Vec<_>>()
-            .join(", ");
+            .map(|(table, _)| Value::String(Some(Box::new((*table).to_string()))))
+            .collect();
+        // `table_name::text` because information_schema (PG 12+) types it as
+        // sql_identifier, which does not compare against a text[] bind on its
+        // own.
         let rows = match self
             .orm
-            .query_all(Statement::from_string(
+            .query_all(Statement::from_sql_and_values(
                 DbBackend::Postgres,
-                format!(
-                    "SELECT table_name, column_name FROM information_schema.columns \
-                     WHERE table_schema = 'public' \
-                       AND table_name IN ({tables})"
-                ),
+                "SELECT table_name, column_name FROM information_schema.columns \
+                 WHERE table_schema = 'public' \
+                   AND table_name::text = ANY($1)",
+                [Value::Array(
+                    ArrayType::String,
+                    Some(Box::new(tables)),
+                )],
             ))
             .await
         {

@@ -75,15 +75,14 @@ fn api_order_item_to_cart_item(item: &ApiOrderItem) -> Option<CartItem> {
             crate::ui::state::CartItemType::Accessory,
             item.unit_price.unwrap_or(0.0),
         )
-    } else if let Some(ref tid) = item.tea_id {
+    } else {
+        let tid = item.tea_id.as_ref()?;
         (
             tid.clone(),
             item.tea_name.clone().unwrap_or_else(|| "Drink".into()),
             crate::ui::state::CartItemType::Tea,
             item.unit_price.unwrap_or(0.0),
         )
-    } else {
-        return None;
     };
     Some(CartItem {
         id,
@@ -148,7 +147,7 @@ struct OrderDetailOrder {
 pub fn SuccessScreen(id: String) -> Element {
     let lang = crate::ui::lang::current_lang();
     let title = t(lang, T_SUCCESS_TITLE).to_string();
-    let received = tf(lang, T_SUCCESS_ORDER_RECEIVED, &[id.clone()]);
+    let received = tf(lang, T_SUCCESS_ORDER_RECEIVED, std::slice::from_ref(&id));
     let contact = t(lang, T_SUCCESS_CONTACT_SHORTLY).to_string();
     let delivery_estimate = t(lang, T_SUCCESS_DELIVERY_ESTIMATE).to_string();
     let status_label = t(lang, T_SUCCESS_STATUS).to_string();
@@ -284,12 +283,12 @@ pub fn SuccessScreen(id: String) -> Element {
             (Some(min), Some(max)) => Some(format!("{min}-{max}")),
             _ => None,
         })
-        .or_else(|| zone_eta().as_ref().map(Clone::clone))
+        .or_else(|| zone_eta().clone())
         .unwrap_or_else(|| "30-45".to_string());
     let zone_display = status_result
         .as_ref()
         .and_then(|s| s.delivery_zone_name.clone())
-        .or_else(|| zone_name().as_ref().map(Clone::clone));
+        .or_else(|| zone_name().clone());
     let status_loading = status_res.read().is_none();
 
     let bonus_balance = profile_res
@@ -344,14 +343,14 @@ pub fn SuccessScreen(id: String) -> Element {
     let reorder_init = init_data.clone();
     let reorder_tid = telegram_id;
     let cart_for_reorder = use_context::<Signal<Cart>>();
-    let reorder_nav = nav.clone();
+    let reorder_nav = nav;
     let on_reorder = move |_| {
         track_event("reorder_clicked", "success_screen");
         let oid = reorder_id.clone();
         let init = reorder_init.clone();
         let tid = reorder_tid.unwrap_or(0);
-        let mut cart_sig = cart_for_reorder.clone();
-        let nav = reorder_nav.clone();
+        let mut cart_sig = cart_for_reorder;
+        let nav = reorder_nav;
         spawn(async move {
             if tid == 0 {
                 return;
@@ -467,7 +466,7 @@ pub fn SuccessScreen(id: String) -> Element {
                 }
                 div { style: "display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 13px;",
                     span { style: "color: #8b8b9e;", "{eta_label}" }
-                    span { "{tf(lang, T_SUCCESS_ETA_VALUE, &[eta_range.clone()])}" }
+                    span { "{tf(lang, T_SUCCESS_ETA_VALUE, std::slice::from_ref(&eta_range))}" }
                 }
                 div { style: "display: flex; justify-content: space-between; font-size: 13px;",
                     span { style: "color: #8b8b9e;", "{payment_label}" }

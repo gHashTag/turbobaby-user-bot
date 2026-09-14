@@ -70,7 +70,7 @@ pub fn App() -> Element {
     // slow CloudStorage callback doesn't clobber an in-flight shopping session.
     #[cfg(target_arch = "wasm32")]
     use_hook(move || {
-        let mut cart_signal = cart.clone();
+        let mut cart_signal = cart;
         let initial = initial_cart_for_cloud;
         spawn(async move {
             let tg = crate::ui::telegram::TelegramApp;
@@ -89,7 +89,7 @@ pub fn App() -> Element {
     // empty. This restores the cart after cache loss or cross-device return.
     #[cfg(target_arch = "wasm32")]
     use_hook(move || {
-        let mut cart_signal = cart.clone();
+        let mut cart_signal = cart;
         spawn(async move {
             let tg = crate::ui::telegram::TelegramApp::init();
             let Some(tid) = tg.get_user_id() else { return };
@@ -164,12 +164,12 @@ pub fn App() -> Element {
     // Telegram WebApp initDataUnsafe may not be populated on the very first
     // render, so poll start_param briefly instead of reading it once.
     use_hook(move || {
-        let mut pending = pending_shared.clone();
-        let mut pending_order_id = pending_order.clone();
-        let mut pending_cart_flag = pending_cart.clone();
-        let mut pending_reorder_id = pending_reorder.clone();
-        let mut pending_garden_invite_id = pending_garden_invite.clone();
-        let mut pending_garden_flag = pending_garden.clone();
+        let mut pending = pending_shared;
+        let mut pending_order_id = pending_order;
+        let mut pending_cart_flag = pending_cart;
+        let mut pending_reorder_id = pending_reorder;
+        let mut pending_garden_invite_id = pending_garden_invite;
+        let mut pending_garden_flag = pending_garden;
         spawn(async move {
             for _ in 0..30 {
                 if pending.read().is_some()

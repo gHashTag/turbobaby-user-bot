@@ -271,7 +271,7 @@ fn cart_item_row(item: CartItem, lang: crate::trios::core::Lang) -> Element {
     let qty = item.quantity;
     let line_total_str = format_price(item.price * item.quantity as f64);
     let row_key = item.id.clone();
-    let image_alt = tf(lang, T_CART_IMAGE_ALT, &[item.name.clone()]);
+    let image_alt = tf(lang, T_CART_IMAGE_ALT, std::slice::from_ref(&item.name));
 
     rsx! {
         div {

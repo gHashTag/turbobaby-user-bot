@@ -447,10 +447,7 @@ pub fn offer_instead_labels(bike: &ApiBike) -> Vec<String> {
 /// The localised description, falling back to the Russian text (D13: ru is
 /// primary and there is no Thai). `localized` reads the language itself.
 pub fn description_for(bike: &ApiBike) -> String {
-    let ru = match bike.description_ru.as_deref() {
-        Some(text) => text,
-        None => "",
-    };
+    let ru = bike.description_ru.as_deref().unwrap_or_default();
     crate::ui::lang::localized(ru, bike.description_en.as_deref())
 }
 
@@ -737,7 +734,7 @@ pub fn CatalogScreen() -> Element {
                             SORT_PRICE_DESC => filtered.sort_by(|a, b| {
                                 cmp_rate(client_day_rate(a), client_day_rate(b), true)
                             }),
-                            _ => filtered.sort_by(|a, b| default_sort_key(a).cmp(&default_sort_key(b))),
+                            _ => filtered.sort_by_key(default_sort_key),
                         }
 
                         if filtered.is_empty() {

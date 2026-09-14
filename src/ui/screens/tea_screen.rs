@@ -338,7 +338,7 @@ pub fn TeaScreen() -> Element {
                         category_badge: Some(sub),
                         price_line: Some(price_str),
                         can_add: avail,
-                        add_to_cart_label: Some(format!("{add_to_cart}")),
+                        add_to_cart_label: Some(add_to_cart.to_string()),
                         fulfillment_options: vec!["dine_in".to_string(), "takeaway".to_string()],
                         initial_fulfillment: Some(selected_fulfillment()),
                         on_fulfillment_change: Some(EventHandler::new(move |f: String| selected_fulfillment.set(f))),

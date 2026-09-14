@@ -55,8 +55,12 @@ fn track_event(name: &str, detail: &str) {
 }
 
 fn bangkok_offset() -> FixedOffset {
-    FixedOffset::east_opt(BANGKOK_OFFSET_SECONDS)
-        .unwrap_or_else(|| FixedOffset::east_opt(0).expect("UTC offset 0 is valid"))
+    // east_opt returns None only outside ±24h; +7h is comfortably in range,
+    // so the None arm is a compile-time-visible impossibility, not a fallback.
+    match FixedOffset::east_opt(BANGKOK_OFFSET_SECONDS) {
+        Some(offset) => offset,
+        None => unreachable!("BANGKOK_OFFSET_SECONDS is +7h, always inside ±24h"),
+    }
 }
 
 fn bangkok_now() -> chrono::DateTime<FixedOffset> {
@@ -243,8 +247,8 @@ fn EventCard(props: EventCardProps) -> Element {
     let avail = ev
         .max_seats
         .map(|cap| cap.saturating_sub(ev.seats_taken as i32));
-    let has_baht = ev.price_baht.map_or(false, |p| p > 0.0);
-    let has_stars = ev.price_stars.map_or(false, |s| s > 0);
+    let has_baht = ev.price_baht.is_some_and(|p| p > 0.0);
+    let has_stars = ev.price_stars.is_some_and(|s| s > 0);
     let is_free = !has_baht && !has_stars;
     let price_label = if has_stars {
         Some(format!("{} ⭐", ev.price_stars.unwrap_or(0)))
@@ -256,7 +260,7 @@ fn EventCard(props: EventCardProps) -> Element {
     let lang = crate::ui::lang::current_lang();
     let time_line = start_label
         .as_ref()
-        .map(|label| tf(lang, T_EVENTS_TIME, &[label.clone()]));
+        .map(|label| tf(lang, T_EVENTS_TIME, std::slice::from_ref(label)));
     let avail_label = avail.map(|a| tf(lang, T_EVENTS_SEATS, &[a.to_string()]));
 
     let share_id = ev.id.clone();
@@ -369,8 +373,8 @@ fn EventBookingModal(props: EventBookingModalProps) -> Element {
     let mut seats_to_book = use_signal(|| 1u32);
 
     let starts = parse_event_start(&ev.starts_at);
-    let has_started = starts.map_or(false, |dt| Utc::now() >= dt.with_timezone(&Utc));
-    let has_stars_price = ev.price_stars.map_or(false, |s| s > 0);
+    let has_started = starts.is_some_and(|dt| Utc::now() >= dt.with_timezone(&Utc));
+    let has_stars_price = ev.price_stars.is_some_and(|s| s > 0);
     let can_book = props.telegram_id.is_some() && !ev.is_sold_out() && !has_started;
 
     let date_label = starts.map(|s| s.format("%d %b %Y • %H:%M").to_string());
@@ -387,7 +391,7 @@ fn EventBookingModal(props: EventBookingModalProps) -> Element {
     });
 
     let price_badge = {
-        let has_baht = ev.price_baht.map_or(false, |p| p > 0.0);
+        let has_baht = ev.price_baht.is_some_and(|p| p > 0.0);
         if has_stars_price {
             let price_label = t(lang, T_EVENTS_PRICE_STARS).to_string();
             let price_str = ev.price_stars.unwrap_or(0).to_string();
@@ -803,7 +807,7 @@ pub fn EventsScreen() -> Element {
         }));
 
     let events_for_day = use_memo(move || {
-        let sel = selected.read().clone();
+        let sel = *selected.read();
         match &*events_resource.read() {
             Some(Ok(list)) => list
                 .iter()
@@ -976,7 +980,7 @@ pub fn EventDetailScreen(id: String) -> Element {
                     ev,
                     telegram_id,
                     init_data: init_data.clone(),
-                    on_close: EventHandler::new(go_back.clone()),
+                    on_close: EventHandler::new(go_back),
                     on_booked: EventHandler::new(go_back),
                 }
             }
@@ -1064,7 +1068,7 @@ pub fn MyBookingsScreen() -> Element {
             return;
         }
         let init = init_data_for_cancel.clone();
-        let mut refresh_sig = refresh.clone();
+        let mut refresh_sig = refresh;
         spawn(async move {
             let url = format!(
                 "{}/api/events/bookings/{}/cancel?telegram_id={}",

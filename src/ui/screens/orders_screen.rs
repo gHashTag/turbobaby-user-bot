@@ -80,15 +80,14 @@ fn api_order_item_to_cart_item(item: &ApiOrderItem) -> Option<CartItem> {
             CartItemType::Accessory,
             item.unit_price.unwrap_or(0.0),
         )
-    } else if let Some(ref tid) = item.tea_id {
+    } else {
+        let tid = item.tea_id.as_ref()?;
         (
             tid.clone(),
             item.tea_name.clone().unwrap_or_else(|| "Drink".into()),
             CartItemType::Tea,
             item.unit_price.unwrap_or(0.0),
         )
-    } else {
-        return None;
     };
     Some(CartItem {
         id,
@@ -177,7 +176,7 @@ struct ReviewFormProps {
 fn ReviewForm(props: ReviewFormProps) -> Element {
     let client = use_api_client();
     let mut rating = use_signal(|| 5i32);
-    let mut comment = use_signal(|| String::new());
+    let mut comment = use_signal(String::new);
     let mut submitting = use_signal(|| false);
     let mut done = use_signal(|| false);
     let lang = crate::ui::lang::current_lang();
@@ -380,7 +379,7 @@ pub fn OrdersScreen() -> Element {
                                         let border_color = if is_cancelled { "#2a2a4a" } else { status_color };
                                         let is_active = !is_terminal_status(&o.status);
                                         let shadow = if is_active { "4px 4px 0 #000, 0 0 12px rgba(0,229,255,0.1)" } else { "4px 4px 0 #000" };
-                                        let order_nav = nav.clone();
+                                        let order_nav = nav;
                                         let order_id_for_card = o.id.clone();
 
                                         rsx! {
@@ -394,7 +393,7 @@ pub fn OrdersScreen() -> Element {
                                                 onclick: move |_| { order_nav.push(Route::OrderDetail { id: order_id_for_card.clone() }); },
                                                 StatusStepper { status: o.status.clone() }
                                                 div { style: "display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;",
-                                                    span { style: "font-size: 15px; color: #e8e8e8;", "{tf(lang, T_ORDERS_ORDER, &[short_id.clone()])}" }
+                                                    span { style: "font-size: 15px; color: #e8e8e8;", "{tf(lang, T_ORDERS_ORDER, std::slice::from_ref(&short_id))}" }
                                                     span { style: "
                                                         font-size: 13px; padding: 3px 8px;
                                                         border-radius: 0;
@@ -442,10 +441,10 @@ pub fn OrdersScreen() -> Element {
                                                 if is_terminal_status(&o.status) {
                                                     {
                                                         let order_for_reorder = o.clone();
-                                                        let reorder_nav = nav.clone();
-                                                        let reorder_cart = cart.clone();
+                                                        let reorder_nav = nav;
+                                                        let reorder_cart = cart;
                                                         let reorder_label2 = reorder_label;
-                                                        let loading = reorder_loading.clone();
+                                                        let loading = reorder_loading;
                                                         let init = init_data.clone();
                                                         let tid = telegram_id;
                                                         rsx! {
@@ -456,9 +455,9 @@ pub fn OrdersScreen() -> Element {
                                                                     onclick: move |e: Event<MouseData>| {
                                                                         e.stop_propagation();
                                                                         let order_items = order_for_reorder.items.clone();
-                                                                        let mut cart_sig = reorder_cart.clone();
-                                                                        let nav = reorder_nav.clone();
-                                                                        let mut loading_inner = loading.clone();
+                                                                        let mut cart_sig = reorder_cart;
+                                                                        let nav = reorder_nav;
+                                                                        let mut loading_inner = loading;
                                                                         let init = init.clone();
                                                                         spawn(async move {
                                                                             loading_inner.set(true);

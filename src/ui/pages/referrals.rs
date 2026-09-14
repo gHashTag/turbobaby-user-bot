@@ -228,7 +228,7 @@ pub fn Referrals() -> Element {
                             let share_url = format!(
                                 "https://t.me/share/url?url={}&text={}",
                                 urlencoding_simple(&link),
-                                urlencoding_simple(&share_text)
+                                urlencoding_simple(share_text)
                             );
                             rsx! {
                                 button {
@@ -259,10 +259,10 @@ pub fn Referrals() -> Element {
                         max-width: 380px; margin: 0 auto 16px; padding: 0 16px;
                         display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;
                     ",
-                    {stat_card("\u{1F465}", &t(lang, T_REFERRAL_STAT_INVITED), &stats.total_invited.to_string())}
-                    {stat_card("\u{2705}", &t(lang, T_REFERRAL_STAT_CONFIRMED), &stats.confirmed.to_string())}
-                    {stat_card("\u{23F3}", &t(lang, T_REFERRAL_STAT_PENDING), &stats.pending.to_string())}
-                    {stat_card("\u{1F4B0}", &t(lang, T_REFERRAL_STAT_BONUS), &crate::trios::pricing::format_baht(
+                    {stat_card("\u{1F465}", t(lang, T_REFERRAL_STAT_INVITED), &stats.total_invited.to_string())}
+                    {stat_card("\u{2705}", t(lang, T_REFERRAL_STAT_CONFIRMED), &stats.confirmed.to_string())}
+                    {stat_card("\u{23F3}", t(lang, T_REFERRAL_STAT_PENDING), &stats.pending.to_string())}
+                    {stat_card("\u{1F4B0}", t(lang, T_REFERRAL_STAT_BONUS), &crate::trios::pricing::format_baht(
                         if stats.total_bonus_earned.is_finite() {
                             stats.total_bonus_earned.max(0.0)
                         } else { 0.0 }

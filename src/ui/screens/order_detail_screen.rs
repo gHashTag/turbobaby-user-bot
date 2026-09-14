@@ -100,15 +100,14 @@ fn api_order_item_to_cart_item(item: &ApiOrderItem) -> Option<CartItem> {
             CartItemType::Accessory,
             item.unit_price.unwrap_or(0.0),
         )
-    } else if let Some(ref tid) = item.tea_id {
+    } else {
+        let tid = item.tea_id.as_ref()?;
         (
             tid.clone(),
             item.tea_name.clone().unwrap_or_else(|| "Drink".into()),
             CartItemType::Tea,
             item.unit_price.unwrap_or(0.0),
         )
-    } else {
-        return None;
     };
     Some(CartItem {
         id,
@@ -203,8 +202,8 @@ fn OrderDetailCard(
     let is_terminal = is_terminal_status(display_status);
     let is_pending = display_status == "pending";
     let order_for_reorder = order.clone();
-    let reorder_nav = nav.clone();
-    let reorder_cart = cart.clone();
+    let reorder_nav = nav;
+    let reorder_cart = cart;
     let init_data_for_reorder = init_data.clone();
     let init_data_for_cancel = init_data.clone();
     let mut show_cancel_confirm = use_signal(|| false);
@@ -220,7 +219,7 @@ fn OrderDetailCard(
         ",
             div { style: "display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;",
                 span { style: "font-size: 16px; color: #e8e8e8; font-weight: 700;",
-                    "{tf(lang, T_ORDERS_ORDER, &[short_id.clone()])}"
+                    "{tf(lang, T_ORDERS_ORDER, std::slice::from_ref(&short_id))}"
                 }
                 span { style: "
                     font-size: 13px; padding: 4px 10px;
@@ -344,9 +343,9 @@ fn OrderDetailCard(
                         let order_items = order_for_reorder.items.clone();
                         let init = init_data_for_reorder.clone();
                         let tid = telegram_id;
-                        let mut cart_sig = reorder_cart.clone();
-                        let nav = reorder_nav.clone();
-                        let mut loading = reorder_loading.clone();
+                        let mut cart_sig = reorder_cart;
+                        let nav = reorder_nav;
+                        let mut loading = reorder_loading;
                         spawn(async move {
                             loading.set(true);
                             let local_items: Vec<CartItem> = order_items

@@ -205,6 +205,11 @@ pub(crate) fn is_miniapp_start_payload(payload: &str) -> bool {
 }
 
 /// Build a `startapp` parameter for a catalog product.
+///
+/// No production caller since the strain share branch came out of /menu;
+/// kept (with its test) because the Mini App still parses these prefixes and
+/// share flows are expected to come back for bikes.
+#[allow(dead_code)]
 pub(crate) fn product_start_param(kind_prefix: &str, product_id: &str) -> String {
     format!("{}_{}", kind_prefix, product_id)
 }

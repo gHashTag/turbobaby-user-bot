@@ -29,7 +29,7 @@ static HTTP_CLIENT: LazyLock<crate::ui::api::local_client::LocalClient> =
 // cache is populated by login, by the CloudStorage loader, and by localStorage
 // fallback reads. All reads go through `admin_token()`.
 thread_local! {
-    static ADMIN_TOKEN_CACHE: RefCell<String> = RefCell::new(String::new());
+    static ADMIN_TOKEN_CACHE: RefCell<String> = const { RefCell::new(String::new()) };
 }
 
 fn set_admin_token_cache(token: &str) {
@@ -61,6 +61,7 @@ use crate::ui::telegram::{
 /// Read the cached admin token. Order of precedence:
 /// 1. In-memory cache (populated by CloudStorage loader / login).
 /// 2. localStorage fallback (for plain-browser previews / older clients).
+///
 /// This is used for the first paint so the login screen doesn't flash
 /// unnecessarily when a token is already cached in the browser.
 /// Telegram Mini App WebViews do not reliably persist localStorage across
@@ -685,7 +686,7 @@ pub fn AdminScreen() -> Element {
     // the initial gate — it fails in plain browsers and is confusing in the
     // Telegram WebApp when the user is not yet in ADMIN_IDS. A valid
     // ADMIN_PASSWORD token is enough; Telegram ID is optional metadata.
-    let password_token = use_signal(|| admin_token());
+    let password_token = use_signal(admin_token);
 
     // Cycle #171: load the durable token from Telegram CloudStorage async.
     // WebView localStorage is sandboxed and often does not survive app restart,
@@ -2888,7 +2889,7 @@ fn OrderDetailModal(order: AdminOrder, on_close: EventHandler<()>) -> Element {
         .collect();
     let order_title = format!(
         "Заказ #{}...{}",
-        &order.id.get(0..4).unwrap_or(&order.id),
+        order.id.get(0..4).unwrap_or(&order.id),
         suffix
     );
     rsx! {
@@ -5061,7 +5062,7 @@ fn EventsTab() -> Element {
 
         Modal {
             open: modal_open,
-            title: if editing_id.read().as_deref() == Some(&String::new()) { Some("Новое событие".to_string()) } else { Some("Редактировать событие".to_string()) },
+            title: if editing_id.read().as_deref() == Some("") { Some("Новое событие".to_string()) } else { Some("Редактировать событие".to_string()) },
             show_close: true,
             on_close: move |_| {
                 clear_form.call(());
@@ -5384,11 +5385,11 @@ fn BroadcastTab() -> Element {
     let lang = crate::ui::lang::current_lang();
     let _init_data = use_telegram_init_data();
     let _token = admin_token();
-    let mut text = use_signal(|| String::new());
-    let mut photo_url = use_signal(|| String::new());
+    let mut text = use_signal(String::new);
+    let mut photo_url = use_signal(String::new);
     let mut catalog = use_signal(|| "none".to_string());
     let mut selected_product = use_signal(|| None::<BroadcastPickerProduct>);
-    let mut button_text = use_signal(|| String::new());
+    let mut button_text = use_signal(String::new);
     let mut sending = use_signal(|| false);
     let mut sent = use_signal(|| false);
     let mut error = use_signal(|| Option::<String>::None);
@@ -5604,6 +5605,10 @@ fn BroadcastTab() -> Element {
     }
 }
 
+// Legacy admin broadcast form: it threads the ten signals it touches by hand,
+// which is ugly but honest. Bundling them into a params struct is a separate
+// refactor, not a lint-sweep change.
+#[allow(clippy::too_many_arguments)]
 fn send_broadcast(
     sending: &mut Signal<bool>,
     sent: &mut Signal<bool>,
