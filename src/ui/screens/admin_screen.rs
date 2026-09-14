@@ -2889,7 +2889,7 @@ fn OrderDetailModal(order: AdminOrder, on_close: EventHandler<()>) -> Element {
         .collect();
     let order_title = format!(
         "Заказ #{}...{}",
-        &order.id.get(0..4).unwrap_or(&order.id),
+        order.id.get(0..4).unwrap_or(&order.id),
         suffix
     );
     rsx! {

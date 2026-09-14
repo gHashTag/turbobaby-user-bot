@@ -1071,7 +1071,7 @@ pub fn Garden() -> Element {
                         let shadow = if is_ready {
                             "box-shadow: 0 0 16px rgba(255,215,0,0.3);".to_string()
                         } else if is_active {
-                            format!("box-shadow: 0 0 16px {}40;", &color)
+                            format!("box-shadow: 0 0 16px {}40;", color)
                         } else {
                             String::new()
                         };
@@ -1437,7 +1437,7 @@ fn GardenChooser(
                             }
                         }
                         Some(Ok(_)) => rsx! { div { style: "text-align:center;padding:30px;color:#8b8b9e;", "{t(lang, T_GARDEN_CHOOSER_EMPTY)}" } },
-                        Some(Err(e)) => rsx! { div { style: "text-align:center;padding:30px;color:#ff6b7a;", "{tf(lang, T_GARDEN_CHOOSER_ERROR, &[e.to_string()])}" } },
+                        Some(Err(e)) => rsx! { div { style: "text-align:center;padding:30px;color:#ff6b7a;", "{tf(lang, T_GARDEN_CHOOSER_ERROR, std::slice::from_ref(&e))}" } },
                         None => rsx! { div { style: "text-align:center;padding:30px;color:#8b8b9e;", "{t(lang, T_GARDEN_CHOOSER_LOADING)}" } },
                     }
                 }

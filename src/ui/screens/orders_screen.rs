@@ -80,15 +80,14 @@ fn api_order_item_to_cart_item(item: &ApiOrderItem) -> Option<CartItem> {
             CartItemType::Accessory,
             item.unit_price.unwrap_or(0.0),
         )
-    } else if let Some(ref tid) = item.tea_id {
+    } else {
+        let tid = item.tea_id.as_ref()?;
         (
             tid.clone(),
             item.tea_name.clone().unwrap_or_else(|| "Drink".into()),
             CartItemType::Tea,
             item.unit_price.unwrap_or(0.0),
         )
-    } else {
-        return None;
     };
     Some(CartItem {
         id,
