@@ -89,7 +89,10 @@ struct GardenResponse {
     plants: Vec<ApiPlant>,
 }
 
+// Mirrors the API response one field per field; not every field is rendered.
+// Kept whole so the contract stays readable against the endpoint.
 #[derive(Debug, Clone, serde::Deserialize)]
+#[allow(dead_code)]
 struct GardenStreakResponse {
     has_plant: bool,
     #[serde(default)]
@@ -146,7 +149,9 @@ struct HarvestPlantResponse {
     new_achievements: Vec<String>,
 }
 
+// API mirror — see the note on GardenStreakResponse.
 #[derive(Debug, Clone, serde::Deserialize)]
+#[allow(dead_code)]
 struct Achievement {
     id: String,
     name: String,
@@ -161,7 +166,9 @@ struct Achievement {
     notified: bool,
 }
 
+// API mirror — see the note on GardenStreakResponse.
 #[derive(Debug, Clone, serde::Deserialize)]
+#[allow(dead_code)]
 struct AchievementsResponse {
     achievements: Vec<Achievement>,
     #[serde(default)]
@@ -177,7 +184,9 @@ struct LeaderboardEntry {
     is_you: bool,
 }
 
+// API mirror — see the note on GardenStreakResponse.
 #[derive(Debug, Clone, serde::Deserialize)]
+#[allow(dead_code)]
 struct LeaderboardResponse {
     kind: String,
     entries: Vec<LeaderboardEntry>,
@@ -185,7 +194,9 @@ struct LeaderboardResponse {
     user: Option<serde_json::Value>,
 }
 
+// API mirror — see the note on GardenStreakResponse.
 #[derive(Debug, Clone, serde::Deserialize)]
+#[allow(dead_code)]
 struct Invitee {
     display_name: String,
     /// The Telegram handle without its `@`. Kept apart from `display_name` so
@@ -205,7 +216,9 @@ struct Invitee {
     source: Option<String>,
 }
 
+// API mirror — see the note on GardenStreakResponse.
 #[derive(Debug, Clone, serde::Deserialize)]
+#[allow(dead_code)]
 struct InviteesResponse {
     count: usize,
     invitees: Vec<Invitee>,
@@ -954,7 +967,12 @@ pub fn Garden() -> Element {
                     button {
                         style: "padding:10px 16px;background:#39ff14;color:#000;border:4px solid #2d9e0f;box-shadow:3px 3px 0 #000;font-size:12px;font-weight:700;cursor:pointer;",
                         onclick: move |_| {
-                            let _ = post_client_event(&api_base_url(), "garden_choose_product_tapped", "");
+                            // Fire-and-forget, but it must actually fire: without
+                            // spawn+await the future is dropped on creation and
+                            // the tap is never reported (clippy caught this).
+                            spawn(async move {
+                                let _ = post_client_event(&api_base_url(), "garden_choose_product_tapped", "").await;
+                            });
                             show_chooser.set(true);
                         },
                         if plant_list.is_empty() { "🌱 {choose_product_text}" } else { "🔄 {change_product_text}" }
@@ -963,7 +981,11 @@ pub fn Garden() -> Element {
                         button {
                             style: "padding:10px 16px;background:#ff4757;color:#fff;border:4px solid #c0392b;box-shadow:3px 3px 0 #000;font-size:12px;font-weight:700;cursor:pointer;",
                             onclick: move |_| {
-                                let _ = post_client_event(&api_base_url(), "garden_reset_tapped", "");
+                                // Same as the chooser tap above: spawn or the
+                                // reset event is silently lost.
+                                spawn(async move {
+                                    let _ = post_client_event(&api_base_url(), "garden_reset_tapped", "").await;
+                                });
                                 show_reset_warning.set(true);
                             },
                             "⏪ {reset_progress_text}"

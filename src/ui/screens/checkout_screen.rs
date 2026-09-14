@@ -81,7 +81,10 @@ struct LoyaltyProfileResp {
     bonus_balance: f64,
 }
 
+// API mirror: the config response carries the whole tier ladder; checkout
+// only spends cashback here, the rest documents the shape we deserialize.
 #[derive(serde::Deserialize, Clone)]
+#[allow(dead_code)]
 struct LoyaltyConfigResp {
     cashback_pct: f64,
     max_bonus_usage_pct: f64,
@@ -148,7 +151,6 @@ async fn submit_order_with_retry(
     const DELAYS_MS: [u32; 3] = [1_000, 2_000, 4_000];
     let mut last_status = 0u16;
     let mut last_body = String::new();
-    let mut had_network_error = false;
 
     for (attempt, delay_ms) in std::iter::once(0)
         .chain(DELAYS_MS.iter().copied())
@@ -196,18 +198,17 @@ async fn submit_order_with_retry(
 
                 return SubmitResult::HttpError(status, response_body);
             }
-            Err(_) => {
-                had_network_error = true;
-                continue;
-            }
+            // Network error (no status at all) — retry with the next delay.
+            Err(_) => continue,
         }
     }
 
-    if last_status >= 500 && last_status <= 599 {
+    if (500..=599).contains(&last_status) {
         SubmitResult::HttpError(last_status, last_body)
-    } else if had_network_error {
-        SubmitResult::NetworkError
     } else {
+        // Every path that exhausts the retries without a 5xx is
+        // network-shaped: an explicit network error, or a status the loop
+        // never turned into a response worth surfacing.
         SubmitResult::NetworkError
     }
 }
@@ -242,21 +243,18 @@ fn fill_address_from_geolocation(mut set_address: Signal<String>) {
             return;
         };
         let fut = wasm_bindgen_futures::JsFuture::from(promise);
-        match fut.await {
-            Ok(val) => {
-                let lat = js_sys::Reflect::get(&val, &wasm_bindgen::JsValue::from_str("lat"))
-                    .ok()
-                    .and_then(|v| v.as_f64())
-                    .unwrap_or(f64::NAN);
-                let lng = js_sys::Reflect::get(&val, &wasm_bindgen::JsValue::from_str("lng"))
-                    .ok()
-                    .and_then(|v| v.as_f64())
-                    .unwrap_or(f64::NAN);
-                if lat.is_finite() && lng.is_finite() {
-                    set_address.set(format!("📍 {:.6}, {:.6}", lat, lng));
-                }
+        if let Ok(val) = fut.await {
+            let lat = js_sys::Reflect::get(&val, &wasm_bindgen::JsValue::from_str("lat"))
+                .ok()
+                .and_then(|v| v.as_f64())
+                .unwrap_or(f64::NAN);
+            let lng = js_sys::Reflect::get(&val, &wasm_bindgen::JsValue::from_str("lng"))
+                .ok()
+                .and_then(|v| v.as_f64())
+                .unwrap_or(f64::NAN);
+            if lat.is_finite() && lng.is_finite() {
+                set_address.set(format!("📍 {:.6}, {:.6}", lat, lng));
             }
-            Err(_) => {}
         }
     });
 }
@@ -491,16 +489,16 @@ pub fn CheckoutScreen() -> Element {
     // slow callback can't clobber an in-progress form fill.
     #[cfg(target_arch = "wasm32")]
     use_hook(move || {
-        let mut name_sig = customer_name.clone();
-        let mut phone_sig = customer_phone.clone();
-        let mut address_sig = delivery_address.clone();
-        let mut zone_sig = delivery_zone_id.clone();
-        let mut notes_sig = delivery_notes.clone();
-        let mut stars_sig = stars_to_use.clone();
-        let mut bonus_sig = bonus_to_use.clone();
-        let mut reward_sig = applied_reward.clone();
-        let mut age_sig = age_confirmed.clone();
-        let loaded = loaded_draft.clone();
+        let mut name_sig = customer_name;
+        let mut phone_sig = customer_phone;
+        let mut address_sig = delivery_address;
+        let mut zone_sig = delivery_zone_id;
+        let mut notes_sig = delivery_notes;
+        let mut stars_sig = stars_to_use;
+        let mut bonus_sig = bonus_to_use;
+        let mut reward_sig = applied_reward;
+        let mut age_sig = age_confirmed;
+        let loaded = loaded_draft;
         spawn(async move {
             let tg = TelegramApp;
             if let Some(json) = tg.cloud_storage_get(CHECKOUT_DRAFT_CLOUD_KEY).await {
@@ -998,7 +996,7 @@ pub fn CheckoutScreen() -> Element {
         order_error.set(None);
 
         // Show the native Telegram MainButton spinner while the network request runs.
-        tg.show_main_button_progress(&t(lang, T_CHECKOUT_PROCESSING), true);
+        tg.show_main_button_progress(t(lang, T_CHECKOUT_PROCESSING), true);
         let restore_text = format!(
             "{} — {}",
             t(lang, T_PLACE_ORDER),
@@ -1071,7 +1069,7 @@ pub fn CheckoutScreen() -> Element {
             "customer_name": customer_name(),
             // Send E.164 so the courier-facing number is unambiguous; the
             // customer keeps seeing whatever they typed.
-            "customer_phone": normalize_phone(&customer_phone()).unwrap_or_else(|| customer_phone()),
+            "customer_phone": normalize_phone(&customer_phone()).unwrap_or_else(&*customer_phone),
             "customer_telegram": telegram_username.clone(),
             "items": items_json,
             "subtotal": cart_total,

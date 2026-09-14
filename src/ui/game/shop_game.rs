@@ -124,6 +124,12 @@ pub struct Upgrades {
     pub spawn_level: u32,
 }
 
+impl Default for Upgrades {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Upgrades {
     pub fn new() -> Self {
         Self {
@@ -359,13 +365,12 @@ fn haptic_error() {
 #[component]
 pub fn WoodyShop() -> Element {
     let mut state = use_signal(ShopState::load);
-    let logs = use_signal(|| Vec::<String>::new());
+    let logs = use_signal(Vec::<String>::new);
     let lang = crate::ui::lang::current_lang();
 
     // Persist game progress to localStorage on every state change.
     {
         let state = state;
-        let logs = logs;
         use_effect(move || {
             state.read().save();
             // Touch logs so effect re-runs when logs change too.
@@ -544,7 +549,7 @@ pub fn WoodyShop() -> Element {
     }
 
     // Floating feedback texts (e.g. +10 🪙) that pop and fade.
-    let floaters = use_signal(|| Vec::<(String, u32, i32)>::new());
+    let floaters = use_signal(Vec::<(String, u32, i32)>::new);
     let spawn_floater = move |text: String, y: u32| {
         let mut floaters = floaters;
         let id = js_sys::Date::now() as i32;
@@ -560,10 +565,10 @@ pub fn WoodyShop() -> Element {
     let served = state.read().served;
     let harvested = state.read().harvested;
     let woody_table = state.read().woody_table;
-    let tables = state.read().tables.clone();
-    let farm = state.read().farm.clone();
-    let farm_watering = state.read().farm_watering.clone();
-    let upgrades = state.read().upgrades.clone();
+    let tables = state.read().tables;
+    let farm = state.read().farm;
+    let farm_watering = state.read().farm_watering;
+    let upgrades = state.read().upgrades;
     let active_zone = state.read().active_zone;
     let party_active = state.read().party_active;
     let party_timer_ms = state.read().party_timer_ms;
@@ -571,7 +576,7 @@ pub fn WoodyShop() -> Element {
     let grill_timer_ms = state.read().grill_timer_ms;
     let woody_timer_ms = state.read().woody_timer_ms;
     let woody_total_ms = state.read().woody_total_ms;
-    let farm_water_ms = state.read().farm_water_ms.clone();
+    let farm_water_ms = state.read().farm_water_ms;
     let event_text = state.read().event_text.clone();
     let reward = state.read().reward_per_serve();
 
@@ -610,7 +615,6 @@ pub fn WoodyShop() -> Element {
     {
         let mut prev_served = use_signal(|| state.read().served);
         let mut prev_harvested = use_signal(|| state.read().harvested);
-        let credit_stars = credit_stars;
         use_effect(move || {
             let served = state.read().served;
             let harvested = state.read().harvested;
@@ -1006,7 +1010,7 @@ fn ShopZone(
                         idx,
                         table: *table,
                         woody_here: woody_table == idx,
-                        on_click: on_table_click.clone(),
+                        on_click: on_table_click,
                         lang,
                     }
                 }

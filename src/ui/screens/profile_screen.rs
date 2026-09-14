@@ -37,7 +37,10 @@ struct LoyaltyResponse {
     config: Option<LoyaltyConfigData>,
 }
 
+// API mirror: profile renders most fields but not referral_count — that
+// number lives in invited_count (see its doc comment below).
 #[derive(Debug, Clone, Deserialize)]
+#[allow(dead_code)]
 struct LoyaltyProfileData {
     total_spent: Option<f64>,
     tier: Option<String>,
@@ -54,7 +57,9 @@ struct LoyaltyProfileData {
     orders_count: Option<i32>,
 }
 
+// API mirror — same note as LoyaltyProfileData above.
 #[derive(Debug, Clone, Deserialize)]
+#[allow(dead_code)]
 struct LoyaltyConfigData {
     cashback_pct: f64,
     max_bonus_usage_pct: f64,
@@ -409,7 +414,7 @@ pub fn ProfileScreen() -> Element {
             }
         }
     });
-    let stars_balance = stars_balance_res.read().clone().flatten().unwrap_or(0);
+    let stars_balance = (*stars_balance_res.read()).flatten().unwrap_or(0);
 
     let bonus_history_res = use_resource(move || {
         let init = init_data_for_bonus_history.clone();
@@ -908,13 +913,13 @@ pub fn ProfileScreen() -> Element {
                                 let item_summary = o.items.first().map(profile_item_name).unwrap_or_else(|| "—".to_string());
                                 let more_count = o.items.len().saturating_sub(1);
                                 let init_for_reorder = init_data.clone();
-                                let cart_for_reorder = cart.clone();
+                                let cart_for_reorder = cart;
                                 let nav_for_reorder = navigator();
                                 let reorder_label = t(lang, T_PROFILE_REORDER).to_string();
                                 rsx! {
                                     div { style: "background: #0f0f1a; border: 3px solid {status_color}; box-shadow: 2px 2px 0 #000; padding: 10px 12px;",
                                         div { style: "display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;",
-                                            span { style: "font-size: 14px; font-weight: 700; color: #e8e8e8;", "{tf(lang, T_ORDERS_ORDER, &[short_id.clone()])}" }
+                                            span { style: "font-size: 14px; font-weight: 700; color: #e8e8e8;", "{tf(lang, T_ORDERS_ORDER, std::slice::from_ref(&short_id))}" }
                                             span { style: "font-size: 12px; padding: 2px 6px; background: {status_color}22; color: {status_color};", "{status_label}" }
                                         }
                                         div { style: "font-size: 12px; color: #8b8b9e; margin-bottom: 8px;",
@@ -932,8 +937,8 @@ pub fn ProfileScreen() -> Element {
                                                     let order_items = o.items.clone();
                                                     let init = init_for_reorder.clone();
                                                     let tid = telegram_id;
-                                                    let mut cart_sig = cart_for_reorder.clone();
-                                                    let nav = nav_for_reorder.clone();
+                                                    let mut cart_sig = cart_for_reorder;
+                                                    let nav = nav_for_reorder;
                                                     spawn(async move {
                                                         let local_items: Vec<CartItem> = order_items.iter().filter_map(profile_order_item_to_cart_item).collect();
                                                         match merge_server_cart(&api_base_url(), &init, tid, &local_items).await {
@@ -1023,7 +1028,7 @@ pub fn ProfileScreen() -> Element {
                                     div { style: "font-size: 15px; color: {tier.color()}; margin-bottom: 4px;", "{tier.label(lang)}" }
                                     div { style: "font-size: 13px; color: #8b8b9e; margin-bottom: 2px;", "{tier.cashback()}% cashback" }
                                     {
-                                        let threshold_str = crate::trios::pricing::format_baht(tier.threshold() as f64);
+                                        let threshold_str = crate::trios::pricing::format_baht(tier.threshold());
                                         rsx! { div { style: "font-size: 15px; color: #8b8b9e;", "{threshold_str}+" } }
                                     }
                                 }

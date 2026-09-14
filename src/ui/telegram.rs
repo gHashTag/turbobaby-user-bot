@@ -778,6 +778,13 @@ pub fn use_main_button_click<F: FnMut() + 'static>(callback: F) {
                         //
                         // If the runtime is gone — the app is tearing down —
                         // the click is dropped rather than trapped.
+                        //
+                        // The closure is deliberately not `*f` (clippy's
+                        // redundant_closure suggestion): moving F out of the
+                        // RefMut guard drops the guard's protection for the
+                        // call and pairs badly with the `mut` binding below.
+                        // Calling through the guard is the safe form.
+                        #[allow(clippy::redundant_closure)]
                         in_dioxus_scope(scope, "main button", || f());
                     } else {
                         web_sys::console::warn_1(

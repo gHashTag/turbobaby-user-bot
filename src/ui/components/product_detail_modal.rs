@@ -113,8 +113,7 @@ pub fn ProductDetailModal(props: ProductDetailModalProps) -> Element {
         .share_label
         .clone()
         .unwrap_or_else(|| t(current_lang(), T_SHARE).to_string());
-    let has_share = props.on_share.is_some();
-    let on_share = props.on_share.clone();
+    let on_share = props.on_share;
     let img = props.image_url.clone().unwrap_or_default();
     let has_image = is_usable_src(&img);
     let name = props.name.clone();
@@ -129,7 +128,7 @@ pub fn ProductDetailModal(props: ProductDetailModalProps) -> Element {
             .unwrap_or_else(|| "takeaway".to_string())
     });
     let fulfillment_options = props.fulfillment_options.clone();
-    let on_fulfillment_change = props.on_fulfillment_change.clone();
+    let on_fulfillment_change = props.on_fulfillment_change;
     let mut lightbox_open = use_signal(|| false);
     let lightbox_src = img.clone();
     let lightbox_alt = alt.clone();
@@ -269,7 +268,7 @@ pub fn ProductDetailModal(props: ProductDetailModalProps) -> Element {
                                             _ => t(current_lang(), T_FULFILLMENT_TAKEAWAY).to_string(),
                                         };
                                         let opt_for_handler = opt.clone();
-                                        let handler = on_fulfillment_change.clone();
+                                        let handler = on_fulfillment_change;
                                         rsx! {
                                             button {
                                                 style: "flex:1;padding:10px;border:3px solid {border};background:{bg};color:{color};font-size:13px;font-weight:700;cursor:pointer;",
@@ -302,8 +301,7 @@ pub fn ProductDetailModal(props: ProductDetailModalProps) -> Element {
                         }
                     })}
 
-                    {has_share.then(|| {
-                        let share = on_share.clone().unwrap();
+                    {on_share.map(|share| {
                         rsx! {
                             button {
                                 style: "font-size:14px;font-weight:700;width:100%;padding:12px 20px;margin-bottom:8px;background:#00e5ff;color:#000;border:4px solid #008ba3;box-shadow:3px 3px 0 #000;cursor:pointer;",

@@ -469,8 +469,8 @@ pub fn HomeScreen() -> Element {
             pending_reorder.set(PendingReorder(None));
             let tid = telegram_id.unwrap_or(0);
             let init = init_data.clone();
-            let mut cart_sig = cart_for_reorder.clone();
-            let nav = nav.clone();
+            let mut cart_sig = cart_for_reorder;
+            let nav = nav;
             spawn(async move {
                 if tid == 0 {
                     return;
@@ -520,7 +520,7 @@ pub fn HomeScreen() -> Element {
     // Easier than remembering /admin URL or relying on bot command menu.
     let mut logo_taps = use_signal(|| 0u32);
     let mut last_tap = use_signal(|| 0u64);
-    let nav_for_logo = nav.clone();
+    let nav_for_logo = nav;
     let logo_onclick = move |_| {
         let now = js_sys::Date::now() as u64;
         let dt = now.saturating_sub(last_tap());
@@ -813,8 +813,8 @@ pub fn HomeScreen() -> Element {
                         let order_id_for_reorder = order.id.clone();
                         let init_for_reorder = init_data.clone();
                         let tid_for_reorder = telegram_id.unwrap_or(0);
-                        let cart_for_reorder = cart.clone();
-                        let nav_for_reorder = nav.clone();
+                        let cart_for_reorder = cart;
+                        let nav_for_reorder = nav;
                         let reorder_cta = t(lang, T_HOME_REORDER_CTA).to_string();
                         rsx! {
                             div { style: "margin:0 16px 16px;background:linear-gradient(135deg,#1a1a2e,#16213e);border:4px solid {status_color};box-shadow:4px 4px 0 #000;padding:14px;cursor:pointer;display:flex;align-items:center;gap:12px;",
@@ -832,7 +832,7 @@ pub fn HomeScreen() -> Element {
                                             span { style: "font-size:11px;color:#8b8b9e;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;", "{t(lang, T_HOME_REORDER_STATUS)}: {t(lang, status_label)}" }
                                         }
                                         div { style: "font-size:14px;font-weight:700;color:#e8e8e8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:6px;",
-                                            "{tf(lang, crate::trios::i18n::T_ORDERS_ORDER, &[short_id.clone()])} · {total_str}"
+                                            "{tf(lang, crate::trios::i18n::T_ORDERS_ORDER, std::slice::from_ref(&short_id))} · {total_str}"
                                         }
                                     }
                                 }
@@ -845,8 +845,8 @@ pub fn HomeScreen() -> Element {
                                         let oid = order_id_for_reorder.clone();
                                         let init = init_for_reorder.clone();
                                         let tid = tid_for_reorder;
-                                        let mut cart_sig = cart_for_reorder.clone();
-                                        let nav = nav_for_reorder.clone();
+                                        let mut cart_sig = cart_for_reorder;
+                                        let nav = nav_for_reorder;
                                         let base = api_base_url();
                                         spawn(async move {
                                             let detail_url = format!("{}/api/orders/{}/details?telegram_id={}", base, oid, tid);

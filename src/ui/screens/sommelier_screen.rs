@@ -322,7 +322,7 @@ pub fn SommelierScreen() -> Element {
                 )
             })
             .collect();
-        scored.sort_by(|a, b| b.0.cmp(&a.0));
+        scored.sort_by_key(|(score, _)| std::cmp::Reverse(*score));
         let top: Vec<RecommendedStrain> = scored.into_iter().take(6).map(|(_, r)| r).collect();
         Ok::<SommelierResponse, String>(SommelierResponse {
             recommended_sets: None,

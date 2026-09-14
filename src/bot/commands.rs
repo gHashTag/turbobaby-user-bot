@@ -9,9 +9,7 @@ use teloxide::{
 
 // Cycle #76: button helpers consolidated to bot/mod.rs.
 // Cycle #129: AI_RATE_LIMIT replaced by `ai_rate_limit_allow` helper.
-use crate::bot::{
-    ai_rate_limit_allow, callback_btn, miniapp_deep_link, product_start_param, url_btn, web_app_btn,
-};
+use crate::bot::{ai_rate_limit_allow, callback_btn, web_app_btn};
 use crate::{
     ai::{get_random_fact_prompt, get_random_joke_prompt},
     config::Config,
