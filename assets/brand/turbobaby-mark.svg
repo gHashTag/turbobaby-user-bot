@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="TurboBaby mark">
+  <!-- TurboBaby square mark: a wheel struck by a turbo bolt, speed lines trailing.
+       Vector, no fonts, renders legible at Telegram avatar size (40px).
+       Palette: sunset orange gradient #FF8A3D -> #F5451B, cream #FFF7ED. -->
+  <defs>
+    <linearGradient id="tb-bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FF8A3D"/>
+      <stop offset="1" stop-color="#F5451B"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="116" fill="url(#tb-bg)"/>
+  <g fill="#FFF7ED">
+    <rect x="52" y="196" width="72" height="22" rx="11" opacity="0.55"/>
+    <rect x="52" y="238" width="108" height="22" rx="11" opacity="0.85"/>
+    <rect x="52" y="280" width="88" height="22" rx="11" opacity="0.55"/>
+  </g>
+  <circle cx="300" cy="252" r="132" fill="none" stroke="#FFF7ED" stroke-width="26"/>
+  <path fill="#FFF7ED" d="M324 137 L205 275 L288 275 L277 367 L396 229 L313 229 Z"/>
+</svg>

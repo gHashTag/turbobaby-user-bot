@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 300" role="img" aria-label="TurboBaby logo">
+  <!-- TurboBaby horizontal lockup: mark + wordmark.
+       Wordmark uses text elements for the draft; convert to outlined paths
+       before any print/production use so it does not depend on local fonts. -->
+  <defs>
+    <linearGradient id="tb-bg2" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FF8A3D"/>
+      <stop offset="1" stop-color="#F5451B"/>
+    </linearGradient>
+  </defs>
+  <!-- mark, 512 -> 240px at (24,30) -->
+  <g transform="translate(24,30) scale(0.46875)">
+    <rect width="512" height="512" rx="116" fill="url(#tb-bg2)"/>
+    <g fill="#FFF7ED">
+      <rect x="52" y="196" width="72" height="22" rx="11" opacity="0.55"/>
+      <rect x="52" y="238" width="108" height="22" rx="11" opacity="0.85"/>
+      <rect x="52" y="280" width="88" height="22" rx="11" opacity="0.55"/>
+    </g>
+    <circle cx="300" cy="252" r="132" fill="none" stroke="#FFF7ED" stroke-width="26"/>
+    <path fill="#FFF7ED" d="M324 137 L205 275 L288 275 L277 367 L396 229 L313 229 Z"/>
+  </g>
+  <text x="308" y="172" font-family="'Arial Black', Arial, Helvetica, sans-serif" font-size="108" font-weight="900" font-style="italic" letter-spacing="2" fill="#17171C">TURBO</text>
+  <text x="308" y="262" font-family="Arial, Helvetica, sans-serif" font-size="78" font-weight="400" letter-spacing="14" fill="#F5451B">BABY</text>
+</svg>

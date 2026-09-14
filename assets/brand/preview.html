@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>TurboBaby — превью бренда</title>
+<style>
+  body { font-family: -apple-system, Arial, sans-serif; margin: 0; }
+  .row { display: flex; gap: 32px; align-items: center; padding: 40px 48px; flex-wrap: wrap; }
+  .light { background: #FAF7F2; }
+  .dark  { background: #17171C; }
+  .card  { background: #fff; border-radius: 16px; padding: 24px 28px; box-shadow: 0 8px 30px rgba(0,0,0,.12); }
+  .dark .card { background: #232329; }
+  .avatar { border-radius: 50%; overflow: hidden; width: 96px; height: 96px; box-shadow: 0 4px 14px rgba(0,0,0,.25); }
+  .avatar img { width: 100%; height: 100%; display: block; }
+  h2 { margin: 0 0 4px; font-size: 13px; text-transform: uppercase; letter-spacing: .12em; opacity: .55; }
+  p  { margin: 0 0 18px; font-size: 13px; opacity: .5; }
+  img.mark { width: 160px; height: 160px; }
+  img.logo { height: 84px; }
+</style>
+</head>
+<body>
+  <div class="row light">
+    <div><h2>Знак</h2><p>512×512, вектор</p><img class="mark" src="turbobaby-mark.svg" alt="mark"></div>
+    <div><h2>Локап</h2><p>знак + слово</p><img class="logo" src="turbobaby-logo.svg" alt="logo"></div>
+    <div><h2>Аватар в чате</h2><p>кроп 96px</p><div class="avatar"><img src="turbobaby-mark.svg" alt="avatar"></div></div>
+  </div>
+  <div class="row dark">
+    <div><h2 style="color:#FFF7ED">Знак на тёмном</h2><p style="color:#FFF7ED">шапка сайта/дэша</p><img class="mark" src="turbobaby-mark.svg" alt="mark dark"></div>
+    <div class="card"><img class="logo" src="turbobaby-logo.svg" alt="logo card"></div>
+  </div>
+</body>
+</html>

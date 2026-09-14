@@ -1,13 +1,13 @@
-# AGENTS.md — Woody Weed Bot
+# AGENTS.md — TurboBaby
 
 Контекст для AI-агентов, работающих с этим проектом. Сохраняет "боль", чтобы не повторять одни и те же ошибки.
 
 ## Стек
 - **Backend**: Axum + tokio-postgres + SQLx migrations
 - **Frontend**: Dioxus 0.6 WASM, собирается Trunk
-- **Deploy**: Railway (авто-деплой по push в main), Dockerfile multi-stage
+- **Deploy**: Railway, сервис `turbobaby-bot`, вручную через `railway up` из репо (см. §10–12)
 - **Auth**: Telegram initData HMAC ИЛИ `X-Admin-Token` password fallback
-- **Storage**: `/data/uploads/` (Railway volume), отдаётся как `/uploads/`
+- **Storage**: MinIO-бакет `media` (bucket-production-0ae7), отдаётся как `/media/`
 
 ---
 
@@ -163,15 +163,57 @@ pkill cargo; rm -f target/.cargo-lock; rm -rf target/tmp
 
 ---
 
-### 10. Railway CLI недоступен — deploy только через GitHub
+### 10. «Git push = deploy» — НЕПРАВДА для этого репо
 
-**Симптом:** `railway up` таймаутится на `backboard.railway.com`.
+**Симптом:** мерж в main прошёл, а на проде изменений нет.
 
-**Причина:** Railway CLI заблокирован в текущей сети.
+**Причина:** у воркфлоу `.github/workflows/deploy.yml` нет ни `RAILWAY_TOKEN`,
+ни переменной `RAILWAY_SERVICE` — он честно скипается («loud-skip», замерено
+2026-09-13). Репозиторий к сервису Railway не подключён: ни один из мержей
+этой ночи (#39–#41) не задеплоился сам.
 
-**Решение:** Push в main → Railway автодеплой. Никакой CLI не нужен.
+**Решение:** деплой вручную: `cd <репо> && railway link -p woody -e production
+-s turbobaby-bot && railway up -y -d`, потом ждать SUCCESS и проверять
+`/health`, `/api/bikes`, логи на `InvalidToken`.
 
-**Урок:** Не трать время на CLI. Git push = deploy.
+**Урок:** push в main — это только код. Прод обновляется ровно одним способом:
+`railway up`. Если когда-нибудь захочется автоматики — положить `RAILWAY_TOKEN`
+и `RAILWAY_SERVICE` в секреты GitHub, тогда deploy.yml оживет как есть.
+
+---
+
+### 12. Railway vars: `--service` на `--set` НЕ работает — только link→set
+
+**Симптом:** `railway variables --set X=1 --service woody-weed-bot` — переменная
+оказалась на ДРУГОМ сервисе (залинкованном), с него и задеплоилась.
+
+**Причина:** CLI применяет `--set` к линку из локального конфига, флаг сервиса
+на запись не влияет (замерено 2026-09-13: так лечился турбобот чужим токеном
+50 минут и отравилась чужая база).
+
+**Решение (детерминированный порядок):**
+```
+railway link -p woody -e production -s <нужный сервис>
+railway variables --set 'KEY=value'        # БЕЗ --service
+railway variables --kv | grep -E 'KEY|DATABASE_URL'   # проверить
+```
+
+**Урок:** любая запись в Railway начинается с link и заканчивается проверкой.
+Смена var сама триггерит автодеплой последнего загруженного исходника —
+сначала грузи правильный код, потом меняй vars.
+
+---
+
+### 13. `railway up` из git-worktree молча деплоит ПРОШЛЫЙ исходник
+
+**Симптом:** up из worktree-каталога «прошёл успешно», но на сервисе живёт
+старый код (проверяется эндпоинтом, которого в исходнике нет).
+
+**Решение:** деплой из чистого каталога: `git archive <sha> | tar -x -C /tmp/src`
+или из нормального клона репо.
+
+**Урок:** после КАЖДОГО up проверять, что доехало именно то, что грузили
+(специфичный эндпоинт/версия/число миграций), а не только статус SUCCESS.
 
 ---
 
@@ -195,6 +237,14 @@ pkill cargo; rm -f target/.cargo-lock; rm -rf target/tmp
 - [ ] Все HTTP-запросы в `admin_screen.rs` имеют `.header("X-Admin-Token", admin_token())`
 - [ ] CSP содержит `'unsafe-eval'`
 - [ ] `check_admin_access` не возвращает `false` раньше fallback
+
+## Чеклист после деплоя (на turbobaby-bot)
+
+- [ ] `railway deployment list` — последний SUCCESS
+- [ ] `curl …/health` — 200
+- [ ] `curl …/api/bikes` — JSON, фото 13/13
+- [ ] `railway logs -s turbobaby-bot` — 0 `InvalidToken`, нет `SCHEMA SELF-CHECK`
+- [ ] НИКАКИХ команд в сторону `woody-weed-bot` — чужой сервис (см. топологию в loop/LOOP_STATE.md)
 - [ ] `on_saved` вызывается только внутри `if success`
 - [ ] `use_telegram_id_or_admin` используется вместо `use_telegram_id` в админке
 - [ ] После push: сообщить пользователю про полный рестарт Mini App
