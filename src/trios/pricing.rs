@@ -369,7 +369,10 @@ mod tests {
 
     #[test]
     fn a_two_decimal_market_renders_its_own_separators_and_suffix() {
-        assert_eq!(format_money(1234567.89, &eur_proof_market()), "1.234.567,89€");
+        assert_eq!(
+            format_money(1234567.89, &eur_proof_market()),
+            "1.234.567,89€"
+        );
         assert_eq!(format_money(0.5, &eur_proof_market()), "0,50€");
         assert_eq!(format_money(0.0, &eur_proof_market()), "0,00€");
         // Truncation, not rounding: display never invents a higher price.

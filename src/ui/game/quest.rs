@@ -46,20 +46,20 @@ pub fn Quest() -> Element {
             }
 
             // 1. Reset shared bucket + register a one-shot qrTextReceived
-            //    listener that drops the scanned text into `window.__woody_qr`
+            //    listener that drops the scanned text into `window.__tb_qr`
             //    and closes the popup. We unbind the listener immediately so
             //    consecutive scans don't double-fire.
             let qr_prompt =
                 serde_json::Value::String(t(lang, T_SCAN_QR_PROMPT).to_string()).to_string();
             let _ = eval(&format!(
                 r#"
-                window.__woody_qr = '';
+                window.__tb_qr = '';
                 if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.showScanQrPopup) {{
                     var tg = window.Telegram.WebApp;
                     var handler = function(event) {{
                         var text = (event && (event.data || event.text)) || (typeof event === 'string' ? event : '');
                         if (text && typeof text === 'string') {{
-                            window.__woody_qr = text;
+                            window.__tb_qr = text;
                             try {{ tg.closeScanQrPopup(); }} catch (e) {{}}
                             try {{ tg.offEvent('qrTextReceived', handler); }} catch (e) {{}}
                         }}
@@ -72,13 +72,13 @@ pub fn Quest() -> Element {
             scanning_c.set(true);
             scan_result_c.set(String::new());
 
-            // 2. Poll `window.__woody_qr` for up to ~60 s (120 × 500 ms).
+            // 2. Poll `window.__tb_qr` for up to ~60 s (120 × 500 ms).
             //    Telegram's popup itself caps interaction time; if the user
             //    bails the bucket stays empty and we exit cleanly.
             let mut token: Option<String> = None;
             for _ in 0..120 {
                 gloo_timers::future::TimeoutFuture::new(500).await;
-                if let Ok(v) = eval("window.__woody_qr || ''") {
+                if let Ok(v) = eval("window.__tb_qr || ''") {
                     if let Some(s) = v.as_string() {
                         if !s.is_empty() {
                             token = Some(s);

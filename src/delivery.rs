@@ -54,8 +54,8 @@ impl Default for DeliveryZones {
                 },
                 DeliveryZone {
                     id: "pickup".into(),
-                    name: "Самовывоз (Woody Weed)".into(),
-                    name_en: Some("Pickup at Woody Weed".into()),
+                    name: "Самовывоз (TurboBaby)".into(),
+                    name_en: Some("Pickup at TurboBaby".into()),
                     min_eta_minutes: 15,
                     max_eta_minutes: 15,
                     delivery_fee_baht: 0.0,

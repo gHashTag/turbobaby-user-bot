@@ -323,9 +323,7 @@ async fn bestsellers(db: &Database) -> Result<Vec<Subject>, sea_orm::DbErr> {
         // Which catalog it is, and whether it is still on sale. Promoting
         // something the shop has stopped selling is worse than saying nothing.
         // `strains` left with 083; a strain bestseller can no longer resolve.
-        for (table, kind) in [
-            ("sets", crate::trios::promo::BestsellerKind::Set),
-        ] {
+        for (table, kind) in [("sets", crate::trios::promo::BestsellerKind::Set)] {
             let sql =
                 format!("SELECT name FROM {table} WHERE id::text = $1 AND is_available = TRUE");
             if let Ok(Some(row)) = db
@@ -1154,7 +1152,7 @@ mod tests {
                 .any(|b| matches!(b.kind, InlineKeyboardButtonKind::Url(_)))
         };
         for link in [
-            Some("https://t.me/woody_bot/app?startapp=p_set_abc"),
+            Some("https://t.me/turboagent_phuket_bot/app?startapp=p_set_abc"),
             None,
             Some("not a url at all"),
         ] {
@@ -1165,7 +1163,7 @@ mod tests {
             );
             assert_eq!(
                 has_url(&kb),
-                link == Some("https://t.me/woody_bot/app?startapp=p_set_abc"),
+                link == Some("https://t.me/turboagent_phuket_bot/app?startapp=p_set_abc"),
                 "open button presence wrong for {link:?}"
             );
         }

@@ -350,3 +350,50 @@ agreed by a human at the door, so the spec's rate table is empty and its length 
 What remains hardcoded (the glyph inside i18n templates, the +7 literals in five files, the
 +66 default) is unwired debt tracked in #35, not a second market's problem: the profile it
 must read now exists.
+
+## D19 — The Woody WeedPecker heritage is hidden, not deleted
+
+Owner mandate, 2026-09-14: «из WOODY идут события рассылки, а надо чтобы у каждого
+своя!! сейчас все путается!», «раздели и почини всё», «замени все названия woody наша
+turbobaby». This database forked from the woody bot carrying its live catalogue, and
+two shops ran through one bot: 30 Woody WeedPecker events in the calendar (DJ sets,
+cannabis sommelier nights) with the promo sweep drafting posts about them and the
+24-hour reminder loop mailing customers; 70 accessories, 30 teas and 8 sets on sale;
+the menu button and share links pointing at the other bot (`WEB_APP_URL` unset fell
+back to the woody production URL; `BOT_USERNAME` defaulted to `Woody_WeedPecker_bot`).
+
+Migration **085** flips visibility flags — `events.is_public = FALSE`,
+`*.is_available = FALSE` — and rebrands the pickup zone. No row is deleted and no
+table is dropped: old orders and bookings still resolve their item names, and the
+separation is reversible by flipping the flags back. The screens and endpoints stay
+so a future TurboBaby event (a ride day, a community meet) starts from a clean
+public slate rather than from a code resurrection.
+
+What this decision does *not* settle: the fate of the legacy screens (`/sets`,
+`/tea`, `/sommelier`, `/accessories`, `/garden`, the games) and the Phangan delivery
+zones (Thong Sala, Haad Rin, …) in a shop that README places in Kamala, Phuket.
+Those are product calls; the data waits, hidden, until the owner makes them.
+
+The string rebrand that rides with it (`Woody Weed` → `TurboBaby` in payment QR
+text, pickup names, share/referral texts, profile contacts, i18n) is cosmetic and
+total: no customer-visible surface keeps the old shop's name. Internal keys keep
+their names — `woody_last_*` localStorage entries hold customers' saved checkout
+drafts, and renaming the key would silently discard their data, which is a worse
+bug than an invisible legacy word.
+
+## D20 — The logo is the owner's own channel avatar
+
+Owner mandate, 2026-09-14: «ты логотип найди и замени на реальные данные» (with the
+«Актуальная Система Учета» Drive folder as the pointer). The folder holds no logo
+file — it is sheets, agreements and passports — and the Wix site turbophuket.com has
+a text-only header (its sole uploaded media is the og:image hero photo). The one
+brand image the owner actually publishes is the avatar of his manager channel
+t.me/turbophuket («TURBOBABY manager аренда мото байки»), fetched at its full
+320×320 and installed as `assets/logo.jpg` (the bot itself has no avatar set).
+
+The cannabis-era trust block on the home screen (GACP certification, medical-use
+warning, 20+ badge) was retargeted to verifiable rental facts: legal entity and
+location, Thai helmet law, license requirement. No invented product claims
+(insurance, deposit terms) — those stay the owner's to make. The cannabis shop
+address in checkout (Koh Phangan pickup) became TurboBaby / Kamala, matching README
+and the migration 085 zone rename.

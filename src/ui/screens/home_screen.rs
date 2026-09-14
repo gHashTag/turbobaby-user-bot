@@ -608,12 +608,12 @@ pub fn HomeScreen() -> Element {
             div { style: "text-align:center;padding:20px 16px 16px;position:relative;z-index:1;",
                 img {
                     src: "{assets::logo::MAIN}",
-                    alt: "Woody Weed Bot",
-                    style: "height:120px;width:auto;display:block;margin:0 auto;box-shadow:0 0 20px rgba(57,255,20,0.3);cursor:pointer;user-select:none;transition:transform 0.1s;touch-action:manipulation;",
+                    alt: "TurboBaby",
+                    style: "height:120px;width:auto;display:block;margin:0 auto;box-shadow:0 0 20px rgba(0,0,0,0.5);cursor:pointer;user-select:none;transition:transform 0.1s;touch-action:manipulation;",
                     onclick: logo_onclick,
                 }
-                h1 { style: "font-size:24px;font-weight:800;color:#39ff14;text-shadow:3px 3px 0 #000,0 0 10px rgba(57,255,20,0.5);letter-spacing:2px;margin-top:12px;",
-                    "WOODY WEEDPECKER"
+                h1 { style: "font-size:24px;font-weight:800;color:#f5f5f7;text-shadow:2px 2px 0 #000,0 0 10px rgba(0,0,0,0.6);letter-spacing:2px;margin-top:12px;",
+                    "TURBOBABY"
                 }
                 p { style: "font-size:13px;color:#888;margin-top:6px;", "{home_subtitle}" }
             }
@@ -1079,7 +1079,7 @@ pub fn HomeScreen() -> Element {
                     }
                     p { style: "font-size:12px;color:#8b8b9e;line-height:1.4;margin-bottom:10px;", {t(crate::ui::lang::current_lang(), T_TRUST_MEDICAL)} }
                     a { style: "font-size:13px;font-weight:700;color:#00e5ff;text-decoration:underline;",
-                        href: "https://t.me/woodyweedpecker_support",
+                        href: "https://t.me/turboagent_phuket_bot",
                         target: "_blank",
                         {t(crate::ui::lang::current_lang(), T_TRUST_SUPPORT)}
                     }

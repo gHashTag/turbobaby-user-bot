@@ -195,7 +195,7 @@ fn OrderDetailCard(
         .next()
         .unwrap_or(&order.created_at)
         .to_string();
-    let shop = order.shop_id.as_deref().unwrap_or("Woody Shop");
+    let shop = order.shop_id.as_deref().unwrap_or("TurboBaby");
     let subtotal_str = crate::trios::pricing::format_baht(order.subtotal);
     let total_str = crate::trios::pricing::format_baht(order.total);
     let bonus_str = crate::trios::pricing::format_baht(order.bonus_used);
