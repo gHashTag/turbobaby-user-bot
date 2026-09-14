@@ -991,10 +991,10 @@ mod deep_link_button_tests {
     fn the_button_url_for_a_shared_card_parses() {
         let payload = "p_set_fe346171-aa5b-4f88-93ed-8be0ec38aa6c";
         for base in [
-            "https://woody-weed-bot-production-370f.up.railway.app/?cache=181",
-            "https://woody-weed-bot-production-370f.up.railway.app/",
-            "https://woody-weed-bot-production-370f.up.railway.app",
-            "https://woody-weed-bot-production-370f.up.railway.app/?cache=181#tgWebAppData=xyz",
+            "https://turbobaby-bot-production.up.railway.app/?cache=181",
+            "https://turbobaby-bot-production.up.railway.app/",
+            "https://turbobaby-bot-production.up.railway.app",
+            "https://turbobaby-bot-production.up.railway.app/?cache=181#tgWebAppData=xyz",
         ] {
             let built = build_app_url_with_start(base, "ru", None, Some(payload));
             let parsed = built.parse::<url::Url>();

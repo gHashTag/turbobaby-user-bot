@@ -550,10 +550,10 @@ mod tests {
     fn deep_link_is_a_start_link_not_startapp() {
         // `?startapp=` silently opens the bot chat unless a Main Mini App is
         // configured in BotFather — that is the bug this replaced.
-        let link = deep_link("Woody_WeedPecker_bot", ShareKind::Set, "abc-123");
+        let link = deep_link("turboagent_phuket_bot", ShareKind::Set, "abc-123");
         assert_eq!(
             link,
-            "https://t.me/Woody_WeedPecker_bot?start=p_set_abc-123"
+            "https://t.me/turboagent_phuket_bot?start=p_set_abc-123"
         );
         assert!(!link.contains("startapp"));
     }
@@ -581,7 +581,7 @@ mod tests {
         event.schedule = Some("27.08.2026 · 19:30–21:00".into());
         event.description = "Музыка, закат и камерная встреча.".into();
         event.image_url = Some("https://cdn.example/event.jpg".into());
-        let link = deep_link("Woody_WeedPecker_bot", ShareKind::Event, "event-42");
+        let link = deep_link("turboagent_phuket_bot", ShareKind::Event, "event-42");
         let result = build_inline_result(
             "event-result",
             &event,
@@ -599,7 +599,7 @@ mod tests {
         assert_eq!(button["text"], "Открыть мероприятие");
         assert_eq!(
             button["url"],
-            "https://t.me/Woody_WeedPecker_bot?start=p_event_event-42"
+            "https://t.me/turboagent_phuket_bot?start=p_event_event-42"
         );
     }
 

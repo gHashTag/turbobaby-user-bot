@@ -691,8 +691,8 @@ pub fn CheckoutScreen() -> Element {
 
     // Единственная реальная точка самовывоза.
     let shops = [(
-        "🏠 Woody Weed Pecker",
-        "44, 129, Koh Phangan, Surat Thani 84280",
+        "🏠 TurboBaby",
+        "Kamala, Phuket 83150",
     )];
 
     let stars_balance_res = {
@@ -1475,7 +1475,7 @@ pub fn CheckoutScreen() -> Element {
                         div {
                             style: "margin-top:8px;cursor:pointer;font-size:13px;color:#00e5ff;text-decoration:underline;text-align:center;",
                             onclick: move |_| {
-                                let _ = window().and_then(|w| w.open_with_url_and_target("https://www.google.com/maps/place/Woody+Weed+Pecker/@9.7124562,99.9877309,17z/data=!3m1!4b1!4m6!3m5!1s0x3054ffe9f6df4edf:0xf8735a84f5193e1a!8m2!3d9.7124562!4d99.9877309!16s%2Fg%2F11x314fym6!18m1!1e1?entry=ttu&g_ep=EgoyMDI2MDUxMy4wIKXMDSoASAFQAw%3D%3D", "_blank").ok());
+                                let _ = window().and_then(|w| w.open_with_url_and_target("https://www.google.com/maps/search/?api=1&query=Kamala+Beach+Phuket", "_blank").ok());
                             },
                             "{t(lang, T_CHECKOUT_OPEN_MAP)}"
                         }

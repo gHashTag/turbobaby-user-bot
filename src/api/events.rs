@@ -1817,11 +1817,11 @@ mod tests {
         let body = build_event_reminder_body(
             "CANNABIS SOMMELIER NIGHT",
             starts_at,
-            Some("WoodyWeedPecker, Koh Phangan"),
+            Some("TurboBaby, Kamala Phuket"),
         );
 
         assert!(body.contains("28.08.2026 20:00"));
-        assert!(body.contains("WoodyWeedPecker, Koh Phangan"));
+        assert!(body.contains("TurboBaby, Kamala Phuket"));
         assert!(body.contains("по местному времени"));
         assert!(!body.contains("Bangkok"));
     }

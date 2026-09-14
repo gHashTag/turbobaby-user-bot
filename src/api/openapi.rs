@@ -135,13 +135,13 @@ pub(crate) async fn get_loyalty_tiers_doc() {}
 #[derive(OpenApi)]
 #[openapi(
     info(
-        title = "Woody Weed Bot API",
+        title = "TurboBaby Bot API",
         version = "1.0",
         description = "REST API for Woody Weed Bot — cannabis dispensary Telegram Mini App. \
                        Provides endpoints for loyalty program, orders, catalog, quests, and admin management.",
         contact(
-            name = "Woody Weed Bot",
-            url = "https://woody-weed-bot-production-370f.up.railway.app"
+            name = "TurboBaby Bot",
+            url = "https://turbobaby-bot-production.up.railway.app"
         ),
     ),
     paths(
@@ -163,7 +163,7 @@ pub(crate) async fn get_loyalty_tiers_doc() {}
         (name = "admin", description = "Admin-only endpoints — requires X-Admin-Key header"),
     ),
     servers(
-        (url = "https://woody-weed-bot-production-370f.up.railway.app", description = "Production"),
+        (url = "https://turbobaby-bot-production.up.railway.app", description = "Production"),
         (url = "http://localhost:3000", description = "Local development"),
     ),
 )]

@@ -1,4 +1,4 @@
-/// Custom business metrics for Woody Weed Bot.
+/// Custom business metrics for TurboBaby Bot.
 ///
 /// Uses the `metrics` crate which is already wired under the hood by
 /// `axum-prometheus`.  All counters declared here are automatically
@@ -198,7 +198,7 @@ pub fn milestone_awarded(milestone: i32) {
     .increment(1);
 }
 
-/// Loop #18: a Woody Catch high score was submitted to the server.
+/// Loop #18: a TurboBaby Catch high score was submitted to the server.
 pub fn game_high_score_submitted(score: u64) {
     counter!("game_high_score_submitted_total").increment(1);
     gauge!("game_high_score_value").set(score as f64);

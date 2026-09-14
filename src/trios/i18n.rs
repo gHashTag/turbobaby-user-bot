@@ -965,7 +965,7 @@ fn get_ru_translation(key: Key) -> Value {
         T_CAT_TEA => "Чай",
         // Quest
         T_TITLE => "TurboBaby Island Quest",
-        T_SUBTITLE => "Пройди 5 точек на Пангане",
+        T_SUBTITLE => "Пройди 5 точек на Пхукете",
         T_START_BTN => "Начать квест",
         T_EXPLORE_BTN => "Обзор",
         T_CHECKPOINT_TITLE => "Чекпоинт #{0}",
@@ -1021,7 +1021,7 @@ fn get_ru_translation(key: Key) -> Value {
         T_EVENTS_WEEKDAY_SUN => "вс",
         // Screen titles
         T_HOME_TITLE => "Главная",
-        T_HOME_SUBTITLE => "Премиум каннабис на острове Панган",
+        T_HOME_SUBTITLE => "Аренда байков на Пхукете · Камала",
         T_MENU_TITLE => "🌿 Меню",
         T_MENU_DESC => "Наши премиальные сорта",
         T_SETS_TITLE => "🎁 Наборы",
@@ -1125,10 +1125,10 @@ fn get_ru_translation(key: Key) -> Value {
         T_LAB_CERT_CBD => "CBD",
         T_LAB_CERT_TESTED => "Тестировано",
         T_LAB_CERT_EMPTY => "Нет сертификатов",
-        T_TRUST_GACP => "✅ GACP-сертифицированная продукция",
-        T_TRUST_MEDICAL => "🏥 Только медицинское применение. Перед употреблением проконсультируйтесь с врачом.",
+        T_TRUST_GACP => "✅ TURBOBABY CO., LTD. · Камала, Пхукет",
+        T_TRUST_MEDICAL => "🪖 Шлем обязателен по закону Таиланда — выдаём с байком.",
         T_TRUST_SUPPORT => "💬 Поддержка",
-        T_TRUST_AGE => "🔞 20+",
+        T_TRUST_AGE => "🪪 Нужны права",
         T_REORDER => "🔄 Повторить заказ",
         T_SEARCH_PLACEHOLDER => "🔍 Поиск по названию",
         T_BROADCAST => "Рассылка",
@@ -1242,7 +1242,7 @@ fn get_ru_translation(key: Key) -> Value {
         T_SOMM_EXP_MEDIUM => "🌿 Средний",
         T_SOMM_EXP_EXPERT => "🔥 Эксперт",
         // Game strings
-        T_GAME_TITLE => "WOODY SHOP",
+        T_GAME_TITLE => "TurboBaby Games",
         T_GAME_TAB_SHOP => "🛒 Магазин",
         T_GAME_TAB_FARM => "🌱 Ферма",
         T_GAME_TAB_DJ => "🎧 DJ",
@@ -1270,7 +1270,7 @@ fn get_ru_translation(key: Key) -> Value {
         T_GAME_FLOW => "🚪 Поток",
         T_GAME_RESET => "🔄 Сброс",
         T_GAME_CONFIRM_RESET => "Сбросить весь прогресс? Это нельзя отменить.",
-        T_GAME_SHOP_TITLE => "WOODY SHOP",
+        T_GAME_SHOP_TITLE => "TurboBaby Shop",
         T_GAME_ORDER => "👋 Заказ",
         T_GAME_SERVE => "🤲 Подать",
         T_GAME_CLEAN => "🧽 Убрать",
@@ -1708,7 +1708,7 @@ fn get_en_translation(key: Key) -> Value {
         T_CAT_TEA => "Tea",
         // Quest
         T_TITLE => "TurboBaby Island Quest",
-        T_SUBTITLE => "Complete 5 locations on Koh Phangan",
+        T_SUBTITLE => "Complete 5 locations on Phuket",
         T_START_BTN => "Start Quest",
         T_EXPLORE_BTN => "Explore",
         T_CHECKPOINT_TITLE => "Checkpoint #{0}",
@@ -1764,7 +1764,7 @@ fn get_en_translation(key: Key) -> Value {
         T_EVENTS_WEEKDAY_SUN => "Sun",
         // Screen titles
         T_HOME_TITLE => "Home",
-        T_HOME_SUBTITLE => "Premium Cannabis on Koh Phangan",
+        T_HOME_SUBTITLE => "Bike rental in Phuket · Kamala",
         T_MENU_TITLE => "🌿 Menu",
         T_MENU_DESC => "Our premium selection",
         T_SETS_TITLE => "🎁 Sets",
@@ -1868,10 +1868,10 @@ fn get_en_translation(key: Key) -> Value {
         T_LAB_CERT_CBD => "CBD",
         T_LAB_CERT_TESTED => "Tested",
         T_LAB_CERT_EMPTY => "No certificates",
-        T_TRUST_GACP => "✅ GACP-certified products",
-        T_TRUST_MEDICAL => "🏥 Medical use only. Consult a physician before use.",
+        T_TRUST_GACP => "✅ TURBOBABY CO., LTD. · Kamala, Phuket",
+        T_TRUST_MEDICAL => "🪖 Helmets are required by Thai law — provided with every bike.",
         T_TRUST_SUPPORT => "💬 Support",
-        T_TRUST_AGE => "🔞 20+",
+        T_TRUST_AGE => "🪪 License required",
         T_REORDER => "🔄 Reorder",
         T_SEARCH_PLACEHOLDER => "🔍 Search by name",
         T_BROADCAST => "Broadcast",
@@ -2013,7 +2013,7 @@ fn get_en_translation(key: Key) -> Value {
         T_GAME_FLOW => "🚪 Flow",
         T_GAME_RESET => "🔄 Reset",
         T_GAME_CONFIRM_RESET => "Reset all progress? This cannot be undone.",
-        T_GAME_SHOP_TITLE => "WOODY SHOP",
+        T_GAME_SHOP_TITLE => "TurboBaby Shop",
         T_GAME_ORDER => "👋 Order",
         T_GAME_SERVE => "🤲 Serve",
         T_GAME_CLEAN => "🧽 Clean",
@@ -2671,10 +2671,10 @@ mod tests {
 
     #[test]
     fn test_translation_different() {
-        assert_eq!(t(Lang::Russian, T_SUBTITLE), "Пройди 5 точек на Пангане");
+        assert_eq!(t(Lang::Russian, T_SUBTITLE), "Пройди 5 точек на Пхукете");
         assert_eq!(
             t(Lang::English, T_SUBTITLE),
-            "Complete 5 locations on Koh Phangan"
+            "Complete 5 locations on Phuket"
         );
     }
 
@@ -2701,7 +2701,7 @@ mod tests {
         assert!(!ru.translations.is_empty());
         assert_eq!(
             ru.translations.get(T_SUBTITLE),
-            Some(&"Пройди 5 точек на Пангане".to_string())
+            Some(&"Пройди 5 точек на Пхукете".to_string())
         );
     }
 

@@ -98,7 +98,7 @@ pub fn Referrals() -> Element {
             if tid == 0 {
                 me_c.set(ReferralMe {
                     code: "N/A".into(),
-                    invite_link: "https://t.me/Woody_WeedPecker_bot?start=ref_NA".to_string(),
+                    invite_link: "https://t.me/turboagent_phuket_bot?start=ref_NA".to_string(),
                     stats: ReferralStats::default(),
                 });
                 loading_c.set(false);

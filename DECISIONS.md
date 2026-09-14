@@ -380,3 +380,20 @@ total: no customer-visible surface keeps the old shop's name. Internal keys keep
 their names — `woody_last_*` localStorage entries hold customers' saved checkout
 drafts, and renaming the key would silently discard their data, which is a worse
 bug than an invisible legacy word.
+
+## D20 — The logo is the owner's own channel avatar
+
+Owner mandate, 2026-09-14: «ты логотип найди и замени на реальные данные» (with the
+«Актуальная Система Учета» Drive folder as the pointer). The folder holds no logo
+file — it is sheets, agreements and passports — and the Wix site turbophuket.com has
+a text-only header (its sole uploaded media is the og:image hero photo). The one
+brand image the owner actually publishes is the avatar of his manager channel
+t.me/turbophuket («TURBOBABY manager аренда мото байки»), fetched at its full
+320×320 and installed as `assets/logo.jpg` (the bot itself has no avatar set).
+
+The cannabis-era trust block on the home screen (GACP certification, medical-use
+warning, 20+ badge) was retargeted to verifiable rental facts: legal entity and
+location, Thai helmet law, license requirement. No invented product claims
+(insurance, deposit terms) — those stay the owner's to make. The cannabis shop
+address in checkout (Koh Phangan pickup) became TurboBaby / Kamala, matching README
+and the migration 085 zone rename.
