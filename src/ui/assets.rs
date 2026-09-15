@@ -36,11 +36,13 @@ pub mod game {
 
 /// Member card images — served from /assets/member-cards/.
 ///
-/// `*-member-full.webp` are the full 1536×1024 RGBA cards used as the
-/// background of the profile screen. Cycle #15 replaced the 3 MB lossless
-/// PNG originals with lossy q=80 webp, saving ~8 MB per profile load.
-/// `*-member.webp` are small bud thumbnails (~70 KB) — distinct images,
-/// not lower-res versions of the full cards.
+/// UNREFERENCED since the loyalty ladder became wheels: the artwork behind
+/// both sets is a cannabis bud (`*-member-full.webp` was the 1536×1024 hero
+/// card on the profile screen, `*-member.webp` the ~70 KB tier thumbnail),
+/// which is the wrong identity for a bike shop. `Tier::full_card_image` and
+/// `Tier::wheel_image` in `ui/screens/profile_screen.rs` now draw a
+/// tier-coloured wheel inline instead. The files and the constants are kept
+/// until the owner signs off on the vector art.
 pub mod member_cards {
     pub const BRASS: &str = "/assets/member-cards/brass-member-full.webp";
     pub const SILVER: &str = "/assets/member-cards/silver-member-full.webp";

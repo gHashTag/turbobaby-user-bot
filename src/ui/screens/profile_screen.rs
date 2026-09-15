@@ -16,7 +16,6 @@ use crate::trios::i18n::{
 };
 use crate::ui::api::context::api_base_url;
 use crate::ui::api::http::{merge_server_cart, post_client_event};
-use crate::ui::assets;
 use crate::ui::components::bottom_nav::BottomNav;
 use crate::ui::components::skeleton::{Skeleton, SkeletonShape};
 use crate::ui::lang::{current_lang, set_app_lang};
@@ -149,25 +148,76 @@ impl Tier {
     }
     fn emoji(&self) -> &'static str {
         match self {
-            Self::Starter => "🌱",
+            Self::Starter => "🛞",
             Self::Bronze => "🥉",
             Self::Silver => "🥈",
             Self::Gold => "🥇",
         }
     }
-    fn full_card_image(&self) -> &'static str {
-        match self {
-            Self::Starter | Self::Bronze => assets::member_cards::BRASS,
-            Self::Silver => assets::member_cards::SILVER,
-            Self::Gold => assets::member_cards::GOLD,
-        }
+    /// The loyalty ladder is a set of WHEELS, drawn as vector art.
+    ///
+    /// It used to be cannabis buds — `assets/member-cards/*-member.webp` for
+    /// the strip and `*-member-full.webp` for the hero card. TurboBaby rents
+    /// and sells bikes, so the identity is a wheel; the repo ships no wheel
+    /// bitmap (`assets/` has one bike photo, `logo.jpg`, and the brand mark
+    /// `assets/brand/turbobaby-mark.svg`, neither of which is per-tier), so
+    /// the rim is drawn inline and inherits [`Tier::color`]. That keeps the
+    /// bronze/silver/gold ladder legible with no new binary assets, and costs
+    /// ~2 KB of data URI instead of a 470 KB webp per profile load.
+    ///
+    /// Base64 rather than percent-encoding: the `#` of every hex colour would
+    /// otherwise cut the URI short at a fragment, and this file already uses
+    /// the same `data:image/svg+xml;base64,` idiom for the referral QR code.
+    fn wheel_svg(body: &str) -> String {
+        format!(
+            "data:image/svg+xml;base64,{}",
+            STANDARD.encode(body.as_bytes())
+        )
     }
-    fn bud_image(&self) -> &'static str {
-        match self {
-            Self::Starter | Self::Bronze => assets::member_cards::BRONZE_WEBP,
-            Self::Silver => assets::member_cards::SILVER_WEBP,
-            Self::Gold => assets::member_cards::GOLD_WEBP,
-        }
+    /// Hero card behind the membership block — the TurboBaby mark (wheel,
+    /// speed lines, wordmark) rendered in the tier's colour.
+    fn full_card_image(&self) -> String {
+        let color = self.color();
+        Self::wheel_svg(&format!(
+            "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 480 300' width='480' height='300' role='img'>\
+             <defs><linearGradient id='tb-card' x1='0' y1='0' x2='1' y2='1'>\
+             <stop offset='0' stop-color='#1b2a4a'/><stop offset='1' stop-color='#0f0f1a'/>\
+             </linearGradient></defs>\
+             <rect width='480' height='300' fill='url(#tb-card)'/>\
+             <rect x='6' y='6' width='468' height='288' fill='none' stroke='{color}' stroke-width='4' opacity='0.55'/>\
+             <g fill='{color}'>\
+             <rect x='16' y='118' width='50' height='10' rx='5' opacity='0.35'/>\
+             <rect x='16' y='143' width='70' height='10' rx='5' opacity='0.6'/>\
+             <rect x='16' y='168' width='58' height='10' rx='5' opacity='0.35'/>\
+             </g>\
+             <g transform='translate(190,150)'>\
+             <circle r='84' fill='none' stroke='{color}' stroke-width='20' opacity='0.45'/>\
+             <circle r='60' fill='none' stroke='{color}' stroke-width='7'/>\
+             <g fill='none' stroke='{color}' stroke-width='7' stroke-linecap='round'>\
+             <path d='M-60 0 H60'/><path d='M-30 -52 L30 52'/><path d='M30 -52 L-30 52'/>\
+             </g>\
+             <circle r='17' fill='{color}'/>\
+             </g>\
+             <text x='300' y='132' font-family='Arial Black, Arial, Helvetica, sans-serif' font-size='34' font-weight='900' font-style='italic' fill='{color}'>TURBO</text>\
+             <text x='300' y='172' font-family='Arial, Helvetica, sans-serif' font-size='30' letter-spacing='6' fill='#e8e8f0'>BABY</text>\
+             <text x='300' y='208' font-family='Arial, Helvetica, sans-serif' font-size='16' letter-spacing='4' fill='#8b8b9e'>MEMBER</text>\
+             </svg>"
+        ))
+    }
+    /// Tier icon for the strip and the benefits grid — a bare rim, legible at
+    /// the 32 px the surrounding flex box gives it.
+    fn wheel_image(&self) -> String {
+        let color = self.color();
+        Self::wheel_svg(&format!(
+            "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64' width='64' height='64' role='img'>\
+             <circle cx='32' cy='32' r='27' fill='none' stroke='{color}' stroke-width='7' opacity='0.45'/>\
+             <circle cx='32' cy='32' r='20' fill='none' stroke='{color}' stroke-width='3'/>\
+             <g fill='none' stroke='{color}' stroke-width='3' stroke-linecap='round'>\
+             <path d='M12 32 H52'/><path d='M22 14.7 L42 49.3'/><path d='M42 14.7 L22 49.3'/>\
+             </g>\
+             <circle cx='32' cy='32' r='6' fill='{color}'/>\
+             </svg>"
+        ))
     }
     fn cashback(&self) -> f64 {
         match self {
@@ -619,7 +669,7 @@ pub fn ProfileScreen() -> Element {
                                 div { style: "display: flex; justify-content: center; margin-bottom: 6px; height: 32px; align-items: center;",
                                     if is_unlocked {
                                         img {
-                                            src: "{tier.bud_image()}",
+                                            src: "{tier.wheel_image()}",
                                             alt: "{tier.label(lang)}",
                                             style: "max-width: 100%; max-height: 100%; object-fit: contain; filter: drop-shadow(0 0 4px {tier.color()}80);"
                                         }
@@ -1019,7 +1069,7 @@ pub fn ProfileScreen() -> Element {
                                 ",
                                     div { style: "display: flex; justify-content: center; margin-bottom: 6px; height: 32px; align-items: center;",
                                         img {
-                                            src: "{tier.bud_image()}",
+                                            src: "{tier.wheel_image()}",
                                             alt: "{tier.label(lang)}",
                                             style: "max-width: 100%; max-height: 100%; object-fit: contain; filter: drop-shadow(0 0 4px {tier.color()}80);"
                                         }
