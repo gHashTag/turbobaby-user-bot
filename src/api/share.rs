@@ -466,7 +466,16 @@ mod tests {
     fn an_error_log_never_carries_the_bot_token() {
         // A real error, built the way one arrives: an unroutable host so the
         // request fails at connect and the URL ends up in the Debug output.
-        let token = "8366670807:AAH6YdhtqMJ0DXhSbvwKdJT2oXH979a3fOQ";
+        //
+        // SYNTHETIC, and it has to stay that way. This test was written from a
+        // real incident and the real token was pasted in with it, so a live
+        // credential for @Woody_WeedPecker_bot sat in a PUBLIC repository from
+        // 2026-08-18 to 2026-09-15 — reachable from `upstream` too, which is
+        // why rewriting history could not have recalled it. That token is now
+        // revoked. The test never reaches Telegram (it requests 127.0.0.1:1
+        // and asserts on the `Debug` string), so it only ever needed a
+        // well-formed shape: 10-digit bot id, colon, 35 characters.
+        let token = "1234567890:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
         let rt = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
