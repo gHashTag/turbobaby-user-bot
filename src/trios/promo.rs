@@ -213,8 +213,8 @@ pub fn prompt_for(subject: &Subject, lang: &str, facts: &str) -> String {
     };
 
     format!(
-        "Ты пишешь короткий пост для Telegram-канала магазина WoodyWeedPecker на \
-         острове Панган. Повод: {what}.\n\n\
+        "Ты пишешь короткий пост для Telegram-канала проката мотоциклов и \
+         скутеров TurboBaby в Камале на Пхукете. Повод: {what}.\n\n\
          Факты, которыми можно пользоваться (других у тебя нет):\n{facts}\n\n\
          Правила:\n\
          - Пиши на языке: {lang}.\n\
