@@ -690,10 +690,7 @@ pub fn CheckoutScreen() -> Element {
     let total_label = t(crate::ui::lang::current_lang(), T_TOTAL);
 
     // Единственная реальная точка самовывоза.
-    let shops = [(
-        "🏠 TurboBaby",
-        "Kamala, Phuket 83150",
-    )];
+    let shops = [("🏠 TurboBaby", "Kamala, Phuket 83150")];
 
     let stars_balance_res = {
         let init = init_data.clone();
