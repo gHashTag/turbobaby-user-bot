@@ -309,8 +309,8 @@ mod deep_link_tests {
     fn miniapp_deep_link_uses_start_not_startapp() {
         // `?startapp=` needs a Main Mini App registered in BotFather; without
         // it Telegram opened the bot's home screen instead of the shared card.
-        let url = miniapp_deep_link("Woody_WeedPecker_bot", "p_set_abc123");
-        assert_eq!(url, "https://t.me/Woody_WeedPecker_bot?start=p_set_abc123");
+        let url = miniapp_deep_link("turboagent_phuket_bot", "p_set_abc123");
+        assert_eq!(url, "https://t.me/turboagent_phuket_bot?start=p_set_abc123");
     }
 
     #[test]

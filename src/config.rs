@@ -104,13 +104,16 @@ impl Config {
         }
 
         // The backend service serves BOTH the API and the WASM frontend on the same origin.
-        // If WEB_APP_URL is empty or points to the broken legacy TMA service, fall back to the
-        // canonical backend URL so the Telegram WebApp button always opens a working page.
+        // If WEB_APP_URL is empty or points at a legacy service (the pre-fork TMA host or
+        // the woody bot — another shop's app), fall back to THIS deployment's canonical
+        // URL so the Telegram WebApp button always opens our own page. Before 2026-09-14
+        // the fallback was the woody production URL with WEB_APP_URL unset in prod, which
+        // made the TurboBaby menu button open the other shop's miniapp.
         let raw_web_app_url = std::env::var("WEB_APP_URL").unwrap_or_default();
-        let canonical_web_app_url =
-            "https://woody-weed-bot-production-370f.up.railway.app".to_string();
+        let canonical_web_app_url = "https://turbobaby-bot-production.up.railway.app".to_string();
         let web_app_url = if raw_web_app_url.trim().is_empty()
             || raw_web_app_url.contains("woody-woodpecker-tma-production")
+            || raw_web_app_url.contains("woody-weed-bot-production")
         {
             canonical_web_app_url
         } else {
@@ -126,10 +129,10 @@ impl Config {
             is_production,
             admin_ids,
             bot_username: {
-                let raw = std::env::var("BOT_USERNAME").unwrap_or("Woody_WeedPecker_bot".into());
+                let raw = std::env::var("BOT_USERNAME").unwrap_or("turboagent_phuket_bot".into());
                 let trimmed = raw.trim();
                 if trimmed.is_empty() {
-                    "Woody_WeedPecker_bot".into()
+                    "turboagent_phuket_bot".into()
                 } else {
                     trimmed.to_string()
                 }

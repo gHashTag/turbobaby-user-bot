@@ -650,7 +650,7 @@ pub fn ProfileScreen() -> Element {
 
             // QR Code Card
             {
-                let bot_user = TelegramApp::init().bot_username().unwrap_or_else(|| "Woody_WeedPecker_bot".to_string());
+                let bot_user = TelegramApp::init().bot_username().unwrap_or_else(|| "turboagent_phuket_bot".to_string());
                 let qr_value = format!("https://t.me/{bot_user}?start=ref_{referral_code}");
                 let qr_data_uri = QrCode::new(qr_value.as_bytes())
                     .ok()
@@ -709,7 +709,7 @@ pub fn ProfileScreen() -> Element {
                                 onclick: move |_| {
                                     let _ = web_sys::window().map(|w| {
                                         let _ = w.navigator().clipboard()
-                                            .write_text(&format!("🎁 Get bonus at Woody Weed!\n{}", ref_link_copy));
+                                            .write_text(&format!("🎁 Get bonus at TurboBaby!\n{}", ref_link_copy));
                                     });
                                 },
                                 "{t(lang, T_PROFILE_COPY_LINK)}"
@@ -727,7 +727,7 @@ pub fn ProfileScreen() -> Element {
                                     let share_url = format!(
                                         "https://t.me/share/url?url={}&text={}",
                                         urlencoding::encode(&ref_link_share),
-                                        urlencoding::encode("🎁 Get bonus at Woody Weed!")
+                                        urlencoding::encode("🎁 Get bonus at TurboBaby!")
                                     );
                                     let _ = web_sys::window().and_then(|w| w.open_with_url_and_target(&share_url, "_blank").ok());
                                 },
@@ -804,7 +804,7 @@ pub fn ProfileScreen() -> Element {
                     border-radius: 0; padding: 6px 8px; margin-bottom: 8px;
                 ",
                     {
-                        let bot_user2 = TelegramApp::init().bot_username().unwrap_or_else(|| "Woody_WeedPecker_bot".to_string());
+                        let bot_user2 = TelegramApp::init().bot_username().unwrap_or_else(|| "turboagent_phuket_bot".to_string());
                         rsx! {
                             span { style: "font-size: 15px; color: #39ff14; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;", "t.me/{bot_user2}?start=ref_{referral_code}" }
                         }
@@ -817,7 +817,7 @@ pub fn ProfileScreen() -> Element {
                             box-shadow: 3px 3px 0 #000;
                         ",
                         onclick: move |_| {
-                            let bot_user = TelegramApp::init().bot_username().unwrap_or_else(|| "Woody_WeedPecker_bot".to_string());
+                            let bot_user = TelegramApp::init().bot_username().unwrap_or_else(|| "turboagent_phuket_bot".to_string());
                             let _ = web_sys::window().map(|w| {
                                 let _ = w.navigator().clipboard()
                                     .write_text(&format!("https://t.me/{bot_user}?start=ref_{referral_code}"));
@@ -1093,12 +1093,12 @@ pub fn ProfileScreen() -> Element {
                 box-shadow: 4px 4px 0 #000;
             ",
                 div { style: "font-size: 13px; font-weight: 700; color: #00e5ff; text-transform: uppercase; letter-spacing: 1px; text-shadow: 2px 2px 0 #000; margin-bottom: 10px;", "{t(lang, T_PROFILE_CONTACTS)}" }
-                div { style: "font-size: 15px; margin-bottom: 2px;", "Woody Weed Pecker" }
-                div { style: "font-size: 13px; color: #8b8b9e; margin-bottom: 8px;", "Koh Phangan, Thailand" }
+                div { style: "font-size: 15px; margin-bottom: 2px;", "TurboBaby" }
+                div { style: "font-size: 13px; color: #8b8b9e; margin-bottom: 8px;", "Kamala, Phuket, Thailand" }
                 div {
                     style: "cursor: pointer; font-size: 13px; color: #00e5ff; text-decoration: underline;",
                     onclick: move |_| {
-                        let _ = web_sys::window().and_then(|w| w.open_with_url_and_target("https://www.google.com/maps/place/Woody+Weed+Pecker/@9.7124562,99.9877309,17z/data=!3m1!4b1!4m6!3m5!1s0x3054ffe9f6df4edf:0xf8735a84f5193e1a!8m2!3d9.7124562!4d99.9877309!16s%2Fg%2F11x314fym6!18m1!1e1?entry=ttu&g_ep=EgoyMDI2MDUxMy4wIKXMDSoASAFQAw%3D%3D", "_blank").ok());
+                        let _ = web_sys::window().and_then(|w| w.open_with_url_and_target("https://www.google.com/maps/search/?api=1&query=Kamala+Beach+Phuket", "_blank").ok());
                     },
                     "{t(lang, T_PROFILE_OPEN_MAP)}"
                 }

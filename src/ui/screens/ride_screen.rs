@@ -323,7 +323,7 @@ pub fn RideGame() -> Element {
                     // frame of it has been seen.
                     img {
                         src: "/assets/logo.jpg",
-                        alt: "Woody",
+                        alt: "TurboBaby",
                         style: "width:104px;height:104px;object-fit:cover;border:4px solid #39ff14;box-shadow:0 0 24px rgba(57,255,20,0.45), 4px 4px 0 #000;",
                     }
                     h1 { style: "font-size:26px;font-weight:800;color:#fff;text-shadow:3px 3px 0 rgba(0,0,0,0.4);letter-spacing:2px;margin:0;",

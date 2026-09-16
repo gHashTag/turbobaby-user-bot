@@ -915,7 +915,7 @@ fn get_ru_translation(key: Key) -> Value {
         T_GARDEN_CAT_OTHER => "Прочее",
         T_GARDEN_SHARE_CTA => "📤 Поделиться садом",
         T_GARDEN_SHARE_TITLE => "Загляни в мой сад",
-        T_GARDEN_SHARE_TEXT => "Я выращиваю скидки в Woody Weed — присоединяйся!",
+        T_GARDEN_SHARE_TEXT => "Я выращиваю скидки в TurboBaby — присоединяйся!",
         T_GARDEN_INVITE_TITLE => "Тебя пригласили в сад",
         T_GARDEN_INVITE_BODY => "Примешь приглашение? Когда ты оформишь первый заказ, ты и твой друг получите бонусные баллы.",
         T_GARDEN_INVITE_ACCEPT => "Принять",
@@ -940,7 +940,7 @@ fn get_ru_translation(key: Key) -> Value {
         T_GARDEN_LEADERBOARD_TAB_HARVEST => "🌾 Урожай",
         T_GARDEN_LEADERBOARD_YOU => "Вы",
         T_GARDEN_LEADERBOARD_RANK => "#",
-        T_GARDEN_GAME_HIGH_SCORES => "🏆 Рекорды Woody Catch",
+        T_GARDEN_GAME_HIGH_SCORES => "🏆 Рекорды TurboBaby Catch",
         T_GARDEN_GAME_SUBMIT_SCORE => "Сохранить рекорд",
         T_GARDEN_GAME_TOP_PLAYERS => "Топ игроков",
         T_GARDEN_GAME_YOUR_RANK => "Твой ранг",
@@ -964,8 +964,8 @@ fn get_ru_translation(key: Key) -> Value {
         T_CAT_ACCESSORIES => "Аксессуары",
         T_CAT_TEA => "Чай",
         // Quest
-        T_TITLE => "Woody Island Quest",
-        T_SUBTITLE => "Пройди 5 точек на Пангане",
+        T_TITLE => "TurboBaby Island Quest",
+        T_SUBTITLE => "Пройди 5 точек на Пхукете",
         T_START_BTN => "Начать квест",
         T_EXPLORE_BTN => "Обзор",
         T_CHECKPOINT_TITLE => "Чекпоинт #{0}",
@@ -982,7 +982,7 @@ fn get_ru_translation(key: Key) -> Value {
         T_NEXT_LOCATION => "Следующая точка открыта!",
         T_QUEST_COMPLETE => "Квест завершён!",
         T_REWARD_CLAIM => "Забери награду:",
-        T_REWARD => "🌿 Косячок от Woody",
+        T_REWARD => "🎁 Бонус от TurboBaby",
         T_ERROR_WRONG_ORDER => "Неправильная последовательность",
         T_ERROR_PURCHASE => "Покупка должна быть от 300+ бат",
         T_ERROR_INVALID_QR => "Недействительный QR код",
@@ -995,7 +995,7 @@ fn get_ru_translation(key: Key) -> Value {
         T_POINT_5 => "Точка 5: Триада",
         // Events calendar
         T_EVENTS_TITLE => "📅 События",
-        T_EVENTS_SUBTITLE => "Календарь мероприятий Woody",
+        T_EVENTS_SUBTITLE => "Календарь мероприятий TurboBaby",
         T_EVENTS_NO_EVENTS => "На этот день ничего не запланировано",
         T_EVENTS_DATE => "Мероприятие уже началось",
         T_EVENTS_LOCATION => "Локация",
@@ -1008,7 +1008,7 @@ fn get_ru_translation(key: Key) -> Value {
         T_EVENTS_SOLD_OUT => "Мест нет",
         T_EVENTS_ERROR => "Не удалось забронировать",
         T_EVENTS_ALREADY_BOOKED => "Уже забронировано. Проверьте Мои брони.",
-        T_EVENTS_INSUFFICIENT_STARS => "Недостаточно Stars. Заработайте в играх Woody или пополните баланс.",
+        T_EVENTS_INSUFFICIENT_STARS => "Недостаточно Stars. Заработайте в играх TurboBaby или пополните баланс.",
         T_EVENTS_REMINDER_BODY => "Напоминаем: вы забронировали мероприятие «{0}».\nНачало: {1}.\n📍 Место: {2}\nЖдём вас!",
         T_EVENTS_VIDEO => "Видео",
         T_EVENTS_GALLERY => "Галерея",
@@ -1021,7 +1021,7 @@ fn get_ru_translation(key: Key) -> Value {
         T_EVENTS_WEEKDAY_SUN => "вс",
         // Screen titles
         T_HOME_TITLE => "Главная",
-        T_HOME_SUBTITLE => "Премиум каннабис на острове Панган",
+        T_HOME_SUBTITLE => "Аренда байков на Пхукете · Камала",
         T_MENU_TITLE => "🌿 Меню",
         T_MENU_DESC => "Наши премиальные сорта",
         T_SETS_TITLE => "🎁 Наборы",
@@ -1093,14 +1093,14 @@ fn get_ru_translation(key: Key) -> Value {
         T_FULFILLMENT_DINE_IN => "В заведении",
         T_FULFILLMENT_TAKEAWAY => "С собой",
         T_SHARE => "Поделиться",
-        T_SHARE_MESSAGE => "Посмотри {0} в Woody Weed 👇",
+        T_SHARE_MESSAGE => "Посмотри {0} в TurboBaby 👇",
         T_REFERRAL_TITLE => "🎁 Реферальная программа",
         T_REFERRAL_SUBTITLE => "Приглашай друзей — получай бонусы",
         T_REFERRAL_LINK_LABEL => "ВАША РЕФЕРАЛЬНАЯ ССЫЛКА",
         T_REFERRAL_COPY => "📋 Копировать",
         T_REFERRAL_COPIED => "✅ Скопировано!",
         T_REFERRAL_SHARE => "📤 Поделиться",
-        T_REFERRAL_SHARE_TEXT => "🪵 Присоединяйся к Woody Weed и получай бонусы!",
+        T_REFERRAL_SHARE_TEXT => "🏍 Присоединяйся к TurboBaby и получай бонусы!",
         T_REFERRAL_STAT_INVITED => "Приглашено",
         T_REFERRAL_STAT_CONFIRMED => "Подтверждено",
         T_REFERRAL_STAT_PENDING => "В ожидании",
@@ -1125,10 +1125,10 @@ fn get_ru_translation(key: Key) -> Value {
         T_LAB_CERT_CBD => "CBD",
         T_LAB_CERT_TESTED => "Тестировано",
         T_LAB_CERT_EMPTY => "Нет сертификатов",
-        T_TRUST_GACP => "✅ GACP-сертифицированная продукция",
-        T_TRUST_MEDICAL => "🏥 Только медицинское применение. Перед употреблением проконсультируйтесь с врачом.",
+        T_TRUST_GACP => "✅ TURBOBABY CO., LTD. · Камала, Пхукет",
+        T_TRUST_MEDICAL => "🪖 Шлем обязателен по закону Таиланда — выдаём с байком.",
         T_TRUST_SUPPORT => "💬 Поддержка",
-        T_TRUST_AGE => "🔞 20+",
+        T_TRUST_AGE => "🪪 Нужны права",
         T_REORDER => "🔄 Повторить заказ",
         T_SEARCH_PLACEHOLDER => "🔍 Поиск по названию",
         T_BROADCAST => "Рассылка",
@@ -1242,7 +1242,7 @@ fn get_ru_translation(key: Key) -> Value {
         T_SOMM_EXP_MEDIUM => "🌿 Средний",
         T_SOMM_EXP_EXPERT => "🔥 Эксперт",
         // Game strings
-        T_GAME_TITLE => "WOODY SHOP",
+        T_GAME_TITLE => "TurboBaby Games",
         T_GAME_TAB_SHOP => "🛒 Магазин",
         T_GAME_TAB_FARM => "🌱 Ферма",
         T_GAME_TAB_DJ => "🎧 DJ",
@@ -1270,7 +1270,7 @@ fn get_ru_translation(key: Key) -> Value {
         T_GAME_FLOW => "🚪 Поток",
         T_GAME_RESET => "🔄 Сброс",
         T_GAME_CONFIRM_RESET => "Сбросить весь прогресс? Это нельзя отменить.",
-        T_GAME_SHOP_TITLE => "WOODY SHOP",
+        T_GAME_SHOP_TITLE => "TurboBaby Shop",
         T_GAME_ORDER => "👋 Заказ",
         T_GAME_SERVE => "🤲 Подать",
         T_GAME_CLEAN => "🧽 Убрать",
@@ -1658,7 +1658,7 @@ fn get_en_translation(key: Key) -> Value {
         T_GARDEN_CAT_OTHER => "Other",
         T_GARDEN_SHARE_CTA => "📤 Share garden",
         T_GARDEN_SHARE_TITLE => "Check out my garden",
-        T_GARDEN_SHARE_TEXT => "I'm growing discounts in Woody Weed — join me!",
+        T_GARDEN_SHARE_TEXT => "I'm growing discounts in TurboBaby — join me!",
         T_GARDEN_INVITE_TITLE => "You've been invited to the garden",
         T_GARDEN_INVITE_BODY => "Accept the invite? When you place your first order, you and your friend will both earn bonus points.",
         T_GARDEN_INVITE_ACCEPT => "Accept",
@@ -1683,7 +1683,7 @@ fn get_en_translation(key: Key) -> Value {
         T_GARDEN_LEADERBOARD_TAB_HARVEST => "🌾 Harvest",
         T_GARDEN_LEADERBOARD_YOU => "You",
         T_GARDEN_LEADERBOARD_RANK => "#",
-        T_GARDEN_GAME_HIGH_SCORES => "🏆 Woody Catch high scores",
+        T_GARDEN_GAME_HIGH_SCORES => "🏆 TurboBaby Catch high scores",
         T_GARDEN_GAME_SUBMIT_SCORE => "Save score",
         T_GARDEN_GAME_TOP_PLAYERS => "Top players",
         T_GARDEN_GAME_YOUR_RANK => "Your rank",
@@ -1707,8 +1707,8 @@ fn get_en_translation(key: Key) -> Value {
         T_CAT_ACCESSORIES => "Accessories",
         T_CAT_TEA => "Tea",
         // Quest
-        T_TITLE => "Woody Island Quest",
-        T_SUBTITLE => "Complete 5 locations on Koh Phangan",
+        T_TITLE => "TurboBaby Island Quest",
+        T_SUBTITLE => "Complete 5 locations on Phuket",
         T_START_BTN => "Start Quest",
         T_EXPLORE_BTN => "Explore",
         T_CHECKPOINT_TITLE => "Checkpoint #{0}",
@@ -1725,7 +1725,7 @@ fn get_en_translation(key: Key) -> Value {
         T_NEXT_LOCATION => "Next location unlocked!",
         T_QUEST_COMPLETE => "Quest Complete!",
         T_REWARD_CLAIM => "Claim your reward:",
-        T_REWARD => "🌿 Pre-roll from Woody",
+        T_REWARD => "🎁 Bonus from TurboBaby",
         T_ERROR_WRONG_ORDER => "Wrong location in sequence",
         T_ERROR_PURCHASE => "Purchase must be 300+ THB",
         T_ERROR_INVALID_QR => "Invalid QR code",
@@ -1738,7 +1738,7 @@ fn get_en_translation(key: Key) -> Value {
         T_POINT_5 => "Point 5: Triad",
         // Events calendar
         T_EVENTS_TITLE => "📅 Events",
-        T_EVENTS_SUBTITLE => "Woody events calendar",
+        T_EVENTS_SUBTITLE => "TurboBaby events calendar",
         T_EVENTS_NO_EVENTS => "Nothing planned for this day",
         T_EVENTS_DATE => "Event already started",
         T_EVENTS_LOCATION => "Location",
@@ -1751,7 +1751,7 @@ fn get_en_translation(key: Key) -> Value {
         T_EVENTS_SOLD_OUT => "Sold out",
         T_EVENTS_ERROR => "Booking failed",
         T_EVENTS_ALREADY_BOOKED => "Already booked. Check My bookings.",
-        T_EVENTS_INSUFFICIENT_STARS => "Not enough Stars. Earn them in Woody games or top up your balance.",
+        T_EVENTS_INSUFFICIENT_STARS => "Not enough Stars. Earn them in TurboBaby games or top up your balance.",
         T_EVENTS_REMINDER_BODY => "Reminder: you booked «{0}».\nStarts at: {1}.\n📍 Location: {2}\nSee you there!",
         T_EVENTS_VIDEO => "Video",
         T_EVENTS_GALLERY => "Gallery",
@@ -1764,7 +1764,7 @@ fn get_en_translation(key: Key) -> Value {
         T_EVENTS_WEEKDAY_SUN => "Sun",
         // Screen titles
         T_HOME_TITLE => "Home",
-        T_HOME_SUBTITLE => "Premium Cannabis on Koh Phangan",
+        T_HOME_SUBTITLE => "Bike rental in Phuket · Kamala",
         T_MENU_TITLE => "🌿 Menu",
         T_MENU_DESC => "Our premium selection",
         T_SETS_TITLE => "🎁 Sets",
@@ -1836,14 +1836,14 @@ fn get_en_translation(key: Key) -> Value {
         T_FULFILLMENT_DINE_IN => "Dine in",
         T_FULFILLMENT_TAKEAWAY => "Takeaway",
         T_SHARE => "Share",
-        T_SHARE_MESSAGE => "Check out {0} in Woody Weed 👇",
+        T_SHARE_MESSAGE => "Check out {0} in TurboBaby 👇",
         T_REFERRAL_TITLE => "🎁 Referral Program",
         T_REFERRAL_SUBTITLE => "Invite friends — earn bonuses",
         T_REFERRAL_LINK_LABEL => "YOUR REFERRAL LINK",
         T_REFERRAL_COPY => "📋 Copy",
         T_REFERRAL_COPIED => "✅ Copied!",
         T_REFERRAL_SHARE => "📤 Share",
-        T_REFERRAL_SHARE_TEXT => "🪵 Join Woody Weed and get bonuses!",
+        T_REFERRAL_SHARE_TEXT => "🏍 Join TurboBaby and get bonuses!",
         T_REFERRAL_STAT_INVITED => "Invited",
         T_REFERRAL_STAT_CONFIRMED => "Confirmed",
         T_REFERRAL_STAT_PENDING => "Pending",
@@ -1868,10 +1868,10 @@ fn get_en_translation(key: Key) -> Value {
         T_LAB_CERT_CBD => "CBD",
         T_LAB_CERT_TESTED => "Tested",
         T_LAB_CERT_EMPTY => "No certificates",
-        T_TRUST_GACP => "✅ GACP-certified products",
-        T_TRUST_MEDICAL => "🏥 Medical use only. Consult a physician before use.",
+        T_TRUST_GACP => "✅ TURBOBABY CO., LTD. · Kamala, Phuket",
+        T_TRUST_MEDICAL => "🪖 Helmets are required by Thai law — provided with every bike.",
         T_TRUST_SUPPORT => "💬 Support",
-        T_TRUST_AGE => "🔞 20+",
+        T_TRUST_AGE => "🪪 License required",
         T_REORDER => "🔄 Reorder",
         T_SEARCH_PLACEHOLDER => "🔍 Search by name",
         T_BROADCAST => "Broadcast",
@@ -1985,7 +1985,7 @@ fn get_en_translation(key: Key) -> Value {
         T_SOMM_EXP_MEDIUM => "🌿 Intermediate",
         T_SOMM_EXP_EXPERT => "🔥 Expert",
         // Game strings
-        T_GAME_TITLE => "Woody Games",
+        T_GAME_TITLE => "TurboBaby Games",
         T_GAME_TAB_SHOP => "🛒 Shop",
         T_GAME_TAB_FARM => "🌱 Farm",
         T_GAME_TAB_DJ => "🎧 DJ",
@@ -2013,7 +2013,7 @@ fn get_en_translation(key: Key) -> Value {
         T_GAME_FLOW => "🚪 Flow",
         T_GAME_RESET => "🔄 Reset",
         T_GAME_CONFIRM_RESET => "Reset all progress? This cannot be undone.",
-        T_GAME_SHOP_TITLE => "WOODY SHOP",
+        T_GAME_SHOP_TITLE => "TurboBaby Shop",
         T_GAME_ORDER => "👋 Order",
         T_GAME_SERVE => "🤲 Serve",
         T_GAME_CLEAN => "🧽 Clean",
@@ -2034,7 +2034,7 @@ fn get_en_translation(key: Key) -> Value {
         T_GAME_LOG_NEW_CUSTOMER => "New customer arrived",
         T_GAME_LOG_FARM_GREW => "Farm grew a step",
         T_GAME_LOG_RESET => "Progress reset",
-        T_GAME_LOG_MOVED_TO_TABLE => "Woody moved to table {0}",
+        T_GAME_LOG_MOVED_TO_TABLE => "TurboBaby moved to table {0}",
         T_GAME_LOG_TAKING_ORDER => "Taking order at table {0}",
         T_GAME_LOG_SERVING => "Serving at table {0}",
         T_GAME_LOG_CLEANING => "Cleaning table {0}",
@@ -2665,16 +2665,16 @@ mod tests {
 
     #[test]
     fn test_translation_basic() {
-        assert_eq!(t(Lang::Russian, T_TITLE), "Woody Island Quest");
-        assert_eq!(t(Lang::English, T_TITLE), "Woody Island Quest");
+        assert_eq!(t(Lang::Russian, T_TITLE), "TurboBaby Island Quest");
+        assert_eq!(t(Lang::English, T_TITLE), "TurboBaby Island Quest");
     }
 
     #[test]
     fn test_translation_different() {
-        assert_eq!(t(Lang::Russian, T_SUBTITLE), "Пройди 5 точек на Пангане");
+        assert_eq!(t(Lang::Russian, T_SUBTITLE), "Пройди 5 точек на Пхукете");
         assert_eq!(
             t(Lang::English, T_SUBTITLE),
-            "Complete 5 locations on Koh Phangan"
+            "Complete 5 locations on Phuket"
         );
     }
 
@@ -2701,7 +2701,7 @@ mod tests {
         assert!(!ru.translations.is_empty());
         assert_eq!(
             ru.translations.get(T_SUBTITLE),
-            Some(&"Пройди 5 точек на Пангане".to_string())
+            Some(&"Пройди 5 точек на Пхукете".to_string())
         );
     }
 

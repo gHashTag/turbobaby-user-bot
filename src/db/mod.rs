@@ -375,6 +375,10 @@ const MIGRATIONS: &[(&str, &str)] = &[
         "084_bikes_images.sql",
         include_str!("../../migrations/084_bikes_images.sql"),
     ),
+    (
+        "085_unpublish_woody_catalog.sql",
+        include_str!("../../migrations/085_unpublish_woody_catalog.sql"),
+    ),
 ];
 
 /// The last migration that shipped before the bike domain, and therefore the last
@@ -689,10 +693,7 @@ impl Database {
                 "SELECT table_name, column_name FROM information_schema.columns \
                  WHERE table_schema = 'public' \
                    AND table_name::text = ANY($1)",
-                [Value::Array(
-                    ArrayType::String,
-                    Some(Box::new(tables)),
-                )],
+                [Value::Array(ArrayType::String, Some(Box::new(tables)))],
             ))
             .await
         {
