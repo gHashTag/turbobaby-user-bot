@@ -245,39 +245,25 @@ struct RentalTermsResponse {
 //
 // Every price, deposit, monthly rate and sale price in the catalog and in the
 // bike detail screen goes through `money_thb`. Nothing else formats money.
+//
+// It used to be defined here *and*, character for character, in
+// `components::bike_card` — two functions, each documented as "the one money
+// renderer", each telling the reader to call the other instead of writing a
+// second copy. That is the restated-list defect this repo keeps finding, and
+// `#7` asks for "a single rendering helper" in as many words. There is now one
+// definition, and it lives in the component layer: a component must not depend
+// on a screen, so the arrow has to point that way.
+//
+// These are deliberately kept as named re-exports rather than deleted. Some
+// twenty call sites across the catalog, the bike detail screen and the admin
+// read-only views spell them `money_thb` / `finite_money` / `MONEY_DASH`, and
+// renaming all of them would be churn that buys nothing — the defect was two
+// *implementations*, not two names for one.
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// What an absent money value looks like: an em dash. Never `0`, never an
-/// average, never a "from" price (D9).
-pub const MONEY_DASH: &str = "—";
-
-/// Keeps only a money value this shop is willing to put on screen.
-///
-/// `None`, NaN, infinity and negatives all mean the same thing — the source
-/// publishes nothing here — and so does `0.0`: a zero rental rate or deposit
-/// is not a tariff, it is the `NOT NULL DEFAULT 0` / `try_get_warn!` failure
-/// mode D9 names arriving on the wire. All of them become `None` here, and
-/// every caller renders `None` as a dash and says a manager quotes the price.
-///
-/// This is also the guard in front of `format_baht`, whose `sanitize_money`
-/// would otherwise turn NaN into a confident `฿0`.
-pub fn finite_money(value: Option<f64>) -> Option<f64> {
-    match value {
-        Some(v) if v.is_finite() && v > 0.0 => Some(v),
-        _ => None,
-    }
-}
-
-/// The one money renderer: a published number, or [`MONEY_DASH`].
-///
-/// No call site is allowed to reach for `unwrap_or(0.0)` or
-/// `unwrap_or_default()` instead — see the module docs.
-pub fn money_thb(value: Option<f64>) -> String {
-    match finite_money(value) {
-        Some(v) => crate::trios::pricing::format_baht(v),
-        None => MONEY_DASH.to_string(),
-    }
-}
+pub use crate::ui::components::bike_card::{
+    published as finite_money, thb_or_dash as money_thb, DASH as MONEY_DASH,
+};
 
 /// Keeps only a discount that is a fraction of 1 (0.25 = 25%).
 ///

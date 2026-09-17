@@ -76,6 +76,22 @@ struct OrderStatusResp {
 
 /// Loop #12: convert a backend order item into a local [`CartItem`] so it can
 /// be merged into the server-side cart with current DB prices.
+///
+/// A line the shop cannot price is dropped, never priced at zero.
+///
+/// `published()` is the same filter the catalog renders through: `None`, NaN,
+/// infinity, negatives and `0.0` all mean "this value was never published"
+/// (D9). It used to be `unwrap_or(0.0)` here, which turned a missing price
+/// into a confident `฿0` — a number nobody measured, presented as fact, and
+/// the exact failure `#7` exists to prevent. The happy path re-prices against
+/// the server anyway; the invented zero only ever showed up in the offline
+/// fallback cart, which is the worst place for it.
+///
+/// Dropping is what the caller already does with any line it cannot identify
+/// — every call site is a `filter_map`. Bike lines never reach this code at
+/// all: `src/api/orders.rs:845` clears `unit_price` on them on purpose (a
+/// rental's money lives in its `deal`), and none of the four id branches
+/// below matches a bike, so a reorder has never included one.
 fn api_order_item_to_cart_item(item: &ApiOrderItem) -> Option<CartItem> {
     let (id, name, item_type, price_hint) = if let Some(ref sid) = item.strain_id {
         (
@@ -88,14 +104,14 @@ fn api_order_item_to_cart_item(item: &ApiOrderItem) -> Option<CartItem> {
             // same thing without naming the previous shop's goods.
             item.strain_name.clone().unwrap_or_else(|| "Товар".into()),
             CartItemType::Strain,
-            item.unit_price.unwrap_or(0.0),
+            crate::ui::components::bike_card::published(item.unit_price)?,
         )
     } else if let Some(ref set_id) = item.set_id {
         (
             set_id.clone(),
             item.set_name.clone().unwrap_or_else(|| "Set".into()),
             CartItemType::Set,
-            item.unit_price.unwrap_or(0.0),
+            crate::ui::components::bike_card::published(item.unit_price)?,
         )
     } else if let Some(ref aid) = item.accessory_id {
         (
@@ -104,7 +120,7 @@ fn api_order_item_to_cart_item(item: &ApiOrderItem) -> Option<CartItem> {
                 .clone()
                 .unwrap_or_else(|| "Accessory".into()),
             CartItemType::Accessory,
-            item.unit_price.unwrap_or(0.0),
+            crate::ui::components::bike_card::published(item.unit_price)?,
         )
     } else {
         let tid = item.tea_id.as_ref()?;
@@ -112,7 +128,7 @@ fn api_order_item_to_cart_item(item: &ApiOrderItem) -> Option<CartItem> {
             tid.clone(),
             item.tea_name.clone().unwrap_or_else(|| "Drink".into()),
             CartItemType::Tea,
-            item.unit_price.unwrap_or(0.0),
+            crate::ui::components::bike_card::published(item.unit_price)?,
         )
     };
     Some(CartItem {
@@ -133,6 +149,19 @@ fn item_name(item: &ApiOrderItem) -> String {
         .or_else(|| item.tea_name.clone())
         .or_else(|| item.set_name.clone())
         .unwrap_or_else(|| "Unknown".to_string())
+}
+
+/// What one order line costs in total, or a dash when the shop never priced it.
+///
+/// Goes through the same `published` filter as the catalog (D9): `None`, NaN,
+/// infinity, negatives and `0.0` all mean "never published". A bike line is
+/// deliberately in that set — `src/api/orders.rs:845` clears `unit_price` on
+/// bikes because a rental's money lives in its `deal`, so multiplying a day
+/// rate by a unit count here would print a figure the door never quoted.
+fn line_total(item: &ApiOrderItem) -> String {
+    let total = crate::ui::components::bike_card::published(item.unit_price)
+        .map(|p| p * item.quantity.max(0.0));
+    crate::ui::components::bike_card::thb_or_dash(total)
 }
 
 fn is_terminal_status(status: &str) -> bool {
@@ -250,7 +279,12 @@ fn OrderDetailCard(
                     div { style: "display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 4px;",
                         span { style: "color: #e8e8e8;", "{item_name(item)} x{item.quantity as i32}" }
                         span { style: "color: #8b8b9e;",
-                            "{item.unit_price.map(|p| crate::trios::pricing::format_baht(p * item.quantity.max(0.0))).unwrap_or_default()}"
+                            // An absent line price renders as a dash, not as an
+                            // empty cell. `unwrap_or_default()` here produced
+                            // `""`, which reads on screen as "this line is
+                            // free" — the same invented-zero D9 forbids, just
+                            // spelled with no characters at all.
+                            "{line_total(item)}"
                         }
                     }
                 }
