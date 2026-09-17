@@ -9,12 +9,17 @@ use dioxus::prelude::*;
 /// An em dash, not `0`, not an average, not a "from" price (D9).
 pub const DASH: &str = "—";
 
-/// The one money renderer for bike cards: a published number, or a dash.
+/// The one money renderer in the UI: a published number, or a dash.
 ///
-/// This is the dash-for-absent helper referenced by the rebrand brief and it
-/// lives here, in the component module. Anything else that needs it — the
-/// catalog screen included — should call this rather than write a second copy,
-/// so there is a single place where "absent" is defined.
+/// This is the single rendering helper `#7` asks for. It is reached from the
+/// catalog, the bike detail screen and the admin read-only views under the
+/// names `money_thb` / `finite_money` / `MONEY_DASH`, which are re-exports of
+/// these three items from `screens::catalog_screen` — that module used to
+/// carry a second, identical implementation, and both copies carried a doc
+/// comment calling itself the only one.
+///
+/// It lives here, in the component layer, because a component must not depend
+/// on a screen.
 ///
 /// Two properties matter and are deliberate:
 ///

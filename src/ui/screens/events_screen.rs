@@ -250,17 +250,20 @@ fn EventCard(props: EventCardProps) -> Element {
     let avail = ev
         .max_seats
         .map(|cap| cap.saturating_sub(ev.seats_taken as i32));
-    let has_baht = ev.price_baht.is_some_and(|p| p > 0.0);
-    let has_stars = ev.price_stars.is_some_and(|s| s > 0);
-    let is_free = !has_baht && !has_stars;
-    let price_label = if has_stars {
-        Some(format!("{} ⭐", ev.price_stars.unwrap_or(0)))
-    } else if has_baht {
-        Some(crate::trios::pricing::format_baht(
-            ev.price_baht.unwrap_or(0.0),
-        ))
-    } else {
-        None
+    // Bind the published price once instead of testing it and then unwrapping
+    // it with a zero fallback three lines later. The old shape was
+    // `has_stars = price_stars.is_some_and(|s| s > 0)` followed by
+    // `price_stars.unwrap_or(0)` — safe only because a sibling boolean
+    // computed above happened to agree, and a `฿0` / `0 ⭐` badge the moment
+    // the two stopped agreeing. A free event is `None` here, and `is_free`
+    // renders the free label; it is never priced at zero (D9, `#7`).
+    let baht = ev.price_baht.filter(|p| p.is_finite() && *p > 0.0);
+    let stars = ev.price_stars.filter(|s| *s > 0);
+    let is_free = baht.is_none() && stars.is_none();
+    let price_label = match (stars, baht) {
+        (Some(s), _) => Some(format!("{s} ⭐")),
+        (None, Some(b)) => Some(crate::trios::pricing::format_baht(b)),
+        (None, None) => None,
     };
     let lang = crate::ui::lang::current_lang();
     let time_line = start_label
@@ -379,7 +382,10 @@ fn EventBookingModal(props: EventBookingModalProps) -> Element {
 
     let starts = parse_event_start(&ev.starts_at);
     let has_started = starts.is_some_and(|dt| Utc::now() >= dt.with_timezone(&Utc));
-    let has_stars_price = ev.price_stars.is_some_and(|s| s > 0);
+    // Same rule as the card above: bind the published price, do not test it
+    // and re-unwrap it with a zero. `stars_price` is `Some` only when the
+    // event really charges stars.
+    let stars_price = ev.price_stars.filter(|s| *s > 0);
     let can_book = props.telegram_id.is_some() && !ev.is_sold_out() && !has_started;
 
     let date_label = starts.map(|s| s.format("%d %b %Y • %H:%M").to_string());
@@ -396,18 +402,18 @@ fn EventBookingModal(props: EventBookingModalProps) -> Element {
     });
 
     let price_badge = {
-        let has_baht = ev.price_baht.is_some_and(|p| p > 0.0);
-        if has_stars_price {
+        let baht_price = ev.price_baht.filter(|p| p.is_finite() && *p > 0.0);
+        if let Some(stars) = stars_price {
             let price_label = t(lang, T_EVENTS_PRICE_STARS).to_string();
-            let price_str = ev.price_stars.unwrap_or(0).to_string();
+            let price_str = stars.to_string();
             rsx! {
                 div { style: "font-size:12px;color:#39ff14;background:rgba(57,255,20,0.1);padding:6px 10px;border:2px solid #39ff14;",
                     "{price_label}: {price_str} ⭐"
                 }
             }
-        } else if has_baht {
+        } else if let Some(baht) = baht_price {
             let price_label = t(lang, T_EVENTS_PRICE).to_string();
-            let price_str = crate::trios::pricing::format_baht(ev.price_baht.unwrap_or(0.0));
+            let price_str = crate::trios::pricing::format_baht(baht);
             rsx! {
                 div { style: "font-size:12px;color:#39ff14;background:rgba(57,255,20,0.1);padding:6px 10px;border:2px solid #39ff14;",
                     "{price_label}: {price_str}"
@@ -435,13 +441,9 @@ fn EventBookingModal(props: EventBookingModalProps) -> Element {
         started_label
     } else if props.telegram_id.is_none() {
         telegram_required
-    } else if has_stars_price {
+    } else if let Some(stars) = stars_price {
         let seats = seats_to_book().max(1);
-        format!(
-            "{} ({} ⭐)",
-            book_label,
-            ev.price_stars.unwrap_or(0) * seats as i64
-        )
+        format!("{} ({} ⭐)", book_label, stars * seats as i64)
     } else {
         book_label
     };

@@ -39,20 +39,35 @@ struct ReorderOrderItem {
     unit_price: Option<f64>,
 }
 
+/// A line the shop cannot price is dropped, never priced at zero.
+///
+/// `published()` is the same filter the catalog renders through: `None`, NaN,
+/// infinity, negatives and `0.0` all mean "this value was never published"
+/// (D9). It used to be `unwrap_or(0.0)` here, which turned a missing price
+/// into a confident `฿0` — a number nobody measured, presented as fact, and
+/// the exact failure `#7` exists to prevent. The happy path re-prices against
+/// the server anyway; the invented zero only ever showed up in the offline
+/// fallback cart, which is the worst place for it.
+///
+/// Dropping is what the caller already does with any line it cannot identify
+/// — every call site is a `filter_map`. Bike lines never reach this code at
+/// all: `src/api/orders.rs:845` clears `unit_price` on them on purpose (a
+/// rental's money lives in its `deal`), and none of the four id branches
+/// below matches a bike, so a reorder has never included one.
 fn reorder_item_to_cart_item(item: &ReorderOrderItem) -> Option<CartItem> {
     let (id, name, item_type, price_hint) = if let Some(ref sid) = item.strain_id {
         (
             sid.clone(),
-            item.strain_name.clone().unwrap_or_else(|| "Strain".into()),
+            item.strain_name.clone().unwrap_or_else(|| "Товар".into()),
             CartItemType::Strain,
-            item.unit_price.unwrap_or(0.0),
+            crate::ui::components::bike_card::published(item.unit_price)?,
         )
     } else if let Some(ref set_id) = item.set_id {
         (
             set_id.clone(),
             item.set_name.clone().unwrap_or_else(|| "Set".into()),
             CartItemType::Set,
-            item.unit_price.unwrap_or(0.0),
+            crate::ui::components::bike_card::published(item.unit_price)?,
         )
     } else if let Some(ref aid) = item.accessory_id {
         (
@@ -61,7 +76,7 @@ fn reorder_item_to_cart_item(item: &ReorderOrderItem) -> Option<CartItem> {
                 .clone()
                 .unwrap_or_else(|| "Accessory".into()),
             CartItemType::Accessory,
-            item.unit_price.unwrap_or(0.0),
+            crate::ui::components::bike_card::published(item.unit_price)?,
         )
     } else {
         let tid = item.tea_id.as_ref()?;
@@ -69,7 +84,7 @@ fn reorder_item_to_cart_item(item: &ReorderOrderItem) -> Option<CartItem> {
             tid.clone(),
             item.tea_name.clone().unwrap_or_else(|| "Drink".into()),
             CartItemType::Tea,
-            item.unit_price.unwrap_or(0.0),
+            crate::ui::components::bike_card::published(item.unit_price)?,
         )
     };
     Some(CartItem {
