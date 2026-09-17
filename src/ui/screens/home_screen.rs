@@ -1,40 +1,17 @@
 use crate::trios::i18n::{
-    t, tf, T_ADD_TO_CART, T_HOME_NO_SOTD, T_HOME_REORDER_CTA, T_HOME_REORDER_LAST,
-    T_HOME_REORDER_STATUS, T_HOME_SOTD, T_HOME_SUBTITLE, T_HOME_WATCH_VIDEO, T_MENU_OFF,
-    T_MENU_THC, T_TRUST_AGE, T_TRUST_GACP, T_TRUST_MEDICAL, T_TRUST_SUPPORT,
+    t, tf, T_HOME_REORDER_CTA, T_HOME_REORDER_LAST, T_HOME_REORDER_STATUS, T_HOME_SUBTITLE,
+    T_TRUST_AGE, T_TRUST_GACP, T_TRUST_MEDICAL, T_TRUST_SUPPORT,
 };
 use crate::ui::api::context::api_base_url;
 use crate::ui::api::http::{fetch_text_authed, merge_server_cart, post_client_event};
 use crate::ui::assets;
 use crate::ui::components::bottom_nav::BottomNav;
-use crate::ui::components::skeleton::{Skeleton, SkeletonShape};
-use crate::ui::components::video_modal::VideoModal;
 use crate::ui::routes::Route;
 use crate::ui::share::{PendingOrder, PendingReorder, SharedProduct};
 use crate::ui::state::{Cart, CartItem, CartItemType};
 use crate::ui::telegram::{use_telegram_id, use_telegram_init_data};
 use dioxus::prelude::*;
 use serde::Deserialize;
-
-#[derive(Debug, Clone, Deserialize, PartialEq)]
-struct SotdStrain {
-    id: String,
-    name: String,
-    #[serde(default)]
-    name_en: Option<String>,
-    category: Option<String>,
-    thc_percent: Option<f64>,
-    price_per_gram: f64,
-    image_url: Option<String>,
-    #[serde(default)]
-    video_url: Option<String>,
-    strain_of_day_discount: f64,
-}
-
-#[derive(Debug, Deserialize)]
-struct SotdResponse {
-    strains: Vec<SotdStrain>,
-}
 
 /// Loop #15: lightweight order-detail DTO used by the proactive reorder deep-link.
 #[derive(Debug, Deserialize)]
@@ -162,20 +139,6 @@ fn status_label_key(status: &str) -> crate::trios::i18n::Key {
     }
 }
 
-fn category_emoji(cat: &str) -> &'static str {
-    match cat {
-        "Sativa" => "☀️",
-        "Indica" => "🌙",
-        "Hybrid" => "⚖️",
-        _ => "🌿",
-    }
-}
-
-fn format_price(price: f64) -> String {
-    // Single source of truth (was identical in menu/cart, narrowing to i32).
-    crate::trios::pricing::format_baht(price)
-}
-
 #[component]
 pub fn HomeScreen() -> Element {
     let cart = use_context::<Signal<Cart>>();
@@ -264,7 +227,8 @@ pub fn HomeScreen() -> Element {
     let home_subtitle = t(crate::ui::lang::current_lang(), T_HOME_SUBTITLE).to_string();
     // Подписи плиток каталога убраны вместе с сеткой CATEGORIES: все шесть вели
     // на снятые с витрины экраны (см. комментарий ниже на месте самой сетки).
-    let add_to_cart_label = t(crate::ui::lang::current_lang(), T_ADD_TO_CART).to_string();
+    // `add_to_cart_label` ушла следом за карточкой «сорта дня»: на главной
+    // больше нет ни одной кнопки, кладущей товар в корзину напрямую.
 
     // Secret admin entry: 5 rapid taps on the logo navigates to /admin.
     // Easier than remembering /admin URL or relying on bot command menu.
@@ -283,21 +247,6 @@ pub fn HomeScreen() -> Element {
             nav_for_logo.push(Route::Admin {});
         }
     };
-
-    // Packs carousel (first block). Promo packs lead; tap → Sets section.
-    let sotd_resource = use_resource(|| async move {
-        let base = api_base_url();
-        let url = format!("{}/api/strains/strain-of-day", base);
-        crate::ui::api::local_client::LocalClient::new()
-            .get(&url)
-            .send()
-            .await
-            .map_err(|e| e.to_string())?
-            .json::<SotdResponse>()
-            .await
-            .map(|r| r.strains)
-            .map_err(|e| e.to_string())
-    });
 
     let telegram_id = use_telegram_id();
     let init_data = use_telegram_init_data();
@@ -424,59 +373,19 @@ pub fn HomeScreen() -> Element {
             // каждом открытии экрана — ещё до того, как API успевал ответить
             // пустотой.
 
-            {
-                match &*sotd_resource.read() {
-                    Some(Ok(strains)) if !strains.is_empty() => {
-                        // Carousel: up to 3 featured strains, native horizontal
-                        // scroll-snap (one swipe = one slide), dot indicators.
-                        let list = strains.clone();
-                        let count = list.len();
-                        rsx! {
-                            div { style: "display:flex;overflow-x:auto;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;",
-                                for s in list.iter() {
-                                    div { style: "flex:0 0 100%;scroll-snap-align:center;box-sizing:border-box;",
-                                        { render_sotd_card(s.clone(), cart, add_to_cart_label.clone()) }
-                                    }
-                                }
-                            }
-                            if count > 1 {
-                                div { style: "display:flex;justify-content:center;gap:6px;margin:0 0 14px;",
-                                    for _i in 0..count {
-                                        span { style: "width:8px;height:8px;border-radius:50%;background:#ff6b35;opacity:0.55;box-shadow:1px 1px 0 #000;" }
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    Some(Ok(_)) => {
-                        let no_sotd = t(crate::ui::lang::current_lang(), T_HOME_NO_SOTD).to_string();
-                        rsx! {
-                            div { style: "
-                                margin:0 16px 16px;
-                                background:#16213e;border:4px solid #2a2a4a;
-                                box-shadow:4px 4px 0 #000;
-                                padding:20px;text-align:center;
-                            ",
-                                p { style: "font-size:20px;margin-bottom:8px;", "🌟" }
-                                p { style: "font-size:15px;color:#888;", "{no_sotd}" }
-                            }
-                        }
-                    },
-                    Some(Err(_)) | None => {
-                        let sotd_hdr = t(crate::ui::lang::current_lang(), T_HOME_SOTD).to_string();
-                        rsx! {
-                            div { style: "padding:0 16px 8px;",
-                                h2 { style: "font-size:13px;font-weight:700;color:#ffe600;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;text-shadow:2px 2px 0 #000;",
-                                    "{sotd_hdr}"
-                                }
-                            }
-                            div { style: "margin:0 16px 16px;",
-                                Skeleton { shape: SkeletonShape::Sotd }
-                            }
-                        }
-                    },
-                }
-            }
+            // Блок «Сорт дня» убран целиком, а не перенацелен.
+            //
+            // Он читал `/api/strains/strain-of-day` — маршрут, которого в
+            // роутере больше нет: миграция 083 удаляет каннабис-каталог, и
+            // сервер отдаёт на этот путь index.html SPA-фолбэка. Разбор JSON
+            // падал, ветка `Some(Err(_))` рисовала заголовок «⭐ Сорт дня» и
+            // скелетон — и так на первом экране у каждого посетителя, всегда.
+            // Это и был последний живой каннабис-текст в продукте (#2, #26).
+            //
+            // Мотоциклетного аналога у «сорта дня» нет: витрина — это флот, а
+            // не одна позиция со скидкой дня. Когда владелец захочет «байк
+            // недели», это будет новый блок поверх `/api/bikes`, а не
+            // переименование этого.
 
             // Блок «КАТЕГОРИИ» (сетка 3x2) убран: из шести плиток жила одна.
             // Menu вела на каталог байков, а Sets, Sommelier, Accessories, Tea
@@ -523,117 +432,6 @@ pub fn HomeScreen() -> Element {
             }
 
             BottomNav { cart_count }
-        }
-    }
-}
-
-/// One "Strain of the Day" carousel slide: the featured-strain card, with an
-/// optional ▶ button that plays the strain's video (the owner's "card OR video").
-/// Name is localized; add-to-cart mirrors the menu card.
-fn render_sotd_card(s: SotdStrain, mut cart: Signal<Cart>, add_to_cart_label: String) -> Element {
-    let discount = if s.strain_of_day_discount.is_finite() {
-        s.strain_of_day_discount.max(0.0)
-    } else {
-        0.0
-    };
-    let price = if s.price_per_gram.is_finite() {
-        s.price_per_gram.max(0.0)
-    } else {
-        0.0
-    };
-    let cat = s.category.as_deref().unwrap_or("Hybrid");
-    let emoji = category_emoji(cat);
-    let has_discount = discount > 0.0;
-    let lang = crate::ui::lang::current_lang();
-    let discount_label = if has_discount {
-        tf(lang, T_MENU_OFF, &[(discount as i32).to_string()])
-    } else {
-        t(lang, T_HOME_SOTD).to_string()
-    };
-    let unit_price = if has_discount {
-        (price * (1.0 - discount / 100.0)).max(0.0)
-    } else {
-        price
-    };
-    let display_price = format_price(unit_price);
-    let thc_str = s
-        .thc_percent
-        .map(|t| tf(lang, T_MENU_THC, &[(t as i32).to_string()]))
-        .unwrap_or_default();
-    let badge_label = format!("{} {}", emoji, cat);
-    let s_name = crate::ui::lang::localized(&s.name, s.name_en.as_deref());
-    let s_id = s.id.clone();
-    let video_url = s.video_url.clone().unwrap_or_default();
-    let has_video = !video_url.is_empty()
-        && (video_url.starts_with("http://")
-            || video_url.starts_with("https://")
-            || (video_url.starts_with("/") && !video_url.starts_with("//")));
-    let mut show_video = use_signal(|| false);
-
-    rsx! {
-        div { style: "
-            margin:0 16px 16px;
-            background:linear-gradient(135deg,#ff6b35,#f7931e);
-            border:4px solid #ff6b35;
-            box-shadow:0 4px 15px rgba(255,107,53,0.4),4px 4px 0 #000;
-            padding:16px;position:relative;overflow:hidden;
-        ",
-            div { style: "display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;position:relative;",
-                h2 { style: "font-size:13px;font-weight:700;color:#fff;text-transform:uppercase;letter-spacing:1px;text-shadow:2px 2px 0 #000;",
-                    {t(lang, T_HOME_SOTD)}
-                }
-                span { style: "
-                    font-size:13px;font-weight:700;
-                    background:#ffe600;color:#000;
-                    padding:4px 8px;
-                    box-shadow:2px 2px 0 #000;
-                ", "{discount_label}" }
-            }
-            div { style: "font-size:17px;font-weight:700;margin-bottom:4px;position:relative;text-shadow:2px 2px 0 #000;", "{s_name}" }
-            div { style: "font-size:13px;color:#fff;margin-bottom:8px;position:relative;",
-                span { style: "color:#fff;border:2px solid #fff;padding:2px 8px;font-size:13px;margin-right:8px;", "{badge_label}" }
-                span { "{thc_str}" }
-            }
-            div { style: "display:flex;justify-content:space-between;align-items:center;position:relative;",
-                span { style: "font-size:22px;font-weight:800;color:#fff;text-shadow:2px 2px 0 #000;", "{display_price}" }
-                div { style: "display:flex;gap:8px;align-items:center;",
-                    if has_video {
-                        button {
-                            style: "width:44px;height:44px;border-radius:50%;background:rgba(0,0,0,0.45);border:2px solid #fff;color:#fff;font-size:16px;display:flex;align-items:center;justify-content:center;cursor:pointer;",
-                            "aria-label": t(lang, T_HOME_WATCH_VIDEO),
-                            onclick: move |_| show_video.set(true),
-                            "▶️"
-                        }
-                    }
-                    button {
-                        style: "
-                            font-size:14px;font-weight:700;
-                            background:#39ff14;color:#000;
-                            border:4px solid #2d9e0f;
-                            padding:12px 20px;
-                            box-shadow:3px 3px 0 #000;
-                            cursor:pointer;
-                        ",
-                        onclick: move |_| {
-                            let mut c = cart.write();
-                            c.add_item(CartItem {
-                                id: s_id.clone(),
-                                name: s_name.clone(),
-                                price: unit_price,
-                                quantity: 1,
-                                image_url: None,
-                                item_type: CartItemType::Strain,
-                                fulfillment: None,
-                            });
-                            crate::ui::telegram::TelegramApp::init().haptic_notification(crate::ui::telegram::HapticNotification::Success);
-                        },
-                        "{add_to_cart_label} 🛒"
-                    }
-                }
-            }
-            if show_video() {
-                VideoModal { url: video_url.clone(), on_close: move |_| show_video.set(false) }
-            }
         }
     }
 }
