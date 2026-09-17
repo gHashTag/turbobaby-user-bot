@@ -8,8 +8,7 @@ use crate::ui::screens::{
     ARHuntScreen, AccessoriesScreen, AdminScreen, CartScreen, CatalogScreen, CheckoutScreen,
     EventDetailScreen, EventsScreen, GameScreen, HomeScreen, LocationQuestScreen, MenuScreen,
     MyBookingsScreen, OrderDetailScreen, OrdersScreen, ProfileScreen, QuestScreen, ReferralsScreen,
-    RideScreen, SetsScreen, SommelierScreen, SuccessScreen, TeaScreen, TechTreeScreen,
-    TreasureHuntScreen,
+    RideScreen, SuccessScreen, TeaScreen, TechTreeScreen, TreasureHuntScreen,
 };
 use crate::ui::share::{PendingOrder, PendingReorder, SharedProduct};
 use dioxus::prelude::*;
@@ -126,21 +125,32 @@ fn Menu() -> Element {
     }
 }
 
+/// `/sets` survives as a compatibility alias, exactly as `/sommelier` does.
+///
+/// The screen behind it is deleted. `/api/sets` answers `{"sets":[]}` here —
+/// the combos were the previous shop's, and no TurboBaby set has ever been
+/// created — so the screen could only render an empty list. The *path* stays
+/// because months of `startapp=sets` deep links sit in customers' Telegram
+/// histories forever and a router miss is worse than the catalog.
 #[component]
 fn Sets() -> Element {
     rsx! {
-        LazyScreen {
-            SetsScreen {}
-        }
+        CatalogScreen {}
     }
 }
 
+/// `/sommelier` survives as a compatibility alias, exactly as `/skate` does.
+///
+/// The screen behind it is deleted — it recommended cannabis strains from a
+/// retired endpoint (#2). The *path* stays because the bot has been sending
+/// `startapp=sommelier` deep links for months and they sit in customers'
+/// Telegram histories forever; dropping the route would turn every one of them
+/// into a router miss. It lands on the catalog, which is where somebody asking
+/// "what should I take" now belongs.
 #[component]
 fn Sommelier() -> Element {
     rsx! {
-        LazyScreen {
-            SommelierScreen {}
-        }
+        CatalogScreen {}
     }
 }
 

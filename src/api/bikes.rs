@@ -3,7 +3,7 @@
 //!
 //! | route | serves |
 //! | --- | --- |
-//! | `GET /api/bikes` | offered families; `?available_only=true` narrows to families with at least one `available` unit |
+//! | `GET /api/bikes` | offered families; filtered by `?available_only=true`, `?class=`, `?min_cc=`, `?max_cc=` — see [`CatalogFilter`] |
 //! | `GET /api/bikes/:key` | one family plus its unit rollup, recorded colours and model years |
 //! | `GET /api/rental-terms` | published class discounts + term discount bands |
 //!
@@ -130,6 +130,37 @@ pub(crate) fn routes() -> Router<AppState> {
             "/admin/bikes/:id/offered",
             axum::routing::put(admin_set_offered),
         )
+        // ── the physical fleet ──────────────────────────────────────
+        //
+        // Same story one level down, and found by the gate rather than by
+        // reading: the Units and Service tabs of the same screen have been
+        // calling `/api/bike-units*` and `/api/admin/bike-service-records*`
+        // since they were written, and neither path has ever been
+        // registered anywhere. These did not even 405 — an unmatched path
+        // falls through to the SPA fallback, which answers 200 with
+        // `index.html`, so the list parse failed silently and every write
+        // "succeeded" until a reload. `tests/ui_endpoints_exist.rs` is the
+        // instrument; it is what stops the fourth instance.
+        .route(
+            "/admin/bike-units",
+            get(admin_list_units).post(admin_create_unit),
+        )
+        .route(
+            "/admin/bike-units/:id",
+            axum::routing::put(admin_update_unit).delete(admin_delete_unit),
+        )
+        .route(
+            "/admin/bike-units/:id/status",
+            axum::routing::put(admin_set_unit_status),
+        )
+        .route(
+            "/admin/bike-service-records",
+            get(admin_list_service_records).post(admin_create_service_record),
+        )
+        .route(
+            "/admin/bike-service-records/:id",
+            axum::routing::delete(admin_delete_service_record),
+        )
     // There is deliberately no `/admin/bikes/:id/for-sale` twin of the
     // `offered` toggle. `offered` has its own route because it is flipped
     // from the list row, where no form is open and a full-body PUT would
@@ -221,6 +252,149 @@ pub(crate) async fn ask_door(keys: &[&str]) -> DoorAnswers {
     DoorAnswers::default()
 }
 
+// ── catalog filters ──────────────────────────────────────────────
+
+/// The class and displacement filters `#8` names in its title.
+///
+/// They were missing until now, and the way they were missing is the point:
+/// `list_bikes` read `available_only` and nothing else, and Axum hands unknown
+/// query keys through without complaint. So `GET /api/bikes?class=motorcycle`
+/// answered **200 with all thirteen families** — a caller that trusted the
+/// parameter got the unfiltered catalog and no way to tell.
+///
+/// That is why an unrecognised *value* is a `400` here rather than a default.
+/// `?class=motorcyle` is a typo, and the only honest answers to a typo are the
+/// error or the whole catalog-with-a-warning; silently returning everything
+/// under a 200 is the one answer that lies. Unknown *keys* are still ignored,
+/// which is ordinary HTTP manners — the asymmetry is deliberate: a key the
+/// server does not know may belong to someone else, but a value it does not
+/// know was meant for it.
+#[derive(Debug, Default, PartialEq)]
+struct CatalogFilter {
+    /// `scooter` | `motorcycle`, validated against [`BIKE_CLASSES`].
+    ///
+    /// Deliberately the *same* constant the admin write path checks, not a
+    /// fresh copy of the two words: that constant is already pinned to the
+    /// migration's CHECK constraint by
+    /// `the_accepted_classes_are_the_ones_the_column_allows`, so reusing it
+    /// buys this filter the same guard for free. A second copy would be the
+    /// restated-list defect, and it would drift the first time a third class
+    /// is added.
+    class: Option<String>,
+    /// Inclusive bounds on `bikes.displacement_cc`.
+    min_cc: Option<i32>,
+    max_cc: Option<i32>,
+}
+
+impl CatalogFilter {
+    /// Parse, or name what was wrong with the request.
+    ///
+    /// The error strings are returned to the caller, so they say which
+    /// parameter and which value — a bare `400` on a catalog read tells a
+    /// client nothing it can act on.
+    fn parse(q: &HashMap<String, String>) -> Result<Self, String> {
+        let class = match q.get("class") {
+            None => None,
+            Some(raw) => {
+                let lowered = raw.to_ascii_lowercase();
+                if !BIKE_CLASSES.contains(&lowered.as_str()) {
+                    return Err(format!(
+                        "class must be one of {BIKE_CLASSES:?}, got {raw:?}"
+                    ));
+                }
+                Some(lowered)
+            }
+        };
+
+        let cc = |key: &str| -> Result<Option<i32>, String> {
+            match q.get(key) {
+                None => Ok(None),
+                Some(raw) => raw
+                    .parse::<i32>()
+                    .map_err(|_| format!("{key} must be a whole number of cc, got {raw:?}"))
+                    .and_then(|v| {
+                        if v < 0 {
+                            Err(format!("{key} must not be negative, got {v}"))
+                        } else {
+                            Ok(Some(v))
+                        }
+                    }),
+            }
+        };
+        let min_cc = cc("min_cc")?;
+        let max_cc = cc("max_cc")?;
+
+        // An inverted range is a request that can only ever answer nothing.
+        // Returning an empty list would be defensible; saying so is better,
+        // because the empty list is indistinguishable from "we rent no bikes
+        // in that band", which is a different and much worse thing to tell a
+        // customer.
+        if let (Some(lo), Some(hi)) = (min_cc, max_cc) {
+            if lo > hi {
+                return Err(format!(
+                    "min_cc ({lo}) is above max_cc ({hi}); no displacement can satisfy both"
+                ));
+            }
+        }
+
+        Ok(Self {
+            class,
+            min_cc,
+            max_cc,
+        })
+    }
+
+    fn is_empty(&self) -> bool {
+        *self == Self::default()
+    }
+
+    /// Takes the two fields rather than the whole `bikes` row on purpose: it
+    /// makes the predicate testable without constructing a SeaORM `Model` with
+    /// twenty-odd columns and two timestamps, none of which it reads. A test
+    /// that needs a fixture that large tends not to get written.
+    fn matches(&self, class: &str, displacement_cc: i32) -> bool {
+        if let Some(ref want) = self.class {
+            if !class.eq_ignore_ascii_case(want) {
+                return false;
+            }
+        }
+        if let Some(lo) = self.min_cc {
+            if displacement_cc < lo {
+                return false;
+            }
+        }
+        if let Some(hi) = self.max_cc {
+            if displacement_cc > hi {
+                return false;
+            }
+        }
+        true
+    }
+
+    /// The part of the ETag cache key this filter owns.
+    ///
+    /// The comment on `cache_key` below warns that a filtered catalog must not
+    /// flap the unfiltered one's ETag. That warning was written when there was
+    /// exactly one filter and two possible keys; with three more it has to be
+    /// derived rather than spelled out, or the next filter added silently
+    /// serves one selection's body under another's ETag.
+    fn cache_suffix(&self) -> String {
+        if self.is_empty() {
+            return String::new();
+        }
+        format!(
+            "|class={}|min={}|max={}",
+            self.class.as_deref().unwrap_or("*"),
+            self.min_cc
+                .map(|v| v.to_string())
+                .unwrap_or_else(|| "*".into()),
+            self.max_cc
+                .map(|v| v.to_string())
+                .unwrap_or_else(|| "*".into()),
+        )
+    }
+}
+
 // ── handlers ─────────────────────────────────────────────────────
 
 /// `GET /api/bikes` — the offered families, in catalog order.
@@ -242,6 +416,25 @@ async fn list_bikes(
 ) -> Result<axum::response::Response, StatusCode> {
     let available_only = query_flag(&q, "available_only");
 
+    // Parsed before the database is touched: a malformed request should cost
+    // no query. The error is carried in the body rather than as a bare
+    // `StatusCode`, because "400" alone on a catalog read tells a client
+    // nothing it can fix.
+    let filter = match CatalogFilter::parse(&q) {
+        Ok(f) => f,
+        Err(reason) => {
+            tracing::debug!("list_bikes: rejecting query: {reason}");
+            let mut response = axum::response::Response::new(axum::body::Body::from(
+                json!({ "error": "bad_request", "detail": reason }).to_string(),
+            ));
+            response
+                .headers_mut()
+                .insert("content-type", HeaderValue::from_static("application/json"));
+            *response.status_mut() = StatusCode::BAD_REQUEST;
+            return Ok(response);
+        }
+    };
+
     // `{e:#}` rather than the `{e}` used elsewhere in `api::*`: `db::bikes`
     // attaches a `.context()` to every query, and plain Display prints only
     // that context — "list_offered_families query" — throwing away the DbErr
@@ -252,6 +445,15 @@ async fn list_bikes(
             tracing::error!("list_bikes: {e:#}");
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
+    // Applied here rather than pushed into the SQL: the offered catalog is
+    // thirteen rows, so the filter costs nothing in memory, and keeping it out
+    // of `list_offered_families` leaves exactly one place that decides what
+    // "offered" means. A `WHERE class = …` bolted onto that query would be the
+    // second.
+    let listings: Vec<_> = listings
+        .into_iter()
+        .filter(|l| filter.matches(&l.bike.class, l.bike.displacement_cc))
+        .collect();
     // One read of the discount ladder for the whole page, not one per card.
     let discounts = list_class_discounts(&state.db.orm).await.map_err(|e| {
         tracing::error!("list_bikes(class_discounts): {e:#}");
@@ -284,11 +486,16 @@ async fn list_bikes(
     // ETag; a cached body serves a stale door price for up to the `max-age`
     // below. #25 does not specify which of those is wanted, so the behaviour
     // here is left exactly as it is rather than a policy being picked quietly.
-    let cache_key = if available_only {
-        "bikes_available"
-    } else {
-        "bikes"
-    };
+    let cache_key = format!(
+        "{}{}",
+        if available_only {
+            "bikes_available"
+        } else {
+            "bikes"
+        },
+        filter.cache_suffix()
+    );
+    let cache_key = cache_key.as_str();
     let (changed, etag) = state.cache.has_changed(cache_key, &body).await;
     if !changed {
         if let Some(if_none_match) = headers.get("if-none-match") {
@@ -1134,12 +1341,511 @@ async fn admin_delete_bike(
     Ok(Json(json!({ "ok": true })))
 }
 
+// ── the physical fleet: units and service records ────────────────
+//
+// The same defect as the family routes above, found the same way and left
+// behind when they were fixed: the admin screen's Units tab and Service tab
+// have been issuing GET/POST/PUT/DELETE against `/api/bike-units` and
+// `/api/admin/bike-service-records` since they were written, and no route has
+// ever answered either path. They do not even 405 — an unmatched path falls
+// through to the SPA fallback, which returns 200 and `index.html`, so the
+// screens' `serde_json::from_str` quietly failed and the list simply rendered
+// empty. Every write was optimistic-first, so a unit appeared in the table,
+// the haptic buzzed success, and a reload showed it had never existed.
+//
+// `tests/ui_endpoints_exist.rs` is what turned that up, and is what stops the
+// third instance.
+//
+// The paths are `/admin/*` for the same reason the family routes are: a
+// physical machine is not public. The catalog publishes counts derived from
+// `bike_units` (`rollup_units`) and nothing else — not codes, not colours per
+// machine, not kilometres — and an endpoint that lists the rows themselves
+// must not be reachable without the admin gate.
+
+/// The write shape for one physical machine, shared by create and update.
+///
+/// `id`, `created_at` and `updated_at` are deliberately absent: the first is a
+/// path parameter or a fresh UUID, the other two are the server's to stamp.
+#[derive(Debug, serde::Deserialize)]
+struct UnitWriteRequest {
+    bike_id: String,
+    unit_code: String,
+    #[serde(default)]
+    model_year: Option<i32>,
+    #[serde(default)]
+    color: Option<String>,
+    #[serde(default)]
+    km_since_purchase: Option<i32>,
+    status: String,
+}
+
+/// Validate a unit write, returning the owner's sentence rather than a code.
+///
+/// The three checks mirror constraints `078_bike_units.sql` already enforces.
+/// They are restated here not to replace the database but to answer in Russian:
+/// a CHECK violation arrives as a 500 and a log line the owner cannot read,
+/// and "статус ... неизвестен" is the difference between a fixable mistake and
+/// a screen that seems broken.
+fn validate_unit_write(req: &UnitWriteRequest) -> Result<(), String> {
+    let code = req.unit_code.trim();
+    if code.is_empty() {
+        return Err("Код байка обязателен".to_string());
+    }
+    if code.chars().count() > 64 {
+        return Err("Код байка длиннее 64 символов".to_string());
+    }
+    if req.bike_id.trim().is_empty() {
+        return Err("Выберите модель".to_string());
+    }
+    if !UNIT_STATUSES.contains(&req.status.as_str()) {
+        return Err(format!(
+            "Статус «{}» неизвестен — допустимы: {}",
+            req.status,
+            UNIT_STATUSES.join(", ")
+        ));
+    }
+    // 078's own CHECK. A new machine legitimately reads 0, so 0 passes and
+    // NULL still means "not recorded" (D9) — neither is rewritten into the
+    // other here.
+    if req.km_since_purchase.is_some_and(|km| km < 0) {
+        return Err("Пробег с покупки не может быть отрицательным".to_string());
+    }
+    Ok(())
+}
+
+/// A duplicate `unit_code` is an ordinary mistake — the owner adding the same
+/// machine twice — and deserves a sentence, not a 500.
+fn unit_write_error(e: &sea_orm::DbErr, code: &str, context: &'static str) -> (StatusCode, String) {
+    let text = e.to_string();
+    if text.contains("duplicate key") || text.contains("unique constraint") {
+        return (
+            StatusCode::CONFLICT,
+            format!("Байк с кодом «{code}» уже есть"),
+        );
+    }
+    tracing::error!("{context}: {e}");
+    (StatusCode::INTERNAL_SERVER_ERROR, String::new())
+}
+
+/// `GET /api/admin/bike-units` — every physical machine, retired ones included.
+///
+/// Unlike the catalog's rollup this does not hide `retired` rows: the owner's
+/// reason for opening this tab is usually to look at exactly those.
+async fn admin_list_units(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+) -> Result<Json<Value>, (StatusCode, String)> {
+    check_admin(&headers, &state).map_err(|s| (s, String::new()))?;
+
+    use crate::db::entities::bike_unit::{Column as UnitCol, Entity as UnitEntity};
+    use sea_orm::{EntityTrait, QueryOrder};
+    let units = UnitEntity::find()
+        .order_by_asc(UnitCol::UnitCode)
+        .all(&state.db.orm)
+        .await
+        .map_err(|e| {
+            tracing::error!("admin_list_units: {e:#}");
+            (StatusCode::INTERNAL_SERVER_ERROR, String::new())
+        })?;
+
+    // Built by hand rather than by serializing the entity, so that adding a
+    // column to `bike_units` cannot publish it to a screen by accident — which
+    // is the shape D14 cares about most on this table.
+    let units: Vec<Value> = units
+        .into_iter()
+        .map(|u| {
+            json!({
+                "id": u.id,
+                "bike_id": u.bike_id,
+                "unit_code": u.unit_code,
+                "model_year": u.model_year,
+                "color": u.color,
+                "km_since_purchase": u.km_since_purchase,
+                "status": u.status,
+            })
+        })
+        .collect();
+    Ok(Json(json!({ "units": units })))
+}
+
+/// `POST /api/admin/bike-units` — add one physical machine.
+async fn admin_create_unit(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    Json(req): Json<UnitWriteRequest>,
+) -> Result<Json<Value>, (StatusCode, String)> {
+    check_admin(&headers, &state).map_err(|s| (s, String::new()))?;
+    validate_unit_write(&req).map_err(|m| (StatusCode::BAD_REQUEST, m))?;
+
+    use crate::db::entities::bike_unit::{ActiveModel, Entity as UnitEntity};
+    use sea_orm::{ActiveValue::Set, EntityTrait};
+
+    let id = uuid::Uuid::new_v4().to_string();
+    let now = chrono::Utc::now().into();
+    let code = req.unit_code.trim().to_string();
+    let model = ActiveModel {
+        id: Set(id.clone()),
+        bike_id: Set(req.bike_id.trim().to_string()),
+        unit_code: Set(code.clone()),
+        model_year: Set(req.model_year),
+        color: Set(req.color),
+        km_since_purchase: Set(req.km_since_purchase),
+        status: Set(req.status),
+        created_at: Set(now),
+        updated_at: Set(now),
+    };
+    UnitEntity::insert(model)
+        .exec(&state.db.orm)
+        .await
+        .map_err(|e| {
+            // The FK to `bikes(id)` fires here when the screen's family picker
+            // holds a family somebody deleted in another tab.
+            if e.to_string().contains("foreign key") {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    "Модель не найдена — обновите страницу".to_string(),
+                );
+            }
+            unit_write_error(&e, &code, "admin_create_unit")
+        })?;
+    tracing::info!(unit_id = %id, unit_code = %code, "admin: unit created");
+    Ok(Json(json!({ "id": id })))
+}
+
+/// `PUT /api/admin/bike-units/:id` — replace one machine's editable fields.
+async fn admin_update_unit(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(req): Json<UnitWriteRequest>,
+) -> Result<Json<Value>, (StatusCode, String)> {
+    check_admin(&headers, &state).map_err(|s| (s, String::new()))?;
+    validate_unit_write(&req).map_err(|m| (StatusCode::BAD_REQUEST, m))?;
+
+    use crate::db::entities::bike_unit::{ActiveModel, Entity as UnitEntity};
+    use sea_orm::{ActiveValue::Set, EntityTrait};
+
+    let existing = UnitEntity::find_by_id(id.clone())
+        .one(&state.db.orm)
+        .await
+        .map_err(|e| {
+            tracing::error!("admin_update_unit(find): {e}");
+            (StatusCode::INTERNAL_SERVER_ERROR, String::new())
+        })?
+        .ok_or((StatusCode::NOT_FOUND, "Байк не найден".to_string()))?;
+
+    let code = req.unit_code.trim().to_string();
+    let mut model: ActiveModel = existing.into();
+    model.bike_id = Set(req.bike_id.trim().to_string());
+    model.unit_code = Set(code.clone());
+    model.model_year = Set(req.model_year);
+    model.color = Set(req.color);
+    model.km_since_purchase = Set(req.km_since_purchase);
+    model.status = Set(req.status);
+    model.updated_at = Set(chrono::Utc::now().into());
+    UnitEntity::update(model)
+        .exec(&state.db.orm)
+        .await
+        .map_err(|e| unit_write_error(&e, &code, "admin_update_unit"))?;
+    tracing::info!(unit_id = %id, unit_code = %code, "admin: unit updated");
+    Ok(Json(json!({ "ok": true })))
+}
+
+/// `PUT /api/admin/bike-units/:id/status` — move one machine between
+/// available / rented / service / retired.
+///
+/// Its own route for the reason `admin_set_offered` has one: this is the edit
+/// made from the list row, where no form is open, and a full-body PUT used as a
+/// one-field toggle is how a stale card clobbers a colour or a kilometre count
+/// somebody else just fixed.
+async fn admin_set_unit_status(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(body): Json<Value>,
+) -> Result<Json<Value>, (StatusCode, String)> {
+    check_admin(&headers, &state).map_err(|s| (s, String::new()))?;
+
+    let status = body
+        .get("status")
+        .and_then(Value::as_str)
+        .ok_or((
+            StatusCode::BAD_REQUEST,
+            "Поле status обязательно".to_string(),
+        ))?
+        .to_string();
+    if !UNIT_STATUSES.contains(&status.as_str()) {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            format!(
+                "Статус «{status}» неизвестен — допустимы: {}",
+                UNIT_STATUSES.join(", ")
+            ),
+        ));
+    }
+
+    use crate::db::entities::bike_unit::{ActiveModel, Entity as UnitEntity};
+    use sea_orm::{ActiveValue::Set, EntityTrait};
+
+    let existing = UnitEntity::find_by_id(id.clone())
+        .one(&state.db.orm)
+        .await
+        .map_err(|e| {
+            tracing::error!("admin_set_unit_status(find): {e}");
+            (StatusCode::INTERNAL_SERVER_ERROR, String::new())
+        })?
+        .ok_or((StatusCode::NOT_FOUND, "Байк не найден".to_string()))?;
+
+    let code = existing.unit_code.clone();
+    let mut model: ActiveModel = existing.into();
+    model.status = Set(status.clone());
+    model.updated_at = Set(chrono::Utc::now().into());
+    UnitEntity::update(model)
+        .exec(&state.db.orm)
+        .await
+        .map_err(|e| {
+            tracing::error!("admin_set_unit_status: {e}");
+            (StatusCode::INTERNAL_SERVER_ERROR, String::new())
+        })?;
+    tracing::info!(unit_id = %id, unit_code = %code, %status, "admin: unit status set");
+    Ok(Json(json!({ "ok": true })))
+}
+
+/// `DELETE /api/admin/bike-units/:id` — remove one physical machine.
+///
+/// The FK from `bike_service_records` is `ON DELETE CASCADE`, so this also
+/// destroys every record of work done to that machine. Unlike a family, a unit
+/// has no reversible "stop renting it" flag to offer instead — `retired` is
+/// that, and the sentence below says so, because the owner reaching for the bin
+/// icon on a sold machine almost always wants `retired` and not this.
+async fn admin_delete_unit(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<Value>, (StatusCode, String)> {
+    check_admin(&headers, &state).map_err(|s| (s, String::new()))?;
+
+    use crate::db::entities::bike_service_record::{Column as ServiceCol, Entity as ServiceEntity};
+    use crate::db::entities::bike_unit::Entity as UnitEntity;
+    use sea_orm::{ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter};
+
+    let records = ServiceEntity::find()
+        .filter(ServiceCol::BikeUnitId.eq(id.clone()))
+        .count(&state.db.orm)
+        .await
+        .map_err(|e| {
+            tracing::error!("admin_delete_unit(count records): {e:#}");
+            (StatusCode::INTERNAL_SERVER_ERROR, String::new())
+        })?;
+    if records > 0 {
+        return Err((
+            StatusCode::CONFLICT,
+            format!(
+                "У байка {records} записей обслуживания — удаление сотрёт и их. \
+                 Если байк продан или списан, поставьте статус «Выведен»."
+            ),
+        ));
+    }
+
+    let res = UnitEntity::delete_by_id(id.clone())
+        .exec(&state.db.orm)
+        .await
+        .map_err(|e| {
+            tracing::error!("admin_delete_unit: {e}");
+            (StatusCode::INTERNAL_SERVER_ERROR, String::new())
+        })?;
+    if res.rows_affected == 0 {
+        return Err((StatusCode::NOT_FOUND, "Байк не найден".to_string()));
+    }
+    tracing::info!(unit_id = %id, "admin: unit deleted");
+    Ok(Json(json!({ "ok": true })))
+}
+
+/// The write shape for one service line.
+#[derive(Debug, serde::Deserialize)]
+struct ServiceWriteRequest {
+    bike_unit_id: String,
+    service_type: String,
+    #[serde(default)]
+    current_km: Option<i32>,
+    #[serde(default)]
+    last_service_km: Option<i32>,
+    #[serde(default)]
+    interval_km: Option<i32>,
+    /// The ops sheet keeps this as its own column rather than deriving it from
+    /// `last_service_km + interval_km`, and so does the screen. Nothing here
+    /// computes it: a derived number the owner did not type would silently
+    /// disagree with the sheet he is copying from.
+    #[serde(default)]
+    next_km: Option<i32>,
+    status: String,
+}
+
+/// `ok` | `due` | `overdue`, as `080_bike_service_records.sql` documents and the
+/// admin screen's dropdown offers.
+///
+/// Unlike `bike_units.status` this is NOT a database CHECK — 080 leaves the
+/// column free TEXT so the ops vocabulary can grow without a migration. The
+/// validation therefore lives only here, and it is worth having: the screen
+/// colours rows by these three words, and a fourth would render as no colour
+/// at all with nothing to explain why.
+const SERVICE_STATUSES: [&str; 3] = ["ok", "due", "overdue"];
+
+fn validate_service_write(req: &ServiceWriteRequest) -> Result<(), String> {
+    if req.bike_unit_id.trim().is_empty() {
+        return Err("Выберите байк".to_string());
+    }
+    let kind = req.service_type.trim();
+    if kind.is_empty() {
+        return Err("Вид обслуживания обязателен".to_string());
+    }
+    if kind.chars().count() > 64 {
+        return Err("Вид обслуживания длиннее 64 символов".to_string());
+    }
+    if !SERVICE_STATUSES.contains(&req.status.as_str()) {
+        return Err(format!(
+            "Статус «{}» неизвестен — допустимы: {}",
+            req.status,
+            SERVICE_STATUSES.join(", ")
+        ));
+    }
+    for (label, km) in [
+        ("Текущий пробег", req.current_km),
+        ("Пробег прошлого ТО", req.last_service_km),
+        ("Интервал", req.interval_km),
+        ("Следующее ТО", req.next_km),
+    ] {
+        if km.is_some_and(|v| v < 0) {
+            return Err(format!("{label} не может быть отрицательным"));
+        }
+    }
+    Ok(())
+}
+
+/// `GET /api/admin/bike-service-records` — the whole service log, newest first.
+///
+/// **ADMIN ONLY (D6).** No catalog surface may read this: units read `overdue`
+/// today, and a public "serviced" badge the shop cannot keep accurate is
+/// precisely the number the data-honesty rule forbids.
+async fn admin_list_service_records(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+) -> Result<Json<Value>, (StatusCode, String)> {
+    check_admin(&headers, &state).map_err(|s| (s, String::new()))?;
+
+    use crate::db::entities::bike_service_record::{Column as ServiceCol, Entity as ServiceEntity};
+    use sea_orm::{EntityTrait, QueryOrder};
+    let records = ServiceEntity::find()
+        .order_by_desc(ServiceCol::RecordedAt)
+        .all(&state.db.orm)
+        .await
+        .map_err(|e| {
+            tracing::error!("admin_list_service_records: {e:#}");
+            (StatusCode::INTERNAL_SERVER_ERROR, String::new())
+        })?;
+
+    let records: Vec<Value> = records
+        .into_iter()
+        .map(|r| {
+            json!({
+                "id": r.id,
+                "bike_unit_id": r.bike_unit_id,
+                "service_type": r.service_type,
+                "current_km": r.current_km,
+                "last_service_km": r.last_service_km,
+                "interval_km": r.interval_km,
+                "next_km": r.next_km,
+                "status": r.status,
+                "recorded_at": r.recorded_at.to_rfc3339(),
+            })
+        })
+        .collect();
+    Ok(Json(json!({ "records": records })))
+}
+
+/// `POST /api/admin/bike-service-records` — log one piece of work.
+///
+/// Returns `recorded_at` as well as `id`: the screen inserts its row
+/// optimistically with no timestamp and patches both from this response, so
+/// the stamp the list sorts by is the server's, not the phone's clock.
+async fn admin_create_service_record(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    Json(req): Json<ServiceWriteRequest>,
+) -> Result<Json<Value>, (StatusCode, String)> {
+    check_admin(&headers, &state).map_err(|s| (s, String::new()))?;
+    validate_service_write(&req).map_err(|m| (StatusCode::BAD_REQUEST, m))?;
+
+    use crate::db::entities::bike_service_record::{ActiveModel, Entity as ServiceEntity};
+    use sea_orm::{ActiveValue::Set, EntityTrait};
+
+    let id = uuid::Uuid::new_v4().to_string();
+    let recorded_at: chrono::DateTime<chrono::FixedOffset> = chrono::Utc::now().into();
+    let model = ActiveModel {
+        id: Set(id.clone()),
+        bike_unit_id: Set(req.bike_unit_id.trim().to_string()),
+        service_type: Set(req.service_type.trim().to_string()),
+        current_km: Set(req.current_km),
+        last_service_km: Set(req.last_service_km),
+        interval_km: Set(req.interval_km),
+        next_km: Set(req.next_km),
+        status: Set(req.status),
+        recorded_at: Set(recorded_at),
+    };
+    ServiceEntity::insert(model)
+        .exec(&state.db.orm)
+        .await
+        .map_err(|e| {
+            if e.to_string().contains("foreign key") {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    "Байк не найден — обновите страницу".to_string(),
+                );
+            }
+            tracing::error!("admin_create_service_record: {e}");
+            (StatusCode::INTERNAL_SERVER_ERROR, String::new())
+        })?;
+    tracing::info!(record_id = %id, "admin: service record created");
+    Ok(Json(json!({
+        "id": id,
+        "recorded_at": recorded_at.to_rfc3339(),
+    })))
+}
+
+/// `DELETE /api/admin/bike-service-records/:id` — remove a mistyped line.
+///
+/// No confirmation gate of its own beyond the screen's modal: unlike a unit or
+/// a family, a service record has nothing hanging off it, so this deletes one
+/// row and only one.
+async fn admin_delete_service_record(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<Value>, (StatusCode, String)> {
+    check_admin(&headers, &state).map_err(|s| (s, String::new()))?;
+
+    use crate::db::entities::bike_service_record::Entity as ServiceEntity;
+    use sea_orm::EntityTrait;
+    let res = ServiceEntity::delete_by_id(id.clone())
+        .exec(&state.db.orm)
+        .await
+        .map_err(|e| {
+            tracing::error!("admin_delete_service_record: {e}");
+            (StatusCode::INTERNAL_SERVER_ERROR, String::new())
+        })?;
+    if res.rows_affected == 0 {
+        return Err((StatusCode::NOT_FOUND, "Запись не найдена".to_string()));
+    }
+    tracing::info!(record_id = %id, "admin: service record deleted");
+    Ok(Json(json!({ "ok": true })))
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
         family_detail_json, family_json, query_flag, rental_terms_json, rollup_units,
-        validate_bike_write, BikeWriteRequest, DoorAnswer, DoorAnswers, UnitRow, BIKE_CLASSES,
-        CLIENT_RATE_FROM_DOOR, CLIENT_RATE_UNAVAILABLE, UNIT_STATUSES,
+        validate_bike_write, BikeWriteRequest, CatalogFilter, DoorAnswer, DoorAnswers, UnitRow,
+        BIKE_CLASSES, CLIENT_RATE_FROM_DOOR, CLIENT_RATE_UNAVAILABLE, UNIT_STATUSES,
     };
     use crate::db::bikes::{Bike, BikeListing, ClassDiscount, RentalTermBand};
     use serde_json::{json, Value};
@@ -1885,5 +2591,125 @@ mod tests {
         assert_eq!(r.by_status.get("retired"), Some(&2));
         assert!(r.colors.is_empty());
         assert!(r.model_years.is_empty());
+    }
+
+    // ── CatalogFilter ────────────────────────────────────────────
+    //
+    // `#8` names class and displacement filters in its title. Before this,
+    // `GET /api/bikes` read `available_only` and nothing else, and because
+    // Axum hands unknown query keys straight through, `?class=motorcycle`
+    // returned all thirteen families under a `200` — measured against
+    // production. That is the worst of the three possible answers: a client
+    // that trusts the parameter shows scooters on a motorcycle page and has no
+    // way to know it was ignored.
+
+    #[test]
+    fn an_absent_query_filters_nothing() {
+        let f = CatalogFilter::parse(&q(&[])).expect("no params is a valid request");
+        assert!(f.is_empty());
+        assert!(f.matches("scooter", 125));
+        assert!(f.matches("motorcycle", 750));
+        assert_eq!(
+            f.cache_suffix(),
+            "",
+            "an empty filter owns the unfiltered key"
+        );
+    }
+
+    #[test]
+    fn available_only_alone_is_not_a_catalog_filter() {
+        // It selects on fleet state, not on the family's own columns, and it
+        // is applied in SQL. If it leaked into the suffix, the two filters
+        // would be spelled into the cache key twice.
+        let f = CatalogFilter::parse(&q(&[("available_only", "true")]))
+            .expect("available_only is handled elsewhere, not rejected here");
+        assert!(f.is_empty());
+    }
+
+    #[test]
+    fn class_is_matched_case_insensitively() {
+        let f = CatalogFilter::parse(&q(&[("class", "Motorcycle")])).expect("valid class");
+        assert!(f.matches("motorcycle", 750));
+        assert!(!f.matches("scooter", 125));
+    }
+
+    #[test]
+    fn an_unknown_class_is_named_rather_than_ignored() {
+        // The whole point of the change: a typo must not read as "no filter".
+        let err = CatalogFilter::parse(&q(&[("class", "moped")]))
+            .expect_err("`moped` is not a value this column can hold");
+        assert!(
+            err.contains("moped"),
+            "the error repeats what was sent: {err}"
+        );
+        assert!(err.contains("class"), "and names the parameter: {err}");
+    }
+
+    #[test]
+    fn the_filter_accepts_exactly_the_classes_the_column_allows() {
+        // Third copy of the closed domain — but not a fourth *list*: it walks
+        // `BIKE_CLASSES`, which `the_accepted_classes_are_the_ones_the_column_allows`
+        // already pins to the migration's CHECK constraint.
+        for class in BIKE_CLASSES {
+            assert!(
+                CatalogFilter::parse(&q(&[("class", class)])).is_ok(),
+                "{class} is a legal value of bikes.class but the filter refused it"
+            );
+        }
+    }
+
+    #[test]
+    fn displacement_bounds_are_inclusive_at_both_ends() {
+        // A customer asking for 150cc-and-up means to see the 150.
+        let f = CatalogFilter::parse(&q(&[("min_cc", "150"), ("max_cc", "155")]))
+            .expect("a valid band");
+        assert!(f.matches("scooter", 150), "the floor is part of the band");
+        assert!(f.matches("scooter", 155), "so is the ceiling");
+        assert!(!f.matches("scooter", 149));
+        assert!(!f.matches("scooter", 156));
+    }
+
+    #[test]
+    fn a_non_numeric_displacement_is_rejected() {
+        let err =
+            CatalogFilter::parse(&q(&[("min_cc", "150cc")])).expect_err("`150cc` is not a number");
+        assert!(err.contains("min_cc"), "{err}");
+    }
+
+    #[test]
+    fn an_inverted_band_is_refused_rather_than_answered_with_nothing() {
+        // An empty list here would be indistinguishable from "we rent no bikes
+        // in that band", which is a different and much worse thing to say.
+        let err = CatalogFilter::parse(&q(&[("min_cc", "400"), ("max_cc", "125")]))
+            .expect_err("no displacement is both ≥400 and ≤125");
+        assert!(err.contains("400") && err.contains("125"), "{err}");
+    }
+
+    #[test]
+    fn distinct_selections_get_distinct_cache_keys() {
+        // The ETag guard: two different bodies must never share a key, or one
+        // selection is served under the other's `304`.
+        let keys: Vec<String> = [
+            vec![],
+            vec![("class", "scooter")],
+            vec![("class", "motorcycle")],
+            vec![("min_cc", "150")],
+            vec![("max_cc", "150")],
+            vec![("class", "scooter"), ("min_cc", "150")],
+        ]
+        .into_iter()
+        .map(|pairs| {
+            CatalogFilter::parse(&q(&pairs))
+                .expect("all six are valid")
+                .cache_suffix()
+        })
+        .collect();
+
+        let unique: std::collections::HashSet<&String> = keys.iter().collect();
+        assert_eq!(
+            unique.len(),
+            keys.len(),
+            "two selections collapsed to one cache key: {keys:?}"
+        );
     }
 }

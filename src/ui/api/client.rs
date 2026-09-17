@@ -115,15 +115,10 @@ impl ApiClient {
         Self::run(req).await
     }
 
-    // Strain endpoints
-    pub async fn get_strains(&self) -> Result<Vec<Strain>> {
-        #[derive(Deserialize)]
-        struct StrainsResponse {
-            strains: Vec<Strain>,
-        }
-        let resp: StrainsResponse = self.get("/api/strains").await?;
-        Ok(resp.strains)
-    }
+    // The two strain readers that used to sit here are gone with their last
+    // caller, the sommelier screen. Neither had a route to call: `/api/strains`
+    // and `/api/strains/strain-of-day` were retired by migration 083 and are
+    // not registered anywhere in `src/api`. See `tests/ui_endpoints_exist.rs`.
 
     // Catalog endpoints
     pub async fn get_accessories(&self) -> Result<Vec<Accessory>> {
@@ -217,16 +212,6 @@ impl ApiClient {
         }
         let resp: ProfileResponse = self.get(&format!("/api/loyalty/{}", telegram_id)).await?;
         Ok(resp.profile)
-    }
-
-    // Strain of day
-    pub async fn get_strain_of_day(&self) -> Result<Vec<Strain>> {
-        #[derive(Deserialize)]
-        struct StrainsResponse {
-            strains: Vec<Strain>,
-        }
-        let resp: StrainsResponse = self.get("/api/strains/strain-of-day").await?;
-        Ok(resp.strains)
     }
 
     // Events calendar endpoints

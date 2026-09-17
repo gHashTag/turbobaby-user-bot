@@ -158,17 +158,6 @@ pub const T_ACC_CAT_SOUVENIR: Key = "acc.cat.souvenir";
 pub const T_ACC_CAT_OTHER: Key = "acc.cat.other";
 pub const T_TEA_TITLE: Key = "tea.title";
 pub const T_TEA_DESC: Key = "tea.description";
-pub const T_SOMM_TITLE: Key = "somm.title";
-pub const T_SOMM_DESC: Key = "somm.description";
-pub const T_SOMM_REASON_INDICA_RELAX: Key = "somm.reason.indica_relax";
-pub const T_SOMM_REASON_HYBRID_MELLOW: Key = "somm.reason.hybrid_mellow";
-pub const T_SOMM_REASON_SATIVA_ENERGY: Key = "somm.reason.sativa_energy";
-pub const T_SOMM_REASON_HYBRID_UP: Key = "somm.reason.hybrid_up";
-pub const T_SOMM_REASON_CREATIVE: Key = "somm.reason.creative";
-pub const T_SOMM_REASON_SLEEP: Key = "somm.reason.sleep";
-pub const T_SOMM_REASON_FLAVOR: Key = "somm.reason.flavor";
-pub const T_SOMM_REASON_THC: Key = "somm.reason.thc";
-pub const T_SOMM_REASON_DEFAULT: Key = "somm.reason.default";
 pub const T_CART_TITLE: Key = "cart.title";
 pub const T_CART_EMPTY: Key = "cart.empty";
 pub const T_CART_EMPTY_DESC: Key = "cart.empty_desc";
@@ -234,11 +223,6 @@ pub const T_LOADING: Key = "label.loading";
 pub const T_FILTER_ALL: Key = "filter.all";
 
 // Variant C: retention + community
-pub const T_LAB_CERTS: Key = "lab_certs.title";
-pub const T_LAB_CERT_THC: Key = "lab_certs.thc";
-pub const T_LAB_CERT_CBD: Key = "lab_certs.cbd";
-pub const T_LAB_CERT_TESTED: Key = "lab_certs.tested";
-pub const T_LAB_CERT_EMPTY: Key = "lab_certs.empty";
 pub const T_TRUST_GACP: Key = "trust.gacp";
 pub const T_TRUST_MEDICAL: Key = "trust.medical";
 pub const T_TRUST_SUPPORT: Key = "trust.support";
@@ -260,10 +244,6 @@ pub const T_BROADCAST_NO_PRODUCT: Key = "broadcast.no_product";
 pub const T_BROADCAST_SELECT_CATALOG: Key = "broadcast.select_catalog";
 pub const T_BROADCAST_SEND_TEST: Key = "broadcast.send_test";
 pub const T_BROADCAST_TEST_SENT: Key = "broadcast.test_sent";
-pub const T_SOMM_MOOD: Key = "somm.mood";
-pub const T_SOMM_TIME: Key = "somm.time";
-pub const T_SOMM_EXP: Key = "somm.experience";
-pub const T_SOMM_RESULT: Key = "somm.result";
 
 // Checkout error messages (cycle #69). Mapped from HTTP status by
 // `trios::checkout_errors::friendly_order_error`. Unknown statuses
@@ -360,25 +340,6 @@ pub const T_LOW_STOCK: Key = "catalog.low_stock";
 pub const T_WATCH_VIDEO: Key = "catalog.watch_video";
 
 // Sommelier strings
-pub const T_SOMM_GET_RECOMMENDATIONS: Key = "somm.get_recommendations";
-pub const T_SOMM_RECOMMENDED_FOR_YOU: Key = "somm.recommended_for_you";
-pub const T_SOMM_RESTART: Key = "somm.restart";
-pub const T_SOMM_RECOMMENDED_SETS: Key = "somm.recommended_sets";
-pub const T_SOMM_RECOMMENDED_STRAINS: Key = "somm.recommended_strains";
-pub const T_SOMM_NO_RECOMMENDATIONS: Key = "somm.no_recommendations";
-pub const T_SOMM_MATCH: Key = "somm.match";
-pub const T_SOMM_MOOD_RELAX: Key = "somm.mood.relax";
-pub const T_SOMM_MOOD_ENERGY: Key = "somm.mood.energy";
-pub const T_SOMM_MOOD_CREATIVE: Key = "somm.mood.creative";
-pub const T_SOMM_MOOD_SLEEP: Key = "somm.mood.sleep";
-pub const T_SOMM_MOOD_STRONG: Key = "somm.mood.strong";
-pub const T_SOMM_MOOD_TASTE: Key = "somm.mood.taste";
-pub const T_SOMM_TIME_DAY: Key = "somm.time.day";
-pub const T_SOMM_TIME_EVENING: Key = "somm.time.evening";
-pub const T_SOMM_TIME_ANY: Key = "somm.time.any";
-pub const T_SOMM_EXP_BEGINNER: Key = "somm.exp.beginner";
-pub const T_SOMM_EXP_MEDIUM: Key = "somm.exp.medium";
-pub const T_SOMM_EXP_EXPERT: Key = "somm.exp.expert";
 
 // Game strings
 pub const T_GAME_TITLE: Key = "game.title";
@@ -605,24 +566,16 @@ pub const T_MENU_SORT_TOP: Key = "menu.sort.top";
 pub const T_MENU_SORT_PRICE_ASC: Key = "menu.sort.price_asc";
 pub const T_MENU_SORT_PRICE_DESC: Key = "menu.sort.price_desc";
 pub const T_MENU_SORT_NAME: Key = "menu.sort.name";
-pub const T_MENU_SORT_THC: Key = "menu.sort.thc";
 pub const T_MENU_NO_RESULTS: Key = "menu.no_results";
-pub const T_MENU_SOTD_HERO: Key = "menu.sotd_hero";
 pub const T_MENU_NEW_ARRIVALS: Key = "menu.new_arrivals";
 pub const T_MENU_PRICE_REQUEST: Key = "menu.price_request";
 pub const T_MENU_SOLD_OUT: Key = "menu.sold_out";
-pub const T_MENU_THC: Key = "menu.thc";
-pub const T_MENU_CBD: Key = "menu.cbd";
 pub const T_MENU_SOTD_BADGE: Key = "menu.sotd_badge";
 pub const T_MENU_NEW_BADGE: Key = "menu.new_badge";
 pub const T_MENU_BEST_BADGE: Key = "menu.best_badge";
 pub const T_MENU_SALE_BADGE: Key = "menu.sale_badge";
 
 /// Product card translations
-pub const T_STRAIN_BADGE_SOTD: Key = "strain.badge.sotd";
-pub const T_STRAIN_BADGE_NEW: Key = "strain.badge.new";
-pub const T_STRAIN_BADGE_BEST: Key = "strain.badge.best";
-pub const T_STRAIN_BADGE_SALE: Key = "strain.badge.sale";
 pub const T_SET_BADGE: Key = "set.badge";
 pub const T_MENU_SET_LABEL: Key = "menu.set_label";
 pub const T_MENU_OFF: Key = "menu.off";
@@ -633,14 +586,11 @@ pub const T_MENU_PER_GRAM: Key = "menu.per_gram";
 // Home screen hard-coded strings
 pub const T_HOME_CATEGORIES: Key = "home.categories";
 pub const T_HOME_SETS_PACKS: Key = "home.sets_packs";
-pub const T_HOME_SOTD: Key = "home.sotd";
-pub const T_HOME_NO_SOTD: Key = "home.no_sotd";
 pub const T_HOME_ADVENTURES: Key = "home.adventures";
 pub const T_HOME_DAILY_QUEST: Key = "home.daily_quest";
 pub const T_HOME_TREASURE_HUNT: Key = "home.treasure_hunt";
 pub const T_HOME_AR_HUNT: Key = "home.ar_hunt";
 pub const T_HOME_LOCATION_QUEST: Key = "home.location_quest";
-pub const T_HOME_SOMMELIER: Key = "home.sommelier";
 pub const T_HOME_GAME: Key = "home.game";
 pub const T_HOME_SHARE: Key = "home.share";
 pub const T_HOME_WATCH_VIDEO: Key = "home.watch_video";
@@ -899,17 +849,6 @@ fn get_ru_translation(key: Key) -> Value {
         T_ACC_CAT_OTHER => "Другое",
         T_TEA_TITLE => "🥤 Напитки",
         T_TEA_DESC => "Чай, кофе и другие напитки",
-        T_SOMM_TITLE => "🍷 Сомелье",
-        T_SOMM_DESC => "Подберём сорт под настроение",
-        T_SOMM_REASON_INDICA_RELAX => "Indica · расслабляющий",
-        T_SOMM_REASON_HYBRID_MELLOW => "Hybrid · мягкий",
-        T_SOMM_REASON_SATIVA_ENERGY => "Sativa · бодрящий",
-        T_SOMM_REASON_HYBRID_UP => "Hybrid · приподнимающий",
-        T_SOMM_REASON_CREATIVE => "Творческий & сфокусированный",
-        T_SOMM_REASON_SLEEP => "Indica · для сна",
-        T_SOMM_REASON_FLAVOR => "Насыщенный вкус",
-        T_SOMM_REASON_THC => "Высокий THC · {0}%",
-        T_SOMM_REASON_DEFAULT => "Хорошее совпадение",
         T_CART_TITLE => "🛒 Корзина",
         T_CART_EMPTY => "Корзина пуста",
         T_CART_EMPTY_DESC => "Добавьте товары из каталога",
@@ -972,11 +911,6 @@ fn get_ru_translation(key: Key) -> Value {
         T_LOADING => "Загрузка...",
         T_FILTER_ALL => "Все",
         // Variant C
-        T_LAB_CERTS => "Лабораторные тесты",
-        T_LAB_CERT_THC => "THC",
-        T_LAB_CERT_CBD => "CBD",
-        T_LAB_CERT_TESTED => "Тестировано",
-        T_LAB_CERT_EMPTY => "Нет сертификатов",
         T_TRUST_GACP => "✅ TURBOBABY CO., LTD. · Камала, Пхукет",
         T_TRUST_MEDICAL => "🪖 Шлем обязателен по закону Таиланда — выдаём с байком.",
         T_TRUST_SUPPORT => "💬 Поддержка",
@@ -998,10 +932,6 @@ fn get_ru_translation(key: Key) -> Value {
         T_BROADCAST_SELECT_CATALOG => "Выберите каталог",
         T_BROADCAST_SEND_TEST => "Отправить админам (тест)",
         T_BROADCAST_TEST_SENT => "Тестовое сообщение отправлено админам",
-        T_SOMM_MOOD => "Настроение",
-        T_SOMM_TIME => "Время суток",
-        T_SOMM_EXP => "Опыт",
-        T_SOMM_RESULT => "Рекомендации",
         // Checkout error messages (cycle #69)
         T_CHECKOUT_ERR_400 => "Что-то не так с корзиной. Попробуйте очистить её и собрать заново.",
         T_CHECKOUT_ERR_403 => "Аккаунт ограничен. Проверьте Профиль или свяжитесь с поддержкой.",
@@ -1073,25 +1003,6 @@ fn get_ru_translation(key: Key) -> Value {
         T_LOW_STOCK => "⚠ Осталось {0} шт.",
         T_WATCH_VIDEO => "Смотреть видео",
         // Sommelier strings
-        T_SOMM_GET_RECOMMENDATIONS => "🔮 Подобрать",
-        T_SOMM_RECOMMENDED_FOR_YOU => "✨ Рекомендации для вас",
-        T_SOMM_RESTART => "↻ Заново",
-        T_SOMM_RECOMMENDED_SETS => "📦 Рекомендуемые наборы",
-        T_SOMM_RECOMMENDED_STRAINS => "🌿 Рекомендуемые сорта",
-        T_SOMM_NO_RECOMMENDATIONS => "Ничего не нашлось. Попробуйте другие варианты!",
-        T_SOMM_MATCH => "совпадение",
-        T_SOMM_MOOD_RELAX => "😌 Расслабиться",
-        T_SOMM_MOOD_ENERGY => "⚡ Энергия",
-        T_SOMM_MOOD_CREATIVE => "🎨 Творчество",
-        T_SOMM_MOOD_SLEEP => "😴 Сон",
-        T_SOMM_MOOD_STRONG => "💪 Крепкое",
-        T_SOMM_MOOD_TASTE => "👅 Вкус",
-        T_SOMM_TIME_DAY => "☀️ День",
-        T_SOMM_TIME_EVENING => "🌙 Вечер",
-        T_SOMM_TIME_ANY => "🔄 Любое",
-        T_SOMM_EXP_BEGINNER => "🌱 Новичок",
-        T_SOMM_EXP_MEDIUM => "🌿 Средний",
-        T_SOMM_EXP_EXPERT => "🔥 Эксперт",
         // Game strings
         T_GAME_TITLE => "TurboBaby Games",
         T_GAME_TAB_SHOP => "🛒 Магазин",
@@ -1300,23 +1211,15 @@ fn get_ru_translation(key: Key) -> Value {
         T_MENU_SORT_PRICE_ASC => "💰 Цена ↑",
         T_MENU_SORT_PRICE_DESC => "💰 Цена ↓",
         T_MENU_SORT_NAME => "А–Я",
-        T_MENU_SORT_THC => "🔥 THC",
         T_MENU_NO_RESULTS => "Не найдено {0} сортов",
-        T_MENU_SOTD_HERO => "🔥 СОРТ ДНЯ",
         T_MENU_NEW_ARRIVALS => "🆕 НОВИНКИ",
         T_MENU_PRICE_REQUEST => "Цена по запросу",
         T_MENU_SOLD_OUT => "Нет в наличии",
-        T_MENU_THC => "THC {0}%",
-        T_MENU_CBD => "CBD {0}%",
         T_MENU_SOTD_BADGE => "⭐ СОТД",
         T_MENU_NEW_BADGE => "🆕 НОВИНКА",
         T_MENU_BEST_BADGE => "⭐ ЛУЧШЕЕ",
         T_MENU_SALE_BADGE => "🔥 СКИДКА",
         T_MENU_SET_LABEL => "📦 НАБОР",
-        T_STRAIN_BADGE_SOTD => "🌟 Сорт дня",
-        T_STRAIN_BADGE_NEW => "🆕 Новинка",
-        T_STRAIN_BADGE_BEST => "⭐ Лучшее",
-        T_STRAIN_BADGE_SALE => "🔥 Скидка",
         T_SET_BADGE => "📦 НАБОР",
         T_MENU_OFF => "{0}%",
         T_MENU_WEIGHT => "⚖️ {0}",
@@ -1325,14 +1228,11 @@ fn get_ru_translation(key: Key) -> Value {
         // Home screen
         T_HOME_CATEGORIES => "Категории",
         T_HOME_SETS_PACKS => "📦 Наборы",
-        T_HOME_SOTD => "⭐ Сорт дня",
-        T_HOME_NO_SOTD => "Сорт дня пока не выбран",
         T_HOME_ADVENTURES => "🎯 Приключения",
         T_HOME_DAILY_QUEST => "Ежедневный квест",
         T_HOME_TREASURE_HUNT => "Охота за сокровищами",
         T_HOME_AR_HUNT => "AR-охота",
         T_HOME_LOCATION_QUEST => "Локационный квест",
-        T_HOME_SOMMELIER => "Сомелье",
         T_HOME_GAME => "Игра",
         T_HOME_SHARE => "Поделиться",
         T_HOME_WATCH_VIDEO => "Смотреть видео",
@@ -1548,17 +1448,6 @@ fn get_en_translation(key: Key) -> Value {
         T_ACC_CAT_OTHER => "Other",
         T_TEA_TITLE => "🥤 Drinks",
         T_TEA_DESC => "Tea, coffee & more",
-        T_SOMM_TITLE => "🍷 Sommelier",
-        T_SOMM_DESC => "Find your perfect strain",
-        T_SOMM_REASON_INDICA_RELAX => "Indica · relaxing",
-        T_SOMM_REASON_HYBRID_MELLOW => "Hybrid · mellow",
-        T_SOMM_REASON_SATIVA_ENERGY => "Sativa · energizing",
-        T_SOMM_REASON_HYBRID_UP => "Hybrid · uplifting",
-        T_SOMM_REASON_CREATIVE => "Creative & focused",
-        T_SOMM_REASON_SLEEP => "Indica · sleep",
-        T_SOMM_REASON_FLAVOR => "Rich flavor",
-        T_SOMM_REASON_THC => "High THC · {0}%",
-        T_SOMM_REASON_DEFAULT => "Good match",
         T_CART_TITLE => "🛒 Cart",
         T_CART_EMPTY => "Your cart is empty",
         T_CART_EMPTY_DESC => "Browse the menu to add items",
@@ -1621,11 +1510,6 @@ fn get_en_translation(key: Key) -> Value {
         T_LOADING => "Loading...",
         T_FILTER_ALL => "All",
         // Variant C
-        T_LAB_CERTS => "Lab tests",
-        T_LAB_CERT_THC => "THC",
-        T_LAB_CERT_CBD => "CBD",
-        T_LAB_CERT_TESTED => "Tested",
-        T_LAB_CERT_EMPTY => "No certificates",
         T_TRUST_GACP => "✅ TURBOBABY CO., LTD. · Kamala, Phuket",
         T_TRUST_MEDICAL => "🪖 Helmets are required by Thai law — provided with every bike.",
         T_TRUST_SUPPORT => "💬 Support",
@@ -1647,10 +1531,6 @@ fn get_en_translation(key: Key) -> Value {
         T_BROADCAST_SELECT_CATALOG => "Select catalog",
         T_BROADCAST_SEND_TEST => "Send to admins (test)",
         T_BROADCAST_TEST_SENT => "Test message sent to admins",
-        T_SOMM_MOOD => "Mood",
-        T_SOMM_TIME => "Time of Day",
-        T_SOMM_EXP => "Experience",
-        T_SOMM_RESULT => "Recommendations",
         // Checkout error messages (cycle #69)
         T_CHECKOUT_ERR_400 => "Something looks wrong with your cart. Try clearing it and adding items again.",
         T_CHECKOUT_ERR_403 => "Account restricted. Check Profile or contact support.",
@@ -1722,25 +1602,6 @@ fn get_en_translation(key: Key) -> Value {
         T_LOW_STOCK => "Only {0} left",
         T_WATCH_VIDEO => "Watch video",
         // Sommelier strings
-        T_SOMM_GET_RECOMMENDATIONS => "Get recommendations",
-        T_SOMM_RECOMMENDED_FOR_YOU => "Recommended for you",
-        T_SOMM_RESTART => "Start over",
-        T_SOMM_RECOMMENDED_SETS => "Recommended sets",
-        T_SOMM_RECOMMENDED_STRAINS => "Recommended strains",
-        T_SOMM_NO_RECOMMENDATIONS => "No recommendations for these options. Try changing mood or experience.",
-        T_SOMM_MATCH => "match",
-        T_SOMM_MOOD_RELAX => "😌 Relax",
-        T_SOMM_MOOD_ENERGY => "⚡ Energy",
-        T_SOMM_MOOD_CREATIVE => "🎨 Creative",
-        T_SOMM_MOOD_SLEEP => "😴 Sleep",
-        T_SOMM_MOOD_STRONG => "💪 Strong",
-        T_SOMM_MOOD_TASTE => "👅 Taste",
-        T_SOMM_TIME_DAY => "☀️ Day",
-        T_SOMM_TIME_EVENING => "🌙 Evening",
-        T_SOMM_TIME_ANY => "🔄 Any",
-        T_SOMM_EXP_BEGINNER => "🌱 Beginner",
-        T_SOMM_EXP_MEDIUM => "🌿 Intermediate",
-        T_SOMM_EXP_EXPERT => "🔥 Expert",
         // Game strings
         T_GAME_TITLE => "TurboBaby Games",
         T_GAME_TAB_SHOP => "🛒 Shop",
@@ -1949,23 +1810,15 @@ fn get_en_translation(key: Key) -> Value {
         T_MENU_SORT_PRICE_ASC => "💰 ↑",
         T_MENU_SORT_PRICE_DESC => "💰 ↓",
         T_MENU_SORT_NAME => "A–Z",
-        T_MENU_SORT_THC => "🔥 THC",
         T_MENU_NO_RESULTS => "No {0} strains found",
-        T_MENU_SOTD_HERO => "🔥 STRAIN OF THE DAY",
         T_MENU_NEW_ARRIVALS => "🆕 NEW ARRIVALS",
         T_MENU_PRICE_REQUEST => "Price on request",
         T_MENU_SOLD_OUT => "Sold Out",
-        T_MENU_THC => "THC {0}%",
-        T_MENU_CBD => "CBD {0}%",
         T_MENU_SOTD_BADGE => "⭐ SOTD",
         T_MENU_NEW_BADGE => "🆕 NEW",
         T_MENU_BEST_BADGE => "⭐ BEST",
         T_MENU_SALE_BADGE => "🔥 SALE",
         T_MENU_SET_LABEL => "📦 SET",
-        T_STRAIN_BADGE_SOTD => "🌟 Strain of Day",
-        T_STRAIN_BADGE_NEW => "🆕 New Arrival",
-        T_STRAIN_BADGE_BEST => "⭐ Best Seller",
-        T_STRAIN_BADGE_SALE => "🔥 Sale",
         T_SET_BADGE => "📦 SET",
         T_MENU_OFF => "{0}% OFF",
         T_MENU_WEIGHT => "⚖️ {0}",
@@ -1974,14 +1827,11 @@ fn get_en_translation(key: Key) -> Value {
         // Home screen
         T_HOME_CATEGORIES => "Categories",
         T_HOME_SETS_PACKS => "📦 Packs",
-        T_HOME_SOTD => "⭐ Strain of the Day",
-        T_HOME_NO_SOTD => "No strain of the day yet",
         T_HOME_ADVENTURES => "🎯 Adventures",
         T_HOME_DAILY_QUEST => "Daily Quest",
         T_HOME_TREASURE_HUNT => "Treasure Hunt",
         T_HOME_AR_HUNT => "AR Hunt",
         T_HOME_LOCATION_QUEST => "Location Quest",
-        T_HOME_SOMMELIER => "Sommelier",
         T_HOME_GAME => "Game",
         T_HOME_SHARE => "Share",
         T_HOME_WATCH_VIDEO => "Watch video",
@@ -2186,8 +2036,6 @@ pub fn get_translations(lang: Lang) -> Translations {
         T_ACC_DESC,
         T_TEA_TITLE,
         T_TEA_DESC,
-        T_SOMM_TITLE,
-        T_SOMM_DESC,
         T_CART_TITLE,
         T_CART_EMPTY,
         T_CART_EMPTY_DESC,
@@ -2208,10 +2056,6 @@ pub fn get_translations(lang: Lang) -> Translations {
         T_ADD_TO_CART,
         T_LOADING,
         T_FILTER_ALL,
-        T_SOMM_MOOD,
-        T_SOMM_TIME,
-        T_SOMM_EXP,
-        T_SOMM_RESULT,
         T_CHECKOUT_TRUST_TITLE,
         T_CHECKOUT_TRUST_VERIFIED,
         T_CHECKOUT_TRUST_COD,
@@ -2227,25 +2071,6 @@ pub fn get_translations(lang: Lang) -> Translations {
         T_CATALOG_SORT_DISCOUNT,
         T_LOW_STOCK,
         T_WATCH_VIDEO,
-        T_SOMM_GET_RECOMMENDATIONS,
-        T_SOMM_RECOMMENDED_FOR_YOU,
-        T_SOMM_RESTART,
-        T_SOMM_RECOMMENDED_SETS,
-        T_SOMM_RECOMMENDED_STRAINS,
-        T_SOMM_NO_RECOMMENDATIONS,
-        T_SOMM_MATCH,
-        T_SOMM_MOOD_RELAX,
-        T_SOMM_MOOD_ENERGY,
-        T_SOMM_MOOD_CREATIVE,
-        T_SOMM_MOOD_SLEEP,
-        T_SOMM_MOOD_STRONG,
-        T_SOMM_MOOD_TASTE,
-        T_SOMM_TIME_DAY,
-        T_SOMM_TIME_EVENING,
-        T_SOMM_TIME_ANY,
-        T_SOMM_EXP_BEGINNER,
-        T_SOMM_EXP_MEDIUM,
-        T_SOMM_EXP_EXPERT,
         T_GAME_TITLE,
         T_GAME_TAB_SHOP,
         T_GAME_TAB_FARM,
@@ -2459,8 +2284,14 @@ mod tests {
         // the parser silently stops matching (a rustfmt change to the `const`
         // layout, say) rather than to be updated every time a key is added. A
         // broken parser would make the parity gate below vacuously green.
+        // Lowered from 600 when 46 cannabis-era keys were deleted outright
+        // (the sommelier questionnaire, strain badges, lab certificates,
+        // THC/CBD labels — #2). The number is only ever a "did the parser
+        // break" tripwire: a broken parser yields ~0, so the floor needs to
+        // sit far below the real count, not just under it. It is not a target
+        // and it is not a census.
         assert!(
-            keys.len() > 600,
+            keys.len() > 450,
             "only {} `T_*` declarations parsed out of this file — the parser is \
              broken, not the table. Every key after the break would be exempt \
              from the parity gate.",

@@ -13,9 +13,17 @@ fn endpoint_for(route: &Route) -> Option<String> {
         // The catalog is the fleet since the rebrand; /api/strains died with
         // the strains table (083) and every warm-up was a 404.
         Route::Home {} | Route::Menu {} => "/api/bikes",
-        Route::Sets {} => "/api/sets",
+        // `/sets` renders the catalog now, so warming `/api/sets` would warm
+        // an empty list the screen never reads.
+        Route::Sets {} => "/api/bikes",
         Route::Accessories {} => "/api/accessories",
-        Route::Tea {} => "/api/tea",
+        // `tea_screen.rs` fetches `/api/tea-products`, and that is the route
+        // `catalog::routes()` registers. `/api/tea` was never one: it warmed a
+        // path that falls through to the SPA fallback, so the prefetch cached
+        // `index.html` under a URL the screen would then miss on. Third entry
+        // in this function to be wrong the same way — hence
+        // `tests/ui_endpoints_exist.rs`, which now checks all three.
+        Route::Tea {} => "/api/tea-products",
         // The customer's orders live at /api/orders/user/{id} and the
         // prefetcher does not know the id; warming the admin /api/orders
         // instead earned a 401 per hover (production logs, 2026-09-13).
