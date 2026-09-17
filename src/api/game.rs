@@ -1,4 +1,4 @@
-//! Cross-device game high scores (Woody Catch)
+//! Cross-device game high scores (TurboBaby Catch)
 //!
 //! Stores the user's best score server-side so returning on a new device
 //! does not lose progress. Submissions are owner-authenticated; the public

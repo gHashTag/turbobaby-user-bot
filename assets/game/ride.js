@@ -766,7 +766,7 @@ export function start(container, opts = {}) {
 
     // A helmet, because the shop hands one over with every key. Open-face and
     // cut off above the brow so the crest still comes through it - the
-    // silhouette is what has to say "Woody" at six metres.
+    // silhouette is what has to say "TurboBaby" at six metres.
     {
       const shell = new THREE.Mesh(
         new THREE.SphereGeometry(0.34, 10, 6, 0, Math.PI * 2, 0, Math.PI * 0.62),

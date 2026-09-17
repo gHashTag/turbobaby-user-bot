@@ -1,4 +1,4 @@
-//! Quest data models for Woody Weed app
+//! Quest data models for the TurboBaby app
 
 use crate::trios::core::Lang;
 use crate::trios::i18n::{
