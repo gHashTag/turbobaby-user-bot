@@ -741,19 +741,19 @@ mod tests {
     #[test]
     fn test_validate_checkout_valid() {
         let items = vec![CartItem::new_strain("strain1".to_string(), 1)];
-        assert!(validate_checkout("John", "+12345", "Koh Phangan", &items).is_ok());
+        assert!(validate_checkout("John", "+12345", "Kamala", &items).is_ok());
     }
 
     #[test]
     fn test_validate_checkout_empty_name() {
         let items = vec![CartItem::new_strain("strain1".to_string(), 1)];
-        assert!(validate_checkout("", "+12345", "Koh Phangan", &items).is_err());
+        assert!(validate_checkout("", "+12345", "Kamala", &items).is_err());
     }
 
     #[test]
     fn test_validate_checkout_empty_phone() {
         let items = vec![CartItem::new_strain("strain1".to_string(), 1)];
-        assert!(validate_checkout("John", "", "Koh Phangan", &items).is_err());
+        assert!(validate_checkout("John", "", "Kamala", &items).is_err());
     }
 
     #[test]
@@ -764,13 +764,13 @@ mod tests {
 
     #[test]
     fn test_validate_checkout_empty_cart() {
-        assert!(validate_checkout("John", "+12345", "Koh Phangan", &[]).is_err());
+        assert!(validate_checkout("John", "+12345", "Kamala", &[]).is_err());
     }
 
     #[test]
     fn test_validate_checkout_invalid_phone() {
         let items = vec![CartItem::new_strain("strain1".to_string(), 1)];
-        assert!(validate_checkout("John", "+123", "Koh Phangan", &items).is_err());
+        assert!(validate_checkout("John", "+123", "Kamala", &items).is_err());
     }
 
     // ---- Phone normalisation -------------------------------------------
@@ -780,7 +780,7 @@ mod tests {
 
     #[test]
     fn normalize_phone_accepts_thai_local_mobile() {
-        // The single most common real input on Koh Phangan.
+        // The single most common real input in Thailand.
         assert_eq!(
             normalize_phone("0812345678").as_deref(),
             Some("+66812345678")
@@ -860,7 +860,7 @@ mod tests {
         // Regression: this exact combination produced a permanently disabled
         // "Place order" button and no request ever reached the server.
         let items = vec![CartItem::new_strain("strain1".to_string(), 1)];
-        assert!(validate_checkout("John", "0812345678", "Koh Phangan", &items).is_ok());
+        assert!(validate_checkout("John", "0812345678", "Kamala", &items).is_ok());
     }
 
     #[test]
@@ -933,7 +933,7 @@ mod tests {
             true,
             "Дмитрий",
             "0812345678",
-            "Baan Tai, Koh Phangan",
+            "Kamala Beach, Phuket",
             Fulfillment::Delivery,
             1,
             true,
