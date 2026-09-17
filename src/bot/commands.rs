@@ -29,8 +29,14 @@ pub(crate) enum Command {
     Start(String),
     #[command(description = "Menu")]
     Menu,
-    #[command(description = "Sets")]
-    Sets,
+    // `/sets` is not in the published command list any more either. It was
+    // still advertised to every customer who typed `/`, and its button opened
+    // a screen whose `/api/sets` answers `{"sets":[]}` on this deployment —
+    // the strain-set combos belong to the previous shop and no TurboBaby set
+    // has ever existed. Every *internal* link to that screen had already been
+    // cut (cart, orders, the home carousel each say so); the published command
+    // was the one entry point left, so the screen stayed reachable and empty.
+    //
     // `/sommelier` is not in the published command list any more. It offered
     // "AI strain recommendations based on your preferences" — the last piece of
     // cannabis vocabulary the bot advertised to every customer who typed `/` —
@@ -333,28 +339,6 @@ pub(crate) async fn handle_command(
                 vec![web_app_btn(
                     &format!("👤 {}", locale.profile),
                     &build_app_url(base, &lang, Some("profile")),
-                )],
-            ]))
-            .await?;
-        }
-
-        Command::Sets => {
-            bot.send_message(
-                msg.chat.id,
-                format!(
-                    "🎁 <b>{}</b>\n━━━━━━━━━━━━━━━━\n\n{}",
-                    locale.sets_for_beginners, locale.sets_description
-                ),
-            )
-            .parse_mode(teloxide::types::ParseMode::Html)
-            .reply_markup(InlineKeyboardMarkup::new(vec![
-                vec![web_app_btn(
-                    &format!("🎁 {}", locale.view_sets),
-                    &build_app_url(base, &lang, Some("sets")),
-                )],
-                vec![web_app_btn(
-                    &format!("🛒 {}", locale.open_menu),
-                    &build_app_url(base, &lang, None),
                 )],
             ]))
             .await?;

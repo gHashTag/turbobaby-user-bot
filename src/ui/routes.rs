@@ -8,7 +8,7 @@ use crate::ui::screens::{
     ARHuntScreen, AccessoriesScreen, AdminScreen, CartScreen, CatalogScreen, CheckoutScreen,
     EventDetailScreen, EventsScreen, GameScreen, HomeScreen, LocationQuestScreen, MenuScreen,
     MyBookingsScreen, OrderDetailScreen, OrdersScreen, ProfileScreen, QuestScreen, ReferralsScreen,
-    RideScreen, SetsScreen, SuccessScreen, TeaScreen, TechTreeScreen, TreasureHuntScreen,
+    RideScreen, SuccessScreen, TeaScreen, TechTreeScreen, TreasureHuntScreen,
 };
 use crate::ui::share::{PendingOrder, PendingReorder, SharedProduct};
 use dioxus::prelude::*;
@@ -125,12 +125,17 @@ fn Menu() -> Element {
     }
 }
 
+/// `/sets` survives as a compatibility alias, exactly as `/sommelier` does.
+///
+/// The screen behind it is deleted. `/api/sets` answers `{"sets":[]}` here —
+/// the combos were the previous shop's, and no TurboBaby set has ever been
+/// created — so the screen could only render an empty list. The *path* stays
+/// because months of `startapp=sets` deep links sit in customers' Telegram
+/// histories forever and a router miss is worse than the catalog.
 #[component]
 fn Sets() -> Element {
     rsx! {
-        LazyScreen {
-            SetsScreen {}
-        }
+        CatalogScreen {}
     }
 }
 

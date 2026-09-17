@@ -9,7 +9,6 @@ pub(crate) struct Locale {
     pub start_description: String,
     pub open_menu: String,
     pub menu: String,
-    pub view_sets: String,
     // `sommelier`, `sommelier_description`, `start_sommelier` and
     // `starting_sommelier` were removed with the `/sommelier` command they
     // served. The English one read "AI strain recommendations based on your
@@ -60,8 +59,6 @@ pub(crate) struct Locale {
     pub tier_upgrade: String,
     pub cashback_now: String,
     pub referral_bonus: String,
-    pub sets_for_beginners: String,
-    pub sets_description: String,
     pub help_commands: String,
     pub opening_sets: String,
     pub welcome_feature1: String,
@@ -151,7 +148,6 @@ fn ru() -> Locale {
         start_description: "Прокат мотоциклов и скутеров на Пхукете".into(),
         open_menu: "Открыть каталог".into(),
         menu: "🏍 Меню".into(),
-        view_sets: "Наборы".into(),
         accessories: "Аксессуары".into(),
         quest: "Квест".into(),
         profile: "Профиль".into(),
@@ -198,8 +194,6 @@ fn ru() -> Locale {
         tier_upgrade: "Поздравляем! Новый уровень:".into(),
         cashback_now: "Ваш кэшбэк теперь".into(),
         referral_bonus: "Ваш друг сделал первую покупку!".into(),
-        sets_for_beginners: "Наборы для начинающих".into(),
-        sets_description: "Готовые наборы для комфортного старта".into(),
         help_commands: "/start — начало\n/menu — меню\n/joke — анекдот\n/fact — факт\n/lang — язык"
             .into(),
         opening_sets: "Открываю наборы...".into(),
@@ -243,7 +237,6 @@ fn en() -> Locale {
         start_description: "Motorbike & scooter rental in Phuket".into(),
         open_menu: "Open catalog".into(),
         menu: "🏍 Menu".into(),
-        view_sets: "Sets".into(),
         accessories: "Accessories".into(),
         quest: "Quest".into(),
         profile: "Profile".into(),
@@ -290,8 +283,6 @@ fn en() -> Locale {
         tier_upgrade: "Congratulations! New tier:".into(),
         cashback_now: "Your cashback is now".into(),
         referral_bonus: "Your friend made a purchase!".into(),
-        sets_for_beginners: "Sets for beginners".into(),
-        sets_description: "Ready-made sets for a comfortable start".into(),
         help_commands: "/start — start\n/menu — menu\n/joke — joke\n/fact — fact\n/lang — language"
             .into(),
         opening_sets: "Opening sets...".into(),

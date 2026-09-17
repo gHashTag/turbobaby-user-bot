@@ -13,7 +13,9 @@ fn endpoint_for(route: &Route) -> Option<String> {
         // The catalog is the fleet since the rebrand; /api/strains died with
         // the strains table (083) and every warm-up was a 404.
         Route::Home {} | Route::Menu {} => "/api/bikes",
-        Route::Sets {} => "/api/sets",
+        // `/sets` renders the catalog now, so warming `/api/sets` would warm
+        // an empty list the screen never reads.
+        Route::Sets {} => "/api/bikes",
         Route::Accessories {} => "/api/accessories",
         // `tea_screen.rs` fetches `/api/tea-products`, and that is the route
         // `catalog::routes()` registers. `/api/tea` was never one: it warmed a
