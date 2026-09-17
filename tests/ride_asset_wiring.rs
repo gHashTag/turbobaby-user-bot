@@ -478,3 +478,109 @@ fn ride_dynamic_import_cannot_survive_unmount_or_a_new_boot() {
     assert!(drop_cleanup.contains("window.__rideGeneration=(window.__rideGeneration||0)+1;"));
     assert!(drop_cleanup.contains("window.__rideStop=null;"));
 }
+
+/// #13's second criterion, which nothing covered: "the mapping has a test
+/// pinning at least three families."
+///
+/// `ride_model_executes_handling_silhouette_and_offer_contract` above executes
+/// `handlingFor`, but against one synthetic 155cc row. That proves the function
+/// runs; it does not pin the mapping to the fleet. Every family here is read
+/// out of `data/fleet_seed.json` at test time rather than retyped, so this is
+/// not a fourth copy of the catalog — if the seed's displacement or class for a
+/// named family changes, this test computes the new expectation and the
+/// assertion below still has to hold.
+#[test]
+fn ride_handling_is_pinned_against_real_families_from_the_seed() {
+    let seed: serde_json::Value =
+        serde_json::from_str(&read("data/fleet_seed.json")).expect("parse data/fleet_seed.json");
+    let families = seed["families"]
+        .as_array()
+        .expect("the seed publishes a families array");
+    assert!(
+        families.len() >= 13,
+        "only {} families in the seed — a scan with a near-empty corpus passes by default",
+        families.len()
+    );
+
+    // The two #13 names by hand, plus one from the other class so the steering
+    // lookup is exercised at both of its values. Three is the brief's floor.
+    const PINNED: [&str; 4] = ["click-125", "xadv-750", "nmax-155", "cbr-650r"];
+
+    let mut rows = String::new();
+    for key in PINNED {
+        let family = families
+            .iter()
+            .find(|f| f["key"].as_str() == Some(key))
+            .unwrap_or_else(|| panic!("{key} is named by #13 but absent from the seed"));
+        let class = family["class"].as_str().expect("class");
+        let cc = family["displacement_cc"].as_i64().expect("displacement_cc");
+        let body = family["body"].as_str().expect("body");
+
+        // The expectation is recomputed from the seed, not stored: these are
+        // the two constants `ride_handling_and_silhouettes_keep_separate_catalog_inputs`
+        // already pins against the source.
+        let top_speed_gu = 400 + cc;
+        let steer_rate_su = match class {
+            "scooter" => 120,
+            "motorcycle" => 90,
+            other => panic!("{key} has class {other:?}, which the steering lookup cannot answer"),
+        };
+
+        rows.push_str(&format!(
+            "  {{ key: '{key}', class: '{class}', body: '{body}', displacement_cc: {cc}, \
+             offered: true, units_available: 1, expectTopSpeedGu: {top_speed_gu}, \
+             expectSteerRateSu: {steer_rate_su} }},\n"
+        ));
+    }
+
+    run_ride_model_in_node(&format!(
+        r#"
+const PINNED = [
+{rows}];
+
+for (const row of PINNED) {{
+  const h = handlingFor(row);
+  if (h === null) {{
+    throw new Error(row.key + ': a seeded family is not playable');
+  }}
+  if (h.topSpeedGu !== row.expectTopSpeedGu) {{
+    throw new Error(row.key + ': topSpeedGu ' + h.topSpeedGu + ' != ' + row.expectTopSpeedGu);
+  }}
+  if (h.steerRateSu !== row.expectSteerRateSu) {{
+    throw new Error(row.key + ': steerRateSu ' + h.steerRateSu + ' != ' + row.expectSteerRateSu);
+  }}
+}}
+
+const byKey = Object.fromEntries(PINNED.map((row) => [row.key, handlingFor(row)]));
+
+// #13's first criterion, in the exact two families it names. Top speed is
+// affine in displacement, so 125cc and 750cc are 525 and 1150 game units —
+// a factor of 2.2, not a rounding difference.
+const click = byKey['click-125'];
+const xadv = byKey['xadv-750'];
+if (!(xadv.topSpeedGu > click.topSpeedGu * 2)) {{
+  throw new Error('CLICK 125 and X-ADV 750 do not measurably differ in top speed');
+}}
+
+// And the half of that criterion the implementation does NOT meet, asserted
+// as it actually behaves rather than left to be discovered: steering is a
+// closed two-class lookup, and BOTH of these families are scooters in the
+// seed. They steer identically, by design — displacement does not enter the
+// steering rate at all. If the fleet ever reclassifies one of them, this
+// assertion fails and #13's first criterion becomes fully true; either way
+// nobody is left believing something the code does not do.
+if (click.steerRateSu !== xadv.steerRateSu) {{
+  throw new Error(
+    'steering now differs between two same-class families — the lookup grew a ' +
+    'displacement term, or the seed reclassified one of them'
+  );
+}}
+
+// The other class is genuinely different, which is what makes the lookup
+// worth having.
+if (byKey['cbr-650r'].steerRateSu === click.steerRateSu) {{
+  throw new Error('a motorcycle steers like a scooter — the class lookup is not being read');
+}}
+"#
+    ));
+}
