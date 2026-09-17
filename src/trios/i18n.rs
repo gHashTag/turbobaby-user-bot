@@ -566,9 +566,7 @@ pub const T_MENU_SORT_TOP: Key = "menu.sort.top";
 pub const T_MENU_SORT_PRICE_ASC: Key = "menu.sort.price_asc";
 pub const T_MENU_SORT_PRICE_DESC: Key = "menu.sort.price_desc";
 pub const T_MENU_SORT_NAME: Key = "menu.sort.name";
-pub const T_MENU_SORT_THC: Key = "menu.sort.thc";
 pub const T_MENU_NO_RESULTS: Key = "menu.no_results";
-pub const T_MENU_SOTD_HERO: Key = "menu.sotd_hero";
 pub const T_MENU_NEW_ARRIVALS: Key = "menu.new_arrivals";
 pub const T_MENU_PRICE_REQUEST: Key = "menu.price_request";
 pub const T_MENU_SOLD_OUT: Key = "menu.sold_out";
@@ -588,8 +586,6 @@ pub const T_MENU_PER_GRAM: Key = "menu.per_gram";
 // Home screen hard-coded strings
 pub const T_HOME_CATEGORIES: Key = "home.categories";
 pub const T_HOME_SETS_PACKS: Key = "home.sets_packs";
-pub const T_HOME_SOTD: Key = "home.sotd";
-pub const T_HOME_NO_SOTD: Key = "home.no_sotd";
 pub const T_HOME_ADVENTURES: Key = "home.adventures";
 pub const T_HOME_DAILY_QUEST: Key = "home.daily_quest";
 pub const T_HOME_TREASURE_HUNT: Key = "home.treasure_hunt";
@@ -1215,9 +1211,7 @@ fn get_ru_translation(key: Key) -> Value {
         T_MENU_SORT_PRICE_ASC => "💰 Цена ↑",
         T_MENU_SORT_PRICE_DESC => "💰 Цена ↓",
         T_MENU_SORT_NAME => "А–Я",
-        T_MENU_SORT_THC => "🔥 THC",
         T_MENU_NO_RESULTS => "Не найдено {0} сортов",
-        T_MENU_SOTD_HERO => "🔥 СОРТ ДНЯ",
         T_MENU_NEW_ARRIVALS => "🆕 НОВИНКИ",
         T_MENU_PRICE_REQUEST => "Цена по запросу",
         T_MENU_SOLD_OUT => "Нет в наличии",
@@ -1234,8 +1228,6 @@ fn get_ru_translation(key: Key) -> Value {
         // Home screen
         T_HOME_CATEGORIES => "Категории",
         T_HOME_SETS_PACKS => "📦 Наборы",
-        T_HOME_SOTD => "⭐ Сорт дня",
-        T_HOME_NO_SOTD => "Сорт дня пока не выбран",
         T_HOME_ADVENTURES => "🎯 Приключения",
         T_HOME_DAILY_QUEST => "Ежедневный квест",
         T_HOME_TREASURE_HUNT => "Охота за сокровищами",
@@ -1818,9 +1810,7 @@ fn get_en_translation(key: Key) -> Value {
         T_MENU_SORT_PRICE_ASC => "💰 ↑",
         T_MENU_SORT_PRICE_DESC => "💰 ↓",
         T_MENU_SORT_NAME => "A–Z",
-        T_MENU_SORT_THC => "🔥 THC",
         T_MENU_NO_RESULTS => "No {0} strains found",
-        T_MENU_SOTD_HERO => "🔥 STRAIN OF THE DAY",
         T_MENU_NEW_ARRIVALS => "🆕 NEW ARRIVALS",
         T_MENU_PRICE_REQUEST => "Price on request",
         T_MENU_SOLD_OUT => "Sold Out",
@@ -1837,8 +1827,6 @@ fn get_en_translation(key: Key) -> Value {
         // Home screen
         T_HOME_CATEGORIES => "Categories",
         T_HOME_SETS_PACKS => "📦 Packs",
-        T_HOME_SOTD => "⭐ Strain of the Day",
-        T_HOME_NO_SOTD => "No strain of the day yet",
         T_HOME_ADVENTURES => "🎯 Adventures",
         T_HOME_DAILY_QUEST => "Daily Quest",
         T_HOME_TREASURE_HUNT => "Treasure Hunt",

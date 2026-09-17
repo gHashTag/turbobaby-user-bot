@@ -80,7 +80,13 @@ fn api_order_item_to_cart_item(item: &ApiOrderItem) -> Option<CartItem> {
     let (id, name, item_type, price_hint) = if let Some(ref sid) = item.strain_id {
         (
             sid.clone(),
-            item.strain_name.clone().unwrap_or_else(|| "Strain".into()),
+            // The *field* keeps its name — it is the wire contract for orders
+            // already in the database, and renaming it would make historical
+            // orders unreadable. The *label* does not: this fallback is what a
+            // customer sees when an old item carries an id but no name, and
+            // «Strain» is exactly the vocabulary #2 removes. "Товар" says the
+            // same thing without naming the previous shop's goods.
+            item.strain_name.clone().unwrap_or_else(|| "Товар".into()),
             CartItemType::Strain,
             item.unit_price.unwrap_or(0.0),
         )
