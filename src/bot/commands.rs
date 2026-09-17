@@ -31,8 +31,10 @@ pub(crate) enum Command {
     Menu,
     #[command(description = "Sets")]
     Sets,
-    #[command(description = "Sommelier")]
-    Sommelier,
+    // `/sommelier` is not in the published command list any more. It offered
+    // "AI strain recommendations based on your preferences" — the last piece of
+    // cannabis vocabulary the bot advertised to every customer who typed `/` —
+    // and its button opened a screen that fetched a retired endpoint. #2.
     #[command(description = "Joke")]
     Joke,
     #[command(description = "Fact")]
@@ -349,28 +351,6 @@ pub(crate) async fn handle_command(
                 vec![web_app_btn(
                     &format!("🎁 {}", locale.view_sets),
                     &build_app_url(base, &lang, Some("sets")),
-                )],
-                vec![web_app_btn(
-                    &format!("🛒 {}", locale.open_menu),
-                    &build_app_url(base, &lang, None),
-                )],
-            ]))
-            .await?;
-        }
-
-        Command::Sommelier => {
-            bot.send_message(
-                msg.chat.id,
-                format!(
-                    "🍷 <b>{}</b>\n━━━━━━━━━━━━━━━━\n\n{}",
-                    locale.sommelier, locale.sommelier_description
-                ),
-            )
-            .parse_mode(teloxide::types::ParseMode::Html)
-            .reply_markup(InlineKeyboardMarkup::new(vec![
-                vec![web_app_btn(
-                    &format!("🍷 {}", locale.start_sommelier),
-                    &build_app_url(base, &lang, Some("sommelier")),
                 )],
                 vec![web_app_btn(
                     &format!("🛒 {}", locale.open_menu),

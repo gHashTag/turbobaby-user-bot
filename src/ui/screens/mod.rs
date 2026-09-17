@@ -27,7 +27,11 @@ pub mod quest_screen;
 pub mod referrals_screen;
 pub mod ride_screen;
 pub mod sets_screen;
-pub mod sommelier_screen;
+// `sommelier_screen` is gone, not retired-in-place. It was a mood/time/effect
+// questionnaire that recommended a cannabis strain by fetching `/api/strains`
+// — a route 083 retired — and the fleet has no analogue: a bike is chosen by
+// engine size, price and licence class, all of which the catalog's filters
+// already do. #2.
 pub mod success_screen;
 pub mod tea_screen;
 pub mod tech_tree_screen;
@@ -52,7 +56,6 @@ pub use quest_screen::QuestScreen;
 pub use referrals_screen::ReferralsScreen;
 pub use ride_screen::RideScreen;
 pub use sets_screen::SetsScreen;
-pub use sommelier_screen::SommelierScreen;
 pub use success_screen::SuccessScreen;
 pub use tea_screen::TeaScreen;
 pub use tech_tree_screen::TechTreeScreen;
