@@ -44,8 +44,12 @@ pub struct Config {
     /// toggle when that's needed.
     pub hide_marketing_badges: bool,
     /// Delivery zones and ETA estimates. Loaded from `DELIVERY_ZONES_JSON`
-    /// or built-in Koh Phangan defaults. Used by the order tracker and
-    /// checkout to show ETA / fee ranges.
+    /// or the built-in defaults. Used by the order tracker and checkout to
+    /// show ETA / fee ranges.
+    ///
+    /// Those defaults are Koh Phangan villages and TurboBaby is in Kamala,
+    /// Phuket — see `crate::delivery` for why they are still there and whose
+    /// decision replaces them.
     pub delivery_zones: crate::delivery::DeliveryZones,
     /// PromptPay merchant identifier for cashless Thai QR payments.
     /// Thai mobile numbers (10 digits starting with 0) or 13-digit national
@@ -56,9 +60,9 @@ pub struct Config {
     /// when their first order completes. Kept at 0 by default so it can be
     /// enabled later via env without changing existing economics.
     pub referral_welcome_bonus: f64,
-    /// Loop #20: deterministic A/B share sources for the garden viral loop.
+    /// Loop #20: deterministic A/B share sources for the referral viral loop.
     /// Comma-separated list in env; defaults to ["utm_a", "utm_b"].
-    pub garden_share_sources: Vec<String>,
+    pub referral_share_sources: Vec<String>,
 }
 
 impl Config {
@@ -166,8 +170,16 @@ impl Config {
                 .and_then(|s| s.trim().parse::<f64>().ok())
                 .filter(|v| v.is_finite() && *v >= 0.0)
                 .unwrap_or(0.0),
-            garden_share_sources: parse_garden_share_sources(
-                std::env::var("GARDEN_SHARE_SOURCES").ok().as_deref(),
+            // `GARDEN_SHARE_SOURCES` is still read as a fallback. The
+            // variable is set on the running deployment and renaming a config
+            // key in the code does not rename it in Railway — dropping the old
+            // name here would silently revert the live A/B split to defaults on
+            // the next deploy, which is a config change disguised as a rename.
+            referral_share_sources: parse_referral_share_sources(
+                std::env::var("REFERRAL_SHARE_SOURCES")
+                    .or_else(|_| std::env::var("GARDEN_SHARE_SOURCES"))
+                    .ok()
+                    .as_deref(),
             ),
         })
     }
@@ -205,10 +217,10 @@ fn disabled_capabilities_from(ai_enabled: bool, s3_enabled: bool) -> Vec<&'stati
     off
 }
 
-/// Loop #20: parse comma-separated garden share sources. Falls back to a
+/// Loop #20: parse comma-separated referral share sources. Falls back to a
 /// default A/B pair so the deterministic assignment always has at least two
 /// variants.
-pub(crate) fn parse_garden_share_sources(raw: Option<&str>) -> Vec<String> {
+pub(crate) fn parse_referral_share_sources(raw: Option<&str>) -> Vec<String> {
     let defaults = || vec!["utm_a".to_string(), "utm_b".to_string()];
     let Some(s) = raw else { return defaults() };
     let trimmed = s.trim();
@@ -476,7 +488,7 @@ mod tests {
             delivery_zones: crate::delivery::DeliveryZones::default(),
             promptpay: crate::promptpay::QrConfig::default(),
             referral_welcome_bonus: 0.0,
-            garden_share_sources: vec!["utm_a".to_string(), "utm_b".to_string()],
+            referral_share_sources: vec!["utm_a".to_string(), "utm_b".to_string()],
         };
         assert!(cfg.s3_enabled());
     }
@@ -538,7 +550,7 @@ mod tests {
             delivery_zones: crate::delivery::DeliveryZones::default(),
             promptpay: crate::promptpay::QrConfig::default(),
             referral_welcome_bonus: 0.0,
-            garden_share_sources: vec!["utm_a".to_string(), "utm_b".to_string()],
+            referral_share_sources: vec!["utm_a".to_string(), "utm_b".to_string()],
         }
     }
 }

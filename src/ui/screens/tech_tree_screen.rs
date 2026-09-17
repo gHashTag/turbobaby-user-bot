@@ -117,7 +117,7 @@ pub fn TechTreeScreen() -> Element {
                     "\u{1F333} Tech Tree"
                 }
                 p { style: "font-size: 13px; color: #8b8b9e; margin-top: 6px;",
-                    "Unlock growing skills to improve your garden"
+                    "Capabilities this build has shipped, and what unlocks next"
                 }
             }
 

@@ -85,6 +85,11 @@ pub struct Bike {
     /// `false` closes the family to NEW rentals — `click-125` today (D12).
     /// The contract still running on one of its units is unaffected.
     pub offered: bool,
+    /// `true` puts the family on the forecourt. Orthogonal to
+    /// `sale_price_thb`: a family can be for sale with no published asking
+    /// price, which the detail screen renders as a dash plus the manager
+    /// line rather than as a number nobody quoted (issue #11, D9/D11).
+    pub for_sale: bool,
     pub description_ru: Option<String>,
     pub description_en: Option<String>,
     pub image_url: Option<String>,
@@ -184,6 +189,7 @@ impl From<crate::db::entities::bike::Model> for Bike {
             monthly_low_season_thb: m.monthly_low_season_thb.filter(|v| v.is_finite()),
             sale_price_thb: m.sale_price_thb.filter(|v| v.is_finite()),
             offered: m.offered,
+            for_sale: m.for_sale,
             description_ru: m.description_ru,
             description_en: m.description_en,
             image_url: m.image_url,
@@ -422,6 +428,64 @@ pub async fn find_family_by_key(
     }))
 }
 
+/// Every family, offered or not, with its `available` unit count.
+///
+/// **ADMIN ONLY.** The public catalog must keep using
+/// [`list_offered_families`], which has exactly one rule — `offered = true`
+/// is what customers see (D12). This is a second function rather than a flag
+/// on that one so the customer-facing rule has no parameter that can be got
+/// wrong: there is no request an anonymous caller can shape that reaches an
+/// unoffered family through the public list.
+///
+/// The admin needs the opposite view, because `click-125` is invisible on the
+/// public catalog and re-opening it from a screen that cannot show it is not
+/// possible.
+#[allow(unreachable_pub)] // Read by the admin endpoints in src/api/bikes.rs and by integration tests as lib consumers.
+pub async fn list_all_families(orm: &sea_orm::DatabaseConnection) -> Result<Vec<BikeListing>> {
+    use crate::db::entities::bike::{Column as BikeCol, Entity as BikeEntity};
+    use sea_orm::{EntityTrait, QueryOrder, QuerySelect};
+    let models = BikeEntity::find()
+        .order_by_asc(BikeCol::SortOrder)
+        .order_by_asc(BikeCol::DisplacementCc)
+        .order_by_asc(BikeCol::Key)
+        .limit(FAMILY_QUERY_LIMIT)
+        .all(orm)
+        .await
+        .context("list_all_families query")?;
+    let counts = available_unit_counts(orm).await?;
+    Ok(models
+        .into_iter()
+        .map(|m| {
+            let units_available = counts.get(&m.id).copied().unwrap_or(0);
+            BikeListing {
+                bike: Bike::from(m),
+                units_available,
+            }
+        })
+        .collect())
+}
+
+/// How many physical units belong to a family, whatever their status.
+///
+/// Distinct from [`available_units_for_family`] on purpose: this one counts
+/// machines that exist, not machines that can be rented today. Deleting a
+/// family cascades to `bike_units` (`078_bike_units.sql`), so the delete path
+/// asks this question rather than the availability one — a family whose units
+/// are all out on rent has zero available and everything to lose.
+#[allow(unreachable_pub)] // Read by the admin endpoints in src/api/bikes.rs and by integration tests as lib consumers.
+pub async fn count_units_for_family(
+    orm: &sea_orm::DatabaseConnection,
+    bike_id: &str,
+) -> Result<u64> {
+    use crate::db::entities::bike_unit::{Column as UnitCol, Entity as UnitEntity};
+    use sea_orm::{ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter};
+    UnitEntity::find()
+        .filter(UnitCol::BikeId.eq(bike_id))
+        .count(orm)
+        .await
+        .context("count_units_for_family query")
+}
+
 /// The published class discounts, one row per class.
 ///
 /// An empty result is not "no discounts" — it is an unseeded table, and a
@@ -506,6 +570,7 @@ mod tests {
             monthly_low_season_thb: monthly,
             sale_price_thb: sale,
             offered: true,
+            for_sale: false,
             description_ru: None,
             description_en: None,
             image_url: None,

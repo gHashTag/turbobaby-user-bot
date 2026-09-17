@@ -16,7 +16,8 @@
 //! (`subcategory="Милкшейк"`, `subcategory_en="Milkshake"`) group together.
 //!
 //! Lives in `trios` (the functional core shared by backend + WASM) following
-//! the same pattern as `garden::first_seedable_item`.
+//! the same pattern as `packs` and `pricing`. The exemplar named here used to
+//! be `garden::first_seedable_item`, deleted with the garden (D5).
 
 /// Lowercased legacy tea labels / keys that all fold into the single canonical
 /// `tea` category. Covers the seed-018 keys and their EN display labels.

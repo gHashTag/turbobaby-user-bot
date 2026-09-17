@@ -879,7 +879,7 @@ mod tests {
             "p_event_e1",
             "o_7f3a",
             "reorder__7f3a",
-            "garden__1234",
+            "referrals",
             "cart",
         ] {
             assert!(
@@ -891,6 +891,9 @@ mod tests {
             "",
             "channel",
             "ref_WOODY123",
+            // Was in the `good` list until D5 removed the screen it opened.
+            "garden",
+            "garden__1234",
             "p_strain_abc def",
             "p_strain_\u{43e}\u{43f}",
         ] {

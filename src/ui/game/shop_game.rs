@@ -12,19 +12,19 @@ use crate::trios::i18n::{
     T_GAME_EVENT_RUSH_HOUR, T_GAME_FARM_EMPTY, T_GAME_FARM_GROWN, T_GAME_FARM_PLANTED,
     T_GAME_FARM_TITLE, T_GAME_FARM_WATER, T_GAME_FARM_WATERED, T_GAME_FLOW, T_GAME_GRILL,
     T_GAME_GRILL_COOK, T_GAME_GRILL_COOKING, T_GAME_GRILL_DESC, T_GAME_GRILL_STOCK,
-    T_GAME_GRILL_TIP, T_GAME_GRILL_TITLE, T_GAME_HARVESTED, T_GAME_LOG_CLEANING,
+    T_GAME_GRILL_TIP, T_GAME_GRILL_TITLE, T_GAME_HARVEST, T_GAME_HARVESTED, T_GAME_LOG_CLEANING,
     T_GAME_LOG_COOKING_STARTED, T_GAME_LOG_CUSTOMER_LEFT, T_GAME_LOG_FARM_GREW,
     T_GAME_LOG_GRILLED_LEFT, T_GAME_LOG_HARVEST, T_GAME_LOG_MOVED_TO_TABLE,
     T_GAME_LOG_NEW_CUSTOMER, T_GAME_LOG_PARTY_STARTED, T_GAME_LOG_PLANTED_SEED,
     T_GAME_LOG_QUICK_GRILL, T_GAME_LOG_READY_AT_TABLE, T_GAME_LOG_RESET, T_GAME_LOG_SERVING,
     T_GAME_LOG_TABLE_CLEANED, T_GAME_LOG_TAKING_ORDER, T_GAME_LOG_WATERING, T_GAME_ORDER,
     T_GAME_PARTY_ON, T_GAME_PARTY_START, T_GAME_PARTY_STATUS_OFF, T_GAME_PARTY_STATUS_ON,
-    T_GAME_PARTY_TIP, T_GAME_PARTY_TITLE, T_GAME_RESET, T_GAME_SERVE, T_GAME_SERVED,
+    T_GAME_PARTY_TIP, T_GAME_PARTY_TITLE, T_GAME_PLANT, T_GAME_RESET, T_GAME_SERVE, T_GAME_SERVED,
     T_GAME_SHOP_TITLE, T_GAME_SPEED, T_GAME_TABLES, T_GAME_TABLE_DIRTY, T_GAME_TABLE_EATING,
     T_GAME_TABLE_FREE, T_GAME_TABLE_PREPARING, T_GAME_TABLE_READY, T_GAME_TABLE_WAITING,
     T_GAME_TAB_DJ, T_GAME_TAB_FARM, T_GAME_TAB_GRILL, T_GAME_TAB_SHOP, T_GAME_TIP, T_GAME_UPGRADES,
     T_GAME_UPGRADE_FLOW, T_GAME_UPGRADE_LEVEL_COST, T_GAME_UPGRADE_MAX, T_GAME_UPGRADE_SPEED,
-    T_GAME_UPGRADE_TABLES, T_GARDEN_HARVEST, T_GARDEN_PLANT,
+    T_GAME_UPGRADE_TABLES,
 };
 use crate::ui::api::context::api_base_url;
 use crate::ui::telegram::{use_telegram_id, use_telegram_init_data};
@@ -1353,7 +1353,7 @@ fn FarmPlot(
             div {
                 style: "display: flex; gap: 6px; width: 100%; margin-top: 8px;",
                 ActionButton {
-                    label: t(lang, T_GARDEN_PLANT).to_string(),
+                    label: t(lang, T_GAME_PLANT).to_string(),
                     active: can_plant && coins >= PLANT_COST,
                     color: "#39ff14",
                     on_click: {
@@ -1407,7 +1407,7 @@ fn FarmPlot(
                     },
                 }
                 ActionButton {
-                    label: t(lang, T_GARDEN_HARVEST).to_string(),
+                    label: t(lang, T_GAME_HARVEST).to_string(),
                     active: can_harvest,
                     color: "#ffe600",
                     on_click: {

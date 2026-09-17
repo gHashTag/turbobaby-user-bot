@@ -26,10 +26,13 @@ use chrono::Datelike;
 /// A reason to write a post.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Subject {
-    Strain {
-        id: String,
-        name: String,
-    },
+    // `Strain` stood here until 2026-09-16. Nothing constructed it: the only
+    // producer, `src/promo.rs`, stopped scanning the `strains` table when 083
+    // dropped it. Its arms lived on, and three of them still named that table
+    // in SQL — `SELECT price_per_gram FROM strains` — so the one thing this
+    // variant could still do was raise a relation-does-not-exist error if
+    // anybody ever built one. `fallback_copy` would have announced it with a
+    // cannabis leaf.
     Accessory {
         id: String,
         name: String,
@@ -78,7 +81,10 @@ pub enum Subject {
 /// Which catalog a bestseller lives in, so its link opens the right screen.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BestsellerKind {
-    Strain,
+    // `Strain` stood here too, and `src/promo.rs:334` had already stopped
+    // producing it — the loop it lives in reads a one-element list with the
+    // comment "`strains` left with 083; a strain bestseller can no longer
+    // resolve." Dropping the variant is what makes the compiler agree.
     Set,
 }
 
@@ -96,8 +102,7 @@ pub fn weekly_period(now: chrono::DateTime<chrono::Utc>) -> String {
 impl Subject {
     pub fn id(&self) -> &str {
         match self {
-            Subject::Strain { id, .. }
-            | Subject::Accessory { id, .. }
+            Subject::Accessory { id, .. }
             | Subject::Tea { id, .. }
             | Subject::Set { id, .. }
             | Subject::Event { id, .. }
@@ -108,8 +113,7 @@ impl Subject {
 
     pub fn name(&self) -> &str {
         match self {
-            Subject::Strain { name, .. }
-            | Subject::Accessory { name, .. }
+            Subject::Accessory { name, .. }
             | Subject::Tea { name, .. }
             | Subject::Set { name, .. }
             | Subject::Event { name, .. }
@@ -123,7 +127,6 @@ impl Subject {
     /// match what is already recorded.
     pub fn kind(&self) -> &'static str {
         match self {
-            Subject::Strain { .. } => "strain",
             Subject::Accessory { .. } => "accessory",
             Subject::Tea { .. } => "tea",
             Subject::Set { .. } => "set",
@@ -137,13 +140,11 @@ impl Subject {
     pub fn deeplink_target(&self) -> Option<crate::trios::deeplink::Target> {
         use crate::trios::deeplink::{Kind, Target};
         let kind = match self {
-            Subject::Strain { .. } => Kind::Strain,
             Subject::Accessory { .. } => Kind::Accessory,
             Subject::Tea { .. } => Kind::Tea,
             Subject::Set { .. } => Kind::Set,
             Subject::Event { .. } | Subject::EventSoon { .. } => Kind::Event,
             Subject::Bestseller { kind, .. } => match kind {
-                BestsellerKind::Strain => Kind::Strain,
                 BestsellerKind::Set => Kind::Set,
             },
         };
@@ -189,7 +190,6 @@ pub const MAX_POST_LEN: usize = 900;
 /// shop to publish.
 pub fn prompt_for(subject: &Subject, lang: &str, facts: &str) -> String {
     let what = match subject {
-        Subject::Strain { name, .. } => format!("новый сорт «{name}» в меню"),
         Subject::Accessory { name, .. } => format!("новый аксессуар «{name}»"),
         Subject::Tea { name, .. } => format!("новая позиция в напитках — «{name}»"),
         Subject::Set { name, .. } => format!("новый набор «{name}» со скидкой"),
@@ -236,9 +236,6 @@ pub fn prompt_for(subject: &Subject, lang: &str, facts: &str) -> String {
 /// tap.
 pub fn fallback_copy(subject: &Subject) -> String {
     match subject {
-        Subject::Strain { name, .. } => {
-            format!("🌿 Новинка в меню — {name}\n\nУже доступен к заказу.")
-        }
         Subject::Accessory { name, .. } => {
             format!("📦 Новый аксессуар — {name}\n\nЗабрать можно вместе с заказом.")
         }
@@ -333,7 +330,6 @@ pub fn score(subject: &Subject, price_baht: Option<f64>) -> f64 {
         // Already proven to sell; the only open question is reach.
         Subject::Bestseller { sold, .. } => 1.8 + (*sold as f64).min(50.0) * 0.02,
         Subject::Event { .. } => 1.5,
-        Subject::Strain { .. } => 1.0,
         Subject::Tea { .. } => 0.6,
         Subject::Accessory { .. } => 0.5,
     };
@@ -515,10 +511,6 @@ mod tests {
 
     fn every_subject() -> Vec<Subject> {
         vec![
-            Subject::Strain {
-                id: "s1".into(),
-                name: "DA FUNK".into(),
-            },
             Subject::Accessory {
                 id: "a1".into(),
                 name: "Asia 420".into(),
@@ -541,7 +533,61 @@ mod tests {
                 when: "20:00 – 23:00".into(),
                 seats_left: Some(4),
             },
+            // `Bestseller` was missing from this list until 2026-09-16, so the
+            // two checks below — that every reason to post has copy of its own,
+            // and that no two share an attribution source — ran over six of the
+            // seven variants and called it every. A helper named `every_*` that
+            // is hand-written is a claim, not a fact; the compiler cannot check
+            // it, which is why the sweep over `Subject` below now can.
+            Subject::Bestseller {
+                id: "b1".into(),
+                name: "Honda Click 125i".into(),
+                kind: BestsellerKind::Set,
+                sold: 12,
+                period: "2026-W38".into(),
+            },
         ]
+    }
+
+    /// `every_subject` names every variant of `Subject`.
+    ///
+    /// The list is written by hand and nothing stops it going stale — it had
+    /// already missed `Bestseller`. This walks the enum's own source instead,
+    /// so a variant added to `Subject` fails here until the fixture covers it.
+    #[test]
+    fn every_subject_covers_every_variant() {
+        let source = include_str!("promo.rs");
+        let start = source
+            .find("pub enum Subject {")
+            .expect("Subject enum declaration");
+        let body = &source[start..start + source[start..].find("\n}\n").expect("enum close")];
+
+        let declared: Vec<&str> = body
+            .lines()
+            .skip(1)
+            .filter_map(|line| {
+                let t = line.trim();
+                t.strip_suffix(" {")
+                    .filter(|n| n.chars().next().is_some_and(char::is_uppercase))
+            })
+            .collect();
+        assert!(
+            declared.len() >= 6,
+            "parsed only {} variants out of `enum Subject` — this check is \
+             reading an empty corpus and would pass on anything: {declared:?}",
+            declared.len()
+        );
+
+        let covered: Vec<String> = every_subject().iter().map(|s| format!("{s:?}")).collect();
+        let missing: Vec<&&str> = declared
+            .iter()
+            .filter(|v| !covered.iter().any(|c| c.starts_with(*v)))
+            .collect();
+        assert!(
+            missing.is_empty(),
+            "every_subject() does not name {missing:?} — every check built on \
+             it silently skips those variants"
+        );
     }
 
     /// Every reason to post produces a post worth sending without any model.
@@ -660,11 +706,11 @@ mod tests {
     /// a model at all.
     #[test]
     fn a_good_answer_is_kept() {
-        let s = Subject::Strain {
+        let s = Subject::Set {
             id: "s1".into(),
-            name: "DA FUNK".into(),
+            name: "Honda Click 125i".into(),
         };
-        let good = "🌿 DA FUNK уже в меню\n\nПлотный индика-доминант для вечера.\nОткрыть меню →";
+        let good = "🏍 Honda Click 125i уже в парке\n\nЛёгкий и экономичный — для города.\nОткрыть каталог →";
         assert_eq!(usable_copy(good, &s), good);
         // Whitespace the model left around it is not part of the post.
         assert_eq!(usable_copy(&format!("\n  {good}  \n"), &s), good);
@@ -755,11 +801,11 @@ mod tests {
             when: "20:00".into(),
             seats_left: Some(6),
         };
-        let strain = Subject::Strain {
-            id: "s".into(),
-            name: "DA FUNK".into(),
+        let quiet = Subject::Accessory {
+            id: "a".into(),
+            name: "шлем".into(),
         };
-        let order = rank(vec![(strain, Some(500.0)), (soon, Some(500.0))]);
+        let order = rank(vec![(quiet, Some(500.0)), (soon, Some(500.0))]);
         assert_eq!(
             order.first().map(|s| s.kind()),
             Some("event_soon"),
@@ -778,11 +824,11 @@ mod tests {
             seats_left: Some(0),
         };
         assert_eq!(score(&full, None), 0.0);
-        let strain = Subject::Strain {
-            id: "s".into(),
-            name: "DA FUNK".into(),
+        let quiet = Subject::Accessory {
+            id: "a".into(),
+            name: "шлем".into(),
         };
-        assert!(score(&strain, Some(300.0)) > score(&full, None));
+        assert!(score(&quiet, Some(300.0)) > score(&full, None));
     }
 
     /// Price must not let one item crowd out the whole shop.

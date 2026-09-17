@@ -8,8 +8,14 @@ fn read(path: impl AsRef<Path>) -> String {
     fs::read_to_string(path).unwrap_or_else(|error| panic!("read {}: {error}", path.display()))
 }
 
-fn dynamic_game_imports() -> Vec<(PathBuf, String)> {
-    let mut imports = Vec::new();
+/// Every screen module, read once.
+///
+/// The walk is the point. This gate used to name `garden_screen.rs` as the file
+/// that mounts the game, and broke the day that screen was deleted (D5) — not
+/// because the property it guards stopped holding, but because it had hard-coded
+/// where to look. A gate that names a file tests the filename.
+fn screen_sources() -> Vec<(PathBuf, String)> {
+    let mut sources = Vec::new();
     let screens = fs::read_dir("src/ui/screens").expect("read src/ui/screens");
 
     for entry in screens {
@@ -18,6 +24,22 @@ fn dynamic_game_imports() -> Vec<(PathBuf, String)> {
             continue;
         }
         let source = read(&path);
+        sources.push((path, source));
+    }
+
+    assert!(
+        sources.len() >= 20,
+        "found only {} screen modules — a scan with an empty corpus passes by \
+         default, and this repository has far more than that",
+        sources.len()
+    );
+    sources
+}
+
+fn dynamic_game_imports() -> Vec<(PathBuf, String)> {
+    let mut imports = Vec::new();
+
+    for (path, source) in screen_sources() {
         for line in source.lines() {
             let Some(start) = line.find("import('/assets/game/") else {
                 continue;
@@ -151,14 +173,22 @@ fn live_ride_wiring_references_only_existing_game_assets() {
         "RideScreen is not exported"
     );
 
-    let garden = read("src/ui/screens/garden_screen.rs");
+    let sources = screen_sources();
     assert!(
-        garden.contains("RideGame {}"),
-        "the game tab does not mount RideGame"
+        sources
+            .iter()
+            .any(|(_, source)| source.contains("RideGame {}")),
+        "no screen mounts RideGame — the component exists and nothing renders it"
     );
+    let skate: Vec<String> = sources
+        .iter()
+        .filter(|(_, source)| source.contains("SkateGame"))
+        .map(|(path, _)| path.display().to_string())
+        .collect();
     assert!(
-        !garden.contains("SkateGame"),
-        "the game tab still mounts the retired SkateGame"
+        skate.is_empty(),
+        "the retired SkateGame is still mounted by: {}",
+        skate.join(", ")
     );
 }
 

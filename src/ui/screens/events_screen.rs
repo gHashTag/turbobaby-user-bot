@@ -29,11 +29,9 @@ use crate::ui::components::skeleton::{Skeleton, SkeletonShape};
 use crate::ui::routes::Route;
 use crate::ui::share::{ProductKind, SharedProduct};
 use crate::ui::telegram::{use_telegram_id, use_telegram_init_data};
-use chrono::{Datelike, FixedOffset, NaiveDate, Utc, Weekday};
+use chrono::{Datelike, FixedOffset, NaiveDate, Offset, Utc, Weekday};
 use dioxus::prelude::*;
 use serde_json::json;
-
-const BANGKOK_OFFSET_SECONDS: i32 = 7 * 3600;
 
 /// Metrics are backend-only; the WASM UI cannot reach `crate::metrics`.
 /// This wrapper no-ops in the WASM build and delegates to the real helpers
@@ -54,23 +52,28 @@ fn track_event(name: &str, detail: &str) {
     }
 }
 
-fn bangkok_offset() -> FixedOffset {
-    // east_opt returns None only outside ±24h; +7h is comfortably in range,
-    // so the None arm is a compile-time-visible impossibility, not a fallback.
-    match FixedOffset::east_opt(BANGKOK_OFFSET_SECONDS) {
-        Some(offset) => offset,
-        None => unreachable!("BANGKOK_OFFSET_SECONDS is +7h, always inside ±24h"),
-    }
+/// The declared market's offset (D18), with UTC as the fallback.
+///
+/// The `unreachable!` this replaces was a fair reading of the old code: the
+/// argument was a literal `7 * 3600`, so `east_opt` genuinely could not fail.
+/// It can now — the offset comes from a profile, and a DST market has no single
+/// one — so the impossible arm has become a real one. `unreachable!` panics,
+/// and in a WASM bundle a panic is a blank screen, so the fallback returns the
+/// only offset that is always true of the instant: UTC.
+fn market_offset() -> FixedOffset {
+    crate::trios::market::MARKET
+        .fixed_offset()
+        .unwrap_or_else(|| Utc.fix())
 }
 
-fn bangkok_now() -> chrono::DateTime<FixedOffset> {
-    Utc::now().with_timezone(&bangkok_offset())
+fn market_now() -> chrono::DateTime<FixedOffset> {
+    Utc::now().with_timezone(&market_offset())
 }
 
 pub(crate) fn parse_event_start(iso: &str) -> Option<chrono::DateTime<FixedOffset>> {
     iso.parse::<chrono::DateTime<Utc>>()
         .ok()
-        .map(|dt| dt.with_timezone(&bangkok_offset()))
+        .map(|dt| dt.with_timezone(&market_offset()))
 }
 
 fn weekday_label(wd: Weekday, lang: crate::trios::core::Lang) -> String {
@@ -253,7 +256,9 @@ fn EventCard(props: EventCardProps) -> Element {
     let price_label = if has_stars {
         Some(format!("{} ⭐", ev.price_stars.unwrap_or(0)))
     } else if has_baht {
-        Some(format!("{:.0} ฿", ev.price_baht.unwrap_or(0.0)))
+        Some(crate::trios::pricing::format_baht(
+            ev.price_baht.unwrap_or(0.0),
+        ))
     } else {
         None
     };
@@ -402,10 +407,10 @@ fn EventBookingModal(props: EventBookingModalProps) -> Element {
             }
         } else if has_baht {
             let price_label = t(lang, T_EVENTS_PRICE).to_string();
-            let price_str = format!("{:.0}", ev.price_baht.unwrap_or(0.0));
+            let price_str = crate::trios::pricing::format_baht(ev.price_baht.unwrap_or(0.0));
             rsx! {
                 div { style: "font-size:12px;color:#39ff14;background:rgba(57,255,20,0.1);padding:6px 10px;border:2px solid #39ff14;",
-                    "{price_label}: {price_str} ฿"
+                    "{price_label}: {price_str}"
                 }
             }
         } else {
@@ -703,7 +708,7 @@ fn EventBookingModal(props: EventBookingModalProps) -> Element {
 
 #[component]
 pub fn EventsScreen() -> Element {
-    let today = bangkok_now().date_naive();
+    let today = market_now().date_naive();
     let selected = use_signal(|| today);
     let mut selected_event = use_signal(|| None::<CalendarEvent>);
     let telegram_id = use_telegram_id();

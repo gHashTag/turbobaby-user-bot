@@ -18,6 +18,7 @@
 use gloo_net::http::Request;
 use serde::{Deserialize, Serialize};
 
+use crate::ui::api::types::ServerCartItem;
 use crate::ui::state::{Cart, CartItem, CartItemType};
 
 /// GET `url`, return the response body as text. Non-2xx responses surface
@@ -415,20 +416,43 @@ pub struct CartRespDto {
     pub updated_at: Option<String>,
 }
 
+impl From<MergeCartItemDto> for ServerCartItem {
+    /// The two structs describe one wire shape field-for-field; only their
+    /// serde defaults differ. This exists so the merge response and the cart
+    /// GET reach [`CartItem::from_server`] by the same road.
+    fn from(dto: MergeCartItemDto) -> Self {
+        Self {
+            id: dto.id,
+            kind: dto.kind,
+            catalog_id: dto.catalog_id,
+            quantity: dto.quantity,
+            unit_price: dto.unit_price,
+            name: dto.name,
+            image_url: dto.image_url,
+        }
+    }
+}
+
 impl From<CartRespDto> for Cart {
+    /// Routed through [`CartItem::from_server`] rather than rebuilt here.
+    ///
+    /// The open-coded version this replaces disagreed with `from_server` on
+    /// every line it shared with it. An unrecognised `kind` became a
+    /// `CartItemType::Strain` instead of being dropped — so the day the server
+    /// speaks a kind this bundle predates, the merge returns it labelled a
+    /// cannabis strain and `cart_item_type_to_kind` posts it straight back as
+    /// `"strain"` to a *price-authoritative* endpoint. A zero quantity
+    /// survived, and a non-finite `unit_price` went into `recalculate_total`
+    /// untouched, making the whole cart total NaN.
+    ///
+    /// `filter_map` is the point: a line this bundle cannot read is dropped,
+    /// which is what `from_server` has always done. The merge response is
+    /// already documented as possibly smaller than the input.
     fn from(resp: CartRespDto) -> Self {
         let items = resp
             .items
             .into_iter()
-            .map(|i| CartItem {
-                id: i.catalog_id,
-                name: i.name,
-                price: i.unit_price,
-                quantity: i.quantity.max(0) as u32,
-                image_url: i.image_url,
-                item_type: kind_to_cart_item_type(&i.kind),
-                fulfillment: None,
-            })
+            .filter_map(|i| CartItem::from_server(i.into()))
             .collect();
         let mut cart = Cart { items, total: 0.0 };
         cart.recalculate_total();
@@ -444,16 +468,6 @@ pub fn cart_item_type_to_kind(item_type: &CartItemType) -> &'static str {
         CartItemType::Accessory => "accessory",
         CartItemType::Tea => "tea",
         CartItemType::Set => "set",
-    }
-}
-
-fn kind_to_cart_item_type(kind: &str) -> CartItemType {
-    match kind {
-        "strain" => CartItemType::Strain,
-        "accessory" => CartItemType::Accessory,
-        "tea" => CartItemType::Tea,
-        "set" => CartItemType::Set,
-        _ => CartItemType::Strain,
     }
 }
 

@@ -24,7 +24,6 @@ pub(crate) mod orders;
 pub(crate) mod quest;
 pub(crate) mod rate_limit;
 pub(crate) mod referrals;
-pub(crate) mod reviews;
 pub(crate) mod share;
 pub(crate) mod stars;
 pub(crate) mod tech_tree;
@@ -94,7 +93,6 @@ fn api_routes() -> Router<AppState> {
         .merge(game::routes())
         .merge(client_errors::routes())
         .merge(referrals::routes())
-        .merge(reviews::routes())
         .merge(stars::routes())
         .merge(tech_tree::routes())
         .merge(users::routes())

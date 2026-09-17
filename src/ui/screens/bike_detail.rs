@@ -209,6 +209,16 @@ fn render_detail(
     };
     let discount_line = discount_percent(bike.class_discount)
         .map(|pct| tf(lang, T_BIKE_CLASS_DISCOUNT, &[pct.to_string()]));
+    // The deposit, the monthly low-season figure and the class-discount
+    // percentage are the file's *reference* money. Beside a door price they are
+    // context; where a price is absent they become the price — ฿9,900 a month
+    // divided by thirty is an averaged per-day number, which D11 forbids by
+    // name. `show_tariff_before` above already applies exactly this gate via
+    // its `_ => false` arm; this is the same rule, applied to its neighbours.
+    let may_show_reference = crate::trios::pricing::may_publish_reference_money(
+        bike.client_rate_thb_day,
+        bike.client_rate_source.as_deref(),
+    );
 
     let alternatives = offer_instead_labels(&bike);
     let availability = availability_line(&bike, lang);
@@ -327,19 +337,23 @@ fn render_detail(
                                 {tf(lang, T_BIKE_TARIFF_BEFORE_DISCOUNT, &[money_thb(bike.base_rate_thb_day)])}
                             }
                         })}
-                        {discount_line.clone().map(|line| rsx! {
-                            div { style: "font-size:13px;color:#39ff14;margin-top:6px;", "{line}" }
+                        {may_show_reference.then(|| rsx! {
+                            {discount_line.clone().map(|line| rsx! {
+                                div { style: "font-size:13px;color:#39ff14;margin-top:6px;", "{line}" }
+                            })}
+                            div { style: detail_row_style(),
+                                {t(lang, T_BIKE_DEPOSIT)}
+                                " "
+                                {money_thb(bike.deposit_thb)}
+                            }
+                            div { style: detail_row_style(),
+                                {t(lang, T_BIKE_MONTHLY_LOW_SEASON)}
+                                " "
+                                {money_thb(bike.monthly_low_season_thb)}
+                            }
                         })}
-                        div { style: detail_row_style(),
-                            {t(lang, T_BIKE_DEPOSIT)}
-                            " "
-                            {money_thb(bike.deposit_thb)}
-                        }
-                        div { style: detail_row_style(),
-                            {t(lang, T_BIKE_MONTHLY_LOW_SEASON)}
-                            " "
-                            {money_thb(bike.monthly_low_season_thb)}
-                        }
+                        // Carries no figure, and D11 forbids silence as firmly
+                        // as invention — so this line stays outside the gate.
                         p { style: "font-size:13px;color:#8b8b9e;line-height:1.4;margin:10px 0 0;",
                             {t(lang, T_BIKE_QUOTE_NOTE)}
                         }

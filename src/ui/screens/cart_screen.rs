@@ -1,8 +1,8 @@
 // Cart Screen — Interactive with global Cart signal
 use crate::trios::i18n::{
-    t, tf, T_CART_BACK_MENU, T_CART_BONUS_NUDGE, T_CART_BROWSE_MENU, T_CART_BROWSE_SETS,
-    T_CART_CHECKOUT, T_CART_DECREASE_QTY, T_CART_DELIVERY, T_CART_DELIVERY_FREE, T_CART_DINE_IN,
-    T_CART_EMPTY, T_CART_EMPTY_DESC, T_CART_IMAGE_ALT, T_CART_ITEMS, T_CART_REMOVE,
+    t, tf, T_CART_BACK_MENU, T_CART_BONUS_NUDGE, T_CART_BROWSE_MENU, T_CART_CHECKOUT,
+    T_CART_DECREASE_QTY, T_CART_DELIVERY, T_CART_DELIVERY_FREE, T_CART_DINE_IN, T_CART_EMPTY,
+    T_CART_EMPTY_DESC, T_CART_IMAGE_ALT, T_CART_ITEMS, T_CART_LINE_EACH, T_CART_REMOVE,
     T_CART_SUBTOTAL, T_CART_SYNCING, T_CART_TAKEAWAY, T_CART_TITLE, T_PLACE_ORDER, T_TOTAL,
 };
 use crate::ui::api::context::api_base_url;
@@ -33,7 +33,6 @@ pub fn CartScreen() -> Element {
     let cart_empty = t(lang, T_CART_EMPTY);
     let cart_empty_desc = t(lang, T_CART_EMPTY_DESC);
     let browse_menu = t(lang, T_CART_BROWSE_MENU);
-    let browse_sets = t(lang, T_CART_BROWSE_SETS);
     let items_label = tf(lang, T_CART_ITEMS, &[item_count.to_string()]);
     let tg = TelegramApp::init();
     let total_str = crate::trios::pricing::format_baht(total);
@@ -117,7 +116,7 @@ pub fn CartScreen() -> Element {
         Some(tf(
             lang,
             T_CART_BONUS_NUDGE,
-            &[format!("{bonus_balance:.0}")],
+            &[crate::trios::pricing::format_baht(bonus_balance)],
         ))
     } else {
         None
@@ -185,17 +184,15 @@ pub fn CartScreen() -> Element {
                                         }
                                     },
                                 }
-                                div { style: "text-align:center;margin-top:16px;",
-                                    Link { to: Route::Sets {},
-                                        button { style: "
-                                            font-size: 15px; font-weight: 700; padding: 14px 20px;
-                                            background: transparent; color: #e8e8e8;
-                                            border: 4px solid #2a2a4a; border-radius: 0;
-                                            cursor: pointer; box-shadow: 3px 3px 0 #000;
-                                            width: 100%; max-width: 320px;
-                                        ", "{browse_sets} →" }
-                                    }
-                                }
+                                // A second button offering «В наборы» stood here,
+                                // linking to `Route::Sets` — a surface migration
+                                // 085 unpublishes (`sets`, `accessory_sets`).
+                                // The empty cart is the *only* state this screen
+                                // can be in (`api/cart.rs::parse_kind` accepts
+                                // strain/set/accessory/tea, and 083 drops
+                                // `strains` while 085 unpublishes the rest), so
+                                // this was the whole screen for every renter who
+                                // opened the tab.
                             }
                         }
                     } else {
@@ -297,7 +294,7 @@ fn cart_item_row(item: CartItem, lang: crate::trios::core::Lang) -> Element {
                     width: 44px; height: 44px; background: #16213e;
                     border-radius: 0; display: flex; align-items: center;
                     justify-content: center; font-size: 22px; flex-shrink: 0;
-                ", "🌿" }
+                ", "🏍" }
             }
             // `min-width: 0` is the whole fix for the text column: a flex item
             // defaults to `min-width: auto`, so it refuses to shrink below its
@@ -306,7 +303,9 @@ fn cart_item_row(item: CartItem, lang: crate::trios::core::Lang) -> Element {
             // is allowed to wrap.
             div { style: "flex: 1 1 150px; min-width: 0;",
                 div { style: "font-size: 16px; font-weight: 700; margin-bottom: 2px; overflow-wrap: anywhere;", "{item.name}" }
-                div { style: "font-size: 14px; color: #8b8b9e;", "{price_str} each · {line_total_str}" }
+                div { style: "font-size: 14px; color: #8b8b9e;",
+                    {tf(lang, T_CART_LINE_EACH, &[price_str.clone(), line_total_str.clone()])}
+                }
                 // A3: per-drink dine-in / takeaway toggle (drinks only).
                 if item.item_type == CartItemType::Tea {
                     {

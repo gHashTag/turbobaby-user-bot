@@ -7,12 +7,12 @@ use crate::trios::i18n::{
     T_PROFILE_BONUS_HISTORY, T_PROFILE_BONUS_HISTORY_EMPTY, T_PROFILE_BONUS_OTHER,
     T_PROFILE_BONUS_REFERRAL, T_PROFILE_CASHBACK_LABEL, T_PROFILE_CONTACTS, T_PROFILE_COPY,
     T_PROFILE_COPY_LINK, T_PROFILE_EARN_PER_REF, T_PROFILE_FRIENDS_INVITED, T_PROFILE_INVITED,
-    T_PROFILE_LOAD_ERROR, T_PROFILE_MEMBERSHIP, T_PROFILE_MORE_TO_UNLOCK, T_PROFILE_MY_GARDEN,
-    T_PROFILE_MY_ORDERS, T_PROFILE_OPEN_MAP, T_PROFILE_ORDER_HISTORY, T_PROFILE_PROGRESS,
-    T_PROFILE_QR_CODE, T_PROFILE_QUESTS, T_PROFILE_QUICK_ACTIONS, T_PROFILE_REFERRAL_LINK,
-    T_PROFILE_REFERRAL_PROGRAM, T_PROFILE_REORDER, T_PROFILE_RETRY, T_PROFILE_SHARE,
-    T_PROFILE_SPENT, T_PROFILE_STARS, T_PROFILE_TIER_BENEFITS, T_PROFILE_TIER_BRONZE,
-    T_PROFILE_TIER_GOLD, T_PROFILE_TIER_SILVER, T_PROFILE_TIER_STARTER, T_PROFILE_TITLE,
+    T_PROFILE_LOAD_ERROR, T_PROFILE_MEMBERSHIP, T_PROFILE_MORE_TO_UNLOCK, T_PROFILE_MY_ORDERS,
+    T_PROFILE_OPEN_MAP, T_PROFILE_ORDER_HISTORY, T_PROFILE_PROGRESS, T_PROFILE_QR_CODE,
+    T_PROFILE_QUESTS, T_PROFILE_QUICK_ACTIONS, T_PROFILE_REFERRAL_LINK, T_PROFILE_REFERRAL_PROGRAM,
+    T_PROFILE_REORDER, T_PROFILE_RETRY, T_PROFILE_SHARE, T_PROFILE_SPENT, T_PROFILE_STARS,
+    T_PROFILE_TIER_BENEFITS, T_PROFILE_TIER_BRONZE, T_PROFILE_TIER_GOLD, T_PROFILE_TIER_SILVER,
+    T_PROFILE_TIER_STARTER, T_PROFILE_TITLE,
 };
 use crate::ui::api::context::api_base_url;
 use crate::ui::api::http::{merge_server_cart, post_client_event};
@@ -64,6 +64,13 @@ struct LoyaltyConfigData {
     max_bonus_usage_pct: f64,
     next_tier: String,
     next_threshold: f64,
+    /// What the shop pays for a friend who orders, read from `loyalty_config`.
+    ///
+    /// `#[serde(default)]` so a client that is newer than the server still
+    /// parses the rest of the block; `Option` rather than `0.0` so "the server
+    /// did not say" is not printed as "you earn nothing".
+    #[serde(default)]
+    referral_bonus: Option<f64>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -595,6 +602,21 @@ pub fn ProfileScreen() -> Element {
     let remaining = next_threshold.map(|t| (t - total_spent).max(0.0));
 
     let lang = crate::ui::lang::current_lang();
+    // What a friend is worth, straight off the wire. `None` when the server did
+    // not say — the line is then left off the screen rather than printed with a
+    // number this page invented, which is what it did until 2026-09-16 (`฿100`,
+    // against a configured default of 200).
+    let earn_per_referral = config
+        .as_ref()
+        .and_then(|c| c.referral_bonus)
+        .filter(|v| v.is_finite() && *v > 0.0)
+        .map(|v| {
+            tf(
+                lang,
+                T_PROFILE_EARN_PER_REF,
+                &[crate::trios::pricing::format_baht(v)],
+            )
+        });
     let profile_title = t(lang, T_PROFILE_TITLE);
     let is_loading = loyalty_resource.read().is_none();
 
@@ -680,7 +702,7 @@ pub fn ProfileScreen() -> Element {
                                 div { style: "font-size: 15px; color: {tier.color()}; margin-bottom: 2px;", "{label}" }
                                 div { style: "font-size: 13px; color: #8b8b9e;", "{cb}% cashback" }
                                 if !is_unlocked {
-                                    div { style: "font-size: 15px; color: #ff4757; margin-top: 2px;", "฿{thresh}" }
+                                    div { style: "font-size: 15px; color: #ff4757; margin-top: 2px;", "{crate::trios::pricing::format_baht(thresh)}" }
                                 }
                             }
                         }
@@ -878,7 +900,9 @@ pub fn ProfileScreen() -> Element {
                 }
                 div { style: "display: flex; gap: 12px; font-size: 13px;",
                     span { style: "color: #8b8b9e;", "{tf(lang, T_PROFILE_INVITED, &[invited_count.to_string()])}" }
-                    span { style: "color: #39ff14;", "{t(lang, T_PROFILE_EARN_PER_REF)}" }
+                    if let Some(earn) = earn_per_referral.clone() {
+                        span { style: "color: #39ff14;", "{earn}" }
+                    }
                 }
             }
 
@@ -900,20 +924,16 @@ pub fn ProfileScreen() -> Element {
                         span { style: "font-size: 15px; color: #8b8b9e;", "→" }
                     }
                 }
-                Link { to: Route::Garden {},
-                    div { style: "
-                        background: #16213e; border: 4px solid #2a2a4a;
-                        border-radius: 0; padding: 12px 14px; margin-bottom: 8px;
-                        display: flex; justify-content: space-between; align-items: center;
-                        box-shadow: 4px 4px 0 #000; cursor: pointer;
-                    ",
-                        div { style: "display: flex; align-items: center; gap: 10px;",
-                            span { style: "font-size: 14px;", "🌱" }
-                            span { style: "font-size: 15px;", "{t(lang, T_PROFILE_MY_GARDEN)}" }
-                        }
-                        span { style: "font-size: 15px; color: #8b8b9e;", "→" }
-                    }
-                }
+                // The «Мой сад» row stood here. Profile is a bottom-nav tab, so
+                // it was two taps from anywhere to a screen that cannot load:
+                // no `/api/garden/*` router is merged, and migration 083 drops
+                // `garden_plants`, `garden_rewards` and `garden_config`. D19
+                // hides the cannabis-era *data* pending the owner's call on the
+                // legacy screens; it does not ask a rental shop to keep
+                // advertising a dead end. The same retirement already landed in
+                // `components/bottom_nav.rs` — this row is the copy nobody
+                // updated, because `tests/customer_surface_wiring.rs` read the
+                // nav and never this file.
                 Link { to: Route::Quest { id: "daily".to_string() },
                     div { style: "
                         background: #16213e; border: 4px solid #2a2a4a;

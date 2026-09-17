@@ -315,9 +315,14 @@ pub fn calculate_cart_total(
     total
 }
 
-/// Default country calling code. The shop is on Koh Phangan, so a bare local
-/// number typed by a customer is Thai unless it says otherwise.
-const DEFAULT_COUNTRY_CODE: &str = "66";
+/// Default country calling code, read from the declared market profile (D18).
+///
+/// A bare local number typed by a customer is assumed to be a number of the
+/// market the shop trades in. Which market that is used to be stated here, in
+/// a comment, and stated wrongly — it said Koh Phangan, and the shop is in
+/// Kamala, Phuket. `MARKET_DIALING` makes the claim once, next to the clock
+/// and against the seed, so there is nothing left here to be wrong about.
+const DEFAULT_COUNTRY_CODE: &str = crate::trios::market::MARKET_DIALING.default_calling_code;
 
 /// How the customer receives the order.
 ///
@@ -387,10 +392,13 @@ pub fn normalize_phone(raw: &str) -> Option<String> {
         return Some(format!("+7{}", &digits[1..]));
     }
     // National trunk prefix: `081…` → `+6681…`. Thai mobiles are 10 digits
-    // with the trunk 0, landlines 9.
+    // with the trunk 0, landlines 9. The `+` comes from the profile's own
+    // spelling of the code, not from this format string: the market owns how
+    // its calling code is written, and a caller that re-adds the plus is a
+    // caller that can disagree with it.
     if let Some(rest) = digits.strip_prefix('0') {
         if rest.len() >= 5 {
-            return Some(format!("+{DEFAULT_COUNTRY_CODE}{rest}"));
+            return Some(format!("{DEFAULT_COUNTRY_CODE}{rest}"));
         }
         return None;
     }

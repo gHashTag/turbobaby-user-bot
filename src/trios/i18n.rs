@@ -13,7 +13,6 @@ pub type Value = &'static str;
 pub const T_NAV_HOME: Key = "nav.home";
 pub const T_NAV_SETS: Key = "nav.sets";
 pub const T_NAV_MENU: Key = "nav.menu";
-pub const T_NAV_GARDEN: Key = "nav.garden";
 pub const T_NAV_ACCESSORIES: Key = "nav.accessories";
 pub const T_NAV_TEA: Key = "nav.tea";
 pub const T_NAV_QUEST: Key = "nav.quest";
@@ -26,93 +25,36 @@ pub const T_NAV_FLEET: Key = "nav.fleet";
 pub const T_NAV_RIDE: Key = "nav.ride";
 pub const T_NAV_ORDERS: Key = "nav.orders";
 
-/// Garden translations
-pub const T_GARDEN_TITLE: Key = "garden.title";
-pub const T_GARDEN_SUBTITLE: Key = "garden.subtitle";
-pub const T_GARDEN_EMPTY_LABEL: Key = "garden.empty_label";
-pub const T_GARDEN_EMPTY_CTA: Key = "garden.empty_cta";
-pub const T_GARDEN_LOADING: Key = "garden.loading";
-pub const T_GARDEN_CHANGE_PRODUCT: Key = "garden.change_product";
-pub const T_GARDEN_RESET_PROGRESS: Key = "garden.reset_progress";
-pub const T_GARDEN_RESET_CONFIRM_TITLE: Key = "garden.reset_confirm_title";
-pub const T_GARDEN_RESET_CONFIRM_BODY: Key = "garden.reset_confirm_body";
-pub const T_GARDEN_CANCEL: Key = "garden.cancel";
-pub const T_GARDEN_CONFIRM_RESET: Key = "garden.confirm_reset";
-pub const T_GARDEN_TAB_GARDEN: Key = "garden.tab.garden";
-pub const T_GARDEN_HARVEST: Key = "garden.harvest";
-pub const T_GARDEN_PLANT: Key = "garden.plant";
-pub const T_GARDEN_ONBOARD_TITLE: Key = "garden.onboard.title";
-pub const T_GARDEN_ONBOARD_STEP1: Key = "garden.onboard.step1";
-pub const T_GARDEN_ONBOARD_STEP2: Key = "garden.onboard.step2";
-pub const T_GARDEN_ONBOARD_STEP3: Key = "garden.onboard.step3";
-pub const T_GARDEN_ONBOARD_CTA: Key = "garden.onboard.cta";
-pub const T_GARDEN_DIAGNOSTICS_COPY: Key = "garden.diagnostics.copy";
-pub const T_GARDEN_DIAGNOSTICS_COPIED: Key = "garden.diagnostics.copied";
-pub const T_GARDEN_CHOOSE_PRODUCT: Key = "garden.choose_product";
-pub const T_GARDEN_CHOOSE_PRODUCT_HINT: Key = "garden.choose_product_hint";
-pub const T_GARDEN_PLANT_ALT: Key = "garden.plant_alt";
-pub const T_GARDEN_PRODUCT_ALT: Key = "garden.product_alt";
-pub const T_GARDEN_DISCOUNT_BADGE: Key = "garden.discount_badge";
-pub const T_GARDEN_READY: Key = "garden.ready";
-pub const T_GARDEN_COOLDOWN: Key = "garden.cooldown";
-pub const T_GARDEN_CHOOSER_TITLE: Key = "garden.chooser.title";
-pub const T_GARDEN_CHOOSER_EMPTY: Key = "garden.chooser.empty";
-pub const T_GARDEN_CHOOSER_LOADING: Key = "garden.chooser.loading";
-pub const T_GARDEN_CHOOSER_ERROR: Key = "garden.chooser.error";
-pub const T_GARDEN_ERROR_HARVEST: Key = "garden.error.harvest";
-pub const T_GARDEN_ERROR_RESET: Key = "garden.error.reset";
-pub const T_GARDEN_ERROR_COOLDOWN: Key = "garden.error.cooldown";
-pub const T_GARDEN_ERROR_PRODUCT_UNAVAILABLE: Key = "garden.error.product_unavailable";
-pub const T_GARDEN_WATER_CTA: Key = "garden.water_cta";
-pub const T_GARDEN_HARVEST_CTA: Key = "garden.harvest_cta";
-pub const T_GARDEN_STREAK_DAYS: Key = "garden.streak_days";
-pub const T_GARDEN_STREAK_BEST: Key = "garden.streak_best";
-pub const T_GARDEN_NEXT_WATER_IN: Key = "garden.next_water_in";
-pub const T_GARDEN_WATER_NOW: Key = "garden.water_now";
-pub const T_GARDEN_REWARD_EXPIRES_IN: Key = "garden.reward_expires_in";
-pub const T_GARDEN_START_FIRST_GARDEN: Key = "garden.start_first_garden";
-pub const T_GARDEN_START_FIRST_GARDEN_CTA: Key = "garden.start_first_garden_cta";
-pub const T_GARDEN_CAT_STRAIN: Key = "garden.cat.strain";
-pub const T_GARDEN_CAT_ACCESSORY: Key = "garden.cat.accessory";
-pub const T_GARDEN_CAT_TEA: Key = "garden.cat.tea";
-pub const T_GARDEN_CAT_SET: Key = "garden.cat.set";
-pub const T_GARDEN_CAT_ACCESSORY_SET: Key = "garden.cat.accessory_set";
-pub const T_GARDEN_CAT_TEA_SET: Key = "garden.cat.tea_set";
-pub const T_GARDEN_CAT_OTHER: Key = "garden.cat.other";
-pub const T_GARDEN_SHARE_CTA: Key = "garden.share_cta";
-pub const T_GARDEN_SHARE_TITLE: Key = "garden.share_title";
-pub const T_GARDEN_SHARE_TEXT: Key = "garden.share_text";
-pub const T_GARDEN_INVITE_TITLE: Key = "garden.invite.title";
-pub const T_GARDEN_INVITE_BODY: Key = "garden.invite.body";
-pub const T_GARDEN_INVITE_ACCEPT: Key = "garden.invite.accept";
-pub const T_GARDEN_INVITE_SKIP: Key = "garden.invite.skip";
-pub const T_GARDEN_MILESTONE_HINT: Key = "garden.milestone_hint";
-pub const T_GARDEN_NEXT_WATER_COUNTDOWN: Key = "garden.next_water_countdown";
-pub const T_GARDEN_INVITEES_TITLE: Key = "garden.invitees.title";
-pub const T_GARDEN_INVITEES_EMPTY: Key = "garden.invitees.empty";
-pub const T_GARDEN_INVITEE_JOINED: Key = "garden.invitee.joined";
-pub const T_GARDEN_INVITEE_WATERING: Key = "garden.invitee.watering";
-pub const T_GARDEN_INVITEE_ORDERED: Key = "garden.invitee.ordered";
+/// The two labels on the idle shop game's own plant/harvest buttons. They
+/// were declared in the garden's namespace, but the garden and the game are
+/// different mechanics: the garden had tables and endpoints, the game is
+/// client-side state. The garden is gone (D5); the game is not.
+pub const T_GAME_HARVEST: Key = "game.harvest";
+pub const T_GAME_PLANT: Key = "game.plant";
+
+/// Referral social proof. These also lived under `garden.*`, because the
+/// garden screen was the only place that rendered them — but the endpoints
+/// behind them (`/invitees`, `/milestones`) read `referral_events` and
+/// `referral_milestones`, which migration 083 does not touch. The panels
+/// moved to the referrals page rather than dying with their old host.
+pub const T_REFERRAL_INVITEES_TITLE: Key = "referral.invitees.title";
+pub const T_REFERRAL_INVITEES_EMPTY: Key = "referral.invitees.empty";
+pub const T_REFERRAL_INVITEE_JOINED: Key = "referral.invitee.joined";
+pub const T_REFERRAL_INVITEE_ORDERED: Key = "referral.invitee.ordered";
 /// Printed instead of a name only when nothing about the person was ever
 /// recorded — see `crate::trios::person::Naming::Anonymous`.
-pub const T_GARDEN_INVITEE_UNKNOWN: Key = "garden.invitee.unknown";
-pub const T_GARDEN_REFERRAL_MILESTONE_TITLE: Key = "garden.referral_milestone.title";
-pub const T_GARDEN_REFERRAL_MILESTONE_SUBTITLE: Key = "garden.referral_milestone.subtitle";
-pub const T_GARDEN_REFERRAL_MILESTONE_AWARDED: Key = "garden.referral_milestone.awarded";
-pub const T_GARDEN_HOME_VIRAL_CTA: Key = "garden.home.viral_cta";
-pub const T_GARDEN_ACHIEVEMENTS_TITLE: Key = "garden.achievements.title";
-pub const T_GARDEN_ACHIEVEMENTS_EMPTY: Key = "garden.achievements.empty";
-pub const T_GARDEN_ACHIEVEMENTS_NEW: Key = "garden.achievements.new";
-pub const T_GARDEN_LEADERBOARD_TITLE: Key = "garden.leaderboard.title";
-pub const T_GARDEN_LEADERBOARD_TAB_STREAK: Key = "garden.leaderboard.tab.streak";
-pub const T_GARDEN_LEADERBOARD_TAB_HARVEST: Key = "garden.leaderboard.tab.harvest";
-pub const T_GARDEN_LEADERBOARD_YOU: Key = "garden.leaderboard.you";
-pub const T_GARDEN_LEADERBOARD_RANK: Key = "garden.leaderboard.rank";
-pub const T_GARDEN_GAME_HIGH_SCORES: Key = "garden.game.high_scores";
-pub const T_GARDEN_GAME_SUBMIT_SCORE: Key = "garden.game.submit_score";
-pub const T_GARDEN_GAME_TOP_PLAYERS: Key = "garden.game.top_players";
-pub const T_GARDEN_GAME_YOUR_RANK: Key = "garden.game.your_rank";
-pub const T_GARDEN_GAME_NO_SCORES: Key = "garden.game.no_scores";
+pub const T_REFERRAL_INVITEE_UNKNOWN: Key = "referral.invitee.unknown";
+pub const T_REFERRAL_MILESTONE_TITLE: Key = "referral.milestone.title";
+pub const T_REFERRAL_MILESTONE_SUBTITLE: Key = "referral.milestone.subtitle";
+/// `{0}` friends, `{1}` the money — already formatted by
+/// `crate::trios::pricing::format_baht`, symbol included.
+///
+/// Both translations carried a literal `฿` glued to `{1}` until the panel was
+/// rewired. That is a currency decision made in a translation file: the market
+/// profile says where the symbol goes (`THB_MARKET.symbol_suffix` is `false`,
+/// i.e. `฿500`), and the suffixed glyph disagreed with every other price on
+/// the screen. Deciding it once, in the formatter, is D15.
+pub const T_REFERRAL_MILESTONE_AWARDED: Key = "referral.milestone.awarded";
 
 /// Generic button translations
 pub const T_CLOSE: Key = "btn.close";
@@ -121,7 +63,6 @@ pub const T_CLOSE: Key = "btn.close";
 pub const T_BTN_CART: Key = "btn.cart";
 pub const T_BTN_CHECKOUT: Key = "btn.checkout";
 pub const T_BTN_PAY: Key = "btn.pay";
-pub const T_BTN_WATER: Key = "btn.water";
 pub const T_BTN_CHECKIN: Key = "btn.checkin";
 pub const T_BTN_ORDER: Key = "btn.order";
 pub const T_BTN_ASK: Key = "btn.ask";
@@ -293,14 +234,6 @@ pub const T_LOADING: Key = "label.loading";
 pub const T_FILTER_ALL: Key = "filter.all";
 
 // Variant C: retention + community
-pub const T_REVIEWS_TITLE: Key = "reviews.title";
-pub const T_REVIEWS_AVG: Key = "reviews.avg";
-pub const T_REVIEWS_EMPTY: Key = "reviews.empty";
-pub const T_REVIEW_LEAVE: Key = "review.leave";
-pub const T_REVIEW_RATING: Key = "review.rating";
-pub const T_REVIEW_COMMENT: Key = "review.comment";
-pub const T_REVIEW_SUBMIT: Key = "review.submit";
-pub const T_REVIEW_THANKS: Key = "review.thanks";
 pub const T_LAB_CERTS: Key = "lab_certs.title";
 pub const T_LAB_CERT_THC: Key = "lab_certs.thc";
 pub const T_LAB_CERT_CBD: Key = "lab_certs.cbd";
@@ -372,6 +305,13 @@ pub const T_CART_BONUS_NUDGE: Key = "cart.bonus_nudge";
 pub const T_CART_DECREASE_QTY: Key = "cart.decrease_qty";
 pub const T_CART_REMOVE: Key = "cart.remove";
 pub const T_CART_IMAGE_ALT: Key = "cart.image_alt";
+/// `{0}` is the unit price and `{1}` the line total, both already formatted by
+/// `crate::trios::pricing::format_baht`.
+///
+/// The cart row spelled this `"{price_str} each · {line_total_str}"` in Rust
+/// until 2026-09-16 — one hard-coded English word on a screen whose every other
+/// string goes through `tf`, so a Russian customer read «฿300 each · ฿600».
+pub const T_CART_LINE_EACH: Key = "cart.line_each";
 
 // Checkout screen hard-coded strings
 pub const T_CHECKOUT_CART_EMPTY: Key = "checkout.cart_empty";
@@ -379,8 +319,6 @@ pub const T_CHECKOUT_STEP_CART: Key = "checkout.step.cart";
 pub const T_CHECKOUT_STEP_DETAILS: Key = "checkout.step.details";
 pub const T_CHECKOUT_STEP_CONFIRM: Key = "checkout.step.confirm";
 pub const T_CHECKOUT_SELECT_ZONE: Key = "checkout.select_zone";
-pub const T_CHECKOUT_GARDEN_DISCOUNT: Key = "checkout.garden_discount";
-pub const T_CHECKOUT_GARDEN_DISCOUNT_PCT: Key = "checkout.garden_discount_pct";
 pub const T_CHECKOUT_STARS: Key = "checkout.stars";
 pub const T_CHECKOUT_STARS_AVAILABLE: Key = "checkout.stars_available";
 pub const T_CHECKOUT_STARS_MINUS: Key = "checkout.stars_minus";
@@ -551,7 +489,6 @@ pub const T_SUCCESS_MY_ORDERS: Key = "success.my_orders";
 pub const T_SUCCESS_TRACK_ORDER: Key = "success.track_order";
 pub const T_SUCCESS_PUSH_REASSURANCE: Key = "success.push_reassurance";
 pub const T_SUCCESS_REWARDS_TITLE: Key = "success.rewards.title";
-pub const T_SUCCESS_REWARDS_GARDEN: Key = "success.rewards.garden";
 pub const T_SUCCESS_REWARDS_BONUS: Key = "success.rewards.bonus";
 pub const T_SUCCESS_CASHBACK_EARNED: Key = "success.cashback_earned";
 pub const T_SUCCESS_SHARE_REFERRAL: Key = "success.share_referral";
@@ -568,7 +505,7 @@ pub const T_REORDER_DEEP_LINK_TITLE: Key = "reorder.deep_link.title";
 // Orders screen hard-coded strings
 pub const T_ORDERS_HISTORY: Key = "orders.history";
 pub const T_ORDERS_NO_ORDERS: Key = "orders.no_orders";
-pub const T_ORDERS_BROWSE_SETS: Key = "orders.browse_sets";
+pub const T_ORDERS_BROWSE_BIKES: Key = "orders.browse_bikes";
 pub const T_ORDERS_ORDER: Key = "orders.order";
 pub const T_ORDERS_CLOSE: Key = "orders.close";
 pub const T_ORDERS_STATUS_PENDING: Key = "orders.status.pending";
@@ -611,10 +548,16 @@ pub const T_PROFILE_FRIENDS_INVITED: Key = "profile.friends_invited";
 pub const T_PROFILE_REFERRAL_LINK: Key = "profile.referral_link";
 pub const T_PROFILE_COPY: Key = "profile.copy";
 pub const T_PROFILE_INVITED: Key = "profile.invited";
+/// `{0}` is what a friend is worth, already formatted by
+/// `crate::trios::pricing::format_baht`, symbol included.
+///
+/// Both translations spelled the amount out — `฿100` — while the real figure is
+/// `loyalty_config.referral_bonus`, whose own default is 200. The screen was
+/// promising half of what the shop pays, in a string no compiler and no test
+/// could relate to the number it was about.
 pub const T_PROFILE_EARN_PER_REF: Key = "profile.earn_per_ref";
 pub const T_PROFILE_QUICK_ACTIONS: Key = "profile.quick_actions";
 pub const T_PROFILE_MY_ORDERS: Key = "profile.my_orders";
-pub const T_PROFILE_MY_GARDEN: Key = "profile.my_garden";
 pub const T_PROFILE_QUESTS: Key = "profile.quests";
 pub const T_PROFILE_REFERRAL_PROGRAM: Key = "profile.referral_program";
 pub const T_PROFILE_TIER_BENEFITS: Key = "profile.tier_benefits";
@@ -701,12 +644,6 @@ pub const T_HOME_SOMMELIER: Key = "home.sommelier";
 pub const T_HOME_GAME: Key = "home.game";
 pub const T_HOME_SHARE: Key = "home.share";
 pub const T_HOME_WATCH_VIDEO: Key = "home.watch_video";
-pub const T_HOME_GARDEN_TITLE: Key = "home.garden.title";
-pub const T_HOME_GARDEN_WATER: Key = "home.garden.water";
-pub const T_HOME_GARDEN_HARVEST: Key = "home.garden.harvest";
-pub const T_HOME_GARDEN_GROWING: Key = "home.garden.growing";
-pub const T_HOME_GARDEN_EMPTY: Key = "home.garden.empty";
-pub const T_HOME_GARDEN_CTA: Key = "home.garden.cta";
 pub const T_HOME_REORDER_LAST: Key = "home.reorder.last";
 pub const T_HOME_REORDER_STATUS: Key = "home.reorder.status";
 pub const T_HOME_REORDER_CTA: Key = "home.reorder.cta";
@@ -848,7 +785,6 @@ fn get_ru_translation(key: Key) -> Value {
         T_NAV_HOME => "Главная",
         T_NAV_SETS => "Наборы",
         T_NAV_MENU => "Меню",
-        T_NAV_GARDEN => "Сад",
         T_NAV_ACCESSORIES => "Аксессуары",
         T_NAV_TEA => "Напитки",
         T_NAV_QUEST => "Квест",
@@ -860,97 +796,21 @@ fn get_ru_translation(key: Key) -> Value {
         T_NAV_FLEET => "Байки",
         T_NAV_RIDE => "Заезд",
         T_NAV_ORDERS => "Заказы",
-        // Garden
-        T_GARDEN_TITLE => "Мой сад",
-        T_GARDEN_SUBTITLE => "Выращивайте и собирайте урожай",
-        T_GARDEN_EMPTY_LABEL => "Пока нет растений",
-        T_GARDEN_EMPTY_CTA => "Выберите товар и начните выращивать скидку — заказ не обязателен!",
-        T_GARDEN_LOADING => "Загружаем ваш сад...",
-        T_GARDEN_CHANGE_PRODUCT => "Сменить товар",
-        T_GARDEN_RESET_PROGRESS => "Начать сначала",
-        T_GARDEN_RESET_CONFIRM_TITLE => "Начать сначала?",
-        T_GARDEN_RESET_CONFIRM_BODY => "Текущий прогресс полива будет сброшен. Растение вернётся к семечку (0/14), но целевой товар останется прежним.",
-        T_GARDEN_CANCEL => "Отмена",
-        T_GARDEN_CONFIRM_RESET => "Сбросить прогресс",
-        T_GARDEN_TAB_GARDEN => "Сад",
-        T_GARDEN_HARVEST => "Собрать",
-        T_GARDEN_PLANT => "Посадить",
-        T_GARDEN_ONBOARD_TITLE => "Как работает сад",
-        T_GARDEN_ONBOARD_STEP1 => "1. Посадите семечко из заказа",
-        T_GARDEN_ONBOARD_STEP2 => "2. Поливайте растение, чтобы оно росло",
-        T_GARDEN_ONBOARD_STEP3 => "3. Соберите урожай и получите награды",
-        T_GARDEN_ONBOARD_CTA => "Понятно",
-        T_GARDEN_DIAGNOSTICS_COPY => "📋 Скопировать диагностику",
-        T_GARDEN_DIAGNOSTICS_COPIED => "📋 Диагностика скопирована",
-        T_GARDEN_CHOOSE_PRODUCT => "🌱 Выбрать товар",
-        T_GARDEN_CHOOSE_PRODUCT_HINT => "↑ Нажми «Выбрать товар» вверху",
-        T_GARDEN_PLANT_ALT => "Растение",
-        T_GARDEN_PRODUCT_ALT => "Товар",
-        T_GARDEN_DISCOUNT_BADGE => "🎯 скидка",
-        T_GARDEN_READY => "🏆 ГОТОВО",
-        T_GARDEN_COOLDOWN => "⏳ Перерыв...",
-        T_GARDEN_CHOOSER_TITLE => "Выбери товар для скидки",
-        T_GARDEN_CHOOSER_EMPTY => "Нет доступных товаров",
-        T_GARDEN_CHOOSER_LOADING => "Загрузка...",
-        T_GARDEN_CHOOSER_ERROR => "Ошибка: {0}",
-        T_GARDEN_ERROR_HARVEST => "Не удалось собрать урожай: {0}",
-        T_GARDEN_ERROR_RESET => "Не удалось сбросить: {0}",
-        T_GARDEN_ERROR_COOLDOWN => "Скидку можно растить раз в сутки — подожди после прошлого сбора.",
-        T_GARDEN_ERROR_PRODUCT_UNAVAILABLE => "Товар недоступен.",
-        T_GARDEN_WATER_CTA => "💧 Полей растение и получи скидку",
-        T_GARDEN_HARVEST_CTA => "🏆 Собери урожай и примени скидку",
-        T_GARDEN_STREAK_DAYS => "дней подряд",
-        T_GARDEN_STREAK_BEST => "рекорд",
-        T_GARDEN_NEXT_WATER_IN => "Следующий полив через {0}",
-        T_GARDEN_WATER_NOW => "Можно полить сейчас",
-        T_GARDEN_REWARD_EXPIRES_IN => "Скидка сгорит через {0}",
-        T_GARDEN_START_FIRST_GARDEN => "Посади первое растение и вырасти скидку",
-        T_GARDEN_START_FIRST_GARDEN_CTA => "В сад",
-        T_GARDEN_CAT_STRAIN => "🌿 Сорта",
-        T_GARDEN_CAT_ACCESSORY => "💨 Аксессуары",
-        T_GARDEN_CAT_TEA => "🥤 Напитки",
-        T_GARDEN_CAT_SET => "📦 Наборы",
-        T_GARDEN_CAT_ACCESSORY_SET => "🔧 Сеты аксессуаров",
-        T_GARDEN_CAT_TEA_SET => "🫖 Сеты напитков",
-        T_GARDEN_CAT_OTHER => "Прочее",
-        T_GARDEN_SHARE_CTA => "📤 Поделиться садом",
-        T_GARDEN_SHARE_TITLE => "Загляни в мой сад",
-        T_GARDEN_SHARE_TEXT => "Я выращиваю скидки в TurboBaby — присоединяйся!",
-        T_GARDEN_INVITE_TITLE => "Тебя пригласили в сад",
-        T_GARDEN_INVITE_BODY => "Примешь приглашение? Когда ты оформишь первый заказ, ты и твой друг получите бонусные баллы.",
-        T_GARDEN_INVITE_ACCEPT => "Принять",
-        T_GARDEN_INVITE_SKIP => "Пропустить",
-        T_GARDEN_MILESTONE_HINT => "До {0}-дневного milestone: {1} дн.",
-        T_GARDEN_NEXT_WATER_COUNTDOWN => "Следующий полив через {0}",
-        T_GARDEN_INVITEES_TITLE => "🤝 Друзья в саду",
-        T_GARDEN_INVITEES_EMPTY => "Пригласи друзей — получайте бонусы вместе",
-        T_GARDEN_INVITEE_JOINED => "присоединился",
-        T_GARDEN_INVITEE_WATERING => "стрик {0}",
-        T_GARDEN_INVITEE_ORDERED => "оформил заказ",
-        T_GARDEN_INVITEE_UNKNOWN => "Друг",
-        T_GARDEN_REFERRAL_MILESTONE_TITLE => "Рубежи друзей",
-        T_GARDEN_REFERRAL_MILESTONE_SUBTITLE => "{0}/{1} друзей",
-        T_GARDEN_REFERRAL_MILESTONE_AWARDED => "🏆 {0} друзей — +{1}฿",
-        T_GARDEN_HOME_VIRAL_CTA => "Пригласи друга — не потеряй стрик 🔥",
-        T_GARDEN_ACHIEVEMENTS_TITLE => "🏅 Достижения",
-        T_GARDEN_ACHIEVEMENTS_EMPTY => "Пока нет достижений. Полей растение, чтобы получить первую!",
-        T_GARDEN_ACHIEVEMENTS_NEW => "Новое достижение!",
-        T_GARDEN_LEADERBOARD_TITLE => "🏆 Лидерборд садоводов",
-        T_GARDEN_LEADERBOARD_TAB_STREAK => "🔥 Стрик",
-        T_GARDEN_LEADERBOARD_TAB_HARVEST => "🌾 Урожай",
-        T_GARDEN_LEADERBOARD_YOU => "Вы",
-        T_GARDEN_LEADERBOARD_RANK => "#",
-        T_GARDEN_GAME_HIGH_SCORES => "🏆 Рекорды TurboBaby Catch",
-        T_GARDEN_GAME_SUBMIT_SCORE => "Сохранить рекорд",
-        T_GARDEN_GAME_TOP_PLAYERS => "Топ игроков",
-        T_GARDEN_GAME_YOUR_RANK => "Твой ранг",
-        T_GARDEN_GAME_NO_SCORES => "Пока нет рекордов — стань первым!",
+        T_GAME_HARVEST => "Собрать",
+        T_GAME_PLANT => "Посадить",
+        T_REFERRAL_INVITEES_TITLE => "🤝 Приглашённые друзья",
+        T_REFERRAL_INVITEES_EMPTY => "Пригласи друзей — получайте бонусы вместе",
+        T_REFERRAL_INVITEE_JOINED => "присоединился",
+        T_REFERRAL_INVITEE_ORDERED => "оформил заказ",
+        T_REFERRAL_INVITEE_UNKNOWN => "Друг",
+        T_REFERRAL_MILESTONE_TITLE => "Рубежи друзей",
+        T_REFERRAL_MILESTONE_SUBTITLE => "{0}/{1} друзей",
+        T_REFERRAL_MILESTONE_AWARDED => "🏆 {0} друзей — +{1}",
         T_CLOSE => "Закрыть",
         // Telegram buttons
         T_BTN_CART => "Корзина",
         T_BTN_CHECKOUT => "Оформить",
         T_BTN_PAY => "Оплатить",
-        T_BTN_WATER => "Полить",
         T_BTN_CHECKIN => "Чек-ин",
         T_BTN_ORDER => "Заказать",
         T_BTN_ASK => "Спросить",
@@ -1053,7 +913,7 @@ fn get_ru_translation(key: Key) -> Value {
         T_CART_TITLE => "🛒 Корзина",
         T_CART_EMPTY => "Корзина пуста",
         T_CART_EMPTY_DESC => "Добавьте товары из каталога",
-        T_CART_BROWSE_MENU => "🌿 В меню",
+        T_CART_BROWSE_MENU => "🏍 К байкам",
         T_CART_BROWSE_SETS => "🎁 В наборы",
         T_CHECKOUT_TITLE => "🛍️ Оформление",
         T_ORDERS_TITLE => "📋 Заказы",
@@ -1064,7 +924,7 @@ fn get_ru_translation(key: Key) -> Value {
         T_DELIVERY => "Доставка",
         T_DELIVERY_ZONE => "Зона доставки",
         T_DELIVERY_ETA => "Время доставки: {0} мин",
-        T_DELIVERY_FEE => "Стоимость доставки: {0} ฿",
+        T_DELIVERY_FEE => "Стоимость доставки: {0}",
         T_PAYMENT => "Оплата",
         T_PLACE_ORDER => "Оформить заказ ✓",
         T_CHECKOUT_ERR_NAME => "Укажите ваше имя",
@@ -1112,14 +972,6 @@ fn get_ru_translation(key: Key) -> Value {
         T_LOADING => "Загрузка...",
         T_FILTER_ALL => "Все",
         // Variant C
-        T_REVIEWS_TITLE => "Отзывы",
-        T_REVIEWS_AVG => "Средняя оценка: {0}",
-        T_REVIEWS_EMPTY => "Пока нет отзывов. Будьте первым!",
-        T_REVIEW_LEAVE => "Оставить отзыв",
-        T_REVIEW_RATING => "Оценка",
-        T_REVIEW_COMMENT => "Комментарий",
-        T_REVIEW_SUBMIT => "Отправить",
-        T_REVIEW_THANKS => "Спасибо за отзыв!",
         T_LAB_CERTS => "Лабораторные тесты",
         T_LAB_CERT_THC => "THC",
         T_LAB_CERT_CBD => "CBD",
@@ -1172,25 +1024,24 @@ fn get_ru_translation(key: Key) -> Value {
         T_CART_ITEMS => "{0} товаров",
         T_CART_DINE_IN => "🍽 На месте",
         T_CART_TAKEAWAY => "🥡 С собой",
-        T_CART_BONUS_NUDGE => "🎁 У вас {0} ฿ бонусов — применим при оформлении",
+        T_CART_BONUS_NUDGE => "🎁 У вас {0} бонусов — применим при оформлении",
         T_CART_DECREASE_QTY => "Убавить количество",
         T_CART_REMOVE => "Удалить товар",
         T_CART_IMAGE_ALT => "Фото: {0}",
+        T_CART_LINE_EACH => "{0} за шт · {1}",
         // Checkout screen
         T_CHECKOUT_CART_EMPTY => "Корзина пуста",
         T_CHECKOUT_STEP_CART => "Корзина",
         T_CHECKOUT_STEP_DETAILS => "Детали",
         T_CHECKOUT_STEP_CONFIRM => "Подтверждение",
         T_CHECKOUT_SELECT_ZONE => "Выберите зону доставки",
-        T_CHECKOUT_GARDEN_DISCOUNT => "🌱 Скидка из сада",
-        T_CHECKOUT_GARDEN_DISCOUNT_PCT => "{0}% на {1}",
         T_CHECKOUT_STARS => "⭐ Звёзды",
         T_CHECKOUT_STARS_AVAILABLE => "доступно {0}",
-        T_CHECKOUT_STARS_MINUS => "−{0} ฿",
+        T_CHECKOUT_STARS_MINUS => "−{0}",
         T_CHECKOUT_BONUS => "🎁 Бонусы",
-        T_CHECKOUT_BONUS_AVAILABLE => "доступно {0} ฿",
-        T_CHECKOUT_BONUS_APPLIED => "−{0} ฿",
-        T_CHECKOUT_BONUS_MAX => "макс. {0} ฿",
+        T_CHECKOUT_BONUS_AVAILABLE => "доступно {0}",
+        T_CHECKOUT_BONUS_APPLIED => "−{0}",
+        T_CHECKOUT_BONUS_MAX => "макс. {0}",
         T_CHECKOUT_NAME_LABEL => "Имя *",
         T_CHECKOUT_NAME_PLACEHOLDER => "Введите имя",
         T_CHECKOUT_PHONE_LABEL => "Телефон *",
@@ -1348,9 +1199,8 @@ fn get_ru_translation(key: Key) -> Value {
         T_SUCCESS_TRACK_ORDER => "🔔 Отслеживать",
         T_SUCCESS_PUSH_REASSURANCE => "🔔 Push-уведомления о каждом статусе заказа",
         T_SUCCESS_REWARDS_TITLE => "🎁 Что вы получите",
-        T_SUCCESS_REWARDS_GARDEN => "🌱 Семя сада за strain-заказ",
         T_SUCCESS_REWARDS_BONUS => "⭐ Бонусные баллы: {0}",
-        T_SUCCESS_CASHBACK_EARNED => "💸 +{0} ฿ кешбэка начислено",
+        T_SUCCESS_CASHBACK_EARNED => "💸 +{0} кешбэка начислено",
         T_SUCCESS_SHARE_REFERRAL => "👥 Пригласить друга",
         T_SUCCESS_REORDER => "🔄 Повторить заказ",
         T_SUCCESS_STATUS_LOADING => "Обновляем статус…",
@@ -1360,7 +1210,7 @@ fn get_ru_translation(key: Key) -> Value {
         // Orders screen
         T_ORDERS_HISTORY => "История заказов",
         T_ORDERS_NO_ORDERS => "Пока нет заказов",
-        T_ORDERS_BROWSE_SETS => "Смотреть наборы 🎁",
+        T_ORDERS_BROWSE_BIKES => "🏍 К байкам",
         T_ORDERS_ORDER => "Заказ №{0}",
         T_ORDERS_CLOSE => "Закрыть",
         T_ORDERS_STATUS_PENDING => "⏳ Ожидает",
@@ -1400,10 +1250,9 @@ fn get_ru_translation(key: Key) -> Value {
         T_PROFILE_REFERRAL_LINK => "🔗 Реферальная ссылка",
         T_PROFILE_COPY => "Копировать",
         T_PROFILE_INVITED => "👥 Приглашено: {0}",
-        T_PROFILE_EARN_PER_REF => "Получайте ฿100 за друга",
+        T_PROFILE_EARN_PER_REF => "Получайте {0} за друга",
         T_PROFILE_QUICK_ACTIONS => "Быстрые действия",
         T_PROFILE_MY_ORDERS => "Мои заказы",
-        T_PROFILE_MY_GARDEN => "Мой сад",
         T_PROFILE_QUESTS => "Квесты",
         T_PROFILE_REFERRAL_PROGRAM => "Реферальная программа",
         T_PROFILE_TIER_BENEFITS => "💎 Привилегии уровня",
@@ -1487,12 +1336,6 @@ fn get_ru_translation(key: Key) -> Value {
         T_HOME_GAME => "Игра",
         T_HOME_SHARE => "Поделиться",
         T_HOME_WATCH_VIDEO => "Смотреть видео",
-        T_HOME_GARDEN_TITLE => "🌱 Мой сад",
-        T_HOME_GARDEN_WATER => "💧 Полить",
-        T_HOME_GARDEN_HARVEST => "🏆 Собрать",
-        T_HOME_GARDEN_GROWING => "растёт",
-        T_HOME_GARDEN_EMPTY => "Посадите семя из заказа — получите скидку",
-        T_HOME_GARDEN_CTA => "В сад",
         T_HOME_REORDER_LAST => "Последний заказ",
         T_HOME_REORDER_STATUS => "Статус",
         T_HOME_REORDER_CTA => "Повторить заказ",
@@ -1591,7 +1434,6 @@ fn get_en_translation(key: Key) -> Value {
         T_NAV_HOME => "Home",
         T_NAV_SETS => "Sets",
         T_NAV_MENU => "Menu",
-        T_NAV_GARDEN => "Garden",
         T_NAV_ACCESSORIES => "Accessories",
         T_NAV_TEA => "Drinks",
         T_NAV_QUEST => "Quest",
@@ -1603,97 +1445,21 @@ fn get_en_translation(key: Key) -> Value {
         T_NAV_FLEET => "Bikes",
         T_NAV_RIDE => "Ride",
         T_NAV_ORDERS => "Orders",
-        // Garden
-        T_GARDEN_TITLE => "My Garden",
-        T_GARDEN_SUBTITLE => "Grow and harvest your plants",
-        T_GARDEN_EMPTY_LABEL => "No plants yet",
-        T_GARDEN_EMPTY_CTA => "Choose a product and start growing a discount — no order required!",
-        T_GARDEN_LOADING => "Loading your garden...",
-        T_GARDEN_CHANGE_PRODUCT => "Change product",
-        T_GARDEN_RESET_PROGRESS => "Start over",
-        T_GARDEN_RESET_CONFIRM_TITLE => "Start over?",
-        T_GARDEN_RESET_CONFIRM_BODY => "Current watering progress will be reset. The plant returns to seed (0/14), but the chosen product stays the same.",
-        T_GARDEN_CANCEL => "Cancel",
-        T_GARDEN_CONFIRM_RESET => "Reset progress",
-        T_GARDEN_TAB_GARDEN => "Garden",
-        T_GARDEN_HARVEST => "Harvest",
-        T_GARDEN_PLANT => "Plant",
-        T_GARDEN_ONBOARD_TITLE => "How Garden works",
-        T_GARDEN_ONBOARD_STEP1 => "1. Plant a seed from your order",
-        T_GARDEN_ONBOARD_STEP2 => "2. Water it to grow through stages",
-        T_GARDEN_ONBOARD_STEP3 => "3. Harvest and earn rewards",
-        T_GARDEN_ONBOARD_CTA => "Got it",
-        T_GARDEN_DIAGNOSTICS_COPY => "📋 Copy diagnostics",
-        T_GARDEN_DIAGNOSTICS_COPIED => "📋 Diagnostics copied",
-        T_GARDEN_CHOOSE_PRODUCT => "🌱 Choose product",
-        T_GARDEN_CHOOSE_PRODUCT_HINT => "↑ Tap Choose product above",
-        T_GARDEN_PLANT_ALT => "Plant",
-        T_GARDEN_PRODUCT_ALT => "Product",
-        T_GARDEN_DISCOUNT_BADGE => "🎯 discount",
-        T_GARDEN_READY => "🏆 READY",
-        T_GARDEN_COOLDOWN => "⏳ Cooldown...",
-        T_GARDEN_CHOOSER_TITLE => "Pick a product for discount",
-        T_GARDEN_CHOOSER_EMPTY => "No products available",
-        T_GARDEN_CHOOSER_LOADING => "Loading...",
-        T_GARDEN_CHOOSER_ERROR => "Error: {0}",
-        T_GARDEN_ERROR_HARVEST => "Failed to harvest: {0}",
-        T_GARDEN_ERROR_RESET => "Failed to reset: {0}",
-        T_GARDEN_ERROR_COOLDOWN => "Discount can be grown once a day — wait until after the last harvest.",
-        T_GARDEN_ERROR_PRODUCT_UNAVAILABLE => "Product unavailable.",
-        T_GARDEN_WATER_CTA => "💧 Water the plant to grow a discount",
-        T_GARDEN_HARVEST_CTA => "🏆 Harvest and apply the discount",
-        T_GARDEN_STREAK_DAYS => "day streak",
-        T_GARDEN_STREAK_BEST => "best",
-        T_GARDEN_NEXT_WATER_IN => "Next water in {0}",
-        T_GARDEN_WATER_NOW => "Ready to water now",
-        T_GARDEN_REWARD_EXPIRES_IN => "Discount expires in {0}",
-        T_GARDEN_START_FIRST_GARDEN => "Plant your first garden and grow a discount",
-        T_GARDEN_START_FIRST_GARDEN_CTA => "Open garden",
-        T_GARDEN_CAT_STRAIN => "🌿 Strains",
-        T_GARDEN_CAT_ACCESSORY => "💨 Accessories",
-        T_GARDEN_CAT_TEA => "🥤 Drinks",
-        T_GARDEN_CAT_SET => "📦 Sets",
-        T_GARDEN_CAT_ACCESSORY_SET => "🔧 Accessory sets",
-        T_GARDEN_CAT_TEA_SET => "🫖 Drink sets",
-        T_GARDEN_CAT_OTHER => "Other",
-        T_GARDEN_SHARE_CTA => "📤 Share garden",
-        T_GARDEN_SHARE_TITLE => "Check out my garden",
-        T_GARDEN_SHARE_TEXT => "I'm growing discounts in TurboBaby — join me!",
-        T_GARDEN_INVITE_TITLE => "You've been invited to the garden",
-        T_GARDEN_INVITE_BODY => "Accept the invite? When you place your first order, you and your friend will both earn bonus points.",
-        T_GARDEN_INVITE_ACCEPT => "Accept",
-        T_GARDEN_INVITE_SKIP => "Skip",
-        T_GARDEN_MILESTONE_HINT => "{1} days to {0}-day milestone",
-        T_GARDEN_NEXT_WATER_COUNTDOWN => "Next water in {0}",
-        T_GARDEN_INVITEES_TITLE => "🤝 Friends in the garden",
-        T_GARDEN_INVITEES_EMPTY => "Invite friends — earn bonuses together",
-        T_GARDEN_INVITEE_JOINED => "joined",
-        T_GARDEN_INVITEE_WATERING => "streak {0}",
-        T_GARDEN_INVITEE_ORDERED => "placed an order",
-        T_GARDEN_INVITEE_UNKNOWN => "Friend",
-        T_GARDEN_REFERRAL_MILESTONE_TITLE => "Friend milestones",
-        T_GARDEN_REFERRAL_MILESTONE_SUBTITLE => "{0}/{1} friends",
-        T_GARDEN_REFERRAL_MILESTONE_AWARDED => "🏆 {0} friends — +{1}฿",
-        T_GARDEN_HOME_VIRAL_CTA => "Invite a friend — don't lose your streak 🔥",
-        T_GARDEN_ACHIEVEMENTS_TITLE => "🏅 Achievements",
-        T_GARDEN_ACHIEVEMENTS_EMPTY => "No achievements yet. Water a plant to earn your first!",
-        T_GARDEN_ACHIEVEMENTS_NEW => "New achievement!",
-        T_GARDEN_LEADERBOARD_TITLE => "🏆 Gardener leaderboard",
-        T_GARDEN_LEADERBOARD_TAB_STREAK => "🔥 Streak",
-        T_GARDEN_LEADERBOARD_TAB_HARVEST => "🌾 Harvest",
-        T_GARDEN_LEADERBOARD_YOU => "You",
-        T_GARDEN_LEADERBOARD_RANK => "#",
-        T_GARDEN_GAME_HIGH_SCORES => "🏆 TurboBaby Catch high scores",
-        T_GARDEN_GAME_SUBMIT_SCORE => "Save score",
-        T_GARDEN_GAME_TOP_PLAYERS => "Top players",
-        T_GARDEN_GAME_YOUR_RANK => "Your rank",
-        T_GARDEN_GAME_NO_SCORES => "No scores yet — be the first!",
+        T_GAME_HARVEST => "Harvest",
+        T_GAME_PLANT => "Plant",
+        T_REFERRAL_INVITEES_TITLE => "🤝 Friends you invited",
+        T_REFERRAL_INVITEES_EMPTY => "Invite friends — earn bonuses together",
+        T_REFERRAL_INVITEE_JOINED => "joined",
+        T_REFERRAL_INVITEE_ORDERED => "placed an order",
+        T_REFERRAL_INVITEE_UNKNOWN => "Friend",
+        T_REFERRAL_MILESTONE_TITLE => "Friend milestones",
+        T_REFERRAL_MILESTONE_SUBTITLE => "{0}/{1} friends",
+        T_REFERRAL_MILESTONE_AWARDED => "🏆 {0} friends — +{1}",
         T_CLOSE => "Close",
         // Telegram buttons
         T_BTN_CART => "Cart",
         T_BTN_CHECKOUT => "Checkout",
         T_BTN_PAY => "Pay",
-        T_BTN_WATER => "Water",
         T_BTN_CHECKIN => "Check In",
         T_BTN_ORDER => "Order",
         T_BTN_ASK => "Ask",
@@ -1796,7 +1562,7 @@ fn get_en_translation(key: Key) -> Value {
         T_CART_TITLE => "🛒 Cart",
         T_CART_EMPTY => "Your cart is empty",
         T_CART_EMPTY_DESC => "Browse the menu to add items",
-        T_CART_BROWSE_MENU => "🌿 Browse menu",
+        T_CART_BROWSE_MENU => "🏍 Browse bikes",
         T_CART_BROWSE_SETS => "🎁 Browse sets",
         T_CHECKOUT_TITLE => "🛍️ Checkout",
         T_ORDERS_TITLE => "📋 Orders",
@@ -1807,7 +1573,7 @@ fn get_en_translation(key: Key) -> Value {
         T_DELIVERY => "Delivery",
         T_DELIVERY_ZONE => "Delivery Zone",
         T_DELIVERY_ETA => "Delivery time: {0} min",
-        T_DELIVERY_FEE => "Delivery fee: {0} ฿",
+        T_DELIVERY_FEE => "Delivery fee: {0}",
         T_PAYMENT => "Payment",
         T_PLACE_ORDER => "Place Order ✓",
         T_CHECKOUT_ERR_NAME => "Please enter your name",
@@ -1855,14 +1621,6 @@ fn get_en_translation(key: Key) -> Value {
         T_LOADING => "Loading...",
         T_FILTER_ALL => "All",
         // Variant C
-        T_REVIEWS_TITLE => "Reviews",
-        T_REVIEWS_AVG => "Average rating: {0}",
-        T_REVIEWS_EMPTY => "No reviews yet. Be the first!",
-        T_REVIEW_LEAVE => "Leave a review",
-        T_REVIEW_RATING => "Rating",
-        T_REVIEW_COMMENT => "Comment",
-        T_REVIEW_SUBMIT => "Submit",
-        T_REVIEW_THANKS => "Thanks for your review!",
         T_LAB_CERTS => "Lab tests",
         T_LAB_CERT_THC => "THC",
         T_LAB_CERT_CBD => "CBD",
@@ -1915,25 +1673,24 @@ fn get_en_translation(key: Key) -> Value {
         T_CART_ITEMS => "{0} items",
         T_CART_DINE_IN => "🍽 Dine-in",
         T_CART_TAKEAWAY => "🥡 Takeaway",
-        T_CART_BONUS_NUDGE => "🎁 {0} ฿ bonus available at checkout",
+        T_CART_BONUS_NUDGE => "🎁 {0} bonus available at checkout",
         T_CART_DECREASE_QTY => "Decrease quantity",
         T_CART_REMOVE => "Remove item",
         T_CART_IMAGE_ALT => "Photo: {0}",
+        T_CART_LINE_EACH => "{0} each · {1}",
         // Checkout screen
         T_CHECKOUT_CART_EMPTY => "Cart is empty",
         T_CHECKOUT_STEP_CART => "Cart",
         T_CHECKOUT_STEP_DETAILS => "Details",
         T_CHECKOUT_STEP_CONFIRM => "Confirm",
         T_CHECKOUT_SELECT_ZONE => "Select delivery zone",
-        T_CHECKOUT_GARDEN_DISCOUNT => "🌱 Garden discount",
-        T_CHECKOUT_GARDEN_DISCOUNT_PCT => "{0}% off {1}",
         T_CHECKOUT_STARS => "⭐ Stars",
         T_CHECKOUT_STARS_AVAILABLE => "{0} available",
-        T_CHECKOUT_STARS_MINUS => "−{0} ฿",
+        T_CHECKOUT_STARS_MINUS => "−{0}",
         T_CHECKOUT_BONUS => "🎁 Bonus",
-        T_CHECKOUT_BONUS_AVAILABLE => "{0} ฿ available",
-        T_CHECKOUT_BONUS_APPLIED => "−{0} ฿",
-        T_CHECKOUT_BONUS_MAX => "max {0} ฿",
+        T_CHECKOUT_BONUS_AVAILABLE => "{0} available",
+        T_CHECKOUT_BONUS_APPLIED => "−{0}",
+        T_CHECKOUT_BONUS_MAX => "max {0}",
         T_CHECKOUT_NAME_LABEL => "Name *",
         T_CHECKOUT_NAME_PLACEHOLDER => "Enter your name",
         T_CHECKOUT_PHONE_LABEL => "Phone *",
@@ -2091,9 +1848,8 @@ fn get_en_translation(key: Key) -> Value {
         T_SUCCESS_TRACK_ORDER => "🔔 Track Order",
         T_SUCCESS_PUSH_REASSURANCE => "🔔 Push notifications for every order status",
         T_SUCCESS_REWARDS_TITLE => "🎁 Your Rewards",
-        T_SUCCESS_REWARDS_GARDEN => "🌱 Garden seed for strain orders",
         T_SUCCESS_REWARDS_BONUS => "⭐ Bonus points: {0}",
-        T_SUCCESS_CASHBACK_EARNED => "💸 +{0} ฿ cashback earned",
+        T_SUCCESS_CASHBACK_EARNED => "💸 +{0} cashback earned",
         T_SUCCESS_SHARE_REFERRAL => "👥 Invite a friend",
         T_SUCCESS_REORDER => "🔄 Reorder",
         T_SUCCESS_STATUS_LOADING => "Updating status…",
@@ -2103,7 +1859,7 @@ fn get_en_translation(key: Key) -> Value {
         // Orders screen
         T_ORDERS_HISTORY => "Your order history",
         T_ORDERS_NO_ORDERS => "No orders yet",
-        T_ORDERS_BROWSE_SETS => "Browse Sets 🎁",
+        T_ORDERS_BROWSE_BIKES => "🏍 Browse bikes",
         T_ORDERS_ORDER => "Order #{0}",
         T_ORDERS_CLOSE => "Close",
         T_ORDERS_STATUS_PENDING => "⏳ Pending",
@@ -2143,10 +1899,9 @@ fn get_en_translation(key: Key) -> Value {
         T_PROFILE_REFERRAL_LINK => "🔗 Referral Link",
         T_PROFILE_COPY => "Copy",
         T_PROFILE_INVITED => "👥 {0} invited",
-        T_PROFILE_EARN_PER_REF => "Earn ฿100 per referral",
+        T_PROFILE_EARN_PER_REF => "Earn {0} per referral",
         T_PROFILE_QUICK_ACTIONS => "Quick Actions",
         T_PROFILE_MY_ORDERS => "My Orders",
-        T_PROFILE_MY_GARDEN => "My Garden",
         T_PROFILE_QUESTS => "Quests",
         T_PROFILE_REFERRAL_PROGRAM => "Referral Program",
         T_PROFILE_TIER_BENEFITS => "💎 Tier Benefits",
@@ -2230,12 +1985,6 @@ fn get_en_translation(key: Key) -> Value {
         T_HOME_GAME => "Game",
         T_HOME_SHARE => "Share",
         T_HOME_WATCH_VIDEO => "Watch video",
-        T_HOME_GARDEN_TITLE => "🌱 My Garden",
-        T_HOME_GARDEN_WATER => "💧 Water",
-        T_HOME_GARDEN_HARVEST => "🏆 Harvest",
-        T_HOME_GARDEN_GROWING => "growing",
-        T_HOME_GARDEN_EMPTY => "Plant a seed from your order to earn a discount",
-        T_HOME_GARDEN_CTA => "Open Garden",
         T_HOME_REORDER_LAST => "Last order",
         T_HOME_REORDER_STATUS => "Status",
         T_HOME_REORDER_CTA => "Reorder",
@@ -2351,7 +2100,6 @@ pub fn get_translations(lang: Lang) -> Translations {
         T_NAV_HOME,
         T_NAV_SETS,
         T_NAV_MENU,
-        T_NAV_GARDEN,
         T_NAV_ACCESSORIES,
         T_NAV_TEA,
         T_NAV_QUEST,
@@ -2361,48 +2109,11 @@ pub fn get_translations(lang: Lang) -> Translations {
         T_NAV_FLEET,
         T_NAV_RIDE,
         T_NAV_ORDERS,
-        // Garden
-        T_GARDEN_TITLE,
-        T_GARDEN_SUBTITLE,
-        T_GARDEN_EMPTY_LABEL,
-        T_GARDEN_EMPTY_CTA,
-        T_GARDEN_LOADING,
-        T_GARDEN_CHANGE_PRODUCT,
-        T_GARDEN_RESET_PROGRESS,
-        T_GARDEN_RESET_CONFIRM_TITLE,
-        T_GARDEN_RESET_CONFIRM_BODY,
-        T_GARDEN_CANCEL,
-        T_GARDEN_CONFIRM_RESET,
-        T_GARDEN_DIAGNOSTICS_COPY,
-        T_GARDEN_DIAGNOSTICS_COPIED,
-        T_GARDEN_CHOOSE_PRODUCT,
-        T_GARDEN_CHOOSE_PRODUCT_HINT,
-        T_GARDEN_PLANT_ALT,
-        T_GARDEN_PRODUCT_ALT,
-        T_GARDEN_DISCOUNT_BADGE,
-        T_GARDEN_READY,
-        T_GARDEN_COOLDOWN,
-        T_GARDEN_CHOOSER_TITLE,
-        T_GARDEN_CHOOSER_EMPTY,
-        T_GARDEN_CHOOSER_LOADING,
-        T_GARDEN_CHOOSER_ERROR,
-        T_GARDEN_ERROR_HARVEST,
-        T_GARDEN_ERROR_RESET,
-        T_GARDEN_ERROR_COOLDOWN,
-        T_GARDEN_ERROR_PRODUCT_UNAVAILABLE,
-        T_GARDEN_CAT_STRAIN,
-        T_GARDEN_CAT_ACCESSORY,
-        T_GARDEN_CAT_TEA,
-        T_GARDEN_CAT_SET,
-        T_GARDEN_CAT_ACCESSORY_SET,
-        T_GARDEN_CAT_TEA_SET,
-        T_GARDEN_CAT_OTHER,
         T_CLOSE,
         // Telegram buttons
         T_BTN_CART,
         T_BTN_CHECKOUT,
         T_BTN_PAY,
-        T_BTN_WATER,
         T_BTN_CHECKIN,
         T_BTN_ORDER,
         T_BTN_ASK,

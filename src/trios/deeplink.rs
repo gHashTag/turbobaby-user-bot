@@ -91,10 +91,15 @@ pub enum Target {
         source: String,
     },
     Reorder(String),
-    Garden {
-        referrer: Option<i64>,
-        source: Option<String>,
-    },
+    /// The customer's own referral page: their invite link, who accepted it,
+    /// and which milestones it has reached.
+    ///
+    /// This replaces `Garden { referrer, source }`, which carried an inviter's
+    /// telegram id in the payload itself. The garden is removed (D5) and that
+    /// second invite path went with it: a referral is recorded from
+    /// `/start ref_<code>`, by the bot, against an opaque code — never from a
+    /// raw id a stranger could type into a link.
+    Referrals,
 }
 
 /// The character set Telegram allows in a `start` parameter.
@@ -183,46 +188,28 @@ pub fn parse(payload: &str) -> Option<Target> {
         return (!id.is_empty()).then(|| Target::Order(id.to_string()));
     }
 
-    if payload == "garden" {
-        return Some(Target::Garden {
-            referrer: None,
-            source: None,
-        });
-    }
-    if let Some(rest) = payload.strip_prefix("garden__") {
-        if rest.is_empty() {
-            return None;
-        }
-        let (id_part, source) = match rest.find("__") {
-            Some(at) => (&rest[..at], Some(&rest[at + 2..])),
-            None => (rest, None),
-        };
-        if let Some(s) = source {
-            if !usable_source(s) {
-                return None;
-            }
-        }
-        let referrer = id_part.parse::<i64>().ok()?;
-        if referrer <= 0 {
-            return None;
-        }
-        return Some(Target::Garden {
-            referrer: Some(referrer),
-            source: source.map(str::to_string),
-        });
+    if payload == "referrals" {
+        return Some(Target::Referrals);
     }
 
+    // `garden`, `garden__<referrer>` and `garden__<referrer>__<source>` were
+    // read here. They are deliberately not read any more, and deliberately not
+    // aliased onto anything either: a link still sitting in someone's Telegram
+    // history now falls through to `None`, so the bot answers it with the
+    // ordinary welcome — which creates the profile and the referral code —
+    // instead of a Mini App button to a screen that no longer exists.
     None
 }
 
 /// Build the payload for any target — the exact inverse of [`parse`].
 ///
-/// One builder beside the one parser, because the four shapes this replaces
-/// (`cart__`, `o_`, `reorder__`, `garden__`) were written in `src/ui/share.rs`,
-/// whose `#[cfg(test)] mod tests` holds 22 assertions and runs **none of them**:
-/// `src/ui` is `#[cfg(target_arch = "wasm32")]`, so `cargo test` never reaches
-/// it. The parse side was covered here and the build side was not, so a builder
-/// emitting `garden_<id>` instead of `garden__<id>` would have shipped green.
+/// One builder beside the one parser, because the shapes this replaces
+/// (`cart__`, `o_`, `reorder__`, and the retired `garden__`) were written in
+/// `src/ui/share.rs`, whose `#[cfg(test)] mod tests` runs **none of its**
+/// assertions: `src/ui` is `#[cfg(target_arch = "wasm32")]`, so `cargo test`
+/// never reaches it. The parse side was covered here and the build side was
+/// not, so a builder emitting `reorder_<id>` instead of `reorder__<id>` ships
+/// green — which is exactly how the garden's builder drifted before it went.
 ///
 /// Returns `None` for a target that cannot be transported — an id carrying a
 /// character Telegram rejects, or a payload over 64 bytes — rather than
@@ -234,18 +221,7 @@ pub fn payload_for(target: &Target) -> Option<String> {
         Target::Reorder(id) => format!("reorder__{id}"),
         Target::Cart { source } if source.is_empty() => "cart".to_string(),
         Target::Cart { source } => format!("cart__{source}"),
-        Target::Garden {
-            referrer: None,
-            source: _,
-        } => "garden".to_string(),
-        Target::Garden {
-            referrer: Some(id),
-            source: None,
-        } => format!("garden__{id}"),
-        Target::Garden {
-            referrer: Some(id),
-            source: Some(s),
-        } => format!("garden__{id}__{s}"),
+        Target::Referrals => "referrals".to_string(),
     };
     transportable(&payload).then_some(payload)
 }
@@ -256,7 +232,9 @@ pub fn payload_for(target: &Target) -> Option<String> {
 /// other target reached its screen — the product screens, the cart, the order,
 /// the reorder — and `Garden` had a resolver, an analytics event and an invite
 /// signal but **no navigation**, so `startapp=garden` (the link the watering
-/// reminder sends) resolved correctly and left the customer on the home screen.
+/// reminder sent) resolved correctly and left the customer on the home screen.
+/// That target is gone with the garden (D5); `Referrals` took its place as the
+/// destination the surviving referral notifications link to.
 ///
 /// A sixth variant cannot be added without the compiler stopping here, which is
 /// the only guarantee available: the wiring itself lives in `src/ui`, and no
@@ -273,7 +251,7 @@ pub fn destination(target: &Target) -> &'static str {
         Target::Order(_) => "/orders",
         Target::Reorder(_) => "/cart",
         Target::Cart { .. } => "/cart",
-        Target::Garden { .. } => "/garden",
+        Target::Referrals => "/referrals",
     }
 }
 
@@ -304,7 +282,8 @@ mod tests {
     ///
     /// "Landed on the home screen" is precisely how a broken deep link looks to
     /// a customer: no error, no 404, just the wrong place. `Garden` shipped in
-    /// exactly that state.
+    /// exactly that state, and `Referrals` — the target that replaced it — is
+    /// reached by a live notification button, so it must not repeat it.
     #[test]
     fn every_target_names_a_screen_that_is_not_the_home_screen() {
         let mut seen = std::collections::BTreeSet::new();
@@ -321,14 +300,7 @@ mod tests {
             Target::Cart {
                 source: String::new(),
             },
-            Target::Garden {
-                referrer: None,
-                source: None,
-            },
-            Target::Garden {
-                referrer: Some(7),
-                source: Some("tg".into()),
-            },
+            Target::Referrals,
         ] {
             seen.insert(destination(&t));
         }
@@ -447,18 +419,7 @@ mod tests {
         targets.push(Target::Cart {
             source: "utm_instagram".to_string(),
         });
-        targets.push(Target::Garden {
-            referrer: None,
-            source: None,
-        });
-        targets.push(Target::Garden {
-            referrer: Some(144_022_504),
-            source: None,
-        });
-        targets.push(Target::Garden {
-            referrer: Some(144_022_504),
-            source: Some("tg".to_string()),
-        });
+        targets.push(Target::Referrals);
 
         for t in &targets {
             let payload = payload_for(t)
@@ -478,14 +439,14 @@ mod tests {
                 payload.len()
             );
         }
-        assert_eq!(targets.len(), 5 * IDS.len() + 2 * IDS.len() + 5);
+        assert_eq!(targets.len(), 5 * IDS.len() + 2 * IDS.len() + 3);
     }
 
     /// The shapes `src/ui/share.rs` writes by hand, pinned here where a test
     /// can see them. If a builder there drifts, this is the file that says so.
     #[test]
     fn the_wire_shapes_are_exactly_what_the_app_writes() {
-        let cases: [(Target, &str); 7] = [
+        let cases: [(Target, &str); 5] = [
             (
                 Target::Cart {
                     source: String::new(),
@@ -500,27 +461,7 @@ mod tests {
             ),
             (Target::Order("abc".into()), "o_abc"),
             (Target::Reorder("abc".into()), "reorder__abc"),
-            (
-                Target::Garden {
-                    referrer: None,
-                    source: None,
-                },
-                "garden",
-            ),
-            (
-                Target::Garden {
-                    referrer: Some(7),
-                    source: None,
-                },
-                "garden__7",
-            ),
-            (
-                Target::Garden {
-                    referrer: Some(7),
-                    source: Some("tg".into()),
-                },
-                "garden__7__tg",
-            ),
+            (Target::Referrals, "referrals"),
         ];
         for (t, want) in cases {
             assert_eq!(payload_for(&t).as_deref(), Some(want), "{t:?}");
@@ -590,14 +531,13 @@ mod tests {
             "cart__utm_a",
             "o_7f3a",
             "reorder__7f3a",
-            "garden",
-            "garden__123",
+            "referrals",
         ] {
             assert!(is_miniapp_payload(other), "{other} must be answerable");
             checked += 1;
         }
         // A scan that checks nothing reports a clean sweep.
-        assert!(checked >= 26, "only {checked} payloads were checked");
+        assert!(checked >= 25, "only {checked} payloads were checked");
     }
 
     #[test]
@@ -640,7 +580,6 @@ mod tests {
         }
         assert!(parse("o_").is_none());
         assert!(parse("reorder__").is_none());
-        assert!(parse("garden__").is_none());
     }
 
     /// `p_set_x` must not be read as kind `p` with id `set_x`, which is what
@@ -673,29 +612,54 @@ mod tests {
                 source: "utm_a".into()
             })
         );
-        assert_eq!(
-            parse("garden"),
-            Some(Target::Garden {
-                referrer: None,
-                source: None
-            })
-        );
-        assert_eq!(
-            parse("garden__123__utm_a"),
-            Some(Target::Garden {
-                referrer: Some(123),
-                source: Some("utm_a".into())
-            })
-        );
+        assert_eq!(parse("referrals"), Some(Target::Referrals));
         // A reorder is not an order: `reorder__x` must not be read as an order
         // whose id happens to start with `reorder`.
         assert!(matches!(parse("reorder__x"), Some(Target::Reorder(_))));
     }
 
+    /// Every shape the retired garden ever put on the wire now parses to
+    /// nothing — including the ones that were *already* refused, so this test
+    /// cannot pass merely because the parser rejects garbage.
+    ///
+    /// `is_miniapp_payload` is asserted beside `parse` because that is the
+    /// half a customer feels: a payload the bot still answers with a Mini App
+    /// button, opening a route that no longer exists, is a dead tap. Falling
+    /// through to `None` gets them the ordinary welcome instead.
     #[test]
-    fn a_garden_referrer_must_be_a_real_seat_number() {
-        assert!(parse("garden__0").is_none(), "0 is not a referrer");
-        assert!(parse("garden__-5").is_none(), "negative is not a referrer");
-        assert!(parse("garden__abc").is_none(), "not a number at all");
+    fn no_garden_payload_is_answerable_any_more() {
+        for retired in [
+            "garden",
+            "garden__144022504",
+            "garden__144022504__tg",
+            "garden__",
+            "garden__0",
+            "garden__-5",
+            "garden__abc",
+        ] {
+            assert!(parse(retired).is_none(), "{retired} still parses");
+            assert!(
+                !is_miniapp_payload(retired),
+                "the bot would still answer {retired} with a button to /garden"
+            );
+        }
+    }
+
+    /// The referral page is reachable by deep link, because a live
+    /// notification button points at it.
+    ///
+    /// `src/notification_queue.rs` builds one for every `friend_joined`,
+    /// `friend_ordered` and `milestone` message. It used to build
+    /// `startapp=garden`; if this payload stops being answerable, that button
+    /// goes back to doing nothing and nothing else in the repository notices.
+    #[test]
+    fn the_referral_notification_button_has_somewhere_to_land() {
+        assert_eq!(parse("referrals"), Some(Target::Referrals));
+        assert!(is_miniapp_payload("referrals"));
+        assert_eq!(
+            payload_for(&Target::Referrals).as_deref(),
+            Some("referrals")
+        );
+        assert_eq!(destination(&Target::Referrals), "/referrals");
     }
 }

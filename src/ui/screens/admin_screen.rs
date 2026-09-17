@@ -232,6 +232,12 @@ struct AdminBike {
     /// CLICK 125 today (D12).
     #[serde(default = "default_true")]
     offered: bool,
+    /// `true` puts the family on the forecourt. Independent of
+    /// `sale_price_thb`: for sale with no published asking price is the
+    /// honest "price on request" state, and requiring a number here would
+    /// force the shop to invent one (D9/D11, issue #11).
+    #[serde(default)]
+    for_sale: bool,
     #[serde(default)]
     description_ru: Option<String>,
     #[serde(default)]
@@ -313,12 +319,31 @@ struct ServiceRecordsResp {
 // ── Absent-stays-absent helpers (D9) ──────────────────────────
 
 /// A price nobody published renders as a dash. Never `0`, never an
-/// average, never a "from" price. `is_finite` also catches a NaN that
-/// reached us through a JSON number.
-fn money_thb(value: Option<f64>) -> String {
-    match value.filter(|v| v.is_finite()) {
-        Some(v) => format!("{v:.0} ฿"),
-        None => "—".to_string(),
+/// average, never a "from" price.
+///
+/// This was a second implementation until 2026-09-16, and the two had
+/// drifted in both directions: it wrote `3000 ฿` where the customer-facing
+/// copy writes `฿3,000` (the symbol's side is a property of the market, not
+/// of the screen — D15/D18), and it rendered a stored `0.0` as `0 ฿`, which
+/// is precisely the `NOT NULL DEFAULT 0` value D9 says is an absent price
+/// wearing a number. The rule is one function; the admin gets the same one.
+use super::catalog_screen::{finite_money, money_thb, MONEY_DASH};
+
+/// An aggregate, not a price — and the difference is the zero.
+///
+/// [`money_thb`] reads `Some(0.0)` as an absent price wearing a `NOT NULL
+/// DEFAULT 0` (D9), which is right for a tariff nobody published and wrong
+/// here: revenue of exactly zero is a measurement, and a shop that has taken
+/// no orders today should read `฿0`, not `—`. Only a missing or non-finite
+/// total is unknown.
+///
+/// The symbol still comes from the market profile. The revenue card used to
+/// put the currency in its *heading* — "Выручка (Бат)" — and print a bare
+/// number, which is a third convention on a screen that already had two.
+fn revenue_thb(value: Option<f64>) -> String {
+    match value.filter(|v| v.is_finite() && *v >= 0.0) {
+        Some(v) => crate::trios::pricing::format_baht(v),
+        None => MONEY_DASH.to_string(),
     }
 }
 
@@ -461,15 +486,26 @@ fn bike_sub(bike: &AdminBike) -> String {
 /// What this screen is allowed to say about the client-facing price (D11).
 /// When the door published no number the answer is a sentence, never a
 /// number — not exact, not "from", not an average, not a range.
+///
+/// `finite_money`, not a bare `is_finite`: a client rate of `0.0` is the
+/// `NOT NULL DEFAULT 0` the door never filled in, and printing it as `฿0`
+/// would be the bot showing a number D11 says only a human may quote. It
+/// falls through to the sentence below instead.
 fn client_rate_note(bike: &AdminBike) -> String {
-    match bike.client_rate_thb_day.filter(|v| v.is_finite()) {
+    match finite_money(bike.client_rate_thb_day) {
         Some(rate) => {
             let source = match bike.client_rate_source.as_deref() {
                 Some("door") => "дверь",
                 Some(other) if !other.trim().is_empty() => other,
                 _ => "источник не указан",
             };
-            format!("Цена клиенту: {rate:.0} ฿/сут ({source})")
+            // `{}/сут`, matching `bike_sub` twelve lines up. This line spelled
+            // the tariff `{rate:.0} ฿/сут` until 2026-09-16 — two conventions
+            // for one unit on one card.
+            format!(
+                "Цена клиенту: {}/сут ({source})",
+                crate::trios::pricing::format_baht(rate)
+            )
         }
         None => "Цена клиенту: называет человек — бот числа не показывает".to_string(),
     }
@@ -1008,13 +1044,17 @@ fn BikesTab() -> Element {
         }
     });
 
-    // Fetch data into cache (runs on mount). `include_unoffered` is what
-    // makes CLICK 125 visible here: the public catalog hides it (D12), the
-    // admin has to be able to see and re-open it.
+    // Fetch data into cache (runs on mount). The admin list is its own route,
+    // not the public one with a flag: the public catalog hides CLICK 125
+    // (D12) and the admin has to see it to re-open it, but no query string an
+    // anonymous caller can type may reach a hidden family. This used to point
+    // at `/api/bikes?include_unoffered=true`, which was never a route — the
+    // flag was read by nothing and the screen has always been looking at the
+    // offered families only.
     let _ = use_resource(move || {
         let init_data = init_data.read().clone();
         async move {
-            let url = format!("{}/api/bikes?include_unoffered=true", api_base_url());
+            let url = format!("{}/api/admin/bikes", api_base_url());
             if let Ok(resp) = HTTP_CLIENT
                 .clone()
                 .get(&url)
@@ -1156,7 +1196,7 @@ fn BikesTab() -> Element {
                                    // row until the next fetch — a dash, not a
                                    // copy of the tariff (D11).
                                    client_rate_thb_day: None, client_rate_source: None,
-                                   offered: true,
+                                   offered: true, for_sale: false,
                                    description_ru: if dru.is_empty() { None } else { Some(dru.clone()) },
                                    description_en: if den.is_empty() { None } else { Some(den.clone()) },
                                    image_url: if img.is_empty() { None } else { Some(img.clone()) },
@@ -1183,12 +1223,12 @@ fn BikesTab() -> Element {
                                        "deposit_thb": money_json(dep),
                                        "monthly_low_season_thb": money_json(mon),
                                        "sale_price_thb": money_json(sale),
-                                       "offered": true,
+                                       "offered": true, "for_sale": false,
                                        "description_ru": text_json(&dru),
                                        "description_en": text_json(&den),
                                        "image_url": text_json(&img),
                                    });
-                                   let url = format!("{}/api/bikes", api_base_url());
+                                   let url = format!("{}/api/admin/bikes", api_base_url());
                                    let res = HTTP_CLIENT.clone().post(&url)
                                        .header("X-Telegram-Init-Data", init_data.read().clone())
     .header("X-Admin-Token", admin_token())
@@ -1278,7 +1318,7 @@ fn BikesTab() -> Element {
                                            let id = id.clone();
                                            if let Some(b) = cache.write().iter_mut().find(|b| b.id == id) { b.offered = next_offered; }
                                            spawn(async move {
-                                               let url = format!("{}/api/bikes/{}/offered", api_base_url(), id);
+                                               let url = format!("{}/api/admin/bikes/{}/offered", api_base_url(), id);
                                                let res = HTTP_CLIENT.clone().put(&url)
                                                    .header("X-Telegram-Init-Data", init_data.read().clone())
                                                    .header("X-Admin-Token", admin_token())
@@ -1312,7 +1352,7 @@ fn BikesTab() -> Element {
                        let deleted = cache.read().iter().find(|b| b.id == id).cloned();
                        cache.write().retain(|b| b.id != id);
                        spawn(async move {
-                           let url = format!("{}/api/bikes/{}", api_base_url(), id);
+                           let url = format!("{}/api/admin/bikes/{}", api_base_url(), id);
                            let res = HTTP_CLIENT.clone().delete(&url)
                                .header("X-Telegram-Init-Data", init_data.read().clone())
                                .header("X-Admin-Token", admin_token())
@@ -1404,7 +1444,7 @@ fn BikeUnitsTab() -> Element {
     let _ = use_resource(move || {
         let init_data = init_data.read().clone();
         async move {
-            let url = format!("{}/api/bikes?include_unoffered=true", api_base_url());
+            let url = format!("{}/api/admin/bikes", api_base_url());
             if let Ok(resp) = HTTP_CLIENT
                 .clone()
                 .get(&url)
@@ -2356,6 +2396,7 @@ fn EditBikeCard(
     let mut deposit = use_signal(|| money_edit_value(item.deposit_thb));
     let mut monthly = use_signal(|| money_edit_value(item.monthly_low_season_thb));
     let mut sale_price = use_signal(|| money_edit_value(item.sale_price_thb));
+    let mut for_sale = use_signal(|| item.for_sale);
     let mut description_ru = use_signal(|| item.description_ru.clone().unwrap_or_default());
     let mut description_en = use_signal(|| item.description_en.clone().unwrap_or_default());
     let mut image_url = use_signal(|| item.image_url.clone().unwrap_or_default());
@@ -2391,9 +2432,23 @@ fn EditBikeCard(
                input { style: input_style(), placeholder: "Тариф ฿/сут ДО скидки — пусто = прочерк", value: "{base_rate}", r#type: "number", oninput: move |e| base_rate.set(e.value()) }
                input { style: input_style(), placeholder: "Депозит ฿ — пусто = прочерк", value: "{deposit}", r#type: "number", oninput: move |e| deposit.set(e.value()) }
                input { style: input_style(), placeholder: "Месяц, низкий сезон ฿ — пусто = прочерк", value: "{monthly}", r#type: "number", oninput: move |e| monthly.set(e.value()) }
-               input { style: input_style(), placeholder: "Цена продажи ฿ — пусто = не продаётся", value: "{sale_price}", r#type: "number", oninput: move |e| sale_price.set(e.value()) }
+               input { style: input_style(), placeholder: "Цена продажи ฿ — пусто = цена по запросу", value: "{sale_price}", r#type: "number", oninput: move |e| sale_price.set(e.value()) }
+               // The forecourt flag, separate from the asking price on purpose:
+               // "продаём, цена по запросу" is a real state and the shop must be
+               // able to say it without inventing a number (D9/D11, issue #11).
+               // Before this the two were one field — the placeholder above used
+               // to read "пусто = не продаётся" — so a bike could only be
+               // advertised by publishing a price for it.
+               label { style: "display:flex;align-items:center;gap:8px;font-size:13px;color:#d8d8e4;cursor:pointer;",
+                   input {
+                       r#type: "checkbox",
+                       checked: "{for_sale}",
+                       onchange: move |e| for_sale.set(e.checked()),
+                   }
+                   "Продаётся"
+               }
                div { style: "font-size:11px;color:#8b8b9e;",
-                   "Пустое поле цены сохраняется как отсутствие цены и показывается прочерком. Ноль вводить не нужно и он не принимается."
+                   "Пустое поле цены сохраняется как отсутствие цены и показывается прочерком. Ноль вводить не нужно и он не принимается. «Продаётся» без цены — это «цена по запросу»."
                }
                input { style: input_style(), placeholder: "Порядок сортировки", value: "{sort_order}", r#type: "number", oninput: move |e| sort_order.set(e.value()) }
                textarea { style: textarea_style(), placeholder: "Описание (RU)", value: "{description_ru}", oninput: move |e| description_ru.set(e.value()) }
@@ -2435,6 +2490,7 @@ fn EditBikeCard(
                            let dru = description_ru(); let den = description_en();
                            let img = crate::trios::validation::normalize_media_url(&image_url());
                            let offered = item.offered;
+                           let for_sale = for_sale();
                            let id = item_id.clone();
                            let original = cache.read().iter().find(|b| b.id == id).cloned();
                            if let Some(b) = cache.write().iter_mut().find(|b| b.id == id) {
@@ -2444,6 +2500,7 @@ fn EditBikeCard(
                                b.displacement_cc = cc;
                                b.base_rate_thb_day = rate; b.deposit_thb = dep;
                                b.monthly_low_season_thb = mon; b.sale_price_thb = sale;
+                               b.for_sale = for_sale;
                                b.sort_order = order;
                                b.description_ru = if dru.is_empty() { None } else { Some(dru.clone()) };
                                b.description_en = if den.is_empty() { None } else { Some(den.clone()) };
@@ -2462,13 +2519,13 @@ fn EditBikeCard(
                                    "deposit_thb": money_json(dep),
                                    "monthly_low_season_thb": money_json(mon),
                                    "sale_price_thb": money_json(sale),
-                                   "offered": offered,
+                                   "offered": offered, "for_sale": for_sale,
                                    "sort_order": order,
                                    "description_ru": text_json(&dru),
                                    "description_en": text_json(&den),
                                    "image_url": text_json(&img),
                                });
-                               let url = format!("{}/api/bikes/{}", api_base_url(), id);
+                               let url = format!("{}/api/admin/bikes/{}", api_base_url(), id);
                                let res = HTTP_CLIENT.clone().put(&url)
                                    .header("X-Telegram-Init-Data", init_data.read().clone())
     .header("X-Admin-Token", admin_token())
@@ -2730,7 +2787,7 @@ fn DashboardTab() -> Element {
             } else if let Some(s) = stats.read().clone() {
                 div { class: "admin-stats-grid",
                     {stat_card("Всего заказов", count_or_dash(s.total_orders), "cyan")}
-                    {stat_card("Выручка (Бат)", s.total_revenue.filter(|v| v.is_finite()).map(|v| format!("{:.0}", v)).unwrap_or_else(|| "—".to_string()), "")}
+                    {stat_card("Выручка", revenue_thb(s.total_revenue), "")}
                     {stat_card("Моделей в прокате", count_or_dash(s.offered_families), "yellow")}
                     {stat_card("Свободных юнитов", count_or_dash(s.units_available), "")}
                 }
@@ -2952,23 +3009,23 @@ fn OrderDetailModal(order: AdminOrder, on_close: EventHandler<()>) -> Element {
                 div { style: "border-top:1px solid #2a2a4a;padding-top:12px;display:flex;flex-direction:column;gap:4px;",
                     div { style: "display:flex;justify-content:space-between;font-size:13px;color:#888;",
                         span { "Подытог" }
-                        span { "{order.subtotal:.0} Бат" }
+                        span { "{crate::trios::pricing::format_baht(order.subtotal)}" }
                     }
                     if order.bonus_used > 0.0 {
                         div { style: "display:flex;justify-content:space-between;font-size:13px;color:#ffe600;",
                             span { "Бонусы" }
-                            span { "-{order.bonus_used:.0} Бат" }
+                            span { "-{crate::trios::pricing::format_baht(order.bonus_used)}" }
                         }
                     }
                     if order.stars_used > 0 {
                         div { style: "display:flex;justify-content:space-between;font-size:13px;color:#7dd3fc;",
                             span { "⭐ Stars" }
-                            span { "-{order.stars_used} ฿" }
+                            span { "-{crate::trios::pricing::format_baht(order.stars_used as f64)}" }
                         }
                     }
                     div { style: "display:flex;justify-content:space-between;font-size:16px;font-weight:700;color:#39ff14;",
                         span { "Итого" }
-                        span { "{order.total:.0} Бат" }
+                        span { "{crate::trios::pricing::format_baht(order.total)}" }
                     }
                 }
                 if let Some(ref shop) = order.shop_id {
@@ -4633,14 +4690,19 @@ fn EventsTab() -> Element {
         // Build the timestamps BEFORE `submitting` is latched: an early return
         // past that point would leave the Save button disabled for good.
         //
-        // Admin input is interpreted as Asia/Bangkok (UTC+7), not browser local
-        // time. The conversion is shared and tested (`trios::calendar`) rather
-        // than a `format!` here — a datetime-local value carrying seconds used
-        // to be concatenated into an unparseable timestamp and rejected by the
-        // server with an error nobody could see.
-        const SHOP_OFFSET: &str = "+07:00";
+        // Admin input is interpreted on the declared market's clock (D18), not
+        // browser local time. The conversion is shared and tested
+        // (`trios::calendar`) rather than a `format!` here — a datetime-local
+        // value carrying seconds used to be concatenated into an unparseable
+        // timestamp and rejected by the server with an error nobody could see.
+        //
+        // The offset was a literal, the second of the two sites D18's own list
+        // of them missed. The DST fallback lives in `trios::market`, not here:
+        // a default is a policy about the market.
+        let shop_offset = crate::trios::market::MARKET.rfc3339_offset_or_utc();
+        let shop_offset = shop_offset.as_str();
         let starts_at_api =
-            match crate::trios::calendar::datetime_local_to_rfc3339(&starts_at.read(), SHOP_OFFSET)
+            match crate::trios::calendar::datetime_local_to_rfc3339(&starts_at.read(), shop_offset)
             {
                 Some(s) => s,
                 None => {
@@ -4656,7 +4718,7 @@ fn EventsTab() -> Element {
         let ends_at_api = if ends_at_raw.is_empty() {
             None
         } else {
-            match crate::trios::calendar::datetime_local_to_rfc3339(&ends_at_raw, SHOP_OFFSET) {
+            match crate::trios::calendar::datetime_local_to_rfc3339(&ends_at_raw, shop_offset) {
                 Some(s) => Some(s),
                 None => {
                     push_toast(
@@ -4981,7 +5043,7 @@ fn EventsTab() -> Element {
                             let price_label = if let Some(s) = ev.price_stars.filter(|s| *s > 0) {
                                 format!("{} ⭐", s)
                             } else if let Some(p) = ev.price_baht.filter(|p| *p > 0.0) {
-                                format!("{:.0} ฿", p)
+                                crate::trios::pricing::format_baht(p)
                             } else {
                                 "бесплатно".to_string()
                             };

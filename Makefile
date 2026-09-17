@@ -1,11 +1,11 @@
-# Woody Weed Bot - удобные команды
+# TurboBaby Bot - удобные команды
 
 .PHONY: help dev backend frontend logs logs-logs-api sql-logs clean
 
 .DEFAULT_GOAL := help
 
 help: ## Показать эту справку
-	@echo "🌿 Woody Weed Bot - команды:"
+	@echo "🏍️ TurboBaby Bot - команды:"
 	@echo ""
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[0;32m%-20s\033[0m %s\n", $$1, $$2}'
 

@@ -19,10 +19,14 @@ use crate::locales::get_locale;
 // both were dead code — and CI runs clippy with `-D warnings`, so dead code
 // here is a failed build, not a cosmetic complaint.
 //
-// The locale strings they read (`garden_water_reminder`, `garden_harvest_ready`,
-// `garden_reward_expiry`) are deliberately still in src/locales.rs: the
-// notification worker renders queued rows by `kind`, and a deployed database
-// can still hold unsent garden rows. See DECISIONS.md D18.
+// The three locale strings they read (`garden_water_reminder`,
+// `garden_harvest_ready`, `garden_reward_expiry`) were kept on the theory that
+// the notification worker could still render a queued garden row. It cannot:
+// `build_message` has no arm for any of those kinds, and nothing has ever
+// enqueued one — they were sent directly by the deleted functions, not through
+// the queue. So the strings were deleted on 2026-09-16 along with the menu
+// label `garden`. `garden_friend_watered_legacy` is the one that genuinely does
+// survive for queued rows, and it kept its garden wording for that reason.
 
 /// Cycle #79: notify the customer that their order status changed.
 ///
@@ -109,15 +113,26 @@ mod tests {
         assert!(!locale.order_open_app.is_empty());
     }
 
+    /// The button on every referral notification, in both locales.
+    ///
+    /// This test used to assert three garden reminder strings as well. They
+    /// were unreachable, and asserting that an unreachable string is non-empty
+    /// is how it stays in the file for ever: the assertion reads as a wiring
+    /// check and is really just a spelling check.
     #[test]
-    fn garden_reminder_locale_fields_are_present() {
-        let ru = get_locale("ru");
-        assert!(!ru.garden_water_reminder.is_empty());
-        assert!(!ru.garden_harvest_ready.is_empty());
-        assert!(!ru.garden_open_app.is_empty());
-        let en = get_locale("en");
-        assert!(!en.garden_water_reminder.is_empty());
-        assert!(!en.garden_harvest_ready.is_empty());
-        assert!(!en.garden_open_app.is_empty());
+    fn the_referral_notification_button_has_a_label() {
+        for lang in ["ru", "en"] {
+            let locale = get_locale(lang);
+            assert!(
+                !locale.referrals_open_app.is_empty(),
+                "{lang}: the notification button would render with no text"
+            );
+            assert!(
+                !locale.referrals_open_app.to_lowercase().contains("сад")
+                    && !locale.referrals_open_app.to_lowercase().contains("garden"),
+                "{lang}: the button says {:?} but opens /referrals",
+                locale.referrals_open_app
+            );
+        }
     }
 }

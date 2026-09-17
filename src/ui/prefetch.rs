@@ -20,10 +20,10 @@ fn endpoint_for(route: &Route) -> Option<String> {
         // prefetcher does not know the id; warming the admin /api/orders
         // instead earned a 401 per hover (production logs, 2026-09-13).
         Route::Orders {} => return None,
-        // /api/user/profile is not a route the server exposes, and the garden
-        // endpoints died with the garden tables (D5). Warming dead endpoints
-        // is log noise, not speed.
-        Route::Profile {} | Route::Garden {} => return None,
+        // /api/user/profile is not a route the server exposes. Warming a dead
+        // endpoint is log noise, not speed. (`Route::Garden` was listed here
+        // too, for the same reason; the route itself is gone now — D5.)
+        Route::Profile {} => return None,
         _ => return None,
     };
     Some(format!("{}{}", base, path))

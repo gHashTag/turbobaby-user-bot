@@ -164,6 +164,6 @@ fn test_config(database_url: &str) -> Config {
         delivery_zones: DeliveryZones::default(),
         promptpay: QrConfig::default(),
         referral_welcome_bonus: 50.0,
-        garden_share_sources: vec!["utm_a".to_string(), "utm_b".to_string()],
+        referral_share_sources: vec!["utm_a".to_string(), "utm_b".to_string()],
     }
 }

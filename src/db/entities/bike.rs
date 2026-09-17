@@ -57,6 +57,14 @@ pub struct Model {
     /// FALSE closes a family to NEW rentals without cancelling a contract
     /// still running on one of its units — `click-125` today (D12).
     pub offered: bool,
+
+    // ── Sale (086_bikes_for_sale.sql) ────────────────────────────────
+    /// Family is offered for sale. Deliberately independent of
+    /// `sale_price_thb`: `true` with a NULL price is "price on request",
+    /// which is the only honest state for a bike the shop will sell at a
+    /// number it has not published (D9/D11). Never set from the internal
+    /// per-unit purchase cost (D14).
+    pub for_sale: bool,
     pub description_ru: Option<String>,
     pub description_en: Option<String>,
     pub image_url: Option<String>,

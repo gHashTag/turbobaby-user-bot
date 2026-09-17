@@ -176,7 +176,7 @@ pub(crate) fn miniapp_deep_link(bot_username: &str, start_param: &str) -> String
 // keep in sync, which is the defect this whole area just paid for.
 
 /// Does this `/start` payload address a Mini App target (product card, order,
-/// cart, reorder, garden invite) rather than a plain chat start?
+/// cart, reorder, referrals) rather than a plain chat start?
 ///
 /// Shared links use `t.me/<bot>?start=<payload>` rather than `?startapp=`:
 /// `?startapp=` only launches the Mini App when the bot has a **Main Mini App**
@@ -201,6 +201,11 @@ pub(crate) fn is_miniapp_start_payload(payload: &str) -> bool {
     //   p_set_, o_,      the bot answered with a Mini App button for payloads
     //   reorder__,       the app cannot parse, so the button opened the home
     //   garden__0, ...   screen instead of the card
+    //
+    // The `garden*` payloads are now settled the other way — neither side
+    // answers them (D5) — but the pair is still one function, which is the
+    // point: a removal on one side cannot leave the other side promising a
+    // screen that is gone.
     crate::trios::deeplink::is_miniapp_payload(payload)
 }
 
@@ -365,12 +370,16 @@ mod deep_link_tests {
             "o_",
             "reorder__7f3a",
             "reorder__",
+            // Kept in the corpus after the garden's removal (D5): the two
+            // functions must agree that these are dead, not merely stop being
+            // asked about them.
             "garden",
             "garden__123",
             "garden__123__utm_a",
             "garden__0",
             "garden__-5",
             "garden__abc",
+            "referrals",
             "ref_0u3KYyAT",
             "channel",
             "",
@@ -409,8 +418,13 @@ mod deep_link_tests {
             "a campaign cart link must be answered with a Mini App button"
         );
         assert!(
-            is_miniapp_start_payload("garden"),
-            "a garden invite with no referrer must still open the garden"
+            is_miniapp_start_payload("referrals"),
+            "the referral notification button must open the referrals screen"
+        );
+        assert!(
+            !is_miniapp_start_payload("garden"),
+            "the bot must not answer a garden link with a button to a screen \
+             this build does not have"
         );
         assert!(
             !is_miniapp_start_payload("p_set_"),

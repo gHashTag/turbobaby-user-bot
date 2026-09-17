@@ -185,17 +185,9 @@ impl ApiClient {
         self.post("/api/orders", order).await
     }
 
-    // Garden endpoints
-    pub async fn get_user_plants(&self, telegram_id: i64) -> Result<Vec<Plant>> {
-        #[derive(Deserialize)]
-        struct PlantsResponse {
-            plants: Vec<Plant>,
-        }
-        let resp: PlantsResponse = self
-            .get(&format!("/api/garden/plants?telegram_id={}", telegram_id))
-            .await?;
-        Ok(resp.plants)
-    }
+    // `get_user_plants` stood here, calling `/api/garden/plants`. The garden
+    // is removed (D5) and no `/api/garden/*` router was ever merged, so the
+    // method could only ever return a transport error.
 
     // Quest endpoints
     pub async fn get_quest_locations(&self) -> Result<Vec<QuestLocation>> {
@@ -282,32 +274,13 @@ impl ApiClient {
         Self::run(req).await
     }
 
-    // Reviews & lab certificates (Variant C)
-    pub async fn get_strain_reviews(&self, strain_id: &str) -> Result<ReviewsList> {
-        self.get(&format!(
-            "/api/reviews?strain_id={}",
-            urlencoding::encode(strain_id)
-        ))
-        .await
-    }
-
-    pub async fn get_strain_lab_certs(&self, strain_id: &str) -> Result<Vec<LabCertificate>> {
-        #[derive(Deserialize)]
-        struct CertsResponse {
-            lab_certificates: Vec<LabCertificate>,
-        }
-        let resp: CertsResponse = self
-            .get(&format!(
-                "/api/strains/{}/lab-certs",
-                urlencoding::encode(strain_id)
-            ))
-            .await?;
-        Ok(resp.lab_certificates)
-    }
-
-    pub async fn create_review(&self, req: &CreateReviewRequest) -> Result<serde_json::Value> {
-        self.post("/api/reviews", req).await
-    }
+    // Здесь стояли три метода Variant C: `get_strain_reviews`,
+    // `get_strain_lab_certs` и `create_review`. Первый и третий ходили в
+    // `/api/reviews` — маршрут поверх `strain_reviews`, удалённой миграцией
+    // 083. Второй ходил в `/api/strains/{id}/lab-certs`, которого на сервере
+    // не было никогда: ни один маршрут его не объявлял, так что он отвечал 404
+    // с первого дня. Клиент, ушедший вперёд сервера, выглядит как рабочий код
+    // ровно до первого вызова.
 
     pub async fn send_broadcast(&self, req: &BroadcastRequest) -> Result<serde_json::Value> {
         self.post("/api/admin/broadcast", req).await

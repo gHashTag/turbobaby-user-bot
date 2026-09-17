@@ -6,12 +6,12 @@
 use crate::ui::components::lazy_screen::LazyScreen;
 use crate::ui::screens::{
     ARHuntScreen, AccessoriesScreen, AdminScreen, CartScreen, CatalogScreen, CheckoutScreen,
-    EventDetailScreen, EventsScreen, GameScreen, GardenScreen, HomeScreen, LocationQuestScreen,
-    MenuScreen, MyBookingsScreen, OrderDetailScreen, OrdersScreen, ProfileScreen, QuestScreen,
-    ReferralsScreen, RideScreen, SetsScreen, SommelierScreen, SuccessScreen, TeaScreen,
-    TechTreeScreen, TreasureHuntScreen,
+    EventDetailScreen, EventsScreen, GameScreen, HomeScreen, LocationQuestScreen, MenuScreen,
+    MyBookingsScreen, OrderDetailScreen, OrdersScreen, ProfileScreen, QuestScreen, ReferralsScreen,
+    RideScreen, SetsScreen, SommelierScreen, SuccessScreen, TeaScreen, TechTreeScreen,
+    TreasureHuntScreen,
 };
-use crate::ui::share::{PendingGarden, PendingOrder, PendingReorder, SharedProduct};
+use crate::ui::share::{PendingOrder, PendingReorder, SharedProduct};
 use dioxus::prelude::*;
 
 /// Routes component that renders router
@@ -55,8 +55,11 @@ pub enum Route {
     OrderDetail { id: String },
     #[route("/profile")]
     Profile {},
-    #[route("/garden")]
-    Garden {},
+    // `/garden` stood here. The garden mechanic is removed, not repointed
+    // (D5): its tables are dropped by migration 083 and no `/api/garden/*`
+    // router was ever merged, so the route rendered a screen that could only
+    // fail. There is deliberately no alias — unlike `/skate`, which still has
+    // a renderer to fall back on, a garden has nothing left to show.
     #[route("/quest/:id")]
     Quest { id: String },
     #[route("/game")]
@@ -90,19 +93,18 @@ pub enum Route {
 fn Home() -> Element {
     // The public landing page is the live bike catalog. HomeScreen remains a
     // narrow compatibility controller for historical Telegram deep links; it
-    // mounts only long enough to route a pending cart/order/reorder/product or
-    // garden payload, so cannabis-era home content is no longer reachable at
-    // `/` during an ordinary visit.
+    // mounts only long enough to route a pending cart/order/reorder/product
+    // payload, so cannabis-era home content is no longer reachable at `/`
+    // during an ordinary visit. A garden payload was a fifth reason to mount
+    // it; that payload no longer parses (D5).
     let pending_product = use_context::<Signal<Option<SharedProduct>>>();
     let pending_order = use_context::<Signal<PendingOrder>>();
     let pending_cart = use_context::<Signal<bool>>();
     let pending_reorder = use_context::<Signal<PendingReorder>>();
-    let pending_garden = use_context::<Signal<PendingGarden>>();
     let has_compatibility_redirect = pending_product.read().is_some()
         || pending_order.read().0.is_some()
         || *pending_cart.read()
-        || pending_reorder.read().0.is_some()
-        || pending_garden.read().0;
+        || pending_reorder.read().0.is_some();
 
     rsx! {
         LazyScreen {
@@ -237,15 +239,6 @@ fn Profile() -> Element {
     rsx! {
         LazyScreen {
             ProfileScreen {}
-        }
-    }
-}
-
-#[component]
-fn Garden() -> Element {
-    rsx! {
-        LazyScreen { heavy: true,
-            GardenScreen {}
         }
     }
 }

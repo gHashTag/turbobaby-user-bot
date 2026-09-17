@@ -54,7 +54,7 @@
 //! ## The price door (DECISIONS.md D11) — a seam, not an implementation
 //!
 //! D11: the client-facing price is whatever the owner's live sheet (the "door")
-//! returns, and **if the door is silent the bot must not compute**. Issue #7
+//! returns, and **if the door is silent the bot must not compute**. Issue #25
 //! owns the door. So every family here carries
 //!
 //! ```text
@@ -62,12 +62,12 @@
 //! "client_rate_source":  "unavailable"
 //! ```
 //!
-//! produced by [`client_rate`] — the one function #7 replaces. `null` +
+//! produced by [`ask_door`] — the one function #25 replaces. `null` +
 //! `"unavailable"` is a first-class state, not an error: the UI must render
 //! "a human quotes this price" and emit no number at all.
 //!
 //! `base_rate_thb_day` and `class_discount` are also served, because the admin
-//! surface and #7's divergence log both need the file's number. They are the
+//! surface and #25's divergence log both need the file's number. They are the
 //! **published pre-discount tariff**, not a client price: rendering
 //! `base_rate_thb_day` to a customer overstates every scooter by 33%, and
 //! multiplying it by `class_discount` is precisely the computation D11 forbids.
@@ -90,7 +90,9 @@ use axum::{
 use serde_json::{json, Value};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
+use crate::api::auth::check_admin;
 use crate::api::cache::make_etag_header;
+use crate::api::validate_url;
 use crate::db::bikes::{
     discount_for_class, find_family_by_key, list_class_discounts, list_offered_families,
     list_rental_term_bands, BikeListing, ClassDiscount, RentalTermBand, UNIT_STATUS_AVAILABLE,
@@ -102,39 +104,121 @@ pub(crate) fn routes() -> Router<AppState> {
         .route("/bikes", get(list_bikes))
         .route("/bikes/:key", get(get_bike))
         .route("/rental-terms", get(get_rental_terms))
+        // ── admin (every handler calls `check_admin` first) ──────────
+        //
+        // These are new, and what they replace is nothing: the admin fleet
+        // screen has been issuing POST/PUT/DELETE against `/api/bikes` and
+        // `/api/bikes/:id` since it was written, and no route has ever
+        // matched them. Axum answered 405, the screen updated its own
+        // in-memory cache first and only rolled back on failure, so the
+        // toast said "✅ Добавлена!" and the row appeared — until a reload
+        // fetched the truth from the database and it was gone.
+        //
+        // The paths are `/admin/bikes` rather than the `/bikes` the screen
+        // was calling because a family the public catalog hides must not be
+        // reachable by shaping a query against the public list; see
+        // `db::bikes::list_all_families`. The screen is moved to match.
+        .route(
+            "/admin/bikes",
+            get(admin_list_bikes).post(admin_create_bike),
+        )
+        .route(
+            "/admin/bikes/:id",
+            axum::routing::put(admin_update_bike).delete(admin_delete_bike),
+        )
+        .route(
+            "/admin/bikes/:id/offered",
+            axum::routing::put(admin_set_offered),
+        )
+    // There is deliberately no `/admin/bikes/:id/for-sale` twin of the
+    // `offered` toggle. `offered` has its own route because it is flipped
+    // from the list row, where no form is open and a full-body PUT would
+    // clobber whatever a stale card holds. The forecourt flag is edited on
+    // the card next to the asking price it sits beside, so the card's PUT
+    // already carries it — a second route would be an endpoint with no
+    // caller, and this repository has enough of those.
 }
 
 // ── the door seam (D11) ──────────────────────────────────────────
 
 /// `client_rate_source` when the number came from the owner's live sheet.
-/// Nothing sets it yet — issue #7 owns the door. Declared here so the UI
-/// worker can branch on the final string today instead of guessing it later.
-#[allow(dead_code)]
+/// Reached by [`DoorAnswers::resolve`]; no family carries it today, because the
+/// batch the handlers build is still empty — issue #25 fills it.
 const CLIENT_RATE_FROM_DOOR: &str = "door";
 
 /// `client_rate_source` when there is no client-facing number to give.
 /// Covers both "the door is not wired yet" (now) and "the door was asked and
-/// stayed silent" (after #7) — from the UI's side those are the same state:
+/// stayed silent" (after #25) — from the UI's side those are the same state:
 /// say a human quotes this price, emit no number.
 const CLIENT_RATE_UNAVAILABLE: &str = "unavailable";
 
-/// The client-facing per-day rate for one family, and where it came from.
+/// What the door said about one family.
 ///
-/// **Issue #7 owns the implementation.** Today there is no door to ask, so
-/// this always answers "no number at all", which is the same shape the silent
-/// door must produce later. When #7 wires the live sheet it replaces the body
-/// of this function and keeps the `None` branch intact:
+/// `Silent` deliberately collapses three door states — answered with nothing,
+/// timed out, errored. That is not laziness: from the customer's side they are
+/// one state, and the UI has no honest way to tell them apart. Splitting them
+/// here would invite a screen that says "we could not reach the owner" for one
+/// and something else for another, when D11's answer to all three is the same
+/// sentence.
 ///
-/// * door answered → `(Some(rate), CLIENT_RATE_FROM_DOOR)`
-/// * door silent, timed out (measured at 21.4 s — the common path, D11) or
-///   errored → `(None, CLIENT_RATE_UNAVAILABLE)`
+/// Neither variant is constructed outside the tests yet, because [`ask_door`]
+/// still returns an empty batch — the `#[allow(dead_code)]` records that, and
+/// #25 removes it by writing the door body. Declaring both states now is what
+/// lets [`DoorAnswers::resolve`] be written and tested against the priced
+/// branch years before a live sheet is reachable from the server.
+#[allow(dead_code)]
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) enum DoorAnswer {
+    Quoted(f64),
+    Silent,
+}
+
+/// One door round-trip's worth of answers, keyed by family key.
 ///
-/// What it must never become is a fallback computation from
-/// `base_rate_thb_day` and `class_discount`. That is why this returns an
-/// `Option` rather than an `f64`, and why the caller passes the family key
-/// (the door's lookup handle) rather than a price.
-fn client_rate(_family_key: &str) -> (Option<f64>, &'static str) {
-    (None, CLIENT_RATE_UNAVAILABLE)
+/// The map exists so the `await` can be hoisted out of the per-family loop. A
+/// key that is absent resolves to silence, which is what makes today's empty
+/// map *correct* rather than a special case to be removed later.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct DoorAnswers(HashMap<String, DoorAnswer>);
+
+impl DoorAnswers {
+    /// The client-facing per-day rate for one family, and where it came from.
+    ///
+    /// Never a fallback computation from `base_rate_thb_day` and
+    /// `class_discount` — that is why this returns an `Option` rather than an
+    /// `f64`, and why the lookup handle is the family key rather than a price.
+    pub(crate) fn resolve(&self, family_key: &str) -> (Option<f64>, &'static str) {
+        match self.0.get(family_key) {
+            Some(DoorAnswer::Quoted(rate)) => (Some(*rate), CLIENT_RATE_FROM_DOOR),
+            Some(DoorAnswer::Silent) | None => (None, CLIENT_RATE_UNAVAILABLE),
+        }
+    }
+}
+
+/// Ask the door for every family on one page, in one call.
+///
+/// **Issue #25 owns the body.** Today there is no door to ask, so this answers
+/// with an empty map — every key resolves to silence, which is the same shape
+/// the wired door must produce when the owner does not answer.
+///
+/// The batch signature is the point, and it is deliberate rather than
+/// incidental. The measured door latency is 21.4 s
+/// (`data/fleet_seed.json` → `measured_door_latency_s`), so the timeout path is
+/// the *common* path, not the exceptional one. A per-family call would make
+/// `GET /api/bikes` cost fourteen families × 21.4 s ≈ five minutes. The
+/// contract #25 must keep:
+///
+/// * one call per request, covering every family on the page — never one per
+///   card;
+/// * one shared deadline for the whole batch;
+/// * a deadline breach yields `Silent` for every unanswered key and **not** an
+///   error to the caller. D11 forbids silence as firmly as invention — the
+///   seed's `must_not_emit` has five entries and the fifth is "silence" — so an
+///   unreachable door must still produce a catalog that says a human quotes the
+///   price, not an error page that says nothing.
+pub(crate) async fn ask_door(keys: &[&str]) -> DoorAnswers {
+    let _ = keys;
+    DoorAnswers::default()
 }
 
 // ── handlers ─────────────────────────────────────────────────────
@@ -179,14 +263,27 @@ async fn list_bikes(
         available_only
     );
 
+    // One door round-trip for the whole page, before the loop. The map below
+    // stays synchronous precisely so a per-family `await` cannot be written
+    // into it without the batch being taken apart first (D11, 21.4 s measured).
+    let keys: Vec<&str> = listings.iter().map(|l| l.bike.key.as_str()).collect();
+    let door = ask_door(&keys).await;
+
     let families = listings
         .iter()
-        .map(|l| family_json(l, &discounts))
+        .map(|l| family_json(l, &discounts, &door))
         .collect::<Result<Vec<Value>, StatusCode>>()?;
     let body = json!({ "bikes": families }).to_string();
 
     // Separate keys: the filtered catalog must not flap the unfiltered one's
     // ETag, and vice versa.
+    //
+    // Observation for whoever wires the door (#25), recorded rather than acted
+    // on: once a door number is in the body, this stops being a pure content
+    // hash and becomes a freshness decision. A flapping door answer flaps the
+    // ETag; a cached body serves a stale door price for up to the `max-age`
+    // below. #25 does not specify which of those is wanted, so the behaviour
+    // here is left exactly as it is rather than a policy being picked quietly.
     let cache_key = if available_only {
         "bikes_available"
     } else {
@@ -249,8 +346,9 @@ async fn get_bike(
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
     let units = load_units(&state, &listing.bike.id).await?;
+    let door = ask_door(&[listing.bike.key.as_str()]).await;
 
-    let bike = family_detail_json(&listing, &discounts, &units)?;
+    let bike = family_detail_json(&listing, &discounts, &units, &door)?;
     Ok(Json(json!({ "bike": bike })))
 }
 
@@ -286,7 +384,11 @@ const MAX_KEY_LEN: usize = 200;
 /// The serialisation goes through `BikeListing`'s own `Serialize`, so the money
 /// fields arrive exactly as `db::bikes` mapped them — `None` as an explicit
 /// `null`, never a missing key and never `0`.
-fn family_json(listing: &BikeListing, discounts: &[ClassDiscount]) -> Result<Value, StatusCode> {
+fn family_json(
+    listing: &BikeListing,
+    discounts: &[ClassDiscount],
+    door: &DoorAnswers,
+) -> Result<Value, StatusCode> {
     let mut value = serde_json::to_value(listing).map_err(|e| {
         tracing::error!(
             "bikes API: family {} not serialisable: {e}",
@@ -313,12 +415,44 @@ fn family_json(listing: &BikeListing, discounts: &[ClassDiscount]) -> Result<Val
     );
 
     // ── the door (D11). The only field a customer price may come from. ──
-    let (client_rate_thb_day, client_rate_source) = client_rate(&listing.bike.key);
+    //
+    // A family closed to new rentals is never priced, even if the door answers
+    // for it (D12, #25's fifth criterion). CLICK 125 is the measured case: the
+    // seasonal grid still carries 187/day for it, and that figure is stale —
+    // not a tariff. The family stays serialisable and the detail endpoint stays
+    // 200, because the PCX 150 / ADV 150 / NMAX 155 redirect needs that page to
+    // exist. Never bookable and never priced is not the same as hidden.
+    let (client_rate_thb_day, client_rate_source) = if listing.bike.offered {
+        door.resolve(&listing.bike.key)
+    } else {
+        (None, CLIENT_RATE_UNAVAILABLE)
+    };
     obj.insert(
         "client_rate_thb_day".to_string(),
         json!(client_rate_thb_day),
     );
     obj.insert("client_rate_source".to_string(), json!(client_rate_source));
+
+    // D11's divergence log: when the door does quote, record how far its number
+    // sits from what the file implies, and carry on. The comparator is the one
+    // the order path already uses — one implementation, not a catalog twin
+    // (D15) — and it is deliberately **non-blocking**: neither number is
+    // corrected to match the other, the answer still returns, and the log is
+    // for whoever reconciles the owner's sheet later.
+    if let Some(rate) = client_rate_thb_day {
+        if let Some((quoted, from_file)) = crate::api::orders::rate_divergence(
+            Some(rate),
+            listing.bike.base_rate_thb_day,
+            discount_for_class(discounts, &listing.bike.class),
+        ) {
+            tracing::info!(
+                family = %listing.bike.key,
+                quoted,
+                from_file,
+                "D11 door/file divergence"
+            );
+        }
+    }
 
     Ok(value)
 }
@@ -330,8 +464,9 @@ fn family_detail_json(
     listing: &BikeListing,
     discounts: &[ClassDiscount],
     units: &[UnitRow],
+    door: &DoorAnswers,
 ) -> Result<Value, StatusCode> {
-    let mut value = family_json(listing, discounts)?;
+    let mut value = family_json(listing, discounts, door)?;
     let rollup = rollup_units(units);
     let obj = value.as_object_mut().ok_or_else(|| {
         tracing::error!("bikes API: family detail did not serialise to an object");
@@ -527,11 +662,484 @@ fn query_flag(q: &HashMap<String, String>, key: &str) -> bool {
         .unwrap_or(false)
 }
 
+// ──────────────────────────────────────────────────────────────────
+// Admin write surface
+// ──────────────────────────────────────────────────────────────────
+//
+// Every handler below opens with `check_admin`. That is the whole gate:
+// there is no per-handler role, and none of these paths is reachable
+// without it.
+
+/// A family as the admin screen submits it, for create and for update alike.
+///
+/// One struct for both because the screen sends the same fields either way,
+/// and two structs would be the restated-list defect with a type system
+/// attached — a field added to the create form and forgotten on the edit form
+/// is exactly the drift that costs an afternoon.
+///
+/// Money is `Option<f64>` and stays `Option` all the way to the column (D9).
+/// `None` means the shop has not published that number; it is never written
+/// as `0`, because a `0` deposit reads as "no deposit required" and a `0`
+/// sale price reads as "free".
+/// `key` is optional because it is write-once. It is required on create and
+/// ignored on update: `bikes.key` is the `catalog_id` a cart rental line
+/// carries (D8), so renaming a family orphans every live cart that holds one.
+/// The edit card does not offer it as a field; the server does not accept it
+/// as one either, so the rule holds even against a hand-made request.
+#[derive(Debug, Clone, serde::Deserialize)]
+pub(crate) struct BikeWriteRequest {
+    #[serde(default)]
+    pub key: Option<String>,
+    pub brand: String,
+    pub model: String,
+    #[serde(default)]
+    pub variant_label: Option<String>,
+    pub class: String,
+    pub body: String,
+    pub displacement_cc: i32,
+    #[serde(default)]
+    pub base_rate_thb_day: Option<f64>,
+    #[serde(default)]
+    pub deposit_thb: Option<f64>,
+    #[serde(default)]
+    pub monthly_low_season_thb: Option<f64>,
+    #[serde(default)]
+    pub sale_price_thb: Option<f64>,
+    #[serde(default = "default_true")]
+    pub offered: bool,
+    /// Defaults to `false`, not to "keep whatever is stored": a body that
+    /// omits the flag is a body written before the flag existed, and the
+    /// safe reading of silence is that the bike is not on the forecourt.
+    #[serde(default)]
+    pub for_sale: bool,
+    #[serde(default)]
+    pub sort_order: Option<i32>,
+    #[serde(default)]
+    pub description_ru: Option<String>,
+    #[serde(default)]
+    pub description_en: Option<String>,
+    #[serde(default)]
+    pub image_url: Option<String>,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+/// The two values `bikes.class` may hold, mirroring the CHECK constraint in
+/// `077_bikes.sql`.
+///
+/// Checked here so a typo comes back as a 400 naming the field rather than as
+/// a 500 carrying a Postgres constraint name. The list is duplicated from SQL,
+/// which is the restated-list defect — so it is pinned by
+/// `the_accepted_classes_are_the_ones_the_column_allows`, which reads the
+/// migration.
+const BIKE_CLASSES: [&str; 2] = ["scooter", "motorcycle"];
+
+/// Largest engine the form will accept, in cc. The fleet's biggest is the
+/// X-ADV 750; the bound exists to catch a slipped decimal point, not to
+/// express an opinion about motorcycles.
+const MAX_DISPLACEMENT_CC: i32 = 3000;
+
+/// Longest free-text field the form will accept. Descriptions are a
+/// paragraph, not a document.
+const MAX_TEXT_LEN: usize = 4000;
+
+/// What is wrong with a submitted family, in words the admin screen shows.
+///
+/// A string, not a code: the screen already renders the response body
+/// verbatim under the save button (`src/ui/screens/admin_screen.rs` reads
+/// `r.text()` on a non-success status), so the most useful thing this can
+/// return is a sentence. "HTTP 400" tells the owner nothing about which of
+/// seventeen fields he got wrong.
+type WriteRejection = String;
+
+/// Check and normalise a submitted family.
+///
+/// Pure, so the whole contract is testable without a database — which matters
+/// more than usual here, because the alternative is discovering the rules by
+/// watching Postgres reject things in production.
+///
+/// Normalisation is deliberately narrow: whitespace is trimmed, and an empty
+/// optional string becomes `None`. Nothing else is rewritten. In particular a
+/// money value is never rounded, clamped or defaulted — an unusable number is
+/// rejected outright rather than quietly turned into a different number that
+/// a customer then sees (D9/D11).
+pub(crate) fn validate_bike_write(
+    req: &BikeWriteRequest,
+) -> Result<BikeWriteRequest, WriteRejection> {
+    fn required(label: &str, v: &str, max: usize) -> Result<String, WriteRejection> {
+        let t = v.trim();
+        if t.is_empty() {
+            return Err(format!("Поле «{label}» обязательно"));
+        }
+        if t.chars().count() > max {
+            return Err(format!("Поле «{label}» длиннее {max} символов"));
+        }
+        Ok(t.to_string())
+    }
+    fn optional(
+        label: &str,
+        v: &Option<String>,
+        max: usize,
+    ) -> Result<Option<String>, WriteRejection> {
+        let Some(t) = v.as_deref().map(str::trim).filter(|s| !s.is_empty()) else {
+            return Ok(None);
+        };
+        if t.chars().count() > max {
+            return Err(format!("Поле «{label}» длиннее {max} символов"));
+        }
+        Ok(Some(t.to_string()))
+    }
+    // A money field is either absent or a real, non-negative number. NaN and
+    // infinity are rejected rather than filtered to `None` the way the read
+    // path filters them: on the way out, a stored NaN is damage to be survived;
+    // on the way in, it is a bug to be refused before it becomes that damage.
+    fn money(label: &str, v: Option<f64>) -> Result<Option<f64>, WriteRejection> {
+        match v {
+            None => Ok(None),
+            Some(n) if !n.is_finite() => Err(format!("Поле «{label}»: не число")),
+            Some(n) if n < 0.0 => Err(format!("Поле «{label}»: отрицательная цена")),
+            Some(n) => Ok(Some(n)),
+        }
+    }
+
+    // The key is a URL path segment (`GET /api/bikes/:key`) and a cart line's
+    // `catalog_id` (D8). Restricting it to the shape the seeded keys already
+    // have — `xmax-300-new` — keeps both of those honest without needing an
+    // escaping rule anywhere downstream. Absent is allowed here and refused by
+    // the create handler, which is the only caller that needs one.
+    let key = match optional("ключ", &req.key, MAX_KEY_LEN)? {
+        None => None,
+        Some(k) => {
+            if !k
+                .chars()
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+            {
+                return Err("Ключ: только строчные латинские буквы, цифры и дефис".to_string());
+            }
+            Some(k)
+        }
+    };
+
+    let class = required("класс", &req.class, 32)?;
+    if !BIKE_CLASSES.contains(&class.as_str()) {
+        return Err(format!(
+            "Класс должен быть одним из: {}",
+            BIKE_CLASSES.join(", ")
+        ));
+    }
+
+    if req.displacement_cc < 0 || req.displacement_cc > MAX_DISPLACEMENT_CC {
+        return Err(format!(
+            "Объём двигателя: от 0 до {MAX_DISPLACEMENT_CC} см³"
+        ));
+    }
+
+    let image_url = optional("фото", &req.image_url, 2048)?;
+    validate_url(&image_url).map_err(|_| "Ссылка на фото: недопустимый адрес".to_string())?;
+
+    Ok(BikeWriteRequest {
+        key,
+        brand: required("бренд", &req.brand, 200)?,
+        model: required("модель", &req.model, 200)?,
+        variant_label: optional("вариант", &req.variant_label, 200)?,
+        class,
+        body: required("тип", &req.body, 64)?,
+        displacement_cc: req.displacement_cc,
+        base_rate_thb_day: money("цена в день", req.base_rate_thb_day)?,
+        deposit_thb: money("депозит", req.deposit_thb)?,
+        monthly_low_season_thb: money("цена за месяц", req.monthly_low_season_thb)?,
+        sale_price_thb: money("цена продажи", req.sale_price_thb)?,
+        offered: req.offered,
+        for_sale: req.for_sale,
+        sort_order: req.sort_order,
+        description_ru: optional("описание", &req.description_ru, MAX_TEXT_LEN)?,
+        description_en: optional("описание (EN)", &req.description_en, MAX_TEXT_LEN)?,
+        image_url,
+    })
+}
+
+/// `GET /api/admin/bikes` — every family, offered or not.
+///
+/// No ETag and no cache key, unlike the public list: this is the screen the
+/// owner edits from, and a 304 served off a body that predates his last save
+/// is how an edit appears to have been lost.
+async fn admin_list_bikes(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+) -> Result<Json<Value>, (StatusCode, String)> {
+    check_admin(&headers, &state).map_err(|s| (s, String::new()))?;
+    let listings = crate::db::bikes::list_all_families(&state.db.orm)
+        .await
+        .map_err(|e| {
+            tracing::error!("admin_list_bikes: {e:#}");
+            (StatusCode::INTERNAL_SERVER_ERROR, String::new())
+        })?;
+    let discounts = list_class_discounts(&state.db.orm).await.map_err(|e| {
+        tracing::error!("admin_list_bikes(class_discounts): {e:#}");
+        (StatusCode::INTERNAL_SERVER_ERROR, String::new())
+    })?;
+    // The admin screen shows the same cards the catalog does, so it gets the
+    // same shape — including `client_rate_*`, so the owner can see what the
+    // door is actually quoting rather than what the file says (D11).
+    let keys: Vec<&str> = listings.iter().map(|l| l.bike.key.as_str()).collect();
+    let door = ask_door(&keys).await;
+    let families = listings
+        .iter()
+        .map(|l| family_json(l, &discounts, &door))
+        .collect::<Result<Vec<Value>, StatusCode>>()
+        .map_err(|s| (s, String::new()))?;
+    Ok(Json(json!({ "bikes": families })))
+}
+
+/// `POST /api/admin/bikes` — add a family.
+async fn admin_create_bike(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    Json(req): Json<BikeWriteRequest>,
+) -> Result<Json<Value>, (StatusCode, String)> {
+    check_admin(&headers, &state).map_err(|s| (s, String::new()))?;
+    let req = validate_bike_write(&req).map_err(|m| (StatusCode::BAD_REQUEST, m))?;
+    let key = req.key.clone().ok_or((
+        StatusCode::BAD_REQUEST,
+        "Поле «ключ» обязательно".to_string(),
+    ))?;
+
+    use crate::db::entities::bike::{ActiveModel, Entity as BikeEntity};
+    use sea_orm::{ActiveValue::Set, EntityTrait};
+
+    let id = uuid::Uuid::new_v4().to_string();
+    let now = chrono::Utc::now().into();
+    let model = ActiveModel {
+        id: Set(id.clone()),
+        key: Set(key.clone()),
+        brand: Set(req.brand),
+        model: Set(req.model),
+        variant_label: Set(req.variant_label),
+        class: Set(req.class),
+        body: Set(req.body),
+        displacement_cc: Set(req.displacement_cc),
+        base_rate_thb_day: Set(req.base_rate_thb_day),
+        deposit_thb: Set(req.deposit_thb),
+        monthly_low_season_thb: Set(req.monthly_low_season_thb),
+        sale_price_thb: Set(req.sale_price_thb),
+        offered: Set(req.offered),
+        for_sale: Set(req.for_sale),
+        description_ru: Set(req.description_ru),
+        description_en: Set(req.description_en),
+        image_url: Set(req.image_url),
+        sort_order: Set(req.sort_order.unwrap_or(0)),
+        created_at: Set(now),
+        updated_at: Set(now),
+    };
+    BikeEntity::insert(model)
+        .exec(&state.db.orm)
+        .await
+        .map_err(|e| {
+            // `bikes.key` is UNIQUE. A duplicate is the owner adding a family
+            // twice, which is an ordinary mistake and deserves a sentence, not
+            // a 500 and a log line he cannot read.
+            let text = e.to_string();
+            if text.contains("duplicate key") || text.contains("unique constraint") {
+                return (
+                    StatusCode::CONFLICT,
+                    format!("Модель с ключом «{key}» уже есть"),
+                );
+            }
+            tracing::error!("admin_create_bike: {e}");
+            (StatusCode::INTERNAL_SERVER_ERROR, String::new())
+        })?;
+    tracing::info!(bike_id = %id, key = %key, "admin: family created");
+    Ok(Json(json!({ "id": id })))
+}
+
+/// `PUT /api/admin/bikes/:id` — replace a family's editable fields.
+async fn admin_update_bike(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(req): Json<BikeWriteRequest>,
+) -> Result<Json<Value>, (StatusCode, String)> {
+    check_admin(&headers, &state).map_err(|s| (s, String::new()))?;
+    let req = validate_bike_write(&req).map_err(|m| (StatusCode::BAD_REQUEST, m))?;
+
+    use crate::db::entities::bike::{ActiveModel, Entity as BikeEntity};
+    use sea_orm::{ActiveValue::Set, EntityTrait};
+
+    let existing = BikeEntity::find_by_id(id.clone())
+        .one(&state.db.orm)
+        .await
+        .map_err(|e| {
+            tracing::error!("admin_update_bike(find): {e}");
+            (StatusCode::INTERNAL_SERVER_ERROR, String::new())
+        })?
+        .ok_or((StatusCode::NOT_FOUND, "Модель не найдена".to_string()))?;
+
+    let key = existing.key.clone();
+    let mut model: ActiveModel = existing.into();
+    // `model.key` is deliberately NOT written. See `BikeWriteRequest::key`:
+    // the key is a live cart's `catalog_id`, and a rename here would leave
+    // those lines pointing at a family that no longer answers under that name.
+    model.brand = Set(req.brand);
+    model.model = Set(req.model);
+    model.variant_label = Set(req.variant_label);
+    model.class = Set(req.class);
+    model.body = Set(req.body);
+    model.displacement_cc = Set(req.displacement_cc);
+    model.base_rate_thb_day = Set(req.base_rate_thb_day);
+    model.deposit_thb = Set(req.deposit_thb);
+    model.monthly_low_season_thb = Set(req.monthly_low_season_thb);
+    model.sale_price_thb = Set(req.sale_price_thb);
+    model.offered = Set(req.offered);
+    model.for_sale = Set(req.for_sale);
+    model.description_ru = Set(req.description_ru);
+    model.description_en = Set(req.description_en);
+    model.image_url = Set(req.image_url);
+    if let Some(order) = req.sort_order {
+        model.sort_order = Set(order);
+    }
+    model.updated_at = Set(chrono::Utc::now().into());
+    BikeEntity::update(model)
+        .exec(&state.db.orm)
+        .await
+        .map_err(|e| {
+            tracing::error!("admin_update_bike: {e}");
+            (StatusCode::INTERNAL_SERVER_ERROR, String::new())
+        })?;
+    tracing::info!(bike_id = %id, key = %key, "admin: family updated");
+    Ok(Json(json!({ "ok": true })))
+}
+
+/// `PUT /api/admin/bikes/:id/offered` — open or close a family to new rentals.
+///
+/// Its own route because it is the one edit the owner makes from the list
+/// without opening the card, and because it must not require him to re-submit
+/// seventeen other fields to flip one boolean — a full-body update used as a
+/// toggle is how an unrelated field gets clobbered by a stale form.
+async fn admin_set_offered(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(body): Json<Value>,
+) -> Result<Json<Value>, (StatusCode, String)> {
+    let offered = crate::api::extract_bool(&body, "offered").map_err(|_| {
+        (
+            StatusCode::BAD_REQUEST,
+            "Ожидалось поле offered".to_string(),
+        )
+    })?;
+    set_family_flag(headers, state, &id, FamilyFlag::Offered, offered).await
+}
+
+/// Which single boolean [`set_family_flag`] is writing.
+///
+/// A one-variant enum today. It exists rather than a bare `bool` parameter
+/// because the next flag on this table — and `bikes` has already grown one in
+/// `086` — should extend a match rather than add a second copy of the
+/// find-modify-save body below.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FamilyFlag {
+    Offered,
+}
+
+/// Find a family, move one boolean, save. Shared so a second toggle is a
+/// match arm rather than a second transaction written slightly differently.
+async fn set_family_flag(
+    headers: HeaderMap,
+    state: AppState,
+    id: &str,
+    flag: FamilyFlag,
+    value: bool,
+) -> Result<Json<Value>, (StatusCode, String)> {
+    check_admin(&headers, &state).map_err(|s| (s, String::new()))?;
+
+    use crate::db::entities::bike::{ActiveModel, Entity as BikeEntity};
+    use sea_orm::{ActiveValue::Set, EntityTrait};
+
+    let existing = BikeEntity::find_by_id(id.to_string())
+        .one(&state.db.orm)
+        .await
+        .map_err(|e| {
+            tracing::error!("set_family_flag(find): {e}");
+            (StatusCode::INTERNAL_SERVER_ERROR, String::new())
+        })?
+        .ok_or((StatusCode::NOT_FOUND, "Модель не найдена".to_string()))?;
+
+    let key = existing.key.clone();
+    let mut model: ActiveModel = existing.into();
+    match flag {
+        FamilyFlag::Offered => model.offered = Set(value),
+    }
+    model.updated_at = Set(chrono::Utc::now().into());
+    BikeEntity::update(model)
+        .exec(&state.db.orm)
+        .await
+        .map_err(|e| {
+            tracing::error!("set_family_flag: {e}");
+            (StatusCode::INTERNAL_SERVER_ERROR, String::new())
+        })?;
+    tracing::info!(bike_id = %id, key = %key, ?flag, value, "admin: family flag set");
+    Ok(Json(json!({ "ok": true })))
+}
+
+/// `DELETE /api/admin/bikes/:id` — remove a family that has no machines.
+///
+/// Refuses while any `bike_units` row points at it. The FK is
+/// `ON DELETE CASCADE` (`078_bike_units.sql`), so without this check one tap
+/// on the list screen destroys every unit of the family and, with them, the
+/// per-unit service history `080_bike_service_records.sql` hangs off — records
+/// of work that was actually done to a physical machine, which no amount of
+/// re-adding the family brings back.
+///
+/// The owner's usual intent here is "stop renting this", and that is
+/// `offered = false`, which is reversible and one route away. This path is for
+/// a family added by mistake.
+async fn admin_delete_bike(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<Value>, (StatusCode, String)> {
+    check_admin(&headers, &state).map_err(|s| (s, String::new()))?;
+
+    let units = crate::db::bikes::count_units_for_family(&state.db.orm, &id)
+        .await
+        .map_err(|e| {
+            tracing::error!("admin_delete_bike(count): {e:#}");
+            (StatusCode::INTERNAL_SERVER_ERROR, String::new())
+        })?;
+    if units > 0 {
+        return Err((
+            StatusCode::CONFLICT,
+            format!(
+                "У модели {units} шт. в парке — удаление удалит и их, и историю обслуживания. \
+                 Сначала удалите байки, либо снимите модель с аренды."
+            ),
+        ));
+    }
+
+    use crate::db::entities::bike::Entity as BikeEntity;
+    use sea_orm::EntityTrait;
+    let res = BikeEntity::delete_by_id(id.clone())
+        .exec(&state.db.orm)
+        .await
+        .map_err(|e| {
+            tracing::error!("admin_delete_bike: {e}");
+            (StatusCode::INTERNAL_SERVER_ERROR, String::new())
+        })?;
+    if res.rows_affected == 0 {
+        return Err((StatusCode::NOT_FOUND, "Модель не найдена".to_string()));
+    }
+    tracing::info!(bike_id = %id, "admin: family deleted");
+    Ok(Json(json!({ "ok": true })))
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        client_rate, family_detail_json, family_json, query_flag, rental_terms_json, rollup_units,
-        UnitRow, CLIENT_RATE_UNAVAILABLE, UNIT_STATUSES,
+        family_detail_json, family_json, query_flag, rental_terms_json, rollup_units,
+        validate_bike_write, BikeWriteRequest, DoorAnswer, DoorAnswers, UnitRow, BIKE_CLASSES,
+        CLIENT_RATE_FROM_DOOR, CLIENT_RATE_UNAVAILABLE, UNIT_STATUSES,
     };
     use crate::db::bikes::{Bike, BikeListing, ClassDiscount, RentalTermBand};
     use serde_json::{json, Value};
@@ -566,6 +1174,7 @@ mod tests {
                 monthly_low_season_thb: None,
                 sale_price_thb: None,
                 offered: true,
+                for_sale: false,
                 description_ru: None,
                 description_en: None,
                 image_url: None,
@@ -596,7 +1205,12 @@ mod tests {
 
     #[test]
     fn absent_money_is_an_explicit_null_not_a_missing_key() {
-        let value = family_json(&listing("x-adv-750", "motorcycle", None), &[]).expect("json");
+        let value = family_json(
+            &listing("x-adv-750", "motorcycle", None),
+            &[],
+            &silent_door(),
+        )
+        .expect("json");
         let obj = obj_of(&value);
         for field in MONEY_FIELDS {
             assert!(
@@ -614,7 +1228,12 @@ mod tests {
     #[test]
     fn a_published_tariff_is_served_verbatim() {
         // No rounding, no discount, no currency conversion on the way out.
-        let value = family_json(&listing("nmax-155", "scooter", Some(449.0)), &[]).expect("json");
+        let value = family_json(
+            &listing("nmax-155", "scooter", Some(449.0)),
+            &[],
+            &silent_door(),
+        )
+        .expect("json");
         assert_eq!(obj_of(&value).get("base_rate_thb_day"), Some(&json!(449.0)));
     }
 
@@ -626,6 +1245,7 @@ mod tests {
         let value = family_json(
             &listing("x-adv-750", "atv", Some(2788.0)),
             &scooter_ladder(),
+            &silent_door(),
         )
         .expect("json");
         assert_eq!(obj_of(&value).get("class_discount"), Some(&Value::Null));
@@ -636,6 +1256,7 @@ mod tests {
         let value = family_json(
             &listing("nmax-155", "scooter", Some(939.0)),
             &scooter_ladder(),
+            &silent_door(),
         )
         .expect("json");
         assert_eq!(obj_of(&value).get("class_discount"), Some(&json!(0.25)));
@@ -643,25 +1264,54 @@ mod tests {
 
     // ── D11: the door seam ───────────────────────────────────────
 
+    /// The door as it stands today, and as it stands whenever the owner does
+    /// not answer: an empty batch. Every key resolves to silence.
+    fn silent_door() -> DoorAnswers {
+        DoorAnswers::default()
+    }
+
+    /// A door that quoted one family. This is what the tests below need and the
+    /// reason `DoorAnswers` carries a map rather than a bare "wired" flag —
+    /// the priced branch has to be reachable from a test years before the live
+    /// sheet is reachable from the server.
+    fn door_quoting(key: &str, thb: f64) -> DoorAnswers {
+        let mut answers = HashMap::new();
+        answers.insert(key.to_string(), DoorAnswer::Quoted(thb));
+        DoorAnswers(answers)
+    }
+
     #[test]
-    fn client_rate_is_no_number_until_the_door_is_wired() {
-        // #7 replaces the body of client_rate. Until then the client-facing
-        // price must be absent, NOT base_rate * (1 - class_discount).
-        let (rate, source) = client_rate("nmax-155");
-        assert_eq!(rate, None);
-        assert_eq!(source, CLIENT_RATE_UNAVAILABLE);
+    fn a_silent_door_yields_no_number_and_the_unavailable_source() {
+        // The client-facing price is absent, NOT base_rate * (1 - discount).
+        assert_eq!(
+            silent_door().resolve("nmax-155"),
+            (None, CLIENT_RATE_UNAVAILABLE)
+        );
+        assert_eq!(
+            door_quoting("nmax-155", 337.0).resolve("nmax-155"),
+            (Some(337.0), CLIENT_RATE_FROM_DOOR)
+        );
+        // Absent-means-silent. This is the assertion that makes today's empty
+        // batch *correct* rather than a stub waiting to be special-cased: a
+        // family the door did not answer for is in exactly the same state as a
+        // family it answered nothing for.
+        assert_eq!(
+            door_quoting("nmax-155", 337.0).resolve("pcx-160"),
+            (None, CLIENT_RATE_UNAVAILABLE)
+        );
     }
 
     #[test]
     fn a_family_with_both_inputs_still_serves_no_computed_price() {
         // 939 with a 25% class discount is the seed's reconciled row: the
         // owner's sheet quotes 704 and the arithmetic gives 704.25. Both
-        // numbers are computable from this payload and NEITHER may be in it —
-        // `db::bikes::apply_class_discount` exists for the door's answer, not
-        // for its silence.
+        // numbers are computable from this payload and NEITHER may be in it
+        // while the door is silent — `db::bikes::apply_class_discount` exists
+        // for the door's answer, not for its silence.
         let value = family_json(
             &listing("nmax-155", "scooter", Some(939.0)),
             &scooter_ladder(),
+            &silent_door(),
         )
         .expect("json");
         let obj = obj_of(&value);
@@ -680,6 +1330,92 @@ mod tests {
         }
     }
 
+    #[test]
+    fn a_door_quote_of_the_computable_number_reaches_only_the_client_rate_field() {
+        // The sibling above is the sharpest anti-computation gate in the repo
+        // and also its sharpest trap: 704 is a number the *door* may legitimately
+        // quote for this family, so a body-wide ban on 704 would go red on a
+        // correct answer. The rule D11 actually carries is narrower — no
+        // computed price when the source is not the door — so the ban is stated
+        // per-source rather than relaxed.
+        let value = family_json(
+            &listing("nmax-155", "scooter", Some(939.0)),
+            &scooter_ladder(),
+            &door_quoting("nmax-155", 704.0),
+        )
+        .expect("json");
+        let obj = obj_of(&value);
+        assert_eq!(obj.get("client_rate_thb_day"), Some(&json!(704.0)));
+        assert_eq!(
+            obj.get("client_rate_source"),
+            Some(&json!(CLIENT_RATE_FROM_DOOR))
+        );
+        for (name, field) in obj {
+            if name == "client_rate_thb_day" {
+                continue;
+            }
+            if let Some(n) = field.as_f64() {
+                assert!(
+                    (n - 704.25).abs() > 1e-9 && (n - 704.0).abs() > 1e-9,
+                    "`{name}` carries the door's price in a field that is not the door's: {n}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_diverging_door_quote_still_reaches_the_wire() {
+        // The file implies 449 x 0.75 = 336.75 -> 337; the door says 449. That
+        // is a 112-baht divergence, far over the >= 1 baht threshold, so the
+        // log fires. D11 is explicit that neither number is corrected to match
+        // the other and the answer still returns — this is the half of #25's
+        // third criterion that nothing in the tree covered.
+        let value = family_json(
+            &listing("nmax-155", "scooter", Some(449.0)),
+            &scooter_ladder(),
+            &door_quoting("nmax-155", 449.0),
+        )
+        .expect("a divergence must never fail the request");
+        let obj = obj_of(&value);
+        assert_eq!(obj.get("client_rate_thb_day"), Some(&json!(449.0)));
+        assert_eq!(
+            obj.get("client_rate_source"),
+            Some(&json!(CLIENT_RATE_FROM_DOOR))
+        );
+        // And the file's own number is still served verbatim beside it, for the
+        // admin surface and for whoever reconciles the sheet.
+        assert_eq!(obj.get("base_rate_thb_day"), Some(&json!(449.0)));
+    }
+
+    #[test]
+    fn click_125_never_carries_a_client_rate_even_when_the_door_answers() {
+        // D12 plus #25's fifth criterion. CLICK 125 is closed to new rentals;
+        // the seasonal grid's 187/day for it is stale, not a tariff. A family
+        // that is not offered is not priced, whatever the door says.
+        let mut closed = listing("click-125", "scooter", Some(249.0));
+        closed.bike.offered = false;
+        let value = family_json(
+            &closed,
+            &scooter_ladder(),
+            &door_quoting("click-125", 187.0),
+        )
+        .expect("json");
+        let obj = obj_of(&value);
+        assert_eq!(obj.get("client_rate_thb_day"), Some(&Value::Null));
+        assert_eq!(
+            obj.get("client_rate_source"),
+            Some(&json!(CLIENT_RATE_UNAVAILABLE))
+        );
+        for (name, field) in obj {
+            if let Some(n) = field.as_f64() {
+                assert!(
+                    (n - 187.0).abs() > 1e-9,
+                    "`{name}` carries a price for a family closed to new rentals: {n}"
+                );
+            }
+        }
+    }
+
     // ── D6 / D14: what the public catalog may not carry ──────────
 
     #[test]
@@ -692,6 +1428,7 @@ mod tests {
             &listing("nmax-155", "scooter", Some(939.0)),
             &scooter_ladder(),
             &units,
+            &silent_door(),
         )
         .expect("json");
         let obj = obj_of(&value);
@@ -721,8 +1458,13 @@ mod tests {
             unit(UNIT_STATUSES[1], Some("green"), Some(2021)),
             unit(UNIT_STATUSES[3], Some("red"), Some(2014)),
         ];
-        let value =
-            family_detail_json(&listing("nmax-155", "scooter", None), &[], &units).expect("json");
+        let value = family_detail_json(
+            &listing("nmax-155", "scooter", None),
+            &[],
+            &units,
+            &silent_door(),
+        )
+        .expect("json");
         let obj = obj_of(&value);
         // The fixture's `units_available` is 5 and the rollup says 2. One body
         // must not hold two answers to the same question.
@@ -749,8 +1491,188 @@ mod tests {
         // it anyway, so the UI can redirect instead of 404-ing.
         let mut l = listing("click-125", "scooter", Some(300.0));
         l.bike.offered = false;
-        let value = family_json(&l, &scooter_ladder()).expect("json");
+        let value = family_json(&l, &scooter_ladder(), &silent_door()).expect("json");
         assert_eq!(obj_of(&value).get("offered"), Some(&json!(false)));
+    }
+
+    #[test]
+    fn the_wire_always_carries_for_sale() {
+        // The UI's `Bike` struct has declared `for_sale: Option<bool>` since
+        // the sale block was written, and until `086_bikes_for_sale.sql` there
+        // was no column behind it — so serde filled it with `None` on every
+        // response and `for_sale == Some(true)` in `bike_detail.rs` could
+        // never be true. A struct field with no producer is indistinguishable
+        // from a working one at the call site, which is exactly why this
+        // asserts key PRESENCE and not just a value: the failure mode being
+        // guarded is an absent key reading as a legitimate "we don't sell it".
+        let mut l = listing("xmax-300-new", "motorcycle", Some(900.0));
+        let value = family_json(&l, &scooter_ladder(), &silent_door()).expect("json");
+        assert_eq!(obj_of(&value).get("for_sale"), Some(&json!(false)));
+
+        l.bike.for_sale = true;
+        let value = family_json(&l, &scooter_ladder(), &silent_door()).expect("json");
+        assert_eq!(obj_of(&value).get("for_sale"), Some(&json!(true)));
+        // …and with no published asking price, which is the state D9/D11
+        // require to stay expressible: "we sell this one, ask us the price".
+        assert_eq!(obj_of(&value).get("sale_price_thb"), Some(&json!(null)));
+    }
+
+    // ── admin write surface ──────────────────────────────────────
+
+    fn write_req() -> BikeWriteRequest {
+        BikeWriteRequest {
+            key: Some("nmax-155".to_string()),
+            brand: "Yamaha".to_string(),
+            model: "NMAX 155".to_string(),
+            variant_label: None,
+            class: "scooter".to_string(),
+            body: "scooter".to_string(),
+            displacement_cc: 155,
+            base_rate_thb_day: Some(400.0),
+            deposit_thb: None,
+            monthly_low_season_thb: None,
+            sale_price_thb: None,
+            offered: true,
+            for_sale: false,
+            sort_order: None,
+            description_ru: None,
+            description_en: None,
+            image_url: None,
+        }
+    }
+
+    #[test]
+    fn the_accepted_classes_are_the_ones_the_column_allows() {
+        // `BIKE_CLASSES` is a second copy of the CHECK constraint, and a
+        // second copy of a list is the defect this repository keeps finding.
+        // So it is read back out of the migration rather than retyped: adding
+        // a third class in SQL and forgetting it here now fails the build's
+        // test step instead of producing 500s that name a Postgres constraint.
+        let sql = include_str!("../../migrations/077_bikes.sql");
+        let clause = sql
+            .lines()
+            .find(|l| l.contains("CHECK (class IN ("))
+            .expect("077_bikes.sql constrains `class`");
+        for class in BIKE_CLASSES {
+            assert!(
+                clause.contains(&format!("'{class}'")),
+                "`{class}` is accepted by the API and not by the column: {clause}"
+            );
+        }
+        // …and the other direction, which is the one that actually bites: a
+        // class the column allows but the API refuses is a family the owner
+        // cannot add at all.
+        let in_sql = clause
+            .split_once("CHECK (class IN (")
+            .map(|(_, rest)| rest)
+            .and_then(|rest| rest.split_once("))"))
+            .map(|(inner, _)| inner)
+            .expect("the CHECK clause closes on the same line");
+        let sql_classes: Vec<String> = in_sql
+            .split(',')
+            .map(|s| s.trim().trim_matches('\'').to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
+        assert_eq!(sql_classes.len(), BIKE_CLASSES.len(), "class list drifted");
+        for class in &sql_classes {
+            assert!(
+                BIKE_CLASSES.contains(&class.as_str()),
+                "the column allows `{class}` and the API rejects it"
+            );
+        }
+    }
+
+    #[test]
+    fn a_valid_family_passes_and_is_trimmed() {
+        let mut r = write_req();
+        r.brand = "  Yamaha  ".to_string();
+        r.description_ru = Some("   ".to_string());
+        let out = validate_bike_write(&r).expect("valid");
+        assert_eq!(out.brand, "Yamaha");
+        // Whitespace-only optional text becomes absent, not an empty string:
+        // D9 draws the line at "absent stays absent", and `Some("")` is a
+        // published empty description, which renders as a blank paragraph.
+        assert_eq!(out.description_ru, None);
+    }
+
+    #[test]
+    fn an_unknown_class_is_refused_by_name() {
+        let mut r = write_req();
+        r.class = "quadbike".to_string();
+        let err = validate_bike_write(&r).expect_err("rejected");
+        assert!(
+            err.contains("scooter"),
+            "the message names the options: {err}"
+        );
+    }
+
+    #[test]
+    fn a_key_that_is_not_a_url_segment_is_refused() {
+        for bad in ["NMAX 155", "nmax/155", "nmax_155", "nmax?155"] {
+            let mut r = write_req();
+            r.key = Some(bad.to_string());
+            assert!(
+                validate_bike_write(&r).is_err(),
+                "`{bad}` must not become a `/api/bikes/:key` path segment"
+            );
+        }
+    }
+
+    #[test]
+    fn an_absent_key_validates_and_is_the_update_shape() {
+        // The edit card sends no key, because a family's key is a live cart's
+        // `catalog_id` (D8) and renaming it orphans those lines. Validation
+        // must therefore accept a body without one — the create handler is
+        // where the requirement lives, and only there.
+        let mut r = write_req();
+        r.key = None;
+        assert_eq!(validate_bike_write(&r).expect("valid").key, None);
+        r.key = Some("   ".to_string());
+        assert_eq!(
+            validate_bike_write(&r).expect("valid").key,
+            None,
+            "a whitespace key is absent, not a family named ' '"
+        );
+    }
+
+    #[test]
+    fn an_unusable_price_is_refused_rather_than_stored() {
+        // The read path filters NaN to `None` because a stored NaN is damage
+        // to survive. The write path must not do that: filtering here would
+        // accept the submission, drop the number silently, and leave the owner
+        // looking at a card that says a dash while his form said 400.
+        for bad in [f64::NAN, f64::INFINITY, -1.0] {
+            let mut r = write_req();
+            r.base_rate_thb_day = Some(bad);
+            assert!(validate_bike_write(&r).is_err(), "{bad} must be refused");
+        }
+        let mut r = write_req();
+        r.deposit_thb = None;
+        assert_eq!(
+            validate_bike_write(&r).expect("valid").deposit_thb,
+            None,
+            "an absent price stays absent — never 0 (D9)"
+        );
+    }
+
+    #[test]
+    fn a_family_can_be_for_sale_with_no_asking_price() {
+        // The state issue #11 exists to make expressible: on the forecourt,
+        // price on request. If validation ever starts requiring a price
+        // alongside the flag, the shop is forced to invent a number (D11).
+        let mut r = write_req();
+        r.for_sale = true;
+        r.sale_price_thb = None;
+        let out = validate_bike_write(&r).expect("for sale without a price is valid");
+        assert!(out.for_sale);
+        assert_eq!(out.sale_price_thb, None);
+    }
+
+    #[test]
+    fn a_javascript_url_never_reaches_the_image_field() {
+        let mut r = write_req();
+        r.image_url = Some("javascript:alert(1)".to_string());
+        assert!(validate_bike_write(&r).is_err());
     }
 
     // ── rental terms ─────────────────────────────────────────────

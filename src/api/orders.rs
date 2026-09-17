@@ -240,19 +240,22 @@ const MAX_RENTAL_DAYS: i64 = 365;
 /// hundred thousand. One million bounds all three without touching reality.
 const MAX_QUOTED_THB: f64 = 1_000_000.0;
 
-/// Shop-local today in Phuket (UTC+7), used to reject a rental that starts in
-/// the past.
+/// Shop-local today on the declared market's clock, used to reject a rental
+/// that starts in the past.
 ///
-/// `FixedOffset` rather than a tz database: Thailand has had no DST since 1976
-/// and the crate has no `chrono-tz`, which is also how `trios::promo` and
-/// `trios::happy_hour` read the shop's clock. `None` from `east_opt` is
-/// impossible for a constant 7 h, but it is handled rather than unwrapped
-/// (`clippy::unwrap_used`) by falling back to the UTC date — which in the hour
-/// before Bangkok midnight is yesterday, i.e. it errs towards accepting a
-/// booking, never towards refusing a valid one.
+/// `FixedOffset` rather than a tz database: the crate has no `chrono-tz`, and
+/// the market profile records whether that reduction is legitimate
+/// (`dst_observed`). This used to be a third copy of `7 * 3600`; the doc
+/// comment it replaces said so itself — "which is also how `trios::promo` and
+/// `trios::happy_hour` read the shop's clock" — and that sentence is the reason
+/// D18's own list of these sites was two short.
+///
+/// `None` is handled rather than unwrapped (`clippy::unwrap_used`) by falling
+/// back to the UTC date — which in the hour before local midnight is yesterday,
+/// i.e. it errs towards accepting a booking, never towards refusing a valid one.
 fn shop_today() -> chrono::NaiveDate {
-    match chrono::FixedOffset::east_opt(7 * 3600) {
-        Some(tz) => chrono::Utc::now().with_timezone(&tz).date_naive(),
+    match crate::trios::market::MARKET.now() {
+        Some(local) => local.date_naive(),
         None => chrono::Utc::now().date_naive(),
     }
 }
@@ -380,8 +383,12 @@ fn validate_bike_lines(items: &[OrderItem], today: chrono::NaiveDate) -> Result<
 }
 
 /// Load the configured max share of an order that can be paid with bonus
-/// balance. Falls back to 30 % if the loyalty_config singleton is missing or
-/// malformed, so a DB glitch never opens the ceiling to 100 %.
+/// balance.
+///
+/// A missing singleton and an unusable value are the same answer — the standing
+/// default in `trios::loyalty` — so a DB glitch never opens the ceiling to
+/// 100 %. Both the number and the range that decides "unusable" used to be
+/// written out here, a third of the file away from the two other copies.
 async fn load_max_bonus_usage_pct(orm: &sea_orm::DatabaseConnection) -> f64 {
     use crate::db::entities::loyalty_config::Entity as LcEntity;
     use sea_orm::EntityTrait;
@@ -392,14 +399,9 @@ async fn load_max_bonus_usage_pct(orm: &sea_orm::DatabaseConnection) -> f64 {
             None
         }
     }) else {
-        return 30.0;
+        return crate::trios::loyalty::default_f64("max_bonus_usage_pct");
     };
-    model
-        .config
-        .get("max_bonus_usage_pct")
-        .and_then(|v| v.as_f64())
-        .filter(|v| v.is_finite() && *v >= 0.0 && *v <= 100.0)
-        .unwrap_or(30.0)
+    crate::trios::loyalty::max_bonus_usage_pct(&model.config)
 }
 
 /// True if `k` is a syntactically acceptable `X-Idempotency-Key` value.
@@ -619,7 +621,7 @@ pub(crate) enum BikeLineCheck {
 /// Pure, and it returns the pair it compared so a test can assert on it
 /// without reading a log: `Some((quoted, from_file))` when both numbers exist
 /// and differ by at least a baht.
-fn rate_divergence(
+pub(crate) fn rate_divergence(
     quoted_thb_day: Option<f64>,
     base_rate_thb_day: Option<f64>,
     class_discount: Option<f64>,

@@ -6,7 +6,11 @@
 //! the carousel-first ordering, and the weight/strain-count display string.
 //!
 //! Lives in `trios` (shared backend + WASM) following the functional-core
-//! pattern of `garden::first_seedable_item` and `drink_categories`.
+//! pattern of `drink_categories` and `pricing`.
+//!
+//! `garden::first_seedable_item` was named here as the exemplar until D5
+//! deleted that module. A doc pointer to a file that does not exist teaches
+//! nothing and nothing compiles it, so it can stay wrong indefinitely.
 
 /// A pack's promo badge. One per pack (owner decision). The auto `% OFF`
 /// discount badge is separate and rendered independently of this.

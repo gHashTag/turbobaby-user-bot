@@ -108,18 +108,8 @@ impl From<crate::db::entities::order::Model> for Order {
 /// silently, which is how a half-migrated `loyalty_config` becomes visible
 /// instead of quietly paying everyone the bronze rate.
 pub(crate) fn cashback_pct_for_tier(config: &serde_json::Value, tier: &str) -> f64 {
-    let key = match tier {
-        "gold" => "gold_cashback_pct",
-        "silver" => "silver_cashback_pct",
-        "bronze" => "bronze_cashback_pct",
-        _ => "progressive_cashback",
-    };
-    let default = match tier {
-        "gold" => 10.0,
-        "silver" => 7.0,
-        "bronze" => 5.0,
-        _ => 2.0,
-    };
+    let key = crate::trios::loyalty::cashback_key(tier);
+    let default = crate::trios::loyalty::default_f64(key);
     let raw = config.get(key).cloned().unwrap_or(serde_json::Value::Null);
     let parsed = if raw.is_array() {
         // `progressive_cashback` is an array indexed by completed-order
@@ -458,7 +448,7 @@ pub async fn complete_order_and_update_loyalty(
                             e
                         );
                     }
-                    crate::metrics::garden_invite_funnel("ordered");
+                    crate::metrics::referral_invite_funnel("ordered");
                 }
                 Some(bonus)
             }
