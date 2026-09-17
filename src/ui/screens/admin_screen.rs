@@ -1466,7 +1466,7 @@ fn BikeUnitsTab() -> Element {
     let _ = use_resource(move || {
         let init_data = init_data.read().clone();
         async move {
-            let url = format!("{}/api/bike-units", api_base_url());
+            let url = format!("{}/api/admin/bike-units", api_base_url());
             if let Ok(resp) = HTTP_CLIENT
                 .clone()
                 .get(&url)
@@ -1583,7 +1583,7 @@ fn BikeUnitsTab() -> Element {
                                     "km_since_purchase": int_json(km),
                                     "status": st,
                                 });
-                                let url = format!("{}/api/bike-units", api_base_url());
+                                let url = format!("{}/api/admin/bike-units", api_base_url());
                                 let res = HTTP_CLIENT.clone().post(&url)
                                     .header("X-Telegram-Init-Data", init_data.read().clone())
                                     .header("X-Admin-Token", admin_token())
@@ -1685,7 +1685,7 @@ fn BikeUnitsTab() -> Element {
                                                     let id = id_for_status.clone();
                                                     if let Some(u) = cache.write().iter_mut().find(|u| u.id == id) { u.status = next.clone(); }
                                                     spawn(async move {
-                                                        let url = format!("{}/api/bike-units/{}/status", api_base_url(), id);
+                                                        let url = format!("{}/api/admin/bike-units/{}/status", api_base_url(), id);
                                                         let res = HTTP_CLIENT.clone().put(&url)
                                                             .header("X-Telegram-Init-Data", init_data.read().clone())
                                                             .header("X-Admin-Token", admin_token())
@@ -1734,17 +1734,37 @@ fn BikeUnitsTab() -> Element {
                     let deleted = cache.read().iter().find(|u| u.id == id).cloned();
                     cache.write().retain(|u| u.id != id);
                     spawn(async move {
-                        let url = format!("{}/api/bike-units/{}", api_base_url(), id);
+                        let url = format!("{}/api/admin/bike-units/{}", api_base_url(), id);
                         let res = HTTP_CLIENT.clone().delete(&url)
                             .header("X-Telegram-Init-Data", init_data.read().clone())
                             .header("X-Admin-Token", admin_token())
                             .header("X-Admin-Telegram-Id", telegram_id.to_string())
                             .send().await;
-                        match res {
-                            Ok(r) if r.status().is_success() => { push_toast(toasts, "Юнит удалён".into(), ToastKind::Success); TelegramApp::init().haptic_notification(HapticNotification::Success); }
-                            _ => {
+                        // The server's own sentence is shown when it sends
+                        // one. Deleting a unit that has service records is
+                        // refused with a 409 explaining that «Выведен» is
+                        // almost certainly the status wanted instead — advice
+                        // a generic "не удалось" would throw away, leaving the
+                        // owner pressing the same button again.
+                        let reason = match res {
+                            Ok(r) if r.status().is_success() => None,
+                            Ok(r) => {
+                                let code = r.status().as_u16();
+                                let body = r.text().await.unwrap_or_default();
+                                let b = body.trim();
+                                Some(if b.is_empty() {
+                                    format!("Не удалось удалить юнит (HTTP {code})")
+                                } else {
+                                    b.chars().take(160).collect()
+                                })
+                            }
+                            Err(_) => Some("Не удалось удалить юнит: сеть/таймаут".to_string()),
+                        };
+                        match reason {
+                            None => { push_toast(toasts, "Юнит удалён".into(), ToastKind::Success); TelegramApp::init().haptic_notification(HapticNotification::Success); }
+                            Some(reason) => {
                                 if let Some(item) = deleted { cache.write().push(item); }
-                                push_toast(toasts, "Не удалось удалить юнит".into(), ToastKind::Error);
+                                push_toast(toasts, reason, ToastKind::Error);
                                 TelegramApp::init().haptic_notification(HapticNotification::Error);
                             }
                         }
@@ -1791,7 +1811,7 @@ fn ServiceTab() -> Element {
     let _ = use_resource(move || {
         let init_data = init_data.read().clone();
         async move {
-            let url = format!("{}/api/bike-units", api_base_url());
+            let url = format!("{}/api/admin/bike-units", api_base_url());
             if let Ok(resp) = HTTP_CLIENT
                 .clone()
                 .get(&url)
@@ -2647,7 +2667,7 @@ fn EditBikeUnitCard(
                                    "km_since_purchase": int_json(km),
                                    "status": st,
                                });
-                               let url = format!("{}/api/bike-units/{}", api_base_url(), id);
+                               let url = format!("{}/api/admin/bike-units/{}", api_base_url(), id);
                                let res = HTTP_CLIENT.clone().put(&url)
                                    .header("X-Telegram-Init-Data", init_data.read().clone())
     .header("X-Admin-Token", admin_token())
