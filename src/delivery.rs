@@ -1,8 +1,23 @@
-//! Delivery zones + ETA estimates for the Koh Phangan shop.
+//! Delivery zones + ETA estimates.
 //!
 //! Kept as a small config-driven module so zones/ETA can be tuned without
 //! touching order logic. In production, override via `DELIVERY_ZONES_JSON`;
-//! otherwise the built-in Koh Phangan defaults apply.
+//! otherwise the built-in defaults below apply.
+//!
+//! # Those defaults are the other shop's map
+//!
+//! `Haad Rin`, `Srithanu` and `Thong Sala` are villages on Koh Phangan.
+//! TurboBaby is in Kamala, Phuket — a different island, and the two are not
+//! adjacent. The header of this file used to assert the Koh Phangan location
+//! as fact, which is how a wrong delivery map reads as a correct one.
+//!
+//! The names are left in place rather than guessed at, for the same reason
+//! `migrations/085_unpublish_woody_catalog.sql` leaves the `delivery_zones`
+//! rows alone and says so: a zone is a name, a fee and an ETA, and inventing
+//! any of the three puts a number on a customer's screen that nobody
+//! measured (D11). TurboBaby's Phuket zones are the owner's to define. Until
+//! he does, this module's job is to be obviously unanswered instead of
+//! quietly wrong.
 
 use serde::{Deserialize, Serialize};
 

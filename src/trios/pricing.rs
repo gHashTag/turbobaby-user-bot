@@ -186,6 +186,95 @@ pub fn client_day_rate(
     authoritative_door_rate(client_rate_thb_day)
 }
 
+// ── The three-state rate, transcribed from `specs/turbobaby/pricing_honesty.t27`
+//    (D11, D15). The spec is executed by the `t27-contracts` CI job, so this is
+//    a transcription and not a design: where the two disagree the spec wins and
+//    the disagreement is a bug here. It lives in this module rather than beside
+//    either screen because `src/lib.rs` gates `pub mod ui;` on `wasm32` — nothing
+//    under `src/ui` is compiled by `cargo test`, so an assertion written there
+//    proves nothing. These run.
+
+/// The sentence a dash must carry. Mirrors the spec's `MUST_SAY` (:157), which
+/// is D11's `on_silence.must_say`. The locale layer does the wording (D13); what
+/// is pinned here is that *something* is said.
+pub const SAY_HUMAN_QUOTES: &str = "a human quotes this price";
+
+/// What a render may emit. Two shapes and no third, because there is no number
+/// to put in one — no "approximately", no "from", no "average". Mirrors
+/// `SHAPE_AMOUNT` / `SHAPE_DASH`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RateShape {
+    /// A number the door returned. It speaks for itself.
+    Amount,
+    /// No number. Never travels alone — see [`RenderedRate::say`].
+    Dash,
+}
+
+/// The render result: a typed triple rather than a formatted string, because
+/// the typesetting is locale work. Mirrors the spec's `RenderedRate` (:229).
+#[derive(Debug, Clone, PartialEq)]
+pub struct RenderedRate {
+    pub shape: RateShape,
+    /// Present only for [`RateShape::Amount`]. The spec fills the dash's slot
+    /// with a poison marker (`NOT_AN_AMOUNT_THB_DAY = -1`) so that code reading
+    /// it without checking the tag breaks obviously; Rust's `Option` makes the
+    /// same slot unreadable outright, which is the stronger guarantee.
+    pub thb_day: Option<f64>,
+    /// The obligation travelling with the shape. `None` is the spec's
+    /// `SAY_NOTHING_EXTRA` — an amount needs no sentence. `Some` is
+    /// `SAY_HUMAN_QUOTES`, and a `Dash` always carries it: the spec's invariant
+    /// `the_dash_never_travels_alone` (:398) exists because D11 lists *silence*
+    /// alongside invention in `must_not_emit`. Saying nothing is the other half
+    /// of the offence, not the safe default.
+    pub say: Option<&'static str>,
+}
+
+/// Render a client-facing day rate from its complete wire context.
+///
+/// Delegates the provenance gate to [`client_day_rate`] so there is one door
+/// gate in the codebase and not two (D15). Total over its input: every value
+/// lands on `Amount` or `Dash`, and absence and invalid money land together —
+/// both mean nobody measured a rate, and the client-facing consequence is
+/// identical.
+pub fn render_client_rate(
+    client_rate_thb_day: Option<f64>,
+    client_rate_source: Option<&str>,
+) -> RenderedRate {
+    match client_day_rate(client_rate_thb_day, client_rate_source, None, None) {
+        Some(rate) => RenderedRate {
+            shape: RateShape::Amount,
+            thb_day: Some(rate),
+            say: None,
+        },
+        None => RenderedRate {
+            shape: RateShape::Dash,
+            thb_day: None,
+            say: Some(SAY_HUMAN_QUOTES),
+        },
+    }
+}
+
+/// May a customer-facing price box publish the file's *reference* money — the
+/// deposit, the monthly low-season figure, the class-discount percentage?
+///
+/// Only beside a real door price. Those three are `SOURCE_FILE_REFERENCE` in the
+/// spec (:116): retained for audit comparison, never authoritative on their own.
+/// Standing beside a door quote they are context. Standing where a price is
+/// *absent* they become the price — a customer reading "a manager quotes this
+/// price" above "฿9,900 per month" divides by thirty and leaves with an averaged
+/// per-day number, which is exactly what D11's `must_not_emit` forbids.
+///
+/// One predicate, used by both price boxes. The two screens have already drifted
+/// once — `money_thb(Some(0.0))` renders a dash in the WASM while
+/// `thb_or_dash(Some(0.0))` renders `0 ฿` in the API — so the gate is shared
+/// rather than spelled twice (D15).
+pub fn may_publish_reference_money(
+    client_rate_thb_day: Option<f64>,
+    client_rate_source: Option<&str>,
+) -> bool {
+    client_day_rate(client_rate_thb_day, client_rate_source, None, None).is_some()
+}
+
 /// A market's money display profile: the Rust-side instance of the contract in
 /// `specs/turbobaby/market_profile.t27` (`turbobaby/market`, D18). The owner's
 /// standing instruction is that this agent runs on any market, country and
@@ -293,6 +382,11 @@ fn group_digits(n: i64, sep: char) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    // The price slot's own words, for the criterion that is about emitted text
+    // rather than about shape. Both modules compile for either arch, so unlike
+    // an assertion under `src/ui` this one runs.
+    use crate::trios::core::Lang;
+    use crate::trios::i18n::{t, T_BIKE_PRICE_ON_REQUEST};
 
     fn now_utc() -> DateTime<Utc> {
         Utc::now()
@@ -331,6 +425,114 @@ mod tests {
             client_day_rate(Some(f64::NAN), Some("door"), Some(939.0), Some(0.25)),
             None
         );
+    }
+
+    #[test]
+    fn a_dash_never_travels_alone() {
+        // The spec's invariant of the same name (pricing_honesty.t27:398).
+        // D11 lists silence in `must_not_emit` beside invention, so a render
+        // that emits no number must emit a sentence.
+        for silent in [
+            render_client_rate(None, Some("unavailable")),
+            render_client_rate(None, None),
+            render_client_rate(Some(704.25), Some("unavailable")),
+            render_client_rate(Some(704.25), None),
+            render_client_rate(Some(0.0), Some("door")),
+            render_client_rate(Some(-1.0), Some("door")),
+            render_client_rate(Some(f64::NAN), Some("door")),
+        ] {
+            assert_eq!(silent.shape, RateShape::Dash);
+            assert_eq!(silent.thb_day, None);
+            assert_eq!(silent.say, Some(SAY_HUMAN_QUOTES));
+        }
+    }
+
+    #[test]
+    fn a_door_quote_renders_as_an_amount_that_speaks_for_itself() {
+        let quoted = render_client_rate(Some(337.0), Some("door"));
+        assert_eq!(quoted.shape, RateShape::Amount);
+        assert_eq!(quoted.thb_day, Some(337.0));
+        // SAY_NOTHING_EXTRA: the number needs no accompanying sentence.
+        assert_eq!(quoted.say, None);
+    }
+
+    #[test]
+    fn reference_money_may_be_published_only_beside_a_door_price() {
+        // The file's deposit / monthly / class-discount figures are context
+        // beside a real quote and a price in the absence of one.
+        assert!(may_publish_reference_money(Some(337.0), Some("door")));
+        assert!(!may_publish_reference_money(None, Some("unavailable")));
+        assert!(!may_publish_reference_money(None, None));
+        // A file number wearing no door provenance buys nothing.
+        assert!(!may_publish_reference_money(Some(939.0), Some("file")));
+        assert!(!may_publish_reference_money(Some(939.0), None));
+        // Invalid money is not a price, so it licenses nothing either.
+        assert!(!may_publish_reference_money(Some(0.0), Some("door")));
+        assert!(!may_publish_reference_money(Some(f64::NAN), Some("door")));
+    }
+
+    /// #25's second acceptance criterion: `от` / "from" / an averaged number is
+    /// never emitted *as a price*. The scope is the price slot and nothing
+    /// wider, and that scoping is what makes the criterion provable at all —
+    /// the shipped `T_BIKE_QUOTE_NOTE` reads "…она зависит **от** срока, сезона
+    /// и наличия", correct copy that a whole-screen search for `от` would
+    /// condemn. That note stands outside the slot and is not tested here.
+    ///
+    /// The proof is by absence of numerals rather than by a blocklist of words.
+    /// A "from" price, a range and an average each need a numeral; where none
+    /// can reach the slot, none of the three is expressible in it whatever
+    /// words surround it. It is also why the em dash in the Russian wording is
+    /// harmless: a dash is a range only when a number stands on each side.
+    #[test]
+    fn a_rendered_absent_rate_carries_no_from_no_range_and_no_average() {
+        let dash = render_client_rate(None, Some("unavailable"));
+        assert_eq!(dash.shape, RateShape::Dash);
+        // No caller can format a numeral out of a slot it cannot read.
+        assert_eq!(dash.thb_day, None);
+        assert!(!SAY_HUMAN_QUOTES.chars().any(char::is_numeric));
+
+        // The text that actually stands in the slot, in every locale the
+        // dispatcher serves. A translator writing "от 300฿" is the realistic
+        // way this criterion gets broken, and `is_numeric` rather than
+        // `is_ascii_digit` because Thai ๐–๙ would spend a price just as well.
+        for lang in [
+            Lang::Russian,
+            Lang::English,
+            Lang::Thai,
+            Lang::Chinese,
+            Lang::Hebrew,
+            Lang::German,
+            Lang::French,
+            Lang::Spanish,
+        ] {
+            let slot = t(lang, T_BIKE_PRICE_ON_REQUEST);
+            assert!(
+                !slot.chars().any(char::is_numeric),
+                "{lang:?}: the on-request line carries a numeral ({slot:?}) — \
+                 that is a price with no door behind it (D11)"
+            );
+        }
+    }
+
+    #[test]
+    fn the_reference_gate_and_the_render_agree_on_every_input() {
+        // Two functions, one door gate (D15). If these ever disagree, one of
+        // them has grown a second opinion about what a price is.
+        for (rate, source) in [
+            (Some(337.0), Some("door")),
+            (Some(337.0), Some("unavailable")),
+            (Some(0.0), Some("door")),
+            (Some(-1.0), Some("door")),
+            (Some(f64::INFINITY), Some("door")),
+            (None, Some("door")),
+            (None, None),
+        ] {
+            assert_eq!(
+                may_publish_reference_money(rate, source),
+                render_client_rate(rate, source).shape == RateShape::Amount,
+                "disagreement on ({rate:?}, {source:?})"
+            );
+        }
     }
 
     #[test]

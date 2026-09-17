@@ -27,7 +27,8 @@ pub(crate) struct TopReferrer {
     pub total_bonus_earned: f64,
 }
 
-/// Loop #20: a single invitee's visible progress for the garden viral panel.
+/// Loop #20: a single invitee's visible progress, for the friends panel on the
+/// referrals page.
 ///
 /// `display_name` stays a single ready-to-print string so nothing that already
 /// reads it breaks, but the parts are carried alongside it now: the screen
@@ -41,9 +42,29 @@ pub(crate) struct Invitee {
     /// True when nothing about this person was ever recorded, so the client
     /// can print "friend" in its own language instead of the English noun the
     /// old `COALESCE(first_name, 'Friend')` baked into the database layer.
+    ///
+    /// Derived from `suffix` rather than matched separately: the two say the
+    /// same thing, and a boolean computed next to a string it must agree with
+    /// is the shape that drifts.
     pub is_anonymous: bool,
+    /// The stable `#NNNN` tail that keeps two unnamed friends apart, present
+    /// only when there is no name to print.
+    ///
+    /// `display_name` already ends with it — glued behind the English word
+    /// `Friend`, because this layer holds no language. Sending the tail on its
+    /// own is what lets the client substitute its own noun without parsing the
+    /// word back off a string the server formatted, which is a contract
+    /// nobody wrote down and nothing would have caught breaking.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub suffix: Option<String>,
     pub status: String,
-    pub streak: i64,
+    /// `streak` stood here: `COALESCE(MAX(gp.max_streak), 0)` over a
+    /// `LEFT JOIN garden_plants`. Migration 083 drops that table, and Postgres
+    /// does not shrug at a join onto a relation that is not there — it fails
+    /// the whole statement. So this was not a list that had lost one column,
+    /// it was a list that could not be produced at all: every call to
+    /// `/api/referrals/{id}/invitees` answered 500. Removing the garden is D5,
+    /// and a streak nobody can compute does not come back as `0` (D9).
     pub has_ordered: bool,
     pub source: Option<String>,
 }
@@ -604,8 +625,7 @@ pub(crate) async fn get_top_referrers(
         .collect())
 }
 
-/// Loop #20: list invitees for a referrer with their garden streak and
-/// order status.
+/// Loop #20: list invitees for a referrer with their order status.
 ///
 /// The name is decided by `crate::trios::person`, which has the three cases
 /// written down and tested; this function only supplies what the database
@@ -628,11 +648,9 @@ pub(crate) async fn get_invitees(
             MAX(ul.first_name)                                    AS first_name,
             MAX(ul.last_name)                                     AS last_name,
             MAX(ul.username)                                      AS username,
-            COALESCE(MAX(gp.max_streak), 0)                       AS streak,
             MAX(CASE WHEN o.id IS NOT NULL THEN 1 ELSE 0 END)   AS has_ordered
         FROM referral_events re
         LEFT JOIN user_languages ul ON ul.telegram_id = re.referred_id
-        LEFT JOIN garden_plants gp ON gp.user_id = re.referred_id::text
         LEFT JOIN orders o ON o.telegram_id = re.referred_id
         WHERE re.referrer_id = $1
         GROUP BY re.referred_id, re.status, re.source
@@ -660,19 +678,23 @@ pub(crate) async fn get_invitees(
                 username: username.as_deref(),
             };
             let naming = crate::trios::person::name_for(&known, referred_id);
-            let is_anonymous = matches!(naming, crate::trios::person::Naming::Anonymous { .. });
+            let suffix = match &naming {
+                crate::trios::person::Naming::Anonymous { suffix } => Some(suffix.clone()),
+                _ => None,
+            };
             // "Friend" only ever reaches the wire as the last resort, and the
-            // client is told so via `is_anonymous` and may say it its own way.
+            // client is told so via `is_anonymous` and `suffix`, and may say it
+            // its own way.
             let display_name = crate::trios::person::one_line(&known, referred_id, "Friend");
 
             Invitee {
                 display_name,
                 username: crate::trios::person::handle(username.as_deref()),
-                is_anonymous,
+                is_anonymous: suffix.is_some(),
+                suffix,
                 status: r
                     .try_get::<String>("", "status")
                     .unwrap_or_else(|_| "pending".into()),
-                streak: r.try_get::<i32>("", "streak").unwrap_or(0) as i64,
                 has_ordered: r.try_get::<i32>("", "has_ordered").unwrap_or(0) == 1,
                 source: r.try_get::<String>("", "source").ok(),
             }
@@ -680,11 +702,32 @@ pub(crate) async fn get_invitees(
         .collect())
 }
 
+/// The referral milestone ladder: how many confirmed friends earn a bonus.
+///
+/// One list, because there were three. `maybe_award_referral_milestones`
+/// decided who gets paid, `milestone_bonus_amounts` decided how much, and
+/// `src/api/referrals.rs` told the customer what to aim for — each from its own
+/// hand-written `[1, 3, 5]`. Adding a fourth rung to two of the three would
+/// have promised a bonus nothing awards.
+pub(crate) const MILESTONE_THRESHOLDS: [i32; 3] = [1, 3, 5];
+
+/// What each rung pays when `loyalty_config` says nothing. Tuned to feel
+/// meaningful without cannibalising margin.
+const MILESTONE_DEFAULT_BONUS: [(i32, f64); 3] = [(1, 100.0), (3, 300.0), (5, 500.0)];
+
 /// Loop #21: return achieved referral milestones and total confirmed count.
+///
+/// Each milestone comes back with the amount that was **actually credited**,
+/// read from its `referral_milestones` row — not recomputed. The row is the
+/// only record of what the shop paid: `loyalty_config` can be edited between
+/// one award and the next, so a milestone reached in June may be worth a
+/// different number today. The client used to print its own
+/// `1 => 100, 3 => 300, 5 => 500`, which is right until the day somebody edits
+/// the config and then silently wrong for ever.
 pub(crate) async fn get_referral_milestones(
     orm: &sea_orm::DatabaseConnection,
     referrer_id: i64,
-) -> Result<(Vec<i32>, i64)> {
+) -> Result<(Vec<(i32, f64)>, i64)> {
     use crate::db::entities::referral_milestone::{
         Column as MilestoneCol, Entity as MilestoneEntity,
     };
@@ -698,7 +741,10 @@ pub(crate) async fn get_referral_milestones(
         .context("fetch referral_milestones")?;
     let confirmed = count_confirmed_referrals(orm, referrer_id).await?;
     Ok((
-        achieved.into_iter().map(|m| m.milestone).collect(),
+        achieved
+            .into_iter()
+            .map(|m| (m.milestone, m.bonus_amount))
+            .collect(),
         confirmed,
     ))
 }
@@ -742,12 +788,11 @@ pub(crate) async fn maybe_award_referral_milestones(
 
     let amounts = milestone_bonus_amounts(orm).await;
     let confirmed = count_confirmed_referrals(orm, referrer_id).await?;
-    let thresholds = [1, 3, 5];
 
     let tx = orm.begin().await.context("start milestone tx")?;
     let mut awarded: Vec<(i32, f64)> = Vec::new();
 
-    for milestone in thresholds {
+    for milestone in MILESTONE_THRESHOLDS {
         if confirmed < milestone as i64 {
             continue;
         }
@@ -842,16 +887,18 @@ pub(crate) async fn maybe_award_referral_milestones(
     Ok(awarded)
 }
 
-/// Read per-milestone bonus amounts from `loyalty_config.config` JSON. Defaults
-/// are tuned to feel meaningful without cannibalising margin: 100 / 300 / 500 ฿.
-async fn milestone_bonus_amounts(
+/// Read per-milestone bonus amounts from `loyalty_config.config` JSON, falling
+/// back to [`MILESTONE_DEFAULT_BONUS`].
+///
+/// This is what the shop pays *now*, which is what a customer who has not
+/// reached a rung yet should be shown. What an already-awarded rung paid is a
+/// different number and comes from [`get_referral_milestones`].
+pub(crate) async fn milestone_bonus_amounts(
     orm: &sea_orm::DatabaseConnection,
 ) -> std::collections::HashMap<i32, f64> {
     use sea_orm::{ConnectionTrait, DbBackend, Statement};
-    let mut out = std::collections::HashMap::new();
-    out.insert(1, 100.0);
-    out.insert(3, 300.0);
-    out.insert(5, 500.0);
+    let mut out: std::collections::HashMap<i32, f64> =
+        MILESTONE_DEFAULT_BONUS.iter().copied().collect();
 
     let row = orm
         .query_one(Statement::from_string(
@@ -868,7 +915,7 @@ async fn milestone_bonus_amounts(
         _ => serde_json::json!({}),
     };
 
-    for milestone in [1, 3, 5] {
+    for milestone in MILESTONE_THRESHOLDS {
         let key = format!("milestone_bonus_{}", milestone);
         if let Some(v) = config
             .get(&key)

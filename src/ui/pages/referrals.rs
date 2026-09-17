@@ -1,9 +1,26 @@
+//! The referral screen: your link, your numbers, your friends, your ladder.
+//!
+//! The friends list and the milestone ladder did not start here. They were
+//! rendered by the garden screen, which is gone (D5) — but the garden only
+//! ever *hosted* them: both panels read `referral_events` and
+//! `referral_milestones`, tables migration 083 does not touch. Deleting the
+//! host and the tenants together would have retired a live mechanic by
+//! association, so the two panels moved to the page they were always about.
+//!
+//! One thing did not move. The garden's milestone panel printed its own
+//! `1 => 100, 3 => 300, 5 => 500`, a fourth hand-written copy of a ladder that
+//! also existed in three places on the server. A client that invents the
+//! reward is right until somebody edits `loyalty_config`, and silently wrong
+//! for ever after. Every number below comes off the wire.
+
 use crate::trios::i18n::{
     t, tf, T_LOADING, T_REFERRAL_COPIED, T_REFERRAL_COPY, T_REFERRAL_EMPTY_LEADERBOARD,
-    T_REFERRAL_ID_MASK, T_REFERRAL_LINK_LABEL, T_REFERRAL_ROW_META, T_REFERRAL_SHARE,
-    T_REFERRAL_SHARE_TEXT, T_REFERRAL_STAT_BONUS, T_REFERRAL_STAT_CONFIRMED,
-    T_REFERRAL_STAT_INVITED, T_REFERRAL_STAT_PENDING, T_REFERRAL_SUBTITLE, T_REFERRAL_TITLE,
-    T_REFERRAL_TOP,
+    T_REFERRAL_ID_MASK, T_REFERRAL_INVITEES_EMPTY, T_REFERRAL_INVITEES_TITLE,
+    T_REFERRAL_INVITEE_JOINED, T_REFERRAL_INVITEE_ORDERED, T_REFERRAL_INVITEE_UNKNOWN,
+    T_REFERRAL_LINK_LABEL, T_REFERRAL_MILESTONE_AWARDED, T_REFERRAL_MILESTONE_SUBTITLE,
+    T_REFERRAL_MILESTONE_TITLE, T_REFERRAL_ROW_META, T_REFERRAL_SHARE, T_REFERRAL_SHARE_TEXT,
+    T_REFERRAL_STAT_BONUS, T_REFERRAL_STAT_CONFIRMED, T_REFERRAL_STAT_INVITED,
+    T_REFERRAL_STAT_PENDING, T_REFERRAL_SUBTITLE, T_REFERRAL_TITLE, T_REFERRAL_TOP,
 };
 use crate::ui::api::context::api_base_url;
 use crate::ui::telegram::{use_telegram_id, use_telegram_init_data};
@@ -30,6 +47,65 @@ pub struct TopReferrer {
     pub telegram_id: i64,
     pub referral_count: i64,
     pub total_bonus_earned: f64,
+}
+
+/// One person who followed this user's invite link.
+///
+/// `status` and `source` are on the wire and deliberately unread: `status` is
+/// already aggregated into the confirmed/pending cards above, and `source` is
+/// the A/B share bucket — an internal measurement, not something to show the
+/// customer whose friend it describes.
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+pub struct Invitee {
+    /// Ready to print, and already localised for everyone who has a name or a
+    /// handle. Only the anonymous case needs this screen's help.
+    pub display_name: String,
+    #[serde(default)]
+    pub username: Option<String>,
+    #[serde(default)]
+    pub is_anonymous: bool,
+    /// The `#NNNN` tail, sent on its own exactly when `display_name` had to
+    /// fall back to the English word the server had no language to translate.
+    #[serde(default)]
+    pub suffix: Option<String>,
+    #[serde(default)]
+    pub has_ordered: bool,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, PartialEq)]
+struct InviteesResponse {
+    /// `count` is on the wire too. It is not read here: a length sent beside
+    /// the list it counts is one more number that can disagree with the truth
+    /// next to it, and `Vec::len` cannot.
+    #[serde(default)]
+    invitees: Vec<Invitee>,
+}
+
+/// A rung of the referral ladder and the money attached to it.
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+pub struct MilestoneRung {
+    pub milestone: i32,
+    #[serde(default)]
+    pub bonus_amount: f64,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, PartialEq)]
+struct MilestonesResponse {
+    #[serde(default)]
+    confirmed: i64,
+    /// Every rung the ladder has, with what it pays **today** — the server
+    /// reads `loyalty_config` for these. This is also the ladder itself: the
+    /// response carries a bare `thresholds` array as well, for clients shipped
+    /// before this panel existed, and reading both would be two copies of one
+    /// list in one struct.
+    #[serde(default)]
+    bonuses: Vec<MilestoneRung>,
+    /// The rungs already reached, with what each one **actually credited**,
+    /// read from its `referral_milestones` row. Not the same number as
+    /// `bonuses` for the same rung whenever the shop has edited the config
+    /// since — which is the whole reason the server sends both.
+    #[serde(default)]
+    awards: Vec<MilestoneRung>,
 }
 
 fn open_telegram_link(url: &str) {
@@ -84,6 +160,11 @@ pub fn Referrals() -> Element {
     let lang = crate::ui::lang::current_lang();
     let referral_me = use_signal(ReferralMe::default);
     let leaderboard = use_signal(Vec::<TopReferrer>::new);
+    // `None` is "not answered", not "empty". A failed request must leave these
+    // panels off the screen rather than render the empty state, which says
+    // «пригласи друзей» to somebody who may have invited a dozen.
+    let invitees = use_signal(|| None::<Vec<Invitee>>);
+    let milestones = use_signal(|| None::<MilestonesResponse>);
     let loading = use_signal(|| true);
     let mut copied = use_signal(|| false);
     let init_data = use_telegram_init_data();
@@ -91,6 +172,8 @@ pub fn Referrals() -> Element {
     {
         let mut me_c = referral_me;
         let mut board_c = leaderboard;
+        let mut invitees_c = invitees;
+        let mut milestones_c = milestones;
         let mut loading_c = loading;
         let tid = telegram_id;
         let init = init_data.clone();
@@ -139,7 +222,32 @@ pub fn Referrals() -> Element {
                     }
                 }
 
+                // The link and the counters are the page; everything below is
+                // detail. Releasing the spinner here keeps time-to-first-paint
+                // exactly where it was before the two panels moved in.
                 loading_c.set(false);
+
+                if let Ok(text) = crate::ui::api::http::fetch_text_authed(
+                    &format!("{}/api/referrals/me/{}/invitees", base, tid),
+                    &init,
+                )
+                .await
+                {
+                    if let Ok(resp) = serde_json::from_str::<InviteesResponse>(&text) {
+                        invitees_c.set(Some(resp.invitees));
+                    }
+                }
+
+                if let Ok(text) = crate::ui::api::http::fetch_text_authed(
+                    &format!("{}/api/referrals/me/{}/milestones", base, tid),
+                    &init,
+                )
+                .await
+                {
+                    if let Ok(resp) = serde_json::from_str::<MilestonesResponse>(&text) {
+                        milestones_c.set(Some(resp));
+                    }
+                }
             });
         });
     }
@@ -149,6 +257,8 @@ pub fn Referrals() -> Element {
     let link_for_copy = link.clone();
     let stats = me.stats.clone();
     let board = leaderboard.read().clone();
+    let friends = invitees.read().clone();
+    let ladder = milestones.read().clone();
 
     rsx! {
         div {
@@ -269,6 +379,14 @@ pub fn Referrals() -> Element {
                     ))}
                 }
 
+                if let Some(m) = ladder {
+                    {milestones_panel(lang, m)}
+                }
+
+                if let Some(list) = friends {
+                    {invitees_panel(lang, list)}
+                }
+
                 div {
                     style: "max-width: 380px; margin: 0 auto; padding: 0 16px;",
 
@@ -291,6 +409,179 @@ pub fn Referrals() -> Element {
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+/// The ladder: every rung, what it pays, and which ones are already paid.
+///
+/// Reached rungs print the amount that was **actually credited**; unreached
+/// ones print what the shop pays for them today. The two can differ, and the
+/// server sends both for exactly that reason — see `MilestonesResponse`.
+fn milestones_panel(lang: crate::trios::core::Lang, m: MilestonesResponse) -> Element {
+    if m.bonuses.is_empty() {
+        // No ladder came back. A panel with a title and nothing under it says
+        // less than no panel at all.
+        return rsx! {};
+    }
+
+    // The server builds this list in ladder order, but "the caller happens to
+    // sort it" is not a property the caller declared.
+    let mut rungs = m.bonuses.clone();
+    rungs.sort_by_key(|r| r.milestone);
+
+    let top = rungs.last().map(|r| r.milestone).unwrap_or(0);
+    let goal = rungs
+        .iter()
+        .map(|r| r.milestone)
+        .find(|rung| i64::from(*rung) > m.confirmed)
+        .unwrap_or(top);
+    let subtitle = tf(
+        lang,
+        T_REFERRAL_MILESTONE_SUBTITLE,
+        &[m.confirmed.to_string(), goal.to_string()],
+    );
+
+    rsx! {
+        div {
+            style: "
+                max-width: 380px; margin: 0 auto 16px; padding: 16px;
+                background: #16213e;
+                border: 4px solid #2a2a4a;
+                box-shadow: 4px 4px 0 #000;
+            ",
+            h2 {
+                style: "font-size: 13px; font-weight: 700; color: #ffd700; text-align: center;",
+                "{t(lang, T_REFERRAL_MILESTONE_TITLE)}"
+            }
+            p {
+                style: "font-size: 15px; color: #888; margin: 6px 0 12px; text-align: center;",
+                "{subtitle}"
+            }
+            div {
+                style: "display: flex; flex-direction: column; gap: 6px;",
+                for rung in rungs.iter() {
+                    {milestone_row(lang, rung, &m.awards)}
+                }
+            }
+        }
+    }
+}
+
+fn milestone_row(
+    lang: crate::trios::core::Lang,
+    rung: &MilestoneRung,
+    awards: &[MilestoneRung],
+) -> Element {
+    let paid = awards.iter().find(|a| a.milestone == rung.milestone);
+    let amount = paid.map(|a| a.bonus_amount).unwrap_or(rung.bonus_amount);
+    let text = tf(
+        lang,
+        T_REFERRAL_MILESTONE_AWARDED,
+        &[
+            rung.milestone.to_string(),
+            crate::trios::pricing::format_baht(amount),
+        ],
+    );
+    let (colour, mark) = if paid.is_some() {
+        ("#39ff14", "\u{2705}")
+    } else {
+        ("#666", "\u{2022}")
+    };
+    rsx! {
+        div {
+            style: "
+                display: flex; align-items: center; gap: 8px;
+                background: rgba(0,0,0,0.25);
+                border: 4px solid #2a2a4a;
+                padding: 8px 10px;
+            ",
+            span { style: "font-size: 14px; width: 18px; flex-shrink: 0;", "{mark}" }
+            span { style: "font-size: 15px; color: {colour};", "{text}" }
+        }
+    }
+}
+
+/// The friends panel: who followed the link, and how far each of them got.
+fn invitees_panel(lang: crate::trios::core::Lang, list: Vec<Invitee>) -> Element {
+    rsx! {
+        div {
+            style: "max-width: 380px; margin: 0 auto 16px; padding: 0 16px;",
+            h2 {
+                style: "font-size: 13px; font-weight: 700; color: #ffd700; margin-bottom: 12px; text-align: center;",
+                "{t(lang, T_REFERRAL_INVITEES_TITLE)}"
+            }
+            if list.is_empty() {
+                div {
+                    style: "text-align: center; color: #555; font-size: 15px; padding: 20px;",
+                    "{t(lang, T_REFERRAL_INVITEES_EMPTY)}"
+                }
+            } else {
+                div {
+                    style: "display: flex; flex-direction: column; gap: 6px;",
+                    for invitee in list.iter() {
+                        {invitee_row(lang, invitee)}
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn invitee_row(lang: crate::trios::core::Lang, inv: &Invitee) -> Element {
+    // The server holds no language, so somebody it knows nothing about arrives
+    // as the English word plus a `#NNNN` tail. It sends the tail separately for
+    // this substitution; everyone with a name or a handle is already right.
+    let line = if inv.is_anonymous {
+        match inv.suffix.as_deref() {
+            Some(suffix) => format!("{} {}", t(lang, T_REFERRAL_INVITEE_UNKNOWN), suffix),
+            None => t(lang, T_REFERRAL_INVITEE_UNKNOWN).to_string(),
+        }
+    } else {
+        inv.display_name.clone()
+    };
+
+    // `display_name` is the whole line, handle included; `username` is that
+    // handle on its own. Peeling off the exact string the server also sent —
+    // rather than guessing at its format — is what lets the row give the
+    // handle its own colour. If the tail is not there, the line prints whole
+    // and nothing is lost.
+    let (name, handle) = match inv.username.as_deref() {
+        Some(u) => {
+            let tail = format!("@{u}");
+            match line.strip_suffix(&tail).map(str::trim_end) {
+                Some(head) if !head.is_empty() => (head.to_string(), Some(tail)),
+                // `@handle` alone: there is no name to put beside it.
+                Some(_) => (tail, None),
+                None => (line, None),
+            }
+        }
+        None => (line, None),
+    };
+
+    let (mark, state) = if inv.has_ordered {
+        ("\u{1F6D2}", t(lang, T_REFERRAL_INVITEE_ORDERED))
+    } else {
+        ("\u{1F44B}", t(lang, T_REFERRAL_INVITEE_JOINED))
+    };
+
+    rsx! {
+        div {
+            style: "
+                display: flex; align-items: center; gap: 10px;
+                background: #16213e;
+                border: 4px solid #2a2a4a;
+                box-shadow: 4px 4px 0 #000;
+                padding: 10px 12px;
+            ",
+            span { style: "font-size: 14px; width: 20px; flex-shrink: 0;", "{mark}" }
+            div { style: "flex: 1; min-width: 0;",
+                div { style: "font-size: 15px; color: #e8e8e8; overflow: hidden; text-overflow: ellipsis;", "{name}" }
+                if let Some(handle) = handle {
+                    div { style: "font-size: 15px; color: #39ff14; margin-top: 2px;", "{handle}" }
+                }
+                div { style: "font-size: 15px; color: #555; margin-top: 2px;", "{state}" }
             }
         }
     }

@@ -135,6 +135,10 @@ async fn friends_are_shown_by_name_and_handle() {
     );
     assert_eq!(named["username"].as_str(), Some("woody_dev"));
     assert_eq!(named["is_anonymous"].as_bool(), Some(false));
+    assert!(
+        named["suffix"].is_null(),
+        "a friend with a name was sent the anonymous tail as well: {named}"
+    );
     // The assertion that discriminates the fix from the defect.
     assert!(
         !named["display_name"]
@@ -159,6 +163,21 @@ async fn friends_are_shown_by_name_and_handle() {
     assert!(
         unknown["username"].is_null(),
         "a person with no handle reported one: {unknown}"
+    );
+    // The tail travels on its own so the screen can print its own word for
+    // "friend" in front of it. Without this the client would have to strip the
+    // English noun back off `display_name` — a format nobody agreed to keep.
+    assert_eq!(
+        unknown["suffix"].as_str(),
+        Some("#6794"),
+        "the client has no way to localise this row: {unknown}"
+    );
+    assert!(
+        unknown["display_name"]
+            .as_str()
+            .unwrap_or_default()
+            .ends_with("#6794"),
+        "the two fields disagree about who this is: {unknown}"
     );
 }
 

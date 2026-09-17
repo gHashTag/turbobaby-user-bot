@@ -1,7 +1,7 @@
 //! Loop #20: garden invitee progress panel integration test.
 //!
 //! Verifies that `GET /api/referrals/me/:telegram_id/invitees` returns
-//! referred users with their garden streak and order status.
+//! referred users with their order status.
 
 #![cfg(feature = "backend")]
 
@@ -71,7 +71,7 @@ async fn invitees_returns_referred_progress() {
         ))
         .await;
 
-    // Give the referred user a first name and a garden streak.
+    // Give the referred user a first name.
     let _ = db
         .orm
         .execute(Statement::from_sql_and_values(
@@ -80,19 +80,10 @@ async fn invitees_returns_referred_progress() {
             [referred_id.into()],
         ))
         .await;
-    let now_ms = chrono::Utc::now().timestamp_millis();
-    let day_ago = now_ms - 86400000;
-    let hours_ago = now_ms - 43200000;
-    let plant_id = uuid::Uuid::new_v4().to_string();
-    let _ = db
-        .orm
-        .execute(Statement::from_sql_and_values(
-            DbBackend::Postgres,
-            "INSERT INTO garden_plants (id, user_id, strain_id, strain_name, current_stage, planted_at, max_streak, streak, last_watered_at, water_count) \
-             VALUES ($1, $2, 'strain-1', 'Test Strain', 'sprout', $3, 3, 3, $4, 3)",
-            [plant_id.into(), referred_id.to_string().into(), day_ago.into(), hours_ago.into()],
-        ))
-        .await;
+    // A `garden_plants` row was seeded here to give the invitee a streak of 3.
+    // Migration 083 drops that table, so the insert could only fail — and this
+    // fixture discards insert errors with `let _ =`, so it would have failed in
+    // silence while the assertion below blamed the endpoint.
 
     let req = Request::builder()
         .method(Method::GET)
@@ -120,7 +111,10 @@ async fn invitees_returns_referred_progress() {
     let invitees = json["invitees"].as_array().expect("invitees array");
     let first = &invitees[0];
     assert_eq!(first["status"].as_str(), Some("pending"));
-    assert_eq!(first["streak"].as_i64(), Some(3));
+    assert!(
+        first.get("streak").is_none(),
+        "the invitee row must not carry a garden streak: {first}"
+    );
     assert_eq!(first["has_ordered"].as_bool(), Some(false));
     assert!(first["display_name"].as_str().unwrap().contains("Alex"));
     assert_eq!(first["source"].as_str(), Some("utm_a"));

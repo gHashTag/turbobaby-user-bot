@@ -14,14 +14,22 @@
 //! the orchestrator adds a route of its own for the fleet, this file becomes a
 //! redirect and then nothing at all.
 //!
-//! Two behaviours went out with the strain grid. They are reported to the
-//! orchestrator rather than silently dropped:
+//! Two behaviours went out with the strain grid. Both were reported to the
+//! orchestrator rather than silently dropped, and one has since been answered:
 //!
-//! - the pending **share target**. This screen used to read a stored
-//!   `ProductKind::Strain` target and open it as a product modal; `share.rs`
-//!   still maps that kind to `Route::Menu {}`. Deep links need a `Bike` kind
-//!   pointing at the bike detail route before they work again.
-//! - `prefetch.rs` still warms `/api/strains` for `Route::Menu {}`.
+//! - the pending **share target**, still open. This screen used to read a
+//!   stored `ProductKind::Strain` target and open it as a product modal. Every
+//!   kind in `share.rs` now lands here, which is the right destination for a
+//!   product line that no longer exists but is not yet the right one for a
+//!   bike: there is no `ProductKind::Bike` and no `/bikes/:id` route to give it
+//!   — `bike_detail.rs` is a modal inside the catalog, not a routable screen —
+//!   so a shared bike opens the fleet rather than the bike. Deep-linking a
+//!   specific bike needs that route first.
+//! - the **prefetch**, closed. This bullet claimed `prefetch.rs` still warmed
+//!   `/api/strains` for `Route::Menu {}` long after it had been repointed at
+//!   `/api/bikes` (`prefetch.rs:15`, which says so in a comment of its own). A
+//!   note describing outstanding work that is already done is worse than no
+//!   note: it is a standing invitation to go and re-fix it.
 
 use crate::ui::screens::catalog_screen::CatalogScreen;
 use dioxus::prelude::*;

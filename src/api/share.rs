@@ -17,7 +17,7 @@
 //! shop does not actually charge.
 
 use axum::{extract::State, http::HeaderMap, http::StatusCode, routing::post, Json, Router};
-use chrono::{DateTime, Datelike, Duration, Timelike, Utc};
+use chrono::{DateTime, Datelike, FixedOffset, Timelike, Utc};
 use sea_orm::{ConnectionTrait, DbBackend, Statement};
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -121,14 +121,30 @@ pub(crate) fn build_caption(card: &ShareCard) -> String {
     out
 }
 
-/// Format an event schedule in the shop's local timezone (Koh Phangan).
+/// Format an event schedule on the declared market's wall clock (D18).
 /// Same-day events show one date and a compact time range; multi-day events
 /// retain both dates so the invitation is never ambiguous.
+///
+/// This used to read `starts_at + Duration::hours(7)`: right digits, wrong
+/// type. Adding the offset to the *instant* leaves a value still typed
+/// `DateTime<Utc>` while holding local wall-clock time, so it prints `+0000`
+/// under `%z` and is seven hours out for anything that treats it as a real
+/// moment. Only the accessors used here (`.day()`, `.hour()`, …) hid that.
+///
+/// A market with no single offset falls back to UTC — the same instant, read
+/// on the only clock this program can still justify.
+fn on_market_clock(utc: DateTime<Utc>) -> DateTime<FixedOffset> {
+    match crate::trios::market::MARKET.at(utc) {
+        Some(local) => local,
+        None => utc.fixed_offset(),
+    }
+}
+
 pub(crate) fn format_event_schedule(
     starts_at: DateTime<Utc>,
     ends_at: Option<DateTime<Utc>>,
 ) -> String {
-    let starts = starts_at + Duration::hours(7);
+    let starts = on_market_clock(starts_at);
     let start = format!(
         "{:02}.{:02}.{} · {:02}:{:02}",
         starts.day(),
@@ -137,7 +153,7 @@ pub(crate) fn format_event_schedule(
         starts.hour(),
         starts.minute()
     );
-    match ends_at.map(|dt| dt + Duration::hours(7)) {
+    match ends_at.map(on_market_clock) {
         Some(ends) if ends.date_naive() == starts.date_naive() => {
             format!("{}–{:02}:{:02}", start, ends.hour(), ends.minute())
         }
@@ -265,10 +281,12 @@ async fn load_card(
     // One statement per kind: the tables have genuinely different column
     // names, and aliasing them here keeps the row-reading code uniform.
     let sql = match kind {
-        ShareKind::Strain => {
-            "SELECT name AS title, COALESCE(description, '') AS description, \
-             price_per_gram::float8 AS price, image_url FROM strains WHERE id = $1"
-        }
+        // Миграция 083 удалила таблицу `strains`. Запрос к ней не вернёт
+        // «нет товара» — он вернёт ошибку, и владелец увидит 500 на ссылку,
+        // которая просто устарела. Честный ответ — «товара нет»: вызывающий
+        // превращает `None` в 404. Вариант оставлен разбираемым, чтобы
+        // `share_kind_wire` в UI не разошёлся с сервером.
+        ShareKind::Strain => return Ok(None),
         ShareKind::Accessory => {
             "SELECT name AS title, COALESCE(description, '') AS description, \
              price::float8 AS price, image_url FROM accessories WHERE id = $1"
@@ -466,7 +484,16 @@ mod tests {
     fn an_error_log_never_carries_the_bot_token() {
         // A real error, built the way one arrives: an unroutable host so the
         // request fails at connect and the URL ends up in the Debug output.
-        let token = "8366670807:AAH6YdhtqMJ0DXhSbvwKdJT2oXH979a3fOQ";
+        //
+        // SYNTHETIC, and it has to stay that way. This test was written from a
+        // real incident and the real token was pasted in with it, so a live
+        // credential for @Woody_WeedPecker_bot sat in a PUBLIC repository from
+        // 2026-08-18 to 2026-09-15 — reachable from `upstream` too, which is
+        // why rewriting history could not have recalled it. That token is now
+        // revoked. The test never reaches Telegram (it requests 127.0.0.1:1
+        // and asserts on the `Debug` string), so it only ever needed a
+        // well-formed shape: 10-digit bot id, colon, 35 characters.
+        let token = "1234567890:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
         let rt = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()

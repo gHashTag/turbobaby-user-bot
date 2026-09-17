@@ -315,9 +315,14 @@ pub fn calculate_cart_total(
     total
 }
 
-/// Default country calling code. The shop is on Koh Phangan, so a bare local
-/// number typed by a customer is Thai unless it says otherwise.
-const DEFAULT_COUNTRY_CODE: &str = "66";
+/// Default country calling code, read from the declared market profile (D18).
+///
+/// A bare local number typed by a customer is assumed to be a number of the
+/// market the shop trades in. Which market that is used to be stated here, in
+/// a comment, and stated wrongly — it said Koh Phangan, and the shop is in
+/// Kamala, Phuket. `MARKET_DIALING` makes the claim once, next to the clock
+/// and against the seed, so there is nothing left here to be wrong about.
+const DEFAULT_COUNTRY_CODE: &str = crate::trios::market::MARKET_DIALING.default_calling_code;
 
 /// How the customer receives the order.
 ///
@@ -387,10 +392,13 @@ pub fn normalize_phone(raw: &str) -> Option<String> {
         return Some(format!("+7{}", &digits[1..]));
     }
     // National trunk prefix: `081…` → `+6681…`. Thai mobiles are 10 digits
-    // with the trunk 0, landlines 9.
+    // with the trunk 0, landlines 9. The `+` comes from the profile's own
+    // spelling of the code, not from this format string: the market owns how
+    // its calling code is written, and a caller that re-adds the plus is a
+    // caller that can disagree with it.
     if let Some(rest) = digits.strip_prefix('0') {
         if rest.len() >= 5 {
-            return Some(format!("+{DEFAULT_COUNTRY_CODE}{rest}"));
+            return Some(format!("{DEFAULT_COUNTRY_CODE}{rest}"));
         }
         return None;
     }
@@ -733,19 +741,19 @@ mod tests {
     #[test]
     fn test_validate_checkout_valid() {
         let items = vec![CartItem::new_strain("strain1".to_string(), 1)];
-        assert!(validate_checkout("John", "+12345", "Koh Phangan", &items).is_ok());
+        assert!(validate_checkout("John", "+12345", "Kamala", &items).is_ok());
     }
 
     #[test]
     fn test_validate_checkout_empty_name() {
         let items = vec![CartItem::new_strain("strain1".to_string(), 1)];
-        assert!(validate_checkout("", "+12345", "Koh Phangan", &items).is_err());
+        assert!(validate_checkout("", "+12345", "Kamala", &items).is_err());
     }
 
     #[test]
     fn test_validate_checkout_empty_phone() {
         let items = vec![CartItem::new_strain("strain1".to_string(), 1)];
-        assert!(validate_checkout("John", "", "Koh Phangan", &items).is_err());
+        assert!(validate_checkout("John", "", "Kamala", &items).is_err());
     }
 
     #[test]
@@ -756,13 +764,13 @@ mod tests {
 
     #[test]
     fn test_validate_checkout_empty_cart() {
-        assert!(validate_checkout("John", "+12345", "Koh Phangan", &[]).is_err());
+        assert!(validate_checkout("John", "+12345", "Kamala", &[]).is_err());
     }
 
     #[test]
     fn test_validate_checkout_invalid_phone() {
         let items = vec![CartItem::new_strain("strain1".to_string(), 1)];
-        assert!(validate_checkout("John", "+123", "Koh Phangan", &items).is_err());
+        assert!(validate_checkout("John", "+123", "Kamala", &items).is_err());
     }
 
     // ---- Phone normalisation -------------------------------------------
@@ -772,7 +780,7 @@ mod tests {
 
     #[test]
     fn normalize_phone_accepts_thai_local_mobile() {
-        // The single most common real input on Koh Phangan.
+        // The single most common real input in Thailand.
         assert_eq!(
             normalize_phone("0812345678").as_deref(),
             Some("+66812345678")
@@ -852,7 +860,7 @@ mod tests {
         // Regression: this exact combination produced a permanently disabled
         // "Place order" button and no request ever reached the server.
         let items = vec![CartItem::new_strain("strain1".to_string(), 1)];
-        assert!(validate_checkout("John", "0812345678", "Koh Phangan", &items).is_ok());
+        assert!(validate_checkout("John", "0812345678", "Kamala", &items).is_ok());
     }
 
     #[test]
@@ -925,7 +933,7 @@ mod tests {
             true,
             "Дмитрий",
             "0812345678",
-            "Baan Tai, Koh Phangan",
+            "Kamala Beach, Phuket",
             Fulfillment::Delivery,
             1,
             true,

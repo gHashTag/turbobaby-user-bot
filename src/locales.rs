@@ -11,7 +11,6 @@ pub(crate) struct Locale {
     pub menu: String,
     pub view_sets: String,
     pub sommelier: String,
-    pub garden: String,
     pub accessories: String,
     pub quest: String,
     pub profile: String,
@@ -83,19 +82,26 @@ pub(crate) struct Locale {
     pub referral_share_button: String,
     pub referral_share_hint: String,
     pub referral_leaderboard: String,
-    pub garden_water_reminder: String,
-    pub garden_harvest_ready: String,
-    pub garden_reward_expiry: String,
-    pub garden_open_app: String,
+    // Four fields stood here: `garden` (a menu label nothing rendered) and
+    // `garden_water_reminder` / `garden_harvest_ready` / `garden_reward_expiry`
+    // — three Telegram messages that `build_message` has no arm for and that
+    // nothing enqueues, so no customer could receive one even before D5. Their
+    // only readers were the assertions in `bot/notify.rs` that checked they
+    // were non-empty, which is how a dead string passes for a live one.
+    /// Label on the button every referral notification carries.
+    pub referrals_open_app: String,
     pub cart_abandonment_reminder: String,
     pub cart_abandonment_reminder_v2: String,
     pub cart_second_nudge: String,
     pub cart_open: String,
     // Loop #21: referrer-facing lifecycle messages (sent by notification worker)
-    pub garden_friend_joined: String,
-    pub garden_friend_watered: String,
-    pub garden_friend_ordered: String,
-    pub garden_invite_progress_hint: String,
+    pub referral_friend_joined: String,
+    /// Only reachable by `notification_queue` rows queued before D5 — nothing
+    /// writes the `friend_watered` kind any more. Kept, and kept worded for the
+    /// garden, because that is what those rows are about.
+    pub garden_friend_watered_legacy: String,
+    pub referral_friend_ordered: String,
+    pub referral_invite_progress_hint: String,
     pub referral_milestone_bonus: String,
 }
 
@@ -147,7 +153,6 @@ fn ru() -> Locale {
         menu: "🏍 Меню".into(),
         view_sets: "Наборы".into(),
         sommelier: "Сомелье".into(),
-        garden: "Сад".into(),
         accessories: "Аксессуары".into(),
         quest: "Квест".into(),
         profile: "Профиль".into(),
@@ -219,19 +224,16 @@ fn ru() -> Locale {
         referral_share_button: "Поделиться".into(),
         referral_share_hint: "Поделитесь ссылкой и получите бонус за каждого нового друга!".into(),
         referral_leaderboard: "Таблица лидеров".into(),
-        garden_water_reminder: "🌱 Вашему растению нужна вода! Зайдите в сад, чтобы полить.".into(),
-        garden_harvest_ready: "🏆 Растение готово к сбору урожая! Откройте сад, чтобы получить награду.".into(),
-        garden_reward_expiry: "⏳ Ваша садовая скидка скоро сгорит! Откройте сад, чтобы применить её к заказу.".into(),
-        garden_open_app: "Открыть сад".into(),
+        referrals_open_app: "Открыть приглашения".into(),
         cart_abandonment_reminder: "🛒 Вы не завершили оформление заказа. Товары ждут вас в корзине — вернитесь и заберите их одним касанием.".into(),
         cart_abandonment_reminder_v2: "👀 В корзине что-то классное осталось. Вернитесь — оформление займёт меньше минуты.".into(),
         cart_second_nudge: "⏰ Ваши товары всё ещё ждут. Оформите сегодня — добавим немного бонусных баллов к заказу.".into(),
         cart_open: "Открыть корзину".into(),
         // Loop #21
-        garden_friend_joined: "🌱 {name} присоединился к вашему саду!".into(),
-        garden_friend_watered: "🔥 {name} полил растение и удерживает стрик {streak} дн.".into(),
-        garden_friend_ordered: "🎉 {name} сделал первый заказ! Вам начислено {bonus} бонусных баллов.".into(),
-        garden_invite_progress_hint: "Приглашайте больше друзей — получайте бонусы за их активность.".into(),
+        referral_friend_joined: "🎉 {name} присоединился по вашей ссылке!".into(),
+        garden_friend_watered_legacy: "🔥 {name} полил растение и удерживает стрик {streak} дн.".into(),
+        referral_friend_ordered: "🎉 {name} сделал первый заказ! Вам начислено {bonus} бонусных баллов.".into(),
+        referral_invite_progress_hint: "Приглашайте больше друзей — получайте бонусы за их активность.".into(),
         referral_milestone_bonus: "🏆 Поздравляем! Вы достигли рубежа {milestone} друзей и получили {bonus} бонусных баллов от @{bot}.".into(),
     }
 }
@@ -247,7 +249,6 @@ fn en() -> Locale {
         menu: "🏍 Menu".into(),
         view_sets: "Sets".into(),
         sommelier: "Sommelier".into(),
-        garden: "Garden".into(),
         accessories: "Accessories".into(),
         quest: "Quest".into(),
         profile: "Profile".into(),
@@ -319,19 +320,16 @@ fn en() -> Locale {
         referral_share_button: "Share".into(),
         referral_share_hint: "Share your link and earn a bonus for every new friend!".into(),
         referral_leaderboard: "Leaderboard".into(),
-        garden_water_reminder: "🌱 Your plant is thirsty! Visit the garden to water it.".into(),
-        garden_harvest_ready: "🏆 Your plant is ready to harvest! Open the garden to claim the reward.".into(),
-        garden_reward_expiry: "⏳ Your garden discount is about to expire! Open the garden to apply it to an order.".into(),
-        garden_open_app: "Open garden".into(),
+        referrals_open_app: "Open invites".into(),
         cart_abandonment_reminder: "🛒 You didn't finish your order. Your items are still in the cart — come back and grab them with one tap.".into(),
         cart_abandonment_reminder_v2: "👀 Something nice is still waiting in your cart. Come back — checkout takes under a minute.".into(),
         cart_second_nudge: "⏰ Your items are still waiting. Complete your order today and we'll add a few bonus points.".into(),
         cart_open: "Open cart".into(),
         // Loop #21
-        garden_friend_joined: "🌱 {name} joined your garden!".into(),
-        garden_friend_watered: "🔥 {name} watered their plant and kept a {streak}-day streak.".into(),
-        garden_friend_ordered: "🎉 {name} placed their first order! You earned {bonus} bonus points.".into(),
-        garden_invite_progress_hint: "Invite more friends — earn bonuses for their activity.".into(),
+        referral_friend_joined: "🎉 {name} joined via your link!".into(),
+        garden_friend_watered_legacy: "🔥 {name} watered their plant and kept a {streak}-day streak.".into(),
+        referral_friend_ordered: "🎉 {name} placed their first order! You earned {bonus} bonus points.".into(),
+        referral_invite_progress_hint: "Invite more friends — earn bonuses for their activity.".into(),
         referral_milestone_bonus: "🏆 Congrats! You hit the {milestone} friends milestone and received {bonus} bonus points from @{bot}.".into(),
     }
 }

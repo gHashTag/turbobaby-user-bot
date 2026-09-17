@@ -9,12 +9,9 @@ use serde_json::{json, Value};
 
 // Admin API routes
 use crate::api::auth::{check_admin, validate_telegram_id_param};
-use crate::db::entities::{delivery_zone, lab_certificate, strain_review};
+use crate::db::entities::delivery_zone;
 use crate::AppState;
-use sea_orm::{
-    ActiveModelTrait, ColumnTrait, ConnectionTrait, DbBackend, EntityTrait, QueryFilter,
-    QueryOrder, QuerySelect, Set, Statement,
-};
+use sea_orm::{ActiveModelTrait, ConnectionTrait, DbBackend, Set, Statement};
 use std::collections::HashSet;
 use teloxide::payloads::{SendMessageSetters, SendPhotoSetters};
 use teloxide::prelude::Requester;
@@ -148,10 +145,11 @@ pub(crate) fn routes() -> Router<AppState> {
             "/admin/marketing-display",
             get(get_marketing_display).put(set_marketing_display),
         )
-        // Variant C: community / retention admin surface.
-        .route("/admin/reviews", get(list_reviews_admin))
-        .route("/admin/reviews/:id/moderate", post(moderate_review))
-        .route("/admin/strains/:id/lab-cert", post(create_lab_cert))
+        // Variant C оставила три маршрута поверх таблиц, которые миграция 083
+        // удалила: `/admin/reviews`, `/admin/reviews/:id/moderate` и
+        // `/admin/strains/:id/lab-cert` читали `strain_reviews` и
+        // `lab_certificates`. Каждый вызов гарантированно отвечал 500.
+        // Маршрут, который не может ответить, — не маршрут.
         .route("/admin/broadcast", post(telegram_broadcast))
         .route("/admin/broadcast/test", post(telegram_broadcast_test))
         .route(
@@ -169,9 +167,9 @@ async fn get_stats(
     State(state): State<AppState>,
 ) -> Result<Json<Value>, StatusCode> {
     check_admin(&headers, &state)?;
-    // Cycle #92: SeaORM via raw `Statement` (pattern #15). All 5 queries
-    // are simple aggregates / GROUP BY; typed builder would be heavier
-    // than the SQL itself.
+    // Cycle #92: SeaORM via raw `Statement` (pattern #15). All three queries
+    // are simple aggregates; typed builder would be heavier than the SQL
+    // itself.
     use sea_orm::{ConnectionTrait, DbBackend, Statement};
     let orm = &state.db.orm;
 
@@ -199,17 +197,6 @@ async fn get_stats(
         .map(|v| if v.is_finite() { v.max(0.0) } else { 0.0 })
         .unwrap_or(0.0);
 
-    let active_strains: i64 = orm
-        .query_one(Statement::from_string(
-            DbBackend::Postgres,
-            "SELECT COUNT(*)::bigint AS n FROM strains WHERE is_available = true".to_string(),
-        ))
-        .await
-        .ok()
-        .flatten()
-        .and_then(|r| r.try_get::<i64>("", "n").ok())
-        .unwrap_or(0);
-
     let total_users: i64 = orm
         .query_one(Statement::from_string(
             DbBackend::Postgres,
@@ -221,42 +208,22 @@ async fn get_stats(
         .and_then(|r| r.try_get::<i64>("", "n").ok())
         .unwrap_or(0);
 
-    // Top strains by order count (avoid CROSS JOIN via subquery)
-    let top_strains: Vec<Value> = orm
-        .query_all(Statement::from_string(
-            DbBackend::Postgres,
-            r#"
-            SELECT s.name AS name, COUNT(*)::bigint AS cnt
-            FROM (
-                SELECT (jsonb_array_elements(items)->>'id') as sid
-                FROM orders
-                WHERE status = 'completed'
-            ) item
-            JOIN strains s ON item.sid = s.id
-            GROUP BY s.name
-            ORDER BY cnt DESC
-            LIMIT 5
-            "#
-            .to_string(),
-        ))
-        .await
-        .map(|rows| {
-            rows.iter()
-                .map(|r| {
-                    let name: String = r.try_get("", "name").unwrap_or_default();
-                    let count: i64 = r.try_get("", "cnt").unwrap_or(0);
-                    json!({ "name": name, "count": count })
-                })
-                .collect()
-        })
-        .unwrap_or_default();
-
+    // Здесь стояли ещё две величины — `active_strains` и `top_strains`. Обе
+    // читали `strains`, удалённую миграцией 083, и обе гасили ошибку:
+    // `.ok()…unwrap_or(0)` и `.unwrap_or_default()`. Наружу уходило
+    // `active_strains: 0` и `top_strains: []` — не «нет данных», а «ноль
+    // товаров», то есть ровно тот случай, который D9 запрещает: отсутствие,
+    // показанное как ноль. Админ-экран их и так не читал
+    // (`admin_screen.rs` разбирает только `total_orders` и `total_revenue`),
+    // так что удаление ничего не гасит на экране.
+    //
+    // Замены нет намеренно: метрика по парку — сколько байков свободно,
+    // сколько в аренде — это новая величина, а не переименование старой.
+    // Сущности `bike`/`bike_unit` для неё уже есть, запроса пока нет.
     Ok(Json(json!({
         "total_users": total_users,
         "total_orders": total_orders,
         "total_revenue": total_revenue,
-        "active_strains": active_strains,
-        "top_strains": top_strains,
     })))
 }
 
@@ -743,137 +710,10 @@ async fn debug_validate_init_data(
     }))
 }
 
-#[derive(Deserialize)]
-struct ModerateReviewRequest {
-    approved: bool,
-}
-
-#[derive(Deserialize)]
-struct CreateLabCertRequest {
-    certificate_url: String,
-    #[serde(default)]
-    tested_at: Option<String>,
-    #[serde(default)]
-    thc_percent: Option<f64>,
-    #[serde(default)]
-    cbd_percent: Option<f64>,
-}
-
-async fn list_reviews_admin(
-    headers: HeaderMap,
-    State(state): State<AppState>,
-    Query(q): Query<std::collections::HashMap<String, String>>,
-) -> Result<Json<Value>, StatusCode> {
-    check_admin(&headers, &state)?;
-
-    let mut query = strain_review::Entity::find();
-    if q.get("pending")
-        .map(|s| s == "1" || s == "true")
-        .unwrap_or(false)
-    {
-        query = query.filter(strain_review::Column::Approved.eq(false));
-    }
-    let rows = query
-        .order_by_desc(strain_review::Column::CreatedAt)
-        .limit(100)
-        .all(&state.db.orm)
-        .await
-        .map_err(|e| {
-            tracing::error!("list_reviews_admin DB error: {}", e);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
-
-    let out: Vec<Value> = rows
-        .into_iter()
-        .map(|r| {
-            json!({
-                "id": r.id,
-                "telegram_id": r.telegram_id,
-                "strain_id": r.strain_id,
-                "order_id": r.order_id,
-                "rating": r.rating,
-                "comment": r.comment,
-                "approved": r.approved,
-                "created_at": r.created_at.to_rfc3339(),
-            })
-        })
-        .collect();
-    Ok(Json(json!({ "reviews": out })))
-}
-
-async fn moderate_review(
-    headers: HeaderMap,
-    Path(id): Path<String>,
-    State(state): State<AppState>,
-    Json(req): Json<ModerateReviewRequest>,
-) -> Result<Json<Value>, StatusCode> {
-    check_admin(&headers, &state)?;
-    let model = strain_review::Entity::find_by_id(&id)
-        .one(&state.db.orm)
-        .await
-        .map_err(|e| {
-            tracing::error!("moderate_review DB error: {}", e);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?
-        .ok_or(StatusCode::NOT_FOUND)?;
-
-    let mut active: strain_review::ActiveModel = model.into();
-    active.approved = Set(req.approved);
-    active.update(&state.db.orm).await.map_err(|e| {
-        tracing::error!("moderate_review update error: {}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-    Ok(Json(json!({ "success": true, "approved": req.approved })))
-}
-
-async fn create_lab_cert(
-    headers: HeaderMap,
-    Path(strain_id): Path<String>,
-    State(state): State<AppState>,
-    Json(req): Json<CreateLabCertRequest>,
-) -> Result<Json<Value>, StatusCode> {
-    let admin_id = check_admin(&headers, &state)?;
-    if req.certificate_url.is_empty() || req.certificate_url.len() > 2048 {
-        return Err(StatusCode::BAD_REQUEST);
-    }
-    crate::api::validate_url(&Some(req.certificate_url.clone()))?;
-
-    let tested_at = req
-        .tested_at
-        .as_deref()
-        .filter(|s| !s.is_empty())
-        .and_then(|s| chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d").ok());
-
-    if let Some(v) = req.thc_percent {
-        if !v.is_finite() || !(0.0..=100.0).contains(&v) {
-            return Err(StatusCode::BAD_REQUEST);
-        }
-    }
-    if let Some(v) = req.cbd_percent {
-        if !v.is_finite() || !(0.0..=100.0).contains(&v) {
-            return Err(StatusCode::BAD_REQUEST);
-        }
-    }
-
-    let id = uuid::Uuid::new_v4().to_string();
-    let now = chrono::Local::now().fixed_offset();
-    let active = lab_certificate::ActiveModel {
-        id: Set(id.clone()),
-        strain_id: Set(strain_id.clone()),
-        certificate_url: Set(req.certificate_url),
-        tested_at: Set(tested_at),
-        thc_percent: Set(req.thc_percent),
-        cbd_percent: Set(req.cbd_percent),
-        uploaded_by_telegram_id: Set(Some(admin_id)),
-        created_at: Set(now),
-    };
-    active.insert(&state.db.orm).await.map_err(|e| {
-        tracing::error!("create_lab_cert insert error: {}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-
-    Ok(Json(json!({ "id": id, "strain_id": strain_id })))
-}
+// Здесь жили три обработчика Variant C: list_reviews_admin,
+// moderate_review и create_lab_cert. Все три обращались к таблицам,
+// удалённым миграцией 083 (strain_reviews, lab_certificates, strains),
+// и отвечали 500 на каждый вызов. Удалены вместе со своими маршрутами.
 
 async fn telegram_broadcast(
     headers: HeaderMap,

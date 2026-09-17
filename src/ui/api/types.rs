@@ -81,28 +81,15 @@ impl Default for Strain {
     }
 }
 
-impl Strain {
-    /// Format THC for display, e.g. "24.0%"
-    pub fn thc_display(&self) -> Option<String> {
-        self.thc
-            .filter(|v| v.is_finite())
-            .map(|v| format!("{v:.1}%"))
-    }
-    /// Format CBD for display
-    pub fn cbd_display(&self) -> Option<String> {
-        self.cbd
-            .filter(|v| v.is_finite())
-            .map(|v| format!("{v:.1}%"))
-    }
-    /// Format price in baht
-    pub fn price_display(&self) -> String {
-        if self.price > 0.0 {
-            format!("{:.0} ฿/g", self.price)
-        } else {
-            "Price on request".to_string()
-        }
-    }
-}
+// `impl Strain` held three display helpers — `thc_display`, `cbd_display` and
+// `price_display` — until 2026-09-16. No screen called any of them; being `pub`
+// in a `pub mod`, they drew no dead-code warning and could sit here
+// indefinitely. `price_display` priced cannabis by the gram (`฿/g`) and was the
+// last place in `src/ui` formatting money without the market profile (D15).
+//
+// The `Strain` struct itself stays: `share.rs` and the cart still round-trip
+// `ProductKind::Strain` for links and lines saved before 083 (D9's open
+// question, recorded in `tests/retired_table_wiring.rs`).
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -201,44 +188,10 @@ pub enum OrderStatus {
     Cancelled,
 }
 
-/// Garden plant — matches backend PlantResponse exactly
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct Plant {
-    pub id: String,
-    pub user_id: String,
-    pub strain_id: String,
-    pub strain_name: String,
-    pub current_stage: String,
-    pub stage_name: String,
-    pub stage_emoji: String,
-    pub planted_at: i64,
-    pub is_completed: bool,
-    pub harvested_at: Option<i64>,
-    pub water_count: u32,
-    pub progress: u8,
-    pub can_water: bool,
-    pub next_water_at: i64,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "lowercase")]
-pub enum GrowthStage {
-    Seed,
-    Sprout,
-    FirstLeaf,
-    YoungBush,
-    VegStart,
-    BigVeg,
-    PreFlower,
-    SmallBuds,
-    BigBuds,
-    Trimming,
-    Curing,
-    Lab,
-    Delivery,
-    Final,
-    Harvested,
-}
+// `Plant` and `GrowthStage` stood here. They mirrored a backend
+// `PlantResponse` that no route ever served, and `GrowthStage` enumerated the
+// cannabis grow cycle down to `Trimming`, `Curing` and `Lab`. Both are gone
+// with the garden (D5); `lab_certificates` went with D6.
 
 /// Quest location
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -416,52 +369,13 @@ pub struct BookEventRequest {
     pub seats: Option<i32>,
 }
 
-// ── Variant C: Reviews / Lab Certificates / LINE broadcast ─────
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct Review {
-    pub id: String,
-    pub telegram_id: i64,
-    pub strain_id: String,
-    pub order_id: String,
-    pub rating: i32,
-    pub comment: String,
-    pub created_at: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct ReviewsList {
-    pub reviews: Vec<Review>,
-    pub average_rating: Option<f64>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct LabCertificate {
-    pub id: String,
-    pub strain_id: String,
-    #[serde(default)]
-    pub certificate_url: Option<String>,
-    #[serde(default)]
-    pub tested_at: Option<String>,
-    pub thc_percent: Option<f64>,
-    pub cbd_percent: Option<f64>,
-    pub uploaded_by_telegram_id: i64,
-    pub created_at: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct LabCertificatesList {
-    pub lab_certificates: Vec<LabCertificate>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct CreateReviewRequest {
-    pub order_id: String,
-    pub strain_id: String,
-    pub rating: i32,
-    #[serde(skip_serializing_if = "String::is_empty")]
-    pub comment: String,
-}
+// ── Variant C: LINE broadcast ─────
+//
+// Здесь же стояли Review, ReviewsList, LabCertificate, LabCertificatesList
+// и CreateReviewRequest. Все пять описывали ответы двух эндпоинтов поверх
+// таблиц, удалённых миграцией 083, и одного эндпоинта, которого на сервере
+// не существовало. Тип, описывающий ответ, который никогда не придёт, —
+// это документация о несуществующем.
 
 #[derive(Debug, Serialize)]
 pub struct BroadcastRequest {

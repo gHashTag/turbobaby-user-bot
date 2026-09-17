@@ -1,7 +1,7 @@
 use axum::{
     extract::{Path, Query, State},
     http::{HeaderMap, StatusCode},
-    routing::{get, post},
+    routing::get,
     Json, Router,
 };
 use serde::Deserialize;
@@ -10,7 +10,7 @@ use serde_json::{json, Value};
 use crate::api::auth::{check_not_blocked, validate_telegram_id_param};
 use crate::db::referrals::{
     get_invitees, get_or_create_referral_code, get_referral_milestones, get_referrer_stats,
-    get_top_referrers, is_self_referral, record_referral,
+    get_top_referrers,
 };
 use crate::trios::referrals::assign_share_source;
 use crate::AppState;
@@ -31,10 +31,14 @@ pub(crate) fn routes() -> Router<AppState> {
             "/referrals/me/:telegram_id/milestones",
             get(get_my_milestones),
         )
-        .route(
-            "/referrals/me/:telegram_id/garden-invite",
-            post(post_garden_invite),
-        )
+        // `POST /referrals/me/:id/garden-invite` stood here. It took a raw
+        // `referrer_id` from the request body and recorded a referral against
+        // it — a second invite path that only the garden screen ever called
+        // (D5). The canonical one is `/start ref_<code>`, handled by the bot
+        // against an opaque code that identifies nobody. Removing this closes
+        // the only route where an inviter was named by a number a caller could
+        // type; nothing is lost, because the link a customer shares has always
+        // carried the code, not the id.
         .route("/referrals/leaderboard", get(get_leaderboard))
 }
 
@@ -46,13 +50,6 @@ pub(crate) fn routes() -> Router<AppState> {
 pub(crate) struct LeaderboardQuery {
     pub period: Option<String>,
     pub limit: Option<i64>,
-}
-
-#[derive(Debug, Deserialize)]
-pub(crate) struct GardenInviteRequest {
-    pub referrer_id: i64,
-    #[serde(default)]
-    pub source: Option<String>,
 }
 
 // ──────────────────────────────────────────────────────────────────
@@ -71,15 +68,17 @@ async fn get_share_source(
     crate::api::auth::check_owner(&headers, &state, telegram_id)?;
     check_not_blocked(&state, telegram_id).await?;
 
-    let source = assign_share_source(telegram_id, &state.config.garden_share_sources);
+    let source = assign_share_source(telegram_id, &state.config.referral_share_sources);
     crate::metrics::share_source_assigned(&source);
     Ok(Json(json!({"source": source})))
 }
 
 /// GET /api/referrals/me/:telegram_id/invitees
 ///
-/// Loop #20: list the people this user referred via garden invites, with their
-/// garden streak and order status so the inviter sees social proof.
+/// Loop #20: list the people this user referred, with their order status so
+/// the inviter sees social proof. The invites were sent from the garden screen
+/// once; the events they wrote are ordinary `referral_events` rows and outlive
+/// it (D5).
 async fn get_my_invitees(
     headers: HeaderMap,
     State(state): State<AppState>,
@@ -96,7 +95,7 @@ async fn get_my_invitees(
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
-    crate::metrics::garden_invitees_viewed();
+    crate::metrics::referral_invitees_viewed();
     Ok(Json(json!({
         "count": invitees.len(),
         "invitees": invitees,
@@ -107,7 +106,15 @@ async fn get_my_invitees(
 ///
 /// Loop #21: returns the referral milestone bonuses already awarded to this
 /// user plus the count of confirmed referrals, so the UI can show progress
-/// toward the next 1/3/5 friend thresholds.
+/// toward the next threshold.
+///
+/// The response carries two kinds of money and they are not the same number.
+/// `awards` is what each reached milestone actually paid, read from its row.
+/// `bonuses` is what an unreached rung pays today, read from `loyalty_config`.
+/// The shop may edit the config at any time, so a rung reached in June and the
+/// same rung offered now can differ — the client must print the server's
+/// numbers rather than a table of its own, which is exactly the mistake the
+/// removed garden screen made.
 async fn get_my_milestones(
     headers: HeaderMap,
     State(state): State<AppState>,
@@ -124,10 +131,24 @@ async fn get_my_milestones(
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
+    let bonuses = crate::db::referrals::milestone_bonus_amounts(&state.db.orm).await;
+
     Ok(Json(json!({
         "confirmed": confirmed,
-        "achieved": achieved,
-        "thresholds": [1, 3, 5],
+        // Kept as a bare list of numbers: shipped clients read it.
+        "achieved": achieved.iter().map(|(m, _)| *m).collect::<Vec<i32>>(),
+        "awards": achieved
+            .iter()
+            .map(|(m, amount)| json!({ "milestone": m, "bonus_amount": amount }))
+            .collect::<Vec<Value>>(),
+        "thresholds": crate::db::referrals::MILESTONE_THRESHOLDS,
+        "bonuses": crate::db::referrals::MILESTONE_THRESHOLDS
+            .iter()
+            .map(|m| json!({
+                "milestone": m,
+                "bonus_amount": bonuses.get(m).copied().unwrap_or(0.0),
+            }))
+            .collect::<Vec<Value>>(),
     })))
 }
 
@@ -169,80 +190,6 @@ async fn get_my_referrals(
             "total_bonus_earned": stats.total_bonus_earned,
         }
     })))
-}
-
-/// POST /api/referrals/me/:telegram_id/garden-invite
-///
-/// Records a pending referral when a user opens the Mini App from a garden
-/// invite deep-link. The caller must own the telegram_id path parameter.
-async fn post_garden_invite(
-    headers: HeaderMap,
-    State(state): State<AppState>,
-    Path(telegram_id): Path<i64>,
-    Json(body): Json<GardenInviteRequest>,
-) -> Result<Json<Value>, StatusCode> {
-    validate_telegram_id_param(telegram_id)?;
-    crate::api::auth::check_owner(&headers, &state, telegram_id)?;
-    check_not_blocked(&state, telegram_id).await?;
-
-    if is_self_referral(body.referrer_id, telegram_id) {
-        return Ok(Json(json!({
-            "success": false,
-            "error": "self_referral",
-        })));
-    }
-
-    // Ensure the referrer has a code; reuse it as the attribution code.
-    let code = get_or_create_referral_code(&state.db.orm, body.referrer_id)
-        .await
-        .map_err(|e| {
-            tracing::error!("DB error getting referrer code: {:?}", e);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
-
-    match record_referral(
-        &state.db.orm,
-        body.referrer_id,
-        telegram_id,
-        &code,
-        body.source.as_deref(),
-    )
-    .await
-    {
-        Ok(_) => {
-            crate::metrics::garden_invite_accepted(body.source.as_deref().unwrap_or(""));
-            let bot_username = &state.config.bot_username;
-            let link = format!("https://t.me/{}?start=ref_{}", bot_username, code);
-            Ok(Json(json!({
-                "success": true,
-                "code": code,
-                "invite_link": link,
-            })))
-        }
-        Err(e) => {
-            let err_str = e.to_string();
-            if err_str.contains("self-referral") {
-                return Ok(Json(json!({
-                    "success": false,
-                    "error": "self_referral",
-                })));
-            }
-            // A duplicate insert (referred_id already has an event) is a
-            // benign race — report success without leaking internal state.
-            if err_str.contains("duplicate key") || err_str.contains("unique constraint") {
-                let bot_username = &state.config.bot_username;
-                let link = format!("https://t.me/{}?start=ref_{}", bot_username, code);
-                return Ok(Json(json!({
-                    "success": true,
-                    "code": code,
-                    "invite_link": link,
-                })));
-            }
-            tracing::error!("DB error recording garden invite: {:?}", e);
-            crate::metrics::garden_invite_failed(err_str.as_str());
-            Err(StatusCode::INTERNAL_SERVER_ERROR)
-        }
-    }
 }
 
 fn validate_leaderboard_query(params: &LeaderboardQuery) -> Result<(&str, i64), StatusCode> {

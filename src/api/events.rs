@@ -1689,9 +1689,18 @@ fn build_event_reminder_body(
     starts_at: chrono::DateTime<chrono::Utc>,
     location_text: Option<&str>,
 ) -> String {
-    // Koh Phangan uses UTC+7 year-round. Describe it as local time rather than
-    // "Bangkok": customers read the timezone label as the event address.
-    let starts_local = starts_at + chrono::Duration::hours(7);
+    // The declared market's wall clock (D18). Described as "local time" rather
+    // than named: customers read a timezone label as the event address, and the
+    // market's zone name is not the venue.
+    //
+    // Was `starts_at + chrono::Duration::hours(7)` — a value typed UTC while
+    // holding local time. `%d.%m.%Y %H:%M` never asks for the offset, which is
+    // why the lie kept producing correct-looking output. This site is one of
+    // the two D18's own list of offset literals missed.
+    let starts_local = match crate::trios::market::MARKET.at(starts_at) {
+        Some(local) => local,
+        None => starts_at.fixed_offset(),
+    };
     let starts_text = format!(
         "{} по местному времени",
         starts_local.format("%d.%m.%Y %H:%M")

@@ -1,3 +1,4 @@
+use crate::trios::market::{MarketClock, MARKET};
 use crate::AppState;
 use axum::{extract::State, http::StatusCode, routing::get, Json, Router};
 use chrono::Timelike;
@@ -7,23 +8,30 @@ pub(crate) fn routes() -> Router<AppState> {
     Router::new().route("/happy-hour", get(get_happy_hour))
 }
 
-/// The shop is on Koh Phangan (Asia/Bangkok, UTC+7, no DST). Happy-hour
-/// `start`/`end` are SHOP-LOCAL hours, so "now" must be derived in this fixed
-/// offset — NOT the server's local zone. Railway runs UTC, where
-/// `chrono::Local::now()` returns the UTC hour and shifts the window by 7h
-/// (e.g. a 18:00–21:00 happy hour would read as active 11:00–14:00 UTC).
-const SHOP_UTC_OFFSET_SECS: i32 = 7 * 3600;
-
-/// Pure: the hour-of-day (0..=23) of a UTC instant as seen at `offset_secs`.
-fn hour_in_offset(utc: chrono::DateTime<chrono::Utc>, offset_secs: i32) -> i64 {
-    use chrono::Offset;
-    let off = chrono::FixedOffset::east_opt(offset_secs).unwrap_or_else(|| chrono::Utc.fix());
-    utc.with_timezone(&off).hour() as i64
+/// Happy-hour `start`/`end` are SHOP-LOCAL hours, so "now" must be derived on
+/// the market's wall clock — NOT the server's local zone. Railway runs UTC,
+/// where `chrono::Local::now()` returns the UTC hour and shifts the window by
+/// the whole offset (e.g. an 18:00–21:00 happy hour would read as active
+/// 11:00–14:00 UTC).
+///
+/// The offset itself is the declared market's, not a constant restated here
+/// (D18): see `trios::market::MARKET`.
+/// Pure: the hour-of-day (0..=23) of a UTC instant on `clock`'s wall clock.
+///
+/// A clock that cannot be reduced to a fixed offset (a DST market) falls back
+/// to UTC rather than guessing one of its two offsets. That makes a misdeclared
+/// market show the wrong happy hour, which is visible, instead of a silently
+/// plausible one an hour off.
+fn hour_in_market(utc: chrono::DateTime<chrono::Utc>, clock: &MarketClock) -> i64 {
+    match clock.at(utc) {
+        Some(local) => local.hour() as i64,
+        None => utc.hour() as i64,
+    }
 }
 
-/// Current hour-of-day in the shop's timezone.
+/// Current hour-of-day on the market's wall clock.
 fn shop_hour_now() -> i64 {
-    hour_in_offset(chrono::Utc::now(), SHOP_UTC_OFFSET_SECS)
+    hour_in_market(chrono::Utc::now(), &MARKET)
 }
 
 fn compute_happy_hour(config: &Value, current_hour: i64) -> (bool, bool, f64, i64, i64) {
@@ -80,7 +88,8 @@ async fn get_happy_hour(State(state): State<AppState>) -> Result<Json<Value>, St
 
 #[cfg(test)]
 mod tests {
-    use super::{compute_happy_hour, hour_in_offset, SHOP_UTC_OFFSET_SECS};
+    use super::{compute_happy_hour, hour_in_market, MARKET};
+    use crate::trios::market::MarketClock;
     use serde_json::json;
 
     #[test]
@@ -91,7 +100,7 @@ mod tests {
         let utc = chrono::Utc
             .with_ymd_and_hms(2026, 6, 16, 11, 30, 0)
             .unwrap();
-        assert_eq!(hour_in_offset(utc, SHOP_UTC_OFFSET_SECS), 18);
+        assert_eq!(hour_in_market(utc, &MARKET), 18);
     }
 
     #[test]
@@ -99,13 +108,50 @@ mod tests {
         use chrono::TimeZone;
         // 20:00 UTC + 7h = 03:00 next day in Bangkok.
         let utc = chrono::Utc.with_ymd_and_hms(2026, 6, 16, 20, 0, 0).unwrap();
-        assert_eq!(hour_in_offset(utc, SHOP_UTC_OFFSET_SECS), 3);
+        assert_eq!(hour_in_market(utc, &MARKET), 3);
     }
 
     #[test]
     fn test_hour_in_offset_in_range() {
-        let h = hour_in_offset(chrono::Utc::now(), SHOP_UTC_OFFSET_SECS);
+        let h = hour_in_market(chrono::Utc::now(), &MARKET);
         assert!((0..=23).contains(&h));
+    }
+
+    /// The window follows the declared market rather than a constant compiled
+    /// into this file: read the same instant on a different clock and a
+    /// different hour comes back. Without this, wiring the offset to the
+    /// profile could be undone by re-hardcoding it and every test above would
+    /// still pass.
+    #[test]
+    fn the_happy_hour_window_moves_with_the_declared_market() {
+        use chrono::TimeZone;
+        let utc = chrono::Utc
+            .with_ymd_and_hms(2026, 6, 16, 11, 30, 0)
+            .unwrap();
+        let lisbon = MarketClock {
+            timezone_name: "Atlantic/Azores",
+            utc_offset_hours: -1,
+            dst_observed: false,
+        };
+        assert_eq!(hour_in_market(utc, &lisbon), 10);
+        assert_eq!(hour_in_market(utc, &MARKET), 18);
+    }
+
+    /// A market that moves its clocks has no single offset, so the hour falls
+    /// back to UTC instead of to one of the two guesses. Visible-wrong beats
+    /// plausible-wrong: an hour-off happy hour reads as correct.
+    #[test]
+    fn a_dst_market_falls_back_to_utc_rather_than_guessing() {
+        use chrono::TimeZone;
+        let utc = chrono::Utc
+            .with_ymd_and_hms(2026, 6, 16, 11, 30, 0)
+            .unwrap();
+        let berlin = MarketClock {
+            timezone_name: "Europe/Berlin",
+            utc_offset_hours: 1,
+            dst_observed: true,
+        };
+        assert_eq!(hour_in_market(utc, &berlin), 11);
     }
 
     #[test]

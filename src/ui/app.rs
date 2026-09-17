@@ -9,9 +9,8 @@ use crate::ui::api::types::ServerCart;
 use crate::ui::components::{install_error_handlers, ErrorOverlay, JsErrorItem};
 use crate::ui::routes::Routes;
 use crate::ui::share::{
-    parse_cart_start_param, parse_garden_start_param, parse_order_start_param,
-    parse_reorder_start_param, parse_start_param, PendingGarden, PendingOrder, PendingReorder,
-    SharedProduct,
+    parse_cart_start_param, parse_order_start_param, parse_reorder_start_param, parse_start_param,
+    PendingOrder, PendingReorder, SharedProduct,
 };
 use crate::ui::state::{Cart, CartItem};
 use crate::ui::telegram::TelegramProvider;
@@ -143,19 +142,14 @@ pub fn App() -> Element {
     use_context_provider(|| Signal::new(PendingReorder::default()));
     let pending_reorder = use_context::<Signal<PendingReorder>>();
 
-    // Garden invite deep-link target: `startapp=garden__{referrer_id}[__{source}]`.
-    // GardenScreen reads this signal to show a welcome modal and record the
-    // pending referral on the server.
-    use_context_provider(|| Signal::new(None::<(i64, String)>));
-    let pending_garden_invite = use_context::<Signal<Option<(i64, String)>>>();
-
-    // Garden deep-link target: `startapp=garden` or `garden__{referrer}`.
-    // HomeScreen navigates on this the way it already does for cart, order and
-    // reorder. Without it the payload resolved, the event fired, the invite was
-    // stored — and the customer was left on the home screen, including for the
-    // `garden` link the shop itself sends in its watering reminders.
-    use_context_provider(|| Signal::new(PendingGarden::default()));
-    let pending_garden = use_context::<Signal<PendingGarden>>();
+    // Two more signals stood here: `startapp=garden` and
+    // `startapp=garden__{referrer_id}[__{source}]`. Both are gone with the
+    // garden (D5). A `garden…` link still sitting in someone's Telegram history
+    // no longer parses, so the bot answers it with the ordinary welcome instead
+    // of a Mini App button to a screen that cannot load — and that welcome
+    // creates the profile and referral code anyway. The invite half is not lost
+    // with the garden: `?start=ref_<code>` is the canonical referral link, the
+    // bot has always recorded it, and `/referrals` renders it.
 
     use_effect(move || {
         install_error_handlers(errors);
@@ -168,16 +162,12 @@ pub fn App() -> Element {
         let mut pending_order_id = pending_order;
         let mut pending_cart_flag = pending_cart;
         let mut pending_reorder_id = pending_reorder;
-        let mut pending_garden_invite_id = pending_garden_invite;
-        let mut pending_garden_flag = pending_garden;
         spawn(async move {
             for _ in 0..30 {
                 if pending.read().is_some()
                     || pending_order_id.read().0.is_some()
                     || pending_cart_flag()
                     || pending_reorder_id.read().0.is_some()
-                    || pending_garden_invite_id.read().is_some()
-                    || pending_garden_flag.read().0
                 {
                     return;
                 }
@@ -252,35 +242,6 @@ pub fn App() -> Element {
                             &format!("[deeplink] resolved order {}", order_id).into(),
                         );
                         pending_order_id.set(PendingOrder(Some(order_id)));
-                        return;
-                    }
-                    if let Some((referrer_id, source)) = parse_garden_start_param(&param) {
-                        #[cfg(target_arch = "wasm32")]
-                        web_sys::console::log_1(
-                            &format!(
-                                "[deeplink] resolved garden invite referrer={:?} source={:?}",
-                                referrer_id, source
-                            )
-                            .into(),
-                        );
-                        let source_str = source.unwrap_or("").to_string();
-                        let source_for_event = source_str.clone();
-                        let base = api_base_url();
-                        spawn(async move {
-                            let _ = crate::ui::api::http::post_client_event(
-                                &base,
-                                "garden_invite_link_opened",
-                                &source_for_event,
-                            )
-                            .await;
-                        });
-                        // Go to the garden either way — that is what the link
-                        // says. The invite modal is a second, narrower thing.
-                        pending_garden_flag.set(PendingGarden(true));
-                        // Only show the invite modal when there is an actual referrer.
-                        if let Some(rid) = referrer_id.filter(|id| *id > 0) {
-                            pending_garden_invite_id.set(Some((rid, source_str)));
-                        }
                         return;
                     }
                 }

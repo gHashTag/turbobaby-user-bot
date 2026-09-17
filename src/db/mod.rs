@@ -379,6 +379,10 @@ const MIGRATIONS: &[(&str, &str)] = &[
         "085_unpublish_woody_catalog.sql",
         include_str!("../../migrations/085_unpublish_woody_catalog.sql"),
     ),
+    (
+        "086_bikes_for_sale.sql",
+        include_str!("../../migrations/086_bikes_for_sale.sql"),
+    ),
 ];
 
 /// The last migration that shipped before the bike domain, and therefore the last
@@ -444,6 +448,68 @@ fn missing_columns(
         }
     }
     missing
+}
+
+/// How long the schema self-check waits before asking a second time.
+///
+/// The false alarm on deployment `22e26660` put 11 ms between the last
+/// migration and the check. This is forty times that and still shorter than
+/// one TLS handshake, so it is invisible next to the rest of boot — the
+/// process is not serving traffic yet, and it only ever elapses on the path
+/// where the first read already found something to be alarmed about.
+pub(crate) const SCHEMA_RECHECK_DELAY: std::time::Duration = std::time::Duration::from_millis(500);
+
+/// What two reads of `information_schema` add up to.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct SchemaVerdict {
+    /// The columns to actually report as missing.
+    pub report: Vec<String>,
+    /// Named by the first read, present by the second. Evidence that the
+    /// first read was early, not that the schema is wrong — logged, never
+    /// reported.
+    pub appeared: Vec<String>,
+    /// The second read failed, so `report` is the first read taken on trust.
+    pub unconfirmed: bool,
+}
+
+/// Decide what a startup schema check should say, given two reads.
+///
+/// `second` is `None` when the confirming read errored.
+///
+/// The rule is *the later read wins*, which is not the same as "the smaller
+/// read wins" and the difference is the whole point:
+///
+/// - A column in `first` but not `second` **appeared** between the two reads.
+///   A committed `CREATE TABLE` does not un-commit, so the only story that
+///   fits is that the first read ran before the DDL was visible to it. Not
+///   reported.
+/// - A column in `second` but not `first` **vanished** between the two reads,
+///   which is a `DROP` against a live database and is exactly the emergency
+///   this guard exists for. Reported, even though the first read was happy
+///   about it. An intersection would swallow this case, which is why this is
+///   not an intersection.
+/// - If `second` is `None` the check learned nothing, so it clears nothing:
+///   `first` is reported verbatim and flagged `unconfirmed`. A guard whose
+///   confirming read times out must not read that timeout as good news.
+pub(crate) fn settle_schema_reads(first: &[String], second: Option<&[String]>) -> SchemaVerdict {
+    let Some(second) = second else {
+        return SchemaVerdict {
+            report: first.to_vec(),
+            appeared: Vec::new(),
+            unconfirmed: true,
+        };
+    };
+    let still_missing: std::collections::HashSet<&str> =
+        second.iter().map(String::as_str).collect();
+    SchemaVerdict {
+        report: second.to_vec(),
+        appeared: first
+            .iter()
+            .filter(|c| !still_missing.contains(c.as_str()))
+            .cloned()
+            .collect(),
+        unconfirmed: false,
+    }
 }
 
 /// Cycle #96: after the 17-cycle SeaORM migration finished, this is the
@@ -669,9 +735,91 @@ impl Database {
     /// migrations agree, not that prod *ran* them). This queries the LIVE
     /// `information_schema` and returns any [`CRITICAL_COLUMNS`] entry the
     /// database is actually missing, so startup can log it loudly by name
-    /// instead of waiting for the first 500. Never blocks startup: a query
-    /// error yields an empty list.
+    /// instead of waiting for the first 500. Never blocks startup.
+    ///
+    /// Two reads, not one, because of the false alarm on deployment
+    /// `22e26660` (2026-09-13): the check ran 11 ms after the last migration
+    /// of a first-boot burst and named seven columns of `bikes` /
+    /// `bike_units` as missing, every one of which was present on the live
+    /// database minutes later — `GET /api/bikes` returned 14 rows and
+    /// `information_schema` listed all seven under psql. The exact mechanism
+    /// was never reproduced, and this does not pretend to know it; what it
+    /// fixes is the class. A guard that fires once on a settling database and
+    /// is never asked again is a guard that cries wolf at the single moment
+    /// people are watching the log, and a boot alarm nobody believes is worse
+    /// than no boot alarm, because the state it exists to catch — a missing
+    /// column silently served as a `try_get_warn!` default (D9) — reaches
+    /// customers as zeros.
+    ///
+    /// See [`settle_schema_reads`] for what the second read is allowed to
+    /// decide. The short version: it may *clear* a column, because a column
+    /// that appears between two reads was always there and the first read was
+    /// early; it may *add* one, because a column that vanishes between two
+    /// reads has genuinely been dropped; and it may not clear anything at all
+    /// if it failed, because a check that cannot confirm must not acquit.
     pub async fn missing_critical_columns(&self) -> Vec<String> {
+        self.missing_critical_columns_after(SCHEMA_RECHECK_DELAY)
+            .await
+    }
+
+    /// [`Self::missing_critical_columns`] with the settle delay injected, so
+    /// a caller under test does not wait half a second to learn nothing.
+    pub(crate) async fn missing_critical_columns_after(
+        &self,
+        delay: std::time::Duration,
+    ) -> Vec<String> {
+        let first = match self.read_missing_critical_columns().await {
+            Ok(v) => v,
+            // The read itself failed. It is not evidence of a missing column
+            // and never was: the pre-existing contract is that a broken query
+            // yields an empty list rather than a boot-time scream about a
+            // schema nobody managed to look at.
+            Err(e) => {
+                tracing::error!("schema self-check: information_schema query failed: {e}");
+                return Vec::new();
+            }
+        };
+        if first.is_empty() {
+            return first;
+        }
+        tracing::warn!(
+            "schema self-check: first read names {} missing column(s); \
+             re-reading in {:?} before reporting — see the 22e26660 false alarm",
+            first.len(),
+            delay
+        );
+        tokio::time::sleep(delay).await;
+        let second = self.read_missing_critical_columns().await;
+        if let Err(e) = &second {
+            tracing::error!("schema self-check: confirming read failed: {e}");
+        }
+        let verdict = settle_schema_reads(&first, second.as_deref().ok());
+        if !verdict.appeared.is_empty() {
+            tracing::warn!(
+                "schema self-check: {} column(s) the first read called missing were \
+                 present on the second and are NOT reported: {:?}. The database was \
+                 still settling when the first read ran.",
+                verdict.appeared.len(),
+                verdict.appeared
+            );
+        }
+        if verdict.unconfirmed && !verdict.report.is_empty() {
+            tracing::error!(
+                "schema self-check: reporting the FIRST read unconfirmed — the \
+                 confirming read errored, so nothing cleared these columns"
+            );
+        }
+        verdict.report
+    }
+
+    /// One read of the live `information_schema`, errors surfaced.
+    ///
+    /// Split out of [`Self::missing_critical_columns`] so the caller can run
+    /// it twice and, crucially, so "the query blew up" is distinguishable
+    /// from "the query found nothing missing". Collapsing those two into an
+    /// empty `Vec` is what would let a failed confirming read acquit a real
+    /// missing column.
+    async fn read_missing_critical_columns(&self) -> Result<Vec<String>> {
         use sea_orm::{sea_query::ArrayType, ConnectionTrait, DbBackend, Statement, Value};
         // The table list is derived from CRITICAL_COLUMNS, not hand-copied: when
         // the bike catalog joined the list, a hand copy stayed three tables
@@ -699,8 +847,7 @@ impl Database {
         {
             Ok(r) => r,
             Err(e) => {
-                tracing::error!("schema self-check: information_schema query failed: {e}");
-                return Vec::new();
+                return Err(anyhow::Error::new(e).context("schema self-check: information_schema"))
             }
         };
         let present: std::collections::HashSet<(String, String)> = rows
@@ -712,7 +859,7 @@ impl Database {
                 ))
             })
             .collect();
-        missing_columns(CRITICAL_COLUMNS, &present)
+        Ok(missing_columns(CRITICAL_COLUMNS, &present))
     }
 
     /// Cycle #79: migrated from raw `tokio_postgres` to SeaORM entity
@@ -1036,8 +1183,72 @@ mod migration_manifest_tests {
 /// category as `entity_schema_consistency_tests` and the UI wiring defense.
 #[cfg(test)]
 mod schema_self_check_tests {
-    use super::{missing_columns, CRITICAL_COLUMNS};
+    use super::{missing_columns, settle_schema_reads, CRITICAL_COLUMNS};
     use std::collections::HashSet;
+
+    fn names(v: &[&str]) -> Vec<String> {
+        v.iter().map(|s| (*s).to_string()).collect()
+    }
+
+    /// The 22e26660 boot, replayed: seven columns named by a read that ran
+    /// 11 ms after the migration burst, none of them missing a moment later.
+    #[test]
+    fn a_column_that_appears_between_the_two_reads_is_not_reported() {
+        let first = names(&[
+            "bikes.base_rate_thb_day",
+            "bikes.deposit_thb",
+            "bikes.monthly_low_season_thb",
+            "bikes.sale_price_thb",
+            "bikes.offered",
+            "bike_units.status",
+            "bike_units.km_since_purchase",
+        ]);
+        let verdict = settle_schema_reads(&first, Some(&[]));
+        assert!(
+            verdict.report.is_empty(),
+            "the boot log screamed about columns that were there: {:?}",
+            verdict.report
+        );
+        assert_eq!(
+            verdict.appeared.len(),
+            7,
+            "all seven should be logged as late-visible"
+        );
+        assert!(!verdict.unconfirmed);
+    }
+
+    /// The reason this is not an intersection. A `DROP COLUMN` against a
+    /// live database lands between the reads and must survive the settle.
+    #[test]
+    fn a_column_that_vanishes_between_the_two_reads_is_reported() {
+        let verdict = settle_schema_reads(&[], Some(&names(&["bikes.offered"])));
+        assert_eq!(verdict.report, names(&["bikes.offered"]));
+        assert!(verdict.appeared.is_empty());
+    }
+
+    /// A genuinely un-migrated database — the case the guard exists for —
+    /// still reports, because both reads agree.
+    #[test]
+    fn a_column_missing_from_both_reads_is_reported() {
+        let both = names(&["sets.price_thb"]);
+        let verdict = settle_schema_reads(&both, Some(&both));
+        assert_eq!(verdict.report, both);
+        assert!(verdict.appeared.is_empty());
+    }
+
+    /// A check that could not look must not acquit. If the confirming read
+    /// errors, the first read stands — flagged, so the log can say so.
+    #[test]
+    fn a_failed_confirming_read_clears_nothing() {
+        let first = names(&["bikes.offered", "bike_units.status"]);
+        let verdict = settle_schema_reads(&first, None);
+        assert_eq!(verdict.report, first);
+        assert!(
+            verdict.unconfirmed,
+            "an unconfirmed report must be marked as such, or the log \
+             claims a confirmation that never happened"
+        );
+    }
 
     fn present(pairs: &[(&str, &str)]) -> HashSet<(String, String)> {
         pairs
@@ -1372,36 +1583,56 @@ mod orphan_table_tests {
         // would require a new migration + prod coordination. Re-evaluate
         // when location quests are revisited.
         "hunt_checkpoints",
-        // The four garden tables, orphaned 2026-09-12 by the D5 removal of the
-        // garden mechanic. All four come from two migrations: `004_garden.sql`
-        // creates `garden_config` and `garden_rewards`, `066_garden_social.sql`
-        // creates `user_achievements` and `share_events`. Every Rust path that
-        // read or wrote them is gone — the API endpoints, the two reminder
+        // The two social tables `066_garden_social.sql` creates, orphaned
+        // 2026-09-12 by the D5 removal of the garden mechanic. Every Rust path
+        // that read or wrote them is gone — the API endpoints, the two reminder
         // loops in main.rs, the plant cell in the UI — so they are orphans by
         // the same measurement that says the removal happened.
         //
         // They are allowlisted rather than dropped, deliberately. A drop
-        // migration against these four destroys live rows in a deployed
-        // database: a customer's accrued garden rewards and their achievement
-        // history. That is the owner's call to make, not a tidy-up, and
-        // `083_drop_cannabis_catalog.sql` only earned its drop because the
-        // catalog it removed was reference data with no customer rows in it.
-        // An idempotent `CREATE TABLE IF NOT EXISTS` that nothing reads costs
-        // one statement per deploy; a wrong `DROP TABLE` costs data.
+        // migration against these two destroys live rows in a deployed
+        // database: a customer's achievement and share history. That is the
+        // owner's call to make, not a tidy-up, and
+        // `083_drop_cannabis_catalog.sql` only earned its drop because what it
+        // removed was reference data guarded by a refusal check against a live
+        // shop. An idempotent `CREATE TABLE IF NOT EXISTS` that nothing reads
+        // costs one statement per deploy; a wrong `DROP TABLE` costs data.
         //
-        // The removal is also not finished, which is the more useful thing to
-        // know: `src/trios/garden.rs` is still wired at `src/trios/mod.rs:10`
-        // and 11 of the 20 garden metric helpers still have live call sites.
-        // See DECISIONS.md D18. Re-evaluate these four when that is closed —
-        // not before, because a table dropped while half the code still
-        // expects it is a worse failure than an unread table.
-        "garden_config",
-        "garden_rewards",
+        // This entry used to list `garden_config` and `garden_rewards` too,
+        // with a rationale that said dropping them "destroys live rows" and
+        // that the drop was the owner's call. Migration 083 lines 88-90 drop
+        // both, and `garden_plants` with them — the call had already been made
+        // and shipped. The allowlist argued against something the same
+        // repository had already done, and nothing noticed because the parser
+        // above read `CREATE TABLE` only, so the dropped tables still looked
+        // present and still needed an excuse. Both names are gone from this
+        // list now: they are not orphans, they are not tables.
+        //
+        // The garden removal is still not finished, which is the more useful
+        // thing to know: `src/trios/garden.rs` is wired at
+        // `src/trios/mod.rs:10` and 11 of the 20 garden metric helpers still
+        // have live call sites. See DECISIONS.md D5 (the garden decision — the
+        // "D18" this comment used to cite is the market profile, an unrelated
+        // decision). Re-evaluate these two when that is closed — not before,
+        // because a table dropped while half the code still expects it is a
+        // worse failure than an unread table.
         "user_achievements",
         "share_events",
     ];
 
-    /// Every table any migration creates.
+    /// Every table that exists once all migrations have run: created by some
+    /// migration and not dropped by a later one.
+    ///
+    /// The `DROP` half matters as much as the `CREATE` half, and reading only
+    /// the `CREATE` half failed in the most misleading direction available.
+    /// `083_drop_cannabis_catalog.sql` drops `strains`, `strain_reviews`,
+    /// `lab_certificates`, `garden_plants`, `garden_rewards` and
+    /// `garden_config`; a create-only parser reported all six as still there.
+    /// `no_unexpected_orphan_tables` then asked "is this table referenced in
+    /// src/?" about tables that no longer exist — and the only thing keeping
+    /// them off the orphan list was the dead handler still naming them. The
+    /// gate was held green by the defect it exists to find, and would have
+    /// turned red the moment that defect was fixed.
     ///
     /// `pub(super)` because `schema_self_check_tests::critical_columns_list_is_sane`
     /// checks its own table list against this one rather than against a
@@ -1409,39 +1640,47 @@ mod orphan_table_tests {
     pub(super) fn migration_tables() -> Vec<String> {
         let manifest = env!("CARGO_MANIFEST_DIR");
         let mig_dir = std::path::Path::new(manifest).join("migrations");
-        let mut out = Vec::new();
+        let mut live: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
         let mut entries: Vec<_> = std::fs::read_dir(&mig_dir)
             .expect("migrations/ readable")
             .filter_map(|e| e.ok())
             .filter(|e| e.file_name().to_str().is_some_and(|n| n.ends_with(".sql")))
             .collect();
+        // Filename order is apply order, so a table created in 002, dropped in
+        // 083 and re-created in a later migration ends up present — which is
+        // what the database would look like.
         entries.sort_by_key(|e| e.file_name());
         for entry in entries {
             let content = std::fs::read_to_string(entry.path()).expect("read migration");
             for line in content.lines() {
                 let t = line.trim();
-                // Match "CREATE TABLE [IF NOT EXISTS] <name>" — case-insensitive
-                // on the keywords, identifier ends at first non-alnum/underscore.
                 let lower = t.to_ascii_lowercase();
-                let rest = if let Some(r) = lower.strip_prefix("create table if not exists ") {
-                    &t[t.len() - r.len()..]
-                } else if let Some(r) = lower.strip_prefix("create table ") {
-                    &t[t.len() - r.len()..]
-                } else {
-                    continue;
-                };
-                let name: String = rest
-                    .chars()
-                    .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
-                    .collect();
-                if !name.is_empty() {
-                    out.push(name);
+                if let Some(name) =
+                    table_after(t, &lower, &["create table if not exists ", "create table "])
+                {
+                    live.insert(name);
+                } else if let Some(name) =
+                    table_after(t, &lower, &["drop table if exists ", "drop table "])
+                {
+                    live.remove(&name);
                 }
             }
         }
-        out.sort();
-        out.dedup();
-        out
+        live.into_iter().collect()
+    }
+
+    /// The identifier following whichever `prefixes` entry the line starts with
+    /// — case-insensitive on the keywords, identifier ending at the first
+    /// character that cannot be part of one. Longest prefix first.
+    fn table_after(line: &str, lower: &str, prefixes: &[&str]) -> Option<String> {
+        let rest = prefixes
+            .iter()
+            .find_map(|p| lower.strip_prefix(p).map(|r| &line[line.len() - r.len()..]))?;
+        let name: String = rest
+            .chars()
+            .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
+            .collect();
+        (!name.is_empty()).then_some(name)
     }
 
     fn code_corpus() -> String {

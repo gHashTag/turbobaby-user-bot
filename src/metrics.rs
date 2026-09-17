@@ -100,56 +100,26 @@ pub fn user_registered() {
 // The eleven garden helpers that remain are still called — see DECISIONS.md D18
 // for why the removal is not finished.
 
-/// Loop #17: customer opened the garden screen.
-pub fn garden_screen_opened(source: &str) {
-    counter!(
-        "garden_screen_opened_total",
-        "source" => source.to_string()
-    )
-    .increment(1);
-}
+// Seven more helpers stood here and were deleted on 2026-09-16, when the garden
+// left the client: `garden_screen_opened`, `garden_water_tapped`,
+// `garden_harvest_tapped`, `garden_choose_product_tapped`,
+// `garden_reset_tapped`, `garden_invite_accepted` and `garden_invite_failed`.
+// The first five counted taps on a screen that no longer exists; the last two
+// counted a `POST /garden-invite` that no longer has a route. Same reasoning as
+// the nine above: `every_metric_helper_is_wired` measured them at zero call
+// sites, and a counter nothing increments is not observability.
+//
+// `garden_reminder_clicked` and `garden_reward_applied` went with them, from
+// further down this file.
 
-/// Loop #17: customer tapped the water CTA in the garden UI.
-pub fn garden_water_tapped() {
-    counter!("garden_water_tapped_total").increment(1);
-}
-
-/// Loop #17: customer tapped the harvest CTA in the garden UI.
-pub fn garden_harvest_tapped() {
-    counter!("garden_harvest_tapped_total").increment(1);
-}
-
-/// Loop #17: customer tapped the choose-product CTA to start a new plant.
-pub fn garden_choose_product_tapped() {
-    counter!("garden_choose_product_tapped_total").increment(1);
-}
-
-/// Loop #17: customer reset their garden plant.
-pub fn garden_reset_tapped() {
-    counter!("garden_reset_tapped_total").increment(1);
-}
-
-/// Loop #19: a user accepted a garden invite deep-link and recorded a referral.
-pub fn garden_invite_accepted(source: &str) {
-    counter!(
-        "garden_invite_accepted_total",
-        "source" => source.to_string()
-    )
-    .increment(1);
-}
-
-/// Loop #19: garden-invite recording failed for a non-duplicate reason.
-pub fn garden_invite_failed(reason: &str) {
-    counter!(
-        "garden_invite_failed_total",
-        "reason" => reason.to_string()
-    )
-    .increment(1);
-}
-
-/// Loop #20: the user viewed their garden invitee progress panel.
-pub fn garden_invitees_viewed() {
-    counter!("garden_invitees_viewed_total").increment(1);
+/// Loop #20: the user viewed their invitee progress panel.
+///
+/// Counter renamed from `garden_invitees_viewed_total` on 2026-09-16: it counts
+/// views of a referral panel, and after D5 there is no garden to qualify it.
+/// Nothing in this repository reads the old series name; a dashboard elsewhere
+/// that graphs it will need repointing.
+pub fn referral_invitees_viewed() {
+    counter!("referral_invitees_viewed_total").increment(1);
 }
 
 /// Loop #20: a deterministic share source was assigned to a user.
@@ -161,11 +131,15 @@ pub fn share_source_assigned(source: &str) {
     .increment(1);
 }
 
-/// Loop #21: funnel stage for garden invite viral loop.
-/// Stages: "share", "accepted", "watered", "ordered".
-pub fn garden_invite_funnel(stage: &str) {
+/// Loop #21: funnel stage for the referral viral loop.
+///
+/// Stages were "share", "accepted", "watered", "ordered". `"watered"` was a
+/// garden step and can no longer be reached (D5); `"ordered"` is the only stage
+/// anything still emits, from `complete_order`. Renamed from
+/// `garden_invite_funnel_total` for the same reason as the counter above.
+pub fn referral_invite_funnel(stage: &str) {
     counter!(
-        "garden_invite_funnel_total",
+        "referral_invite_funnel_total",
         "stage" => stage.to_string()
     )
     .increment(1);
@@ -277,11 +251,6 @@ pub fn reorder_clicked(source: &str) {
     counter!("reorder_clicked_total", "source" => source.to_string()).increment(1);
 }
 
-/// Loop #16: garden reminder CTA (water/harvest) was shown and tapped on Home.
-pub fn garden_reminder_clicked(kind: &str) {
-    counter!("garden_reminder_clicked_total", "kind" => kind.to_string()).increment(1);
-}
-
 /// Loop #12: customer opened the Mini App via a cart deep-link reminder.
 pub fn cart_deep_link_opened(variant: &str) {
     counter!(
@@ -312,11 +281,6 @@ pub fn bonus_applied(amount: f64) {
 pub fn stars_applied(amount: i64) {
     counter!("stars_applied_total").increment(1);
     gauge!("stars_applied_amount").set(amount as f64);
-}
-
-pub fn garden_reward_applied(discount: f64) {
-    counter!("garden_reward_applied_total").increment(1);
-    gauge!("garden_reward_discount").set(discount);
 }
 
 pub fn event_shared(kind: &str) {
@@ -417,18 +381,17 @@ mod tests {
     // above, which is why `every_metric_helper_is_wired` was right to call them
     // unwired: it counts call sites in production code and does not count its
     // own test module, or every helper would wire itself.
-    #[test]
-    fn test_garden_social_metrics_do_not_panic() {
-        garden_invite_accepted("utm_a");
-        garden_invite_failed("db");
-    }
-
+    //
+    // `test_garden_social_metrics_do_not_panic` stood here and went with
+    // `garden_invite_accepted` / `garden_invite_failed`.
     #[test]
     fn test_loop21_metrics_do_not_panic() {
-        garden_invite_funnel("share");
-        garden_invite_funnel("accepted");
-        garden_invite_funnel("watered");
-        garden_invite_funnel("ordered");
+        // "watered" is deliberately not exercised: it was the garden stage of
+        // this funnel and nothing can emit it any more (D5). "ordered" is the
+        // stage `complete_order` still reports.
+        referral_invite_funnel("share");
+        referral_invite_funnel("accepted");
+        referral_invite_funnel("ordered");
         notification_queued("friend_joined");
         friend_activity_pushed("friend_watered");
         milestone_awarded(3);

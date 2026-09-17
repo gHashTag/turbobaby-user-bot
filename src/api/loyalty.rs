@@ -72,6 +72,12 @@ async fn get_loyalty_tiers(State(state): State<AppState>) -> Result<Json<Value>,
     Ok(Json(json!({ "tiers": tiers })))
 }
 
+// The standing loyalty policy and the reader for it live in
+// `crate::trios::loyalty`. They were declared here first — and, for a few
+// hours, only here, which is how the third and fourth copies in
+// `db/orders.rs` and `api/orders.rs` went on disagreeing with them.
+use crate::trios::loyalty::{config_f64, defaults as default_loyalty_config};
+
 async fn get_profile(
     headers: HeaderMap,
     State(state): State<AppState>,
@@ -95,18 +101,7 @@ async fn get_profile(
                 StatusCode::INTERNAL_SERVER_ERROR
             })?
             .map(|m| m.config)
-            .unwrap_or_else(|| {
-                serde_json::json!({
-                    "bronze_threshold": 3000.0,
-                    "silver_threshold": 10000.0,
-                    "gold_threshold": 30000.0,
-                    "bronze_cashback_pct": 5.0,
-                    "silver_cashback_pct": 7.0,
-                    "gold_cashback_pct": 10.0,
-                    "max_bonus_usage_pct": 30.0,
-                    "referral_bonus": 200.0
-                })
-            })
+            .unwrap_or_else(default_loyalty_config)
     };
 
     let stmt = Statement::from_sql_and_values(
@@ -147,34 +142,16 @@ async fn get_profile(
                 .max(0.0);
             let tier = r.try_get::<String>("", "tier").unwrap_or_default();
             let cashback_pct = crate::db::orders::cashback_pct_for_tier(&config, &tier);
-            let max_bonus_usage_pct = config
-                .get("max_bonus_usage_pct")
-                .and_then(|v| v.as_f64())
-                .filter(|v| v.is_finite() && *v >= 0.0 && *v <= 100.0)
-                .unwrap_or(30.0);
+            let max_bonus_usage_pct = crate::trios::loyalty::max_bonus_usage_pct(&config);
+            // What the shop pays for a friend who orders. On the wire because
+            // the profile screen prints it and must not guess — see
+            // `default_loyalty_config`.
+            let referral_bonus = config_f64(&config, "referral_bonus").max(0.0);
 
             let thresholds: Vec<(&str, f64)> = vec![
-                (
-                    "bronze",
-                    config
-                        .get("bronze_threshold")
-                        .and_then(|v| v.as_f64())
-                        .unwrap_or(3000.0),
-                ),
-                (
-                    "silver",
-                    config
-                        .get("silver_threshold")
-                        .and_then(|v| v.as_f64())
-                        .unwrap_or(10000.0),
-                ),
-                (
-                    "gold",
-                    config
-                        .get("gold_threshold")
-                        .and_then(|v| v.as_f64())
-                        .unwrap_or(30000.0),
-                ),
+                ("bronze", config_f64(&config, "bronze_threshold")),
+                ("silver", config_f64(&config, "silver_threshold")),
+                ("gold", config_f64(&config, "gold_threshold")),
             ];
             let spent = total_spent.unwrap_or(0.0);
             let (next_tier, next_threshold) = thresholds
@@ -205,6 +182,7 @@ async fn get_profile(
                     "max_bonus_usage_pct": max_bonus_usage_pct,
                     "next_tier": next_tier,
                     "next_threshold": next_threshold,
+                    "referral_bonus": referral_bonus,
                 }
             })))
         }

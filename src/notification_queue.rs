@@ -73,9 +73,16 @@ async fn process_batch(
         let locale = get_locale(&lang);
 
         let text = build_message(&kind, &payload, &locale, &config.bot_username);
+        // This button carried `startapp=garden` until D5 removed the screen.
+        // Every notification this worker sends is about a friend — joined,
+        // ordered — so `referrals` is not a substitute destination, it is the
+        // one the message was always about; the garden merely hosted the panel.
+        // The deep link is the reason `Target::Referrals` exists in
+        // `trios::deeplink`: the bot answers `/start referrals` with a button,
+        // the app parses it to `/referrals`, and the server serves that path.
         let markup = InlineKeyboardMarkup::new(vec![vec![url_btn(
-            &locale.garden_open_app,
-            &miniapp_deep_link(&config.bot_username, "garden"),
+            &locale.referrals_open_app,
+            &miniapp_deep_link(&config.bot_username, "referrals"),
         )]]);
 
         match bot
@@ -129,8 +136,8 @@ fn build_message(
     match kind {
         "friend_joined" => format!(
             "{}\n\n{}",
-            locale.garden_friend_joined.replace("{name}", name),
-            locale.garden_invite_progress_hint
+            locale.referral_friend_joined.replace("{name}", name),
+            locale.referral_invite_progress_hint
         ),
         // No code writes this kind any more — `enqueue_friend_watered` was
         // deleted with the garden mechanic (D5). The arm stays because rows
@@ -139,18 +146,18 @@ fn build_message(
         "friend_watered" => {
             let streak = payload.get("streak").and_then(|v| v.as_i64()).unwrap_or(0);
             let body = locale
-                .garden_friend_watered
+                .garden_friend_watered_legacy
                 .replace("{name}", name)
                 .replace("{streak}", &streak.to_string());
-            format!("{}\n\n{}", body, locale.garden_invite_progress_hint)
+            format!("{}\n\n{}", body, locale.referral_invite_progress_hint)
         }
         "friend_ordered" => {
             let bonus = payload.get("bonus").and_then(|v| v.as_f64()).unwrap_or(0.0);
             let body = locale
-                .garden_friend_ordered
+                .referral_friend_ordered
                 .replace("{name}", name)
                 .replace("{bonus}", &format!("{:.0}", bonus));
-            format!("{}\n\n{}", body, locale.garden_invite_progress_hint)
+            format!("{}\n\n{}", body, locale.referral_invite_progress_hint)
         }
         "milestone" => {
             let milestone = payload

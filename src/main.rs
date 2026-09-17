@@ -1112,7 +1112,10 @@ async fn main() -> Result<()> {
         .route("/success", get(spa_handler.clone()))
         .route("/orders", get(spa_handler.clone()))
         .route("/profile", get(spa_handler.clone()))
-        .route("/garden", get(spa_handler.clone()))
+        // `/garden` stood here. It is not re-listed and not redirected: the
+        // global `.fallback(serve_dist)` still serves index.html for it, so an
+        // old bookmark reaches the SPA and gets the router's own 404 — the same
+        // answer as any other path this build does not have (D5).
         .route("/quest", get(spa_handler.clone()))
         .route("/game", get(spa_handler.clone()))
         .route("/referrals", get(spa_handler.clone()))
@@ -1615,13 +1618,16 @@ mod css_class_consistency_tests {
         // browser defaults — none breaks production rendering. Defer
         // proper CSS rules to a focused cleanup cycle; the test now
         // guards against *new* mismatches.
-        "pixel-input",     // 1 ref — inline-styled text input
-        "btn-green",       // 2 refs — game/garden buttons
-        "plant-btn",       // 1 ref — garden grow button
-        "card-bg",         // 1 ref — admin background div
-        "chip-close",      // 1 ref — selected-chip close button
-        "harvest-btn",     // 1 ref — garden harvest button
+        "pixel-input", // 1 ref — inline-styled text input
+        "chip-close",  // 1 ref — selected-chip close button
         "cart-item-image", // 2 refs — cart row image wrapper
+                       // `btn-green`, `plant-btn` and `harvest-btn` were here for the garden's
+                       // grow/water/harvest buttons (D5), and `card-bg` for an admin div that
+                       // no longer carries it. All four named classes no longer written
+                       // anywhere in `src/ui` — which the allowlist had no way to notice,
+                       // because it was only ever read to excuse a name, never checked for
+                       // names that had stopped existing. `no_allowlist_entry_outlives_its_class`
+                       // below closes that: the list cannot silently become a graveyard.
     ];
 
     fn ui_class_literals() -> HashSet<String> {
@@ -1746,6 +1752,24 @@ mod css_class_consistency_tests {
              class in ALLOWLIST with a rationale.",
             missing.len(),
             missing
+        );
+    }
+
+    /// An allowlist is a list of exceptions, and an exception outlives its case
+    /// silently. Four of these seven entries named classes that `src/ui` had
+    /// stopped writing — three with the garden (D5), one with an admin div —
+    /// and the suite stayed green throughout, because the list was only ever
+    /// consulted to excuse a name, never to ask whether the name still existed.
+    #[test]
+    fn no_allowlist_entry_outlives_its_class() {
+        let ui = ui_class_literals();
+        let stale: Vec<&&str> = ALLOWLIST.iter().filter(|c| !ui.contains(**c)).collect();
+        assert!(
+            stale.is_empty(),
+            "ALLOWLIST entries no class literal in src/ui uses any more ({}): {:?}\n\
+             Delete them — an excuse for code that is gone is not documentation.",
+            stale.len(),
+            stale
         );
     }
 }
@@ -4200,26 +4224,112 @@ mod wasm_boot_html_tests {
 /// A Dioxus `Signal::write()` guard is a runtime RefCell borrow. If that guard
 /// survives across an `.await`, the scheduler may render while it is still
 /// held and `Signal::read()` panics with `AlreadyBorrowedMut`.
+///
+/// This guard used to check one function in `src/ui/game/garden.rs` — the
+/// water handler, because that is the one that crashed in production on
+/// 2026-08-23. The file is gone with the garden (D5), and a test that reads a
+/// deleted path is not a weaker test, it is a panicking one. So the rule it
+/// encoded is now applied to every file under `src/ui` instead of to the single
+/// place it was first violated: the next `AlreadyBorrowedMut` will not be in
+/// the function we already fixed.
+///
+/// `src/ui` is invisible to `cargo test` — `lib.rs` gates the module on
+/// `target_arch = "wasm32"` — so a source walk is the only instrument that
+/// reaches it from the host.
 #[cfg(test)]
-mod garden_signal_borrow_tests {
-    use std::path::Path;
+mod signal_borrow_tests {
+    use std::path::{Path, PathBuf};
+
+    fn ui_sources() -> Vec<(PathBuf, String)> {
+        let mut out = Vec::new();
+        fn walk(dir: &Path, out: &mut Vec<(PathBuf, String)>) {
+            let Ok(entries) = std::fs::read_dir(dir) else {
+                return;
+            };
+            for entry in entries.filter_map(|e| e.ok()) {
+                let path = entry.path();
+                if path.is_dir() {
+                    walk(&path, out);
+                } else if path.extension().and_then(|s| s.to_str()) == Some("rs") {
+                    if let Ok(src) = std::fs::read_to_string(&path) {
+                        out.push((path, src));
+                    }
+                }
+            }
+        }
+        walk(
+            &Path::new(env!("CARGO_MANIFEST_DIR")).join("src/ui"),
+            &mut out,
+        );
+        out
+    }
+
+    /// Bytes of `src` from `from`, stopping at whichever comes first: the end of
+    /// the block the guard was bound in, or an explicit `drop(<name>)`. Brace
+    /// counting is string- and comment-aware enough for this tree's style.
+    fn guard_lifetime(src: &str, from: usize, name: &str) -> String {
+        let bytes = src.as_bytes();
+        let mut depth = 0i32;
+        let mut in_str = false;
+        let mut i = from;
+        let needle = format!("drop({})", name);
+        while i < bytes.len() {
+            if src[i..].starts_with(&needle) {
+                break;
+            }
+            match bytes[i] {
+                b'"' if i == 0 || bytes[i - 1] != b'\\' => in_str = !in_str,
+                b'{' if !in_str => depth += 1,
+                b'}' if !in_str => {
+                    if depth == 0 {
+                        break;
+                    }
+                    depth -= 1;
+                }
+                _ => {}
+            }
+            i += 1;
+        }
+        src[from..i].to_string()
+    }
 
     #[test]
-    fn water_update_releases_the_plants_write_guard_before_awaiting() {
-        let src = std::fs::read_to_string(
-            Path::new(env!("CARGO_MANIFEST_DIR")).join("src/ui/game/garden.rs"),
-        )
-        .expect("read garden source");
-        let start = src
-            .find("let mut list = ps.write();")
-            .expect("water update write guard");
-        let await_at = src[start..]
-            .find("post_client_event(&api_base_url(), \"garden_water_tapped\"")
-            .map(|offset| start + offset)
-            .expect("water analytics await");
+    fn no_signal_write_guard_is_held_across_an_await() {
+        let sources = ui_sources();
+        assert!(!sources.is_empty(), "no src/ui sources walked");
+
+        let mut offenders = Vec::new();
+        for (path, src) in &sources {
+            for (lineno, line) in src.lines().enumerate() {
+                let trimmed = line.trim_start();
+                let Some(rest) = trimmed.strip_prefix("let mut ") else {
+                    continue;
+                };
+                let Some((name, tail)) = rest.split_once(" = ") else {
+                    continue;
+                };
+                if !tail.contains(".write();") {
+                    continue;
+                }
+                let at = src.find(line).expect("line is from src");
+                if guard_lifetime(src, at + line.len(), name).contains(".await") {
+                    offenders.push(format!(
+                        "{}:{} — `{}` is a write guard held across an .await",
+                        path.display(),
+                        lineno + 1,
+                        name
+                    ));
+                }
+            }
+        }
+
         assert!(
-            src[start..await_at].contains("drop(list);"),
-            "the plants Signal write guard must be dropped before the analytics await"
+            offenders.is_empty(),
+            "Signal write guards live across an await ({}). Dioxus renders on \
+             the same thread, so a read during that await panics with \
+             AlreadyBorrowedMut:\n{}",
+            offenders.len(),
+            offenders.join("\n")
         );
     }
 }

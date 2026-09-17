@@ -15,7 +15,7 @@
 //! `Telegram.WebApp.openTelegramLink` so it stays inside Telegram instead of
 //! falling back to an external browser.
 
-use crate::trios::i18n::{tf, T_GARDEN_SHARE_TEXT, T_GARDEN_SHARE_TITLE, T_SHARE_MESSAGE};
+use crate::trios::i18n::{tf, T_SHARE_MESSAGE};
 use crate::ui::lang::current_lang;
 use crate::ui::routes::Route;
 
@@ -68,13 +68,25 @@ impl ProductKind {
     }
 
     /// Route the recipient should land on.
+    ///
+    /// Every one of these kinds is a cannabis-era product line, and none of
+    /// them has anything left to show: 083 drops the tables and 085 unpublishes
+    /// what survived. Until 2026-09-16 four of the five still named their own
+    /// retired screen, and only `Strain` had been repointed at the fleet.
+    ///
+    /// That asymmetry is worse than it looks, because a deep link is not a tap.
+    /// The customer did not choose to be here — a link arrived in Telegram,
+    /// they opened it, and the app decided where to put them. Landing them on a
+    /// permanently empty grid for a product line the shop no longer sells is a
+    /// dead end with no back button; the fleet is the honest destination and
+    /// the only screen that can still answer "what can I get?".
+    ///
+    /// `screens/mod.rs` keeps rendering the retired screens for anyone who
+    /// types the path — this is about where the app *sends* people (D19: the
+    /// heritage is hidden, not deleted).
     pub fn route(self) -> Route {
         match self {
-            Self::Strain => Route::Menu {},
-            Self::Accessory => Route::Accessories {},
-            Self::Set => Route::Sets {},
-            Self::Tea => Route::Tea {},
-            Self::Event => Route::Events {},
+            Self::Strain | Self::Accessory | Self::Set | Self::Tea | Self::Event => Route::Menu {},
         }
     }
 }
@@ -214,17 +226,6 @@ pub struct PendingOrder(pub Option<String>);
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct PendingReorder(pub Option<String>);
 
-/// A garden deep link is waiting to be opened.
-///
-/// Separate from the invite signal below it, because the two answer different
-/// questions: *go to the garden* is true for both `garden` and
-/// `garden__<referrer>`, while *show the invite modal* is true only for the
-/// second. Conflating them is what left `startapp=garden` resolving correctly
-/// and then doing nothing at all — the parser said "garden", the analytics
-/// event fired, and the customer stayed on the home screen.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct PendingGarden(pub bool);
-
 /// Parse an order `startapp` value (`o_{order_id}`). Unknown prefixes and
 /// payloads that are too long are rejected so malformed links degrade gracefully.
 pub fn parse_order_start_param(param: &str) -> Option<String> {
@@ -267,66 +268,12 @@ pub fn reorder_deep_link(order_id: &str) -> String {
     )
 }
 
-/// Build a `startapp` parameter that opens the Mini App on the garden screen.
-/// When `referrer_id` is provided, the invitee can be attributed back to the
-/// referrer for a two-sided garden-referral reward.
-pub fn garden_start_param(referrer_id: Option<i64>) -> String {
-    crate::trios::deeplink::payload_for(&crate::trios::deeplink::Target::Garden {
-        referrer: referrer_id,
-        source: None,
-    })
-    .unwrap_or_else(|| "garden".to_string())
-}
-
-/// Raw `t.me` deep link that opens the Mini App in the garden.
-pub fn garden_deep_link(referrer_id: Option<i64>) -> String {
-    format!(
-        "https://t.me/{}?start={}",
-        bot_username(),
-        garden_start_param(referrer_id)
-    )
-}
-
-/// Parse a garden `startapp` value. Plain `garden` returns no referrer.
-/// `garden__{id}[__{source}]` returns the referrer id and optional source.
-/// The id segment must be a valid i64 and the optional source is safe chars only.
-pub fn parse_garden_start_param(param: &str) -> Option<(Option<i64>, Option<&str>)> {
-    match crate::trios::deeplink::parse(param)? {
-        crate::trios::deeplink::Target::Garden { referrer, .. } => {
-            let source = param
-                .strip_prefix("garden__")
-                .and_then(|rest| rest.find("__").map(|at| &rest[at + 2..]));
-            Some((referrer, source))
-        }
-        _ => None,
-    }
-}
-
-/// Open Telegram's native share picker for the garden.
-/// `referrer_id` is encoded so invitees are attributed. `source` is an optional
-/// A/B variant (e.g. "utm_a") logged on the server when the invite is accepted.
-pub fn share_garden(referrer_id: Option<i64>, source: Option<&str>) {
-    let mut link = garden_deep_link(referrer_id);
-    if let Some(s) = source {
-        // The parser expects garden__{id}__{source}; append source if present.
-        if referrer_id.is_some() {
-            link.push_str("__");
-            link.push_str(s);
-        }
-    }
-    let lang = current_lang();
-    let text = format!(
-        "{}\n{}",
-        tf(lang, T_GARDEN_SHARE_TITLE, &[]),
-        tf(lang, T_GARDEN_SHARE_TEXT, &[])
-    );
-    let share_url = format!(
-        "https://t.me/share/url?url={}&text={}",
-        urlencoding::encode(&link),
-        urlencoding::encode(&text)
-    );
-    open_telegram_link(&share_url);
-}
+// `garden_start_param`, `garden_deep_link`, `parse_garden_start_param` and
+// `share_garden` stood here — four functions whose whole job was to build and
+// read a link to `/garden`. The route is gone (D5), so such a link could only
+// land nowhere. Nothing replaces them: the link a customer shares to invite a
+// friend is `?start=ref_<code>`, which the bot has always handled and which
+// the referrals page already renders.
 
 /// Parse a reorder `startapp` value (`reorder__{order_id}`). Unknown prefixes
 /// and payloads that are too long are rejected so malformed links degrade
@@ -569,58 +516,5 @@ mod tests {
         let url = reorder_deep_link(id);
         let start_param = url.split("start=").nth(1).unwrap();
         assert_eq!(parse_reorder_start_param(start_param).unwrap(), id);
-    }
-
-    #[test]
-    fn garden_start_param_plain() {
-        assert_eq!(garden_start_param(None), "garden");
-    }
-
-    #[test]
-    fn garden_start_param_with_referrer() {
-        assert_eq!(garden_start_param(Some(12345)), "garden__12345");
-    }
-
-    #[test]
-    fn parse_garden_plain() {
-        assert_eq!(parse_garden_start_param("garden"), Some((None, None)));
-    }
-
-    #[test]
-    fn parse_garden_with_referrer() {
-        assert_eq!(
-            parse_garden_start_param("garden__12345"),
-            Some((Some(12345), None))
-        );
-    }
-
-    #[test]
-    fn parse_garden_with_referrer_and_source() {
-        assert_eq!(
-            parse_garden_start_param("garden__12345__utm_a"),
-            Some((Some(12345), Some("utm_a")))
-        );
-    }
-
-    #[test]
-    fn parse_garden_rejects_non_positive_id() {
-        assert!(parse_garden_start_param("garden__0").is_none());
-        assert!(parse_garden_start_param("garden__-5").is_none());
-    }
-
-    #[test]
-    fn parse_garden_rejects_malformed_source() {
-        assert!(parse_garden_start_param("garden__12345__").is_none());
-        assert!(parse_garden_start_param("garden__12345__utm!").is_none());
-    }
-
-    #[test]
-    fn garden_deep_link_round_trips() {
-        let url = garden_deep_link(Some(12345));
-        let start_param = url.split("start=").nth(1).unwrap();
-        assert_eq!(
-            parse_garden_start_param(start_param),
-            Some((Some(12345), None))
-        );
     }
 }

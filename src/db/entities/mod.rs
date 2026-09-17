@@ -34,10 +34,14 @@ pub mod event;
 pub mod event_photo;
 // `garden_config` stood here. It was the only remaining reference to the
 // `garden_config` table, so deleting the mechanic (D5) left a SeaORM entity
-// mapping a table nothing else in the tree mentions. The table itself stays —
-// see `ALLOWED_ORPHANS` in src/db/mod.rs for why it is not dropped.
-#[allow(unreachable_pub)]
-pub mod lab_certificate;
+// mapping a table nothing else in the tree mentions. Migration 083 drops that
+// table too, at line 90 — the note that used to stand here said it stayed.
+//
+// `lab_certificate` stood here as well. 083 drops `lab_certificates` (line 82)
+// and D6 replaces it with `bike_service_records`, which already exists. Its
+// only callers were the `/admin/strains/:id/lab-cert` route — a guaranteed 500
+// — and a client method pointing at `/api/strains/:id/lab-certs`, an endpoint
+// no server route ever declared.
 #[allow(unreachable_pub)]
 pub mod loyalty_config;
 #[allow(unreachable_pub)]
@@ -64,8 +68,11 @@ pub mod stars_idempotency_key;
 pub mod stars_transaction;
 #[allow(unreachable_pub)]
 pub mod strain;
-#[allow(unreachable_pub)]
-pub mod strain_review;
+// `strain_review` stood here. 083 drops `strain_reviews` (line 83); the two
+// endpoints that read it answered 500 on every call, and the customer-facing
+// one reported success anyway. `strain` itself stays: `src/api/cart.rs` still
+// looks up a strain when pricing a legacy cart line, and what to do with that
+// is an open question for the owner, not a tidy-up.
 #[allow(unreachable_pub)]
 pub mod tea_product;
 #[allow(unreachable_pub)]

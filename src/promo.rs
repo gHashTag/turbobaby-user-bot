@@ -249,13 +249,21 @@ async fn events_happening_tomorrow(db: &Database) -> Result<Vec<Subject>, sea_or
                 .to_string(),
         ))
         .await?;
-    // The shop's timezone. A hard-coded offset that cannot fail, written
+    // The declared market's clock (D18), not an offset restated here. Written
     // without `expect` so a panic is impossible rather than merely unlikely —
     // this runs in a background loop where a panic takes the sweep with it.
-    let bangkok = match chrono::FixedOffset::east_opt(7 * 3600) {
+    //
+    // `None` now also means "this market moves its clocks", which no fixed
+    // offset can express. Skipping the sweep is the right answer to that:
+    // a reminder is a message to a customer naming a time, and a time this
+    // program cannot derive must not be sent at all.
+    let market_tz = match crate::trios::market::MARKET.fixed_offset() {
         Some(tz) => tz,
         None => {
-            tracing::error!("promo: the Bangkok offset stopped being valid; skipping reminders");
+            tracing::error!(
+                timezone = crate::trios::market::MARKET.timezone_name,
+                "promo: the declared market has no single UTC offset; skipping reminders"
+            );
             return Ok(Vec::new());
         }
     };
@@ -268,8 +276,8 @@ async fn events_happening_tomorrow(db: &Database) -> Result<Vec<Subject>, sea_or
             let ends: Option<chrono::DateTime<chrono::FixedOffset>> =
                 r.try_get("", "ends_at").ok().flatten();
             let when = crate::trios::calendar::time_range(
-                &starts.with_timezone(&bangkok).format("%H:%M").to_string(),
-                ends.map(|e| e.with_timezone(&bangkok).format("%H:%M").to_string())
+                &starts.with_timezone(&market_tz).format("%H:%M").to_string(),
+                ends.map(|e| e.with_timezone(&market_tz).format("%H:%M").to_string())
                     .as_deref(),
             );
             // `max_seats` NULL means unlimited, which is not "zero left".
@@ -355,12 +363,10 @@ async fn bestsellers(db: &Database) -> Result<Vec<Subject>, sea_orm::DbErr> {
 /// price for it — an event, or a row that has gone missing.
 async fn price_of(subject: &Subject, db: &Database) -> Option<f64> {
     let (table, col) = match subject {
-        Subject::Strain { .. } => ("strains", "price_per_gram"),
         Subject::Accessory { .. } => ("accessories", "price"),
         Subject::Tea { .. } => ("tea_products", "price"),
         Subject::Set { .. } => ("sets", "total_price"),
         Subject::Bestseller { kind, .. } => match kind {
-            crate::trios::promo::BestsellerKind::Strain => ("strains", "price_per_gram"),
             crate::trios::promo::BestsellerKind::Set => ("sets", "total_price"),
         },
         Subject::Event { .. } | Subject::EventSoon { .. } => ("events", "price_baht"),
@@ -470,12 +476,10 @@ async fn write_copy(
 /// than left to the model, which does not know this shop's prices.
 async fn facts_for(subject: &Subject, db: &Database) -> String {
     let (table, price_col) = match subject {
-        Subject::Strain { .. } => ("strains", "price_per_gram"),
         Subject::Accessory { .. } => ("accessories", "price"),
         Subject::Tea { .. } => ("tea_products", "price"),
         Subject::Set { .. } => ("sets", "total_price"),
         Subject::Bestseller { kind, .. } => match kind {
-            crate::trios::promo::BestsellerKind::Strain => ("strains", "price_per_gram"),
             crate::trios::promo::BestsellerKind::Set => ("sets", "total_price"),
         },
         Subject::Event { .. } | Subject::EventSoon { .. } => {
@@ -515,12 +519,10 @@ async fn facts_for(subject: &Subject, db: &Database) -> String {
 /// owner can add it before publishing.
 async fn image_for(subject: &Subject, db: &Database) -> Option<String> {
     let (table, col) = match subject {
-        Subject::Strain { .. } => ("strains", "image_url"),
         Subject::Accessory { .. } => ("accessories", "image_url"),
         Subject::Tea { .. } => ("tea_products", "image_url"),
         Subject::Set { .. } => ("sets", "image_url"),
         Subject::Bestseller { kind, .. } => match kind {
-            crate::trios::promo::BestsellerKind::Strain => ("strains", "image_url"),
             crate::trios::promo::BestsellerKind::Set => ("sets", "image_url"),
         },
         Subject::Event { .. } | Subject::EventSoon { .. } => ("events", "image_url"),

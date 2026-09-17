@@ -1,12 +1,12 @@
 use crate::trios::i18n::{
-    t, tf, T_MODAL_CLOSE, T_ORDERS_BROWSE_SETS, T_ORDERS_FILTER_ACTIVE, T_ORDERS_FILTER_ALL,
+    t, tf, T_ORDERS_BROWSE_BIKES, T_ORDERS_FILTER_ACTIVE, T_ORDERS_FILTER_ALL,
     T_ORDERS_FILTER_CANCELLED, T_ORDERS_FILTER_COMPLETED, T_ORDERS_HISTORY, T_ORDERS_NO_ORDERS,
     T_ORDERS_ORDER, T_ORDERS_STATUS_CANCELLED, T_ORDERS_STATUS_CONFIRMED,
     T_ORDERS_STATUS_DELIVERED, T_ORDERS_STATUS_OUT_FOR_DELIVERY, T_ORDERS_STATUS_PENDING,
     T_ORDERS_STATUS_PREPARING, T_ORDERS_STATUS_READY, T_ORDERS_STATUS_UNKNOWN, T_ORDERS_TITLE,
-    T_REORDER, T_REVIEW_COMMENT, T_REVIEW_LEAVE, T_REVIEW_RATING, T_REVIEW_SUBMIT, T_REVIEW_THANKS,
+    T_REORDER,
 };
-use crate::ui::api::context::{api_base_url, use_api_client};
+use crate::ui::api::context::api_base_url;
 use crate::ui::api::http::merge_server_cart;
 use crate::ui::components::bottom_nav::BottomNav;
 use crate::ui::components::open_in_telegram::OpenInTelegramNotice;
@@ -163,107 +163,13 @@ fn is_terminal_status(status: &str) -> bool {
     matches!(status, "delivered" | "completed" | "rejected" | "cancelled")
 }
 
-#[derive(Props, PartialEq, Clone)]
-struct ReviewFormProps {
-    order_id: String,
-    strain_id: String,
-    strain_name: String,
-    on_close: EventHandler<()>,
-    on_submitted: EventHandler<()>,
-}
-
-#[component]
-fn ReviewForm(props: ReviewFormProps) -> Element {
-    let client = use_api_client();
-    let mut rating = use_signal(|| 5i32);
-    let mut comment = use_signal(String::new);
-    let mut submitting = use_signal(|| false);
-    let mut done = use_signal(|| false);
-    let lang = crate::ui::lang::current_lang();
-
-    rsx! {
-        div {
-            style: "position:fixed;inset:0;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;z-index:1100;padding:16px;",
-            onclick: move |_| props.on_close.call(()),
-            div {
-                style: "background:#16213e;border:4px solid #2a2a4a;box-shadow:4px 4px 0 #000;max-width:420px;width:100%;padding:16px;",
-                onclick: move |e: Event<MouseData>| e.stop_propagation(),
-                div { style: "font-size:18px;font-weight:800;color:#39ff14;margin-bottom:4px;text-shadow:1px 1px 0 #000;",
-                    {t(lang, T_REVIEW_LEAVE)}
-                }
-                div { style: "font-size:14px;color:#8b8b9e;margin-bottom:12px;", "{props.strain_name}" }
-
-                if done() {
-                    div { style: "text-align:center;padding:24px 0;",
-                        div { style: "font-size:40px;margin-bottom:8px;", "🙌" }
-                        div { style: "font-size:15px;color:#39ff14;", {t(lang, T_REVIEW_THANKS)} }
-                    }
-                } else {
-                    div { style: "margin-bottom:12px;",
-                        div { style: "font-size:13px;color:#8b8b9e;margin-bottom:6px;", {t(lang, T_REVIEW_RATING)} }
-                        div { style: "display:flex;gap:8px;",
-                            for star in 1..=5 {
-                                {
-                                    let selected = rating() >= star;
-                                    let color = if selected { "#ffe600" } else { "#2a2a4a" };
-                                    rsx! {
-                                        button {
-                                            style: "width:44px;height:44px;font-size:24px;background:{color};border:4px solid #1a1a2e;box-shadow:2px 2px 0 #000;cursor:pointer;",
-                                            onclick: move |_| rating.set(star),
-                                            "★"
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    div { style: "margin-bottom:12px;",
-                        div { style: "font-size:13px;color:#8b8b9e;margin-bottom:6px;", {t(lang, T_REVIEW_COMMENT)} }
-                        textarea {
-                            style: "width:100%;min-height:80px;background:#1a1a2e;border:2px solid #2a2a4a;color:#e8e8e8;padding:8px;font-size:14px;resize:vertical;",
-                            value: "{comment()}",
-                            oninput: move |e: Event<FormData>| comment.set(e.value().clone()),
-                        }
-                    }
-
-                    button {
-                        style: "font-size:14px;font-weight:700;width:100%;padding:12px 20px;margin-bottom:8px;background:#39ff14;color:#000;border:4px solid #2d9e0f;box-shadow:3px 3px 0 #000;cursor:pointer;",
-                        disabled: submitting(),
-                        onclick: move |e: Event<MouseData>| {
-                            e.stop_propagation();
-                            let req = crate::ui::api::types::CreateReviewRequest {
-                                order_id: props.order_id.clone(),
-                                strain_id: props.strain_id.clone(),
-                                rating: rating(),
-                                comment: comment().trim().to_string(),
-                            };
-                            let client = client.clone();
-                            spawn(async move {
-                                submitting.set(true);
-                                let _ = client.create_review(&req).await;
-                                submitting.set(false);
-                                done.set(true);
-                            });
-                        },
-                        {t(lang, T_REVIEW_SUBMIT)}
-                    }
-                }
-
-                button {
-                    style: "font-size:14px;font-weight:700;width:100%;padding:12px 20px;background:#2a2a4a;color:#e8e8e8;border:4px solid #1a1a2e;box-shadow:3px 3px 0 #000;cursor:pointer;",
-                    onclick: move |e: Event<MouseData>| { e.stop_propagation(); props.on_close.call(()); },
-                    "{t(lang, T_MODAL_CLOSE)}"
-                }
-            }
-        }
-    }
-}
+// Здесь жили ReviewFormProps и ReviewForm — модальная форма отзыва на сорт.
+// Единственный вызов, client.create_review, бил в /api/reviews поверх
+// strain_reviews, удалённой миграцией 083.
 
 #[component]
 pub fn OrdersScreen() -> Element {
     let mut active_filter = use_signal(|| StatusFilter::All);
-    let mut review_target = use_signal(|| None::<(ApiOrder, ApiOrderItem)>);
     let reorder_loading = use_signal(|| false);
     let telegram_id = use_telegram_id().unwrap_or(0);
     let init_data = use_telegram_init_data();
@@ -353,13 +259,17 @@ pub fn OrdersScreen() -> Element {
                             div { style: "text-align: center; padding: 40px 16px;",
                                 div { style: "font-size: 70px; margin-bottom: 12px;", "📦" }
                                 p { style: "font-size: 13px; color: #8b8b9e; margin-bottom: 16px;", "{t(lang, T_ORDERS_NO_ORDERS)}" }
-                                Link { to: Route::Sets {},
+                                // Пустой список заказов — первое, что видит новый
+                                // арендатор. Кнопка вела в `Route::Sets` (наборы
+                                // каннабиса, снятые с витрины миграцией 085);
+                                // теперь она ведёт в каталог байков.
+                                Link { to: Route::Menu {},
                                     button { style: "
                                         font-size: 14px; font-weight: 700; padding: 12px 20px;
                                         background: #39ff14; color: #000;
                                         border: 4px solid #2d9e0f; border-radius: 0; cursor: pointer;
                                         box-shadow: 3px 3px 0 #000;
-                                    ", "{t(lang, T_ORDERS_BROWSE_SETS)}" }
+                                    ", "{t(lang, T_ORDERS_BROWSE_BIKES)}" }
                                 }
                             }
                         },
@@ -407,33 +317,16 @@ pub fn OrdersScreen() -> Element {
                                                         }
                                                     }
                                                 }
-                                                {(o.status == "delivered" || o.status == "completed").then(|| {
-                                                    let reviewables: Vec<&ApiOrderItem> = o.items.iter().filter(|i| i.strain_id.is_some()).collect();
-                                                    if reviewables.is_empty() {
-                                                        return rsx! {};
-                                                    }
-                                                    let lang = crate::ui::lang::current_lang();
-                                                    let order_for_review = o.clone();
-                                                    rsx! {
-                                                        div { style: "margin-bottom: 8px; padding-top: 8px; border-top: 1px dashed #2a2a4a;",
-                                                            div { style: "font-size: 12px; color: #8b8b9e; margin-bottom: 6px;", {t(lang, T_REVIEW_LEAVE)} }
-                                                            div { style: "display: flex; flex-wrap: wrap; gap: 6px;",
-                                                                for item in reviewables {{
-                                                                    let item_clone = item.clone();
-                                                                    let order_clone = order_for_review.clone();
-                                                                    let name = item_name(&item_clone);
-                                                                    rsx! {
-                                                                        button {
-                                                                            style: "font-size: 12px; padding: 6px 10px; background: #ffe600; color: #000; border: 3px solid #bfa600; box-shadow: 2px 2px 0 #000; cursor: pointer;",
-                                                                            onclick: move |e: Event<MouseData>| { e.stop_propagation(); review_target.set(Some((order_clone.clone(), item_clone.clone()))); },
-                                                                            "★ {name}"
-                                                                        }
-                                                                    }
-                                                                }}
-                                                            }
-                                                        }
-                                                    }
-                                                })}
+                                                // Здесь стояла панель «Оставить отзыв»: она показывалась под каждым
+                                                // доставленным заказом, у которого есть позиция со strain_id, то есть
+                                                // под историческими заказами каннабиса. Кнопка открывала форму, форма
+                                                // слала POST /api/reviews, маршрут читал strain_reviews — таблицу,
+                                                // удалённую миграцией 083. Ответ был 500 всегда.
+                                                //
+                                                // Хуже самого 500: форма писала `let _ = client.create_review(&req).await;`
+                                                // и сразу ставила done = true. Клиент видел «🙌 Спасибо за отзыв!»
+                                                // на отзыв, который сервер отказался принять и нигде не сохранил.
+                                                // Соврать об успехе дороже, чем показать ошибку.
                                                 div { style: "display: flex; justify-content: space-between; padding-top: 8px; border-top: 1px solid #2a2a4a; font-size: 13px;",
                                                     span { style: "color: #8b8b9e;", "📍 {shop} · {date_str}" }
                                                     span { style: "font-size: 20px; font-weight: 800; color: #ffe600; text-shadow: 2px 2px 0 #000;", "{total_str}" }
@@ -520,19 +413,7 @@ pub fn OrdersScreen() -> Element {
                 }
             }
 
-            {review_target().map(|(order, item)| {
-                let strain_id = item.strain_id.clone().unwrap_or_default();
-                let strain_name = item_name(&item);
-                rsx! {
-                    ReviewForm {
-                        order_id: order.id.clone(),
-                        strain_id,
-                        strain_name,
-                        on_close: move |_| review_target.set(None),
-                        on_submitted: move |_| review_target.set(None),
-                    }
-                }
-            })}
+            // Здесь рисовалась ReviewForm. Удалена вместе с эндпоинтом.
 
             BottomNav {}
         }

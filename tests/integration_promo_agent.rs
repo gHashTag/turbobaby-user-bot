@@ -73,9 +73,9 @@ async fn a_subject_is_claimed_exactly_once() {
     };
     clean(&db).await;
 
-    let s = Subject::Strain {
-        id: "promo-test-strain".into(),
-        name: format!("{MARK} strain"),
+    let s = Subject::Set {
+        id: "promo-test-subject".into(),
+        name: format!("{MARK} subject"),
     };
     assert!(claim(&db, &s).await, "the first claim must succeed");
     assert!(
@@ -202,7 +202,7 @@ async fn a_draft_starts_unpublished() {
     };
     clean(&db).await;
 
-    let s = Subject::Strain {
+    let s = Subject::Set {
         id: "promo-test-draft".into(),
         name: format!("{MARK} draft"),
     };

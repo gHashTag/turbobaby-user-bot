@@ -103,7 +103,7 @@ pub struct ApiBike {
     /// The name is the served one: `api::bikes::family_json` inserts
     /// `client_rate_thb_day` next to `client_rate_source`, and its
     /// `client_rate` seam answers `(None, "unavailable")` for every family
-    /// until issue #7 wires the door — so today this is `null` on every card
+    /// until issue #25 wires the door — so today this is `null` on every card
     /// and the screen says a manager quotes the price.
     #[serde(default, alias = "rate_day_thb")]
     pub client_rate_thb_day: Option<f64>,
@@ -130,8 +130,18 @@ pub struct ApiBike {
     pub sale_price_thb: Option<f64>,
     /// Whether this family is offered for sale at all. `None` means the API
     /// does not say, and the detail screen falls back to "there is a
-    /// published sale price" rather than claiming anything — which is the
-    /// live case: `api::bikes` serves no `for_sale` field today.
+    /// published sale price" rather than claiming anything.
+    ///
+    /// This used to be the live case for every response: `bikes.for_sale` did
+    /// not exist as a column, so `/api/bikes` served no such key and serde
+    /// filled it with `None` on every family — leaving the left half of
+    /// `bike_detail.rs`'s `for_sale == Some(true) || sale_price.is_some()`
+    /// dead since the day it was written. `migrations/086_bikes_for_sale.sql`
+    /// added the column and the DTO now carries it, so the key is always
+    /// present on the wire (`the_wire_always_carries_for_sale` in
+    /// `src/api/bikes.rs`). `Option` stays because an old cached bundle
+    /// talking to a new server, or the reverse, must degrade rather than fail
+    /// to parse.
     #[serde(default)]
     pub for_sale: Option<bool>,
     /// `Some(false)` closes the family to new rentals (D12: CLICK 125).
@@ -292,7 +302,7 @@ pub fn discount_percent(value: Option<f64>) -> Option<i64> {
 ///
 /// D11 forbids deriving a client price from `base_rate_thb_day` and
 /// `class_discount`, so neither field enters this function's result. Until
-/// issue #7 wires the door the API serves `client_rate_thb_day: null`, and the
+/// issue #25 wires the door the API serves `client_rate_thb_day: null`, and the
 /// caller says a manager quotes the price without emitting a number.
 pub fn client_day_rate(bike: &ApiBike) -> Option<f64> {
     crate::trios::pricing::client_day_rate(
@@ -826,6 +836,15 @@ where
     let rate = client_day_rate(&bike);
     let rate_str = money_thb(rate);
     let has_rate = rate.is_some();
+    // The same shared gate `bike_detail` uses, for the same reason: the file's
+    // deposit and class-discount figures are reference money, and reference
+    // money standing where a price is absent becomes the price (D11). One
+    // predicate rather than an inline `.is_some()` on each screen — these two
+    // have already drifted once over what a zero means (D15).
+    let may_show_reference = crate::trios::pricing::may_publish_reference_money(
+        bike.client_rate_thb_day,
+        bike.client_rate_source.as_deref(),
+    );
     let deposit_str = money_thb(bike.deposit_thb);
     let tariff_before = finite_money(bike.base_rate_thb_day);
     // The pre-discount tariff is worth showing only when it is genuinely a
@@ -913,14 +932,17 @@ where
                         {show_tariff_before.then(|| rsx! {
                             div { style: "font-size:13px;color:#8b8b9e;margin-bottom:2px;", "{tariff_line}" }
                         })}
-                        {discount_line.clone().map(|line| rsx! {
-                            div { style: "font-size:13px;color:#39ff14;margin-bottom:4px;", "{line}" }
+                        {may_show_reference.then(|| rsx! {
+                            {discount_line.clone().map(|line| rsx! {
+                                div { style: "font-size:13px;color:#39ff14;margin-bottom:4px;", "{line}" }
+                            })}
+                            div { style: "font-size:13px;color:#aaa;margin-bottom:2px;",
+                                {t(lang, T_BIKE_DEPOSIT)}
+                                " "
+                                "{deposit_str}"
+                            }
                         })}
-                        div { style: "font-size:13px;color:#aaa;margin-bottom:2px;",
-                            {t(lang, T_BIKE_DEPOSIT)}
-                            " "
-                            "{deposit_str}"
-                        }
+                        // A unit count is not money, so it stays ungated.
                         div { style: "font-size:13px;color:#888;", "{availability}" }
                     }
                 } else {

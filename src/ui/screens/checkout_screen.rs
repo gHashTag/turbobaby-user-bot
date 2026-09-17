@@ -9,12 +9,11 @@ use crate::trios::i18n::{
     T_CHECKOUT_ERR_NAME_LONG, T_CHECKOUT_ERR_NETWORK, T_CHECKOUT_ERR_NO_TELEGRAM,
     T_CHECKOUT_ERR_PARSE, T_CHECKOUT_ERR_PHONE, T_CHECKOUT_ERR_PHONE_INVALID,
     T_CHECKOUT_ERR_PHONE_LONG, T_CHECKOUT_FULFILLMENT, T_CHECKOUT_FULFILLMENT_DELIVERY,
-    T_CHECKOUT_FULFILLMENT_PICKUP, T_CHECKOUT_GARDEN_DISCOUNT, T_CHECKOUT_GARDEN_DISCOUNT_PCT,
-    T_CHECKOUT_NAME_LABEL, T_CHECKOUT_NAME_PLACEHOLDER, T_CHECKOUT_NOTES_LABEL,
-    T_CHECKOUT_NOTES_PLACEHOLDER, T_CHECKOUT_OPEN_MAP, T_CHECKOUT_PAY_ON_RECEIVE,
-    T_CHECKOUT_PHONE_FROM_TELEGRAM, T_CHECKOUT_PHONE_LABEL, T_CHECKOUT_PHONE_PLACEHOLDER,
-    T_CHECKOUT_PROCESSING, T_CHECKOUT_RETRY, T_CHECKOUT_SELECT_ZONE, T_CHECKOUT_STARS,
-    T_CHECKOUT_STARS_AVAILABLE, T_CHECKOUT_STARS_MINUS, T_CHECKOUT_STEP_CART,
+    T_CHECKOUT_FULFILLMENT_PICKUP, T_CHECKOUT_NAME_LABEL, T_CHECKOUT_NAME_PLACEHOLDER,
+    T_CHECKOUT_NOTES_LABEL, T_CHECKOUT_NOTES_PLACEHOLDER, T_CHECKOUT_OPEN_MAP,
+    T_CHECKOUT_PAY_ON_RECEIVE, T_CHECKOUT_PHONE_FROM_TELEGRAM, T_CHECKOUT_PHONE_LABEL,
+    T_CHECKOUT_PHONE_PLACEHOLDER, T_CHECKOUT_PROCESSING, T_CHECKOUT_RETRY, T_CHECKOUT_SELECT_ZONE,
+    T_CHECKOUT_STARS, T_CHECKOUT_STARS_AVAILABLE, T_CHECKOUT_STARS_MINUS, T_CHECKOUT_STEP_CART,
     T_CHECKOUT_STEP_CONFIRM, T_CHECKOUT_STEP_DETAILS, T_CHECKOUT_TITLE, T_CHECKOUT_TRUST_COD,
     T_CHECKOUT_TRUST_SECURE, T_CHECKOUT_TRUST_TITLE, T_CHECKOUT_TRUST_VERIFIED,
     T_CHECKOUT_USE_MY_LOCATION, T_DELIVERY, T_DELIVERY_ETA, T_DELIVERY_FEE, T_DELIVERY_ZONE,
@@ -51,25 +50,12 @@ fn emit_checkout_event(event: &'static str, detail: String) {
     });
 }
 
-/// B4: a garden reward the customer can apply at checkout (product-scoped).
-#[derive(Clone, serde::Deserialize)]
-struct ApiReward {
-    id: String,
-    #[serde(default)]
-    discount_percent: u32,
-    #[serde(default)]
-    is_active: bool,
-    #[serde(default)]
-    scope: String,
-    #[serde(default)]
-    target_product_id: Option<String>,
-}
-
-#[derive(serde::Deserialize)]
-struct RewardsResp {
-    #[serde(default)]
-    rewards: Vec<ApiReward>,
-}
+// `ApiReward` and `RewardsResp` stood here — the shapes `/api/garden/rewards`
+// returned, alongside the fetch, the picker and the discount they fed. That
+// endpoint is gone with the garden (D5), so the fetch could only 404 and the
+// applied reward could only ever be `None`: the picker was already invisible
+// and the discount already zero in every live checkout. This deletes the code,
+// not the behaviour.
 
 #[derive(serde::Deserialize)]
 struct StarsBalanceResp {
@@ -114,10 +100,9 @@ struct CheckoutDraft {
     notes: String,
     #[serde(default)]
     stars: i64,
-    #[serde(default)]
-    reward_id: Option<String>,
-    #[serde(default)]
-    reward_discount: f64,
+    // `reward_id`/`reward_discount` were here. serde ignores unknown fields by
+    // default, so a draft written by the shipped build still restores — it just
+    // drops the two keys that named a reward nothing can grant any more.
     #[serde(default)]
     bonus: f64,
     #[serde(default)]
@@ -391,9 +376,6 @@ pub fn CheckoutScreen() -> Element {
         }
     });
 
-    // B4: fetch the user's garden rewards; show a toggle for any product-scoped,
-    // still-active reward whose target product is in this cart.
-    let mut applied_reward = use_signal(|| Option::<(String, f64)>::None);
     // Stars (⭐) the user wants to spend as internal-currency discount.
     let mut stars_to_use = use_signal(|| 0i64);
     // Loop #14: bonus balance the user wants to redeem at checkout.
@@ -454,15 +436,9 @@ pub fn CheckoutScreen() -> Element {
                         }
                     }
                 }
-                if draft.reward_id.is_none() {
-                    if let Ok(Some(v)) = storage.get_item("woody_last_reward_id") {
-                        if !v.is_empty() {
-                            draft.reward_id = Some(v);
-                            // Discount can't be recovered from legacy storage; the
-                            // reward picker below will re-apply it if still active.
-                        }
-                    }
-                }
+                // `woody_last_reward_id` is deliberately neither read nor
+                // cleared: it is a key in live browsers, and a removal that
+                // reaches into someone's storage to delete it buys nothing.
                 if !draft.age_confirmed {
                     if let Ok(Some(v)) = storage.get_item("woody_last_age_confirmed") {
                         draft.age_confirmed = v == "true";
@@ -477,9 +453,6 @@ pub fn CheckoutScreen() -> Element {
         delivery_notes.set(draft.notes.clone());
         stars_to_use.set(draft.stars);
         bonus_to_use.set(draft.bonus.max(0.0));
-        if let Some(rid) = draft.reward_id.clone() {
-            applied_reward.set(Some((rid, draft.reward_discount)));
-        }
         age_confirmed.set(draft.age_confirmed);
         loaded_draft.set(Some(draft));
     });
@@ -496,7 +469,6 @@ pub fn CheckoutScreen() -> Element {
         let mut notes_sig = delivery_notes;
         let mut stars_sig = stars_to_use;
         let mut bonus_sig = bonus_to_use;
-        let mut reward_sig = applied_reward;
         let mut age_sig = age_confirmed;
         let loaded = loaded_draft;
         spawn(async move {
@@ -513,12 +485,6 @@ pub fn CheckoutScreen() -> Element {
                                 notes: notes_sig(),
                                 stars: stars_sig(),
                                 bonus: bonus_sig(),
-                                reward_id: reward_sig.read().as_ref().map(|(id, _)| id.clone()),
-                                reward_discount: reward_sig
-                                    .read()
-                                    .as_ref()
-                                    .map(|(_, d)| *d)
-                                    .unwrap_or(0.0),
                                 age_confirmed: age_sig(),
                             };
                             current == ld
@@ -533,9 +499,6 @@ pub fn CheckoutScreen() -> Element {
                         notes_sig.set(draft.notes);
                         stars_sig.set(draft.stars);
                         bonus_sig.set(draft.bonus.max(0.0));
-                        if let Some(rid) = draft.reward_id {
-                            reward_sig.set(Some((rid, draft.reward_discount)));
-                        }
                         age_sig.set(draft.age_confirmed);
                     }
                 }
@@ -555,12 +518,6 @@ pub fn CheckoutScreen() -> Element {
             notes: delivery_notes(),
             stars: stars_to_use(),
             bonus: bonus_to_use().max(0.0),
-            reward_id: applied_reward.read().as_ref().map(|(id, _)| id.clone()),
-            reward_discount: applied_reward
-                .read()
-                .as_ref()
-                .map(|(_, d)| *d)
-                .unwrap_or(0.0),
             age_confirmed: age_confirmed(),
         };
         #[cfg(target_arch = "wasm32")]
@@ -690,10 +647,7 @@ pub fn CheckoutScreen() -> Element {
     let total_label = t(crate::ui::lang::current_lang(), T_TOTAL);
 
     // Единственная реальная точка самовывоза.
-    let shops = [(
-        "🏠 TurboBaby",
-        "Kamala, Phuket 83150",
-    )];
+    let shops = [("🏠 TurboBaby", "Kamala, Phuket 83150")];
 
     let stars_balance_res = {
         let init = init_data.clone();
@@ -740,22 +694,6 @@ pub fn CheckoutScreen() -> Element {
         .and_then(|opt| opt.as_ref())
         .map(|r| (r.profile.bonus_balance, r.config.max_bonus_usage_pct))
         .unwrap_or((0.0, 30.0));
-    let rewards_res = {
-        let init = init_data.clone();
-        use_resource(move || {
-            let init = init.clone();
-            async move {
-                let tid = telegram_id?;
-                let url = format!("{}/api/garden/rewards?telegram_id={}", api_base_url(), tid);
-                let text = crate::ui::api::http::fetch_text_authed(&url, &init)
-                    .await
-                    .ok()?;
-                serde_json::from_str::<RewardsResp>(&text)
-                    .ok()
-                    .map(|r| r.rewards)
-            }
-        })
-    };
     // Delivery zones/ETA are public; no auth header needed.
     let zones_res = use_resource(move || async move {
         let url = format!("{}/api/delivery/zones", api_base_url());
@@ -764,50 +702,10 @@ pub fn CheckoutScreen() -> Element {
             .ok()
             .map(|r| r.zones)
     });
-    // (reward, discount_amount) pairs applicable to this cart.
-    let applicable_rewards: Vec<(ApiReward, f64, String)> = match &*rewards_res.read() {
-        Some(Some(list)) => list
-            .iter()
-            .filter(|r| r.is_active && r.scope == "product")
-            .filter_map(|r| {
-                let tpid = r.target_product_id.as_deref()?;
-                let item = cart_items.iter().find(|i| i.id == tpid)?;
-                let unit = if item.price.is_finite() {
-                    item.price.max(0.0)
-                } else {
-                    0.0
-                };
-                let disc =
-                    (unit * item.quantity as f64 * r.discount_percent as f64 / 100.0).max(0.0);
-                Some((r.clone(), disc, item.name.clone()))
-            })
-            .collect(),
-        _ => Vec::new(),
-    };
-    // If the user had a reward id persisted from a previous checkout and
-    // that reward is still applicable, swap the placeholder 0.0 amount for
-    // the real computed discount once the rewards list loads.
-    let applicable_rewards_for_restore = applicable_rewards.clone();
-    use_effect(move || {
-        if applicable_rewards_for_restore.is_empty() {
-            return;
-        }
-        if let Some((stored_id, _)) = applied_reward().as_ref() {
-            if let Some((r, disc, _)) = applicable_rewards_for_restore
-                .iter()
-                .find(|(r, _, _)| &r.id == stored_id)
-            {
-                applied_reward.set(Some((r.id.clone(), *disc)));
-            }
-        }
-    });
-
-    let applied_discount = applied_reward
-        .read()
-        .as_ref()
-        .map(|(_, d)| *d)
-        .unwrap_or(0.0);
-    let pre_bonus_total = (cart_total - applied_discount).max(0.0);
+    // The cart total used to have a garden-reward discount subtracted here.
+    // Nothing subtracts from it now: the only discounts left are bonus points
+    // and stars, both of which the server re-verifies.
+    let pre_bonus_total = cart_total.max(0.0);
     // Loop #14: bonus redemption is capped by both the user's balance and the
     // business-configured share of the order subtotal. Clamp the applied amount
     // so the UI never proposes a value the server would reject.
@@ -823,7 +721,8 @@ pub fn CheckoutScreen() -> Element {
     let effective_total = (after_bonus - stars_val as f64).max(0.0);
 
     // Loop #15: emit conversion events when the customer actually uses loyalty
-    // or garden rewards. Each fires once per mount to keep the signal clean.
+    // rewards. Each fires once per mount to keep the signal clean. (A third
+    // event, `garden_reward_applied`, fired beside these until D5.)
     let mut bonus_event_fired = use_signal(|| false);
     use_effect(move || {
         if bonus_val > 0.01 && !bonus_event_fired() {
@@ -838,36 +737,35 @@ pub fn CheckoutScreen() -> Element {
             emit_checkout_event("stars_applied", stars_val.to_string());
         }
     });
-    let mut reward_event_fired = use_signal(|| false);
-    use_effect(move || {
-        if applied_reward.read().is_some() && !reward_event_fired() {
-            reward_event_fired.set(true);
-            let discount = applied_reward
-                .read()
-                .as_ref()
-                .map(|(_, d)| *d)
-                .unwrap_or(0.0);
-            emit_checkout_event("garden_reward_applied", format!("{discount:.0}"));
-        }
-    });
 
     // Loop #14: pre-format bonus strings outside rsx! so nested format! braces
     // don't confuse the Dioxus macro parser.
+    //
+    // Every amount below goes through `format_baht`, the same formatter the
+    // MainButton total uses a few lines down. They used to disagree on the same
+    // screen at the same moment: the button said `฿3,000` and the bonus row
+    // said `3000 ฿`, because the row's `{:.0}` had the glyph baked into its
+    // translation and no idea where the market puts it (D15, D18).
     let bonus_header_text = use_memo(move || {
         let available = tf(
             lang,
             T_CHECKOUT_BONUS_AVAILABLE,
-            &[format!("{bonus_balance:.0}")],
+            &[crate::trios::pricing::format_baht(bonus_balance)],
         );
         let max = tf(
             lang,
             T_CHECKOUT_BONUS_MAX,
-            &[format!("{max_bonus_for_order:.0}")],
+            &[crate::trios::pricing::format_baht(max_bonus_for_order)],
         );
         format!("{available} · {max}")
     });
-    let bonus_applied_text =
-        use_memo(move || tf(lang, T_CHECKOUT_BONUS_APPLIED, &[format!("{bonus_val:.0}")]));
+    let bonus_applied_text = use_memo(move || {
+        tf(
+            lang,
+            T_CHECKOUT_BONUS_APPLIED,
+            &[crate::trios::pricing::format_baht(bonus_val)],
+        )
+    });
     let stars_available_text = use_memo(move || {
         tf(
             lang,
@@ -876,7 +774,17 @@ pub fn CheckoutScreen() -> Element {
         )
     });
     let stars_minus_text =
-        use_memo(move || tf(lang, T_CHECKOUT_STARS_MINUS, &[stars_val.to_string()]));
+        // Money, not a star count: `effective_total` subtracts `stars_val as
+        // f64` directly, so this line is the baht that came off the bill. The
+        // count itself is `T_CHECKOUT_STARS_AVAILABLE`, which carries no symbol
+        // for exactly that reason.
+        use_memo(move || {
+            tf(
+                lang,
+                T_CHECKOUT_STARS_MINUS,
+                &[crate::trios::pricing::format_baht(stars_val as f64)],
+            )
+        });
 
     let zones = match &*zones_res.read() {
         Some(Some(z)) => z.clone(),
@@ -892,13 +800,19 @@ pub fn CheckoutScreen() -> Element {
         Some(z) => {
             let eta = format!("{}-{}", z.min_eta_minutes, z.max_eta_minutes);
             let eta_text = t(crate::ui::lang::current_lang(), T_DELIVERY_ETA).replace("{0}", &eta);
-            let fee_text = t(crate::ui::lang::current_lang(), T_DELIVERY_FEE)
-                .replace("{0}", &format!("{:.0}", z.delivery_fee_baht));
+            let fee_text = t(crate::ui::lang::current_lang(), T_DELIVERY_FEE).replace(
+                "{0}",
+                &crate::trios::pricing::format_baht(z.delivery_fee_baht),
+            );
             (eta_text, fee_text)
         }
         None => (
             tf(lang, T_DELIVERY_ETA, &["30-45".to_string()]),
-            tf(lang, T_DELIVERY_FEE, &["0".to_string()]),
+            tf(
+                lang,
+                T_DELIVERY_FEE,
+                &[crate::trios::pricing::format_baht(0.0)],
+            ),
         ),
     };
 
@@ -1054,15 +968,9 @@ pub fn CheckoutScreen() -> Element {
             })
             .collect();
 
-        // B4: apply the selected garden reward (server re-verifies the amount).
-        let (garden_reward_id, garden_discount) = match applied_reward.read().clone() {
-            Some((rid, d)) => (Some(rid), d),
-            None => (None, 0.0),
-        };
         let submit_stars = (*stars_to_use.read()).clamp(0, max_stars);
         let submit_bonus = bonus_val;
-        let order_total =
-            (cart_total - garden_discount - submit_stars as f64 - submit_bonus).max(0.0);
+        let order_total = (cart_total - submit_stars as f64 - submit_bonus).max(0.0);
 
         let body = json!({
             "telegram_id": telegram_id,
@@ -1076,7 +984,6 @@ pub fn CheckoutScreen() -> Element {
             "bonus_used": submit_bonus,
             "stars_used": submit_stars,
             "total": order_total,
-            "garden_reward_id": garden_reward_id,
             "shop_id": shops[shop_selected()].0,
             "fulfillment": fulfillment().as_str(),
             "delivery_address": delivery_address(),
@@ -1127,14 +1034,6 @@ pub fn CheckoutScreen() -> Element {
                             let _ = storage.set_item("woody_last_stars", &submit_stars.to_string());
                             let _ =
                                 storage.set_item("woody_last_bonus", &format!("{submit_bonus:.0}"));
-                            let _ = storage.set_item(
-                                "woody_last_reward_id",
-                                applied_reward
-                                    .read()
-                                    .as_ref()
-                                    .map(|(id, _)| id.as_str())
-                                    .unwrap_or(""),
-                            );
                             let _ = storage.set_item(
                                 "woody_last_age_confirmed",
                                 if age_confirmed() { "true" } else { "false" },
@@ -1240,39 +1139,6 @@ pub fn CheckoutScreen() -> Element {
                                     }
                                     div { style: "font-size:13px; font-weight:700; color:#e8e8e8;",
                                         { crate::trios::pricing::format_baht(item.price * item.quantity as f64) }
-                                    }
-                                }
-                            }
-                            // B4: garden discount picker — toggle a product-scoped reward.
-                            if !applicable_rewards.is_empty() {
-                                div { style: "border-top:1px solid #2a2a4a;margin-top:8px;padding-top:8px;",
-                                    div { style: "font-size:12px;color:#39ff14;font-weight:700;margin-bottom:6px;", "{t(lang, T_CHECKOUT_GARDEN_DISCOUNT)}" }
-                                    for (r, disc, tname) in applicable_rewards.iter() {
-                                        {
-                                            let rid = r.id.clone();
-                                            let tname = tname.clone();
-                                            let pct = r.discount_percent;
-                                            let d = *disc;
-                                            let is_on = applied_reward.read().as_ref().map(|(id, _)| id == &rid).unwrap_or(false);
-                                            let disc_str = crate::trios::pricing::format_baht(d);
-                                            let border = if is_on { "#39ff14" } else { "#2a2a4a" };
-                                            let amt_style = if is_on { "font-size:12px;color:#39ff14;font-weight:700;" } else { "font-size:12px;color:#8b8b9e;" };
-                                            let reward_label = tf(lang, T_CHECKOUT_GARDEN_DISCOUNT_PCT, &[pct.to_string(), tname]);
-                                            rsx! {
-                                                div {
-                                                    style: "display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px;border:3px solid {border};cursor:pointer;margin-bottom:6px;",
-                                                    onclick: move |_| {
-                                                        if applied_reward.read().as_ref().map(|(id, _)| id == &rid).unwrap_or(false) {
-                                                            applied_reward.set(None);
-                                                        } else {
-                                                            applied_reward.set(Some((rid.clone(), d)));
-                                                        }
-                                                    },
-                                                    span { style: "font-size:12px;color:#e8e8e8;", "{reward_label}" }
-                                                    span { style: "{amt_style}", "−{disc_str}" }
-                                                }
-                                            }
-                                        }
                                     }
                                 }
                             }

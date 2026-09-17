@@ -29,6 +29,54 @@
 -- `public.orders`, created in `001_initial.sql:57`, which survives the rebrand
 -- because a rental is still an order.
 
+-- =====================================================================
+-- GUARD: this migration assumed the database it ran on was the bike
+-- database. It never checked. On 2026-09-13 11:49:12 UTC it ran against
+-- the client's live cannabis shop — DATABASE_URL still pointed there —
+-- and took out a catalog going back to April: Black Truffle, DIPZ,
+-- MAC 1, V6 Haze, Pink Oreoz, Death Star OG and the rest. Those names
+-- survive only because `sets.strains`, `strain_of_day_log` and
+-- `user_plants` reference them by name; the rows themselves went.
+--
+-- A fresh install reaches this point with 12 seed strains from 008 and
+-- an EMPTY `orders` table, because nobody has bought anything yet. A
+-- live shop has both. That asymmetry is the discriminator: order history
+-- is the one thing a fresh install cannot fake.
+--
+-- Escape hatch for a deliberate conversion of a shop that does have
+-- history: create the marker table first, in the same database.
+--
+--     CREATE TABLE cannabis_drop_approved ();
+--
+-- Naming it by hand is the point — it cannot happen by deploying.
+-- =====================================================================
+DO $guard$
+DECLARE
+    live_strains bigint;
+    live_orders  bigint;
+BEGIN
+    IF to_regclass('public.strains') IS NULL THEN
+        RETURN;  -- already dropped, or never existed; nothing to protect
+    END IF;
+    IF to_regclass('public.cannabis_drop_approved') IS NOT NULL THEN
+        RAISE NOTICE 'cannabis_drop_approved present - proceeding with the drop';
+        RETURN;
+    END IF;
+
+    EXECUTE 'SELECT count(*) FROM public.strains' INTO live_strains;
+    live_orders := 0;
+    IF to_regclass('public.orders') IS NOT NULL THEN
+        EXECUTE 'SELECT count(*) FROM public.orders' INTO live_orders;
+    END IF;
+
+    IF live_strains > 0 AND live_orders > 0 THEN
+        RAISE EXCEPTION
+            'REFUSING to drop the cannabis catalog: this database has % strains and % orders, so it is a live shop, not a fresh install. If the conversion is intended, run: CREATE TABLE cannabis_drop_approved ();',
+            live_strains, live_orders;
+    END IF;
+END
+$guard$;
+
 -- Children first. `CASCADE` would reach them anyway through their foreign
 -- keys, but naming them makes the drop list auditable rather than implied.
 DROP TABLE IF EXISTS lab_certificates CASCADE;

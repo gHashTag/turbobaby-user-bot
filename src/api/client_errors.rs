@@ -604,12 +604,11 @@ async fn log_client_event(
     match event.as_str() {
         "cart_deep_link_opened" => crate::metrics::cart_deep_link_opened(&detail),
         "reorder_clicked" => crate::metrics::reorder_clicked(&detail),
-        "garden_reminder_clicked" => crate::metrics::garden_reminder_clicked(&detail),
-        "garden_screen_opened" => crate::metrics::garden_screen_opened(&detail),
-        "garden_water_tapped" => crate::metrics::garden_water_tapped(),
-        "garden_harvest_tapped" => crate::metrics::garden_harvest_tapped(),
-        "garden_choose_product_tapped" => crate::metrics::garden_choose_product_tapped(),
-        "garden_reset_tapped" => crate::metrics::garden_reset_tapped(),
+        // Six `garden_*` arms stood here. Nothing emits them: the screen and
+        // the reminder that posted them are gone (D5). A browser still running
+        // the shipped wasm can of course still POST one — it lands in
+        // `client_events` as `unknown`, which is the truthful name for an event
+        // about a mechanic this build does not have.
         "checkout_started" => crate::metrics::checkout_started(),
         "checkout_completed" => crate::metrics::checkout_completed(),
         "checkout_error" => crate::metrics::checkout_error(&detail),
@@ -621,11 +620,6 @@ async fn log_client_event(
         "stars_applied" => {
             if let Ok(v) = detail.parse::<i64>() {
                 crate::metrics::stars_applied(v);
-            }
-        }
-        "garden_reward_applied" => {
-            if let Ok(v) = detail.parse::<f64>() {
-                crate::metrics::garden_reward_applied(v);
             }
         }
         _ => {}
@@ -640,19 +634,12 @@ fn sanitize_event_name(raw: &str) -> String {
     match raw {
         "cart_deep_link_opened" => "cart_deep_link_opened".to_string(),
         "reorder_clicked" => "reorder_clicked".to_string(),
-        "garden_reminder_clicked" => "garden_reminder_clicked".to_string(),
-        "garden_screen_opened" => "garden_screen_opened".to_string(),
-        "garden_water_tapped" => "garden_water_tapped".to_string(),
-        "garden_harvest_tapped" => "garden_harvest_tapped".to_string(),
-        "garden_choose_product_tapped" => "garden_choose_product_tapped".to_string(),
-        "garden_reset_tapped" => "garden_reset_tapped".to_string(),
         "checkout_retry_clicked" => "checkout_retry_clicked".to_string(),
         "checkout_started" => "checkout_started".to_string(),
         "checkout_completed" => "checkout_completed".to_string(),
         "checkout_error" => "checkout_error".to_string(),
         "bonus_applied" => "bonus_applied".to_string(),
         "stars_applied" => "stars_applied".to_string(),
-        "garden_reward_applied" => "garden_reward_applied".to_string(),
         _ => "unknown".to_string(),
     }
 }
@@ -836,13 +823,17 @@ mod tests {
     fn ordinary_pages_still_only_alert_on_fatal_errors() {
         // The purchase path is special-cased on purpose; widening this to
         // every page would make the alert channel unreadable.
+        //
+        // Both fixtures are routes that exist. `/garden` stood here until D5
+        // deleted it, which made this case assert a rule about a page nobody
+        // could ever open — still green, and no longer about anything.
         assert!(!should_alert(
             "unhandledrejection",
             "TypeError: x",
-            "/garden"
+            "/referrals"
         ));
         assert!(!should_alert("window.onerror", "some warning", "/menu"));
-        assert!(should_alert("window.onerror", "PANIC: boom", "/garden"));
+        assert!(should_alert("window.onerror", "PANIC: boom", "/referrals"));
     }
 
     #[test]
