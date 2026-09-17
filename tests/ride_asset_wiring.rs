@@ -584,3 +584,65 @@ if (byKey['cbr-650r'].steerRateSu === click.steerRateSu) {{
 "#
     ));
 }
+
+/// #15's first criterion: "every one of the 13 families resolves to a
+/// silhouette; none falls through to a placeholder cube."
+///
+/// `shapeNameFor` has a fallback chain — `body`, then class, then `'naked'` —
+/// and that chain is right: a row with a body nobody has drawn yet should be
+/// rideable rather than rejected. But a fallback that fires on a *seeded*
+/// family is a silent wrong drawing, not a graceful degradation. The X-ADV 750
+/// would be rendered as a naked bike and nothing would say so.
+///
+/// So this asserts the fallback is never *reached* for the fleet as seeded: each
+/// family's own `body` is a key in `SHAPES`, proven by asking `shapeNameFor` for
+/// the name and requiring it to equal the body the seed published.
+#[test]
+fn every_seeded_family_draws_its_own_silhouette_without_the_fallback() {
+    let seed: serde_json::Value =
+        serde_json::from_str(&read("data/fleet_seed.json")).expect("parse data/fleet_seed.json");
+    let families = seed["families"]
+        .as_array()
+        .expect("the seed publishes a families array");
+    assert!(
+        families.len() >= 13,
+        "only {} families in the seed — an empty corpus passes this by default",
+        families.len()
+    );
+
+    let mut rows = String::new();
+    for family in families {
+        let key = family["key"].as_str().expect("key");
+        let body = family["body"].as_str().expect("body");
+        let class = family["class"].as_str().expect("class");
+        rows.push_str(&format!(
+            "  {{ key: '{key}', class: '{class}', body: '{body}' }},\n"
+        ));
+    }
+
+    run_ride_model_in_node(&format!(
+        r#"
+const FLEET = [
+{rows}];
+
+for (const row of FLEET) {{
+  const shape = shapeNameFor(row);
+  if (shape !== row.body) {{
+    throw new Error(
+      row.key + ": drawn as '" + shape + "' but the seed says '" + row.body + "' — " +
+      'the fallback fired on a seeded family, so this bike is silently the wrong silhouette'
+    );
+  }}
+}}
+
+// The counterpart: the fallback still exists and still works, or the check
+// above would be satisfied by a shapeNameFor that simply echoed its input.
+if (shapeNameFor({{ key: 'x', class: 'motorcycle', body: 'hovercraft' }}) !== 'naked') {{
+  throw new Error('an undrawn body no longer falls back to a real silhouette');
+}}
+if (shapeNameFor({{ key: 'x', class: 'scooter', body: '' }}) !== 'scooter') {{
+  throw new Error('a family with no body no longer falls back on its class');
+}}
+"#
+    ));
+}
