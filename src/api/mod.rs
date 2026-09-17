@@ -104,7 +104,35 @@ fn api_routes() -> Router<AppState> {
     router = router.layer(DefaultBodyLimit::max(2 * 1024 * 1024));
     router = router.merge(upload::routes());
 
-    router
+    // An unmatched `/api/...` path must 404, and it must say so in JSON.
+    //
+    // Without this it inherited the *outer* router's SPA fallback and answered
+    // **200 with `index.html`**. A path is a string, not a symbol: no compiler,
+    // no `dead_code` lint and no clippy pass can see that a route was never
+    // registered. So the miss surfaced at runtime as a `serde_json::from_str`
+    // failing on `<!DOCTYPE html>`, the screen's error branch rendering for
+    // ever, and — because the writes are optimistic-first — a green "✅"
+    // toast over a row that had never been saved. That is exactly how nine
+    // calls in the fleet admin screen went to endpoints nobody had written.
+    //
+    // Set last, after every merge: a fallback set before a `merge` loses to
+    // the merged router's own.
+    router.fallback(api_not_found)
+}
+
+/// The 404 body for `/api/*`, in the shape every other API error uses.
+///
+/// JSON rather than an empty body so that a caller which hits this by mistake
+/// reads a sentence instead of guessing — the whole point of the change is
+/// that a missing route stops being silent.
+async fn api_not_found(uri: axum::http::Uri) -> (StatusCode, Json<Value>) {
+    (
+        StatusCode::NOT_FOUND,
+        Json(json!({
+            "error": "not_found",
+            "detail": format!("no API route matches {}", uri.path()),
+        })),
+    )
 }
 
 /// `/api/ping` — dumb liveness probe. Returns 200 as long as the
