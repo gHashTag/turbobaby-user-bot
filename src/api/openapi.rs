@@ -137,8 +137,14 @@ pub(crate) async fn get_loyalty_tiers_doc() {}
     info(
         title = "TurboBaby Bot API",
         version = "1.0",
-        description = "REST API for Woody Weed Bot — cannabis dispensary Telegram Mini App. \
-                       Provides endpoints for loyalty program, orders, catalog, quests, and admin management.",
+        // The title one line above was renamed; this description was not, and
+        // unlike a comment it is *served*: `/api-docs/openapi.json` on the
+        // TurboBaby deployment announced "cannabis dispensary" to every client
+        // that read the spec. The rebrand sweeps grep source for user-visible
+        // strings, and a string is user-visible when the machine hands it out,
+        // not only when a screen paints it.
+        description = "REST API for TurboBaby Bot — motorbike rental and sales Telegram Mini App. \
+                       Provides endpoints for the bike catalog, rentals, orders, loyalty program, and admin management.",
         contact(
             name = "TurboBaby Bot",
             url = "https://turbobaby-bot-production.up.railway.app"
@@ -158,7 +164,10 @@ pub(crate) async fn get_loyalty_tiers_doc() {}
     tags(
         (name = "loyalty", description = "Loyalty program — profiles, tiers, leaderboard, bonus transactions"),
         (name = "orders", description = "Order creation and management"),
-        (name = "catalog", description = "Catalog — strains, accessories, sets, tea products"),
+        // D19 keeps the heritage endpoints alive so existing orders stay
+        // readable, but their vocabulary does not belong in the published
+        // description of a motorbike shop's API.
+        (name = "catalog", description = "Catalog — bikes, fleet units, accessories and sets"),
         (name = "quests", description = "Quest places, treasure hunts, location quests"),
         (name = "admin", description = "Admin-only endpoints — requires X-Admin-Key header"),
     ),
@@ -168,3 +177,63 @@ pub(crate) async fn get_loyalty_tiers_doc() {}
     ),
 )]
 pub(crate) struct ApiDoc;
+
+/// The rebrand's own gate, applied to the one surface the rebrand missed.
+///
+/// `#2` and `#26` are enforced by grepping source files for the old
+/// vocabulary, and that is how `/api-docs/openapi.json` kept serving "REST API
+/// for Woody Weed Bot — cannabis dispensary Telegram Mini App" from a
+/// turbobaby-bot URL long after every screen had been renamed: the string sat
+/// inside an attribute macro, three lines under a `title` that *had* been
+/// changed, and no human reading the rendered app could see it.
+///
+/// So this asserts on the built document rather than on the file. It calls
+/// `ApiDoc::openapi()` — the same constructor `src/main.rs` hands to the
+/// route — and walks the text the client actually receives. A description
+/// added tomorrow in a new `tags(...)` entry is covered without anyone
+/// remembering to extend a list.
+#[cfg(test)]
+mod published_document_tests {
+    use super::ApiDoc;
+    use utoipa::OpenApi;
+
+    /// Vocabulary that a motorbike shop has no honest reason to publish.
+    ///
+    /// Deliberately not exhaustive and deliberately not `strain`-only: the
+    /// point is to catch the *category* of leak, not to enumerate a banned
+    /// dictionary. `gram` is absent on purpose — it is a substring of
+    /// "telegram" and "program", and a check that cries wolf gets deleted.
+    const RETIRED: [&str; 6] = ["woody", "weed", "cannabis", "dispensary", "strain", "thc"];
+
+    fn published_text() -> String {
+        serde_json::to_string(&ApiDoc::openapi())
+            .expect("the OpenAPI document serializes — main.rs serves exactly this")
+            .to_lowercase()
+    }
+
+    #[test]
+    fn the_served_document_carries_no_cannabis_era_vocabulary() {
+        let doc = published_text();
+        for word in RETIRED {
+            assert!(
+                !doc.contains(word),
+                "/api-docs/openapi.json still publishes {word:?}; \
+                 the rebrand is judged by what the server hands out, not by what the screens paint"
+            );
+        }
+    }
+
+    /// The counterpart claim: the document names this product.
+    ///
+    /// Without it the test above is satisfied by an empty description, which
+    /// is the failure mode of every "contains no X" gate written alone.
+    #[test]
+    fn the_served_document_names_turbobaby() {
+        let doc = published_text();
+        assert!(
+            doc.contains("turbobaby"),
+            "the OpenAPI document no longer names the product — an empty description \
+             passes the retired-vocabulary check for the wrong reason"
+        );
+    }
+}
