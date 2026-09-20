@@ -32,6 +32,12 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
         "min_declarations": 35,
         "min_checks": 8,
     },
+    "specs/turbobaby/ai_assist.t27": {
+        "module": "turbobaby-ai-assist",
+        "id": "turbobaby/ai-assist",
+        "min_declarations": 183,
+        "min_checks": 39,
+    },
     "specs/turbobaby/availability.t27": {
         "module": "availability",
         "id": "turbobaby/availability",
@@ -43,6 +49,12 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
         "id": "turbobaby/bike-catalog",
         "min_declarations": 92,
         "min_checks": 40,
+    },
+    "specs/turbobaby/bot_surface.t27": {
+        "module": "turbobaby-bot-surface",
+        "id": "turbobaby/bot-surface",
+        "min_declarations": 190,
+        "min_checks": 44,
     },
     "specs/turbobaby/catalog_api.t27": {
         "module": "catalog-api",
@@ -56,11 +68,23 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
         "min_declarations": 151,
         "min_checks": 43,
     },
+    "specs/turbobaby/client_errors.t27": {
+        "module": "turbobaby-client-errors",
+        "id": "turbobaby/client-errors",
+        "min_declarations": 206,
+        "min_checks": 53,
+    },
     "specs/turbobaby/commerce.t27": {
         "module": "commerce",
         "id": "turbobaby/commerce",
         "min_declarations": 149,
         "min_checks": 54,
+    },
+    "specs/turbobaby/deeplink.t27": {
+        "module": "turbobaby-deeplink",
+        "id": "turbobaby/deeplink",
+        "min_declarations": 136,
+        "min_checks": 37,
     },
     "specs/turbobaby/delivery_terms.t27": {
         "module": "turbobaby-delivery-terms",
@@ -80,17 +104,35 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
         "min_declarations": 102,
         "min_checks": 32,
     },
+    "specs/turbobaby/legacy_retirement.t27": {
+        "module": "turbobaby-legacy-retirement",
+        "id": "turbobaby/legacy-retirement",
+        "min_declarations": 115,
+        "min_checks": 36,
+    },
     "specs/turbobaby/locale_policy.t27": {
         "module": "turbobaby-locale-policy",
         "id": "turbobaby/locale-policy",
         "min_declarations": 112,
         "min_checks": 32,
     },
+    "specs/turbobaby/loyalty_ledger.t27": {
+        "module": "turbobaby-loyalty-ledger",
+        "id": "turbobaby/loyalty-ledger",
+        "min_declarations": 157,
+        "min_checks": 37,
+    },
     "specs/turbobaby/market_profile.t27": {
         "module": "turbobaby-market",
         "id": "turbobaby/market",
         "min_declarations": 71,
         "min_checks": 17,
+    },
+    "specs/turbobaby/observability.t27": {
+        "module": "turbobaby-observability",
+        "id": "turbobaby/observability",
+        "min_declarations": 149,
+        "min_checks": 39,
     },
     "specs/turbobaby/order_money.t27": {
         "module": "turbobaby-order-money",
@@ -110,10 +152,22 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
         "min_declarations": 102,
         "min_checks": 39,
     },
+    "specs/turbobaby/promo_broadcast.t27": {
+        "module": "turbobaby-promo-broadcast",
+        "id": "turbobaby/promo-broadcast",
+        "min_declarations": 153,
+        "min_checks": 50,
+    },
     "specs/turbobaby/publication.t27": {
         "module": "turbobaby-publish-proof",
         "id": "turbobaby/publication",
         "min_declarations": 150,
+        "min_checks": 36,
+    },
+    "specs/turbobaby/rate_limit.t27": {
+        "module": "turbobaby-rate-limit",
+        "id": "turbobaby/rate-limit",
+        "min_declarations": 138,
         "min_checks": 36,
     },
     "specs/turbobaby/rental_terms.t27": {
@@ -139,6 +193,12 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
         "id": "turbobaby/ride-runtime",
         "min_declarations": 63,
         "min_checks": 22,
+    },
+    "specs/turbobaby/schema_provenance.t27": {
+        "module": "turbobaby-schema-provenance",
+        "id": "turbobaby/schema-provenance",
+        "min_declarations": 199,
+        "min_checks": 48,
     },
     "specs/turbobaby/star_award.t27": {
         "module": "turbobaby-star-award",
