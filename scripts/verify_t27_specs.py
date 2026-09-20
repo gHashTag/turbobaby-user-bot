@@ -50,17 +50,41 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
         "min_declarations": 52,
         "min_checks": 20,
     },
+    "specs/turbobaby/catalog_write.t27": {
+        "module": "turbobaby-catalog-write",
+        "id": "turbobaby/catalog-write",
+        "min_declarations": 151,
+        "min_checks": 43,
+    },
     "specs/turbobaby/commerce.t27": {
         "module": "commerce",
         "id": "turbobaby/commerce",
-        "min_declarations": 78,
-        "min_checks": 28,
+        "min_declarations": 149,
+        "min_checks": 54,
+    },
+    "specs/turbobaby/delivery_terms.t27": {
+        "module": "turbobaby-delivery-terms",
+        "id": "turbobaby/delivery-terms",
+        "min_declarations": 118,
+        "min_checks": 29,
     },
     "specs/turbobaby/deposit_tiers.t27": {
         "module": "deposit-tiers",
         "id": "turbobaby/deposit-tiers",
-        "min_declarations": 90,
-        "min_checks": 39,
+        "min_declarations": 125,
+        "min_checks": 50,
+    },
+    "specs/turbobaby/game_score.t27": {
+        "module": "turbobaby-game-score",
+        "id": "turbobaby/game-score",
+        "min_declarations": 102,
+        "min_checks": 32,
+    },
+    "specs/turbobaby/locale_policy.t27": {
+        "module": "turbobaby-locale-policy",
+        "id": "turbobaby/locale-policy",
+        "min_declarations": 112,
+        "min_checks": 32,
     },
     "specs/turbobaby/market_profile.t27": {
         "module": "turbobaby-market",
@@ -68,29 +92,47 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
         "min_declarations": 71,
         "min_checks": 17,
     },
+    "specs/turbobaby/order_money.t27": {
+        "module": "turbobaby-order-money",
+        "id": "turbobaby/order-money",
+        "min_declarations": 99,
+        "min_checks": 34,
+    },
+    "specs/turbobaby/order_status.t27": {
+        "module": "turbobaby-order-status",
+        "id": "turbobaby/order-status",
+        "min_declarations": 132,
+        "min_checks": 28,
+    },
     "specs/turbobaby/pricing_honesty.t27": {
         "module": "pricing-honesty",
         "id": "turbobaby/pricing-honesty",
-        "min_declarations": 72,
-        "min_checks": 26,
+        "min_declarations": 102,
+        "min_checks": 39,
     },
     "specs/turbobaby/publication.t27": {
         "module": "turbobaby-publish-proof",
         "id": "turbobaby/publication",
-        "min_declarations": 63,
-        "min_checks": 21,
+        "min_declarations": 150,
+        "min_checks": 36,
     },
     "specs/turbobaby/rental_terms.t27": {
         "module": "rental-terms",
         "id": "turbobaby/rental-terms",
-        "min_declarations": 63,
-        "min_checks": 28,
+        "min_declarations": 80,
+        "min_checks": 39,
+    },
+    "specs/turbobaby/request_identity.t27": {
+        "module": "turbobaby-request-identity",
+        "id": "turbobaby/request-identity",
+        "min_declarations": 125,
+        "min_checks": 27,
     },
     "specs/turbobaby/ride_game.t27": {
         "module": "ride-game",
         "id": "turbobaby/ride-game",
-        "min_declarations": 91,
-        "min_checks": 33,
+        "min_declarations": 193,
+        "min_checks": 61,
     },
     "specs/turbobaby/ride_runtime.t27": {
         "module": "turbobaby-ride-lifecycle",
@@ -98,7 +140,14 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
         "min_declarations": 63,
         "min_checks": 22,
     },
+    "specs/turbobaby/star_award.t27": {
+        "module": "turbobaby-star-award",
+        "id": "turbobaby/star-award",
+        "min_declarations": 109,
+        "min_checks": 42,
+    },
 }
+
 GENERATORS = ("gen", "gen-c", "gen-rust", "gen-verilog", "gen-verilog-hir")
 EMPTY_IMPORT_PATTERNS = (
     re.compile(r"(?m)^\s*const\s+=\s*@import\([\"']\.zig[\"']\)"),

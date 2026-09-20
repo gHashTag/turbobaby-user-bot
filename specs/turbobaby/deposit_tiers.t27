@@ -138,8 +138,11 @@ pub const TIER_FAMILY_COUNT_SUM : u8 = 13;
 ; typed twice, and discovery.t27 puts the rule generally -- no owner, limit or exclusion is
 ; typed twice. An earlier draft of this file re-declared CLASSES and DISPLACEMENTS_CC verbatim,
 ; and the drift that rule exists to prevent had already happened: measured 2026-09-12 the same
-; seven displacements are [7]u16 in bike-catalog.t27 and [7]i16 in ride-game.t27, one fact at
-; two integer widths. A file whose whole argument is that displacement and class are NOT its
+; seven displacements were [7]u16 in bike-catalog.t27 and [7]i16 in ride-game.t27, one fact at
+; two integer widths. Re-measured 2026-09-21 that particular drift is closed -- both are now
+; pub const DISPLACEMENTS_CC : [7]u16 with identical elements (bike_catalog.t27:157,
+; ride_game.t27:129) -- and the sentence is kept in the past tense rather than deleted, because
+; the reason this file carries no copy is the drift being POSSIBLE, not the drift being present. A file whose whole argument is that displacement and class are NOT its
 ; axis has no business carrying one more copy of either, so both are gone. The class of a family
 ; is read from the seed's class column (families[13].class == "scooter" for xadv-750) and cited
 ; in prose where it is needed; the displacement of a family is carried by the family key itself
@@ -187,6 +190,84 @@ pub const DEPOSIT_MONEY_METHODS : [3]str = ["cash THB", "bank transfer", "USDT"]
 pub const DEPOSIT_FOREIGN_CURRENCY_RULE : str = "Take the model's THB deposit, convert to an approximate USD/EUR equivalent, round to hundreds. Return by the same method and at the same fixed amount that was agreed.";
 ; The class and term discounts are RATE discounts. A deposit is quoted at its tier, undiscounted.
 pub const DEPOSIT_DISCOUNT_APPLIES : bool = false;
+
+; --- The agreed refund, made executable (added 2026-09-20) --------------------------------
+; WHY (measured 2026-09-20): docs/t27-semantic-merge-matrix.md:62 records the root spec's
+; ":201-257 payment methods, unpublished FX conversion, hundred rounding and fixed refund" as
+; two different things -- the public policy, MERGED into DEPOSIT_FOREIGN_CURRENCY_RULE above,
+; and an executable FX/refund state left as a DEFERRED follow-up "for the commerce runtime".
+; The two halves of that row are no longer in the same condition, and keeping them bundled
+; keeps the dischargeable half deferred by association.
+;   (a) FX STAYS REFUSED. It needs a published rate authority and there is none:
+;       market_profile.t27:135 declares EXCHANGE_RATES_PUBLISHED : [0]str = [] and
+;       DECISIONS.md:347 states that no exchange rate enters this repository without a source.
+;   (b) THE REFUND DOES NOT NEED ONE, and the record it needs already exists. Measured in
+;       src/db/orders.rs:595-618: enum DepositForm { Money { amount: Option<f64>,
+;       currency: Option<String>, method: Option<String> }, Passport }. Its own doc comment
+;       (orders.rs:596-598) says the money "must be returned by the same method and at the
+;       same fixed amount that was agreed, which is why the method is recorded next to the
+;       figure rather than inferred later", and the Passport variant "carries no amount at
+;       all" (orders.rs:615-617). Same method, same currency, same figure is a COMPARISON of
+;       three fields that are already written down. No rate is read, so no rate is needed.
+; The rule below is therefore CURRENCY-PRESERVING by construction: the two currencies are
+; compared and neither is privileged, and no expression anywhere on the money path multiplies,
+; scales, rounds or subtracts. That is the whole of what (b) discharges; (a) stays refused, in
+; named constants, a few lines down.
+; --
+; D14 is untouched by the addition. refund_decision() takes the facts of one rental as
+; ARGUMENTS and stores none of them; PAST_RENTAL_DEPOSITS_THB stays [0]i32. A refund DECISION
+; is a rule, and a refund RECORD would be a renter's transaction, which is still prohibited
+; repository data. The tiers are untouched too: a refund returns the figure that was agreed,
+; which need not be one of the six rungs -- a foreign-currency deposit is not one of them, and
+; an unmatched positive amount is shown and logged rather than snapped (publishable_deposit).
+pub const REUSES_MARKET_PROFILE_ID : str = "turbobaby/market";
+pub const REFUND_SOURCE_ENUM : str = "src/db/orders.rs:595-618 enum DepositForm { Money { amount, currency, method }, Passport }";
+; This file's own naming of the rule, like DEPOSIT_FORMS above, and NOT presented as a
+; quotation: the seed's own sentence is DEPOSIT_FOREIGN_CURRENCY_RULE and stays byte for byte.
+pub const REFUND_RULE : str = "A deposit comes back in the form it was taken: the passport as the document and no money at all, money by the method it arrived by, in the currency it was agreed in and at the figure that was agreed. A request that changes the method, the currency or the amount is not a refund this contract authorizes.";
+
+; orders.rs records the currency and the method as Option<String>; None arrives here as the
+; empty string, the same way an unknown key does in deposit_thb_of_family(""). It is not a
+; method and not a currency, and the money path refuses it instead of guessing one.
+pub const DEPOSIT_FIELD_UNRECORDED : str = "";
+; The "no rung" convention of TIER_NONE, reused for the method table: 255 is not an index into
+; a three-entry list, so it cannot be mistaken for one.
+pub const MONEY_METHOD_NONE : u8 = 255;
+
+; The outcomes of one refund request. Two of them hand something back and seven refuse; the
+; two are numbered first, so an outcome below REFUND_AUTHORIZED_OUTCOMES is exactly an
+; authorized one. That correspondence is checked code by code below rather than assumed from
+; the numbering, because a renumbering that broke it would otherwise pass in silence.
+pub const REFUND_RETURN_DOCUMENT : u8 = 0;
+pub const REFUND_RETURN_SAME_METHOD : u8 = 1;
+pub const REFUND_REFUSED_FORM_ILLEGAL : u8 = 2;
+pub const REFUND_REFUSED_METHOD_UNRECORDED : u8 = 3;
+pub const REFUND_REFUSED_CURRENCY_UNRECORDED : u8 = 4;
+pub const REFUND_REFUSED_AMOUNT_UNAGREED : u8 = 5;
+pub const REFUND_REFUSED_METHOD_CHANGED : u8 = 6;
+pub const REFUND_REFUSED_CURRENCY_CHANGED : u8 = 7;
+pub const REFUND_REFUSED_AMOUNT_CHANGED : u8 = 8;
+pub const REFUND_OUTCOME_COUNT : u8 = 9;
+pub const REFUND_AUTHORIZED_OUTCOMES : u8 = 2;
+
+; --- What the refund rule refuses to do, and what would be needed to allow it -------------
+; Each of the three would be a NUMBER this file can only invent. They are declared as named
+; flags rather than left unwritten, so that a later worker who wants one has to flip a flag
+; and name a source, which cannot pass as a tidy-up.
+; FX: would need a published exchange-rate authority with a source. There is none --
+; market_profile.t27:135 (EXCHANGE_RATES_PUBLISHED : [0]str = []) and DECISIONS.md:347. The
+; seed's own sentence puts the conversion at the door, by hand, BEFORE anything is agreed;
+; what is agreed is then a fixed figure, and the refund returns that figure.
+pub const REFUND_FX_CONVERSION_ALLOWED : bool = false;
+; PARTIAL: would need a published deduction schedule -- what a scratch, a late hour or a
+; missing litre costs. data/fleet_seed.json:289-293 publishes the rule, the accepted forms and
+; the foreign-currency sentence, and no deduction table at all. Without one, a part-refund is
+; a number invented at the keyboard, which is the D11 defect with its sign reversed.
+pub const REFUND_PARTIAL_AMOUNT_ALLOWED : bool = false;
+; FEES: would need a published fee schedule (bank transfer fee, USDT network fee, and which
+; side pays it). The seed publishes none, so there is nothing to net off: the agreed figure is
+; the figure.
+pub const REFUND_FEE_SUBTRACTION_ALLOWED : bool = false;
 
 // ============================================================================
 // Lookups
@@ -335,6 +416,111 @@ pub fn deposit_form_is_legal(money_taken: bool, passport_held: bool) bool {
         return true;
     }
     return false;
+}
+
+; Which of the three accepted money methods this is, or MONEY_METHOD_NONE. The table is
+; DEPOSIT_MONEY_METHODS above -- the first three entries of rental_terms.deposit.accepted --
+; and is not retyped here. The fourth entry of that seed list, "passport in place of money",
+; is a FORM and not a method, so it answers MONEY_METHOD_NONE like anything else that is not
+; money; so does "Thai PromptPay QR transfer", which the seed accepts as a PAYMENT method
+; (data/fleet_seed.json:294) and not as a deposit (data/fleet_seed.json:291).
+pub fn money_method_index_of(method: str) u8 {
+    if (method == DEPOSIT_MONEY_METHODS[0]) {
+        return 0;
+    }
+    if (method == DEPOSIT_MONEY_METHODS[1]) {
+        return 1;
+    }
+    if (method == DEPOSIT_MONEY_METHODS[2]) {
+        return 2;
+    }
+    return MONEY_METHOD_NONE;
+}
+
+; The refund of one deposit, decided from what was agreed and what is being asked for.
+;   money_taken, passport_held   the two form discriminants deposit_form_is_legal() judges
+;   agreed_*                     what src/db/orders.rs:595-618 recorded when the bike went out
+;   requested_*                  what is being asked for now
+; agreed_amount and requested_amount are figures in their own currency -- THB for the six
+; published rungs, the door's agreed USD/EUR figure for a foreign-currency deposit -- and this
+; function only ever COMPARES them. DEPOSIT_ABSENT stands for the orders.rs amount None, and
+; DEPOSIT_FIELD_UNRECORDED for a currency or method None.
+; --
+; Order of the gates, and why it is this order:
+;   1. an illegal form pair (both, or neither) is refused before any figure is read at all;
+;   2. the passport form is answered next, because it has no method, no currency and no
+;      amount, so the money gates have nothing to read on it;
+;   3. the money record is checked for COMPLETENESS before it is compared with the request:
+;      two unrecorded methods are equal to each other, and comparing first would let an empty
+;      record authorize itself. This is the fail-closed gate;
+;   4. only then are method, currency and amount compared, one refusal code each.
+pub fn refund_decision(money_taken: bool, passport_held: bool, agreed_amount: i32, agreed_currency: str, agreed_method: str, requested_amount: i32, requested_currency: str, requested_method: str) u8 {
+    if (!deposit_form_is_legal(money_taken, passport_held)) {
+        return REFUND_REFUSED_FORM_ILLEGAL;
+    }
+    if (passport_held == true) {
+        ; The document goes back and nothing else moves. A request that names a method, a
+        ; currency or an amount is asking for something this deposit never was -- buying a
+        ; held passport out for money is a different transaction, not a refund -- so each of
+        ; the three is refused by the gate that owns it.
+        if (requested_method != DEPOSIT_FIELD_UNRECORDED) {
+            return REFUND_REFUSED_METHOD_CHANGED;
+        }
+        if (requested_currency != DEPOSIT_FIELD_UNRECORDED) {
+            return REFUND_REFUSED_CURRENCY_CHANGED;
+        }
+        if (requested_amount != DEPOSIT_ABSENT) {
+            return REFUND_REFUSED_AMOUNT_CHANGED;
+        }
+        return REFUND_RETURN_DOCUMENT;
+    }
+    ; Past the form gate and not the passport, so money_taken is true: those are the only two
+    ; legal states of the pair.
+    if (money_method_index_of(agreed_method) == MONEY_METHOD_NONE) {
+        return REFUND_REFUSED_METHOD_UNRECORDED;
+    }
+    if (agreed_currency == DEPOSIT_FIELD_UNRECORDED) {
+        return REFUND_REFUSED_CURRENCY_UNRECORDED;
+    }
+    ; publishable_deposit() is reused here for exactly what it is: a sign test on an amount.
+    ; Its parameter is named for THB because every published rung is in THB, but the test it
+    ; performs is currency-free and nothing here converts. An amount that is not positive was
+    ; never agreed -- DEPOSIT_ABSENT is the orders.rs amount None, and 0 is the D9 defect, a
+    ; figure that reads as "no deposit owed".
+    if (!publishable_deposit(agreed_amount)) {
+        return REFUND_REFUSED_AMOUNT_UNAGREED;
+    }
+    if (requested_method != agreed_method) {
+        return REFUND_REFUSED_METHOD_CHANGED;
+    }
+    if (requested_currency != agreed_currency) {
+        return REFUND_REFUSED_CURRENCY_CHANGED;
+    }
+    if (requested_amount != agreed_amount) {
+        return REFUND_REFUSED_AMOUNT_CHANGED;
+    }
+    return REFUND_RETURN_SAME_METHOD;
+}
+
+pub fn refund_is_authorized(decision: u8) bool {
+    return decision == REFUND_RETURN_DOCUMENT or decision == REFUND_RETURN_SAME_METHOD;
+}
+
+; True only for the one outcome that moves a figure. The passport outcome is authorized and
+; moves nothing, which is why "authorized" and "moves money" are two questions here.
+pub fn refund_moves_money(decision: u8) bool {
+    return decision == REFUND_RETURN_SAME_METHOD;
+}
+
+; The figure a refund hands back. There is no arithmetic operator in this body on purpose: the
+; one path that moves money returns the agreed figure UNCHANGED, and every other path returns
+; the absent marker. A conversion, a part-refund or a netted fee would each have to appear
+; here as arithmetic, and there is nowhere for it to hide.
+pub fn refund_amount_returned(decision: u8, agreed_amount: i32) i32 {
+    if (decision == REFUND_RETURN_SAME_METHOD) {
+        return agreed_amount;
+    }
+    return DEPOSIT_ABSENT;
 }
 
 // ============================================================================
@@ -615,6 +801,160 @@ test no_discount_is_applied_to_a_deposit {
     assert DEPOSIT_MONEY_METHODS.len == 3;
 }
 
+; ---- the refund, and what it refuses ----------------------------------------------------
+
+; The numbering is load-bearing: refund_is_authorized() names two codes, and everything at or
+; above REFUND_AUTHORIZED_OUTCOMES must be a refusal. Each of the nine is put through the
+; predicate, so a renumbering that moved a refusal below the line fails here.
+test the_nine_refund_outcomes_are_two_returns_and_seven_refusals {
+    assert REFUND_RETURN_DOCUMENT == 0;
+    assert REFUND_RETURN_SAME_METHOD == 1;
+    assert REFUND_REFUSED_FORM_ILLEGAL == 2;
+    assert REFUND_REFUSED_METHOD_UNRECORDED == 3;
+    assert REFUND_REFUSED_CURRENCY_UNRECORDED == 4;
+    assert REFUND_REFUSED_AMOUNT_UNAGREED == 5;
+    assert REFUND_REFUSED_METHOD_CHANGED == 6;
+    assert REFUND_REFUSED_CURRENCY_CHANGED == 7;
+    assert REFUND_REFUSED_AMOUNT_CHANGED == 8;
+    assert REFUND_REFUSED_AMOUNT_CHANGED + 1 == REFUND_OUTCOME_COUNT;
+    assert REFUND_AUTHORIZED_OUTCOMES == 2;
+    assert refund_is_authorized(REFUND_RETURN_DOCUMENT) == true;
+    assert refund_is_authorized(REFUND_RETURN_SAME_METHOD) == true;
+    assert refund_is_authorized(REFUND_REFUSED_FORM_ILLEGAL) == false;
+    assert refund_is_authorized(REFUND_REFUSED_METHOD_UNRECORDED) == false;
+    assert refund_is_authorized(REFUND_REFUSED_CURRENCY_UNRECORDED) == false;
+    assert refund_is_authorized(REFUND_REFUSED_AMOUNT_UNAGREED) == false;
+    assert refund_is_authorized(REFUND_REFUSED_METHOD_CHANGED) == false;
+    assert refund_is_authorized(REFUND_REFUSED_CURRENCY_CHANGED) == false;
+    assert refund_is_authorized(REFUND_REFUSED_AMOUNT_CHANGED) == false;
+    assert refund_moves_money(REFUND_RETURN_SAME_METHOD) == true;
+    assert refund_moves_money(REFUND_RETURN_DOCUMENT) == false;
+}
+
+; The method table is the seed's, read through DEPOSIT_MONEY_METHODS: the three money methods
+; index, and the two strings that are NOT deposit methods -- the fourth accepted entry, which
+; is the passport FORM, and the PromptPay line from payment_methods -- do not.
+test the_three_accepted_money_methods_are_the_only_ones_a_refund_can_use {
+    assert money_method_index_of(DEPOSIT_MONEY_METHODS[0]) == 0;
+    assert money_method_index_of(DEPOSIT_MONEY_METHODS[1]) == 1;
+    assert money_method_index_of(DEPOSIT_MONEY_METHODS[2]) == 2;
+    assert money_method_index_of("cash THB") == 0;
+    assert money_method_index_of("bank transfer") == 1;
+    assert money_method_index_of("USDT") == 2;
+    assert money_method_index_of(DEPOSIT_FIELD_UNRECORDED) == MONEY_METHOD_NONE;
+    assert money_method_index_of("passport in place of money") == MONEY_METHOD_NONE;
+    assert money_method_index_of("Thai PromptPay QR transfer") == MONEY_METHOD_NONE;
+}
+
+; Passport in, passport out: the document is handed back and there is no figure to hand back
+; with it. The second half is the one that matters -- a request that turns a held passport
+; into money is refused, and so is one that turns it into a zero, which D9 forbids reading as
+; money in the first place.
+test a_passport_deposit_is_returned_as_the_document_and_no_money_moves {
+    assert refund_decision(false, true, DEPOSIT_ABSENT, DEPOSIT_FIELD_UNRECORDED, DEPOSIT_FIELD_UNRECORDED, DEPOSIT_ABSENT, DEPOSIT_FIELD_UNRECORDED, DEPOSIT_FIELD_UNRECORDED) == REFUND_RETURN_DOCUMENT;
+    assert refund_is_authorized(REFUND_RETURN_DOCUMENT) == true;
+    assert refund_moves_money(REFUND_RETURN_DOCUMENT) == false;
+    assert refund_amount_returned(REFUND_RETURN_DOCUMENT, DEPOSIT_ABSENT) == DEPOSIT_ABSENT;
+    assert refund_decision(false, true, DEPOSIT_ABSENT, DEPOSIT_FIELD_UNRECORDED, DEPOSIT_FIELD_UNRECORDED, TIER_2_THB, "THB", "cash THB") == REFUND_REFUSED_METHOD_CHANGED;
+    assert refund_decision(false, true, DEPOSIT_ABSENT, DEPOSIT_FIELD_UNRECORDED, DEPOSIT_FIELD_UNRECORDED, TIER_2_THB, "THB", DEPOSIT_FIELD_UNRECORDED) == REFUND_REFUSED_CURRENCY_CHANGED;
+    assert refund_decision(false, true, DEPOSIT_ABSENT, DEPOSIT_FIELD_UNRECORDED, DEPOSIT_FIELD_UNRECORDED, TIER_2_THB, DEPOSIT_FIELD_UNRECORDED, DEPOSIT_FIELD_UNRECORDED) == REFUND_REFUSED_AMOUNT_CHANGED;
+    assert refund_decision(false, true, DEPOSIT_ABSENT, DEPOSIT_FIELD_UNRECORDED, DEPOSIT_FIELD_UNRECORDED, 0, DEPOSIT_FIELD_UNRECORDED, DEPOSIT_FIELD_UNRECORDED) == REFUND_REFUSED_AMOUNT_CHANGED;
+}
+
+; Money in, the same money out: the method it arrived by, the currency it was agreed in, the
+; figure that was agreed. The third line is the case the tier ladder does not cover -- 6000 is
+; an authoritative amount that matches no rung, the one this file already publishes and logs
+; rather than snapping -- and the refund follows the AGREED figure, not the ladder.
+test money_comes_back_by_the_method_it_arrived_by_at_the_agreed_figure {
+    assert refund_decision(true, false, TIER_2_THB, "THB", "bank transfer", TIER_2_THB, "THB", "bank transfer") == REFUND_RETURN_SAME_METHOD;
+    assert refund_decision(true, false, TIER_6_THB, "THB", "cash THB", TIER_6_THB, "THB", "cash THB") == REFUND_RETURN_SAME_METHOD;
+    assert refund_decision(true, false, 6000, "THB", "USDT", 6000, "THB", "USDT") == REFUND_RETURN_SAME_METHOD;
+    assert is_published_tier(6000) == false;
+    assert refund_moves_money(REFUND_RETURN_SAME_METHOD) == true;
+    assert refund_amount_returned(REFUND_RETURN_SAME_METHOD, TIER_2_THB) == TIER_2_THB;
+    assert refund_amount_returned(REFUND_RETURN_SAME_METHOD, 6000) == 6000;
+}
+
+; USDT in, cash out is not a refund of this deposit, and neither is the reverse. The method is
+; recorded next to the figure (src/db/orders.rs:610-613) for exactly this reason.
+test a_changed_method_is_not_a_refund_this_contract_authorizes {
+    assert refund_decision(true, false, TIER_2_THB, "THB", "USDT", TIER_2_THB, "THB", "cash THB") == REFUND_REFUSED_METHOD_CHANGED;
+    assert refund_decision(true, false, TIER_2_THB, "THB", "cash THB", TIER_2_THB, "THB", "bank transfer") == REFUND_REFUSED_METHOD_CHANGED;
+    assert refund_decision(true, false, TIER_2_THB, "THB", "bank transfer", TIER_2_THB, "THB", DEPOSIT_FIELD_UNRECORDED) == REFUND_REFUSED_METHOD_CHANGED;
+    assert refund_is_authorized(REFUND_REFUSED_METHOD_CHANGED) == false;
+    assert refund_amount_returned(REFUND_REFUSED_METHOD_CHANGED, TIER_2_THB) == DEPOSIT_ABSENT;
+}
+
+; The FX half of the deferred row, as behaviour: a deposit agreed in baht is not returned in
+; dollars, and the request is refused rather than converted. There is no test in the other
+; direction -- a deposit agreed in USD, its return requested in THB -- because writing one
+; would need a concrete USD figure, and no USD figure can be written in this repository
+; without the rate market_profile.t27:135 refuses to publish. The predicate is symmetric by
+; construction: it compares the two currencies and privileges neither.
+test a_changed_currency_is_not_a_refund_this_contract_authorizes {
+    assert refund_decision(true, false, TIER_4_THB, "THB", "USDT", TIER_4_THB, "USD", "USDT") == REFUND_REFUSED_CURRENCY_CHANGED;
+    assert refund_decision(true, false, TIER_4_THB, "THB", "USDT", TIER_4_THB, "EUR", "USDT") == REFUND_REFUSED_CURRENCY_CHANGED;
+    assert refund_decision(true, false, TIER_4_THB, "THB", "USDT", TIER_4_THB, CURRENCY, "USDT") == REFUND_RETURN_SAME_METHOD;
+    assert CURRENCY == "THB";
+    assert refund_is_authorized(REFUND_REFUSED_CURRENCY_CHANGED) == false;
+    assert refund_amount_returned(REFUND_REFUSED_CURRENCY_CHANGED, TIER_4_THB) == DEPOSIT_ABSENT;
+}
+
+; Any other figure is another transaction. The second and third lines are a part-refund and a
+; fee netted off the top; both are refused by the same gate, because this contract has no
+; schedule to net anything against -- REFUND_PARTIAL_AMOUNT_ALLOWED and
+; REFUND_FEE_SUBTRACTION_ALLOWED say what would be needed. No arithmetic appears in the
+; arguments either: the short figures are other published rungs, not a computed shortfall.
+test a_changed_amount_is_not_a_refund_this_contract_authorizes {
+    assert refund_decision(true, false, TIER_5_THB, "THB", "cash THB", TIER_6_THB, "THB", "cash THB") == REFUND_REFUSED_AMOUNT_CHANGED;
+    assert refund_decision(true, false, TIER_5_THB, "THB", "cash THB", TIER_4_THB, "THB", "cash THB") == REFUND_REFUSED_AMOUNT_CHANGED;
+    assert refund_decision(true, false, TIER_5_THB, "THB", "bank transfer", TIER_1_THB, "THB", "bank transfer") == REFUND_REFUSED_AMOUNT_CHANGED;
+    assert refund_decision(true, false, TIER_5_THB, "THB", "cash THB", 0, "THB", "cash THB") == REFUND_REFUSED_AMOUNT_CHANGED;
+    assert refund_is_authorized(REFUND_REFUSED_AMOUNT_CHANGED) == false;
+    assert refund_amount_returned(REFUND_REFUSED_AMOUNT_CHANGED, TIER_5_THB) == DEPOSIT_ABSENT;
+}
+
+; FAIL CLOSED. In every case here the request matches the record exactly, and every one is
+; still refused: an unrecorded method is equal to an unrecorded method, and a rule that
+; compared before it checked completeness would hand back money on an empty record. The third
+; line is a method the shop takes for RENT but not as a DEPOSIT (data/fleet_seed.json:294
+; against :291); the last two are the orders.rs amount None and the zero D9 forbids.
+test an_incomplete_deposit_record_fails_closed {
+    assert refund_decision(true, false, TIER_2_THB, "THB", DEPOSIT_FIELD_UNRECORDED, TIER_2_THB, "THB", DEPOSIT_FIELD_UNRECORDED) == REFUND_REFUSED_METHOD_UNRECORDED;
+    assert refund_decision(true, false, TIER_2_THB, "THB", "passport in place of money", TIER_2_THB, "THB", "passport in place of money") == REFUND_REFUSED_METHOD_UNRECORDED;
+    assert refund_decision(true, false, TIER_2_THB, "THB", "Thai PromptPay QR transfer", TIER_2_THB, "THB", "Thai PromptPay QR transfer") == REFUND_REFUSED_METHOD_UNRECORDED;
+    assert refund_decision(true, false, TIER_2_THB, DEPOSIT_FIELD_UNRECORDED, "USDT", TIER_2_THB, DEPOSIT_FIELD_UNRECORDED, "USDT") == REFUND_REFUSED_CURRENCY_UNRECORDED;
+    assert refund_decision(true, false, DEPOSIT_ABSENT, "THB", "USDT", DEPOSIT_ABSENT, "THB", "USDT") == REFUND_REFUSED_AMOUNT_UNAGREED;
+    assert refund_decision(true, false, 0, "THB", "USDT", 0, "THB", "USDT") == REFUND_REFUSED_AMOUNT_UNAGREED;
+    assert refund_amount_returned(REFUND_REFUSED_METHOD_UNRECORDED, TIER_2_THB) == DEPOSIT_ABSENT;
+}
+
+; The form gate runs first, so a record holding both money and the passport -- or neither --
+; is refused before any figure is read. deposit_form_is_legal() is the same judge the rest of
+; this file uses; the refund does not get a second opinion about what a legal deposit is.
+test an_illegal_form_pair_is_refused_before_any_figure_is_read {
+    assert deposit_form_is_legal(true, true) == false;
+    assert refund_decision(true, true, TIER_2_THB, "THB", "USDT", TIER_2_THB, "THB", "USDT") == REFUND_REFUSED_FORM_ILLEGAL;
+    assert deposit_form_is_legal(false, false) == false;
+    assert refund_decision(false, false, DEPOSIT_ABSENT, DEPOSIT_FIELD_UNRECORDED, DEPOSIT_FIELD_UNRECORDED, DEPOSIT_ABSENT, DEPOSIT_FIELD_UNRECORDED, DEPOSIT_FIELD_UNRECORDED) == REFUND_REFUSED_FORM_ILLEGAL;
+    assert refund_is_authorized(REFUND_REFUSED_FORM_ILLEGAL) == false;
+}
+
+; The three refusals, and the ownership edge that makes the first of them somebody else's fact
+; rather than a second copy of it here. Adding a refund rule added no transaction table: D14
+; holds exactly as it did.
+test the_refund_rule_converts_nothing_and_nets_nothing_off {
+    assert REFUND_FX_CONVERSION_ALLOWED == false;
+    assert REFUND_PARTIAL_AMOUNT_ALLOWED == false;
+    assert REFUND_FEE_SUBTRACTION_ALLOWED == false;
+    assert REUSES_MARKET_PROFILE_ID == "turbobaby/market";
+    assert PAST_RENTAL_DEPOSITS_THB.len == 0;
+    assert refund_amount_returned(REFUND_RETURN_SAME_METHOD, TIER_6_THB) == TIER_6_THB;
+    assert refund_amount_returned(REFUND_RETURN_SAME_METHOD, TIER_1_THB) == TIER_1_THB;
+    assert refund_amount_returned(REFUND_RETURN_DOCUMENT, TIER_6_THB) == DEPOSIT_ABSENT;
+    assert refund_amount_returned(REFUND_REFUSED_AMOUNT_UNAGREED, TIER_6_THB) == DEPOSIT_ABSENT;
+}
+
 // ============================================================================
 // Invariants
 //
@@ -685,3 +1025,11 @@ invariant no_individual_rental_deposit_is_published
 ; D9: an absent deposit is a dash, never a zero. A marker below zero cannot be read as money.
 invariant the_absent_marker_can_never_be_read_as_money
   assert DEPOSIT_ABSENT < 0
+
+; The refund half of the deferred FX/refund row, as a standing claim: the only outcome that
+; moves money hands back the agreed figure unchanged, every other outcome hands back the
+; absent marker, a currency change is refused rather than converted, and the three arithmetic
+; doors are shut. A conversion, a part-refund or a netted fee would each have to appear as
+; arithmetic in refund_amount_returned(), whose body holds one comparison and no arithmetic.
+invariant no_refund_path_converts_or_recomputes_an_amount
+  assert refund_amount_returned(REFUND_RETURN_SAME_METHOD, TIER_6_THB) == TIER_6_THB and refund_amount_returned(REFUND_RETURN_DOCUMENT, TIER_6_THB) == DEPOSIT_ABSENT and refund_decision(true, false, TIER_2_THB, "THB", "USDT", TIER_2_THB, "USD", "USDT") == REFUND_REFUSED_CURRENCY_CHANGED and REFUND_FX_CONVERSION_ALLOWED == false and REFUND_PARTIAL_AMOUNT_ALLOWED == false and REFUND_FEE_SUBTRACTION_ALLOWED == false
