@@ -559,8 +559,6 @@ pub const T_MODAL_INCREASE_QTY: Key = "modal.increase_qty";
 pub const T_MODAL_CERTIFICATE: Key = "modal.certificate";
 
 // Menu screen hard-coded strings
-pub const T_MENU_FILTER_SATIVA: Key = "menu.filter.sativa";
-pub const T_MENU_FILTER_INDICA: Key = "menu.filter.indica";
 pub const T_MENU_FILTER_HYBRID: Key = "menu.filter.hybrid";
 pub const T_MENU_SORT_TOP: Key = "menu.sort.top";
 pub const T_MENU_SORT_PRICE_ASC: Key = "menu.sort.price_asc";
@@ -1204,8 +1202,6 @@ fn get_ru_translation(key: Key) -> Value {
         T_MODAL_INCREASE_QTY => "Добавить количество",
         T_MODAL_CERTIFICATE => "📄 Сертификат",
         // Menu screen
-        T_MENU_FILTER_SATIVA => "☀️ Sativa",
-        T_MENU_FILTER_INDICA => "🌙 Indica",
         T_MENU_FILTER_HYBRID => "⚖️ Hybrid",
         T_MENU_SORT_TOP => "✨ Топ",
         T_MENU_SORT_PRICE_ASC => "💰 Цена ↑",
@@ -1803,8 +1799,6 @@ fn get_en_translation(key: Key) -> Value {
         T_MODAL_INCREASE_QTY => "Increase quantity",
         T_MODAL_CERTIFICATE => "📄 Certificate",
         // Menu screen
-        T_MENU_FILTER_SATIVA => "☀️ Sativa",
-        T_MENU_FILTER_INDICA => "🌙 Indica",
         T_MENU_FILTER_HYBRID => "⚖️ Hybrid",
         T_MENU_SORT_TOP => "✨ Top",
         T_MENU_SORT_PRICE_ASC => "💰 ↑",

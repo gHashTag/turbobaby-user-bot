@@ -6,10 +6,9 @@ use teloxide::{
     types::{InlineKeyboardButton, InlineKeyboardMarkup, MaybeInaccessibleMessage},
 };
 
-use crate::bot::commands::{build_app_url, calculate_discounted_price};
 // Cycle #76: button helpers consolidated to bot/mod.rs.
 // Cycle #129: AI_RATE_LIMIT replaced by `ai_rate_limit_allow` helper.
-use crate::bot::{ai_rate_limit_allow, callback_btn, notify, tg_fire_and_forget, web_app_btn};
+use crate::bot::{ai_rate_limit_allow, callback_btn, notify, tg_fire_and_forget};
 use crate::{
     ai::{get_random_fact_prompt, get_random_joke_prompt},
     config::Config,
@@ -47,7 +46,6 @@ pub(crate) enum CallbackAction {
     /// Switch the user's locale to this language code.
     SetLanguage(String),
     /// Page through the strain-of-day carousel.
-    StrainOfDayPage { next: bool, current: usize },
     /// Admin-only: confirm an order.
     ConfirmOrder(String),
     /// Admin-only: mark an order completed.
@@ -83,20 +81,6 @@ pub(crate) fn route_callback(data: &str) -> CallbackAction {
     if let Some(code) = data.strip_prefix("set_lang_") {
         return CallbackAction::SetLanguage(code.to_string());
     }
-    // The page index is the trailing segment; a missing or unparsable one
-    // falls back to 0, matching the original `unwrap_or(0)`.
-    if data.starts_with("sotd_next_") {
-        return CallbackAction::StrainOfDayPage {
-            next: true,
-            current: parse_pagination_index(data).unwrap_or(0),
-        };
-    }
-    if data.starts_with("sotd_prev_") {
-        return CallbackAction::StrainOfDayPage {
-            next: false,
-            current: parse_pagination_index(data).unwrap_or(0),
-        };
-    }
     if let Some(id) = data.strip_prefix("confirm_") {
         return CallbackAction::ConfirmOrder(id.to_string());
     }
@@ -107,10 +91,6 @@ pub(crate) fn route_callback(data: &str) -> CallbackAction {
         return CallbackAction::RejectOrder(id.to_string());
     }
     CallbackAction::Unknown
-}
-
-pub(crate) fn parse_pagination_index(data: &str) -> Option<usize> {
-    data.split('_').next_back().and_then(|s| s.parse().ok())
 }
 
 pub(crate) fn can_confirm_order(status: &str) -> bool {
@@ -211,7 +191,6 @@ pub(crate) async fn handle_callback(
         .await
         .unwrap_or_else(|| map_telegram_lang(q.from.language_code.as_deref()));
     let locale = get_locale(&lang);
-    let base = &config.web_app_url;
     let too_fast_msg = if lang == "ru" {
         "⏳ Слишком быстро! Подождите несколько секунд."
     } else {
@@ -371,60 +350,6 @@ pub(crate) async fn handle_callback(
                 )
                 .await
                 .ok();
-            }
-        }
-
-        CallbackAction::StrainOfDayPage {
-            next: is_next,
-            current,
-        } => {
-            bot.answer_callback_query(q.id).await?;
-            let new_idx = if is_next {
-                current + 1
-            } else {
-                current.saturating_sub(1)
-            };
-            let strains = db.get_strains_of_day().await.unwrap_or_default();
-            if let Some(s) = strains.get(new_idx) {
-                if let Some(msg) = q.message.as_ref().and_then(|m| match m {
-                    MaybeInaccessibleMessage::Regular(msg) => Some(msg),
-                    MaybeInaccessibleMessage::Inaccessible(_) => None,
-                }) {
-                    let discount = s.strain_of_day_discount;
-                    let discounted = calculate_discounted_price(s.price_per_gram, discount);
-                    let text = format!(
-                        "🔥 <b>{}</b> ({}/{})\n━━━━━━━━━━━━━━━━\n🌿 <b>{}</b>\n{}💰 <s>{} ฿/г</s> → <b>{} ฿/г</b>\n🔥 -{:.0}%",
-                        locale.strain_of_day, new_idx + 1, strains.len(), html_escape(&s.name),
-                        s.thc_percent.map(|t| format!("⚡ THC: {}%\n", t)).unwrap_or_default(),
-                        s.price_per_gram, discounted, discount
-                    );
-                    let mut btns: Vec<Vec<InlineKeyboardButton>> = vec![];
-                    let mut nav = vec![];
-                    if new_idx > 0 {
-                        nav.push(callback_btn(
-                            &locale.prev_strain,
-                            &format!("sotd_prev_{}", new_idx),
-                        ));
-                    }
-                    if new_idx < strains.len() - 1 {
-                        nav.push(callback_btn(
-                            &locale.next_strain,
-                            &format!("sotd_next_{}", new_idx),
-                        ));
-                    }
-                    if !nav.is_empty() {
-                        btns.push(nav);
-                    }
-                    btns.push(vec![web_app_btn(
-                        &format!("🛒 {}", locale.open_menu),
-                        &build_app_url(base, &lang, None),
-                    )]);
-                    bot.edit_message_text(msg.chat.id, msg.id, &text)
-                        .parse_mode(teloxide::types::ParseMode::Html)
-                        .reply_markup(InlineKeyboardMarkup::new(btns))
-                        .await
-                        .ok();
-                }
             }
         }
 
@@ -881,8 +806,8 @@ pub(crate) async fn handle_callback(
 #[cfg(test)]
 mod tests {
     use super::{
-        can_confirm_order, is_callback_data_valid, parse_pagination_index, route_callback,
-        should_refund_bonus, CallbackAction,
+        can_confirm_order, is_callback_data_valid, route_callback, should_refund_bonus,
+        CallbackAction,
     };
 
     // ---- Routing table --------------------------------------------------
@@ -900,8 +825,6 @@ mod tests {
             "start_joke",
             "start_fact",
             "show_lang",
-            "sotd_next_0",
-            "sotd_prev_1",
             "set_lang_ru",
             "confirm_7f3a",
             "complete_7f3a",
@@ -937,40 +860,6 @@ mod tests {
             route_callback("set_lang_en"),
             CallbackAction::SetLanguage("en".into())
         );
-    }
-
-    #[test]
-    fn strain_of_day_paging_carries_direction_and_index() {
-        assert_eq!(
-            route_callback("sotd_next_3"),
-            CallbackAction::StrainOfDayPage {
-                next: true,
-                current: 3
-            }
-        );
-        assert_eq!(
-            route_callback("sotd_prev_2"),
-            CallbackAction::StrainOfDayPage {
-                next: false,
-                current: 2
-            }
-        );
-    }
-
-    #[test]
-    fn strain_of_day_paging_falls_back_to_the_first_page() {
-        // Matches the original `unwrap_or(0)`: a malformed index must page to
-        // the start rather than refuse the press.
-        for data in ["sotd_next_", "sotd_next_abc", "sotd_prev_-1"] {
-            assert_eq!(
-                route_callback(data),
-                CallbackAction::StrainOfDayPage {
-                    next: data.starts_with("sotd_next_"),
-                    current: 0
-                },
-                "{data} should page to 0"
-            );
-        }
     }
 
     #[test]
@@ -1039,7 +928,15 @@ mod tests {
             "CONFIRM_7",
             "delete_everything",
             "set_language_ru",
+            // The cannabis-era strain-of-day carousel. Its handler is gone,
+            // so these are now what they always were in practice: payloads no
+            // button emits. Nothing in `src/` built them — the only code that
+            // did was the carousel editing its own message, and no first
+            // message ever carried one, so the ✅ arm was unreachable from the
+            // moment the shop stopped selling grams.
             "sotd_",
+            "sotd_next_3",
+            "sotd_prev_2",
         ] {
             assert_eq!(
                 route_callback(data),
@@ -1066,10 +963,6 @@ mod tests {
             CallbackAction::Fact,
             CallbackAction::ShowLanguagePicker,
             CallbackAction::SetLanguage("ru".into()),
-            CallbackAction::StrainOfDayPage {
-                next: true,
-                current: 0,
-            },
             CallbackAction::Unknown,
         ] {
             assert!(
@@ -1109,26 +1002,6 @@ mod tests {
     fn test_is_callback_data_valid_exactly_200() {
         let data = "a".repeat(200);
         assert!(is_callback_data_valid(&data));
-    }
-
-    #[test]
-    fn test_parse_pagination_index_next() {
-        assert_eq!(parse_pagination_index("sotd_next_5"), Some(5));
-    }
-
-    #[test]
-    fn test_parse_pagination_index_prev() {
-        assert_eq!(parse_pagination_index("sotd_prev_3"), Some(3));
-    }
-
-    #[test]
-    fn test_parse_pagination_index_invalid() {
-        assert_eq!(parse_pagination_index("sotd_next_abc"), None);
-    }
-
-    #[test]
-    fn test_parse_pagination_index_no_underscore() {
-        assert_eq!(parse_pagination_index("sotd"), None);
     }
 
     #[test]
