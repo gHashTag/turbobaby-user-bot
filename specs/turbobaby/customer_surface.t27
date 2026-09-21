@@ -12,7 +12,7 @@
 ; WHY (measured 2026-09-21). DECISIONS.md:384 D20 retargeted the cannabis-era trust block to
 ; rental facts and wrote the rule in one sentence at :396-397 -- no invented product claims,
 ; insurance and deposit terms stay the owner's to make. That rule has no enforcer anywhere in the
-; repository. The one instrument over this surface is tests/customer_surface_wiring.rs: 795 lines,
+; repository. The one instrument over this surface is tests/customer_surface_wiring.rs: 820 lines,
 ; FIFTEEN #[test] functions, and a grep of the whole tests/ directory for T_TRUST returns ZERO.
 ; Not one of the fifteen reads a claim. What the fifteen do read is navigation -- the tab count at
 ; :116, the five destinations at :110, five retired route names at :118 -- so the SHAPE of the
@@ -384,15 +384,15 @@ pub fn absence_from_the_bar_retires_a_route(route_is_absent_from_the_bar: bool) 
 }
 
 ; --- The witness, and the three things it cannot see -------------------------------------------
-; tests/customer_surface_wiring.rs. 795 lines, fifteen #[test] functions, three files pulled in by
+; tests/customer_surface_wiring.rs. 820 lines, fifteen #[test] functions, three files pulled in by
 ; include_str! at :21-23 plus a walk of every .rs under src/ui. It pins the tab count at :116, the
 ; five destinations at :110 and five retired route names at :118. It is a source-text scan because
 ; src/lib.rs:17-18 gates pub mod ui on target_arch = "wasm32" and cargo test therefore compiles no
 ; line of this surface -- so the scan is the only instrument, not the weaker of two.
-pub const WITNESS_LINES : u16 = 795;
+pub const WITNESS_LINES : u16 = 820;
 pub const WITNESS_TESTS : u8 = 15;
 ; RE-VERIFIED 2026-09-21, and a trap named while it is fresh. Both numbers above still hold --
-; wc -l gives 795 and the witness declares fifteen test functions -- but the obvious re-measurement
+; wc -l gives 820 and the witness declares fifteen test functions -- but the obvious re-measurement
 ; DISAGREES: `grep -c '#\[test\]' tests/customer_surface_wiring.rs` returns 19. The four extra hits
 ; are not tests. Three are inside the witness's own string literals and one is inside a comment,
 ; because two of its checks scan source text FOR the attribute (they count `#[test]` lines under
@@ -670,7 +670,7 @@ test the_wave_census_is_measured_and_the_untimed_interval_is_refused {
 
 test the_witness_test_count_survives_its_own_naive_re_measurement {
   assert WITNESS_TESTS == 15;
-  assert WITNESS_LINES == 795;
+  assert WITNESS_LINES == 820;
   assert WITNESS_TESTS_BY_NAIVE_GREP == 19;
   assert WITNESS_TESTS_NAIVE_GREP_IS_CORRECT == false;
   assert WITNESS_TEST_TOKEN_NON_ATTRIBUTE_HITS == 4;
