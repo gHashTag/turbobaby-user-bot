@@ -62,7 +62,7 @@
 ; measured answer is BOTH, split by path. The entertainment prompts carry nothing the shop
 ; knows: a fixed base string, one of 23 styles (src/ai.rs:7-31) or one of 22 topics
 ; (src/ai.rs:33-56), and a literal persona. The draft prompt carries a price read out of the
-; database (src/promo.rs:477-510, formatted at :507). So the guarantee had to be written per
+; database (src/promo.rs:506-539, formatted at :507). So the guarantee had to be written per
 ; kind, and the one that matters is the conjunction: no path that reaches a customer unreviewed
 ; carries a shop fact into a prompt.
 ; (4) The survey cites src/locales.rs:26 and :31 for the two fallback strings. :31 is right and
@@ -158,7 +158,10 @@ pub const ESCAPE_RULE_IS_RESTATED_HERE : bool = false;
 pub const RATE_LIMIT_MECHANISM_IS_RESTATED_HERE : bool = false;
 
 pub const IMPLEMENTATION : str = "src/ai.rs";
-pub const IMPLEMENTATION_LOC : u16 = 428;
+; RE-MEASURED 2026-09-21 after the sentinel was given a name: 428 before, 454 after. The added
+; lines are one const, one predicate and their reasons, all below every line this file cites.
+pub const IMPLEMENTATION_LOC : u16 = 454;
+pub const SUPERSEDED_IMPLEMENTATION_LOC : u16 = 428;
 pub const ENTRY_FUNCTION : str = "src/ai.rs:185-222 ask_grok";
 pub const REGRESSION_WITNESS : str = "src/bot/mod.rs:286 every_ask_grok_caller_in_bot_is_rate_limited";
 pub const TRUNCATION_HELPER : str = "src/util.rs:8-15 truncate_string";
@@ -213,8 +216,8 @@ pub fn call_sites_of_kind(kind: u8) u8 {
   return 0;
 }
 
-; The draft is the only kind a human stands in front of: src/promo.rs:600-603 sends it to
-; config.admin_ids and to nobody else, and src/promo.rs:645-648 refuses the publish button to a
+; The draft is the only kind a human stands in front of: src/promo.rs:629-632 sends it to
+; config.admin_ids and to nobody else, and src/promo.rs:674-677 refuses the publish button to a
 ; presser who is not an owner. Every other kind is delivered the moment it arrives.
 pub fn reaches_a_customer_unreviewed(kind: u8) bool {
   if (kind == ANSWER_DRAFT_COPY) {
@@ -294,7 +297,13 @@ pub fn turn_outcome_is_known(outcome: u8) bool {
 ;     fact_fail_fallback at the four entertainment sites, the menu field at the free-text site)
 ;     and the written copy at src/trios/promo.rs:237-268 on the draft, which is not a locale
 ;     field and is owned next door.
-;   TURN_FILTER_REPLY      -- the hard-coded English literal of src/ai.rs:192-196.
+;   TURN_FILTER_REPLY      -- the hard-coded English literal of src/ai.rs:192-196 on the two
+;     customer kinds, and the WRITTEN FALLBACK on the draft. CORRECTED 2026-09-21: this line used
+;     to say the literal on all three, which was measured and true -- the draft site took that
+;     sentence for copy and stored it with source = "model" -- and is true no longer. The draft
+;     site now asks src/ai.rs:325-327 whether what came back is this repository's own sentinel
+;     before it asks whether it is good copy, and answers the first question by identity against
+;     the declaration at :314-315 rather than by matching its words.
 ;   TURN_RATE_REFUSAL      -- an inline bilingual literal chosen by an if on the language at the
 ;     four entertainment sites (src/bot/commands.rs:179-183, src/bot/callbacks.rs:215-219), and
 ;     NOTHING AT ALL at the free-text site: src/bot/handlers.rs:58-61 logs a warning and returns
@@ -314,6 +323,9 @@ pub fn what_is_sent(kind: u8, outcome: u8) u8 {
   }
   if (outcome == TURN_MODEL_TEXT) {
     return SENT_MODEL_TEXT;
+  }
+  if (outcome == TURN_FILTER_REPLY and kind == ANSWER_DRAFT_COPY) {
+    return SENT_WRITTEN_FALLBACK;
   }
   if (outcome == TURN_FILTER_REPLY) {
     return SENT_UNLOCALIZED_LITERAL;
@@ -389,11 +401,27 @@ pub const SITES_WITH_A_NON_SILENT_RATE_REFUSAL : u8 = 4;
 pub const FILTER_REPLY_IS_LOCALIZED : bool = false;
 pub const FILTER_REPLY_LOCALE_KEYS : u8 = 0;
 pub const FILTER_REPLY_SITE : str = "src/ai.rs:192-196";
+; ADDED 2026-09-21. The sentence is a value this repository OWNS, and until that date it was an
+; inline literal that nothing could name. Naming it is what lets a consumer refuse it without
+; quoting it: the one consumer that must not publish it compares against the declaration, so a
+; reworded sentinel cannot leave that consumer matching words it no longer uses. The five sites
+; that SEND it to a chat are unchanged and still treat it as the model's answer, which is the
+; defect FILTER_REPLY_NOTE keeps; what changed is the sixth.
+pub const FILTER_REPLY_IS_A_NAMED_CONSTANT : bool = true;
+pub const FILTER_REPLY_DECLARATION : str = "src/ai.rs:314-315 PROMPT_FILTERED_REPLY";
+pub const FILTER_REPLY_RECOGNISER : str = "src/ai.rs:325-327 is_prompt_filtered_reply";
+pub const FILTER_REPLY_IS_MATCHED_BY_PROSE : bool = false;
+pub const SITES_THAT_TELL_THE_SENTINEL_FROM_A_MODEL_ANSWER : u8 = 1;
+pub const SITES_THAT_TREAT_THE_SENTINEL_AS_A_MODEL_ANSWER : u8 = 5;
+
+pub fn sentinel_can_be_published_as_copy(recogniser_exists: bool) bool {
+  return !recogniser_exists;
+}
 pub const RATE_REFUSAL_IS_LOCALIZED : bool = false;
 pub const RATE_REFUSAL_LOCALE_KEYS : u8 = 0;
 pub const RATE_REFUSAL_LITERAL_DECLARATIONS : str = "src/bot/commands.rs:179-183 and src/bot/callbacks.rs:215-219";
 pub const CUSTOMER_STRINGS_NO_LOCALE_OWNS : u8 = 2;
-pub const FILTER_REPLY_NOTE : str = "The injection-refusal sentence is a hard-coded English literal returned inside Some, not a locale field: a grep for it over src/locales.rs returns zero on 2026-09-21. Two consequences follow and neither is theoretical. A Russian-speaking customer is answered in English on this branch, and because it is Some rather than None the caller treats it as the model's answer: src/bot/commands.rs:361 decorates it as the joke and sends it as the joke. Closing this needs two locale fields and a branch that returns them, not a line here.";
+pub const FILTER_REPLY_NOTE : str = "The injection-refusal sentence is a hard-coded English literal returned inside Some, not a locale field: a grep for it over src/locales.rs returns zero on 2026-09-21. Two consequences followed and neither was theoretical. A Russian-speaking customer is answered in English on this branch, and because it is Some rather than None the caller treats it as the model's answer: src/bot/commands.rs:361 decorates it as the joke and sends it as the joke. Closing THAT needs two locale fields and a branch that returns them, not a line here, and it is still open on all five chat sites. The sixth consequence was worse and is closed: the draft site had no chat to answer, so the sentence became a promotional post stored with source = model, one owner press from every subscriber. It is refused there by identity at src/promo.rs:486 against the declaration at src/ai.rs:314-315 -- not by adding its words to a list, because the words are ours to change and a list of them is a second copy that goes stale silently.";
 pub const RATE_REFUSAL_NOTE : str = "The too-fast refusal is not a locale field either. Each of the two bot files declares its own if on the language with the two literals written in place, and the four entertainment sites send whichever it picks; a grep for the pair over src/locales.rs returns zero on 2026-09-21. The free-text site sends neither, and nothing else: src/bot/handlers.rs:58-61 warns into the log and returns Ok(()), so a customer who types a second message inside the window is answered by silence. That is the one place on this boundary where a customer gets no reply at all, and it is recorded as a defect rather than blessed as a design.";
 
 ; --- Entering the prompt ------------------------------------------------------------------------
@@ -425,7 +453,7 @@ pub const FACT_TOPIC_COUNT : u8 = 22;
 pub const STYLE_AND_TOPIC_LISTS_READ_THE_DATABASE : bool = false;
 ; src/ai.rs:58 accepts an order_context and every shipped caller passes None
 ; (src/bot/commands.rs:353, src/bot/callbacks.rs:242). The only Some is the unit test at
-; src/ai.rs:417. A live customer context would change the answer of prompt_carries_customer_datum
+; src/ai.rs:443. A live customer context would change the answer of prompt_carries_customer_datum
 ; for the entertainment kind, so its deadness is a pinned fact and not a footnote.
 pub const ORDER_CONTEXT_PARAMETER_IS_LIVE : bool = false;
 pub const ORDER_CONTEXT_LIVE_CALLERS : u8 = 0;
@@ -446,7 +474,7 @@ pub const FILTER_ON_PERSONA_SHORT_CIRCUITS : bool = false;
 pub const SANITIZER_REPLACES_WHOLE_TEXT : bool = true;
 
 ; --- What the prompt carries, by kind -----------------------------------------------------------
-; The draft prompt carries a price: src/promo.rs:477-510 reads a price column and formats it at
+; The draft prompt carries a price: src/promo.rs:506-539 reads a price column and formats it at
 ; :507 (:508 is the branch taken when the column is absent or not positive), and
 ; src/trios/promo.rs:191-229 puts that string into the instruction. The free-text
 ; prompt carries the customer's own words and the customer's Telegram display name as persona
@@ -485,11 +513,20 @@ pub const RESPONSE_CHARS_ARE_BOUNDED_ON_ARRIVAL : bool = false;
 pub const OUTPUT_CHECK_FUNCTION : str = "src/trios/promo.rs:277-299 usable_copy";
 pub const SITES_WITH_AN_OUTPUT_CHECK : u8 = 1;
 pub const UNREVIEWED_SITES_WITH_AN_OUTPUT_CHECK : u8 = 0;
+; ADDED 2026-09-21. The one site with an output check now applies TWO, and they are different in
+; kind rather than in strictness. The first asks whether the answer is this module's own sentinel
+; and compares against the declaration; the second is usable_copy, a judgement about text that
+; really did come from the model, where its wording is the only evidence there is. The count of
+; SITES is unchanged; what is new is that the site's first question can be answered without
+; reading the sentence at all.
+pub const OUTPUT_CHECKS_ON_THE_DRAFT_SITE : u8 = 2;
+pub const THE_FIRST_DRAFT_CHECK_READS_THE_SENTENCE : bool = false;
+pub const THE_SECOND_DRAFT_CHECK_READS_THE_SENTENCE : bool = true;
 ; What every site does apply. The escape rule itself -- its characters, its replacements and its
 ; call-site counts -- is REUSES_BOT_SURFACE_ID's and is not restated; the one fact kept here is
 ; that all six of THIS file's sites pass the model's text through it before sending
 ; (src/bot/commands.rs:361 and :387, src/bot/callbacks.rs:262 and :300, src/bot/handlers.rs:79,
-; src/promo.rs:580). Saying it is an escaping pass is the point: it makes the answer safe to
+; src/promo.rs:609). Saying it is an escaping pass is the point: it makes the answer safe to
 ; RENDER, which is a different promise from safe to BELIEVE, and this file makes only the first.
 pub const OUTPUT_IS_ESCAPED_AT_EVERY_SITE : bool = true;
 
@@ -503,13 +540,28 @@ pub const OUTPUT_IS_ESCAPED_AT_EVERY_SITE : bool = true;
 ; answers false.
 pub const DRAFT_SEND_OWNER : str = "turbobaby/promo-broadcast";
 pub const DRAFT_TEXT_IS_MODEL_WRITTEN : bool = true;
+; MEASURED 2026-09-21, and it is a hole rather than a boundary. This file says usable_copy's four
+; figures are turbobaby/promo-broadcast's and are not copied here; that file says they are this
+; file's and are not copied there. Both statements are in the tree and both defer, so the floor,
+; the ceiling, the length of the refusal head and the number of refusal markers are declared in no
+; contract at all -- a reader who follows either edge arrives back where they started. Recorded
+; rather than settled: which file should own them is the owner's call, and guessing here would put
+; four numbers in a contract that was told twice not to hold them.
+pub const COPY_CHECK_FIGURES_PINNED_BY_THIS_FILE : u8 = 0;
+pub const COPY_CHECK_FIGURES_PINNED_BY_THE_NAMED_OWNER : u8 = 0;
+pub const COPY_CHECK_FIGURE_OWNERSHIP_IS_CIRCULAR : bool = true;
+pub const COPY_CHECK_CIRCULARITY_NOTE : str = "turbobaby/promo-broadcast declares COPY_CHECK_OWNER_ID = turbobaby/ai-assist and COPY_BOUNDS_ARE_RESTATED_HERE = false; this file declares DRAFT_COPY_CHECK_IS_RESTATED_HERE = false and names that same contract as the owner of the figures. Neither declares them, so usable_copy's character floor, its ceiling, the length of its refusal head and the count of its refusal markers live only in src/trios/promo.rs:277-299 and are unbound by the corpus. No number is copied into either file to close it, because a figure invented to end a disagreement is worse than a disagreement anybody can see.";
+
+pub fn copy_check_figures_have_an_owner(pinned_here: u8, pinned_there: u8) bool {
+  return pinned_here + pinned_there >= 1;
+}
 
 ; The hole in the one path that carries a price, stated without restating the check. The
 ; instruction at src/trios/promo.rs:222-223 tells the model to invent no price, discount,
 ; percentage or date; an instruction is not a check, and the check that exists reads no digit.
 pub const DRAFT_CHECK_READS_NUMBERS : bool = false;
 pub const NUMERIC_CLAIM_GUARD_IS_NOT_PUBLISHED : bool = true;
-pub const NUMERIC_CLAIM_GUARD_NOTE : str = "Nothing in this repository compares a number in a model's answer against the number that was put in its prompt. The only output check that exists anywhere -- src/trios/promo.rs:277-299 usable_copy, owned and pinned by turbobaby/promo-broadcast -- rejects on length and on a refusal in the opening line and reads no digit; its thresholds are that contract's and are not copied here. On the five sites a customer reaches unreviewed there is no output check of any kind, so on those the rule that a model answer is never a price rests on the prompt containing no price and on nothing else. On the sixth the exposure is bounded by a human and not by the code. Closing this needs a comparison between the figures in a prompt and the figures in its answer, with a refusal on divergence; no threshold is invented here in its place, and the divergence rule that does exist belongs to turbobaby/pricing-honesty and governs a different pair of numbers.";
+pub const NUMERIC_CLAIM_GUARD_NOTE : str = "Nothing in this repository compares a number in a model's answer against the number that was put in its prompt. The only output check that reads the sentence at all -- src/trios/promo.rs:277-299 usable_copy, whose figures are pinned by NOBODY (see COPY_CHECK_CIRCULARITY_NOTE) -- rejects on length and on a refusal in the opening line and reads no digit; the identity check added beside it on 2026-09-21 reads no digit either, because it reads nothing; its thresholds are that contract's and are not copied here. On the five sites a customer reaches unreviewed there is no output check of any kind, so on those the rule that a model answer is never a price rests on the prompt containing no price and on nothing else. On the sixth the exposure is bounded by a human and not by the code. Closing this needs a comparison between the figures in a prompt and the figures in its answer, with a refusal on divergence; no threshold is invented here in its place, and the divergence rule that does exist belongs to turbobaby/pricing-honesty and governs a different pair of numbers.";
 
 ; --- The provider is not a guarantee --------------------------------------------------------------
 ; One attempt at the primary and six at the fallback: two endpoints times three model names
@@ -745,6 +797,36 @@ test two_customer_strings_have_no_locale_owner {
   assert what_is_sent(ANSWER_FREE_TEXT, TURN_FILTER_REPLY) == SENT_UNLOCALIZED_LITERAL;
 }
 
+; The sentinel is a value this file owns, and the one path that would have published it refuses it
+; without reading it. ADDED 2026-09-21 with the fix it describes.
+test the_sentinel_is_named_and_refused_by_identity_on_the_one_path_that_would_publish_it {
+  assert FILTER_REPLY_IS_A_NAMED_CONSTANT == true;
+  assert FILTER_REPLY_IS_MATCHED_BY_PROSE == false;
+  assert FILTER_REPLY_DECLARATION == "src/ai.rs:314-315 PROMPT_FILTERED_REPLY";
+  assert FILTER_REPLY_RECOGNISER == "src/ai.rs:325-327 is_prompt_filtered_reply";
+  assert SITES_THAT_TELL_THE_SENTINEL_FROM_A_MODEL_ANSWER == DRAFT_COPY_CALL_SITES;
+  assert SITES_THAT_TELL_THE_SENTINEL_FROM_A_MODEL_ANSWER + SITES_THAT_TREAT_THE_SENTINEL_AS_A_MODEL_ANSWER == CALL_SITE_COUNT;
+  assert sentinel_can_be_published_as_copy(true) == false;
+  assert sentinel_can_be_published_as_copy(false) == true;
+  assert what_is_sent(ANSWER_DRAFT_COPY, TURN_FILTER_REPLY) == SENT_WRITTEN_FALLBACK;
+  assert what_is_sent(ANSWER_DRAFT_COPY, TURN_FILTER_REPLY) != SENT_UNLOCALIZED_LITERAL;
+  assert what_is_sent(ANSWER_DRAFT_COPY, TURN_FILTER_REPLY) != SENT_MODEL_TEXT;
+  assert OUTPUT_CHECKS_ON_THE_DRAFT_SITE == 2;
+  assert THE_FIRST_DRAFT_CHECK_READS_THE_SENTENCE == false;
+  assert THE_SECOND_DRAFT_CHECK_READS_THE_SENTENCE == true;
+}
+
+; The figures of the check next door belong to nobody, and this test is the only thing in the
+; corpus that says so out loud.
+test the_copy_checks_figures_are_pinned_by_neither_contract {
+  assert COPY_CHECK_FIGURES_PINNED_BY_THIS_FILE == 0;
+  assert COPY_CHECK_FIGURES_PINNED_BY_THE_NAMED_OWNER == 0;
+  assert COPY_CHECK_FIGURE_OWNERSHIP_IS_CIRCULAR == true;
+  assert DRAFT_COPY_CHECK_IS_RESTATED_HERE == false;
+  assert copy_check_figures_have_an_owner(COPY_CHECK_FIGURES_PINNED_BY_THIS_FILE, COPY_CHECK_FIGURES_PINNED_BY_THE_NAMED_OWNER) == false;
+  assert copy_check_figures_have_an_owner(0, 4) == true;
+}
+
 test the_two_inbound_clamps_hold_at_their_edges {
   assert chars_entering_the_prompt(0) == 0;
   assert chars_entering_the_prompt(PROMPT_CHAR_CAP) == PROMPT_CHAR_CAP;
@@ -789,6 +871,8 @@ test a_shop_fact_never_enters_an_unreviewed_prompt {
 }
 
 test what_is_asked_for_is_not_what_is_checked {
+  assert IMPLEMENTATION_LOC == 454;
+  assert SUPERSEDED_IMPLEMENTATION_LOC == 428;
   assert REQUESTED_MAX_TOKENS == 300;
   assert REQUESTED_WORD_CEILING == 200;
   assert RESPONSE_CHARS_ARE_BOUNDED_ON_ARRIVAL == false;
@@ -855,6 +939,16 @@ invariant a_model_that_answers_or_fails_is_never_met_with_silence
 
 ; The counterpart, and the reason the invariant above is worded about the MODEL and not about the
 ; turn: a refused turn IS silence on one kind, and this file asserts that rather than hiding it.
+; The sentinel never becomes a post. It is the one customer-facing sentence this repository writes
+; itself, and the only path on this boundary that could broadcast it is the drafted one.
+invariant the_filter_reply_is_never_the_text_of_a_promotional_draft
+  assert what_is_sent(ANSWER_DRAFT_COPY, TURN_FILTER_REPLY) == SENT_WRITTEN_FALLBACK and FILTER_REPLY_IS_A_NAMED_CONSTANT == true and sentinel_can_be_published_as_copy(true) == false
+
+; And it is refused without being quoted: the day this reads true by prose, a reworded sentinel
+; gets published again.
+invariant the_sentinel_is_refused_by_identity_and_not_by_its_words
+  assert FILTER_REPLY_IS_MATCHED_BY_PROSE == false and SITES_THAT_TELL_THE_SENTINEL_FROM_A_MODEL_ANSWER == DRAFT_COPY_CALL_SITES and THE_FIRST_DRAFT_CHECK_READS_THE_SENTENCE == false
+
 invariant a_refused_turn_is_silence_on_the_free_text_kind_alone
   assert what_is_sent(ANSWER_FREE_TEXT, TURN_RATE_REFUSAL) == SENT_NOTHING and what_is_sent(ANSWER_ENTERTAINMENT, TURN_RATE_REFUSAL) != SENT_NOTHING and RATE_REFUSAL_SILENT_SITES == 1
 

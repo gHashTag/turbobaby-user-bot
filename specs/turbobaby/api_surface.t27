@@ -12,15 +12,24 @@
 ; turbobaby/request-identity; what a request may be correlated by belongs to
 ; turbobaby/observability. Four edges, named below by ID, none of them restated.
 ; --
-; WHY (measured 2026-09-21). The binary serves 103 distinct paths under /api and the document
-; names 9 of them. The other 94 are routed and published nowhere. The reverse direction is
-; clean today -- all 9 documented paths resolve to a live registration with the documented verb
-; -- but nothing holds it that way: no test in tests/ mentions the document at all (a grep of
-; tests/ for openapi or ApiDoc on 2026-09-21 returns zero files), and the one gate that does
-; read the router, the route-wiring test at src/api/mod.rs:304-494, takes the MODULE as its
-; subject and never a path. A module can be merged, pass that gate, and carry a path the
-; document invented or forgot; both readings stay green. So the gap is not a backlog, it is
-; unmonitored: the number above was true on 2026-09-21 and the next route changes it in silence.
+; WHY (measured 2026-09-21, re-measured the same day after the repair below). The binary serves
+; 102 distinct paths under /api and the document names 9 of them. The other 93 are routed and
+; published nowhere: 2 of those are now exempt with a reason recorded in the source, and 91 are
+; undisclosed. The reverse direction is clean -- all 9 documented paths resolve to a live
+; registration with the documented verb.
+; WHAT THE FIRST MEASUREMENT FOUND AND WHAT WAS DONE ABOUT IT. Earlier on 2026-09-21 the counts
+; read 103 and 94, and nothing held either direction: no test in tests/ mentioned the document at
+; all (a grep of tests/ for openapi or ApiDoc returned zero files), and the one gate that reads
+; the router, the route-wiring test at src/api/mod.rs:304-494, takes the MODULE as its subject and
+; never a path. A module could be merged, pass that gate, and carry a path the document invented
+; or forgot with both readings green. The 103rd path was the proof: src/api/quest.rs registered a
+; literal that already spelled the nest prefix, so it was served at /api/api/test and unreachable
+; as written since the day it was typed. It is gone, and tests/api_document_pairing.rs now reads
+; both sides as text: it fails on a documented path with no route, on a module literal that
+; respells the prefix, and on an undocumented path beyond a per-module figure that may only fall.
+; The gap is therefore no longer unmonitored. It is still 91 wide, and this file says so rather
+; than treating a gate as a fix: what the gate buys is that the next route cannot widen it
+; silently, not that the 91 are written up.
 ; --
 ; The second half of this file is one structural law rather than a count, because the repository
 ; paid for it once already. Issue #48: an unmatched /api path inherited the outer SPA fallback
@@ -37,9 +46,11 @@
 ;      six are the route-wiring test module's own needles and prose (:301, :323, :445, :463,
 ;      :464, :482). A count taken from the grep total overstates the router by a third.
 ;   2. The obvious path count is wrong by twenty-four, in the other direction. A single-line
-;      grep for .route(" over src/api/*.rs finds 101 production registrations and 80 distinct
-;      paths; the same pass tolerant of a line break between .route( and its literal finds 125
-;      and 104. rustfmt wraps any .route call whose arguments are long, so the paths that go
+;      grep for .route(" over src/api/*.rs finds 100 production registrations and 79 distinct
+;      paths; the same pass tolerant of a line break between .route( and its literal finds 124
+;      and 103. (Both readings were one higher -- 101/80 and 125/104 -- before the removal
+;      described in 5 below; the twenty-four the grep misses is unchanged by it.) rustfmt wraps
+;      any .route call whose arguments are long, so the paths that go
 ;      missing are systematically the longest ones -- including /loyalty/:telegram_id/bonus-history
 ;      (src/api/loyalty.rs:27-30), which the document DOES name and a single-line grep would have
 ;      reported as a phantom. The wrong measurement produces the wrong finding, not a smaller one.
@@ -62,13 +73,20 @@
 ;      the axum nesting semantics the fix depends on, which is worth pinning and is what its own
 ;      header argues for. What it does not pin is this repository's use of them: delete
 ;      src/api/mod.rs:120 and the witness stays green.
-;   5. One registered path is not served at the path it reads as. src/api/quest.rs:16 registers
-;      /api/test inside a router that src/api/mod.rs:77 nests under /api, so the served path is
-;      /api/api/test and a request to /api/test reaches the miss handler. It is counted among the
-;      103 because it is a real registration; it is named here because the doubling is invisible
-;      at the call site, which is the same reason #48 was invisible.
+;   5. One registered path was not served at the path it read as, and is now gone.
+;      src/api/quest.rs:16 registered /api/test inside a router that src/api/mod.rs:77 nests
+;      under /api, so the served path was /api/api/test and a request to /api/test reached the
+;      miss handler. It was counted among the 103 because it was a real registration. Removed
+;      2026-09-21 rather than re-spelled: nothing in the tree fetched either spelling (a grep for
+;      api/test over the working tree returned the registration and this contract and nothing
+;      else), the handler answered a fixed JSON literal, and /api/ping at src/api/mod.rs:83 is
+;      the liveness probe it duplicated. The doubling was invisible at the call site, which is the
+;      same reason #48 was invisible, so the class is now gated rather than only corrected:
+;      tests/api_document_pairing.rs fails on any literal under src/api that begins with the
+;      prefix its parent already supplies, with src/api/mod.rs itself excluded as the composer
+;      that owns the nest and the outer router.
 ; --
-; WHAT THIS FILE NEVER DOES. It does not enumerate the paths. A list of 103 path strings would be
+; WHAT THIS FILE NEVER DOES. It does not enumerate the paths. A list of 102 path strings would be
 ; the restated-list defect in its purest form: it would be stale on the next route, it would
 ; invite a reader to treat this file rather than the router as the surface, and its staleness
 ; would be silent in exactly the way the drift it describes is silent. The counts below are dated
@@ -160,18 +178,37 @@ pub const MERGE_COMMAND : str = "grep -n for .merge( over src/api/mod.rs on 2026
 ; Every .route call whose byte offset precedes its file's first cfg(test), with the first string
 ; literal taken as the path and a line break between .route( and that literal tolerated. One
 ; registration may carry several verbs, which is why the pair count exceeds the call count.
-pub const PATH_COMMAND : str = "A python pass over src/api/*.rs on 2026-09-21 collecting the first string literal of every .route call before the first cfg(test) marker: 125 registrations, 104 distinct paths, 141 distinct verb-and-path pairs. The one route in src/api/observability.rs is inside that file's test module and is excluded.";
-pub const ROUTE_REGISTRATION_COUNT : u16 = 125;
-pub const DISTINCT_PATH_COUNT : u16 = 104;
-pub const VERB_PATH_PAIR_COUNT : u16 = 141;
-; /health is registered on the outer router at src/api/mod.rs:76 and is the only path of the 104
+pub const PATH_COMMAND : str = "A python pass over src/api/*.rs on 2026-09-21 collecting the first string literal of every .route call before the first cfg(test) marker: 124 registrations, 103 distinct paths, 140 distinct verb-and-path pairs. The one route in src/api/observability.rs is inside that file's test module and is excluded. The same pass earlier that day read 125, 104 and 141; the difference is the single unreachable registration removed from src/api/quest.rs, and tests/api_document_pairing.rs replays this pass in Rust on every test run.";
+pub const ROUTE_REGISTRATION_COUNT : u16 = 124;
+pub const DISTINCT_PATH_COUNT : u16 = 103;
+pub const VERB_PATH_PAIR_COUNT : u16 = 140;
+pub const ROUTE_REGISTRATION_COUNT_BEFORE_REPAIR : u16 = 125;
+pub const DISTINCT_PATH_COUNT_BEFORE_REPAIR : u16 = 104;
+; /health is registered on the outer router at src/api/mod.rs:76 and is the only path of the 103
 ; that does not sit under the nest. /ping at :83 does sit under it.
 pub const PATHS_OUTSIDE_THE_NEST : u16 = 1;
-pub const API_PATH_COUNT : u16 = 103;
-pub const API_VERB_PATH_PAIR_COUNT : u16 = 140;
-; A single-line grep is the wrong instrument here and the difference is not noise.
+pub const API_PATH_COUNT : u16 = 102;
+pub const API_VERB_PATH_PAIR_COUNT : u16 = 139;
+pub const API_PATH_COUNT_BEFORE_REPAIR : u16 = 103;
+; A single-line grep is the wrong instrument here and the difference is not noise. It is wrong in
+; BOTH directions, which is the part this file used to get wrong about itself.
+; CORRECTED 2026-09-21 by the adversarial review of the repair wave. These two figures read 101
+; and 80 before the repair and 100 and 79 after it, and every one of those four numbers was one
+; short: they were the CAREFUL pass's scope wearing a grep's name, because they silently dropped
+; the one route a grep cannot drop -- src/api/observability.rs:172, a route registered inside
+; that file's own test module, which PATH_COMMAND excludes on purpose and a text search cannot.
+; A reader who runs SINGLE_LINE_GREP_COMMAND gets the numbers below, which is the whole point of
+; naming a naive instrument: it has to be the naive answer or it proves nothing about the gap.
+; The gap itself is unchanged -- 24 multi-line registrations are invisible to a single line --
+; and the census now closes in both directions: naive, minus the one hit outside the careful
+; pass's scope, plus the 24 it cannot see, is the router.
+pub const SINGLE_LINE_GREP_COMMAND : str = "grep -rho for the seven-character route-and-quote opener over src/api/*.rs, counted with wc -l, and the same pattern extended to the closing quote and passed through sort -u for the paths; measured 2026-09-21";
 pub const SINGLE_LINE_GREP_REGISTRATIONS : u16 = 101;
 pub const SINGLE_LINE_GREP_DISTINCT_PATHS : u16 = 80;
+pub const SINGLE_LINE_GREP_REGISTRATIONS_BEFORE_REPAIR : u16 = 102;
+; The hit the grep has and the census does not: one route registered inside a cfg(test) module.
+pub const GREP_HITS_OUTSIDE_THE_CENSUS_SCOPE : u16 = 1;
+pub const GREP_HIT_OUTSIDE_THE_CENSUS_SCOPE_SITE : str = "src/api/observability.rs:172";
 pub const REGISTRATIONS_A_SINGLE_LINE_GREP_MISSES : u16 = 24;
 
 ; --- The document, measured -------------------------------------------------------------------
@@ -185,8 +222,18 @@ pub const DOCUMENT_STUBS_NOT_LISTED : u16 = 0;
 ; normalized away, on 2026-09-21.
 pub const DOCUMENTED_PATHS_NOT_ROUTED : u16 = 0;
 pub const DOCUMENTED_PAIRS_NOT_ROUTED : u16 = 0;
-pub const ROUTED_API_PATHS_NOT_DOCUMENTED : u16 = 94;
-pub const ROUTED_API_PAIRS_NOT_DOCUMENTED : u16 = 131;
+pub const ROUTED_API_PATHS_NOT_DOCUMENTED : u16 = 93;
+pub const ROUTED_API_PAIRS_NOT_DOCUMENTED : u16 = 130;
+pub const ROUTED_API_PATHS_NOT_DOCUMENTED_BEFORE_REPAIR : u16 = 94;
+; The undocumented 93 split two ways from 2026-09-21, and the split is the thing most likely to
+; be abused later: an exemption is what a reader accepts without checking. Two of the 93 carry a
+; reason in the source -- the liveness probe at src/api/mod.rs:138-140 and the diagnostic hook
+; at src/api/debug.rs:1-6 -- and the other 91 carry none and are counted as undisclosed. The
+; register lives in the gate, not here, because a list of paths in this file is the defect this
+; file refuses; what is declared here is the SIZE of each half, so an exemption list that starts
+; growing shows up as a number moving.
+pub const EXEMPT_PATH_COUNT : u16 = 2;
+pub const UNDISCLOSED_PATH_COUNT : u16 = 91;
 ; The nine documented paths carry fourteen shipped verb-and-path pairs between them, so five
 ; shipped verbs sit on a path the document names while going unmentioned themselves. A
 ; path-level reading calls those five documented; they are not.
@@ -209,8 +256,16 @@ pub const WIRING_GATE_SUBJECTS_TODAY : u8 = 18;
 ; high, the floor is unaffected, and the allowlist at :313 is empty as its comment says.
 pub const WIRING_GATE_COMMENT_CLAIMS_SUBJECTS : u8 = 19;
 pub const WIRING_GATE_COMMENT_IS_CORRECT : bool = false;
-pub const TEST_FILES_NAMING_THE_DOCUMENT : u8 = 0;
-pub const DOCUMENT_IS_GATED_AGAINST_THE_ROUTER : bool = false;
+; Both of these read 0 and false until 2026-09-21. The gate that changed them is
+; tests/api_document_pairing.rs: seven checks over the two sides as text -- two anti-vacuity
+; floors (D16), the phantom direction, the prefix-doubling class, the per-module ratchet, the
+; ratchet's own accuracy, and the exemption register's staleness.
+pub const TEST_FILES_NAMING_THE_DOCUMENT : u8 = 1;
+pub const DOCUMENT_IS_GATED_AGAINST_THE_ROUTER : bool = true;
+pub const PAIRING_GATE_SITE : str = "tests/api_document_pairing.rs";
+pub const PAIRING_GATE_CHECKS : u8 = 7;
+pub const PAIRING_GATE_RATCHET_ROWS : u8 = 17;
+pub const PREFIX_DOUBLING_IS_GATED : bool = true;
 ; src/api/openapi.rs:195-239 does gate the document, on vocabulary: it asserts the served text
 ; carries no retired word and does name the product. That is a rebrand gate, and it would pass
 ; unchanged on a document describing nine paths that do not exist.
@@ -351,9 +406,16 @@ pub fn document_endpoint_is_registered(default_set_carries_it: bool, server_requ
 
 ; --- A registration is a string, so it can disagree with itself ---------------------------------
 ; The nest prefix is applied by the parent. A module that spells the prefix again gets it twice,
-; and nothing in the compiler can see it: src/api/quest.rs:16 is the one such registration today.
-pub const REGISTRATIONS_REPEATING_THE_PREFIX : u8 = 1;
-pub const PREFIX_DOUBLING_SITE : str = "src/api/quest.rs:16";
+; and nothing in the compiler can see it. There was one such registration, src/api/quest.rs:16,
+; and on 2026-09-21 it was removed rather than re-spelled -- nothing fetched it and it duplicated
+; the liveness probe. The count below is therefore 0, and a 0 that nothing watches would be worth
+; very little: what makes it durable is that the class is gated at PAIRING_GATE_SITE. The site is
+; kept under its own name rather than deleted, because "there has never been one" and "there was
+; one and it is gone" are different claims and only the second is true.
+pub const REGISTRATIONS_REPEATING_THE_PREFIX : u8 = 0;
+pub const REGISTRATIONS_REPEATING_THE_PREFIX_BEFORE_REPAIR : u8 = 1;
+pub const PREFIX_DOUBLING_SITE_BEFORE_REPAIR : str = "src/api/quest.rs:16";
+pub const PREFIX_DOUBLING_REPAIRED_AT : str = "2026-09-21";
 
 pub fn served_path_doubles_the_prefix(module_path_repeats_the_prefix: bool) bool {
   return module_path_repeats_the_prefix;
@@ -380,11 +442,12 @@ pub fn wiring_gate_is_awake(subjects_found: u8, floor: u8) bool {
 
 ; --- Honest refusals ------------------------------------------------------------------------------
 pub const THIS_FILE_ENUMERATES_THE_PATHS : bool = false;
-pub const NO_ROUTE_TABLE_NOTE : str = "103 path strings would make this file a second router, wrong on the first route anyone adds, and wrong silently. Reading a list here instead of the code is the failure this contract describes, so the counts are dated and the command that produced each is recorded beside it.";
+pub const NO_ROUTE_TABLE_NOTE : str = "102 path strings would make this file a second router, wrong on the first route anyone adds, and wrong silently. Reading a list here instead of the code is the failure this contract describes, so the counts are dated and the command that produced each is recorded beside it.";
 pub const THIS_FILE_CARRIES_A_SCHEMA_FRAGMENT : bool = false;
 pub const NO_SCHEMA_NOTE : str = "No body shape, parameter or tag from src/api/openapi.rs is copied here, and there is less to copy than the word OpenAPI suggests: all nine stubs declare their success body as serde_json::Value (:9, :24, :42, :58, :70, :82, :99, :114, :128) and the single request body is the same (:94), so the document fixes no field of any response it names. That is a fact about the document and not a licence to invent one here.";
-pub const EXEMPTION_REGISTER_EXISTS : bool = false;
-pub const EXEMPTION_NOTE : str = "The exempt argument has no shipped source. Nothing in the repository records that a routed path is deliberately undocumented; the nearest thing is ALLOWED_UNWIRED_ROUTES at src/api/mod.rs:313, which is empty and is about modules, not paths. Until something declares an exemption, every one of the 94 is undisclosed rather than exempt, and inventing a default of exempt would turn the whole gap green.";
+pub const EXEMPTION_REGISTER_EXISTS : bool = true;
+pub const EXEMPTION_REGISTER_SITE : str = "tests/api_document_pairing.rs";
+pub const EXEMPTION_NOTE : str = "Until 2026-09-21 the exempt argument had no shipped source: nothing in the repository recorded that a routed path was deliberately undocumented, so all 94 were undisclosed. DOCUMENTATION_EXEMPT in the gate is that source now, and it is deliberately the smallest thing that can be called one -- two entries, each naming the file and line where the source itself says the path is not a client surface. The warning the earlier reading carried stands and is the reason the register is kept small and re-checked: a default of exempt, or a register that grows by assertion rather than by citation, turns the whole gap green while the count of undocumented paths never moves. The gate re-derives both halves on every run and fails on an entry whose path has stopped being routed or has started being documented.";
 pub const DRIFT_RATE_IS_MEASURED : bool = false;
 pub const DRIFT_RATE_NOTE : str = "How fast the gap grows is not measured here. It would need the document and the router compared at two dated points, and the repository holds one dated comparison, this one. A rate stated from a single point would be a wish with a decimal in it.";
 
@@ -434,10 +497,15 @@ test api_surface_router_census_is_internally_consistent {
   assert ROUTE_REGISTRATION_COUNT >= DISTINCT_PATH_COUNT;
 }
 
-test api_surface_a_single_line_grep_undercounts_the_router {
-  assert SINGLE_LINE_GREP_REGISTRATIONS + REGISTRATIONS_A_SINGLE_LINE_GREP_MISSES == ROUTE_REGISTRATION_COUNT;
+test api_surface_a_single_line_grep_miscounts_the_router_in_both_directions {
+  ; Naive, minus the one hit the census scope excludes, plus the 24 the grep cannot see.
+  assert SINGLE_LINE_GREP_REGISTRATIONS - GREP_HITS_OUTSIDE_THE_CENSUS_SCOPE + REGISTRATIONS_A_SINGLE_LINE_GREP_MISSES == ROUTE_REGISTRATION_COUNT;
   assert SINGLE_LINE_GREP_DISTINCT_PATHS < DISTINCT_PATH_COUNT;
   assert REGISTRATIONS_A_SINGLE_LINE_GREP_MISSES > 0;
+  assert GREP_HITS_OUTSIDE_THE_CENSUS_SCOPE == 1;
+  assert GREP_HIT_OUTSIDE_THE_CENSUS_SCOPE_SITE == "src/api/observability.rs:172";
+  ; The removal of the unreachable registration moved the grep by exactly one too.
+  assert SINGLE_LINE_GREP_REGISTRATIONS + 1 == SINGLE_LINE_GREP_REGISTRATIONS_BEFORE_REPAIR;
 }
 
 test api_surface_document_census_closes_against_the_router {
@@ -475,15 +543,48 @@ test api_surface_an_undisclosed_path_is_named_as_such {
   assert routed_path_is_undisclosed(true, false, true) == false;
   assert routed_path_is_undisclosed(true, true, false) == false;
   assert routed_path_is_undisclosed(false, false, false) == false;
-  assert EXEMPTION_REGISTER_EXISTS == false;
+  assert EXEMPTION_REGISTER_EXISTS == true;
+  assert EXEMPTION_REGISTER_SITE == PAIRING_GATE_SITE;
 }
 
-test api_surface_drift_is_silent_here_today {
+; The split of the undocumented 93. Asserted as an identity rather than as two numbers, because
+; the failure worth catching is an exemption list that grows into the gap: every path moved from
+; undisclosed to exempt keeps this sum true while the second number falls, and a reader comparing
+; the two numbers sees it immediately.
+test api_surface_the_exemption_register_is_small_and_the_gap_is_not_hidden_in_it {
+  assert EXEMPT_PATH_COUNT == 2;
+  assert UNDISCLOSED_PATH_COUNT == 91;
+  assert EXEMPT_PATH_COUNT + UNDISCLOSED_PATH_COUNT == ROUTED_API_PATHS_NOT_DOCUMENTED;
+  assert EXEMPT_PATH_COUNT < UNDISCLOSED_PATH_COUNT;
+  assert UNDISCLOSED_PATH_COUNT > 0;
+  assert PAIRING_GATE_RATCHET_ROWS == 17;
+  assert PAIRING_GATE_CHECKS == 7;
+}
+
+; What the repair moved, in the numbers this file already declared. Each pair is one fact: the
+; registration is gone, the path it served is gone with it, and the undocumented count fell by
+; exactly one rather than by a number that would mean something else had changed too.
+test api_surface_the_repair_moved_exactly_one_path {
+  assert ROUTE_REGISTRATION_COUNT_BEFORE_REPAIR == 125;
+  assert DISTINCT_PATH_COUNT_BEFORE_REPAIR == 104;
+  assert API_PATH_COUNT_BEFORE_REPAIR == 103;
+  assert ROUTED_API_PATHS_NOT_DOCUMENTED_BEFORE_REPAIR == 94;
+  assert ROUTE_REGISTRATION_COUNT + 1 == ROUTE_REGISTRATION_COUNT_BEFORE_REPAIR;
+  assert DISTINCT_PATH_COUNT + 1 == DISTINCT_PATH_COUNT_BEFORE_REPAIR;
+  assert API_PATH_COUNT + 1 == API_PATH_COUNT_BEFORE_REPAIR;
+  assert ROUTED_API_PATHS_NOT_DOCUMENTED + 1 == ROUTED_API_PATHS_NOT_DOCUMENTED_BEFORE_REPAIR;
+  assert DOCUMENTED_PATH_COUNT == 9;
+  assert census_closes(API_PATH_COUNT_BEFORE_REPAIR, DOCUMENTED_PATH_COUNT, DOCUMENTED_PATHS_NOT_ROUTED, ROUTED_API_PATHS_NOT_DOCUMENTED_BEFORE_REPAIR) == true;
+}
+
+test api_surface_drift_was_silent_here_until_the_gate_existed {
   assert drift_is_silent(false, false) == true;
   assert drift_is_silent(false, true) == false;
   assert drift_is_silent(true, false) == false;
   assert drift_is_silent(true, true) == false;
-  assert surface_has_a_pairing_gate(WIRING_GATE_EXISTS, DOCUMENT_IS_GATED_AGAINST_THE_ROUTER) == false;
+  assert surface_has_a_pairing_gate(WIRING_GATE_EXISTS, DOCUMENT_IS_GATED_AGAINST_THE_ROUTER) == true;
+  assert drift_is_silent(false, DOCUMENT_IS_GATED_AGAINST_THE_ROUTER) == false;
+  assert PAIRING_GATE_SITE == "tests/api_document_pairing.rs";
 }
 
 test api_surface_the_wiring_gate_is_awake_but_looking_elsewhere {
@@ -497,10 +598,10 @@ test api_surface_the_wiring_gate_is_awake_but_looking_elsewhere {
   assert WIRING_GATE_COMMENT_IS_CORRECT == false;
 }
 
-test api_surface_the_vocabulary_gate_is_not_a_pairing_gate {
+test api_surface_the_vocabulary_gate_is_still_not_a_pairing_gate {
   assert DOCUMENT_HAS_A_VOCABULARY_GATE == true;
   assert VOCABULARY_GATE_READS_THE_ROUTER == false;
-  assert TEST_FILES_NAMING_THE_DOCUMENT == 0;
+  assert TEST_FILES_NAMING_THE_DOCUMENT == 1;
   assert surface_has_a_pairing_gate(DOCUMENT_HAS_A_VOCABULARY_GATE, VOCABULARY_GATE_READS_THE_ROUTER) == false;
 }
 
@@ -561,8 +662,12 @@ test api_surface_the_default_feature_set_does_not_decide_what_is_served {
   assert DOCUMENT_ENDPOINT_IS_REGISTERED_IN_EVERY_SERVING_BUILD == true;
 }
 
-test api_surface_a_repeated_prefix_is_served_twice {
-  assert REGISTRATIONS_REPEATING_THE_PREFIX == 1;
+test api_surface_a_repeated_prefix_is_served_twice_and_there_is_no_longer_one {
+  assert REGISTRATIONS_REPEATING_THE_PREFIX == 0;
+  assert REGISTRATIONS_REPEATING_THE_PREFIX_BEFORE_REPAIR == 1;
+  assert PREFIX_DOUBLING_SITE_BEFORE_REPAIR == "src/api/quest.rs:16";
+  assert PREFIX_DOUBLING_REPAIRED_AT == "2026-09-21";
+  assert PREFIX_DOUBLING_IS_GATED == true;
   assert served_path_doubles_the_prefix(true) == true;
   assert served_path_doubles_the_prefix(false) == false;
   assert path_is_reachable_as_written(true) == false;
@@ -607,8 +712,13 @@ invariant api_surface_today_the_census_closes_on_both_readings
 invariant api_surface_the_gap_is_real_and_one_directional_today
   assert ROUTED_API_PATHS_NOT_DOCUMENTED > 0 and DOCUMENTED_PATHS_NOT_ROUTED == 0
 
-invariant api_surface_nothing_joins_the_router_to_the_document
-  assert surface_has_a_pairing_gate(WIRING_GATE_EXISTS, DOCUMENT_IS_GATED_AGAINST_THE_ROUTER) == false and drift_is_silent(false, DOCUMENT_IS_GATED_AGAINST_THE_ROUTER) == true
+invariant api_surface_something_joins_the_router_to_the_document
+  assert surface_has_a_pairing_gate(WIRING_GATE_EXISTS, DOCUMENT_IS_GATED_AGAINST_THE_ROUTER) == true and drift_is_silent(false, DOCUMENT_IS_GATED_AGAINST_THE_ROUTER) == false and TEST_FILES_NAMING_THE_DOCUMENT > 0
+
+; A gate is not a fix, and the census must never be allowed to read as one. The gap is still 93
+; wide and the exemption register must stay the smaller half of it.
+invariant api_surface_the_gate_did_not_close_the_gap
+  assert ROUTED_API_PATHS_NOT_DOCUMENTED > 0 and EXEMPT_PATH_COUNT + UNDISCLOSED_PATH_COUNT == ROUTED_API_PATHS_NOT_DOCUMENTED and EXEMPT_PATH_COUNT < UNDISCLOSED_PATH_COUNT
 
 invariant api_surface_an_unmatched_path_under_the_nest_is_never_a_success_page
   assert unmatched_api_answer_is_honest(unmatched_api_answer(true, true, true)) == true and a_miss_can_render_as_success(unmatched_api_answer(true, true, true)) == false
@@ -626,7 +736,7 @@ invariant api_surface_the_document_endpoint_is_registered_wherever_a_server_exis
   assert document_endpoint_is_registered(DOCUMENT_FEATURE_IS_IN_THE_DEFAULT_FEATURE_SET, SERVER_BINARY_REQUIRES_THE_BACKEND_FEATURE, BACKEND_FEATURE_ENABLES_THE_DOCUMENT_FEATURE) == true and absent_path_answers_html(DOCUMENT_ENDPOINT_IS_REGISTERED_IN_EVERY_SERVING_BUILD, DOCUMENT_ENDPOINT_IS_UNDER_THE_NEST, OUTER_FALLBACK_SERVES_SPA) == false
 
 invariant api_surface_a_repeated_prefix_is_unreachable_as_written
-  assert path_is_reachable_as_written(true) == false
+  assert path_is_reachable_as_written(true) == false and REGISTRATIONS_REPEATING_THE_PREFIX == 0 and PREFIX_DOUBLING_IS_GATED == true
 
 invariant api_surface_the_wiring_gate_cannot_go_blind_unnoticed
   assert wiring_gate_is_awake(0, WIRING_GATE_FLOOR) == false and wiring_gate_is_awake(WIRING_GATE_SUBJECTS_TODAY, WIRING_GATE_FLOOR) == true

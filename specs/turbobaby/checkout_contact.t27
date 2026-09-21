@@ -15,8 +15,8 @@
 ; refusal reasons (src/trios/store.rs:451-458, enum at src/trios/store.rs:419-426), and in the
 ; name, phone and address rows it tests emptiness on the TRIMMED string and the length cap on
 ; the RAW one (src/trios/store.rs:467, :470, :473). The submit handler reaches the same six
-; subjects -- it refuses a missing identity at src/ui/screens/checkout_screen.rs:852-856 and an
-; unticked age box at :857-861 before calling the validator at :863-869 -- but the validator
+; subjects -- it refuses a missing identity at src/ui/screens/checkout_screen.rs:893-897 and an
+; unticked age box at :898-902 before calling the validator at :904-910 -- but the validator
 ; caps the TRIMMED string in all three fields (src/trios/store.rs:505, :511, :522). So a value
 ; whose content fits the cap and whose surrounding whitespace does not is refused by the button
 ; and admitted by the handler: the customer gets a greyed-out button and a "too long" sentence
@@ -67,10 +67,10 @@
 ;       same mistake. validate_checkout_for really does lack a has_telegram_id and an
 ;       age_confirmed parameter (src/trios/store.rs:495-501), and it is tempting to call the
 ;       handler two arguments short of the button. It is not. The function has exactly one
-;       production call site, src/ui/screens/checkout_screen.rs:863, and that call site supplies
-;       both subjects itself, immediately above, at :852-856 and :857-861. Every entry into the
-;       submit path goes through that closure (src/ui/screens/checkout_screen.rs:848, called at
-;       :1100, :1559 and :1638), so there is no reachable order that the button refuses for a
+;       production call site, src/ui/screens/checkout_screen.rs:904, and that call site supplies
+;       both subjects itself, immediately above, at :893-897 and :898-902. Every entry into the
+;       submit path goes through that closure (src/ui/screens/checkout_screen.rs:877, called at
+;       :1133, :1601 and :1680), so there is no reachable order that the button refuses for a
 ;       missing identity or an unticked age box and the handler admits. The function's argument
 ;       list is a fact about the function; the gate is the call site. The shipped agreement test
 ;       passing `true` for both at src/trios/store.rs:1063 is therefore correct rather than a
@@ -94,6 +94,15 @@ pub const NAME : str = "TurboBaby checkout contact fields and phone normalizatio
 pub const MEASURED_AT : str = "2026-09-21";
 pub const CORE_IMPLEMENTATION : str = "src/trios/store.rs";
 pub const SCREEN_IMPLEMENTATION : str = "src/ui/screens/checkout_screen.rs";
+; Addresses into that screen re-taken 2026-09-21 and re-read at their new lines, after the
+; unreachable 409 arm was deleted and a cart-price refusal was added above the identity check:
+; the closure :848 -> :877, the identity refusal :852-856 -> :893-897, the age box
+; :857-861 -> :898-902, the validator call :863-869 -> :904-910, the three entries
+; :1100/:1559/:1638 -> :1133/:1601/:1680, and the phone format :980 -> :1019. Every CLAIM in
+; this file is unchanged; only the addresses moved. The new refusal is a SEVENTH subject the
+; handler reaches before the six counted here -- an unpriced cart, owned by
+; turbobaby/webapp-bridge -- and it refuses earlier than all six, so nothing this file says
+; about the six is affected by it.
 pub const SERVER_IMPLEMENTATION : str = "src/api/orders.rs";
 pub const MESSAGE_IMPLEMENTATION : str = "src/trios/i18n.rs";
 
@@ -436,9 +445,9 @@ pub fn button_admits(has_identity: bool, cart_lines: u16, name_ok: bool, phone_o
 ; The submit handler behind the same button. The VALIDATOR the handler ends in takes five
 ; arguments over four subjects (src/trios/store.rs:495-501) and has no has_telegram_id and no
 ; age_confirmed parameter -- but the handler is the closure at
-; src/ui/screens/checkout_screen.rs:848, and that closure refuses a missing identity at :852-856
-; and an unticked age box at :857-861 before it calls the validator at :863. The closure is the
-; only production caller, and every entry to it (:1100, :1559, :1638) passes through those two
+; src/ui/screens/checkout_screen.rs:877, and that closure refuses a missing identity at :893-897
+; and an unticked age box at :898-902 before it calls the validator at :904. The closure is the
+; only production caller, and every entry to it (:1133, :1601, :1680) passes through those two
 ; checks. So the handler reaches all six subjects: the two absent parameters are a fact about
 ; the function, not a gap in the gate. Both halves are recorded so the next reader does not
 ; re-file the signature as a hole -- this file's own first draft did exactly that.
@@ -586,7 +595,7 @@ pub const BROWSER_ONLY_BLOCKER_NAMES : [2]str = ["no_telegram", "address"];
 ; (8) WHAT REACHES THE COLUMN
 ; ------------------------------------------------------------------------------------------
 ; Two sites format the phone for the wire and BOTH fall back to the typed string when
-; normalization returns nothing: src/ui/screens/checkout_screen.rs:980 and
+; normalization returns nothing: src/ui/screens/checkout_screen.rs:1019 and
 ; src/api/orders.rs:1417-1420. Neither fallback can fire on a request the server accepted,
 ; because src/api/orders.rs:131 has already rejected anything the normalizer refuses. So the
 ; column holds E.164 as a consequence of the VALIDATOR, never of the format call -- and if the

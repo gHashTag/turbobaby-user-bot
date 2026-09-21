@@ -63,7 +63,7 @@
 ; literal property (src/main.rs:1910 is one). The other two are Rust identifiers that PRODUCE a
 ; value for that property and never a pagination token: cursor_style at
 ; src/ui/game/shop_game.rs:1710 returns "pointer" or "default", and btn_cursor at
-; src/ui/screens/checkout_screen.rs:1622 picks "pointer" or "not-allowed". The exceptions are
+; src/ui/screens/checkout_screen.rs:1664 picks "pointer" or "not-allowed". The exceptions are
 ; named rather than folded in because "all" is a word a reader checks by finding one
 ; counterexample; they do not touch the conclusion, which is about pagination and not about CSS.
 ; Where this repository does page, it pages by a clamped limit and
@@ -335,7 +335,7 @@ pub const CURSOR_OCCURRENCES_IN_THE_API_MODULE : u8 = 0;
 ; handlers that take a client-supplied row count and bound it, in file order:
 ;   src/api/client_errors.rs:118 -- default CLIENT_ERROR_PAGE (50, src/api/client_errors.rs:92),
 ;     clamped into 1..500, no offset;
-;   src/api/events.rs:405-409 -- default 100, clamped into 1..100, no offset;
+;   src/api/events.rs:407-411 (:405-409 before 2026-09-21) -- default 100, clamped into 1..100, no offset;
 ;   src/api/game.rs:50 -- clamped into 1..100, default 20 at src/api/game.rs:33-35 (the board this
 ;     ladder serves belongs to turbobaby/game-score; only the transport numbers are read here);
 ;   src/api/loyalty.rs:592-596 -- default 50, clamped into 1..100 at src/api/loyalty.rs:608-609,
@@ -357,7 +357,7 @@ pub const SHIPPED_PAGE_LADDERS_ON_THIS_ENDPOINT : u8 = 0;
 ; --- The cursor census, with its exceptions counted rather than waved past -------------------
 ; The header used to say the 184 lines carrying "cursor" over src/ are ALL the CSS property.
 ; Two are not, and both are still CSS: cursor_style at src/ui/game/shop_game.rs:1710 and
-; btn_cursor at src/ui/screens/checkout_screen.rs:1622 are identifiers that RETURN a value for
+; btn_cursor at src/ui/screens/checkout_screen.rs:1664 are identifiers that RETURN a value for
 ; the property. The split is declared because "all" is checked by one counterexample, and a
 ; reader who finds one stops trusting the sentence that mattered -- which is the last number
 ; here, not the first two. Measured 2026-09-21.

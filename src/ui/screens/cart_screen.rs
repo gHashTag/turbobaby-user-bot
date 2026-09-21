@@ -1,9 +1,10 @@
 // Cart Screen — Interactive with global Cart signal
 use crate::trios::i18n::{
-    t, tf, T_CART_BACK_MENU, T_CART_BONUS_NUDGE, T_CART_BROWSE_MENU, T_CART_CHECKOUT,
-    T_CART_DECREASE_QTY, T_CART_DELIVERY, T_CART_DELIVERY_FREE, T_CART_DINE_IN, T_CART_EMPTY,
-    T_CART_EMPTY_DESC, T_CART_IMAGE_ALT, T_CART_ITEMS, T_CART_LINE_EACH, T_CART_REMOVE,
-    T_CART_SUBTOTAL, T_CART_SYNCING, T_CART_TAKEAWAY, T_CART_TITLE, T_PLACE_ORDER, T_TOTAL,
+    t, tf, T_BIKE_PRICE_ON_REQUEST, T_CART_BACK_MENU, T_CART_BONUS_NUDGE, T_CART_BROWSE_MENU,
+    T_CART_CHECKOUT, T_CART_DECREASE_QTY, T_CART_DELIVERY, T_CART_DELIVERY_FREE, T_CART_DINE_IN,
+    T_CART_EMPTY, T_CART_EMPTY_DESC, T_CART_IMAGE_ALT, T_CART_ITEMS, T_CART_LINE_EACH,
+    T_CART_REMOVE, T_CART_SUBTOTAL, T_CART_SYNCING, T_CART_TAKEAWAY, T_CART_TITLE, T_PLACE_ORDER,
+    T_TOTAL,
 };
 use crate::ui::api::context::api_base_url;
 use crate::ui::api::http::fetch_text_authed;
@@ -17,9 +18,15 @@ use crate::ui::telegram::{
 };
 use dioxus::prelude::*;
 
-fn format_price(price: f64) -> String {
-    // Single source of truth (was identical in menu/home, narrowing to i32).
-    crate::trios::pricing::format_baht(price)
+/// A money slot on this screen: the number, or a dash when there is none.
+///
+/// `thb_or_dash` is the UI's one money renderer (D15) and it puts `None`, NaN,
+/// infinity, a negative and `0.0` in the same bucket -- all of them mean nobody
+/// published this figure (D9). It used to be `format_baht`, which takes an
+/// `f64` and has nothing to say about absence: `sanitize_money` turned every
+/// one of those into `0`, so a cart the shop could not price displayed as free.
+fn format_price(price: Option<f64>) -> String {
+    crate::ui::components::bike_card::thb_or_dash(price)
 }
 
 #[component]
@@ -29,13 +36,21 @@ pub fn CartScreen() -> Element {
     let total = cart.read().total;
     let item_count: u32 = items.iter().map(|i| i.quantity).sum();
     let lang = crate::ui::lang::current_lang();
+    // D11: the dash never travels alone. A cart with no total says what a bike
+    // with no rate says -- a human quotes this price -- because silence is
+    // listed beside invention in `must_not_emit`, and a customer staring at a
+    // dash with no sentence has been served the silence half.
+    let unpriced_note = cart
+        .read()
+        .has_unpriced_line()
+        .then(|| t(lang, T_BIKE_PRICE_ON_REQUEST));
     let cart_title = t(lang, T_CART_TITLE);
     let cart_empty = t(lang, T_CART_EMPTY);
     let cart_empty_desc = t(lang, T_CART_EMPTY_DESC);
     let browse_menu = t(lang, T_CART_BROWSE_MENU);
     let items_label = tf(lang, T_CART_ITEMS, &[item_count.to_string()]);
     let tg = TelegramApp::init();
-    let total_str = crate::trios::pricing::format_baht(total);
+    let total_str = format_price(total);
     let telegram_id = use_telegram_id();
     let init_data = use_telegram_init_data();
 
@@ -124,13 +139,21 @@ pub fn CartScreen() -> Element {
 
     let nav = navigator();
     use_main_button_click(move || {
-        if !cart.read().items.is_empty() {
+        // Same gate as the in-app button below: the native MainButton is a
+        // second door into checkout, and closing only one of them would let a
+        // cart the shop cannot price through the other.
+        if !cart.read().items.is_empty() && !cart.read().has_unpriced_line() {
             nav.push(Route::Checkout {});
         }
     });
-    if !items.is_empty() {
+    if !items.is_empty() && unpriced_note.is_none() {
         tg.set_main_button_text(&format!("{} — {}", t(lang, T_PLACE_ORDER), total_str));
         tg.enable_main_button();
+        tg.show_back_button();
+    } else if !items.is_empty() {
+        // The cart is not empty, it is unquotable: the back button stays, the
+        // primary action does not, and the summary above says why.
+        tg.hide_main_button();
         tg.show_back_button();
     } else {
         tg.hide_main_button();
@@ -226,6 +249,11 @@ pub fn CartScreen() -> Element {
                                     span { "{t(lang, T_TOTAL)}" }
                                     span { style: "font-size: 20px; font-weight: 800; color: #ffe600; text-shadow: 2px 2px 0 #000;", "{format_price(total)}" }
                                 }
+                                if let Some(ref note) = unpriced_note {
+                                    div { style: "font-size: 13px; color: #888; font-style: italic; margin-top: 6px;",
+                                        span { "{note}" }
+                                    }
+                                }
                             }
 
                             // Actions
@@ -239,14 +267,34 @@ pub fn CartScreen() -> Element {
                                         transition: transform 0.1s, box-shadow 0.1s;
                                     ", "{t(lang, T_CART_BACK_MENU)}" }
                                 }
-                                Link { to: Route::Checkout {},
-                                    button { style: "
-                                        font-size: 14px; font-weight: 700; flex: 2; padding: 12px 20px;
-                                        background: #39ff14; color: #000;
-                                        border: 4px solid #2d9e0f; border-radius: 0;
-                                        cursor: pointer; box-shadow: 3px 3px 0 #000;
-                                        transition: transform 0.1s, box-shadow 0.1s;
-                                    ", "{t(lang, T_CART_CHECKOUT)}" }
+                                // Checkout is unreachable while a line has no
+                                // price: the order body would carry a subtotal
+                                // and a total computed from the priced lines
+                                // alone, and the customer would be quoted a
+                                // number nobody measured. The checkout screen
+                                // refuses the same cart on submit -- this is the
+                                // earlier of the two refusals, not the only one.
+                                if unpriced_note.is_some() {
+                                    button {
+                                        disabled: true,
+                                        style: "
+                                            font-size: 14px; font-weight: 700; flex: 2; padding: 12px 20px;
+                                            background: #2a2a4a; color: #8b8b9e;
+                                            border: 4px solid #2a2a4a; border-radius: 0;
+                                            cursor: not-allowed; box-shadow: 3px 3px 0 #000;
+                                        ",
+                                        "{t(lang, T_CART_CHECKOUT)}"
+                                    }
+                                } else {
+                                    Link { to: Route::Checkout {},
+                                        button { style: "
+                                            font-size: 14px; font-weight: 700; flex: 2; padding: 12px 20px;
+                                            background: #39ff14; color: #000;
+                                            border: 4px solid #2d9e0f; border-radius: 0;
+                                            cursor: pointer; box-shadow: 3px 3px 0 #000;
+                                            transition: transform 0.1s, box-shadow 0.1s;
+                                        ", "{t(lang, T_CART_CHECKOUT)}" }
+                                    }
                                 }
                             }
                         }
@@ -266,7 +314,10 @@ fn cart_item_row(item: CartItem, lang: crate::trios::core::Lang) -> Element {
     let item_id_for_remove = item.id.clone();
     let price_str = format_price(item.price);
     let qty = item.quantity;
-    let line_total_str = format_price(item.price * item.quantity as f64);
+    // `cart_line_total` is the shared rule (D15): an absent, zero, negative or
+    // non-finite unit price has no line total either, so the line shows a dash
+    // in both slots rather than a price of `-` beside a total of `0`.
+    let line_total_str = format_price(crate::trios::pricing::cart_line_total(item.price, qty));
     let row_key = item.id.clone();
     let image_alt = tf(lang, T_CART_IMAGE_ALT, std::slice::from_ref(&item.name));
 

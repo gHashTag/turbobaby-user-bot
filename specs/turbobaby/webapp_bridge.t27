@@ -26,46 +26,74 @@
 ; two transport modules, and SEVEN of the nine attach the label that tells the server which kind
 ; of client sent it. The two that omit it are named below.
 ; --
-; WHERE THE BRIEF IS REFUTED. Six corrections, each measured 2026-09-21.
+; WHERE THE BRIEF IS REFUTED. Six corrections, each measured 2026-09-21. Three of the six were
+; DEFECTS rather than miscounts, and all three were closed the same day; each is marked FIXED
+; below and the old reading is kept beside the new one, because a correction nobody can compare
+; with what it replaced is an assertion.
 ;   1. "src/ui/api/http.rs (582 lines - retry and timeout)" -- the file has neither. A
 ;      case-insensitive grep of src/ui/api/http.rs for retry returns 0 and for timeout returns 0,
 ;      across all 21 of its public functions. The only AUTOMATIC retry in the client half is
-;      submit_order_with_retry at src/ui/screens/checkout_screen.rs:128, it wraps exactly one
+;      submit_order_with_retry at src/ui/screens/checkout_screen.rs:148 (:128 before the
+;      2026-09-21 edits in items 4 and 5 below), it wraps exactly one
 ;      call, and it lives in a screen rather than in the transport. Three other screens carry a
-;      retry BUTTON (src/ui/screens/events_screen.rs:920, src/ui/screens/profile_screen.rs:659,
-;      src/ui/screens/success_screen.rs:476); those are a customer tap re-arming a resource, not
+;      retry BUTTON (src/ui/screens/events_screen.rs:924, src/ui/screens/profile_screen.rs:662,
+;      src/ui/screens/success_screen.rs:479 -- :920, :659 and :476 before the same day's
+;      cart-price edits moved them); those are a customer tap re-arming a resource, not
 ;      a re-send the code decides on, and they are counted separately. A request deadline does not
 ;      exist anywhere: AbortController, AbortSignal and .abort() return 0 occurrences over all of
 ;      src/ui. The twenty-two TimeoutFuture sites in src/ui are animation and polling delays; the
-;      one inside the retry loop (:145) is backoff between attempts, not a bound on any attempt.
-;   2. The mirror rule is not at risk, it is already refuted, and the count says by how much. Of
+;      one inside the retry loop (:163, was :145) is backoff between attempts, not a bound on any attempt.
+;   2. PARTLY FIXED 2026-09-21, and the superseded reading is kept beside the new one. The
+;      mirror rule is not at risk, it is already refuted, and the count says by how much. Of
 ;      172 declared fields in src/ui/api/types.rs, 44 carry `#[serde(default)]` -- a plain
 ;      `grep -c` answers 45, because the comment at :37 names the attribute without being one, so
-;      the count below is of attribute lines and not of matches; 27 of those
-;      default an Option, where absence stays absence, and SEVEN default a bare number, where
-;      absence becomes a zero the server never sent. Three of the seven are the cart's own money
-;      and counts: ServerCartItem.quantity (:421), ServerCartItem.unit_price (:423) and
-;      ServerCart.total (:435).
+;      the count below is of attribute lines and not of matches; 28 of those
+;      default an Option, where absence stays absence, and SIX default a bare number, where
+;      absence becomes a zero the server never sent. TWO of the six are the cart's own money
+;      and counts: ServerCartItem.quantity (:421) and ServerCart.total (:448).
+;      SUPERSEDED READING, true until 2026-09-21: "27 of those default an Option ... and SEVEN
+;      default a bare number ... Three of the seven are the cart's own money and counts:
+;      ServerCartItem.quantity (:421), ServerCartItem.unit_price (:423) and ServerCart.total
+;      (:435)." The third of those three is the defect this file's body records as fixed:
+;      ServerCartItem.unit_price is an Option<f64> at :436 now, so absence arrives as absence
+;      and not as a free line. The split moved 27/7 -> 28/6 while the total stayed 44 and the
+;      field count stayed 172 -- one field changed type, none was added or removed, and
+;      :435/:446 became :448/:459. MIRROR_RULE_HOLDS_ON_EVERY_FIELD is still false: a count
+;      that fell by one is not a rule that now holds.
 ;   3. tests/money_is_never_invented.rs:11 cites the wasm gate as `src/lib.rs:16`. Line 16 is
 ;      blank; the attribute is at :17 and `pub mod ui;` at :18. The claim is right and the
 ;      citation is ONE line short of the attribute (two short of the module it gates). Recorded
 ;      because this file leans on that claim.
-;   4. The one place the client branches on a duplicated write -- the 409 arm at
-;      src/ui/screens/checkout_screen.rs:162-178, whose own comment at :125 calls 409 "already
-;      accepted" -- is written against a status POST /api/orders never returns. The server answers
-;      a replay with 200 and a body flag (src/api/orders.rs:1245-1249), refuses a malformed key
-;      with 400 (:764), and the only StatusCode::CONFLICT in src/api/orders.rs is :2210 in
-;      cancel_order. The branch is unreachable from the endpoint it guards.
-;   5. The retry's own doc comment miscounts it. src/ui/screens/checkout_screen.rs:124 says
-;      "up to 3 attempts (delays 1s, 2s, 4s)", but :140-141 chains one immediate attempt to the
-;      three delays, so the ceiling is four requests and not three. The three delays are right;
-;      the attempt count is one short, and a reader sizing the worst case from the comment misses
-;      one request in every four a single tap can put on POST /api/orders.
+;   4. FIXED 2026-09-21. The reading this replaces: "The one place the client branches on a
+;      duplicated write -- the 409 arm at src/ui/screens/checkout_screen.rs:162-178, whose own
+;      comment at :125 calls 409 'already accepted' -- is written against a status
+;      POST /api/orders never returns. The server answers a replay with 200 and a body flag
+;      (src/api/orders.rs:1245-1249), refuses a malformed key with 400 (:764), and the only
+;      StatusCode::CONFLICT in src/api/orders.rs is :2210 in cancel_order. The branch is
+;      unreachable from the endpoint it guards."
+;      The premise held and the arm is GONE rather than repaired: it recovered an order by
+;      RECENCY, never matched against the idempotency key that was sent, and built its URL from
+;      telegram_id.unwrap_or(0). A 409 now falls to the terminal arm and reaches the customer.
+;      The premise is re-measured on every test run rather than quoted -- see
+;      CONFLICT_PREMISE_IS_RE_MEASURED_BY_A_TEST and the REMOVED_ARM_ constants below. The
+;      addresses in the quoted reading are the removed arm's, and nothing stands at :162-178
+;      or :125 now.
+;   5. FIXED 2026-09-21. The reading this replaces: "The retry's own doc comment miscounts it.
+;      src/ui/screens/checkout_screen.rs:124 says 'up to 3 attempts (delays 1s, 2s, 4s)', but
+;      :140-141 chains one immediate attempt to the three delays, so the ceiling is four
+;      requests and not three. The three delays are right; the attempt count is one short, and
+;      a reader sizing the worst case from the comment misses one request in every four a
+;      single tap can put on POST /api/orders."
+;      The comment now says four (src/ui/screens/checkout_screen.rs:127) and names the day it
+;      was corrected. The LOOP did not change: the ceiling was four before and is four now.
+;      The old figure stays executable as ATTEMPTS_CLAIMED_BEFORE_2026_09_21, and
+;      DOC_COMMENT_AGREES_WITH_THE_LOOP went false -> true.
 ;   6. The retry genuinely cannot duplicate a write, but not for a reason visible in the
 ;      transport. post_json_authed_idempotent_full (src/ui/api/http.rs:209) attaches whatever key
 ;      it is handed and mints none; the stability comes from the screen, where
-;      `k.get_or_insert_with(|| uuid::Uuid::new_v4()...)` at src/ui/screens/checkout_screen.rs:934
-;      is the file's only write to that signal. A reader who audits the transport alone cannot
+;      `k.get_or_insert_with(|| uuid::Uuid::new_v4()...)` at src/ui/screens/checkout_screen.rs:971
+;      (:934 before the same day's edits) is the file's only write to that signal. A reader who
+;      audits the transport alone cannot
 ;      establish the property, and the same single write is why an edited cart re-submitted from a
 ;      mounted screen reuses the key with a different body.
 ; --
@@ -79,7 +107,8 @@
 ; literal belongs to turbobaby/loyalty-ledger, the initData byte cap and its admission rule to
 ; turbobaby/request-identity, and this file names both owners rather than copying either value.
 ; It quotes no shipped string: the Russian comments in src/ui/api/types.rs:374-378 and
-; src/ui/api/client.rs:262-268 are cited by path and line and never reproduced. It carries no
+; src/ui/api/client.rs:299-305 (:262-268 before the 2026-09-21 edits) are cited by path and line
+; and never reproduced. It carries no
 ; initData sample, real or synthetic, and no telegram id. Nothing from D14 -- no renter, handle,
 ; phone, key code, plate, debt, purchase price or personal note -- in a constant, a comment or a
 ; test.
@@ -103,11 +132,18 @@ pub const ROUTE_SOURCE : str = "src/ui/routes.rs";
 pub const RETRY_SOURCE : str = "src/ui/screens/checkout_screen.rs";
 pub const MIRROR_CONSUMER : str = "src/ui/state.rs";
 pub const INSTRUMENT_WITNESS : str = "tests/money_is_never_invented.rs";
-; wc -l over the tracked sources, 2026-09-21, so "the whole file" is a measurement.
+; wc -l over the tracked sources, so "the whole file" is a measurement. Re-measured 2026-09-21
+; after the three client-side defects this file recorded were closed. Three of the six moved, and
+; the sentence says which and by how much, because a length that changes silently is a length
+; nobody re-read: transport 582 -> 601 (the merge DTO's price became an Option), DTO 454 -> 467
+; (ServerCartItem.unit_price became an Option and carries the argument for it), typed client
+; 305 -> 342 (the oversize refusal, and a named constructor for the anonymous client). The other
+; three are untouched.
 pub const BRIDGE_SOURCE_LINES : u16 = 811;
-pub const TRANSPORT_SOURCE_LINES : u16 = 582;
-pub const DTO_SOURCE_LINES : u16 = 454;
-pub const TYPED_CLIENT_SOURCE_LINES : u16 = 305;
+pub const TRANSPORT_SOURCE_LINES : u16 = 601;
+pub const DTO_SOURCE_LINES : u16 = 467;
+pub const DTO_SOURCE_LINES_BEFORE_THE_FIX : u16 = 454;
+pub const TYPED_CLIENT_SOURCE_LINES : u16 = 342;
 pub const SHIM_SOURCE_LINES : u16 = 223;
 pub const ROUTE_SOURCE_LINES : u16 = 369;
 
@@ -122,7 +158,17 @@ pub const UNIT_TESTS_NEVER_COMPILED : u8 = 32;
 pub const SHIPPED_INSTRUMENT_IS_A_TEXT_SCAN : bool = true;
 pub const SCAN_NEEDLE_COUNT : u8 = 4;
 pub const SCAN_SEES_A_DEFAULTED_ZERO : bool = false;
-pub const SCAN_GAP_NOTE : str = "tests/money_is_never_invented.rs:116-119 requires one of four literal spellings of unwrap_or on the line. The mirror's own fabricated zero has none: src/ui/api/types.rs:423 carries a serde attribute and no expression at all, and src/ui/state.rs:50 writes a bare 0.0 on its own line inside an else arm, with no money word beside it. Both sites are inside the scanned corpus and invisible to the scan. Closing this needs an instrument that reads the type, not the text.";
+pub const SCAN_GAP_NOTE : str = "tests/money_is_never_invented.rs:116-119 requires one of four literal spellings of unwrap_or on the line. The mirror's own fabricated zero had none: src/ui/api/types.rs:423 carried a serde attribute and no expression at all, and src/ui/state.rs:50 wrote a bare 0.0 on its own line inside an else arm, with no money word beside it. Both sites were inside the scanned corpus and invisible to the scan. CLOSED 2026-09-21, and not by widening the scan: the field is an Option now, so there is no zero to see, and a second instrument reads the DECLARATION rather than hunting expressions.";
+; The second instrument, added 2026-09-21 with the fix. It is still a text scan -- nothing
+; compiles src/ui -- but it reads the TYPE of a declared field and the SHAPE of a function body
+; instead of hunting four spellings of unwrap_or, which is what the note above said closing the
+; gap would take. It also re-takes the measurement the 409 removal rests on, so a server that
+; starts answering 409 on create fails a test instead of stranding a customer.
+pub const TYPE_AWARE_INSTRUMENT : str = "tests/wire_absence_wiring.rs";
+pub const TYPE_AWARE_INSTRUMENT_EXISTS : bool = true;
+pub const TYPE_AWARE_INSTRUMENT_IS_COMPILED_BY_THE_HOST : bool = true;
+; It reads src/ui as text, so it still proves nothing about whether src/ui COMPILES.
+pub const TYPE_AWARE_INSTRUMENT_COMPILES_THE_CLIENT : bool = false;
 
 pub fn a_claim_here_rests_on_a_test(host_suite_compiles: bool) bool {
   return host_suite_compiles;
@@ -254,7 +300,7 @@ pub fn init_data_can_prove_identity(origin: u8) bool {
 
 ; --- What the client does when the bridge is absent ----------------------------------------------
 ; Nothing stops the call. The empty string flows to every authed helper, and only two sites in
-; the whole client half test it: src/ui/api/client.rs:60 omits the header when it is empty, and
+; the whole client half test it: src/ui/api/client.rs:97 (:60 before 2026-09-21) omits the header when it is empty, and
 ; src/ui/api/http.rs:367 does the same inside AdminAuth. Every one of the seven free functions in
 ; src/ui/api/http.rs sends the header with an empty value instead. The request is made either
 ; way and the refusal arrives from the server.
@@ -285,7 +331,8 @@ pub const LABEL_IS_READ_BY_A_SECOND_EVAL : bool = true;
 pub const AUTH_HEADER_SITES : u8 = 9;
 pub const SITES_SENDING_THE_LABEL : u8 = 7;
 pub const SITES_OMITTING_THE_LABEL : u8 = 2;
-pub const UNLABELLED_SITES : [2]str = ["src/ui/api/http.rs:368", "src/ui/api/client.rs:63"];
+; client.rs:63 moved to :100 when the constructor grew a refusal; http.rs:368 did not move.
+pub const UNLABELLED_SITES : [2]str = ["src/ui/api/http.rs:368", "src/ui/api/client.rs:100"];
 pub const MISSING_LABEL_DEFAULTS_TO_TAMPERING : bool = true;
 
 pub fn reconstruction_label(origin: u8) bool {
@@ -312,40 +359,70 @@ pub fn cohort_input_is_faithful(origin: u8, label_sent: bool) bool {
 }
 
 ; --- The size cap, mirrored once and not everywhere ----------------------------------------------
-; src/ui/api/client.rs:36-40 replaces an oversize payload with the empty string, which
-; with_auth (:60) then declines to send, so the request leaves as an anonymous one. It is the only
-; cap on the client: the free functions in src/ui/api/http.rs apply none and send the oversize
-; string, which the server refuses at src/api/auth.rs:70. Both the byte value and the admission
-; rule are request-identity's; neither is copied here.
+; FIXED 2026-09-21, and the old behaviour is recorded rather than overwritten. Until that day
+; src/ui/api/client.rs:36-40 replaced an oversize payload with the empty string, which with_auth
+; then declined to send, so the request left as an ANONYMOUS one: a payload the server would have
+; refused instead became a request claiming to be nobody, and the customer saw whatever an
+; unauthenticated call produces with no hint that a 4 KB proof had been discarded on this side of
+; the wire. src/ui/api/client.rs:58-70 now returns an error carrying the measured length and the
+; cap, and src/ui/api/client.rs:77-82 is a separate, named constructor for the client that carries
+; no proof ON PURPOSE -- so "this call is anonymous" is a decision written at the call site
+; instead of one a constructor arrives at after discarding something.
+; It is still the only cap on the client: the free functions in src/ui/api/http.rs apply none and
+; send the oversize string, which the server refuses at src/api/auth.rs:70. Both the byte value
+; and the admission rule are request-identity's; neither is copied here. What the client compiles
+; against is a MIRROR of the server literal in src/trios/validation.rs -- src/api/auth.rs is
+; behind the `backend` feature and a browser cannot link it -- and the mirror is compared with the
+; server's own number by tests/wire_absence_wiring.rs, so it is a checked mirror and not a second
+; opinion. The cap is NOT raised: the admission rule stays inclusive at the same byte value.
 pub const CLIENT_CAP_SITES : u8 = 1;
 pub const CAP_APPLIES_TO_THE_FREE_HELPERS : bool = false;
-pub const OVERSIZE_IS_REFUSED_LOUDLY_ON_THE_CLIENT : bool = false;
+pub const OVERSIZE_IS_REFUSED_LOUDLY_ON_THE_CLIENT : bool = true;
+pub const OVERSIZE_WAS_REFUSED_LOUDLY_BEFORE_2026_09_21 : bool = false;
+pub const CAP_MIRROR_SITE : str = "src/trios/validation.rs";
+pub const CAP_MIRROR_IS_COMPARED_WITH_THE_SERVER : bool = true;
+pub const REFUSAL_NAMES_THE_MEASURED_LENGTH : bool = true;
+pub const CAP_WAS_RAISED_BY_THE_FIX : bool = false;
 
-pub fn oversize_becomes_anonymous(capped_site: bool, size_admits: bool) bool {
-  return capped_site and !size_admits;
+; Three inputs, because the third is the one that changed. A capped site that refuses out loud
+; hands the caller an error; the same site without the refusal silently downgraded the request.
+; Keeping the old arm reachable is what makes the fix checkable rather than merely asserted.
+pub fn oversize_becomes_anonymous(capped_site: bool, size_admits: bool, refused_loudly: bool) bool {
+  return capped_site and !size_admits and !refused_loudly;
+}
+
+pub fn oversize_is_refused(capped_site: bool, size_admits: bool, refused_loudly: bool) bool {
+  return capped_site and !size_admits and refused_loudly;
 }
 
 ; --- Retry ----------------------------------------------------------------------------------------
-; submit_order_with_retry (src/ui/screens/checkout_screen.rs:128-199). The loop at :140-141 is
-; one immediate attempt chained to the three backoff delays at :136, so four attempts is the
-; ceiling and the delay at :145 is skipped on the first. Which classes continue is written into
-; the arms: the 2xx arm opens at :153 and returns at :156 or :159, the 409 arm opens at :162 and
-; returns at :171 or :177, the 5xx arm opens at :180 and continues at :181, any other status
-; returns at :184, and a transport error continues at :187. The class is modelled as constant
-; across attempts, which is what the loop assumes when it exhausts the delays.
+; submit_order_with_retry (src/ui/screens/checkout_screen.rs:148-191, re-measured 2026-09-21 after
+; the 409 arm was removed; it stood at :128-199). The loop at :158-159 is one immediate attempt
+; chained to the three backoff delays at :154, so four attempts is the ceiling and the delay at
+; :163 is skipped on the first. Which classes continue is written into the arms: the 2xx arm opens
+; at :171 and returns at :174 or :177, the 5xx arm opens at :180 and continues at :181, any other
+; status -- 409 among them now -- returns at :184, and a transport error continues at :187. The
+; class is modelled as constant across attempts, which is what the loop assumes when it exhausts
+; the delays.
 pub const RETRIED_CALL_COUNT : u8 = 1;
-pub const RETRY_SITE : str = "src/ui/screens/checkout_screen.rs:128 submit_order_with_retry";
+pub const RETRY_SITE : str = "src/ui/screens/checkout_screen.rs:148 submit_order_with_retry";
 pub const ATTEMPT_MAX : u8 = 4;
 pub const BACKOFF_STEP_COUNT : u8 = 3;
 pub const BACKOFF_MS : [3]u16 = [1000, 2000, 4000];
 pub const FIRST_ATTEMPT_WAITS : bool = false;
 pub const RETRY_LIVES_IN_THE_TRANSPORT : bool = false;
-; The doc comment at src/ui/screens/checkout_screen.rs:124 says three. The loop makes four.
-pub const ATTEMPTS_CLAIMED_BY_THE_DOC_COMMENT : u8 = 3;
-pub const DOC_COMMENT_AGREES_WITH_THE_LOOP : bool = false;
+; The doc comment said three until 2026-09-21; the loop always made four. The comment was
+; corrected with the 409 removal and now says four (src/ui/screens/checkout_screen.rs:127), so a
+; reader sizing the worst case from it no longer misses one request in every four a single tap can
+; put on POST /api/orders. The old figure is kept because the correction has to be checkable, not
+; merely asserted.
+pub const ATTEMPTS_CLAIMED_BY_THE_DOC_COMMENT : u8 = 4;
+pub const ATTEMPTS_CLAIMED_BEFORE_2026_09_21 : u8 = 3;
+pub const DOC_COMMENT_AGREES_WITH_THE_LOOP : bool = true;
 ; A retry BUTTON is not a retry. Three screens re-arm a failed resource on a customer tap --
-; src/ui/screens/events_screen.rs:920, src/ui/screens/profile_screen.rs:659 and
-; src/ui/screens/success_screen.rs:476 -- and none of the three re-sends anything by itself.
+; src/ui/screens/events_screen.rs:924, src/ui/screens/profile_screen.rs:662 and
+; src/ui/screens/success_screen.rs:479 (:920, :659 and :476 before the 2026-09-21 edits) --
+; and none of the three re-sends anything by itself.
 ; They are counted here so "one call retries" is read as one AUTOMATIC re-send and not as the
 ; claim that the customer has no way to ask again.
 pub const MANUAL_RETRY_BUTTON_SCREENS : u8 = 3;
@@ -382,8 +459,9 @@ pub fn backoff_before(attempt_index: u8) u16 {
 
 ; --- Whether a retry can become a second order ------------------------------------------------
 ; It cannot, and the reason is not in the transport. The key is minted once per mounted screen at
-; src/ui/screens/checkout_screen.rs:934 and that line is the file's only write to the signal, so
-; every attempt inside the loop and every later tap carry the same key.
+; src/ui/screens/checkout_screen.rs:971 (:934 before the 2026-09-21 edits above) and that line is
+; the file's only write to the signal, so every attempt inside the loop and every later tap carry
+; the same key.
 ; post_json_authed_idempotent_full (declared at src/ui/api/http.rs:209, attaching the key it was
 ; handed at :226) mints nothing of its own. The
 ; same single write is why a customer who edits the cart after a failure and taps again sends the
@@ -405,7 +483,7 @@ pub fn resubmission_reuses_a_key_with_a_new_payload(key_stable: bool, payload_ch
 }
 
 ; The client never learns which arm the server took. It reads order_id out of a 2xx body
-; (src/ui/screens/checkout_screen.rs:155-156) and ignores the idempotent_replay flag the server
+; (src/ui/screens/checkout_screen.rs:173-174) and ignores the idempotent_replay flag the server
 ; sets beside it at src/api/orders.rs:1248, so a replayed order and a newly created one are
 ; indistinguishable on this side.
 pub const SERVER_REPLAY_STATUS : u16 = 200;
@@ -416,24 +494,41 @@ pub fn client_distinguishes_replay_from_create(reads_replay_flag: bool) bool {
   return reads_replay_flag;
 }
 
-; --- The conflict arm that cannot fire ------------------------------------------------------------
-; :162-178 treats 409 as "already accepted", fetches /api/orders/user/{id} and returns the first
-; element of the array as the order the customer just placed. The list is newest-first --
-; src/api/orders.rs:2375 orders by created_at descending -- so the pick is at least the newest
-; order, but it is chosen by recency and not by the key that was sent, and nothing checks that it
-; is the same order. It does not matter yet, because POST /api/orders never answers 409: the
-; replay path returns 200 (src/api/orders.rs:1245), an unusable key returns 400 (:764), and the
-; only StatusCode::CONFLICT in that file is cancel_order at :2210. The telegram id used to build
-; the recovery URL is itself a fabricated zero when identity is absent
-; (src/ui/screens/checkout_screen.rs:1000), so the one path this branch could take would query a
-; user that does not exist.
+; --- The conflict arm that could not fire, and is gone ---------------------------------------------
+; REMOVED 2026-09-21. It stood at src/ui/screens/checkout_screen.rs:162-178, treated 409 as
+; "already accepted", fetched /api/orders/user/{id} and returned the FIRST element of the array as
+; the order the customer had just placed. The list is newest-first -- src/api/orders.rs:2375 orders
+; by created_at descending -- so the pick was at least the newest order, but it was chosen by
+; recency and not by the key that was sent, and nothing checked that it was the same order. The
+; telegram id used to build the recovery URL was itself a fabricated zero when identity was absent
+; (src/ui/screens/checkout_screen.rs:1000), so the one path the branch could have taken would have
+; queried a user that does not exist.
+; Removed rather than repaired, because the measurement says it cannot fire and a correct version
+; would have had nothing to guard: POST /api/orders answers a replay with 200
+; (src/api/orders.rs:1245-1250), refuses an unusable key with 400 (:764), and the only
+; StatusCode::CONFLICT in that file is cancel_order at :2210. A 409 now falls to the terminal arm
+; and reaches the customer, which is the honest outcome for a status nothing in the server is known
+; to send. The measurement is not trusted to a comment: tests/wire_absence_wiring.rs re-takes it on
+; every run and fails if a CONFLICT appears outside cancel_order, so a server that starts answering
+; 409 on create costs a red test rather than a stranded customer.
 pub const ORDER_CREATE_EVER_RETURNS_409 : bool = false;
-pub const CONFLICT_RECOVERY_IS_POSITIONAL : bool = true;
-pub const CONFLICT_RECOVERY_MATCHES_THE_KEY : bool = false;
-pub const RECOVERY_URL_USES_A_FABRICATED_ID_WHEN_IDENTITY_IS_ABSENT : bool = true;
+pub const CONFLICT_ARM_IS_SHIPPED : bool = false;
+pub const A_409_NOW_REACHES_THE_CUSTOMER : bool = true;
+pub const REMOVED_ARM_RECOVERY_WAS_POSITIONAL : bool = true;
+pub const REMOVED_ARM_MATCHED_THE_KEY : bool = false;
+pub const REMOVED_ARM_USED_A_FABRICATED_ID_WHEN_IDENTITY_WAS_ABSENT : bool = true;
+pub const NO_REQUEST_IS_BUILT_FROM_A_FABRICATED_ID : bool = true;
+pub const CONFLICT_PREMISE_IS_RE_MEASURED_BY_A_TEST : bool = true;
 
-pub fn conflict_branch_can_fire(server_emits_409_on_create: bool) bool {
-  return server_emits_409_on_create;
+pub fn conflict_branch_can_fire(server_emits_409_on_create: bool, arm_is_shipped: bool) bool {
+  return server_emits_409_on_create and arm_is_shipped;
+}
+
+; An arm that cannot fire and an arm that is not there differ in exactly one way, and it is the
+; one that mattered: the second cannot be repaired into a wrong answer by a later edit to the
+; server. Written as a function so a worker who re-adds a 409 arm has to say so here.
+pub fn conflict_is_terminal_and_visible(arm_is_shipped: bool) bool {
+  return !arm_is_shipped;
 }
 
 pub fn recovered_order_is_provably_ours(matches_the_key: bool) bool {
@@ -455,30 +550,40 @@ pub fn request_can_hang_until_the_browser_gives_up(deadline_shipped: bool) bool 
 
 ; --- The DTO mirror ------------------------------------------------------------------------------
 ; src/ui/api/types.rs declares 24 structs and 3 enums over 172 fields. A field the server stops
-; sending breaks deserialization -- ApiClient::run turns that into ApiError::Parse at
-; src/ui/api/client.rs:79 -- UNLESS the field carries `#[serde(default)]`, in which case serde
-; writes the type's Default and nothing anywhere notices. 44 fields carry it. For the 27 that
-; default an Option the value is None, which is still an absence and still renderable as one. For
-; the 7 that default a bare number the value is a zero the server never sent.
+; sending breaks deserialization -- ApiClient::run turns that into ApiError::Parse -- UNLESS the
+; field carries `#[serde(default)]`, in which case serde writes the type's Default and nothing
+; anywhere notices. 44 fields carry it. For the ones that default an Option the value is None,
+; which is still an absence and still renderable as one. For the ones that default a bare number
+; the value is a zero the server never sent.
+; MOVED 2026-09-21: ServerCartItem.unit_price left the bare-number column for the Option column,
+; so the split went 27/7 -> 28/6 while the total stayed 44 and the field count stayed 172. One
+; field changed type; none was added or removed. The partition is re-counted here rather than
+; adjusted by hand -- the six remaining numeric sites are listed below and each was re-read.
 pub const DTO_STRUCT_COUNT : u8 = 24;
 pub const DTO_ENUM_COUNT : u8 = 3;
 pub const DTO_FIELD_COUNT : u16 = 172;
 pub const DTO_FIELDS_WITH_A_DEFAULT : u8 = 44;
-pub const DEFAULTS_ON_AN_OPTION : u8 = 27;
-pub const DEFAULTS_ON_A_BARE_NUMBER : u8 = 7;
+pub const DEFAULTS_ON_AN_OPTION : u8 = 28;
+pub const DEFAULTS_ON_A_BARE_NUMBER : u8 = 6;
+pub const DEFAULTS_ON_A_BARE_NUMBER_BEFORE_THE_FIX : u8 = 7;
 pub const DEFAULTS_ON_A_BOOL_STRING_OR_VEC : u8 = 10;
 pub const FIELDS_THAT_BREAK_LOUDLY : u16 = 128;
+; Still false, and by six fields rather than seven. A count that fell by one is not a rule that
+; now holds, and saying so is the difference between a fix and a claim of one.
 pub const MIRROR_RULE_HOLDS_ON_EVERY_FIELD : bool = false;
 pub const UNKNOWN_EXTRA_FIELDS_ARE_IGNORED : bool = true;
-pub const NUMERIC_DEFAULT_SITES : [7]str = [
+pub const NUMERIC_DEFAULT_SITES : [6]str = [
   "src/ui/api/types.rs:28",
   "src/ui/api/types.rs:40",
   "src/ui/api/types.rs:311",
   "src/ui/api/types.rs:421",
-  "src/ui/api/types.rs:423",
-  "src/ui/api/types.rs:435",
-  "src/ui/api/types.rs:446"
+  "src/ui/api/types.rs:448",
+  "src/ui/api/types.rs:459"
 ];
+; The site that left the list, and where it went. :423 was ServerCartItem.unit_price; the field is
+; now an Option at :436 and the two lines below it that used to be :435 and :446 are :448 and :459.
+pub const NUMERIC_DEFAULT_SITE_THAT_WAS_FIXED : str = "src/ui/api/types.rs:423";
+pub const FIXED_SITE_IS_NOW_AN_OPTION_AT : str = "src/ui/api/types.rs:436";
 
 pub fn dropped_field_breaks_the_client(field_has_serde_default: bool) bool {
   return !field_has_serde_default;
@@ -492,29 +597,53 @@ pub fn mirror_is_faithful(field_has_serde_default: bool, default_is_a_number: bo
   return !dropped_field_renders_an_invented_value(field_has_serde_default, default_is_a_number);
 }
 
-; --- Where a defaulted number reaches money -----------------------------------------------------
-; CartItem::from_server (src/ui/state.rs:32-57) is the only reader of the server cart and it does
-; drop what it cannot read: an unrecognised kind at :38 and a zero quantity at :41-43. It does not
-; drop an unreadable price. :47-51 replaces a non-finite unit_price with 0.0, and a unit_price the
-; server omitted is already 0.0 from the default at src/ui/api/types.rs:423, which is finite and
-; passes the test untouched. The line then reaches recalculate_total through the filter_map at
-; src/ui/api/http.rs:455 as a free item. The two absences that are loud are loud because the LINE
-; disappears; the one that is silent is the price.
+; --- Where a defaulted number reached money, and what it does instead ---------------------------
+; FIXED 2026-09-21. CartItem::from_server (src/ui/state.rs:42-71) is the only reader of the server
+; cart and it always dropped what it could not read: an unrecognised kind and a zero quantity. It
+; did not drop an unreadable price, and it did not carry one either. It replaced a NON-finite
+; unit_price with 0.0, and a unit_price the server omitted was already 0.0 from the default at
+; src/ui/api/types.rs:423 -- finite, so it passed that test untouched. The line then reached
+; recalculate_total as a FREE item: a bike the customer was shown at no charge, and a cart total
+; that agreed with it.
+; The line still survives, and that is deliberate: dropping it would have replaced a silent zero
+; with a silently missing line, which is the same defect wearing better manners. What changed is
+; that the absence now travels. src/ui/state.rs:65 routes the wire price through
+; published_money -- the same filter the catalog renders through (D15) -- so None, a zero, a
+; negative and a non-finite value all land as None; every renderer shows a dash beside the sentence
+; D11 requires; and trios::pricing::cart_total refuses to total a cart holding such a line, so the
+; checkout has no number to submit and says so instead of quoting one.
+; The RULE this section states is unchanged and its INPUT changed: a surviving line hides its
+; absence when the price field defaults to a NUMBER, which is no longer the case here.
 pub const LINE_DROPPED_ON_UNKNOWN_KIND : bool = true;
 pub const LINE_DROPPED_ON_ZERO_QUANTITY : bool = true;
 pub const LINE_DROPPED_ON_AN_ABSENT_PRICE : bool = false;
-pub const ABSENT_PRICE_SURVIVES_AS_A_FREE_LINE : bool = true;
-pub const NON_FINITE_PRICE_SURVIVES_AS_A_FREE_LINE : bool = true;
+pub const ABSENT_PRICE_SURVIVES_AS_A_FREE_LINE : bool = false;
+pub const NON_FINITE_PRICE_SURVIVES_AS_A_FREE_LINE : bool = false;
+pub const ABSENT_PRICE_SURVIVED_AS_A_FREE_LINE_BEFORE_THE_FIX : bool = true;
+pub const ABSENT_PRICE_IS_CARRIED_AS_AN_ABSENCE : bool = true;
+pub const UNPRICED_LINE_BLOCKS_THE_CART_TOTAL : bool = true;
+pub const UNPRICED_CART_CAN_BE_SUBMITTED : bool = false;
+pub const PRICE_FILTER_IS_SHARED_WITH_THE_CATALOG : bool = true;
+pub const PRICE_FILTER_SITE : str = "src/trios/pricing.rs published_money";
 
 pub fn cart_line_survives(kind_known: bool, quantity_positive: bool) bool {
   return kind_known and quantity_positive;
 }
 
-pub fn price_absence_is_visible(line_survives: bool, price_field_has_a_default: bool) bool {
+; A dropped line is a visible absence by disappearing. A surviving line is a visible absence only
+; while its price field cannot fabricate a number -- which is what an Option guarantees and a
+; defaulted bare number does not.
+pub fn price_absence_is_visible(line_survives: bool, price_default_is_a_number: bool) bool {
   if (!line_survives) {
     return true;
   }
-  return !price_field_has_a_default;
+  return !price_default_is_a_number;
+}
+
+; A cart is quotable only when every surviving line carries a price. This is the rule the checkout
+; refuses on, written here so a later edit that offers a "partial total" has to change it.
+pub fn cart_is_quotable(every_line_priced: bool) bool {
+  return every_line_priced;
 }
 
 ; --- The route table ------------------------------------------------------------------------------
@@ -663,20 +792,44 @@ test two_of_nine_sites_hand_the_cohort_a_false_input {
   assert SITES_SENDING_THE_LABEL == 7;
   assert SITES_OMITTING_THE_LABEL == 2;
   assert UNLABELLED_SITES[0] == "src/ui/api/http.rs:368";
-  assert UNLABELLED_SITES[1] == "src/ui/api/client.rs:63";
+  assert UNLABELLED_SITES[1] == "src/ui/api/client.rs:100";
   assert cohort_input_is_faithful(ORIGIN_REBUILT, true) == true;
   assert cohort_input_is_faithful(ORIGIN_REBUILT, false) == false;
   assert cohort_input_is_faithful(ORIGIN_SIGNED, false) == true;
   assert cohort_input_is_faithful(ORIGIN_NONE, false) == true;
 }
 
-test an_oversize_payload_is_downgraded_and_not_refused {
-  assert oversize_becomes_anonymous(true, false) == true;
-  assert oversize_becomes_anonymous(true, true) == false;
-  assert oversize_becomes_anonymous(false, false) == false;
+test an_oversize_payload_is_refused_and_not_downgraded {
+  assert oversize_becomes_anonymous(true, false, true) == false;
+  assert oversize_is_refused(true, false, true) == true;
+  assert oversize_becomes_anonymous(true, true, true) == false;
+  assert oversize_becomes_anonymous(false, false, true) == false;
   assert CLIENT_CAP_SITES == 1;
   assert CAP_APPLIES_TO_THE_FREE_HELPERS == false;
-  assert OVERSIZE_IS_REFUSED_LOUDLY_ON_THE_CLIENT == false;
+  assert OVERSIZE_IS_REFUSED_LOUDLY_ON_THE_CLIENT == true;
+  assert REFUSAL_NAMES_THE_MEASURED_LENGTH == true;
+  assert CAP_WAS_RAISED_BY_THE_FIX == false;
+}
+
+; The old behaviour, kept reachable so the fix is checkable and not merely asserted: the SAME
+; capped site with the refusal switched off is exactly the downgrade this file recorded until
+; 2026-09-21.
+test the_downgrade_this_replaced_is_still_reachable_in_the_model {
+  assert OVERSIZE_WAS_REFUSED_LOUDLY_BEFORE_2026_09_21 == false;
+  assert oversize_becomes_anonymous(true, false, OVERSIZE_WAS_REFUSED_LOUDLY_BEFORE_2026_09_21) == true;
+  assert oversize_is_refused(true, false, OVERSIZE_WAS_REFUSED_LOUDLY_BEFORE_2026_09_21) == false;
+  assert OVERSIZE_IS_REFUSED_LOUDLY_ON_THE_CLIENT != OVERSIZE_WAS_REFUSED_LOUDLY_BEFORE_2026_09_21;
+}
+
+; The cap is request-identity's number, and this file still does not copy it: what it records is
+; that a MIRROR exists for the runtime that cannot link the server, and that something compares
+; the two. Naming the mirror's file is not naming the value.
+test the_client_mirror_of_the_cap_is_compared_and_not_invented {
+  assert CAP_MIRROR_SITE == "src/trios/validation.rs";
+  assert CAP_MIRROR_IS_COMPARED_WITH_THE_SERVER == true;
+  assert CAP_VALUE_IS_RESTATED_HERE == false;
+  assert SIZE_CAP_IS_OWNED_BY == "turbobaby/request-identity";
+  assert CAP_MIRROR_SITE != SIZE_CAP_IS_OWNED_BY;
 }
 
 test exactly_one_call_retries_and_it_is_not_in_the_transport {
@@ -690,10 +843,12 @@ test exactly_one_call_retries_and_it_is_not_in_the_transport {
   assert BACKOFF_MS[0] == 1000;
   assert BACKOFF_MS[1] == 2000;
   assert BACKOFF_MS[2] == 4000;
-  assert ATTEMPTS_CLAIMED_BY_THE_DOC_COMMENT == 3;
-  assert ATTEMPTS_CLAIMED_BY_THE_DOC_COMMENT != ATTEMPT_MAX;
-  assert DOC_COMMENT_AGREES_WITH_THE_LOOP == false;
-  assert ATTEMPTS_CLAIMED_BY_THE_DOC_COMMENT + 1 == ATTEMPT_MAX;
+  assert ATTEMPTS_CLAIMED_BY_THE_DOC_COMMENT == 4;
+  assert ATTEMPTS_CLAIMED_BY_THE_DOC_COMMENT == ATTEMPT_MAX;
+  assert DOC_COMMENT_AGREES_WITH_THE_LOOP == true;
+  assert ATTEMPTS_CLAIMED_BEFORE_2026_09_21 == 3;
+  assert ATTEMPTS_CLAIMED_BEFORE_2026_09_21 + 1 == ATTEMPT_MAX;
+  assert ATTEMPTS_CLAIMED_BEFORE_2026_09_21 != ATTEMPTS_CLAIMED_BY_THE_DOC_COMMENT;
 }
 
 test only_a_network_error_or_a_server_status_is_retried {
@@ -747,13 +902,27 @@ test the_client_cannot_tell_a_replay_from_a_new_order {
   assert client_distinguishes_replay_from_create(true) == true;
 }
 
-test the_conflict_arm_guards_a_status_the_endpoint_never_sends {
+test the_conflict_arm_is_gone_and_a_409_now_reaches_the_customer {
   assert ORDER_CREATE_EVER_RETURNS_409 == false;
-  assert conflict_branch_can_fire(ORDER_CREATE_EVER_RETURNS_409) == false;
-  assert conflict_branch_can_fire(true) == true;
-  assert CONFLICT_RECOVERY_IS_POSITIONAL == true;
-  assert CONFLICT_RECOVERY_MATCHES_THE_KEY == false;
-  assert recovered_order_is_provably_ours(CONFLICT_RECOVERY_MATCHES_THE_KEY) == false;
+  assert CONFLICT_ARM_IS_SHIPPED == false;
+  assert conflict_branch_can_fire(ORDER_CREATE_EVER_RETURNS_409, CONFLICT_ARM_IS_SHIPPED) == false;
+  assert conflict_branch_can_fire(true, CONFLICT_ARM_IS_SHIPPED) == false;
+  assert conflict_branch_can_fire(true, true) == true;
+  assert conflict_is_terminal_and_visible(CONFLICT_ARM_IS_SHIPPED) == true;
+  assert conflict_is_terminal_and_visible(true) == false;
+  assert A_409_NOW_REACHES_THE_CUSTOMER == true;
+  assert CONFLICT_PREMISE_IS_RE_MEASURED_BY_A_TEST == true;
+}
+
+; What was removed, recorded so the removal is a decision a reader can audit rather than a gap.
+; The arm recovered an order BY RECENCY, and the recovery URL was built from a fabricated zero.
+test the_removed_arm_would_not_have_been_provably_ours {
+  assert REMOVED_ARM_RECOVERY_WAS_POSITIONAL == true;
+  assert REMOVED_ARM_MATCHED_THE_KEY == false;
+  assert recovered_order_is_provably_ours(REMOVED_ARM_MATCHED_THE_KEY) == false;
+  assert recovered_order_is_provably_ours(true) == true;
+  assert REMOVED_ARM_USED_A_FABRICATED_ID_WHEN_IDENTITY_WAS_ABSENT == true;
+  assert NO_REQUEST_IS_BUILT_FROM_A_FABRICATED_ID == true;
 }
 
 test no_deadline_is_declared_because_none_is_implemented {
@@ -766,8 +935,10 @@ test no_deadline_is_declared_because_none_is_implemented {
 test the_mirror_counts_add_up {
   assert DTO_FIELD_COUNT == 172;
   assert DTO_FIELDS_WITH_A_DEFAULT == 44;
-  assert DEFAULTS_ON_AN_OPTION == 27;
-  assert DEFAULTS_ON_A_BARE_NUMBER == 7;
+  assert DEFAULTS_ON_AN_OPTION == 28;
+  assert DEFAULTS_ON_A_BARE_NUMBER == 6;
+  assert DEFAULTS_ON_A_BARE_NUMBER_BEFORE_THE_FIX == 7;
+  assert DEFAULTS_ON_A_BARE_NUMBER + 1 == DEFAULTS_ON_A_BARE_NUMBER_BEFORE_THE_FIX;
   assert DEFAULTS_ON_A_BOOL_STRING_OR_VEC == 10;
   assert DEFAULTS_ON_AN_OPTION + DEFAULTS_ON_A_BARE_NUMBER + DEFAULTS_ON_A_BOOL_STRING_OR_VEC == DTO_FIELDS_WITH_A_DEFAULT;
   assert FIELDS_THAT_BREAK_LOUDLY == 128;
@@ -786,12 +957,18 @@ test a_dropped_field_is_loud_only_when_it_has_no_default {
   assert MIRROR_RULE_HOLDS_ON_EVERY_FIELD == false;
 }
 
-test the_seven_numeric_default_sites_are_named {
+test the_six_numeric_default_sites_are_named {
+  assert NUMERIC_DEFAULT_SITES.len == 6;
+  assert NUMERIC_DEFAULT_SITES.len == DEFAULTS_ON_A_BARE_NUMBER;
   assert NUMERIC_DEFAULT_SITES[0] == "src/ui/api/types.rs:28";
   assert NUMERIC_DEFAULT_SITES[3] == "src/ui/api/types.rs:421";
-  assert NUMERIC_DEFAULT_SITES[4] == "src/ui/api/types.rs:423";
-  assert NUMERIC_DEFAULT_SITES[5] == "src/ui/api/types.rs:435";
-  assert NUMERIC_DEFAULT_SITES[6] == "src/ui/api/types.rs:446";
+  assert NUMERIC_DEFAULT_SITES[4] == "src/ui/api/types.rs:448";
+  assert NUMERIC_DEFAULT_SITES[5] == "src/ui/api/types.rs:459";
+  assert NUMERIC_DEFAULT_SITE_THAT_WAS_FIXED == "src/ui/api/types.rs:423";
+  assert FIXED_SITE_IS_NOW_AN_OPTION_AT == "src/ui/api/types.rs:436";
+  assert NUMERIC_DEFAULT_SITE_THAT_WAS_FIXED != FIXED_SITE_IS_NOW_AN_OPTION_AT;
+  assert NUMERIC_DEFAULT_SITES[4] != NUMERIC_DEFAULT_SITE_THAT_WAS_FIXED;
+  assert NUMERIC_DEFAULT_SITES[5] != NUMERIC_DEFAULT_SITE_THAT_WAS_FIXED;
 }
 
 test the_cart_drops_two_unreadable_things_and_keeps_the_third {
@@ -803,12 +980,29 @@ test the_cart_drops_two_unreadable_things_and_keeps_the_third {
   assert LINE_DROPPED_ON_AN_ABSENT_PRICE == false;
 }
 
-test an_absent_price_is_the_one_absence_nothing_shows {
+test an_absent_price_is_now_the_absence_it_always_was {
   assert price_absence_is_visible(false, true) == true;
   assert price_absence_is_visible(true, false) == true;
+  ; The line this file recorded until 2026-09-21: a surviving line whose price field defaults to a
+  ; NUMBER hides the absence. Kept reachable so the fix is checkable and not merely asserted.
   assert price_absence_is_visible(true, true) == false;
-  assert ABSENT_PRICE_SURVIVES_AS_A_FREE_LINE == true;
-  assert NON_FINITE_PRICE_SURVIVES_AS_A_FREE_LINE == true;
+  assert ABSENT_PRICE_SURVIVED_AS_A_FREE_LINE_BEFORE_THE_FIX == true;
+  assert ABSENT_PRICE_SURVIVES_AS_A_FREE_LINE == false;
+  assert NON_FINITE_PRICE_SURVIVES_AS_A_FREE_LINE == false;
+  assert ABSENT_PRICE_IS_CARRIED_AS_AN_ABSENCE == true;
+  assert PRICE_FILTER_IS_SHARED_WITH_THE_CATALOG == true;
+}
+
+; The line survives and the cart does not pretend to know what it costs. One unpriced line makes
+; the whole total unknown: summing the rest understates the cart and presents the understatement
+; as a measured figure, which is the defaulted zero wearing a different hat.
+test an_unpriced_line_leaves_the_cart_without_a_total {
+  assert UNPRICED_LINE_BLOCKS_THE_CART_TOTAL == true;
+  assert cart_is_quotable(true) == true;
+  assert cart_is_quotable(false) == false;
+  assert UNPRICED_CART_CAN_BE_SUBMITTED == false;
+  assert LINE_DROPPED_ON_AN_ABSENT_PRICE == false;
+  assert price_absence_is_visible(true, false) == true;
 }
 
 test the_route_table_always_resolves {
@@ -845,8 +1039,8 @@ invariant a_successful_response_is_never_retried
 invariant a_conflict_is_never_retried
   assert attempt_is_retried(CLASS_CONFLICT) == false
 
-invariant the_attempt_ceiling_is_the_loop_and_not_the_comment
-  assert attempts_used(CLASS_SERVER) == ATTEMPT_MAX and ATTEMPTS_CLAIMED_BY_THE_DOC_COMMENT + 1 == ATTEMPT_MAX and DOC_COMMENT_AGREES_WITH_THE_LOOP == false
+invariant the_attempt_ceiling_is_the_loop_and_the_comment_now_says_so
+  assert attempts_used(CLASS_SERVER) == ATTEMPT_MAX and ATTEMPTS_CLAIMED_BY_THE_DOC_COMMENT == ATTEMPT_MAX and DOC_COMMENT_AGREES_WITH_THE_LOOP == true and ATTEMPTS_CLAIMED_BEFORE_2026_09_21 + 1 == ATTEMPT_MAX
 
 invariant no_attempt_beyond_the_first_is_immediate
   assert backoff_before(0) == 0 and backoff_before(1) == 1000 and backoff_before(2) == 2000 and backoff_before(3) == 4000
@@ -857,23 +1051,47 @@ invariant a_retry_with_a_stable_attached_key_cannot_write_twice
 invariant a_missing_key_makes_every_retry_a_possible_duplicate
   assert retry_can_duplicate_a_write(false, true) == true
 
-invariant the_conflict_arm_is_unreachable_from_the_endpoint_it_guards
-  assert conflict_branch_can_fire(ORDER_CREATE_EVER_RETURNS_409) == false
+invariant the_conflict_arm_cannot_fire_because_it_is_not_there
+  assert conflict_branch_can_fire(ORDER_CREATE_EVER_RETURNS_409, CONFLICT_ARM_IS_SHIPPED) == false and conflict_branch_can_fire(true, CONFLICT_ARM_IS_SHIPPED) == false
+
+; An unreachable arm and an absent arm differ in what a later server edit can do to them. This is
+; the one that survives someone adding a 409 to create.
+invariant a_409_is_terminal_and_the_customer_is_told
+  assert conflict_is_terminal_and_visible(CONFLICT_ARM_IS_SHIPPED) == true and A_409_NOW_REACHES_THE_CUSTOMER == true and attempt_is_retried(CLASS_CONFLICT) == false
+
+invariant no_request_is_built_from_an_identity_nobody_supplied
+  assert NO_REQUEST_IS_BUILT_FROM_A_FABRICATED_ID == true and REMOVED_ARM_USED_A_FABRICATED_ID_WHEN_IDENTITY_WAS_ABSENT == true
 
 invariant a_recovered_order_that_does_not_match_the_key_is_not_provably_ours
-  assert recovered_order_is_provably_ours(CONFLICT_RECOVERY_MATCHES_THE_KEY) == false
+  assert recovered_order_is_provably_ours(REMOVED_ARM_MATCHED_THE_KEY) == false
 
 invariant no_deadline_is_invented_where_none_is_shipped
   assert REQUEST_DEADLINE_IS_SHIPPED == false and ABORT_OCCURRENCES_IN_UI == 0
+
+; The refusal replaced a downgrade; it did not buy the client a larger allowance. Both halves are
+; asserted, because "we now refuse" would be worth nothing beside a quietly raised cap.
+invariant an_oversize_payload_is_refused_here_and_the_cap_is_not_raised
+  assert oversize_is_refused(true, false, OVERSIZE_IS_REFUSED_LOUDLY_ON_THE_CLIENT) == true and oversize_becomes_anonymous(true, false, OVERSIZE_IS_REFUSED_LOUDLY_ON_THE_CLIENT) == false and CAP_WAS_RAISED_BY_THE_FIX == false and CAP_VALUE_IS_RESTATED_HERE == false
 
 invariant a_defaulted_number_is_the_only_silent_drop
   assert dropped_field_renders_an_invented_value(true, true) == true and dropped_field_renders_an_invented_value(false, true) == false and dropped_field_breaks_the_client(false) == true
 
 invariant the_default_partition_is_complete
-  assert DEFAULTS_ON_AN_OPTION + DEFAULTS_ON_A_BARE_NUMBER + DEFAULTS_ON_A_BOOL_STRING_OR_VEC == DTO_FIELDS_WITH_A_DEFAULT
+  assert DEFAULTS_ON_AN_OPTION + DEFAULTS_ON_A_BARE_NUMBER + DEFAULTS_ON_A_BOOL_STRING_OR_VEC == DTO_FIELDS_WITH_A_DEFAULT and NUMERIC_DEFAULT_SITES.len == DEFAULTS_ON_A_BARE_NUMBER
 
-invariant a_surviving_line_with_a_defaulted_price_hides_the_absence
-  assert price_absence_is_visible(true, true) == false and ABSENT_PRICE_SURVIVES_AS_A_FREE_LINE == true
+; One field changed column; none was added or removed. A partition that moved without the total
+; moving is the shape of a type change, and a total that also moved would mean the recount was
+; wrong.
+invariant moving_one_field_between_columns_left_the_total_alone
+  assert DEFAULTS_ON_A_BARE_NUMBER + 1 == DEFAULTS_ON_A_BARE_NUMBER_BEFORE_THE_FIX and DEFAULTS_ON_AN_OPTION - 1 + DEFAULTS_ON_A_BARE_NUMBER_BEFORE_THE_FIX + DEFAULTS_ON_A_BOOL_STRING_OR_VEC == DTO_FIELDS_WITH_A_DEFAULT
+
+; The rule is unchanged and its input changed. A surviving line hides its absence exactly when the
+; price field can fabricate a number, which an Option cannot.
+invariant a_surviving_line_hides_its_absence_only_when_the_price_field_can_fabricate_one
+  assert price_absence_is_visible(true, true) == false and price_absence_is_visible(true, false) == true and ABSENT_PRICE_SURVIVES_AS_A_FREE_LINE == false
+
+invariant an_unpriced_line_is_never_totalled_and_never_submitted
+  assert UNPRICED_LINE_BLOCKS_THE_CART_TOTAL == true and UNPRICED_CART_CAN_BE_SUBMITTED == false and cart_is_quotable(false) == false
 
 invariant a_dropped_line_is_a_visible_absence
   assert price_absence_is_visible(false, true) == true

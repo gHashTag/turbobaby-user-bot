@@ -10,6 +10,32 @@ fn is_telegram_id_str(s: &str) -> bool {
 /// Purchase amount minimum for location quest
 pub const MIN_PURCHASE_AMOUNT: i64 = 300;
 
+/// The server's admission rule for a Telegram `initData` payload, in bytes.
+///
+/// The authority is `src/api/auth.rs:70` — `if init_data.len() > 4096` — and
+/// `scripts/verify_t27_against_source.py` binds that literal to
+/// `specs/turbobaby/request_identity.t27`'s `INIT_DATA_MAX_BYTES`. This is the
+/// mirror the WASM client compiles against, because `src/api/auth.rs` is behind
+/// the `backend` feature and the browser cannot link it.
+///
+/// The bound is INCLUSIVE, the same way the server's `>` is: 4096 is admitted
+/// and 4097 is the first refused length. `tests/wire_absence_wiring.rs` reads
+/// the server's literal and fails if the two numbers part company, so this is a
+/// checked mirror and not a second opinion.
+pub const INIT_DATA_MAX_BYTES: usize = 4096;
+
+/// Would the server accept a payload of this many bytes?
+///
+/// The client asks before sending so an oversize payload fails where the
+/// customer is. It used to be silently replaced with an empty string
+/// (`src/ui/api/client.rs`), and an empty header is not sent at all, so the
+/// request the server would have refused left as an ANONYMOUS one instead —
+/// a downgrade where a refusal belongs. Mirrors `init_data_size_admits` in
+/// `specs/turbobaby/request_identity.t27:242`.
+pub fn init_data_size_admits(byte_len: usize) -> bool {
+    byte_len <= INIT_DATA_MAX_BYTES
+}
+
 /// Validate Telegram ID
 pub fn validate_telegram_id(id: i64) -> Result<TelegramId> {
     if id <= 0 {
@@ -498,5 +524,19 @@ mod tests {
         assert_eq!(clamp_finite_non_negative(f64::NAN), 0.0);
         assert_eq!(clamp_finite_non_negative(f64::INFINITY), 0.0);
         assert_eq!(clamp_finite_non_negative(f64::NEG_INFINITY), 0.0);
+    }
+
+    #[test]
+    fn the_init_data_bound_is_closed_at_the_cap() {
+        // The server's refusal is `len() > 4096`, so the bound is INCLUSIVE:
+        // 4096 is accepted and 4097 is the first refused length. An off-by-one
+        // here would make the client refuse a payload the server would have
+        // taken, which is a self-inflicted outage rather than a safety margin.
+        assert!(init_data_size_admits(0));
+        assert!(init_data_size_admits(1));
+        assert!(init_data_size_admits(INIT_DATA_MAX_BYTES - 1));
+        assert!(init_data_size_admits(INIT_DATA_MAX_BYTES));
+        assert!(!init_data_size_admits(INIT_DATA_MAX_BYTES + 1));
+        assert_eq!(INIT_DATA_MAX_BYTES, 4096);
     }
 }

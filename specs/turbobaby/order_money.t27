@@ -9,9 +9,9 @@
 ; --
 ; WHY (measured 2026-09-20). This identity is hand-written THREE times, in two languages, and
 ; only one of the three is tested. src/api/orders.rs:210 computes the expected total in the Axum
-; validator. The Dioxus/WASM checkout computes it twice more: src/ui/screens/checkout_screen.rs:721
-; for the figure the customer is shown, and src/ui/screens/checkout_screen.rs:973 for the figure it
-; puts into the request body at src/ui/screens/checkout_screen.rs:986 as the total field the server
+; validator. The Dioxus/WASM checkout computes it twice more: src/ui/screens/checkout_screen.rs:731
+; for the figure the customer is shown, and src/ui/screens/checkout_screen.rs:1012 for the figure it
+; puts into the request body at src/ui/screens/checkout_screen.rs:1025 as the total field the server
 ; will then check. src/ui/screens/checkout_screen.rs holds zero occurrences of the test attribute,
 ; so neither client copy is exercised by anything -- re-counted 2026-09-21 and still zero. Hand-copied computation is exactly the defect
 ; DECISIONS.md:201-233 (D15) names, and D15's own table lists three copies of the PRICE arithmetic
@@ -268,16 +268,24 @@ pub fn order_money_verdict(subtotal_minor: i64, claimed_total_minor: i64, bonus_
 ; Three implementations, one deciding. A client copy is a proposal even when it is correct, and
 ; there are two of them: the figure the customer is shown and the figure the body carries.
 pub const IDENTITY_IMPLEMENTATION_COUNT : u8 = 3;
+; Client addresses re-taken 2026-09-21 and re-read at their new lines (:721 -> :731,
+; :973 -> :1012) after an unreachable 409 arm was deleted from the same screen and a cart-price
+; refusal was added above the submit path. Both copies still compute the same identity; only the
+; addresses moved. One RENAME goes with the move and is recorded rather than smoothed over: the
+; subtrahend at :1012 reads `priced_subtotal` instead of `cart_total`, because the cart's total is
+; an Option now and is None when a line has no published price. That branch never reaches this
+; arithmetic -- the handler refuses an unquotable cart before it -- so on every path that gets
+; here the two names hold the same number.
 pub const IDENTITY_IMPLEMENTATIONS : [3]str = [
   "src/api/orders.rs:210",
-  "src/ui/screens/checkout_screen.rs:721",
-  "src/ui/screens/checkout_screen.rs:973",
+  "src/ui/screens/checkout_screen.rs:731",
+  "src/ui/screens/checkout_screen.rs:1012",
 ];
 pub const CLIENT_IDENTITY_COPY_COUNT : u8 = 2;
 ; The two client copies are not even the same shape, and the difference is recorded without
 ; claiming a disagreement the shipped clamps do not permit.
 pub const CLIENT_COPIES_ARE_SHAPED_DIFFERENTLY : bool = true;
-pub const CLIENT_COPY_SHAPE_NOTE : str = "src/ui/screens/checkout_screen.rs:718 and :721 floor twice, once after the bonus is subtracted and again after the stars, while src/ui/screens/checkout_screen.rs:973 subtracts both and floors once, which is the shape src/api/orders.rs:210 uses. Measured 2026-09-20: the clamps above them at src/ui/screens/checkout_screen.rs:712-720 hold the bonus at or below the cart total and the star count at or below what the bonus left, so no input reachable through the shipped path separates the two shapes. What is claimed here is that three hand-written copies exist, not that they disagree today.";
+pub const CLIENT_COPY_SHAPE_NOTE : str = "src/ui/screens/checkout_screen.rs:728 and :731 floor twice, once after the bonus is subtracted and again after the stars, while src/ui/screens/checkout_screen.rs:1012 subtracts both and floors once, which is the shape src/api/orders.rs:210 uses. Measured 2026-09-20 at :718/:721/:973/:712-720 and re-read 2026-09-21 at the addresses above, unchanged in shape: the clamps at src/ui/screens/checkout_screen.rs:722-730 hold the bonus at or below the cart subtotal and the star count at or below what the bonus left, so no input reachable through the shipped path separates the two shapes. What is claimed here is that three hand-written copies exist, not that they disagree today.";
 pub const SERVER_RECOMPUTATION_DECIDES : bool = true;
 pub const CLIENT_COMPUTATION_IS_A_PROPOSAL : bool = true;
 pub const AUTHORITY_RULE_IS_NOT_OWNED_HERE : bool = true;
@@ -502,8 +510,8 @@ test a_browser_claim_never_moves_the_expected_figure {
   assert IDENTITY_IMPLEMENTATION_COUNT == 3;
   assert IDENTITY_IMPLEMENTATIONS.len == IDENTITY_IMPLEMENTATION_COUNT;
   assert IDENTITY_IMPLEMENTATIONS[0] == "src/api/orders.rs:210";
-  assert IDENTITY_IMPLEMENTATIONS[1] == "src/ui/screens/checkout_screen.rs:721";
-  assert IDENTITY_IMPLEMENTATIONS[2] == "src/ui/screens/checkout_screen.rs:973";
+  assert IDENTITY_IMPLEMENTATIONS[1] == "src/ui/screens/checkout_screen.rs:731";
+  assert IDENTITY_IMPLEMENTATIONS[2] == "src/ui/screens/checkout_screen.rs:1012";
   assert CLIENT_IDENTITY_COPY_COUNT == 2;
   assert CLIENT_IDENTITY_COPY_COUNT + 1 == IDENTITY_IMPLEMENTATION_COUNT;
   assert CLIENT_COPIES_ARE_SHAPED_DIFFERENTLY == true;

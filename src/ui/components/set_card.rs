@@ -200,7 +200,7 @@ pub fn render_uniform_set_card(
                                 c.add_item(CartItem {
                                     id: s.id.clone(),
                                     name: lang::localized(&s.name, s.name_en.as_deref()),
-                                    price,
+                                    price: crate::trios::pricing::published_money(Some(price)),
                                     quantity: 1,
                                     image_url: None,
                                     item_type: CartItemType::Set,
@@ -244,7 +244,7 @@ pub fn render_uniform_set_card(
                                 id: s.id.clone(),
                                 name: lang::localized(
                                     &s.name, s.name_en.as_deref()),
-                                price: add_price,
+                                price: crate::trios::pricing::published_money(Some(add_price)),
                                 quantity: q,
                                 image_url: None,
                                 item_type: CartItemType::Set,

@@ -14,7 +14,7 @@
 ; FIVE of them are reached by live code and EIGHT by nothing at all -- not by src/, not by
 ; tests/. The five that are reached split three ways along the line D9 draws, and nobody has
 ; drawn it: parse_int_in_range and parse_finite_float_in_range REFUSE a bad input with the field
-; named; normalize_media_url REWRITES one and cannot refuse at all (src/trios/validation.rs:223
+; named; normalize_media_url REWRITES one and cannot refuse at all (src/trios/validation.rs:249
 ; returns String and never Result, and :239 prefixes a scheme-less input) -- it is counted apart
 ; from the parsers because calling it a refusal would be false; and clamp_finite_in_range and
 ; clamp_finite_non_negative REPLACE a bad input with a NUMBER and say nothing. Only the last two
@@ -24,7 +24,7 @@
 ; INSIDE the range they just checked. So a NaN latitude, an out-of-range latitude and a genuine
 ; reading of zero leave that function as the same f64, and the consumer of the JSON at
 ; src/api/quest.rs:90-98 -- a customer's quest map -- cannot tell which it got. The doc comment
-; at src/trios/validation.rs:136-139 names that exact outcome as the bug the WRITE path was fixed
+; at src/trios/validation.rs:162-165 names that exact outcome as the bug the WRITE path was fixed
 ; to stop: a typo routed to "(0, 0) - Gulf of Guinea". The read path still ships it, for a
 ; different reason, through a helper whose name says it is safe. And the input is already zeroed
 ; once before the clamp is asked: src/api/quest.rs:83 reads the column with
@@ -39,7 +39,7 @@
 ; are a FOURTH and FIFTH member of that family, not counted by D9 because D9 was written about
 ; the strain money path. They are worse than the three D9 lists in one measurable respect:
 ; try_get_warn! at src/db/macros.rs:28-44 at least emits a tracing::warn on the substitution, and
-; a grep of src/trios/validation.rs:177-205 for tracing returns ZERO. The clamps are the silent
+; a grep of src/trios/validation.rs:203-231 for tracing returns ZERO. The clamps are the silent
 ; members of the family.
 ; --
 ; WHERE THE BRIEF IS REFUTED. Three corrections, each measured, each a result rather than an
@@ -157,7 +157,7 @@ pub const VALIDATOR_PUBLIC_ITEMS : u8 = 13;
 pub const VALIDATOR_ITEMS_REACHED_BY_LIVE_CODE : u8 = 5;
 pub const VALIDATOR_ITEMS_REACHED_BY_NOTHING : u8 = 8;
 ; Of the five reached: two refuse a bad input with a labelled Err (parse_int_in_range at
-; src/trios/validation.rs:117, parse_finite_float_in_range at :144), one rewrites it and has no
+; src/trios/validation.rs:143, parse_finite_float_in_range at :170), one rewrites it and has no
 ; refusing branch at all (normalize_media_url at :223 returns String, and :239 prefixes a
 ; scheme-less input), and two replace it with a number (the two clamps). The rewriter is counted
 ; apart from the parsers because a count that called it a refusal would be measurably wrong.
@@ -175,7 +175,7 @@ pub const READ_CLAMP_CALL_SITES_ON_A_PUBLISHED_FIELD : u8 = 4;
 ; figure that the admin panel renders.
 pub const MONEY_CLAMP_CALL_SITES : u8 = 1;
 
-; A grep of src/trios/validation.rs:177-205 for tracing returns nothing. try_get_warn!
+; A grep of src/trios/validation.rs:203-231 for tracing returns nothing. try_get_warn!
 ; (src/db/macros.rs:28-44), which D9 already counts, emits a warn on its substitution; these two
 ; emit nothing, so a substituted value leaves no trace of having been substituted.
 pub const CLAMP_LOGS_ITS_SUBSTITUTION : bool = false;
@@ -207,7 +207,7 @@ pub const D9_CITATION_CORRECTION : str = "DECISIONS.md:122 cites the strains cla
 ; So the two facts a float carries are split: finiteness is a boolean the caller supplies, and
 ; magnitude is an integer in hundredths of a unit. NaN and both infinities collapse into
 ; finite = false, which is precisely the distinction clamp_finite_in_range makes at
-; src/trios/validation.rs:178 with v.is_finite().
+; src/trios/validation.rs:204 with v.is_finite().
 pub const CORPUS_FILES_MEASURED_FOR_F64 : u8 = 43;
 pub const F64_DECLARATIONS_IN_CORPUS : u8 = 0;
 pub const F64_ABSENCE_WAS_RE_RUN_AT_REVIEW : bool = true;
@@ -218,7 +218,7 @@ pub const LON_MIN_CENTI : i32 = -18000;
 pub const LON_MAX_CENTI : i32 = 18000;
 ; The fallback every live call site passes (src/api/quest.rs:83, :84, :254, :260).
 pub const READ_PATH_FALLBACK_CENTI : i32 = 0;
-; From the shipped regression tests. src/trios/validation.rs:469-478 uses a capital city to prove
+; From the shipped regression tests. src/trios/validation.rs:495-504 uses a capital city to prove
 ; the cycle #147 fix -- a legitimately negative coordinate must survive -- and :460 uses the first
 ; value past the ceiling.
 pub const SOUTHERN_SAMPLE_LAT_CENTI : i32 = -4129;
@@ -230,7 +230,7 @@ pub const CLAMP_OUT_PASSTHROUGH : u8 = 1;
 pub const CLAMP_OUT_SUBSTITUTED : u8 = 2;
 pub const CLAMP_OUTCOME_COUNT : u8 = 2;
 
-; src/trios/validation.rs:177-183. Finite AND within the inclusive interval is the only
+; src/trios/validation.rs:203-209. Finite AND within the inclusive interval is the only
 ; passthrough; everything else -- NaN, either infinity, below the floor, above the ceiling --
 ; takes the fallback.
 pub fn clamp_outcome(finite: bool, value: i32, min: i32, max: i32) u8 {
@@ -255,7 +255,7 @@ pub fn clamp_result(finite: bool, value: i32, min: i32, max: i32, fallback: i32)
 
 ; The function the NAME promises, kept here only so the difference is checkable. A clamp maps an
 ; out-of-range value to the nearest bound; clamp_finite_in_range maps it to a fourth argument
-; that need not be near anything. The shipped test at src/trios/validation.rs:460 asserts the
+; that need not be near anything. The shipped test at src/trios/validation.rs:486 asserts the
 ; substituting behaviour, so this is not a defect in the code, it is a defect in the name -- and
 ; the name is what a call site reads.
 pub fn saturating_result(finite: bool, value: i32, min: i32, max: i32, fallback: i32) i32 {
@@ -286,7 +286,7 @@ pub fn substitution_is_undetectable(finite: bool, value: i32, min: i32, max: i32
 }
 
 ; --- The non-negative companion ---------------------------------------------------------------
-; src/trios/validation.rs:199-205, one caller, at src/db/orders.rs:1218, on revenue. Its floor is
+; src/trios/validation.rs:225-231, one caller, at src/db/orders.rs:1218, on revenue. Its floor is
 ; a true clamp for a negative input and a substitution for a non-finite one, and in both cases
 ; the output is zero, which for a revenue figure is an ordinary quiet day. Same trap, money slot.
 pub const NON_NEGATIVE_FLOOR : i32 = 0;
@@ -369,7 +369,7 @@ pub fn published_slot(finite: bool, value: i32, min: i32, max: i32) u8 {
 ; --- The honest counterexample, already shipped ---------------------------------------------------
 ; src/ui/screens/admin_screen.rs:379-384 is the shape a money field gets right today: an empty
 ; input is ABSENT rather than zero, and a present-but-bad input is REFUSED with the field named,
-; never replaced. It reaches parse_finite_float_in_range (src/trios/validation.rs:144-164), which
+; never replaced. It reaches parse_finite_float_in_range (src/trios/validation.rs:170-190), which
 ; rejects empty, malformed, NaN, both infinities and out-of-range alike. The ceilings that
 ; function is called with belong to the catalog write contract, so only the SHAPE is pinned here.
 pub const PARSE_UNSET : u8 = 0;
@@ -403,13 +403,13 @@ pub fn parse_invented_a_number(nonempty_after_trim: bool, parsed: bool, finite: 
 }
 
 ; --- The QR token grammar ------------------------------------------------------------------------
-; src/trios/validation.rs:43-55. Exactly sixteen characters, every one ASCII alphanumeric. The
+; src/trios/validation.rs:69-81. Exactly sixteen characters, every one ASCII alphanumeric. The
 ; grammar is pinned by a count and a class predicate and never by an example, because a spec is a
 ; public file and a plausible sixteen-character token is a guess at a real one.
 pub const SHARED_TOKEN_EXACT_CHARS : u16 = 16;
 pub const SHARED_TOKEN_ALPHABET_SIZE : u16 = 62;
 pub const SHARED_TOKEN_LENGTH_IS_EXACT_NOT_A_CEILING : bool = true;
-; The shipped length test counts BYTES, not characters: src/trios/validation.rs:44 is
+; The shipped length test counts BYTES, not characters: src/trios/validation.rs:70 is
 ; s.len() != 16 and Rust str::len returns UTF-8 bytes. On the strict grammar the two numbers
 ; coincide for every string it ADMITS, because :49 then requires every character ASCII
 ; alphanumeric and an ASCII character is one byte -- so the model below is exact here. The unit
@@ -418,7 +418,7 @@ pub const SHARED_TOKEN_LENGTH_IS_EXACT_NOT_A_CEILING : bool = true;
 pub const SHARED_TOKEN_LENGTH_IS_MEASURED_IN_BYTES : bool = true;
 pub const SHARED_TOKEN_BYTES_AND_CHARS_COINCIDE_ON_ADMITTED_STRINGS : bool = true;
 pub const TOKEN_FIXTURE_IS_REFUSED : bool = true;
-pub const TOKEN_FIXTURE_NOTE : str = "No token literal appears in this file. The shipped unit test carries one at src/trios/validation.rs:300 because it must call the function; a spec must not, because a spec is read by people looking for the shape of a valid token. The count and the alphabet size say everything the grammar says.";
+pub const TOKEN_FIXTURE_NOTE : str = "No token literal appears in this file. The shipped unit test carries one at src/trios/validation.rs:326 because it must call the function; a spec must not, because a spec is read by people looking for the shape of a valid token. The count and the alphabet size say everything the grammar says.";
 
 pub fn shared_token_admits(char_count: u16, all_ascii_alphanumeric: bool) bool {
     return char_count == SHARED_TOKEN_EXACT_CHARS and all_ascii_alphanumeric;
@@ -463,7 +463,7 @@ pub fn token_reaches_the_lookup(char_count: u16, all_ascii_alphanumeric: bool) b
 }
 
 ; --- The Telegram id: three gates, none of them an identity ---------------------------------------
-; src/trios/validation.rs:14-40. The numeric bound is positive and at most 2^53-1, the ceiling
+; src/trios/validation.rs:40-66. The numeric bound is positive and at most 2^53-1, the ceiling
 ; named in the source comment at :20 for JavaScript safety. The string form adds a grammar first:
 ; src/trios/validation.rs:6-8 requires one to twenty characters, every one an ASCII digit, which
 ; is why a leading minus fails the GRAMMAR and never the range.

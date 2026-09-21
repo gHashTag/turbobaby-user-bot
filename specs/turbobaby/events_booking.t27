@@ -18,7 +18,10 @@
 ; and the edge block below always used the IDs. Aligned so both halves of the file say the same.)
 ; --
 ; WHY (measured 2026-09-21). The number that forces this file is a ZERO, and it is a zero over
-; src/, not over specs/. src/api/events.rs is 1959 lines. Its routes() at :29-53 declares 11 HTTP
+; src/, not over specs/. src/api/events.rs is 2496 lines -- it was 1959 when this file was written
+; earlier the same day and 2290 after the delete refusal and the waitlist scan; the 206 lines since
+; are the delete's escape hatch, its tests and the comments that say why. Its routes() at :29-53
+; declares 11 HTTP
 ; paths carrying 14 method bindings into 14 handlers, and src/api/mod.rs:90 merges them into the
 ; public router unconditionally; src/ui/routes.rs:39-42 routes two screens onto them. Against all
 ; of that, migration 085 retired exactly NONE: its only touch on this surface is one visibility
@@ -29,7 +32,7 @@
 ; lands, on a machine whose capacity rule, waitlist rule and promotion rule had no contract.
 ; --
 ; THE SHARPEST SINGLE MEASUREMENT is the pair of comparisons that decide which door opens.
-; src/api/events.rs:624 refuses a booking on `taken + seats > cap`; src/api/events.rs:1253 refuses
+; src/api/events.rs:626 refuses a booking on `taken + seats > cap`; src/api/events.rs:1359 refuses
 ; a waitlist join on `taken < cap`. Equality belongs to the booking side: at taken + seats == cap
 ; the seat is SOLD, not refused. The two predicates are exact complements for a one-seat booking,
 ; so for any cap of one or more there is never a state where both doors are open and never a state
@@ -44,22 +47,22 @@
 ;      declares in LEGACY_LIVE_ROUTE_COUNT -- re-opened 2026-09-21 and still 8 -- a different
 ;      surface; the events screens are two of them, at src/ui/routes.rs:39-42.
 ;   2. "An attendee reachout is a queue row" is refuted at both of the tree's two reachouts.
-;      send_event_reminders sends directly at src/api/events.rs:1762 and send_event_bookings sends
-;      directly at :1658. A grep for `notification` over src/api/events.rs returns 0, and
+;      send_event_reminders sends directly at src/api/events.rs:2130 and send_event_bookings sends
+;      directly at :2026. A grep for `notification` over src/api/events.rs returns 0, and
 ;      src/db/notifications.rs declares exactly three enqueue functions (:16, :38, :52), all three
 ;      referral. The consequence is not cosmetic: the queue retries three times
-;      (src/notification_queue.rs:20) and a direct send has one attempt and a `continue`
-;      (src/api/events.rs:1766-1774). The edge to notification-queue is still taken below, as the
+;      (src/notification_queue.rs:21, was :20) and a direct send has one attempt and a `continue`
+;      (src/api/events.rs:2134-2142). The edge to notification-queue is still taken below, as the
 ;      owner of the shape these two reachouts do NOT use.
 ;   3. "The waitlist migration (survey says 045 - confirm)" -- confirmed exactly.
 ;      migrations/045_events_waitlist_status.sql:4-9 drops the two-value CHECK and re-adds it with
 ;      three. That is the whole of the waitlist's storage: no separate table, no position column,
 ;      no joined_at beyond created_at.
 ;   4. "What happens at exactly capacity" has TWO answers, not one, and the survey implies one.
-;      The last seat is sold (:624, strict `>`), and the same instant opens the waitlist (:1253,
+;      The last seat is sold (:626, strict `>`), and the same instant opens the waitlist (:1359,
 ;      strict `<`). Both are pinned below, and the complementarity is an invariant.
 ;   5. The same-day question has no limit to find. migrations/043 declares no unique key over
-;      `events` beyond the primary key at :6, and src/api/events.rs:1348-1371 is a plain INSERT
+;      `events` beyond the primary key at :6, and src/api/events.rs:1454-1477 is a plain INSERT
 ;      with no ON CONFLICT arm. tests/integration_events_same_day.rs designs four events onto one
 ;      date through the admin handler (:279-338) -- but all four of its tests are `#[ignore]`d
 ;      (:134, :210, :237, :278) and return early without a database, so the test is a named case
@@ -103,9 +106,23 @@ pub const REMINDER_MIGRATION : str = "migrations/052_event_reminders.sql";
 pub const GALLERY_MIGRATION : str = "migrations/055_event_photos_video.sql";
 pub const IDENTITY_MIGRATION : str = "migrations/070_event_bookings_username.sql";
 pub const SAME_DAY_WITNESS : str = "tests/integration_events_same_day.rs";
-; wc -l over the tracked sources, 2026-09-21, so "the whole file" is a measurement and not a mood.
-pub const HTTP_SOURCE_LINES : u16 = 1959;
-pub const CALENDAR_SOURCE_LINES : u16 = 405;
+; wc -l over the tracked sources, so "the whole file" is a measurement and not a mood. RE-MEASURED
+; 2026-09-21 after the delete refusal, the waitlist scan and the shared seat subtraction landed:
+; src/api/events.rs read 1959 and src/trios/calendar.rs 405 earlier the same day, and both numbers
+; below are the ones after that change. RE-MEASURED AGAIN the same day, after the delete's escape
+; hatch: src/api/events.rs read 2290 between the two and reads 2496 now, so every citation into it
+; past the delete moved by 140 and is written below at its new address; the calendar, attendee and
+; witness files that change did not touch keep the earlier reading. Every src/api/events.rs line this file cites IN ITS OWN
+; VOICE is likewise the line AFTER it, and where a citation moved far enough to matter the old
+; number is named beside the new one. The exception is deliberate and is the only one: inside a
+; QUOTED superseded paragraph -- the blocks below that begin "This paragraph read:" -- the line
+; numbers are the ones the quoted text carried, i.e. the pre-change file, and they do not point
+; at today's source. Quoting a measurement means quoting its addresses too; re-pointing them
+; would make the quote say something it never said. Corrected 2026-09-21 by this file's
+; adversarial review, which found the sentence above claiming ALL citations were post-change
+; while four quoted ones were not.
+pub const HTTP_SOURCE_LINES : u16 = 2496;
+pub const CALENDAR_SOURCE_LINES : u16 = 482;
 pub const ATTENDEE_SOURCE_LINES : u16 = 357;
 pub const SAME_DAY_WITNESS_LINES : u16 = 339;
 
@@ -151,12 +168,12 @@ pub const REUSES_LEGACY_RETIREMENT_ID : str = "turbobaby/legacy-retirement";
 ; market owns the shop clock -- the offset, the zone name and the fact that it has no DST, in
 ; TH_UTC_OFFSET_HOURS, TH_TIMEZONE and TH_DST. This file consumes the offset as an abstract whole
 ; number of hours east and declares no zone, no offset literal and no DST rule. That discipline is
-; not decorative: src/api/events.rs:1695-1699 records a repaired bug where a hardcoded seven-hour
-; shift was typed UTC, and the repaired call at :1700 goes through the market clock.
+; not decorative: src/api/events.rs:2063-2067 records a repaired bug where a hardcoded seven-hour
+; shift was typed UTC, and the repaired call at :1928 goes through the market clock.
 pub const REUSES_MARKET_ID : str = "turbobaby/market";
 ; locale-policy owns the published locale set and what an unpublished one renders, in
 ; PUBLISHED_LOCALES and resolution_is_total. Every customer-facing sentence on this surface is a
-; key in src/trios/i18n.rs selected at src/api/events.rs:1712-1716 and throughout the events
+; key in src/trios/i18n.rs selected at src/api/events.rs:2080-2084 and throughout the events
 ; screen; this file pins the obligation that a sentence exists and never the sentence.
 pub const REUSES_LOCALE_POLICY_ID : str = "turbobaby/locale-policy";
 ; notification-queue owns a queued outbound message: its row, its attempt budget and its drain, in
@@ -168,12 +185,12 @@ pub const REUSES_NOTIFICATION_QUEUE_ID : str = "turbobaby/notification-queue";
 ; strict_proof_ok. This file takes the gate's verdict as booleans and restates no gate, no
 ; precedence and no attempt bound. Worth naming for one measured reason: the handle stored on a
 ; booking row comes from validated initData and never from the request body
-; (src/api/events.rs:346-360 says why), so the identity edge is load-bearing on the guest list and
+; (src/api/events.rs:348-362 says why), so the identity edge is load-bearing on the guest list and
 ; not only on the door.
 pub const REUSES_REQUEST_IDENTITY_ID : str = "turbobaby/request-identity";
 ; rate-limit owns whether an attempt is admitted inside a window, in attempt_admitted. This file
-; makes two statements about that surface -- book_event carries a limiter (src/api/events.rs:526-538
-; with the budget at :25-26) and join_waitlist carries none (:1201-1299) -- and declares neither
+; makes two statements about that surface -- book_event carries a limiter (src/api/events.rs:528-540
+; with the budget at :25-26) and join_waitlist carries none (:1307-1405) -- and declares neither
 ; budget, neither window nor any admission rule. The edge is added 2026-09-21 by this file's
 ; adversarial review so that nobody later writes the event-booking budget into a booking contract.
 pub const REUSES_RATE_LIMIT_ID : str = "turbobaby/rate-limit";
@@ -273,17 +290,17 @@ pub fn booking_state_code_of(name: str) u8 {
 }
 
 ; Only a confirmed row occupies a seat, and this is not an opinion: every count of `taken` in the
-; tree filters status = 'confirmed' -- src/api/events.rs:415, :451, :618, :1003, :1242, :1313 and
-; :1435, seven sites, no exception. A waitlisted row holds a place in a line and nothing else.
+; tree filters status = 'confirmed' -- src/api/events.rs:417, :453, :620, :1061, :1348, :1419 and
+; :1541, seven sites, no exception. A waitlisted row holds a place in a line and nothing else.
 pub fn state_occupies_a_seat(code: u8) bool {
   return code == BOOKING_STATE_CONFIRMED;
 }
 
 ; --- Capacity, and the exact-capacity case ------------------------------------------------------
-; src/api/events.rs:614-628. `max_seats` is nullable (migrations/043_events_booking.sql:15), and a
-; NULL skips the whole check at :615 -- an event with no declared capacity can never sell out.
-; The comparison at :624 is strict, so the seat that brings the count level with the cap is SOLD.
-; The seat count per booking is not an assumption: src/api/events.rs:542-546 maps an absent field
+; src/api/events.rs:616-630. `max_seats` is nullable (migrations/043_events_booking.sql:15), and a
+; NULL skips the whole check at :617 -- an event with no declared capacity can never sell out.
+; The comparison at :626 is strict, so the seat that brings the count level with the cap is SOLD.
+; The seat count per booking is not an assumption: src/api/events.rs:544-548 maps an absent field
 ; and an explicit 1 to one seat and answers 400 to anything else, so `seats` is always 1 on the
 ; write path even though migrations/043_events_booking.sql:31 would store more. (Citation added
 ; 2026-09-21 by this file's adversarial review -- these two constants carried no file:line.)
@@ -305,9 +322,9 @@ pub fn booking_fits(capacity_declared: bool, cap: u32, taken: u32, seats: u32) b
   return taken + seats <= cap;
 }
 
-; src/api/events.rs:1231-1255. Three refusals before a place in the line: the event must be
-; public and exist (:1220-1230), the cap must be a positive number (:1231-1235 -- an unlimited
-; event unwraps to 0 and is refused), and the seats must actually be gone (:1253).
+; src/api/events.rs:1337-1361. Three refusals before a place in the line: the event must be
+; public and exist (:1326-1336), the cap must be a positive number (:1337-1341 -- an unlimited
+; event unwraps to 0 and is refused), and the seats must actually be gone (:1359).
 pub fn waitlist_open(capacity_declared: bool, cap: u32, taken: u32) bool {
   if (!capacity_declared) {
     return false;
@@ -333,18 +350,27 @@ pub fn exactly_one_door_is_open(cap: u32, taken: u32) bool {
 pub const ZERO_CAPACITY_IS_CREATABLE : bool = true;
 pub const ZERO_CAPACITY_SHUTS_BOTH_DOORS : bool = true;
 
-; What the read API publishes as remaining seats. src/api/events.rs:341 clamps at zero with
-; `.max(0)`, so an overbooked row -- which the write path cannot produce but a direct SQL edit
-; can -- reads as zero over HTTP and never as a negative number. This function models THAT number.
-; MEASURED CORRECTION, 2026-09-21, adversarial review of this file: the screen does NOT agree, and
-; the earlier claim here that it did was wrong. The screen's own count at
-; src/ui/screens/events_screen.rs:250-252 is `max_seats.map(|cap| cap.saturating_sub(seats_taken))`
-; over i32, and i32 saturation floors at i32::MIN, not at 0; the result goes straight into the
-; seats label at :272 with no further clamp. The same overbooked row therefore publishes 0 on the
-; API and a negative number on the screen. Declared as a disagreement and not modelled: the
-; screen's number is a second quantity, and this file states only that the two differ.
+; What the read API publishes as remaining seats. src/api/events.rs:341-343 clamps at zero, so an
+; overbooked row -- which the write path cannot produce but a lowered max_seats or a direct SQL
+; edit can -- reads as zero over HTTP and never as a negative number. This function models THAT
+; number.
+;
+; MEASURED CORRECTION, 2026-09-21, adversarial review of this file, and FIXED the same day. The
+; correction read: "the screen does NOT agree, and the earlier claim here that it did was wrong.
+; The screen's own count at src/ui/screens/events_screen.rs:250-252 is
+; `max_seats.map(|cap| cap.saturating_sub(seats_taken))` over i32, and i32 saturation floors at
+; i32::MIN, not at 0; the result goes straight into the seats label at :272 with no further clamp.
+; The same overbooked row therefore publishes 0 on the API and a negative number on the screen."
+; Both ends now call ONE function, src/trios/calendar.rs:375 `seats_free`, which subtracts in i64
+; and clamps to 0..=i32::MAX (D15). The API's call is at src/api/events.rs:343 and the screen's two
+; are at src/ui/screens/events_screen.rs:256 and :399, the second of which had the same defect and
+; is not the one the correction named. The disagreement is therefore gone rather than modelled, and
+; SCREEN_CLAMPS_SEATS_AT_ZERO says so; the invariant below that pinned the two as UNEQUAL is
+; replaced by one that pins them as equal, which is the only honest way to record a fix.
 pub const API_CLAMPS_SEATS_AT_ZERO : bool = true;
-pub const SCREEN_CLAMPS_SEATS_AT_ZERO : bool = false;
+pub const SCREEN_CLAMPS_SEATS_AT_ZERO : bool = true;
+pub const SEATS_FREE_IMPLEMENTATION_COUNT : u8 = 1;
+pub const SEATS_FREE_IMPLEMENTATION : str = "src/trios/calendar.rs:375 seats_free, called from src/api/events.rs:343 and from src/ui/screens/events_screen.rs:256 and :399";
 
 pub fn seats_available(capacity_declared: bool, cap: u32, taken: u32) u32 {
   if (!capacity_declared) {
@@ -357,7 +383,7 @@ pub fn seats_available(capacity_declared: bool, cap: u32, taken: u32) u32 {
 }
 
 ; --- The door before the door: the event must not have started ---------------------------------
-; src/api/events.rs:596-600, inside the transaction and after the event row is locked at :586-590.
+; src/api/events.rs:598-602, inside the transaction and after the event row is locked at :588-592.
 ; This is checked for a booking and NOT for a waitlist join: join_waitlist never reads starts_at,
 ; so a line can still form for an evening already under way. Recorded as measured, not endorsed.
 pub const BOOKING_CHECKS_START_TIME : bool = true;
@@ -375,7 +401,7 @@ pub fn booking_door_open(event_public: bool, event_started: bool, capacity_decla
 
 ; --- The duplicate guards, which do not agree ---------------------------------------------------
 ; MEASURED DEFECT, reported as a measurement and not rewritten into a rule. book_event's guard at
-; src/api/events.rs:605 reads `status = 'confirmed'`; join_waitlist's at :1263 reads
+; src/api/events.rs:607 reads `status = 'confirmed'`; join_waitlist's at :1369 reads
 ; `IN ('confirmed','waitlisted')`. The asymmetry is one-directional and reachable: a waitlisted
 ; customer whose seat frees can call the book endpoint, pass the guard, and end holding a confirmed
 ; row AND a live waitlisted row. The partial unique index at
@@ -402,20 +428,38 @@ pub fn one_person_can_hold_two_rows(waitlisted_already: bool, a_seat_freed: bool
 }
 
 ; --- Promotion ------------------------------------------------------------------------------------
-; src/api/events.rs:994-1141. Promotion has no trigger of its own: it lives inside
-; cancel_booking_and_promote and runs nowhere else. Both cancel endpoints call it -- the customer's
-; at :1193 and the admin's at :1677 -- and no sweep, no loop and no boot path does.
+; src/api/events.rs:1052-1246 (:994-1141 before 2026-09-21). Promotion has no trigger of its own:
+; it lives inside cancel_booking_and_promote and runs nowhere else. Both cancel endpoints call it
+; -- the customer's at :1299 and the admin's at :1905 -- and no sweep, no loop and no boot path
+; does.
 pub const PROMOTION_TRIGGER_COUNT : u8 = 1;
-pub const PROMOTION_TRIGGER : str = "a committed cancellation, src/api/events.rs:994-1141";
+pub const PROMOTION_TRIGGER : str = "a committed cancellation, src/api/events.rs:1052-1246";
 pub const PROMOTIONS_PER_CANCEL_MAX : u8 = 1;
-pub const CANDIDATES_READ_PER_CANCEL : u8 = 1;
-pub const PROMOTION_ORDER : str = "created_at ASC, src/api/events.rs:1018";
-pub const PROMOTION_SKIPS_TO_THE_NEXT_PAYER : bool = false;
+; CHANGED 2026-09-21, and it is the whole of the head-of-line fix. Was 1: the SELECT was
+; `LIMIT 1`, so a cancellation read exactly one candidate and a head who could not pay ended the
+; promotion. The read is now `LIMIT PROMOTION_CANDIDATE_SCAN_MAX` (src/api/events.rs:850) and the
+; seat is offered down the line. One cancellation still promotes at most one person, because it
+; still frees exactly one seat -- PROMOTIONS_PER_CANCEL_MAX did not move.
+pub const CANDIDATES_READ_PER_CANCEL : u8 = 10;
+pub const PROMOTION_ORDER : str = "payers first, then created_at ASC, src/api/events.rs:1099-1104";
+pub const PROMOTION_SKIPS_TO_THE_NEXT_PAYER : bool = true;
 pub const PROMOTION_IS_AN_OFFER : bool = false;
 
+; The scan bound is the code's own number and not a measurement, and this file will not dress it as
+; one. Nothing in this repository publishes a waitlist length (see WAITLIST_LENGTH_CAP_PUBLISHED),
+; so there is nothing to take; ten bounds WORK, because the read holds the event row locked and
+; every booking of that event waits behind it. It does not decide who waits: the order puts every
+; customer who can pay ahead of every customer who cannot, so the tenth row is reached only after
+; nine balances moved between the read and the debit inside one transaction. When the whole scan
+; promotes nobody, the warn at src/api/events.rs:1236-1244 carries the event, the price, the rows
+; read and the debit attempts -- the failure is visible instead of a threshold quietly deciding.
+pub const PROMOTION_SCAN_BOUND_IS_MEASURED : bool = false;
+pub const PROMOTION_SCAN_BOUND_SITE : str = "src/api/events.rs:850 PROMOTION_CANDIDATE_SCAN_MAX";
+pub const PROMOTION_EXHAUSTED_SCAN_IS_LOGGED : bool = true;
+
 ; Four conditions, all ANDs. The capacity one matters more than it looks: an unlimited event never
-; has a waitlist to promote from (:999 is `if let Some(cap)`), and cancelling a WAITLISTED row
-; frees no seat, so the count afterwards is unchanged and :1014 refuses.
+; has a waitlist to promote from (:1057 is `if let Some(cap)`), and cancelling a WAITLISTED row
+; frees no seat, so the count afterwards is unchanged and :1072 refuses.
 pub fn promotion_runs(cancel_effective: bool, capacity_declared: bool, cap: u32, taken_after_cancel: u32, waitlist_nonempty: bool) bool {
   if (!cancel_effective) {
     return false;
@@ -429,44 +473,73 @@ pub fn promotion_runs(cancel_effective: bool, capacity_declared: bool, cap: u32,
   return taken_after_cancel < cap;
 }
 
-; src/api/events.rs:1034-1123. The head of the line is charged the event's price AS IT STANDS AT
-; PROMOTION TIME: :1029-1032 reads price_stars off the locked event row, and the join INSERT at
-; :1281 carried no stars column at all, so nothing was quoted to him when he joined.
-pub fn promotion_completes(promotion_running: bool, price: u32, head_balance: u32) bool {
+; src/api/events.rs:1134-1230. Whoever takes the seat is charged the event's price AS IT STANDS AT
+; PROMOTION TIME: :1076-1078 reads price_stars off the locked event row, and the join INSERT at
+; :1387 carries no stars column at all, so nothing was quoted to him when he joined. The parameter
+; was named head_balance until 2026-09-21; it is any candidate's balance now, because the head is
+; no longer the only one asked.
+pub fn promotion_completes(promotion_running: bool, price: u32, candidate_balance: u32) bool {
   if (!promotion_running) {
     return false;
   }
   if (price == 0) {
     return true;
   }
-  return head_balance >= price;
+  return candidate_balance >= price;
 }
 
-; The head-of-line block, stated as arithmetic. src/api/events.rs:1118-1120 is the `else { false }`
-; arm: a head who cannot pay is not skipped, the whole promotion ends, and the seat stays empty
-; until the NEXT cancellation. Nobody behind him is read, because the SELECT at :1018 is LIMIT 1
-; and runs once per cancel.
-pub fn seat_stays_empty_after_cancel(promotion_running: bool, price: u32, head_balance: u32) bool {
-  return !promotion_completes(promotion_running, price, head_balance);
+; MEASURED DEFECT, FIXED 2026-09-21. This paragraph read: "The head-of-line block, stated as
+; arithmetic. src/api/events.rs:1118-1120 is the `else { false }` arm: a head who cannot pay is not
+; skipped, the whole promotion ends, and the seat stays empty until the NEXT cancellation. Nobody
+; behind him is read, because the SELECT at :1018 is LIMIT 1 and runs once per cancel."
+;
+; That arm is gone. The SELECT at :1099-1104 reads up to CANDIDATES_READ_PER_CANCEL rows ordered
+; `(balance >= price) DESC, created_at ASC`, and next_promotable at :880 walks them until one can
+; pay. Being passed over costs nothing: no status and no created_at is rewritten, and created_at is
+; the only thing a place in this line is made of (the waitlist has no position column -- see
+; WAITLIST_HAS_A_POSITION_COLUMN), so a customer who tops up is at the head again.
+;
+; The seat can still end up empty, and the two ways are now NAMED rather than silent: nobody in the
+; rows read can pay, or every candidate that the read said could pay lost the balance between the
+; read and the debit (:1168-1180, which re-checks under the row lock and is the authority). Both
+; end at the warn at :1236-1244.
+pub fn seat_stays_empty_after_cancel(promotion_running: bool, price: u32, best_balance_in_line: u32) bool {
+  return !promotion_completes(promotion_running, price, best_balance_in_line);
+}
+
+; The same fix stated as the thing a reader can check against the code: two people wait, the head
+; cannot pay and the next can. Returns the place in the line that gets the seat, or 0 for nobody.
+; Before 2026-09-21 this returned 0 for the first case; it returns 2.
+pub fn seat_reaches(price: u32, head_balance: u32, next_balance: u32) u8 {
+  if (price == 0) {
+    return 1;
+  }
+  if (head_balance >= price) {
+    return 1;
+  }
+  if (next_balance >= price) {
+    return 2;
+  }
+  return 0;
 }
 
 ; --- Cancellation and refund ----------------------------------------------------------------------
-; src/api/events.rs:877-881 returns before the refund block when the row is already cancelled, so
+; src/api/events.rs:935-939 returns before the refund block when the row is already cancelled, so
 ; a replayed cancel moves no balance and fires no second promotion. A waitlisted row may be
 ; cancelled -- it simply leaves the line.
 pub fn cancel_has_effect(current_state: u8) bool {
   return booking_state_is_known(current_state) and current_state != BOOKING_STATE_CANCELLED;
 }
 
-; src/api/events.rs:883-890. The refund is the amount the ROW records, never the event's current
+; src/api/events.rs:941-948. The refund is the amount the ROW records, never the event's current
 ; price, so a price change between booking and cancel can neither over- nor under-refund. A free
 ; booking records zero and refunds zero.
 ;
 ; MEASURED, added 2026-09-21 by this file's adversarial review: "records zero" is exactly where the
 ; storage and the code disagree. migrations/051_events_stars_price.sql:10 states that NULL means a
-; free booking, but src/api/events.rs:632 computes `stars_cost = price_stars.unwrap_or(0) * seats`
-; and :743 inserts that value unconditionally, so a free booking is stored as 0 and never as NULL.
-; The refund arithmetic is unharmed -- :890 gates on `stars_paid > 0` and 0 and NULL both fail it
+; free booking, but src/api/events.rs:634 computes `stars_cost = price_stars.unwrap_or(0) * seats`
+; and :745 inserts that value unconditionally, so a free booking is stored as 0 and never as NULL.
+; The refund arithmetic is unharmed -- :948 gates on `stars_paid > 0` and 0 and NULL both fail it
 ; -- but `stars_paid IS NULL` no longer separates a free booking from a paid-zero one, and the
 ; CHECK added at 051:13 admits both. Recorded here and not modelled: this file owns the refund
 ; SHAPE, and which of two falsy encodings the column carries is the schema's question.
@@ -480,13 +553,63 @@ pub fn refund_amount(cancel_effective: bool, amount_on_row: u32) u32 {
   return amount_on_row;
 }
 
-; MEASURED, and the sharpest hole on the money side. delete_event at src/api/events.rs:1532-1554 is
-; a bare DELETE with no refund path, and migrations/043_events_booking.sql:29 declares
-; ON DELETE CASCADE, so every booking of that event -- paid ones included -- disappears with it.
-; The refund code exists only inside cancel_booking_and_promote (:890-978) and delete never enters
-; it.
+; MEASURED DEFECT, FIXED 2026-09-21. This paragraph read: "MEASURED, and the sharpest hole on the
+; money side. delete_event at src/api/events.rs:1532-1554 is a bare DELETE with no refund path, and
+; migrations/043_events_booking.sql:29 declares ON DELETE CASCADE, so every booking of that event
+; -- paid ones included -- disappears with it. The refund code exists only inside
+; cancel_booking_and_promote (:890-978) and delete never enters it."
+;
+; The cascade is untouched and still declared at migrations/043_events_booking.sql:29. What changed
+; is that the delete no longer walks into it: delete_event at src/api/events.rs:1747-1922 opens a
+; transaction, takes FOR UPDATE on the event row the way the booking door and the cancel path both
+; do, counts the rows that still record Stars -- `status <> 'cancelled' AND
+; COALESCE(stars_paid,0) > 0`, because cancelling is the one path that gives them back -- and
+; answers 409 `paid_bookings_exist` with the count and the total while any exist. An unreadable
+; count refuses too, rather than becoming a confident zero (D9): reading it as zero would open the
+; delete on exactly the failure the count exists to catch.
+;
+; It still refunds NOTHING, and the facts are kept in separate constants so none can be read as
+; another. Refusing is the reversible half: nothing is destroyed by it, and the owner already has
+; a path that returns Stars one booking at a time. Refunding from inside the delete would have had
+; to reuse cancel_booking_and_promote, whose second half PROMOTES a waitlisted customer -- charging
+; him for a seat at an event about to vanish.
+;
+; AND THE REFUSAL HAS A DOOR, corrected here the same day by the review of the fix above. This
+; block said "refuses" and stopped there, and a refusal with no way through is its own defect: an
+; event that already happened holds its paid bookings for ever, so a finished evening with three
+; paid seats was a row nobody -- the owner included -- could delete at all. The door is one query
+; parameter, DELETE_HATCH_PARAM, carrying the COUNT being given up:
+; DELETE /api/admin/events/:id?abandon_paid_bookings=3. Three properties, each asserted below.
+; (1) The refusal is the DEFAULT: absent is every caller that says nothing, which is every client
+; written before the parameter existed, so DELETE_REFUSAL_IS_THE_DEFAULT is true while
+; DELETE_REFUSAL_IS_UNCONDITIONAL is false. (2) It is EXPLICIT, and a NUMBER rather than a flag: a
+; flag can be set by a client with no idea what it is destroying. (3) The count is the SERVER'S --
+; it must equal what the transaction measured under the row lock, so a stale admin screen replaying
+; an old click cannot take a seat paid for since; that answer is 409 DELETE_STALE_ACK_CODE carrying
+; both numbers. Zero is not exempt: 0 against three paid bookings is the same false statement as
+; any other wrong number, and it is the one an empty form field sends. The door decides who may
+; destroy the rows, not whether the Stars come back -- DELETE_HATCH_REFUNDS is false for the same
+; reason DELETE_REFUNDS is, and src/trios/api_errors.rs is the one reader that turns either 409
+; into something the admin screen can say.
+;
+; DELETE_DESTROYS_PAID_BOOKINGS was one bool reading false and is now two, because with the door
+; open the single word "destroys" has two answers. It was TRUE before the refusal, false between
+; the refusal and the hatch, and is now false UNASKED and true WHEN NAMED.
 pub const DELETE_REFUNDS : bool = false;
 pub const DELETE_CASCADES_BOOKINGS : bool = true;
+pub const DELETE_DESTROYS_PAID_BOOKINGS_UNASKED : bool = false;
+pub const DELETE_DESTROYS_PAID_BOOKINGS_WHEN_NAMED : bool = true;
+pub const DELETE_REFUSES_WHILE_PAID_BOOKINGS_EXIST : bool = true;
+pub const DELETE_REFUSAL_IS_THE_DEFAULT : bool = true;
+pub const DELETE_REFUSAL_IS_UNCONDITIONAL : bool = false;
+pub const DELETE_REFUSAL_CODE : str = "paid_bookings_exist";
+pub const DELETE_REFUSAL_REPORTS_THE_COUNT : bool = true;
+pub const DELETE_COUNTS_UNDER_A_ROW_LOCK : bool = true;
+pub const DELETE_HATCH_PARAM : str = "abandon_paid_bookings";
+pub const DELETE_HATCH_IS_EXPLICIT : bool = true;
+pub const DELETE_HATCH_COUNT_IS_THE_SERVERS : bool = true;
+pub const DELETE_HATCH_REFUNDS : bool = false;
+pub const DELETE_STALE_ACK_CODE : str = "acknowledgement_is_stale";
 
 pub fn money_returns_on(path_is_cancel: bool, amount_on_row: u32) u32 {
   if (!path_is_cancel) {
@@ -495,12 +618,28 @@ pub fn money_returns_on(path_is_cancel: bool, amount_on_row: u32) u32 {
   return refund_amount(true, amount_on_row);
 }
 
+; The delete, as arithmetic. A cancelled row counts zero here because its Stars were already
+; returned; a waitlisted row counts zero because it never held any.
+pub fn delete_is_admitted(paid_bookings_attached: u32) bool {
+  return paid_bookings_attached == 0;
+}
+
+; The same delete with the door in it. `ack_sent` is the parameter's PRESENCE and nothing else:
+; absent is the road above, unchanged. Present, the number has to equal the count the server
+; measured -- an older screen's number is refused, and so is a zero.
+pub fn delete_is_admitted_with_ack(paid_attached: u32, acknowledged: u32, ack_sent: bool) bool {
+  if (!ack_sent) {
+    return delete_is_admitted(paid_attached);
+  }
+  return acknowledged == paid_attached;
+}
+
 ; --- Reaching the attendee ------------------------------------------------------------------------
 ; The tree has exactly two attendee reachouts and neither is a queue row. See refutation 2.
 pub const ATTENDEE_REACHOUT_COUNT : u8 = 2;
 pub const ATTENDEE_REACHOUT_SITES : [2]str = [
-  "src/api/events.rs:1762 send_event_reminders, one direct send per confirmed booking",
-  "src/api/events.rs:1658 send_event_bookings, one direct send of the guest list to the admin",
+  "src/api/events.rs:2130 send_event_reminders, one direct send per confirmed booking",
+  "src/api/events.rs:2026 send_event_bookings, one direct send of the guest list to the admin",
 ];
 pub const ATTENDEE_REACHOUT_IS_A_QUEUE_ROW : bool = false;
 pub const QUEUE_ENQUEUE_FUNCTIONS_IN_TREE : u8 = 3;
@@ -509,7 +648,8 @@ pub const QUEUE_ENQUEUE_SITES_FOR_EVENTS : u8 = 0;
 ; queue owns the queue's attempt budget in its MAX_ATTEMPTS and its SEND_ATTEMPTS_PER_ROW; the
 ; value is copied here, not derived here, because the only sentence this file needs it for is the
 ; contrast with a direct send. Both readings stand on the same measurement,
-; src/notification_queue.rs:20 (`const MAX_ATTEMPTS: i32 = 3`). If that line moves, BOTH contracts
+; src/notification_queue.rs:21 (`const MAX_ATTEMPTS: i32 = 3`, was :20 until the 2026-09-21 drain
+; rewrite added an import line above it -- the VALUE did not move). If that line moves, BOTH contracts
 ; are wrong and the owner is the one to fix first. The drift invariant below is what makes the copy
 ; visible instead of silent. (Marked 2026-09-21 by this file's adversarial review.)
 pub const QUEUE_MAX_ATTEMPTS : u8 = 3;
@@ -524,7 +664,7 @@ pub fn reachout_attempts_per_pass(is_queue_row: bool) u8 {
   return DIRECT_SEND_ATTEMPTS_PER_SWEEP;
 }
 
-; src/api/events.rs:1737-1740, three ANDed conditions, plus the window. src/main.rs:641 supplies
+; src/api/events.rs:2105-2108, three ANDed conditions, plus the window. src/main.rs:641 supplies
 ; both numbers. A waitlisted row is reached by none of it, which is right: he holds no seat.
 pub const REMINDER_WINDOW_HOURS : u32 = 24;
 pub const REMINDER_SWEEP_SECONDS : u16 = 300;
@@ -543,7 +683,7 @@ pub fn reminder_is_due(state: u8, already_reminded: bool, event_started: bool, h
   return hours_until_start <= window_hours;
 }
 
-; src/api/events.rs:1766-1781: the mark happens after the send, and a failed send takes a
+; src/api/events.rs:2134-2149: the mark happens after the send, and a failed send takes a
 ; `continue` without marking. So a failure is retried on the next sweep, every 300 seconds, until
 ; it lands or the event starts -- which is a real retry policy and not the queue's bounded one.
 pub fn reminder_retried_next_sweep(delivered: bool, event_started: bool) bool {
@@ -553,9 +693,9 @@ pub fn reminder_retried_next_sweep(delivered: bool, event_started: bool) bool {
   return !event_started;
 }
 
-; The guest list the owner receives filters status = 'confirmed' (src/api/events.rs:1631), so the
+; The guest list the owner receives filters status = 'confirmed' (src/api/events.rs:1999), so the
 ; waitlist is invisible on it. The customer's own view does not rank him either: my_bookings
-; (:785-789) selects his row's columns and joins the event, and computes no position.
+; (:787-791) selects his row's columns and joins the event, and computes no position.
 pub const GUEST_LIST_INCLUDES_WAITLIST : bool = false;
 pub const CUSTOMER_SEES_HIS_POSITION : bool = false;
 
@@ -573,7 +713,8 @@ pub const HOURS_PER_DAY : u32 = 24;
 ; word "proves" overstated them. They are a DESIGNED case of four events on one date, which is
 ; worth naming; the load-bearing evidence is that migrations/043_events_booking.sql declares no
 ; unique key over `events` beyond the primary key at :6, and that create_event at
-; src/api/events.rs:1348-1371 is a plain INSERT with no ON CONFLICT arm.
+; src/api/events.rs:1454-1477 (:1348-1371 before the 2026-09-21 delete refusal moved it)
+; is a plain INSERT with no ON CONFLICT arm.
 pub const SAME_DAY_EVENT_LIMIT_EXISTS : bool = false;
 pub const SAME_DAY_EVENTS_DESIGNED_INTO_THE_WITNESS : u8 = 4;
 pub const SAME_DAY_WITNESS_TEST_COUNT : u8 = 4;
@@ -766,26 +907,26 @@ pub const DEFAULT_CAPACITY_PUBLISHED : bool = false;
 pub const DEFAULT_CAPACITY_NOTE : str = "max_seats is per-row admin input with no default and no per-type table. src/api/events.rs:196-200 bounds it to 0..=1000000 and migrations/043_events_booking.sql:15 permits NULL. The tree defines no event type anywhere -- no column in 043, 045, 051, 052, 055 or 070 and no variant in src/db/entities/event.rs -- so a seat count for a ride day or a community meet would be a number this repository has never held.";
 
 pub const WAITLIST_LENGTH_CAP_PUBLISHED : bool = false;
-pub const WAITLIST_LENGTH_CAP_NOTE : str = "Nothing bounds the number of waitlisted rows. join_waitlist has no limit of its own and, unlike book_event, no rate limiter: src/api/events.rs:526-538 applies one to booking with the budget at :25-26, and src/api/events.rs:1201-1299 applies none. The join also runs outside any transaction and takes no FOR UPDATE, so two concurrent joins can both pass the duplicate check at :1263.";
+pub const WAITLIST_LENGTH_CAP_NOTE : str = "Nothing bounds the number of waitlisted rows. join_waitlist has no limit of its own and, unlike book_event, no rate limiter: src/api/events.rs:528-540 applies one to booking with the budget at :25-26, and src/api/events.rs:1307-1405 applies none. The join also runs outside any transaction and takes no FOR UPDATE, so two concurrent joins can both pass the duplicate check at :1369. Re-measured 2026-09-21 after the promotion scan landed and still true in every clause: PROMOTION_CANDIDATE_SCAN_MAX bounds what ONE CANCELLATION READS and is not a cap on the line, which is why it is declared as a work bound above and not as the missing number here.";
 
 pub const WAITLIST_POSITION_PUBLISHED : bool = false;
-pub const WAITLIST_POSITION_NOTE : str = "No endpoint returns a queue position. my_bookings at src/api/events.rs:785-789 selects the row's own columns and joins the event, computing no rank, and the admin guest list at :1631 filters status = 'confirmed'. The waitlist is therefore absent from the customer's view and from the owner's.";
+pub const WAITLIST_POSITION_NOTE : str = "No endpoint returns a queue position. my_bookings at src/api/events.rs:787-791 selects the row's own columns and joins the event, computing no rank, and the admin guest list at :1859 filters status = 'confirmed'. The waitlist is therefore absent from the customer's view and from the owner's. The promotion scan added 2026-09-21 reads the line in payer-first order but writes no rank and returns none, so this stays unpublished.";
 
 pub const PROMOTION_NOTICE_PUBLISHED : bool = false;
-pub const PROMOTION_NOTICE_NOTE : str = "A promoted customer is told nothing. cancel_booking_and_promote sends no message and enqueues no row; the promoted id travels only in the HTTP response to whoever cancelled, at src/api/events.rs:1195-1197 and :1679-1681. When the event carries a Stars price his balance is debited at :1075-1087 in the same transaction, so the first thing he can learn about the promotion is the missing balance.";
+pub const PROMOTION_NOTICE_NOTE : str = "A promoted customer is told nothing. cancel_booking_and_promote sends no message and enqueues no row; the promoted id travels only in the HTTP response to whoever cancelled, at src/api/events.rs:1301-1303 and :1907-1909. When the event carries a Stars price his balance is debited at :1152-1167 in the same transaction, so the first thing he can learn about the promotion is the missing balance. Unchanged by the 2026-09-21 skip fix, and it costs one more person: a customer the scan passes over is told that even less.";
 
 pub const PROMOTION_OFFER_TTL_PUBLISHED : bool = false;
-pub const PROMOTION_OFFER_TTL_NOTE : str = "Promotion is a fait accompli rather than an offer: the UPDATE at src/api/events.rs:1125-1129 writes 'confirmed' with no acceptance step, and no column exists anywhere in 043, 045, 051, 052 or 070 that could hold an expiry for one.";
+pub const PROMOTION_OFFER_TTL_NOTE : str = "Promotion is a fait accompli rather than an offer: the UPDATE at src/api/events.rs:1212-1220 writes 'confirmed' with no acceptance step, and no column exists anywhere in 043, 045, 051, 052 or 070 that could hold an expiry for one.";
 
 pub const DELETE_REFUND_PUBLISHED : bool = false;
-pub const DELETE_REFUND_NOTE : str = "delete_event at src/api/events.rs:1532-1554 is a bare DELETE and migrations/043_events_booking.sql:29 declares ON DELETE CASCADE. Paid bookings vanish with the event and no Stars return. The repository publishes no compensating path, so none is stated here.";
+pub const DELETE_REFUND_NOTE : str = "Still unpublished on 2026-09-21, and no longer the way the money is lost. This note read: 'delete_event at src/api/events.rs:1532-1554 is a bare DELETE and migrations/043_events_booking.sql:29 declares ON DELETE CASCADE. Paid bookings vanish with the event and no Stars return.' The delete now refuses while paid bookings are attached (src/api/events.rs:1747-1922, 409 paid_bookings_exist carrying the count and the total), so nothing is destroyed unasked; the owner may still delete such an event by naming the count he gives up (DELETE_HATCH_PARAM), and that road returns no Stars either. A refund ON DELETE is published nowhere in this repository and none is invented here. The owner's route is the cancel path, one booking at a time, which refunds and may promote.";
 
 ; --- What this file carries about people ------------------------------------------------------------
 pub const CARRIES_AN_ATTENDEE : bool = false;
 pub const CARRIES_A_PHONE : bool = false;
 pub const CARRIES_AN_EVENT_FIXTURE : bool = false;
 pub const CARRIES_A_CYRILLIC_SHIPPED_STRING : bool = false;
-pub const SHIPPED_STRING_RULE : str = "Every customer-facing sentence on this surface is a key in src/trios/i18n.rs, selected at src/api/events.rs:1712-1716 for the reminder body and throughout src/ui/screens/events_screen.rs for the calendar. The guest-list literals live at src/trios/attendees.rs:111 and :117. All are cited by path and line and none is quoted.";
+pub const SHIPPED_STRING_RULE : str = "Every customer-facing sentence on this surface is a key in src/trios/i18n.rs, selected at src/api/events.rs:2080-2084 for the reminder body and throughout src/ui/screens/events_screen.rs for the calendar. The guest-list literals live at src/trios/attendees.rs:111 and :117. All are cited by path and line and none is quoted.";
 
 ; --- Tests ---------------------------------------------------------------------------------------
 
@@ -829,7 +970,8 @@ test remaining_seats_never_go_negative {
   assert seats_available(true, 10, 10) == 0;
   assert seats_available(true, 10, 12) == 0;
   assert API_CLAMPS_SEATS_AT_ZERO == true;
-  assert SCREEN_CLAMPS_SEATS_AT_ZERO == false;
+  assert SCREEN_CLAMPS_SEATS_AT_ZERO == true;
+  assert SEATS_FREE_IMPLEMENTATION_COUNT == 1;
 }
 
 test the_capacity_range_is_the_one_the_handler_admits {
@@ -891,16 +1033,22 @@ test promotion_needs_a_cancel_a_capacity_and_a_line {
   assert PROMOTION_TRIGGER_COUNT == 1;
 }
 
-test a_head_who_cannot_pay_blocks_the_line_instead_of_being_skipped {
+test a_head_who_cannot_pay_is_skipped_and_keeps_his_place {
   assert promotion_completes(true, 0, 0) == true;
   assert promotion_completes(true, 500, 500) == true;
   assert promotion_completes(true, 500, 499) == false;
   assert promotion_completes(false, 0, 999) == false;
+  assert seat_reaches(500, 0, 900) == 2;
+  assert seat_reaches(500, 900, 0) == 1;
+  assert seat_reaches(500, 499, 499) == 0;
+  assert seat_reaches(0, 0, 0) == 1;
   assert seat_stays_empty_after_cancel(true, 500, 499) == true;
   assert seat_stays_empty_after_cancel(true, 500, 500) == false;
-  assert PROMOTION_SKIPS_TO_THE_NEXT_PAYER == false;
-  assert CANDIDATES_READ_PER_CANCEL == 1;
+  assert PROMOTION_SKIPS_TO_THE_NEXT_PAYER == true;
+  assert CANDIDATES_READ_PER_CANCEL == 10;
   assert PROMOTIONS_PER_CANCEL_MAX == 1;
+  assert PROMOTION_SCAN_BOUND_IS_MEASURED == false;
+  assert PROMOTION_EXHAUSTED_SCAN_IS_LOGGED == true;
 }
 
 test a_replayed_cancel_moves_no_money_and_promotes_nobody {
@@ -919,6 +1067,26 @@ test the_refund_is_the_amount_the_row_recorded {
   assert money_returns_on(false, 300) == 0;
   assert DELETE_REFUNDS == false;
   assert DELETE_CASCADES_BOOKINGS == true;
+  assert DELETE_DESTROYS_PAID_BOOKINGS_UNASKED == false;
+  assert DELETE_DESTROYS_PAID_BOOKINGS_WHEN_NAMED == true;
+  assert delete_is_admitted(1) == false;
+  assert delete_is_admitted(3) == false;
+  assert delete_is_admitted(0) == true;
+  assert DELETE_REFUSES_WHILE_PAID_BOOKINGS_EXIST == true;
+  assert DELETE_REFUSAL_IS_THE_DEFAULT == true;
+  assert DELETE_REFUSAL_IS_UNCONDITIONAL == false;
+  assert DELETE_REFUSAL_REPORTS_THE_COUNT == true;
+  assert DELETE_HATCH_IS_EXPLICIT == true;
+  assert DELETE_HATCH_COUNT_IS_THE_SERVERS == true;
+  assert DELETE_HATCH_REFUNDS == false;
+  assert DELETE_HATCH_PARAM == "abandon_paid_bookings";
+  assert DELETE_STALE_ACK_CODE == "acknowledgement_is_stale";
+  assert delete_is_admitted_with_ack(3, 3, true) == true;
+  assert delete_is_admitted_with_ack(3, 1, true) == false;
+  assert delete_is_admitted_with_ack(3, 0, true) == false;
+  assert delete_is_admitted_with_ack(3, 3, false) == false;
+  assert delete_is_admitted_with_ack(0, 0, false) == true;
+  assert delete_is_admitted_with_ack(0, 2, true) == false;
   assert FREE_BOOKING_IS_STORED_AS_NULL == false;
   assert FREE_BOOKING_IS_STORED_AS_ZERO == true;
   assert refund_amount(true, 0) == 0;
@@ -1152,8 +1320,8 @@ invariant a_zero_capacity_event_leaves_the_customer_nowhere_to_go
 invariant the_api_never_publishes_a_negative_seat_count
   assert seats_available(true, 10, 12) == 0 and seats_available(true, 10, 10) == 0
 
-invariant the_api_clamps_the_seat_count_and_the_screen_does_not
-  assert API_CLAMPS_SEATS_AT_ZERO != SCREEN_CLAMPS_SEATS_AT_ZERO
+invariant the_api_and_the_screen_clamp_the_seat_count_the_same_way
+  assert API_CLAMPS_SEATS_AT_ZERO == SCREEN_CLAMPS_SEATS_AT_ZERO and SEATS_FREE_IMPLEMENTATION_COUNT == 1
 
 invariant a_waitlisted_row_never_counts_as_a_seat
   assert state_occupies_a_seat(BOOKING_STATE_WAITLISTED) == false and state_occupies_a_seat(BOOKING_STATE_CANCELLED) == false
@@ -1174,16 +1342,28 @@ invariant cancelling_a_waitlisted_row_frees_no_seat_and_promotes_nobody
   assert promotion_runs(true, true, 10, 10, true) == false
 
 invariant at_most_one_person_is_promoted_per_cancellation
-  assert PROMOTIONS_PER_CANCEL_MAX == 1 and CANDIDATES_READ_PER_CANCEL == 1
+  assert PROMOTIONS_PER_CANCEL_MAX == 1 and CANDIDATES_READ_PER_CANCEL >= PROMOTIONS_PER_CANCEL_MAX
 
-invariant a_head_who_cannot_pay_leaves_the_seat_empty
-  assert seat_stays_empty_after_cancel(true, 500, 499) == true and PROMOTION_SKIPS_TO_THE_NEXT_PAYER == false
+invariant a_head_who_cannot_pay_no_longer_decides_for_the_line
+  assert seat_reaches(500, 0, 900) == 2 and PROMOTION_SKIPS_TO_THE_NEXT_PAYER == true
+
+invariant a_line_where_nobody_can_pay_leaves_the_seat_empty_and_says_so
+  assert seat_stays_empty_after_cancel(true, 500, 499) == true and PROMOTION_EXHAUSTED_SCAN_IS_LOGGED == true
 
 invariant a_second_cancel_refunds_nothing
   assert cancel_has_effect(BOOKING_STATE_CANCELLED) == false and refund_amount(false, 300) == 0
 
 invariant deleting_an_event_returns_no_money
   assert money_returns_on(false, 300) == 0 and DELETE_REFUNDS == false
+
+; Renamed 2026-09-21 with the escape hatch: this read a_delete_never_destroys_a_paid_booking, which
+; the door makes false as a sentence. What survives the door, and is the half worth an invariant,
+; is that nothing destroys a paid booking NOBODY NAMED.
+invariant a_delete_never_destroys_a_paid_booking_nobody_named
+  assert delete_is_admitted(1) == false and delete_is_admitted_with_ack(3, 1, true) == false and DELETE_DESTROYS_PAID_BOOKINGS_UNASKED == false
+
+invariant the_hatch_opens_only_on_the_servers_own_count
+  assert delete_is_admitted_with_ack(3, 3, true) == true and delete_is_admitted_with_ack(3, 0, true) == false and DELETE_HATCH_REFUNDS == false
 
 invariant no_attendee_reachout_on_this_surface_is_a_queue_row
   assert ATTENDEE_REACHOUT_IS_A_QUEUE_ROW == false and QUEUE_ENQUEUE_SITES_FOR_EVENTS == 0

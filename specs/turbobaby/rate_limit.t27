@@ -367,7 +367,7 @@ pub fn anonymous_order_guard_applies(caller_is_identified: bool) bool {
 ; (:37-38), the same window and attempt constants (:39-40, key cap at :41), and the same key -- the
 ; bare caller key
 ; with no per-handler prefix. The one call site in the tree that does prefix is
-; src/api/events.rs:525, which builds its key with an endpoint tag in front of the id, so the idiom
+; src/api/events.rs:527 (was :525), which builds its key with an endpoint tag in front of the id, so the idiom
 ; exists and was not applied here. The consequence is one bucket for two endpoints: analytics
 ; volume from a caller silently suppresses that caller's error reports, and because the two
 ; refusals are counted under different metric labels (:396 and :564) the shared cause does not show
@@ -383,7 +383,7 @@ pub fn handlers_compete(store_is_shared: bool, key_is_prefixed_per_handler: bool
 
 ; --- What a refusal leaves behind --------------------------------------------------------------------
 ; src/metrics.rs:190-191 defines the counter. Six of the eight call sites increment it before
-; returning: src/api/auth.rs:513, src/api/client_errors.rs:396 and :564, src/api/events.rs:535,
+; returning: src/api/auth.rs:513, src/api/client_errors.rs:396 and :564, src/api/events.rs:537,
 ; src/api/orders.rs:783, src/api/upload.rs:125. Two do not -- the broadcast refusal at
 ; src/api/admin.rs:773-776 and the bot cooldown at src/bot/mod.rs:29-37 -- so two of the eight
 ; refusal paths are invisible to the only instrument that counts refusals. The repository already

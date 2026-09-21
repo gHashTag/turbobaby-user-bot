@@ -357,6 +357,25 @@ pub fn day_mark(count: usize) -> DayMark {
     }
 }
 
+/// Seats still free on an event with a declared capacity.
+///
+/// One implementation, shared by the two ends that used to disagree (D15).
+/// The API clamped at zero — `(cap - seats_taken).max(0)`, the
+/// `seats_available` it publishes — and the calendar card recomputed the same
+/// quantity with `i32::saturating_sub`, which saturates at `i32::MIN` and not
+/// at zero. An event can be oversubscribed: `validate_update_request`
+/// (`src/api/events.rs:298`) accepts any `max_seats` in `0..=1_000_000` and
+/// never compares it against the seats already sold, so lowering the capacity
+/// under the guest list is one PUT away. The card then printed a negative seat
+/// count for an event the API was reporting as full.
+///
+/// `taken` is `i64` because it arrives as `SUM(seats)` off the bookings
+/// table, and the subtraction is done in `i64` so a capacity near the `i32`
+/// edge cannot wrap into a large positive count before the clamp.
+pub fn seats_free(cap: i32, taken: i64) -> i32 {
+    (i64::from(cap) - taken).clamp(0, i64::from(i32::MAX)) as i32
+}
+
 #[cfg(test)]
 mod schedule_tests {
     use super::*;
@@ -401,5 +420,63 @@ mod schedule_tests {
         assert_eq!(day_mark(1), DayMark::One);
         assert_eq!(day_mark(2), DayMark::Several(2));
         assert_eq!(day_mark(9), DayMark::Several(9));
+    }
+
+    /// Both ends, spelled out as the two expressions that used to disagree.
+    ///
+    /// The three easy rows are not evidence and this test said only those
+    /// until 2026-09-21: `saturating_sub`, the expression the card carried,
+    /// returns 10, 7 and 0 for them as well, so the test passed with the fix
+    /// reverted. The row that tells the two apart is the oversubscribed one --
+    /// the only case where an `i32` saturation floor (`i32::MIN`) and a clamp
+    /// at zero can differ at all -- and it is asserted here rather than left
+    /// to the neighbouring test, because agreement is this test's own claim.
+    #[test]
+    fn free_seats_are_counted_the_same_at_both_ends() {
+        // The API's published rule: `seats_available`, clamped at zero.
+        let api = |cap: i32, taken: i64| (i64::from(cap) - taken).max(0);
+        // The card's rule before D15: `cap.saturating_sub(taken as i32)`.
+        let card_before_d15 = |cap: i32, taken: i64| i64::from(cap.saturating_sub(taken as i32));
+
+        for (cap, taken) in [(10i32, 0i64), (10, 3), (10, 10)] {
+            assert_eq!(i64::from(seats_free(cap, taken)), api(cap, taken));
+            assert_eq!(
+                card_before_d15(cap, taken),
+                api(cap, taken),
+                "cap={cap} taken={taken} agrees under both rules, so it cannot \
+                 tell them apart"
+            );
+        }
+
+        // 8 seats sold against a capacity an admin lowered to 5. The API
+        // published 0 and the card printed -3 for the same row.
+        assert_eq!(i64::from(seats_free(5, 8)), api(5, 8));
+        assert_eq!(seats_free(5, 8), 0);
+        assert_ne!(
+            card_before_d15(5, 8),
+            api(5, 8),
+            "the two ends now agree on the oversubscribed row as well, so this \
+             test has stopped being able to fail"
+        );
+    }
+
+    /// The case the card and the API disagreed on. An admin lowers `max_seats`
+    /// to 5 on an event that already sold 8 seats: the API publishes
+    /// `seats_available: 0` and the card printed the seats-left label with -3 in it.
+    #[test]
+    fn an_oversubscribed_event_has_no_free_seats_rather_than_negative_ones() {
+        assert_eq!(seats_free(5, 8), 0, "a full event has 0 free seats, not -3");
+        assert_eq!(seats_free(0, 5), 0, "capacity lowered to zero is still 0");
+        assert_eq!(seats_free(1, 1_000_000), 0);
+    }
+
+    /// `taken` is a `SUM` and arrives as `i64`. Narrowing it to `i32` before
+    /// the subtraction turns a huge number of seats into a negative one, and a
+    /// negative subtrahend into a seat count of `i32::MAX` — "free seats" on
+    /// an event nobody can book.
+    #[test]
+    fn a_seat_count_past_the_i32_edge_does_not_wrap_into_free_seats() {
+        assert_eq!(seats_free(10, i64::from(i32::MAX) + 11), 0);
+        assert_eq!(seats_free(i32::MAX, 0), i32::MAX);
     }
 }

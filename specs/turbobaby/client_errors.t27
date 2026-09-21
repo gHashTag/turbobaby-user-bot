@@ -48,7 +48,7 @@
 ;      the two mappers and is refuted on the other, at exactly one line. api_errors.rs:35-48 sends
 ;      every status to a key, unknown included (:45). checkout_errors.rs:33 returns a formatted
 ;      numeral in one hardcoded language, bypassing the lookup, and it is reachable from
-;      src/ui/screens/checkout_screen.rs:1079. Two of its own tests pin it there (:155-160 asserts
+;      src/ui/screens/checkout_screen.rs:1112. Two of its own tests pin it there (:155-160 asserts
 ;      the numeral is present, :197-204 asserts both locales get the identical string).
 ;   4. api_errors.rs:18-19 calls the checkout mapper "a thin wrapper" for the general one. It is
 ;      not one: checkout_errors.rs holds an independent match and a grep of that file for
@@ -470,7 +470,7 @@ pub fn alert_is_raised(source_is_normalized: bool, message_is_fatal_shaped: bool
 ; seven and sends everything else to a formatted numeral at :33. The eighth arm the general mapper
 ; has is 401, and api_errors.rs:11-14 gives the reason: checkout cannot see a stale session because
 ; it demands a fresh proof, but a long-lived screen can. The general mapper is live at ten call
-; sites across six screens; the checkout mapper at src/ui/screens/checkout_screen.rs:1079, which is
+; sites across six screens; the checkout mapper at src/ui/screens/checkout_screen.rs:1112, which is
 ; where the bare-code branch is reachable from.
 pub const SURFACE_UNSET : u8 = 0;
 pub const SURFACE_API : u8 = 1;
@@ -520,7 +520,7 @@ pub fn renders_a_bare_code(surface: u8, status_is_mapped: bool) bool {
   return render_kind(surface, status_is_mapped, true) == RENDER_BARE_CODE;
 }
 
-; Where the checkout sentence comes from. src/ui/screens/checkout_screen.rs:1078-1079 tries the
+; Where the checkout sentence comes from. src/ui/screens/checkout_screen.rs:1111-1112 tries the
 ; body code first and falls back to the status, so an unrecognized code (checkout_errors.rs:46
 ; returns nothing for one) never reaches the customer as a code -- it becomes the status sentence
 ; instead. Two codes are mapped, at :44 and :45.

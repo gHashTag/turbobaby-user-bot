@@ -46,8 +46,8 @@
 ;   (2) The client cannot receive the null anyway. src/ui/api/types.rs:405 types
 ;       `delivery_fee_baht` as a bare `f64`, so a null in that field fails the whole response.
 ;   (3) When the zone list arrives EMPTY the checkout screen prints a zero fee and a hard-coded
-;       "30-45" minute ETA (src/ui/screens/checkout_screen.rs:809-816) through format_baht, which
-;       takes `f64` and has no absent case (src/trios/pricing.rs:361). It is the empty list and not
+;       "30-45" minute ETA (src/ui/screens/checkout_screen.rs:828-835) through format_baht, which
+;       takes `f64` and has no absent case (src/trios/pricing.rs:417, was :361). It is the empty list and not
 ;       an unselected picker that reaches this branch, because :797 falls back to the first zone
 ;       whenever one exists. That is the confident zero D9 forbids, still live on the client half.
 ; The prohibition therefore cannot be a render rule here. It is the LENGTH of the published-fee
@@ -255,7 +255,7 @@ pub const ABSENT_FEE_HAS_NO_ROW_SHAPE : bool = true;
 ; data/fleet_seed.json, and the minute ranges the API serves (src/api/orders.rs:1787-1788 and
 ; :2409-2410) come from the zone rows of the other island.
 pub const ETA_IS_NOT_PUBLISHED : bool = true;
-pub const ETA_NOTE : str = "No travel-time estimate for any area of the coverage island exists in this repository. The shop's promise is a window with a start and a published length; the min/max minute pair the API returns is read from delivery_zones rows whose places are on another island, and the empty-list fallback on the checkout screen prints a single hard-coded '30-45' string that no source measures (src/ui/screens/checkout_screen.rs:810). What would be needed is an owner-measured time per Phuket area, which nobody has taken. Until then a window is the answer and an ETA is not offered. RE-MEASURED 2026-09-21 over all 43 tracked specs: still nothing. turbobaby/order-status, written that day, records No delivery ETA from its own side, which is a second contract arriving independently at the same absence and not a source that supplies one. The checkout-screen line was re-read the same day and still carries the hard-coded string.";
+pub const ETA_NOTE : str = "No travel-time estimate for any area of the coverage island exists in this repository. The shop's promise is a window with a start and a published length; the min/max minute pair the API returns is read from delivery_zones rows whose places are on another island, and the empty-list fallback on the checkout screen prints a single hard-coded '30-45' string that no source measures (src/ui/screens/checkout_screen.rs:829). What would be needed is an owner-measured time per Phuket area, which nobody has taken. Until then a window is the answer and an ETA is not offered. RE-MEASURED 2026-09-21 over all 43 tracked specs: still nothing. turbobaby/order-status, written that day, records No delivery ETA from its own side, which is a second contract arriving independently at the same absence and not a source that supplies one. The checkout-screen line was re-read the same day and still carries the hard-coded string.";
 ; Nothing in this repository decides whether an address is on the coverage island. delivery_zones
 ; carries name, name_en, fee, min_order, eta_min, eta_max, is_active and sort_order
 ; (migrations/060_delivery_zones.sql:2-14) and no geometry of any kind; the checkout screen can
@@ -272,7 +272,7 @@ pub const ADMIN_WRITE_TURNS_AN_UNUSABLE_FEE_INTO_ZERO : bool = true;
 
 ; --- Fees and totals ------------------------------------------------------------------------------
 ; Measured 2026-09-20: the zone fee is READ at two endpoints (src/api/orders.rs:1794 and :2415)
-; and rendered on one screen (src/ui/screens/checkout_screen.rs:799-806, :1505). It appears in no
+; and rendered on one screen (src/ui/screens/checkout_screen.rs:818-825, :1547). It appears in no
 ; total expression anywhere: the order total the server accepts is subtotal minus bonus minus
 ; stars (src/api/orders.rs:210), with no delivery term in it. The shipped delivery fee is
 ; therefore displayed and never charged. This file neither changes that nor restates the identity.

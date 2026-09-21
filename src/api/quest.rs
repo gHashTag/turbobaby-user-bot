@@ -12,8 +12,12 @@ use serde_json::{json, Value};
 
 pub(crate) fn routes() -> Router<AppState> {
     Router::new()
-        // Test endpoint
-        .route("/api/test", get(test_endpoint))
+        // 2026-09-21: a GET registration for the literal "/api/test" stood
+        // here, its handler below. src/api/mod.rs:77 nests this router under
+        // "/api", so it was served at /api/api/test while a request to
+        // /api/test met the miss handler at src/api/mod.rs:128 -- unreachable
+        // since written and fetched nowhere. Not respelled in a route shape:
+        // parsers read this file as text. Guard: tests/api_document_pairing.rs.
         // Quest Places
         .route("/quest-places", get(get_quest_places))
         .route("/quest-places", post(create_quest_place))
@@ -29,10 +33,6 @@ pub(crate) fn routes() -> Router<AppState> {
         .route("/quest/locations", post(create_quest_location))
         .route("/quest/locations/:id", put(update_quest_location))
         .route("/quest/scan", post(scan_quest_qr))
-}
-
-async fn test_endpoint() -> Json<Value> {
-    Json(json!({ "test": "ok", "timestamp": chrono::Utc::now().timestamp() }))
 }
 
 // Cycle #148: `clamp_finite_in_range` moved to `src/trios/validation.rs`

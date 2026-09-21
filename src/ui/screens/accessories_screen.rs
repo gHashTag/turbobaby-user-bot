@@ -267,7 +267,7 @@ pub fn AccessoriesScreen() -> Element {
                             cart.write().add_item(CartItem {
                                 id: add_id.clone(),
                                 name: add_name.clone(),
-                                price: add_price,
+                                price: crate::trios::pricing::published_money(Some(add_price)),
                                 quantity: q,
                                 image_url: None,
                                 item_type: CartItemType::Accessory,
@@ -383,7 +383,7 @@ where
                                 cart.write().add_item(CartItem {
                                     id: a_id.clone(),
                                     name: a_name.clone(),
-                                    price: a_price,
+                                    price: crate::trios::pricing::published_money(Some(a_price)),
                                     quantity: 1,
                                     image_url: None,
                                     item_type: CartItemType::Accessory,

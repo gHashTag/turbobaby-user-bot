@@ -764,7 +764,7 @@ BINDINGS: tuple[dict[str, object], ...] = (
     # --- "wc -l over the tracked sources": measurements contracts state in so many words ---------
     # Five contracts open by recording how long the files they describe are, each with
     # the sentence that it is a measurement. api_surface.t27:101, client_errors.t27:94,
-    # events_booking.t27:106, customer_surface.t27:387 and catalog_write.t27:103. Every
+    # events_booking.t27 HTTP_SOURCE_LINES, customer_surface.t27:387 and catalog_write.t27:103. Every
     # census that follows in those files was taken against a file of that length, so a
     # changed length means the census was taken against a different file.
     # catalog_write.t27:101-104 makes TWO claims, and binding one of them to a RANK was
@@ -875,7 +875,7 @@ BINDINGS: tuple[dict[str, object], ...] = (
         "source": "src/api/events.rs",
         "extract": ("line_count",),
         "relation": "equal",
-        "why": "events_booking.t27:106 records it so 'the whole file' is a measurement "
+        "why": "events_booking.t27 HTTP_SOURCE_LINES records it so 'the whole file' is a measurement "
                "and not a mood, in its own words",
     },
     {

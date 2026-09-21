@@ -419,8 +419,21 @@ pub struct ServerCartItem {
     pub catalog_id: String,
     #[serde(default)]
     pub quantity: i32,
+    /// `Option`, not `f64`, and the difference is the whole point.
+    ///
+    /// `#[serde(default)]` on a bare number writes the type's `Default` when
+    /// the server stops sending the field, and nothing anywhere notices: the
+    /// price became `0.0`, `CartItem::from_server` let it through because
+    /// `0.0` is finite, and the screen rendered a free bike. D9 — an absent
+    /// number never becomes a confident zero. On an `Option` the same
+    /// attribute writes `None`, which is still an absence and is still
+    /// renderable as one.
+    ///
+    /// `specs/turbobaby/webapp_bridge.t27` counted this field among the seven
+    /// DTO fields that defaulted a bare number; it now defaults an `Option`,
+    /// and that contract says so.
     #[serde(default)]
-    pub unit_price: f64,
+    pub unit_price: Option<f64>,
     pub name: String,
     #[serde(default)]
     pub image_url: Option<String>,

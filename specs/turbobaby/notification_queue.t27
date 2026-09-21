@@ -7,19 +7,43 @@
 ; written to twice for one event. It owns no message, no recipient, no kind vocabulary that a
 ; producer does not already own, and no schedule this repository does not implement.
 ; --
-; WHY (measured 2026-09-21, the asymmetry). This queue is bounded where it ought to persist and
-; unbounded where it ought to stop, and both halves are the same eleven lines. A send that FAILS
-; is retried on the very next tick: POLL_INTERVAL_SECS is 30 (src/notification_queue.rs:18),
+; WHY (measured 2026-09-21, the asymmetry -- and half of it CLOSED on the same date). This queue is
+; bounded where it ought to persist and WAS unbounded where it ought to stop. A send that FAILS
+; is retried on the very next tick: POLL_INTERVAL_SECS is 30 (src/notification_queue.rs:19),
 ; MAX_ATTEMPTS is 3 (:20), and scheduled_at is written once at insert (src/db/notifications.rs:77)
 ; and updated at 0 sites anywhere -- so the three sends fall at t, t+30 and t+60 and the retry
 ; horizon of this queue is 60 seconds. A Telegram outage longer than that burns all three, and the
-; third failure does not record a loss: src/notification_queue.rs:112-114 writes processed_at, the
-; same column with the same shape of value that a delivery writes at :94. A send that SUCCEEDS and
-; whose mark then fails (:94-99) advances nothing at all -- the Ok arm never touches attempts -- so
-; the row stays pending with attempts unchanged and is sent again in 30 seconds, and again, without
-; bound, while attempts stays 0 and the giveup rule it would have to reach is never reached. The
-; queue gives up on a message nobody received after 60 seconds and re-sends a message that was
-; received forever.
+; third failure does not record a loss in the ROW: the giveup branch at
+; src/notification_queue.rs:220-245 ends it by writing processed_at through the very same call a
+; delivery uses at :196. That half stands.
+; THE OTHER HALF IS HISTORY NOW, AND THE READING IS KEPT BECAUSE IT WAS TRUE. Until 2026-09-21 a
+; send that SUCCEEDED and whose mark then failed advanced nothing at all -- the Ok arm never
+; touched attempts -- so the row stayed pending with attempts unchanged and was sent again in 30
+; seconds, and again, without bound, while attempts stayed 0 and the giveup rule it would have had
+; to reach was never reached. The queue gave up on a message nobody received after 60 seconds and
+; re-sent a message that WAS received for ever. What closed it is one write moved and no new rule:
+; the attempt is counted at src/notification_queue.rs:104, BEFORE the send, rather than in the
+; failure arm after it, so every way out of the loop body leaves the counter one higher and the
+; bound is reachable from all of them -- including the path where the giveup's own write fails,
+; because the counter has by then reached the value the scan filters on. The superseded readings
+; are kept as constants rather than deleted: SUPERSEDED_RESENDS_WERE_UNBOUNDED,
+; SUPERSEDED_HIGHEST_ATTEMPTS_VALUE and SUPERSEDED_TERMINAL_WRITE_SITES.
+; --
+; WHY (measured 2026-09-21, LATER THE SAME DAY, and the reason every line number in this file
+; moved). The paragraph above says "one write moved and no new rule". That was true of the first
+; cut and the first cut was wrong in a second place: having moved the increment ahead of the send,
+; it REFUSED to send a row whose increment failed. An adversarial review put the test plainly --
+; revoke UPDATE on notification_queue and watch nothing go out -- and it was right. One UPDATE on
+; one column had become able to stop outbound delivery altogether, which the queue could not do
+; before the fix and must not do after it. There is now a new rule, and this is it: the counter is
+; still written first and its failure is CARRIED rather than obeyed. The attempt is held in this
+; process (UncountedAttempts, src/notification_queue.rs:275), attempts_spent (:305) adds the
+; column to what is held, and the one bound applies to the sum -- so the message still goes out
+; and it still goes out at most MAX_ATTEMPTS times. What the fix does NOT do is bound the SCAN on
+; that path, and it does not survive a restart: both are recorded, measured, in
+; UNCOUNTABLE_ROW_NOTE below rather than left for a reader to discover. Every citation into
+; src/notification_queue.rs in this file was re-measured against the rewritten drain on that date;
+; the file grew from 361 lines to 616 and no citation below is a remembered one.
 ; --
 ; WHY (measured 2026-09-21, the scope). The name says queue and the shape says transport, but a
 ; grep for .send_message( over src/ on 2026-09-21 returns 53 occurrences across 12 files, and
@@ -33,9 +57,9 @@
 ; and for "the dedupe key". Neither exists as the question presumes.
 ; migrations/067_notification_queue.sql:4-13 declares 8 columns and not one of them is a status or
 ; a state: the state of a row is derived from processed_at being null or not, and the three
-; outcomes that end a row -- delivered (:94), abandoned after three attempts (:114) and skipped
-; because the chat id is 0 (:62-66) -- write the same column, so the row afterwards cannot say
-; which happened. And the word UNIQUE occurs 0 times in that migration; the only uniqueness on the
+; outcomes that end a row -- delivered (:142), abandoned after three attempts (the SAME write at
+; :196, chosen by the condition at :195) and skipped because the chat id is 0 (:124-138) -- write
+; the same column, so the row afterwards cannot say which happened. And the word UNIQUE occurs 0 times in that migration; the only uniqueness on the
 ; table is the PRIMARY KEY, whose declared default is gen_random_uuid (:5) and whose value in
 ; practice is a client-side uuid v4 written at src/db/notifications.rs:73 -- the schema default is
 ; never exercised, and neither number is one a producer can collide with. There is no dedupe key. What stops a second message is three separate guards in three
@@ -43,8 +67,8 @@
 ; corrections, both inside the repository: src/db/notifications.rs:30-31 tells the reader that the
 ; surviving friend_watered arm lives in a function called render_referral_text, and
 ; render_referral_text occurs 1 time in all of src/ -- that comment; the function is build_message
-; at src/notification_queue.rs:125. And src/trios/deeplink.rs:651-652 says the button is built for
-; friend_joined, friend_ordered and milestone; the markup at src/notification_queue.rs:83-86 is
+; at src/notification_queue.rs:336. And src/trios/deeplink.rs:651-652 says the button is built for
+; friend_joined, friend_ordered and milestone; the markup at src/notification_queue.rs:161-164 is
 ; built outside the match and attached to all five rendering paths, the legacy arm and the
 ; unknown-kind fallback included.
 ; --
@@ -92,7 +116,7 @@ pub const REUSES_PROMO_BROADCAST_ID : str = "turbobaby/promo-broadcast";
 ; is reached and whether it was already awarded is turbobaby/referral-program's; this file consumes
 ; only the boolean that its producer guard fired.
 pub const REUSES_REFERRAL_PROGRAM_ID : str = "turbobaby/referral-program";
-; The drain reads a per-recipient language (src/notification_queue.rs:69-73) before rendering. The
+; The drain reads a per-recipient language (src/notification_queue.rs:146-150) before rendering. The
 ; published set, the primary and the fallback are turbobaby/locale-policy's. What is recorded here
 ; is that the drain resolves its own fallback from a literal instead of asking.
 pub const REUSES_LOCALE_POLICY_ID : str = "turbobaby/locale-policy";
@@ -146,10 +170,13 @@ pub fn row_may_be_drained_again(processed: bool) bool {
   return !state_is_terminal(row_state(processed));
 }
 
-; Three outcomes end a row and all three write processed_at: delivery at
-; src/notification_queue.rs:94, abandonment at :114, and the chat-id-zero skip at :62-66. Only the
-; first increments a counter (:101), so the three are separable in aggregate and not on the row --
-; which is the only place an operator looks when the question is about one customer.
+; Three outcomes end a row and all three write processed_at, now through TWO call sites rather
+; than three: delivery and abandonment share src/notification_queue.rs:196 (which of the two it
+; was is decided at :197 and :220), and the chat-id-zero skip has its own at :129. Only delivery
+; increments a counter (:217), so the three are separable in aggregate and not on the row -- which
+; is the only place an operator looks when the question is about one customer. What the row still
+; cannot say, the log now does for the giveup alone: :229-244 names the row, the kind, the
+; attempts spent and which of the two reasons ended it.
 pub const OUTCOME_DELIVERED : u8 = 1;
 pub const OUTCOME_ABANDONED : u8 = 2;
 pub const OUTCOME_SKIPPED_NO_CHAT : u8 = 3;
@@ -157,6 +184,22 @@ pub const TERMINAL_OUTCOME_COUNT : u8 = 3;
 pub const TERMINAL_OUTCOMES_SHARE_ONE_COLUMN : bool = true;
 pub const THE_ROW_RECORDS_WHICH_OUTCOME : bool = false;
 pub const A_GIVEUP_IS_WRITTEN_AS_A_DELIVERY : bool = true;
+pub const TERMINAL_WRITE_SITES_IN_THE_DRAIN : u8 = 2;
+pub const SUPERSEDED_TERMINAL_WRITE_SITES : u8 = 3;
+pub const A_GIVEUP_IS_NAMED_IN_THE_LOG : bool = true;
+pub const A_GIVEUP_LOG_LINE_CARRIES_THE_REASON : bool = true;
+; One new state the table can hold, and it is the only one of these that survives a restart. When
+; the giveup's own write fails the row keeps processed_at NULL while attempts stands at the
+; ceiling, and no other outcome produces that pair: a delivery, an abandonment that wrote, and a
+; skip that wrote all set the column. It does NOT say which of the two reasons stopped the
+; retries -- only the log does that -- and it is reachable from the zero-chat path as well, so
+; what it means is exactly "the drain stopped handling this row and could not write it off". The
+; partial index at migrations/067_notification_queue.sql:15-17 already serves the query.
+pub const AN_UNWRITTEN_GIVEUP_IS_LEGIBLE_IN_THE_ROW : bool = true;
+
+pub fn row_was_given_up_without_its_terminal_write(processed: bool, attempts: u8) bool {
+  return !processed and attempts >= MAX_ATTEMPTS;
+}
 
 pub fn outcome_is_terminal(outcome: u8) bool {
   return outcome >= OUTCOME_DELIVERED and outcome <= OUTCOME_SKIPPED_NO_CHAT;
@@ -186,7 +229,7 @@ pub fn insert_is_admitted(kind_within_cap: bool, payload_is_json: bool) bool {
   return kind_within_cap and payload_is_json;
 }
 
-; src/notification_queue.rs:136-177. Four arms plus a catch-all; three writers, at
+; src/notification_queue.rs:347-388. Four arms plus a catch-all; three writers, at
 ; src/db/referrals.rs:300, src/db/orders.rs:437 and src/db/referrals.rs:877. The fourth arm is kept
 ; deliberately for rows written before the mechanic behind it was withdrawn, and the reason stands
 ; at src/db/notifications.rs:27-35: the writer is code and the rows are data, and the two do not
@@ -214,12 +257,12 @@ pub fn unwritten_readable_kinds(readable: u8, written: u8) u8 {
 }
 
 ; --- The drain ---------------------------------------------------------------------------------
-; src/notification_queue.rs:28-45. One interval, cold-start tick discarded at :32, then
+; src/notification_queue.rs:29-49. One interval, cold-start tick discarded at :33, then
 ; process_batch run synchronously inside the tick. The empty tick is silent BY DECISION and the
 ; decision is annotated in place at :36-39; tests/timed_loops_announce_ticks.rs:18-31 is the gate
 ; that forces every timed loop either to log the empty case or to say in the file why not, and this
 ; loop says why not -- 2880 lines a day, and Ok(0) here counts deliveries rather than work found.
-pub const INTERVAL_SOURCE_LINE : str = "src/notification_queue.rs:18";
+pub const INTERVAL_SOURCE_LINE : str = "src/notification_queue.rs:19";
 pub const POLL_INTERVAL_SECONDS : u16 = 30;
 pub const FIRST_TICK_IS_DISCARDED : bool = true;
 pub const BATCH_SIZE : u16 = 50;
@@ -244,7 +287,7 @@ pub fn backlog_after_tick(pending: u16) u16 {
   return pending - rows_this_tick(pending);
 }
 
-; The scan applies exactly two filters (src/db/notifications.rs:98-99) and one order (:100).
+; The scan applies exactly two filters (src/db/notifications.rs:106-107) and one order (:108).
 ; scheduled_at is read as a sort key and never as a due time, so the column named like a schedule
 ; does not schedule: a row dated into the future is admitted by the very next scan. The one thing
 ; the date still does is sort it -- being the newest scheduled_at it goes to the BACK of the
@@ -271,29 +314,95 @@ pub fn drain_admits_row(processed: bool, attempts: u8, ceiling: u8, scheduled_in
 }
 
 ; --- Retry, and the backoff that does not exist -------------------------------------------------
-; src/notification_queue.rs:112-117. The giveup fires at attempts + 1 >= MAX_ATTEMPTS, so the
-; increment at src/db/notifications.rs:138 runs only from 0 and from 1. The highest value the column
-; can ever hold is 2, and the scan's own ceiling of 3 (src/db/notifications.rs:99) therefore
-; excludes nothing this code can write. The partial index carries attempts as a key column at
+; src/notification_queue.rs:78-122 and :220-245, re-measured 2026-09-21 after the counter moved,
+; and again the same day after it stopped deciding the send.
+; One pass over a row runs the increment at :73 (SQL at src/db/notifications.rs:146) BEFORE it
+; sends, so the counter runs 0 -> 1 -> 2 -> 3 whatever each pass did, and the giveup at :220 fires
+; when the value it left is MAX_ATTEMPTS. The highest value the column can now hold is 3, which is
+; exactly the scan's ceiling (src/db/notifications.rs:107) -- and that ceiling is no longer a
+; second copy of this number: the drain passes MAX_ATTEMPTS into the query at :60, so the filter
+; and the giveup read one declaration (:21). The partial index carries attempts as a key column at
 ; migrations/067_notification_queue.sql:16 to serve that same filter.
+; UNTIL 2026-09-21 this section read differently and the superseded figure is kept beside the new
+; one: the giveup fired at attempts + 1 >= MAX_ATTEMPTS from the FAILURE arm only, the increment
+; ran only from 0 and from 1, the highest value the column could hold was 2, and the scan's own
+; ceiling of 3 therefore excluded nothing the code could write. A reader who repeats that
+; measurement today gets 3, and the difference is the fix rather than either reading being sloppy.
 pub const MAX_ATTEMPTS : u8 = 3;
 pub const ATTEMPTS_AT_INSERT : u8 = 0;
-pub const HIGHEST_ATTEMPTS_VALUE_THE_CODE_CAN_WRITE : u8 = 2;
+pub const HIGHEST_ATTEMPTS_VALUE_THE_CODE_CAN_WRITE : u8 = 3;
+pub const SUPERSEDED_HIGHEST_ATTEMPTS_VALUE : u8 = 2;
 pub const ATTEMPTS_FILTER_CEILING : u8 = 3;
 pub const SEND_ATTEMPTS_PER_ROW : u8 = 3;
-pub const THE_ATTEMPTS_FILTER_CAN_EXCLUDE_A_ROW : bool = false;
-; That unreachability is a statement about ONE drainer and not about the arithmetic. The increment
-; is a read-modify-write with no claim on the row (see the ordering section), so two drainers that
-; both read attempts = 1 would both run src/db/notifications.rs:138 and leave 3 in the column --
-; exactly the value the filter was written for. Exactly one drainer is spawned (src/main.rs:669),
-; and that spawn count, not the branch at src/notification_queue.rs:112, is what keeps 3 out.
-pub const ATTEMPTS_CEILING_IS_UNREACHABLE_ONLY_WITH_ONE_DRAINER : bool = true;
+pub const THE_ATTEMPTS_FILTER_CAN_EXCLUDE_A_ROW : bool = true;
+pub const THE_FILTER_AND_THE_GIVEUP_READ_ONE_DECLARATION : bool = true;
+pub const BUDGET_DECLARATION_SITE : str = "src/notification_queue.rs:21";
+pub const RESEND_BOUND_LANDED_AT : str = "2026-09-21";
+pub const THE_ATTEMPT_IS_COUNTED_BEFORE_THE_SEND : bool = true;
+pub const COUNTER_WRITE_SITES_PER_PASS : u8 = 1;
+pub const BOUND_IS_REACHABLE_ON_EVERY_PATH : bool = true;
+
+; A row's attempts are read from TWO places and bounded as one number. The column is the durable
+; half and the only half the scan can see; the other is what this process is holding for a row
+; whose UPDATE would not land (src/notification_queue.rs:275-296, summed at :305). Both halves
+; existed as of 2026-09-21 and the second did not exist before that date, so the sum and the
+; column are the same number on every healthy row and differ only where the database refused a
+; write.
+pub const ATTEMPTS_ARE_READ_FROM_TWO_PLACES : u8 = 2;
+pub const ATTEMPTS_HELD_IN_MEMORY_DECLARATION_SITE : str = "src/notification_queue.rs:275";
+pub const ATTEMPTS_SUM_SITE : str = "src/notification_queue.rs:305";
+
+pub fn attempts_spent(column: u8, held_in_memory: u8) u8 {
+  return column + held_in_memory;
+}
+
+; Whether a pass sends the row it is holding. The counter's OUTCOME is not an argument, and that
+; absence is the statement: src/notification_queue.rs:144 decides the send from what the row has
+; already spent and from whether there is a chat to send to, and from nothing the database said
+; about the write at :104. A row with no chat reaches nobody whatever the column holds, which is
+; the one early exit the loop keeps (:137).
+; WHERE THIS IS TIED TO THE CODE. No test can execute the drain -- it needs a live Postgres and a
+; live Telegram -- so the two functions above are a model and a model can agree with a loop that
+; has stopped matching it. tests/notification_drain_wiring.rs reads the loop as text and holds the
+; wiring instead: that it decides through the same three rules, that it hands MAX_ATTEMPTS to the
+; scan, that a refused counter is held rather than obeyed, and that the one early exit left is the
+; row with no chat. It also reads INTERVAL_SOURCE_LINE, BUDGET_DECLARATION_SITE,
+; ATTEMPTS_HELD_IN_MEMORY_DECLARATION_SITE and ATTEMPTS_SUM_SITE back out of this file and
+; re-measures each against the declaration it names, so the four citations above cannot drift off
+; their lines in silence the way every citation in this file did on 2026-09-21.
+pub fn pass_sends(attempts_spent_before: u8, chat_id_is_zero: bool) bool {
+  if (chat_id_is_zero) {
+    return false;
+  }
+  return attempts_spent_before < MAX_ATTEMPTS;
+}
+
+; The shape of the defect, kept as a predicate so it cannot come back unnoticed: a send that
+; succeeded and a mark that did not is the one pair for which the counter used to stand still.
+pub fn counter_moves_when_the_mark_fails(send_ok: bool, mark_ok: bool) bool {
+  if (send_ok and !mark_ok) {
+    return A_FAILED_MARK_ADVANCES_ATTEMPTS;
+  }
+  return true;
+}
+; One drainer now reaches the ceiling by itself, which is what the change was for. The increment
+; is still a read-modify-write with no claim on the row (see the ordering section), so two drainers
+; that both read attempts = 2 would both run src/db/notifications.rs:146 and leave 4 in a column
+; whose filter stops at 3 -- an overshoot rather than an escape, since every value at or above the
+; ceiling is excluded. Exactly one drainer is spawned (src/main.rs:669). The superseded claim, that
+; the spawn count and not the branch was what kept 3 out of the column, is kept below.
+pub const ATTEMPTS_CEILING_IS_REACHED_BY_ONE_DRAINER : bool = true;
+pub const SUPERSEDED_CEILING_NEEDED_A_SECOND_DRAINER : bool = true;
+
+; The attempt is counted once per pass and before anything can consume it, which is the whole of
+; the fix. Everything below that says "after a failure" or "after a successful send" is this one
+; function seen from a different arm.
+pub fn attempts_after_pass(attempts: u8) u8 {
+  return attempts + 1;
+}
 
 pub fn attempts_after_failure(attempts: u8) u8 {
-  if (attempts + 1 >= MAX_ATTEMPTS) {
-    return attempts;
-  }
-  return attempts + 1;
+  return attempts_after_pass(attempts);
 }
 
 pub fn failure_abandons_the_row(attempts: u8) bool {
@@ -316,8 +425,19 @@ pub fn the_attempts_filter_is_reachable(attempts: u8) bool {
   return attempts_filter_excludes(attempts) and attempts_value_is_writable(attempts);
 }
 
-pub fn attempts_ceiling_is_unreachable(single_drainer: bool) bool {
+pub fn attempts_ceiling_is_reached(single_drainer: bool) bool {
   return single_drainer;
+}
+
+; The giveup is reached from BOTH ways a pass can end without a confirmed delivery, which is the
+; property the code did not have before 2026-09-21: src/notification_queue.rs:220 asks only
+; whether the delivery was confirmed and whether the budget is spent, and the send's outcome
+; chooses the WORDS of the log line at :239-243 and nothing else.
+pub fn pass_abandons_the_row(attempts: u8, delivery_confirmed: bool) bool {
+  if (delivery_confirmed) {
+    return false;
+  }
+  return attempts_after_pass(attempts) >= MAX_ATTEMPTS;
 }
 
 ; No delay grows between attempts and no attempt is rescheduled, so the gap between two attempts on
@@ -339,7 +459,7 @@ pub fn message_survives_outage(outage_seconds: u16) bool {
 }
 
 ; A refusal by Telegram and a broken socket are one event to this loop
-; (src/notification_queue.rs:105-118): one Err arm, one counter of attempts, one giveup. A customer
+; (src/notification_queue.rs:144-245): one warn, one counter of attempts, one giveup. A customer
 ; who has blocked the bot is retried twice like a timeout, and a timeout is discarded after 60
 ; seconds like a block.
 pub const SEND_FAILURE_CLASS_COUNT : u8 = 1;
@@ -377,23 +497,34 @@ pub fn a_new_producer_inherits_a_guard(producer_guard_present: bool) bool {
   return duplicate_enqueue_is_stopped(producer_guard_present);
 }
 
-; The second way one customer is written to twice needs no duplicate row at all. On the success
-; path (src/notification_queue.rs:93-104) the mark is a second database write, and when it fails the
-; row is left pending with attempts untouched -- the Ok arm contains no call to the increment. The
-; next tick re-reads it, re-sends it and tries the same failing write again. The only barrier
-; against a repeat send is the write that just failed, and nothing counts the repeats: the delivery
-; counter at :101 sits inside the else branch that did not run. The warn at :95 names the failed
-; MARK and not the send before it, so the log holds one line per repeat and not one line saying a
-; customer was written to twice.
+; The second way one customer is written to twice needs no duplicate row at all, and it is BOUNDED
+; rather than closed -- the distinction is the point of this section. On the success path
+; (src/notification_queue.rs:144-209) the mark is a second database write, and when it fails the
+; row is still pending, so the next tick re-reads it and re-sends it: the send is not idempotent
+; and nothing here makes it so. What changed on 2026-09-21 is that the row no longer comes back
+; unchanged. The attempt was counted at :104 before the send, so the repeat costs budget, and after
+; MAX_ATTEMPTS passes the scan stops handing the row out (src/db/notifications.rs:107) whether or
+; not any write ever succeeded. A customer can therefore receive the same referral message at most
+; SEND_ATTEMPTS_PER_ROW times instead of every POLL_INTERVAL_SECONDS seconds until someone
+; notices. The repeat is counted, in the column and nowhere else -- the delivery counter at :217
+; still fires only on a confirmed delivery, so a repeat is legible in `attempts` and not in any
+; metric. The warn at :201-207 names the failed MARK and the budget spent; the giveup at :229-244
+; names the row when the retries stop and says which of the two reasons stopped them.
+; SUPERSEDED, and kept because it was the measurement this section was written for: before that
+; date the Ok arm contained no call to the increment, the only barrier against a repeat send was
+; the write that had just failed, and the repeats were bounded by nothing in the code at all.
 pub const THE_SEND_IS_IDEMPOTENT : bool = false;
-pub const THE_ONLY_BARRIER_IS_THE_WRITE_THAT_FAILED : bool = true;
-pub const A_FAILED_MARK_ADVANCES_ATTEMPTS : bool = false;
+pub const THE_ONLY_BARRIER_IS_THE_WRITE_THAT_FAILED : bool = false;
+pub const A_FAILED_MARK_ADVANCES_ATTEMPTS : bool = true;
 pub const A_RESEND_AFTER_A_FAILED_MARK_IS_LOGGED : bool = true;
-pub const A_RESEND_AFTER_A_FAILED_MARK_IS_COUNTED : bool = false;
-pub const RESENDS_AFTER_A_FAILED_MARK_ARE_BOUNDED : bool = false;
+pub const A_RESEND_AFTER_A_FAILED_MARK_IS_COUNTED : bool = true;
+pub const A_RESEND_AFTER_A_FAILED_MARK_HAS_A_METRIC : bool = false;
+pub const RESENDS_AFTER_A_FAILED_MARK_ARE_BOUNDED : bool = true;
+pub const SUPERSEDED_RESENDS_WERE_UNBOUNDED : bool = true;
+pub const MAX_SENDS_TO_ONE_CUSTOMER_FOR_ONE_ROW : u8 = 3;
 
 pub fn attempts_after_successful_send(attempts: u8) u8 {
-  return attempts;
+  return attempts_after_pass(attempts);
 }
 
 pub fn row_stays_pending_after_send(send_ok: bool, mark_ok: bool) bool {
@@ -404,13 +535,22 @@ pub fn customer_is_messaged_twice(send_ok: bool, mark_ok: bool, another_tick_run
   return row_stays_pending_after_send(send_ok, mark_ok) and another_tick_runs;
 }
 
+; The argument is kept so the superseded rule is still expressible: the bound used to depend on
+; the mark eventually succeeding, and now it does not depend on it at all.
 pub fn resend_count_is_bounded(mark_ever_succeeds: bool) bool {
-  return mark_ever_succeeds;
+  return mark_ever_succeeds or RESENDS_AFTER_A_FAILED_MARK_ARE_BOUNDED;
+}
+
+pub fn sends_to_one_customer_for_one_row(mark_ever_succeeds: bool) u8 {
+  if (mark_ever_succeeds) {
+    return 1;
+  }
+  return MAX_SENDS_TO_ONE_CUSTOMER_FOR_ONE_ROW;
 }
 
 ; --- Ordering -------------------------------------------------------------------------------------
-; One sort key, no tiebreaker (src/db/notifications.rs:100), and the loop at
-; src/notification_queue.rs:57 walks the result in order with nothing between sends. A failed row
+; One sort key, no tiebreaker (src/db/notifications.rs:108), and the loop at
+; src/notification_queue.rs:63 walks the result in order with nothing between sends. A failed row
 ; keeps its scheduled_at, so it keeps the head of the queue for its remaining attempts rather than
 ; falling behind. None of that is a global guarantee: there is no claim on a row -- 0 occurrences of
 ; FOR UPDATE or SKIP LOCKED in src/db/notifications.rs -- so the ordering holds only while exactly
@@ -444,18 +584,24 @@ pub fn ordering_survives_a_second_process(claim_exists: bool, drainer_count: u8)
 }
 
 ; --- The recipient the drain declines to send to ----------------------------------------------------
-; src/notification_queue.rs:62-67. A row whose chat id is 0 is marked processed and skipped, with no
-; log line and no counter, so it leaves the queue looking exactly like a delivery.
+; src/notification_queue.rs:124-138. A row whose chat id is 0 is marked processed and skipped, with
+; no log line and no counter, so it leaves the queue looking exactly like a delivery. Two things
+; changed on 2026-09-21 and neither is the skip itself: the pass that skips has already counted an
+; attempt at :104, so a row whose mark keeps failing is examined at most MAX_ATTEMPTS times instead
+; of every tick for ever; and the mark's failure is a warn at :131-135 where it used to be discarded
+; by an `.ok()`. The successful skip is still silent, which is what the constant below says.
 pub const ZERO_CHAT_ID_IS_SKIPPED : bool = true;
 pub const ZERO_CHAT_ID_SKIP_IS_LOGGED : bool = false;
 pub const ZERO_CHAT_ID_SKIP_INCREMENTS_A_COUNTER : bool = false;
+pub const ZERO_CHAT_ID_SKIP_COUNTS_AN_ATTEMPT : bool = true;
+pub const A_FAILED_SKIP_WRITE_IS_LOGGED : bool = true;
 
 pub fn send_is_attempted(chat_id_present: bool, admitted: bool) bool {
   return chat_id_present and admitted;
 }
 
 ; --- Localization boundary --------------------------------------------------------------------------
-; src/notification_queue.rs:69-73 reads the language per row and falls back to a literal written in
+; src/notification_queue.rs:146-150 reads the language per row and falls back to a literal written in
 ; the drain. The read cannot distinguish a missing user from a failed query --
 ; src/db/mod.rs:868-885 returns the same None for both and says so at :866-867 -- so a database
 ; hiccup degrades to the fallback rather than deferring the row. The failure is not unobserved,
@@ -478,7 +624,7 @@ pub fn drain_sends_in_the_fallback(user_row_found: bool, read_failed: bool) bool
 }
 
 ; --- The one button ----------------------------------------------------------------------------------
-; src/notification_queue.rs:83-86 builds the markup outside the match on kind, so every rendering
+; src/notification_queue.rs:161-164 builds the markup outside the match on kind, so every rendering
 ; path carries the same single button at the same single target. That is not an accident and the
 ; reasoning stands at :76-82; it is also why the live test at src/trios/deeplink.rs:648-658 exists.
 pub const BUTTON_COUNT_PER_MESSAGE : u8 = 1;
@@ -492,10 +638,11 @@ pub fn button_can_differ_by_path(rendering_paths: u8, button_targets: u8) bool {
 
 ; --- Observability ------------------------------------------------------------------------------------
 ; Two counters exist on this path: one at the insert (src/db/notifications.rs:86, defined at
-; src/metrics.rs:149-155) and one after a confirmed delivery (src/notification_queue.rs:101, defined
+; src/metrics.rs:149-155) and one after a confirmed delivery (src/notification_queue.rs:217, defined
 ; at src/metrics.rs:158-164). A send failure, an abandonment, a zero-chat skip, a failed batch and
-; the depth of the queue have none. The batch failure is a warn at src/notification_queue.rs:41 and
-; nothing else. Both counter names were searched for in all four monitoring artifacts this
+; the depth of the queue have none. The batch failure is a warn at src/notification_queue.rs:46 and
+; nothing else. The abandonment gained a warn on 2026-09-21 (:229-244) and no counter: a metric
+; NAME is turbobaby/observability's to grant and none is coined here. Both counter names were searched for in all four monitoring artifacts this
 ; repository ships -- docs/grafana-dashboard.json, docs/prometheus-alerts.yaml,
 ; docs/prometheus-recording-rules.yaml and monitoring/grafana-dashboard.json -- and each returns 0.
 pub const COUNTERS_ON_THIS_PATH : u8 = 2;
@@ -552,19 +699,28 @@ pub fn a_failed_send_can_be_retried(goes_through_the_queue: bool) bool {
 
 ; --- Refusals ----------------------------------------------------------------------------------------------
 pub const BACKOFF_IS_NOT_SHIPPED : bool = true;
-pub const BACKOFF_NOTE : str = "No delay grows between attempts and none is configurable. scheduled_at is written once (src/db/notifications.rs:77) and updated at 0 sites, the failure branch calls only the counter increment (src/notification_queue.rs:116, SQL at src/db/notifications.rs:138), and the drain declares three constants and not one of them is a retry delay (:18-20). Closing this needs a write of scheduled_at on failure and a due-time predicate in the scan, which the column already supports and the query does not use. No interval is invented here in its place, and the 30 seconds pinned above is the poll interval rather than a chosen retry delay -- the retry inherits it by having no opinion of its own.";
+pub const BACKOFF_NOTE : str = "No delay grows between attempts and none is configurable. scheduled_at is written once (src/db/notifications.rs:77) and updated at 0 sites, the pass calls the counter increment and nothing resembling a delay (src/notification_queue.rs:104, SQL at src/db/notifications.rs:146), and the drain declares three constants and not one of them is a retry delay (:19-21). RE-READ 2026-09-21 after the counter moved ahead of the send: the increment changed PLACE and not nature, so this refusal is unaffected and the horizon it leaves is still the poll interval times two. Closing this needs a write of scheduled_at on failure and a due-time predicate in the scan, which the column already supports and the query does not use. No interval is invented here in its place, and the 30 seconds pinned above is the poll interval rather than a chosen retry delay -- the retry inherits it by having no opinion of its own.";
 
 pub const PER_RECIPIENT_RATE_LIMIT_IS_NOT_SHIPPED : bool = true;
-pub const PER_RECIPIENT_RATE_NOTE : str = "Nothing bounds how many rows for one person may be drained in one tick. The scan (src/db/notifications.rs:97-104) groups by nothing, the loop (src/notification_queue.rs:57-120) sends each row as it comes, and the file contains 0 sleeps. Fifty rows for one customer would be fifty messages as fast as the socket allows. Closing this needs a per-recipient bound at the scan or a pause in the loop; how often one customer may be written to is the owner's decision and not the transport's, and no figure is coined here to stand in for it.";
+pub const PER_RECIPIENT_RATE_NOTE : str = "Nothing bounds how many rows for one person may be drained in one tick. The scan (src/db/notifications.rs:105-112) groups by nothing, the loop (src/notification_queue.rs:63-246) sends each row as it comes, and the file contains 0 sleeps. Fifty rows for one customer would be fifty messages as fast as the socket allows. Closing this needs a per-recipient bound at the scan or a pause in the loop; how often one customer may be written to is the owner's decision and not the transport's, and no figure is coined here to stand in for it.";
 
 pub const QUEUE_DEPTH_IS_NOT_PUBLISHED : bool = true;
-pub const QUEUE_DEPTH_NOTE : str = "The two counters on this path are events and not levels: one fires at the insert and one after a confirmed delivery, and neither reports how many rows are pending now. Their difference is not the backlog either, because an abandonment (src/notification_queue.rs:114) and a zero-chat skip (:63) both leave the queue without touching the delivery counter. A gauge over processed_at IS NULL is the missing input, and the partial index at migrations/067_notification_queue.sql:15-17 would already serve it. Metric naming is turbobaby/observability's rule and no name is coined here.";
+pub const QUEUE_DEPTH_NOTE : str = "The two counters on this path are events and not levels: one fires at the insert and one after a confirmed delivery, and neither reports how many rows are pending now. Their difference is not the backlog either, because an abandonment (src/notification_queue.rs:220-245) and a zero-chat skip (:124-138) both leave the queue without touching the delivery counter. A gauge over processed_at IS NULL is the missing input, and the partial index at migrations/067_notification_queue.sql:15-17 would already serve it. Metric naming is turbobaby/observability's rule and no name is coined here. The abandonment became a log line on 2026-09-21 and did not become a number: a depth still cannot be read from anything this path emits.";
 
 pub const DEAD_LETTER_STORE_IS_NOT_SHIPPED : bool = true;
-pub const DEAD_LETTER_NOTE : str = "An abandoned row is not moved, not flagged and not copied anywhere. src/notification_queue.rs:112-114 writes the same processed_at a delivery writes, the comment beside it says the purpose is to stop retrying, and the error text reaches the warn at :106-111 and no column -- it is logged once per failure and never persisted. After the third failure the repository holds no record that the message was never received, only a row that reads as delivered. Closing this needs either a column recording which outcome ended the row or a separate table for abandonment, plus the last error. Neither is invented here, and the abandonment is not renamed a delivery in this contract merely because the two share a column.";
+pub const DEAD_LETTER_NOTE : str = "An abandoned row is not moved, not flagged and not copied anywhere. src/notification_queue.rs:196 writes the same processed_at a delivery writes -- literally the same call, chosen by the condition at :195 -- and the error text reaches a warn (:173-185 for the send, :201-207 for the mark) and no column. RE-MEASURED 2026-09-21: the abandonment itself is now named in the log at :229-244, with the row id, the kind, the attempts spent and which of the two reasons ended the retries, so a message that stops being retried no longer stops silently. That is a line and not a record: after the third pass the repository still holds no PERSISTED trace that the message was never received, only a row that reads as delivered, and a log is not a store. Closing this needs either a column recording which outcome ended the row or a separate table for abandonment, plus the last error. Neither is invented here, and the abandonment is not renamed a delivery in this contract merely because the two share a column.";
+
+pub const AN_UNCOUNTABLE_ATTEMPT_IS_REFUSED_NOT_BOUNDED : bool = false;
+pub const SUPERSEDED_UNCOUNTABLE_ATTEMPT_WAS_REFUSED : bool = true;
+pub const AN_UNCOUNTABLE_ATTEMPT_IS_HELD_IN_MEMORY : bool = true;
+pub const UNCOUNTABLE_SEND_IS_BOUNDED : bool = true;
+pub const UNCOUNTABLE_SCAN_IS_BOUNDED : bool = false;
+pub const IN_MEMORY_BOUND_SURVIVES_A_RESTART : bool = false;
+pub const UNCOUNTABLE_BOUND_LANDED_AT : str = "2026-09-21";
+pub const UNCOUNTABLE_ROW_NOTE : str = "SUPERSEDED THE DAY IT WAS WRITTEN, and the superseded reading is kept because it was the measurement the fix was made against. It read: the bound lives in a column, so a row whose counter cannot be written has no bound; src/notification_queue.rs:73 ran the increment first and :83 skipped the row when it failed, which converted an unbounded SEND into an unbounded SCAN, and that was the honest half because an attempt nobody counted is the one that repeats for ever. It was half of an answer and the other half was a new single point of failure: one UPDATE on one column decided whether ANY message left this process, which is a power the queue did not hand it before the fix. Measured by revoking UPDATE on notification_queue -- the scan still returns rows, every increment fails, and nothing is sent. What ships now carries the failure instead of obeying it. The attempt is held in this process (UncountedAttempts, :275-296), attempts_spent (:305) adds it to the column, and the one bound applies to the sum, so the send is bounded at MAX_ATTEMPTS on that path as well and the customer still hears from us. TWO THINGS REMAIN OPEN AND ARE NOT DRESSED UP. The SCAN is bounded by nothing here: the column never reaches the ceiling it filters on, so the row is re-read every POLL_INTERVAL_SECONDS for ever, refused a send by what the process remembers and retried on its terminal write each tick in case the grant returns. And the memory is a process, not a store: a restart forgets what it held and spends the budget again, so the repeat is bounded by restarts rather than by anything persisted, which the warn at :109-114 says on every pass rather than leaving it to be discovered. Closing both needs the same persisted failure record DEAD_LETTER_NOTE names, and no number of restarts to tolerate is invented here in its place.";
 
 pub const DELIVERY_RECEIPT_IS_NOT_SHIPPED : bool = true;
-pub const DELIVERY_RECEIPT_NOTE : str = "processed_at records that a send returned Ok to this process, which is the transport's acknowledgement and not the customer's. Nothing reads a message id and nothing records one -- the Ok binding at src/notification_queue.rs:93 is discarded -- and no later pass reconciles anything against this table. This contract therefore never says a customer was reached; it says a send was acknowledged and a row was marked, and the gap between those two statements is exactly what a receipt would close.";
+pub const DELIVERY_RECEIPT_NOTE : str = "processed_at records that a send returned Ok to this process, which is the transport's acknowledgement and not the customer's. Nothing reads a message id and nothing records one -- the send's result is bound at src/notification_queue.rs:144 and reduced to a bool at :187, which is the only thing four later lines ask (:195, :199, :220, :239) -- and no later pass reconciles anything against this table. This contract therefore never says a customer was reached; it says a send was acknowledged and a row was marked, and the gap between those two statements is exactly what a receipt would close.";
 
 ; --- Tests ------------------------------------------------------------------------------------------------
 
@@ -582,6 +738,15 @@ test a_row_has_two_derived_states_and_no_state_column {
 
 test three_outcomes_end_a_row_and_the_row_forgets_which {
   assert TERMINAL_OUTCOME_COUNT == 3;
+  assert TERMINAL_WRITE_SITES_IN_THE_DRAIN == 2;
+  assert SUPERSEDED_TERMINAL_WRITE_SITES == 3;
+  assert A_GIVEUP_IS_NAMED_IN_THE_LOG == true;
+  assert A_GIVEUP_LOG_LINE_CARRIES_THE_REASON == true;
+  assert outcome_increments_a_counter(OUTCOME_ABANDONED) == false;
+  assert AN_UNWRITTEN_GIVEUP_IS_LEGIBLE_IN_THE_ROW == true;
+  assert row_was_given_up_without_its_terminal_write(false, 3) == true;
+  assert row_was_given_up_without_its_terminal_write(true, 3) == false;
+  assert row_was_given_up_without_its_terminal_write(false, 2) == false;
   assert outcome_is_terminal(OUTCOME_DELIVERED) == true;
   assert outcome_is_terminal(OUTCOME_ABANDONED) == true;
   assert outcome_is_terminal(OUTCOME_SKIPPED_NO_CHAT) == true;
@@ -647,7 +812,7 @@ test the_scheduled_at_column_does_not_schedule {
 test three_sends_are_allowed_and_the_third_failure_ends_the_row {
   assert attempts_after_failure(0) == 1;
   assert attempts_after_failure(1) == 2;
-  assert attempts_after_failure(2) == 2;
+  assert attempts_after_failure(2) == 3;
   assert failure_abandons_the_row(0) == false;
   assert failure_abandons_the_row(1) == false;
   assert failure_abandons_the_row(2) == true;
@@ -656,20 +821,42 @@ test three_sends_are_allowed_and_the_third_failure_ends_the_row {
   assert SEND_ATTEMPTS_PER_ROW == MAX_ATTEMPTS;
 }
 
-test the_attempts_filter_guards_a_value_the_code_cannot_write {
+; The half that did not exist before 2026-09-21: the giveup is reached from a pass that SENT, not
+; only from a pass that failed, and the counter gets there on every path.
+test the_giveup_is_reached_from_both_ways_a_pass_can_end {
+  assert THE_ATTEMPT_IS_COUNTED_BEFORE_THE_SEND == true;
+  assert COUNTER_WRITE_SITES_PER_PASS == 1;
+  assert attempts_after_pass(0) == 1;
+  assert attempts_after_pass(1) == 2;
+  assert attempts_after_pass(2) == 3;
+  assert pass_abandons_the_row(2, false) == true;
+  assert pass_abandons_the_row(2, true) == false;
+  assert pass_abandons_the_row(1, false) == false;
+  assert pass_abandons_the_row(0, false) == false;
+  assert counter_moves_when_the_mark_fails(true, false) == true;
+  assert counter_moves_when_the_mark_fails(true, true) == true;
+  assert counter_moves_when_the_mark_fails(false, false) == true;
+  assert BOUND_IS_REACHABLE_ON_EVERY_PATH == true;
+}
+
+test the_attempts_filter_now_guards_a_value_the_code_does_write {
   assert ATTEMPTS_AT_INSERT == 0;
-  assert HIGHEST_ATTEMPTS_VALUE_THE_CODE_CAN_WRITE == 2;
+  assert HIGHEST_ATTEMPTS_VALUE_THE_CODE_CAN_WRITE == 3;
+  assert SUPERSEDED_HIGHEST_ATTEMPTS_VALUE == 2;
   assert ATTEMPTS_FILTER_CEILING == 3;
+  assert ATTEMPTS_FILTER_CEILING == MAX_ATTEMPTS;
   assert attempts_filter_excludes(3) == true;
-  assert attempts_value_is_writable(3) == false;
+  assert attempts_value_is_writable(3) == true;
   assert the_attempts_filter_is_reachable(0) == false;
   assert the_attempts_filter_is_reachable(1) == false;
   assert the_attempts_filter_is_reachable(2) == false;
-  assert the_attempts_filter_is_reachable(3) == false;
-  assert THE_ATTEMPTS_FILTER_CAN_EXCLUDE_A_ROW == false;
-  assert attempts_ceiling_is_unreachable(true) == true;
-  assert attempts_ceiling_is_unreachable(false) == false;
-  assert ATTEMPTS_CEILING_IS_UNREACHABLE_ONLY_WITH_ONE_DRAINER == true;
+  assert the_attempts_filter_is_reachable(3) == true;
+  assert THE_ATTEMPTS_FILTER_CAN_EXCLUDE_A_ROW == true;
+  assert attempts_ceiling_is_reached(true) == true;
+  assert ATTEMPTS_CEILING_IS_REACHED_BY_ONE_DRAINER == true;
+  assert SUPERSEDED_CEILING_NEEDED_A_SECOND_DRAINER == true;
+  assert THE_FILTER_AND_THE_GIVEUP_READ_ONE_DECLARATION == true;
+  assert BUDGET_DECLARATION_SITE == "src/notification_queue.rs:21";
 }
 
 test the_retry_horizon_is_sixty_seconds_because_nothing_backs_off {
@@ -707,9 +894,10 @@ test the_transport_contributes_nothing_to_dedupe {
 
 test a_delivered_message_can_be_delivered_again_without_a_duplicate_row {
   assert THE_SEND_IS_IDEMPOTENT == false;
-  assert A_FAILED_MARK_ADVANCES_ATTEMPTS == false;
-  assert attempts_after_successful_send(0) == 0;
-  assert attempts_after_successful_send(2) == 2;
+  assert A_FAILED_MARK_ADVANCES_ATTEMPTS == true;
+  assert attempts_after_successful_send(0) == 1;
+  assert attempts_after_successful_send(2) == 3;
+  assert attempts_after_successful_send(0) == attempts_after_pass(0);
   assert row_stays_pending_after_send(true, false) == true;
   assert row_stays_pending_after_send(true, true) == false;
   assert row_stays_pending_after_send(false, false) == false;
@@ -718,12 +906,17 @@ test a_delivered_message_can_be_delivered_again_without_a_duplicate_row {
   assert customer_is_messaged_twice(true, false, false) == false;
 }
 
-test the_resend_loop_is_bounded_only_by_the_write_that_keeps_failing {
-  assert RESENDS_AFTER_A_FAILED_MARK_ARE_BOUNDED == false;
-  assert THE_ONLY_BARRIER_IS_THE_WRITE_THAT_FAILED == true;
+test the_resend_loop_is_bounded_by_the_attempt_counter_and_not_by_the_write {
+  assert RESENDS_AFTER_A_FAILED_MARK_ARE_BOUNDED == true;
+  assert SUPERSEDED_RESENDS_WERE_UNBOUNDED == true;
+  assert THE_ONLY_BARRIER_IS_THE_WRITE_THAT_FAILED == false;
   assert resend_count_is_bounded(true) == true;
-  assert resend_count_is_bounded(false) == false;
-  assert A_RESEND_AFTER_A_FAILED_MARK_IS_COUNTED == false;
+  assert resend_count_is_bounded(false) == true;
+  assert sends_to_one_customer_for_one_row(true) == 1;
+  assert sends_to_one_customer_for_one_row(false) == MAX_SENDS_TO_ONE_CUSTOMER_FOR_ONE_ROW;
+  assert MAX_SENDS_TO_ONE_CUSTOMER_FOR_ONE_ROW == SEND_ATTEMPTS_PER_ROW;
+  assert A_RESEND_AFTER_A_FAILED_MARK_IS_COUNTED == true;
+  assert A_RESEND_AFTER_A_FAILED_MARK_HAS_A_METRIC == false;
   assert A_RESEND_AFTER_A_FAILED_MARK_IS_LOGGED == true;
 }
 
@@ -757,6 +950,8 @@ test a_zero_chat_id_leaves_the_queue_looking_delivered {
   assert ZERO_CHAT_ID_IS_SKIPPED == true;
   assert ZERO_CHAT_ID_SKIP_IS_LOGGED == false;
   assert ZERO_CHAT_ID_SKIP_INCREMENTS_A_COUNTER == false;
+  assert ZERO_CHAT_ID_SKIP_COUNTS_AN_ATTEMPT == true;
+  assert A_FAILED_SKIP_WRITE_IS_LOGGED == true;
   assert send_is_attempted(false, true) == false;
   assert send_is_attempted(true, true) == true;
   assert send_is_attempted(true, false) == false;
@@ -847,6 +1042,12 @@ test every_reuse_edge_names_an_owner_and_restates_nothing {
 
 test what_is_missing_is_named_rather_than_guessed {
   assert BACKOFF_IS_NOT_SHIPPED == true;
+  ; Until 2026-09-21 the missing thing here was a bound on an uncountable row and the shipped
+  ; answer was a refusal to send it. The refusal is gone and the bound is real; what is still
+  ; missing is a PERSISTED one, so the two halves that survive the fix are what this asserts.
+  assert SUPERSEDED_UNCOUNTABLE_ATTEMPT_WAS_REFUSED == true;
+  assert UNCOUNTABLE_SCAN_IS_BOUNDED == false;
+  assert IN_MEMORY_BOUND_SURVIVES_A_RESTART == false;
   assert PER_RECIPIENT_RATE_LIMIT_IS_NOT_SHIPPED == true;
   assert QUEUE_DEPTH_IS_NOT_PUBLISHED == true;
   assert DEAD_LETTER_STORE_IS_NOT_SHIPPED == true;
@@ -854,6 +1055,33 @@ test what_is_missing_is_named_rather_than_guessed {
   assert PACING_SLEEPS_IN_THE_DRAIN == 0;
   assert FUTURE_SCHEDULED_AT_WRITE_SITES == 0;
   assert A_FUTURE_ROW_IS_SENT_ON_THE_NEXT_TICK == true;
+}
+
+; The finding of 2026-09-21, stated as the two properties that have to hold together. A send is
+; attempted at most a bounded number of times, AND a counter that cannot be written does not stop
+; delivery. The first cut of the resend fix had the first and broke the second.
+test a_counter_the_database_refuses_bounds_the_send_without_cancelling_it {
+  assert AN_UNCOUNTABLE_ATTEMPT_IS_REFUSED_NOT_BOUNDED == false;
+  assert SUPERSEDED_UNCOUNTABLE_ATTEMPT_WAS_REFUSED == true;
+  assert AN_UNCOUNTABLE_ATTEMPT_IS_HELD_IN_MEMORY == true;
+  assert ATTEMPTS_ARE_READ_FROM_TWO_PLACES == 2;
+  ; The first pass on a row nobody can count still goes out, and so do the second and the third.
+  assert pass_sends(0, false) == true;
+  assert pass_sends(1, false) == true;
+  assert pass_sends(2, false) == true;
+  ; The fourth does not: one bound over both halves of the count.
+  assert pass_sends(3, false) == false;
+  assert attempts_spent(0, 0) == 0;
+  assert attempts_spent(0, 3) == MAX_ATTEMPTS;
+  assert attempts_spent(1, 2) == MAX_ATTEMPTS;
+  assert attempts_spent(3, 0) == MAX_ATTEMPTS;
+  ; A row with no chat is not sent whatever the counter did, which is the one early exit left.
+  assert pass_sends(0, true) == false;
+  ; And what is still open, said here rather than implied.
+  assert UNCOUNTABLE_SEND_IS_BOUNDED == true;
+  assert UNCOUNTABLE_SCAN_IS_BOUNDED == false;
+  assert IN_MEMORY_BOUND_SURVIVES_A_RESTART == false;
+  assert UNCOUNTABLE_BOUND_LANDED_AT == RESEND_BOUND_LANDED_AT;
 }
 
 ; --- Invariants ---------------------------------------------------------------------------------------------
@@ -865,16 +1093,27 @@ invariant an_abandonment_is_written_with_a_deliverys_column
   assert A_GIVEUP_IS_WRITTEN_AS_A_DELIVERY == true and TERMINAL_OUTCOMES_SHARE_ONE_COLUMN == true and outcome_increments_a_counter(OUTCOME_ABANDONED) == false
 
 invariant the_third_failure_ends_the_row_and_the_second_does_not
-  assert failure_abandons_the_row(2) == true and failure_abandons_the_row(1) == false and attempts_after_failure(2) == 2
+  assert failure_abandons_the_row(2) == true and failure_abandons_the_row(1) == false and attempts_after_failure(2) == 3
 
-invariant no_writable_value_reaches_the_attempts_filter
-  assert the_attempts_filter_is_reachable(2) == false and the_attempts_filter_is_reachable(3) == false and THE_ATTEMPTS_FILTER_CAN_EXCLUDE_A_ROW == false
+; The property the loop did not have until 2026-09-21, stated where it cannot be edited away in
+; silence: no pair of write outcomes leaves the counter where it was, so the giveup is reachable
+; from all of them.
+invariant every_pass_spends_an_attempt_whatever_its_two_writes_did
+  assert counter_moves_when_the_mark_fails(true, false) == true and attempts_after_pass(2) == MAX_ATTEMPTS and pass_abandons_the_row(2, false) == true and BOUND_IS_REACHABLE_ON_EVERY_PATH == true
 
-invariant the_attempts_ceiling_is_unreachable_because_one_drainer_exists
-  assert attempts_ceiling_is_unreachable(false) == false and DRAINER_SPAWN_SITES == 1 and ROW_CLAIM_EXISTS == false
+; No single failed write decides whether a customer hears from us, in either direction: a refused
+; counter cannot cancel the delivery, and it cannot buy an extra one either.
+invariant no_single_failed_write_cancels_a_delivery_or_buys_an_extra_one
+  assert pass_sends(0, false) == true and pass_sends(3, false) == false and attempts_spent(1, 2) == MAX_ATTEMPTS and AN_UNCOUNTABLE_ATTEMPT_IS_REFUSED_NOT_BOUNDED == false
+
+invariant a_writable_value_now_reaches_the_attempts_filter
+  assert the_attempts_filter_is_reachable(2) == false and the_attempts_filter_is_reachable(3) == true and THE_ATTEMPTS_FILTER_CAN_EXCLUDE_A_ROW == true
+
+invariant the_attempts_ceiling_is_reached_by_the_one_drainer_that_exists
+  assert attempts_ceiling_is_reached(true) == true and DRAINER_SPAWN_SITES == 1 and ROW_CLAIM_EXISTS == false
 
 invariant the_poll_interval_is_a_marked_copy_with_one_arbiter
-  assert INTERVAL_SOURCE_LINE == "src/notification_queue.rs:18" and RETRY_INTERVAL_SECONDS == POLL_INTERVAL_SECONDS
+  assert INTERVAL_SOURCE_LINE == "src/notification_queue.rs:19" and RETRY_INTERVAL_SECONDS == POLL_INTERVAL_SECONDS
 
 invariant the_retry_budget_is_spent_in_two_poll_intervals
   assert retry_horizon_seconds(POLL_INTERVAL_SECONDS, 3) == 60 and BACKOFF_EXISTS == false and SCHEDULED_AT_UPDATE_SITES == 0
@@ -886,10 +1125,10 @@ invariant the_queue_stops_no_duplicate_by_itself
   assert duplicate_enqueue_is_stopped(false) == false and QUEUE_HAS_A_DEDUPE_KEY == false and TRANSPORT_GUARD_PRESENT == false
 
 invariant a_send_that_succeeds_and_a_mark_that_fails_sends_again
-  assert customer_is_messaged_twice(true, false, true) == true and attempts_after_successful_send(1) == 1
+  assert customer_is_messaged_twice(true, false, true) == true and attempts_after_successful_send(1) == 2
 
-invariant that_resend_is_bounded_by_nothing_in_the_code
-  assert resend_count_is_bounded(false) == false and RESENDS_AFTER_A_FAILED_MARK_ARE_BOUNDED == false
+invariant that_resend_is_bounded_by_the_counter_and_not_by_the_write
+  assert resend_count_is_bounded(false) == true and RESENDS_AFTER_A_FAILED_MARK_ARE_BOUNDED == true and sends_to_one_customer_for_one_row(false) == SEND_ATTEMPTS_PER_ROW
 
 invariant a_single_sort_key_is_not_a_total_order
   assert order_is_total(TIEBREAKER_COUNT) == false and ORDER_KEY_COUNT == 1

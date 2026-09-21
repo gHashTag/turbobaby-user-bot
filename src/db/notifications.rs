@@ -88,15 +88,23 @@ async fn insert_queue_row(
 }
 
 /// Up to `limit` pending notifications, oldest first.
+///
+/// `max_attempts` arrives from the caller instead of being written here again.
+/// This filter and the drain's give-up branch are the same bound seen from two
+/// sides, and the literal `3` that used to stand in it was a second copy of
+/// `MAX_ATTEMPTS` (src/notification_queue.rs): the day one moved, rows would
+/// have been withheld from the drain without ever being abandoned by it, which
+/// looks exactly like a queue that quietly forgets messages.
 #[allow(dead_code)] // Consumed by the binary-only notification worker.
 pub(crate) async fn pending_notifications(
     orm: &sea_orm::DatabaseConnection,
     limit: usize,
+    max_attempts: i32,
 ) -> Result<Vec<crate::db::entities::notification_queue::Model>> {
     use crate::db::entities::notification_queue::{Column, Entity};
     let rows = Entity::find()
         .filter(Column::ProcessedAt.is_null())
-        .filter(Column::Attempts.lt(3))
+        .filter(Column::Attempts.lt(max_attempts))
         .order_by_asc(Column::ScheduledAt)
         .limit(Some(limit as u64))
         .all(orm)

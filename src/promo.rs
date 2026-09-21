@@ -452,24 +452,53 @@ async fn write_copy(
 ) -> (String, &'static str) {
     let facts = facts_for(subject, db).await;
     let prompt = promo::prompt_for(subject, "ru", &facts);
-    match ai
+    let answer = ai
         .ask_grok(&prompt, subject.name(), "Ты копирайтер магазина.")
-        .await
-    {
-        Some(answer) => {
-            let usable = promo::usable_copy(&answer, subject);
-            if usable == promo::fallback_copy(subject) {
-                tracing::info!(
-                    kind = subject.kind(),
-                    "promo: the model's answer was unusable; sending the written copy"
-                );
-                (usable, "fallback")
-            } else {
-                (usable, "model")
-            }
-        }
-        None => (promo::fallback_copy(subject), "fallback"),
+        .await;
+    copy_from_answer(answer.as_deref(), subject)
+}
+
+/// What the post says, and who wrote it.
+///
+/// Separated from `write_copy` because that function needs a live model and a
+/// live database, so nothing could execute the decision — and this is the
+/// decision that puts words under the shop's name.
+///
+/// Two rejections, and they are not the same kind of thing.
+///
+/// The first is ours. When the prompt sanitiser trips, `ask_grok` answers with
+/// `crate::ai::PROMPT_FILTERED_REPLY`, a sentence this repository wrote,
+/// returned inside `Some` so a chat gets a reply instead of silence. On this
+/// path there is no chat: whatever comes back becomes a promotional post. It
+/// is refused here by identity, against the constant that produces it, so
+/// rewording the sentinel cannot quietly re-open this. Until 2026-09-21
+/// nothing refused it at all — `usable_copy`'s refusal list holds "i cannot"
+/// and "i'm sorry" and not "i can't", the sentence is well inside its length
+/// bounds, and the sweeper stored it as the draft with source = "model".
+///
+/// The second is the model's own refusal, and there the wording really is all
+/// the evidence there is: `usable_copy` keeps that judgement and this function
+/// does not second-guess it.
+fn copy_from_answer(answer: Option<&str>, subject: &Subject) -> (String, &'static str) {
+    let Some(answer) = answer else {
+        return (promo::fallback_copy(subject), "fallback");
+    };
+    if crate::ai::is_prompt_filtered_reply(answer) {
+        tracing::info!(
+            kind = subject.kind(),
+            "promo: the prompt filter answered, not the model; sending the written copy"
+        );
+        return (promo::fallback_copy(subject), "fallback");
     }
+    let usable = promo::usable_copy(answer, subject);
+    if usable == promo::fallback_copy(subject) {
+        tracing::info!(
+            kind = subject.kind(),
+            "promo: the model's answer was unusable; sending the written copy"
+        );
+        return (usable, "fallback");
+    }
+    (usable, "model")
 }
 
 /// The only facts the model is allowed to use. Read from the database rather
@@ -1082,6 +1111,125 @@ impl From<PromoResult> for crate::trios::promo::DigestRow {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The prompt filter's own sentence must never be published as copy.
+    ///
+    /// When the sanitiser trips, `ask_grok` hands back a sentence this
+    /// repository wrote, inside the same `Some` a real answer arrives in. In a
+    /// chat that is an answer; here it would be a promotional post, stored
+    /// with source = "model" and one owner press away from every subscriber.
+    ///
+    /// Asserted BY IDENTITY, against the constant that produces the sentence,
+    /// so this cannot pass by matching words the sentinel no longer uses.
+    #[test]
+    fn the_prompt_filters_own_sentence_is_never_published_as_copy() {
+        let s = Subject::Set {
+            id: "s1".into(),
+            name: "Honda Click 125i".into(),
+        };
+        let (body, source) = copy_from_answer(Some(crate::ai::PROMPT_FILTERED_REPLY), &s);
+        assert_eq!(
+            body,
+            promo::fallback_copy(&s),
+            "the prompt filter's own sentence was published as the post"
+        );
+        assert_eq!(
+            source, "fallback",
+            "the shop's own sentinel was recorded as the model's writing"
+        );
+    }
+
+    /// Why the check above has to be an identity and not another phrase in a
+    /// list: the sentinel passes every bound `usable_copy` applies. This is a
+    /// measurement of that function, not a wish about it — if it ever starts
+    /// rejecting the sentinel, come back and read why the identity check is
+    /// still the one that must hold.
+    #[test]
+    fn the_refusal_list_does_not_stop_the_sentinel() {
+        let s = Subject::Set {
+            id: "s1".into(),
+            name: "Honda Click 125i".into(),
+        };
+        assert_eq!(
+            promo::usable_copy(crate::ai::PROMPT_FILTERED_REPLY, &s),
+            crate::ai::PROMPT_FILTERED_REPLY,
+            "the refusal list now catches the sentinel too; the identity check above is still what the post depends on"
+        );
+    }
+
+    /// The rejection is narrow: a model answer that is usable is still kept,
+    /// and still says the model wrote it. A promoter that always sends its own
+    /// text has no use for a model at all.
+    #[test]
+    fn a_usable_model_answer_is_still_the_models() {
+        let s = Subject::Set {
+            id: "s1".into(),
+            name: "Honda Click 125i".into(),
+        };
+        // Any well-formed answer will do here; what is under test is that a
+        // usable one still passes through, not the language it is written in.
+        let good = "Honda Click 125i is in the park now. Light, cheap to run, easy in town.";
+        let (body, source) = copy_from_answer(Some(good), &s);
+        assert_eq!(body, good);
+        assert_eq!(source, "model");
+    }
+
+    /// No answer at all is still the written copy, attributed to nobody --
+    /// and the whole mapping around that row, because the row alone proves
+    /// nothing.
+    ///
+    /// Measured 2026-09-21, adversarial review: this test asserted only the
+    /// `None` row and passed with the sentinel check removed. It had to. An
+    /// absent answer lands on the fallback under every version of this
+    /// function ever shipped, the one that published the sentinel included.
+    /// What CAN fail is the table: the four things that can come back and
+    /// where each of them lands, which is the same table the contract states
+    /// as `body_is_the_written_fallback` and `source_is_the_model`
+    /// (specs/turbobaby/promo_broadcast.t27). The sentinel row is the one that
+    /// moves when the identity check goes.
+    #[test]
+    fn a_silent_model_falls_back() {
+        let s = Subject::Set {
+            id: "s1".into(),
+            name: "Honda Click 125i".into(),
+        };
+        let fallback = promo::fallback_copy(&s);
+        // Any well-formed answer will do for the last row; what is under test
+        // is where each KIND of answer lands, not the language one is in.
+        let good = "Honda Click 125i is in the park now. Light, cheap to run, easy in town.";
+        for (answer, body, source, what_came_back) in [
+            (
+                None,
+                fallback.as_str(),
+                "fallback",
+                "a model that said nothing at all",
+            ),
+            (
+                Some(crate::ai::PROMPT_FILTERED_REPLY),
+                fallback.as_str(),
+                "fallback",
+                "the prompt filter's own sentence, which no model wrote",
+            ),
+            (
+                Some("too short"),
+                fallback.as_str(),
+                "fallback",
+                "an answer the owner's copy check rejects",
+            ),
+            (
+                Some(good),
+                good,
+                "model",
+                "an answer the owner's copy check keeps",
+            ),
+        ] {
+            assert_eq!(
+                copy_from_answer(answer, &s),
+                (body.to_string(), source),
+                "{what_came_back}"
+            );
+        }
+    }
 
     /// The callback prefix and the dedup key have to compose into something
     /// Telegram will carry: callback data is capped at 64 **bytes**, and

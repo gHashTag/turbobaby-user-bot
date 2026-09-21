@@ -40,6 +40,7 @@ fn clear_admin_token_cache() {
     ADMIN_TOKEN_CACHE.with(|c| c.borrow_mut().clear());
 }
 
+use crate::trios::api_errors::admin_event_delete_failure;
 use crate::trios::i18n::{
     t, T_BROADCAST, T_BROADCAST_BUTTON_TEXT, T_BROADCAST_NO_PRODUCT, T_BROADCAST_PHOTO,
     T_BROADCAST_PHOTO_HINT, T_BROADCAST_PREVIEW, T_BROADCAST_PRODUCT, T_BROADCAST_PRODUCT_NONE,
@@ -4575,6 +4576,7 @@ fn textarea_style() -> &'static str {
 #[component]
 fn EventsTab() -> Element {
     let telegram_id = use_telegram_id().unwrap_or(0);
+    let lang = crate::ui::lang::current_lang();
     let init_data = use_signal(use_telegram_init_data);
     let mut cache: Signal<Vec<AdminEvent>> = use_signal(Vec::new);
     let mut loading = use_signal(|| true);
@@ -4892,6 +4894,11 @@ fn EventsTab() -> Element {
         });
     };
 
+    // The one copy of the failed-delete label. It used to be three arms' worth
+    // of the same literal; the wording is unchanged, and what follows the colon
+    // is what now tells the three failures apart.
+    const DELETE_FAILED: &str = "Ошибка удаления";
+
     let confirm_delete = move |_| {
         let id = delete_target_id.read().clone();
         if let Some(id) = id {
@@ -4915,8 +4922,29 @@ fn EventsTab() -> Element {
                         reload.set(next);
                         push_toast(toasts, "Удалено".into(), ToastKind::Success);
                     }
-                    _ => {
-                        push_toast(toasts, "Ошибка удаления".into(), ToastKind::Error);
+                    // The server explains itself on a refused delete: 409
+                    // `paid_bookings_exist` carries the count and the total it
+                    // measured, and 409 `acknowledgement_is_stale` carries the
+                    // count the caller answered for as well. Collapsing those
+                    // into one generic toast made "three people paid for
+                    // this event" and "the connection dropped" the same
+                    // sentence, and the owner's next move is different for
+                    // each. The reading is `admin_event_delete_failure`
+                    // (src/trios/api_errors.rs), which is a trio because
+                    // nothing under src/ui is compiled by cargo test.
+                    Ok(r) => {
+                        let status = r.status().as_u16();
+                        let body = r.text().await.unwrap_or_default();
+                        let msg = match admin_event_delete_failure(lang, status, &body) {
+                            Some(detail) => format!("{DELETE_FAILED} ({status}): {detail}"),
+                            None => format!("{DELETE_FAILED} ({status})"),
+                        };
+                        push_toast(toasts, msg, ToastKind::Error);
+                    }
+                    // Nothing was answered at all, which is the case the
+                    // arm above used to be mistaken for.
+                    Err(e) => {
+                        push_toast(toasts, format!("{DELETE_FAILED}: {e}"), ToastKind::Error);
                     }
                 }
             });

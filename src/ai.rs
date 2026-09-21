@@ -190,9 +190,9 @@ impl AiClient {
     ) -> Option<String> {
         let clean_prompt = sanitize_user_text(prompt);
         if clean_prompt == "[filtered]" {
-            return Some(
-                "I can't process that request. Let's talk about our bikes! 🏍️".to_string(),
-            );
+            // OUR sentence, not the model's, and every caller that must not
+            // publish it recognises it by identity rather than by its prose.
+            return Some(PROMPT_FILTERED_REPLY.to_string());
         }
         // Defense-in-depth: cap length at the paid-API boundary, independent of
         // callers. The bot DM caps the prompt to 1500 (handlers.rs), but other
@@ -298,6 +298,32 @@ impl AiClient {
 
         Err(anyhow::anyhow!("All GLM endpoints failed"))
     }
+}
+
+/// The sentence `ask_grok` returns in place of a model's answer when the
+/// prompt sanitiser fires.
+///
+/// Declared once, and named, because a caller has to be able to tell it apart
+/// from something the model wrote. Until 2026-09-21 it was an inline literal
+/// and no caller could: the only check on a model's answer anywhere in this
+/// tree is `usable_copy` (src/trios/promo.rs), a list of refusal openings that
+/// holds "i cannot" and "i'm sorry" and not "i can't", and this sentence sits
+/// well inside that function's length bounds. The promo sweeper therefore took
+/// it for copy and stored it as a draft post with source = "model" — a refusal
+/// addressed to one customer, queued to be broadcast to all of them.
+pub(crate) const PROMPT_FILTERED_REPLY: &str =
+    "I can't process that request. Let's talk about our bikes! 🏍️";
+
+/// True when `answer` is this module's own sentinel rather than a model's
+/// sentence.
+///
+/// Identity, not prose: the comparison is against the declaration above, so
+/// rewording the sentinel cannot leave a consumer matching words it no longer
+/// uses. That is what separates this from adding another phrase to a denylist
+/// — a denylist is for answers that really did come from the model, where the
+/// wording is the only evidence there is.
+pub(crate) fn is_prompt_filtered_reply(answer: &str) -> bool {
+    answer.trim() == PROMPT_FILTERED_REPLY
 }
 
 #[cfg(test)]
