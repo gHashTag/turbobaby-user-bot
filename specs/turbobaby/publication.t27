@@ -148,20 +148,46 @@ pub const MANIFEST_DISCOVERED_AT : str = "2026-09-15T14:46:43.844Z";
 ; answers about a commit this repository never made would prove somebody else is published.
 pub const PUBLISHED_COMMIT : str = "e9356f1f0664e8f6d963c52035a9d310761ca9a8";
 pub const PUBLISHED_COMMIT_IS_IN_LOCAL_HISTORY : bool = true;
-; git ls-files over specs/ on the observation date. It equals the published count today, which is
-; a dated witness of completeness and not a rule: adding a canonical file moves this number first
-; and the manifest number only after the next scan, so a future inequality is lag, not loss.
+; git ls-files over specs/ on the observation date. It equalled the published count on that date,
+; which is a dated witness of completeness and not a rule: adding a canonical file moves this
+; number first and the manifest number only after the next scan, so a future inequality is lag,
+; not loss.
+; THE FUTURE THAT SENTENCE DESCRIBED HAS ARRIVED (re-measured 2026-09-21). Until this edit the
+; line above read "It equals the published count today", and the "today" in it was 2026-09-20.
+; It is false now, and the constant beside it is not the thing that went wrong: git ls-files over
+; specs/ answers 43, because 31 further canonical files were tracked after the observation, and
+; the manifest still answers 12 because it has not been scanned since. That is the lag this
+; paragraph predicted, so the dated constant keeps its measured 12 and the live count is declared
+; separately instead of typed over it. Neither number is a network reading: both are git ls-files
+; against this repository, and no t27.ai surface was re-probed for this correction.
 pub const TRACKED_SPEC_COUNT_AT_OBSERVED_AT : u8 = 12;
+pub const TRACKED_SPEC_COUNT_REMEASURED_AT : str = "2026-09-21";
+pub const TRACKED_SPEC_COUNT_REMEASURED : u8 = 43;
+pub const TRACKED_SPEC_COUNT_EXCEEDS_THE_PUBLISHED_COUNT : bool = true;
+pub const SPEC_COUNT_INEQUALITY_IS_SCAN_LAG : bool = true;
+; The direction is the whole verdict. More tracked than published is a scan that has not caught up;
+; fewer tracked than published would be a manifest answering about files this repository no longer
+; has, which is loss and not lag. One comparison separates them, so neither reading can be taken
+; for the other by a reader who meets the two numbers side by side.
+pub fn spec_count_gap_is_scan_lag(tracked_now: u8, published_count: u8) bool {
+  return tracked_now >= published_count;
+}
+
 pub const SHARED_CORE_URL : str = "https://t27.ai/t27/shared-core.json";
 pub const SHARED_CORE_HTTP_STATUS : u16 = 200;
 pub const SHARED_CORE_BYTES : u32 = 2329087;
 ; Modules the deployed route returned WITH their header prose, their symbol lists and a source
 ; repo of ghashtag/turbobaby-user-bot. That is resolution of our source, not a directory listing
 ; that happens to spell our paths. Re-read 2026-09-20 against the same URL: the route resolves ALL
-; 12 tracked modules of this repository, not the 3 first sampled. The correction matters because a
-; count of 3 standing next to TRACKED_SPEC_COUNT_AT_OBSERVED_AT = 12 reads as nine of our specs
-; going unresolved, which is a failure that is not happening. The array below stays a named sample
-; of three; the count is the whole.
+; 12 modules this repository had tracked ON THAT DATE, not the 3 first sampled. The correction
+; matters because a count of 3 standing next to TRACKED_SPEC_COUNT_AT_OBSERVED_AT = 12 reads as
+; nine of our specs going unresolved, which is a failure that was not happening. The array below
+; stays a named sample of three; the count was the whole of that day's corpus.
+; SCOPED 2026-09-21: "ALL" is a word about 2026-09-20 and must not be read forward. 43 files are
+; tracked now, so 12 is no longer all of them, and this constant says nothing about whether the
+; 31 added since resolve. The deployed route was NOT re-probed for this edit -- doing so is a
+; network measurement and none was taken -- so that question is unmeasured here rather than
+; answered either way.
 pub const RESOLVED_MODULE_COUNT : u8 = 12;
 pub const SAMPLED_RESOLVED_MODULE_COUNT : u8 = 3;
 pub const RESOLVED_MODULE_PATHS : [3]str = [
@@ -436,6 +462,25 @@ test publication_contract_contains_no_domain_payload {
   assert TEST_COMMAND_EXECUTES_ASSERTIONS == false;
 }
 
+; The dated count and the live one, kept apart on purpose. The first is what was true when the
+; manifest was read and is what the witness test above compares against; the second is what is
+; true today and is compared against nothing published, because nothing published has been read
+; since. The last assert is the one that matters to a later reader: the two dates differ, so the
+; two numbers are not two readings of one measurement.
+test the_tracked_count_outgrew_the_published_one_and_that_is_lag_not_loss {
+  assert TRACKED_SPEC_COUNT_AT_OBSERVED_AT == 12;
+  assert TRACKED_SPEC_COUNT_REMEASURED == 43;
+  assert TRACKED_SPEC_COUNT_REMEASURED_AT == "2026-09-21";
+  assert TRACKED_SPEC_COUNT_REMEASURED > TRACKED_SPEC_COUNT_AT_OBSERVED_AT;
+  assert TRACKED_SPEC_COUNT_REMEASURED > MANIFEST_SPEC_COUNT;
+  assert TRACKED_SPEC_COUNT_EXCEEDS_THE_PUBLISHED_COUNT == true;
+  assert SPEC_COUNT_INEQUALITY_IS_SCAN_LAG == true;
+  assert spec_count_gap_is_scan_lag(TRACKED_SPEC_COUNT_REMEASURED, MANIFEST_SPEC_COUNT) == true;
+  assert spec_count_gap_is_scan_lag(TRACKED_SPEC_COUNT_AT_OBSERVED_AT, MANIFEST_SPEC_COUNT) == true;
+  assert spec_count_gap_is_scan_lag(11, MANIFEST_SPEC_COUNT) == false;
+  assert TRACKED_SPEC_COUNT_REMEASURED_AT != SPEC_BROWSER_OBSERVED_AT;
+}
+
 test spec_browser_manifest_witness_was_observed_and_is_nonvacuous {
   assert SPEC_BROWSER_OBSERVED_AT == "2026-09-20";
   assert MANIFEST_HTTP_STATUS == HTTP_OK;
@@ -587,6 +632,12 @@ invariant every_required_generator_must_emit_nonempty_output
 
 invariant a_manifest_entry_alone_is_not_spec_browser_publication
   assert spec_browser_publish_proved(true, true, false) == false
+
+; The dated witness may not be refreshed in place. A worker who re-measures the corpus writes the
+; new number beside the old one, because overwriting 12 with 43 would silently convert a 2026-09-20
+; observation into a claim about a scan that never happened.
+invariant the_dated_tracked_count_is_never_overwritten_by_a_later_measurement
+  assert TRACKED_SPEC_COUNT_AT_OBSERVED_AT == MANIFEST_SPEC_COUNT and TRACKED_SPEC_COUNT_REMEASURED > TRACKED_SPEC_COUNT_AT_OBSERVED_AT and spec_count_gap_is_scan_lag(TRACKED_SPEC_COUNT_REMEASURED, MANIFEST_SPEC_COUNT) == true
 
 invariant a_tracked_agent_card_alone_is_not_public_agent_proof
   assert agent_card_publish_proved(true, false, false) == false

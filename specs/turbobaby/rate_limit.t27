@@ -10,12 +10,18 @@
 ; --
 ; WHY (measured 2026-09-21). One 299-line module decides whether a request proceeds at eight
 ; production call sites, over seven separate stores, guarding six HTTP routes -- and the twenty
-; contracts the gate manifests describe none of it. Run on 2026-09-21 over those twenty files,
-; grep -rn -i "rate limit|ratelimit" returns 0 and grep -rn -i "sliding|window log" returns 0:
-; the corpus has no sentence about the mechanism at all. The words rate-limit and rate_limit do
-; appear, 7 times, and all 7 are in ONE file -- request_identity.t27, describing the admin-auth
-; bound that file owns. So the silence is not total, it is worse than total: the corpus documents
-; the single narrowest application of the limiter and says nothing about the primitive underneath
+; contracts the gate manifested when this file was written describe none of it. Run on 2026-09-21
+; over those twenty files, grep -rn -i "rate limit|ratelimit" returns 0 and
+; grep -rn -i "sliding|window log" returns 0: that corpus had no sentence about the mechanism at
+; all. The words rate-limit and rate_limit did appear, 7 times, and all 7 in ONE file --
+; request_identity.t27, describing the admin-auth bound that file owns. THE ZEROES ARE HISTORY
+; NOW, and saying so is part of the measurement: the manifest has since grown to 43 files, and
+; re-measured over it on 2026-09-21, excluding this file, the same greps return 3 hits in 3 files
+; and 6 hits in 3 files, while rate-limit and rate_limit appear 95 times across 10 files. What
+; closed the silence is this contract and the edges the siblings drew back to it, not a second
+; description of the mechanism: no sibling declares a window, a ceiling or a key derivation, which
+; is checked below. So the silence was not total, it was worse than total: the corpus documented
+; the single narrowest application of the limiter and said nothing about the primitive underneath
 ; it or about the other seven places it decides. Behind that silence sits one derivation shared by
 ; every call site that keys on a caller, whose failure path is a single string literal at
 ; src/api/rate_limit.rs:43. Every request that cannot produce a usable header is counted in that
@@ -64,8 +70,11 @@ pub const MEASURED_AT : str = "2026-09-21";
 ; --- The one ownership edge, spelled as an ID because this language has no import ---------------
 ; src/api/auth.rs:431-435 declares a store and three constants for failed admin authentication,
 ; and src/api/auth.rs:505 feeds them to the sync function this file owns. The bound itself was
-; already measured and published by request_identity.t27:275-290, down to the boundary its shipped
-; test pins. This file consumes that as a fact about a caller of the primitive and copies none of
+; already measured and published by turbobaby/request-identity, which declares
+; ADMIN_RL_WINDOW_SECONDS, ADMIN_RL_MAX_ATTEMPTS and ADMIN_RL_MAX_TRACKED_IPS and pins the
+; boundary its shipped test proves in admin_attempt_admitted. The edge is named by DECLARATION
+; and not by line, because a line in a sibling goes stale on that sibling's next edit. This file
+; consumes that as a fact about a caller of the primitive and copies none of
 ; its three numbers: a second copy would be the hand-written table that goes stale in silence.
 ; The direction is worth stating plainly -- that contract owns ONE application, this one owns the
 ; mechanism, and the eight call sites below include theirs.
@@ -74,14 +83,44 @@ pub const ADMIN_AUTH_BOUND_IS_RESTATED_HERE : bool = false;
 pub const REUSE_EDGE_COUNT : u8 = 1;
 
 ; --- The measured zero this file closes ---------------------------------------------------------
-; All four greps run on 2026-09-21 over the twenty specs manifested in scripts/verify_t27_specs.py,
-; and the scope is part of the claim: re-running them over the working tree does NOT reproduce the
-; zeroes, because unmanifested siblings were being written the same day and two of them now name
-; the limiter. The measured silence is the corpus the gate enforces, not the directory listing.
+; All four greps ran on 2026-09-21 over the twenty files the manifest in
+; scripts/verify_t27_specs.py then held, and the scope was part of the claim. THAT SCOPE HAS SINCE
+; MOVED: the manifest holds 43 files today -- 42 under specs/turbobaby plus
+; specs/agents/turbobaby.t27 -- so the sentence that once read the measured silence is the corpus
+; the gate enforces is no longer true, and it is corrected here rather than left standing. The
+; four constants below are historical by their own names, re-verified 2026-09-21 by re-running the
+; greps against the tree as it stood at the twenty-file manifest: 0, 0, 7 and 1 exactly. The
+; constants beside them are the same greps over the 43 the gate enforces today: the algorithm
+; words appear at all now, and six files draw an edge back here. A zero with
+; no date is a claim; a zero with a date and a scope is a measurement.
+; THE SCOPE IS NOT ONE SCOPE, AND SAYING SO IS THE CORRECTION. This paragraph used to end
+; "excluding this file" as though the exclusion governed all four of today's figures. It governs
+; two. The phrase census and the algorithm census are taken over the other 42 and exclude this
+; file; the word census and its file tally are taken over all 43 and COUNT THIS FILE, which is
+; why the tally reads ten and not the nine it would read under the other scope. A single word
+; standing in for two scopes is how a reader is handed a figure whose meaning nobody checked, so
+; each census below now carries its own scope as a declared boolean rather than a shared adverb.
+; THE WORD CENSUS ALSO MOVED, from 91 to 95, re-run by the corpus audit of 2026-09-21 after the
+; last wave of sibling edits landed. The file tally did not move. Four more occurrences arrived
+; in files that already held some, which is the quietest way a census goes stale: nothing appears
+; to change, because the shape of the answer is unchanged and only its size is wrong.
 pub const CORPUS_FILES_BEFORE_THIS_ONE : u8 = 20;
 pub const CORPUS_ALGORITHM_MENTIONS : u32 = 0;
 pub const CORPUS_WORD_HITS_BEFORE_THIS_FILE : u8 = 7;
 pub const CORPUS_FILES_HOLDING_THOSE_HITS : u8 = 1;
+pub const CORPUS_FILES_TODAY : u8 = 43;
+pub const CORPUS_PHRASE_HITS_TODAY : u32 = 3;
+pub const CORPUS_ALGORITHM_HITS_TODAY : u32 = 6;
+pub const CORPUS_WORD_HITS_TODAY : u8 = 95;
+pub const CORPUS_WORD_HITS_TODAY_SUPERSEDED_FIGURE : u8 = 91;
+pub const CORPUS_FILES_HOLDING_THOSE_HITS_TODAY : u8 = 10;
+; Which of today's four figures exclude this file, declared one by one instead of by an adverb.
+pub const PHRASE_CENSUS_EXCLUDES_THIS_FILE : bool = true;
+pub const ALGORITHM_CENSUS_EXCLUDES_THIS_FILE : bool = true;
+pub const WORD_CENSUS_EXCLUDES_THIS_FILE : bool = false;
+pub const WORD_CENSUS_FILE_TALLY_EXCLUDES_THIS_FILE : bool = false;
+pub const WORD_CENSUS_AUDITED_AT : str = "2026-09-21";
+pub const NO_SIBLING_DECLARES_THE_MECHANISM : bool = true;
 
 ; --- The window: a log of instants, pruned from the front ----------------------------------------
 ; src/api/rate_limit.rs:16 -- one VecDeque<Instant> per key. src/api/rate_limit.rs:47-55 drops
@@ -356,29 +395,55 @@ pub const REFUSALS_INVISIBLE_TO_THE_METRIC : u8 = 2;
 pub const A_REFUSAL_WITHOUT_A_METRIC_FAILS_NO_TEST : bool = true;
 
 ; --- The inbound edges, counted by a grep rather than by memory ------------------------------------
-; Measured 2026-09-21 against the siblings as they stand on disk. `grep -rl "pub const
-; REUSES_RATE_LIMIT_ID" specs/` returns FOUR files, and each one defers rather than copies:
-; promo-broadcast (:83) keeps only the two figures its own admin route is configured with and
-; leaves the mechanism, the caller key and the silent refusal here (:81-82); client-errors (:114)
-; is the other file the SECOND TRIPWIRE above lives in and pins the division explicitly, its
-; SHARED_BUCKET_TRIPWIRE_IS_RESTATED_HERE and KEY_SOURCE_RULE_IS_RESTATED_HERE both false
-; (:119-120); ai-assist (:105) takes the verdict for the bot cooldown at src/bot/mod.rs:30 as a
-; plain boolean argument and declares RATE_LIMIT_MECHANISM_IS_RESTATED_HERE false (:110);
-; observability (:104-105) declares LIMITER_CALL_SITE_CENSUS_IS_OWNED_THERE, so the census of
-; emitting sites is this file's and its own block on the same counter (:273-287) carries the label
-; KEY and the dashboards that select the wrong one, not a count of kinds.
+; Re-measured 2026-09-21 against the siblings as they stand on disk, after the corpus grew from
+; twenty files to 43. `grep -rl "pub const REUSES_RATE_LIMIT_ID" specs/` returns SIX files, not
+; the FOUR this block first recorded, and each one defers rather than copies. Every neighbour is
+; named by its DECLARATION here; the earlier draft of this block cited them by line, and every one
+; of those line numbers had already drifted by the time it was re-read.
+; promo-broadcast keeps only the two figures its own admin route is configured with and leaves the
+; mechanism, the caller key and the silent refusal here; client-errors is the other file the
+; SECOND TRIPWIRE above lives in and pins the division explicitly, its
+; SHARED_BUCKET_TRIPWIRE_IS_RESTATED_HERE and KEY_SOURCE_RULE_IS_RESTATED_HERE both false;
+; ai-assist takes the verdict for the bot cooldown at src/bot/mod.rs:30 as a plain boolean
+; argument and declares RATE_LIMIT_MECHANISM_IS_RESTATED_HERE false; observability declares
+; LIMITER_CALL_SITE_CENSUS_IS_OWNED_THERE, so the census of emitting sites is this file's and its
+; own block on the same counter, RATE_LIMIT_EMITTED_LABEL_KEY against
+; RATE_LIMIT_REFERENCED_LABEL_KEY, carries the label KEY and the dashboards that select the wrong
+; one, not a count of kinds. The two edges this block did not have are events-booking, which
+; states that book_event carries a limiter and join_waitlist carries none and declares neither
+; budget nor window, and upload-media, which consumes attempt_admitted for the route this file
+; already uses as its exemplar and declares LIMITER_WINDOW_IS_RESTATED_HERE and
+; LIMITER_ATTEMPT_CAP_IS_RESTATED_HERE both false.
+; TWO MORE files name this contract and the grep above sees neither, which is why the edge count
+; and the naming count are two numbers here and not one. http_cache declares the edge as
+; NEIGHBOUR_RATE_LIMIT_ID beside THE_ONLY_BOUND_ON_KEY_GROWTH_IS_OWNED_THERE, a different constant
+; name for the same relation; and turbobaby/request-identity lists this ID inside its CONSUMERS
+; array rather than as an edge constant of its own. A grep for one constant name is a grep for a
+; spelling, not a census of edges. The same grep has one more blind spot worth naming: run
+; literally it also matches THIS file, because the sentence above quotes the constant it looks
+; for, so the six excludes this file by hand and not by the pattern.
 ; A DRAFT OF THIS FILE CLAIMED OTHERWISE, and the correction is kept because it is the kind of
 ; claim a reader would trust: the draft said observability declares a coincident six in a
-; RATE_LIMIT_EMITTED_KIND_COUNT, and no such constant is declared anywhere in specs/ -- every hit
-; of that name is a sentence in this file about the mistake. There is no coincident magnitude next
-; door. The six below is unopposed rather than disambiguated, and nothing was absorbed from it.
+; RATE_LIMIT_EMITTED_KIND_COUNT. RE-VERIFIED 2026-09-21 over all 43 files: no such constant is
+; declared anywhere in specs/, and the only hit of that name in the corpus is this sentence about
+; the mistake. There is no coincident magnitude next door -- what observability does declare is
+; IGNORED_METRIC_KIND_CALL_SITES, a count of call sites it takes from turbobaby/request-identity
+; and marks as a neighbour's figure. The six below is unopposed rather than disambiguated, and
+; nothing was absorbed from it.
 pub const CONSUMER_PROMO_BROADCAST_ID : str = "turbobaby/promo-broadcast";
 pub const CONSUMER_CLIENT_ERRORS_ID : str = "turbobaby/client-errors";
 pub const CONSUMER_AI_ASSIST_ID : str = "turbobaby/ai-assist";
+pub const CONSUMER_EVENTS_BOOKING_ID : str = "turbobaby/events-booking";
+pub const CONSUMER_UPLOAD_MEDIA_ID : str = "turbobaby/upload-media";
 pub const NEIGHBOUR_OBSERVABILITY_ID : str = "turbobaby/observability";
+pub const NEIGHBOUR_HTTP_CACHE_ID : str = "turbobaby/http-cache";
 pub const OBSERVABILITY_DEFERS_THE_CALL_SITE_CENSUS : bool = true;
 pub const OBSERVABILITY_DECLARES_A_KIND_COUNT : bool = false;
-pub const INBOUND_EDGE_COUNT : u8 = 4;
+pub const INBOUND_EDGE_COUNT : u8 = 6;
+pub const INBOUND_EDGE_COUNT_AT_FIRST_WRITING : u8 = 4;
+pub const EDGES_NAMED_BY_ANOTHER_CONSTANT : u8 = 1;
+pub const EDGES_NAMED_INSIDE_A_CONSUMER_ARRAY : u8 = 1;
+pub const FILES_NAMING_THIS_CONTRACT_BY_ID : u8 = 8;
 
 ; --- What a limiter is, stated so it cannot be overread ------------------------------------------------
 pub const LIMITER_BOUNDS_A_RATE : bool = true;
@@ -542,6 +607,27 @@ test the_corpus_described_none_of_this_before_today {
   assert CORPUS_FILES_HOLDING_THOSE_HITS < CORPUS_FILES_BEFORE_THIS_ONE;
 }
 
+test the_zero_has_a_date_and_the_date_has_since_moved {
+  assert CORPUS_FILES_TODAY == 43;
+  assert CORPUS_FILES_TODAY > CORPUS_FILES_BEFORE_THIS_ONE;
+  assert CORPUS_PHRASE_HITS_TODAY == 3;
+  assert CORPUS_ALGORITHM_HITS_TODAY == 6;
+  assert CORPUS_WORD_HITS_TODAY == 95;
+  assert CORPUS_WORD_HITS_TODAY_SUPERSEDED_FIGURE == 91;
+  assert CORPUS_WORD_HITS_TODAY > CORPUS_WORD_HITS_TODAY_SUPERSEDED_FIGURE;
+  assert CORPUS_FILES_HOLDING_THOSE_HITS_TODAY == 10;
+  assert PHRASE_CENSUS_EXCLUDES_THIS_FILE == true;
+  assert ALGORITHM_CENSUS_EXCLUDES_THIS_FILE == true;
+  assert WORD_CENSUS_EXCLUDES_THIS_FILE == false;
+  assert WORD_CENSUS_FILE_TALLY_EXCLUDES_THIS_FILE == false;
+  assert WORD_CENSUS_AUDITED_AT == "2026-09-21";
+  assert WORD_CENSUS_AUDITED_AT == MEASURED_AT;
+  assert CORPUS_ALGORITHM_HITS_TODAY > CORPUS_ALGORITHM_MENTIONS;
+  assert CORPUS_WORD_HITS_TODAY > CORPUS_WORD_HITS_BEFORE_THIS_FILE;
+  assert CORPUS_FILES_HOLDING_THOSE_HITS_TODAY > CORPUS_FILES_HOLDING_THOSE_HITS;
+  assert NO_SIBLING_DECLARES_THE_MECHANISM == true;
+}
+
 test the_four_inbound_edges_defer_rather_than_copy {
   assert NEIGHBOUR_OBSERVABILITY_ID != ID;
   assert CONSUMER_PROMO_BROADCAST_ID != ID;
@@ -555,8 +641,27 @@ test the_four_inbound_edges_defer_rather_than_copy {
   assert CONSUMER_AI_ASSIST_ID != NEIGHBOUR_OBSERVABILITY_ID;
   assert OBSERVABILITY_DEFERS_THE_CALL_SITE_CENSUS == true;
   assert OBSERVABILITY_DECLARES_A_KIND_COUNT == false;
-  assert INBOUND_EDGE_COUNT == 4;
+  assert INBOUND_EDGE_COUNT_AT_FIRST_WRITING == 4;
   assert CALL_SITES_EMITTING_THE_BLOCKED_METRIC == 6;
+}
+
+; The test above keeps the name it was born with. The count it was named for is
+; INBOUND_EDGE_COUNT_AT_FIRST_WRITING now; the live figure is six, and it is pinned here.
+test the_inbound_edges_were_six_when_the_corpus_stopped_growing {
+  assert INBOUND_EDGE_COUNT == 6;
+  assert INBOUND_EDGE_COUNT > INBOUND_EDGE_COUNT_AT_FIRST_WRITING;
+  assert CONSUMER_EVENTS_BOOKING_ID == "turbobaby/events-booking";
+  assert CONSUMER_UPLOAD_MEDIA_ID == "turbobaby/upload-media";
+  assert NEIGHBOUR_HTTP_CACHE_ID == "turbobaby/http-cache";
+  assert CONSUMER_EVENTS_BOOKING_ID != ID;
+  assert CONSUMER_UPLOAD_MEDIA_ID != ID;
+  assert NEIGHBOUR_HTTP_CACHE_ID != ID;
+  assert CONSUMER_EVENTS_BOOKING_ID != CONSUMER_UPLOAD_MEDIA_ID;
+  assert NEIGHBOUR_HTTP_CACHE_ID != NEIGHBOUR_OBSERVABILITY_ID;
+  assert EDGES_NAMED_BY_ANOTHER_CONSTANT == 1;
+  assert FILES_NAMING_THIS_CONTRACT_BY_ID == 8;
+  assert EDGES_NAMED_INSIDE_A_CONSUMER_ARRAY == 1;
+  assert INBOUND_EDGE_COUNT + EDGES_NAMED_BY_ANOTHER_CONSTANT + EDGES_NAMED_INSIDE_A_CONSUMER_ARRAY == FILES_NAMING_THIS_CONTRACT_BY_ID;
 }
 
 test bounding_a_rate_is_not_preventing_abuse {

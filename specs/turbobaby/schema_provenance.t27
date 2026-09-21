@@ -44,13 +44,23 @@
 ; is exactly src/db/macros.rs:28-44. The numbers below are the measured ones; the decisions are
 ; cited by identifier, which does not rot.
 ; --
-; WHERE A SIBLING SPEC IS REFUTED. availability.t27:103-104 and deposit_tiers.t27:16-17 both say
-; scripts/verify_fleet_seed.py "knows nothing about .t27" (the phrase itself lands on :104 and
-; :17, the sentence opens on :103 and :16). As written that is false: the gate
-; reads exactly one .t27 file (scripts/verify_fleet_seed.py:34, market_profile.t27) and pins the
-; seed's 13-field market block to its constants. The verdict those two files draw from the claim
-; still stands -- the gate does not compare any .t27 fleet table to the seed -- so what is wrong
-; is the reason, not the conclusion. Stated here because this file owns what that gate covers.
+; WHERE A SIBLING SPEC WAS REFUTED, AND THE REFUTATION HAS SINCE BEEN ACCEPTED. The sentence
+; this file refuted was carried by turbobaby/availability in the comment above FAMILY_UNITS and
+; by turbobaby/deposit-tiers in the comment above FAMILY_DEPOSIT_THB: that
+; scripts/verify_fleet_seed.py "knows nothing about .t27". It is false, and the measurement is
+; unchanged -- that gate reads exactly one .t27 file (MARKET_SPEC at
+; scripts/verify_fleet_seed.py:34, read at :112, parsed one constant at a time by spec_const at
+; :90-95) and pins the seed's 13-field market block to its constants.
+; Re-opened at review on 2026-09-21 and BOTH OWNERS HAVE CORRECTED THEIR OWN TEXT. Neither now
+; claims the gate is .t27-blind; each says instead that the script gates turbobaby/market and
+; not its own table, and each gives a narrower checkable reason for its copy still being
+; ungated. So this paragraph is a record of a settled disagreement, not a live one, and reading
+; it as live would send someone to fix two sentences that no longer exist. What did NOT change
+; on either side is the verdict -- the gate compares no .t27 fleet table to the seed -- which is
+; why the count below is still 2 and why it belongs here: this file owns what that gate covers.
+; Cited by owner and declaration name throughout, never by line: the line numbers this paragraph
+; used to carry pointed into two files that were rewritten the same day, and would now land on
+; text that says the opposite of what they were cited for.
 ; --
 ; WHAT THIS FILE NEVER DOES. It transcribes no schema: no CREATE TABLE, no column type, no
 ; constraint text, no table list kept for its own sake. It claims no migration number for work
@@ -86,6 +96,16 @@ pub const REUSES_AVAILABILITY_ID : str = "turbobaby/availability";
 pub const REUSES_CATALOG_ID : str = "turbobaby/bike-catalog";
 pub const REUSES_PRICING_HONESTY_ID : str = "turbobaby/pricing-honesty";
 pub const REUSES_PUBLICATION_ID : str = "turbobaby/publication";
+; ADDED at review 2026-09-21, and it was a missing edge rather than an absent subject. This file
+; names two observability artefacts on its own pages: the Prometheus gauge schema_missing_columns
+; (BOOT_HALT_NOTE, set at src/main.rs:460) and the tracing log target db.schema_drift
+; (FAIL_OPEN_EVIDENCE, emitted inside src/db/macros.rs:28-44). turbobaby/observability owns the
+; rule that a metric name exists only where the binary emits it, and the naming rule for a gauge
+; or a counter; what this file owns is the VALUE that gauge carries and the fact that the log
+; target is the only evidence a fail-open read leaves behind. That contract already names this
+; one from its side, as NEIGHBOUR_SCHEMA_PROVENANCE_ID, so the edge existed in one direction
+; only and this declaration closes it. No metric name is coined here and none is restated.
+pub const REUSES_OBSERVABILITY_ID : str = "turbobaby/observability";
 
 ; --- The sequence law (D1, D2) ---------------------------------------------------------------
 ; ls migrations/*.sql | wc -l -> 86, and the numeric prefixes run 001..086 with no gap and no
@@ -161,9 +181,22 @@ pub fn change_is_expressible(number: u8, is_a_new_file: bool) bool {
 ; The arithmetic that proves the file is there: find migrations -name '*.sql' -> 87,
 ; ls migrations/*.sql -> 86, and the difference is exactly the one wip file. ls migrations/ also
 ; prints 87, counting the wip DIRECTORY rather than the wip file -- the right number by the wrong
-; arithmetic, which pricing_honesty.t27 already records for its own recursive grep. That file's 87
-; is the recursive count and belongs to it; the 86 here is the shallow walks' input and is a
-; different measurement of a different set.
+; arithmetic, which turbobaby/pricing-honesty already records beside its own
+; MIGRATION_FILES_SEARCHED.
+; --
+; WHO OWNS THE RECURSIVE COUNT, and why three contracts declare it (measured 2026-09-21, all
+; three opened). This file owns the migration-file census: the sequence law, the shallow walks'
+; input and the wip tripwire are its subject, so SQL_FILES_TOP_LEVEL and SQL_FILES_RECURSIVE are
+; declared here and the 86 is the shallow walks' input. turbobaby/pricing-honesty and
+; turbobaby/locale-policy each declare the same recursive total under the name
+; MIGRATION_FILES_SEARCHED, and neither is a second census: it is the DENOMINATOR of a recursive
+; grep each of them ran over the same directory -- for divergence in the one, for a CHECK
+; constraint on a language column in the other -- and a denominator has to be stated where the
+; search is reported or the absence it proves cannot be read. Three declarations are therefore
+; correct, and what they carry is a drift risk rather than a duplication. The copy here is
+; pinned against its OWN components and not against theirs, because those two files are not this
+; one's to edit: 86 shallow plus the 1 file in migrations/wip equals the 87 recursive, asserted
+; below, so this file cannot go on carrying an 87 that its own two halves stop producing.
 pub const WIP_DIRECTORY : str = "migrations/wip";
 pub const WIP_FILE : str = "migrations/wip/077_quest_progress.sql";
 pub const WIP_CLAIMED_NUMBER : u8 = 77;
@@ -189,6 +222,13 @@ pub const WIP_FILE_IS_READ_BY_SOMETHING : bool = true;
 pub const WIP_PREFIX_IS_READ_BY_SOMETHING : bool = false;
 pub const SQL_FILES_TOP_LEVEL : u8 = 86;
 pub const SQL_FILES_RECURSIVE : u8 = 87;
+pub const WIP_SQL_FILES : u8 = 1;
+pub const SQL_FILE_CENSUS_OWNER_ID : str = "turbobaby/schema-provenance";
+pub const SQL_FILE_CENSUS_SIBLING_COPIES : u8 = 2;
+pub const SQL_FILE_CENSUS_SIBLING_COPY_OWNERS : [2]str = [
+  "turbobaby/pricing-honesty", "turbobaby/locale-policy",
+];
+pub const SQL_FILE_CENSUS_SIBLING_COPY_DECLARATION : str = "MIGRATION_FILES_SEARCHED";
 pub const WIP_COLLISION_TRIPWIRE : str = "migrations/wip/077_quest_progress.sql claims a number migrations/077_bikes.sql owns. Three non-recursive read_dir walks of migrations/ keep the subdirectory invisible, so nothing collides today and nothing reports it either. The moment the file is moved up it becomes a duplicate prefix and src/db/mod.rs:1384 fails. Renumber the promoted file to the next free slot above the highest migrations/*.sql on disk at that time; never renumber the bike migrations (D1).";
 
 pub fn collision_is_live(candidate: u8, in_wip_subdirectory: bool) bool {
@@ -473,10 +513,23 @@ pub fn direction_writes_to_a_live_database(direction: u8) bool {
 
 ; --- What the seed gate covers -------------------------------------------------------------------
 ; scripts/verify_fleet_seed.py pins migrations/082_bikes_seed.sql to data/fleet_seed.json field by
-; field, and it is the only gate in this repository that opens a .t27 file: MARKET_SPEC at
-; scripts/verify_fleet_seed.py:34, read at :112 and parsed one constant at a time by spec_const at
-; :90-95, comparing the seed's market block to the 13 contract fields listed at :72-86. Three
-; exits, deliberately distinct: files agree, files disagree, a file is missing or unparseable.
+; field, and it is the only gate in this repository that takes a .t27 constant as EVIDENCE ABOUT
+; ANOTHER ARTIFACT: MARKET_SPEC at scripts/verify_fleet_seed.py:34, read at :112 and parsed one
+; constant at a time by spec_const at :90-95 -- a regex over the file's own text, no compiler
+; involved -- comparing the seed's market block to the 13 contract fields listed at :72-86. The
+; spec there is the source of truth and the SQL is the thing on trial.
+; THAT PHRASING IS A CORRECTION, made twice on 2026-09-21 because the first attempt was wrong too,
+; and both wrong versions read as confident absences. It first said "the only gate that OPENS a
+; .t27 file", which is false: scripts/verify_t27_specs.py:326-330 reads every spec's bytes to
+; prove it is ASCII and the compiler it drives opens them all again. It then said "the only gate
+; that reads a VALUE out of a .t27 file", which is false as well: that same gate pulls two values
+; out of every spec through the compiler's AST -- the module name at
+; scripts/verify_t27_specs.py:418 and the ID literal through extract_id at :397-408 -- and
+; refuses the corpus when either disagrees with its manifest. What survives both corrections is
+; the narrow claim above, and the difference it turns on is what the value is compared AGAINST:
+; the spec gate checks a spec against a list inside itself, and the seed gate checks a different
+; file against the spec. Three exits, deliberately distinct: files agree, files disagree, a file
+; is missing or unparseable.
 pub const SEED_GATE_SQL : str = "migrations/082_bikes_seed.sql";
 pub const SEED_GATE_JSON : str = "data/fleet_seed.json";
 pub const SEED_GATE_SPEC_READ : str = "specs/turbobaby/market_profile.t27";
@@ -497,13 +550,25 @@ pub fn seed_gate_exit(files_readable: bool, mismatch_count: u16) u8 {
 }
 
 ; What it does NOT cover, measured rather than assumed: two contracts declare that their own copy
-; of a fleet table is checked by nothing -- availability.t27:103-105 and deposit_tiers.t27:16-18.
-; The word is not the count, and saying so is the correction: grep -rn ungated specs/ returns 5 on
-; 2026-09-21 -- those two, two invariant NAMES in bot_surface.t27 (:703, :709) about an unrelated
-; subject, and this line itself. The 2 below is the number of fleet-table copy declarations read
-; one by one; it is not what that grep prints and must not be re-derived from it. Those copies
-; belong to their owners; the fact that the gate does not reach them belongs here, because this
-; file owns the gate's scope.
+; of a fleet table is checked by nothing -- turbobaby/availability, whose SEED_GATE_COVERS_THIS_FILE
+; is false and whose SEED_GATE_NOTE says the word availability does not occur in that script at
+; all, and turbobaby/deposit-tiers, which says the string deposit_tier does not occur in it
+; either. Cited by owner and declaration because the line numbers this sentence first carried
+; are exactly the thing that rots, and both of those files were rewritten on the day this one
+; was measured. Read declaration by declaration at review on 2026-09-21, after that rewrite:
+; still two. turbobaby/rental-terms is named by the deposit contract as a possible third, and it
+; declares no second copy to gate, so it is not counted here.
+; THE WORD IS NOT THE COUNT, and the way this section learned that is worth keeping. It first
+; pinned the reading of grep -rn ungated specs/ at 5. Re-run at review the same day, excluding
+; this file's own sentences because a sentence about a grep is itself a match, it gave 7 over 5
+; files. Re-run again twenty minutes later, while sibling contracts were being edited in
+; parallel, it gave 10 over 6 files. Three honest readings of one grep in one day, and not one
+; of them is a property of anything. So NO grep count is pinned here, deliberately: the only
+; number this section declares is the 2 below, read declaration by declaration, which did not
+; move across all three readings and did not move when both of those declarations were rewritten.
+; The 2 is the number of fleet-table copy declarations read one at a time; it is not what any
+; grep prints and must not be re-derived from one. Those copies belong to their owners; the fact
+; that the gate does not reach them belongs here, because this file owns the gate's scope.
 pub const SEED_GATE_COVERS_T27_FLEET_TABLES : bool = false;
 pub const UNGATED_T27_COPY_DECLARATIONS : u8 = 2;
 
@@ -521,21 +586,32 @@ pub fn seed_gate_covers(is_the_market_block: bool, is_a_t27_fleet_table: bool) b
 ; derives from the SQL are compared against totals DECLARED in fleet_seed.json, so a regex that
 ; matches nothing reports a mismatch instead of passing -- and that holds exactly while the
 ; declared total is positive, which is the condition D16 is about. The spec gate's floor is
-; explicit: scripts/verify_t27_specs.py:175-176 fails on an empty manifest, and :177-184 fails on
+; explicit: scripts/verify_t27_specs.py:313-314 fails on an empty manifest, and :315-322 fails on
 ; any set difference between the manifest and what rglob discovers, so an unmanifested .t27 file
-; cannot ride along unchecked. publication.t27 owns the scanner-side floor of the same shape and
-; the compiler-evidence rules; neither is restated here.
+; cannot ride along unchecked. Those two spans read :175-176 and :177-184 when this section was
+; written; the gate has grown since and both were re-opened and re-numbered on 2026-09-21, the
+; manifest itself now occupying :28-287. turbobaby/publication owns the scanner-side floor of the
+; same shape and the compiler-evidence rules; neither is restated here.
 pub const SPEC_GATE_MANIFEST_ENTRIES_AT_MEASUREMENT : u8 = 20;
 pub const SPEC_GATE_EMPTY_MANIFEST_FAILS : bool = true;
 pub const SPEC_GATE_UNMANIFESTED_FILE_FAILS : bool = true;
 pub const SEED_GATE_HAS_A_FLOOR : bool = true;
-; The manifest named twenty entries when this file was measured and does not name this path, so
-; discover_specs reports it as unmanifested and the gate refuses the WHOLE corpus until an entry
-; for it is added with its measured declaration and check floors. Contracts landing in the same
-; iteration widen that difference, which is why the constant below is dated and the assertions
-; pin the refusal rather than a count. Recorded as a false rather than left to be discovered,
-; because a contract that claims to be gated while the gate rejects it is the vacuity D16 names.
-pub const THIS_FILE_IS_MANIFESTED : bool = false;
+; THE REFUSAL RECORDED HERE HAS EXPIRED, and saying so is the correction (re-measured 2026-09-21
+; at review, by reading the manifest and the discovery walk rather than by remembering them).
+; When this file was drafted the manifest named twenty entries and did not name this path, so
+; discover_specs would have called it unmanifested and refused the WHOLE corpus; the constant
+; above keeps that reading because the pair is the evidence, not because the twenty is still
+; true. Both halves have since changed. scripts/verify_t27_specs.py:257 now carries an entry for
+; this file, and the manifest holds 43 entries -- 42 quoted spec paths plus AGENT_CARD -- against
+; 43 discovered, which is the 42 files specs/turbobaby/*.t27 rglob finds plus the agent card
+; discover_specs adds at :310-311. Manifest and discovery agree, so nothing is refused and this
+; file is gated. A boolean still reading false here would be the worst thing this contract could
+; carry: a claimed absence, of exactly the kind every reader trusts without checking, sitting in
+; the one section that exists to say what a gate does not reach.
+pub const SPEC_GATE_MANIFEST_ENTRIES_AT_REVIEW : u8 = 43;
+pub const SPEC_GATE_DISCOVERED_SPECS_AT_REVIEW : u8 = 43;
+pub const SPEC_GATE_MANIFEST_ENTRY_SITE : str = "scripts/verify_t27_specs.py:257";
+pub const THIS_FILE_IS_MANIFESTED : bool = true;
 
 pub fn spec_gate_manifest_agrees(manifest_entries: u8, discovered_files: u8) bool {
   if (manifest_entries == 0) {
@@ -606,6 +682,20 @@ test the_recursive_and_top_level_counts_differ_by_exactly_the_wip_file {
   assert SQL_FILES_TOP_LEVEL == MIGRATION_FILES;
   assert SQL_FILES_RECURSIVE == 87;
   assert recursive_excess(SQL_FILES_RECURSIVE, SQL_FILES_TOP_LEVEL) == 1;
+  assert WIP_SQL_FILES == 1;
+  assert SQL_FILES_TOP_LEVEL + WIP_SQL_FILES == SQL_FILES_RECURSIVE;
+}
+
+test the_recursive_count_names_its_owner_and_its_two_sibling_copies {
+  assert SQL_FILE_CENSUS_OWNER_ID == ID;
+  assert SQL_FILE_CENSUS_SIBLING_COPIES == 2;
+  assert SQL_FILE_CENSUS_SIBLING_COPY_OWNERS.len == SQL_FILE_CENSUS_SIBLING_COPIES;
+  assert SQL_FILE_CENSUS_SIBLING_COPY_OWNERS[0] == "turbobaby/pricing-honesty";
+  assert SQL_FILE_CENSUS_SIBLING_COPY_OWNERS[1] == "turbobaby/locale-policy";
+  assert SQL_FILE_CENSUS_SIBLING_COPY_OWNERS[0] == REUSES_PRICING_HONESTY_ID;
+  assert SQL_FILE_CENSUS_SIBLING_COPY_OWNERS[0] != ID;
+  assert SQL_FILE_CENSUS_SIBLING_COPY_OWNERS[1] != ID;
+  assert SQL_FILE_CENSUS_SIBLING_COPY_DECLARATION == "MIGRATION_FILES_SEARCHED";
 }
 
 test the_wip_file_is_read_by_a_recursive_walk_and_its_number_is_not {
@@ -764,7 +854,12 @@ test a_gate_whose_input_reaches_zero_is_refused {
   assert spec_gate_manifest_agrees(21, 21) == true;
   assert SPEC_GATE_EMPTY_MANIFEST_FAILS == true;
   assert SPEC_GATE_UNMANIFESTED_FILE_FAILS == true;
-  assert THIS_FILE_IS_MANIFESTED == false;
+  assert THIS_FILE_IS_MANIFESTED == true;
+  assert SPEC_GATE_MANIFEST_ENTRIES_AT_REVIEW == 43;
+  assert SPEC_GATE_DISCOVERED_SPECS_AT_REVIEW == 43;
+  assert SPEC_GATE_MANIFEST_ENTRY_SITE == "scripts/verify_t27_specs.py:257";
+  assert SPEC_GATE_MANIFEST_ENTRIES_AT_REVIEW > SPEC_GATE_MANIFEST_ENTRIES_AT_MEASUREMENT;
+  assert spec_gate_manifest_agrees(SPEC_GATE_MANIFEST_ENTRIES_AT_REVIEW, SPEC_GATE_DISCOVERED_SPECS_AT_REVIEW) == true;
   assert seed_gate_floor_holds(0) == false;
   assert blind_regex_is_detected(0, 14) == true;
   assert blind_regex_is_detected(14, 14) == false;
@@ -778,6 +873,9 @@ test the_reuse_edges_point_outward_and_nowhere_twice {
   assert REUSES_CATALOG_ID == "turbobaby/bike-catalog";
   assert REUSES_PRICING_HONESTY_ID == "turbobaby/pricing-honesty";
   assert REUSES_PUBLICATION_ID == "turbobaby/publication";
+  assert REUSES_OBSERVABILITY_ID == "turbobaby/observability";
+  assert REUSES_OBSERVABILITY_ID != ID;
+  assert REUSES_OBSERVABILITY_ID != REUSES_PUBLICATION_ID;
   assert REUSES_MARKET_ID != ID;
   assert REUSES_AVAILABILITY_ID != ID;
   assert REUSES_CATALOG_ID != ID;
@@ -867,13 +965,16 @@ invariant an_empty_corpus_cannot_pass_the_spec_gate
   assert spec_gate_manifest_agrees(0, 0) == false
 
 invariant an_unmanifested_spec_cannot_ride_along
-  assert spec_gate_manifest_agrees(SPEC_GATE_MANIFEST_ENTRIES_AT_MEASUREMENT, SPEC_GATE_MANIFEST_ENTRIES_AT_MEASUREMENT + 1) == false and THIS_FILE_IS_MANIFESTED == false
+  assert spec_gate_manifest_agrees(SPEC_GATE_MANIFEST_ENTRIES_AT_REVIEW, SPEC_GATE_MANIFEST_ENTRIES_AT_REVIEW + 1) == false and spec_gate_manifest_agrees(SPEC_GATE_MANIFEST_ENTRIES_AT_MEASUREMENT, SPEC_GATE_MANIFEST_ENTRIES_AT_MEASUREMENT + 1) == false and spec_gate_manifest_agrees(SPEC_GATE_MANIFEST_ENTRIES_AT_REVIEW, SPEC_GATE_DISCOVERED_SPECS_AT_REVIEW) == true and THIS_FILE_IS_MANIFESTED == true
 
 invariant a_blind_regex_is_caught_only_while_the_declared_total_is_positive
   assert blind_regex_is_detected(0, 14) == true and blind_regex_is_detected(0, 0) == false
 
 invariant this_file_restates_no_siblings_decision
-  assert REUSES_MARKET_ID != ID and REUSES_AVAILABILITY_ID != ID and REUSES_CATALOG_ID != ID and REUSES_PRICING_HONESTY_ID != ID and REUSES_PUBLICATION_ID != ID
+  assert REUSES_MARKET_ID != ID and REUSES_AVAILABILITY_ID != ID and REUSES_CATALOG_ID != ID and REUSES_PRICING_HONESTY_ID != ID and REUSES_PUBLICATION_ID != ID and REUSES_OBSERVABILITY_ID != ID
+
+invariant the_recursive_sql_count_is_the_shallow_count_plus_the_one_wip_file
+  assert SQL_FILES_RECURSIVE == SQL_FILES_TOP_LEVEL + WIP_SQL_FILES and SQL_FILES_TOP_LEVEL == MIGRATION_FILES and recursive_excess(SQL_FILES_RECURSIVE, SQL_FILES_TOP_LEVEL) == WIP_SQL_FILES and SQL_FILE_CENSUS_SIBLING_COPY_OWNERS.len == SQL_FILE_CENSUS_SIBLING_COPIES
 
 invariant no_schema_and_no_customer_data_enters_this_contract
   assert SCHEMA_DDL_TRANSCRIBED == false and CUSTOMER_DATA_FIELDS == 0 and MIGRATION_NUMBER_CLAIMED_FOR_UNDONE_WORK == 0

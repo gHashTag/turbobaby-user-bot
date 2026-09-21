@@ -44,9 +44,11 @@
 ; 1. "No tier, no cashback percentage and no usage cap may be declared here: they have no
 ;    published source." The measurement behind that is real and I re-ran it: data/fleet_seed.json
 ;    (19434 bytes) holds 0 occurrences of loyalty, 0 of bonus and 0 of cashback, case-insensitive.
-;    The inference does not follow, and the corpus had already refuted it -- order_money.t27:33-38
-;    and its BONUS_POLICY_NOTE at :272 name src/trios/loyalty.rs:34-46 as the standing default
-;    block and src/trios/loyalty.rs:86-92 as the clamp over it. So that zero, and what it does and
+;    The inference does not follow, and the corpus had already refuted it -- turbobaby/order-money
+;    owns that refutation, and its BONUS_POLICY_NOTE names src/trios/loyalty.rs:34-46 as the
+;    standing default block and src/trios/loyalty.rs:86-92 as the clamp over it. Both source spans
+;    were re-opened 2026-09-21 and both still land: :34-46 is the defaults() json! block and :86-92
+;    is max_bonus_usage_pct's range clamp. So that zero, and what it does and
 ;    does not prove, has an owner (SEED_MEASUREMENT_OWNER_ID) and is not re-measured into a
 ;    constant here. This file refuses the rates for a different and narrower reason: it owns
 ;    structure, the rates have a source, and copying them would be the second table the corpus
@@ -69,15 +71,17 @@
 ; WHAT THIS FILE NEVER DOES. It declares no tier threshold, no cashback percent, no bonus usage
 ; ceiling and no expiry period. It states no term of the order total: the identity
 ; total == subtotal - bonus - stars, its floor and its one-minor-unit tolerance are
-; order_money.t27's, and the bonus reaches that identity from here as an already-decided amount.
-; It publishes no exchange rate and converts nothing -- that prohibition is market_profile.t27's.
-; It does not restate commerce.t27's five-way idempotency vocabulary; it consumes the verdict as
-; booleans and owns only which of those verdicts this table can physically produce. It does not
-; restate request_identity.t27's proof of who is asking; it records only which gate stands on the
-; two money routes, which that owner explicitly does not carry
-; (request_identity.t27:239, ENDPOINT_TO_GATE_MAP_IS_NOT_OWNED_HERE). It declares no per-window
-; ceiling of its own -- star_award.t27 owns the one capped non-purchase credit in this system and
-; is named as the precedent, not copied. It carries no leaderboard content, no rank and no row: the
+; turbobaby/order-money's, and the bonus reaches that identity from here as an already-decided
+; amount. It publishes no exchange rate and converts nothing -- that prohibition is
+; turbobaby/market's. It does not restate turbobaby/commerce's five-way idempotency vocabulary; it
+; consumes the verdict as booleans and owns only which of those verdicts this table can physically
+; produce. It does not restate turbobaby/request-identity's proof of who is asking; it records only
+; which gate stands on the two money routes, which that owner explicitly does not carry and says so
+; in ENDPOINT_TO_GATE_MAP_IS_NOT_OWNED_HERE. It declares no per-window
+; ceiling of its own -- turbobaby/star-award owns the only capped non-purchase credit in the
+; corpus (re-measured 2026-09-21: of the 43 .t27 files, that one is the sole owner of a per-window
+; credit ceiling) and is named as the precedent, not copied. It carries no leaderboard content, no
+; rank and no row: the
 ; board at src/api/loyalty.rs:31 is named as a route and nothing of it is reproduced. It names no
 ; renter, handle, phone, key code, plate, debt, purchase price or personal note in any constant,
 ; fixture or comment, and no account id is written down anywhere below -- only compared. Shipped
@@ -134,10 +138,52 @@ pub const REUSE_EDGES : [5]str = [
 ];
 pub const RESTATES_THE_COMMERCE_DECISION_SET : bool = false;
 pub const DECLARES_AN_EXCHANGE_RATE : bool = false;
-; request_identity.t27:92 declares CONSUMER_COUNT 8 and :94-103 the closed CONSUMERS array, measured on
-; 2026-09-20. This file is a ninth consumer and is not in that snapshot; the edge is declared here,
-; from this side, which is the half of the pattern a new file can honestly supply.
-pub const NAMED_IN_THE_IDENTITY_CONSUMER_SNAPSHOT : bool = false;
+; turbobaby/request-identity owns CONSUMER_COUNT and the closed CONSUMERS array beside it, and this
+; file IS named in it. The edge is also declared here, from this side, so the pair is named from
+; both ends.
+;
+; CORRECTED TWICE ON 2026-09-21, and the second correction teaches more than the first.
+; The wording that stood here called this file "a ninth consumer" of a snapshot of eight. That was
+; a false absence wearing modest clothes: it implied the snapshot was one name short, when a count
+; showed 18 files other than the owner declaring REUSES_REQUEST_IDENTITY_ID against only 4 of the 8
+; named -- fourteen short, not one. Before that correction could be written down, the owner
+; re-measured his own snapshot in the same day: CONSUMER_COUNT now reads 22, the array names
+; turbobaby/loyalty-ledger outright, CONSUMERS_DECLARING_THE_EDGE reads 18, and he keeps the
+; superseded figure beside the new one in CONSUMER_COUNT_BEFORE_THE_RE_MEASUREMENT. So the honest
+; answer to "is this file in the snapshot" went from no to yes between one reading and the next.
+; That is the whole argument for dating a measurement instead of stating it flatly, and it is why
+; nothing below is written as a standing absence.
+;
+; Measured 2026-09-21, AFTER that re-measurement: the snapshot holds 22 names, 18 files other than
+; the owner declare the edge back, all 18 of them are inside the 22, and the remaining 4
+; (turbobaby/commerce, turbobaby/bike-catalog, turbobaby/availability, turbobaby/ride-game) are
+; named by the owner without declaring the edge from their own side. Nothing here may be read as
+; "the identity edge is undeclared elsewhere" -- it is declared in eighteen places.
+pub const NAMED_IN_THE_IDENTITY_CONSUMER_SNAPSHOT : bool = true;
+pub const IDENTITY_CONSUMER_SNAPSHOT_SIZE : u8 = 22;
+pub const IDENTITY_CONSUMER_SNAPSHOT_SIZE_BEFORE_THE_RE_MEASUREMENT : u8 = 8;
+pub const IDENTITY_CONSUMER_SNAPSHOT_MEASURED_AT : str = "2026-09-21";
+pub const IDENTITY_EDGE_CENSUS_MEASURED_AT : str = "2026-09-21";
+pub const IDENTITY_EDGE_DECLARERS_IN_CORPUS : u8 = 18;
+pub const IDENTITY_EDGE_DECLARERS_INSIDE_THE_SNAPSHOT : u8 = 18;
+pub const IDENTITY_EDGE_DECLARERS_OUTSIDE_THE_SNAPSHOT : u8 = 0;
+pub const NAMED_BY_THE_OWNER_WITHOUT_DECLARING_THE_EDGE : u8 = 4;
+pub const SNAPSHOT_MOVED_WHILE_THIS_FILE_WAS_BEING_CORRECTED : bool = true;
+pub const CORPUS_T27_FILE_COUNT : u8 = 43;
+
+pub fn identity_edge_census_closes(inside: u8, outside: u8, declarers: u8) bool {
+  return inside + outside == declarers;
+}
+
+pub fn snapshot_accounting_closes(declarers_inside: u8, named_only: u8, snapshot_size: u8) bool {
+  return declarers_inside + named_only == snapshot_size;
+}
+
+; A snapshot that grew by fourteen names in one day is not a thing to quote without a date. This
+; returns false for any figure read on a different day than the one it is compared against.
+pub fn a_snapshot_figure_may_be_quoted_flatly(measured_at: str, quoted_at: str) bool {
+  return measured_at == quoted_at and false;
+}
 
 ; --- Who may move the money ----------------------------------------------------------------------
 ; src/api/loyalty.rs:21-34. Eight registrations over seven paths, and the gate is not uniform:
@@ -215,7 +261,7 @@ pub fn a_differing_payload_is_detected(key_seen: bool, stores_payload_digest: bo
   return key_seen and stores_payload_digest;
 }
 
-; commerce.t27 owns the five-way verdict set. What this file owns is which of those verdicts this
+; turbobaby/commerce owns the five-way verdict set. What this file owns is which of those verdicts this
 ; table can physically reach. CONFLICT needs a payload to disagree with and there is none stored.
 ; IN_PROGRESS needs a key row whose prior did not commit, and the key row is inserted inside the
 ; money transaction on the happy path only (src/api/loyalty.rs:375-394, :561-580); the refused
@@ -352,8 +398,9 @@ pub fn clamp_fires_under_the_guard(balance_minor: i64, amount_minor: i64, guard_
 ; The ceiling bounds ONE grant, not the balance. src/api/loyalty.rs:353 is an unbounded
 ; bonus_balance + $1 with no upper test anywhere in the handler, and no rate limit stands on the
 ; route -- src/api/orders.rs:1270-1285 shows what one looks like on the checkout path and
-; src/api/loyalty.rs:223-231 has no equivalent. star_award.t27 owns the only capped non-purchase
-; credit in this system; this ledger has no per-window ceiling of any size.
+; src/api/loyalty.rs:223-231 has no equivalent. turbobaby/star-award owns the only capped
+; non-purchase credit in this system -- re-measured 2026-09-21 across the 43 .t27 files and still
+; the only one; this ledger has no per-window ceiling of any size.
 pub const BALANCE_HAS_NO_CEILING : bool = true;
 pub const THIS_LEDGER_HAS_A_PER_WINDOW_CEILING : bool = false;
 pub const THE_OTHER_NON_PURCHASE_CREDIT_HAS_ONE : bool = true;
@@ -413,6 +460,26 @@ pub fn ledger_sums_to_the_balance(bypass_site_count: u8) bool {
   return bypass_site_count == 0;
 }
 
+; --- Who writes three of the six paired rows, and the fact we co-declare -----------------------------
+; Added 2026-09-21. Three of the six paired movements above are the referral domain's
+; (src/db/referrals.rs:429 behind :419, :489 behind :481, :855 behind :847) and that domain has a
+; contract: turbobaby/referral-program owns the edge those credits pay on. It already names this
+; file by ID in its own LOYALTY_LEDGER_SUPPLIES and reads the same six-of-ten split from its side,
+; so the citation runs both ways by ID and by declaration name, and in neither direction by line.
+; Checked 2026-09-21 and the two agree: it claims all three of its credits sit inside the paired
+; six, and LEDGER_BYPASS_SITES names none of them -- every one of the four bypasses is an orders or
+; bot callback site. This is a co-declared fact and not a decision this file consumes, so it is
+; deliberately outside REUSE_EDGE_COUNT above.
+pub const REFERRAL_PROGRAM_ID : str = "turbobaby/referral-program";
+pub const REFERRAL_CREDIT_SITES_INSIDE_THE_PAIRED_SIX : u8 = 3;
+pub const REFERRAL_CREDIT_SITES_AMONG_THE_BYPASSES : u8 = 0;
+pub const LEDGER_ORDERING_AGREES_WITH_THE_REFERRAL_CONTRACT : bool = true;
+pub const LEDGER_ORDERING_AGREEMENT_CHECKED_AT : str = "2026-09-21";
+
+pub fn the_two_ledger_contracts_agree(inside_the_six: u8, among_the_bypasses: u8, paired: u8) bool {
+  return among_the_bypasses == 0 and inside_the_six <= paired;
+}
+
 ; --- The key namespace is never pruned ---------------------------------------------------------------
 pub const KEY_TABLE_CREATED_AT_IS_INDEXED : bool = true;
 pub const TTL_SWEEP_COUNT : u8 = 3;
@@ -441,7 +508,36 @@ pub const DECLARES_A_CASHBACK_PERCENT : bool = false;
 pub const DECLARES_A_USAGE_CEILING : bool = false;
 pub const RATE_SOURCE : str = "src/trios/loyalty.rs";
 pub const SEED_MEASUREMENT_OWNER_ID : str = "turbobaby/order-money";
-pub const RATE_REFUSAL_NOTE : str = "Refused for want of ownership, not for want of a source. The rates exist and are published in code: src/trios/loyalty.rs:34-46 is the standing default block for the loyalty_config JSONB row, src/trios/loyalty.rs:57-60 reads one key through it and treats a non-finite stored value as absent, src/trios/loyalty.rs:63-65 answers with no stored config in play, src/trios/loyalty.rs:71-78 maps a tier name to its key and falls unrecognised names to the progressive schedule, and src/trios/loyalty.rs:86-92 clamps a stored ceiling into the legal percentage range or returns the default. src/trios/loyalty.rs:1-24 records why they are there at all: four hand-written copies that could not see each other, one of which shipped a screen promising one figure against a configured other. The seed measurement often quoted as proof that these are unowned is real and re-run on 2026-09-21 -- data/fleet_seed.json, 19434 bytes, holds 0 occurrences of loyalty, 0 of bonus and 0 of cashback -- but it proves only that the seed does not carry them, and that finding already has an owner in this corpus: turbobaby/order-money. This file therefore names the source and declares no number, because a rate restated beside a structure is the second table the corpus exists to prevent.";
+
+; --- The seed zero is a PINNED COPY, not this file's measurement ------------------------------------
+; Added 2026-09-21. The rate refusal used to re-run the fleet-seed grep and write its numbers out in
+; prose, which made this file look like a second owner of a finding it only consumes.
+; turbobaby/order-money owns it and declares it as constants -- FLEET_SEED_LOYALTY_MENTIONS and
+; FLEET_SEED_BONUS_MENTIONS, both 0, measured 2026-09-20 -- beside the BONUS_POLICY_NOTE that
+; refutes the inference "a seed zero makes the rates unowned". Those two literals are carried below
+; ONLY so the drift invariant can fail loudly if the owner's numbers ever move; the owner is the one
+; to fix first, and this copy is the thing that makes the disagreement visible instead of silent.
+; The cashback count is different: that owner measures loyalty and bonus and does NOT measure
+; cashback, so the cashback zero has no owner in the corpus and is declared here as this file's own
+; re-run, dated. Re-run 2026-09-21: data/ holds exactly one file, data/fleet_seed.json at 19434
+; bytes, and a case-insensitive grep of it returns 0 for loyalty, 0 for bonus and 0 for cashback.
+pub const SEED_MEASUREMENT_OWNER_DECLARATIONS : [2]str = [
+  "FLEET_SEED_LOYALTY_MENTIONS",
+  "FLEET_SEED_BONUS_MENTIONS",
+];
+pub const SEED_MEASUREMENT_OWNER_MEASURED_AT : str = "2026-09-20";
+pub const SEED_LOYALTY_MENTIONS_PINNED_COPY : u8 = 0;
+pub const SEED_BONUS_MENTIONS_PINNED_COPY : u8 = 0;
+pub const SEED_MENTIONS_ARE_A_PINNED_COPY : bool = true;
+pub const SEED_CASHBACK_MENTIONS_MEASURED_HERE : u8 = 0;
+pub const SEED_CASHBACK_HAS_AN_OWNER_ELSEWHERE : bool = false;
+pub const SEED_MEASUREMENT_RERUN_AT : str = "2026-09-21";
+
+pub fn seed_copy_agrees_with_the_owner(loyalty_here: u8, bonus_here: u8, loyalty_there: u8, bonus_there: u8) bool {
+  return loyalty_here == loyalty_there and bonus_here == bonus_there;
+}
+
+pub const RATE_REFUSAL_NOTE : str = "Refused for want of ownership, not for want of a source. The rates exist and are published in code: src/trios/loyalty.rs:34-46 is the standing default block for the loyalty_config JSONB row, src/trios/loyalty.rs:57-60 reads one key through it and treats a non-finite stored value as absent, src/trios/loyalty.rs:63-65 answers with no stored config in play, src/trios/loyalty.rs:71-78 maps a tier name to its key and falls unrecognised names to the progressive schedule, and src/trios/loyalty.rs:86-92 clamps a stored ceiling into the legal percentage range or returns the default. src/trios/loyalty.rs:1-24 records why they are there at all: four hand-written copies that could not see each other, one of which shipped a screen promising one figure against a configured other. The seed measurement often quoted as proof that these are unowned is NOT restated here as this file's finding: turbobaby/order-money owns it and declares it in FLEET_SEED_LOYALTY_MENTIONS and FLEET_SEED_BONUS_MENTIONS, and the pinned copy above exists only to make a drift visible. What the seed zero proves is that the seed does not carry these rates, and nothing more. This file therefore names the source and declares no rate, because a rate restated beside a structure is the second table the corpus exists to prevent.";
 ; The one that really is absent.
 pub const DECLARES_AN_EXPIRY_PERIOD : bool = false;
 pub const BONUS_EXPIRY_NAME_OCCURRENCES : u8 = 0;
@@ -644,6 +740,64 @@ test this_file_declares_no_rate_and_names_the_source {
   assert SEED_MEASUREMENT_OWNER_ID == "turbobaby/order-money";
 }
 
+test the_seed_zero_is_a_pinned_copy_and_names_its_owner {
+  assert SEED_MEASUREMENT_OWNER_ID == "turbobaby/order-money";
+  assert SEED_MEASUREMENT_OWNER_DECLARATIONS.len == 2;
+  assert SEED_MEASUREMENT_OWNER_DECLARATIONS[0] == "FLEET_SEED_LOYALTY_MENTIONS";
+  assert SEED_MEASUREMENT_OWNER_DECLARATIONS[1] == "FLEET_SEED_BONUS_MENTIONS";
+  assert SEED_MEASUREMENT_OWNER_MEASURED_AT == "2026-09-20";
+  assert SEED_MENTIONS_ARE_A_PINNED_COPY == true;
+  assert SEED_LOYALTY_MENTIONS_PINNED_COPY == 0;
+  assert SEED_BONUS_MENTIONS_PINNED_COPY == 0;
+  assert seed_copy_agrees_with_the_owner(SEED_LOYALTY_MENTIONS_PINNED_COPY, SEED_BONUS_MENTIONS_PINNED_COPY, 0, 0) == true;
+  assert seed_copy_agrees_with_the_owner(SEED_LOYALTY_MENTIONS_PINNED_COPY, SEED_BONUS_MENTIONS_PINNED_COPY, 1, 0) == false;
+  assert seed_copy_agrees_with_the_owner(SEED_LOYALTY_MENTIONS_PINNED_COPY, SEED_BONUS_MENTIONS_PINNED_COPY, 0, 2) == false;
+}
+
+test the_cashback_zero_is_this_files_own_and_is_dated {
+  assert SEED_CASHBACK_MENTIONS_MEASURED_HERE == 0;
+  assert SEED_CASHBACK_HAS_AN_OWNER_ELSEWHERE == false;
+  assert SEED_MEASUREMENT_RERUN_AT == "2026-09-21";
+  assert SEED_MEASUREMENT_RERUN_AT != SEED_MEASUREMENT_OWNER_MEASURED_AT;
+}
+
+test this_file_is_named_in_the_identity_snapshot_and_declares_the_edge_back {
+  assert NAMED_IN_THE_IDENTITY_CONSUMER_SNAPSHOT == true;
+  assert IDENTITY_CONSUMER_SNAPSHOT_SIZE == 22;
+  assert IDENTITY_EDGE_DECLARERS_IN_CORPUS == 18;
+  assert IDENTITY_EDGE_DECLARERS_INSIDE_THE_SNAPSHOT == 18;
+  assert IDENTITY_EDGE_DECLARERS_OUTSIDE_THE_SNAPSHOT == 0;
+  assert NAMED_BY_THE_OWNER_WITHOUT_DECLARING_THE_EDGE == 4;
+  assert identity_edge_census_closes(IDENTITY_EDGE_DECLARERS_INSIDE_THE_SNAPSHOT, IDENTITY_EDGE_DECLARERS_OUTSIDE_THE_SNAPSHOT, IDENTITY_EDGE_DECLARERS_IN_CORPUS) == true;
+  assert identity_edge_census_closes(4, 13, 18) == false;
+  assert snapshot_accounting_closes(IDENTITY_EDGE_DECLARERS_INSIDE_THE_SNAPSHOT, NAMED_BY_THE_OWNER_WITHOUT_DECLARING_THE_EDGE, IDENTITY_CONSUMER_SNAPSHOT_SIZE) == true;
+  assert snapshot_accounting_closes(18, 3, 22) == false;
+  assert IDENTITY_EDGE_DECLARERS_INSIDE_THE_SNAPSHOT < IDENTITY_CONSUMER_SNAPSHOT_SIZE;
+  assert IDENTITY_EDGE_CENSUS_MEASURED_AT == "2026-09-21";
+  assert CORPUS_T27_FILE_COUNT == 43;
+}
+
+test the_identity_snapshot_moved_under_this_file_and_the_date_is_what_saved_it {
+  assert SNAPSHOT_MOVED_WHILE_THIS_FILE_WAS_BEING_CORRECTED == true;
+  assert IDENTITY_CONSUMER_SNAPSHOT_SIZE_BEFORE_THE_RE_MEASUREMENT == 8;
+  assert IDENTITY_CONSUMER_SNAPSHOT_SIZE > IDENTITY_CONSUMER_SNAPSHOT_SIZE_BEFORE_THE_RE_MEASUREMENT;
+  assert IDENTITY_CONSUMER_SNAPSHOT_MEASURED_AT == "2026-09-21";
+  assert IDENTITY_CONSUMER_SNAPSHOT_MEASURED_AT == IDENTITY_EDGE_CENSUS_MEASURED_AT;
+  assert a_snapshot_figure_may_be_quoted_flatly(IDENTITY_CONSUMER_SNAPSHOT_MEASURED_AT, IDENTITY_EDGE_CENSUS_MEASURED_AT) == false;
+  assert a_snapshot_figure_may_be_quoted_flatly("2026-09-20", "2026-09-21") == false;
+}
+
+test the_referral_contract_is_named_by_id_and_the_two_agree {
+  assert REFERRAL_PROGRAM_ID == "turbobaby/referral-program";
+  assert REFERRAL_CREDIT_SITES_INSIDE_THE_PAIRED_SIX == 3;
+  assert REFERRAL_CREDIT_SITES_AMONG_THE_BYPASSES == 0;
+  assert REFERRAL_CREDIT_SITES_INSIDE_THE_PAIRED_SIX < BALANCE_WRITES_WITH_A_LEDGER_ROW;
+  assert LEDGER_ORDERING_AGREES_WITH_THE_REFERRAL_CONTRACT == true;
+  assert LEDGER_ORDERING_AGREEMENT_CHECKED_AT == "2026-09-21";
+  assert the_two_ledger_contracts_agree(REFERRAL_CREDIT_SITES_INSIDE_THE_PAIRED_SIX, REFERRAL_CREDIT_SITES_AMONG_THE_BYPASSES, BALANCE_WRITES_WITH_A_LEDGER_ROW) == true;
+  assert the_two_ledger_contracts_agree(3, 1, 6) == false;
+}
+
 test no_expiry_period_is_published_anywhere {
   assert DECLARES_AN_EXPIRY_PERIOD == false;
   assert BONUS_EXPIRY_NAME_OCCURRENCES == 0;
@@ -661,7 +815,7 @@ test reuse_edges_are_declared_and_nothing_is_restated {
   assert REUSES_MARKET_PROFILE_ID == "turbobaby/market";
   assert RESTATES_THE_COMMERCE_DECISION_SET == false;
   assert DECLARES_AN_EXCHANGE_RATE == false;
-  assert NAMED_IN_THE_IDENTITY_CONSUMER_SNAPSHOT == false;
+  assert NAMED_IN_THE_IDENTITY_CONSUMER_SNAPSHOT == true;
 }
 
 ; --- Invariants --------------------------------------------------------------------------------------
@@ -701,6 +855,18 @@ invariant an_unswept_key_table_makes_every_key_permanent
 
 invariant no_rate_tier_ceiling_or_expiry_is_declared_in_this_file
   assert DECLARES_A_TIER_TABLE == false and DECLARES_A_CASHBACK_PERCENT == false and DECLARES_A_USAGE_CEILING == false and DECLARES_AN_EXPIRY_PERIOD == false
+
+invariant the_seed_zero_is_never_re_owned_by_this_file
+  assert SEED_MENTIONS_ARE_A_PINNED_COPY == true and SEED_MEASUREMENT_OWNER_ID == "turbobaby/order-money" and seed_copy_agrees_with_the_owner(SEED_LOYALTY_MENTIONS_PINNED_COPY, SEED_BONUS_MENTIONS_PINNED_COPY, 0, 0) == true
+
+invariant a_missing_name_in_the_identity_snapshot_is_never_read_as_a_missing_edge
+  assert identity_edge_census_closes(IDENTITY_EDGE_DECLARERS_INSIDE_THE_SNAPSHOT, IDENTITY_EDGE_DECLARERS_OUTSIDE_THE_SNAPSHOT, IDENTITY_EDGE_DECLARERS_IN_CORPUS) == true and snapshot_accounting_closes(IDENTITY_EDGE_DECLARERS_INSIDE_THE_SNAPSHOT, NAMED_BY_THE_OWNER_WITHOUT_DECLARING_THE_EDGE, IDENTITY_CONSUMER_SNAPSHOT_SIZE) == true
+
+invariant a_snapshot_figure_is_never_quoted_without_the_day_it_was_taken
+  assert a_snapshot_figure_may_be_quoted_flatly(IDENTITY_CONSUMER_SNAPSHOT_MEASURED_AT, IDENTITY_EDGE_CENSUS_MEASURED_AT) == false and SNAPSHOT_MOVED_WHILE_THIS_FILE_WAS_BEING_CORRECTED == true
+
+invariant no_referral_credit_is_a_ledger_bypass
+  assert REFERRAL_CREDIT_SITES_AMONG_THE_BYPASSES == 0 and the_two_ledger_contracts_agree(REFERRAL_CREDIT_SITES_INSIDE_THE_PAIRED_SIX, REFERRAL_CREDIT_SITES_AMONG_THE_BYPASSES, BALANCE_WRITES_WITH_A_LEDGER_ROW) == true
 
 invariant the_grant_ceiling_bounds_one_call_and_not_the_balance
   assert BALANCE_HAS_NO_CEILING == true and credit_is_admitted(100000001, true, 100000000) == false and balance_after_credit(100000000000, 100000000, true, 100000000) == 100100000000

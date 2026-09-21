@@ -10,12 +10,29 @@
 ; This file is a ROOT of the ownership graph. Like availability.t27 it has no outbound reuse
 ; edge: it takes no decision from another contract, and every domain fact it could have restated
 ; is an input boolean instead. The direction is written the other way round, in CONSUMERS below,
-; so a reader can grep who depends on identity without opening twelve files.
+; so a reader can grep who depends on identity without opening the other 42 files. That sentence
+; said "twelve" until 2026-09-21, which was the corpus size on the day it was written and has not
+; been the corpus size since; the array it points at was re-measured the same day.
 ; --
-; WHY (measured 2026-09-20). grep -ril "initData|init_data|hmac" over the twelve contracts that
-; existed before this one returns 0 files, and re-run over specs/ today it still returns only
-; this file: the corpus says what the product answers and not one line of it says who is asking
-; -- the four consumers below name this owner by ID and none of them restates the check. Behind
+; WHY (measured 2026-09-20, re-measured 2026-09-21). grep -ril "initData|init_data|hmac" over the
+; twelve contracts that existed before this one returned 0 files, and that zero is the finding
+; this contract was written for: the corpus said what the product answers and not one line of it
+; said who is asking.
+; CORRECTED 2026-09-21, and what is being retired is a FALSE ABSENCE, which is the worst thing a
+; reader can inherit from this corpus because it is the one claim nobody re-runs. This paragraph
+; used to continue "and re-run over specs/ today it still returns only this file". Re-run today
+; over all 43 files it returns SIX: bot_surface.t27, client_errors.t27, events_booking.t27,
+; runtime_config.t27, webapp_bridge.t27 and this one. The claim that was ever load-bearing
+; survives the correction and is narrower than the one that rotted -- not one of those five
+; restates the data-check decision, and each names a different half of the subject.
+; bot_surface measures that the BOT gate does not verify initData at all; client_errors records
+; that initData-shaped tokens are stripped from free text before storage; events_booking says a
+; booking row comes from validated initData; runtime_config reads a handle out of initDataUnsafe
+; in the UI; and webapp_bridge owns where the string COMES FROM on the client and names this
+; contract for the byte cap and the admission rule instead of copying either. Measured the same
+; day and still exclusive: INIT_DATA_MAX_BYTES and init_data_size_admits are each declared exactly
+; once in specs/, here, and 4096 appears nowhere else as a cap.
+; The consumers below name this owner by ID and none of them restates the check. Behind
 ; that silence sit 113 gate call sites in 18 modules -- 17 under src/api plus src/main.rs:1181 --
 ; and by gate 84 check_admin, 23 check_owner, 6 check_owner_lenient, every one of them depending
 ; on the answer. The check is not the generic one from the protocol documentation either. Its
@@ -55,12 +72,26 @@
 ; HMAC-SHA256 as arithmetic -- that is an external standard, and the secret-key derivation is
 ; cited at :185 rather than repeated. It does not map endpoints to gates: 113 call sites over 18
 ; modules have no single owner, so only the gate names and their precedence are declared. It
-; owns no read-transport status code -- 200, 304, 400, 404 and 500 belong to catalog_api.t27 --
-; and declares only the three refusal statuses that a failed proof produces, which no contract
-; in this corpus carried before. It restates no privacy field list: the D14 enumerations live in
-; specs/agents/turbobaby.t27 and specs/turbobaby/bike_catalog.t27, and no renter name, handle,
-; phone, key code, plate, debt, cost or personal note appears here in any form, fixtures
-; included. A user id is never written down; it is only ever compared.
+; owns no read-transport status code -- 200, 304, 400, 404 and 500 are turbobaby/catalog-api's,
+; where they are declared as HTTP_OK, HTTP_NOT_MODIFIED, HTTP_BAD_REQUEST, HTTP_NOT_FOUND and
+; HTTP_INTERNAL_ERROR. SCOPED HONESTLY on re-measurement, 2026-09-21: those five are that
+; contract's as the READ transport's answers, and not exclusively as numerals. 400 is also
+; declared by order_status.t27, upload_media.t27 and cart_persistence.t27, 200 and 404 by
+; publication.t27, and NINE contracts in all declare a transport status of their own, so "belong
+; to" was the wrong verb for a corpus this size. The nine were counted by reading every u16
+; constant in specs/ whose value is a three-digit IANA code, not by grepping the HTTP_ prefix: the
+; prefix answers six and silently drops cart_persistence.t27, happy_hour.t27 and
+; webapp_bridge.t27, which spell their statuses CART_WRITE_BAD_REQUEST, STATUS_OK and
+; SERVER_REPLAY_STATUS. cart_persistence.t27 is worth naming twice, because its own comment says
+; it declares three refusal numerals "for the same reason turbobaby/request-identity declares its
+; own three" -- it is this file's precedent quoting this file. What IS exclusive is the half this file depends on, and it is re-verified
+; rather than remembered: 401, 403 and 429 are declared here and at no other line of specs/, so
+; the three refusal statuses a failed proof produces are still this contract's alone. It restates
+; no privacy field list, and that pair of homes is re-verified the same day: the D14 enumerations
+; live in exactly two files and they are the two named here -- FORBIDDEN_FIELDS in
+; specs/agents/turbobaby.t27 and FORBIDDEN_UNIT_FIELDS in specs/turbobaby/bike_catalog.t27 -- and
+; no renter name, handle, phone, key code, plate, debt, cost or personal note appears here in any
+; form, fixtures included. A user id is never written down; it is only ever compared.
 ; phi^2 + 1/phi^2 = 3 | TRINITY
 
 module turbobaby-request-identity;
@@ -74,24 +105,51 @@ pub const MEASURED_AT : str = "2026-09-20";
 ; --- Root of the ownership graph ----------------------------------------------------------------
 ; No REUSES_* constant exists in this file and that is the claim, not an omission. The consumers
 ; are named by ID because there are no imports, and they carry two different strengths of
-; evidence, which is why the count of the stronger kind is its own constant. The FIRST FOUR
-; declare the edge from their own side, as a constant a grep finds from both ends, re-read on
-; 2026-09-20 rather than taken from the survey: catalog_write.t27:69, game_score.t27:79,
-; star_award.t27:77 and order_status.t27:86 each hold
-; REUSES_REQUEST_IDENTITY_ID = "turbobaby/request-identity". order_status was written in
-; parallel with this file and promoted itself from a prose mention (its note at :345) to a
-; declared edge, which is why it is counted here and not left out. The REMAINING FOUR are
-; measured instead, from gate call sites in the module that implements their subject: commerce ->
-; src/api/cart.rs (owner gate) and src/api/orders.rs (both gates); bike-catalog ->
-; src/api/catalog.rs and src/api/bikes.rs (admin gate); availability -> the unit rows written
-; through src/api/bikes.rs behind the same gate; ride-game -> src/api/game.rs (the owner gate,
-; entered through check_owner_lenient at :96). That half of the list is by module, never by
-; endpoint, and no constant on their side names it yet.
+; evidence, which is why the count of the stronger kind is its own constant.
+; RE-MEASURED 2026-09-21, and the array below grew from eight entries to twenty-two. The list was
+; written when twelve contracts existed; fourteen more have landed since and every one of them
+; declares the edge. The command is the whole method and can be re-run by anyone:
+;   grep -rlE "^pub const REUSES_REQUEST_IDENTITY_ID" specs/
+; It answers 18 files, and those 18 are positions 0-3 and 8-21 below, each holding
+; REUSES_REQUEST_IDENTITY_ID = "turbobaby/request-identity" as a constant a grep finds from both
+; ends. THE DECLARATION IS WHAT IS COUNTED, not the mention. Grepping for the bare ID string
+; instead answers MORE files and is the wrong measurement for this array: some contracts name this
+; owner in prose without declaring an edge to it, which is a legal thing to do and not a
+; twenty-third consumer. That looser count is left out of the constants on purpose -- it moves
+; whenever any contract writes a sentence, and a number that moves for reasons the array does not
+; care about is a number that will be wrong before it is read.
+; A CLOSED array that has stopped being closed is the defect this re-measurement exists to
+; kill: the old eight were not wrong, they were all that had been written, and a reader trusting
+; the count would have concluded that fourteen live edges do not exist.
+; THE TWO STRENGTHS OF EVIDENCE, and the ORDER of the array, which is now load-bearing.
+; Positions 0-3 are the four that declared the edge first (catalog-write, game-score, star-award,
+; order-status). order_status was written in parallel with this file and promoted itself from a
+; prose mention to a declared edge, which is why it was counted here from the beginning.
+; Positions 4-7 are the four that are MEASURED instead, from gate call sites in the module that
+; implements their subject: commerce -> src/api/cart.rs (owner gate) and src/api/orders.rs (both
+; gates); bike-catalog -> src/api/catalog.rs and src/api/bikes.rs (admin gate); availability ->
+; the unit rows written through src/api/bikes.rs behind the same gate; ride-game ->
+; src/api/game.rs (the owner gate, entered through check_owner_lenient at :96). That half of the
+; list is by module, never by endpoint, and no constant on their side names it even now.
+; Positions 8-21 are the fourteen found on 2026-09-21, and every one of them is a DECLARED edge.
+; The four measured-only entries are kept where they are rather than sorted to the end, because
+; moving them would change the index every existing assertion below is written against, and an
+; index that moves is the same defect as a line number that moves.
+; Each sibling is cited by its ID and by the DECLARATION NAME it holds, never by a line in its
+; file: the four citations that used to stand here were line numbers into catalog_write.t27,
+; game_score.t27, star_award.t27 and order_status.t27, and by 2026-09-21 they no longer landed on
+; the constant they named.
 pub const IS_OWNERSHIP_ROOT : bool = true;
 pub const REUSE_EDGE_COUNT : u8 = 0;
-pub const CONSUMER_COUNT : u8 = 8;
-pub const CONSUMERS_DECLARING_THE_EDGE : u8 = 4;
-pub const CONSUMERS : [8]str = [
+pub const CONSUMER_COUNT : u8 = 22;
+pub const CONSUMERS_DECLARING_THE_EDGE : u8 = 18;
+pub const CONSUMERS_MEASURED_ONLY : u8 = 4;
+pub const CONSUMER_CENSUS_MEASURED_AT : str = "2026-09-21";
+pub const CONSUMER_CENSUS_GREP : str = "grep -rlE \"^pub const REUSES_REQUEST_IDENTITY_ID\" specs/";
+pub const THE_CENSUS_COUNTS_DECLARATIONS_NOT_MENTIONS : bool = true;
+pub const EDGE_DECLARATION_NAME : str = "REUSES_REQUEST_IDENTITY_ID";
+pub const CONSUMER_COUNT_BEFORE_THE_RE_MEASUREMENT : u8 = 8;
+pub const CONSUMERS : [22]str = [
     "turbobaby/catalog-write",
     "turbobaby/game-score",
     "turbobaby/star-award",
@@ -100,7 +158,29 @@ pub const CONSUMERS : [8]str = [
     "turbobaby/bike-catalog",
     "turbobaby/availability",
     "turbobaby/ride-game",
+    "turbobaby/api-surface",
+    "turbobaby/bot-surface",
+    "turbobaby/cart-persistence",
+    "turbobaby/checkout-contact",
+    "turbobaby/client-errors",
+    "turbobaby/deeplink",
+    "turbobaby/events-booking",
+    "turbobaby/loyalty-ledger",
+    "turbobaby/observability",
+    "turbobaby/rate-limit",
+    "turbobaby/referral-program",
+    "turbobaby/upload-media",
+    "turbobaby/validation-bounds",
+    "turbobaby/webapp-bridge",
 ];
+
+; Which positions carry which strength, stated as numbers so a test can hold them. The declaring
+; set is positions 0-3 and 8-21; the measured-only set is positions 4-7 and nothing else.
+pub const FIRST_MEASURED_ONLY_INDEX : u8 = 4;
+pub const LAST_MEASURED_ONLY_INDEX : u8 = 7;
+pub const FIRST_LATE_DECLARER_INDEX : u8 = 8;
+pub const LAST_LATE_DECLARER_INDEX : u8 = 21;
+pub const LATE_DECLARER_COUNT : u8 = 14;
 
 ; --- The data-check string: what is removed, and what may admit ----------------------------------
 ; src/api/auth.rs:148 filters BOTH keys before sorting: k != "hash" && k != "signature". `hash`
@@ -349,6 +429,36 @@ pub const HTTP_STATUS_NOT_OWNED_HERE : u16 = 0;
 pub const HTTP_UNAUTHORIZED : u16 = 401;
 pub const HTTP_FORBIDDEN : u16 = 403;
 pub const HTTP_TOO_MANY_REQUESTS : u16 = 429;
+; Re-measured 2026-09-21 over all 43 files, because "no contract in this corpus carried these
+; before" is an absence and an absence is the one kind of claim a reader never re-runs. Each of
+; the three numerals still has exactly one declaration in specs/, and it is the one above.
+pub const REFUSAL_STATUS_CENSUS_MEASURED_AT : str = "2026-09-21";
+pub const REFUSAL_STATUS_COUNT : u8 = 3;
+pub const CONTRACTS_DECLARING_UNAUTHORIZED : u8 = 1;
+pub const CONTRACTS_DECLARING_FORBIDDEN : u8 = 1;
+pub const CONTRACTS_DECLARING_TOO_MANY_REQUESTS : u8 = 1;
+pub const THE_THREE_REFUSAL_STATUSES_ARE_STILL_EXCLUSIVE : bool = true;
+; The read-transport numerals, which are NOT exclusive and never were claimed to be after this
+; measurement. The owner named here is the one whose contract they answer for, not the only file
+; that spells them.
+pub const READ_TRANSPORT_STATUS_OWNER_ID : str = "turbobaby/catalog-api";
+pub const CONTRACTS_DECLARING_AN_IANA_STATUS : u8 = 9;
+pub const CONTRACTS_DECLARING_BAD_REQUEST : u8 = 4;
+; The census was taken twice and the first pass was wrong low. A grep on the HTTP_ prefix answers
+; six; reading every IANA-valued u16 in specs/ answers nine. The three the prefix drops are named
+; here so the smaller number cannot come back.
+pub const CONTRACTS_A_PREFIX_GREP_WOULD_HAVE_MISSED : u8 = 3;
+pub const PREFIX_GREP_ANSWER : u8 = 6;
+pub const A_PEER_CONTRACT_CITES_THIS_FILES_THREE_AS_ITS_PRECEDENT : bool = true;
+pub const PEER_CITING_THIS_PRECEDENT_ID : str = "turbobaby/cart-persistence";
+; The two homes of the D14 enumerations, re-verified the same day. Named as paths because one of
+; them is not a contract at all and has no contract ID to name.
+pub const D14_ENUMERATION_HOME_COUNT : u8 = 2;
+pub const D14_ENUMERATION_HOMES : [2]str = [
+    "specs/agents/turbobaby.t27",
+    "specs/turbobaby/bike_catalog.t27",
+];
+pub const D14_ENUMERATION_DECLARATIONS : [2]str = ["FORBIDDEN_FIELDS", "FORBIDDEN_UNIT_FIELDS"];
 pub const OUTCOME_UNSET : u8 = 0;
 pub const OUTCOME_ADMITTED : u8 = 1;
 pub const OUTCOME_UNAUTHORIZED : u8 = 2;
@@ -402,8 +512,11 @@ test this_contract_is_a_root_and_names_its_consumers_instead {
     assert IS_OWNERSHIP_ROOT == true;
     assert REUSE_EDGE_COUNT == 0;
     assert CONSUMERS.len == CONSUMER_COUNT;
-    assert CONSUMERS_DECLARING_THE_EDGE == 4;
+    ; Re-measured 2026-09-21: 18 of the 22, not the 4 of the first writing.
+    assert CONSUMERS_DECLARING_THE_EDGE == 18;
     assert CONSUMERS_DECLARING_THE_EDGE < CONSUMER_COUNT;
+    assert CONSUMERS_DECLARING_THE_EDGE + CONSUMERS_MEASURED_ONLY == CONSUMER_COUNT;
+    assert CONSUMER_COUNT > CONSUMER_COUNT_BEFORE_THE_RE_MEASUREMENT;
     assert CONSUMERS[0] == "turbobaby/catalog-write";
     assert CONSUMERS[1] == "turbobaby/game-score";
     assert CONSUMERS[2] == "turbobaby/star-award";
@@ -417,8 +530,10 @@ test this_contract_is_a_root_and_names_its_consumers_instead {
     assert CONSUMERS[7] != ID;
 }
 
-; The four inbound edges spelled exactly as their own files spell them. If a consumer renames
-; this contract's ID on its side, its assert and this one disagree and the pair says which moved.
+; The first four inbound edges spelled exactly as their own files spell them. If a consumer
+; renames this contract's ID on its side, its assert and this one disagree and the pair says which
+; moved. The other fourteen declarers found on 2026-09-21 get the same treatment in the test below
+; this one; they are kept apart because these four are also the four the file was born naming.
 test the_declared_inbound_edges_name_this_contract_by_its_own_id {
     assert ID == "turbobaby/request-identity";
     assert CONSUMERS[0] == "turbobaby/catalog-write";
@@ -430,6 +545,57 @@ test the_declared_inbound_edges_name_this_contract_by_its_own_id {
     assert CONSUMERS[0] != CONSUMERS[2];
     assert CONSUMERS[3] != CONSUMERS[0];
     assert CONSUMERS[3] != CONSUMERS[4];
+}
+
+; The fourteen edges the first writing could not have known about, pinned to their literals for
+; the same reason as the first four: each is a constant in the consumer's own file, and a rename
+; on either side makes these two assertions disagree.
+test the_fourteen_later_declarers_are_pinned_by_their_own_ids {
+    assert CONSUMER_CENSUS_MEASURED_AT == "2026-09-21";
+    assert EDGE_DECLARATION_NAME == "REUSES_REQUEST_IDENTITY_ID";
+    assert LATE_DECLARER_COUNT == 14;
+    assert FIRST_LATE_DECLARER_INDEX == 8;
+    assert LAST_LATE_DECLARER_INDEX == 21;
+    assert CONSUMERS[8] == "turbobaby/api-surface";
+    assert CONSUMERS[9] == "turbobaby/bot-surface";
+    assert CONSUMERS[10] == "turbobaby/cart-persistence";
+    assert CONSUMERS[11] == "turbobaby/checkout-contact";
+    assert CONSUMERS[12] == "turbobaby/client-errors";
+    assert CONSUMERS[13] == "turbobaby/deeplink";
+    assert CONSUMERS[14] == "turbobaby/events-booking";
+    assert CONSUMERS[15] == "turbobaby/loyalty-ledger";
+    assert CONSUMERS[16] == "turbobaby/observability";
+    assert CONSUMERS[17] == "turbobaby/rate-limit";
+    assert CONSUMERS[18] == "turbobaby/referral-program";
+    assert CONSUMERS[19] == "turbobaby/upload-media";
+    assert CONSUMERS[20] == "turbobaby/validation-bounds";
+    assert CONSUMERS[21] == "turbobaby/webapp-bridge";
+    assert CONSUMERS[21] != ID;
+    assert CONSUMERS[8] != CONSUMERS[21];
+}
+
+; The shape of the array, kept honest against the counts that describe it. This is the assertion
+; that fails the day a fifteenth declarer is appended without the count being touched.
+test the_consumer_census_and_the_array_describe_the_same_list {
+    assert CONSUMERS.len == 22;
+    assert CONSUMER_COUNT == 22;
+    assert CONSUMER_COUNT_BEFORE_THE_RE_MEASUREMENT == 8;
+    assert CONSUMERS_MEASURED_ONLY == 4;
+    assert FIRST_MEASURED_ONLY_INDEX == 4;
+    assert LAST_MEASURED_ONLY_INDEX == 7;
+    assert LAST_MEASURED_ONLY_INDEX - FIRST_MEASURED_ONLY_INDEX + 1 == CONSUMERS_MEASURED_ONLY;
+    assert LAST_LATE_DECLARER_INDEX - FIRST_LATE_DECLARER_INDEX + 1 == LATE_DECLARER_COUNT;
+    assert LATE_DECLARER_COUNT + CONSUMER_COUNT_BEFORE_THE_RE_MEASUREMENT == CONSUMER_COUNT;
+    assert FIRST_MEASURED_ONLY_INDEX + LATE_DECLARER_COUNT == CONSUMERS_DECLARING_THE_EDGE;
+    ; The four measured-only entries are exactly the four positions the census says they are.
+    assert CONSUMERS[4] == "turbobaby/commerce";
+    assert CONSUMERS[5] == "turbobaby/bike-catalog";
+    assert CONSUMERS[6] == "turbobaby/availability";
+    assert CONSUMERS[7] == "turbobaby/ride-game";
+    assert CONSUMER_CENSUS_GREP == "grep -rlE \"^pub const REUSES_REQUEST_IDENTITY_ID\" specs/";
+    ; The grep counts declarations. A looser grep for the bare ID answers more files and is not
+    ; what this array holds, which is why the census names its own command.
+    assert THE_CENSUS_COUNTS_DECLARATIONS_NOT_MENTIONS == true;
 }
 
 test both_keys_leave_the_data_check_string_and_only_those_two {
@@ -582,6 +748,42 @@ test the_gate_census_explains_why_no_endpoint_table_lives_here {
     assert GATE_CALL_SITES_ADMIN + GATE_CALL_SITES_OWNER + GATE_CALL_SITES_OWNER_LENIENT == GATE_CALL_SITES_TOTAL;
     assert GATE_CALL_SITE_MODULES == 18;
     assert ENDPOINT_TO_GATE_MAP_IS_NOT_OWNED_HERE == true;
+}
+
+; The absences this file leans on, re-run rather than recalled. Every literal below was measured
+; on 2026-09-21 over all 43 .t27 files, and the test exists so the next reader checks a number.
+test the_exclusivity_claims_are_re_measured_and_not_remembered {
+    assert REFUSAL_STATUS_CENSUS_MEASURED_AT == "2026-09-21";
+    assert REFUSAL_STATUS_COUNT == 3;
+    assert CONTRACTS_DECLARING_UNAUTHORIZED == 1;
+    assert CONTRACTS_DECLARING_FORBIDDEN == 1;
+    assert CONTRACTS_DECLARING_TOO_MANY_REQUESTS == 1;
+    assert THE_THREE_REFUSAL_STATUSES_ARE_STILL_EXCLUSIVE == true;
+    assert HTTP_UNAUTHORIZED == 401;
+    assert HTTP_FORBIDDEN == 403;
+    assert HTTP_TOO_MANY_REQUESTS == 429;
+    ; And the half that is NOT exclusive, stated as the larger number so the two cannot be mixed.
+    assert READ_TRANSPORT_STATUS_OWNER_ID == "turbobaby/catalog-api";
+    assert READ_TRANSPORT_STATUS_OWNER_ID != ID;
+    assert CONTRACTS_DECLARING_AN_IANA_STATUS == 9;
+    assert CONTRACTS_DECLARING_BAD_REQUEST == 4;
+    assert CONTRACTS_DECLARING_BAD_REQUEST > CONTRACTS_DECLARING_UNAUTHORIZED;
+    assert CONTRACTS_DECLARING_AN_IANA_STATUS > CONTRACTS_DECLARING_BAD_REQUEST;
+    ; The census method, pinned: nine by reading, six by prefix grep, three invisible to the grep.
+    assert PREFIX_GREP_ANSWER == 6;
+    assert CONTRACTS_A_PREFIX_GREP_WOULD_HAVE_MISSED == 3;
+    assert PREFIX_GREP_ANSWER + CONTRACTS_A_PREFIX_GREP_WOULD_HAVE_MISSED == CONTRACTS_DECLARING_AN_IANA_STATUS;
+    assert A_PEER_CONTRACT_CITES_THIS_FILES_THREE_AS_ITS_PRECEDENT == true;
+    assert PEER_CITING_THIS_PRECEDENT_ID == "turbobaby/cart-persistence";
+    assert PEER_CITING_THIS_PRECEDENT_ID != ID;
+    assert PEER_CITING_THIS_PRECEDENT_ID == CONSUMERS[10];
+    ; The two D14 homes, which the re-measurement confirmed rather than corrected.
+    assert D14_ENUMERATION_HOMES.len == D14_ENUMERATION_HOME_COUNT;
+    assert D14_ENUMERATION_DECLARATIONS.len == D14_ENUMERATION_HOME_COUNT;
+    assert D14_ENUMERATION_HOMES[0] == "specs/agents/turbobaby.t27";
+    assert D14_ENUMERATION_HOMES[1] == "specs/turbobaby/bike_catalog.t27";
+    assert D14_ENUMERATION_DECLARATIONS[0] == "FORBIDDEN_FIELDS";
+    assert D14_ENUMERATION_DECLARATIONS[1] == "FORBIDDEN_UNIT_FIELDS";
 }
 
 test the_named_absences_are_refused_rather_than_filled_with_a_number {

@@ -325,6 +325,43 @@ pub fn admin_api_may_reach(seen_by_bot: bool, telegram_id_positive: bool, first_
   return seen_by_bot and telegram_id_positive and first_occurrence;
 }
 
+; THE PREDICATE TWO INVARIANT NAMES WERE PROMISING AND NOT COMPOSING. Two invariants below are
+; named for an OPTED-OUT customer and for a customer BLOCKED FOR FRAUD, and both used to be
+; asserted against admin_api_may_reach, which takes neither parameter. The assertion was true and
+; the names were not wrong about the world -- but the predicate could not SEE the condition its
+; name turned on, so what was actually proved was "the admin route admits a customer meeting its
+; three conditions", and the opt-out half was left to the reader's trust. That is the same defect
+; as a stale citation, one level up: a name asserting more than the thing under it can decide.
+; This predicate takes both parameters and returns the same answer whichever way they go. The
+; two branches are deliberately identical: the equality IS the measurement, and writing it as one
+; branch would hide the very fact being pinned.
+; MEASURED AT SOURCE 2026-09-21, not inferred from the signature: src/api/admin.rs mentions
+; promo_muted ZERO times, and its only two occurrences of "blocked" (:241 and :257) sit in the
+; customer LISTING query, not in the broadcast route at :790-818, whose sole filters are
+; telegram_id <= 0 and a dedup insert. The route does not read the opt-out table at all.
+pub const ADMIN_ROUTE_READS_THE_OPT_OUT : bool = false;
+pub const ADMIN_ROUTE_READS_THE_FRAUD_BLOCK : bool = false;
+pub const ADMIN_ROUTE_PROMO_MUTED_MENTIONS : u8 = 0;
+pub const ADMIN_ROUTE_FILTER_COUNT : u8 = 2;
+
+pub fn admin_api_may_reach_regardless_of_opt_out(seen_by_bot: bool, telegram_id_positive: bool, first_occurrence: bool, opted_out: bool, blocked_for_fraud: bool) bool {
+  if (opted_out or blocked_for_fraud) {
+    return admin_api_may_reach(seen_by_bot, telegram_id_positive, first_occurrence);
+  }
+  return admin_api_may_reach(seen_by_bot, telegram_id_positive, first_occurrence);
+}
+
+; The difference between the two paths, now provable in one expression rather than by reading
+; two signatures side by side: the button path CHANGES its answer when a customer opts out, and
+; the admin path does not.
+pub fn opt_out_changes_the_answer_on_the_admin_route() bool {
+  return admin_api_may_reach_regardless_of_opt_out(true, true, true, false, false) != admin_api_may_reach_regardless_of_opt_out(true, true, true, true, false);
+}
+
+pub fn opt_out_changes_the_answer_on_the_button_path() bool {
+  return button_path_may_reach(true, false, false, false) != button_path_may_reach(true, true, false, false);
+}
+
 ; The unsubscribe itself. migrations/075_promo_muted.sql:9-12 stores a row per silenced
 ; person rather than a flag on the agent, so one owner muting it does not silence the others.
 ; The button rides in both messages a promotion travels in -- the owner's draft
@@ -597,6 +634,26 @@ test the_admin_route_asks_only_whether_the_chat_exists_once {
   assert admin_api_may_reach(false, true, true) == false;
   assert admin_api_may_reach(true, false, true) == false;
   assert admin_api_may_reach(true, true, false) == false;
+  assert admin_api_may_reach_regardless_of_opt_out(true, true, true, false, false) == true;
+  assert admin_api_may_reach_regardless_of_opt_out(true, true, true, true, false) == true;
+  assert admin_api_may_reach_regardless_of_opt_out(true, true, true, false, true) == true;
+  assert admin_api_may_reach_regardless_of_opt_out(true, true, true, true, true) == true;
+  assert admin_api_may_reach_regardless_of_opt_out(false, true, true, true, true) == false;
+  assert admin_api_may_reach_regardless_of_opt_out(true, false, true, true, true) == false;
+  assert admin_api_may_reach_regardless_of_opt_out(true, true, false, true, true) == false;
+}
+
+; The literals behind the two invariant names, asserted so the names rest on a measurement and
+; not on a reading of a function signature.
+test the_admin_route_reads_neither_the_opt_out_nor_the_block {
+  assert ADMIN_ROUTE_READS_THE_OPT_OUT == false;
+  assert ADMIN_ROUTE_READS_THE_FRAUD_BLOCK == false;
+  assert ADMIN_ROUTE_PROMO_MUTED_MENTIONS == 0;
+  assert ADMIN_ROUTE_FILTER_COUNT == 2;
+  assert path_honours_optout(PATH_ADMIN_API) == false;
+  assert opt_out_changes_the_answer_on_the_admin_route() == false;
+  assert opt_out_changes_the_answer_on_the_button_path() == true;
+  assert opt_out_changes_the_answer_on_the_admin_route() != opt_out_changes_the_answer_on_the_button_path();
 }
 
 test the_opt_out_is_per_person_visible_and_its_two_reads_fail_opposite_ways {
@@ -726,11 +783,18 @@ invariant neither_send_path_honours_the_opt_out_and_bounds_its_rate
 invariant the_path_with_the_cooldown_is_the_path_without_the_opt_out
   assert path_has_attempt_cooldown(PATH_BUTTON) == false and path_honours_optout(PATH_ADMIN_API) == false
 
+; Both invariants now compose the predicate that TAKES the condition its name turns on, so the
+; opted-out and blocked arguments are passed in explicitly and the admin route is shown admitting
+; the customer anyway. The old composition is kept in the same assertion rather than dropped: it
+; still holds, and keeping it proves the new predicate agrees with the one it wraps.
 invariant an_opted_out_customer_is_still_reachable_on_the_admin_route
-  assert button_path_may_reach(true, true, false, false) == false and admin_api_may_reach(true, true, true) == true
+  assert button_path_may_reach(true, true, false, false) == false and admin_api_may_reach_regardless_of_opt_out(true, true, true, true, false) == true and admin_api_may_reach(true, true, true) == true
 
 invariant a_customer_blocked_for_fraud_is_still_reachable_on_the_admin_route
-  assert button_path_may_reach(true, false, true, false) == false and admin_api_may_reach(true, true, true) == true
+  assert button_path_may_reach(true, false, true, false) == false and admin_api_may_reach_regardless_of_opt_out(true, true, true, false, true) == true and admin_api_may_reach(true, true, true) == true
+
+invariant the_admin_route_never_starts_reading_the_opt_out_unnoticed
+  assert opt_out_changes_the_answer_on_the_admin_route() == false and opt_out_changes_the_answer_on_the_button_path() == true and ADMIN_ROUTE_READS_THE_OPT_OUT == false
 
 invariant nothing_in_this_repository_bounds_one_customers_exposure
   assert PER_CUSTOMER_REACH_CAP_IS_NOT_SHIPPED == true and per_customer_sends_are_bounded(false) == false

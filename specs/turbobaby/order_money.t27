@@ -13,7 +13,7 @@
 ; for the figure the customer is shown, and src/ui/screens/checkout_screen.rs:973 for the figure it
 ; puts into the request body at src/ui/screens/checkout_screen.rs:986 as the total field the server
 ; will then check. src/ui/screens/checkout_screen.rs holds zero occurrences of the test attribute,
-; so neither client copy is exercised by anything. Hand-copied computation is exactly the defect
+; so neither client copy is exercised by anything -- re-counted 2026-09-21 and still zero. Hand-copied computation is exactly the defect
 ; DECISIONS.md:201-233 (D15) names, and D15's own table lists three copies of the PRICE arithmetic
 ; and none of these -- the order identity has been a second, unlisted family of copies the whole
 ; time. D15 closes with the remedy this file is: a .t27 spec pins the arithmetic, so the two
@@ -22,9 +22,11 @@
 ; WHY THE TOLERANCE IS ONE MINOR UNIT AND NOT A FLOAT. The shipped gate at src/api/orders.rs:215
 ; refuses when the absolute difference between the claimed and the recomputed total exceeds a
 ; hundredth of a baht. A hundredth is not a magic slack: it is one minor unit of the market
-; currency. How many minor digits a market has is owned by market_profile.t27 and is NOT restated
-; here; this file carries the count of minor units (one) and takes the scale as an argument, so
-; the identity holds for a market with a different exponent. Every amount below is an integer in
+; currency. How many minor digits a market has is owned by turbobaby/market, which declares
+; MINOR_DIGITS_MIN, MINOR_DIGITS_MAX and minor_digits_is_legal, and is NOT restated here.
+; Re-verified 2026-09-21 and still true in both directions: that contract holds the exponent, and
+; no constant in this file is one. This file carries the count of minor units (one) and takes the
+; scale as an argument, so the identity holds for a market with a different exponent. Every amount below is an integer in
 ; minor units for the same reason -- a contract that re-enacted the float would inherit the
 ; float's undecidable boundary, and the repository never probes that boundary (see the note).
 ; --
@@ -76,6 +78,15 @@ pub const IMPLEMENTATION_BOUNDARY : str = "client proposal -> server recomputati
 ;                   server, not the client, decides it.
 ;                   Between them a star arrives already earned. This file owns only what a star is
 ;                   worth when it is SPENT as a discount, which is the one fact neither declares.
+; THE LAST SENTENCE IS AN ABSENCE, so it was re-run on 2026-09-21 rather than left standing on the
+; day it was written. `grep -rn "STAR_VALUE" specs/` answers with this file and no other, and the
+; two neighbours name the gap rather than filling it -- star_award.t27 says in its own header that
+; "what a Star is worth when SPENT is order_money's too", and it holds REUSES_ORDER_MONEY_ID.
+; The re-measurement also found a THIRD file agreeing from outside the pair: loyalty_ledger.t27
+; names order-money as the owner of "the identity the bonus is a TERM of, and what a star is worth
+; when spent". Four contracts hold REUSES_ORDER_MONEY_ID today (checkout-contact, delivery-terms,
+; loyalty-ledger, star-award) and not one of them declares a star value. The count is a constant
+; below, because "nobody else declares this" is exactly the claim a reader trusts without checking.
 pub const REUSES_COMMERCE_ID : str = "turbobaby/commerce";
 pub const REUSES_MARKET_PROFILE_ID : str = "turbobaby/market";
 pub const REUSES_RENTAL_TERMS_ID : str = "turbobaby/rental-terms";
@@ -97,6 +108,19 @@ pub const TOLERANCE_MINOR_UNITS : i64 = 1;
 ; src/ui/screens/admin_screen.rs:3043 renders a stored star count through the baht formatter,
 ; which is the same rate seen from the other end of the system.
 pub const STAR_VALUE_IN_MAJOR_UNITS : i64 = 1;
+; The exclusivity of the line above, measured and not assumed. Re-run 2026-09-21 over all 43 .t27
+; files: one declaration of a star's spend value in the corpus, here. The inbound edges are the
+; other half of the same measurement -- four contracts point AT this file, and a pointer is only
+; worth something while the thing pointed at is the single home of the fact.
+pub const STAR_VALUE_CENSUS_MEASURED_AT : str = "2026-09-21";
+pub const CONTRACTS_DECLARING_A_STAR_SPEND_VALUE : u8 = 1;
+pub const INBOUND_EDGE_COUNT : u8 = 4;
+pub const INBOUND_EDGES : [4]str = [
+  "turbobaby/checkout-contact",
+  "turbobaby/delivery-terms",
+  "turbobaby/loyalty-ledger",
+  "turbobaby/star-award",
+];
 ; src/api/orders.rs:202 -- the per-transaction ceiling on stars spent, a count and not an amount.
 pub const MAX_STARS_PER_TRANSACTION : i64 = 1000000;
 ; src/api/orders.rs:180 -- the envelope both the subtotal and the total must sit inside, in major
@@ -105,7 +129,12 @@ pub const MAX_ORDER_AMOUNT_MAJOR_UNITS : i64 = 100000000;
 
 ; --- Verdicts -----------------------------------------------------------------------------------
 ; The shipped path answers every one of these with the same transport status, so the status is not
-; a discriminant and no HTTP constant is declared here. What differs, and what is worth naming, is
+; a discriminant and no HTTP constant is declared here. Re-verified 2026-09-21 against a census of
+; the whole corpus: NINE contracts declare a transport status numeral of their own and this file
+; is not one of them. The nine were counted by reading every IANA-valued u16 in specs/ rather than
+; by grepping the HTTP_ prefix, which answers six -- three contracts spell a status without either
+; word in the name. Here the distinction changes nothing, because the count this file cares about
+; is its own and that one is zero either way. What differs, and what is worth naming, is
 ; WHICH gate refused: src/api/orders.rs:189, :192, :196, :199, :204, :208 and :216 are seven
 ; distinct returns collapsed into one wire answer.
 pub const VERDICT_INVALID : u8 = 0;
@@ -269,6 +298,17 @@ pub const MINOR_UNIT_SCALE_IS_AN_ABSTRACT_PARAMETER : bool = true;
 pub const BONUS_POLICY_IS_NOT_A_TERM_OF_THIS_IDENTITY : bool = true;
 pub const FLEET_SEED_LOYALTY_MENTIONS : u8 = 0;
 pub const FLEET_SEED_BONUS_MENTIONS : u8 = 0;
+; The two zeros above are an ABSENCE and were re-run on 2026-09-21 rather than quoted from the
+; day they were taken: data/fleet_seed.json is 19434 bytes and still holds zero of each,
+; case-insensitive. The corpus now carries a second reader of the same measurement, which is the
+; reason to pin the date: loyalty_ledger.t27 re-ran it the same day, records the identical
+; numbers, and names THIS file as the owner of the finding rather than restating the inference.
+; A measurement with two readers and one owner is the shape this corpus wants; a measurement with
+; two readers and two owners is the second table it exists to prevent.
+pub const SEED_MEASUREMENT_RE_RUN_AT : str = "2026-09-21";
+pub const FLEET_SEED_BYTES : u32 = 19434;
+pub const A_SECOND_CONTRACT_CITES_THIS_SEED_MEASUREMENT : bool = true;
+pub const SEED_MEASUREMENT_SECOND_READER_ID : str = "turbobaby/loyalty-ledger";
 pub const BONUS_POLICY_NOTE : str = "Measured 2026-09-20: data/fleet_seed.json contains zero occurrences of loyalty and zero of bonus, case-insensitive. That does NOT make the policy unowned. src/trios/loyalty.rs:34-46 is a standing default block holding max_bonus_usage_pct 30.0 at src/trios/loyalty.rs:43 next to three cashback percentages and three tier thresholds; src/trios/loyalty.rs:86-92 clamps a stored value into the legal percentage range or falls back to that default; src/api/orders.rs:1167-1179 turns it into a ceiling and refuses above it. All of that runs AFTER the identity here has passed, and none of it is a term of the identity, so restating any number of it here would be the hand-copied computation D15 forbids.";
 
 ; The float boundary the repository never probes. Recorded so a later reader does not read the
@@ -497,6 +537,38 @@ test the_seed_is_silent_about_bonus_and_the_policy_is_still_owned_elsewhere {
   assert FLEET_SEED_BONUS_MENTIONS == 0;
   assert BONUS_POLICY_IS_NOT_A_TERM_OF_THIS_IDENTITY == true;
   assert BONUS_POLICY_NOTE != "";
+  ; Re-run 2026-09-21 with the file's size beside the zeros, so a zero taken from a truncated or
+  ; missing file cannot pass for a zero taken from the real one.
+  assert SEED_MEASUREMENT_RE_RUN_AT == "2026-09-21";
+  assert FLEET_SEED_BYTES == 19434;
+  assert FLEET_SEED_BYTES > 0;
+  assert A_SECOND_CONTRACT_CITES_THIS_SEED_MEASUREMENT == true;
+  assert SEED_MEASUREMENT_SECOND_READER_ID == "turbobaby/loyalty-ledger";
+  assert SEED_MEASUREMENT_SECOND_READER_ID != ID;
+}
+
+; What a star is worth when SPENT has exactly one home, and this is it. The literal below is the
+; whole claim: if a second contract ever declares a star value, this count is what has to change
+; first, and a reader who quotes the sentence in the header gets sent here instead.
+test the_star_spend_value_is_declared_in_this_corpus_exactly_once {
+  assert STAR_VALUE_CENSUS_MEASURED_AT == "2026-09-21";
+  assert CONTRACTS_DECLARING_A_STAR_SPEND_VALUE == 1;
+  assert STAR_VALUE_IN_MAJOR_UNITS == 1;
+  ; The neighbours that name the gap instead of filling it, pinned by ID from this side too.
+  assert INBOUND_EDGES.len == INBOUND_EDGE_COUNT;
+  assert INBOUND_EDGE_COUNT == 4;
+  assert INBOUND_EDGES[0] == "turbobaby/checkout-contact";
+  assert INBOUND_EDGES[1] == "turbobaby/delivery-terms";
+  assert INBOUND_EDGES[2] == "turbobaby/loyalty-ledger";
+  assert INBOUND_EDGES[3] == "turbobaby/star-award";
+  assert INBOUND_EDGES[3] == REUSES_STAR_AWARD_ID;
+  assert INBOUND_EDGES[2] == SEED_MEASUREMENT_SECOND_READER_ID;
+  assert INBOUND_EDGES[0] != ID;
+  assert INBOUND_EDGES[3] != ID;
+  ; star-award is named in BOTH directions, which is the one pair in this list that is a cycle of
+  ; naming rather than a one-way pointer, and it is legal because neither restates the other.
+  assert REUSES_STAR_AWARD_ID == "turbobaby/star-award";
+  assert INBOUND_EDGE_COUNT > CONTRACTS_DECLARING_A_STAR_SPEND_VALUE;
 }
 
 test the_float_boundary_and_the_clamped_finiteness_guard_are_recorded {

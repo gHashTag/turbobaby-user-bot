@@ -89,8 +89,10 @@
 ; no ledger structure and no replay-key rule: turbobaby/loyalty-ledger owns the bonus ledger this
 ; domain writes into. It restates no notice: turbobaby/notification-queue owns the friend-joined
 ; and milestone rows this domain enqueues, and this file states only where those enqueues sit
-; relative to a money commit. It copies no window ceiling: turbobaby/star-award owns the corpus's
-; only capped credit path and is named as precedent, with neither the size of its ceiling nor the
+; relative to a money commit. It copies no window ceiling: turbobaby/star-award owns the only
+; capped credit path in the corpus -- re-measured 2026-09-21 across all 43 .t27 files and still the
+; only one, so the absence claimed here is dated and not remembered -- and is named as precedent,
+; with neither the size of its ceiling nor the
 ; size of its capped set reproduced here. It restates no identity proof: turbobaby/request-identity
 ; owns the gates, and this file records only which of its own routes stands behind one. It carries
 ; no leaderboard row, no rank, no
@@ -123,8 +125,37 @@ pub const REGRESSION_WITNESS : str = "tests/integration_invite_counter.rs";
 
 ; --- Reuse edges, named because there are no imports ---------------------------------------------
 ; A cross-contract dependency is a string pinned to its literal by a test. Each edge names the
-; DECLARATION this file consumes, never a line in the sibling: ten contracts were written in
-; parallel one wave ago and every line citation between them was stale within the hour.
+; DECLARATION this file consumes, never a line in the sibling.
+;
+; RE-MEASURED 2026-09-21, from git rather than from memory, because the sentence that used to stand
+; here ("ten contracts were written in parallel one wave ago and every line citation between them
+; was stale within the hour") mixed one true count with one nobody timed. The true count: the wave
+; before this one landed exactly TEN new contracts in a single commit. What that sentence left out
+; is that this file's OWN wave landed THIRTEEN more beside it, so the hazard is larger than it
+; said, not smaller -- a line number typed into a sibling was typed against a file another author
+; was still editing. "Within the hour" is dropped: nobody measured the interval and this corpus does
+; not publish guessed numbers.
+;
+; The corpus-wide RESIDUE is deliberately not pinned either, and the reason is the finding itself.
+; It was counted at 63 when this correction began and at 7 a few minutes later, because sibling
+; contracts are being repaired in parallel right now. A total written into this file would be false
+; before the commit carrying it landed -- the same defect in a new costume. What is pinned is what
+; cannot move: the wave sizes, which are git history, and this file's own contribution, which is
+; zero. Citations into src/, migrations/, data/, docs/ and DECISIONS.md are a different case --
+; those files were not moving -- and they stay.
+pub const CORPUS_T27_FILE_COUNT : u8 = 43;
+pub const PRIOR_WAVE_NEW_CONTRACTS : u8 = 10;
+pub const OWN_WAVE_NEW_CONTRACTS : u8 = 13;
+pub const SIBLING_LINE_CITATIONS_IN_THIS_FILE : u8 = 0;
+pub const CORPUS_RESIDUE_IS_PINNED_HERE : bool = false;
+pub const CORPUS_RESIDUE_NOTE : str = "Counted twice on 2026-09-21 during this correction: 63 at the start and 7 a few minutes later. The drop is sibling contracts being repaired in parallel, not a measurement error. A live corpus-wide total is therefore refused a constant here, because pinning one would publish a number that goes stale before the commit carrying it lands. Any reader who needs today's figure can grep for it in one line; what this file owes is the two numbers a grep cannot recover, and those are above.";
+pub const WAVE_CENSUS_MEASURED_AT : str = "2026-09-21";
+pub const WAVE_CENSUS_SOURCE : str = "git log over specs/turbobaby, added-file counts per commit";
+pub const STALENESS_INTERVAL_IS_PUBLISHED : bool = false;
+
+pub fn edge_is_durable(names_a_declaration: bool, names_a_line_number: bool) bool {
+  return names_a_declaration and !names_a_line_number;
+}
 pub const REUSES_LOYALTY_LEDGER_ID : str = "turbobaby/loyalty-ledger";
 pub const REUSES_STAR_AWARD_ID : str = "turbobaby/star-award";
 pub const REUSES_REQUEST_IDENTITY_ID : str = "turbobaby/request-identity";
@@ -141,17 +172,48 @@ pub const REUSE_EDGES : [6]str = [
   "turbobaby/notification-queue",
 ];
 
-pub const LOYALTY_LEDGER_SUPPLIES : str = "the bonus ledger a referral credit is a row in, and the finding that six of the ten balance movements in this repository pair with a ledger insert. All three of this domain's credits are inside that six, and that owner names all three. This file adds no ledger column and no replay key.";
+pub const LOYALTY_LEDGER_SUPPLIES : str = "the bonus ledger a referral credit is a row in, and the finding that six of the ten balance movements in this repository pair with a ledger insert. All three of this domain's credits are inside that six, and that owner names all three -- by path and line into src/, which is the half of a citation that does not rot. This file adds no ledger column and no replay key. Re-checked 2026-09-21: that owner's LEDGER_BYPASS_SITES names four bypasses and not one of them is a referral site, so the two contracts agree on where this domain's money is written down, and each names the other by ID rather than by line.";
+
+; The agreement above, pinned so it cannot drift silently. turbobaby/loyalty-ledger declares the
+; same three sites from its side and now names this contract back by ID; neither file cites the
+; other by line number, in either direction. If that owner's bypass list ever grows a referral
+; site, these literals and his disagree and the invariant below fails.
+pub const LEDGER_PAIRED_MOVEMENTS : u8 = 6;
+pub const LEDGER_MOVEMENTS_TOTAL : u8 = 10;
+pub const THIS_DOMAINS_CREDITS_INSIDE_THE_PAIRED_SIX : u8 = 3;
+pub const THIS_DOMAINS_CREDITS_AMONG_THE_BYPASSES : u8 = 0;
+pub const LEDGER_OWNER_NAMES_THIS_CONTRACT_BACK : bool = true;
+pub const LEDGER_AGREEMENT_CHECKED_AT : str = "2026-09-21";
+pub const LEDGER_CITATION_IS_BY_ID_IN_BOTH_DIRECTIONS : bool = true;
+
+pub fn ledger_contracts_agree(inside: u8, among_bypasses: u8, paired: u8, total: u8) bool {
+  if (among_bypasses != 0) {
+    return false;
+  }
+  return inside <= paired and paired <= total;
+}
 pub const STAR_AWARD_SUPPLIES : str = "the corpus precedent for a capped credit path -- a per-source rolling ceiling that trims rather than refuses, over a capped SET whose size is that owner's number and is not reproduced here. A referral credit has no equivalent ceiling, which is a fact about this file and not about that one.";
-pub const REQUEST_IDENTITY_SUPPLIES : str = "who the caller is and what a failed proof means. That owner declares CONSUMERS as a closed snapshot and this file is not in it; this file records only which of its own five routes stands behind a gate, which that owner explicitly does not carry.";
+pub const REQUEST_IDENTITY_SUPPLIES : str = "who the caller is and what a failed proof means. That owner declares CONSUMERS as a closed snapshot, and as of 2026-09-21 this file IS named in it -- see the note below, which records that the answer was the opposite earlier the same day. This file records only which of its own five routes stands behind a gate, which that owner explicitly does not carry.";
 pub const DEEPLINK_SUPPLIES : str = "the /start payload grammar in its link form, and REFERRAL_TRAVELS_AS_AN_OPAQUE_CODE -- the link-side statement that a referral travels as a code rather than as an identity. This file owns the mint that makes the code opaque, not the transport that carries it.";
 pub const BOT_SURFACE_SUPPLIES : str = "start_records_a_referral -- the conjunction of prefix, length bound, referrer lookup and sender comparison that admits an incoming referral at the COMMAND layer. It arrives here as the single boolean start_admitted, and none of its four terms is restated as a term of this file. The self edge recurs here only as a SECOND guard at a second site, the data layer, which that owner does not measure.";
 pub const NOTIFICATION_QUEUE_SUPPLIES : str = "the queued mail a referral produces -- the friend-joined row and the milestone row, their kinds and their delivery. This file declares only where those enqueues sit relative to a money commit, and restates no kind, no markup, no retry and no table column.";
 
-; turbobaby/request-identity declares a closed snapshot of its consumers, measured before this
-; file existed. This file is not in that snapshot; the edge is declared from this side, which is
-; the half of the pattern a new file can honestly supply.
-pub const NAMED_IN_THE_IDENTITY_CONSUMER_SNAPSHOT : bool = false;
+; turbobaby/request-identity declares a closed snapshot of its consumers, and this file IS named in
+; it. The edge is declared from this side too, so the pair is named from both ends.
+;
+; CORRECTED 2026-09-21, and the correction is worth more than the fact. The sentence that stood
+; here -- "this file is not in that snapshot", written when the snapshot was taken before this file
+; existed -- was true when written and false by the time it was read. That owner re-measured the
+; same day: CONSUMER_COUNT went from 8 to 22, the array now names turbobaby/referral-program
+; outright, and he keeps the superseded figure in CONSUMER_COUNT_BEFORE_THE_RE_MEASUREMENT so the
+; move is visible rather than silent. A standing "is not in it" is exactly the false absence this
+; corpus cannot afford, so the claim below carries the day it was taken and nothing here asserts an
+; absence that only a date could make true.
+pub const NAMED_IN_THE_IDENTITY_CONSUMER_SNAPSHOT : bool = true;
+pub const IDENTITY_SNAPSHOT_CHECKED_AT : str = "2026-09-21";
+pub const IDENTITY_SNAPSHOT_SIZE : u8 = 22;
+pub const IDENTITY_SNAPSHOT_SIZE_BEFORE_THE_RE_MEASUREMENT : u8 = 8;
+pub const IDENTITY_SNAPSHOT_MOVED_THE_SAME_DAY : bool = true;
 ; turbobaby/deeplink declares a co-declared-fact site pointing at turbobaby/bot-surface for the
 ; referral payload. This file is the third holder of that fact and restates none of it.
 pub const RESTATES_THE_START_PAYLOAD_GRAMMAR : bool = false;
@@ -637,6 +699,36 @@ test this_file_owns_its_own_identity {
   assert MEASURED_AT == "2026-09-21";
 }
 
+test the_wave_census_is_measured_and_the_unmeasured_interval_is_refused {
+  assert CORPUS_T27_FILE_COUNT == 43;
+  assert PRIOR_WAVE_NEW_CONTRACTS == 10;
+  assert OWN_WAVE_NEW_CONTRACTS == 13;
+  assert OWN_WAVE_NEW_CONTRACTS > PRIOR_WAVE_NEW_CONTRACTS;
+  assert SIBLING_LINE_CITATIONS_IN_THIS_FILE == 0;
+  assert CORPUS_RESIDUE_IS_PINNED_HERE == false;
+  assert CORPUS_RESIDUE_NOTE != "";
+  assert WAVE_CENSUS_MEASURED_AT == "2026-09-21";
+  assert WAVE_CENSUS_SOURCE != "";
+  assert STALENESS_INTERVAL_IS_PUBLISHED == false;
+  assert edge_is_durable(true, false) == true;
+  assert edge_is_durable(true, true) == false;
+  assert edge_is_durable(false, false) == false;
+}
+
+test the_ledger_agreement_is_pinned_in_both_directions {
+  assert REUSES_LOYALTY_LEDGER_ID == "turbobaby/loyalty-ledger";
+  assert LEDGER_PAIRED_MOVEMENTS == 6;
+  assert LEDGER_MOVEMENTS_TOTAL == 10;
+  assert THIS_DOMAINS_CREDITS_INSIDE_THE_PAIRED_SIX == 3;
+  assert THIS_DOMAINS_CREDITS_AMONG_THE_BYPASSES == 0;
+  assert LEDGER_OWNER_NAMES_THIS_CONTRACT_BACK == true;
+  assert LEDGER_CITATION_IS_BY_ID_IN_BOTH_DIRECTIONS == true;
+  assert LEDGER_AGREEMENT_CHECKED_AT == "2026-09-21";
+  assert ledger_contracts_agree(THIS_DOMAINS_CREDITS_INSIDE_THE_PAIRED_SIX, THIS_DOMAINS_CREDITS_AMONG_THE_BYPASSES, LEDGER_PAIRED_MOVEMENTS, LEDGER_MOVEMENTS_TOTAL) == true;
+  assert ledger_contracts_agree(3, 1, 6, 10) == false;
+  assert ledger_contracts_agree(7, 0, 6, 10) == false;
+}
+
 test a_code_is_opaque_only_when_it_is_random_and_full_length {
   assert code_is_opaque(false, true, 8) == true;
   assert code_is_opaque(true, true, 8) == false;
@@ -906,7 +998,17 @@ test the_refusals_are_measured_and_carry_no_invented_number {
 test this_file_restates_no_owned_decision {
   assert RESTATES_THE_START_PAYLOAD_GRAMMAR == false;
   assert RESTATES_THE_LEDGER_STRUCTURE == false;
-  assert NAMED_IN_THE_IDENTITY_CONSUMER_SNAPSHOT == false;
+  assert NAMED_IN_THE_IDENTITY_CONSUMER_SNAPSHOT == true;
+}
+
+test the_identity_snapshot_names_this_file_and_moved_the_day_it_was_checked {
+  assert NAMED_IN_THE_IDENTITY_CONSUMER_SNAPSHOT == true;
+  assert IDENTITY_SNAPSHOT_CHECKED_AT == "2026-09-21";
+  assert IDENTITY_SNAPSHOT_SIZE == 22;
+  assert IDENTITY_SNAPSHOT_SIZE_BEFORE_THE_RE_MEASUREMENT == 8;
+  assert IDENTITY_SNAPSHOT_SIZE > IDENTITY_SNAPSHOT_SIZE_BEFORE_THE_RE_MEASUREMENT;
+  assert IDENTITY_SNAPSHOT_MOVED_THE_SAME_DAY == true;
+  assert REUSES_REQUEST_IDENTITY_ID == "turbobaby/request-identity";
 }
 
 ; --- Invariants -------------------------------------------------------------------------------------
@@ -973,6 +1075,18 @@ invariant the_one_ungated_route_is_the_one_that_publishes_an_account_id
 
 invariant a_seed_that_never_mentions_referrals_settles_nothing_about_the_ladder
   assert SEED_REFERRAL_OCCURRENCES == 0 and SEED_ZERO_MAKES_THE_LADDER_UNOWNED == false and MILESTONE_RUNG_COUNT == 3
+
+invariant no_edge_of_this_contract_is_carried_by_a_line_number
+  assert SIBLING_LINE_CITATIONS_IN_THIS_FILE == 0 and edge_is_durable(true, false) == true and edge_is_durable(true, true) == false
+
+invariant an_unmeasured_interval_is_never_published_as_a_number
+  assert STALENESS_INTERVAL_IS_PUBLISHED == false and WAVE_CENSUS_MEASURED_AT == "2026-09-21"
+
+invariant a_number_that_moves_while_it_is_read_is_never_pinned_as_a_constant
+  assert CORPUS_RESIDUE_IS_PINNED_HERE == false and CORPUS_RESIDUE_NOTE != "" and SIBLING_LINE_CITATIONS_IN_THIS_FILE == 0
+
+invariant no_credit_of_this_domain_escapes_the_ledger
+  assert THIS_DOMAINS_CREDITS_AMONG_THE_BYPASSES == 0 and ledger_contracts_agree(THIS_DOMAINS_CREDITS_INSIDE_THE_PAIRED_SIX, THIS_DOMAINS_CREDITS_AMONG_THE_BYPASSES, LEDGER_PAIRED_MOVEMENTS, LEDGER_MOVEMENTS_TOTAL) == true
 
 invariant this_contract_carries_no_person_and_no_code
   assert CODE_FIXTURES_CARRIED == 0 and ACCOUNT_IDS_CARRIED == 0 and LEADERBOARD_CONTENT_CARRIED == false

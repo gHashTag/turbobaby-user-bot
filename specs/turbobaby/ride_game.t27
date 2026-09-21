@@ -279,7 +279,9 @@ pub const RIDE_EMITS_CLIENT_PRICE : bool = false;
 ; CORRECTION (2026-09-20): "not copied here" means not copied FROM THE SNAPSHOT. Three of those
 ; four arrays are copies of another canonical contract's table -- CATALOG_KEYS,
 ; EXCLUDED_NONE_FREE and EXCLUDED_NOT_OFFERED -- and only RIDEABLE_KEYS is this file's own
-; witness, declared nowhere else in specs/. The owners are named immediately below.
+; witness, declared nowhere else in specs/. RE-MEASURED 2026-09-21: that last clause was taken
+; when specs/ held 12 tracked files and it holds 43 now, so it was run again over all 43 and still
+; answers nowhere else. The owners are named immediately below.
 pub const RIDE_BOOKABILITY_OWNER_ID : str = "turbobaby/availability";
 pub const RIDE_BOOKABILITY_INPUT : str = "is_bookable(offered, units_available) from the availability contract";
 
@@ -329,18 +331,30 @@ pub fn ride_can_start(outcome: u8, rideable_count: u8) bool {
 ; the copy owners was named in a constant -- RIDE_BOOKABILITY_OWNER_ID, and that one names a
 ; BOOLEAN this file consumes, not a table it copies -- so six copies were invisible to grep and
 ; could drift without anything failing. The duplication is not deleted below, because there is
-; nowhere to delete it TO (SHARED_VOCABULARY_IMPORT_IS_NOT_SHIPPED) and a thirteenth shared-facts
-; contract would be one more copy rather than one fewer. What is added is the EDGE: every copy
+; nowhere to delete it TO (SHARED_VOCABULARY_IMPORT_IS_NOT_SHIPPED) and a further shared-facts
+; contract would be one more copy rather than one fewer. (That contract was called "a thirteenth"
+; here until 2026-09-21, which was right when specs/ held 12 tracked files and is wrong now: it
+; would be the 44th of 43. The ordinal was never the argument -- the argument is that a new file
+; holding the same tables is another copy and not a source -- so the count is corrected and the
+; sentence is not.) What is added is the EDGE: every copy
 ; names its owner by ID and by path, records that it is a copy, and is pinned by an invariant to
 ; the owner's declared length and ends, so a drift between the two fails the gate instead of
 ; shipping.
 ; --
-; THE MEASUREMENT, command by command, all run 2026-09-20 against the working tree:
-;   grep -A2 'pub const CATALOG_KEYS' specs/turbobaby/ride_game.t27 | tail -2
-;   grep -A2 'pub const FAMILY_KEYS'  specs/turbobaby/availability.t27 | tail -2
+; THE MEASUREMENT, command by command. First run 2026-09-20; EVERY line below re-run 2026-09-21
+; against the working tree, with the result unchanged in each case:
+;   grep -A2 '^pub const CATALOG_KEYS : ' specs/turbobaby/ride_game.t27 | tail -2
+;   grep -A2 '^pub const FAMILY_KEYS'     specs/turbobaby/availability.t27 | tail -2
 ;     -> diff reports no difference; both extracts hash to sha256
 ;        61547e83c41496c5f874dcb17dbd2f36841e04b35f4764f4c7717cde1477a2bd
-;   grep -A1 'pub const PRICE_LIST_ONLY_KEYS' on this file and on deposit_tiers.t27, each tail -1
+;   THE ANCHORS ARE PART OF THE COMMAND (corrected 2026-09-21). The first grep was printed here
+;   without the leading ^ and without the trailing " : ", and in that form it also matches
+;   CATALOG_KEYS_COPY_NOTE further down this file; tail -2 then returns the tail of that note
+;   instead of the two element lines, and the recipe emits the wrong extract while exiting 0. It
+;   shipped broken, because the note it collides with was written in the same edit that recorded
+;   the recipe. The hashes were never wrong -- the printed command simply stopped reproducing
+;   them, which is the quietest way for a measurement to stop being a measurement.
+;   grep -A1 '^pub const PRICE_LIST_ONLY_KEYS' on this file and on deposit_tiers.t27, each tail -1
 ;     -> diff reports no difference; both extracts hash to sha256
 ;        d3db4c253e0cc918617763a7f22b112f5591a24f9ff03107057f5ac381aeaecf
 ;   the four class discriminant declarations of this file and of bike_catalog.t27, sorted, diffed
@@ -369,13 +383,22 @@ pub const COPY_RULE : str = "Each vocabulary named in COPY_NAMES is declared in 
 
 ; THE REFUSAL, and the reason all seven are still copies. No import form in the pinned compiler
 ; carries a constant across files. scripts/verify_t27_specs.py fails any malformed UseDecl
-; (lines 245-249), keeps EMPTY_IMPORT_PATTERNS for an emitted empty import (lines 103-106), and
-; fails the file when any of the five generators emits one (lines 273-275). The corpus reaches
-; the same conclusion in prose at docs/t27-semantic-merge-matrix.md:122-123: the pinned compiler
+; (lines 431-436), keeps EMPTY_IMPORT_PATTERNS for an emitted empty import (lines 290-293), and
+; fails the file when any of the five generators emits one (lines 458-461). The corpus reaches
+; the same conclusion in prose at docs/t27-semantic-merge-matrix.md:127-129: the pinned compiler
 ; does not provide a sound cross-file import form, so the contracts exchange abstract inputs and
 ; do not pretend that brace imports resolve. What is missing is the import, not the number, and
 ; no number is invented in its place. When an import form exists, these copies are what it
 ; deletes.
+; ALL FOUR OF THOSE CITATIONS WERE STALE AND ARE CORRECTED (re-measured 2026-09-21). They read
+; 245-249, 103-106, 273-275 and 122-123 until this edit, and not one of the four still pointed at
+; what it named: line 245 of the verifier is now the middle of the ride_runtime registry entry,
+; 103 the middle of the customer-surface one, and 273 a min_checks field. The cause is worth
+; naming because it will happen again -- the verifier carries one registry block per tracked spec,
+; the corpus went from 12 tracked specs to 43 on 2026-09-21, and 31 new blocks pushed every check
+; in that file several hundred lines down at once. The three checks themselves were re-read and
+; are unchanged in substance; only their addresses moved. The matrix sentence moved for the same
+; kind of reason and now reads the same words at 127-129.
 pub const SHARED_VOCABULARY_IMPORT_IS_NOT_SHIPPED : bool = true;
 pub const SHARED_VOCABULARY_IMPORT_NOTE : str = "No import form in the pinned compiler carries a constant across files: scripts/verify_t27_specs.py rejects a malformed UseDecl and fails any file whose five generators emit an empty import, and docs/t27-semantic-merge-matrix.md records that the contracts exchange abstract inputs rather than pretend brace imports resolve. Until an import exists, a shared vocabulary can only be a pinned copy with a named owner. Deleting a copy is not the alternative: without DISPLACEMENTS_CC or CATALOG_KEYS this file cannot state its own laws, and a new shared-facts contract would be a thirteenth copy, not a single source.";
 
@@ -408,12 +431,29 @@ pub const AVAILABILITY_OWNER_PATH : str = "specs/turbobaby/availability.t27";
 ; "available_only" finds in two files, so the owner is named here and the two owned literals are
 ; pinned below. Composition, not copy: COPY_COUNT does not move, and the test asserts that
 ; RIDEABLE_SOURCE is NOT equal to the endpoint it is built from.
+; THE OWNER'S ARRAY MOVED UNDER THIS EDGE, AND THE PIN HELD (re-measured 2026-09-21). On
+; 2026-09-20 catalog-api declared FILTER_NAMES as five elements: class, cc_min, cc_max,
+; available_only, for_sale. It declares four today: class, min_cc, max_cc, available_only. Two of
+; the words were corrected against the shipped endpoint, which had never read the old spellings,
+; and for_sale left the filter vocabulary entirely because no query parse mentions it. The fourth
+; element survived both changes, so the composition above is still the composition it claims to
+; be and nothing here had to move.
+; That is the good outcome, and it is recorded as a measurement rather than as reassurance. An
+; array this edge depends on lost a fifth of its length and had two of its words rewritten inside
+; one day, and the only reason the edge did not break is that every change fell on the other
+; positions. What is pinned below is the VALUE available_only and never the ordinal 3; the ordinal
+; is the fragile half, and a reader who reaches for it should know it has already been outlived
+; once by the thing it indexes.
 pub const REUSES_CATALOG_API_ID : str = "turbobaby/catalog-api";
 pub const CATALOG_API_OWNER_PATH : str = "specs/turbobaby/catalog_api.t27";
 pub const CATALOG_API_OWNED_LIST_ENDPOINT : str = "GET /api/bikes";
 pub const CATALOG_API_OWNED_AVAILABLE_ONLY_FILTER : str = "available_only";
 pub const RIDEABLE_SOURCE_IS_A_COMPOSED_ROUTE : bool = true;
-pub const RIDEABLE_SOURCE_NOTE : str = "RIDEABLE_SOURCE is built from two literals turbobaby/catalog-api declares at specs/turbobaby/catalog_api.t27: LIST_ENDPOINT, which is GET /api/bikes, and FILTER_NAMES position 3, which is available_only. Measured 2026-09-20, both are unchanged there. The route named here is the query form of that endpoint, so the path and the filter word are the owner's and only the composition is this file's. If the transport contract renames the filter or moves the path, this constant is wrong and no amount of local testing would say so, which is why the two owned literals are pinned rather than merely mentioned.";
+pub const RIDEABLE_SOURCE_NOTE : str = "RIDEABLE_SOURCE is built from two literals turbobaby/catalog-api declares at specs/turbobaby/catalog_api.t27: LIST_ENDPOINT, which is GET /api/bikes, and FILTER_NAMES position 3, which is available_only. RE-MEASURED 2026-09-21: LIST_ENDPOINT is unchanged and position 3 still reads available_only, but the array around it is NOT unchanged. It was five elements on 2026-09-20 -- class, cc_min, cc_max, available_only, for_sale -- and it is four today, with cc_min and cc_max corrected to min_cc and max_cc and for_sale removed from the filter vocabulary. This note said 'Measured 2026-09-20, both are unchanged there' until this edit, which was true of the two literals and false of the array they sit in, and a reader who took it for the array would have believed the owner's transport surface had held still while it was being rewritten. The route named here is the query form of that endpoint, so the path and the filter word are the owner's and only the composition is this file's. If the transport contract renames the filter or moves the path, this constant is wrong and no amount of local testing would say so, which is why the two owned literals are pinned rather than merely mentioned.";
+pub const CATALOG_API_FILTER_COUNT_AT_FIRST_MEASUREMENT : u8 = 5;
+pub const CATALOG_API_FILTER_COUNT_AT_REMEASUREMENT : u8 = 4;
+pub const CATALOG_API_FILTER_ARRAY_CHANGED_UNDER_THIS_EDGE : bool = true;
+pub const CATALOG_API_OWNED_FILTER_VALUE_SURVIVED : bool = true;
 
 ; --- Edge found by review, 2026-09-20: the unit floor ---------------------------------------------
 ; availability.t27 owns the bookability rule itself, and says so in its own words: the comment
@@ -497,11 +537,46 @@ pub const OUT_ON_CONTRACT_COPY_AGREES : bool = true;
 pub const NOT_OFFERED_COPY_AGREES : bool = true;
 pub const BOOKABLE_COUNTS_COPY_AGREES : bool = true;
 
-pub const CLASS_ALGEBRA_COPY_NOTE : str = "CLASS_NAMES, CLASS_SCOOTER, CLASS_MOTORCYCLE, CLASS_COUNT and CLASS_NONE are a COPY. Owner turbobaby/bike-catalog at specs/turbobaby/bike_catalog.t27, where the array is called CLASSES. Measured 2026-09-20: the four discriminant declarations of the two files, sorted and diffed, show no difference, and the two arrays hold the same two strings in the same order under different constant names. Change here only in the commit that changes the owner.";
-pub const DISPLACEMENT_DOMAIN_COPY_NOTE : str = "DISPLACEMENTS_CC, DISPLACEMENT_MIN_CC and DISPLACEMENT_MAX_CC are a COPY. Owner turbobaby/bike-catalog at specs/turbobaby/bike_catalog.t27, under the same three names. Measured 2026-09-20: all three declaration lines are byte-identical in the two files, widths included. The owner also declares DISPLACEMENT_COUNT, which this file does not copy and does not need, because its own length invariant reads DISPLACEMENTS_CC.len. Change here only in the commit that changes the owner.";
-pub const CATALOG_KEYS_COPY_NOTE : str = "CATALOG_KEYS is a COPY of FAMILY_KEYS in specs/turbobaby/availability.t27, owner turbobaby/availability. Measured 2026-09-20: grep -A2 for each declaration piped to tail -2 emits the same two element lines from both files, diff reports no difference, and both extracts hash to sha256 61547e83c41496c5f874dcb17dbd2f36841e04b35f4764f4c7717cde1477a2bd. Only the declaration line differs, and only in the constant name. Both are the fourteen in-stock family keys of data/fleet_seed.json lines 121-238 in the seed's own order. Change here only in the commit that changes the owner.";
-pub const PRICE_LIST_ONLY_COPY_NOTE : str = "PRICE_LIST_ONLY_KEYS and PRICE_LIST_ONLY_UNITS_TOTAL are a COPY. Owner turbobaby/deposit-tiers at specs/turbobaby/deposit_tiers.t27, which declares an array of the same name and the same zero as PRICE_LIST_ONLY_UNITS. Measured 2026-09-20: the element line is byte-identical in both files, sha256 d3db4c253e0cc918617763a7f22b112f5591a24f9ff03107057f5ac381aeaecf. Both are the seven tariff rows of data/fleet_seed.json lines 255-261 that own no unit. Change here only in the commit that changes the owner.";
-pub const SMALL_ROSTER_COPY_NOTE : str = "Three smaller copies, all measured 2026-09-20 and all agreeing in value while differing in name. EXCLUDED_NONE_FREE holds the same two keys as OFFERED_OUT_ON_CONTRACT_KEYS in specs/turbobaby/availability.t27. EXCLUDED_NOT_OFFERED holds the same single key as NOT_OFFERED_KEYS in specs/turbobaby/deposit_tiers.t27. RIDEABLE_FAMILIES_AT_MEASURED_AT and RIDEABLE_UNITS_AT_MEASURED_AT are the same two measured numbers, 11 and 26, as BOOKABLE_FAMILIES and FLEET_AVAILABLE in specs/turbobaby/availability.t27. A copy that differs only in name is the one grep cannot find, which is why each of the three is pinned by an invariant below. Change here only in the commit that changes the owner.";
+pub const CLASS_ALGEBRA_COPY_NOTE : str = "CLASS_NAMES, CLASS_SCOOTER, CLASS_MOTORCYCLE, CLASS_COUNT and CLASS_NONE are a COPY. Owner turbobaby/bike-catalog at specs/turbobaby/bike_catalog.t27, where the array is called CLASSES. Measured 2026-09-20: the four discriminant declarations of the two files, sorted and diffed, show no difference, and the two arrays hold the same two strings in the same order under different constant names. RE-VERIFIED 2026-09-21, element by element: no difference. CLASS_COUNT 2, CLASS_MOTORCYCLE 1, CLASS_NONE 255, CLASS_SCOOTER 0 on both sides, and CLASSES still holds scooter then motorcycle. Change here only in the commit that changes the owner.";
+pub const DISPLACEMENT_DOMAIN_COPY_NOTE : str = "DISPLACEMENTS_CC, DISPLACEMENT_MIN_CC and DISPLACEMENT_MAX_CC are a COPY. Owner turbobaby/bike-catalog at specs/turbobaby/bike_catalog.t27, under the same three names. Measured 2026-09-20: all three declaration lines are byte-identical in the two files, widths included. RE-VERIFIED 2026-09-21: the three lines diff clean again, still byte-identical and still [7]u16 = [125, 155, 300, 350, 400, 650, 750] with the extremes 125 and 750. The owner also declares DISPLACEMENT_COUNT, which this file does not copy and does not need, because its own length invariant reads DISPLACEMENTS_CC.len. Change here only in the commit that changes the owner.";
+pub const CATALOG_KEYS_COPY_NOTE : str = "CATALOG_KEYS is a COPY of FAMILY_KEYS in specs/turbobaby/availability.t27, owner turbobaby/availability. Measured 2026-09-20: an ANCHORED grep for each declaration piped to tail -2 emits the same two element lines from both files, diff reports no difference, and both extracts hash to sha256 61547e83c41496c5f874dcb17dbd2f36841e04b35f4764f4c7717cde1477a2bd. This sentence said only grep -A2 until 2026-09-21, and in that unanchored form it also matches this very constant further down the file and returns the wrong extract; the anchors are given in THE MEASUREMENT above and they are part of the command, not decoration. RE-VERIFIED 2026-09-21 with the anchored form: both extracts still reproduce that same sha256 byte for byte. Only the declaration line differs, and only in the constant name. Both are the fourteen in-stock family keys of data/fleet_seed.json lines 121-238 in the seed's own order, re-read the same day and unchanged. Change here only in the commit that changes the owner.";
+pub const PRICE_LIST_ONLY_COPY_NOTE : str = "PRICE_LIST_ONLY_KEYS and PRICE_LIST_ONLY_UNITS_TOTAL are a COPY. Owner turbobaby/deposit-tiers at specs/turbobaby/deposit_tiers.t27, which declares an array of the same name and the same zero as PRICE_LIST_ONLY_UNITS. Measured 2026-09-20: the element line is byte-identical in both files, sha256 d3db4c253e0cc918617763a7f22b112f5591a24f9ff03107057f5ac381aeaecf. RE-VERIFIED 2026-09-21, and this is the copy whose owner moved furthest: deposit-tiers gained 350 committed lines that day and more again in the working tree, and the element line and PRICE_LIST_ONLY_UNITS 0 both came through untouched, reproducing the same sha256. Both are the seven tariff rows of data/fleet_seed.json lines 255-261 that own no unit, re-read the same day and unchanged. Change here only in the commit that changes the owner.";
+
+; --- The seven copies, re-verified element by element after the corpus grew ----------------------
+; The audit above was taken on 2026-09-20 against a corpus of 12 tracked specs. 31 more were
+; tracked on 2026-09-21, and ALL THREE copy owners were edited that day: deposit-tiers gained 350
+; committed lines, and all three carry further edits in the working tree -- availability +72/-13,
+; bike-catalog +44/-5, deposit-tiers +78/-17 -- from the same day's work on their own files. A
+; copy audit whose owners have all been edited since it was taken is not an audit any more, it is
+; a memory of one, so all seven were run again element by element rather than assumed to have
+; held. The re-run was made against the WORKING TREE, after those edits, and not against the last
+; commit: the tree is what the next reader compiles.
+; ALL SEVEN STILL AGREE, and the re-run is the same measurement and not a lighter one: the two
+; published sha256 extracts both reproduce byte for byte, the three displacement declaration lines
+; are still byte-identical, the four class discriminants still sort and diff clean, and the three
+; name-differing rosters still hold their owners' values -- forza-300 with mt-03-300, the single
+; click-125, and 11 with 26. What the three owners gained was prose and re-measurement, and not
+; one of them touched a table this file copies.
+; WHAT THIS DATE DOES NOT DO. It does not refresh MEASURED_AT, which belongs to the fleet reading
+; of 2026-09-12, and it does not refresh COPIES_MEASURED_AT, which belongs to the day the audit was
+; written. Three dates, three measurements, and none of them renews another.
+pub const COPIES_REVERIFIED_AT : str = "2026-09-21";
+pub const COPIES_REVERIFIED_COUNT : u8 = 7;
+pub const COPIES_FOUND_DRIFTED : u8 = 0;
+pub const COPY_OWNERS_EDITED_SINCE_THE_FIRST_MEASUREMENT : u8 = 3;
+pub const COPY_OWNER_COUNT : u8 = 3;
+pub const TRACKED_SPECS_WHEN_THE_COPIES_WERE_FIRST_MEASURED : u8 = 12;
+pub const TRACKED_SPECS_AT_REVERIFICATION : u8 = 43;
+pub const ELEVEN_KEY_FAMILY_ARRAYS_ELSEWHERE_IN_SPECS : u8 = 0;
+
+; A re-run counts only if it covered every copy and found every one of them agreeing. Written as a
+; function so that a worker who finds a drift writes the number and watches the assert fail,
+; instead of editing the booleans above one at a time.
+pub fn every_copy_still_agrees(copies_checked: u8, copies_drifted: u8) bool {
+  return copies_checked == COPY_COUNT and copies_drifted == 0;
+}
+
+pub const SMALL_ROSTER_COPY_NOTE : str = "Three smaller copies, all measured 2026-09-20 and all agreeing in value while differing in name. EXCLUDED_NONE_FREE holds the same two keys as OFFERED_OUT_ON_CONTRACT_KEYS in specs/turbobaby/availability.t27. EXCLUDED_NOT_OFFERED holds the same single key as NOT_OFFERED_KEYS in specs/turbobaby/deposit_tiers.t27. RIDEABLE_FAMILIES_AT_MEASURED_AT and RIDEABLE_UNITS_AT_MEASURED_AT are the same two measured numbers, 11 and 26, as BOOKABLE_FAMILIES and FLEET_AVAILABLE in specs/turbobaby/availability.t27. A copy that differs only in name is the one grep cannot find, which is why each of the three is pinned by an invariant below. RE-VERIFIED 2026-09-21, value by value: OFFERED_OUT_ON_CONTRACT_KEYS is still forza-300 then mt-03-300, NOT_OFFERED_KEYS is still the single click-125, and BOOKABLE_FAMILIES and FLEET_AVAILABLE still read 11 and 26. None of the three moved. Change here only in the commit that changes the owner.";
 
 ; The owner's decision arrives as parameters, exactly as bookability does: this function knows
 ; nothing about which vocabulary it is checking, and so cannot be the place a table is restated.
@@ -749,7 +824,10 @@ test the_displacement_domain_copy_tracks_the_catalog {
   assert DISPLACEMENT_DOMAIN_COPY_AGREES == true;
 }
 
-; The largest copy in the corpus, and the one the measurement hashed.
+; The largest of THIS FILE'S seven copies, and the one the measurement hashed. It read "the largest
+; copy in the corpus" until 2026-09-21, which was never a measurement: nothing had been measured
+; over the corpus, only over these seven, and the corpus has grown from 12 tracked specs to 43
+; since. The narrower sentence is the one that was actually taken, so it is the one that stands.
 test the_catalog_key_copy_tracks_availability {
   assert CATALOG_KEYS.len == AVAILABILITY_OWNED_KEY_LEN;
   assert CATALOG_KEYS[0] == AVAILABILITY_OWNED_KEY_FIRST;
@@ -789,6 +867,12 @@ test the_small_roster_copies_track_their_owners {
 ; RIDEABLE_KEYS is the control case and the reason this section is an audit rather than a
 ; confession: it is the one roster this file measured for itself, and no other contract declares
 ; an eleven-key family array anywhere in specs/.
+; RE-MEASURED 2026-09-21 over all 43 tracked specs, because that sentence was first taken over 12
+; and an absence measured on a smaller corpus is the one claim a reader accepts without checking.
+; It still holds. The corpus contains exactly one other eleven-element array of any type --
+; bike-catalog's FORBIDDEN_UNIT_FIELDS, the field names a unit record may never carry -- and it is
+; a roster of forbidden FIELDS, not of families. RIDEABLE_KEYS appears under that name in no other
+; file either.
 test the_one_roster_this_file_owns_is_not_in_the_copy_list {
   assert RIDEABLE_KEYS.len == RIDEABLE_FAMILIES_AT_MEASURED_AT;
   assert RIDEABLE_KEYS.len != AVAILABILITY_OWNED_KEY_LEN;
@@ -796,6 +880,48 @@ test the_one_roster_this_file_owns_is_not_in_the_copy_list {
   assert COPY_NAMES.len == COPY_COUNT;
   assert COPY_NAMES[0] == "class algebra";
   assert COPY_NAMES[6] == "bookable counts";
+  assert ELEVEN_KEY_FAMILY_ARRAYS_ELSEWHERE_IN_SPECS == 0;
+}
+
+; The re-run, and the two dates it must not be confused with. The owner count is the assert that
+; says the re-run was not vacuous: every one of the three copy owners was edited between the two
+; measurements, so the second one had somewhere to find a drift and found none.
+test every_copy_was_reverified_against_its_owner_after_the_corpus_grew {
+  assert COPIES_REVERIFIED_AT == "2026-09-21";
+  assert COPIES_REVERIFIED_AT != COPIES_MEASURED_AT;
+  assert COPIES_REVERIFIED_AT != MEASURED_AT;
+  assert COPIES_REVERIFIED_COUNT == COPY_COUNT;
+  assert COPIES_FOUND_DRIFTED == 0;
+  assert COPY_OWNERS_EDITED_SINCE_THE_FIRST_MEASUREMENT == 3;
+  assert COPY_OWNER_COUNT == 3;
+  assert COPY_OWNERS_EDITED_SINCE_THE_FIRST_MEASUREMENT == COPY_OWNER_COUNT;
+  assert TRACKED_SPECS_WHEN_THE_COPIES_WERE_FIRST_MEASURED == 12;
+  assert TRACKED_SPECS_AT_REVERIFICATION == 43;
+  assert TRACKED_SPECS_AT_REVERIFICATION > TRACKED_SPECS_WHEN_THE_COPIES_WERE_FIRST_MEASURED;
+  assert every_copy_still_agrees(COPIES_REVERIFIED_COUNT, COPIES_FOUND_DRIFTED) == true;
+  assert every_copy_still_agrees(COPIES_REVERIFIED_COUNT, 1) == false;
+  assert every_copy_still_agrees(6, 0) == false;
+  assert CLASS_ALGEBRA_COPY_AGREES == true;
+  assert DISPLACEMENT_DOMAIN_COPY_AGREES == true;
+  assert CATALOG_KEYS_COPY_AGREES == true;
+  assert PRICE_LIST_ONLY_COPY_AGREES == true;
+  assert OUT_ON_CONTRACT_COPY_AGREES == true;
+  assert NOT_OFFERED_COPY_AGREES == true;
+  assert BOOKABLE_COUNTS_COPY_AGREES == true;
+}
+
+; The transport array shrank and the pinned value did not. Both halves are asserted, because the
+; reassuring half alone would read as though nothing had happened upstream.
+test the_owners_filter_array_changed_and_the_pinned_value_survived {
+  assert CATALOG_API_FILTER_COUNT_AT_FIRST_MEASUREMENT == 5;
+  assert CATALOG_API_FILTER_COUNT_AT_REMEASUREMENT == 4;
+  assert CATALOG_API_FILTER_COUNT_AT_REMEASUREMENT < CATALOG_API_FILTER_COUNT_AT_FIRST_MEASUREMENT;
+  assert CATALOG_API_FILTER_ARRAY_CHANGED_UNDER_THIS_EDGE == true;
+  assert CATALOG_API_OWNED_FILTER_VALUE_SURVIVED == true;
+  assert CATALOG_API_OWNED_AVAILABLE_ONLY_FILTER == "available_only";
+  assert CATALOG_API_OWNED_LIST_ENDPOINT == "GET /api/bikes";
+  assert RIDEABLE_SOURCE_IS_A_COMPOSED_ROUTE == true;
+  assert COPY_COUNT == 7;
 }
 
 ; The rule itself. A copy may change only in the commit that changes its owner; an untouched copy
@@ -978,6 +1104,18 @@ invariant a_copy_edited_without_its_owner_is_illegal
 
 invariant the_copies_stay_only_because_no_import_form_exists
   assert SHARED_VOCABULARY_IMPORT_IS_NOT_SHIPPED == true
+
+; The audit carries the day it was last re-run, and that day is not the day it was written. Without
+; this, a copy audit taken against a corpus of twelve would go on reading as current against one of
+; forty-three, which is the exact way a true measurement turns into a false one without being
+; edited.
+invariant the_copy_audit_carries_the_day_it_was_last_re_run
+  assert every_copy_still_agrees(COPIES_REVERIFIED_COUNT, COPIES_FOUND_DRIFTED) == true and COPIES_REVERIFIED_AT != COPIES_MEASURED_AT and TRACKED_SPECS_AT_REVERIFICATION > TRACKED_SPECS_WHEN_THE_COPIES_WERE_FIRST_MEASURED
+
+; The composed route survived a change to the array it indexes. The pin is on the VALUE, so this
+; holds whatever the owner's array length becomes next.
+invariant the_composed_route_is_pinned_to_a_value_and_not_to_an_ordinal
+  assert CATALOG_API_OWNED_AVAILABLE_ONLY_FILTER == "available_only" and CATALOG_API_FILTER_ARRAY_CHANGED_UNDER_THIS_EDGE == true and CATALOG_API_OWNED_FILTER_VALUE_SURVIVED == true
 
 invariant the_ride_game_declares_no_class_discount
   assert THIS_FILE_DECLARES_A_CLASS_DISCOUNT == false

@@ -58,6 +58,9 @@
 ;      2026-09-21 finds turbobaby/rate-limit, which owns the limiter this endpoint configures and
 ;      already records the shared-store tripwire this file would otherwise have declared a second
 ;      time, and turbobaby/observability, which owns metric names. Both are taken as edges below.
+;      RE-VERIFIED 2026-09-21 over the 43 files the corpus now holds -- 42 under specs/turbobaby
+;      plus specs/agents/turbobaby.t27 -- where both contracts are manifested and both still own
+;      what is named here. The count of edges is six and has not moved since.
 ; --
 ; WHAT THIS FILE NEVER DOES. It quotes no message: every customer-facing sentence on this surface
 ; is a Russian or English row in src/trios/i18n.rs, pinned here by the line that selects it and
@@ -66,10 +69,11 @@
 ; client-supplied telegram_id and derives none from headers (:10-11), and no value of that field,
 ; real or invented, appears here. It declares no retention period, because the code implements
 ; none, and the honest refusal is recorded rather than a plausible number. It re-declares no HTTP
-; numeral the corpus already has: the one numeral below is 202, which no sibling owns, and the
-; three refusals name their existing declaration sites instead. Nothing from D14 -- no renter,
-; handle, phone, key code, plate, debt, purchase price or personal note -- in a constant, a
-; comment or a test.
+; numeral the corpus already has: the one numeral below is 202, and RE-MEASURED 2026-09-21 over
+; all 43 files a grep for a declaration of it returns this file's line and no other, so no sibling
+; owns it. The three refusals name their existing declaration sites instead. Nothing from D14 --
+; no renter, handle, phone, key code, plate, debt, purchase price or personal note -- in a
+; constant, a comment or a test.
 ; phi^2 + 1/phi^2 = 3 | TRINITY
 
 module turbobaby-client-errors;
@@ -156,8 +160,11 @@ pub const BODY_LIMIT_ACTS_BEFORE_DESERIALIZATION : bool = true;
 pub const BODY_LIMIT_REFUSAL_STATUS_IS_MEASURED : bool = false;
 ; 2. Rate. The three numbers at :39-41 are this endpoint's budget and live nowhere else: the
 ; limiter takes window, ceiling and key cap as arguments, so a contract for the limiter fixes none
-; of them. What differs from the admin gate that request_identity.t27:281-284 records is the
-; window and the counting rule -- 60 seconds against 300, and every request counted here against
+; of them. What differs from the admin gate -- turbobaby/request-identity records that gate in
+; ADMIN_RL_WINDOW_SECONDS, ADMIN_RL_MAX_ATTEMPTS, ADMIN_RL_MAX_TRACKED_IPS and
+; ADMIN_RL_COUNTS_FAILURES_ONLY, named by declaration rather than by line because a sibling's
+; lines move on its next edit -- is the window and the counting rule: 60 seconds against 300, and
+; every request counted here against
 ; failures only there. The tracked-key cap is 10000 on both, which is a coincidence of two
 ; separate literals (src/api/client_errors.rs:41 and src/api/auth.rs:433-435) and not a shared
 ; constant; neither file would change if the other did. Who ends up in which bucket, and what
@@ -205,12 +212,18 @@ pub const OUTCOME_MALFORMED : u8 = 2;
 pub const OUTCOME_THROTTLED : u8 = 3;
 pub const OUTCOME_SINK_FAILED : u8 = 4;
 pub const OUTCOME_COUNT : u8 = 5;
-; The one numeral this file declares. 202 appears in neither catalog_api.t27's set nor
-; request_identity.t27's, and it is the fact that distinguishes this surface: the handler returns
+; The one numeral this file declares. RE-MEASURED 2026-09-21 over all 43 files of the corpus: a
+; grep for a declaration of 202 in specs/ returns this file's line and no other. It appears in
+; neither turbobaby/catalog-api's set, which owns HTTP_BAD_REQUEST and HTTP_INTERNAL_ERROR, nor
+; turbobaby/request-identity's, which owns HTTP_TOO_MANY_REQUESTS -- both named by ID and
+; DECLARATION rather than by line, because a line in a sibling goes stale on that sibling's next
+; edit. It is the fact that distinguishes this surface: the handler returns
 ; it at :477 after the row is written but while the admin alert is still an unawaited task spawned
 ; at :462, so the answer acknowledges the report without waiting on anything it causes. The
 ; integration witness pins it at tests/integration_client_errors.rs:45 and :125.
 pub const HTTP_ACCEPTED : u16 = 202;
+pub const CORPUS_FILES_AT_REMEASUREMENT : u8 = 43;
+pub const SIBLINGS_DECLARING_THIS_NUMERAL : u8 = 0;
 pub const HTTP_STATUS_OWNED_ELSEWHERE : u16 = 0;
 pub const MALFORMED_NUMERAL_ALREADY_DECLARED_AT : str = "turbobaby/catalog-api";
 pub const SINK_FAILED_NUMERAL_ALREADY_DECLARED_AT : str = "turbobaby/catalog-api";
@@ -558,8 +571,10 @@ test the_budget_differs_from_the_admin_gate_in_window_and_not_in_key_cap {
 test the_limiter_mechanism_and_its_tripwire_are_not_restated_here {
   assert SHARED_BUCKET_TRIPWIRE_IS_RESTATED_HERE == false;
   assert KEY_SOURCE_RULE_IS_RESTATED_HERE == false;
+  assert WHO_A_REQUEST_IS_IS_NOT_THIS_FILES_SUBJECT == true;
   assert REUSES_RATE_LIMIT_ID == "turbobaby/rate-limit";
   assert LIMITER_VERDICT_INPUT == "under_rate_limit, supplied by the rate-limit contract";
+  assert NO_TRANSLATION_OUTCOME_INPUT == "key_has_translation, supplied by the locale contract";
 }
 
 test intake_precedence_refuses_before_it_inspects {
@@ -584,6 +599,10 @@ test only_the_accepted_numeral_is_declared_here {
   assert outcome_http_status(OUTCOME_UNSET) == HTTP_STATUS_OWNED_ELSEWHERE;
   assert MALFORMED_NUMERAL_ALREADY_DECLARED_AT == REUSES_CATALOG_API_ID;
   assert THROTTLED_NUMERAL_ALREADY_DECLARED_AT == REUSES_REQUEST_IDENTITY_ID;
+  assert SINK_FAILED_NUMERAL_ALREADY_DECLARED_AT == REUSES_CATALOG_API_ID;
+  assert HTTP_ACCEPTED == 202;
+  assert CORPUS_FILES_AT_REMEASUREMENT == 43;
+  assert SIBLINGS_DECLARING_THIS_NUMERAL == 0;
 }
 
 test the_outcome_set_is_closed {

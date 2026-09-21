@@ -26,14 +26,21 @@
 ; this file closes" from grep -ril telegram specs/. That grep returned SIX files, not zero. Five
 ; were re-opened line by line under review and every one holds a column name, an identity field
 ; or a D14 privacy field -- telegram_id, telegram_handle -- and not one is a bot surface:
-; specs/agents/turbobaby.t27:75 and :121 (a forbidden-fields list), bike_catalog.t27:327 (a
-; privacy field), game_score.t27:16 (a column), order_status.t27:56 (a statement that no
-; telegram id can appear) and request_identity.t27 in many places. The sixth was counted but
-; never named, and ten contracts have landed since, so it cannot now be recovered by name; what a
-; reader can reproduce is the re-run recorded at the end of this file, which is twelve. The
-; honest zeros are narrower: grep -ril "parse_mode" specs/ -> 0, "callback_data" -> 0,
-; "BotCommands" -> 0, and a grep for a slash-prefixed command name -> 0 at the time of writing
-; and 1 today. Those are the absences this file closes, and the six-file count is recorded rather
+; turbobaby/BOT owns FORBIDDEN_FIELDS, whose first element names telegram handles;
+; turbobaby/bike-catalog owns FORBIDDEN_UNIT_FIELDS, which carries telegram_handle as a privacy
+; field; turbobaby/game-score owns KEY_COLUMNS_TODAY over the telegram_id primary key of
+; migrations/027; turbobaby/order-status refuses a telegram id in its own header; and
+; turbobaby/request-identity names one in many places. Owners and declaration names stand here
+; instead of line numbers ON PURPOSE: a line number into a sibling goes stale the moment that
+; sibling is edited, and this file's siblings have been edited since these five were read.
+; The sixth was counted but never named, and the corpus has kept growing since, so it cannot now
+; be recovered by name; what a reader can reproduce is the re-run recorded at the end of this
+; file -- RE-MEASURED 2026-09-21 at TWENTY-TWO of the other 42 files, not the twelve a mid-wave
+; reading gave. The honest zeros are narrower, and all three were re-run on 2026-09-21 and all
+; three still hold outside this file: grep -ril "parse_mode" specs/ -> 0, "callback_data" -> 0,
+; "BotCommands" -> 0. A grep for a slash-prefixed command name is NO LONGER one of them and is
+; no longer claimed as one: it was 0 when this file was written and is 5 of the other 42 today.
+; Those are the absences this file closes, and the six-file count is recorded rather
 ; than rounded down because a reader who repeats the brief's grep must not conclude the survey
 ; was lying about something else.
 ; --
@@ -61,11 +68,12 @@
 ; bot sends is Cyrillic and is cited by path only, which is also why the strain-of-day format
 ; string is named as src/bot/callbacks.rs:396-399 and never reproduced. It carries no admin id
 ; and no roster: membership arrives as the boolean id_is_configured_admin and the list stays in
-; runtime configuration. It restates no locale set and no picker button -- locale_policy.t27:104
-; already owns both, including the very call sites a reply localises through. It restates no
+; runtime configuration. It restates no locale set and no picker button --
+; turbobaby/locale-policy owns PUBLISHED_SET_REACHES_THE_CUSTOMER_AT, which carries the very
+; call sites a reply localises through. It restates no
 ; order status name, no terminality and no refund predicate: the three order buttons advance an
-; order, and order_status.t27 owns what they advance it to, down to should_refund_bonus, which
-; that file already pins at its :27. It does not decide whether the cannabis-era surface should
+; order, and turbobaby/order-status owns what they advance it to, down to should_refund_bonus,
+; the predicate it pins through REFUND_GUARD_SOURCE. It does not decide whether the cannabis-era surface should
 ; be retired -- that is a product ruling and legacy-retirement's subject -- it only measures that
 ; the surface is still wired. It says what the two pre-router callback branches ARE and where in
 ; the order they sit, and nothing about what they do: the publish and mute buttons of the promo
@@ -103,24 +111,32 @@ pub const REUSES_ORDER_STATUS_ID : str = "turbobaby/order-status";
 pub const REUSES_LEGACY_RETIREMENT_ID : str = "turbobaby/legacy-retirement";
 pub const REUSES_PROMO_BROADCAST_ID : str = "turbobaby/promo-broadcast";
 pub const REUSE_EDGE_COUNT : u8 = 5;
-; That edge is reciprocal without either side being told: specs/turbobaby/promo_broadcast.t27:237
-; -238 names this file's callback routing as where the press arrives, and a grep of it for the
-; two branch literals, for the cap and for route_callback returns 0.
-pub const PROMO_BROADCAST_POINTS_BACK_AT : str = "specs/turbobaby/promo_broadcast.t27:237-238";
+; That edge is reciprocal without either side being told: turbobaby/promo-broadcast declares
+; REUSES_BOT_SURFACE_ID and names this file's callback routing as where the press arrives, and a
+; grep of it for the two branch literals, for the cap and for route_callback returns 0 --
+; RE-MEASURED 2026-09-21, still 0 on all four. One trap is named because it is exactly how that
+; zero gets read wrong: promo_mute, the mute branch's EXACT KEY, is 0 there, while promo_muted,
+; the opt-out TABLE of migrations/075, appears 4 times. The two differ by one letter and are
+; different subjects, so a substring grep reports four hits and a reader who stops there
+; concludes the routing IS restated next door. It is not.
+pub const PROMO_BROADCAST_POINTS_BACK_AT : str = "turbobaby/promo-broadcast declares REUSES_BOT_SURFACE_ID";
 pub const PROMO_BROADCAST_RESTATES_THE_ROUTING : bool = false;
+pub const PROMO_MUTED_TABLE_HITS_NEXT_DOOR : u8 = 4;
+pub const PROMO_MUTE_BRANCH_KEY_HITS_NEXT_DOOR : u8 = 0;
 
 ; The fourth edge, RE-MEASURED rather than left as written. At the first measurement today
 ; specs/turbobaby/legacy_retirement.t27 did not exist -- ls returned no such file and a grep of
 ; specs/ for its ID returned 0 hits outside this file -- so the edge was declared forward,
 ; because the tripwire below needs an owner to point at and a forward declaration that says so
 ; beats a measured fact with no addressee. That file has since landed, and the edge is now
-; RECIPROCAL: its :93 holds REUSES_BOT_SURFACE_ID = "turbobaby/bot-surface", so a grep finds the
+; RECIPROCAL: it declares REUSES_BOT_SURFACE_ID = "turbobaby/bot-surface", so a grep finds the
 ; pair from both ends. The division of labour held on both sides without either being told --
-; a grep of that file for sotd, carousel and strain_of_day returns 0, so it rules on the
+; a grep of that file for sotd, carousel and strain_of_day returns 0, RE-MEASURED 2026-09-21,
+; so it rules on the
 ; retirement, this file measures the wiring, and no table is restated between them.
 pub const LEGACY_RETIREMENT_EDGE_WAS_FORWARD_DECLARED : bool = true;
 pub const LEGACY_RETIREMENT_EDGE_IS_RECIPROCAL : bool = true;
-pub const LEGACY_RETIREMENT_DECLARES_THIS_FILE_AT : str = "specs/turbobaby/legacy_retirement.t27:93";
+pub const LEGACY_RETIREMENT_DECLARES_THIS_FILE_AT : str = "turbobaby/legacy-retirement declares REUSES_BOT_SURFACE_ID";
 pub const LEGACY_RETIREMENT_RESTATES_THE_CAROUSEL : bool = false;
 
 ; --- The three command surfaces, and their disagreement ------------------------------------------
@@ -313,8 +329,8 @@ pub fn start_reply_shape_for_any_referral() u8 {
 ; The consequence is MEASURED rather than inferred, and it is the reason this file cannot describe
 ; the cap as the first thing tried: those two are the only callback data in this repository acted
 ; on WITHOUT passing the length bound. What the two buttons DO is REUSES_PROMO_BROADCAST_ID's
-; subject and is not described here -- that file already points back at this routing at its
-; :237-238 -- so only the ordering and the bypass are recorded. Handlers are otherwise not
+; subject and is not described here -- that file already points back at this routing through its
+; own REUSES_BOT_SURFACE_ID -- so only the ordering and the bypass are recorded. Handlers are otherwise not
 ; enumerated: the grammar is what a contract can protect, and the ordering is the part that breaks
 ; silently, so the ordering is what is pinned.
 pub const CALLBACK_ROUTER_STAGE_COUNT : u8 = 5;
@@ -487,22 +503,35 @@ pub fn send_error_reaches_the_expected_error_filter(is_behind_fire_and_forget: b
     return is_behind_fire_and_forget;
 }
 
-; CO-DECLARED, not duplicated, and said out loud because a grep for html_escape over specs/ now
-; returns two files. Both citations into that file were RE-READ under review and both had drifted
-; while it was being written: the edge is declared at ai_assist.t27:98 and its refusal to restate
-; this rule is pinned at :109, and the six sites where an AI answer is escaped are listed at
-; :377-383, not at the lines a first draft of this file named. Five of those six sit inside the
+; CO-DECLARED, not duplicated. An earlier draft said this out loud "because a grep for
+; html_escape over specs/ now returns two files"; that claim is FALSE as of 2026-09-21 and is
+; corrected rather than quietly dropped. The re-run returns ONE file -- this one, and only in
+; the three prose lines above that discuss the helper by name. The co-declarer spells the helper
+; nowhere: it calls the thing an escaping pass and names no function. So the co-declaration is
+; real but it is NOT greppable by the helper's name, which is precisely why the edge has to be
+; carried by declaration names below instead of by a shared literal.
+; Both citations into that file were RE-READ under review and both had drifted
+; while it was being written; they had drifted AGAIN by 2026-09-21, which is why neither is a
+; line number any more. The edge is declared by that file's REUSES_BOT_SURFACE_ID, its refusal
+; to restate this rule is pinned by its ESCAPE_RULE_IS_RESTATED_HERE, and the six sites where an
+; AI answer is escaped are carried by its OUTPUT_IS_ESCAPED_AT_EVERY_SITE. Five of those six sit inside the
 ; three bot modules counted above (src/bot/commands.rs:361 and :387, src/bot/callbacks.rs:262 and
 ; :300, src/bot/handlers.rs:79) and one is at src/promo.rs:580 outside them, which is why its six
 ; and this file's eight do not contradict each other. That file owns the claim that ONE caller
 ; escapes at every one of its sites; this file owns what the helper escapes, in what order, and
 ; what a caller who forgets gets. Neither restates the other: a grep of ai_assist.t27 for the
-; escaped character set, the replacement strings and the word ampersand returns 0, measured today.
+; escaped character set, the replacement strings and the word ampersand returns 0, RE-MEASURED
+; 2026-09-21 and still 0.
 pub const ESCAPE_RULE_IS_CO_DECLARED_WITH : str = "turbobaby/ai-assist";
-pub const CO_DECLARER_LISTS_ITS_SITES_AT : str = "specs/turbobaby/ai_assist.t27:377-383";
-pub const CO_DECLARER_DECLARES_THE_EDGE_AT : str = "specs/turbobaby/ai_assist.t27:98";
+pub const CO_DECLARER_LISTS_ITS_SITES_AT : str = "turbobaby/ai-assist declares OUTPUT_IS_ESCAPED_AT_EVERY_SITE";
+pub const CO_DECLARER_DECLARES_THE_EDGE_AT : str = "turbobaby/ai-assist declares REUSES_BOT_SURFACE_ID";
+pub const CO_DECLARER_PINS_ITS_REFUSAL_AT : str = "turbobaby/ai-assist declares ESCAPE_RULE_IS_RESTATED_HERE";
 pub const CO_DECLARER_BOT_MODULE_SITES : u8 = 5;
 pub const CO_DECLARER_RESTATES_THE_ESCAPE_RULE : bool = false;
+; RE-MEASURED 2026-09-21, and the older "two files" reading is corrected here rather than left
+; standing. The helper's NAME reaches exactly one file in the corpus: this one.
+pub const SPECS_SPELLING_THE_ESCAPE_HELPER_NAME : u8 = 1;
+pub const THE_CO_DECLARER_SPELLS_THE_HELPER_NAME : bool = false;
 
 ; --- The legacy tripwire ----------------------------------------------------------------------------
 ; MEASURED, not inferred. Two of the six callback prefixes page a strain-of-day carousel whose
@@ -524,12 +553,27 @@ pub const LEGACY_PREFIXES : [2]str = ["sotd_next_", "sotd_prev_"];
 pub const LEGACY_DROPPED_TABLE : str = "strains";
 pub const LEGACY_TABLE_IS_LIVE : bool = false;
 pub const LEGACY_DROP_MIGRATION : str = "migrations/083_drop_cannabis_catalog.sql:84";
+; MARKED COPY, NOT AN ORIGINAL. The next two counts are turbobaby/legacy-retirement's: it is the
+; retirement owner, it declares them as DROPPED_TABLE_COUNT and ALLOWLIST_SIZE, and it is the
+; file a reader should change first. They are repeated here because the tripwire paragraph above
+; is unreadable without them, and a copy that is not marked as one is how two files start
+; disagreeing in silence. The owner's values are pinned beside them and an invariant holds the
+; pair equal, so a divergence fails the gate here instead of being discovered by a reader.
+; Both were re-read at SOURCE on 2026-09-21, not taken on trust from the owner: migration 083
+; carries 6 DROP TABLE statements (:82-84 and :88-90) and tests/retired_table_wiring.rs holds 4
+; Survivor entries (:49-82). Owner and source agree, which is what makes the copy safe to keep.
 pub const LEGACY_TABLES_DROPPED_BY_THAT_MIGRATION : u8 = 6;
+pub const DROPPED_TABLE_COUNT_OWNER_ID : str = "turbobaby/legacy-retirement";
+pub const DROPPED_TABLE_COUNT_OWNER_DECLARATION : str = "DROPPED_TABLE_COUNT";
+pub const DROPPED_TABLE_COUNT_OWNERS_VALUE : u8 = 6;
 pub const LEGACY_READER : str = "src/db/mod.rs:1029";
 pub const LEGACY_CALL_SITE : str = "src/bot/callbacks.rs:387";
 pub const LEGACY_ERROR_IS_SWALLOWED : bool = true;
 pub const LEGACY_SURVIVOR_ENTRY : str = "tests/retired_table_wiring.rs:66-75";
 pub const LEGACY_SURVIVOR_ENTRY_COUNT : u8 = 4;
+pub const ALLOWLIST_SIZE_OWNER_DECLARATION : str = "ALLOWLIST_SIZE";
+pub const ALLOWLIST_SIZE_OWNERS_VALUE : u8 = 4;
+pub const THESE_TWO_COUNTS_ARE_COPIES : bool = true;
 pub const LEGACY_FIRST_PAGE_PRODUCERS : u8 = 0;
 pub const LEGACY_BUTTON_PRODUCERS : [2]str = [
     "src/bot/callbacks.rs:406", "src/bot/callbacks.rs:412",
@@ -547,26 +591,61 @@ pub fn legacy_surface_answers_with_content(table_is_live: bool, rows_returned: u
 
 ; --- The absence this file closes ---------------------------------------------------------------------
 ; Each PRIOR_ count is a grep over specs/ run on 2026-09-21 BEFORE this file existed, and a
-; snapshot of a growing corpus is exactly the kind of number that rots into a lie, so the RE-RUN
-; is recorded beside it. Ten more contracts landed in the same wave, and re-running the two
-; non-trivial greps today, excluding this file, gives twelve files for telegram (the six of the
-; original measurement plus ai_assist, client_errors, deeplink, loyalty_ledger, promo_broadcast
-; and rate_limit) and one for a slash-prefixed command name -- ai_assist.t27:26, which names
-; /joke and /fact while counting ask_grok call sites. Neither re-run weakens the point: every
-; telegram hit is still a column name, an identity field or a D14 privacy field, and the one
-; slash-command hit is a call-site census and not a command surface. What did NOT move is the
-; pair that matters: parse_mode and callback_data are still 0 across the corpus outside this file.
+; snapshot of a growing corpus is exactly the kind of number that rots into a lie. It rotted.
+; The *_AFTER_THE_WAVE pair below was read while the wave was still landing, and both figures
+; are now too small; they are KEPT as the readings they were and SUPERSEDED by the dated pair
+; that follows, because deleting a measurement hides that the drift happened at all.
+; RE-MEASURED 2026-09-21 against the finished 43-file corpus, excluding this file:
+;   grep -ril telegram specs/          -> 22 of the other 42, not 12.
+;   a slash-prefixed command name      -> 5 of the other 42, not 1.
+; THE POINT SURVIVES BOTH, BUT NOT IN ITS OLD WORDS, so the old words are withdrawn. The claim
+; used to be that every telegram hit is "a column name, an identity field or a D14 privacy
+; field". That is NO LONGER TRUE and is not repaired by a bigger number: several of the new hits
+; name Telegram as a PLATFORM rather than as a column -- the WebApp SDK and menu button in
+; runtime_config, the host tab in webapp_bridge, the outage and the refusal in notification_queue,
+; the exported type TelegramId in validation_bounds, the handle grammar in events_booking.
+; What IS still true, and is the only thing this file ever needed, is narrower: none of the 22
+; declares a BOT COMMAND SURFACE. The machine-checkable proxy for that is the trio below, all
+; three re-run today and all three still 0 outside this file -- parse_mode, callback_data and
+; BotCommands. Those are the absences this file closes.
+; The five slash hits were opened one by one on 2026-09-21 and not one is a command roster:
+; turbobaby/customer-surface names /menu as a CLIENT UI ROUTE (Route::Menu) and says in the same
+; breath that no tab produces it; turbobaby/client-errors names /admin inside the HTTP route
+; GET /admin/promo-report; turbobaby/referral-program names /start three times only to DISCLAIM
+; the grammar, saying it owns no /start grammar; turbobaby/deeplink names /start as the link
+; form of the payload it co-owns with this file; turbobaby/ai-assist names /joke and /fact while
+; counting ask_grok call sites behind CALL_SITE_COUNT. Two of the five -- /menu and /admin --
+; are an HTTP or UI path that merely SHARES A SPELLING with a bot command, which is the trap
+; this whole paragraph exists to stop: a slash plus a word is not a command surface.
 pub const PRIOR_SPECS_MATCHING_TELEGRAM : u8 = 6;
 pub const PRIOR_SPECS_MATCHING_PARSE_MODE : u8 = 0;
 pub const PRIOR_SPECS_MATCHING_CALLBACK_DATA : u8 = 0;
 pub const PRIOR_SPECS_MATCHING_BOTCOMMANDS : u8 = 0;
 pub const PRIOR_SPECS_NAMING_A_SLASH_COMMAND : u8 = 0;
+; The two figures below were read MID-WAVE and are both superseded; see CORPUS_FILE_COUNT and
+; the SPECS_*_2026_09_21 pair. They are kept because a withdrawn measurement is evidence and a
+; deleted one is not. Their names say "after the wave"; the wave was not over when they were read.
 pub const SPECS_MATCHING_TELEGRAM_AFTER_THE_WAVE : u8 = 12;
 pub const SPECS_NAMING_A_SLASH_COMMAND_AFTER_THE_WAVE : u8 = 1;
-pub const THE_ONE_SLASH_COMMAND_HIT : str = "specs/turbobaby/ai_assist.t27:26";
+pub const THE_AFTER_THE_WAVE_PAIR_WAS_READ_MID_WAVE : bool = true;
+pub const THE_ONE_SLASH_COMMAND_HIT : str = "turbobaby/ai-assist, in the prose behind CALL_SITE_COUNT -- and no longer the only one; see SPECS_NAMING_A_SLASH_COMMAND_2026_09_21";
 pub const SPECS_MATCHING_PARSE_MODE_AFTER_THE_WAVE : u8 = 0;
 pub const SPECS_MATCHING_CALLBACK_DATA_AFTER_THE_WAVE : u8 = 0;
 pub const THE_BRIEFS_TELEGRAM_ZERO_IS_REFUTED : bool = true;
+
+; The dated re-measurement. Denominator named on purpose: a bare count over a corpus that grows
+; is the defect being corrected here, not a fix for it.
+pub const CORPUS_FILE_COUNT : u8 = 43;
+pub const CORPUS_FILES_OTHER_THAN_THIS_ONE : u8 = 42;
+pub const SPECS_MATCHING_TELEGRAM_2026_09_21 : u8 = 22;
+pub const SPECS_NAMING_A_SLASH_COMMAND_2026_09_21 : u8 = 5;
+pub const SPECS_MATCHING_PARSE_MODE_2026_09_21 : u8 = 0;
+pub const SPECS_MATCHING_CALLBACK_DATA_2026_09_21 : u8 = 0;
+pub const SPECS_MATCHING_BOTCOMMANDS_2026_09_21 : u8 = 0;
+; The withdrawn characterisation, named so it cannot quietly come back.
+pub const EVERY_TELEGRAM_HIT_IS_A_COLUMN_OR_PRIVACY_FIELD : bool = false;
+pub const ANY_OTHER_SPEC_DECLARES_A_COMMAND_SURFACE : bool = false;
+pub const SLASH_HITS_THAT_ARE_AN_HTTP_OR_UI_PATH : u8 = 2;
 
 ; --- Tests -----------------------------------------------------------------------------------------------
 
@@ -788,9 +867,43 @@ test the_five_ownership_edges_point_away_from_this_file {
 test the_retirement_edge_is_reciprocal_and_nothing_is_restated_across_it {
   assert LEGACY_RETIREMENT_EDGE_WAS_FORWARD_DECLARED == true;
   assert LEGACY_RETIREMENT_EDGE_IS_RECIPROCAL == true;
-  assert LEGACY_RETIREMENT_DECLARES_THIS_FILE_AT == "specs/turbobaby/legacy_retirement.t27:93";
+  assert LEGACY_RETIREMENT_DECLARES_THIS_FILE_AT == "turbobaby/legacy-retirement declares REUSES_BOT_SURFACE_ID";
   assert LEGACY_RETIREMENT_RESTATES_THE_CAROUSEL == false;
   assert REUSES_LEGACY_RETIREMENT_ID == "turbobaby/legacy-retirement";
+}
+
+test sibling_citations_name_an_owner_and_a_declaration_never_a_line {
+  assert PROMO_BROADCAST_POINTS_BACK_AT == "turbobaby/promo-broadcast declares REUSES_BOT_SURFACE_ID";
+  assert CO_DECLARER_DECLARES_THE_EDGE_AT == "turbobaby/ai-assist declares REUSES_BOT_SURFACE_ID";
+  assert CO_DECLARER_LISTS_ITS_SITES_AT == "turbobaby/ai-assist declares OUTPUT_IS_ESCAPED_AT_EVERY_SITE";
+  assert CO_DECLARER_PINS_ITS_REFUSAL_AT == "turbobaby/ai-assist declares ESCAPE_RULE_IS_RESTATED_HERE";
+  assert DROPPED_TABLE_COUNT_OWNER_DECLARATION == "DROPPED_TABLE_COUNT";
+  assert ALLOWLIST_SIZE_OWNER_DECLARATION == "ALLOWLIST_SIZE";
+}
+
+test the_two_retirement_counts_are_marked_copies_of_their_owners_values {
+  assert THESE_TWO_COUNTS_ARE_COPIES == true;
+  assert DROPPED_TABLE_COUNT_OWNER_ID == "turbobaby/legacy-retirement";
+  assert DROPPED_TABLE_COUNT_OWNER_ID == REUSES_LEGACY_RETIREMENT_ID;
+  assert DROPPED_TABLE_COUNT_OWNER_ID != ID;
+  assert LEGACY_TABLES_DROPPED_BY_THAT_MIGRATION == DROPPED_TABLE_COUNT_OWNERS_VALUE;
+  assert DROPPED_TABLE_COUNT_OWNERS_VALUE == 6;
+  assert LEGACY_SURVIVOR_ENTRY_COUNT == ALLOWLIST_SIZE_OWNERS_VALUE;
+  assert ALLOWLIST_SIZE_OWNERS_VALUE == 4;
+  assert ALLOWLIST_SIZE_OWNERS_VALUE < DROPPED_TABLE_COUNT_OWNERS_VALUE;
+}
+
+test the_mute_branch_key_and_the_opt_out_table_are_different_tokens {
+  assert PROMO_MUTE_BRANCH_KEY_HITS_NEXT_DOOR == 0;
+  assert PROMO_MUTED_TABLE_HITS_NEXT_DOOR == 4;
+  assert PROMO_MUTE_BRANCH_KEY_HITS_NEXT_DOOR != PROMO_MUTED_TABLE_HITS_NEXT_DOOR;
+  assert PROMO_BROADCAST_RESTATES_THE_ROUTING == false;
+}
+
+test the_escape_helper_name_reaches_exactly_one_file {
+  assert SPECS_SPELLING_THE_ESCAPE_HELPER_NAME == 1;
+  assert THE_CO_DECLARER_SPELLS_THE_HELPER_NAME == false;
+  assert CO_DECLARER_RESTATES_THE_ESCAPE_RULE == false;
 }
 
 test the_absence_this_file_closes_is_the_narrow_one {
@@ -803,9 +916,34 @@ test the_absence_this_file_closes_is_the_narrow_one {
   assert SPECS_MATCHING_TELEGRAM_AFTER_THE_WAVE == 12;
   assert SPECS_MATCHING_TELEGRAM_AFTER_THE_WAVE > PRIOR_SPECS_MATCHING_TELEGRAM;
   assert SPECS_NAMING_A_SLASH_COMMAND_AFTER_THE_WAVE == 1;
-  assert THE_ONE_SLASH_COMMAND_HIT == "specs/turbobaby/ai_assist.t27:26";
   assert SPECS_MATCHING_PARSE_MODE_AFTER_THE_WAVE == PRIOR_SPECS_MATCHING_PARSE_MODE;
   assert SPECS_MATCHING_CALLBACK_DATA_AFTER_THE_WAVE == PRIOR_SPECS_MATCHING_CALLBACK_DATA;
+}
+
+test the_mid_wave_counts_are_superseded_by_the_dated_re_measurement {
+  assert THE_AFTER_THE_WAVE_PAIR_WAS_READ_MID_WAVE == true;
+  assert CORPUS_FILE_COUNT == 43;
+  assert CORPUS_FILES_OTHER_THAN_THIS_ONE == 42;
+  assert CORPUS_FILES_OTHER_THAN_THIS_ONE + 1 == CORPUS_FILE_COUNT;
+  assert SPECS_MATCHING_TELEGRAM_2026_09_21 == 22;
+  assert SPECS_MATCHING_TELEGRAM_2026_09_21 > SPECS_MATCHING_TELEGRAM_AFTER_THE_WAVE;
+  assert SPECS_MATCHING_TELEGRAM_2026_09_21 < CORPUS_FILES_OTHER_THAN_THIS_ONE;
+  assert SPECS_NAMING_A_SLASH_COMMAND_2026_09_21 == 5;
+  assert SPECS_NAMING_A_SLASH_COMMAND_2026_09_21 > SPECS_NAMING_A_SLASH_COMMAND_AFTER_THE_WAVE;
+  assert THE_ONE_SLASH_COMMAND_HIT != "specs/turbobaby/ai_assist.t27:26";
+}
+
+test the_narrow_zeros_are_the_only_absence_still_claimed {
+  assert SPECS_MATCHING_PARSE_MODE_2026_09_21 == 0;
+  assert SPECS_MATCHING_CALLBACK_DATA_2026_09_21 == 0;
+  assert SPECS_MATCHING_BOTCOMMANDS_2026_09_21 == 0;
+  assert SPECS_MATCHING_PARSE_MODE_2026_09_21 == PRIOR_SPECS_MATCHING_PARSE_MODE;
+  assert SPECS_MATCHING_CALLBACK_DATA_2026_09_21 == PRIOR_SPECS_MATCHING_CALLBACK_DATA;
+  assert SPECS_MATCHING_BOTCOMMANDS_2026_09_21 == PRIOR_SPECS_MATCHING_BOTCOMMANDS;
+  assert EVERY_TELEGRAM_HIT_IS_A_COLUMN_OR_PRIVACY_FIELD == false;
+  assert ANY_OTHER_SPEC_DECLARES_A_COMMAND_SURFACE == false;
+  assert SLASH_HITS_THAT_ARE_AN_HTTP_OR_UI_PATH == 2;
+  assert SLASH_HITS_THAT_ARE_AN_HTTP_OR_UI_PATH < SPECS_NAMING_A_SLASH_COMMAND_2026_09_21;
 }
 
 ; --- Invariants ------------------------------------------------------------------------------------------
@@ -875,6 +1013,24 @@ invariant the_legacy_carousel_has_no_first_page_producer
 
 invariant this_file_never_rules_on_the_retirement
   assert RETIREMENT_IS_NOT_THIS_FILES_DECISION == true and REUSES_LEGACY_RETIREMENT_ID != ID
+
+; The two drift invariants. Each holds a MARKED COPY equal to the value its owner declares, so
+; editing one number here without editing turbobaby/legacy-retirement's DROPPED_TABLE_COUNT or
+; ALLOWLIST_SIZE fails the gate in this file rather than leaving two contracts disagreeing.
+invariant the_dropped_table_count_never_drifts_from_its_owner
+  assert LEGACY_TABLES_DROPPED_BY_THAT_MIGRATION == DROPPED_TABLE_COUNT_OWNERS_VALUE and DROPPED_TABLE_COUNT_OWNER_ID != ID and THESE_TWO_COUNTS_ARE_COPIES == true
+
+invariant the_survivor_allowlist_size_never_drifts_from_its_owner
+  assert LEGACY_SURVIVOR_ENTRY_COUNT == ALLOWLIST_SIZE_OWNERS_VALUE and DROPPED_TABLE_COUNT_OWNER_ID == REUSES_LEGACY_RETIREMENT_ID
+
+invariant a_sibling_is_never_cited_by_line_number_again
+  assert LEGACY_RETIREMENT_DECLARES_THIS_FILE_AT == "turbobaby/legacy-retirement declares REUSES_BOT_SURFACE_ID" and PROMO_BROADCAST_POINTS_BACK_AT == "turbobaby/promo-broadcast declares REUSES_BOT_SURFACE_ID"
+
+invariant the_withdrawn_characterisation_never_comes_back
+  assert EVERY_TELEGRAM_HIT_IS_A_COLUMN_OR_PRIVACY_FIELD == false and ANY_OTHER_SPEC_DECLARES_A_COMMAND_SURFACE == false
+
+invariant the_corpus_counts_are_never_read_without_their_denominator
+  assert SPECS_MATCHING_TELEGRAM_2026_09_21 < CORPUS_FILES_OTHER_THAN_THIS_ONE and SPECS_NAMING_A_SLASH_COMMAND_2026_09_21 < CORPUS_FILES_OTHER_THAN_THIS_ONE
 
 invariant the_order_buttons_borrow_their_vocabulary
   assert CALLBACK_OWNS_NO_STATUS_VOCABULARY == true and REUSES_ORDER_STATUS_ID == "turbobaby/order-status"

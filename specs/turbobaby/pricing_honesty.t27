@@ -298,8 +298,10 @@ pub const SUB_BAHT_GAP_IS_UNREPRESENTABLE_HERE : bool = true;
 ; NOT restated here: src/api/orders.rs:629-631 calls apply_class_discount (src/db/bikes.rs:296)
 ; then round_half_up_baht (src/db/bikes.rs:312), and the integer statement of that same step
 ; belongs to the rental-terms contract, whose audit_daily_thb pins 449 at 2500 bp to 337
-; (specs/turbobaby/rental_terms.t27; cited by declaration, not by line, because that file is
-; under concurrent edit and a line number would rot). This file compares two amounts. It
+; (turbobaby/rental-terms owns audit_daily_thb and REF_BASE_THB_DAY; cited by owner ID and
+; declaration name rather than by line, because that file is under concurrent edit and a line
+; number would rot -- re-opened 2026-09-21, both declarations exist and still carry exactly this
+; arithmetic). This file compares two amounts. It
 ; computes neither of them, and it holds no discount, rate or rounding rule of its own.
 pub const REUSES_RENTAL_TERMS_ID : str = "turbobaby/rental-terms";
 
@@ -311,8 +313,9 @@ pub const REUSES_RENTAL_TERMS_ID : str = "turbobaby/rental-terms";
 pub const FILE_REFERENCE_IS_AUDIT_ONLY : bool = true;
 pub const DIVERGENCE_FILE_SIDE_SOURCE : u8 = SOURCE_FILE_REFERENCE;
 
-; THE REFUSAL (measured 2026-09-20). Persistence is not specified here, and not because it was
-; deferred: there is nothing in this repository to specify it against. grep -rniE "diverg" over
+; THE REFUSAL (measured 2026-09-20, re-measured 2026-09-21 and unchanged). Persistence is not
+; specified here, and not because it was deferred: there is nothing in this repository to
+; specify it against. grep -rniE "diverg" over
 ; migrations/ returns 0 rows. The 87 below is the number of .sql migration files that recursive
 ; grep actually read: 86 at the top level plus 077_quest_progress.sql in migrations/wip/. It is
 ; NOT "ls migrations/ | wc -l", which also prints 87 but counts the wip/ DIRECTORY as one of its
@@ -325,6 +328,21 @@ pub const DIVERGENCE_FILE_SIDE_SOURCE : u8 = SOURCE_FILE_REFERENCE;
 pub const DIVERGENCE_PERSISTENCE_IS_NOT_SPECIFIED : bool = true;
 pub const DIVERGENCE_TABLES : u8 = 0;
 pub const MIGRATION_FILES_SEARCHED : u8 = 87;
+; THIS CONTRACT OWNS THIS COUNT. turbobaby/locale-policy declares the same figure in a
+; declaration of the same name, for a DIFFERENT search over the same directory: it looks for a
+; CHECK constraint on a language column where this one looks for a divergence sink. One
+; measurement declared twice with no edge between the two files is the drift D15 exists to
+; remove. This contract raised the figure first, so the count is owned HERE and carried THERE as
+; a named copy that names this ID. Re-measured 2026-09-21 and unchanged at 87: 86 .sql files at
+; the top level plus 077_quest_progress.sql in migrations/wip/. The only non-.sql file anywhere
+; under migrations/ is migrations/wip/README.md, which is why counting every file returns 88 and
+; is the wrong arithmetic for this claim. Re-run the same day, the search for divergence over
+; all 87 still returns zero rows, and both emission sites below still read as quoted.
+pub const MIGRATION_COUNT_IS_OWNED_HERE : bool = true;
+pub const MIGRATION_COUNT_COPY_HOLDER_ID : str = "turbobaby/locale-policy";
+pub const MIGRATION_COUNT_TOP_LEVEL : u8 = 86;
+pub const MIGRATION_COUNT_IN_WIP : u8 = 1;
+pub const MIGRATION_COUNT_REMEASURED_AT : str = "2026-09-21";
 pub const DIVERGENCE_SINK_KIND : str = "process log line";
 pub const DIVERGENCE_SINKS : [2]str = [
   "src/api/bikes.rs:655-660",
@@ -569,6 +587,21 @@ test persistence_of_a_divergence_is_refused_for_lack_of_a_sink {
 
 ; The file side's number is somebody else's output. Naming that owner is what keeps this
 ; contract from growing a second copy of the class-discount step.
+; The count this contract owns, and the name of the file that copies it. This fails the day the
+; two halves of the directory stop adding up to the whole, which is the arithmetic that made the
+; wrong version of this measurement look right.
+test this_contract_owns_the_migration_file_count_and_names_its_copy_holder {
+  assert MIGRATION_FILES_SEARCHED == 87;
+  assert MIGRATION_COUNT_IS_OWNED_HERE == true;
+  assert MIGRATION_COUNT_TOP_LEVEL == 86;
+  assert MIGRATION_COUNT_IN_WIP == 1;
+  assert MIGRATION_COUNT_TOP_LEVEL + MIGRATION_COUNT_IN_WIP == MIGRATION_FILES_SEARCHED;
+  assert MIGRATION_COUNT_COPY_HOLDER_ID == "turbobaby/locale-policy";
+  assert MIGRATION_COUNT_COPY_HOLDER_ID != ID;
+  assert MIGRATION_COUNT_REMEASURED_AT == "2026-09-21";
+  assert DIVERGENCE_TABLES == 0;
+}
+
 test the_file_side_arithmetic_is_owned_by_the_rental_terms_contract {
     assert REUSES_RENTAL_TERMS_ID == "turbobaby/rental-terms";
     assert REUSES_RENTAL_TERMS_ID != ID;

@@ -4,9 +4,19 @@
 ; This contract owns the shape of what the shop promises about getting a bike to a client:
 ; the coverage rule, the handover point and the agreement it needs, the window geometry read
 ; off the wall clock, and the single documented area fee. It is the named PRODUCER of the
-; `delivery_destination_ready` boolean that specs/turbobaby/commerce.t27 consumes abstractly in
-; commerce_fulfillment_valid (commerce.t27:146-156): commerce decides whether an order may be
-; delivered, this file decides only whether the destination leg is complete.
+; `delivery_destination_ready` boolean that turbobaby/commerce consumes abstractly in its own
+; declaration commerce_fulfillment_valid: commerce decides whether an order may be delivered,
+; this file decides only whether the destination leg is complete.
+; THE EDGE IS NAMED BY OWNER AND DECLARATION, NOT BY LINE (corrected 2026-09-21). Until this edit
+; it cited commerce.t27 by a line range, 146 through 156. That range was re-read on the day it was
+; deleted and it still held -- which is the argument against it and not for it: commerce.t27 grew
+; from 411 lines to 855 between the two readings, and the citation survived only because every
+; addition happened to land past the end of the range. A number that is right by luck reads
+; exactly like a number that is right. The old form is described here rather than quoted, so that
+; a sweep for line citations into a sibling does not find this paragraph and count it as one.
+; What was re-verified instead is the sentence: turbobaby/commerce declares
+; commerce_fulfillment_valid, delivery_destination_ready is its fourth argument, and its delivery
+; arm still returns the conjunction of that boolean with the upstream delivery_allowed.
 ; Transcribed from data/fleet_seed.json rental_terms.delivery, lines 295-309 (measured_at
 ; 2026-09-12, schema_version 2). ASCII only (L3), English identifiers only.
 ; --
@@ -167,7 +177,7 @@ pub const SAME_DAY_MODEL_NOTE : str = "Every minute-of-day quantity in this file
 ;     and no source anywhere in the repository states when the day ends, so nothing below puts an
 ;     upper bound on a window start. A late hour is therefore unjudged rather than permitted.
 pub const OFFICE_CLOSING_TIME_IS_NOT_PUBLISHED : bool = true;
-pub const OFFICE_CLOSING_NOTE : str = "data/fleet_seed.json:299 publishes an opening time and no closing time, and no other file in this repository states one. window_start_is_allowed therefore has a floor and no ceiling: a start late in the evening is not refused by it, and that is an unjudged case rather than a published promise. What is missing is the owner's closing hour. Inventing one would refuse windows the shop may well serve.";
+pub const OFFICE_CLOSING_NOTE : str = "data/fleet_seed.json:299 publishes an opening time and no closing time, and no other file in this repository states one. window_start_is_allowed therefore has a floor and no ceiling: a start late in the evening is not refused by it, and that is an unjudged case rather than a published promise. What is missing is the owner's closing hour. Inventing one would refuse windows the shop may well serve. RE-MEASURED 2026-09-21, because the sentence above was first measured when specs/ held 12 tracked files and it holds 43 now: a case-insensitive search over .rs, .json, .sql, .t27 and .md for office_close, closing_time, closes_at and closing hour returns this file's own two lines and nothing else, so the count of sources is still zero and is now dated twice.";
 
 ; --- The one published fee ----------------------------------------------------------------------
 ; data/fleet_seed.json:306, the sole `known_tariff_example`: one area, a delivery figure of 290
@@ -195,7 +205,7 @@ pub const DOCUMENTED_COLLECTION_FEE_THB : i32 = 0;
 pub const FEE_ABSENT : i32 = -1;
 pub const FEE_MAY_BE_INTERPOLATED : bool = false;
 pub const TARIFF_TABLE_IS_NOT_SHIPPED : bool = true;
-pub const TARIFF_TABLE_NOTE : str = "data/fleet_seed.json:307 sets rental_terms.delivery.tariff_table to null, and :308 says only the one documented area's figure exists and that no other area may be interpolated from it. There is no second published area price anywhere in this repository: the delivery_zones rows carry fees (migrations/071_delivery_zones_koh_phangan.sql:25-29) but they price another island's villages. What is missing is the owner's Phuket tariff -- an area list with a fee per area, measured by him. Until it exists, every area but the documented one is an absent amount, and an absent amount is rendered by turbobaby/pricing-honesty, not filled in here.";
+pub const TARIFF_TABLE_NOTE : str = "data/fleet_seed.json:307 sets rental_terms.delivery.tariff_table to null, and :308 says only the one documented area's figure exists and that no other area may be interpolated from it. There is no second published area price anywhere in this repository: the delivery_zones rows carry fees (migrations/071_delivery_zones_koh_phangan.sql:25-29) but they price another island's villages. What is missing is the owner's Phuket tariff -- an area list with a fee per area, measured by him. Until it exists, every area but the documented one is an absent amount, and an absent amount is rendered by turbobaby/pricing-honesty, not filled in here. RE-MEASURED 2026-09-21 against the corpus as it now stands, 43 tracked specs against the 12 this sentence was first measured over: none of the 31 contracts added since declares a delivery area price, and the only delivery fee any of them names is turbobaby/commerce pointing at src/api/orders.rs:1794, the same shipped zone read this file already cites. The seed line numbers were re-read the same day and are unchanged.";
 
 ; --- The shipped zone table, which describes another island --------------------------------------
 ; src/delivery.rs:37-78 -- 5 default zones, 4 places and 1 handover row. The module header
@@ -245,7 +255,7 @@ pub const ABSENT_FEE_HAS_NO_ROW_SHAPE : bool = true;
 ; data/fleet_seed.json, and the minute ranges the API serves (src/api/orders.rs:1787-1788 and
 ; :2409-2410) come from the zone rows of the other island.
 pub const ETA_IS_NOT_PUBLISHED : bool = true;
-pub const ETA_NOTE : str = "No travel-time estimate for any area of the coverage island exists in this repository. The shop's promise is a window with a start and a published length; the min/max minute pair the API returns is read from delivery_zones rows whose places are on another island, and the empty-list fallback on the checkout screen prints a single hard-coded '30-45' string that no source measures (src/ui/screens/checkout_screen.rs:810). What would be needed is an owner-measured time per Phuket area, which nobody has taken. Until then a window is the answer and an ETA is not offered.";
+pub const ETA_NOTE : str = "No travel-time estimate for any area of the coverage island exists in this repository. The shop's promise is a window with a start and a published length; the min/max minute pair the API returns is read from delivery_zones rows whose places are on another island, and the empty-list fallback on the checkout screen prints a single hard-coded '30-45' string that no source measures (src/ui/screens/checkout_screen.rs:810). What would be needed is an owner-measured time per Phuket area, which nobody has taken. Until then a window is the answer and an ETA is not offered. RE-MEASURED 2026-09-21 over all 43 tracked specs: still nothing. turbobaby/order-status, written that day, records No delivery ETA from its own side, which is a second contract arriving independently at the same absence and not a source that supplies one. The checkout-screen line was re-read the same day and still carries the hard-coded string.";
 ; Nothing in this repository decides whether an address is on the coverage island. delivery_zones
 ; carries name, name_en, fee, min_order, eta_min, eta_max, is_active and sort_order
 ; (migrations/060_delivery_zones.sql:2-14) and no geometry of any kind; the checkout screen can
@@ -266,8 +276,34 @@ pub const ADMIN_WRITE_TURNS_AN_UNUSABLE_FEE_INTO_ZERO : bool = true;
 ; total expression anywhere: the order total the server accepts is subtotal minus bonus minus
 ; stars (src/api/orders.rs:210), with no delivery term in it. The shipped delivery fee is
 ; therefore displayed and never charged. This file neither changes that nor restates the identity.
+; Re-verified 2026-09-21: src/ is byte-identical to the tree that measurement was taken against,
+; and the contracts written since put the total elsewhere rather than here -- turbobaby/order-money
+; owns the identity and turbobaby/checkout-contact states in its own words that it computes no
+; total and decides no delivery. No contract in the grown corpus adds a delivery term to a total.
 pub const FEE_ENTERS_NO_SHIPPED_TOTAL : bool = true;
 pub const THIS_FILE_ADDS_NO_FEE_TO_ANY_TOTAL : bool = true;
+
+; --- The three absence claims, re-measured against the grown corpus ------------------------------
+; Three sentences in this file say that something exists NOWHERE in this repository: no closing
+; hour, no second published area price, no ETA for the coverage island. All three were measured on
+; 2026-09-20, when specs/ held 12 tracked files; it holds 43 now, 31 of them added on 2026-09-21.
+; A false absence is the one claim a reader accepts without checking, so none of the three was left
+; standing on the smaller corpus. All three were run again and all three still answer zero. The
+; counts are declared rather than described so that a later reader can see WHICH corpus was
+; searched and on WHAT DAY, instead of inheriting a sentence whose scope has quietly moved.
+pub const ABSENCE_CLAIMS_REMEASURED_AT : str = "2026-09-21";
+pub const TRACKED_SPECS_WHEN_FIRST_MEASURED : i32 = 12;
+pub const TRACKED_SPECS_AT_REMEASURE : i32 = 43;
+pub const ABSENCE_CLAIM_COUNT : i32 = 3;
+pub const CLOSING_TIME_SOURCES_FOUND : i32 = 0;
+pub const SECOND_PUBLISHED_AREA_PRICE_SOURCES_FOUND : i32 = 0;
+pub const COVERAGE_ISLAND_ETA_SOURCES_FOUND : i32 = 0;
+pub const ABSENCE_CLAIMS_SURVIVED_THE_REMEASURE : bool = true;
+; A claim of absence holds only while its count is zero. Written as a function so that a worker who
+; finds one source writes the number and watches the assert fail, instead of editing the prose.
+pub fn absence_claim_still_holds(sources_found: i32) bool {
+    return sources_found == 0;
+}
 
 ; ==================================================================================================
 ; Functions. Each takes plain arguments: the compiler has no struct type, and every decision this
@@ -530,6 +566,37 @@ test what_is_not_published_is_refused_by_name_rather_than_filled_in {
     assert SHIPPED_HANDOVER_ROW_IS_THE_SHOP_ITSELF == true;
 }
 
+; The three counts and the corpus they were taken over. The last two asserts are the point: the
+; re-measurement has its own date, distinct from the file's MEASURED_AT, and one non-zero count is
+; enough to make the function say so.
+test the_three_absence_claims_were_remeasured_on_the_grown_corpus {
+    assert ABSENCE_CLAIMS_REMEASURED_AT == "2026-09-21";
+    assert TRACKED_SPECS_WHEN_FIRST_MEASURED == 12;
+    assert TRACKED_SPECS_AT_REMEASURE == 43;
+    assert TRACKED_SPECS_AT_REMEASURE > TRACKED_SPECS_WHEN_FIRST_MEASURED;
+    assert ABSENCE_CLAIM_COUNT == 3;
+    assert CLOSING_TIME_SOURCES_FOUND == 0;
+    assert SECOND_PUBLISHED_AREA_PRICE_SOURCES_FOUND == 0;
+    assert COVERAGE_ISLAND_ETA_SOURCES_FOUND == 0;
+    assert absence_claim_still_holds(CLOSING_TIME_SOURCES_FOUND) == true;
+    assert absence_claim_still_holds(SECOND_PUBLISHED_AREA_PRICE_SOURCES_FOUND) == true;
+    assert absence_claim_still_holds(COVERAGE_ISLAND_ETA_SOURCES_FOUND) == true;
+    assert ABSENCE_CLAIMS_SURVIVED_THE_REMEASURE == true;
+    assert ABSENCE_CLAIMS_REMEASURED_AT != MEASURED_AT;
+    assert absence_claim_still_holds(1) == false;
+}
+
+; The consumer edge, re-verified by NAME on 2026-09-21 after its line citation was removed from the
+; header. The owner and the declaration are both literals here, so the edge cannot decay into a
+; comment the way a line number does.
+test the_consumer_edge_names_an_owner_and_a_declaration_and_not_a_line {
+    assert REUSES_COMMERCE_ID == "turbobaby/commerce";
+    assert CONSUMER_FUNCTION == "commerce_fulfillment_valid";
+    assert PRODUCES == "delivery_destination_ready";
+    assert REUSES_COMMERCE_ID != ID;
+    assert CONSUMER_FUNCTION != PRODUCES;
+}
+
 test this_contract_charges_nothing_and_totals_nothing {
     assert THIS_FILE_ADDS_NO_FEE_TO_ANY_TOTAL == true;
     assert FEE_ENTERS_NO_SHIPPED_TOTAL == true;
@@ -600,6 +667,11 @@ invariant the_shipped_zone_table_answers_for_no_part_of_the_coverage_area
 ; turn a promise into an invoice, so it fails here.
 invariant this_contract_never_becomes_a_charge
     assert THIS_FILE_ADDS_NO_FEE_TO_ANY_TOTAL == true and ETA_IS_NOT_PUBLISHED == true
+
+; An absence is a measurement and carries the corpus it was taken over. If any of the three counts
+; ever leaves zero, this fails rather than the sentence quietly becoming false.
+invariant an_absence_claim_here_holds_only_while_its_count_is_zero
+    assert absence_claim_still_holds(CLOSING_TIME_SOURCES_FOUND) == true and absence_claim_still_holds(SECOND_PUBLISHED_AREA_PRICE_SOURCES_FOUND) == true and absence_claim_still_holds(COVERAGE_ISLAND_ETA_SOURCES_FOUND) == true and TRACKED_SPECS_AT_REMEASURE > TRACKED_SPECS_WHEN_FIRST_MEASURED
 
 ; The ownership edges, pinned as literals because without imports a REUSES_* string is the only
 ; thing standing between reuse and a second copy of somebody else's table.

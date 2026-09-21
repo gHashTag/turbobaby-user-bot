@@ -16,8 +16,12 @@
 ; present and never what the response was. publication.t27 owns the discipline the health section
 ; borrows: a thing is claimed only where it was observed, and an empty report is evidence about
 ; the record, not about the system. One number below is a neighbour's and is marked as such:
-; request_identity.t27:236 counts the six check_owner_lenient call sites as GATE_CALL_SITES_OWNER_LENIENT,
-; and the six sites that hand that gate a label it drops are the same six, taken from there.
+; turbobaby/request-identity counts the six check_owner_lenient call sites as
+; GATE_CALL_SITES_OWNER_LENIENT, and the six sites that hand that gate a label it drops are the
+; same six, taken from there. Every citation into a sibling below names the owner ID and the
+; DECLARATION, never a line number: a line in another .t27 goes stale the moment that file is
+; edited, and the 12 line citations this file carried were converted on 2026-09-21 for that
+; reason. Citations into src/, docs/ and migrations/ are line-accurate and stay as lines.
 ; --
 ; WHY (measured 2026-09-21). Epic #31 asks that request ids correlate API failures, alerts and
 ; logs, and that dashboards name metrics the binary actually emits. Both halves are unowned in
@@ -40,35 +44,59 @@
 ; "No data" and nobody notices until an incident (src/main.rs:3649-3657) -- and then reads the
 ; other file. That is the whole reason this contract exists: the forward direction
 ; (declared -> wired) has a test and holds; the reverse direction (referenced -> emitted) has a
-; test that covers one of the three published artifacts.
+; test that covers one of the FOUR published artifacts. Re-measured 2026-09-21 over docs/ and
+; monitoring/ for a PromQL carrier -- a JSON "expr" key or a YAML expr: line -- the answer is 4,
+; not the 3 this file first wrote: monitoring/grafana-dashboard.json, docs/grafana-dashboard.json,
+; docs/prometheus-alerts.yaml and docs/prometheus-recording-rules.yaml. The fourth was missed on
+; the first pass. It carries 12 recording-rule expressions, no Rust test reads it, and it names no
+; dead metric -- every series it touches is an axum_ built-in or another wwb: rule -- so the
+; dead-name count below does not move and only the coverage fraction does.
 ; --
 ; WHERE THE BRIEF IS REFUTED, three times, all measured 2026-09-21.
 ; FIRST, and it is the brief's headline number. The brief calls
 ; grep -ril "request_id\|metric" specs/ "the measured zero". It is not zero, and it does not hold
-; still. Re-measured at review time, excluding this file, it is 14 files and 42 matches
-; case-sensitive -- 89 with -i, because this corpus spells its constants in capitals. The
-; substance survives and the number does not, in both directions: the rest of the corpus was being
-; written in parallel with this file, so the figures pinned below are a snapshot with a stated
-; condition and not a property that holds still. What the matches are: the great majority are the
-; constant REUSES_REQUEST_IDENTITY_ID or prose naming request_identity.t27; three are the word
-; "symmetric" (deposit_tiers.t27:892, pricing_honesty.t27:509) and a mention of an ignored Rust
-; parameter (request_identity.t27:41); and exactly one is a real metric name, rate_limit.t27:353
-; BLOCKED_METRIC_NAME, declared there for the counter that contract owns. So "not one is on
-; subject" is refused as well: one is, and it is a neighbour's declaration rather than a gap.
+; still, which is the whole lesson: measured 2026-09-21 over the 30 files the corpus then held and
+; excluding this one, it was 14 files and 42 matches case-sensitive, 89 with -i. RE-MEASURED
+; 2026-09-21 over the 43 the corpus holds now -- 42 under specs/turbobaby plus
+; specs/agents/turbobaby.t27 -- the same greps return 25 files and 51 matches case-sensitive, 150
+; with -i. Both readings are kept because the pair is the evidence, and the second was taken while
+; the siblings were being edited in the same pass, which is the condition and not a caveat: a grep
+; over a corpus still being written is a snapshot with a date, never a property. The direction of
+; the drift is itself informative -- the case-sensitive count FELL from 58 earlier the same day,
+; because a sibling converting a citation from request_identity.t27 to turbobaby/request-identity
+; removes a match and adds none.
+; What the 51 are: 12 name request_identity.t27 in prose, 4 are
+; the word "symmetric" in a sibling sentence about a predicate (deposit_tiers.t27,
+; pricing_honesty.t27, and schema_provenance.t27 twice -- named by file, because a grep census is
+; about files and a line in a sibling goes stale), 1 is the ignored Rust parameter that
+; request_identity.t27 refuses the brief over, and the rest are the word metric deferring here.
+; Exactly one match is a real metric name: turbobaby/rate-limit declares BLOCKED_METRIC_NAME for
+; the counter that contract owns, and -i is what catches it, because this corpus spells its
+; constants in capitals. So "not one is on subject" is refused as well: one is, and it is a
+; neighbour's declaration rather than a gap. That single figure is the one number here that
+; re-measurement did NOT move.
 ; The honest absence greps, pinned as constants below, are
-; grep -ril "x-request-id" specs/ -> 0 files other than this one, and
-; grep -rilE "prometheus|grafana|dashboard|observability|gauge|correlation|scrape" specs/ -> 3
-; files other than this one, not 0. Two of the three, client_errors.t27 and rate_limit.t27, match
-; only on the word "observability" naming THIS contract's ID, so they are inbound edges and not
-; occupants; the third, schema_provenance.t27, matches on its own subject because it owns the
-; value of one gauge. One metric is not the vocabulary, and the rule stays unowned until here.
+; grep -ril "x-request-id" specs/ -> 0 files other than this one, re-verified 2026-09-21 and
+; still 0 across all 43, and
+; grep -rilE "prometheus|grafana|dashboard|observability|gauge|correlation|scrape" specs/ -> 7
+; files other than this one: not the 3 pinned here before, and not the 0 claimed before that.
+; Four of the seven -- api_surface.t27, client_errors.t27, rate_limit.t27 and
+; request_identity.t27 -- match only in sentences that name THIS contract or report what it owns:
+; the word observability itself in all four, plus correlation in api_surface.t27 and dashboards in
+; rate_limit.t27, each reporting this file's subject rather than declaring one of its own.
+; They are inbound edges and not occupants.
+; The other three match on their own subject: schema_provenance.t27 owns the VALUE of the
+; schema_missing_columns gauge, runtime_config.t27 names that same gauge as what a missing column
+; raises, and notification_queue.t27 counts the four monitoring artifacts and says a queue-depth
+; gauge is the missing input without coining a name for it. All three defer the naming RULE to
+; here, which is why the count moved and the ownership did not.
 ; SECOND. The brief calls tests/observability_ownership.rs "the only existing guard". There is a
 ; second one: src/main.rs:3659-3914, the module grafana_dashboard_tests (its name test occupies
 ; :3798-3851 of that span), which parses a dashboard
 ; and asserts every PromQL name is declared in src/metrics.rs, is an axum_ built-in, or is a wwb:
 ; recording rule. It is a real guard and it is green -- because of the path it reads, not because
 ; the tree is clean. Calling it absent would have made this contract claim a gap that is half
-; closed; calling it sufficient would miss that it covers 1 of 3 files.
+; closed; calling it sufficient would miss that it covers 1 of the 4 files that carry PromQL.
 ; THIRD, and it moves the refusal. The brief asks for "no log line format that the code does not
 ; fix". The code fixes two, by environment: src/main.rs:394-405 installs a JSON subscriber in
 ; production and the human formatter otherwise. So the refusal below is not "the format is
@@ -268,6 +296,22 @@ pub const UNGUARDED_ALERT_PATH : str = "docs/prometheus-alerts.yaml";
 ; guard of any kind, not a weaker one.
 pub const ALERT_FILES_READ_BY_A_TEST : u8 = 0;
 
+; The recording rules are the fourth carrier of PromQL in the tree and were missed when this
+; block was first written. Re-measured 2026-09-21: a grep over docs/ and monitoring/ for a JSON
+; "expr" key or a YAML expr: line returns 4 files, and grep -rn "prometheus-recording-rules"
+; --include=*.rs . returns 0, so it is unguarded exactly as the alert file is. It references only
+; axum_ built-ins and other wwb: rules, so it adds no dead name: what it widens is coverage.
+pub const PROMQL_ARTIFACT_COUNT : u8 = 4;
+pub const PROMQL_ARTIFACTS_READ_BY_A_TEST : u8 = 1;
+pub const RECORDING_RULES_PATH : str = "docs/prometheus-recording-rules.yaml";
+pub const RECORDING_RULES_READ_BY_A_TEST : bool = false;
+pub const RECORDING_RULE_EXPRESSIONS : u8 = 12;
+pub const RECORDING_RULES_DEAD_NAMES : u8 = 0;
+; The older test below is named the_measured_coverage_gap_is_two_files_of_three. Its asserts are
+; still true -- there are two Grafana dashboards and one of them is read -- but its NAME records
+; the three-artifact reading this block has since corrected to four. The constants are the
+; measurement; the name is a birthmark, and it is left standing rather than quietly rewritten.
+
 ; The five names referenced by a published artifact and emitted by nothing. The first was a real
 ; helper until cycle #108 removed it with its pool (src/metrics.rs:320-328); the other four were
 ; never emitted at all. They are written out because they are the finding, not because this file
@@ -303,10 +347,13 @@ pub const LABEL_VALUE_NEVER_EMITTED_SITES : u8 = 1;
 ; and drops it. The parameter is named _metric_kind at :606 and the body delegates without reading
 ; it, so six call sites pass a label that is never attached to anything. Named because it is the
 ; same defect class as a dead dashboard name, and greppable from the opposite side.
-; The SIX is not this file's census, and unlike the coincident six rate_limit.t27:360 writes about,
-; it is not a coincidence either. turbobaby/request-identity owns that function as a gate and
-; already publishes exactly these call sites as GATE_CALL_SITES_OWNER_LENIENT
-; (request_identity.t27:236, with the same dropped parameter noted at :41). It is literally the
+; The SIX is not this file's census, and unlike the coincident six next door it is not a
+; coincidence either. turbobaby/rate-limit declares CALL_SITES_EMITTING_THE_BLOCKED_METRIC 6 for
+; the limiter refusals that reach its counter, and records in the same block that no constant of
+; this file opposes that figure. turbobaby/request-identity owns check_owner_lenient as a gate and
+; already publishes exactly these call sites as GATE_CALL_SITES_OWNER_LENIENT; the same contract's
+; refusal of the brief is where the dropped _metric_kind parameter is noted. Neither is cited by
+; line, because a sibling's lines move and its declaration names do not. It is literally the
 ; same six sites, counted once, there. This file recounts neither the gate nor the sites; it takes
 ; the owner's figure and adds only the part that is observability's -- that every one of those
 ; sites hands over a label the callee never attaches. If the two ever disagree, the owner's number
@@ -314,7 +361,7 @@ pub const LABEL_VALUE_NEVER_EMITTED_SITES : u8 = 1;
 pub const IGNORED_METRIC_KIND_SITE : str = "src/api/auth.rs:606";
 pub const IGNORED_METRIC_KIND_CALL_SITES : u8 = 6;
 pub const IGNORED_METRIC_KIND_CENSUS_IS_OWNED_BY_REQUEST_IDENTITY : bool = true;
-pub const IGNORED_METRIC_KIND_CENSUS_OWNER_CONSTANT : str = "request_identity.t27:236 GATE_CALL_SITES_OWNER_LENIENT";
+pub const IGNORED_METRIC_KIND_CENSUS_OWNER_CONSTANT : str = "turbobaby/request-identity GATE_CALL_SITES_OWNER_LENIENT";
 
 pub fn artifact_is_guarded(path_is_read_by_a_test: bool) bool {
   return path_is_read_by_a_test;
@@ -382,29 +429,45 @@ pub fn observability_module_ownership_holds(main_declarations: u8, api_mod_decla
 }
 
 ; --- The corpus absence, measured the way it is written ------------------------------------------
-; Every count here EXCLUDES this file and was re-measured at review time. The rest of the corpus
-; was being written in parallel, so each is a snapshot with its condition named, not a property
-; that holds still -- which is the only honest way to pin a grep over a moving tree.
-; grep -ril "x-request-id" specs/ -> 0 other files. That header really is unheld anywhere else.
-; grep -rilE "prometheus|grafana|dashboard|observability|gauge|correlation|scrape" specs/ -> 3
-; other files, NOT the 0 this section first claimed. Two of them, client_errors.t27 and
-; rate_limit.t27, match only on the word "observability" naming this contract's own ID, so they
-; are inbound edges. The third, schema_provenance.t27, matches on its own subject: it owns the
-; VALUE of the schema_missing_columns gauge, and this file takes that meaning from there rather
-; than restating it. One metric is not the vocabulary, and the naming rule is still unowned here.
-; The brief's own grep is recorded beside them so the difference cannot be lost: 14 files and 42
-; matches case-sensitive, 89 with -i. Exactly one of those is on subject -- rate_limit.t27:353
-; declares the literal name of the counter it owns -- so the on-subject count is 1 and not 0.
+; Every count here EXCLUDES this file. Two readings are kept for each grep, because one reading
+; would be a claim and two are a measurement: the figure taken when this file was written, over
+; the 30 files the corpus then held, and the figure re-measured 2026-09-21 over the 43 it holds
+; now. The first writing of this section claimed 0 where the answer was 3; the answer is now 7.
+; Leaving a stale absence standing is the one defect a reader cannot catch by reading.
+; grep -ril "x-request-id" specs/ -> 0 other files, then and now. That header really is unheld
+; anywhere else, and it is the only absence here that survived the growth from 30 files to 43.
+; grep -rilE "prometheus|grafana|dashboard|observability|gauge|correlation|scrape" specs/ -> 7
+; other files. Four of them -- api_surface.t27, client_errors.t27, rate_limit.t27 and
+; request_identity.t27 -- match only in sentences that name this contract or report what it owns,
+; so they are inbound edges. The other three match on their own subject: schema_provenance.t27
+; owns the VALUE of the
+; schema_missing_columns gauge, runtime_config.t27 names that gauge as what a missing column
+; raises, and notification_queue.t27 counts the four monitoring artifacts and names the
+; queue-depth gauge it does NOT coin. Each of the three defers the naming rule to this file, so
+; seven files touch the vocabulary and none of them owns it.
+; The brief's own grep is recorded beside them so the difference cannot be lost: 25 files and 51
+; matches case-sensitive, 150 with -i, against 14 / 42 / 89 at first writing. Exactly one of
+; those is on subject -- turbobaby/rate-limit declares BLOCKED_METRIC_NAME, the literal name of
+; the counter it owns -- so the on-subject count is 1 and not 0, and it is the only figure in
+; this block that re-measurement left where it was.
+pub const CORPUS_FILE_COUNT_AT_REMEASUREMENT : u8 = 43;
+pub const CORPUS_FILE_COUNT_AT_FIRST_WRITING : u8 = 30;
 pub const CORPUS_FILES_NAMING_A_CORRELATION_HEADER : u8 = 0;
-pub const CORPUS_FILES_NAMING_A_METRIC_VOCABULARY : u8 = 3;
-pub const CORPUS_FILES_NAMING_IT_ONLY_BY_THIS_CONTRACTS_ID : u8 = 2;
-pub const CORPUS_FILES_NAMING_A_METRIC_ON_THEIR_OWN_SUBJECT : u8 = 1;
+pub const CORPUS_FILES_NAMING_A_METRIC_VOCABULARY : u8 = 7;
+pub const CORPUS_FILES_NAMING_IT_ONLY_BY_THIS_CONTRACTS_ID : u8 = 4;
+pub const CORPUS_FILES_NAMING_A_METRIC_ON_THEIR_OWN_SUBJECT : u8 = 3;
+pub const CORPUS_FILES_NAMING_A_METRIC_VOCABULARY_AT_FIRST_WRITING : u8 = 3;
 pub const NEIGHBOUR_SCHEMA_PROVENANCE_ID : str = "turbobaby/schema-provenance";
-pub const BRIEF_GREP_FILE_COUNT : u8 = 14;
-pub const BRIEF_GREP_MATCH_COUNT : u8 = 42;
-pub const BRIEF_GREP_MATCH_COUNT_CASE_INSENSITIVE : u8 = 89;
+pub const NEIGHBOUR_RUNTIME_CONFIG_ID : str = "turbobaby/runtime-config";
+pub const NEIGHBOUR_NOTIFICATION_QUEUE_ID : str = "turbobaby/notification-queue";
+pub const BRIEF_GREP_FILE_COUNT : u8 = 25;
+pub const BRIEF_GREP_MATCH_COUNT : u8 = 51;
+pub const BRIEF_GREP_MATCH_COUNT_CASE_INSENSITIVE : u8 = 150;
 pub const BRIEF_GREP_MATCHES_ON_SUBJECT : u8 = 1;
-pub const ON_SUBJECT_MATCH_SITE : str = "specs/turbobaby/rate_limit.t27:353";
+pub const ON_SUBJECT_MATCH_SITE : str = "turbobaby/rate-limit BLOCKED_METRIC_NAME";
+pub const BRIEF_GREP_FILE_COUNT_AT_FIRST_WRITING : u8 = 14;
+pub const BRIEF_GREP_MATCH_COUNT_AT_FIRST_WRITING : u8 = 42;
+pub const BRIEF_GREP_MATCH_COUNT_CASE_INSENSITIVE_AT_FIRST_WRITING : u8 = 89;
 
 ; --- Tests ---------------------------------------------------------------------------------------
 
@@ -577,12 +640,24 @@ test the_guarded_dashboard_is_clean_and_that_is_the_point {
   assert reference_failure_is_silent(false, true) == false;
 }
 
+test the_recording_rules_are_the_fourth_artifact_and_nothing_reads_them {
+  assert PROMQL_ARTIFACT_COUNT == 4;
+  assert PROMQL_ARTIFACTS_READ_BY_A_TEST == 1;
+  assert RECORDING_RULES_PATH == "docs/prometheus-recording-rules.yaml";
+  assert RECORDING_RULES_READ_BY_A_TEST == false;
+  assert RECORDING_RULE_EXPRESSIONS == 12;
+  assert RECORDING_RULES_DEAD_NAMES == 0;
+  assert PROMQL_ARTIFACT_COUNT > DASHBOARD_FILE_COUNT;
+  assert PROMQL_ARTIFACT_COUNT > PROMQL_ARTIFACTS_READ_BY_A_TEST;
+  assert artifact_is_guarded(RECORDING_RULES_READ_BY_A_TEST) == false;
+}
+
 test a_metric_kind_is_dropped_inside_the_binary_too {
   assert IGNORED_METRIC_KIND_SITE == "src/api/auth.rs:606";
   assert IGNORED_METRIC_KIND_CALL_SITES == 6;
   assert metric_name_is_emitted(false, true) == false;
   assert IGNORED_METRIC_KIND_CENSUS_IS_OWNED_BY_REQUEST_IDENTITY == true;
-  assert IGNORED_METRIC_KIND_CENSUS_OWNER_CONSTANT == "request_identity.t27:236 GATE_CALL_SITES_OWNER_LENIENT";
+  assert IGNORED_METRIC_KIND_CENSUS_OWNER_CONSTANT == "turbobaby/request-identity GATE_CALL_SITES_OWNER_LENIENT";
 }
 
 test the_digest_states_its_window_and_counts_what_it_cut {
@@ -620,16 +695,31 @@ test the_existing_guard_owns_declarations_and_nothing_else {
 }
 
 test the_corpus_absence_is_recorded_with_the_brief_it_corrects {
+  assert CORPUS_FILE_COUNT_AT_REMEASUREMENT == 43;
+  assert CORPUS_FILE_COUNT_AT_FIRST_WRITING == 30;
+  assert CORPUS_FILE_COUNT_AT_REMEASUREMENT > CORPUS_FILE_COUNT_AT_FIRST_WRITING;
   assert CORPUS_FILES_NAMING_A_CORRELATION_HEADER == 0;
-  assert CORPUS_FILES_NAMING_A_METRIC_VOCABULARY == 3;
+  assert CORPUS_FILES_NAMING_A_METRIC_VOCABULARY == 7;
+  assert CORPUS_FILES_NAMING_A_METRIC_VOCABULARY_AT_FIRST_WRITING == 3;
+  assert CORPUS_FILES_NAMING_A_METRIC_VOCABULARY > CORPUS_FILES_NAMING_A_METRIC_VOCABULARY_AT_FIRST_WRITING;
   assert CORPUS_FILES_NAMING_IT_ONLY_BY_THIS_CONTRACTS_ID + CORPUS_FILES_NAMING_A_METRIC_ON_THEIR_OWN_SUBJECT == CORPUS_FILES_NAMING_A_METRIC_VOCABULARY;
   assert NEIGHBOUR_SCHEMA_PROVENANCE_ID == "turbobaby/schema-provenance";
   assert NEIGHBOUR_SCHEMA_PROVENANCE_ID != ID;
-  assert BRIEF_GREP_FILE_COUNT == 14;
-  assert BRIEF_GREP_MATCH_COUNT == 42;
-  assert BRIEF_GREP_MATCH_COUNT_CASE_INSENSITIVE == 89;
+  assert NEIGHBOUR_RUNTIME_CONFIG_ID == "turbobaby/runtime-config";
+  assert NEIGHBOUR_NOTIFICATION_QUEUE_ID == "turbobaby/notification-queue";
+  assert NEIGHBOUR_RUNTIME_CONFIG_ID != NEIGHBOUR_SCHEMA_PROVENANCE_ID;
+  assert NEIGHBOUR_NOTIFICATION_QUEUE_ID != NEIGHBOUR_RUNTIME_CONFIG_ID;
+  assert NEIGHBOUR_NOTIFICATION_QUEUE_ID != ID;
+  assert BRIEF_GREP_FILE_COUNT == 25;
+  assert BRIEF_GREP_MATCH_COUNT == 51;
+  assert BRIEF_GREP_MATCH_COUNT_CASE_INSENSITIVE == 150;
   assert BRIEF_GREP_MATCHES_ON_SUBJECT == 1;
-  assert ON_SUBJECT_MATCH_SITE == "specs/turbobaby/rate_limit.t27:353";
+  assert ON_SUBJECT_MATCH_SITE == "turbobaby/rate-limit BLOCKED_METRIC_NAME";
+  assert BRIEF_GREP_FILE_COUNT_AT_FIRST_WRITING == 14;
+  assert BRIEF_GREP_MATCH_COUNT_AT_FIRST_WRITING == 42;
+  assert BRIEF_GREP_MATCH_COUNT_CASE_INSENSITIVE_AT_FIRST_WRITING == 89;
+  assert BRIEF_GREP_FILE_COUNT > BRIEF_GREP_FILE_COUNT_AT_FIRST_WRITING;
+  assert BRIEF_GREP_MATCH_COUNT > BRIEF_GREP_MATCH_COUNT_AT_FIRST_WRITING;
   assert BRIEF_GREP_FILE_COUNT > CORPUS_FILES_NAMING_A_CORRELATION_HEADER;
   assert BRIEF_GREP_MATCH_COUNT_CASE_INSENSITIVE > BRIEF_GREP_MATCH_COUNT;
 }

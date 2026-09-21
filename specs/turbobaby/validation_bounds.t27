@@ -72,9 +72,11 @@
 ; guess at a real one. The grammar is pinned by a character count and a class predicate instead.
 ; It ships no Telegram id, real or invented: the only large integers here are 2^53-1 and its
 ; successor, which are properties of IEEE 754 double precision and of nothing's account. It holds
-; no f64 and cannot: no contract in this corpus declares one, so finiteness travels here as a
-; boolean argument and magnitude as a scaled integer, which is honest about what the language can
-; check and refuses to imply that a float was evaluated. It computes no price and renders no
+; no f64 and cannot: no contract in this corpus declares one -- re-run over all 43 .t27 files on
+; 2026-09-21 at review and still 0, pinned below as F64_DECLARATIONS_IN_CORPUS so the next reader
+; re-runs a number instead of trusting this sentence -- so finiteness travels here as a boolean
+; argument and magnitude as a scaled integer, which is honest about what the language can check
+; and refuses to imply that a float was evaluated. It computes no price and renders no
 ; absence -- there is no function here from an unknown to a number, and that missing function IS
 ; the specification. It carries nothing from D14: no renter, handle, phone, plate, key code, debt,
 ; purchase cost or personal note, in a constant, a fixture or a comment. The two coordinates that
@@ -103,9 +105,38 @@ pub const LEGITIMATE_CLAMP_INPUT : str = "the bounded control clamp owned by the
 pub const IDENTITY_INPUT : str = "proof outcome supplied by the request identity contract";
 pub const WRITE_BOUND_INPUT : str = "admin write ceilings owned by the catalog write contract";
 
-; The one clamp in this corpus that is legitimate, named by the declaration its owner gives it
-; and never by a line number. Its bounds, its units and its rate belong to that contract; what
-; this file needs from it is only its SHAPE, recorded as two booleans below.
+; The clamp this file borrows as its legitimate SHAPE, named by the declaration its owner gives
+; it and never by a line number. Its bounds, its units and its rate belong to that contract; what
+; this file needs from it is only its shape, recorded as two booleans below.
+; --
+; RE-MEASURED 2026-09-21 at review, and the sentence above used to read "the one clamp in this
+; corpus that is legitimate", which is a uniqueness claim over specs/ and was written when the
+; corpus was smaller. Counted today by grepping specs/ for a pub fn whose name contains clamp:
+; SIX files declare one. Four of them are this file's own models of the construct it judges
+; (clamp_outcome, clamp_result, clamp_is_legitimate, clamp_call_is_permitted); the other five
+; files are turbobaby/happy-hour with clamp_discount_percent, turbobaby/loyalty-ledger with
+; clamp_would_fire and clamp_fires_under_the_guard, turbobaby/order-money with
+; order_money_clamp_at_zero, turbobaby/ride-runtime with clamp_horizontal_control, and
+; turbobaby/upload-media with sanitizer_clamp_can_fire.
+; This file does NOT adjudicate any of those five. USE_BOUNDED_CONTROL is a verdict about what a
+; value steers and who reads it, which is each owner's subject and not this one's, so no
+; legitimacy verdict is passed on a sibling's declaration here and none is implied. What is
+; claimed, and all that is claimed, is that clamp_horizontal_control is the declaration this file
+; takes its legitimate shape FROM -- an interval that defines the quantity, an output that steers
+; something and is never published. The count is pinned as a constant so the sentence cannot
+; quietly turn back into a uniqueness claim the next time the corpus grows.
+pub const CORPUS_FILES_DECLARING_A_CLAMP_FN : u8 = 6;
+pub const SIBLING_FILES_DECLARING_A_CLAMP_FN : u8 = 5;
+pub const CLAMP_FNS_DECLARED_HERE : u8 = 4;
+pub const SIBLING_CLAMP_OWNER_IDS : [5]str = [
+    "turbobaby/happy-hour",
+    "turbobaby/loyalty-ledger",
+    "turbobaby/order-money",
+    "turbobaby/ride-runtime",
+    "turbobaby/upload-media"
+];
+pub const LEGITIMATE_CLAMP_IS_A_UNIQUENESS_CLAIM : bool = false;
+pub const SIBLING_CLAMP_LEGITIMACY_IS_JUDGED_HERE : bool = false;
 pub const LEGITIMATE_CLAMP_DECLARATION : str = "clamp_horizontal_control";
 pub const LEGITIMATE_CLAMP_SATURATES_AT_THE_BOUND : bool = true;
 pub const LEGITIMATE_CLAMP_OUTPUT_IS_EVER_PUBLISHED : bool = false;
@@ -168,10 +199,18 @@ pub const D9_CITATION_CORRECTION : str = "DECISIONS.md:122 cites the strains cla
 
 ; --- The clamp, modelled without a float -------------------------------------------------------
 ; No contract in this corpus declares an f64, and inventing one here would imply an arithmetic
-; the gate cannot check. So the two facts a float carries are split: finiteness is a boolean the
-; caller supplies, and magnitude is an integer in hundredths of a unit. NaN and both infinities
-; collapse into finite = false, which is precisely the distinction clamp_finite_in_range makes at
+; the gate cannot check. RE-RUN 2026-09-21 at review, because an absence measured over specs/
+; while the corpus was still being written is the one claim in this file that could have gone
+; false without anyone noticing: a grep of all 43 .t27 files for a declaration typed f64 returns
+; 0, so the sentence holds. It holds as of that reading and not for ever -- several siblings
+; discuss f64 in prose, about floats in src/, and any one of them could declare one tomorrow.
+; So the two facts a float carries are split: finiteness is a boolean the caller supplies, and
+; magnitude is an integer in hundredths of a unit. NaN and both infinities collapse into
+; finite = false, which is precisely the distinction clamp_finite_in_range makes at
 ; src/trios/validation.rs:178 with v.is_finite().
+pub const CORPUS_FILES_MEASURED_FOR_F64 : u8 = 43;
+pub const F64_DECLARATIONS_IN_CORPUS : u8 = 0;
+pub const F64_ABSENCE_WAS_RE_RUN_AT_REVIEW : bool = true;
 pub const SCALE_PER_UNIT : i32 = 100;
 pub const LAT_MIN_CENTI : i32 = -9000;
 pub const LAT_MAX_CENTI : i32 = 9000;
@@ -520,6 +559,26 @@ test the_legitimate_clamp_is_named_by_declaration_and_its_numbers_are_left_alone
     assert LEGITIMATE_CLAMP_SATURATES_AT_THE_BOUND != SHARED_CLAMP_SATURATES_AT_THE_BOUND;
 }
 
+test naming_one_legitimate_clamp_is_not_a_uniqueness_claim_over_the_corpus {
+    assert CORPUS_FILES_DECLARING_A_CLAMP_FN == 6;
+    assert SIBLING_FILES_DECLARING_A_CLAMP_FN == 5;
+    assert SIBLING_CLAMP_OWNER_IDS.len == SIBLING_FILES_DECLARING_A_CLAMP_FN;
+    assert SIBLING_FILES_DECLARING_A_CLAMP_FN + 1 == CORPUS_FILES_DECLARING_A_CLAMP_FN;
+    assert CLAMP_FNS_DECLARED_HERE == 4;
+    assert SIBLING_CLAMP_OWNER_IDS[3] == REUSES_RIDE_RUNTIME_ID;
+    assert SIBLING_CLAMP_OWNER_IDS[0] != ID;
+    assert SIBLING_CLAMP_OWNER_IDS[4] != ID;
+    assert LEGITIMATE_CLAMP_IS_A_UNIQUENESS_CLAIM == false;
+    assert SIBLING_CLAMP_LEGITIMACY_IS_JUDGED_HERE == false;
+}
+
+test the_f64_absence_is_a_dated_reading_and_carries_its_denominator {
+    assert F64_DECLARATIONS_IN_CORPUS == 0;
+    assert CORPUS_FILES_MEASURED_FOR_F64 == 43;
+    assert F64_ABSENCE_WAS_RE_RUN_AT_REVIEW == true;
+    assert MEASURED_AT == "2026-09-21";
+}
+
 test the_census_of_the_validator_module_is_pinned {
     assert VALIDATOR_SOURCE == "src/trios/validation.rs";
     assert TYPE_ALIAS_SOURCE == "src/trios/core.rs";
@@ -789,6 +848,12 @@ test the_gaps_this_file_found_are_named_rather_than_filled {
 
 invariant a_substituted_value_can_never_be_published
   assert value_may_reach_a_published_slot(USE_PUBLISHED_FACT, true) == false and value_may_reach_a_published_slot(USE_PUBLISHED_MONEY, true) == false
+
+invariant this_file_judges_no_siblings_clamp_and_counts_them_instead
+  assert LEGITIMATE_CLAMP_IS_A_UNIQUENESS_CLAIM == false and SIBLING_CLAMP_LEGITIMACY_IS_JUDGED_HERE == false and SIBLING_CLAMP_OWNER_IDS.len == SIBLING_FILES_DECLARING_A_CLAMP_FN and SIBLING_FILES_DECLARING_A_CLAMP_FN + 1 == CORPUS_FILES_DECLARING_A_CLAMP_FN
+
+invariant the_corpus_carries_no_float_declaration_as_of_the_dated_reading
+  assert F64_DECLARATIONS_IN_CORPUS == 0 and F64_ABSENCE_WAS_RE_RUN_AT_REVIEW == true and CORPUS_FILES_MEASURED_FOR_F64 == 43
 
 invariant a_clamp_is_legitimate_on_one_use_kind_and_no_other
   assert clamp_is_legitimate(USE_BOUNDED_CONTROL) == true and clamp_is_legitimate(USE_PUBLISHED_FACT) == false and clamp_is_legitimate(USE_PUBLISHED_MONEY) == false and clamp_is_legitimate(USE_UNSET) == false

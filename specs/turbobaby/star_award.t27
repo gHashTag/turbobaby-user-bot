@@ -3,10 +3,15 @@
 ; This contract owns the decision /api/stars/add makes when a game asks to be paid: which sources
 ; are capped because a game rather than a purchase produced them, the per-window ceiling for one
 ; player on one source, the fact that an over-ceiling request is TRIMMED and not refused, the
-; separate per-call ceiling, and what the answer lets the caller see. ride_runtime.t27:134-135
-; declares SERVER_OWNS_AWARD_DECISION true and CLIENT_OWNS_AWARD_CAP false and then names no
-; server owner anywhere in the corpus. This file is that owner, and it names ride_runtime's ID so
-; the pointer becomes an edge instead of a dangling claim.
+; separate per-call ceiling, and what the answer lets the caller see. turbobaby/ride-runtime owns
+; SERVER_OWNS_AWARD_DECISION, which is true, and CLIENT_OWNS_AWARD_CAP, which is false, and then
+; names no server owner. This file is that owner, and it names ride_runtime's ID so the pointer
+; becomes an edge instead of a dangling claim. Re-verified 2026-09-21, and scoped more carefully
+; than the first writing scoped it: both declarations still exist and still carry those values,
+; and ride_runtime.t27 declares exactly ONE reuse edge -- REUSES_RIDE_GAME_ID, pointing at
+; turbobaby/ride-game -- so it is not a file without edges, it is a file whose one edge is not
+; this one. The award pointer is still undeclared from that side, which is what makes the edge
+; below load-bearing in one direction only.
 ; --
 ; WHY (measured 2026-09-20). Two ceilings guard the same money and they are not the same size.
 ; src/api/stars.rs:52 sets the per-call ceiling to 1000000 and src/api/stars.rs:54-59 refuses only
@@ -34,7 +39,9 @@
 ;    uncaps a source; its LENGTH is therefore the permission and an invariant pins it.
 ; --
 ; WHAT THIS FILE NEVER DOES. It publishes no exchange rate and performs no conversion: that
-; prohibition is market_profile.t27's (REUSES_MARKET_PROFILE_ID), and the face-value sentence at
+; prohibition is turbobaby/market's (REUSES_MARKET_PROFILE_ID), which owns EXCHANGE_RATES_PUBLISHED
+; -- an empty array -- and EXCHANGE_RATE_RULE beside it, both re-read 2026-09-21; the face-value
+; sentence at
 ; src/trios/stars_cap.rs:3 is a shop fact there, not a rate here. It emits no client price (D11)
 ; and owns no order total -- the total identity is order_money.t27's and the checkout seam around
 ; it is commerce.t27's, and what a Star is worth when SPENT is order_money's too. It does not restate
@@ -92,8 +99,10 @@ pub const THE_SPEND_CEILING_IS_A_DIFFERENT_CONSTANT_AT_THE_SAME_MAGNITUDE : bool
 pub const RIDE_RUNTIME_DECLARES_A_SERVER_OWNER : bool = true;
 pub const THIS_FILE_IS_THAT_SERVER_OWNER : bool = true;
 
-; commerce.t27:61-66 owns the idempotency decision vocabulary (reject, create, return prior, in
-; progress, conflict). This file restates none of it. It takes the replay verdict as one inbound
+; turbobaby/commerce owns the idempotency decision vocabulary: IDEM_REJECT_KEY, IDEM_CREATE_NEW,
+; IDEM_RETURN_PRIOR, IDEM_IN_PROGRESS, IDEM_CONFLICT, closed by IDEM_DECISION_COUNT (reject,
+; create, return prior, in progress, conflict). Re-read 2026-09-21: all six declarations still
+; exist there and the count still closes the set at five. This file restates none of it. It takes the replay verdict as one inbound
 ; boolean, and only records WHICH FIELD the endpoint keys on: src/api/stars.rs:34 declares
 ; external_tx_id as the game-generated id, src/api/stars.rs:192-219 locks and checks it, and
 ; migrations/042_stars_currency.sql gives it its own table.
@@ -274,7 +283,8 @@ pub fn caller_can_observe_the_trim(outcome: u8) bool {
 }
 
 ; --- Refusals --------------------------------------------------------------------------------------
-; No rate, no conversion. market_profile.t27 owns that prohibition; naming it here is what stops
+; No rate, no conversion. turbobaby/market owns that prohibition in EXCHANGE_RATES_PUBLISHED and
+; EXCHANGE_RATE_RULE; naming it here is what stops
 ; the face value at src/trios/stars_cap.rs:3 from being read as an FX rate published by this file.
 pub const THIS_FILE_PUBLISHES_AN_EXCHANGE_RATE : bool = false;
 pub const THIS_FILE_CONVERTS_BETWEEN_CURRENCIES : bool = false;
@@ -290,9 +300,19 @@ pub const PERSON_LEVEL_FIELDS_CARRIED : [0]str = [];
 ; discriminator. Both are game_score.t27's, named above. The payout and the score are two writes
 ; on two endpoints (src/api/stars.rs:22 and src/api/game.rs:20-21) that happen to share one
 ; caller; a contract over both would be two contracts. The absence itself is measured and stated
-; once, over there, and is not re-measured here.
+; once, over there, and is not re-measured here. Re-checked 2026-09-21 that the sentence still has
+; a referent: turbobaby/game-score holds GAME_KEY_OCCURRENCES and the zero it carries, and it is
+; the only contract in the corpus that declares it. The check counts DECLARATIONS and not
+; mentions, and that choice was forced by getting it wrong once: an earlier draft of this comment
+; said the discriminator's name occurred in exactly one .t27 file, and writing that sentence
+; raised the count to two, because the sentence contains the name. A measurement a contract can
+; break by describing itself is not a measurement. "Stated once, over there" is only safe while
+; the over-there exists, so the owner is pinned below by ID and by declaration name.
 pub const HIGH_SCORE_TABLE_IS_OWNED_HERE : bool = false;
 pub const GAME_DISCRIMINATOR_IS_OWNED_HERE : bool = false;
+pub const ABSENCE_OWNER_CHECKED_AT : str = "2026-09-21";
+pub const GAME_DISCRIMINATOR_ABSENCE_DECLARATION : str = "GAME_KEY_OCCURRENCES";
+pub const CONTRACTS_DECLARING_THE_DISCRIMINATOR_ABSENCE : u8 = 1;
 
 ; THE SECOND REFUSAL. What the shipped caller posts is narrower than "on every run end", and the
 ; non-positive branch of the trio is narrower still: nothing shipped reaches it, in either
@@ -483,6 +503,23 @@ test the_refusals_are_declared_rather_than_filled_in {
   assert THIS_FILE_EMITS_A_CLIENT_PRICE == false;
   assert THIS_FILE_OWNS_AN_ORDER_TOTAL == false;
   assert PERSON_LEVEL_FIELDS_CARRIED.len == 0;
+}
+
+; A refusal that points somewhere is only as good as the somewhere. This file declines to
+; re-measure the discriminator absence and defers to game-score for it, so the deferral itself is
+; pinned: the owner's ID, the declaration that carries the zero, and the count of contracts that
+; carry it. Re-measured 2026-09-21. If the owner ever drops GAME_KEY_OCCURRENCES, the refusal
+; above stops naming anything and this is the test that says so.
+test the_deferred_absence_still_has_an_owner_and_a_declaration {
+  assert ABSENCE_OWNER_CHECKED_AT == "2026-09-21";
+  assert GAME_DISCRIMINATOR_ABSENCE_DECLARATION == "GAME_KEY_OCCURRENCES";
+  assert CONTRACTS_DECLARING_THE_DISCRIMINATOR_ABSENCE == 1;
+  assert REUSES_GAME_SCORE_ID == "turbobaby/game-score";
+  assert GAME_DISCRIMINATOR_IS_OWNED_HERE == false;
+  assert HIGH_SCORE_TABLE_IS_OWNED_HERE == false;
+  ; One owner, and it is not this file: the deferral would be circular otherwise.
+  assert REUSES_GAME_SCORE_ID != ID;
+  assert CONTRACTS_DECLARING_THE_DISCRIMINATOR_ABSENCE == 1;
 }
 
 ; --- Invariants --------------------------------------------------------------------------------

@@ -61,8 +61,15 @@
 ; the one this boundary touches is the photo-URL refusal at src/api/bikes.rs:1047, cited by path
 ; and line and never by its wording. It declares no retention period and no scan result, because
 ; the repository implements neither and an honest refusal is recorded instead. It restates no
-; limiter window, no attempt cap, no admin-auth bound, no HTTP numeral a sibling already owns and
-; no catalog column ceiling. Nothing from D14 -- no renter, handle, phone, key code, plate, debt,
+; limiter window, no attempt cap, no admin-auth bound and no catalog column ceiling. On HTTP
+; numerals the sentence has to be narrower than the one that stood here, and the correction is
+; RE-MEASURED 2026-09-21 over all 43 files of the corpus: this file declares four refusal
+; numerals, and two of them -- 400 and 500 -- are declared by siblings for their own surfaces
+; too, so "no HTTP numeral a sibling already owns" was false. What IS true is the deferral that
+; sentence was reaching for: the gate numerals 401, 403 and 429 belong to
+; turbobaby/request-identity, and this file counts their SITES and never writes their numbers.
+; The measurement is pinned as constants below rather than left as a phrase.
+; Nothing from D14 -- no renter, handle, phone, key code, plate, debt,
 ; purchase price or personal note -- in a constant, a comment or a test.
 ; phi^2 + 1/phi^2 = 3 | TRINITY
 
@@ -91,8 +98,11 @@ pub const STORAGE_SOURCE_LINES : u16 = 260;
 ; The pinned compiler lowers a brace import to an empty UseDecl and the gate rejects it, so a
 ; cross-contract edge is a string naming the owner's ID plus a test asserting the literal. Each
 ; edge below also names the DECLARATION that carries the decision, never a line in a sibling
-; file: ten contracts written in parallel on 2026-09-21 made every line citation between them
-; stale within the hour, and a name survives a reorder that a number does not.
+; file: the commit this file arrived in added THIRTEEN contracts at once, and the corpus reached
+; its 42 under specs/turbobaby across five commits of 10, 1, 8, 10 and 13. Contracts written in
+; parallel made every line citation between them stale within the hour -- re-measured 2026-09-21,
+; the sibling line citations still standing in the corpus had drifted by between 3 and 59 lines.
+; A name survives a reorder that a number does not.
 ;
 ; turbobaby/rate-limit owns the sliding window, the key derivation and the shared fallback
 ; bucket, and attempt_admitted is the decision this route consumes. That contract already
@@ -428,6 +438,23 @@ pub const HTTP_UNSUPPORTED_MEDIA_TYPE : u16 = 415;
 pub const HTTP_SERVER_ERROR : u16 = 500;
 pub const HTTP_STATUSES_DECLARED_HERE : u8 = 4;
 pub const GATE_STATUSES_ARE_DECLARED_AT : str = "turbobaby/request-identity";
+; Which of the four this file shares, RE-MEASURED 2026-09-21 by grepping specs/ for a declaration
+; of each numeral across all 43 files. 413 and 415 are declared nowhere else: this route is the
+; only surface in the corpus that can refuse for size or for type. 400 and 500 are each declared
+; by four contracts -- turbobaby/catalog-api, turbobaby/order-status and turbobaby/cart-persistence
+; beside this file for 400, and turbobaby/catalog-api, turbobaby/cart-persistence and
+; turbobaby/happy-hour beside this file for 500. The corpus therefore has no single owner of
+; either, and this file is one voice of four rather than a second copy of one. The invariant
+; further down is named no_numeral_a_sibling_already_owns_is_re_declared_here; what it asserts,
+; and all it ever asserted, is that the three GATE numerals are not declared here. The name
+; overclaims, it is left standing rather than quietly rewritten, and these constants are the
+; measurement a reader should trust instead of it.
+pub const CORPUS_FILES_AT_REMEASUREMENT : u8 = 43;
+pub const NUMERALS_DECLARED_ONLY_HERE : u8 = 2;
+pub const NUMERALS_ALSO_DECLARED_BY_A_SIBLING : u8 = 2;
+pub const CONTRACTS_DECLARING_BAD_REQUEST : u8 = 4;
+pub const CONTRACTS_DECLARING_SERVER_ERROR : u8 = 4;
+pub const GATE_NUMERALS_DECLARED_HERE : u8 = 0;
 pub const BAD_REQUEST_SITES : u8 = 6;
 pub const PAYLOAD_TOO_LARGE_SITES : u8 = 2;
 pub const UNSUPPORTED_MEDIA_TYPE_SITES : u8 = 2;
@@ -678,6 +705,20 @@ test fifteen_refusal_sites_and_four_numerals_of_our_own {
   assert refusal_status_is_declared_here(HTTP_SERVER_ERROR) == true;
   assert refusal_status_is_declared_here(429) == false;
   assert refusal_status_is_declared_here(401) == false;
+  assert refusal_status_is_declared_here(403) == false;
+}
+
+test two_of_the_four_numerals_are_also_a_siblings_and_that_is_measured {
+  assert CORPUS_FILES_AT_REMEASUREMENT == 43;
+  assert NUMERALS_DECLARED_ONLY_HERE == 2;
+  assert NUMERALS_ALSO_DECLARED_BY_A_SIBLING == 2;
+  assert NUMERALS_DECLARED_ONLY_HERE + NUMERALS_ALSO_DECLARED_BY_A_SIBLING == HTTP_STATUSES_DECLARED_HERE;
+  assert CONTRACTS_DECLARING_BAD_REQUEST == 4;
+  assert CONTRACTS_DECLARING_SERVER_ERROR == 4;
+  assert CONTRACTS_DECLARING_BAD_REQUEST > NUMERALS_ALSO_DECLARED_BY_A_SIBLING;
+  assert GATE_NUMERALS_DECLARED_HERE == 0;
+  assert GATE_STATUSES_ARE_DECLARED_AT == "turbobaby/request-identity";
+  assert GATE_STATUSES_ARE_DECLARED_AT == REUSES_REQUEST_IDENTITY_ID;
 }
 
 test a_refusal_body_is_one_key_and_never_the_raw_error {

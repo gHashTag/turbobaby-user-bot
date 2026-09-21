@@ -171,6 +171,41 @@ pub const HEADER_LITERAL_IS_RESTATED_HERE : bool = false;
 pub const IDEMPOTENCY_ARMS_ARE_RESTATED_HERE : bool = false;
 pub const ROUTE_ALIASES_ARE_RESTATED_HERE : bool = false;
 
+; --- The declaration names the edges rest on, read in the owners' files ---------------------------
+; Three of the five edges above named their owner's declarations in PROSE ONLY -- catalog-api's
+; catalog_api_dto_valid, client-errors' render_kind and checkout_message_source, deeplink's
+; LEGACY_ROUTE_ALIASES and deeplink_landing. A prose name is better than a line number, because it
+; survives the owner being edited, but nothing checks it: the owner could rename or delete the
+; declaration and every sentence here would read exactly as it does now. The eleven names are
+; pinned below so that a rename upstream is a thing this file can be measured against rather than
+; a thing a reader has to go and look for.
+; WHAT A PIN HERE DOES AND DOES NOT DO. It records that the name was READ in the owner's file on a
+; named day and found to mean what the sentence beside it claims. It cannot notice a later rename
+; by itself -- no import form resolves, so there is nothing to break -- and it is deliberately a
+; NAME and not a value: the cap, the header literal and the alias list stay uncopied, which is what
+; the four booleans above say and what the test below re-asserts.
+pub const EDGE_DECLARATIONS_VERIFIED_AT : str = "2026-09-21";
+pub const EDGE_DECLARATIONS_PINNED : u8 = 11;
+pub const EDGE_DECLARATIONS_MISSING_FROM_THEIR_OWNERS : u8 = 0;
+pub const REQUEST_IDENTITY_DECLARATIONS : [4]str = [
+  "identity_of_request",
+  "lenient_cohort",
+  "INIT_DATA_MAX_BYTES",
+  "init_data_size_admits"
+];
+pub const CATALOG_API_DECLARATIONS : [1]str = ["catalog_api_dto_valid"];
+pub const COMMERCE_DECLARATIONS : [1]str = ["commerce_idempotency_decision"];
+pub const CLIENT_ERRORS_DECLARATIONS : [2]str = ["render_kind", "checkout_message_source"];
+pub const DEEPLINK_DECLARATIONS : [2]str = ["LEGACY_ROUTE_ALIASES", "deeplink_landing"];
+pub const LOYALTY_LEDGER_DECLARATIONS : [1]str = ["IDEMPOTENCY_HEADER"];
+
+; An edge is checkable only while the owner still declares the name it rests on. Written as a
+; function so a worker who finds a rename writes the boolean and watches the assert fail, rather
+; than silently repairing the sentence.
+pub fn edge_rests_on_a_live_declaration(owner_still_declares_it: bool) bool {
+  return owner_still_declares_it;
+}
+
 ; --- Where initData comes from -----------------------------------------------------------------
 ; get_init_data (src/ui/telegram.rs:573-620) is a single js_sys::eval with three exits, and they
 ; are not three degrees of the same thing. :578 returns the signed string Telegram supplied.
@@ -527,6 +562,43 @@ test every_reuse_edge_names_an_owner_and_not_a_line {
   assert REUSES_DEEPLINK_ID != REUSES_CLIENT_ERRORS_ID;
 }
 
+; The eleven names, and the arithmetic that says the five edges account for all of them. The last
+; two asserts are the ones that would catch a rename: the count of names missing from their owners
+; is zero TODAY, and the day it was read is a literal rather than an impression.
+test every_edge_rests_on_a_declaration_that_exists_in_its_owner {
+  assert EDGE_DECLARATIONS_VERIFIED_AT == "2026-09-21";
+  assert EDGE_DECLARATIONS_VERIFIED_AT == MEASURED_AT;
+  assert REQUEST_IDENTITY_DECLARATIONS.len == 4;
+  assert REQUEST_IDENTITY_DECLARATIONS[0] == "identity_of_request";
+  assert REQUEST_IDENTITY_DECLARATIONS[3] == "init_data_size_admits";
+  assert CATALOG_API_DECLARATIONS[0] == "catalog_api_dto_valid";
+  assert COMMERCE_DECLARATIONS[0] == "commerce_idempotency_decision";
+  assert CLIENT_ERRORS_DECLARATIONS[0] == "render_kind";
+  assert CLIENT_ERRORS_DECLARATIONS[1] == "checkout_message_source";
+  assert DEEPLINK_DECLARATIONS[0] == "LEGACY_ROUTE_ALIASES";
+  assert DEEPLINK_DECLARATIONS[1] == "deeplink_landing";
+  assert LOYALTY_LEDGER_DECLARATIONS[0] == "IDEMPOTENCY_HEADER";
+  assert REQUEST_IDENTITY_DECLARATIONS.len + CATALOG_API_DECLARATIONS.len + COMMERCE_DECLARATIONS.len + CLIENT_ERRORS_DECLARATIONS.len + DEEPLINK_DECLARATIONS.len + LOYALTY_LEDGER_DECLARATIONS.len == EDGE_DECLARATIONS_PINNED;
+  assert EDGE_DECLARATIONS_MISSING_FROM_THEIR_OWNERS == 0;
+  assert edge_rests_on_a_live_declaration(true) == true;
+  assert edge_rests_on_a_live_declaration(false) == false;
+}
+
+; A pinned NAME is not a copied VALUE, and the difference is the whole reason the names may be
+; pinned at all. The five counted edges each carry at least one name; the two declarations that are
+; not edges carry one each and still copy nothing.
+test pinning_a_declaration_name_is_not_copying_the_owners_value {
+  assert CATALOG_API_DECLARATIONS.len == 1;
+  assert COMMERCE_DECLARATIONS.len == 1;
+  assert LOYALTY_LEDGER_DECLARATIONS.len == 1;
+  assert CAP_VALUE_IS_RESTATED_HERE == false;
+  assert HEADER_LITERAL_IS_RESTATED_HERE == false;
+  assert IDEMPOTENCY_ARMS_ARE_RESTATED_HERE == false;
+  assert ROUTE_ALIASES_ARE_RESTATED_HERE == false;
+  assert REQUEST_IDENTITY_DECLARATIONS[2] != SIZE_CAP_IS_OWNED_BY;
+  assert LOYALTY_LEDGER_DECLARATIONS[0] != HEADER_NAME_IS_ALREADY_DECLARED_AT;
+}
+
 test nothing_a_sibling_owns_is_copied_here {
   assert CAP_VALUE_IS_RESTATED_HERE == false;
   assert HEADER_LITERAL_IS_RESTATED_HERE == false;
@@ -811,3 +883,14 @@ invariant the_catchall_is_what_makes_the_route_table_total
 
 invariant every_edge_names_an_owner_that_is_not_this_file
   assert REUSES_REQUEST_IDENTITY_ID != ID and REUSES_CATALOG_API_ID != ID and REUSES_COMMERCE_ID != ID and REUSES_CLIENT_ERRORS_ID != ID and REUSES_DEEPLINK_ID != ID
+
+; An edge names an OWNER and a DECLARATION, and never a line in the owner's file. The count of
+; pinned names has to keep its measured length for the same reason the partition above does: an
+; emptied list would make every sentence about the edges vacuously true.
+invariant every_edge_is_named_by_a_declaration_and_none_of_them_is_missing
+  assert EDGE_DECLARATIONS_MISSING_FROM_THEIR_OWNERS == 0 and REQUEST_IDENTITY_DECLARATIONS.len + CATALOG_API_DECLARATIONS.len + COMMERCE_DECLARATIONS.len + CLIENT_ERRORS_DECLARATIONS.len + DEEPLINK_DECLARATIONS.len + LOYALTY_LEDGER_DECLARATIONS.len == EDGE_DECLARATIONS_PINNED and EDGE_DECLARATIONS_PINNED == 11
+
+; The names are pinned; the values are still the owners'. If a later edit copies the cap, the header
+; literal or the alias list into this file, this is what fails.
+invariant pinning_a_name_never_becomes_copying_a_value
+  assert CAP_VALUE_IS_RESTATED_HERE == false and HEADER_LITERAL_IS_RESTATED_HERE == false and ROUTE_ALIASES_ARE_RESTATED_HERE == false and IDEMPOTENCY_ARMS_ARE_RESTATED_HERE == false

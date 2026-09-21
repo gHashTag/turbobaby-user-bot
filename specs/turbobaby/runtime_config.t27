@@ -38,13 +38,21 @@
 ; WHERE THE BRIEF IS REFUTED, five times, every citation opened on 2026-09-21.
 ;   1. The brief's reuse list names turbobaby/notification-queue while the thirty IDs the brief
 ;      itself enumerates do not contain it. The list is right and the enumeration is short: the
-;      contract exists. Reading the ID line of every file under specs/ on 2026-09-21, at review
-;      rather than at first draft, finds turbobaby/notification-queue declared and owning the
-;      drain's poll interval under the name POLL_INTERVAL_SECONDS. This file's first draft
-;      asserted the opposite, and the way it got there is the lesson: an absence measured over
-;      specs/ while the corpus is being written is false by the time it is read. The edge is
-;      declared below and the drain's row in the inventory is a marked copy. The source citation
-;      src/notification_queue.rs:18 stays, because a line into src/ does not go stale.
+;      contract exists. This file's FIRST DRAFT declared the opposite as a refutation -- that no
+;      owner existed for that id and that reading the ID line of every file under
+;      specs/turbobaby found it nowhere -- and that refutation was a false absence, the one
+;      defect a reader trusts without checking. It has been re-measured twice since, the second
+;      time on 2026-09-21 at review, by opening every ID line in the corpus rather than by
+;      remembering the brief: 43 ID lines read, 42 under specs/turbobaby plus
+;      specs/agents/turbobaby.t27, and specs/turbobaby/notification_queue.t27 declares
+;      turbobaby/notification-queue and owns the drain's poll interval under the name
+;      POLL_INTERVAL_SECONDS. The way the first draft got there is the lesson: an absence
+;      measured over specs/ while the corpus is being written is false by the time it is read,
+;      and it goes on sounding authoritative for as long as nobody re-runs it. The edge is
+;      declared below, the drain's row in the inventory is a marked copy, and the counts are
+;      pinned as constants so the next reader re-runs a number instead of trusting a sentence.
+;      The source citation src/notification_queue.rs:18 stays, because a line into src/ does not
+;      go stale the way a line into a sibling spec does.
 ;   2. The brief attaches "(boot halts)" to turbobaby/schema-provenance. It does not halt, that
 ;      contract already says so, and this file takes the weaker claim as given: src/main.rs:455
 ;      reads the missing columns, :460 publishes them as a gauge, :464-470 logs an error and still
@@ -119,6 +127,17 @@ pub const REUSES_NOTIFICATION_QUEUE_ID : str = "turbobaby/notification-queue";
 pub const REUSES_EVENTS_BOOKING_ID : str = "turbobaby/events-booking";
 pub const REUSES_CART_PERSISTENCE_ID : str = "turbobaby/cart-persistence";
 pub const REUSE_EDGE_COUNT : u8 = 9;
+
+; The re-measurement behind edge seven, pinned so it can be re-run rather than believed. Counted
+; by opening the ID line of every .t27 file in the corpus on 2026-09-21 at review, not by reading
+; a list handed to this file. A file path is carried instead of a line number on purpose: the
+; path is what rglob discovers and it does not move when the sibling is edited.
+pub const SPEC_ID_LINES_READ_AT_REVIEW : u8 = 43;
+pub const SPEC_ID_LINES_UNDER_TURBOBABY : u8 = 42;
+pub const SPEC_ID_LINES_AGENT_CARDS : u8 = 1;
+pub const NOTIFICATION_QUEUE_OWNER_EXISTS : bool = true;
+pub const NOTIFICATION_QUEUE_OWNER_FILE : str = "specs/turbobaby/notification_queue.t27";
+pub const NOTIFICATION_QUEUE_INTERVAL_DECLARATION : str = "POLL_INTERVAL_SECONDS";
 
 ; --- The census --------------------------------------------------------------------------------
 ; Distinct environment variable names the shipped binary reads, counted by opening every
@@ -411,6 +430,41 @@ pub const SHARED_ROW_BEHAVIOUR_OWNER_IDS : [4]str = [
   "turbobaby/notification-queue"
 ];
 pub const INTERVAL_ARBITER_IS_THE_SOURCE_LITERAL : bool = true;
+
+; THE EDGE BACK IS NOT SYMMETRIC, and the asymmetry is measured rather than assumed (2026-09-21
+; at review, by opening the reuse constants of all four behaviour owners). Two of the four declare
+; turbobaby/runtime-config and two declare nothing. turbobaby/cart-persistence declares
+; REUSES_RUNTIME_CONFIG_ID and marks its ABANDON_SWEEP_INTERVAL_SECONDS as a copy of a row in this
+; inventory; turbobaby/notification-queue declares REUSES_RUNTIME_CONFIG_ID and marks
+; POLL_INTERVAL_SECONDS the same way. turbobaby/promo-broadcast declares SWEEP_INTERVAL_SECONDS and
+; turbobaby/events-booking declares REMINDER_SWEEP_SECONDS, and neither of those two names this
+; contract at all -- the string turbobaby/runtime-config does not occur in either file, in a
+; constant or in prose, read one file at a time on that date. Other contracts DO name this one for
+; reasons that have nothing to do with a loop cadence; turbobaby/customer-surface declares
+; REUSES_RUNTIME_CONFIG_ID and carries no interval of its own. How many files name this contract in
+; total is deliberately NOT pinned here: that figure moved while this section was being written,
+; because the rest of the corpus was under edit at the same time, and a number that moves between
+; two readings of the same afternoon is not a measurement of anything. The per-owner reading is,
+; and it is what the constants below record. Both missing halves live in files this contract is not
+; editing, so what is done here is to count the gap and name it where it can be seen. The count is
+; worth a constant because an unreciprocated copy is exactly how a number in two places drifts in
+; silence: both rows read one literal in src/, and if only one side knows the other exists, only
+; one side ever gets corrected when the literal moves.
+pub const SHARED_ROWS_WITH_A_RECIPROCAL_EDGE : u8 = 2;
+pub const SHARED_ROWS_WITHOUT_A_RECIPROCAL_EDGE : u8 = 2;
+pub const RECIPROCAL_EDGE_OWNER_IDS : [2]str = [
+  "turbobaby/cart-persistence",
+  "turbobaby/notification-queue"
+];
+pub const MISSING_RECIPROCAL_EDGE_OWNER_IDS : [2]str = [
+  "turbobaby/promo-broadcast",
+  "turbobaby/events-booking"
+];
+pub const MISSING_RECIPROCAL_EDGE_DECLARATIONS : [2]str = [
+  "SWEEP_INTERVAL_SECONDS",
+  "REMINDER_SWEEP_SECONDS"
+];
+pub const MISSING_RECIPROCAL_EDGES_ARE_FIXED_HERE : bool = false;
 pub const LOOP_NAMES : [8]str = [
   "promo_sweep",
   "idempotency_ttl_sweep",
@@ -731,6 +785,29 @@ test spawn_expressions_and_boot_tasks_are_different_counts_and_reconcile {
   assert ONE_SHOT_DELAY_SECONDS[1] == 3;
 }
 
+test the_notification_queue_owner_exists_and_was_re_measured_at_review {
+  assert NOTIFICATION_QUEUE_OWNER_EXISTS == true;
+  assert SPEC_ID_LINES_UNDER_TURBOBABY + SPEC_ID_LINES_AGENT_CARDS == SPEC_ID_LINES_READ_AT_REVIEW;
+  assert SPEC_ID_LINES_READ_AT_REVIEW == 43;
+  assert NOTIFICATION_QUEUE_OWNER_FILE == "specs/turbobaby/notification_queue.t27";
+  assert NOTIFICATION_QUEUE_INTERVAL_DECLARATION == "POLL_INTERVAL_SECONDS";
+  assert REUSES_NOTIFICATION_QUEUE_ID == SHARED_ROW_BEHAVIOUR_OWNER_IDS[3];
+}
+
+test two_of_the_four_behaviour_owners_declare_the_edge_back_and_two_do_not {
+  assert SHARED_ROWS_WITH_A_RECIPROCAL_EDGE + SHARED_ROWS_WITHOUT_A_RECIPROCAL_EDGE == ROWS_WITH_A_BEHAVIOUR_OWNER;
+  assert RECIPROCAL_EDGE_OWNER_IDS.len == SHARED_ROWS_WITH_A_RECIPROCAL_EDGE;
+  assert MISSING_RECIPROCAL_EDGE_OWNER_IDS.len == SHARED_ROWS_WITHOUT_A_RECIPROCAL_EDGE;
+  assert MISSING_RECIPROCAL_EDGE_DECLARATIONS.len == SHARED_ROWS_WITHOUT_A_RECIPROCAL_EDGE;
+  assert RECIPROCAL_EDGE_OWNER_IDS[0] == REUSES_CART_PERSISTENCE_ID;
+  assert RECIPROCAL_EDGE_OWNER_IDS[1] == REUSES_NOTIFICATION_QUEUE_ID;
+  assert MISSING_RECIPROCAL_EDGE_OWNER_IDS[0] == REUSES_PROMO_BROADCAST_ID;
+  assert MISSING_RECIPROCAL_EDGE_OWNER_IDS[1] == REUSES_EVENTS_BOOKING_ID;
+  assert MISSING_RECIPROCAL_EDGE_DECLARATIONS[0] == "SWEEP_INTERVAL_SECONDS";
+  assert MISSING_RECIPROCAL_EDGE_DECLARATIONS[1] == "REMINDER_SWEEP_SECONDS";
+  assert MISSING_RECIPROCAL_EDGES_ARE_FIXED_HERE == false;
+}
+
 test the_reuse_edges_are_ids_and_none_of_them_is_this_file {
   assert REUSES_SCHEMA_PROVENANCE_ID == "turbobaby/schema-provenance";
   assert REUSES_OBSERVABILITY_ID == "turbobaby/observability";
@@ -814,6 +891,12 @@ invariant no_loop_interval_is_configurable_and_all_eight_skip_the_cold_start
 
 invariant every_shared_interval_row_names_its_behaviour_owner_and_defers_to_the_literal
   assert SHARED_ROW_BEHAVIOUR_OWNER_IDS.len == ROWS_WITH_A_BEHAVIOUR_OWNER and SHARED_ROW_INDICES.len == ROWS_WITH_A_BEHAVIOUR_OWNER and ROWS_WITH_A_BEHAVIOUR_OWNER + ROWS_WITH_NO_OTHER_CONTRACT == RECURRING_LOOPS and INTERVAL_ARBITER_IS_THE_SOURCE_LITERAL == true and LOOP_INTERVAL_SECONDS[0] == 900 and LOOP_INTERVAL_SECONDS[5] == 300 and LOOP_INTERVAL_SECONDS[6] == 300 and LOOP_INTERVAL_SECONDS[7] == 30
+
+invariant the_owner_of_the_drain_interval_exists_and_is_not_this_file
+  assert NOTIFICATION_QUEUE_OWNER_EXISTS == true and REUSES_NOTIFICATION_QUEUE_ID != ID and SPEC_ID_LINES_UNDER_TURBOBABY + SPEC_ID_LINES_AGENT_CARDS == SPEC_ID_LINES_READ_AT_REVIEW
+
+invariant every_behaviour_owner_is_either_reciprocating_or_counted_as_not
+  assert SHARED_ROWS_WITH_A_RECIPROCAL_EDGE + SHARED_ROWS_WITHOUT_A_RECIPROCAL_EDGE == ROWS_WITH_A_BEHAVIOUR_OWNER and RECIPROCAL_EDGE_OWNER_IDS.len + MISSING_RECIPROCAL_EDGE_OWNER_IDS.len == ROWS_WITH_A_BEHAVIOUR_OWNER and MISSING_RECIPROCAL_EDGE_DECLARATIONS.len == SHARED_ROWS_WITHOUT_A_RECIPROCAL_EDGE and MISSING_RECIPROCAL_EDGES_ARE_FIXED_HERE == false
 
 invariant the_measured_interval_range_is_pinned_by_a_scan_not_by_a_row
   assert shortest_loop_interval() == 30 and longest_loop_interval() == 86400

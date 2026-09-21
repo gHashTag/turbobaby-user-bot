@@ -5,18 +5,42 @@
 ; whose deposit authority is the published tariff source KB_faq, section "Exact price list
 ; (from CRM)". Closes issue #18. ASCII only (L3), English identifiers only.
 ; --
-; WHAT READS THIS FILE TODAY (measured 2026-09-12): nothing. A grep for ".t27" and for
-; "specs/turbobaby" across *.rs, *.toml, *.py, *.sh, .github/ and Makefile returns no hit, so
-; the sentence above is a contract and not a description of a wiring that exists. The catalog
-; screen renders deposit_thb as it arrives from the API (src/ui/screens/catalog_screen.rs:126,
-; src/ui/components/bike_card.rs:102), and the API is seeded by migrations/082_bikes_seed.sql.
+; WHAT READS THIS FILE TODAY: no surface reads its VALUES -- but the absence this paragraph
+; used to assert was WIDER than the truth, and it has been narrowed to what can be measured
+; (re-measured 2026-09-21). It said: a grep for ".t27" and for "specs/turbobaby" across *.rs,
+; *.toml, *.py, *.sh, .github/ and Makefile returns no hit. That grep now returns SIX files --
+; scripts/verify_fleet_seed.py, scripts/verify_t27_specs.py, src/trios/market.rs,
+; src/trios/pricing.rs, tests/market_clock_wiring.rs and .github/workflows/ci.yml. Exactly one
+; of the six names THIS file: scripts/verify_t27_specs.py at :119-121, and what it pins there is
+; the module name and the ID, never a deposit. The other five name turbobaby/market and
+; turbobaby/pricing-honesty. So the corrected claim is narrower and is still the one that
+; matters: this corpus is wired to a COMPILER GATE and not to a consumer, and no shipped surface
+; reads FAMILY_DEPOSIT_THB. A reader who took the old sentence at face value would have
+; concluded that no .t27 is wired to anything, which stopped being true without this file
+; noticing. The catalog
+; screen renders deposit_thb as it arrives from the API (the field at
+; src/ui/screens/catalog_screen.rs:124 rendered through money_thb at :834, and the field at
+; src/ui/components/bike_card.rs:107 rendered through thb_or_dash at :195 -- both addresses
+; re-verified 2026-09-21, and both had drifted from the :126 and :102 this paragraph used to
+; give), and the API is seeded by migrations/082_bikes_seed.sql.
 ; FAMILY_DEPOSIT_THB below is therefore a THIRD copy of the deposit column -- after
 ; data/fleet_seed.json and migrations/082_bikes_seed.sql -- and a copy is a drift risk (D15).
 ; It is here because none of the arithmetic below can be checked without it, and the copy is
-; currently ungated: scripts/verify_fleet_seed.py pins the SQL to the JSON and nothing else --
-; its own docstring says so -- and knows nothing about .t27. Comparing this table to the seed
-; is the next gate to write, not a job something already does. The sibling specs disclose the
-; same gap for their own copies (availability.t27, rental_terms.t27); an undeclared third copy
+; STILL ungated -- for a narrower reason than this paragraph used to give (re-verified
+; 2026-09-21). It said scripts/verify_fleet_seed.py pins the SQL to the JSON and nothing else,
+; that its own docstring says so, and that it knows nothing about .t27. The first clause holds
+; exactly, and the deposit column is covered by it: the script parses deposit out of the SQL at
+; :48 and compares it with the JSON's deposit_thb at :231. The docstring does still say only
+; that (lines 2-19 describe the SQL-to-JSON comparison alone) -- which now makes the docstring
+; out of date rather than evidence. The third clause is FALSE: the script binds MARKET_SPEC to
+; specs/turbobaby/market_profile.t27 at :34 and compares the seed's market block against that
+; contract's constants at :98-140. It gates one spec and this is not it, and the checkable form
+; of that is narrow: the string deposit_tier does not occur in the script at all. So comparing
+; THIS table to the seed is still the next gate to write -- and the precedent for writing it
+; now exists in the same script. The sibling disclosure is corrected with it: availability.t27
+; does declare the same gap for its own fleet table, and rental_terms.t27 does NOT -- it holds
+; no second copy to gate and says so in its own words at :116, "declares no second copy of that
+; algebra". An undeclared third copy
 ; of a money column is exactly the defect D15 names, so it is declared here.
 ; --
 ; WHY (measured 2026-09-12): the deposit is the sixth heaviest topic in the dialog history the
@@ -67,6 +91,16 @@ pub const SEED : str = "data/fleet_seed.json";
 pub const MEASURED_AT : str = "2026-09-12";
 pub const DEPOSIT_AUTHORITY : str = "KB_faq, section 'Exact price list (from CRM)'";
 pub const CURRENCY : str = "THB";
+
+; --- The wiring absence, re-measured and pinned as a number ------------------------------
+; The header used to assert that NOTHING outside specs/ names a .t27 at all. That absence had
+; stopped being true and the sentence went on asserting it, which is the one failure mode a
+; reader never checks. The live numbers are kept here so the next drift shows up as a failing
+; assert rather than as confident prose. Measured 2026-09-21.
+pub const WIRING_GREP_HITS : u8 = 6;
+pub const WIRING_GREP_HITS_NAMING_THIS_FILE : u8 = 1;
+pub const WIRING_CONSUMERS_OF_THIS_FILE : u8 = 0;
+pub const WIRING_NOTE : str = "grep for .t27 and specs/turbobaby across *.rs, *.toml, *.py, *.sh, .github/ and Makefile returns six files on 2026-09-21: scripts/verify_fleet_seed.py, scripts/verify_t27_specs.py, src/trios/market.rs, src/trios/pricing.rs, tests/market_clock_wiring.rs, .github/workflows/ci.yml. One of the six names this file -- scripts/verify_t27_specs.py:119-121 -- and it pins the module name and the ID only. Zero of the six read a deposit. The contract-versus-wiring gap is therefore real and narrower than it was stated: this corpus is wired to a compiler gate, not to a consumer.";
 
 ; --- The six tiers ----------------------------------------------------------------------
 ; The closed set of tier values measured in the published seed. The sources publish an AMOUNT
@@ -135,13 +169,17 @@ pub const TIER_FAMILY_COUNT_SUM : u8 = 13;
 ; THE TWO AXES OF THE REFUTATION ARE NOT DECLARED HERE. bike-catalog.t27 owns the class algebra
 ; (CLASSES, CLASS_SCOOTER, CLASS_MOTORCYCLE, CLASS_COUNT, CLASS_NONE) and the displacement axis
 ; (DISPLACEMENTS_CC, the count and the three bands); its own header states that no count is
-; typed twice, and discovery.t27 puts the rule generally -- no owner, limit or exclusion is
-; typed twice. An earlier draft of this file re-declared CLASSES and DISPLACEMENTS_CC verbatim,
+; typed twice. (This sentence used to credit the general form of that rule to discovery.t27.
+; There is no such file in this corpus -- find specs -type f returns 43 files, and none of them
+; is discovery.t27, measured 2026-09-21 -- so the attribution is withdrawn and the rule is
+; stated on its own: no owner, limit or exclusion is typed twice.)
+; An earlier draft of this file re-declared CLASSES and DISPLACEMENTS_CC verbatim,
 ; and the drift that rule exists to prevent had already happened: measured 2026-09-12 the same
 ; seven displacements were [7]u16 in bike-catalog.t27 and [7]i16 in ride-game.t27, one fact at
-; two integer widths. Re-measured 2026-09-21 that particular drift is closed -- both are now
-; pub const DISPLACEMENTS_CC : [7]u16 with identical elements (bike_catalog.t27:157,
-; ride_game.t27:129) -- and the sentence is kept in the past tense rather than deleted, because
+; two integer widths. Re-measured 2026-09-21 that particular drift is closed -- turbobaby/bike-
+; catalog owns DISPLACEMENTS_CC and turbobaby/ride-game declares DISPLACEMENTS_CC under the same
+; name, and both are now pub const DISPLACEMENTS_CC : [7]u16 with identical elements
+; -- and the sentence is kept in the past tense rather than deleted, because
 ; the reason this file carries no copy is the drift being POSSIBLE, not the drift being present. A file whose whole argument is that displacement and class are NOT its
 ; axis has no business carrying one more copy of either, so both are gone. The class of a family
 ; is read from the seed's class column (families[13].class == "scooter" for xadv-750) and cited
@@ -199,7 +237,7 @@ pub const DEPOSIT_DISCOUNT_APPLIES : bool = false;
 ; The two halves of that row are no longer in the same condition, and keeping them bundled
 ; keeps the dischargeable half deferred by association.
 ;   (a) FX STAYS REFUSED. It needs a published rate authority and there is none:
-;       market_profile.t27:135 declares EXCHANGE_RATES_PUBLISHED : [0]str = [] and
+;       turbobaby/market owns EXCHANGE_RATES_PUBLISHED, declared as [0]str = [], and
 ;       DECISIONS.md:347 states that no exchange rate enters this repository without a source.
 ;   (b) THE REFUND DOES NOT NEED ONE, and the record it needs already exists. Measured in
 ;       src/db/orders.rs:595-618: enum DepositForm { Money { amount: Option<f64>,
@@ -221,6 +259,10 @@ pub const DEPOSIT_DISCOUNT_APPLIES : bool = false;
 ; which need not be one of the six rungs -- a foreign-currency deposit is not one of them, and
 ; an unmatched positive amount is shown and logged rather than snapped (publishable_deposit).
 pub const REUSES_MARKET_PROFILE_ID : str = "turbobaby/market";
+; The declaration this file leans on, named rather than addressed by line. Three paragraphs
+; above used to cite it as market_profile.t27:135, and a line number into a sibling is stale the
+; day that sibling is edited; the owner plus the declaration name is not.
+pub const MARKET_FX_DECLARATION : str = "EXCHANGE_RATES_PUBLISHED";
 pub const REFUND_SOURCE_ENUM : str = "src/db/orders.rs:595-618 enum DepositForm { Money { amount, currency, method }, Passport }";
 ; This file's own naming of the rule, like DEPOSIT_FORMS above, and NOT presented as a
 ; quotation: the seed's own sentence is DEPOSIT_FOREIGN_CURRENCY_RULE and stays byte for byte.
@@ -255,7 +297,8 @@ pub const REFUND_AUTHORIZED_OUTCOMES : u8 = 2;
 ; flags rather than left unwritten, so that a later worker who wants one has to flip a flag
 ; and name a source, which cannot pass as a tidy-up.
 ; FX: would need a published exchange-rate authority with a source. There is none --
-; market_profile.t27:135 (EXCHANGE_RATES_PUBLISHED : [0]str = []) and DECISIONS.md:347. The
+; turbobaby/market owns EXCHANGE_RATES_PUBLISHED and declares it [0]str = [], and
+; DECISIONS.md:347 says why. The
 ; seed's own sentence puts the conversion at the door, by hand, BEFORE anything is agreed;
 ; what is agreed is then a fixed figure, and the refund returns that figure.
 pub const REFUND_FX_CONVERSION_ALLOWED : bool = false;
@@ -787,6 +830,20 @@ test zero_is_not_a_tier_and_absent_is_not_zero {
     assert DEPOSIT_NOT_IN_FLEET != DEPOSIT_ABSENT;
 }
 
+; The header's wiring claim, as literals. It is asserted rather than described because the
+; sentence it replaces was false for an unknown length of time and nothing could have caught
+; it: a prose absence has no failing state. These three numbers do.
+test the_wiring_absence_is_a_measured_number_and_not_a_flat_nothing {
+    // Six files outside specs/ name a .t27 or specs/turbobaby. The old claim was zero.
+    assert WIRING_GREP_HITS == 6;
+    // Exactly one of them names this file, and it is the corpus gate.
+    assert WIRING_GREP_HITS_NAMING_THIS_FILE == 1;
+    assert WIRING_GREP_HITS_NAMING_THIS_FILE < WIRING_GREP_HITS;
+    // The claim that actually mattered, and the only one that survived re-measurement:
+    // nothing READS a deposit out of this file.
+    assert WIRING_CONSUMERS_OF_THIS_FILE == 0;
+}
+
 test the_deposit_is_money_or_the_passport_and_never_both {
     assert deposit_form_is_legal(true, false) == true;
     assert deposit_form_is_legal(false, true) == true;
@@ -889,7 +946,8 @@ test a_changed_method_is_not_a_refund_this_contract_authorizes {
 ; dollars, and the request is refused rather than converted. There is no test in the other
 ; direction -- a deposit agreed in USD, its return requested in THB -- because writing one
 ; would need a concrete USD figure, and no USD figure can be written in this repository
-; without the rate market_profile.t27:135 refuses to publish. The predicate is symmetric by
+; without the rate turbobaby/market refuses to publish in EXCHANGE_RATES_PUBLISHED. The
+; predicate is symmetric by
 ; construction: it compares the two currencies and privileges neither.
 test a_changed_currency_is_not_a_refund_this_contract_authorizes {
     assert refund_decision(true, false, TIER_4_THB, "THB", "USDT", TIER_4_THB, "USD", "USDT") == REFUND_REFUSED_CURRENCY_CHANGED;
@@ -948,6 +1006,9 @@ test the_refund_rule_converts_nothing_and_nets_nothing_off {
     assert REFUND_PARTIAL_AMOUNT_ALLOWED == false;
     assert REFUND_FEE_SUBTRACTION_ALLOWED == false;
     assert REUSES_MARKET_PROFILE_ID == "turbobaby/market";
+    // The edge is owner plus declaration name, so that it survives an edit to the owner.
+    assert MARKET_FX_DECLARATION == "EXCHANGE_RATES_PUBLISHED";
+    assert REUSES_MARKET_PROFILE_ID != ID;
     assert PAST_RENTAL_DEPOSITS_THB.len == 0;
     assert refund_amount_returned(REFUND_RETURN_SAME_METHOD, TIER_6_THB) == TIER_6_THB;
     assert refund_amount_returned(REFUND_RETURN_SAME_METHOD, TIER_1_THB) == TIER_1_THB;

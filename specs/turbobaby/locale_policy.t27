@@ -62,10 +62,14 @@
 ; which is also what both gates find, and 565 is what is pinned below.
 ; --
 ; WHAT THIS FILE NEVER DOES. It carries no translated string and no Cyrillic: L3 forbids
-; Cyrillic in a spec, and pricing_honesty.t27 already set the precedent for the whole corpus by
-; pinning the must-say obligation while leaving its Russian sentence to the locale layer
-; (specs/turbobaby/pricing_honesty.t27:58-59 and :177-179). That precedent is named here as
-; REUSES_PRICING_HONESTY_ID and applied to all 565 keys at once. It declares no key list --
+; Cyrillic in a spec, and turbobaby/pricing-honesty already set the precedent for the whole
+; corpus by pinning the must-say obligation while leaving its Russian sentence to the locale
+; layer. It owns two declarations that carry the precedent: MUST_SAY, which states the
+; obligation in English, and RenderedRate, whose typed triple pins the shape and the amount and
+; leaves the wording to the locale layer. Both were re-opened 2026-09-21 and both still mean
+; what this sentence claims. They were cited by line until then, and the line numbers had
+; already drifted: the first pointed one line past the sentence it meant. That precedent is
+; named here as REUSES_PRICING_HONESTY_ID and applied to all 565 keys at once. It declares no key list --
 ; restating 565 identifiers would be the largest duplication in this repository, and it would be
 ; the fourth hand-maintained copy of a list that already has three. It publishes no third
 ; locale, and that prohibition is structural: the LENGTH of the published array, pinned by an
@@ -111,14 +115,19 @@ pub const PRIMARY_LOCALE_DECISION : str = "DECISIONS.md:181-184 D13";
 ; what makes resolution total rather than merely defined.
 pub const FALLBACK_LOCALE : str = "en";
 ; THE ONE VALUE THIS FILE SHARES WITH ANOTHER CONTRACT, named here so it is found by its author
-; before it is found by a reviewer. market_profile.t27:109 TH_LANGUAGES carries the same two
-; codes. It is a DIFFERENT measurement with a different source: that one is a field of the
+; before it is found by a reviewer. turbobaby/market owns TH_LANGUAGES, and it carries the same
+; two codes. It is a DIFFERENT measurement with a different source: that one is a field of the
 ; deployment's market profile -- what the MARKET speaks -- and this one is read off
 ; src/locales.rs:119-121, what the APPLICATION publishes. They coincide today because this shop
 ; publishes its own market's languages, and nothing forces that: a second market profile would
 ; carry other codes while this set stayed at two, and a shop may publish a locale its market
 ; does not speak. Neither file reads the other, and this one would not change if that one did.
-pub const MARKET_LANGUAGE_FIELD : str = "specs/turbobaby/market_profile.t27:109 TH_LANGUAGES";
+; Named by owner ID and declaration name, not by line. This citation used to read
+; "specs/turbobaby/market_profile.t27:109 TH_LANGUAGES" and it went stale on 2026-09-21 while
+; being read: an edit to that file's header moved TH_LANGUAGES from line 109 to line 151, and
+; line 109 is now blank. A declaration name survives an edit to its own file; a line number does
+; not, and it fails silently and authoritatively.
+pub const MARKET_LANGUAGE_FIELD : str = "turbobaby/market TH_LANGUAGES";
 pub const PUBLISHED_SET_IS_INHERITED_FROM_THE_MARKET : bool = false;
 pub const SETS_COINCIDE_TODAY : bool = true;
 
@@ -163,6 +172,19 @@ pub const STORAGE_COLUMN : str = "migrations/001_initial.sql:4 user_languages.la
 ; resolves it exactly like any other unpublished code.
 pub const MIGRATION_FILES_SEARCHED : u8 = 87;
 pub const STORAGE_CONSTRAINS_THE_PUBLISHED_SET : bool = false;
+; WHOSE COUNT THIS IS. turbobaby/pricing-honesty raised the same figure first, in a declaration
+; of the same name, for a different search over the same directory. Two contracts declaring one
+; measurement with no edge between them is the drift D15 exists to remove, so the count is OWNED
+; there and carried HERE as a named copy. The declaration above stays -- this file's own tests
+; read it, and a contract that cannot check its own sentence is a claim -- but it is a copy, and
+; the edge below says so and says whose. Re-measured 2026-09-21 and unchanged: a recursive
+; search of migrations/ for .sql files returns 87, of which 86 sit at the top level and one in
+; migrations/wip. The only non-.sql file under migrations/ is migrations/wip/README.md, which is
+; why counting every file gives 88 and is the wrong arithmetic for this claim.
+pub const MIGRATION_COUNT_OWNER_ID : str = "turbobaby/pricing-honesty";
+pub const MIGRATION_COUNT_OWNER_DECL : str = "MIGRATION_FILES_SEARCHED";
+pub const MIGRATION_COUNT_IS_A_COPY : bool = true;
+pub const MIGRATION_COUNT_REMEASURED_AT : str = "2026-09-21";
 
 ; --- The enumerated variant set, and the gap -------------------------------------------------
 ; src/trios/core.rs:8-17 enum Lang: Russian, English, Thai, Chinese, Hebrew, German, French,
@@ -229,14 +251,24 @@ pub const TRANSLATED_STRINGS_PUBLISHED : [0]str = [];
 pub const KEY_LITERALS_PUBLISHED : [0]str = [];
 pub const NUMBER_FORMAT_FIELDS_PUBLISHED : [0]str = [];
 pub const NUMBER_FORMAT_OWNER_NOTE : str = "Currency symbol code point, symbol placement, group and decimal separators and display exponent are fields of the market profile. Their owner is named by REUSES_MARKET_PROFILE_ID and not one of them is repeated here.";
-; THE HONEST REFUSAL. D13 gives a staffing reason and not a distribution, and no file in this
-; repository breaks the client corpus down by language: the KB_faq figures the corpus does carry
-; are split by TOPIC (specs/turbobaby/rental_terms.t27:18-20, 710 dialogs and 31245 messages,
-; split 481 term / 375 deposit / 180 availability), never by the language the client wrote in.
-; So the share of clients who would read en,
-; or th, or anything else is unmeasured here, and this file will not estimate it. Measuring it
-; would need a per-language count over that dialog corpus, which lives outside this repository.
+; THE HONEST REFUSAL, re-measured 2026-09-21. D13 gives a staffing reason and not a
+; distribution, and none of the 43 files in this corpus breaks the client dialogs down by
+; language: a case-insensitive grep of specs/ for the three phrases a split would be written in
+; returns three lines, and all three are in this file, saying what this paragraph says.
+; The KB_faq figures the corpus does carry are split by TOPIC -- 710 dialogs and 31245 messages,
+; split 481 term / 375 deposit / 180 availability -- and never by the language the client wrote
+; in. Those figures belong to turbobaby/rental-terms, which states them in the WHY paragraph of
+; its header and in no declaration; they are cited to that contract by name because there is no
+; declaration name to cite, and a line number into a neighbour is what this file has just
+; stopped depending on. Re-opened 2026-09-21: every figure above still reads as quoted there.
+; So the share of clients who would read en, or th, or anything else is unmeasured here, and
+; this file will not estimate it. Measuring it would need a per-language count over that dialog
+; corpus, which lives outside this repository.
 pub const PER_LANGUAGE_DEMAND_MEASUREMENT_IS_NOT_SHIPPED : bool = true;
+pub const PER_LANGUAGE_SPLIT_FILES_IN_CORPUS : u8 = 0;
+pub const CORPUS_FILES_SEARCHED : u8 = 43;
+pub const PER_LANGUAGE_ABSENCE_REMEASURED_AT : str = "2026-09-21";
+pub const TOPIC_SPLIT_OWNER_ID : str = "turbobaby/rental-terms";
 pub const PER_LANGUAGE_DEMAND_NOTE : str = "D13 states a staffing fact, not a demand estimate. No file here counts clients or messages by language; the KB_faq figures in this corpus are split by topic. A third locale therefore has no measurement to argue from, in either direction.";
 ; THE SECOND HONEST REFUSAL. That an unpublished variant is REACHABLE is proved by the code path
 ; above. How often one is actually reached is a different question, and nothing in this
@@ -349,12 +381,35 @@ test the_published_set_is_two_and_names_its_source {
 // codes twice; this test is the answer to that grep, and it fails the day someone decides one
 // file may read its set off the other.
 test the_shared_value_is_a_coincidence_of_two_measurements_and_not_an_inheritance {
-  assert MARKET_LANGUAGE_FIELD == "specs/turbobaby/market_profile.t27:109 TH_LANGUAGES";
+  assert MARKET_LANGUAGE_FIELD == "turbobaby/market TH_LANGUAGES";
   assert PUBLISHED_SET_IS_INHERITED_FROM_THE_MARKET == false;
   assert SETS_COINCIDE_TODAY == true;
   assert PUBLISHED_SET_SOURCE != MARKET_LANGUAGE_FIELD;
   assert REUSES_MARKET_PROFILE_ID == "turbobaby/market";
   assert PUBLISHED_LOCALE_COUNT == 2;
+}
+
+; The count above is not this file's to own. This test fails the day the copy stops naming its
+; owner, or the day the owner edge stops agreeing with the reuse edge already declared.
+test the_migration_count_is_carried_as_a_copy_and_its_owner_is_named {
+  assert MIGRATION_FILES_SEARCHED == 87;
+  assert MIGRATION_COUNT_IS_A_COPY == true;
+  assert MIGRATION_COUNT_OWNER_ID == "turbobaby/pricing-honesty";
+  assert MIGRATION_COUNT_OWNER_DECL == "MIGRATION_FILES_SEARCHED";
+  assert MIGRATION_COUNT_OWNER_ID == REUSES_PRICING_HONESTY_ID;
+  assert MIGRATION_COUNT_OWNER_ID != ID;
+  assert MIGRATION_COUNT_REMEASURED_AT == "2026-09-21";
+}
+
+; The absence, re-measured rather than inherited. A false absence is the one claim a reader
+; trusts without checking, so the count it rests on is declared and the date with it.
+test no_file_in_this_corpus_splits_the_dialogs_by_language {
+  assert PER_LANGUAGE_SPLIT_FILES_IN_CORPUS == 0;
+  assert CORPUS_FILES_SEARCHED == 43;
+  assert PER_LANGUAGE_DEMAND_MEASUREMENT_IS_NOT_SHIPPED == true;
+  assert PER_LANGUAGE_ABSENCE_REMEASURED_AT == "2026-09-21";
+  assert TOPIC_SPLIT_OWNER_ID == "turbobaby/rental-terms";
+  assert TOPIC_SPLIT_OWNER_ID != ID;
 }
 
 test only_the_primary_may_be_primary {

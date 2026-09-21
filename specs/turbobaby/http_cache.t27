@@ -1,24 +1,44 @@
 // SPDX-License-Identifier: Apache-2.0
 ; specs/turbobaby/http_cache.t27 -- what a cached catalog answer is made of, how long a copy of
 ; it may be held, and what that holding time costs a price
-; This contract owns three boundaries no other file in specs/turbobaby occupies: the derivation
-; of the entity tag the catalog list answers with, the lifetime of a copy a client is allowed to
-; keep without asking again, and the price risk that lifetime creates. catalog_api.t27 owns the
-; conditional OUTCOME -- its catalog_api_list_status and catalog_api_response_has_body decide
-; what the transport answers -- and this file restates no status code and declares no HTTP
-; number at all. The two local discriminants below are named OUTCOME_NOT_MODIFIED and
+; This contract owns three boundaries, and that no other file occupies them is a MEASUREMENT
+; and not an impression: re-run 2026-09-21 over all 43 files of the corpus, with the two near
+; misses named here rather than left for a reader to trip over. The three are the derivation of
+; the entity tag the catalog list answers with, the lifetime of a copy a client is allowed to
+; keep without asking again, and the price risk that lifetime creates.
+; BOUNDARY ONE, the tag. Two contracts mention an entity tag: this one and
+; turbobaby/catalog-api. That one takes etag_matches as a BOOLEAN PARAMETER of
+; catalog_api_list_status and derives no tag from anything. The derivation is here and nowhere
+; else, and the distinction is the whole reason both files can exist.
+; BOUNDARY TWO, the lifetime. Two contracts declare a max-age. The other is
+; turbobaby/request-identity, whose AUTH_DATE_MAX_AGE_SECONDS bounds the freshness of an
+; initData auth stamp at 86400 seconds -- a different subject, a different clock, and not the
+; lifetime of a served copy. A reader greping this corpus for a max-age will find that one, so
+; this sentence is the answer to that grep rather than a claim it would refute.
+; BOUNDARY THREE, the price risk. One contract, this one. Nothing else in the corpus relates an
+; age to a price.
+; turbobaby/catalog-api owns the conditional OUTCOME -- its catalog_api_list_status and
+; catalog_api_response_has_body decide what the transport answers -- and this file restates no
+; status code and declares no HTTP number at all. The two local discriminants below are named OUTCOME_NOT_MODIFIED and
 ; OUTCOME_FULL_BODY and carry the values 1 and 2 precisely so that nobody can mistake them for
 ; the wire.
 ; --
-; OWNERSHIP EDGES, spelled as IDs because this language has no import. pricing_honesty.t27 owns
-; the rule that the door is the price authority; this file owns only the observation that a
-; number with an age is not that authority's answer NOW, and takes the door's decision as a
-; boolean. availability.t27 owns what a unit count means and what may confirm one; this file
-; observes that the same body carries a unit count and therefore ages it identically.
-; legacy_retirement.t27 owns the census of what migration 083 retired; this file names one
-; consequence of that census and republishes no table list. rate_limit.t27 owns attempt_admitted
-; and is the only place a bound on the key growth described below could come from; that edge was
-; added after a grep, not from the brief.
+; OWNERSHIP EDGES, spelled as owner ID plus declaration name because this language has no import
+; and because a line number into a neighbour rots. Every edge below was re-opened 2026-09-21;
+; every declaration named exists and still means what the sentence claims. One of them proved
+; the point while the check was running: DROP_MIGRATION moved from line 83 to line 95 inside its
+; own file that morning, under a concurrent edit. The name resolved either way. A number would
+; not have, and it would not have said so.
+; turbobaby/pricing-honesty owns PRICE_AUTHORITY, the rule that the door is the price authority;
+; this file owns only the observation that a number with an age is not that authority's answer
+; NOW, and takes the door's decision as a boolean.
+; turbobaby/availability owns what a unit count means and what may confirm one -- available_count
+; computes it, FILE_MAY_CONFIRM and CONFIRMATION_AUTHORITY say what may not and what may; this
+; file observes that the same body carries a unit count and therefore ages it identically.
+; turbobaby/legacy-retirement owns the census of what migration 083 retired, in DROP_MIGRATION;
+; this file names one consequence of that census and republishes no table list.
+; turbobaby/rate-limit owns attempt_admitted and is the only place a bound on the key growth
+; described below could come from; that edge was added after a grep, not from the brief.
 ; --
 ; WHY (measured 2026-09-21). The number is 60. src/api/bikes.rs:516-519 sends the catalog list
 ; with a cache directive whose age budget is 60 seconds, and that is the only freshness number
@@ -78,7 +98,8 @@
 ; number. It sets no time-to-live on a map entry, because src/api/cache.rs sets none -- the only
 ; lifetime an entry has is the process. It copies no other surface's age budget: src/main.rs
 ; sets its own at :819, :834, :1016-1024, :1066 and :1093 for surfaces this contract does not
-; own, and upload_media.t27 owns the stored-object read header. It states no collision
+; own, and turbobaby/upload-media owns the stored-object read header, in
+; READ_RESPONSE_IS_BROWSER_CACHEABLE (re-opened and confirmed 2026-09-21). It states no collision
 ; probability for the truncated digest. It carries no price, no rate, no unit count, no family
 ; key and no deposit. It carries nothing from D14 -- no renter, handle, phone, key code, plate,
 ; debt, purchase cost or personal note -- in a constant, a fixture or a comment.
@@ -115,6 +136,20 @@ pub const THE_RETIREMENT_CENSUS_IS_OWNED_THERE : bool = true;
 pub const NEIGHBOUR_RATE_LIMIT_ID : str = "turbobaby/rate-limit";
 pub const THE_ONLY_BOUND_ON_KEY_GROWTH_IS_OWNED_THERE : bool = true;
 pub const REUSE_EDGE_COUNT : u8 = 5;
+
+; --- The boundary census, re-measured 2026-09-21 ------------------------------------------------
+; The header claims three boundaries no other contract occupies. An absence is the one claim a
+; reader trusts without re-running it, so the counts it rests on are declared here with the date
+; they were taken and the corpus size they were taken over. Two of the three have a near miss,
+; and a near miss counted is worth more than an absence asserted.
+pub const BOUNDARY_CENSUS_AT : str = "2026-09-21";
+pub const CORPUS_FILES_SEARCHED : u8 = 43;
+pub const BOUNDARIES_OWNED_HERE : u8 = 3;
+pub const CONTRACTS_MENTIONING_AN_ENTITY_TAG : u8 = 2;
+pub const CONTRACTS_DECLARING_A_MAX_AGE : u8 = 2;
+pub const CONTRACTS_RELATING_AN_AGE_TO_A_PRICE : u8 = 1;
+pub const OTHER_MAX_AGE_OWNER_ID : str = "turbobaby/request-identity";
+pub const OTHER_ENTITY_TAG_MENTIONER_ID : str = "turbobaby/catalog-api";
 
 ; --- What the tag is computed over ---------------------------------------------------------------
 ; src/api/cache.rs:24-35. SHA-256 over the response body string; the first eight bytes of the
@@ -415,6 +450,23 @@ pub fn surface_may_be_cached(is_an_edit_surface: bool) bool {
 }
 
 ; --- Tests -------------------------------------------------------------------------------------
+
+; The census behind the header's absence. Each count is over the whole corpus and not over the
+; neighbours this file happened to think of; the near misses are asserted as PRESENT, because an
+; absence that has never met a near miss has not been measured.
+test the_three_boundaries_are_measured_and_the_near_misses_are_named {
+  assert BOUNDARIES_OWNED_HERE == 3;
+  assert CORPUS_FILES_SEARCHED == 43;
+  assert BOUNDARY_CENSUS_AT == "2026-09-21";
+  assert CONTRACTS_RELATING_AN_AGE_TO_A_PRICE == 1;
+  assert CONTRACTS_MENTIONING_AN_ENTITY_TAG == 2;
+  assert CONTRACTS_DECLARING_A_MAX_AGE == 2;
+  assert OTHER_MAX_AGE_OWNER_ID == "turbobaby/request-identity";
+  assert OTHER_ENTITY_TAG_MENTIONER_ID == "turbobaby/catalog-api";
+  assert OTHER_ENTITY_TAG_MENTIONER_ID == REUSES_CATALOG_API_ID;
+  assert OTHER_MAX_AGE_OWNER_ID != ID;
+  assert OTHER_ENTITY_TAG_MENTIONER_ID != ID;
+}
 
 test the_owner_contracts_are_named_and_none_of_them_is_restated {
   assert REUSES_CATALOG_API_ID == "turbobaby/catalog-api";

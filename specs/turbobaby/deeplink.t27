@@ -77,7 +77,8 @@
 ; resolved link is not a proof and REUSES_REQUEST_IDENTITY_ID owns what one is. It restates no
 ; locale set, fallback or key: REUSES_LOCALE_POLICY_ID owns those, and this file records only the
 ; measured fact that the payload grammar has no locale segment. The word "skate" appears here as a
-; ROUTE alias; star_award.t27:114-120 holds it as a retained score-source string, and the two are
+; ROUTE alias; turbobaby/star-award owns it as RETAINED_LEGACY_SOURCE, a retained score-source
+; string, and the two are
 ; different subjects that share a syllable. No renter name, handle, phone, key code, plate, debt,
 ; cost or personal note appears in any constant, fixture or comment (D14) -- and that prohibition
 ; has a measured origin in this very grammar, recorded below.
@@ -97,18 +98,27 @@ pub const DECISIONS : [3]str = ["D5", "D14", "D19"];
 ; Two greps over specs/ before this file was written, both run on 2026-09-21 across the twenty
 ; contracts then present. Neither the mechanism nor its vocabulary had an owner.
 ;
-; THE ZERO IS DATED, AND IT HAS ALREADY MOVED. Re-running `grep -ril deeplink specs/` at the end of
-; the same session prints THREE paths, and one of them is this file: the constant below counts the
-; OTHER two, specs/turbobaby/promo_broadcast.t27 and specs/turbobaby/bot_surface.t27, both written
-; in this same wave and neither before it. A reader who runs the command today and reads 3 has not
-; refuted the number below -- the number is scoped to the twenty, which is why the count of the
-; corpus it was taken over is declared beside it rather than left implicit. The second grep prints
-; one path, this file, and zero others.
+; THE ZERO IS DATED, AND IT HAS ALREADY MOVED -- TWICE. Re-running `grep -ril deeplink specs/` at
+; the end of the same session printed THREE paths, one of them this file, and that reading of 2
+; others is kept below as the wave reading. It is no longer current. RE-MEASURED 2026-09-21
+; against the finished 43-file corpus the same command prints EIGHT paths: SEVEN others plus this
+; file. A reader who runs the command today and reads 8 has not refuted the zero -- the zero is
+; scoped to the twenty contracts that existed first, which is why the size of the corpus it was
+; taken over is declared beside it rather than left implicit, and why the later counts carry
+; dates of their own. The second grep has NOT moved: `grep -rl startapp specs/` still prints one
+; path, this file, and zero others, re-run 2026-09-21. That one is a real standing absence and is
+; the only one this file still claims as such.
 pub const CONTRACTS_BEFORE_THIS_ONE : u8 = 20;
 pub const CONTRACTS_MENTIONING_DEEPLINK : u8 = 0;
 pub const CONTRACTS_MENTIONING_STARTAPP : u8 = 0;
 ; Contracts OTHER THAN THIS ONE that the command finds; the command itself prints one more.
+; The first figure is the WAVE reading and is superseded by the dated one under it.
 pub const CONTRACTS_MENTIONING_DEEPLINK_AFTER_THIS_WAVE : u8 = 2;
+pub const CORPUS_FILE_COUNT : u8 = 43;
+pub const CORPUS_FILES_OTHER_THAN_THIS_ONE : u8 = 42;
+pub const CONTRACTS_MENTIONING_DEEPLINK_2026_09_21 : u8 = 7;
+pub const CONTRACTS_MENTIONING_STARTAPP_2026_09_21 : u8 = 0;
+pub const THE_STARTAPP_ZERO_STILL_HOLDS : bool = true;
 pub const ZERO_GREP_COMMANDS : [2]str = ["grep -ril deeplink specs/", "grep -rl startapp specs/"];
 
 ; --- Ownership edges ------------------------------------------------------------------------------
@@ -124,29 +134,58 @@ pub const REQUEST_IDENTITY_SUPPLIES : str = "identity_proof_passed -- a resolved
 pub const LOCALE_POLICY_SUPPLIES : str = "the published locale set and its fallback; this file only records that the payload carries no locale segment.";
 
 ; --- Inbound: who takes this file's decisions -------------------------------------------------------
-; One contract written in the same wave declares the edge from its own side, re-read on 2026-09-21
-; rather than assumed: specs/turbobaby/promo_broadcast.t27 holds
-; REUSES_DEEPLINK_ID = "turbobaby/deeplink" at :91 and asserts the literal at :670, and its note at
-; :88 states that the prefix set is taken as a PARAMETER and its members are deliberately not
-; counted there. That is the shape this corpus wants, and it is recorded here so the edge is
-; greppable from both ends. Those three line numbers moved TWICE while this file was under review
-; -- they were :88, :581 and :85 an hour earlier -- so the durable half of the citation is the
-; constant NAME REUSES_DEEPLINK_ID, and a reader who finds the numbers stale should grep for it
-; rather than conclude the edge is gone.
-pub const CONSUMER_COUNT : u8 = 1;
-pub const CONSUMERS : [1]str = ["turbobaby/promo-broadcast"];
+; ONE consumer when this file was written; FIVE on 2026-09-21. The count below is the re-measured
+; one, and the earlier figure is kept beside it rather than overwritten silently, because "one
+; contract takes this file's decisions" is exactly the kind of sentence a reader believes without
+; re-running anything. Each of the five declares the edge from its own side as
+; REUSES_DEEPLINK_ID = "turbobaby/deeplink", and each was opened and re-read on 2026-09-21 rather
+; than counted from a grep alone: turbobaby/promo-broadcast, whose note states that the prefix set
+; is taken as a PARAMETER and its members are deliberately not counted there;
+; turbobaby/customer-surface, which also carries DEEPLINK_SUPPLIES naming deeplink_landing and
+; deeplink_is_a_dead_tap; turbobaby/notification-queue, which takes the payload its one button
+; carries; turbobaby/referral-program, which takes the link form of the start payload and
+; disclaims the grammar; and turbobaby/webapp-bridge, which also points here through
+; LEGACY_ALIASES_ARE_DECLARED_AT. That is the shape this corpus wants, and it is recorded here so
+; every edge is greppable from both ends.
+; WHY NO LINE NUMBERS. The three that used to stand here -- the edge, its assertion and the note
+; next door -- moved TWICE while this file was under review, and they were :88, :581 and :85 an
+; hour before that. The durable half of a citation is the constant NAME, so names are all that is
+; cited now; a reader who cannot find one should grep for it rather than conclude the edge is gone.
+; turbobaby/request-identity also names this file, but in the OTHER direction -- it lists
+; turbobaby/deeplink among ITS consumers, matching REUSES_REQUEST_IDENTITY_ID below. It is not a
+; consumer of this file and is deliberately not counted as one.
+pub const CONSUMER_COUNT : u8 = 5;
+pub const CONSUMERS : [5]str = [
+    "turbobaby/promo-broadcast",
+    "turbobaby/customer-surface",
+    "turbobaby/notification-queue",
+    "turbobaby/referral-program",
+    "turbobaby/webapp-bridge",
+];
+pub const CONSUMER_COUNT_WHEN_THIS_FILE_WAS_WRITTEN : u8 = 1;
+pub const CONSUMERS_MEASURED_AT : str = "2026-09-21";
+pub const CONSUMER_EDGE_DECLARATION : str = "REUSES_DEEPLINK_ID";
 
 ; ONE FACT IS CO-DECLARED, AND THE OVERLAP IS ADJUDICATED RATHER THAN IGNORED.
-; specs/turbobaby/bot_surface.t27:248 declares REFERRAL_PAYLOAD_IS_A_MINIAPP_TARGET = false, the
+; turbobaby/bot-surface declares REFERRAL_PAYLOAD_IS_A_MINIAPP_TARGET = false, the
 ; same boolean as REFERRAL_CODE_IS_A_MINIAPP_TARGET below, and cites the same two source lines
 ; (src/trios/deeplink.rs:262-263). It was written in parallel and does not carry a reuse edge to
-; this file. The split that keeps both honest: the referral PREFIX and the length bound on its code
-; are the bot surface's own grammar (bot_surface.t27:243-244, from src/bot/commands.rs:188-190),
+; this file -- re-measured 2026-09-21: it declares no REUSES_DEEPLINK_ID, so it is correctly
+; absent from the consumer list above. The split that keeps both honest: the referral PREFIX and
+; the length bound on its code are the bot surface's own grammar, which it owns as REFERRAL_PREFIX
+; and REFERRAL_CODE_MAX_LEN, both read from src/bot/commands.rs:188-190,
 ; while whether that payload is a Mini App TARGET is a property of the parser's target set, and the
 ; parser is this contract's subject. A future edit that changes the answer must change it here
 ; first; the copy over there is evidence, not a second opinion.
+; THE VALUE BELOW USED TO BE A LINE NUMBER, AND THE LINE HAD MOVED. A constant whose VALUE is a
+; stale line reference is worse than a stale comment: a comment is read by a human who can see it
+; is wrong, while this string is what a tool would resolve. It names the ID and the declaration now.
 pub const CO_DECLARED_FACT_COUNT : u8 = 1;
-pub const CO_DECLARED_FACT_SITE : str = "specs/turbobaby/bot_surface.t27:248 REFERRAL_PAYLOAD_IS_A_MINIAPP_TARGET -- re-measured 2026-09-21 by review; the constant NAME is the durable half, the line moves as that file is edited";
+pub const CO_DECLARED_FACT_SITE : str = "turbobaby/bot-surface declares REFERRAL_PAYLOAD_IS_A_MINIAPP_TARGET -- re-measured 2026-09-21; the ID and the declaration name are the durable halves, a line number is not";
+pub const CO_DECLARED_FACT_OWNER_ID : str = "turbobaby/bot-surface";
+pub const CO_DECLARED_FACT_DECLARATION : str = "REFERRAL_PAYLOAD_IS_A_MINIAPP_TARGET";
+pub const CO_DECLARER_CARRIES_NO_EDGE_BACK : bool = true;
+pub const BOT_SURFACE_GRAMMAR_DECLARATIONS : [2]str = ["REFERRAL_PREFIX", "REFERRAL_CODE_MAX_LEN"];
 
 ; --- The four-stage pipeline ----------------------------------------------------------------------
 ; src/trios/deeplink.rs:3-10 names all four. Build: the Mini App turns a target into a t.me link
@@ -322,9 +361,10 @@ pub const WHICH_SCREEN_A_KIND_LANDS_ON_IS_NOT_DECLARED_HERE : bool = true;
 ; ride screen without importing the retired asset (src/ui/routes.rs:68-71, :275-282). WHY a retirement
 ; keeps its path is REUSES_LEGACY_RETIREMENT_ID's decision, and it arrives below as a parameter.
 ; THE OTHER HALF OF THAT EDGE IS A PARTIAL OVERLAP, AND IT IS ADJUDICATED RATHER THAN LEFT TO A
-; READER. specs/turbobaby/legacy_retirement.t27:236 declares REPOINTED_ROUTE_COUNT = 2 over the
-; same two paths, /sets and /sommelier, and its scope note at :63-64 states that /skate belongs to
-; turbobaby/ride-game and turbobaby/star-award and enters none of its counts. The two counts are
+; READER. turbobaby/legacy-retirement declares REPOINTED_ROUTE_COUNT = 2 over the
+; same two paths, /sets and /sommelier, and its scope note states that /skate belongs to
+; turbobaby/ride-game and turbobaby/star-award and enters none of its counts -- both re-read
+; 2026-09-21, and the line the count used to be cited at had already moved by one. The two counts are
 ; therefore three and two over different questions and neither is a copy of the other: that file
 ; counts paths whose SCREEN was deleted while the path survived, a retirement state; this file
 ; counts paths kept RESOLVABLE for links already sent, a link-compatibility set, which is why
@@ -436,6 +476,26 @@ test deeplink_the_measured_zero_is_scoped_to_the_corpus_it_was_taken_over {
   assert CONTRACTS_MENTIONING_DEEPLINK_AFTER_THIS_WAVE > CONTRACTS_MENTIONING_DEEPLINK;
 }
 
+; The wave reading drifted again. Both later figures carry a date and a denominator so that the
+; next reader can tell a grown corpus from a broken claim.
+test deeplink_the_wave_reading_is_superseded_by_a_dated_one {
+  assert CORPUS_FILE_COUNT == 43;
+  assert CORPUS_FILES_OTHER_THAN_THIS_ONE == 42;
+  assert CORPUS_FILES_OTHER_THAN_THIS_ONE + 1 == CORPUS_FILE_COUNT;
+  assert CONTRACTS_MENTIONING_DEEPLINK_2026_09_21 == 7;
+  assert CONTRACTS_MENTIONING_DEEPLINK_2026_09_21 > CONTRACTS_MENTIONING_DEEPLINK_AFTER_THIS_WAVE;
+  assert CONTRACTS_MENTIONING_DEEPLINK_2026_09_21 < CORPUS_FILES_OTHER_THAN_THIS_ONE;
+}
+
+; The startapp zero is the one absence that did NOT move, and it is asserted as its own claim so
+; that it never rides along on the deeplink count's coat-tails.
+test deeplink_the_startapp_zero_is_the_one_absence_still_standing {
+  assert CONTRACTS_MENTIONING_STARTAPP_2026_09_21 == 0;
+  assert CONTRACTS_MENTIONING_STARTAPP_2026_09_21 == CONTRACTS_MENTIONING_STARTAPP;
+  assert THE_STARTAPP_ZERO_STILL_HOLDS == true;
+  assert ZERO_GREP_COMMANDS[1] == "grep -rl startapp specs/";
+}
+
 test deeplink_names_its_three_owners_and_restates_none_of_them {
   assert REUSE_EDGE_COUNT == 3;
   assert REUSES_LEGACY_RETIREMENT_ID == "turbobaby/legacy-retirement";
@@ -449,6 +509,35 @@ test deeplink_records_its_one_inbound_edge_and_its_one_co_declared_fact {
   assert CONSUMERS[0] != ID;
   assert CO_DECLARED_FACT_COUNT == 1;
   assert REFERRAL_CODE_IS_A_MINIAPP_TARGET == false;
+}
+
+; The inbound edge count grew from one to five while nothing here was edited. Every member is
+; asserted by name, so a consumer that drops its edge fails this test instead of leaving the
+; count quietly too high.
+test deeplink_has_five_consumers_not_the_one_it_was_written_with {
+  assert CONSUMER_COUNT == 5;
+  assert CONSUMER_COUNT_WHEN_THIS_FILE_WAS_WRITTEN == 1;
+  assert CONSUMER_COUNT > CONSUMER_COUNT_WHEN_THIS_FILE_WAS_WRITTEN;
+  assert CONSUMERS.len == CONSUMER_COUNT;
+  assert CONSUMERS[1] == "turbobaby/customer-surface";
+  assert CONSUMERS[2] == "turbobaby/notification-queue";
+  assert CONSUMERS[3] == "turbobaby/referral-program";
+  assert CONSUMERS[4] == "turbobaby/webapp-bridge";
+  assert CONSUMERS[4] != ID;
+  assert CONSUMERS_MEASURED_AT == "2026-09-21";
+  assert CONSUMER_EDGE_DECLARATION == "REUSES_DEEPLINK_ID";
+}
+
+; The co-declarer is NOT a consumer, and the two are counted separately on purpose.
+test deeplink_the_co_declared_fact_names_an_id_and_a_declaration_not_a_line {
+  assert CO_DECLARED_FACT_OWNER_ID == "turbobaby/bot-surface";
+  assert CO_DECLARED_FACT_OWNER_ID != ID;
+  assert CO_DECLARED_FACT_DECLARATION == "REFERRAL_PAYLOAD_IS_A_MINIAPP_TARGET";
+  assert CO_DECLARER_CARRIES_NO_EDGE_BACK == true;
+  assert CO_DECLARED_FACT_OWNER_ID != CONSUMERS[0];
+  assert BOT_SURFACE_GRAMMAR_DECLARATIONS.len == 2;
+  assert BOT_SURFACE_GRAMMAR_DECLARATIONS[0] == "REFERRAL_PREFIX";
+  assert BOT_SURFACE_GRAMMAR_DECLARATIONS[1] == "REFERRAL_CODE_MAX_LEN";
 }
 
 test deeplink_pipeline_has_four_stages_owned_by_two_halves {
@@ -621,6 +710,15 @@ test deeplink_the_chain_is_conjunctive_and_every_gap_looks_the_same {
 
 invariant deeplink_this_file_closes_a_measured_zero
   assert CONTRACTS_MENTIONING_DEEPLINK == 0 and CONTRACTS_MENTIONING_STARTAPP == 0
+
+; The zero above is HISTORICAL and the invariant below is what keeps it from being read as
+; current: the deeplink count has grown past it and is never again allowed to equal it, while
+; the startapp zero is asserted separately because it is the one that genuinely still holds.
+invariant deeplink_the_historical_zero_is_never_mistaken_for_todays_count
+  assert CONTRACTS_MENTIONING_DEEPLINK_2026_09_21 > CONTRACTS_MENTIONING_DEEPLINK and CONTRACTS_MENTIONING_STARTAPP_2026_09_21 == CONTRACTS_MENTIONING_STARTAPP
+
+invariant deeplink_every_inbound_edge_is_counted_from_both_ends
+  assert CONSUMERS.len == CONSUMER_COUNT and CONSUMER_COUNT > CONSUMER_COUNT_WHEN_THIS_FILE_WAS_WRITTEN and CO_DECLARER_CARRIES_NO_EDGE_BACK == true
 
 invariant deeplink_the_pipeline_has_exactly_four_stages
   assert STAGE_NAMES.len == STAGE_COUNT and deeplink_stage_is_known(STAGE_PARSE) == true and deeplink_stage_is_known(5) == false

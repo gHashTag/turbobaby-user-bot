@@ -10,12 +10,24 @@
 ; traces to src/api/bikes.rs, migrations/077_bikes.sql or migrations/078_bike_units.sql at the
 ; line its comment gives. ASCII only (L3), English identifiers only (LANG-EN).
 ; --
-; WHY (measured 2026-09-20). src/ui/screens/admin_screen.rs is 5802 lines, the largest source
-; file in this repository -- the next is src/main.rs at 4599. Two contracts cite one line of it
-; in passing, specs/turbobaby/availability.t27 and specs/turbobaby/order_money.t27, and both cite
-; it for something it RENDERS; no contract owns the write side it is the head of. It is the
+; WHY (measured 2026-09-20, citation counts RE-MEASURED 2026-09-21). src/ui/screens/admin_screen.rs
+; is 5802 lines, the largest source file in this repository -- the next is src/main.rs at 4599.
+; Both figures re-verified 2026-09-21 and both unchanged.
+; The count of contracts that cite it did NOT hold. This paragraph said TWO, availability.t27 and
+; order_money.t27, and said both cite it for something it RENDERS. Measured over the 43-file
+; corpus on 2026-09-21 it is FIVE besides this file: turbobaby/availability (:41, a unit status
+; label), turbobaby/order-money (:97, a star count through the baht formatter) and
+; turbobaby/order-status (:18, :212, :327, :332, the pipeline stepper) cite it render-side as the
+; old sentence said; turbobaby/upload-media (:84 CALLER_SOURCE, :191, :464) and
+; turbobaby/validation-bounds (:118 HONEST_PARSER_CALLER, :331) cite it INPUT-side, and two of
+; those are declared constants naming the screen rather than passing citations.
+; The conclusion survives the correction and is now checkable instead of merely asserted: neither
+; input-side neighbour claims the write bounds, and each says so in its own header --
+; turbobaby/validation-bounds writes "It owns no admin write bound" and hands them to
+; turbobaby/catalog-write by ID, and turbobaby/upload-media writes that it owns "no catalog
+; column bound". So the screen is cited by five contracts and owned by none of them. It is the
 ; screen every catalog write starts from, and the read contracts decline its side of the boundary
-; on purpose, so the bounds an admin write must respect have no owner today.
+; on purpose, so the bounds an admin write must respect had no owner before this file.
 ; That is not a tidiness problem. Five shipped columns refuse a value the API accepts: the CHECK
 ; at migrations/077_bikes.sql:67 requires displacement_cc > 0 while src/api/bikes.rs:1040 admits
 ; the whole closed interval from 0, and the four money CHECKs at 077_bikes.sql:59-66 require
@@ -39,9 +51,13 @@
 ; src/ui/screens/admin_screen.rs:1112-1121 and the edit card at 2447-2450 -- and a request made by
 ; hand meets neither. So this file declares the missing guard as a tripwire rather than
 ; claiming a check that is not there, and it declares no body vocabulary of its own while doing
-; it. The displacement ceiling is refuted in the other direction: bike_catalog.t27:159 records its
-; measured extremes as reported and never used as a bound, and argues at 148-151 that a clamp to
-; today's fleet would reject the next machine the shop buys. That is correct for a read contract
+; it. The displacement ceiling is refuted in the other direction: turbobaby/bike-catalog owns
+; DISPLACEMENT_MIN_CC and DISPLACEMENT_MAX_CC and records both as measured extremes that are
+; reported and never used as a bound, and the comment over its DISPLACEMENTS_CC argues that a
+; clamp to today's fleet would reject the next machine the shop buys. (Both were cited here by
+; line number until 2026-09-21; a line into a sibling goes stale the day that sibling is edited,
+; so the owner and the declaration names carry it instead. Re-verified on that date: the two
+; constants exist under those names and still say that.) That is correct for a read contract
 ; and it leaves the write ceiling ownerless, which is why the ceiling lives here.
 ; --
 ; WHAT THIS FILE NEVER DOES. It quotes no error message: the shipped rejections are Russian
@@ -82,11 +98,22 @@ pub const FAMILY_MIGRATION : str = "migrations/077_bikes.sql";
 pub const UNIT_MIGRATION : str = "migrations/078_bike_units.sql";
 pub const ADMIN_SCREEN : str = "src/ui/screens/admin_screen.rs";
 pub const MEASURED_AT : str = "2026-09-20";
-; wc -l over the tracked source, 2026-09-20. The screen is the largest file and the only one of
-; that size with no contract; the runner-up is recorded so "largest" is a comparison and not a
-; claim.
+; wc -l over the tracked source, 2026-09-20 and re-verified unchanged 2026-09-21. The screen is
+; the largest file; the runner-up is recorded so "largest" is a comparison and not a claim.
 pub const ADMIN_SCREEN_LINES : u16 = 5802;
 pub const NEXT_LARGEST_SOURCE_LINES : u16 = 4599;
+
+; --- Who cites this screen, counted over the corpus as it stands now -------------------------
+; The header's count of citing contracts was TWO and is FIVE. It is pinned as a literal here
+; because the wrong number was doing real work in the argument: two passing render-side mentions
+; read as a screen nobody looks at, and five contracts across both sides of the boundary read as
+; a screen everyone depends on and nobody owns -- which is the actual case, and the stronger
+; reason for this file. Measured over the 43-file corpus, 2026-09-21, excluding this file.
+pub const CONTRACTS_CITING_ADMIN_SCREEN : u8 = 5;
+pub const CONTRACTS_CITING_IT_RENDER_SIDE : u8 = 3;
+pub const CONTRACTS_CITING_IT_INPUT_SIDE : u8 = 2;
+pub const CONTRACTS_OWNING_ITS_WRITE_BOUNDS : u8 = 0;
+pub const ADMIN_SCREEN_CITERS_NOTE : str = "turbobaby/availability, turbobaby/order-money and turbobaby/order-status cite src/ui/screens/admin_screen.rs for something it renders; turbobaby/upload-media and turbobaby/validation-bounds cite it as the caller on the input side, each through a declared constant (CALLER_SOURCE and HONEST_PARSER_CALLER). None of the five claims the write bounds: turbobaby/validation-bounds states it owns no admin write bound and names turbobaby/catalog-write, and turbobaby/upload-media states it owns no catalog column bound. Measured 2026-09-21 over the 43 files under specs/; the header of this file said TWO, which was true when written and had stopped being true.";
 
 ; --- Where a write is judged twice ----------------------------------------------------------------
 ; Every bounded field is judged by the API first and by the column second. The two judgements are
@@ -408,6 +435,22 @@ test the_owner_contracts_are_named_and_none_of_them_is_restated {
     assert UNIT_STATUS_VOCABULARY_INPUT == "membership boolean supplied by the availability contract";
     assert MONEY_ABSENCE_INPUT == "absence discipline owned by the pricing contract";
     assert WHO_MAY_WRITE_IS_NOT_THIS_FILES_SUBJECT == true;
+}
+
+; The header's census of who else cites the screen, as literals. Pinned because the number was
+; wrong in the direction that weakens the argument, and because a count of citers is exactly the
+; kind of sentence that ages without anyone noticing: every new contract that mentions the screen
+; falsifies it silently.
+test the_screen_is_cited_by_five_contracts_and_owned_by_none {
+    assert CONTRACTS_CITING_ADMIN_SCREEN == 5;
+    // The split adds up, so neither side can be dropped and leave a plausible total.
+    assert CONTRACTS_CITING_IT_RENDER_SIDE + CONTRACTS_CITING_IT_INPUT_SIDE == CONTRACTS_CITING_ADMIN_SCREEN;
+    assert CONTRACTS_CITING_IT_RENDER_SIDE == 3;
+    assert CONTRACTS_CITING_IT_INPUT_SIDE == 2;
+    // The claim the wrong count was propping up, and the reason this file exists. The two
+    // input-side citers each disclaim the write bounds in their own headers.
+    assert CONTRACTS_OWNING_ITS_WRITE_BOUNDS == 0;
+    assert ADMIN_SCREEN == "src/ui/screens/admin_screen.rs";
 }
 
 test the_sources_these_bounds_were_read_from_are_pinned {

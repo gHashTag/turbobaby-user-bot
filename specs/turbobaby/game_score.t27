@@ -7,10 +7,15 @@
 ; request_identity.t27. Each is named below as an ID string and consumed as a boolean, because a
 ; second copy of a rule that already has an owner is the defect this corpus exists to prevent.
 ; --
-; WHY (measured 2026-09-20). Issue #14 asks that the biker game reuse this path, "adding only a
-; game_key discriminator if one is absent". It is absent, and the measurement is a zero:
+; WHY (measured 2026-09-20, re-run 2026-09-21). Issue #14 asks that the biker game reuse this
+; path, "adding only a game_key discriminator if one is absent". It is absent, and the measurement
+; is a zero:
 ;   grep -rn "game_key" migrations/ src/ assets/ | wc -l  ->  0
-; No migration, no server source and no shipped game asset carries THAT name. A game is named
+; No migration, no server source and no shipped game asset carries THAT name. The zero is scoped
+; to those three trees ON PURPOSE and the scope is now stated instead of implied, because an
+; absence with an unstated scope is the defect this corpus can least afford. Measured the same
+; day over the specs/ tree, which the command above never touched: game_key occurs in exactly ONE
+; of the 43 .t27 files, this one, where it names the thing that is missing. A game is named
 ; elsewhere -- the star credit the same submitter sends three lines later does carry one, which is
 ; recorded below -- so the zero is a property of this ledger and not of the repository. The table is
 ; migrations/027_game_high_scores.sql, and line 7 is the whole problem: telegram_id is the
@@ -28,13 +33,16 @@
 ; used it. Rows stay distinct only when the KEY is the pair. That is why eras_are_distinguishable
 ; below takes the column AND its presence in the key, and is false for the column alone.
 ; --
-; WHERE THE OBVIOUS READING IS REFUTED (measured 2026-09-20). Neither game asset posts to this
+; WHERE THE OBVIOUS READING IS REFUTED (measured 2026-09-20, every line of it re-run 2026-09-21
+; and unchanged). Neither game asset posts to this
 ; endpoint. assets/game/skate.js does not exist: assets/game/ride.js:3 records that it replaced
 ; it, and commit 4a230fc deleted it. A grep over assets/ for the endpoint returns nothing at all,
 ; and the single caller in the repository is src/ui/screens/ride_screen.rs:68, a Rust host.
 ; assets/game/catch.js -- Woody Catch, the game migration 027 line 1 was written for -- is
 ; mounted by no code today: the only assets/game import under src/ is ride.js, at
-; src/ui/screens/ride_screen.rs:236. The era collision is therefore not a live race between two
+; src/ui/screens/ride_screen.rs:236. These are citations into src/ and assets/ and they stay as
+; line numbers, because a line into a tree this file does not own is checkable against that tree;
+; what does not stay is a line number into a sibling .t27, and this file carries none. The era collision is therefore not a live race between two
 ; writers; it is a property of a row that has outlived its first writer and will outlive its
 ; second. A discriminator justified only by "two games write today" would be justified by
 ; nothing, and a discriminator refused for the same reason would be refused by nothing.
@@ -78,11 +86,23 @@ pub const REUSES_RIDE_RUNTIME_ID : str = "turbobaby/ride-runtime";
 pub const REUSES_STAR_AWARD_ID : str = "turbobaby/star-award";
 pub const REUSES_REQUEST_IDENTITY_ID : str = "turbobaby/request-identity";
 pub const A_SCORE_IS_NOT_A_STAR : bool = true;
-; catalog_api.t27 owns page budgets for GET /api/bikes and calls them CHOSEN protocol budgets.
+; turbobaby/catalog-api owns page budgets for GET /api/bikes -- PAGE_LIMIT_MIN, PAGE_LIMIT_DEFAULT
+; and PAGE_LIMIT_MAX -- and calls them CHOSEN protocol budgets.
 ; The board budgets recorded further down were measured out of src/api/game.rs for a different
 ; endpoint and happen to carry the same magnitudes. Neither file consumes the other's; this
 ; constant exists so a reader who notices the coincidence does not read it as one rule twice.
+; Re-checked 2026-09-21, and the coincidence is now recorded from BOTH sides rather than only
+; this one: that contract's own review the same day found that its three budgets match a shipped
+; ladder exactly, named the ladder as src/api/game.rs:33-35 and src/api/game.rs:50 -- which is
+; this file's leaderboard limit -- and wrote down that the agreement is precedent and not
+; derivation. Two files measuring the same coincidence independently and agreeing on what it is
+; NOT is the strongest form this claim can take here, so the constant below is kept and dated
+; rather than softened.
 pub const CATALOG_API_PAGE_BUDGETS_GOVERN_A_DIFFERENT_ENDPOINT : bool = true;
+pub const PAGE_BUDGET_COINCIDENCE_RE_CHECKED_AT : str = "2026-09-21";
+pub const PAGE_BUDGET_COINCIDENCE_IS_NAMED_FROM_BOTH_SIDES : bool = true;
+pub const PAGE_BUDGET_COINCIDENCE_IS_DERIVATION : bool = false;
+pub const CATALOG_API_OWNER_ID : str = "turbobaby/catalog-api";
 
 ; --- The shape of the row (migrations/027_game_high_scores.sql) ---------------------------------
 ; Line 6 creates the table; line 7 makes telegram_id the PRIMARY KEY on its own; line 8 holds one
@@ -93,8 +113,23 @@ pub const KEY_COLUMNS_TODAY : u8 = 1;
 pub const ROWS_PER_PLAYER : u8 = 1;
 pub const STORED_SCORES_PER_PLAYER : u8 = 1;
 pub const KEY_COLUMNS_FOR_DISTINCT_ERAS : u8 = 2;
-; The zero that makes issue #14 real, from the grep quoted in the header.
+; The zero that makes issue #14 real, from the grep quoted in the header. The tree it was taken
+; over is named beside it, because a zero without a scope is a claim nobody can re-run: this one
+; counts migrations/, src/ and assets/ and nothing else.
 pub const GAME_KEY_OCCURRENCES : u32 = 0;
+pub const GAME_KEY_SCOPE : str = "migrations/ src/ assets/";
+pub const GAME_KEY_RE_RUN_AT : str = "2026-09-21";
+; The other tree, measured separately on the same day so the two are never conflated. The
+; measurement over specs/ counts DECLARATIONS and not mentions, and the reason is worth the two
+; lines: a draft of this block counted .t27 files MENTIONING the discriminator's name, said one,
+; and was made wrong by a second contract writing a sentence about the absence -- the sentence
+; contained the name. A count that any contract can break by describing the thing counted is not
+; a measurement of the repository, it is a measurement of the prose. So what is pinned is the
+; declaration: exactly one contract in the 43 declares the absence, and it is this one.
+pub const CORPUS_FILE_COUNT : u8 = 43;
+pub const CONTRACTS_DECLARING_THE_ABSENCE : u8 = 1;
+pub const THE_ABSENCE_IS_DECLARED_ONLY_HERE : bool = true;
+pub const THE_CENSUS_COUNTS_DECLARATIONS_NOT_MENTIONS : bool = true;
 
 ; --- Who writes to the ledger (measured 2026-09-20) ---------------------------------------------
 pub const ENDPOINT_CALLERS_IN_REPOSITORY : u8 = 1;
@@ -282,6 +317,40 @@ test the_repository_contains_no_game_discriminator {
   assert GAME_KEY_OCCURRENCES == 0;
   assert GAME_DISCRIMINATOR_IS_NOT_SHIPPED_IN_THIS_LEDGER == true;
   assert eras_are_distinguishable(false, false) == false;
+  ; The scope of the zero, pinned so the number cannot be quoted without the tree it was taken
+  ; over. Re-run 2026-09-21 and still zero.
+  assert GAME_KEY_SCOPE == "migrations/ src/ assets/";
+  assert GAME_KEY_RE_RUN_AT == "2026-09-21";
+  ; And the tree that grep never visited, measured separately and by DECLARATION: one contract of
+  ; the 43 declares this absence, and it is this one. Counting mentions instead gives a number
+  ; that any contract can change by writing a sentence, which is why it is not the number pinned.
+  assert CORPUS_FILE_COUNT == 43;
+  assert CONTRACTS_DECLARING_THE_ABSENCE == 1;
+  assert CONTRACTS_DECLARING_THE_ABSENCE < CORPUS_FILE_COUNT;
+  assert THE_ABSENCE_IS_DECLARED_ONLY_HERE == true;
+  assert THE_CENSUS_COUNTS_DECLARATIONS_NOT_MENTIONS == true;
+}
+
+; The coincidence with the catalog contract's page budgets, dated and pinned. Both files measured
+; it independently on 2026-09-21 and both recorded that it is precedent rather than derivation;
+; this assertion is this file's half, and it goes red if a later reader turns the coincidence into
+; a consumed edge without either owner agreeing to one.
+test the_page_budget_coincidence_is_precedent_and_not_an_edge {
+  assert PAGE_BUDGET_COINCIDENCE_RE_CHECKED_AT == "2026-09-21";
+  assert CATALOG_API_PAGE_BUDGETS_GOVERN_A_DIFFERENT_ENDPOINT == true;
+  assert PAGE_BUDGET_COINCIDENCE_IS_NAMED_FROM_BOTH_SIDES == true;
+  assert PAGE_BUDGET_COINCIDENCE_IS_DERIVATION == false;
+  assert CATALOG_API_OWNER_ID == "turbobaby/catalog-api";
+  assert CATALOG_API_OWNER_ID != ID;
+  ; The magnitudes that coincide, stated here so the claim names the numbers it is about.
+  assert LEADERBOARD_LIMIT_MIN == 1;
+  assert LEADERBOARD_LIMIT_DEFAULT == 20;
+  assert LEADERBOARD_LIMIT_MAX == 100;
+  ; No REUSES_ constant names the catalog contract, which is what "not an edge" means in a corpus
+  ; with no imports. The three that ARE edges are named instead.
+  assert CATALOG_API_OWNER_ID != REUSES_RIDE_RUNTIME_ID;
+  assert CATALOG_API_OWNER_ID != REUSES_STAR_AWARD_ID;
+  assert CATALOG_API_OWNER_ID != REUSES_REQUEST_IDENTITY_ID;
 }
 
 test a_discriminator_column_outside_the_key_changes_nothing {

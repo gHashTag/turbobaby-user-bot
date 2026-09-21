@@ -232,10 +232,47 @@ pub fn market_swap_reaches_every_branch() bool {
 ; ------------------------------------------------------------------------------------------
 ; (3) THE MARKET TRIPWIRE: THE CODE IS WIRED AND THE DECISION RECORD SAYS IT IS NOT
 ; ------------------------------------------------------------------------------------------
+; RE-VERIFIED 2026-09-21. A tripwire that fires on a citation is worth exactly what the citation is
+; worth, so every line this section stands on was re-opened rather than trusted, and each one still
+; lands where it is said to:
+;   DECISIONS.md:351 still carries the stale sentence, word for word -- "+66 default) is unwired
+;     debt tracked in #35". It is also the ONLY occurrence of "#35" anywhere in DECISIONS.md, which
+;     is what makes ISSUE_35_OCCURRENCES_AS_AN_ISSUE a 1 and not a survey of a common token; the
+;     ten other hits are under docs/reports/ and are wave numbers, re-counted today at ten.
+;   src/trios/store.rs:325 is still the wired const, reading
+;     crate::trios::market::MARKET_DIALING.default_calling_code.
+;   src/trios/market.rs:86 is still the profile field and :92 still holds the value; :69-71 still
+;     says in the source's own words that a market swap is an edit here and in the seed.
+;   data/fleet_seed.json:30 still holds the deployment copy, tests/market_clock_wiring.rs:256-258
+;     still fails when the constant and the seed disagree, and scripts/verify_fleet_seed.py:164
+;     still pins the field's shape.
+;   src/trios/store.rs:401 is still the SINGLE read of DEFAULT_COUNTRY_CODE in the normalizer --
+;     grep gives two hits in the whole file, the declaration at :325 and that one use -- and
+;     src/trios/store.rs:392 still emits a second country's code from a literal under no profile.
+;
+; And the thing this section must never become: nowhere does this contract assert the stale claim
+; as fact. The record's sentence is carried as a claim ABOUT THE RECORD
+; (DECISION_RECORD_STILL_CALLS_IT_UNWIRED) and never as a claim about the code; the claim about the
+; code is CALLING_CODE_IS_WIRED_TO_THE_PROFILE, and it is true. The two disagreeing is precisely
+; what arms the tripwire, so collapsing them would disarm it while looking tidier.
 pub const CALLING_CODE_IS_WIRED_TO_THE_PROFILE : bool = true;
 pub const PROFILE_IS_A_COMPILE_TIME_CONSTANT : bool = true;
 pub const SEED_AND_CONSTANT_ARE_PINNED_BY_A_TEST : bool = true;
 pub const DECISION_RECORD_STILL_CALLS_IT_UNWIRED : bool = true;
+pub const DECISION_RECORD_CITATION : str = "DECISIONS.md:351";
+pub const DECISION_RECORD_CITATION_REVERIFIED_AT : str = "2026-09-21";
+pub const DECISION_RECORD_CITATION_STILL_LANDS : bool = true;
+pub const THIS_FILE_ASSERTS_THE_STALE_CLAIM_AS_FACT : bool = false;
+pub const ISSUE_35_OCCURRENCES_IN_DECISIONS : u8 = 1;
+pub const ISSUE_35_TOKEN_OCCURRENCES_UNDER_DOCS_REPORTS : u8 = 10;
+pub const DEFAULT_COUNTRY_CODE_READ_SITES_IN_THE_NORMALIZER : u8 = 1;
+
+; A tripwire whose citation no longer lands is not armed, it is merely loud. Both halves are
+; required: the record must still say the stale thing AT the line cited, and the code must still be
+; wired.
+pub fn tripwire_citation_is_sound(citation_lands: bool, asserts_stale_claim_as_fact: bool) bool {
+  return citation_lands and !asserts_stale_claim_as_fact;
+}
 pub const ISSUE_35_BODY_IS_PUBLISHED_HERE : bool = false;
 pub const ISSUE_35_OCCURRENCES_AS_AN_ISSUE : u8 = 1;
 pub const ISSUE_35_NOTE : str = "Issue #35 is named as an issue exactly once, at DECISIONS.md:351: no body, no tracker file, no figure. The token also appears ten times under docs/reports/, but there it is a WAVE number and not this issue, which is why the count above is scoped to the issue rather than to the string. This contract therefore cites the decision record's sentence and never the issue's contents, and it states no number whose only provenance would be a ticket nobody in this repository can open.";
@@ -682,6 +719,28 @@ test the_tripwire_disarms_only_when_the_record_is_corrected {
   assert tripwire_is_armed(false, false) == true;
 }
 
+test the_tripwire_citation_was_reopened_and_still_lands {
+  assert DECISION_RECORD_CITATION == "DECISIONS.md:351";
+  assert DECISION_RECORD_CITATION_REVERIFIED_AT == "2026-09-21";
+  assert DECISION_RECORD_CITATION_STILL_LANDS == true;
+  assert ISSUE_35_OCCURRENCES_IN_DECISIONS == 1;
+  assert ISSUE_35_OCCURRENCES_IN_DECISIONS == ISSUE_35_OCCURRENCES_AS_AN_ISSUE;
+  assert ISSUE_35_TOKEN_OCCURRENCES_UNDER_DOCS_REPORTS == 10;
+  assert ISSUE_35_TOKEN_OCCURRENCES_UNDER_DOCS_REPORTS > ISSUE_35_OCCURRENCES_IN_DECISIONS;
+  assert DEFAULT_COUNTRY_CODE_READ_SITES_IN_THE_NORMALIZER == 1;
+  assert DEFAULT_COUNTRY_CODE_READ_SITES_IN_THE_NORMALIZER == BRANCHES_READING_THE_MARKET_PROFILE;
+  assert tripwire_citation_is_sound(DECISION_RECORD_CITATION_STILL_LANDS, THIS_FILE_ASSERTS_THE_STALE_CLAIM_AS_FACT) == true;
+  assert tripwire_citation_is_sound(false, false) == false;
+  assert tripwire_citation_is_sound(true, true) == false;
+}
+
+test this_contract_never_repeats_the_records_stale_claim_as_its_own {
+  assert THIS_FILE_ASSERTS_THE_STALE_CLAIM_AS_FACT == false;
+  assert CALLING_CODE_IS_WIRED_TO_THE_PROFILE == true;
+  assert CALLING_CODE_IS_WIRED_TO_THE_PROFILE != THIS_FILE_ASSERTS_THE_STALE_CLAIM_AS_FACT;
+  assert DECISION_RECORD_STILL_CALLS_IT_UNWIRED == true;
+}
+
 test the_issue_itself_is_not_published_here {
   assert ISSUE_35_BODY_IS_PUBLISHED_HERE == false;
   assert ISSUE_35_OCCURRENCES_AS_AN_ISSUE == 1;
@@ -987,6 +1046,12 @@ invariant a_relaxed_validator_would_surrender_the_stored_format
 
 invariant no_person_level_datum_is_published_by_this_contract
   assert D14_APPLIES == true and PHONE_NUMBERS_PUBLISHED.len == 0 and ADDRESSES_PUBLISHED.len == 0 and CUSTOMER_NAMES_PUBLISHED.len == 0 and BLOCKER_SENTENCES_QUOTED_HERE.len == 0
+
+invariant the_tripwire_never_stands_on_a_citation_that_stopped_landing
+  assert tripwire_citation_is_sound(DECISION_RECORD_CITATION_STILL_LANDS, THIS_FILE_ASSERTS_THE_STALE_CLAIM_AS_FACT) == true and tripwire_is_armed(CALLING_CODE_IS_WIRED_TO_THE_PROFILE, DECISION_RECORD_STILL_CALLS_IT_UNWIRED) == true
+
+invariant the_records_stale_sentence_is_never_this_contracts_own_claim
+  assert THIS_FILE_ASSERTS_THE_STALE_CLAIM_AS_FACT == false and CALLING_CODE_IS_WIRED_TO_THE_PROFILE == true
 
 invariant an_unverifiable_claim_is_refused_rather_than_invented
   assert PHONE_OWNERSHIP_IS_VERIFIED == false and NATIONAL_LENGTH_IS_VALIDATED_PER_COUNTRY == false

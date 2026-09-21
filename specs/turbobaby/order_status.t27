@@ -3,10 +3,14 @@
 ; This contract owns five things and nothing else: which status names the admin write path
 ; accepts, which of them are terminal, which name is an alias of another, the length caps on the
 ; two path inputs, and the single status precondition on a customer cancellation. It is the
-; producer of one boolean that already had a consumer and no source: commerce.t27:229 takes
-; current_is_terminal as an abstract argument and says in its own comment that the order-status
-; vocabulary remains in the order owner. Until this file existed there was no order owner.
-; order_status_current_is_terminal is that source, and commerce still owns the gate.
+; producer of one boolean that already had a consumer and no source: turbobaby/commerce owns
+; commerce_order_transition_allowed, which takes current_is_terminal as an abstract argument and
+; says in its own comment that the order-status vocabulary remains in the order owner. Until this
+; file existed there was no order owner. order_status_current_is_terminal is that source, and
+; commerce still owns the gate. The edge is now declared from the other side too: re-measured
+; 2026-09-21, TWO contracts hold REUSES_ORDER_STATUS_ID -- turbobaby/bot-surface and
+; turbobaby/cart-persistence -- so "no order owner" is a statement about the past and the count
+; below is what a reader should check instead of trusting this sentence.
 ; ASCII only (L3), English only (LANG-EN).
 ; --
 ; WHY (measured 2026-09-20): one VARCHAR(30) column is closed by FIVE separate declarations in
@@ -68,25 +72,41 @@ pub const MEASURED_AT : str = "2026-09-20";
 
 ; Current t27c does not support brace imports. These three strings are the whole of the
 ; cross-contract wiring, and each names an owner this file refuses to restate.
-; commerce.t27 owns the transition GATE -- commerce_order_transition_allowed at commerce.t27:229
+; turbobaby/commerce owns the transition GATE -- its commerce_order_transition_allowed
 ; consumes current_is_terminal, same_state and transition_authorized. This file supplies the first
 ; of those three from the vocabulary and declares no gate of its own; the checkout join, the cart
 ; states and the idempotency decisions stay there and appear nowhere below.
 pub const REUSES_COMMERCE_ID : str = "turbobaby/commerce";
-; availability.t27 owns the UNIT status set of bike_units -- available, rented, service, retired.
-; That is a different table, a different vocabulary and a different question (is a machine
+; turbobaby/availability owns the UNIT status set of bike_units -- available, rented, service,
+; retired. That is a different table, a different vocabulary and a different question (is a machine
 ; rentable now), and none of its four values is repeated here. Named because the confusion is one
-; grep away: both tables have a column called status.
+; grep away: both tables have a column called status. Re-verified 2026-09-21 and all four halves
+; still hold -- availability.t27 declares exactly those four values, this file repeats none of
+; them, orders.status is migrations/001_initial.sql:67 and bike_units.status is indexed at
+; migrations/078_bike_units.sql:43. What the sentence was MISSING is the sharper half of the same
+; confusion, and it is recorded below the vocabulary as a census: the grep collides on DECLARATION
+; NAMES too, and not only with availability.
 pub const REUSES_AVAILABILITY_ID : str = "turbobaby/availability";
-; request_identity.t27 owns the GATES -- check_admin, check_owner and check_owner_lenient, its
-; GATE_NAMES array -- and names src/api/orders.rs among the files it covers. The array is cited
-; by name and not by line: an earlier revision of this sentence pointed at request_identity.t27:208,
-; which was never the array (it moved to :233 while both files were being written), and a line
-; number that drifts is a citation that stops being checkable. The
-; authorization at src/api/orders.rs:1889 is check_admin, one line after the vocabulary check this
-; file owns at :1888. Named so the seam is greppable; no gate, no precedence order and no attempt
-; bound of that contract is repeated below.
+; turbobaby/request-identity owns the GATES -- check_admin, check_owner and check_owner_lenient,
+; carried in its GATE_NAMES array -- and names src/api/orders.rs among the files it covers. That
+; array is cited by its DECLARATION NAME and never by a line: an earlier revision of this sentence
+; pointed at a line number inside that file, the line it named was not the array even when it was
+; written, and the array had moved again before either file was finished. A line number into a
+; sibling stops being checkable the moment the sibling is edited, which is why every cross-contract
+; citation in this file names an owner ID plus a declaration. Line numbers into src/ are a
+; different thing and stay: the authorization at src/api/orders.rs:1889 is check_admin, one line
+; after the vocabulary check this file owns at :1888, both re-read on 2026-09-21. Named so the
+; seam is greppable; no gate, no precedence order and no attempt bound of that contract is
+; repeated below.
 pub const REUSES_REQUEST_IDENTITY_ID : str = "turbobaby/request-identity";
+
+; The edges pointing the OTHER way, measured 2026-09-21 by grepping specs/ for this file's own ID.
+; The header calls this file the first order owner, which is a claim about the past; the count here
+; is the claim about today, and it is the one that can be re-run. Two contracts declare the edge
+; from their own side, both by holding REUSES_ORDER_STATUS_ID = this file's ID.
+pub const INBOUND_EDGE_CENSUS_MEASURED_AT : str = "2026-09-21";
+pub const INBOUND_EDGE_COUNT : u8 = 2;
+pub const INBOUND_EDGES : [2]str = ["turbobaby/bot-surface", "turbobaby/cart-persistence"];
 
 ; --- The nine accepted names --------------------------------------------------------------------
 ; src/api/orders.rs:1865-1875, the VALID_STATUSES slice of validate_update_order_status. The u8
@@ -112,6 +132,55 @@ pub const STATUS_NAMES : [9]str = [
   "pending", "confirmed", "preparing", "ready", "out_for_delivery",
   "delivered", "completed", "rejected", "cancelled",
 ];
+
+; --- The bare STATUS_ names, and who else spells them ---------------------------------------------
+; Measured 2026-09-21 with `grep -rn "^pub const STATUS_" specs/` over all 43 files. FOUR contracts
+; declare bare STATUS_ constants -- this one, availability.t27, referral_program.t27 and
+; happy_hour.t27 -- and FOUR of the bare names are declared by more than one of them. NOTHING IS
+; RENAMED to dodge this. The pinned compiler has no imports, so a collision cannot break a build;
+; it breaks a READER, and a rename would cost the vocabulary its own words to buy back a grep. So
+; the collision is recorded as data instead, greppable from either end by the names below.
+;   STATUS_NAMES     -- [9]str here, [4]str in availability.t27. SAME NAME, DIFFERENT ARITY, and
+;                       the two lists share no value at all. This is the one that misleads worst:
+;                       a reader who greps STATUS_NAMES gets two closed vocabularies of one word.
+;   STATUS_UNSET     -- 0 here, 0 in availability.t27, 0 in referral_program.t27. Three files and
+;                       one meaning; the agreement IS the finding, because it says the zero rule is
+;                       a corpus habit and not a local trick.
+;   STATUS_PENDING   -- 1 here over the ORDER pipeline, 1 in referral_program.t27 over the REFERRAL
+;   STATUS_CONFIRMED -- 2 here, 2 in referral_program.t27. Same two codes, two different tables,
+;                       two different vocabularies. The codes agreeing is a coincidence of writing
+;                       order, not a shared model, and reading it as one is the whole trap.
+; STATUS_COUNT and STATUS_CHARS_MAX are this file's alone, which is why they are not in the list.
+pub const BARE_STATUS_NAME_CENSUS_MEASURED_AT : str = "2026-09-21";
+pub const CONTRACTS_DECLARING_BARE_STATUS_NAMES : u8 = 4;
+pub const COLLIDING_BARE_STATUS_NAME_COUNT : u8 = 4;
+pub const COLLIDING_BARE_STATUS_NAMES : [4]str = [
+  "STATUS_NAMES", "STATUS_UNSET", "STATUS_PENDING", "STATUS_CONFIRMED",
+];
+pub const STATUS_NAMES_ARITY_HERE : u8 = 9;
+pub const STATUS_NAMES_ARITY_IN_AVAILABILITY : u8 = 4;
+pub const STATUS_NAMES_ARITIES_DIFFER : bool = true;
+pub const STATUS_NAMES_SHARE_NO_VALUE_WITH_AVAILABILITY : bool = true;
+pub const STATUS_UNSET_DECLARER_COUNT : u8 = 3;
+pub const STATUS_UNSET_AGREES_ACROSS_EVERY_DECLARER : bool = true;
+pub const COLLIDING_WITH_REFERRAL_PROGRAM_ID : str = "turbobaby/referral-program";
+pub const NO_DECLARATION_IS_RENAMED_TO_AVOID_THE_COLLISION : bool = true;
+
+pub fn order_status_bare_name_collides(name: str) bool {
+  if (name == COLLIDING_BARE_STATUS_NAMES[0]) {
+    return true;
+  }
+  if (name == COLLIDING_BARE_STATUS_NAMES[1]) {
+    return true;
+  }
+  if (name == COLLIDING_BARE_STATUS_NAMES[2]) {
+    return true;
+  }
+  if (name == COLLIDING_BARE_STATUS_NAMES[3]) {
+    return true;
+  }
+  return false;
+}
 
 pub fn order_status_is_known(code: u8) bool {
   return code >= STATUS_PENDING and code <= STATUS_CANCELLED;
@@ -164,7 +233,8 @@ pub fn order_status_is_terminal(code: u8) bool {
   return code == STATUS_COMPLETED or code == STATUS_DELIVERED or code == STATUS_REJECTED or code == STATUS_CANCELLED;
 }
 
-; THE EXPORT. commerce.t27:229 takes current_is_terminal and deliberately does not compute it.
+; THE EXPORT. turbobaby/commerce owns commerce_order_transition_allowed, which takes
+; current_is_terminal as an argument and deliberately does not compute it.
 ; This is the function that computes it, and it is a separate name from order_status_is_terminal
 ; on purpose: the argument commerce receives is about the CURRENT stored state of one order, and
 ; the distinction is what makes the fail-open below legible instead of invisible.
@@ -230,12 +300,53 @@ pub fn order_status_persisted_code(requested: u8) u8 {
 ; discriminant exists to keep the precedence checkable rather than to change an answer.
 pub const ORDER_ID_CHARS_MAX : u16 = 200;
 pub const STATUS_CHARS_MAX : u16 = 50;
-; Protocol numerals, not a domain table. They are restated here for the same reason
-; publication.t27:125-133 and catalog_api.t27:53-57 each restate their own: an IANA status code is
-; not a rule any contract owns, and neither of those files covers this surface.
+; Protocol numerals, not a domain table. They are restated here for the same reason NINE of the
+; 43 contracts restate their own: an IANA status code is not a rule any contract owns.
+; turbobaby/publication owns HTTP_OK, HTTP_NOT_FOUND and HTTP_BAD_GATEWAY; turbobaby/catalog-api
+; owns HTTP_OK, HTTP_NOT_MODIFIED, HTTP_BAD_REQUEST, HTTP_NOT_FOUND and HTTP_INTERNAL_ERROR.
+; Neither of those two covers this surface, which is re-verified and not remembered.
+; CORRECTED 2026-09-21: this sentence used to cite both neighbours by line and to name them as if
+; they were the only precedent. Both halves had rotted. One of the two line ranges had drifted off
+; its declarations entirely, and the precedent is nine contracts rather than two -- the count
+; below is a constant so the next reader checks a number instead of a memory.
+; HOW THE NINE WERE COUNTED, because a census with an unstated method is the next stale claim.
+; The re-measurement was taken twice, and the FIRST pass was wrong in the direction that matters.
+; That pass grepped for the HTTP_ prefix and answered six; a second pass over every u16 constant
+; in the corpus whose value is a three-digit IANA code, read declaration by declaration, answered
+; nine. Three contracts declare transport statuses under names carrying neither HTTP nor STATUS:
+; turbobaby/cart-persistence spells its three CART_WRITE_BAD_REQUEST, CART_WRITE_UNPROCESSABLE and
+; CART_WRITE_SERVER_ERROR, turbobaby/happy-hour spells two of its STATUS_OK and
+; STATUS_INTERNAL_ERROR, and turbobaby/webapp-bridge spells one SERVER_REPLAY_STATUS. A grep on
+; the prefix would have published a smaller number with the same confidence, which is how the
+; sentence this block replaces went wrong the first time.
 pub const REFUSAL_NONE : u16 = 0;
 pub const HTTP_BAD_REQUEST : u16 = 400;
 pub const HTTP_CONFLICT : u16 = 409;
+; Measured 2026-09-21 by grepping specs/ for a u16 constant whose value is an IANA status code.
+; The two counts below are what makes the "neither covers this surface" claim checkable rather
+; than rhetorical: 400 is a crowd and 409 is this file alone.
+pub const IANA_STATUS_CENSUS_MEASURED_AT : str = "2026-09-21";
+pub const CONTRACTS_DECLARING_AN_IANA_STATUS : u8 = 9;
+pub const CONTRACTS_DECLARING_FOUR_HUNDRED : u8 = 4;
+pub const CONTRACTS_DECLARING_FOUR_HUNDRED_AND_NINE : u8 = 1;
+; The nine, enumerated rather than left as a total, because a total is the thing that rots first
+; and a list can be re-checked one name at a time. Three of them (cart-persistence, happy-hour,
+; webapp-bridge) are invisible to a grep on the HTTP_ prefix.
+pub const IANA_STATUS_DECLARERS : [9]str = [
+  "turbobaby/cart-persistence",
+  "turbobaby/catalog-api",
+  "turbobaby/client-errors",
+  "turbobaby/happy-hour",
+  "turbobaby/order-status",
+  "turbobaby/publication",
+  "turbobaby/request-identity",
+  "turbobaby/upload-media",
+  "turbobaby/webapp-bridge",
+];
+pub const IANA_STATUS_DECLARERS_MISSED_BY_A_PREFIX_GREP : u8 = 3;
+pub const IANA_STATUS_PRECEDENT_A : str = "turbobaby/publication";
+pub const IANA_STATUS_PRECEDENT_B : str = "turbobaby/catalog-api";
+pub const NEITHER_PRECEDENT_COVERS_THIS_SURFACE : bool = true;
 
 pub const REFUSAL_REASON_NONE : u8 = 0;
 pub const REFUSAL_REASON_ID_TOO_LONG : u8 = 1;
@@ -647,6 +758,95 @@ test order_status_declares_the_rules_this_repository_does_not_ship {
   assert order_status_write_admitted(STATUS_PENDING, STATUS_OUT_FOR_DELIVERY) == true;
   assert ORDER_STATUS_HAS_NO_DATABASE_CONSTRAINT == true;
   assert TRANSITION_AUTHORITY_IS_NOT_OWNED_HERE == true;
+}
+
+; The collision census, pinned to its literals so the day availability.t27 or referral_program.t27
+; renames one of these, this test is the thing that notices.
+test order_status_bare_names_collide_with_two_other_contracts {
+  assert BARE_STATUS_NAME_CENSUS_MEASURED_AT == "2026-09-21";
+  assert CONTRACTS_DECLARING_BARE_STATUS_NAMES == 4;
+  assert COLLIDING_BARE_STATUS_NAMES.len == COLLIDING_BARE_STATUS_NAME_COUNT;
+  assert COLLIDING_BARE_STATUS_NAMES[0] == "STATUS_NAMES";
+  assert COLLIDING_BARE_STATUS_NAMES[1] == "STATUS_UNSET";
+  assert COLLIDING_BARE_STATUS_NAMES[2] == "STATUS_PENDING";
+  assert COLLIDING_BARE_STATUS_NAMES[3] == "STATUS_CONFIRMED";
+  assert order_status_bare_name_collides("STATUS_NAMES") == true;
+  assert order_status_bare_name_collides("STATUS_CONFIRMED") == true;
+  ; The two this file owns outright, which is the other half of the finding.
+  assert order_status_bare_name_collides("STATUS_COUNT") == false;
+  assert order_status_bare_name_collides("STATUS_CHARS_MAX") == false;
+  assert order_status_bare_name_collides("STATUS_OUT_FOR_DELIVERY") == false;
+  ; The arity difference, which is what makes STATUS_NAMES the worst of the four.
+  assert STATUS_NAMES_ARITY_HERE == 9;
+  assert STATUS_NAMES_ARITY_IN_AVAILABILITY == 4;
+  assert STATUS_NAMES_ARITIES_DIFFER == true;
+  assert STATUS_NAMES_ARITY_HERE != STATUS_NAMES_ARITY_IN_AVAILABILITY;
+  assert STATUS_NAMES_ARITY_HERE == STATUS_COUNT;
+  assert STATUS_NAMES.len == STATUS_NAMES_ARITY_HERE;
+  assert STATUS_NAMES_SHARE_NO_VALUE_WITH_AVAILABILITY == true;
+  ; availability.t27's four values, asked of this file's own lookup: all four are unknown here.
+  assert order_status_code_of("available") == STATUS_UNSET;
+  assert order_status_code_of("rented") == STATUS_UNSET;
+  assert order_status_code_of("service") == STATUS_UNSET;
+  assert order_status_code_of("retired") == STATUS_UNSET;
+  ; The zero that three contracts agree on, and the collision nobody renamed away.
+  assert STATUS_UNSET_DECLARER_COUNT == 3;
+  assert STATUS_UNSET_AGREES_ACROSS_EVERY_DECLARER == true;
+  assert STATUS_UNSET == 0;
+  assert COLLIDING_WITH_REFERRAL_PROGRAM_ID == "turbobaby/referral-program";
+  assert COLLIDING_WITH_REFERRAL_PROGRAM_ID != ID;
+  assert COLLIDING_WITH_REFERRAL_PROGRAM_ID != REUSES_AVAILABILITY_ID;
+  assert NO_DECLARATION_IS_RENAMED_TO_AVOID_THE_COLLISION == true;
+}
+
+test order_status_the_iana_precedent_is_nine_contracts_and_not_two {
+  assert IANA_STATUS_CENSUS_MEASURED_AT == "2026-09-21";
+  assert CONTRACTS_DECLARING_AN_IANA_STATUS == 9;
+  assert CONTRACTS_DECLARING_AN_IANA_STATUS > 2;
+  assert IANA_STATUS_DECLARERS.len == CONTRACTS_DECLARING_AN_IANA_STATUS;
+  assert CONTRACTS_DECLARING_FOUR_HUNDRED == 4;
+  assert CONTRACTS_DECLARING_FOUR_HUNDRED_AND_NINE == 1;
+  assert CONTRACTS_DECLARING_FOUR_HUNDRED > CONTRACTS_DECLARING_FOUR_HUNDRED_AND_NINE;
+  assert IANA_STATUS_PRECEDENT_A == "turbobaby/publication";
+  assert IANA_STATUS_PRECEDENT_B == "turbobaby/catalog-api";
+  assert IANA_STATUS_PRECEDENT_A != IANA_STATUS_PRECEDENT_B;
+  assert IANA_STATUS_PRECEDENT_A != ID;
+  assert IANA_STATUS_PRECEDENT_B != ID;
+  assert NEITHER_PRECEDENT_COVERS_THIS_SURFACE == true;
+  assert HTTP_BAD_REQUEST == 400;
+  assert HTTP_CONFLICT == 409;
+  ; The list, pinned name by name. This file is in it, which is the point: the sentence above is
+  ; about a habit this contract shares and not about a licence only neighbours have.
+  assert IANA_STATUS_DECLARERS[0] == "turbobaby/cart-persistence";
+  assert IANA_STATUS_DECLARERS[1] == "turbobaby/catalog-api";
+  assert IANA_STATUS_DECLARERS[2] == "turbobaby/client-errors";
+  assert IANA_STATUS_DECLARERS[3] == "turbobaby/happy-hour";
+  assert IANA_STATUS_DECLARERS[4] == ID;
+  assert IANA_STATUS_DECLARERS[5] == "turbobaby/publication";
+  assert IANA_STATUS_DECLARERS[6] == "turbobaby/request-identity";
+  assert IANA_STATUS_DECLARERS[7] == "turbobaby/upload-media";
+  assert IANA_STATUS_DECLARERS[8] == "turbobaby/webapp-bridge";
+  assert IANA_STATUS_DECLARERS[1] == IANA_STATUS_PRECEDENT_B;
+  assert IANA_STATUS_DECLARERS[5] == IANA_STATUS_PRECEDENT_A;
+  assert IANA_STATUS_DECLARERS[6] == REUSES_REQUEST_IDENTITY_ID;
+  ; The three a prefix grep does not see, which is why the total is nine and not six.
+  assert IANA_STATUS_DECLARERS_MISSED_BY_A_PREFIX_GREP == 3;
+  assert CONTRACTS_DECLARING_AN_IANA_STATUS - IANA_STATUS_DECLARERS_MISSED_BY_A_PREFIX_GREP == 6;
+}
+
+test order_status_is_named_as_the_order_owner_from_two_other_sides {
+  assert INBOUND_EDGE_CENSUS_MEASURED_AT == "2026-09-21";
+  assert INBOUND_EDGES.len == INBOUND_EDGE_COUNT;
+  assert INBOUND_EDGES[0] == "turbobaby/bot-surface";
+  assert INBOUND_EDGES[1] == "turbobaby/cart-persistence";
+  assert INBOUND_EDGES[0] != INBOUND_EDGES[1];
+  assert INBOUND_EDGES[0] != ID;
+  assert INBOUND_EDGES[1] != ID;
+  ; An inbound edge is not an outbound one: neither of those two is named above as an owner here.
+  assert INBOUND_EDGES[0] != REUSES_COMMERCE_ID;
+  assert INBOUND_EDGES[1] != REUSES_COMMERCE_ID;
+  assert INBOUND_EDGES[0] != REUSES_AVAILABILITY_ID;
+  assert INBOUND_EDGES[1] != REUSES_REQUEST_IDENTITY_ID;
 }
 
 ; --- Invariants ---------------------------------------------------------------------------------

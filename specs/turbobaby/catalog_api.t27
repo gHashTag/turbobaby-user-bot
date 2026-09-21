@@ -58,8 +58,15 @@
 ; WHAT THE PAGE AND CURSOR BUDGETS CONSTRAIN TODAY: NOTHING (measured 2026-09-21). list_bikes at
 ; src/api/bikes.rs:412-525 reads no limit, no page and no offset, and serves one document at
 ; src/api/bikes.rs:478; admin_list_bikes serves the same unpaged shape at src/api/bikes.rs:1100.
-; A grep for cursor over src/api/ returns zero, and the 184 hits over src/ are all the CSS
-; property (src/main.rs:1910). Where this repository does page, it pages by a clamped limit and
+; A grep for cursor over src/api/ returns zero, and the 184 lines that carry the word over src/
+; are the CSS property with TWO exceptions (re-measured 2026-09-21). 182 of the 184 hold the
+; literal property (src/main.rs:1910 is one). The other two are Rust identifiers that PRODUCE a
+; value for that property and never a pagination token: cursor_style at
+; src/ui/game/shop_game.rs:1710 returns "pointer" or "default", and btn_cursor at
+; src/ui/screens/checkout_screen.rs:1622 picks "pointer" or "not-allowed". The exceptions are
+; named rather than folded in because "all" is a word a reader checks by finding one
+; counterexample; they do not touch the conclusion, which is about pagination and not about CSS.
+; Where this repository does page, it pages by a clamped limit and
 ; sometimes an offset: SIX such ladders, measured 2026-09-21 and listed with their numbers beside
 ; SHIPPED_PAGE_LADDERS below. Not one of the six is cursor-shaped and not one of them is this
 ; endpoint. (This paragraph said THREE until the review of 2026-09-21; the corrected census and
@@ -347,6 +354,18 @@ pub const SHIPPED_PAGE_LADDER_FLOOR : u16 = 1;
 pub const SHIPPED_PAGE_LADDERS_WITH_AN_OFFSET : u8 = 2;
 pub const SHIPPED_PAGE_LADDERS_ON_THIS_ENDPOINT : u8 = 0;
 
+; --- The cursor census, with its exceptions counted rather than waved past -------------------
+; The header used to say the 184 lines carrying "cursor" over src/ are ALL the CSS property.
+; Two are not, and both are still CSS: cursor_style at src/ui/game/shop_game.rs:1710 and
+; btn_cursor at src/ui/screens/checkout_screen.rs:1622 are identifiers that RETURN a value for
+; the property. The split is declared because "all" is checked by one counterexample, and a
+; reader who finds one stops trusting the sentence that mattered -- which is the last number
+; here, not the first two. Measured 2026-09-21.
+pub const CURSOR_WORD_LINES_IN_SRC : u16 = 184;
+pub const CURSOR_WORD_LINES_AS_CSS_PROPERTY : u16 = 182;
+pub const CURSOR_WORD_LINES_AS_CSS_IDENTIFIER : u16 = 2;
+pub const CURSOR_WORD_LINES_AS_PAGINATION : u16 = 0;
+
 ; REFUTED 2026-09-21: this file used to assert that no shipped ladder agrees with the budget it
 ; chose, and offered that as the proof the budget was not derived. One does, and it agrees on all
 ; three numbers at once: the leaderboard ladder defaults to 20 (src/api/game.rs:33-35), floors at 1
@@ -615,6 +634,13 @@ test catalog_api_where_this_repository_pages_it_pages_by_offset_and_never_by_cur
     assert SHIPPED_PAGE_LADDER_DEFAULTS.len == SHIPPED_PAGE_LADDERS;
     assert SHIPPED_PAGE_LADDER_MAXIMA.len == SHIPPED_PAGE_LADDERS;
     assert SHIPPED_PAGE_LADDERS_WITH_AN_OFFSET == 2;
+    // The census of the word itself. The two exceptions are counted in, so the split adds up
+    // and neither half can be quietly dropped later.
+    assert CURSOR_WORD_LINES_AS_CSS_PROPERTY + CURSOR_WORD_LINES_AS_CSS_IDENTIFIER == CURSOR_WORD_LINES_IN_SRC;
+    assert CURSOR_WORD_LINES_AS_CSS_IDENTIFIER == 2;
+    // The claim the exceptions do not touch, and the reason the census is here at all.
+    assert CURSOR_WORD_LINES_AS_PAGINATION == 0;
+    assert CURSOR_WORD_LINES_AS_PAGINATION == SHIPPED_CURSOR_LADDERS;
     assert SHIPPED_PAGE_LADDERS_WITH_AN_OFFSET < SHIPPED_PAGE_LADDERS;
     assert SHIPPED_PAGE_LADDER_FLOOR == PAGE_LIMIT_MIN;
     // client_errors / events / game / loyalty / orders / referrals, in that order.

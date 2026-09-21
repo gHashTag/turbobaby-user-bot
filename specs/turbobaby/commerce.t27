@@ -413,7 +413,16 @@ invariant commerce_refused_checkout_has_no_commit_path
 ; ============================================================================================
 ; EPIC #28: THREE OBLIGATIONS THE EPIC STATES AND NO CONTRACT OWNED
 ; --
-; WHY (measured 2026-09-20): three sentences of epic #28 had no owner anywhere in this corpus.
+; WHY (measured 2026-09-20; the absence RE-MEASURED 2026-09-21 over the corpus as it now
+; stands, 43 files): three sentences of epic #28 had no owner anywhere in this corpus, and they
+; still have none outside this file. The corpus has grown since the first measurement, so the
+; absence was re-run rather than carried forward -- an absence that was true when written is the
+; one claim a reader never re-checks. Today grep over specs/ finds "#28" in this file alone, the
+; concurrent-capacity sentence in this file alone, and the client-price sentence in this file
+; alone. The one contract that could have absorbed the second sentence explicitly does not:
+; turbobaby/cart-persistence says in its own header that it owns the distance between the cart
+; machine turbobaby/commerce declares and the two tables the repository ships, which defers the
+; machine itself back here.
 ; The first -- client-submitted prices, deposits, fees and totals are never authoritative -- is
 ; obeyed all over the shipped order path and written down in no contract. The second is D8's
 ; dated line identity, which lived in a decision record and a migration only. The third --
@@ -665,7 +674,7 @@ pub fn commerce_family_capacity_remaining(units_available: i32, confirmed_overla
 ; The two named refusals of obligation (3), each checked in the places a mechanism would have to
 ; appear before it was written down.
 pub const OVERLAP_RESERVATION_IS_NOT_SHIPPED : bool = true;
-pub const OVERLAP_RESERVATION_NOTE : str = "Nothing in this repository holds a unit while a window is being confirmed. src/api/orders.rs:648-652 states that the fleet check reserves nothing and that there is no reservation table in the schema; src/api/orders.rs:708-716 logs a shortfall at info level and lets the order through. Migrations 077-086 add bikes, units, rental terms, service records, seeds, images, the sale flag and the dated cart line of 081, and none of them declares a hold row, an expiry column or an exclusion constraint. specs/turbobaby/availability.t27:96-97 records the same absence from the unit side: the four wire values of migrations/078_bike_units.sql:32 carry no reserved status. What is missing is the mechanism, not the rule: a hold with an owner and an expiry, and a decision on whether an unconfirmed cart line consumes capacity. No lock name and no timeout is invented here in its place.";
+pub const OVERLAP_RESERVATION_NOTE : str = "Nothing in this repository holds a unit while a window is being confirmed. src/api/orders.rs:648-652 states that the fleet check reserves nothing and that there is no reservation table in the schema; src/api/orders.rs:708-716 logs a shortfall at info level and lets the order through. Migrations 077-086 add bikes, units, rental terms, service records, seeds, images, the sale flag and the dated cart line of 081, and none of them declares a hold row, an expiry column or an exclusion constraint. turbobaby/availability records the same absence from the unit side, in RESERVED_STATUS (declared empty) and RESERVED_STATUS_NOTE: the four wire values of migrations/078_bike_units.sql:32 carry no reserved status. That edge is named by owner and declaration rather than by line number, because a line into a sibling contract goes stale the day that contract is edited and this one already had. What is missing is the mechanism, not the rule: a hold with an owner and an expiry, and a decision on whether an unconfirmed cart line consumes capacity. No lock name and no timeout is invented here in its place.";
 pub const CONFIRMED_OVERLAP_COUNT_IS_NOT_DERIVABLE : bool = true;
 pub const CONFIRMED_OVERLAP_COUNT_NOTE : str = "No shipped code counts the rentals of a family that overlap a window. migrations/081_cart_rental_lines.sql:132-136 adds an index by rental date for the availability check that would need that count, and says so in its own comment, but no query reads it: rental_start and rental_end appear in src/api/cart.rs only inside the partial-index predicate of the undated upsert, and the order path reads units at base today (src/api/orders.rs:708) rather than over a range. The second argument of commerce_family_capacity_admits is therefore an input this repository cannot yet produce. What is missing is the overlap query and a decision on which order statuses count as confirmed.";
 

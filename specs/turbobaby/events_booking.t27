@@ -7,13 +7,15 @@
 ; only collision rule this surface actually has. This file owns capacity and the exact-capacity
 ; case, the three booking states, the waitlist's admission and promotion rules, the cancel-refund
 ; shape, and the month arithmetic's boundary cases. It owns no person, no money vocabulary, no
-; clock and no proof of identity: who a request is belongs to request_identity.t27, the wall clock
-; and the offset belong to market_profile.t27, what an unpublished locale renders belongs to
-; locale_policy.t27, the distinction between a hidden row and a live surface belongs to
-; legacy_retirement.t27, a queued outbound message belongs to notification-queue, and what a
-; sold-out event is WORTH to the promo sweeper belongs to promo_broadcast.t27, and whether an
-; attempt is admitted inside a window belongs to rate-limit. Seven edges, named below by ID and by
-; declaration name, and not one of them restated.
+; clock and no proof of identity: who a request is belongs to turbobaby/request-identity, the wall
+; clock and the offset belong to turbobaby/market, what an unpublished locale renders belongs to
+; turbobaby/locale-policy, the distinction between a hidden row and a live surface belongs to
+; turbobaby/legacy-retirement, a queued outbound message belongs to turbobaby/notification-queue,
+; and what a sold-out event is WORTH to the promo sweeper belongs to turbobaby/promo-broadcast, and
+; whether an attempt is admitted inside a window belongs to turbobaby/rate-limit. Seven edges,
+; named here and below by ID and by declaration name, and not one of them restated. (The seven were
+; spelled as FILE NAMES in this paragraph until 2026-09-21; a file name is not a contract's name,
+; and the edge block below always used the IDs. Aligned so both halves of the file say the same.)
 ; --
 ; WHY (measured 2026-09-21). The number that forces this file is a ZERO, and it is a zero over
 ; src/, not over specs/. src/api/events.rs is 1959 lines. Its routes() at :29-53 declares 11 HTTP
@@ -38,8 +40,9 @@
 ; WHERE THE BRIEF IS REFUTED. Five corrections, each measured 2026-09-21.
 ;   1. "About 8 routes" undercounts. src/api/events.rs:29-53 has 11 `.route(` paths and 14 method
 ;      bindings (:42 binds two, :43-46 binds three), resolving to 14 distinct handlers. The eight
-;      in the survey is the count legacy_retirement.t27 measured for LEGACY SCREEN routes, a
-;      different surface; the events screens are two of them, at src/ui/routes.rs:39-42.
+;      in the survey is the count turbobaby/legacy-retirement measured for LEGACY SCREEN routes and
+;      declares in LEGACY_LIVE_ROUTE_COUNT -- re-opened 2026-09-21 and still 8 -- a different
+;      surface; the events screens are two of them, at src/ui/routes.rs:39-42.
 ;   2. "An attendee reachout is a queue row" is refuted at both of the tree's two reachouts.
 ;      send_event_reminders sends directly at src/api/events.rs:1762 and send_event_bookings sends
 ;      directly at :1658. A grep for `notification` over src/api/events.rs returns 0, and
@@ -109,10 +112,35 @@ pub const SAME_DAY_WITNESS_LINES : u16 = 339;
 ; --- Ownership edges ------------------------------------------------------------------------------
 ; The pinned compiler lowers a brace import to an empty UseDecl and the gate rejects it, so a
 ; cross-contract edge is a string holding the owner's ID plus a test asserting the literal. Every
-; edge below is named by ID and by the NAME of the declaration it leans on, never by line: ten
-; contracts were written beside this one in a single wave and a line citation between them goes
-; stale inside the hour. Citations into src/, migrations/, data/, docs/ and DECISIONS.md are
+; edge below is named by ID and by the NAME of the declaration it leans on, never by line.
+;
+; CORRECTED 2026-09-21. This paragraph used to say "ten contracts were written beside this one in a
+; single wave". That number was wrong and wrong in the reassuring direction: counted from git, the
+; commit that added this file added THIRTEEN new contracts (and modified a fourteenth), and the TEN
+; belongs to the wave BEFORE it. So more siblings were moving under a line number than the sentence
+; admitted, not fewer. "Goes stale inside the hour" is dropped with the bad count -- nobody timed
+; the interval, and an untimed figure has no place beside measured ones.
+;
+; The corpus-wide RESIDUE is refused a constant here for a reason that proves the point: counted at
+; 63 when this correction began and at 7 a few minutes later, because sibling contracts are being
+; repaired in parallel. Pinning a live total would publish a number that goes stale before the
+; commit carrying it lands, which is the very defect this paragraph exists to warn about. What is
+; pinned is what cannot move: the wave sizes, which are git history, and this file's own
+; contribution, which is zero. Citations into src/, migrations/, data/, docs/ and DECISIONS.md are
 ; different -- those files were not moving -- and they stay.
+pub const CORPUS_T27_FILE_COUNT : u8 = 43;
+pub const OWN_WAVE_NEW_CONTRACTS : u8 = 13;
+pub const PRIOR_WAVE_NEW_CONTRACTS : u8 = 10;
+pub const SIBLING_LINE_CITATIONS_IN_THIS_FILE : u8 = 0;
+pub const CORPUS_RESIDUE_IS_PINNED_HERE : bool = false;
+pub const CORPUS_RESIDUE_NOTE : str = "Counted twice on 2026-09-21 during this correction: 63 at the start and 7 a few minutes later. The drop is sibling contracts being repaired in parallel, not a measurement error. A live corpus-wide total is therefore refused a constant here, because pinning one would publish a number that goes stale before the commit carrying it lands. Any reader who needs today's figure can grep for it in one line; what this file owes is the two wave counts a grep cannot recover, and those are above.";
+pub const WAVE_CENSUS_MEASURED_AT : str = "2026-09-21";
+pub const WAVE_CENSUS_SOURCE : str = "git log over specs/turbobaby, added-file counts per commit";
+pub const STALENESS_INTERVAL_IS_PUBLISHED : bool = false;
+
+pub fn edge_is_durable(names_a_declaration: bool, names_a_line_number: bool) bool {
+  return names_a_declaration and !names_a_line_number;
+}
 ;
 ; legacy-retirement owns the one distinction this file would otherwise have had to invent: that
 ; hiding DATA and retiring a SURFACE are different acts. Its HIDDEN_TABLES array already names
@@ -205,7 +233,9 @@ pub fn new_event_is_public(flag_supplied: bool, flag_value: bool) bool {
 
 ; --- The three booking states -------------------------------------------------------------------
 ; migrations/045_events_waitlist_status.sql:9 is the whole vocabulary. Zero is UNSET and is never
-; a stored value, for the reason order_status.t27 gives its own set: an unwritten slot in a
+; a stored value, for the reason turbobaby/order-status gives for its own set in STATUS_UNSET
+; (re-opened 2026-09-21: that owner still declares zero as UNSET and never as an accepted status):
+; an unwritten slot in a
 ; fixed-length array already holds zero, and a vocabulary starting at zero turns an unwritten slot
 ; into a confident answer. The residual error here falls towards refusing to treat a row as a
 ; seat, which loses nobody a place, rather than towards counting a phantom one.
@@ -1055,6 +1085,24 @@ test every_reuse_edge_names_its_owner_by_id {
   assert REUSE_EDGE_COUNT == 7;
 }
 
+test the_wave_census_is_counted_from_git_and_the_old_ten_is_corrected {
+  assert CORPUS_T27_FILE_COUNT == 43;
+  assert OWN_WAVE_NEW_CONTRACTS == 13;
+  assert PRIOR_WAVE_NEW_CONTRACTS == 10;
+  assert OWN_WAVE_NEW_CONTRACTS != PRIOR_WAVE_NEW_CONTRACTS;
+  assert OWN_WAVE_NEW_CONTRACTS > PRIOR_WAVE_NEW_CONTRACTS;
+  assert OWN_WAVE_NEW_CONTRACTS > REUSE_EDGE_COUNT;
+  assert SIBLING_LINE_CITATIONS_IN_THIS_FILE == 0;
+  assert CORPUS_RESIDUE_IS_PINNED_HERE == false;
+  assert CORPUS_RESIDUE_NOTE != "";
+  assert WAVE_CENSUS_MEASURED_AT == "2026-09-21";
+  assert WAVE_CENSUS_SOURCE != "";
+  assert STALENESS_INTERVAL_IS_PUBLISHED == false;
+  assert edge_is_durable(true, false) == true;
+  assert edge_is_durable(true, true) == false;
+  assert edge_is_durable(false, false) == false;
+}
+
 test the_surface_census_adds_up {
   assert HTTP_PATH_COUNT == 11;
   assert PUBLIC_PATH_COUNT + ADMIN_PATH_COUNT == HTTP_PATH_COUNT;
@@ -1184,6 +1232,15 @@ invariant no_capacity_is_invented_for_an_event_type_the_tree_does_not_define
 
 invariant every_refusal_stays_a_refusal
   assert WAITLIST_POSITION_PUBLISHED == false and PROMOTION_NOTICE_PUBLISHED == false and PROMOTION_OFFER_TTL_PUBLISHED == false and WAITLIST_LENGTH_CAP_PUBLISHED == false
+
+invariant no_edge_of_this_contract_is_carried_by_a_line_number
+  assert SIBLING_LINE_CITATIONS_IN_THIS_FILE == 0 and edge_is_durable(true, false) == true and edge_is_durable(true, true) == false
+
+invariant the_wave_that_wrote_this_file_is_never_undercounted_again
+  assert OWN_WAVE_NEW_CONTRACTS == 13 and OWN_WAVE_NEW_CONTRACTS > PRIOR_WAVE_NEW_CONTRACTS and STALENESS_INTERVAL_IS_PUBLISHED == false
+
+invariant a_number_that_moves_while_it_is_read_is_never_pinned_as_a_constant
+  assert CORPUS_RESIDUE_IS_PINNED_HERE == false and CORPUS_RESIDUE_NOTE != "" and SIBLING_LINE_CITATIONS_IN_THIS_FILE == 0
 
 invariant this_contract_names_no_person
   assert CARRIES_AN_ATTENDEE == false and CARRIES_A_PHONE == false and CARRIES_AN_EVENT_FIXTURE == false

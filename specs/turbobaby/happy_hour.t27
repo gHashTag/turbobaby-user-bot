@@ -68,8 +68,15 @@ pub const DECISIONS : [3]str = ["D9", "D11", "D18"];
 
 ; --- Reuse edges -------------------------------------------------------------------------------
 ; No import exists in this language and none is wanted. A neighbour is named by its ID and by
-; the NAME of the declaration that owns the decision, never by a line number: ten contracts were
-; written in parallel and every line citation between them went stale inside an hour.
+; the NAME of the declaration that owns the decision, never by a line number. The reason,
+; re-measured 2026-09-21 from the git history rather than from memory: the 43 files of this
+; corpus arrived in six commits, the two largest waves being ten contracts and then the thirteen
+; this file belongs to, and citations written by line between files being edited in parallel
+; went stale inside an hour. The convention earned itself again during this edit. Every
+; declaration turbobaby/market owns that is named below moved line the same morning --
+; TH_TIMEZONE, TH_UTC_OFFSET_HOURS, TH_DST and utc_offset_is_real each by exactly forty-two
+; lines -- and not one citation in this file had to change, because not one of them is a
+; number.
 pub const REUSES_MARKET_ID : str = "turbobaby/market";
 pub const REUSES_PRICING_ID : str = "turbobaby/pricing-honesty";
 pub const REUSES_RENTAL_TERMS_ID : str = "turbobaby/rental-terms";
@@ -370,13 +377,26 @@ pub const APPLIER_MISSING_PRICE_BECOMES_ZERO : bool = true;
 ; src/api/happy_hour.rs:8 mounts one route under the /api nest (src/api/mod.rs:77, :92). A
 ; database error is 500 (src/api/happy_hour.rs:58-64); everything else, including a missing
 ; singleton row, is 200 with a body (src/api/happy_hour.rs:66-86). Absence is not a 404 here.
-; u16 rather than i64: turbobaby/catalog-api, turbobaby/cart-persistence and turbobaby/upload-media
-; all carry an HTTP status as u16, and a status typed wider than the corpus types it is the kind
-; of drift that makes two contracts uncomparable for no gain.
+; u16 rather than i64, and the reason is a corpus measurement rather than a preference.
+; Re-measured 2026-09-21 across all 43 files: NINE contracts declare an HTTP status constant and
+; every one of them types it u16 -- turbobaby/cart-persistence, turbobaby/catalog-api,
+; turbobaby/client-errors, turbobaby/events-booking, turbobaby/order-status,
+; turbobaby/publication, turbobaby/request-identity, turbobaby/upload-media and this file. Not
+; one HTTP status anywhere in the corpus is declared at any other width. An earlier version of
+; this sentence named three of the nine and read as though three were the whole corpus; all
+; three it named are real, but a subset presented as a census is the shape a false absence takes
+; when nobody re-runs it. The u8 STATUS_ constants elsewhere in the corpus -- unit availability,
+; order status, referral status -- are domain enumerations rather than HTTP, and are counted
+; here as neither. A status typed wider than the corpus types it is the kind of drift that makes
+; two contracts uncomparable for no gain.
 pub const STATUS_OK : u16 = 200;
 pub const STATUS_INTERNAL_ERROR : u16 = 500;
 pub const MISSING_ROW_STATUS : u16 = 200;
 pub const NOT_FOUND_IS_SERVED : bool = false;
+pub const HTTP_STATUS_DECLARING_CONTRACTS : u8 = 9;
+pub const HTTP_STATUS_CONTRACTS_USING_U16 : u8 = 9;
+pub const HTTP_STATUS_WIDTH_CENSUS_AT : str = "2026-09-21";
+pub const CORPUS_FILES_SEARCHED : u8 = 43;
 
 pub fn status_for(db_error: bool) u16 {
   if (db_error) {
@@ -590,6 +610,20 @@ test the_endpoint_answers_two_statuses_and_calls_absence_a_success {
   assert RESPONSE_CARRIES_A_PRICE == false;
   assert RESPONSE_CARRIES_A_CURRENCY == false;
   assert DISCOUNT_JSON_TYPE_IS_STABLE == false;
+}
+
+; The width census, declared so the next reader inherits a number instead of an impression.
+; A subset named as though it were the corpus is the defect this test exists to prevent
+; recurring: the two counts below are equal because every declaring contract was counted, not
+; because three convenient ones agreed.
+test every_contract_that_declares_an_http_status_types_it_the_same_width {
+  assert HTTP_STATUS_DECLARING_CONTRACTS == 9;
+  assert HTTP_STATUS_CONTRACTS_USING_U16 == HTTP_STATUS_DECLARING_CONTRACTS;
+  assert CORPUS_FILES_SEARCHED == 43;
+  assert HTTP_STATUS_WIDTH_CENSUS_AT == "2026-09-21";
+  assert HTTP_STATUS_DECLARING_CONTRACTS < CORPUS_FILES_SEARCHED;
+  assert STATUS_OK == 200;
+  assert STATUS_INTERNAL_ERROR == 500;
 }
 
 test the_two_percent_representations_disagree_where_a_fraction_would_live {

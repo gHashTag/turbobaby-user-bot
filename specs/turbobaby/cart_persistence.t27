@@ -50,13 +50,23 @@
 ;      refused that edge because no contract carried the id. THAT REFUSAL IS NOW WRONG, and the
 ;      scoping it was written under is exactly what makes the error visible instead of silent: the
 ;      id was absent from the thirty ids this file was handed, re-read from specs/ on 2026-09-21
-;      before this file was added, and a contract carrying it landed later the same day. The edge
-;      is declared below. What does NOT change is the measurement, and it runs the other way from
+;      before this file was added, and a contract carrying it landed later the same day.
+;      RE-SCOPED at review on the same date, because the sentence above is honest about when it
+;      was measured and misleading about what is true now. The corpus is no longer thirty: 43 ID
+;      lines were opened one at a time -- 42 under specs/turbobaby plus specs/agents/turbobaby.t27
+;      -- and specs/turbobaby/notification_queue.t27 declares turbobaby/notification-queue. A
+;      reader who takes "the thirty ids" for the size of specs/ is reading a number that stopped
+;      being true the same afternoon, which is the failure this paragraph exists to document, so
+;      the current figure is pinned as a constant below rather than left inside a sentence about
+;      the past. Both reciprocal edges were checked at review and both already stand:
+;      REUSES_NOTIFICATION_QUEUE_ID and REUSES_RUNTIME_CONFIG_ID are declared below and asserted
+;      by the wiring test. What does NOT change is the measurement, and it runs the other way from
 ;      what the brief implied: the reminder never reaches that queue. Both rungs call the Telegram
 ;      client directly (src/cart_abandonment.rs:184-188 and :244-248) and src/cart_abandonment.rs
-;      names src/notification_queue.rs nowhere. The reminder is fire-and-forget, and the counter
-;      that spends the rung is incremented whether the send succeeded or failed -- deliberately,
-;      per the comment at src/cart_abandonment.rs:195-196.
+;      names src/notification_queue.rs nowhere -- re-run 2026-09-21, 0 occurrences of the string
+;      in that file. The reminder is fire-and-forget, and the counter that spends the rung is
+;      incremented whether the send succeeded or failed -- deliberately, per the comment at
+;      src/cart_abandonment.rs:195-196.
 ; --
 ; WHAT THIS FILE NEVER DOES. It declares no cart state machine: the four states, their transitions,
 ; their terminality, the checkout join and the idempotency decision are turbobaby/commerce's, are
@@ -135,6 +145,20 @@ pub const REUSES_NOTIFICATION_QUEUE_ID : str = "turbobaby/notification-queue";
 ; copies are stale.
 pub const REUSES_RUNTIME_CONFIG_ID : str = "turbobaby/runtime-config";
 pub const REUSE_EDGE_COUNT : u8 = 8;
+
+; The size of the corpus this file's refutations were measured against, re-read at review on
+; 2026-09-21 by opening the ID line of every .t27 file rather than by counting a handed list.
+; Declared because the prose above quotes an older figure inside a sentence about the past, and a
+; stale count left loose in prose is read as current by everyone who does not re-run it. The two
+; booleans record that the edges the older sentence refused are present and verified, so the
+; refusal cannot be mistaken for a live verdict.
+pub const SPEC_IDS_READ_AT_REVIEW : u8 = 43;
+pub const SPEC_IDS_UNDER_TURBOBABY_AT_REVIEW : u8 = 42;
+pub const SPEC_IDS_IN_AGENT_CARDS_AT_REVIEW : u8 = 1;
+pub const SPEC_IDS_HANDED_TO_THE_FIRST_PASS : u8 = 30;
+pub const NOTIFICATION_QUEUE_OWNER_FILE : str = "specs/turbobaby/notification_queue.t27";
+pub const NOTIFICATION_QUEUE_EDGE_IS_DECLARED : bool = true;
+pub const RUNTIME_CONFIG_EDGE_IS_DECLARED : bool = true;
 
 ; --- The column census ---------------------------------------------------------------------------
 ; Ten columns on carts, twelve on cart_items, and the numbers that matter are what is NOT there.
@@ -770,6 +794,12 @@ test the_reuse_edges_name_owners_and_restate_nothing {
   assert REUSES_NOTIFICATION_QUEUE_ID == "turbobaby/notification-queue";
   assert REUSES_RUNTIME_CONFIG_ID == "turbobaby/runtime-config";
   assert REUSE_EDGE_COUNT == 8;
+  assert NOTIFICATION_QUEUE_EDGE_IS_DECLARED == true;
+  assert RUNTIME_CONFIG_EDGE_IS_DECLARED == true;
+  assert SPEC_IDS_READ_AT_REVIEW == 43;
+  assert SPEC_IDS_UNDER_TURBOBABY_AT_REVIEW + SPEC_IDS_IN_AGENT_CARDS_AT_REVIEW == SPEC_IDS_READ_AT_REVIEW;
+  assert SPEC_IDS_READ_AT_REVIEW > SPEC_IDS_HANDED_TO_THE_FIRST_PASS;
+  assert NOTIFICATION_QUEUE_OWNER_FILE == "specs/turbobaby/notification_queue.t27";
 }
 
 test this_file_proposes_no_column_and_reserves_no_migration {
@@ -797,6 +827,9 @@ invariant an_inferred_state_is_never_authoritative
 
 invariant the_inactivity_threshold_cannot_read_activity_while_nothing_updates_the_column
   assert clock_measures_last_activity(UPDATED_AT_UPDATE_SITES) == false and clock_measures_row_age(UPDATED_AT_INSERT_SITES, UPDATED_AT_UPDATE_SITES) == true
+
+invariant the_refused_edges_are_declared_and_the_corpus_count_is_the_review_one
+  assert NOTIFICATION_QUEUE_EDGE_IS_DECLARED == true and RUNTIME_CONFIG_EDGE_IS_DECLARED == true and REUSES_NOTIFICATION_QUEUE_ID != ID and REUSES_RUNTIME_CONFIG_ID != ID and SPEC_IDS_UNDER_TURBOBABY_AT_REVIEW + SPEC_IDS_IN_AGENT_CARDS_AT_REVIEW == SPEC_IDS_READ_AT_REVIEW and SPEC_IDS_READ_AT_REVIEW > SPEC_IDS_HANDED_TO_THE_FIRST_PASS
 
 invariant the_sweep_interval_stays_a_marked_copy_of_one_measured_literal
   assert ABANDON_SWEEP_INTERVAL_IS_A_MARKED_COPY == true and ABANDON_SWEEP_INTERVAL_SECONDS == 300 and ABANDON_SWEEP_INTERVAL_LITERAL_SITE == "src/main.rs:660"

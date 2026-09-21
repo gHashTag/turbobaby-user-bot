@@ -8,7 +8,16 @@
 ; require -- heritage is hidden rather than deleted, and anything kept is named with a reason.
 ; --
 ; WHY (measured 2026-09-21). The two retirement migrations disagree about what retirement is,
-; and no contract said so. migrations/083_drop_cannabis_catalog.sql drops six tables outright
+; and no contract said so. That absence was RE-MEASURED on 2026-09-21 against the finished
+; 43-file corpus and it still holds, but only in its narrow form, so the narrow form is what is
+; written: 16 of the other 42 files now contain the word "retire", and NONE of them declares the
+; distinction this file owns. The grep that decides it is not the word but the state machine --
+; retirement_state, STATE_DATA_HIDDEN and STATE_SURFACE_LIVE appear in no other file. The 16 are
+; something else: the edge REUSES_LEGACY_RETIREMENT_ID pointing here, the bike-unit STATUS
+; "retired" that turbobaby/availability owns, and the retired "skate" spelling that
+; turbobaby/ride-game and turbobaby/star-award own. A reader who greps the WORD gets 16 and must
+; not read that as sixteen contracts ruling on retirement; the word is shared, the subject is not.
+; migrations/083_drop_cannabis_catalog.sql drops six tables outright
 ; (:82-84 and :88-90). migrations/085_unpublish_woody_catalog.sql deletes no row and drops no
 ; table: it issues six visibility UPDATEs (:25-30) and one in-place rename (:36-38), and says
 ; at :12 and :19-21 that the rows are kept and the flags are reversible. Underneath both, the
@@ -57,13 +66,16 @@
 ; WHAT THIS FILE NEVER DOES. It implements no route, describes no screen, carries no Cyrillic
 ; copy and names no deletion date -- issue #2 is open and the order of retirement is the
 ; owner's call, refused explicitly below. It restates nothing a sibling owns: the delivery-zone
-; rename that rides along in the same migration 085 belongs to turbobaby/delivery-terms
-; (specs/turbobaby/delivery_terms.t27:222-224) and is neither re-decided nor counted here; the
-; mount status of the orphaned catch asset belongs to turbobaby/game-score (specs/turbobaby/
-; game_score.t27:35-37); the retirement of the skate spelling belongs to turbobaby/ride-game
-; and turbobaby/star-award, so no /skate path enters any count below; and the word "retired"
-; as a BIKE UNIT STATUS is turbobaby/availability's (specs/turbobaby/availability.t27:93), a
-; different subject that this file never touches. It carries no renter, handle, phone, key
+; rename that rides along in the same migration 085 belongs to turbobaby/delivery-terms, which
+; owns ZONE_RENAME_MIGRATION and ZONE_ROWS_KEPT_REASON, and is neither re-decided nor counted
+; here; the mount status of the orphaned catch asset belongs to turbobaby/game-score, which owns
+; CATCH_ERA_ASSET_IS_MOUNTED; the retirement of the skate spelling belongs to turbobaby/ride-game
+; and turbobaby/star-award, the latter owning RETAINED_LEGACY_SOURCE, so no /skate path enters
+; any count below; and the word "retired"
+; as a BIKE UNIT STATUS is turbobaby/availability's, which owns STATUS_RETIRED and STATUS_NAMES, a
+; different subject that this file never touches. Each sibling is named by ID and declaration
+; rather than by line: all three of these were line citations, all three still pointed at the
+; right subject on 2026-09-21, and all three would have rotted on the next edit next door. It carries no renter, handle, phone, key
 ; code, plate, debt, purchase price or personal note (D14): every constant here is a table
 ; name, a path, a route pattern or a count.
 ; phi^2 + 1/phi^2 = 3 | TRINITY
@@ -177,10 +189,17 @@ pub fn hidden_data_is_reversible(rows_kept: bool, flag_is_the_only_change: bool)
 ; Declaration order is the migration's own: children first at :82-84, then the garden trio at
 ; :88-90. The split below is the measurement that matters -- one dropped table carries every
 ; surviving reader and five carry none.
+; THIS FILE OWNS THIS NUMBER. turbobaby/bot-surface needs it for its carousel tripwire and keeps
+; it as a MARKED COPY (its LEGACY_TABLES_DROPPED_BY_THAT_MIGRATION), pinned to this value by a
+; drift invariant on that side. The retirement owner is here, so a change to migration 083 is
+; edited here FIRST and the copy follows; the invariant next door fails the gate if it does not.
 pub const DROPPED_TABLE_COUNT : u8 = 6;
 pub const DROPPED_TABLES : [6]str = ["lab_certificates", "strain_reviews", "strains", "garden_rewards", "garden_plants", "garden_config"];
 pub const DROPPED_TABLES_WITH_A_SURVIVING_READER : u8 = 1;
 pub const DROPPED_TABLES_WITH_NO_READER : u8 = 5;
+pub const DROPPED_TABLE_COUNT_IS_OWNED_HERE : bool = true;
+pub const DROPPED_TABLE_COUNT_COPIED_BY_ID : str = "turbobaby/bot-surface";
+pub const DROPPED_TABLE_COUNT_COPY_DECLARATION : str = "LEGACY_TABLES_DROPPED_BY_THAT_MIGRATION";
 
 ; --- The allowlist, as the mechanism D19 and epic #26 require ------------------------------------
 ; Four entries at tests/retired_table_wiring.rs:49-82, each a path, a table and a prose reason.
@@ -188,12 +207,29 @@ pub const DROPPED_TABLES_WITH_NO_READER : u8 = 5;
 ; that shrinks and the rule is the contract -- a small reviewed list, no global replacement.
 ; Three of that file's nine tests guard the list (:450, :476, :495); the other six pin what its
 ; detector sees -- 3 module-reference shapes (:569), 5 table-position keywords (:303).
+; THIS FILE OWNS THIS NUMBER TOO, on the same terms: turbobaby/bot-surface carries it as the
+; marked copy LEGACY_SURVIVOR_ENTRY_COUNT under its own drift invariant. The allowlist is a
+; to-do list that shrinks, so this is the number most likely to move, and it moves here first.
 pub const ALLOWLIST_SIZE : u8 = 4;
+pub const ALLOWLIST_SIZE_IS_OWNED_HERE : bool = true;
+pub const ALLOWLIST_SIZE_COPY_DECLARATION : str = "LEGACY_SURVIVOR_ENTRY_COUNT";
 pub const ALLOWLIST_DISTINCT_TABLES : u8 = 1;
 pub const ALLOWLIST_REASON_MIN_CHARS : u16 = 40;
 pub const ALLOWLIST_CHECK_COUNT : u8 = 3;
 pub const ALLOWLIST_DETECTION_SHAPE_COUNT : u8 = 3;
 pub const ALLOWLIST_TABLE_POSITION_KEYWORDS : u8 = 5;
+
+; --- The absence this file still closes, re-measured ---------------------------------------------
+; "No contract said so" is the load-bearing absence of this file, and a false absence is the one
+; thing a reader trusts without checking, so it carries a date and a denominator rather than a
+; bare word. RE-MEASURED 2026-09-21 over the finished corpus, this file excluded: the WORD
+; reaches 16 files, the SUBJECT reaches none. The second number is the claim; the first is here
+; so that a reader who greps the word and gets 16 can see that the two were counted separately.
+pub const CORPUS_FILE_COUNT : u8 = 43;
+pub const CORPUS_FILES_OTHER_THAN_THIS_ONE : u8 = 42;
+pub const SPECS_CONTAINING_THE_WORD_RETIRE_2026_09_21 : u8 = 16;
+pub const SPECS_DECLARING_THE_RETIREMENT_DISTINCTION_2026_09_21 : u8 = 0;
+pub const THE_WORD_IS_SHARED_THE_SUBJECT_IS_NOT : bool = true;
 
 ; The reason floor is read from the witness itself: every_survivor_carries_a_reason asserts a
 ; reason longer than 40 characters at tests/retired_table_wiring.rs:499, so exactly 40 fails.
@@ -372,6 +408,27 @@ test migration_083_drops_six_tables_and_one_of_them_keeps_every_reader {
     assert DROPPED_TABLES_WITH_A_SURVIVING_READER == 1;
     assert DROPPED_TABLES_WITH_NO_READER == 5;
     assert DROPPED_TABLES_WITH_A_SURVIVING_READER + DROPPED_TABLES_WITH_NO_READER == DROPPED_TABLE_COUNT;
+}
+
+test this_file_owns_both_numbers_that_bot_surface_copies {
+    assert DROPPED_TABLE_COUNT_IS_OWNED_HERE == true;
+    assert ALLOWLIST_SIZE_IS_OWNED_HERE == true;
+    assert DROPPED_TABLE_COUNT_COPIED_BY_ID == "turbobaby/bot-surface";
+    assert DROPPED_TABLE_COUNT_COPIED_BY_ID == REUSES_BOT_SURFACE_ID;
+    assert DROPPED_TABLE_COUNT_COPIED_BY_ID != ID;
+    assert DROPPED_TABLE_COUNT_COPY_DECLARATION == "LEGACY_TABLES_DROPPED_BY_THAT_MIGRATION";
+    assert ALLOWLIST_SIZE_COPY_DECLARATION == "LEGACY_SURVIVOR_ENTRY_COUNT";
+    assert DROPPED_TABLE_COUNT_COPY_DECLARATION != ALLOWLIST_SIZE_COPY_DECLARATION;
+}
+
+test the_retirement_distinction_is_still_declared_nowhere_else {
+    assert CORPUS_FILE_COUNT == 43;
+    assert CORPUS_FILES_OTHER_THAN_THIS_ONE == 42;
+    assert SPECS_CONTAINING_THE_WORD_RETIRE_2026_09_21 == 16;
+    assert SPECS_DECLARING_THE_RETIREMENT_DISTINCTION_2026_09_21 == 0;
+    assert SPECS_CONTAINING_THE_WORD_RETIRE_2026_09_21 > SPECS_DECLARING_THE_RETIREMENT_DISTINCTION_2026_09_21;
+    assert SPECS_CONTAINING_THE_WORD_RETIRE_2026_09_21 < CORPUS_FILES_OTHER_THAN_THIS_ONE;
+    assert THE_WORD_IS_SHARED_THE_SUBJECT_IS_NOT == true;
 }
 
 test the_allowlist_is_pinned_by_size_and_rule_not_by_contents {

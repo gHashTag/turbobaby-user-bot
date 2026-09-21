@@ -78,7 +78,9 @@
 ; subject turns on are already declared by turbobaby/catalog-api and are named by their owner
 ; instead of copied. It names no gate for any endpoint -- turbobaby/request-identity records that
 ; the endpoint-to-gate map is not owned there either, and it cannot be owned here, because that
-; map IS a route table. Nothing from D14 -- no renter, handle, phone, key code, plate, debt,
+; map IS a route table. That absence is re-measured below rather than assumed, and it is narrower
+; than it sounds: two siblings do publish a gate census for their own module's routes.
+; Nothing from D14 -- no renter, handle, phone, key code, plate, debt,
 ; purchase price or personal note -- in a constant, a comment or a test.
 ; phi^2 + 1/phi^2 = 3 | TRINITY
 
@@ -121,6 +123,26 @@ pub const MISS_NUMERAL_ALREADY_DECLARED_AT : str = "turbobaby/catalog-api";
 pub const THIS_FILE_DECLARES_NO_HTTP_NUMERAL : bool = true;
 pub const A_GATE_IS_NOT_DOCUMENTATION : bool = true;
 pub const ENDPOINT_TO_GATE_MAP_IS_OWNED_HERE : bool = false;
+
+; The gate map, re-measured rather than assumed. RE-MEASURED 2026-09-21 over all 43 files of the
+; corpus -- 42 under specs/turbobaby plus specs/agents/turbobaby.t27 -- no contract publishes the
+; endpoint-to-gate map: turbobaby/request-identity declares ENDPOINT_TO_GATE_MAP_IS_NOT_OWNED_HERE
+; and counts gate call sites over modules instead. What DOES exist, and is recorded so the absence
+; is not read wider than it is, are two per-module censuses: turbobaby/loyalty-ledger and
+; turbobaby/referral-program each split their OWN routes into ungated and gated counts. A census
+; of one module's routes is not a map of the surface, and neither file claims it is.
+pub const CORPUS_FILES_AT_REMEASUREMENT : u8 = 43;
+pub const CORPUS_FILES_PUBLISHING_THE_GATE_MAP : u8 = 0;
+pub const CORPUS_FILES_WITH_A_PER_MODULE_GATE_CENSUS : u8 = 2;
+pub const GATE_CENSUS_NEIGHBOUR_LOYALTY_LEDGER_ID : str = "turbobaby/loyalty-ledger";
+pub const GATE_CENSUS_NEIGHBOUR_REFERRAL_PROGRAM_ID : str = "turbobaby/referral-program";
+; Two of the census constants further down carry names a sibling also uses for its own module:
+; turbobaby/loyalty-ledger declares ROUTE_REGISTRATION_COUNT and DISTINCT_PATH_COUNT for its eight
+; registrations and seven paths. A corpus-wide grep for either name returns two declarations with
+; two subjects and two magnitudes, and a reader who takes the first hit reads the wrong surface.
+; Named here because the collision is invisible from inside either file.
+pub const SHARED_CENSUS_CONSTANT_NAMES : u8 = 2;
+pub const FILES_DECLARING_THOSE_NAMES : u8 = 2;
 
 ; --- The router, measured ---------------------------------------------------------------------
 ; api_routes (src/api/mod.rs:81-121) builds one Router, merges eighteen module routers into it,
@@ -377,6 +399,21 @@ test api_surface_reuse_edges_are_named_by_id {
   assert SUCCESS_NUMERAL_ALREADY_DECLARED_AT == REUSES_CATALOG_API_ID;
   assert MISS_NUMERAL_ALREADY_DECLARED_AT == REUSES_CATALOG_API_ID;
   assert THIS_FILE_DECLARES_NO_HTTP_NUMERAL == true;
+}
+
+test the_gate_map_is_owned_nowhere_and_two_files_count_their_own {
+  assert CORPUS_FILES_AT_REMEASUREMENT == 43;
+  assert CORPUS_FILES_PUBLISHING_THE_GATE_MAP == 0;
+  assert ENDPOINT_TO_GATE_MAP_IS_OWNED_HERE == false;
+  assert CORPUS_FILES_WITH_A_PER_MODULE_GATE_CENSUS == 2;
+  assert GATE_CENSUS_NEIGHBOUR_LOYALTY_LEDGER_ID == "turbobaby/loyalty-ledger";
+  assert GATE_CENSUS_NEIGHBOUR_REFERRAL_PROGRAM_ID == "turbobaby/referral-program";
+  assert GATE_CENSUS_NEIGHBOUR_LOYALTY_LEDGER_ID != ID;
+  assert GATE_CENSUS_NEIGHBOUR_REFERRAL_PROGRAM_ID != ID;
+  assert GATE_CENSUS_NEIGHBOUR_LOYALTY_LEDGER_ID != GATE_CENSUS_NEIGHBOUR_REFERRAL_PROGRAM_ID;
+  assert SHARED_CENSUS_CONSTANT_NAMES == 2;
+  assert FILES_DECLARING_THOSE_NAMES == 2;
+  assert CORPUS_FILES_WITH_A_PER_MODULE_GATE_CENSUS < CORPUS_FILES_AT_REMEASUREMENT;
 }
 
 test api_surface_identity_is_its_own {

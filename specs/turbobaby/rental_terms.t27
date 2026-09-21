@@ -7,8 +7,13 @@
 ; specs/rental_terms.t27 stated the same bands in f64; its declarations were semantically
 ; classified in docs/t27-semantic-merge-matrix.md and this canonical file is the chosen owner.
 ; That draft is GONE and no reviewer can reopen it: it was never tracked, so it is not in the
-; history either (git log --all -- specs/rental_terms.t27 prints nothing, measured 2026-09-20),
-; and specs/ now holds twelve tracked files and no root-level .t27 at all. The TWIN_* constants
+; history either (git log --all -- specs/rental_terms.t27 prints nothing, re-verified 2026-09-21
+; and still empty). The COUNT that used to stand beside that fact has not held: this sentence
+; said specs/ holds twelve tracked files, and on 2026-09-21 it holds FORTY-THREE --
+; specs/agents/turbobaby.t27 plus the 42 under specs/turbobaby/. The corpus more than tripled
+; and the sentence went on stating twelve, which is why the live count is pinned below as
+; CORPUS_FILES rather than left in prose. What the number was there to support is unchanged and
+; is the part worth checking: there is still no root-level .t27 in specs/ at all. The TWIN_* constants
 ; below name the path it occupied and the matrix that absorbed it -- not a second authority,
 ; and not a file that still exists.
 ; Transcribed from data/fleet_seed.json (measured_at 2026-09-12):
@@ -92,8 +97,16 @@
 ; 593, 337, 2091) from the six published base tariffs, and half-down would miss three.
 ; An earlier revision of this paragraph claimed those six figures are pinned a second time in
 ; specs/pricing_honesty.t27, through round_half_up_baht and a RECONCILED_DOOR_THB row loop.
-; Measured 2026-09-20, both halves are false: grep -rn RECONCILED_DOOR_THB specs/ matches this
-; sentence and nothing else, and pricing_honesty.t27 contains none of the six figures. The
+; Measured 2026-09-20 both halves were false, and re-measured 2026-09-21 over the 43-file corpus
+; the first still is: grep -rn RECONCILED_DOOR_THB specs/ matches only this file's own two lines
+; and no other file. The second half needs one correction. It said pricing_honesty.t27 contains
+; NONE of the six figures; it contains ONE of them. 337 appears there twice -- once against an
+; orders.rs reconciliation gap of 0.4 baht, and once in a sentence that credits this contract's
+; audit_daily_thb with pinning 449 at 2500 bp to 337. Neither is a second reproduction of the
+; measured column: the first is a different quantity and the second points back here by name.
+; So the conclusion holds and its supporting absence does not, which is stated in that order on
+; purpose -- a reader who finds the 337 must not conclude the paragraph was bluffing about the
+; rest. The other five figures (704, 749, 518, 593, 2091) appear in that file nowhere. The
 ; second pinning lived in the deleted f64 draft and went with it. So this file is the ONLY
 ; place the externally measured column is reproduced, and the cross-check the old paragraph
 ; advertised does not exist. That is stated rather than quietly dropped, because a reader who
@@ -139,6 +152,17 @@ pub const TWIN_SPEC_ID : str = "turbobaby/rental_terms";
 pub const TWIN_ENCODING : str = "legacy f64 fractions mapped to canonical integer basis points";
 pub const TWIN_MERGE_MATRIX : str = "docs/t27-semantic-merge-matrix.md";
 pub const TWIN_IS_RESOLVED : bool = true;
+; The corpus this file measures itself against, as a number rather than as a word. Two
+; paragraphs above counted it in prose -- "twelve tracked files", "the eleven files under
+; specs/turbobaby/" -- and both were true when written and wrong by 2026-09-21. A word cannot
+; fail; this can. CORPUS_ROOT_T27_FILES is the claim those counts were actually supporting: the
+; deleted draft's slot at the root of specs/ is still empty, and that is what makes
+; TWIN_SPEC_PATH a former address rather than a competing authority.
+pub const CORPUS_FILES : u8 = 43;
+pub const CORPUS_FILES_UNDER_TURBOBABY : u8 = 42;
+pub const CORPUS_FILES_UNDER_AGENTS : u8 = 1;
+pub const CORPUS_ROOT_T27_FILES : u8 = 0;
+pub const CORPUS_MEASURED_AT : str = "2026-09-21";
 
 ; --- D11, the rule that outranks everything in this file ----------------------------------
 ; These bands never become a client quote. The door answers, or a human does.
@@ -194,6 +218,14 @@ pub const BAND_NONE : i8 = -1;
 ; comment, and a comment is not a declaration. The rate is pinned here because this file
 ; already owns the integer form of the discount arithmetic; the class algebra it is keyed on
 ; stays bike-catalog.t27's (REUSES_CATALOG_ID). The correction is in the tests section below.
+; RE-MEASURED 2026-09-21 over the 43-file corpus, and the absence still holds: that grep matches
+; three lines, all of them in this file. One thing has changed in this file's favour and is
+; recorded because a re-measurement that only ever confirms is not a re-measurement --
+; turbobaby/ride-game now carries a declared CLASS_DISCOUNT_QUOTE_NOTE which states that it
+; declares no class discount and names turbobaby/rental-terms as the owner of
+; SCOOTER_CLASS_DISCOUNT_BP and MOTORCYCLE_CLASS_DISCOUNT_BP. The prose-only travel described
+; above has therefore ended on both sides: the rate is declared here, and the neighbour that
+; used to mention it in a comment now points at this file by ID instead.
 pub const SCOOTER_CLASS_DISCOUNT_BP : i32 = 2500;
 pub const MOTORCYCLE_CLASS_DISCOUNT_BP : i32 = 1500;
 ; Fails closed. 0 means "this input publishes no class discount", NOT "a discount of zero":
@@ -336,10 +368,15 @@ pub fn class_discount_bp(class_name: str) i32 {
 ; (SCOOTER_DISCOUNT, CLASS_DISCOUNT_VALUES) and specs/pricing_honesty.t27
 ; (SCOOTER_DISCOUNT_AT_RECONCILIATION) -- and concluded that this file must not become a third
 ; declaration site. Every clause of that has stopped being true. Both root-level files were
-; deleted in the merge: find specs -type f returns specs/agents/turbobaby.t27 and the eleven
-; files under specs/turbobaby/, and nothing else; neither constant name survives anywhere, and
-; a grep for them over specs/ now matches only the two paragraphs of this file that record the
-; correction -- this one and the one in THE CLASS TABLE. So the rate was not declared twice,
+; deleted in the merge. (The inventory in this sentence was measured when the corpus was
+; smaller and said eleven files under specs/turbobaby/; re-measured 2026-09-21, find specs -type f
+; returns 43 -- specs/agents/turbobaby.t27 and the 42 under specs/turbobaby/, and nothing else.
+; The correction matters here more than most places, because this paragraph's whole subject is a
+; note that outlived its evidence, and a stale count inside it would be the same defect a second
+; time.) Neither constant name survives anywhere, and
+; a grep for them over specs/ still matches only the two paragraphs of this file that record the
+; correction -- this one and the one in THE CLASS TABLE, three lines in total, re-measured
+; 2026-09-21. So the rate was not declared twice,
 ; it was declared NOWHERE, and the note explaining its absence outlived the files it pointed
 ; at and went on authorising that absence in their name. A reason that cites
 ; deleted evidence is worse than no reason, because it reads as though it had been checked.
@@ -686,6 +723,16 @@ invariant the_root_snapshot_carries_a_legacy_id
 ; Ownership is no longer ambiguous: this ID and the declaration matrix name the survivor.
 invariant the_twin_semantic_merge_is_resolved
   assert TWIN_IS_RESOLVED == true and TWIN_MERGE_MATRIX == "docs/t27-semantic-merge-matrix.md"
+
+; The corpus size, so the next growth spurt breaks an assert instead of quietly falsifying two
+; paragraphs of this header the way the last one did.
+invariant the_corpus_count_is_the_sum_of_its_two_directories
+  assert CORPUS_FILES_UNDER_TURBOBABY + CORPUS_FILES_UNDER_AGENTS == CORPUS_FILES
+
+; The claim the stale counts were supporting, and the only one that has to stay true for
+; TWIN_SPEC_PATH to be a former address: the root of specs/ holds no .t27.
+invariant the_deleted_drafts_slot_is_still_empty
+  assert CORPUS_ROOT_T27_FILES == 0
 
 ; The shortest published band starts at a week, so the ladder's first rung is a week and
 ; anything shorter has no band. Absent stays absent (D9); it is not a zero discount.
