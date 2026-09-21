@@ -113,8 +113,8 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/delivery_terms.t27": {
         "module": "turbobaby-delivery-terms",
         "id": "turbobaby/delivery-terms",
-        "min_declarations": 130,
-        "min_checks": 32,
+        "min_declarations": 253,
+        "min_checks": 46,
     },
     "specs/turbobaby/deposit_tiers.t27": {
         "module": "deposit-tiers",
@@ -143,8 +143,8 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/http_cache.t27": {
         "module": "turbobaby-http-cache",
         "id": "turbobaby/http-cache",
-        "min_declarations": 177,
-        "min_checks": 41,
+        "min_declarations": 284,
+        "min_checks": 62,
     },
     "specs/turbobaby/legacy_retirement.t27": {
         "module": "turbobaby-legacy-retirement",
@@ -188,11 +188,23 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
         "min_declarations": 108,
         "min_checks": 35,
     },
+    "specs/turbobaby/order_presentation.t27": {
+        "module": "turbobaby-order-presentation",
+        "id": "turbobaby/order-presentation",
+        "min_declarations": 235,
+        "min_checks": 40,
+    },
     "specs/turbobaby/order_status.t27": {
         "module": "turbobaby-order-status",
         "id": "turbobaby/order-status",
         "min_declarations": 160,
         "min_checks": 31,
+    },
+    "specs/turbobaby/person_naming.t27": {
+        "module": "turbobaby-person-naming",
+        "id": "turbobaby/person-naming",
+        "min_declarations": 239,
+        "min_checks": 53,
     },
     "specs/turbobaby/pricing_honesty.t27": {
         "module": "pricing-honesty",
@@ -227,8 +239,8 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/rental_terms.t27": {
         "module": "rental-terms",
         "id": "turbobaby/rental-terms",
-        "min_declarations": 87,
-        "min_checks": 41,
+        "min_declarations": 170,
+        "min_checks": 58,
     },
     "specs/turbobaby/request_identity.t27": {
         "module": "turbobaby-request-identity",
