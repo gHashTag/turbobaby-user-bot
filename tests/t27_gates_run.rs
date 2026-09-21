@@ -14,8 +14,18 @@
 //!
 //! What they check, and why a Rust test file is not a silly place for it:
 //!
+//! `--no-crosscheck` is passed on purpose, and it costs something worth naming.
+//! With a compiler configured, the gate also compares every declaration and
+//! function body against `t27c`'s own parse, and that comparison is what found
+//! three defects in the pinned compiler (a body truncated at an inner `;`
+//! comment, a dropped `while (c) : (step)` loop, a `packed struct` split in
+//! two). There is no compiler in this job, and the gate refuses to run blind in
+//! CI rather than skipping quietly — correctly. So the cross-check has no CI
+//! home until the workflow jobs land; the 8 111 assertions still all execute
+//! here, which is the part that had no home at all before.
+//!
 //! * The pinned compiler returns `TestBlock` and `InvariantBlock` nodes with
-//!   EMPTY children — it discards test and invariant bodies — so all 7 890
+//!   EMPTY children — it discards test and invariant bodies — so all 8 111
 //!   assertions in `specs/` are comments as far as the toolchain is concerned.
 //!   The first gate is the only thing in this repository that runs them.
 //! * The second binds contract constants to the Rust and SQL they describe.
@@ -97,7 +107,7 @@ fn assert_gate_green(script: &str, args: &[&str]) {
 /// Every assertion in the corpus is executed, and every one of them holds.
 #[test]
 fn every_t27_assertion_is_executed_and_holds() {
-    assert_gate_green("execute_t27_assertions.py", &["-v"]);
+    assert_gate_green("execute_t27_assertions.py", &["--no-crosscheck", "-v"]);
 }
 
 /// Every bound contract constant still agrees with the source it constrains.
@@ -117,7 +127,7 @@ fn every_t27_source_binding_holds() {
 /// turns a gate into a no-op cannot also turn this test into one.
 #[test]
 fn the_gates_report_a_corpus_and_not_an_empty_scan() {
-    let assertions = run_gate("execute_t27_assertions.py", &[]);
+    let assertions = run_gate("execute_t27_assertions.py", &["--no-crosscheck"]);
     let summary = both_streams(&assertions);
     assert!(
         summary.contains("spec(s)") && summary.contains("passed"),
