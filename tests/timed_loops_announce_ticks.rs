@@ -182,7 +182,7 @@ fn report_the_loops_these_guards_cannot_judge() {
         spawned_with_interval += 1;
         let has_arm = text.contains("Ok(0)");
         if !has_arm {
-            unjudged.push(path.display().to_string());
+            unjudged.push(path.display().to_string().replace('\\', "/"));
         }
     }
 

@@ -73,8 +73,13 @@ fn repo_root() -> PathBuf {
 /// silently empty it.
 fn live_source(relative: &str) -> String {
     let path = repo_root().join(relative);
+    // Normalised to LF: several checks below anchor on "\n", and a Windows
+    // checkout (`core.autocrlf`) would hand them CRLF and match nothing. A
+    // guard that quietly stops matching is the failure mode these guards
+    // exist to prevent.
     fs::read_to_string(&path)
         .unwrap_or_else(|e| panic!("{relative} is a live customer surface and must exist: {e}"))
+        .replace("\r\n", "\n")
 }
 
 /// Strip `//` line comments so the retirement notes left where the removed
@@ -102,7 +107,17 @@ fn ordinary_home_visit_renders_the_bike_catalog() {
 
     assert!(home.contains("if has_compatibility_redirect"));
     assert!(home.contains("HomeScreen {}"));
-    assert!(home.contains("else {\n                CatalogScreen {}"));
+    // Checked as a claim, not as a substring: the previous form embedded a
+    // newline and sixteen spaces, so it broke on a CRLF checkout and would
+    // break again on any reindent of a file this test does not own.
+    let otherwise = home
+        .split("else {")
+        .nth(1)
+        .expect("Home has an else branch");
+    assert!(
+        otherwise.trim_start().starts_with("CatalogScreen {}"),
+        "the else branch of Home no longer renders the bike catalog first"
+    );
 }
 
 #[test]
@@ -192,12 +207,22 @@ fn ui_sources() -> Vec<(String, String)> {
             if path.is_dir() {
                 walk(&path, root, out);
             } else if path.extension().and_then(|s| s.to_str()) == Some("rs") {
+                // One separator, whatever the host: UNCOMPILED_TEST_DEBT and
+                // the other tables below key on forward slashes, so a
+                // backslash here turns a recorded file into an unrecorded
+                // one, which reads as "new tests that will never run".
                 let relative = path
                     .strip_prefix(root)
                     .unwrap_or(&path)
                     .display()
-                    .to_string();
-                out.push((relative, fs::read_to_string(&path).expect("readable")));
+                    .to_string()
+                    .replace('\\', "/");
+                out.push((
+                    relative,
+                    fs::read_to_string(&path)
+                        .expect("readable")
+                        .replace("\r\n", "\n"),
+                ));
             }
         }
     }

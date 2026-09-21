@@ -33,11 +33,15 @@ fn rust_sources() -> Vec<(String, String)> {
             if path.is_dir() {
                 stack.push(path);
             } else if path.extension().is_some_and(|e| e == "rs") {
+                // One separator, whatever the host: the expectations below are
+                // written with forward slashes, and a backslash here makes every
+                // entry miss and reports a drift that is not there.
                 let label = path
                     .strip_prefix(root.parent().expect("src has a parent"))
                     .unwrap_or(&path)
                     .display()
-                    .to_string();
+                    .to_string()
+                    .replace('\\', "/");
                 out.push((label, fs::read_to_string(&path).expect("readable")));
             }
         }

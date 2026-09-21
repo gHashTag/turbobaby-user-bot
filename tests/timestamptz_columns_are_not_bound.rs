@@ -54,7 +54,7 @@ fn rust_sources(dir: &std::path::Path, out: &mut Vec<(String, String)>) {
             rust_sources(&path, out);
         } else if path.extension().and_then(|e| e.to_str()) == Some("rs") {
             if let Ok(text) = std::fs::read_to_string(&path) {
-                out.push((path.display().to_string(), text));
+                out.push((path.display().to_string().replace('\\', "/"), text));
             }
         }
     }

@@ -148,7 +148,7 @@ fn ui_call_sites() -> Vec<CallSite> {
                 };
                 let path = lit[start..].split(['?', '#']).next().unwrap_or_default();
                 sites.push(CallSite {
-                    file: file.display().to_string(),
+                    file: file.display().to_string().replace('\\', "/"),
                     line: n + 1,
                     path: path.trim_end_matches('/').to_string(),
                 });
