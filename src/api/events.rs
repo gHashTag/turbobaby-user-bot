@@ -338,7 +338,9 @@ fn event_row(r: &sea_orm::QueryResult) -> Value {
         "price_stars": price_stars,
         "is_public": r.try_get::<bool>("", "is_public").unwrap_or(true),
         "seats_taken": seats_taken,
-        "seats_available": max_seats.map(|cap| (cap - seats_taken as i32).max(0)),
+        // One implementation of this subtraction, shared with the calendar
+        // card that used to recompute it and get -3 where this got 0 (D15).
+        "seats_available": max_seats.map(|cap| crate::trios::calendar::seats_free(cap, seats_taken)),
         "created_at": r.try_get::<DateTime<Utc>>("", "created_at").ok().map(|d| d.to_rfc3339()),
     })
 }
@@ -828,6 +830,62 @@ async fn my_bookings(
     Ok(Json(json!({ "bookings": bookings })))
 }
 
+/// How many waitlisted rows one cancellation reads before it gives up.
+///
+/// The work per cancellation has to be bounded: this runs inside the cancel
+/// transaction, which holds `FOR UPDATE` on the event row, and every booking
+/// of that event waits behind it. Nothing in the tree bounds a waitlist —
+/// `join_waitlist` has no limit and no rate limiter — so an unbounded scan is
+/// an unbounded lock.
+///
+/// Ten is OURS and not a measurement: no waitlist length is published
+/// anywhere in this repository, and inventing one to look measured would be
+/// worse than saying this. It is a WORK bound and not a policy, because the
+/// order above already puts every customer who can pay ahead of every
+/// customer who cannot: the tenth row is reached only after nine consecutive
+/// balances moved between the read and the debit inside one transaction. When
+/// the whole scan promotes nobody the seat stays empty for this cancellation
+/// and `tracing::warn!` says so with the event, the price and the counts —
+/// the failure is visible rather than a threshold quietly deciding who waits.
+const PROMOTION_CANDIDATE_SCAN_MAX: i64 = 10;
+
+/// One waitlisted customer, reduced to what the promotion decision needs.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct PromotionCandidate {
+    booking_id: String,
+    telegram_id: i64,
+    /// The Stars balance read together with the candidate row. Advisory only:
+    /// the conditional debit re-reads it under the row lock and is the
+    /// authority, so a balance that moved between the two is a lost race and
+    /// not an overdraft.
+    balance: i64,
+}
+
+/// Who the freed seat is offered to next, in waitlist order, starting at
+/// `from`.
+///
+/// The line is already ordered; this decides who in it can take the seat.
+/// A customer who cannot clear `price` is SKIPPED and not stopped at: the
+/// shipped rule ended the whole promotion at the first person who could not
+/// pay, so one waitlisted customer with an empty balance held the seat empty
+/// for everybody behind him until the next cancellation, which may never come.
+///
+/// Skipping costs the skipped customer nothing. This returns an index into the
+/// line and never reorders or rewrites it — his row keeps its `status` and its
+/// `created_at`, which is the only thing his place is made of, so he is at the
+/// head again the moment he has the Stars.
+///
+/// `price <= 0` is a free event: everybody can take the seat and the head
+/// takes it.
+fn next_promotable(candidates: &[PromotionCandidate], price: i64, from: usize) -> Option<usize> {
+    candidates
+        .iter()
+        .enumerate()
+        .skip(from)
+        .find(|(_, c)| price <= 0 || c.balance >= price)
+        .map(|(i, _)| i)
+}
+
 /// Cancel a booking and, if a seat opens up, auto-promote the oldest waitlist entry.
 /// Returns the promoted booking id (if any) so the HTTP layer can report it.
 async fn cancel_booking_and_promote(
@@ -1012,72 +1070,94 @@ async fn cancel_booking_and_promote(
             .and_then(|r| r.try_get("", "taken").ok())
             .unwrap_or(0);
         if taken < cap {
-            if let Some(wait) = tx
-                .query_one(Statement::from_sql_and_values(
+            // The price as it stands NOW, not as it stood when he joined: the
+            // waitlist INSERT carries no stars column, so nothing was ever
+            // quoted to him.
+            let price_stars: Option<i64> = ev
+                .as_ref()
+                .and_then(|r| r.try_get::<Option<i64>>("", "price_stars").ok().flatten());
+            let promo_price = price_stars.unwrap_or(0);
+
+            // The line, read once, with each waiting customer's Stars balance
+            // beside him.
+            //
+            // `ORDER BY (balance >= price) DESC` puts everyone who can pay
+            // ahead of everyone who cannot, and `created_at ASC` then decides
+            // among them — which is the waitlist rule, unchanged. Nothing in
+            // the line is rewritten: no status, no created_at, and a customer
+            // who is passed over is at the head again the moment he has the
+            // Stars. On a free event the first key is true for every row and
+            // the order is exactly `created_at ASC`, as it always was.
+            //
+            // The balances are ADVISORY. The conditional debit below re-reads
+            // the balance under the row lock and is the authority; a balance
+            // that moved between the two is a lost race, handled as one, and
+            // never an overdraft.
+            let candidate_rows = tx
+                .query_all(Statement::from_sql_and_values(
                     DbBackend::Postgres,
-                    "SELECT id, telegram_id FROM event_bookings WHERE event_id = $1 AND status = 'waitlisted' ORDER BY created_at ASC LIMIT 1 FOR UPDATE",
-                    [event_id.into()],
+                    "SELECT b.id, b.telegram_id, COALESCE(u.balance, 0)::bigint AS balance \
+                     FROM event_bookings b \
+                     LEFT JOIN user_stars u ON u.telegram_id = b.telegram_id \
+                     WHERE b.event_id = $1 AND b.status = 'waitlisted' \
+                     ORDER BY (COALESCE(u.balance, 0) >= $2::bigint) DESC, b.created_at ASC \
+                     LIMIT $3 FOR UPDATE OF b",
+                    [
+                        event_id.into(),
+                        promo_price.into(),
+                        PROMOTION_CANDIDATE_SCAN_MAX.into(),
+                    ],
                 ))
                 .await
                 .map_err(|e| {
                     tracing::error!("cancel_booking waitlist select: {e}");
                     StatusCode::INTERNAL_SERVER_ERROR
-                })?
-            {
-                let wait_id: String = wait.try_get("", "id").unwrap_or_default();
-                let wait_tid: i64 = wait.try_get("", "telegram_id").unwrap_or(0);
-                let price_stars: Option<i64> = ev
-                    .as_ref()
-                    .and_then(|r| r.try_get::<Option<i64>>("", "price_stars").ok().flatten());
-                let promo_price = price_stars.unwrap_or(0);
+                })?;
+            // An unreadable balance is not a confident zero (D9): it decides
+            // nothing about money here, because this number never reaches the
+            // debit. It only means this cancellation does not offer HIM the
+            // seat, and his row is left exactly as it was.
+            let candidates: Vec<PromotionCandidate> = candidate_rows
+                .iter()
+                .map(|r| PromotionCandidate {
+                    booking_id: r.try_get("", "id").unwrap_or_default(),
+                    telegram_id: r.try_get("", "telegram_id").unwrap_or(0),
+                    balance: r.try_get("", "balance").unwrap_or(0),
+                })
+                .filter(|c| !c.booking_id.is_empty() && c.telegram_id != 0)
+                .collect();
+
+            // One cancellation frees one seat, so at most one promotion — but
+            // the seat is offered DOWN the line instead of to the head alone.
+            let mut from = 0usize;
+            let mut debit_attempts = 0u32;
+            while let Some(i) = next_promotable(&candidates, promo_price, from) {
+                let candidate = &candidates[i];
+                from = i + 1;
                 let mut promo_stars_tx_id: Option<String> = None;
-                let can_promote = if promo_price > 0 {
+
+                if promo_price > 0 {
                     use crate::db::entities::{
-                        loyalty_profile::{ActiveModel as LpAm2, Column as LpCol2, Entity as LpEntity2},
                         stars_transaction::{ActiveModel as TxAm2, Entity as TxEntity2},
-                        user_stars::{ActiveModel as UsAm2, Column as UsCol2, Entity as UsEntity2},
+                        user_stars::{Column as UsCol2, Entity as UsEntity2},
                     };
-                    use sea_orm::sea_query::OnConflict;
                     use sea_orm::{ActiveValue::Set, ColumnTrait, EntityTrait, QueryFilter};
 
-                    let lp_am = LpAm2 {
-                        telegram_id: Set(wait_tid),
-                        bonus_balance: Set(Some(0.0)),
-                        total_spent: Set(Some(0.0)),
-                        ..Default::default()
-                    };
-                    let _ = LpEntity2::insert(lp_am)
-                        .on_conflict(OnConflict::column(LpCol2::TelegramId).do_nothing().to_owned())
-                        .do_nothing()
-                        .exec(&tx)
-                        .await
-                        .map_err(|e| {
-                            tracing::error!("cancel_booking promote loyalty_profile upsert: {e}");
-                        });
-
-                    let us_am = UsAm2 {
-                        telegram_id: Set(wait_tid),
-                        balance: Set(0),
-                        ..Default::default()
-                    };
-                    let _ = UsEntity2::insert(us_am)
-                        .on_conflict(
-                            OnConflict::column(UsCol2::TelegramId)
-                                .update_column(UsCol2::UpdatedAt)
-                                .to_owned(),
-                        )
-                        .exec(&tx)
-                        .await
-                        .map_err(|e| {
-                            tracing::error!("cancel_booking promote user_stars upsert: {e}");
-                        });
-
+                    debit_attempts += 1;
+                    // No loyalty_profile/user_stars upsert here, unlike the
+                    // booking door: a candidate reaches this line only because
+                    // the read found him a balance of at least `promo_price`,
+                    // which is positive, so his `user_stars` row exists. The
+                    // upsert would have written a row for people we then skip.
                     let debited = UsEntity2::update_many()
                         .col_expr(
                             UsCol2::Balance,
-                            sea_orm::sea_query::Expr::cust_with_values("balance - $1", [promo_price]),
+                            sea_orm::sea_query::Expr::cust_with_values(
+                                "balance - $1",
+                                [promo_price],
+                            ),
                         )
-                        .filter(UsCol2::TelegramId.eq(wait_tid))
+                        .filter(UsCol2::TelegramId.eq(candidate.telegram_id))
                         .filter(UsCol2::Balance.gte(promo_price))
                         .exec(&tx)
                         .await
@@ -1085,57 +1165,83 @@ async fn cancel_booking_and_promote(
                             tracing::error!("cancel_booking promote stars debit: {e}");
                             StatusCode::INTERNAL_SERVER_ERROR
                         })?;
-                    if debited.rows_affected > 0 {
-                        let balance_after = UsEntity2::find_by_id(wait_tid)
-                            .one(&tx)
-                            .await
-                            .map_err(|e| {
-                                tracing::error!("cancel_booking promote balance read: {e}");
-                                StatusCode::INTERNAL_SERVER_ERROR
-                            })?
-                            .map(|r| r.balance)
-                            .unwrap_or(0);
-                        let promo_tx_id = uuid::Uuid::new_v4().to_string();
-                        TxEntity2::insert(TxAm2 {
-                            id: Set(promo_tx_id.clone()),
-                            telegram_id: Set(wait_tid),
-                            amount: Set(-promo_price),
-                            balance_after: Set(balance_after),
-                            source: Set("events".to_string()),
-                            reason: Set("event_booking".to_string()),
-                            external_tx_id: Set(None),
-                            related_order_id: Set(Some(wait_id.clone())),
-                            ..Default::default()
-                        })
-                        .exec(&tx)
+                    if debited.rows_affected == 0 {
+                        // His balance moved between the read and the lock, or
+                        // his balance row is gone. Named rather than silent,
+                        // because this is the one way the seat can still miss
+                        // someone the read said could take it.
+                        tracing::warn!(
+                            "cancel_booking: waitlist candidate {} could not be debited {} stars on event {}, offering the seat to the next one",
+                            candidate.booking_id,
+                            promo_price,
+                            event_id
+                        );
+                        continue;
+                    }
+
+                    let balance_after = UsEntity2::find_by_id(candidate.telegram_id)
+                        .one(&tx)
                         .await
                         .map_err(|e| {
-                            tracing::error!("cancel_booking promote ledger insert: {e}");
+                            tracing::error!("cancel_booking promote balance read: {e}");
                             StatusCode::INTERNAL_SERVER_ERROR
-                        })?;
-                        promo_stars_tx_id = Some(promo_tx_id);
-                        true
-                    } else {
-                        false
-                    }
-                } else {
-                    true
-                };
-                if can_promote {
-                    tx.execute(Statement::from_sql_and_values(
-                        DbBackend::Postgres,
-                        "UPDATE event_bookings SET status = 'confirmed', updated_at = NOW(), stars_paid = $1, stars_tx_id = $2 WHERE id = $3",
-                        [promo_price.into(), promo_stars_tx_id.into(), wait_id.clone().into()],
-                    ))
+                        })?
+                        .map(|r| r.balance)
+                        .unwrap_or(0);
+                    let promo_tx_id = uuid::Uuid::new_v4().to_string();
+                    TxEntity2::insert(TxAm2 {
+                        id: Set(promo_tx_id.clone()),
+                        telegram_id: Set(candidate.telegram_id),
+                        amount: Set(-promo_price),
+                        balance_after: Set(balance_after),
+                        source: Set("events".to_string()),
+                        reason: Set("event_booking".to_string()),
+                        external_tx_id: Set(None),
+                        related_order_id: Set(Some(candidate.booking_id.clone())),
+                        ..Default::default()
+                    })
+                    .exec(&tx)
                     .await
                     .map_err(|e| {
-                        tracing::error!("cancel_booking promote update: {e}");
+                        tracing::error!("cancel_booking promote ledger insert: {e}");
                         StatusCode::INTERNAL_SERVER_ERROR
                     })?;
-                    crate::metrics::event_booking_created("confirmed");
-                    crate::metrics::event_waitlist_promoted();
-                    promoted_id = Some(wait_id);
+                    promo_stars_tx_id = Some(promo_tx_id);
                 }
+
+                tx.execute(Statement::from_sql_and_values(
+                    DbBackend::Postgres,
+                    "UPDATE event_bookings SET status = 'confirmed', updated_at = NOW(), stars_paid = $1, stars_tx_id = $2 WHERE id = $3",
+                    [
+                        promo_price.into(),
+                        promo_stars_tx_id.into(),
+                        candidate.booking_id.clone().into(),
+                    ],
+                ))
+                .await
+                .map_err(|e| {
+                    tracing::error!("cancel_booking promote update: {e}");
+                    StatusCode::INTERNAL_SERVER_ERROR
+                })?;
+                crate::metrics::event_booking_created("confirmed");
+                crate::metrics::event_waitlist_promoted();
+                promoted_id = Some(candidate.booking_id.clone());
+                break;
+            }
+
+            // A line that exists and got nobody is the failure this scan can
+            // still have, and it says so with its numbers instead of leaving a
+            // freed seat unexplained. An empty line is not that: there was
+            // nobody to promote.
+            if promoted_id.is_none() && !candidates.is_empty() {
+                tracing::warn!(
+                    "cancel_booking: seat freed on event {} stayed empty - {} waitlisted row(s) read (scan cap {}), {} debit attempt(s), price {} stars",
+                    event_id,
+                    candidates.len(),
+                    PROMOTION_CANDIDATE_SCAN_MAX,
+                    debit_attempts,
+                    promo_price
+                );
             }
         }
     }
@@ -1529,28 +1635,290 @@ async fn update_event(
     Ok(Json(json!({ "success": true })))
 }
 
+/// What a delete is allowed to do about the money the event is still holding.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum DeleteVerdict {
+    /// Nothing paid is attached; the cascade destroys no money.
+    Allowed,
+    /// The event still holds paid bookings and the caller acknowledged
+    /// nothing. The two numbers exist so the refusal can say how many people
+    /// and how many Stars, rather than being one more indistinguishable
+    /// failure.
+    HoldsPaidBookings { bookings: i64, stars: i64 },
+    /// The caller named a count and it is not the count this transaction
+    /// measured. All three numbers travel — the two the server stands behind
+    /// and the one the caller sent — so the answer shows the gap instead of
+    /// only asserting that there is one.
+    AcknowledgementIsStale {
+        bookings: i64,
+        stars: i64,
+        acknowledged: i64,
+    },
+    /// The caller named exactly the count the server measured, and it is not
+    /// zero: the delete goes through and these paid bookings go with it. Still
+    /// no refund — the two numbers are here so the log line and the answer can
+    /// say what was given up.
+    AbandonsPaidBookings { bookings: i64, stars: i64 },
+}
+
+/// The query parameter that opens the delete on an event still holding paid
+/// bookings: `DELETE /api/admin/events/:id?abandon_paid_bookings=3`.
+///
+/// Named, and not a flag. `?force=1` would be a word about the delete; this is
+/// a word about the BOOKINGS, and the number in it is the thing being given
+/// up. A client that cannot say how many paid bookings it is destroying is a
+/// client that does not know how many there are, and it gets the refusal.
+const ABANDON_PAID_BOOKINGS_PARAM: &str = "abandon_paid_bookings";
+
+/// A delete must not silently destroy paid state.
+///
+/// `migrations/043_events_booking.sql:29` declares `ON DELETE CASCADE` on
+/// `event_bookings.event_id`, so `DELETE FROM events` takes every booking row
+/// with it — including the rows that record `stars_paid`. The only code that
+/// returns Stars is the refund block inside `cancel_booking_and_promote`, and
+/// a delete never enters it. The customer was left with a debit in
+/// `stars_transactions` (that table has no foreign key to the booking, so the
+/// ledger survives) pointing at an event, a seat and a booking that no longer
+/// exist, and nothing in the tree would ever pay it back.
+///
+/// So the delete REFUSES while paid bookings are attached. Refusing is the
+/// reversible half of the choice: nothing is destroyed by it, and the owner
+/// already has a tested path that returns the Stars one booking at a time.
+/// Refunding from inside the delete would have to reuse
+/// `cancel_booking_and_promote`, whose second half PROMOTES a waitlisted
+/// customer — charging him for a seat at an event that is about to vanish.
+///
+/// AND IT REFUSES WITH A DOOR, which is the half added on 2026-09-21. A
+/// refusal with no way through is its own defect: an event that already
+/// happened holds its paid bookings for ever, so a finished evening with three
+/// paid seats was a row nobody — the owner included — could delete at all. The
+/// door is `acknowledged`: the caller names how many paid bookings he is
+/// giving up, and it has to equal the count this transaction measured under
+/// the row lock.
+///
+/// Three properties, each doing work:
+///
+/// * **Refusal stays the default.** `None` is every caller that says nothing,
+///   which is every client written before the parameter existed.
+/// * **The acknowledgement is explicit, and it is a NUMBER rather than a
+///   flag.** A flag can be set by a client with no idea what it is destroying;
+///   a count can only be sent by one that has read the same event this
+///   transaction just locked.
+/// * **The server’s count is the authority.** A stale admin screen replaying
+///   an old click carries the old number, and a seat paid for in between makes
+///   that number wrong, so the delete refuses and hands back what it measured.
+///   Zero is not exempt: `Some(0)` against three paid bookings is the same
+///   false statement as any other wrong number, and it is the one an empty
+///   form field would send.
+///
+/// The cost of that strictness is named rather than hidden: a caller whose
+/// count is stale in the HARMLESS direction — he says three, they were all
+/// cancelled and refunded, the server measures zero — is refused too, and has
+/// to re-read the event. That is one round trip, against an exception that
+/// would have to be reasoned about every time this function is read.
+///
+/// Neither road refunds anything. The door decides who may destroy the rows,
+/// not whether the Stars come back.
+fn delete_verdict(paid_bookings: i64, stars_held: i64, acknowledged: Option<i64>) -> DeleteVerdict {
+    match acknowledged {
+        // A count travelled and it is not this event’s. Whatever the caller
+        // read, it was not what is in front of this transaction.
+        Some(n) if n != paid_bookings => DeleteVerdict::AcknowledgementIsStale {
+            bookings: paid_bookings,
+            stars: stars_held,
+            acknowledged: n,
+        },
+        // It matches, and there is something to give up.
+        Some(_) if paid_bookings > 0 => DeleteVerdict::AbandonsPaidBookings {
+            bookings: paid_bookings,
+            stars: stars_held,
+        },
+        // It matches at zero: an ordinary delete that happens to carry the
+        // parameter. Nothing is abandoned, so nothing is announced.
+        Some(_) => DeleteVerdict::Allowed,
+        None if paid_bookings > 0 => DeleteVerdict::HoldsPaidBookings {
+            bookings: paid_bookings,
+            stars: stars_held,
+        },
+        None => DeleteVerdict::Allowed,
+    }
+}
+
 async fn delete_event(
     headers: HeaderMap,
     State(state): State<AppState>,
     Path(id): Path<String>,
-) -> Result<Json<Value>, StatusCode> {
-    event_id_ok(&id)?;
-    check_admin(&headers, &state)?;
-    use sea_orm::{ConnectionTrait, DbBackend, Statement};
-    state
-        .db
-        .orm
-        .execute(Statement::from_sql_and_values(
+    Query(q): Query<HashMap<String, String>>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    event_id_ok(&id).map_err(|c| booking_err(c, "invalid_event_id"))?;
+    check_admin(&headers, &state).map_err(|c| booking_err(c, "unauthorized"))?;
+
+    // The acknowledgement, read before anything is locked. Absent is the
+    // default and means no: only a value that PARSES and MATCHES opens the
+    // door, and `delete_verdict` below owns the matching.
+    //
+    // A present value that is not a number is answered 400 and not read as
+    // absent, and above all not read as zero (D9). Both silent readings turn a
+    // typo into a sentence about the money: as absent it becomes the ordinary
+    // refusal on an event whose count the caller did name, and as zero it
+    // becomes a claim that nothing is at stake.
+    let acknowledged: Option<i64> = match q.get(ABANDON_PAID_BOOKINGS_PARAM).map(|s| s.trim()) {
+        None => None,
+        Some(raw) => match raw.parse::<i64>() {
+            Ok(n) => Some(n),
+            Err(_) => {
+                return Err(booking_err(
+                    StatusCode::BAD_REQUEST,
+                    "invalid_abandon_paid_bookings",
+                ))
+            }
+        },
+    };
+
+    use sea_orm::{ConnectionTrait, DbBackend, Statement, TransactionTrait};
+
+    let tx = state.db.orm.begin().await.map_err(|e| {
+        tracing::error!("delete_event tx.begin: {e}");
+        booking_err(StatusCode::INTERNAL_SERVER_ERROR, "server_error")
+    })?;
+
+    // Lock the event row the way the booking door and the cancel path both do,
+    // so a seat cannot be sold — or a waitlisted customer charged and promoted
+    // — between the count below and the DELETE. A row that is not there locks
+    // nothing and counts nothing, and the DELETE is then the no-op this
+    // endpoint has always answered for an id that does not exist.
+    tx.query_one(Statement::from_sql_and_values(
+        DbBackend::Postgres,
+        "SELECT id FROM events WHERE id = $1 FOR UPDATE",
+        [id.clone().into()],
+    ))
+    .await
+    .map_err(|e| {
+        tracing::error!("delete_event lock event: {e}");
+        booking_err(StatusCode::INTERNAL_SERVER_ERROR, "server_error")
+    })?;
+
+    // What the cascade would take with the event. A row still counts as
+    // holding Stars unless it was CANCELLED: cancelling is the path that gave
+    // them back, and it is the only one.
+    let held = tx
+        .query_one(Statement::from_sql_and_values(
             DbBackend::Postgres,
-            "DELETE FROM events WHERE id = $1",
-            [id.into()],
+            "SELECT COUNT(*)::bigint AS paid_bookings, COALESCE(SUM(stars_paid), 0)::bigint AS stars_held \
+             FROM event_bookings \
+             WHERE event_id = $1 AND status <> 'cancelled' AND COALESCE(stars_paid, 0) > 0",
+            [id.clone().into()],
         ))
         .await
         .map_err(|e| {
-            tracing::error!("delete_event: {e}");
-            StatusCode::INTERNAL_SERVER_ERROR
+            tracing::error!("delete_event paid booking count: {e}");
+            booking_err(StatusCode::INTERNAL_SERVER_ERROR, "server_error")
         })?;
-    Ok(Json(json!({ "success": true })))
+    // A count that cannot be read is not zero (D9). Reading it as zero here
+    // would open the delete on exactly the failure the count exists to catch,
+    // so an unreadable count refuses the same way a database error does.
+    let (paid_bookings, stars_held): (i64, i64) = match held {
+        Some(ref r) => match (r.try_get("", "paid_bookings"), r.try_get("", "stars_held")) {
+            (Ok(n), Ok(s)) => (n, s),
+            _ => {
+                let _ = tx.rollback().await;
+                tracing::error!("delete_event: paid booking count unreadable for event {id}");
+                return Err(booking_err(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "server_error",
+                ));
+            }
+        },
+        None => {
+            let _ = tx.rollback().await;
+            tracing::error!("delete_event: paid booking count returned no row for event {id}");
+            return Err(booking_err(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "server_error",
+            ));
+        }
+    };
+
+    // One decision, taken in one place. Both refusals roll back and answer 409
+    // with every number the caller needs to act; both ways through fall out of
+    // the match and reach the DELETE below.
+    let abandoned = match delete_verdict(paid_bookings, stars_held, acknowledged) {
+        DeleteVerdict::Allowed => None,
+        DeleteVerdict::AbandonsPaidBookings { bookings, stars } => {
+            // The event, the people and the money, written BEFORE the DELETE:
+            // the rows that recorded them are about to stop existing, and a
+            // crash before the commit must not take the record with them.
+            tracing::warn!(
+                "delete_event: about to delete event {id} with {bookings} paid booking(s) worth {stars} stars abandoned, acknowledged by the caller; no Stars are returned"
+            );
+            Some((bookings, stars))
+        }
+        DeleteVerdict::HoldsPaidBookings { bookings, stars } => {
+            // Both numbers travel to the caller. A bare 409 would be one more
+            // indistinguishable failure, and the owner's next move depends on
+            // how many people he has to refund first.
+            let _ = tx.rollback().await;
+            tracing::warn!(
+                "delete_event refused: event {id} still holds {bookings} paid booking(s) worth {stars} stars"
+            );
+            return Err((
+                StatusCode::CONFLICT,
+                Json(json!({
+                    "error": "paid_bookings_exist",
+                    "paid_bookings": bookings,
+                    "stars_held": stars,
+                })),
+            ));
+        }
+        DeleteVerdict::AcknowledgementIsStale {
+            bookings,
+            stars,
+            acknowledged,
+        } => {
+            // The caller answered for a different event than the one under the
+            // lock. The measured count goes back so the next attempt can be
+            // made against what is actually there.
+            let _ = tx.rollback().await;
+            tracing::warn!(
+                "delete_event refused: event {id} holds {bookings} paid booking(s) worth {stars} stars, caller acknowledged {acknowledged}"
+            );
+            return Err((
+                StatusCode::CONFLICT,
+                Json(json!({
+                    "error": "acknowledgement_is_stale",
+                    "paid_bookings": bookings,
+                    "stars_held": stars,
+                    "acknowledged": acknowledged,
+                })),
+            ));
+        }
+    };
+
+    tx.execute(Statement::from_sql_and_values(
+        DbBackend::Postgres,
+        "DELETE FROM events WHERE id = $1",
+        [id.into()],
+    ))
+    .await
+    .map_err(|e| {
+        tracing::error!("delete_event: {e}");
+        booking_err(StatusCode::INTERNAL_SERVER_ERROR, "server_error")
+    })?;
+    tx.commit().await.map_err(|e| {
+        tracing::error!("delete_event tx.commit: {e}");
+        booking_err(StatusCode::INTERNAL_SERVER_ERROR, "server_error")
+    })?;
+    // The ordinary delete answers what it always answered. The one that took
+    // paid bookings with it says so in the body too: the caller asked for this,
+    // and the receipt is the last place those two numbers exist.
+    match abandoned {
+        None => Ok(Json(json!({ "success": true }))),
+        Some((bookings, stars)) => Ok(Json(json!({
+            "success": true,
+            "abandoned_paid_bookings": bookings,
+            "stars_abandoned": stars,
+        }))),
+    }
 }
 
 async fn list_event_bookings(
@@ -1955,5 +2323,174 @@ mod tests {
         assert!(event_id_ok(&"x".repeat(37)).is_err());
         assert!(event_id_ok(&"").is_err());
         assert!(event_id_ok("550e8400-e29b-41d4-a716-446655440000").is_ok());
+    }
+
+    // ── The waitlist: a freed seat must reach someone ────────────────
+    //
+    // No telegram id here is a person: 1, 2, 3 are line positions written as
+    // the column's type and nothing else (D14).
+
+    /// A line position: the booking id, the id the debit would target, and the
+    /// balance read with the row.
+    fn waiting(booking_id: &str, telegram_id: i64, balance: i64) -> PromotionCandidate {
+        PromotionCandidate {
+            booking_id: booking_id.to_string(),
+            telegram_id,
+            balance,
+        }
+    }
+
+    /// The head-of-line block. Three people wait for a 500-Star seat and the
+    /// first cannot pay; the seat must reach the second, not stay empty.
+    #[test]
+    fn a_freed_seat_passes_the_head_who_cannot_pay() {
+        let line = [
+            waiting("a", 1, 0),
+            waiting("b", 2, 500),
+            waiting("c", 3, 900),
+        ];
+        assert_eq!(
+            next_promotable(&line, 500, 0),
+            Some(1),
+            "the seat stopped at the head instead of reaching the next payer"
+        );
+    }
+
+    /// Skipping must not cost the skipped customer his place: the decision is
+    /// an index into the line, and the line it was given comes back unchanged.
+    #[test]
+    fn a_skipped_customer_keeps_his_place_in_the_line() {
+        let line = [waiting("a", 1, 0), waiting("b", 2, 0), waiting("c", 3, 900)];
+        let before = line.clone();
+        assert_eq!(next_promotable(&line, 500, 0), Some(2));
+        assert_eq!(line, before, "the line was reordered or rewritten");
+    }
+
+    /// A lost race resumes at the next candidate rather than at the head: the
+    /// debit is the authority, and when it refuses the seat moves on.
+    #[test]
+    fn the_scan_resumes_after_a_candidate_falls_through() {
+        let line = [
+            waiting("a", 1, 900),
+            waiting("b", 2, 0),
+            waiting("c", 3, 900),
+        ];
+        assert_eq!(next_promotable(&line, 500, 1), Some(2));
+    }
+
+    /// Nobody in the line can pay: there is no promotion, and the caller is
+    /// the one that says so in the log.
+    #[test]
+    fn a_line_of_people_who_cannot_pay_promotes_nobody() {
+        let line = [waiting("a", 1, 0), waiting("b", 2, 499)];
+        assert_eq!(next_promotable(&line, 500, 0), None);
+        assert_eq!(next_promotable(&[], 500, 0), None);
+    }
+
+    /// A free event charges nobody, so the head takes the seat whatever his
+    /// balance. Guard rather than proof: this held before the skip was added
+    /// and must keep holding.
+    #[test]
+    fn a_free_event_promotes_the_head_whatever_his_balance() {
+        let line = [waiting("a", 1, 0), waiting("b", 2, 900)];
+        assert_eq!(next_promotable(&line, 0, 0), Some(0));
+    }
+
+    // ── Delete: paid bookings are not the delete's to destroy ─────────
+
+    /// The cascade at migrations/043_events_booking.sql:29 takes paid bookings
+    /// with the event and no Stars come back, so the delete refuses and says
+    /// how many and how much.
+    #[test]
+    fn a_delete_refuses_while_the_event_holds_paid_bookings() {
+        assert_eq!(
+            delete_verdict(3, 1500, None),
+            DeleteVerdict::HoldsPaidBookings {
+                bookings: 3,
+                stars: 1500
+            },
+            "the delete destroyed paid bookings with no refund"
+        );
+        assert_eq!(
+            delete_verdict(1, 500, None),
+            DeleteVerdict::HoldsPaidBookings {
+                bookings: 1,
+                stars: 500
+            }
+        );
+    }
+
+    /// An event nobody paid for deletes as it always did: a free event, an
+    /// empty one, and one whose bookings were all cancelled and refunded
+    /// already all count zero paid rows.
+    #[test]
+    fn a_delete_with_nothing_paid_still_goes_through() {
+        assert_eq!(delete_verdict(0, 0, None), DeleteVerdict::Allowed);
+    }
+
+    /// The way through, and the reason it exists: an event that already
+    /// happened holds paid bookings for ever, so a refusal with no door is a
+    /// row nobody can ever remove. The owner opens the door by NAMING what he
+    /// gives up -- the count the server just measured -- and the delete goes
+    /// through, still refunding nothing.
+    #[test]
+    fn an_owner_who_names_the_count_may_abandon_it() {
+        assert_eq!(
+            delete_verdict(3, 1500, Some(3)),
+            DeleteVerdict::AbandonsPaidBookings {
+                bookings: 3,
+                stars: 1500
+            },
+            "an acknowledgement matching the count the server measured was refused"
+        );
+    }
+
+    /// The stale-screen case, which is why the count travels at all. The admin
+    /// list said one paid booking; two more were paid while the confirm dialog
+    /// sat open. Replaying that click must not take the two rows nobody has
+    /// seen -- the server's number is the authority and the answer carries it.
+    #[test]
+    fn a_stale_screen_cannot_abandon_a_booking_it_never_saw() {
+        assert_eq!(
+            delete_verdict(3, 1500, Some(1)),
+            DeleteVerdict::AcknowledgementIsStale {
+                bookings: 3,
+                stars: 1500,
+                acknowledged: 1
+            },
+            "a count from an older screen opened the delete on rows it did not name"
+        );
+    }
+
+    /// Zero is not a skeleton key. `abandon_paid_bookings=0` on an event that
+    /// holds three is the same false statement as any other wrong number, and
+    /// it is the one a client would send by accident -- an empty field, a
+    /// default, a number that was true before the seats sold.
+    #[test]
+    fn acknowledging_zero_does_not_open_a_paid_event() {
+        assert_eq!(
+            delete_verdict(3, 1500, Some(0)),
+            DeleteVerdict::AcknowledgementIsStale {
+                bookings: 3,
+                stars: 1500,
+                acknowledged: 0
+            }
+        );
+    }
+
+    /// Nothing paid and nothing claimed: the ordinary delete, unchanged, and
+    /// the acknowledgement is not something it has to carry.
+    #[test]
+    fn an_acknowledgement_is_not_required_when_nothing_was_paid() {
+        assert_eq!(delete_verdict(0, 0, Some(0)), DeleteVerdict::Allowed);
+        assert_eq!(
+            delete_verdict(0, 0, Some(2)),
+            DeleteVerdict::AcknowledgementIsStale {
+                bookings: 0,
+                stars: 0,
+                acknowledged: 2
+            },
+            "a count that is false about this event was accepted as harmless"
+        );
     }
 }

@@ -267,8 +267,13 @@ pub const LOCKED_HAS_ENACTMENT : bool = false;
 pub const LOCKED_ROW_PRESENCE_SUFFICES : bool = false;
 
 ; CONVERTED. No column. It is ENACTED: after a successful order the CLIENT calls the clear endpoint
-; (src/ui/screens/checkout_screen.rs:1050-1056) and the server deletes the lines
+; (src/ui/screens/checkout_screen.rs:1086-1089) and the server deletes the lines
 ; (src/api/cart.rs:594-603). The cart row itself survives the call.
+; Address re-taken 2026-09-21: the block moved from :1050-1056 and lost a line when the identity
+; it is guarded by stopped being flattened to a fabricated 0 and became the Option it always was.
+; The guard is now `if let Some(tid)` instead of `!= 0`; what this section claims -- client-side
+; enactment, unchecked result, cart row survives -- is unchanged and was re-read at the new
+; address.
 pub const CONVERTED_HAS_COLUMN : bool = false;
 pub const CONVERTED_HAS_INFERENCE : bool = false;
 pub const CONVERTED_HAS_ENACTMENT : bool = true;
@@ -282,7 +287,7 @@ pub const ABANDONED_HAS_ENACTMENT : bool = false;
 pub const ABANDONED_ROW_PRESENCE_SUFFICES : bool = false;
 
 ; --- Conversion: enacted by the client, and its failure is silent ------------------------------------
-pub const CONVERSION_ENACTMENT_SITE : str = "src/ui/screens/checkout_screen.rs:1050-1056";
+pub const CONVERSION_ENACTMENT_SITE : str = "src/ui/screens/checkout_screen.rs:1086-1089";
 pub const CONVERSION_ENACTMENT_IS_CLIENT_SIDE : bool = true;
 pub const CONVERSION_IS_SERVER_ENFORCED : bool = false;
 ; The call is issued as a discarded result, so a dropped connection between the order commit and the
@@ -499,10 +504,11 @@ pub fn cart_write_refusal_status(outcome: u8) u16 {
 ;                  handler refuses at src/api/cart.rs:467.
 ; Five kinds in the table, and the number that can write a row today is zero.
 ; The shipped client reached this conclusion before this contract did, and says so in a comment:
-; src/ui/screens/cart_screen.rs:190-195 records that the empty cart is the only state that screen
+; src/ui/screens/cart_screen.rs:213-218 (:190-195 before the 2026-09-21 unpriced-line edits
+; added twenty-three lines above it) records that the empty cart is the only state that screen
 ; can be in, and names the same three causes -- parse_kind's four kinds, 083's drop, 085's
 ; unpublish. The census below is a second measurement of a fact already written down in src/.
-pub const CLIENT_SIDE_WITNESS : str = "src/ui/screens/cart_screen.rs:190-195";
+pub const CLIENT_SIDE_WITNESS : str = "src/ui/screens/cart_screen.rs:213-218";
 pub const KINDS_THAT_CAN_WRITE_A_ROW_TODAY : u8 = 0;
 pub const KINDS_REFUSED_AT_THE_GATE : u8 = 1;
 pub const KINDS_REFUSED_BY_A_DROPPED_TABLE : u8 = 1;

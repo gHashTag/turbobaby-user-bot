@@ -402,7 +402,23 @@ pub struct MergeCartItemDto {
     pub kind: String,
     pub catalog_id: String,
     pub quantity: i32,
-    pub unit_price: f64,
+    /// `Option` for the same reason `ServerCartItem::unit_price` is: the two
+    /// structs describe one wire shape, and a price the server omitted must
+    /// arrive as an absence on both roads into `CartItem::from_server` (D9).
+    ///
+    /// Outbound it is skipped when absent rather than sent as a `0`. The
+    /// server ignores this field on merge -- `collapse_merge_items`
+    /// (`src/api/cart.rs:626-634`) keeps only kind, catalog_id and quantity and
+    /// re-prices every line from the catalog -- so omitting it loses nothing
+    /// the server reads, while a fabricated `0` would be a number this client
+    /// never measured, written into a price-authoritative request. The server's
+    /// own request type requires the field, so such a payload is REFUSED rather
+    /// than merged: a visible failure where there is no honest number to send.
+    /// No reorder path can produce one -- `reorder_item_to_cart_item` drops a
+    /// line it cannot price before it becomes a `CartItem` at all.
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub unit_price: Option<f64>,
     pub name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub image_url: Option<String>,
@@ -454,7 +470,10 @@ impl From<CartRespDto> for Cart {
             .into_iter()
             .filter_map(|i| CartItem::from_server(i.into()))
             .collect();
-        let mut cart = Cart { items, total: 0.0 };
+        // `total` is overwritten on the next line; `None` is the honest
+        // placeholder for a figure that has not been computed yet, where a
+        // `0.0` would be a cart momentarily claiming to be free.
+        let mut cart = Cart { items, total: None };
         cart.recalculate_total();
         cart
     }

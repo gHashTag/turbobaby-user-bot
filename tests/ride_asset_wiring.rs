@@ -5,7 +5,12 @@ use std::process::Command;
 
 fn read(path: impl AsRef<Path>) -> String {
     let path = path.as_ref();
-    fs::read_to_string(path).unwrap_or_else(|error| panic!("read {}: {error}", path.display()))
+    // Normalised to LF: every section marker below anchors on "\n", and a
+    // CRLF checkout would make them all miss at once -- the guard then
+    // reports "missing section end" for a section that is present.
+    fs::read_to_string(path)
+        .unwrap_or_else(|error| panic!("read {}: {error}", path.display()))
+        .replace("\r\n", "\n")
 }
 
 /// Every screen module, read once.
@@ -107,10 +112,22 @@ fn run_ride_model_in_node(assertions: &str) {
         &ride[import_end..],
         assertions,
     );
+    // Handed to node as a file, not as `--eval`. The module is 43 885 bytes
+    // and a Windows command line stops at 32 767 characters, so the spawn
+    // failed with "file name or extension too long" and the four Ride model
+    // regressions silently never ran outside CI's Linux runner. A .mjs file
+    // is ESM by extension, so --input-type is no longer needed.
+    let script_path = std::env::temp_dir().join(format!(
+        "turbobaby_ride_model_{}_{:p}.mjs",
+        std::process::id(),
+        &script
+    ));
+    fs::write(&script_path, &script).expect("write the Ride model regression script");
     let output = Command::new("node")
-        .args(["--input-type=module", "--eval", &script])
+        .arg(&script_path)
         .output()
         .expect("run Node.js Ride model regression");
+    let _ = fs::remove_file(&script_path);
     assert!(
         output.status.success(),
         "Ride model regression failed:\nstdout:\n{}\nstderr:\n{}",
@@ -183,7 +200,7 @@ fn live_ride_wiring_references_only_existing_game_assets() {
     let skate: Vec<String> = sources
         .iter()
         .filter(|(_, source)| source.contains("SkateGame"))
-        .map(|(path, _)| path.display().to_string())
+        .map(|(path, _)| path.display().to_string().replace('\\', "/"))
         .collect();
     assert!(
         skate.is_empty(),

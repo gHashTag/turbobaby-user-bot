@@ -280,7 +280,7 @@ pub fn TeaScreen() -> Element {
                                                             c.add_item(CartItem {
                                                                 id: t_id.clone(),
                                                                 name: t_name.clone(),
-                                                                price: t_price,
+                                                                price: crate::trios::pricing::published_money(Some(t_price)),
                                                                 quantity: 1,
                                                                 image_url: None,
                                                                 item_type: CartItemType::Tea,
@@ -346,7 +346,7 @@ pub fn TeaScreen() -> Element {
                             cart.write().add_item(CartItem {
                                 id: add_id.clone(),
                                 name: add_name.clone(),
-                                price: t_price,
+                                price: crate::trios::pricing::published_money(Some(t_price)),
                                 quantity: q,
                                 image_url: tea.image_url.clone(),
                                 item_type: CartItemType::Tea,

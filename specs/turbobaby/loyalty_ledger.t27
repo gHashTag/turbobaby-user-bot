@@ -179,10 +179,15 @@ pub fn snapshot_accounting_closes(declarers_inside: u8, named_only: u8, snapshot
   return declarers_inside + named_only == snapshot_size;
 }
 
-; A snapshot that grew by fourteen names in one day is not a thing to quote without a date. This
-; returns false for any figure read on a different day than the one it is compared against.
-pub fn a_snapshot_figure_may_be_quoted_flatly(measured_at: str, quoted_at: str) bool {
-  return measured_at == quoted_at and false;
+; A snapshot that grew by fourteen names in one day is not a thing to quote without a date.
+; Matching dates are necessary and NOT sufficient, and that is the whole point of this file's
+; correction: the figure moved inside a single day, so a same-day quote is still a quote of a
+; number that no longer holds. An earlier form wrote the sufficiency as `... and false`, which
+; made the answer constant and both parameters decorative -- the assertions over it could not
+; have failed whatever the dates said. The third argument carries the reason instead of hiding
+; it, so every parameter is load-bearing and the one honest true case becomes reachable.
+pub fn a_snapshot_figure_may_be_quoted_flatly(measured_at: str, quoted_at: str, moved_within_the_day: bool) bool {
+  return measured_at == quoted_at and !moved_within_the_day;
 }
 
 ; --- Who may move the money ----------------------------------------------------------------------
@@ -783,8 +788,10 @@ test the_identity_snapshot_moved_under_this_file_and_the_date_is_what_saved_it {
   assert IDENTITY_CONSUMER_SNAPSHOT_SIZE > IDENTITY_CONSUMER_SNAPSHOT_SIZE_BEFORE_THE_RE_MEASUREMENT;
   assert IDENTITY_CONSUMER_SNAPSHOT_MEASURED_AT == "2026-09-21";
   assert IDENTITY_CONSUMER_SNAPSHOT_MEASURED_AT == IDENTITY_EDGE_CENSUS_MEASURED_AT;
-  assert a_snapshot_figure_may_be_quoted_flatly(IDENTITY_CONSUMER_SNAPSHOT_MEASURED_AT, IDENTITY_EDGE_CENSUS_MEASURED_AT) == false;
-  assert a_snapshot_figure_may_be_quoted_flatly("2026-09-20", "2026-09-21") == false;
+  assert a_snapshot_figure_may_be_quoted_flatly(IDENTITY_CONSUMER_SNAPSHOT_MEASURED_AT, IDENTITY_EDGE_CENSUS_MEASURED_AT, SNAPSHOT_MOVED_WHILE_THIS_FILE_WAS_BEING_CORRECTED) == false;
+  assert a_snapshot_figure_may_be_quoted_flatly("2026-09-20", "2026-09-21", false) == false;
+  assert a_snapshot_figure_may_be_quoted_flatly("2026-09-21", "2026-09-21", false) == true;
+  assert a_snapshot_figure_may_be_quoted_flatly("2026-09-21", "2026-09-21", true) == false;
 }
 
 test the_referral_contract_is_named_by_id_and_the_two_agree {
@@ -863,7 +870,7 @@ invariant a_missing_name_in_the_identity_snapshot_is_never_read_as_a_missing_edg
   assert identity_edge_census_closes(IDENTITY_EDGE_DECLARERS_INSIDE_THE_SNAPSHOT, IDENTITY_EDGE_DECLARERS_OUTSIDE_THE_SNAPSHOT, IDENTITY_EDGE_DECLARERS_IN_CORPUS) == true and snapshot_accounting_closes(IDENTITY_EDGE_DECLARERS_INSIDE_THE_SNAPSHOT, NAMED_BY_THE_OWNER_WITHOUT_DECLARING_THE_EDGE, IDENTITY_CONSUMER_SNAPSHOT_SIZE) == true
 
 invariant a_snapshot_figure_is_never_quoted_without_the_day_it_was_taken
-  assert a_snapshot_figure_may_be_quoted_flatly(IDENTITY_CONSUMER_SNAPSHOT_MEASURED_AT, IDENTITY_EDGE_CENSUS_MEASURED_AT) == false and SNAPSHOT_MOVED_WHILE_THIS_FILE_WAS_BEING_CORRECTED == true
+  assert a_snapshot_figure_may_be_quoted_flatly(IDENTITY_CONSUMER_SNAPSHOT_MEASURED_AT, IDENTITY_EDGE_CENSUS_MEASURED_AT, SNAPSHOT_MOVED_WHILE_THIS_FILE_WAS_BEING_CORRECTED) == false and SNAPSHOT_MOVED_WHILE_THIS_FILE_WAS_BEING_CORRECTED == true
 
 invariant no_referral_credit_is_a_ledger_bypass
   assert REFERRAL_CREDIT_SITES_AMONG_THE_BYPASSES == 0 and the_two_ledger_contracts_agree(REFERRAL_CREDIT_SITES_INSIDE_THE_PAIRED_SIX, REFERRAL_CREDIT_SITES_AMONG_THE_BYPASSES, BALANCE_WRITES_WITH_A_LEDGER_ROW) == true

@@ -247,9 +247,13 @@ fn EventCard(props: EventCardProps) -> Element {
             .map(|e| e.format("%H:%M").to_string());
         crate::trios::calendar::time_range(&from, to.as_deref())
     });
+    // The same subtraction the API publishes as `seats_available`, and now
+    // literally the same function (D15). `saturating_sub` here saturated at
+    // `i32::MIN`, so an event whose capacity was lowered under its guest list
+    // printed the seats-left label with -3 in it on the card.
     let avail = ev
         .max_seats
-        .map(|cap| cap.saturating_sub(ev.seats_taken as i32));
+        .map(|cap| crate::trios::calendar::seats_free(cap, ev.seats_taken));
     // Bind the published price once instead of testing it and then unwrapping
     // it with a zero fallback three lines later. The old shape was
     // `has_stars = price_stars.is_some_and(|s| s > 0)` followed by
@@ -392,7 +396,7 @@ fn EventBookingModal(props: EventBookingModalProps) -> Element {
 
     let cap_badge = ev.max_seats.map(|cap| {
         let taken = ev.seats_taken;
-        let avail = cap.saturating_sub(taken as i32);
+        let avail = crate::trios::calendar::seats_free(cap, taken);
         let cap_label = t(lang, T_EVENTS_CAPACITY).to_string();
         rsx! {
             div { style: "font-size:12px;color:#ffe600;background:rgba(255,230,0,0.1);padding:6px 10px;border:2px solid #ffe600;",

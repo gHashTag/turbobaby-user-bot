@@ -354,7 +354,10 @@ fn profile_order_item_to_cart_item(item: &ProfileOrderItem) -> Option<CartItem> 
     Some(CartItem {
         id,
         name,
-        price: price_hint,
+        // `price_hint` came through `published()?` above, so it is a real
+        // number by the time it reaches here: the reorder path drops a line it
+        // cannot price rather than carrying the absence forward.
+        price: Some(price_hint),
         quantity: item.quantity.max(1.0) as u32,
         image_url: None,
         item_type,

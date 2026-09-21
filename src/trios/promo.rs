@@ -556,7 +556,12 @@ mod tests {
     /// so a variant added to `Subject` fails here until the fixture covers it.
     #[test]
     fn every_subject_covers_every_variant() {
-        let source = include_str!("promo.rs");
+        // `include_str!` embeds the file exactly as it sits on disk, so a
+        // Windows checkout (`core.autocrlf`) hands this scan CRLF, the
+        // "\n}\n" anchor below matches nothing, and the guard panics with
+        // "enum close" on every run outside CI's Linux runner. Normalising
+        // once here keeps the anchors readable and costs nothing on LF.
+        let source = include_str!("promo.rs").replace("\r\n", "\n");
         let start = source
             .find("pub enum Subject {")
             .expect("Subject enum declaration");

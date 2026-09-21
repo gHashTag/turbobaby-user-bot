@@ -4,6 +4,7 @@
 // shipping reqwest's generic HTTP stack.
 
 use super::types::*;
+use crate::trios::validation::{init_data_size_admits, INIT_DATA_MAX_BYTES};
 use gloo_net::http::Request;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -19,6 +20,12 @@ pub enum ApiError {
 
     #[error("API error: {status} - {message}")]
     Api { status: u16, message: String },
+
+    /// The proof of identity we were handed is longer than the server will
+    /// read. Carries both numbers because the refusal has to be diagnosable
+    /// from a log line alone — "too long" without a length is a dead end.
+    #[error("initData is {len} bytes, over the {cap}-byte cap the server accepts")]
+    InitDataTooLarge { len: usize, cap: usize },
 }
 
 pub type Result<T> = std::result::Result<T, ApiError>;
@@ -27,20 +34,50 @@ pub type Result<T> = std::result::Result<T, ApiError>;
 pub struct ApiClient {
     base_url: String,
     /// Telegram WebApp initData; attached as `X-Telegram-Init-Data` to every
-    /// request. Caps inbound size to avoid hostile bloat header attacks.
+    /// request. Empty means this client was built [`ApiClient::anonymous`] and
+    /// sends no proof at all; it never means "we had a proof and dropped it".
     init_data: String,
 }
 
 impl ApiClient {
-    pub fn new(base_url: String, init_data: String) -> Self {
-        let init_data = if init_data.len() > 4096 {
-            String::new()
-        } else {
-            init_data
-        };
-        Self {
+    /// Build a client that will attach `init_data` to every request.
+    ///
+    /// Refuses a payload the server would refuse, and refuses it HERE, where
+    /// the caller can see it. Until 2026-09-21 this replaced an oversize
+    /// payload with `String::new()`; `with_auth` below then declined to send
+    /// an empty header, so the request left as an ANONYMOUS one. The customer
+    /// saw whatever an unauthenticated call produces — usually a 401 with no
+    /// hint that a 4 KB proof had been thrown away on this side of the wire.
+    /// A downgrade that quietly changes who the request claims to be is worse
+    /// than the failure it is hiding.
+    ///
+    /// The cap is the server's own (`src/api/auth.rs:70`), mirrored once in
+    /// `crate::trios::validation` and not copied a second time here. It is not
+    /// raised: `init_data_size_admits` is inclusive, so 4096 is still sent and
+    /// 4097 is the first length refused.
+    pub fn new(base_url: String, init_data: String) -> Result<Self> {
+        if !init_data_size_admits(init_data.len()) {
+            return Err(ApiError::InitDataTooLarge {
+                len: init_data.len(),
+                cap: INIT_DATA_MAX_BYTES,
+            });
+        }
+        Ok(Self {
             base_url: base_url.trim_end_matches('/').to_string(),
             init_data,
+        })
+    }
+
+    /// Build a client that carries no proof of identity on purpose.
+    ///
+    /// Separate from [`ApiClient::new`] so that "this call is anonymous" is a
+    /// decision written at the call site rather than something a constructor
+    /// arrives at after discarding a payload. Infallible by construction: an
+    /// empty string is under any cap.
+    pub fn anonymous(base_url: String) -> Self {
+        Self {
+            base_url: base_url.trim_end_matches('/').to_string(),
+            init_data: String::new(),
         }
     }
 

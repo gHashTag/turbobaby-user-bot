@@ -516,7 +516,7 @@ pub fn send_error_reaches_the_expected_error_filter(is_behind_fire_and_forget: b
 ; to restate this rule is pinned by its ESCAPE_RULE_IS_RESTATED_HERE, and the six sites where an
 ; AI answer is escaped are carried by its OUTPUT_IS_ESCAPED_AT_EVERY_SITE. Five of those six sit inside the
 ; three bot modules counted above (src/bot/commands.rs:361 and :387, src/bot/callbacks.rs:262 and
-; :300, src/bot/handlers.rs:79) and one is at src/promo.rs:580 outside them, which is why its six
+; :300, src/bot/handlers.rs:79) and one is at src/promo.rs:609 outside them, which is why its six
 ; and this file's eight do not contradict each other. That file owns the claim that ONE caller
 ; escapes at every one of its sites; this file owns what the helper escapes, in what order, and
 ; what a caller who forgets gets. Neither restates the other: a grep of ai_assist.t27 for the

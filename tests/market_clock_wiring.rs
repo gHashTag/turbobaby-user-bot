@@ -59,7 +59,8 @@ fn rust_sources() -> Vec<(String, String)> {
                     .strip_prefix(&parent)
                     .unwrap_or(&path)
                     .display()
-                    .to_string();
+                    .to_string()
+                    .replace('\\', "/");
                 out.push((label, fs::read_to_string(&path).expect("readable")));
             }
         }

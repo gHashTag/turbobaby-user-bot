@@ -35,14 +35,14 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/ai_assist.t27": {
         "module": "turbobaby-ai-assist",
         "id": "turbobaby/ai-assist",
-        "min_declarations": 197,
-        "min_checks": 41,
+        "min_declarations": 217,
+        "min_checks": 45,
     },
     "specs/turbobaby/api_surface.t27": {
         "module": "turbobaby-api-surface",
         "id": "turbobaby/api-surface",
-        "min_declarations": 152,
-        "min_checks": 39,
+        "min_declarations": 172,
+        "min_checks": 42,
     },
     "specs/turbobaby/availability.t27": {
         "module": "availability",
@@ -125,8 +125,8 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/events_booking.t27": {
         "module": "turbobaby-events-booking",
         "id": "turbobaby/events-booking",
-        "min_declarations": 260,
-        "min_checks": 73,
+        "min_declarations": 284,
+        "min_checks": 76,
     },
     "specs/turbobaby/game_score.t27": {
         "module": "turbobaby-game-score",
@@ -143,8 +143,8 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/http_cache.t27": {
         "module": "turbobaby-http-cache",
         "id": "turbobaby/http-cache",
-        "min_declarations": 164,
-        "min_checks": 38,
+        "min_declarations": 177,
+        "min_checks": 41,
     },
     "specs/turbobaby/legacy_retirement.t27": {
         "module": "turbobaby-legacy-retirement",
@@ -173,8 +173,8 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/notification_queue.t27": {
         "module": "turbobaby-notification-queue",
         "id": "turbobaby/notification-queue",
-        "min_declarations": 230,
-        "min_checks": 48,
+        "min_declarations": 270,
+        "min_checks": 52,
     },
     "specs/turbobaby/observability.t27": {
         "module": "turbobaby-observability",
@@ -203,8 +203,8 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/promo_broadcast.t27": {
         "module": "turbobaby-promo-broadcast",
         "id": "turbobaby/promo-broadcast",
-        "min_declarations": 162,
-        "min_checks": 52,
+        "min_declarations": 176,
+        "min_checks": 54,
     },
     "specs/turbobaby/publication.t27": {
         "module": "turbobaby-publish-proof",
@@ -281,8 +281,8 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/webapp_bridge.t27": {
         "module": "turbobaby-webapp-bridge",
         "id": "turbobaby/webapp-bridge",
-        "min_declarations": 209,
-        "min_checks": 51,
+        "min_declarations": 245,
+        "min_checks": 60,
     },
 }
 

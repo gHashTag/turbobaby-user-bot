@@ -216,7 +216,7 @@ pub fn discount_in_force(active: bool, served_percent: i64) i64 {
 ; on this contract's own function, not a claim about any shipped total.
 ; UNITS. The arithmetic is integer and scale-free: it holds for any integer unit the caller
 ; passes, and this file chooses none. The applier's own operand is an i64 whole unit
-; (src/trios/pricing.rs:328-330 records that prices and totals are i64 in the domain, naming
+; (src/trios/pricing.rs:384-386, was :328-330, records that prices and totals are i64 in the domain, naming
 ; ProductPrice.price and calculate_cart_total), and the minor-digit count that would relate a
 ; whole unit to a minor one belongs to turbobaby/market, which owns the money half of the
 ; profile. The _minor suffix follows the corpus spelling for an integer amount and is not a

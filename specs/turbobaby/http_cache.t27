@@ -56,9 +56,9 @@
 ; --
 ; WHERE THE BRIEF IS REFUTED, five times, all measured 2026-09-21.
 ; FIRST, and it moves the whole subject. The brief asks how "a cached body" is derived. No body
-; is cached in this process. src/api/cache.rs:12 declares the map as String -> String: a key to a
-; sixteen-character hex digest, and nothing else. src/api/cache.rs:53-62 stores that digest and
-; src/api/bikes.rs:499 hands it the body it has just built at :478. The origin therefore
+; is cached in this process. src/api/cache.rs:22 declares the map as String -> String: a key to a
+; sixty-four-character hex digest, and nothing else. src/api/cache.rs:95-128 stores that digest
+; and src/api/bikes.rs:499 hands it the body it has just built at :478. The origin therefore
 ; remembers a HASH and never a BODY. The only cached body in this system lives in the client,
 ; held there by the directive at src/api/bikes.rs:516-519, and it is reachable by no server-side
 ; action whatever. Everything the brief calls "the cache" is two different things with two
@@ -67,17 +67,20 @@
 ; :486 and inside that span, but the max-age the observation depends on is at :516-519 and
 ; outside it. The span given ends one line before the number that makes the comment true.
 ; THIRD. The brief asks for "the invalidation rule (or its absence)". Both are true at once and
-; neither alone is honest. Four invalidators exist -- src/api/cache.rs:73-77, :81-83, :87-89 and
-; :93-95 -- naming five keys between them. The live catalog writer creates keys beginning
+; neither alone is honest. Four invalidators exist -- src/api/cache.rs:160-164, :168-170, :174-176
+; and :180-182 -- naming five keys between them. The live catalog writer creates keys beginning
 ; "bikes" or "bikes_available" (src/api/bikes.rs:489-498), and not one of the five is such a key.
-; Three of the four carry a dead-code annotation and a Russian comment (src/api/cache.rs:79-80,
-; :85-86, :91-92, cited by path and not quoted) saying they await a future path. The fourth is
+; Three of the four carry a dead-code annotation and a Russian comment (src/api/cache.rs:166-167,
+; :172-173, :178-179, cited by path and not quoted) saying they await a future path. The fourth is
 ; called exactly once, at src/api/admin.rs:686, whose own comment at :683-685 names the endpoint
-; it is clearing for -- an endpoint src/ui/api/client.rs:119-121 records as retired by migration
+; it is clearing for -- an endpoint src/ui/api/client.rs:156-158 (was :119-121) records as retired by migration
 ; 083. So invalidation coverage of the live keys is zero, and it is harmless: correctness comes
-; from src/api/cache.rs:54 re-hashing the current body on every call, which is exactly what the
+; from src/api/cache.rs:120 re-hashing the current body on every call, which is exactly what the
 ; module docstring at src/api/bikes.rs:10-13 claims. That claim is true and it is about the
 ; origin only; it says nothing about the 60 seconds.
+; The line numbers in this paragraph moved on 2026-09-21 and the facts did not: the repair
+; described under THE TAG below lengthened src/api/cache.rs from 150 lines to 314. Four
+; invalidators, five key names, one call site, zero live keys -- all re-counted after the edit.
 ; FOURTH. The brief says a cached body can serve a stale door price. Today it cannot, and the
 ; reason is worth a constant rather than a footnote: src/api/bikes.rs:250-253 is a stub that
 ; answers every key with silence, so no door number has ever entered a body. The window is armed
@@ -100,9 +103,13 @@
 ; sets its own at :819, :834, :1016-1024, :1066 and :1093 for surfaces this contract does not
 ; own, and turbobaby/upload-media owns the stored-object read header, in
 ; READ_RESPONSE_IS_BROWSER_CACHEABLE (re-opened and confirmed 2026-09-21). It states no collision
-; probability for the truncated digest. It carries no price, no rate, no unit count, no family
-; key and no deposit. It carries nothing from D14 -- no renter, handle, phone, key code, plate,
-; debt, purchase cost or personal note -- in a constant, a fixture or a comment.
+; probability for the digest. Since 2026-09-21 src/api/cache.rs:95-116 does ANNOUNCE the entry
+; count each time it crosses a decade, and this file declares that announcement rather than
+; reading it as a ceiling: a log line changes nothing about what the map will accept, so the
+; refusal above stands unweakened and the growth simply stopped being invisible. It carries no
+; price, no rate, no unit count, no family key and no deposit. It carries nothing from D14 -- no
+; renter, handle, phone, key code, plate, debt, purchase cost or personal note -- in a constant,
+; a fixture or a comment.
 ; phi^2 + 1/phi^2 = 3 | TRINITY
 
 module turbobaby-http-cache;
@@ -117,8 +124,12 @@ pub const CALL_SITE : str = "src/api/bikes.rs";
 pub const DEPLOY_MANIFEST : str = "railway.toml";
 pub const DECISION : str = "D11";
 pub const DOOR_ISSUE : str = "#25";
-pub const IMPLEMENTATION_LINES : u16 = 150;
-pub const IMPLEMENTATION_UNIT_TESTS : u8 = 5;
+; 150 lines and 5 unit tests until 2026-09-21; the ETag repair below added the growth notice,
+; the entry count and three tests.
+pub const IMPLEMENTATION_LINES : u16 = 314;
+pub const IMPLEMENTATION_UNIT_TESTS : u8 = 8;
+pub const IMPLEMENTATION_LINES_BEFORE_REPAIR : u16 = 150;
+pub const IMPLEMENTATION_UNIT_TESTS_BEFORE_REPAIR : u8 = 5;
 
 ; --- Ownership edges -----------------------------------------------------------------------------
 ; Five owners, five abstract parameters, nothing restated. The first edge is the one a reader is
@@ -152,16 +163,28 @@ pub const OTHER_MAX_AGE_OWNER_ID : str = "turbobaby/request-identity";
 pub const OTHER_ENTITY_TAG_MENTIONER_ID : str = "turbobaby/catalog-api";
 
 ; --- What the tag is computed over ---------------------------------------------------------------
-; src/api/cache.rs:24-35. SHA-256 over the response body string; the first eight bytes of the
-; thirty-two-byte digest are kept and rendered as sixteen lowercase hex characters. The docstring
-; at :8-9 states why a stable hash was chosen over the standard-library hasher. Nothing else is
+; src/api/cache.rs:32-51. SHA-256 over the response body string; the WHOLE thirty-two-byte
+; digest is kept and rendered as sixty-four lowercase hex characters by hex::encode. The docstring
+; at :7-19 states why a stable hash was chosen over the standard-library hasher. Nothing else is
 ; hashed: not the cache key, not a request header, not the query. The selection is carried by the
 ; KEY instead (src/api/bikes.rs:489-498), which is a different mechanism with a different failure.
+; WHAT CHANGED, AND WHEN. Until 2026-09-21 this function kept hash[0..8] and rendered sixteen
+; characters, so 24 of the 32 bytes were discarded and the tag was 64 bits wide. The measurement
+; is preserved below as TAG_KEPT_BYTES_BEFORE_REPAIR rather than overwritten, because the old
+; width is what every claim in this file about a stale confirmation used to rest on: at 64 bits a
+; birthday collision arrives around 2^32 distinct bodies, which is a number a catalog can reach,
+; and the consequence -- a changed body answered as unchanged -- is the one way the re-hash
+; guarantee could fail. Nothing was bought by the truncation: the same format! call, 48 more bytes
+; per entry. The repair landed with a unit test anchored on FIPS 180-4's own worked examples
+; (src/api/cache.rs:208-219) rather than on a second call into sha2, because a test that computes
+; its subject the way its subject does would have stayed green through the truncation too.
 pub const HASH_ALGORITHM : str = "sha256";
 pub const BITS_PER_BYTE : u16 = 8;
 pub const HEX_CHARS_PER_BYTE : u16 = 2;
 pub const DIGEST_BYTES : u16 = 32;
-pub const TAG_KEPT_BYTES : u16 = 8;
+pub const TAG_KEPT_BYTES : u16 = 32;
+pub const TAG_KEPT_BYTES_BEFORE_REPAIR : u16 = 8;
+pub const TAG_WIDTH_REPAIRED_AT : str = "2026-09-21";
 pub const TAG_HASHES_THE_BODY : bool = true;
 pub const TAG_HASHES_THE_KEY : bool = false;
 pub const TAG_HASHES_A_HEADER : bool = false;
@@ -191,19 +214,21 @@ pub fn two_keys_can_share_a_tag(bodies_are_byte_identical: bool) bool {
   return bodies_are_byte_identical;
 }
 
-; The truncation is the one hole in the origin's guarantee, and this file states its existence
-; and refuses its rate. A collision makes both the stored digest and the fresh digest the same
-; value, so a genuinely changed body reads as unchanged.
+; A collision makes both the stored digest and the fresh digest the same value, so a genuinely
+; changed body reads as unchanged. That mechanism is stated here and its rate is still refused.
+; What changed on 2026-09-21 is the width it operates at, not the mechanism: the predicate below
+; takes the collision as a parameter and is written over no width at all, which is why the repair
+; needed no edit to it.
 pub const COLLISION_RATE_IS_MEASURED : bool = false;
-pub const COLLISION_RATE_NOTE : str = "The digest is truncated to eight bytes at src/api/cache.rs:31-34 and nothing in this repository measures, bounds or monitors a collision on it. A probability written here would be arithmetic about a hash function, not a measurement of this system, so the rate is declared absent instead. What IS measured is the width and the consequence, both pinned above and below.";
+pub const COLLISION_RATE_NOTE : str = "Nothing in this repository measures, bounds or monitors a collision on this digest, and that was equally true when the digest was truncated to eight bytes -- so the truncation was a hole nobody was watching, rather than a risk somebody had priced. src/api/cache.rs:49-51 now keeps all 32 bytes. A probability written here would be arithmetic about a hash function, not a measurement of this system, so the rate stays declared absent. What IS measured is the width, before and after, and the consequence -- all pinned above and below.";
 
 pub fn changed_body_reads_as_unchanged(body_changed: bool, truncated_digest_collided: bool) bool {
   return body_changed and truncated_digest_collided;
 }
 
 ; --- What the origin remembers -------------------------------------------------------------------
-; src/api/cache.rs:12 -- a map from key to digest behind a read-write lock. No body is stored.
-; src/api/cache.rs:53-62 -- the current body is re-hashed on EVERY call, so the stored digest
+; src/api/cache.rs:22 -- a map from key to digest behind a read-write lock. No body is stored.
+; src/api/cache.rs:118-128 -- the current body is re-hashed on EVERY call, so the stored digest
 ; never outlives the body it describes. src/api/bikes.rs:478 builds that body from the database
 ; before :499 consults the map, so a served full body is always freshly built.
 pub const ORIGIN_REMEMBERS_A_DIGEST : bool = true;
@@ -254,14 +279,15 @@ pub const INVALIDATOR_CALL_SITES : u8 = 1;
 pub const INVALIDATORS_NAMING_A_LIVE_KEY : u8 = 0;
 pub const LIVE_KEY_BASES : [2]str = ["bikes", "bikes_available"];
 pub const LIVE_KEY_BASE_COUNT : u8 = 2;
-pub const INVALIDATION_NOTE : str = "The four invalidators are at src/api/cache.rs:73-77, :81-83, :87-89 and :93-95; the last three carry a dead-code annotation. The single call site is src/api/admin.rs:686 and it clears keys for a route src/ui/api/client.rs:119-121 records as retired by migration 083; legacy_retirement.t27 owns that census. The live writer at src/api/bikes.rs:489-499 creates keys under the two bases above. Coverage of a live key is therefore zero, and harmless, because the origin re-hashes.";
+pub const INVALIDATION_NOTE : str = "The four invalidators are at src/api/cache.rs:160-164, :168-170, :174-176 and :180-182; the last three carry a dead-code annotation. The single call site is src/api/admin.rs:686 and it clears keys for a route src/ui/api/client.rs:119-121 records as retired by migration 083; legacy_retirement.t27 owns that census. The live writer at src/api/bikes.rs:489-499 creates keys under the two bases above. Coverage of a live key is therefore zero, and harmless, because the origin re-hashes.";
 
 pub fn a_write_can_clear_this_key(key_is_named_by_an_invalidator: bool, a_call_site_exists: bool) bool {
   return key_is_named_by_an_invalidator and a_call_site_exists;
 }
 
 ; An entry dies two ways and no others. There is no expiry timer on a map entry anywhere in
-; src/api/cache.rs, so an entry that is neither removed nor lost to a restart lives forever.
+; src/api/cache.rs, so an entry that is neither removed nor lost to a restart lives forever. The
+; growth notice added on 2026-09-21 does not change this: it counts, it does not expire.
 pub const ENTRY_HAS_A_TIMER : bool = false;
 pub const ENTRY_LIFETIME : str = "the process";
 
@@ -269,25 +295,47 @@ pub fn entry_is_gone(process_restarted: bool, key_removed: bool) bool {
   return process_restarted or key_removed;
 }
 
-; --- Size, and the refusal to invent one ---------------------------------------------------------
-; src/api/cache.rs holds a plain map: no capacity argument, no eviction, no accounting. The key
-; space is shaped by the caller, not by the fleet: src/api/bikes.rs:381-395 folds the class and
-; both displacement bounds into the key, and the parser at :309-337 rejects only a non-integer, a
-; negative value and an inverted band. Every remaining non-negative integer is a distinct key.
-; The class term is the one closed dimension -- src/api/bikes.rs:944 declares two values and the
-; parser at :300 admits no third -- and two values do not bound a product with two open ones.
+; --- Size: still unbounded, no longer unseen -------------------------------------------------------
+; src/api/cache.rs holds a plain map: no capacity, no eviction. The key space is shaped by the
+; caller, not by the fleet: src/api/bikes.rs:381-395 folds the class and both displacement bounds
+; into the key, and the parser at :309-337 rejects only a non-integer, a negative value and an
+; inverted band. Every remaining non-negative integer is a distinct key. The class term is the one
+; closed dimension -- src/api/bikes.rs:944 declares two values and the parser at :300 admits no
+; third -- and two values do not bound a product with two open ones.
+; WHAT CHANGED ON 2026-09-21, AND WHAT DID NOT. Until then the map had no accounting either: the
+; entry count could not be read from anywhere, so growth was not merely unbounded but invisible,
+; and the first evidence of it would have been the process's memory. src/api/cache.rs:67-69 now
+; reports the count and :104-114 writes it to the log the first time it reaches 10, 100, 1000 and
+; so on. A decade is a reporting cadence and NOT a threshold -- nothing refuses, nothing is
+; evicted, no behaviour differs on either side of it -- which is exactly why it could be chosen
+; here without an owner: it states a fact rather than setting a policy. A capacity could not have
+; been chosen the same way. None is published anywhere in this repository, the nearest bound is
+; turbobaby/rate-limit's, which bounds attempts and not distinct keys, and a number invented here
+; would have been read as the owner's ceiling by everyone who came after. So the two booleans
+; below still read false, and the third one is what is new.
 pub const ENTRY_LIMIT_IS_SET : bool = false;
 pub const EVICTION_RULE_EXISTS : bool = false;
+pub const GROWTH_IS_ANNOUNCED : bool = true;
+pub const GROWTH_NOTICE_CADENCE : str = "each decade: 10, 100, 1000, and so on";
+pub const GROWTH_NOTICE_FIRST_AT : u16 = 10;
+pub const GROWTH_NOTICE_IS_A_CEILING : bool = false;
+pub const ENTRY_COUNT_IS_READABLE : bool = true;
 pub const NOT_A_COUNT : i32 = -1;
 pub const MAX_ENTRIES : i32 = NOT_A_COUNT;
 pub const CLASS_VALUES_ACCEPTED : u8 = 2;
 pub const CLASS_VALUE_SET_IS_CLOSED : bool = true;
 pub const CC_BOUND_LOW_ACCEPTED : i32 = 0;
 pub const CC_BOUND_IS_CAPPED : bool = false;
-pub const SIZE_REFUSAL_NOTE : str = "No entry ceiling exists to pin. MAX_ENTRIES carries the NOT_A_COUNT sentinel rather than a plausible figure, because a figure here would be an invention and because the honest statement is stronger: the number of distinct keys is a function of caller-supplied integers, and the only bound on how many a caller may ask for lives in rate_limit.t27 rather than here.";
+pub const SIZE_REFUSAL_NOTE : str = "No entry ceiling exists to pin. MAX_ENTRIES carries the NOT_A_COUNT sentinel rather than a plausible figure, because a figure here would be an invention and because the honest statement is stronger: the number of distinct keys is a function of caller-supplied integers, and the only bound on how many a caller may ask for lives in rate_limit.t27 rather than here. Since 2026-09-21 the count is at least VISIBLE -- src/api/cache.rs:67-69 reports it and :104-114 logs it at each decade -- and the sentinel is unchanged by that, because a measurement is not a maximum.";
 
 pub fn map_entries_are_bounded(entry_limit_is_set: bool, eviction_rule_exists: bool) bool {
   return entry_limit_is_set or eviction_rule_exists;
+}
+
+; Bounded and observable are different questions, and answering the second one yes must never be
+; allowed to read as yes to the first. Two functions, never one.
+pub fn growth_is_observable(entry_limit_is_set: bool, eviction_rule_exists: bool, growth_is_announced: bool) bool {
+  return entry_limit_is_set or eviction_rule_exists or growth_is_announced;
 }
 
 pub fn key_space_is_bounded_by_the_fleet(cc_bound_is_capped: bool, class_value_set_is_closed: bool) bool {
@@ -406,9 +454,11 @@ pub fn served_copy_is_a_confirmation(live_check_performed: bool, age_seconds: u3
 
 ; --- Where the map lives ---------------------------------------------------------------------------
 ; src/main.rs:715 constructs one map and hands it to the shared state, and it is the only such
-; construction in the binary. A grep that counts three has counted the test module: the other two
-; ETagCache::new() calls are src/api/cache.rs:125 and :134, both inside that file's cfg(test)
-; block at :103. There is no external cache dependency in the binary or its manifest --
+; construction in the binary. A grep that counts four has counted the test module: the other three
+; ETagCache::new() calls are src/api/cache.rs:252, :289 and :298, all inside that file's cfg(test)
+; block at :190. They were two at :125 and :134 before 2026-09-21; the count a grep returns is a
+; fact about the test module and moves whenever a test is added. There is no external cache
+; dependency in the binary or its manifest --
 ; grep -rni "redis\|memcached\|moka\|dashmap" Cargo.toml src/ returned 0 on 2026-09-21.
 ; railway.toml:14-18 declares one region at one replica, so today's coherence is a fact about a
 ; deployment file and not about this code.
@@ -493,17 +543,33 @@ test the_local_outcome_discriminants_are_not_wire_numbers {
   assert THE_CONDITIONAL_OUTCOME_IS_OWNED_THERE == true;
 }
 
-test the_tag_is_a_truncated_digest_of_the_body_alone {
+test the_tag_is_the_whole_digest_of_the_body_alone {
   assert HASH_ALGORITHM == "sha256";
   assert DIGEST_BYTES == 32;
-  assert TAG_KEPT_BYTES == 8;
-  assert tag_bits_kept(TAG_KEPT_BYTES) == 64;
-  assert tag_hex_chars(TAG_KEPT_BYTES) == 16;
-  assert tag_bytes_discarded(DIGEST_BYTES, TAG_KEPT_BYTES) == 24;
+  assert TAG_KEPT_BYTES == 32;
+  assert TAG_KEPT_BYTES == DIGEST_BYTES;
+  assert tag_bits_kept(TAG_KEPT_BYTES) == 256;
+  assert tag_hex_chars(TAG_KEPT_BYTES) == 64;
+  assert tag_bytes_discarded(DIGEST_BYTES, TAG_KEPT_BYTES) == 0;
   assert tag_depends_only_on_the_body(TAG_HASHES_THE_BODY, TAG_HASHES_THE_KEY, TAG_HASHES_A_HEADER) == true;
   assert tag_depends_only_on_the_body(true, true, false) == false;
   assert tag_depends_only_on_the_body(true, false, true) == false;
   assert tag_depends_only_on_the_body(false, false, false) == false;
+}
+
+; The width the tag had until 2026-09-21, kept executable rather than described. The same three
+; functions answer it, which is what makes the two states comparable at all.
+test the_old_width_is_still_readable_and_is_no_longer_the_shipped_one {
+  assert TAG_KEPT_BYTES_BEFORE_REPAIR == 8;
+  assert TAG_WIDTH_REPAIRED_AT == "2026-09-21";
+  assert tag_bits_kept(TAG_KEPT_BYTES_BEFORE_REPAIR) == 64;
+  assert tag_hex_chars(TAG_KEPT_BYTES_BEFORE_REPAIR) == 16;
+  assert tag_bytes_discarded(DIGEST_BYTES, TAG_KEPT_BYTES_BEFORE_REPAIR) == 24;
+  assert TAG_KEPT_BYTES != TAG_KEPT_BYTES_BEFORE_REPAIR;
+  assert IMPLEMENTATION_LINES_BEFORE_REPAIR == 150;
+  assert IMPLEMENTATION_UNIT_TESTS_BEFORE_REPAIR == 5;
+  assert IMPLEMENTATION_LINES > IMPLEMENTATION_LINES_BEFORE_REPAIR;
+  assert IMPLEMENTATION_UNIT_TESTS > IMPLEMENTATION_UNIT_TESTS_BEFORE_REPAIR;
 }
 
 test a_shared_tag_across_keys_means_identical_bytes_and_nothing_worse {
@@ -519,8 +585,8 @@ test the_origin_stores_a_digest_and_never_a_body {
   assert ORIGIN_REHASHES_EVERY_CALL == true;
   assert BODY_IS_REBUILT_PER_REQUEST == true;
   assert IMPLEMENTATION == "src/api/cache.rs";
-  assert IMPLEMENTATION_LINES == 150;
-  assert IMPLEMENTATION_UNIT_TESTS == 5;
+  assert IMPLEMENTATION_LINES == 314;
+  assert IMPLEMENTATION_UNIT_TESTS == 8;
 }
 
 test all_three_conditions_are_required_for_the_short_answer {
@@ -573,6 +639,13 @@ test no_size_is_invented_and_the_key_space_is_caller_shaped {
   assert MAX_ENTRIES == NOT_A_COUNT;
   assert MAX_ENTRIES == -1;
   assert map_entries_are_bounded(ENTRY_LIMIT_IS_SET, EVICTION_RULE_EXISTS) == false;
+  assert GROWTH_IS_ANNOUNCED == true;
+  assert ENTRY_COUNT_IS_READABLE == true;
+  assert GROWTH_NOTICE_FIRST_AT == 10;
+  assert GROWTH_NOTICE_IS_A_CEILING == false;
+  assert growth_is_observable(ENTRY_LIMIT_IS_SET, EVICTION_RULE_EXISTS, GROWTH_IS_ANNOUNCED) == true;
+  assert growth_is_observable(false, false, false) == false;
+  assert growth_is_observable(true, false, false) == true;
   assert map_entries_are_bounded(true, false) == true;
   assert map_entries_are_bounded(false, true) == true;
   assert CLASS_VALUES_ACCEPTED == 2;
@@ -684,8 +757,13 @@ invariant the_origin_never_holds_a_body
 invariant the_tag_is_derived_from_the_body_and_from_nothing_else
   assert tag_depends_only_on_the_body(TAG_HASHES_THE_BODY, TAG_HASHES_THE_KEY, TAG_HASHES_A_HEADER) == true and tag_depends_only_on_the_body(true, true, false) == false and tag_depends_only_on_the_body(true, false, true) == false
 
-invariant the_kept_width_is_sixty_four_bits_and_the_rest_is_discarded
-  assert tag_bits_kept(TAG_KEPT_BYTES) == 64 and tag_hex_chars(TAG_KEPT_BYTES) == 16 and tag_bytes_discarded(DIGEST_BYTES, TAG_KEPT_BYTES) == 24
+invariant the_whole_digest_is_kept_and_nothing_is_discarded
+  assert tag_bits_kept(TAG_KEPT_BYTES) == 256 and tag_hex_chars(TAG_KEPT_BYTES) == 64 and tag_bytes_discarded(DIGEST_BYTES, TAG_KEPT_BYTES) == 0 and TAG_KEPT_BYTES == DIGEST_BYTES
+
+; The old width, held as an invariant so the repair cannot be undone quietly: a return to eight
+; bytes makes the two constants equal and this fails.
+invariant the_shipped_width_is_not_the_width_that_was_repaired
+  assert TAG_KEPT_BYTES != TAG_KEPT_BYTES_BEFORE_REPAIR and tag_bits_kept(TAG_KEPT_BYTES_BEFORE_REPAIR) == 64 and tag_bytes_discarded(DIGEST_BYTES, TAG_KEPT_BYTES_BEFORE_REPAIR) == 24
 
 invariant no_collision_rate_is_stated_and_the_consequence_is
   assert COLLISION_RATE_IS_MEASURED == false and changed_body_reads_as_unchanged(true, true) == true and origin_can_confirm_a_stale_body(true, false, true) == true
@@ -704,6 +782,11 @@ invariant no_entry_carries_a_timer_so_only_restart_or_removal_ends_one
 
 invariant no_entry_ceiling_is_invented
   assert ENTRY_LIMIT_IS_SET == false and EVICTION_RULE_EXISTS == false and MAX_ENTRIES == NOT_A_COUNT and map_entries_are_bounded(ENTRY_LIMIT_IS_SET, EVICTION_RULE_EXISTS) == false
+
+; Unbounded and unseen are two states, and only the second one was fixed. An announcement must
+; never be read as a bound: both halves are asserted together so neither can drift into the other.
+invariant growth_is_visible_and_still_unbounded
+  assert growth_is_observable(ENTRY_LIMIT_IS_SET, EVICTION_RULE_EXISTS, GROWTH_IS_ANNOUNCED) == true and map_entries_are_bounded(ENTRY_LIMIT_IS_SET, EVICTION_RULE_EXISTS) == false and GROWTH_NOTICE_IS_A_CEILING == false and MAX_ENTRIES == NOT_A_COUNT
 
 invariant the_key_space_is_not_bounded_by_the_fleet
   assert key_space_is_bounded_by_the_fleet(CC_BOUND_IS_CAPPED, CLASS_VALUE_SET_IS_CLOSED) == false and CC_BOUND_IS_CAPPED == false

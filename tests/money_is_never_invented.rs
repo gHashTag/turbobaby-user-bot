@@ -107,7 +107,8 @@ fn no_money_or_rate_is_invented_with_unwrap_or_zero() {
             .strip_prefix(env!("CARGO_MANIFEST_DIR"))
             .unwrap_or(&path)
             .display()
-            .to_string();
+            .to_string()
+            .replace('\\', "/");
 
         for (i, line) in text.lines().enumerate() {
             if !is_code(line) {

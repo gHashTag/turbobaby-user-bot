@@ -1,11 +1,12 @@
 use crate::trios::checkout_errors::{friendly_order_error, friendly_order_error_code};
 use crate::trios::core::Lang;
 use crate::trios::i18n::{
-    t, tf, T_BACK, T_CHECKOUT_ADDRESS_LABEL, T_CHECKOUT_ADDRESS_PLACEHOLDER,
-    T_CHECKOUT_AGE_CONFIRM, T_CHECKOUT_AGE_NOTICE, T_CHECKOUT_BLOCKED_TITLE, T_CHECKOUT_BONUS,
-    T_CHECKOUT_BONUS_APPLIED, T_CHECKOUT_BONUS_AVAILABLE, T_CHECKOUT_BONUS_MAX,
-    T_CHECKOUT_CART_EMPTY, T_CHECKOUT_CASH_ON_DELIVERY, T_CHECKOUT_CHANGE, T_CHECKOUT_ERR_400,
-    T_CHECKOUT_ERR_ADDRESS, T_CHECKOUT_ERR_ADDRESS_LONG, T_CHECKOUT_ERR_ITEMS, T_CHECKOUT_ERR_NAME,
+    t, tf, T_BACK, T_BIKE_PRICE_ON_REQUEST, T_CHECKOUT_ADDRESS_LABEL,
+    T_CHECKOUT_ADDRESS_PLACEHOLDER, T_CHECKOUT_AGE_CONFIRM, T_CHECKOUT_AGE_NOTICE,
+    T_CHECKOUT_BLOCKED_TITLE, T_CHECKOUT_BONUS, T_CHECKOUT_BONUS_APPLIED,
+    T_CHECKOUT_BONUS_AVAILABLE, T_CHECKOUT_BONUS_MAX, T_CHECKOUT_CART_EMPTY,
+    T_CHECKOUT_CASH_ON_DELIVERY, T_CHECKOUT_CHANGE, T_CHECKOUT_ERR_400, T_CHECKOUT_ERR_ADDRESS,
+    T_CHECKOUT_ERR_ADDRESS_LONG, T_CHECKOUT_ERR_ITEMS, T_CHECKOUT_ERR_NAME,
     T_CHECKOUT_ERR_NAME_LONG, T_CHECKOUT_ERR_NETWORK, T_CHECKOUT_ERR_NO_TELEGRAM,
     T_CHECKOUT_ERR_PARSE, T_CHECKOUT_ERR_PHONE, T_CHECKOUT_ERR_PHONE_INVALID,
     T_CHECKOUT_ERR_PHONE_LONG, T_CHECKOUT_FULFILLMENT, T_CHECKOUT_FULFILLMENT_DELIVERY,
@@ -21,9 +22,9 @@ use crate::trios::i18n::{
 };
 use crate::trios::store::{checkout_blockers, normalize_phone, validate_checkout_for, Fulfillment};
 use crate::ui::api::context::api_base_url;
-use crate::ui::api::http::{
-    delete_authed, fetch_text_authed_full, post_json_authed_idempotent_full,
-};
+// `fetch_text_authed_full` left this import with the 409 arm that was its only
+// caller here (see `submit_order_with_retry`).
+use crate::ui::api::http::{delete_authed, post_json_authed_idempotent_full};
 use crate::ui::api::types::{DeliveryZone, DeliveryZonesResponse};
 use crate::ui::components::error_banner::ErrorBanner;
 use crate::ui::routes::Route;
@@ -121,17 +122,34 @@ enum SubmitResult {
 }
 
 /// Cycle #77: retry checkout submission with exponential backoff.
-/// Retries on 5xx/network errors up to 3 attempts (delays 1s, 2s, 4s).
-/// 409 Conflict is treated as "already accepted" and we recover the
-/// order id from the user's recent orders so the customer lands on the
-/// success screen instead of an error banner.
+///
+/// The loop chains one immediate attempt to the three backoff delays, so the
+/// ceiling is FOUR requests per tap and not three — the count this comment
+/// claimed until 2026-09-21, and the one a reader sizing the worst case would
+/// have taken away. Only a network error and a 5xx are retried; every other
+/// status is terminal and reaches the customer.
+///
+/// A 409 arm stood here until 2026-09-21. It called 409 "already accepted",
+/// fetched `/api/orders/user/{id}` and returned the FIRST element of a
+/// newest-first list as the order the customer had just placed — chosen by
+/// recency, never checked against the idempotency key that was sent. It was
+/// removed rather than repaired because it cannot fire: `POST /api/orders`
+/// answers a replay with 200 and an `idempotent_replay` flag
+/// (`src/api/orders.rs:1245-1250`), refuses an unusable key with 400 (:764),
+/// and the only `StatusCode::CONFLICT` in that file is `cancel_order`
+/// (:2210). A 409 from this endpoint now falls to the terminal arm below and
+/// is shown to the customer, which is the honest outcome for a status nothing
+/// in the server is known to send. `tests/wire_absence_wiring.rs` re-takes
+/// that measurement on every run, so the premise cannot rot silently.
+///
+/// Removing the arm also removed its `telegram_id.unwrap_or(0)`: the recovery
+/// URL was built for user 0 whenever identity was absent, so the one path the
+/// branch could have taken would have queried a user that does not exist.
 async fn submit_order_with_retry(
     url: &str,
     init_data: &str,
     idempotency_key: &str,
     body: &str,
-    base: &str,
-    telegram_id: i64,
 ) -> SubmitResult {
     const DELAYS_MS: [u32; 3] = [1_000, 2_000, 4_000];
     let mut last_status = 0u16;
@@ -157,24 +175,6 @@ async fn submit_order_with_retry(
                         }
                     }
                     return SubmitResult::ParseError;
-                }
-
-                if status == 409 {
-                    let recent_url = format!("{}/api/orders/user/{}", base, telegram_id);
-                    if let Ok((200, orders_body)) =
-                        fetch_text_authed_full(&recent_url, init_data).await
-                    {
-                        if let Ok(val) = serde_json::from_str::<serde_json::Value>(&orders_body) {
-                            if let Some(arr) = val.get("orders").and_then(|v| v.as_array()) {
-                                if let Some(first) = arr.first() {
-                                    if let Some(id) = first.get("id").and_then(|v| v.as_str()) {
-                                        return SubmitResult::Success(id.to_string());
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    return SubmitResult::HttpError(status, response_body);
                 }
 
                 if (500..600).contains(&status) {
@@ -354,7 +354,17 @@ fn CheckoutStepper(props: CheckoutStepperProps) -> Element {
 pub fn CheckoutScreen() -> Element {
     let mut cart = use_context::<Signal<Cart>>();
     let cart_items = cart.read().items.clone();
-    let cart_total = cart.read().total;
+    // D9/D11: a cart holding a line nobody priced has no total, so there is no
+    // number to quote and no order to place. `cart_is_quotable` gates every
+    // figure this screen renders and the submit handler refuses outright; the
+    // cart screen refuses earlier, at the door into here.
+    let cart_is_quotable = !cart.read().has_unpriced_line();
+    // The sum of the lines that DO carry a price -- a measured figure, never
+    // shown or sent as the cart's total. It is reached only when the cart is
+    // quotable, and then it EQUALS the total; the bonus and star caps are
+    // arithmetic on a subtotal, and threading an `Option` through them would
+    // have bought a branch per cap and no extra honesty.
+    let priced_subtotal = cart.read().priced_subtotal();
     let mut customer_name = use_signal(String::new);
     let mut customer_phone = use_signal(String::new);
     let mut delivery_address = use_signal(String::new);
@@ -705,7 +715,7 @@ pub fn CheckoutScreen() -> Element {
     // The cart total used to have a garden-reward discount subtracted here.
     // Nothing subtracts from it now: the only discounts left are bonus points
     // and stars, both of which the server re-verifies.
-    let pre_bonus_total = cart_total.max(0.0);
+    let pre_bonus_total = priced_subtotal.max(0.0);
     // Loop #14: bonus redemption is capped by both the user's balance and the
     // business-configured share of the order subtotal. Clamp the applied amount
     // so the UI never proposes a value the server would reject.
@@ -719,6 +729,15 @@ pub fn CheckoutScreen() -> Element {
     let max_stars = (after_bonus.floor() as i64).min(stars_balance).max(0);
     let stars_val = (*stars_to_use.read()).clamp(0, max_stars.max(0));
     let effective_total = (after_bonus - stars_val as f64).max(0.0);
+    // The one place this screen turns the total into text. A dash when the cart
+    // cannot be quoted; `format_baht` otherwise, NOT `thb_or_dash` -- an order
+    // paid entirely with bonus and stars really does come to zero, and that
+    // zero is a computed figure rather than the absence D9 is about.
+    let effective_total_str = if cart_is_quotable {
+        crate::trios::pricing::format_baht(effective_total)
+    } else {
+        crate::ui::components::bike_card::DASH.to_string()
+    };
 
     // Loop #15: emit conversion events when the customer actually uses loyalty
     // rewards. Each fires once per mount to keep the signal clean. (A third
@@ -818,10 +837,17 @@ pub fn CheckoutScreen() -> Element {
 
     // Sync the native Telegram MainButton with the live total and form validity.
     let cart_len = cart_items.len();
+    // The effect and the submit callback both outlive this scope, so each takes
+    // its own copy of the one rendered figure rather than recomputing it.
+    let main_button_total = effective_total_str.clone();
+    let restore_total = effective_total_str.clone();
     use_effect(move || {
         let lang = crate::ui::lang::current_lang();
-        let total_str = crate::trios::pricing::format_baht(effective_total);
-        tg.set_main_button_text(&format!("{} — {}", t(lang, T_PLACE_ORDER), total_str));
+        tg.set_main_button_text(&format!(
+            "{} — {}",
+            t(lang, T_PLACE_ORDER),
+            main_button_total
+        ));
         // Same gate as the in-page button — one source of truth, so the native
         // MainButton and the on-screen button can never disagree about whether
         // the order is placeable.
@@ -835,7 +861,10 @@ pub fn CheckoutScreen() -> Element {
             age_confirmed(),
         )
         .is_empty()
-            && !is_processing();
+            && !is_processing()
+            // An unquotable cart blocks the native button too: `checkout_blockers`
+            // reasons about the form, and this is a fact about the cart.
+            && cart_is_quotable;
         if valid {
             tg.enable_main_button();
         } else {
@@ -847,6 +876,18 @@ pub fn CheckoutScreen() -> Element {
     let submit_selected_zone = selected_zone.clone();
     let submit_order = use_callback(move |_: ()| {
         if is_processing() {
+            return;
+        }
+        // D9/D11, before any form check: a cart holding a line the shop cannot
+        // price cannot be ordered, because the body would carry a `subtotal`
+        // and a `total` computed from the priced lines alone -- a number nobody
+        // measured, sent to a price-authoritative endpoint and charged. The
+        // customer is told what D11 requires instead of being told nothing,
+        // and the sentence is the one the catalog already ships for the same
+        // situation (no new wording, no new locale row).
+        if !cart_is_quotable {
+            order_error.set(Some(t(lang, T_BIKE_PRICE_ON_REQUEST).to_string()));
+            tg.haptic_notification(HapticNotification::Warning);
             return;
         }
         if telegram_id.is_none() {
@@ -911,11 +952,7 @@ pub fn CheckoutScreen() -> Element {
 
         // Show the native Telegram MainButton spinner while the network request runs.
         tg.show_main_button_progress(t(lang, T_CHECKOUT_PROCESSING), true);
-        let restore_text = format!(
-            "{} — {}",
-            t(lang, T_PLACE_ORDER),
-            crate::trios::pricing::format_baht(effective_total)
-        );
+        let restore_text = format!("{} — {}", t(lang, T_PLACE_ORDER), restore_total);
         let zone_info = submit_selected_zone.clone();
 
         let base = api_base_url();
@@ -970,7 +1007,9 @@ pub fn CheckoutScreen() -> Element {
 
         let submit_stars = (*stars_to_use.read()).clamp(0, max_stars);
         let submit_bonus = bonus_val;
-        let order_total = (cart_total - submit_stars as f64 - submit_bonus).max(0.0);
+        // Reached only past the `cart_is_quotable` refusal above, where the
+        // priced subtotal IS the cart's total.
+        let order_total = (priced_subtotal - submit_stars as f64 - submit_bonus).max(0.0);
 
         let body = json!({
             "telegram_id": telegram_id,
@@ -980,7 +1019,7 @@ pub fn CheckoutScreen() -> Element {
             "customer_phone": normalize_phone(&customer_phone()).unwrap_or_else(&*customer_phone),
             "customer_telegram": telegram_username.clone(),
             "items": items_json,
-            "subtotal": cart_total,
+            "subtotal": priced_subtotal,
             "bonus_used": submit_bonus,
             "stars_used": submit_stars,
             "total": order_total,
@@ -997,18 +1036,15 @@ pub fn CheckoutScreen() -> Element {
         let body_text = body.to_string();
         let restore_text_clone = restore_text.clone();
         let base_clone = base.clone();
-        let telegram_id_for_retry = telegram_id.unwrap_or(0);
+        // The identity travels as the `Option` it is. It used to be flattened
+        // here with `unwrap_or(0)`, and `0` then had to be re-read as "absent"
+        // further down by a `!= 0` test — a sentinel standing in for the
+        // absence the type already expressed.
+        let telegram_id_for_cleanup = telegram_id;
 
         spawn(async move {
-            let result = submit_order_with_retry(
-                &url,
-                &init_data_clone,
-                &key_clone,
-                &body_text,
-                &base_clone,
-                telegram_id_for_retry,
-            )
-            .await;
+            let result =
+                submit_order_with_retry(&url, &init_data_clone, &key_clone, &body_text).await;
 
             match result {
                 SubmitResult::Success(order_id) => {
@@ -1047,11 +1083,8 @@ pub fn CheckoutScreen() -> Element {
                     tg.disable_closing_confirmation();
                     // Loop #11: clear the server-side cart so a returning
                     // customer doesn't see stale items after a successful order.
-                    if telegram_id_for_retry != 0 {
-                        let clear_url = format!(
-                            "{}/api/cart?telegram_id={}",
-                            base_clone, telegram_id_for_retry
-                        );
+                    if let Some(tid) = telegram_id_for_cleanup {
+                        let clear_url = format!("{}/api/cart?telegram_id={}", base_clone, tid);
                         let _ = delete_authed(&clear_url, &init_data_clone).await;
                     }
                     // Navigate to success and clear cart.
@@ -1138,7 +1171,16 @@ pub fn CheckoutScreen() -> Element {
                                         div { style: "font-size:12px; color:#8b8b9e;", "x{item.quantity}" }
                                     }
                                     div { style: "font-size:13px; font-weight:700; color:#e8e8e8;",
-                                        { crate::trios::pricing::format_baht(item.price * item.quantity as f64) }
+                                        {
+                                            // The shared line rule (D15): an absent
+                                            // unit price has no line total, and the
+                                            // slot shows a dash rather than a zero.
+                                            crate::ui::components::bike_card::thb_or_dash(
+                                                crate::trios::pricing::cart_line_total(
+                                                    item.price, item.quantity,
+                                                ),
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -1193,9 +1235,9 @@ pub fn CheckoutScreen() -> Element {
                             }
                             div { style: "display: flex; justify-content: space-between; font-size: 15px; font-weight: 800; padding-top: 8px; border-top: 1px solid #2a2a4a; margin-top: 8px;",
                                 span { "{total_label}" }
-                                {
-                                    let total_str = crate::trios::pricing::format_baht(effective_total);
-                                    rsx! { span { style: "font-size: 20px; font-weight: 800; color: #ffe600; text-shadow: 2px 2px 0 #000;", "{total_str}" } }
+                                span {
+                                    style: "font-size: 20px; font-weight: 800; color: #ffe600; text-shadow: 2px 2px 0 #000;",
+                                    "{effective_total_str}"
                                 }
                             }
                         }

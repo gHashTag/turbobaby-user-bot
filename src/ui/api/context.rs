@@ -22,9 +22,15 @@ fn get_base_url() -> String {
 }
 
 /// Provider component for ApiClient
+///
+/// The provided client carries no initData: every screen that needs a proof
+/// reads it from the bridge itself (`use_telegram_init_data`) and goes through
+/// the free helpers in `api::http`. `ApiClient::anonymous` says that out loud,
+/// which is why this call cannot fail — `ApiClient::new` is fallible only
+/// because an oversize proof is a refusal now, and there is no proof here.
 #[component]
 pub fn ApiClientProvider(children: Element) -> Element {
-    let api_client = use_hook(|| Arc::new(ApiClient::new(get_base_url(), String::new())));
+    let api_client = use_hook(|| Arc::new(ApiClient::anonymous(get_base_url())));
 
     provide_context(api_client);
     rsx! {

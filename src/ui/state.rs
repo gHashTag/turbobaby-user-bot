@@ -16,7 +16,17 @@ pub enum CartItemType {
 pub struct CartItem {
     pub id: String,
     pub name: String,
-    pub price: f64,
+    /// The unit price, or `None` when nobody published one.
+    ///
+    /// `None` is not free and it is not zero: it is the line the shop cannot
+    /// price, and every renderer shows it as a dash beside the sentence D11
+    /// requires. `#[serde(default)]` is deliberate — a cart persisted to
+    /// localStorage by a bundle that predates this field's `Option` carries a
+    /// plain number, which deserialises straight into `Some`, and a cart that
+    /// somehow carries no `price` key at all restores as an absence rather
+    /// than failing the whole restore.
+    #[serde(default)]
+    pub price: Option<f64>,
     pub quantity: u32,
     pub image_url: Option<String>,
     pub item_type: CartItemType,
@@ -44,16 +54,28 @@ impl CartItem {
         Some(Self {
             id: item.catalog_id,
             name: item.name,
-            price: if item.unit_price.is_finite() {
-                item.unit_price.max(0.0)
-            } else {
-                0.0
-            },
+            // The two absences this function already handled were loud because
+            // the LINE disappeared; the price was the silent one. It replaced
+            // only a NON-finite value, and the value that actually arrives when
+            // the server omits the field is finite — it is zero, which reads as
+            // FREE (D9). The line now survives carrying its absence, so the
+            // customer sees a line the shop cannot price instead of a free one.
+            // `published_money` is the same filter the catalog renders through,
+            // shared rather than spelled again (D15).
+            price: crate::trios::pricing::published_money(item.unit_price),
             quantity,
             image_url: item.image_url,
             item_type,
             fulfillment: None,
         })
+    }
+
+    /// Is this line one the shop can put a number on?
+    ///
+    /// Exposed so screens branch on the fact instead of parsing a rendered
+    /// string for a dash.
+    pub fn is_priced(&self) -> bool {
+        crate::trios::pricing::published_money(self.price).is_some()
     }
 }
 
@@ -61,14 +83,21 @@ impl CartItem {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Cart {
     pub items: Vec<CartItem>,
-    pub total: f64,
+    /// What the cart costs, or `None` when it holds a line nobody priced.
+    ///
+    /// One unpriced line makes the whole total unknown. Summing the rest is
+    /// not a partial answer, it is a wrong one: the figure understates the
+    /// cart and presents the understatement as a measured fact. The arithmetic
+    /// and that rule live once, in `trios::pricing::cart_total`.
+    #[serde(default)]
+    pub total: Option<f64>,
 }
 
 impl Cart {
     pub fn new() -> Self {
         Self {
             items: Vec::new(),
-            total: 0.0,
+            total: Some(0.0),
         }
     }
 
@@ -88,22 +117,36 @@ impl Cart {
 
     pub fn clear(&mut self) {
         self.items.clear();
-        self.total = 0.0;
+        self.total = Some(0.0);
     }
 
     pub fn recalculate_total(&mut self) {
-        self.total = self
-            .items
+        self.total =
+            crate::trios::pricing::cart_total(self.items.iter().map(|i| (i.price, i.quantity)));
+    }
+
+    /// Does the cart hold a line the shop cannot price?
+    ///
+    /// The same question as `self.total.is_none()`, named so a screen reads as
+    /// what it is asking rather than as a check for a missing number.
+    pub fn has_unpriced_line(&self) -> bool {
+        self.total.is_none()
+    }
+
+    /// The sum of the lines that DO carry a price.
+    ///
+    /// This is a measured figure — what the priced part of the cart comes to —
+    /// and it is never the cart's total: when `has_unpriced_line` is true the
+    /// screens show a dash and the checkout refuses to submit, so this number
+    /// reaches nothing but the bonus and star caps, which are only offered on a
+    /// cart that can be quoted. It exists because those caps are arithmetic on
+    /// a subtotal, and threading an `Option` through them would have bought a
+    /// branch per cap and no extra honesty.
+    pub fn priced_subtotal(&self) -> f64 {
+        self.items
             .iter()
-            .map(|i| {
-                let price = if i.price.is_finite() {
-                    i.price.max(0.0)
-                } else {
-                    0.0
-                };
-                price * i.quantity as f64
-            })
-            .sum();
+            .filter_map(|i| crate::trios::pricing::cart_line_total(i.price, i.quantity))
+            .sum()
     }
 }
 

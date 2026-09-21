@@ -23,7 +23,7 @@ module turbobaby-promo-broadcast;
 ; was applied was applied to the data and not to the decision.
 ;
 ; WHY (measured 2026-09-21, the two send paths). There are two ways a message reaches every
-; customer and they do not have the same guards. The Publish button (src/promo.rs:638)
+; customer and they do not have the same guards. The Publish button (src/promo.rs:667)
 ; subtracts the opt-out, the fraud block and the owners from its recipient query
 ; (:751-757), paces itself at 500 ms per send (:789) and records an outcome row per person
 ; (:869). The admin HTTP route (src/api/admin.rs:718) has a cooldown of 1 attempt per 600
@@ -244,13 +244,13 @@ pub fn draft_reaches_owner(row_claimed: bool, owner_opted_out: bool) bool {
 }
 
 ; Three gates, all of them checked before any customer is addressed: an admin pressed it
-; (src/promo.rs:645-648), a human pressed it rather than a timer, and the post is not already
+; (src/promo.rs:674-677), a human pressed it rather than a timer, and the post is not already
 ; published (:665-669).
 pub fn send_is_authorized(human_pressed: bool, presser_is_admin: bool, already_published: bool) bool {
   return human_pressed and presser_is_admin and !already_published;
 }
 
-; src/promo.rs:674-685 stamps published_at BEFORE the fan-out starts, because a broadcast
+; src/promo.rs:703-714 stamps published_at BEFORE the fan-out starts, because a broadcast
 ; takes minutes and must not be launchable twice off one button. The fan-out itself is handed
 ; to a background task at :725-727 and the button returns immediately, which is why the stamp
 ; has to be the thing that bounds a second press: at the moment the second press arrives the
@@ -268,29 +268,29 @@ pub fn send_path_is_known(path: u8) bool {
   return path == PATH_BUTTON or path == PATH_ADMIN_API;
 }
 
-; src/promo.rs:752-753 subtracts promo_muted; src/api/admin.rs mentions promo_muted 0 times.
+; src/promo.rs:781-782 subtracts promo_muted; src/api/admin.rs mentions promo_muted 0 times.
 pub fn path_honours_optout(path: u8) bool {
   return path == PATH_BUTTON;
 }
 
-; src/promo.rs:754-755 subtracts a blocked loyalty profile; the UNION at
+; src/promo.rs:783-784 subtracts a blocked loyalty profile; the UNION at
 ; src/api/admin.rs:795-798 has no such term.
 pub fn path_excludes_blocked(path: u8) bool {
   return path == PATH_BUTTON;
 }
 
-; src/promo.rs:756 excludes the owners, who already hold the draft; the admin route does not.
+; src/promo.rs:785 excludes the owners, who already hold the draft; the admin route does not.
 pub fn path_excludes_owners(path: u8) bool {
   return path == PATH_BUTTON;
 }
 
-; src/promo.rs:789 waits 500 ms between customers; the loop at src/api/admin.rs:815-861
+; src/promo.rs:818 waits 500 ms between customers; the loop at src/api/admin.rs:815-861
 ; contains 0 sleeps.
 pub fn path_paces_sends(path: u8) bool {
   return path == PATH_BUTTON;
 }
 
-; src/promo.rs:869 writes one promo_deliveries row per customer; the admin route writes none.
+; src/promo.rs:898 writes one promo_deliveries row per customer; the admin route writes none.
 pub fn path_records_delivery(path: u8) bool {
   return path == PATH_BUTTON;
 }
@@ -313,7 +313,7 @@ pub fn path_is_fully_guarded(path: u8) bool {
 }
 
 ; --- Reach --------------------------------------------------------------------------------
-; src/promo.rs:751-757, read as a rule rather than as SQL.
+; src/promo.rs:780-786, read as a rule rather than as SQL.
 pub fn button_path_may_reach(seen_by_bot: bool, opted_out: bool, blocked_for_fraud: bool, is_owner: bool) bool {
   return seen_by_bot and !opted_out and !blocked_for_fraud and !is_owner;
 }
@@ -365,13 +365,13 @@ pub fn opt_out_changes_the_answer_on_the_button_path() bool {
 ; The unsubscribe itself. migrations/075_promo_muted.sql:9-12 stores a row per silenced
 ; person rather than a flag on the agent, so one owner muting it does not silence the others.
 ; The button rides in both messages a promotion travels in -- the owner's draft
-; (src/promo.rs:594-597) and the customer's broadcast (:776-779) -- because an opt-out a reader
+; (src/promo.rs:623-626) and the customer's broadcast (:776-779) -- because an opt-out a reader
 ; has to go looking for is not an opt-out. The reverse command is deliberately not admin-gated
 ; (src/bot/commands.rs:665-677).
 ;
 ; CORRECTED BY REVIEW 2026-09-21. The two reads of that one table fail in OPPOSITE directions,
 ; and a single "fails open" constant hid it behind the more alarming of the two. The owner's
-; draft read is a function that swallows its error (src/promo.rs:941-951, the unwrap_or at
+; draft read is a function that swallows its error (src/promo.rs:970-980, the unwrap_or at
 ; :950): a database hiccup SENDS the draft, deliberately, because silence caused by an error is
 ; indistinguishable from a dead agent and an owner who muted it can mute it again. The
 ; customer's read is a NOT EXISTS term inside the recipient query (:752-753), and a failure of
@@ -390,10 +390,10 @@ pub fn per_customer_sends_are_bounded(cap_shipped: bool) bool {
   return cap_shipped;
 }
 
-pub const PER_CUSTOMER_REACH_CAP_NOTE : str = "Nothing bounds how often one customer is written to. promo_deliveries (migrations/076_promo_broadcast.sql:25-36) records one row per customer per published post, and src/promo.rs:869 is its only occurrence anywhere in src/ -- an INSERT, never a SELECT -- so the ledger reports and does not gate. The only per-customer gate that exists is the opt-out row of migrations/075_promo_muted.sql:9-12, which is all-or-nothing and honoured on one send path of the two. Greps over src/ and migrations/ on 2026-09-21 return 0 for last_sent, per_user_cap, max_per_day and promo_frequency. The count for cooldown or frequency depends on the flag, so the flag is named: case-INSENSITIVELY the pair returns 9 hits over src/ and 0 over migrations/, and not one of the 9 bounds a customer -- six are the per-user AI-request limiter (src/bot/mod.rs:13, :17, :24, :28, :33, :65), two are an operator alert throttle (src/api/client_errors.rs:47, :439) and one is a prose line about the sweep interval (src/main.rs:491). Case-SENSITIVELY the same pair returns 3, and they are src/bot/mod.rs:28, :65 and src/main.rs:491 -- the uppercase constants drop out, which is exactly how a reader talks himself into a smaller number than the one he measured. src/api/admin.rs contains neither word: the 600-second bound this file pins on that route is spelled as a rate-limit, so a grep for cooldown misses the one real interval in a send path. Closing this needs the owner's decision about how often one customer may be written to, and a read of promo_deliveries at the recipient query. No interval is invented here in its place, and the 600-second bound of the admin route is not one: it limits an admin's attempts, not a customer's exposure.";
+pub const PER_CUSTOMER_REACH_CAP_NOTE : str = "Nothing bounds how often one customer is written to. promo_deliveries (migrations/076_promo_broadcast.sql:25-36) records one row per customer per published post, and src/promo.rs:898 is its only occurrence anywhere in src/ -- an INSERT, never a SELECT -- so the ledger reports and does not gate. The only per-customer gate that exists is the opt-out row of migrations/075_promo_muted.sql:9-12, which is all-or-nothing and honoured on one send path of the two. Greps over src/ and migrations/ on 2026-09-21 return 0 for last_sent, per_user_cap, max_per_day and promo_frequency. The count for cooldown or frequency depends on the flag, so the flag is named: case-INSENSITIVELY the pair returns 9 hits over src/ and 0 over migrations/, and not one of the 9 bounds a customer -- six are the per-user AI-request limiter (src/bot/mod.rs:13, :17, :24, :28, :33, :65), two are an operator alert throttle (src/api/client_errors.rs:47, :439) and one is a prose line about the sweep interval (src/main.rs:491). Case-SENSITIVELY the same pair returns 3, and they are src/bot/mod.rs:28, :65 and src/main.rs:491 -- the uppercase constants drop out, which is exactly how a reader talks himself into a smaller number than the one he measured. src/api/admin.rs contains neither word: the 600-second bound this file pins on that route is spelled as a rate-limit, so a grep for cooldown misses the one real interval in a send path. Closing this needs the owner's decision about how often one customer may be written to, and a read of promo_deliveries at the recipient query. No interval is invented here in its place, and the 600-second bound of the admin route is not one: it limits an admin's attempts, not a customer's exposure.";
 
 ; --- What a promotion may say -----------------------------------------------------------------
-; src/promo.rs:475-476 reads the facts from the database rather than leaving them to a model
+; src/promo.rs:504-505 reads the facts from the database rather than leaving them to a model
 ; that does not know this shop's prices, and :506-509 admits a price to the fact block only
 ; when the shop publishes a positive one -- otherwise the name goes alone. An absent amount is
 ; rendered by turbobaby/pricing-honesty and is not filled in here. The prompt at
@@ -420,17 +420,28 @@ pub fn a_stated_amount_is_verified(fact_block_from_shop: bool, output_digits_are
 }
 
 ; The draft copy check belongs to turbobaby/ai-assist (REUSES_AI_ASSIST_ID). It owns
-; src/trios/promo.rs:277-299 usable_copy and pins all four of that function's figures -- the
-; character floor, the ceiling, the length of the refusal head and the number of refusal
-; markers -- so none of them is restated here. An earlier draft of this file carried two of
-; them and that was a restated rule, not a measurement of this mechanism. What belongs here is
-; only the consequence for a broadcast: the owner's verdict arrives as one boolean, and a draft
-; it rejects is never the text that ships. The written fallback goes instead (an apology under
-; the shop's name is worse than a plain post), and the fallback is the live path today because
-; no model key is set in production -- migrations/074_promo_posts.sql:26-29 says so on the
-; column that records which of the two wrote the body.
+; src/trios/promo.rs:277-299 usable_copy, and this file restates none of that function's four
+; figures -- the character floor, the ceiling, the length of the refusal head and the number of
+; refusal markers. An earlier draft of this file carried two of them and that was a restated rule,
+; not a measurement of this mechanism. What belongs here is only the consequence for a broadcast:
+; the owner's verdict arrives as one boolean, and a draft it rejects is never the text that ships.
+; The written fallback goes instead (an apology under the shop's name is worse than a plain post),
+; and the fallback is the live path today because no model key is set in production --
+; migrations/074_promo_posts.sql:26-29 says so on the column that records which of the two wrote
+; the body.
+; CORRECTED BY MEASUREMENT 2026-09-21. The sentence above used to say that turbobaby/ai-assist
+; "pins all four of that function's figures", and it does not: that contract declares
+; DRAFT_COPY_CHECK_IS_RESTATED_HERE = false and names THIS file as the owner of the same four.
+; Both files defer and neither declares, so the figures are pinned by no contract at all. The
+; measurement is a MARKED COPY of that contract's COPY_CHECK_CIRCULARITY_NOTE and is repeated here
+; because a deferral that names a nonexistent owner reads as coverage from either side; it is not
+; resolved here, because guessing which file should hold four numbers is an owner's decision and
+; inventing them is the defect both refusals exist to avoid.
 pub const COPY_CHECK_OWNER_ID : str = "turbobaby/ai-assist";
 pub const COPY_BOUNDS_ARE_RESTATED_HERE : bool = false;
+pub const COPY_CHECK_FIGURES_PINNED_BY_THE_NAMED_OWNER : u8 = 0;
+pub const COPY_CHECK_FIGURE_OWNERSHIP_IS_CIRCULAR : bool = true;
+pub const CIRCULARITY_COPY_OWNER_ID : str = "turbobaby/ai-assist";
 
 pub fn copy_may_be_sent_as_written(owner_check_passed: bool) bool {
   return owner_check_passed;
@@ -439,9 +450,54 @@ pub fn copy_may_be_sent_as_written(owner_check_passed: bool) bool {
 pub const UNUSABLE_COPY_FALLS_BACK : bool = true;
 pub const FALLBACK_IS_THE_LIVE_PATH : bool = true;
 
+; --- The answer that was never the model's ----------------------------------------------------
+; MEASURED AND FIXED 2026-09-21. src/ai.rs answers a prompt its sanitiser tripped on with a
+; sentence this repository wrote, returned inside the same Some a real answer arrives in. Five
+; call sites are chats and send it as the reply, which is why it exists. The sixth is this path,
+; and here there is no chat: what comes back becomes the BODY of a promotional post. It passed the
+; owner's check -- that check's refusal list carries no marker this sentence matches, and the
+; sentence is well inside its length bounds -- so the draft was stored with source = "model" and
+; sat one owner press from every subscriber. The refusal now happens before that check, at
+; src/promo.rs:486, by identity against the declaration in src/ai.rs rather than by matching the
+; sentence; the sentinel and its recogniser are turbobaby/ai-assist's and neither is copied here.
+; What this file records is the consequence for a broadcast: the body is the written fallback and
+; the source column says so, so nothing that reaches a subscriber is attributed to a model that
+; never wrote it.
+; WHERE THIS IS TIED TO THE CODE, added 2026-09-21 after an adversarial pass found that the unit
+; tests execute the extracted decision and not the live site: inline the old match back into
+; write_copy and four green tests stay green behind a sweeper that publishes the sentinel again.
+; tests/promo_copy_wiring.rs reads src/promo.rs as text and holds three things the unit tests
+; cannot -- that write_copy still routes through the decision, that the decision still asks the
+; recogniser, and that it asks BEFORE the copy check, which matters because that check hands the
+; sentence straight back. It also reads SENTINEL_REFUSAL_SITE back out of this file and
+; re-measures it, so the citation below cannot drift off the line it names.
+pub const SENTINEL_IS_REFUSED_BEFORE_THE_COPY_CHECK : bool = true;
+pub const SENTINEL_REFUSAL_SITE : str = "src/promo.rs:486";
+pub const SENTINEL_OWNER_ID : str = "turbobaby/ai-assist";
+pub const SENTINEL_IS_MATCHED_BY_PROSE_HERE : bool = false;
+pub const SOURCE_MODEL : str = "model";
+pub const SOURCE_FALLBACK : str = "fallback";
+pub const SUPERSEDED_SENTINEL_WAS_STORED_AS_MODEL : bool = true;
+
+; What the body is and what the source column says, for each of the three things that can come
+; back. The sentinel arm is the one that changed on 2026-09-21; the other two are unchanged.
+pub fn body_is_the_written_fallback(answered: bool, answer_is_the_sentinel: bool, copy_is_usable: bool) bool {
+  if (!answered) {
+    return true;
+  }
+  if (answer_is_the_sentinel) {
+    return SENTINEL_IS_REFUSED_BEFORE_THE_COPY_CHECK;
+  }
+  return !copy_is_usable;
+}
+
+pub fn source_is_the_model(answered: bool, answer_is_the_sentinel: bool, copy_is_usable: bool) bool {
+  return !body_is_the_written_fallback(answered, answer_is_the_sentinel, copy_is_usable);
+}
+
 ; A broadcast is localized. This one is not.
 ; src/promo.rs:454 passes the literal "ru" into the prompt, and src/api/admin.rs:46-51 takes
-; one text field for every recipient. The recipient query at src/promo.rs:751 selects
+; one text field for every recipient. The recipient query at src/promo.rs:780 selects
 ; telegram_id FROM user_languages -- the very table whose language column is declared at
 ; migrations/001_initial.sql:4 -- and does not select that column. The published locale set
 ; and its fallback belong to turbobaby/locale-policy and are not restated here; what is
@@ -454,7 +510,7 @@ pub fn broadcast_respects_recipient_locale(locale_taken_from_recipient: bool) bo
   return locale_taken_from_recipient;
 }
 
-pub const LOCALE_NOTE : str = "The broadcast is single-locale by construction on both paths, and the missing input is already in hand on one of them. src/promo.rs:751 reads the recipient list out of user_languages and asks it for telegram_id only, while the language column it declines to read sits on the same row (migrations/001_initial.sql:4, NOT NULL with a default). src/promo.rs:454 supplies the copy locale as a literal, so a recipient's own language cannot reach the prompt even if it were selected. Closing this needs the language in the recipient query and a copy variant per published locale, with the locale set and the fallback taken from turbobaby/locale-policy rather than restated. No locale list and no per-locale text is written here.";
+pub const LOCALE_NOTE : str = "The broadcast is single-locale by construction on both paths, and the missing input is already in hand on one of them. src/promo.rs:780 reads the recipient list out of user_languages and asks it for telegram_id only, while the language column it declines to read sits on the same row (migrations/001_initial.sql:4, NOT NULL with a default). src/promo.rs:454 supplies the copy locale as a literal, so a recipient's own language cannot reach the prompt even if it were selected. Closing this needs the language in the recipient query and a copy variant per published locale, with the locale set and the fallback taken from turbobaby/locale-policy rather than restated. No locale list and no per-locale text is written here.";
 
 ; --- The retirement: data hidden, logic intact ----------------------------------------------
 ; MARKED COPY, added by review 2026-09-21. The shape of migration 085 is
@@ -690,6 +746,27 @@ test the_copy_check_is_borrowed_whole_and_a_rejected_draft_never_ships {
   assert copy_may_be_sent_as_written(false) == false;
   assert UNUSABLE_COPY_FALLS_BACK == true;
   assert FALLBACK_IS_THE_LIVE_PATH == true;
+  assert COPY_CHECK_FIGURES_PINNED_BY_THE_NAMED_OWNER == 0;
+  assert COPY_CHECK_FIGURE_OWNERSHIP_IS_CIRCULAR == true;
+  assert CIRCULARITY_COPY_OWNER_ID == REUSES_AI_ASSIST_ID;
+}
+
+; The sentence the shop wrote for one customer is not copy for all of them.
+test the_prompt_filters_own_sentence_is_never_the_body_of_a_post {
+  assert SENTINEL_IS_REFUSED_BEFORE_THE_COPY_CHECK == true;
+  assert SENTINEL_IS_MATCHED_BY_PROSE_HERE == false;
+  assert SENTINEL_OWNER_ID == REUSES_AI_ASSIST_ID;
+  assert SUPERSEDED_SENTINEL_WAS_STORED_AS_MODEL == true;
+  assert body_is_the_written_fallback(true, true, true) == true;
+  assert source_is_the_model(true, true, true) == false;
+  assert body_is_the_written_fallback(true, false, true) == false;
+  assert source_is_the_model(true, false, true) == true;
+  assert body_is_the_written_fallback(true, false, false) == true;
+  assert source_is_the_model(true, false, false) == false;
+  assert body_is_the_written_fallback(false, false, false) == true;
+  assert source_is_the_model(false, false, false) == false;
+  assert SOURCE_MODEL == "model";
+  assert SOURCE_FALLBACK == "fallback";
 }
 
 test the_broadcast_is_not_localized_and_the_column_it_ignores_exists {
@@ -807,6 +884,11 @@ invariant an_instruction_alone_never_makes_a_stated_amount_verified
 
 invariant a_draft_the_owners_check_rejects_is_never_the_text_that_ships
   assert copy_may_be_sent_as_written(false) == false and UNUSABLE_COPY_FALLS_BACK == true
+
+; A post is attributed to a model only when a model wrote it. The sentinel is the one sentence on
+; this path that looks like an answer and is not one.
+invariant a_post_attributed_to_the_model_was_written_by_the_model
+  assert source_is_the_model(true, true, true) == false and body_is_the_written_fallback(true, true, true) == true and SENTINEL_IS_REFUSED_BEFORE_THE_COPY_CHECK == true
 
 invariant the_copy_bounds_stay_with_their_owner
   assert COPY_BOUNDS_ARE_RESTATED_HERE == false and COPY_CHECK_OWNER_ID == REUSES_AI_ASSIST_ID

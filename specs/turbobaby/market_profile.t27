@@ -20,12 +20,14 @@
 ;     :34 derives the wall-clock hour from it; src/api/share.rs:137, src/promo.rs:260,
 ;     src/api/orders.rs:257 and src/ui/screens/events_screen.rs:63-65 call MARKET.at,
 ;     MARKET.fixed_offset, MARKET.now and MARKET.fixed_offset respectively.
-; (3) The census was two short. src/api/events.rs:1700 and src/ui/screens/admin_screen.rs:4722
+; (3) The census was two short. src/api/events.rs:2068 (:1700, then :1928 -- the 2026-09-21 events
+;     edits moved it twice, the second time by the delete's escape hatch) and
+;     src/ui/screens/admin_screen.rs:4724 (:4722 before that same day's delete-toast fix)
 ;     read the same clock and appear in no list of five; both source files say so in their own
 ;     comments. tests/market_clock_wiring.rs pins SEVEN sites in its WIRED array, and seven is
 ;     the count pinned below.
 ; (4) This file's previous sentence -- "src/api/events.rs stores UTC and carries no market
-;     fact" -- was true on 2026-09-13 and is false now: events.rs:1700 reads MARKET.at.
+;     fact" -- was true on 2026-09-13 and is false now: events.rs:1928 reads MARKET.at.
 ; DECISIONS.md D18 is stale on the same point and cannot be corrected from here: its closing
 ; paragraph still calls "the +7 literals in five files" unwired debt tracked in issue #35. The
 ; debt is wired and the count was never five. Editing DECISIONS.md is outside this contract, so

@@ -39,8 +39,16 @@ pub fn thb_or_dash(amount: Option<f64>) -> String {
 
 /// The filter behind [`thb_or_dash`], exposed so callers can branch on
 /// "is there a price at all" without parsing the rendered string.
+///
+/// The rule itself moved to `crate::trios::pricing::published_money` on
+/// 2026-09-21 and this is now a delegation, because the server, the cart wire
+/// and `cargo test` all need the same boundary and none of them can link this
+/// module -- `src/lib.rs` gates `pub mod ui;` on `wasm32` (D15). The NAME stays
+/// here: `tests/money_is_never_invented.rs` pins it as the component layer's
+/// canonical helper, and the copy it was pinned against has grown back once
+/// already.
 pub fn published(amount: Option<f64>) -> Option<f64> {
-    amount.filter(|v| v.is_finite() && *v > 0.0)
+    crate::trios::pricing::published_money(amount)
 }
 
 /// Scooter or motorcycle — the only two classes the fleet has.

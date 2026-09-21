@@ -158,6 +158,23 @@ pub fn effective_set_price(total_price: f64, discount_percent: f64) -> f64 {
     (base * (1.0 - pct / 100.0)).max(0.0)
 }
 
+/// D9's honesty filter, and the one definition of an absent money value.
+///
+/// `None`, NaN, infinity, a negative and `0.0` all mean the same thing: nobody
+/// published this number. Zero is in that list on purpose — D9 measured that
+/// "a price of 0 reads as FREE", and `฿0` is the single most misleading string
+/// a price box can print.
+///
+/// It lives here because `src/ui/components/bike_card.rs` is
+/// `cfg(target_arch = "wasm32")`: the catalog's copy cannot be linked by the
+/// server, by `src/trios`, or by a `cargo test` binary, so a shared boundary
+/// had to live where both runtimes compile (D15). `bike_card::published`
+/// delegates to this and keeps its name, because `tests/money_is_never_invented.rs`
+/// pins that name as the component layer's canonical helper.
+pub fn published_money(amount: Option<f64>) -> Option<f64> {
+    amount.filter(|v| v.is_finite() && *v > 0.0)
+}
+
 /// Keep only a client-facing day rate returned by the authoritative door.
 ///
 /// Absence and invalid money stay absent. This helper deliberately accepts no
@@ -165,7 +182,46 @@ pub fn effective_set_price(total_price: f64, discount_percent: f64) -> f64 {
 /// client price (D11) and the same boundary is shared by native and WASM code
 /// (D15).
 pub fn authoritative_door_rate(client_rate_thb_day: Option<f64>) -> Option<f64> {
-    client_rate_thb_day.filter(|rate| rate.is_finite() && *rate > 0.0)
+    published_money(client_rate_thb_day)
+}
+
+/// What one cart line is worth, or `None` when nobody priced it.
+///
+/// The multiplication is here rather than at each screen because a line total
+/// is the one place an absent unit price used to become a visible number: a
+/// `0.0` that survived the wire rendered as `฿0` on the line AND added `0` to
+/// the cart, so the customer saw a free item and a total that agreed with it.
+pub fn cart_line_total(unit_price: Option<f64>, quantity: u32) -> Option<f64> {
+    published_money(unit_price).map(|price| price * quantity as f64)
+}
+
+/// The total of a cart, or `None` when the cart holds a line nobody priced.
+///
+/// One unpriced line makes the WHOLE total unknown. Summing the rest and
+/// showing the result is not a partial answer, it is a wrong one: the figure
+/// understates the cart and presents the understatement as a measured fact,
+/// which is D9's confident zero wearing a different hat. A non-finite or
+/// negative amount lands in the same `None` — `src/ui/api/http.rs:445` records
+/// a non-finite `unit_price` reaching `recalculate_total` and turning the whole
+/// cart total into NaN.
+///
+/// `None` is not a refusal to sell. It is the instruction to say what D11
+/// requires and this file already names: a human quotes this price.
+/// It is written in terms of [`cart_line_total`] rather than re-deciding what
+/// counts as a price, because the first draft of this function did re-decide
+/// and got it wrong within the same hour: it admitted a `Some(0.0)` line that
+/// `cart_line_total` calls absent, so the line rendered a dash and the total
+/// counted it as free — the two-implementations drift D15 exists to stop,
+/// reproduced in twelve lines of new code.
+pub fn cart_total<I>(lines: I) -> Option<f64>
+where
+    I: IntoIterator<Item = (Option<f64>, u32)>,
+{
+    let mut sum = 0.0_f64;
+    for (unit_price, quantity) in lines {
+        sum += cart_line_total(unit_price, quantity)?;
+    }
+    sum.is_finite().then_some(sum)
 }
 
 /// Resolve the client-facing day rate from its complete wire context.
@@ -469,6 +525,80 @@ mod tests {
         // Invalid money is not a price, so it licenses nothing either.
         assert!(!may_publish_reference_money(Some(0.0), Some("door")));
         assert!(!may_publish_reference_money(Some(f64::NAN), Some("door")));
+    }
+
+    #[test]
+    fn published_money_is_the_door_filter_under_another_name() {
+        // D15: one implementation. If these two ever disagree, a price the
+        // catalog calls absent is a price the cart calls real.
+        for probe in [
+            Some(449.0),
+            Some(0.0),
+            Some(-1.0),
+            Some(f64::NAN),
+            Some(f64::INFINITY),
+            Some(f64::NEG_INFINITY),
+            None,
+        ] {
+            assert_eq!(published_money(probe), authoritative_door_rate(probe));
+        }
+        assert_eq!(published_money(Some(449.0)), Some(449.0));
+        assert_eq!(published_money(Some(0.0)), None);
+    }
+
+    #[test]
+    fn a_cart_line_with_no_price_is_worth_nothing_knowable() {
+        assert_eq!(cart_line_total(Some(449.0), 3), Some(1347.0));
+        // A quantity of zero is a measured zero, not an absence: the line's
+        // price is known and the customer asked for none of it.
+        assert_eq!(cart_line_total(Some(449.0), 0), Some(0.0));
+        // The four shapes of "nobody priced this". A `0.0` that survived the
+        // wire is in the list: before 2026-09-21 it rendered `฿0` on the line
+        // and added `0` to the total, so the free item and the total agreed
+        // with each other and with nothing else.
+        assert_eq!(cart_line_total(None, 3), None);
+        assert_eq!(cart_line_total(Some(0.0), 3), None);
+        assert_eq!(cart_line_total(Some(-449.0), 3), None);
+        assert_eq!(cart_line_total(Some(f64::NAN), 3), None);
+    }
+
+    #[test]
+    fn one_unpriced_line_makes_the_whole_cart_total_unknown() {
+        assert_eq!(
+            cart_total([(Some(449.0), 2), (Some(120.0), 1)]),
+            Some(1018.0)
+        );
+        assert_eq!(cart_total(std::iter::empty()), Some(0.0));
+
+        // The defect this function exists to prevent: the priced lines still
+        // sum to 898, and showing 898 would tell the customer their cart costs
+        // 898 baht. It does not — nobody knows what it costs.
+        assert_eq!(cart_total([(Some(449.0), 2), (None, 1)]), None);
+        assert_eq!(cart_total([(None, 1), (Some(449.0), 2)]), None);
+
+        // `src/ui/api/http.rs:445` records a non-finite unit_price reaching
+        // recalculate_total and making the whole total NaN. NaN formats as a
+        // zero through `sanitize_money`, so it read as a free cart.
+        assert_eq!(cart_total([(Some(f64::NAN), 1)]), None);
+        assert_eq!(cart_total([(Some(f64::INFINITY), 1)]), None);
+        assert_eq!(cart_total([(Some(-1.0), 1)]), None);
+
+        // A zero-priced line is unpriced, not free: same rule as the line
+        // helper, so the two cannot drift.
+        assert_eq!(cart_total([(Some(0.0), 1)]), None);
+    }
+
+    #[test]
+    fn an_untotalled_cart_still_says_something() {
+        // D11 lists silence beside invention in `must_not_emit`. A cart with no
+        // total renders through the same dash-plus-sentence pair as a bike with
+        // no rate, so the customer is never shown an empty space where a price
+        // belongs.
+        let silent = render_client_rate(None, Some("door"));
+        assert_eq!(silent.shape, RateShape::Dash);
+        assert_eq!(silent.say, Some(SAY_HUMAN_QUOTES));
+        assert!(!t(Lang::Russian, T_BIKE_PRICE_ON_REQUEST).is_empty());
+        assert!(!t(Lang::English, T_BIKE_PRICE_ON_REQUEST).is_empty());
     }
 
     /// #25's second acceptance criterion: `от` / "from" / an averaged number is
