@@ -188,11 +188,23 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
         "min_declarations": 108,
         "min_checks": 35,
     },
+    "specs/turbobaby/order_presentation.t27": {
+        "module": "turbobaby-order-presentation",
+        "id": "turbobaby/order-presentation",
+        "min_declarations": 235,
+        "min_checks": 40,
+    },
     "specs/turbobaby/order_status.t27": {
         "module": "turbobaby-order-status",
         "id": "turbobaby/order-status",
         "min_declarations": 160,
         "min_checks": 31,
+    },
+    "specs/turbobaby/person_naming.t27": {
+        "module": "turbobaby-person-naming",
+        "id": "turbobaby/person-naming",
+        "min_declarations": 239,
+        "min_checks": 53,
     },
     "specs/turbobaby/pricing_honesty.t27": {
         "module": "pricing-honesty",

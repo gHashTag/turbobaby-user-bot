@@ -1,0 +1,959 @@
+// SPDX-License-Identifier: Apache-2.0
+; specs/turbobaby/order_presentation.t27 -- what a customer is told about an order that is theirs
+; This contract owns three questions and nothing else: which STATUS a customer is shown for an
+; order of theirs, which FIGURES they are shown, and what they are shown when either one is
+; missing. The boundary is the two screens the customer reaches with their own identity --
+; src/ui/screens/orders_screen.rs (the list and its four filter chips) and
+; src/ui/screens/order_detail_screen.rs (one order in full) -- plus the rendering consequences
+; of the component they share, src/ui/components/status_stepper.rs, whose pipeline CONTENT
+; belongs to turbobaby/order-status and is not restated here.
+; --
+; WHY (measured 2026-09-21). 996 lines of this tree are named by no contract at all: 440 in the
+; orders list and 556 in the order detail screen. They are not leftovers awaiting retirement and
+; they are not design-system primitives -- they are the last surface between the server's order
+; row and the person who paid for it, and everything on them is a sentence addressed to that
+; person. Four measurements taken while reading those 996 lines say why one contract had to cover
+; both files at once. FIRST: one status string is read by FIFTEEN decision sites across the three
+; files, SIX of which lower-case it first and NINE of which compare it raw, so the label a
+; customer is shown and the filter chip they find it under are decided by two different readings
+; of the same word. SECOND: the status label table holds EIGHT keys for the server's NINE accepted
+; names, and the missing one is not an oversight -- there is no T_ORDERS_STATUS_COMPLETED constant
+; anywhere in src/trios/i18n.rs (the eight are declared at src/trios/i18n.rs:472-479), so the
+; alias pair turbobaby/order-status records is invisible to a customer by construction. THIRD:
+; the stepper resolves a status name it does not carry to the index AFTER the last step
+; (src/ui/components/status_stepper.rs:29) and fills a segment whenever its index is at or below
+; the current one (src/ui/components/status_stepper.rs:73-74), so a status this software does not
+; understand renders as a COMPLETED delivery -- absence rendered as the most reassuring thing on
+; the screen. FOURTH: of the FIVE money figures that reach these screens, exactly ONE passes
+; through the published/dash filter D9 requires; the other four go straight into
+; crate::trios::pricing::format_baht, whose sanitize_money (src/trios/pricing.rs:119-125) maps a
+; non-finite or negative amount to 0.0. So a total nobody could compute is shown as a price.
+; --
+; WHAT THIS FILE NEVER DOES. It holds no order id, no customer name, no phone number, no address
+; and no delivery note (D14) -- not in a constant, not in a test argument, and not in an example.
+; It publishes no user-facing copy and no Cyrillic: every string a customer reads is cited by the
+; NAME of its i18n key and never by its text, and the key texts stay in the two tables
+; turbobaby/locale-policy points at. It invents no status name for a state the server does not
+; send: the eighth label is a label for the ABSENCE of a recognised name, not a ninth name, and
+; nothing here adds a tenth. It does not restate the server vocabulary, the terminal set, the
+; display pipeline, the money identity, the delivery figures or the locale tables -- those belong
+; to the seven contracts named by ID below, and only booleans and cardinalities cross. Above all
+; it RESOLVES NOTHING: the completed/delivered alias is turbobaby/order-status's question, and
+; what is written here is only what the customer currently sees while that question is open. Where
+; the screens have no rule -- a refused cancellation, an expired live view, a status outside the
+; vocabulary, an ETA the server keeps sending -- this file declares that there is none, and does
+; not supply one.
+; phi^2 + 1/phi^2 = 3 | TRINITY
+
+module turbobaby-order-presentation;
+
+pub const KIND : str = "contract";
+pub const ID : str = "turbobaby/order-presentation";
+pub const NAME : str = "TurboBaby order presentation: what a customer is told about their order";
+pub const WORLD : str = "gHashTag/turbobaby-user-bot";
+pub const DECISIONS : [2]str = ["D9", "D14"];
+pub const MEASURED_AT : str = "2026-09-21";
+
+; --- The surface this file owns, by path and by size -------------------------------------------
+; The two line counts are the measurement that forced this contract into existence; they are
+; recorded so a later reader can re-run wc and see whether the surface has moved under the words.
+pub const LIST_IMPLEMENTATION : str = "src/ui/screens/orders_screen.rs";
+pub const DETAIL_IMPLEMENTATION : str = "src/ui/screens/order_detail_screen.rs";
+pub const SHARED_COMPONENT : str = "src/ui/components/status_stepper.rs";
+pub const LIST_LINE_COUNT : u16 = 440;
+pub const DETAIL_LINE_COUNT : u16 = 556;
+pub const OWNED_LINE_COUNT : u16 = 996;
+pub const SHARED_COMPONENT_LINE_COUNT : u16 = 122;
+pub const SHARED_COMPONENT_IS_OWNED_HERE : bool = false;
+
+; And the boundary's honest edge, added by the review of 2026-09-21 because a contract named for
+; what a customer is told about an order must not leave a reader believing two screens exhaust the
+; subject. They do not. A THIRD customer surface renders the status of the customer's own last
+; order -- src/ui/screens/home_screen.rs:319-321 computes its label, its colour and its total and
+; :341 and :344 render them -- through a fourth copy of the same helper block. That file is owned
+; by turbobaby/customer-surface and is not touched, measured or judged from here. What is declared
+; is only that it exists, so the two counts of owned lines above read as a boundary and never as a
+; census of where a customer meets an order status.
+pub const THIRD_CUSTOMER_SURFACE_SHOWS_AN_ORDER_STATUS : bool = true;
+pub const THIRD_CUSTOMER_SURFACE_SITE : str = "src/ui/screens/home_screen.rs:319-321";
+pub const THIRD_CUSTOMER_SURFACE_OWNER : str = "turbobaby/customer-surface";
+pub const THIRD_CUSTOMER_SURFACE_IS_OWNED_HERE : bool = false;
+
+; --- The seven neighbours, named by owner and by declaration -----------------------------------
+; There is no import in this language, so a REUSES_ string plus a test asserting it is the only
+; way one contract can name another's territory. Each edge below is named by the owner's ID and,
+; where this file consumes a specific fact, by the DECLARATION NAME it consumes -- never by a line
+; number in the neighbour's file, which goes stale on that neighbour's next edit and says nothing
+; when it does. What crosses every one of these edges is a boolean or a cardinality. No table,
+; no vocabulary, no arithmetic and no price is copied across.
+pub const REUSES_ORDER_STATUS_ID : str = "turbobaby/order-status";
+pub const REUSES_ORDER_MONEY_ID : str = "turbobaby/order-money";
+pub const REUSES_PRICING_HONESTY_ID : str = "turbobaby/pricing-honesty";
+pub const REUSES_LOCALE_POLICY_ID : str = "turbobaby/locale-policy";
+pub const REUSES_DELIVERY_TERMS_ID : str = "turbobaby/delivery-terms";
+pub const REUSES_DEEPLINK_ID : str = "turbobaby/deeplink";
+pub const REUSES_WEBAPP_BRIDGE_ID : str = "turbobaby/webapp-bridge";
+pub const NEIGHBOUR_COUNT : u8 = 7;
+pub const NEIGHBOURS : [7]str = [
+  "turbobaby/order-status",
+  "turbobaby/order-money",
+  "turbobaby/pricing-honesty",
+  "turbobaby/locale-policy",
+  "turbobaby/delivery-terms",
+  "turbobaby/deeplink",
+  "turbobaby/webapp-bridge",
+];
+pub const VOCABULARY_DECLARATION : str = "STATUS_NAMES and STATUS_COUNT, declared by the order-status contract";
+pub const TERMINALITY_DECLARATION : str = "order_status_is_terminal, declared by the order-status contract";
+pub const ALIAS_DECLARATION : str = "ALIAS_ACCEPTED_NAME and ALIAS_PERSISTED_NAME, declared by the order-status contract";
+pub const PIPELINE_LENGTH_DECLARATION : str = "DISPLAY_PIPELINE_VARIANT_COUNT, declared by the order-status contract";
+pub const PIPELINE_GAP_DECLARATION : str = "DISPLAY_PIPELINE_MISSING_NAMES, declared by the order-status contract";
+pub const CANCEL_PRECONDITION_DECLARATION : str = "order_status_customer_cancel_admitted, declared by the order-status contract";
+pub const MONEY_IDENTITY_DECLARATION : str = "order_money_total_agrees and order_money_expected_total_minor, declared by the order-money contract";
+pub const DASH_SHAPE_DECLARATION : str = "SHAPE_DASH, declared by the pricing-honesty contract";
+pub const BARE_KEY_FALLBACK_DECLARATION : str = "BARE_KEY_FALLBACK_SITES, declared by the locale-policy contract";
+pub const DELIVERY_FIGURE_DECLARATION : str = "the zone, fee and eta figures declared by the delivery-terms contract";
+pub const DEEPLINK_DESTINATION_DECLARATION : str = "the order destination declared by the deeplink contract";
+pub const PAYLOAD_ARRIVAL_DECLARATION : str = "the init-data envelope declared by the webapp-bridge contract";
+pub const THIS_FILE_RESTATES_A_NEIGHBOUR_TABLE : bool = false;
+pub const THIS_FILE_RESOLVES_THE_ALIAS : bool = false;
+pub const NEIGHBOUR_EDGE_VERIFIED_AT : str = "2026-09-21";
+
+; The other half of the same measurement, and it is a staleness rather than an agreement. Both
+; order owners carry an inbound census taken before this file existed: order-status records two
+; contracts naming it and order-money records four. This file makes each of those one short. The
+; neighbours are not edited from here -- a census is a dated reading, not a running total -- so
+; what is declared instead is that the readings predate this contract.
+pub const THE_NEIGHBOUR_INBOUND_CENSUSES_PREDATE_THIS_FILE : bool = true;
+pub const INBOUND_CENSUS_DECLARATIONS : [2]str = [
+  "INBOUND_EDGES, declared by the order-status contract",
+  "INBOUND_EDGES, declared by the order-money contract",
+];
+
+; --- The label surface: eight keys for nine names ----------------------------------------------
+; An ARM is this screen family's own structure, not the server's. src/trios/i18n.rs:472-479
+; declares eight status label keys; the three byte-identical copies of status_label_key collapse
+; the server's nine accepted names onto seven of them and send everything else to the eighth. The
+; arms below are that collapse. They are NOT a second status vocabulary: two of them are named
+; for a PAIR because the shipped match arm is a pair, and the eighth exists because the shipped
+; match has a fallback, not because the server has a ninth state to describe.
+pub const ARM_UNRESOLVED : u8 = 0;
+pub const ARM_PENDING : u8 = 1;
+pub const ARM_CONFIRMED : u8 = 2;
+pub const ARM_PREPARING : u8 = 3;
+pub const ARM_READY : u8 = 4;
+pub const ARM_OUT_FOR_DELIVERY : u8 = 5;
+pub const ARM_DELIVERED_OR_COMPLETED : u8 = 6;
+pub const ARM_CANCELLED_OR_REJECTED : u8 = 7;
+pub const ARM_COUNT : u8 = 8;
+pub const NON_FALLBACK_ARM_COUNT : u8 = 7;
+pub const SHARED_ARM_COUNT : u8 = 2;
+; Consumed from the order-status contract as a CARDINALITY, not as a list. The nine names
+; themselves are that contract's STATUS_NAMES and are deliberately absent from this file.
+pub const SERVER_NAME_COUNT_CONSUMED : u8 = 9;
+
+; The eight keys, cited by the NAME of the Rust constant and never by the key literal or by any
+; translated text (L3, D13). The order is the order of the arms: index 7 is the fallback.
+pub const LABEL_KEY_COUNT : u8 = 8;
+pub const LABEL_KEY_NAMES : [8]str = [
+  "T_ORDERS_STATUS_PENDING",
+  "T_ORDERS_STATUS_CONFIRMED",
+  "T_ORDERS_STATUS_PREPARING",
+  "T_ORDERS_STATUS_READY",
+  "T_ORDERS_STATUS_OUT_FOR_DELIVERY",
+  "T_ORDERS_STATUS_DELIVERED",
+  "T_ORDERS_STATUS_CANCELLED",
+  "T_ORDERS_STATUS_UNKNOWN",
+];
+pub const LABEL_KEY_TABLE_SITE : str = "src/trios/i18n.rs:472-479";
+pub const NO_COMPLETED_LABEL_KEY_EXISTS : bool = true;
+pub const NO_REJECTED_LABEL_KEY_EXISTS : bool = true;
+
+pub fn order_presentation_arm_is_known(arm: u8) bool {
+  return arm >= ARM_PENDING and arm <= ARM_CANCELLED_OR_REJECTED;
+}
+
+pub fn order_presentation_arm_is_shared(arm: u8) bool {
+  return arm == ARM_DELIVERED_OR_COMPLETED or arm == ARM_CANCELLED_OR_REJECTED;
+}
+
+; Literal indices only. An arm is a position in this file's own enumeration, and computing the
+; index from the arm would hide the one fact worth seeing: arm 6 and arm 7 each stand for two
+; server names and still return a single key.
+pub fn order_presentation_label_key(arm: u8) str {
+  if (arm == ARM_PENDING) {
+    return LABEL_KEY_NAMES[0];
+  }
+  if (arm == ARM_CONFIRMED) {
+    return LABEL_KEY_NAMES[1];
+  }
+  if (arm == ARM_PREPARING) {
+    return LABEL_KEY_NAMES[2];
+  }
+  if (arm == ARM_READY) {
+    return LABEL_KEY_NAMES[3];
+  }
+  if (arm == ARM_OUT_FOR_DELIVERY) {
+    return LABEL_KEY_NAMES[4];
+  }
+  if (arm == ARM_DELIVERED_OR_COMPLETED) {
+    return LABEL_KEY_NAMES[5];
+  }
+  if (arm == ARM_CANCELLED_OR_REJECTED) {
+    return LABEL_KEY_NAMES[6];
+  }
+  return LABEL_KEY_NAMES[7];
+}
+
+; --- The alias as a customer meets it ----------------------------------------------------------
+; turbobaby/order-status owns the question of which of completed and delivered is the alias of
+; which, and records that five declarations close one column with four vocabularies. This file
+; answers only the customer-visible half, and answers it with a subtraction: nine accepted names
+; reach seven non-fallback arms, so exactly two names are lost on the way to the customer. One of
+; the two losses is the alias pair. There is no key that would let a customer tell the pair apart
+; even if they wanted to, because no T_ORDERS_STATUS_COMPLETED constant exists to be translated.
+pub const ALIAS_PAIR_SHARES_ONE_LABEL_KEY : bool = true;
+pub const ALIAS_PAIR_SHARES_ONE_FILTER_CHIP : bool = true;
+pub const ALIAS_PAIR_SHARES_ONE_STEP_LABEL : bool = true;
+pub const ALIAS_PAIR_SHARES_ONE_PROGRESS_SHAPE : bool = true;
+pub const ALIAS_PAIR_SHARES_ONE_REORDER_AFFORDANCE : bool = true;
+pub const CUSTOMER_VISIBLE_DIFFERENCE_BETWEEN_THE_PAIR : u8 = 0;
+; Five hand-written two-literal disjunctions carry the pair, one per surface, and a sixth surface
+; carries it by accident. The five are at src/ui/screens/orders_screen.rs:134, :147, :175 and
+; :182 and at src/ui/components/status_stepper.rs:65. The accident is the stepper's index lookup:
+; the pipeline does not carry completed at all (the order-status contract declares that gap), so
+; completed takes the SAME branch as a status nobody recognises and only reaches the right picture
+; because the other five disjunctions caught it first. That is the fragile one.
+pub const ALIAS_DISJUNCTION_SITE_COUNT : u8 = 5;
+pub const ALIAS_DISJUNCTION_SITES : [5]str = [
+  "src/ui/screens/orders_screen.rs:134",
+  "src/ui/screens/orders_screen.rs:147",
+  "src/ui/screens/orders_screen.rs:175",
+  "src/ui/screens/orders_screen.rs:182",
+  "src/ui/components/status_stepper.rs:65",
+];
+pub const COMPLETED_SHARES_THE_UNRESOLVED_BRANCH_IN_THE_STEPPER : bool = true;
+
+; --- The four chips, and the mapping nobody had written down -----------------------------------
+; src/ui/screens/orders_screen.rs:251 offers four chips. All shows everything. The other three
+; partition the rest, but by two unrelated rules written in two places: Active is the NEGATION of
+; the terminal predicate (src/ui/screens/orders_screen.rs:174), while Completed and Cancelled are
+; literal disjunctions (:175, :176). The partition holds today. It holds by coincidence of two
+; independent edits, not by construction, and nothing in the tree checks it -- which is why it is
+; written down here.
+pub const CHIP_ALL : u8 = 1;
+pub const CHIP_ACTIVE : u8 = 2;
+pub const CHIP_COMPLETED : u8 = 3;
+pub const CHIP_CANCELLED : u8 = 4;
+pub const CHIP_COUNT : u8 = 4;
+pub const PARTITIONING_CHIP_COUNT : u8 = 3;
+pub const CHIP_SITE : str = "src/ui/screens/orders_screen.rs:171-178";
+pub const CHIP_RULES_ARE_WRITTEN_TWICE_AND_INDEPENDENTLY : bool = true;
+
+; spelled_as_the_vocabulary is the fact the nine raw comparison sites depend on and the six
+; lower-casing sites do not: it is true when the status string arriving from the server is
+; character-for-character the lower-case name the raw comparisons expect. It is a separate
+; argument rather than a string operation because this file holds no status strings at all.
+pub fn order_presentation_chip_of(arm: u8, spelled_as_the_vocabulary: bool) u8 {
+  if (!spelled_as_the_vocabulary) {
+    return CHIP_ACTIVE;
+  }
+  if (arm == ARM_CANCELLED_OR_REJECTED) {
+    return CHIP_CANCELLED;
+  }
+  if (arm == ARM_DELIVERED_OR_COMPLETED) {
+    return CHIP_COMPLETED;
+  }
+  return CHIP_ACTIVE;
+}
+
+pub fn order_presentation_is_shown_under(chip: u8, arm: u8, spelled_as_the_vocabulary: bool) bool {
+  if (chip == CHIP_ALL) {
+    return true;
+  }
+  return chip == order_presentation_chip_of(arm, spelled_as_the_vocabulary);
+}
+
+; An unresolved status is not filtered out and it is not given a chip of its own: it lands in
+; Active, because Active is defined as everything the terminal predicate refuses. A customer who
+; taps Active is therefore shown every order this software failed to understand, alongside the
+; ones genuinely in flight, with no mark distinguishing the two.
+pub const UNRESOLVED_STATUS_IS_FILTERED_AS_ACTIVE : bool = true;
+
+; --- One string, fifteen readers, two readings of case -----------------------------------------
+; Six sites lower-case the status before deciding and nine compare it raw. Every site in the first
+; group decides what the customer READS; every site in the second decides what the customer can
+; FIND, DO, or SEE PROGRESS ON. So a status spelled in any other case keeps its correct label and
+; loses its chip, its cancel button, its reorder button and its place in the pipeline at once.
+; No source in this tree normalises the status before it reaches these screens: the detail screen
+; assigns the polled value straight over the loaded one at
+; src/ui/screens/order_detail_screen.rs:227 with no vocabulary check of any kind.
+pub const STATUS_READER_COUNT : u8 = 15;
+pub const CASE_NORMALIZING_READER_COUNT : u8 = 6;
+pub const RAW_READER_COUNT : u8 = 9;
+pub const READERS_AGREE_ON_CASE : bool = false;
+pub const CASE_NORMALIZING_SITES : [6]str = [
+  "src/ui/screens/orders_screen.rs:128",
+  "src/ui/screens/orders_screen.rs:141",
+  "src/ui/screens/order_detail_screen.rs:175",
+  "src/ui/screens/order_detail_screen.rs:188",
+  "src/ui/components/status_stepper.rs:33",
+  "src/ui/components/status_stepper.rs:46",
+];
+pub const RAW_READER_SITES : [9]str = [
+  "src/ui/screens/orders_screen.rs:175",
+  "src/ui/screens/orders_screen.rs:176",
+  "src/ui/screens/orders_screen.rs:182",
+  "src/ui/screens/orders_screen.rs:306",
+  "src/ui/screens/order_detail_screen.rs:171",
+  "src/ui/screens/order_detail_screen.rs:241",
+  "src/ui/components/status_stepper.rs:28",
+  "src/ui/components/status_stepper.rs:59",
+  "src/ui/components/status_stepper.rs:96",
+];
+pub const STATUS_IS_NORMALISED_BEFORE_IT_REACHES_THE_SCREENS : bool = false;
+pub const POLLED_STATUS_OVERRIDES_THE_LOADED_ONE_AT : str = "src/ui/screens/order_detail_screen.rs:227";
+
+; The same twenty-five lines, byte for byte, in three files. Verified by diff on 2026-09-21:
+; both comparisons reported no difference. This is a SECOND duplication inside this subject and
+; not the one the order-status contract already records -- that one is about the two copies of the
+; display pipeline, and one of its two sites is a different range of the same file.
+pub const HELPER_BLOCK_COPY_COUNT : u8 = 3;
+pub const HELPER_BLOCK_COPIES_ARE_BYTE_IDENTICAL : bool = true;
+pub const HELPER_BLOCK_SITES : [3]str = [
+  "src/ui/screens/orders_screen.rs:127-151",
+  "src/ui/screens/order_detail_screen.rs:174-198",
+  "src/ui/components/status_stepper.rs:32-56",
+];
+pub const TERMINAL_PREDICATE_COPY_COUNT : u8 = 2;
+pub const TERMINAL_PREDICATE_SITES : [2]str = [
+  "src/ui/screens/orders_screen.rs:181-183",
+  "src/ui/screens/order_detail_screen.rs:170-172",
+];
+; Both counts above are counts WITHIN THIS CONTRACT'S BOUNDARY -- the two owned screens and the
+; component they share -- and a reader must not take either for a census of the tree, because the
+; tree holds more. Measured 2026-09-21 by grep over src/ for the three function names: a FOURTH
+; status_color, byte-identical to the three, lives at src/ui/screens/home_screen.rs:134-145 beside
+; a status_label_key at :147-158 that decides the same eight arms and is not byte-identical only
+; because it spells the key constants with their full paths; and a THIRD is_terminal_status, byte-
+; identical to the two, lives at src/ui/screens/admin_screen.rs:2951-2953. Neither file is owned
+; here and neither is edited from here. They are named so that the numbers above cannot be read as
+; "these are all of them", which is the shape a false absence takes in a census.
+pub const HELPER_BLOCK_COPIES_OUTSIDE_THIS_BOUNDARY : u8 = 1;
+pub const HELPER_BLOCK_COPY_OUTSIDE_SITE : str = "src/ui/screens/home_screen.rs:134-158";
+pub const TERMINAL_PREDICATE_COPIES_OUTSIDE_THIS_BOUNDARY : u8 = 1;
+pub const TERMINAL_PREDICATE_COPY_OUTSIDE_SITE : str = "src/ui/screens/admin_screen.rs:2951-2953";
+pub const THE_COPY_COUNTS_ARE_BOUNDED_BY_THIS_CONTRACT : bool = true;
+
+; --- The progress bar, and what it says about a status nobody recognised -----------------------
+; The pipeline CONTENT is the order-status contract's. What is owned here is the rendering rule
+; applied to a name that pipeline does not carry, and its consequence. The lookup resolves such a
+; name to the index AFTER the last step (src/ui/components/status_stepper.rs:29, unwrap_or on the
+; slice length) and a segment is drawn filled whenever its index is at or below the current one
+; (src/ui/components/status_stepper.rs:73-74). Every segment therefore fills. The functions below
+; take the pipeline length as an ARGUMENT and are asserted at three different lengths, so the
+; claim made here is about the SHAPE of the rule and not about any number belonging to the owner.
+pub const UNRESOLVED_INDEX_RULE_SITE : str = "src/ui/components/status_stepper.rs:29";
+pub const SEGMENT_FILL_RULE_SITE : str = "src/ui/components/status_stepper.rs:73-74";
+pub const PIPELINE_LENGTH_IS_DECLARED_HERE : bool = false;
+
+pub fn order_presentation_unresolved_index(pipeline_length: u8) u8 {
+  return pipeline_length;
+}
+
+pub fn order_presentation_bar_index(carried_by_the_pipeline: bool, index_if_carried: u8, pipeline_length: u8) u8 {
+  if (!carried_by_the_pipeline) {
+    return order_presentation_unresolved_index(pipeline_length);
+  }
+  return index_if_carried;
+}
+
+pub fn order_presentation_segments_filled(current: u8, pipeline_length: u8) u8 {
+  if (current + 1 >= pipeline_length) {
+    return pipeline_length;
+  }
+  return current + 1;
+}
+
+pub fn order_presentation_last_index(pipeline_length: u8) u8 {
+  if (pipeline_length == 0) {
+    return 0;
+  }
+  return pipeline_length - 1;
+}
+
+pub fn order_presentation_reads_as_finished(carried_by_the_pipeline: bool, index_if_carried: u8, pipeline_length: u8) bool {
+  return order_presentation_segments_filled(order_presentation_bar_index(carried_by_the_pipeline, index_if_carried, pipeline_length), pipeline_length) == pipeline_length;
+}
+
+pub const UNRESOLVED_STATUS_FILLS_EVERY_SEGMENT : bool = true;
+pub const ABSENCE_RENDERS_AS_COMPLETION : bool = true;
+
+; Four answers to one unrecognised status, produced in a single render, all visible at once: the
+; colour of no information, the label for no information, the raw server token, and the picture of
+; a finished delivery. The sites below are the component's; the first two of them are reproduced
+; byte for byte inside both owned screens as well.
+pub const SIMULTANEOUS_ANSWERS_TO_ONE_UNRESOLVED_STATUS : u8 = 4;
+pub const UNRESOLVED_ANSWER_SITES : [4]str = [
+  "src/ui/components/status_stepper.rs:41",
+  "src/ui/components/status_stepper.rs:54",
+  "src/ui/components/status_stepper.rs:66",
+  "src/ui/components/status_stepper.rs:29",
+];
+
+; The third of those four is the one a locale reader must not mistake for a known class. The
+; locale-policy contract records that both translation tables end in a bare-key fallback, so a key
+; with no arm renders as the KEY. This is not that: src/ui/components/status_stepper.rs:66 returns
+; the SERVER'S OWN STRING as the step label, so a value that was never a key at all, never passed
+; through a table, and never had a translation is placed in front of the customer verbatim.
+pub const UNRESOLVED_STEP_LABEL_IS_THE_RAW_SERVER_TOKEN : bool = true;
+pub const UNRESOLVED_STEP_LABEL_SITE : str = "src/ui/components/status_stepper.rs:66";
+pub const RAW_TOKEN_IS_NOT_THE_BARE_KEY_FALLBACK : bool = true;
+
+; What lets an unrecognised name arrive at all is not owned here either, and it is worth naming
+; because it is the reason the branch is reachable rather than theoretical: the order-status
+; contract declares that the column carries no database constraint and that the nine names are
+; enforced by one function on one route. Neither screen re-checks. Both deserialize the status as
+; a bare string -- src/ui/screens/orders_screen.rs:28 and src/ui/screens/order_detail_screen.rs:37.
+pub const SCREENS_VALIDATE_THE_STATUS_AGAINST_THE_VOCABULARY : bool = false;
+pub const STATUS_ARRIVES_AS_AN_UNCHECKED_STRING_AT : [3]str = [
+  "src/ui/screens/orders_screen.rs:28",
+  "src/ui/screens/order_detail_screen.rs:37",
+  "src/ui/screens/order_detail_screen.rs:68",
+];
+
+; --- The figures, and the four different things absence looks like -----------------------------
+; Five money figures reach these two screens. ONE of them -- the per-line total at
+; src/ui/screens/order_detail_screen.rs:164-168 -- goes through the published filter and renders a
+; dash when the shop never priced the line, which is what D9 requires and what the
+; pricing-honesty contract calls SHAPE_DASH. The other four go directly into format_baht, which
+; takes a plain f64 and cannot express absence: src/trios/pricing.rs:119-125 turns a non-finite or
+; negative amount into 0.0 first. So the answer to "does this screen obey D9" is: on the line it
+; does, on the order it does not, and the two sit four lines apart in the same card.
+pub const MONEY_RENDER_SITE_COUNT : u8 = 5;
+pub const DASH_FILTERED_SITE_COUNT : u8 = 1;
+pub const UNFILTERED_SITE_COUNT : u8 = 4;
+pub const DASH_FILTERED_SITE : str = "src/ui/screens/order_detail_screen.rs:164-168";
+pub const UNFILTERED_SITES : [4]str = [
+  "src/ui/screens/orders_screen.rs:305",
+  "src/ui/screens/order_detail_screen.rs:237",
+  "src/ui/screens/order_detail_screen.rs:238",
+  "src/ui/screens/order_detail_screen.rs:239",
+];
+pub const ZERO_FALLBACK_SITE : str = "src/trios/pricing.rs:119-125";
+pub const PUBLISHED_FILTER_SITE : str = "src/trios/pricing.rs:174-176";
+pub const D9_IS_OBEYED_BY_EVERY_FIGURE_ON_THESE_SCREENS : bool = false;
+
+; Absence has four different shapes here, and which one a customer gets depends on which field
+; went missing rather than on any rule. The fourth is the loudest and the least expected: the
+; order totals are declared as plain numbers -- three f64 and one i64 -- with no serde default
+; (src/ui/screens/order_detail_screen.rs:33-36), so a payload that omits one does not render a
+; dash or a zero -- deserialization fails and the customer is told the order was not found.
+pub const FIGURE_SHOWN : u8 = 0;
+pub const ABSENCE_RENDERS_AS_DASH : u8 = 1;
+pub const ABSENCE_RENDERS_AS_ZERO : u8 = 2;
+pub const ABSENCE_RENDERS_AS_OMITTED_ROW : u8 = 3;
+pub const ABSENCE_RENDERS_AS_A_LOST_SCREEN : u8 = 4;
+pub const ABSENCE_SHAPE_COUNT : u8 = 4;
+pub const NON_OPTIONAL_FIGURE_SITE : str = "src/ui/screens/order_detail_screen.rs:33-36";
+pub const CONDITIONAL_ROW_COUNT : u8 = 2;
+pub const CONDITIONAL_ROW_SITES : [2]str = [
+  "src/ui/screens/order_detail_screen.rs:301",
+  "src/ui/screens/order_detail_screen.rs:307",
+];
+
+pub fn order_presentation_figure_shape(field_present: bool, value_is_usable: bool, filtered_by_published: bool, row_is_conditional: bool) u8 {
+  if (!field_present and !filtered_by_published) {
+    return ABSENCE_RENDERS_AS_A_LOST_SCREEN;
+  }
+  if (value_is_usable) {
+    return FIGURE_SHOWN;
+  }
+  if (filtered_by_published) {
+    return ABSENCE_RENDERS_AS_DASH;
+  }
+  if (row_is_conditional) {
+    return ABSENCE_RENDERS_AS_OMITTED_ROW;
+  }
+  return ABSENCE_RENDERS_AS_ZERO;
+}
+
+pub fn order_presentation_absence_is_honest(shape: u8) bool {
+  return shape == ABSENCE_RENDERS_AS_DASH;
+}
+
+; The detail screen shows all four terms of the order-money identity -- subtotal, bonus, stars and
+; total -- one under the other, and checks none of them against each other. The arithmetic belongs
+; to that contract and is not restated here; what is owned here is the display fact, which is that
+; a customer is handed four numbers that are supposed to agree and a screen that never asks
+; whether they do. A disagreement between them reaches the customer silently.
+pub const IDENTITY_TERMS_SHOWN : u8 = 4;
+pub const IDENTITY_TERM_SITES : [4]str = [
+  "src/ui/screens/order_detail_screen.rs:299",
+  "src/ui/screens/order_detail_screen.rs:304",
+  "src/ui/screens/order_detail_screen.rs:310",
+  "src/ui/screens/order_detail_screen.rs:319",
+];
+pub const IDENTITY_IS_CHECKED_ON_THIS_SCREEN : bool = false;
+
+; --- What the server sends about delivery, and what the customer sees of it --------------------
+; The status endpoint publishes seven fields (src/api/orders.rs:1782-1795). The detail screen's
+; response struct declares four of them and reads ONE -- the status. The three it declares and
+; does not read are silenced with an allow(dead_code) at src/ui/screens/order_detail_screen.rs:66,
+; and the seventh, the delivery fee, is not declared at all. The fee is the sharp one: the comment
+; that publishes it at src/api/orders.rs:1789-1790 says a non-finite fee serialises as null and
+; RENDERS AS A DASH, naming a renderer that this screen does not contain. The zone name and the
+; eta pair ARE read elsewhere, by two screens and neither of them owned here: the checkout screen
+; before the order exists (src/ui/screens/checkout_screen.rs:820) and the success screen after it
+; does -- the success screen polls this same endpoint (src/ui/screens/success_screen.rs:214-216),
+; reads the pair at :298-305 and renders it at :491-492. So the claim owned here is the narrow one
+; and it is the only one the measurement supports: the eta reaches a customer somewhere, and it
+; reaches NEITHER of the two screens this contract owns, although one of them polls the payload
+; that carries it every ten seconds. A wider claim was in this paragraph until the review of
+; 2026-09-21 and was false; it is recorded as corrected rather than quietly replaced, because a
+; false absence is the one kind of claim a later reader never re-runs.
+pub const STATUS_PAYLOAD_SITE : str = "src/api/orders.rs:1782-1795";
+pub const STATUS_PAYLOAD_FIELD_COUNT : u8 = 7;
+pub const FIELDS_DECLARED_BY_THE_SCREEN : u8 = 4;
+pub const FIELDS_THAT_REACH_THE_CUSTOMER : u8 = 1;
+pub const DEAD_CODE_ANNOTATION_SITE : str = "src/ui/screens/order_detail_screen.rs:66";
+pub const DELIVERY_FEE_IS_DECLARED_BY_THE_SCREEN : bool = false;
+pub const DELIVERY_FEE_PUBLISHER_SITE : str = "src/api/orders.rs:1794";
+pub const NO_ETA_REACHES_EITHER_OWNED_SCREEN : bool = true;
+pub const ETA_READER_SCREEN_COUNT : u8 = 2;
+pub const ETA_READER_SCREENS_OWNED_HERE : u8 = 0;
+pub const ETA_IS_READ_BEFORE_THE_ORDER_EXISTS_AT : str = "src/ui/screens/checkout_screen.rs:820";
+pub const ETA_REACHES_A_CUSTOMER_ON_AN_UNOWNED_SCREEN_AT : str = "src/ui/screens/success_screen.rs:491-492";
+pub const ETA_CLAIM_WAS_CORRECTED_AT : str = "2026-09-21";
+pub const NO_DELIVERY_FIGURE_REACHES_EITHER_OWNED_SCREEN : bool = true;
+
+; The one row on the detail screen that carries a delivery label carries a shop name in its value
+; slot (src/ui/screens/order_detail_screen.rs:313-316). The four rows that carry the actual
+; delivery facts carry no label key at all: an emoji is the only thing telling an address from a
+; note from a phone number from a date.
+pub const LABELLED_DELIVERY_ROW_SITE : str = "src/ui/screens/order_detail_screen.rs:313-316";
+pub const LABELLED_DELIVERY_ROW_VALUE_IS_A_SHOP_NAME : bool = true;
+pub const UNLABELLED_ROW_COUNT : u8 = 4;
+pub const UNLABELLED_ROW_SITES : [4]str = [
+  "src/ui/screens/order_detail_screen.rs:325",
+  "src/ui/screens/order_detail_screen.rs:328",
+  "src/ui/screens/order_detail_screen.rs:331",
+  "src/ui/screens/order_detail_screen.rs:333",
+];
+pub const ORDER_DATE_IS_RENDERED_AS_THE_WIRE_PREFIX : bool = true;
+pub const ORDER_DATE_SITE : str = "src/ui/screens/order_detail_screen.rs:230-235";
+
+; --- Strings that reach the customer without passing through a key ------------------------------
+; Seven sites put a string in front of a customer that no translation table ever saw. Two are
+; English item-name fallbacks, two are an English shop-name fallback, two hand the raw transport
+; error text straight to the screen, and the seventh is the raw server status token already named
+; above. The locale-policy contract owns the key tables and the bare-key fallback; none of these
+; seven is a key, so none of them is covered there. No text is reproduced here, only the sites.
+pub const KEYLESS_CUSTOMER_STRING_SITE_COUNT : u8 = 7;
+pub const KEYLESS_CUSTOMER_STRING_SITES : [7]str = [
+  "src/ui/screens/orders_screen.rs:54",
+  "src/ui/screens/orders_screen.rs:304",
+  "src/ui/screens/orders_screen.rs:420",
+  "src/ui/screens/order_detail_screen.rs:154",
+  "src/ui/screens/order_detail_screen.rs:236",
+  "src/ui/screens/order_detail_screen.rs:540",
+  "src/ui/components/status_stepper.rs:66",
+];
+pub const TRANSPORT_ERROR_TEXT_REACHES_THE_CUSTOMER : bool = true;
+pub const LIST_ERROR_STATE_HAS_NO_KEY : bool = true;
+pub const DETAIL_ERROR_STATE_HAS_A_KEY_AND_ALSO_LEAKS_THE_TEXT : bool = true;
+
+; --- The live view, and what it promises --------------------------------------------------------
+; The detail screen polls the status endpoint on a bounded schedule: 360 ticks, ten seconds apart
+; (src/ui/screens/order_detail_screen.rs:463-470), which is one hour and then silence. A live
+; badge is shown whenever a status response EXISTS (:270). It is not shown on the freshness of
+; that response, and could not be: the payload carries no timestamp of any kind. So the badge
+; makes a promise about currency that nothing in the payload can support, and when the hour is up
+; it keeps making it. order_presentation_live_badge_shown takes no age argument, and that omission
+; is the specification: there is no age to take.
+pub const POLL_INTERVAL_MS : u32 = 10000;
+pub const POLL_TICK_LIMIT : u32 = 360;
+pub const POLL_HORIZON_MS : u32 = 3600000;
+pub const POLL_SITE : str = "src/ui/screens/order_detail_screen.rs:463-470";
+pub const LIVE_BADGE_SITE : str = "src/ui/screens/order_detail_screen.rs:270-275";
+pub const STATUS_PAYLOAD_CARRIES_A_TIMESTAMP : bool = false;
+pub const LIVE_BADGE_IS_KEYED_ON_PRESENCE : bool = true;
+
+pub fn order_presentation_poll_horizon_ms(interval_ms: u32, tick_limit: u32) u32 {
+  return interval_ms * tick_limit;
+}
+
+pub fn order_presentation_live_badge_shown(status_response_present: bool) bool {
+  return status_response_present;
+}
+
+; --- The two things a customer can DO, and what they are told afterwards ------------------------
+; The cancel button appears on a raw comparison against one name (:241) and the reorder button on
+; the raw terminal predicate (:353 in the list, :381 in the detail). Both therefore disappear
+; entirely for a status spelled in any other case, while the label above them stays correct.
+; Whether a cancellation is ALLOWED is the order-status contract's precondition, not this file's.
+; Whether the customer is TOLD the answer is this file's, and the answer is that they are not: the
+; response is discarded at :352 and the dialog closes unconditionally at :358, so a refusal and a
+; success look identical until a later poll tick happens to disagree -- or, past the hour, never.
+; No rule is supplied for that here. The screens have none, and inventing one would be this
+; contract legislating for code it only describes.
+pub const CANCEL_BUTTON_CONDITION_SITE : str = "src/ui/screens/order_detail_screen.rs:241";
+pub const CANCEL_RESULT_DISCARDED_AT : str = "src/ui/screens/order_detail_screen.rs:352";
+pub const CANCEL_DIALOG_CLOSES_UNCONDITIONALLY_AT : str = "src/ui/screens/order_detail_screen.rs:358";
+pub const REORDER_SITES : [2]str = [
+  "src/ui/screens/orders_screen.rs:353",
+  "src/ui/screens/order_detail_screen.rs:381",
+];
+pub const REORDER_IS_OFFERED_ON_EVERY_TERMINAL_ARM : bool = true;
+pub const REORDER_IS_OFFERED_AFTER_A_REFUSAL : bool = true;
+
+pub fn order_presentation_cancel_button_shown(arm: u8, spelled_as_the_vocabulary: bool) bool {
+  if (!spelled_as_the_vocabulary) {
+    return false;
+  }
+  return arm == ARM_PENDING;
+}
+
+pub fn order_presentation_reorder_button_shown(arm: u8, spelled_as_the_vocabulary: bool) bool {
+  if (!spelled_as_the_vocabulary) {
+    return false;
+  }
+  return order_presentation_arm_is_shared(arm);
+}
+
+; --- Named refusals -----------------------------------------------------------------------------
+; Each of these is a place where the tree publishes nothing and this file declines to invent it.
+; A refusal is a named boolean plus a note saying exactly what is missing, so that a later reader
+; can tell "nobody decided this" from "somebody decided it elsewhere".
+pub const SCREEN_HAS_NO_RULE_FOR_A_REFUSED_CANCELLATION : bool = true;
+pub const REFUSED_CANCELLATION_NOTE : str = "The POST result is bound to a discarded local at src/ui/screens/order_detail_screen.rs:352 and the confirmation dialog is closed at :358 on both paths. No branch reads a status code, no state records a failure, and no i18n key exists for one. What the customer is told after a refused cancellation is therefore nothing, and this file declares the absence rather than a message.";
+pub const SCREEN_HAS_NO_RULE_FOR_AN_EXPIRED_LIVE_VIEW : bool = true;
+pub const EXPIRED_LIVE_VIEW_NOTE : str = "The tick loop at src/ui/screens/order_detail_screen.rs:463-470 ends after 360 iterations and nothing runs afterwards. The badge at :270 remains rendered because it depends on the presence of the last response and not on its age, and the payload at src/api/orders.rs:1782-1795 carries no timestamp that a freshness rule could consult. There is no shipped rule here to describe.";
+pub const SCREEN_HAS_NO_RULE_FOR_A_STATUS_OUTSIDE_THE_VOCABULARY : bool = true;
+pub const OUTSIDE_VOCABULARY_NOTE : str = "There is a RENDERING for such a status -- four of them at once, named above -- but no RULE: nothing validates the string, nothing refuses it, nothing logs it, and nothing tells the customer that the state could not be read. This file records what is drawn and declines to specify what ought to be.";
+pub const NO_DELIVERY_FIGURE_IS_OWNED_HERE : bool = true;
+pub const DELIVERY_FIGURE_NOTE : str = "The zone, the eta window and the fee are the delivery-terms contract's figures. This file declares only that none of the three reaches either owned screen although the server sends all three on a payload one of the screens already polls every ten seconds.";
+pub const NO_ORDER_IDENTITY_IS_CARRIED_HERE : bool = true;
+pub const D14_NOTE : str = "D14. The detail screen renders an order id tail, an address, a delivery note and a phone number when the server sends them, at src/ui/screens/order_detail_screen.rs:213-221 and :324-332. That those four rows exist is a structural fact about the screen and is recorded. No value of any of them appears in this file, in any test argument, or in any example, and none ever may.";
+pub const NO_STATUS_NAME_IS_INVENTED_HERE : bool = true;
+pub const INVENTION_NOTE : str = "The eighth label is a label for the absence of a recognised name and not a ninth state. This file adds no name to the vocabulary, renames none, and takes no position on which member of the alias pair is the alias -- that question belongs to the order-status contract and is left open on purpose.";
+
+; --- Tests ---------------------------------------------------------------------------------------
+
+test the_owned_surface_is_two_files_and_996_lines {
+  assert LIST_LINE_COUNT == 440;
+  assert DETAIL_LINE_COUNT == 556;
+  assert LIST_LINE_COUNT + DETAIL_LINE_COUNT == OWNED_LINE_COUNT;
+  assert OWNED_LINE_COUNT == 996;
+  assert SHARED_COMPONENT_IS_OWNED_HERE == false;
+  assert LIST_IMPLEMENTATION != DETAIL_IMPLEMENTATION;
+  ; Two owned screens are a boundary, not the whole of where a customer meets a status.
+  assert THIRD_CUSTOMER_SURFACE_SHOWS_AN_ORDER_STATUS == true;
+  assert THIRD_CUSTOMER_SURFACE_IS_OWNED_HERE == false;
+  assert THIRD_CUSTOMER_SURFACE_OWNER != ID;
+  assert THIRD_CUSTOMER_SURFACE_SITE != LIST_IMPLEMENTATION;
+  assert THIRD_CUSTOMER_SURFACE_SITE != DETAIL_IMPLEMENTATION;
+}
+
+test the_seven_neighbour_edges_are_named_by_owner_and_copy_no_table {
+  assert NEIGHBOURS.len == NEIGHBOUR_COUNT;
+  assert NEIGHBOURS[0] == REUSES_ORDER_STATUS_ID;
+  assert NEIGHBOURS[1] == REUSES_ORDER_MONEY_ID;
+  assert NEIGHBOURS[2] == REUSES_PRICING_HONESTY_ID;
+  assert NEIGHBOURS[3] == REUSES_LOCALE_POLICY_ID;
+  assert NEIGHBOURS[4] == REUSES_DELIVERY_TERMS_ID;
+  assert NEIGHBOURS[5] == REUSES_DEEPLINK_ID;
+  assert NEIGHBOURS[6] == REUSES_WEBAPP_BRIDGE_ID;
+  assert REUSES_ORDER_STATUS_ID != ID;
+  assert REUSES_ORDER_MONEY_ID != ID;
+  assert THIS_FILE_RESTATES_A_NEIGHBOUR_TABLE == false;
+  assert NEIGHBOUR_EDGE_VERIFIED_AT == "2026-09-21";
+}
+
+test the_consumed_facts_are_named_as_declarations_and_not_as_lines {
+  assert VOCABULARY_DECLARATION == "STATUS_NAMES and STATUS_COUNT, declared by the order-status contract";
+  assert TERMINALITY_DECLARATION == "order_status_is_terminal, declared by the order-status contract";
+  assert PIPELINE_LENGTH_DECLARATION == "DISPLAY_PIPELINE_VARIANT_COUNT, declared by the order-status contract";
+  assert PIPELINE_GAP_DECLARATION == "DISPLAY_PIPELINE_MISSING_NAMES, declared by the order-status contract";
+  assert MONEY_IDENTITY_DECLARATION == "order_money_total_agrees and order_money_expected_total_minor, declared by the order-money contract";
+  assert DASH_SHAPE_DECLARATION == "SHAPE_DASH, declared by the pricing-honesty contract";
+  assert BARE_KEY_FALLBACK_DECLARATION == "BARE_KEY_FALLBACK_SITES, declared by the locale-policy contract";
+  assert CANCEL_PRECONDITION_DECLARATION == "order_status_customer_cancel_admitted, declared by the order-status contract";
+  assert INBOUND_CENSUS_DECLARATIONS.len == 2;
+  assert THE_NEIGHBOUR_INBOUND_CENSUSES_PREDATE_THIS_FILE == true;
+}
+
+test nine_server_names_reach_eight_keys_and_two_names_are_lost_on_the_way {
+  assert SERVER_NAME_COUNT_CONSUMED == 9;
+  assert NON_FALLBACK_ARM_COUNT == 7;
+  assert SERVER_NAME_COUNT_CONSUMED - NON_FALLBACK_ARM_COUNT == SHARED_ARM_COUNT;
+  assert NON_FALLBACK_ARM_COUNT + 1 == ARM_COUNT;
+  assert ARM_COUNT == LABEL_KEY_COUNT;
+  assert LABEL_KEY_NAMES.len == LABEL_KEY_COUNT;
+  assert NO_COMPLETED_LABEL_KEY_EXISTS == true;
+  assert NO_REJECTED_LABEL_KEY_EXISTS == true;
+}
+
+test every_arm_resolves_to_one_key_and_the_fallback_is_the_eighth {
+  assert order_presentation_label_key(ARM_PENDING) == "T_ORDERS_STATUS_PENDING";
+  assert order_presentation_label_key(ARM_CONFIRMED) == "T_ORDERS_STATUS_CONFIRMED";
+  assert order_presentation_label_key(ARM_PREPARING) == "T_ORDERS_STATUS_PREPARING";
+  assert order_presentation_label_key(ARM_READY) == "T_ORDERS_STATUS_READY";
+  assert order_presentation_label_key(ARM_OUT_FOR_DELIVERY) == "T_ORDERS_STATUS_OUT_FOR_DELIVERY";
+  assert order_presentation_label_key(ARM_DELIVERED_OR_COMPLETED) == "T_ORDERS_STATUS_DELIVERED";
+  assert order_presentation_label_key(ARM_CANCELLED_OR_REJECTED) == "T_ORDERS_STATUS_CANCELLED";
+  assert order_presentation_label_key(ARM_UNRESOLVED) == "T_ORDERS_STATUS_UNKNOWN";
+  assert order_presentation_arm_is_known(ARM_UNRESOLVED) == false;
+  assert order_presentation_arm_is_known(ARM_PENDING) == true;
+  assert order_presentation_arm_is_known(ARM_CANCELLED_OR_REJECTED) == true;
+  assert order_presentation_arm_is_known(ARM_COUNT) == false;
+}
+
+test two_arms_carry_two_server_names_each_and_the_customer_sees_no_difference {
+  assert order_presentation_arm_is_shared(ARM_DELIVERED_OR_COMPLETED) == true;
+  assert order_presentation_arm_is_shared(ARM_CANCELLED_OR_REJECTED) == true;
+  assert order_presentation_arm_is_shared(ARM_PENDING) == false;
+  assert order_presentation_arm_is_shared(ARM_UNRESOLVED) == false;
+  assert CUSTOMER_VISIBLE_DIFFERENCE_BETWEEN_THE_PAIR == 0;
+  assert ALIAS_PAIR_SHARES_ONE_LABEL_KEY == true;
+  assert ALIAS_PAIR_SHARES_ONE_FILTER_CHIP == true;
+  assert ALIAS_PAIR_SHARES_ONE_STEP_LABEL == true;
+  assert ALIAS_PAIR_SHARES_ONE_PROGRESS_SHAPE == true;
+  assert ALIAS_PAIR_SHARES_ONE_REORDER_AFFORDANCE == true;
+  assert THIS_FILE_RESOLVES_THE_ALIAS == false;
+}
+
+test the_alias_is_carried_by_five_hand_written_disjunctions_and_one_accident {
+  assert ALIAS_DISJUNCTION_SITES.len == ALIAS_DISJUNCTION_SITE_COUNT;
+  assert ALIAS_DISJUNCTION_SITE_COUNT == 5;
+  assert COMPLETED_SHARES_THE_UNRESOLVED_BRANCH_IN_THE_STEPPER == true;
+  assert order_presentation_reads_as_finished(false, 0, 6) == order_presentation_reads_as_finished(true, 5, 6);
+}
+
+test the_three_partitioning_chips_cover_every_arm_exactly_once {
+  assert order_presentation_chip_of(ARM_PENDING, true) == CHIP_ACTIVE;
+  assert order_presentation_chip_of(ARM_CONFIRMED, true) == CHIP_ACTIVE;
+  assert order_presentation_chip_of(ARM_PREPARING, true) == CHIP_ACTIVE;
+  assert order_presentation_chip_of(ARM_READY, true) == CHIP_ACTIVE;
+  assert order_presentation_chip_of(ARM_OUT_FOR_DELIVERY, true) == CHIP_ACTIVE;
+  assert order_presentation_chip_of(ARM_DELIVERED_OR_COMPLETED, true) == CHIP_COMPLETED;
+  assert order_presentation_chip_of(ARM_CANCELLED_OR_REJECTED, true) == CHIP_CANCELLED;
+  assert order_presentation_chip_of(ARM_UNRESOLVED, true) == CHIP_ACTIVE;
+  assert PARTITIONING_CHIP_COUNT + 1 == CHIP_COUNT;
+  assert CHIP_RULES_ARE_WRITTEN_TWICE_AND_INDEPENDENTLY == true;
+}
+
+test the_all_chip_shows_everything_and_the_others_show_one_class_each {
+  assert order_presentation_is_shown_under(CHIP_ALL, ARM_UNRESOLVED, true) == true;
+  assert order_presentation_is_shown_under(CHIP_ALL, ARM_DELIVERED_OR_COMPLETED, true) == true;
+  assert order_presentation_is_shown_under(CHIP_COMPLETED, ARM_DELIVERED_OR_COMPLETED, true) == true;
+  assert order_presentation_is_shown_under(CHIP_COMPLETED, ARM_CANCELLED_OR_REJECTED, true) == false;
+  assert order_presentation_is_shown_under(CHIP_CANCELLED, ARM_CANCELLED_OR_REJECTED, true) == true;
+  assert order_presentation_is_shown_under(CHIP_ACTIVE, ARM_READY, true) == true;
+  assert order_presentation_is_shown_under(CHIP_ACTIVE, ARM_DELIVERED_OR_COMPLETED, true) == false;
+  assert UNRESOLVED_STATUS_IS_FILTERED_AS_ACTIVE == true;
+}
+
+test a_status_spelled_otherwise_keeps_its_label_and_loses_everything_else {
+  assert order_presentation_label_key(ARM_DELIVERED_OR_COMPLETED) == "T_ORDERS_STATUS_DELIVERED";
+  assert order_presentation_chip_of(ARM_DELIVERED_OR_COMPLETED, false) == CHIP_ACTIVE;
+  assert order_presentation_chip_of(ARM_CANCELLED_OR_REJECTED, false) == CHIP_ACTIVE;
+  assert order_presentation_cancel_button_shown(ARM_PENDING, true) == true;
+  assert order_presentation_cancel_button_shown(ARM_PENDING, false) == false;
+  assert order_presentation_reorder_button_shown(ARM_DELIVERED_OR_COMPLETED, true) == true;
+  assert order_presentation_reorder_button_shown(ARM_DELIVERED_OR_COMPLETED, false) == false;
+  assert READERS_AGREE_ON_CASE == false;
+}
+
+test fifteen_readers_of_one_string_split_six_against_nine {
+  assert CASE_NORMALIZING_READER_COUNT + RAW_READER_COUNT == STATUS_READER_COUNT;
+  assert STATUS_READER_COUNT == 15;
+  assert CASE_NORMALIZING_SITES.len == CASE_NORMALIZING_READER_COUNT;
+  assert RAW_READER_SITES.len == RAW_READER_COUNT;
+  assert STATUS_IS_NORMALISED_BEFORE_IT_REACHES_THE_SCREENS == false;
+  assert POLLED_STATUS_OVERRIDES_THE_LOADED_ONE_AT == "src/ui/screens/order_detail_screen.rs:227";
+}
+
+test the_status_helper_block_is_byte_identical_in_three_files {
+  assert HELPER_BLOCK_SITES.len == HELPER_BLOCK_COPY_COUNT;
+  assert HELPER_BLOCK_COPY_COUNT == 3;
+  assert HELPER_BLOCK_COPIES_ARE_BYTE_IDENTICAL == true;
+  assert TERMINAL_PREDICATE_SITES.len == TERMINAL_PREDICATE_COPY_COUNT;
+  assert HELPER_BLOCK_COPY_COUNT > TERMINAL_PREDICATE_COPY_COUNT;
+  ; The counts above are bounded by this contract, and the tree holds one more of each.
+  assert THE_COPY_COUNTS_ARE_BOUNDED_BY_THIS_CONTRACT == true;
+  assert HELPER_BLOCK_COPIES_OUTSIDE_THIS_BOUNDARY == 1;
+  assert TERMINAL_PREDICATE_COPIES_OUTSIDE_THIS_BOUNDARY == 1;
+  assert HELPER_BLOCK_COPY_OUTSIDE_SITE != HELPER_BLOCK_SITES[0];
+  assert TERMINAL_PREDICATE_COPY_OUTSIDE_SITE != TERMINAL_PREDICATE_SITES[0];
+}
+
+test a_name_the_pipeline_does_not_carry_renders_as_a_finished_delivery {
+  assert order_presentation_unresolved_index(6) == 6;
+  assert order_presentation_segments_filled(6, 6) == 6;
+  assert order_presentation_reads_as_finished(false, 0, 6) == true;
+  assert order_presentation_reads_as_finished(false, 0, 4) == true;
+  assert order_presentation_reads_as_finished(false, 0, 9) == true;
+  assert order_presentation_reads_as_finished(true, 0, 6) == false;
+  assert order_presentation_reads_as_finished(true, 4, 6) == false;
+  assert order_presentation_reads_as_finished(true, 5, 6) == true;
+  assert order_presentation_last_index(6) == 5;
+  assert UNRESOLVED_STATUS_FILLS_EVERY_SEGMENT == true;
+  assert ABSENCE_RENDERS_AS_COMPLETION == true;
+}
+
+test the_unresolved_status_is_answered_four_ways_at_once {
+  assert UNRESOLVED_ANSWER_SITES.len == SIMULTANEOUS_ANSWERS_TO_ONE_UNRESOLVED_STATUS;
+  assert SIMULTANEOUS_ANSWERS_TO_ONE_UNRESOLVED_STATUS == 4;
+  assert UNRESOLVED_STEP_LABEL_IS_THE_RAW_SERVER_TOKEN == true;
+  assert RAW_TOKEN_IS_NOT_THE_BARE_KEY_FALLBACK == true;
+  assert SCREENS_VALIDATE_THE_STATUS_AGAINST_THE_VOCABULARY == false;
+  assert STATUS_ARRIVES_AS_AN_UNCHECKED_STRING_AT.len == 3;
+}
+
+test one_money_figure_of_five_obeys_the_absent_stays_absent_rule {
+  assert DASH_FILTERED_SITE_COUNT + UNFILTERED_SITE_COUNT == MONEY_RENDER_SITE_COUNT;
+  assert MONEY_RENDER_SITE_COUNT == 5;
+  assert UNFILTERED_SITES.len == UNFILTERED_SITE_COUNT;
+  assert DASH_FILTERED_SITE_COUNT == 1;
+  assert D9_IS_OBEYED_BY_EVERY_FIGURE_ON_THESE_SCREENS == false;
+  assert DASH_FILTERED_SITE != UNFILTERED_SITES[1];
+}
+
+test absence_has_four_shapes_and_only_one_of_them_is_honest {
+  assert order_presentation_figure_shape(true, false, true, false) == ABSENCE_RENDERS_AS_DASH;
+  assert order_presentation_figure_shape(false, false, true, false) == ABSENCE_RENDERS_AS_DASH;
+  assert order_presentation_figure_shape(true, false, false, false) == ABSENCE_RENDERS_AS_ZERO;
+  assert order_presentation_figure_shape(true, false, false, true) == ABSENCE_RENDERS_AS_OMITTED_ROW;
+  assert order_presentation_figure_shape(false, false, false, false) == ABSENCE_RENDERS_AS_A_LOST_SCREEN;
+  assert order_presentation_figure_shape(true, true, false, false) == FIGURE_SHOWN;
+  assert order_presentation_figure_shape(true, true, true, false) == FIGURE_SHOWN;
+  assert order_presentation_absence_is_honest(ABSENCE_RENDERS_AS_DASH) == true;
+  assert order_presentation_absence_is_honest(ABSENCE_RENDERS_AS_ZERO) == false;
+  assert order_presentation_absence_is_honest(ABSENCE_RENDERS_AS_OMITTED_ROW) == false;
+  assert order_presentation_absence_is_honest(ABSENCE_RENDERS_AS_A_LOST_SCREEN) == false;
+  assert ABSENCE_SHAPE_COUNT == 4;
+}
+
+test four_terms_of_the_money_identity_are_shown_and_none_is_checked {
+  assert IDENTITY_TERM_SITES.len == IDENTITY_TERMS_SHOWN;
+  assert IDENTITY_TERMS_SHOWN == 4;
+  assert IDENTITY_IS_CHECKED_ON_THIS_SCREEN == false;
+  assert MONEY_IDENTITY_DECLARATION != ID;
+  assert CONDITIONAL_ROW_SITES.len == CONDITIONAL_ROW_COUNT;
+}
+
+test seven_delivery_fields_are_sent_four_are_declared_and_one_is_shown {
+  assert STATUS_PAYLOAD_FIELD_COUNT == 7;
+  assert FIELDS_DECLARED_BY_THE_SCREEN == 4;
+  assert FIELDS_THAT_REACH_THE_CUSTOMER == 1;
+  assert STATUS_PAYLOAD_FIELD_COUNT > FIELDS_DECLARED_BY_THE_SCREEN;
+  assert FIELDS_DECLARED_BY_THE_SCREEN > FIELDS_THAT_REACH_THE_CUSTOMER;
+  assert DELIVERY_FEE_IS_DECLARED_BY_THE_SCREEN == false;
+  assert NO_ETA_REACHES_EITHER_OWNED_SCREEN == true;
+  assert ETA_READER_SCREENS_OWNED_HERE == 0;
+  assert ETA_READER_SCREEN_COUNT == 2;
+  assert ETA_IS_READ_BEFORE_THE_ORDER_EXISTS_AT != ETA_REACHES_A_CUSTOMER_ON_AN_UNOWNED_SCREEN_AT;
+  assert NO_DELIVERY_FIGURE_REACHES_EITHER_OWNED_SCREEN == true;
+}
+
+test the_labelled_delivery_row_carries_a_shop_and_the_real_rows_carry_no_key {
+  assert LABELLED_DELIVERY_ROW_VALUE_IS_A_SHOP_NAME == true;
+  assert UNLABELLED_ROW_SITES.len == UNLABELLED_ROW_COUNT;
+  assert UNLABELLED_ROW_COUNT == 4;
+  assert ORDER_DATE_IS_RENDERED_AS_THE_WIRE_PREFIX == true;
+  assert KEYLESS_CUSTOMER_STRING_SITES.len == KEYLESS_CUSTOMER_STRING_SITE_COUNT;
+  assert KEYLESS_CUSTOMER_STRING_SITE_COUNT == 7;
+  assert TRANSPORT_ERROR_TEXT_REACHES_THE_CUSTOMER == true;
+  assert LIST_ERROR_STATE_HAS_NO_KEY == true;
+  assert DETAIL_ERROR_STATE_HAS_A_KEY_AND_ALSO_LEAKS_THE_TEXT == true;
+}
+
+test the_live_badge_promises_currency_that_the_payload_cannot_support {
+  assert order_presentation_poll_horizon_ms(POLL_INTERVAL_MS, POLL_TICK_LIMIT) == POLL_HORIZON_MS;
+  assert POLL_HORIZON_MS == 3600000;
+  assert order_presentation_live_badge_shown(true) == true;
+  assert order_presentation_live_badge_shown(false) == false;
+  assert STATUS_PAYLOAD_CARRIES_A_TIMESTAMP == false;
+  assert LIVE_BADGE_IS_KEYED_ON_PRESENCE == true;
+}
+
+test the_reorder_offer_follows_terminality_and_not_success {
+  assert order_presentation_reorder_button_shown(ARM_CANCELLED_OR_REJECTED, true) == true;
+  assert order_presentation_reorder_button_shown(ARM_PENDING, true) == false;
+  assert order_presentation_reorder_button_shown(ARM_UNRESOLVED, true) == false;
+  assert REORDER_IS_OFFERED_AFTER_A_REFUSAL == true;
+  assert REORDER_SITES.len == 2;
+  assert order_presentation_cancel_button_shown(ARM_CONFIRMED, true) == false;
+}
+
+test every_refusal_is_named_and_carries_what_is_missing {
+  assert SCREEN_HAS_NO_RULE_FOR_A_REFUSED_CANCELLATION == true;
+  assert SCREEN_HAS_NO_RULE_FOR_AN_EXPIRED_LIVE_VIEW == true;
+  assert SCREEN_HAS_NO_RULE_FOR_A_STATUS_OUTSIDE_THE_VOCABULARY == true;
+  assert NO_DELIVERY_FIGURE_IS_OWNED_HERE == true;
+  assert NO_ORDER_IDENTITY_IS_CARRIED_HERE == true;
+  assert NO_STATUS_NAME_IS_INVENTED_HERE == true;
+  assert REFUSED_CANCELLATION_NOTE != "";
+  assert EXPIRED_LIVE_VIEW_NOTE != "";
+  assert OUTSIDE_VOCABULARY_NOTE != "";
+  assert DELIVERY_FIGURE_NOTE != "";
+  assert D14_NOTE != "";
+  assert INVENTION_NOTE != "";
+}
+
+; --- Invariants -----------------------------------------------------------------------------------
+
+invariant the_customer_has_no_label_that_separates_the_alias_pair
+  assert order_presentation_arm_is_shared(ARM_DELIVERED_OR_COMPLETED) == true and CUSTOMER_VISIBLE_DIFFERENCE_BETWEEN_THE_PAIR == 0 and NO_COMPLETED_LABEL_KEY_EXISTS == true
+
+invariant nine_names_reach_eight_keys_and_the_shortfall_is_two_shared_arms
+  assert SERVER_NAME_COUNT_CONSUMED - NON_FALLBACK_ARM_COUNT == SHARED_ARM_COUNT and ARM_COUNT == LABEL_KEY_COUNT and LABEL_KEY_NAMES.len == LABEL_KEY_COUNT
+
+invariant no_arm_resolves_to_two_keys_and_no_arm_resolves_to_none
+  assert order_presentation_label_key(ARM_UNRESOLVED) == LABEL_KEY_NAMES[7] and order_presentation_label_key(ARM_PENDING) == LABEL_KEY_NAMES[0] and order_presentation_label_key(ARM_CANCELLED_OR_REJECTED) == LABEL_KEY_NAMES[6]
+
+invariant every_arm_lands_under_exactly_one_partitioning_chip
+  assert order_presentation_chip_of(ARM_DELIVERED_OR_COMPLETED, true) == CHIP_COMPLETED and order_presentation_chip_of(ARM_CANCELLED_OR_REJECTED, true) == CHIP_CANCELLED and order_presentation_chip_of(ARM_PENDING, true) == CHIP_ACTIVE and order_presentation_chip_of(ARM_UNRESOLVED, true) == CHIP_ACTIVE
+
+invariant a_status_this_software_cannot_read_is_never_filtered_out_of_sight
+  assert order_presentation_is_shown_under(CHIP_ALL, ARM_UNRESOLVED, true) == true and order_presentation_chip_of(ARM_UNRESOLVED, true) == CHIP_ACTIVE and UNRESOLVED_STATUS_IS_FILTERED_AS_ACTIVE == true
+
+invariant the_label_survives_a_different_spelling_and_the_chip_does_not
+  assert order_presentation_chip_of(ARM_DELIVERED_OR_COMPLETED, false) == CHIP_ACTIVE and order_presentation_label_key(ARM_DELIVERED_OR_COMPLETED) == LABEL_KEY_NAMES[5] and READERS_AGREE_ON_CASE == false
+
+invariant a_different_spelling_removes_every_action_the_customer_had
+  assert order_presentation_cancel_button_shown(ARM_PENDING, false) == false and order_presentation_reorder_button_shown(ARM_DELIVERED_OR_COMPLETED, false) == false
+
+invariant the_reader_census_stays_split_until_one_reading_of_the_string_is_shipped
+  assert CASE_NORMALIZING_READER_COUNT + RAW_READER_COUNT == STATUS_READER_COUNT and STATUS_IS_NORMALISED_BEFORE_IT_REACHES_THE_SCREENS == false
+
+invariant an_unresolved_status_reads_as_finished_at_every_pipeline_length
+  assert order_presentation_reads_as_finished(false, 0, 4) == true and order_presentation_reads_as_finished(false, 0, 6) == true and order_presentation_reads_as_finished(false, 0, 9) == true
+
+invariant a_step_before_the_last_never_reads_as_finished
+  assert order_presentation_reads_as_finished(true, 0, 6) == false and order_presentation_reads_as_finished(true, 4, 6) == false and order_presentation_reads_as_finished(true, 5, 6) == true
+
+invariant only_the_dash_is_an_honest_answer_to_an_absent_figure
+  assert order_presentation_absence_is_honest(ABSENCE_RENDERS_AS_DASH) == true and order_presentation_absence_is_honest(ABSENCE_RENDERS_AS_ZERO) == false and order_presentation_absence_is_honest(ABSENCE_RENDERS_AS_OMITTED_ROW) == false and order_presentation_absence_is_honest(ABSENCE_RENDERS_AS_A_LOST_SCREEN) == false
+
+invariant an_unfiltered_figure_can_never_produce_a_dash
+  assert order_presentation_figure_shape(true, false, false, false) == ABSENCE_RENDERS_AS_ZERO and order_presentation_figure_shape(true, false, true, false) == ABSENCE_RENDERS_AS_DASH
+
+invariant four_of_the_five_money_sites_stay_marked_as_disobeying_until_the_rust_agrees
+  assert DASH_FILTERED_SITE_COUNT + UNFILTERED_SITE_COUNT == MONEY_RENDER_SITE_COUNT and D9_IS_OBEYED_BY_EVERY_FIGURE_ON_THESE_SCREENS == false
+
+invariant the_delivery_payload_stays_wider_than_what_the_customer_is_shown
+  assert STATUS_PAYLOAD_FIELD_COUNT > FIELDS_DECLARED_BY_THE_SCREEN and FIELDS_DECLARED_BY_THE_SCREEN > FIELDS_THAT_REACH_THE_CUSTOMER and NO_DELIVERY_FIGURE_REACHES_EITHER_OWNED_SCREEN == true
+
+invariant the_live_badge_is_keyed_on_presence_because_there_is_no_age_to_key_it_on
+  assert order_presentation_live_badge_shown(true) == true and STATUS_PAYLOAD_CARRIES_A_TIMESTAMP == false and order_presentation_poll_horizon_ms(POLL_INTERVAL_MS, POLL_TICK_LIMIT) == POLL_HORIZON_MS
+
+invariant this_contract_names_other_owners_and_copies_none_of_their_tables
+  assert REUSES_ORDER_STATUS_ID != ID and REUSES_ORDER_MONEY_ID != ID and REUSES_PRICING_HONESTY_ID != ID and THIS_FILE_RESTATES_A_NEIGHBOUR_TABLE == false
+
+invariant the_alias_question_stays_open_and_no_status_name_is_invented_here
+  assert THIS_FILE_RESOLVES_THE_ALIAS == false and NO_STATUS_NAME_IS_INVENTED_HERE == true and order_presentation_arm_is_known(ARM_UNRESOLVED) == false
+
+invariant no_order_identity_and_no_user_copy_ever_enters_this_file
+  assert NO_ORDER_IDENTITY_IS_CARRIED_HERE == true and D14_NOTE != "" and LABEL_KEY_NAMES[7] == "T_ORDERS_STATUS_UNKNOWN"
