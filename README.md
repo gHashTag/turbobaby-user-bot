@@ -23,9 +23,9 @@ Four documents outrank the code, and all four outrank an issue's prose:
 
 | file | what it settles |
 | ---- | --------------- |
-| [`DECISIONS.md`](DECISIONS.md) | the cross-subsystem decisions D1–D17 — price authority, nullable money, the CLICK 125 exclusion, the PII prohibition list |
+| [`DECISIONS.md`](DECISIONS.md) | the cross-subsystem decisions D1–D20 — price authority, nullable money, the CLICK 125 exclusion, the PII prohibition list |
 | [`data/fleet_seed.json`](data/fleet_seed.json) | every published number, with the source that published it. De-identified; the raw sheets never enter this repo |
-| [`specs/`](specs/) | the `.t27` contracts the two language runtimes are checked against, including [`specs/agents/turbobaby.t27`](specs/agents/turbobaby.t27) |
+| [`specs/`](specs/) | the `.t27` contracts the two language runtimes are checked against — **43 tracked specs**, indexed by [`docs/t27-contract-map.md`](docs/t27-contract-map.md), including [`specs/agents/turbobaby.t27`](specs/agents/turbobaby.t27) |
 | [`.claude/agents/turbobaby-bot.md`](.claude/agents/turbobaby-bot.md) | the **owner agent** of this repository: its scope, its tools, and the four rules it can never violate |
 
 ## Setup for new contributors

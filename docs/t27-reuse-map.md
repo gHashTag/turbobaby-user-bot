@@ -76,8 +76,11 @@ catalog-of-goods, pricing or booking category anywhere in the corpus.
 
 **Conclusion:** the TurboBaby domain contracts duplicate nothing in the published corpus. This
 is a new domain for `.t27`, and the reuse the instruction asks for is available at the level of
-*form*, not content. Local ownership is narrower: ten canonical contracts divide domain,
-transport, transaction, runtime and publication boundaries without copying formulas between them.
+*form*, not content. Local ownership is narrower: canonical contracts divide domain, transport,
+transaction, runtime and publication boundaries without copying formulas between them. There were
+ten when this was measured; there are **43** on 2026-09-21, and which one owns what is tabulated in
+[`t27-contract-map.md`](t27-contract-map.md). The conclusion above is unchanged by that growth --
+the probe that found zero commerce specs in the published corpus was re-read, not re-guessed.
 
 ---
 
@@ -154,6 +157,16 @@ So **no wiring code is needed for the spec browser.** The remaining step is the 
 specs land in the committed catalog data automatically and become visible on t27.ai when the
 owner runs the deploy. That gate is a decision, not a defect, and it is not mine to pull.
 
+**Re-measured 2026-09-20: that gate has since been pulled, and this half is DONE.**
+`GET https://t27.ai/t27/manifest.json` answers 200 (1 478 541 bytes) and its `repos` array carries
+`{"repo": "turbobaby-user-bot", "commit": "e9356f1f0664e8f6d963c52035a9d310761ca9a8", "specs": 12,
+"discoveredAt": "2026-09-15T14:46:43.844Z", "duplicatesSkipped": 0}`; its `categories` map carries
+`turbobaby-user-bot/specs` with the same 12; and `GET https://t27.ai/t27/shared-core.json` (200,
+2 329 087 bytes) resolves our modules by path with their header prose. That commit is an ancestor
+of this branch. The corpus has grown from 12 to 43 since that scan, so the next nightly run is what
+carries the rest — the mechanism is proved, the count is a snapshot. `publication.t27` holds the
+same three witnesses as dated constants, which is why it may now claim the spec browser is live.
+
 ### `#/queen` — blocked, and not by anything in this repository
 
 The board is single-repo by construction. `apps/website/src/pages/Queen.tsx` declares:
@@ -165,10 +178,22 @@ interface BoardResponse { repo: string; columns: ...; cards: BoardCard[]; pulse:
 One `repo` string, not a list. A second repository's epic cannot appear on that board without
 a change to the supervisor's board contract and to the page.
 
-The deployed origin the page falls back to is also not currently serving the board API.
-`DEPLOYED_QUEEN = https://trios-agent-server-production.up.railway.app` answers `/health` with
-`{"status":"ok","pid":2,"cdpConnected":false,...}` — a CDP/browser service — while
-`/queen/public-board`, `/api/status` and `/api/queen/needs-you` all return **404**.
+The deployed origin the page falls back to was also not serving the board API when this was
+written. `DEPLOYED_QUEEN = https://trios-agent-server-production.up.railway.app` answers `/health`
+with `{"status":"ok","pid":2,"cdpConnected":false,...}` — a CDP/browser service — while
+`/queen/public-board`, `/api/status` and `/api/queen/needs-you` all returned **404**.
+
+**Re-measured 2026-09-20, and half of that sentence is now stale in the direction that matters.**
+`/queen/public-board` answers **200**, and `/queen/status` answers 200 too; `/queen/worlds`,
+`/api/queen/worlds`, `/queen/public-modules` and `/api/status` still 404. But the payload is
+`{"repo": "gHashTag/t27", "columns": [...], "cards": [...], "pulse": ...}` — one repository
+string, and its cards carry no repository identity — and adding `?world=gHashTag/turbobaby-user-bot`
+returns the identical single-repo payload: the parameter is ignored. The t27.ai world view at
+`/#/queen?world=ghashtag%2Fturbobaby-user-bot` does render a TurboBaby card reading "12 .t27 - 33
+open issues", and the page itself labels that data "Observed: 9/15/2026 - not live", i.e. the
+catalog snapshot rather than the board. So the blocker is narrower and sharper than "the API is
+down": the API is up and is single-repo by construction, which is exactly what `gHashTag/tri-27#3`
+(OPEN) exists to change.
 
 Issue #22 therefore splits: the spec-browser half needs nothing from us, and the Queen-board
 half needs a `repo` parameter in the board contract before it is possible at all. Recorded
