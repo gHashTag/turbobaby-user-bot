@@ -113,8 +113,8 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/delivery_terms.t27": {
         "module": "turbobaby-delivery-terms",
         "id": "turbobaby/delivery-terms",
-        "min_declarations": 130,
-        "min_checks": 32,
+        "min_declarations": 253,
+        "min_checks": 46,
     },
     "specs/turbobaby/deposit_tiers.t27": {
         "module": "deposit-tiers",
@@ -143,8 +143,8 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/http_cache.t27": {
         "module": "turbobaby-http-cache",
         "id": "turbobaby/http-cache",
-        "min_declarations": 177,
-        "min_checks": 41,
+        "min_declarations": 284,
+        "min_checks": 62,
     },
     "specs/turbobaby/legacy_retirement.t27": {
         "module": "turbobaby-legacy-retirement",
@@ -227,8 +227,8 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/rental_terms.t27": {
         "module": "rental-terms",
         "id": "turbobaby/rental-terms",
-        "min_declarations": 87,
-        "min_checks": 41,
+        "min_declarations": 170,
+        "min_checks": 58,
     },
     "specs/turbobaby/request_identity.t27": {
         "module": "turbobaby-request-identity",

@@ -403,6 +403,18 @@ a:hover, a:focus-visible { color: var(--cyan); }
   background: var(--card); border: 4px solid var(--border);
   box-shadow: var(--pixel-shadow);
 }
+/* The sentence D11 requires beside a line the shop cannot price. It is a real
+   rule and not an ALLOWLIST entry because the class is new (2026-09-21) and the
+   allowlist is for pre-existing mismatches: `every_jsx_class_literal_has_a_css_rule`
+   (src/main.rs:1736) failed on it the moment rustfmt put `class:` on its own
+   line, which is the only reason the same gap on `.cart-item-price` above has
+   never been seen. Declared here rather than inline on the element so the note
+   has one definition. */
+.cart-item-price-note {
+  font-size: 12px;
+  color: #888;
+  font-style: italic;
+}
 .cart-item-remove {
   width: 32px; height: 32px;
   background: rgba(255,71,87,0.2);
