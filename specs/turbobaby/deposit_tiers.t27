@@ -21,11 +21,11 @@
 ; files, three of which name THIS file and all three of which are gates, two of them reading a
 ; deposit. WIRING_REMEASURED_NOTE below has the list; still no shipped surface.) The catalog
 ; screen renders deposit_thb as it arrives from the API (the field at
-; src/ui/screens/catalog_screen.rs:124 rendered through money_thb at :834, and the field at
-; src/ui/components/bike_card.rs:115 rendered through thb_or_dash at :203 (:107 and :195 before
-; the 2026-09-21 published_money edit) -- both addresses
-; re-verified 2026-09-21, and both had drifted from the :126 and :102 this paragraph used to
-; give), and the API is seeded by migrations/082_bikes_seed.sql.
+; src/ui/screens/catalog_screen.rs:123 rendered through money_thb at :822 -- :124 and :834 until
+; the 2026-09-24 availability edit -- and the field at src/ui/components/bike_card.rs:115 rendered
+; through thb_or_dash at :203 (:107 and :195 before the 2026-09-21 published_money edit); all four
+; addresses re-verified 2026-09-24, and both pairs had drifted from the :126 and :102 this
+; paragraph used to give), and the API is seeded by migrations/082_bikes_seed.sql.
 ; FAMILY_DEPOSIT_THB below is therefore a THIRD copy of the deposit column -- after
 ; data/fleet_seed.json and migrations/082_bikes_seed.sql -- and a copy is a drift risk (D15).
 ; It is here because none of the arithmetic below can be checked without it, and the copy is

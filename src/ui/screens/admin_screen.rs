@@ -1180,7 +1180,7 @@ fn BikesTab() -> Element {
                                let vl = variant_label().trim().to_string();
                                let dru = description_ru(); let den = description_en();
                                let img = crate::trios::validation::normalize_media_url(&image_url());
-                               submitting.set(true);
+                               submitting.set(true); status.set(String::new());
                                // ── Optimistic: insert immediately ──
                                let temp_id = format!("temp-{}", uuid::Uuid::new_v4());
                                cache.write().insert(0, AdminBike {
@@ -1206,13 +1206,6 @@ fn BikesTab() -> Element {
                                    // was created a millisecond ago.
                                    units_total: None, units_available: None,
                                });
-                               status.set("✅ Добавлена!".into());
-                               family_key.set(String::new()); brand.set(String::new()); model.set(String::new());
-                               variant_label.set(String::new()); displacement_cc.set(String::new());
-                               base_rate.set(String::new()); deposit.set(String::new());
-                               monthly.set(String::new()); sale_price.set(String::new());
-                               description_ru.set(String::new()); description_en.set(String::new());
-                               image_url.set(String::new());
                                auto_scroll_to_list();
                                spawn(async move {
                                    let body = json!({
@@ -1243,11 +1236,18 @@ fn BikesTab() -> Element {
                                                    if let Some(b) = cache.write().iter_mut().find(|b| b.id == temp_id) { b.id = real_id.to_string(); }
                                                }
                                            }
+                                           status.set("✅ Добавлена!".into());
+                                           family_key.set(String::new()); brand.set(String::new()); model.set(String::new());
+                                           variant_label.set(String::new()); displacement_cc.set(String::new());
+                                           base_rate.set(String::new()); deposit.set(String::new());
+                                           monthly.set(String::new()); sale_price.set(String::new());
+                                           description_ru.set(String::new()); description_en.set(String::new());
+                                           image_url.set(String::new());
                                            TelegramApp::init().haptic_notification(HapticNotification::Success);
                                        }
-                                       _ => {
+                                       other => {
                                            cache.write().retain(|b| b.id != temp_id);
-                                           status.set("❌ Ошибка добавления".into());
+                                           status.set(format!("❌ Ошибка добавления ({})", admin_add_failure_reason(other).await));
                                            TelegramApp::init().haptic_notification(HapticNotification::Error);
                                        }
                                    }
@@ -1564,7 +1564,7 @@ fn BikeUnitsTab() -> Element {
                             };
                             let col = color().trim().to_string();
                             let st = unit_status();
-                            submitting.set(true);
+                            submitting.set(true); status.set(String::new());
                             let temp_id = format!("temp-{}", uuid::Uuid::new_v4());
                             cache.write().insert(0, AdminBikeUnit {
                                 id: temp_id.clone(), bike_id: bid.clone(), unit_code: code.clone(),
@@ -1572,9 +1572,6 @@ fn BikeUnitsTab() -> Element {
                                 color: if col.is_empty() { None } else { Some(col.clone()) },
                                 km_since_purchase: km, status: st.clone(),
                             });
-                            status.set("✅ Добавлен!".into());
-                            unit_code.set(String::new()); model_year.set(String::new());
-                            color.set(String::new()); km_since_purchase.set(String::new());
                             auto_scroll_to_list();
                             spawn(async move {
                                 let body = json!({
@@ -1598,11 +1595,14 @@ fn BikeUnitsTab() -> Element {
                                                 if let Some(u) = cache.write().iter_mut().find(|u| u.id == temp_id) { u.id = real_id.to_string(); }
                                             }
                                         }
+                                        status.set("✅ Добавлен!".into());
+                                        unit_code.set(String::new()); model_year.set(String::new());
+                                        color.set(String::new()); km_since_purchase.set(String::new());
                                         TelegramApp::init().haptic_notification(HapticNotification::Success);
                                     }
-                                    _ => {
+                                    other => {
                                         cache.write().retain(|u| u.id != temp_id);
-                                        status.set("❌ Ошибка добавления".into());
+                                        status.set(format!("❌ Ошибка добавления ({})", admin_add_failure_reason(other).await));
                                         TelegramApp::init().haptic_notification(HapticNotification::Error);
                                     }
                                 }
@@ -5878,4 +5878,33 @@ fn admin_csv_count(count: Option<i64>) -> String {
     count
         .filter(|s| *s >= 0)
         .map_or_else(String::new, |v| v.to_string())
+}
+
+/// Why an admin Add was refused, for the line under the form (epic #31 AC4,
+/// 2026-09-24). Both Add buttons used to show «❌ Ошибка добавления» and nothing
+/// else, although the server answers a duplicate key with a 409 and a sentence
+/// of its own (`src/api/bikes.rs`, `admin_create_bike`). The words are the edit
+/// cards' own -- `HTTP {st}: {snip}`, `HTTP {st}`, `сеть/таймаут` -- so no new
+/// copy enters the screen. Called only for an answer that is not a 2xx. Sits at
+/// the end of the file so that no line cited above it moves.
+async fn admin_add_failure_reason(
+    res: Result<
+        crate::ui::api::local_client::LocalResponse,
+        crate::ui::api::local_client::LocalError,
+    >,
+) -> String {
+    match res {
+        Ok(r) => {
+            let st = r.status().as_u16();
+            let body = r.text().await.unwrap_or_default();
+            let b = body.trim();
+            if b.is_empty() {
+                format!("HTTP {st}")
+            } else {
+                let snip: String = b.chars().take(100).collect();
+                format!("HTTP {st}: {snip}")
+            }
+        }
+        Err(_) => "сеть/таймаут".to_string(),
+    }
 }

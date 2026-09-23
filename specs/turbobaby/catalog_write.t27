@@ -107,7 +107,15 @@ pub const MEASURED_AT : str = "2026-09-20";
 ; RE-MEASURED 2026-09-23 after T27 defect 2 taught the admin order card, badges and CSV to read a
 ; withheld (null) money figure: 5881, was 5830. The 51 lines are six helpers appended at the end
 ; of the file, so no cited line above them moved. Same caveat on MEASURED_AT as above.
-pub const ADMIN_SCREEN_LINES : u16 = 5881;
+; CORRECTED 2026-09-24: 5881 stopped being the length when the two Add buttons (a family, a unit)
+; stopped reporting success before the server answered and started naming the reason of a refusal.
+; Re-measured: 5910, was 5881. The 29 lines are one reason helper appended at the end of the file
+; (admin_add_failure_reason) with its doc comment; both Add handlers kept their own line count, so
+; no line cited above the helper moved (re-checked at :522, :2447, :2858, :2908-2917, :2945,
+; :2951, :3043 and :4724). The 2026-09-23 figure is kept below as history. Same caveat on
+; MEASURED_AT as above.
+pub const ADMIN_SCREEN_LINES : u16 = 5910;
+pub const ADMIN_SCREEN_LINES_BEFORE_2026_09_24 : u16 = 5881;
 pub const NEXT_LARGEST_SOURCE_LINES : u16 = 4599;
 
 ; --- Who cites this screen, counted over the corpus as it stands now -------------------------
@@ -466,7 +474,9 @@ test the_sources_these_bounds_were_read_from_are_pinned {
     assert UNIT_MIGRATION == "migrations/078_bike_units.sql";
     assert ADMIN_SCREEN == "src/ui/screens/admin_screen.rs";
     assert MEASURED_AT == "2026-09-20";
-    assert ADMIN_SCREEN_LINES == 5881;
+    assert ADMIN_SCREEN_LINES == 5910;
+    assert ADMIN_SCREEN_LINES_BEFORE_2026_09_24 == 5881;
+    assert ADMIN_SCREEN_LINES - ADMIN_SCREEN_LINES_BEFORE_2026_09_24 == 29;
     assert ADMIN_SCREEN_LINES > NEXT_LARGEST_SOURCE_LINES;
 }
 

@@ -47,15 +47,14 @@
 
 use crate::trios::core::Lang;
 use crate::trios::i18n::{
-    t, tf, Key, T_BIKE_AVAILABILITY, T_BIKE_AVAILABILITY_FREE, T_BIKE_AVAILABILITY_UNKNOWN,
-    T_BIKE_BOOK_BLOCKED_NOT_OFFERED, T_BIKE_BOOK_BLOCKED_NOT_WIRED, T_BIKE_BOOK_BLOCKED_NO_RATE,
-    T_BIKE_BOOK_BLOCKED_NO_UNITS, T_BIKE_BOOK_BLOCKED_UNKNOWN_AVAILABILITY, T_BIKE_CATALOG_DESC,
-    T_BIKE_CATALOG_TITLE, T_BIKE_CC, T_BIKE_CLASS_DISCOUNT, T_BIKE_CLASS_MOTORCYCLE,
-    T_BIKE_CLASS_SCOOTER, T_BIKE_DEPOSIT, T_BIKE_DETAILS, T_BIKE_FILTER_FREE_NOW,
-    T_BIKE_FILTER_MOTORCYCLE, T_BIKE_FILTER_SCOOTER, T_BIKE_NOT_OFFERED_ALTERNATIVES,
-    T_BIKE_NOT_OFFERED_TITLE, T_BIKE_NO_RESULTS, T_BIKE_PER_DAY, T_BIKE_PRICE_ON_REQUEST,
-    T_BIKE_QUOTE_NOTE, T_BIKE_SORT_DEFAULT, T_BIKE_SORT_PRICE_ASC, T_BIKE_SORT_PRICE_DESC,
-    T_BIKE_TARIFF_BEFORE_DISCOUNT, T_FILTER_ALL, T_SEARCH_PLACEHOLDER,
+    t, tf, Key, T_BIKE_AVAILABILITY_UNKNOWN, T_BIKE_BOOK_BLOCKED_NOT_OFFERED,
+    T_BIKE_BOOK_BLOCKED_NOT_WIRED, T_BIKE_BOOK_BLOCKED_NO_RATE, T_BIKE_BOOK_BLOCKED_NO_UNITS,
+    T_BIKE_BOOK_BLOCKED_UNKNOWN_AVAILABILITY, T_BIKE_CATALOG_DESC, T_BIKE_CATALOG_TITLE, T_BIKE_CC,
+    T_BIKE_CLASS_DISCOUNT, T_BIKE_CLASS_MOTORCYCLE, T_BIKE_CLASS_SCOOTER, T_BIKE_DEPOSIT,
+    T_BIKE_DETAILS, T_BIKE_FILTER_MOTORCYCLE, T_BIKE_FILTER_SCOOTER,
+    T_BIKE_NOT_OFFERED_ALTERNATIVES, T_BIKE_NOT_OFFERED_TITLE, T_BIKE_NO_RESULTS, T_BIKE_PER_DAY,
+    T_BIKE_PRICE_ON_REQUEST, T_BIKE_QUOTE_NOTE, T_BIKE_SORT_DEFAULT, T_BIKE_SORT_PRICE_ASC,
+    T_BIKE_SORT_PRICE_DESC, T_BIKE_TARIFF_BEFORE_DISCOUNT, T_FILTER_ALL, T_SEARCH_PLACEHOLDER,
 };
 use crate::ui::api::context::api_base_url;
 use crate::ui::components::bottom_nav::BottomNav;
@@ -151,11 +150,12 @@ pub struct ApiBike {
     #[serde(default)]
     pub offered: Option<bool>,
     /// Rentable units — everything except `retired`. **Detail only**:
-    /// `GET /api/bikes` runs no unit query, so on a list card this is `None`
-    /// and the availability line says only how many are free.
+    /// `GET /api/bikes` runs no unit query, so on a list card this is `None`.
+    /// Not printed to a customer (see [`availability_line`]).
     #[serde(default)]
     pub units_total: Option<i64>,
-    /// Units in status `available` right now. Served by both endpoints.
+    /// Units whose seeded, admin-edited status is `available`. Served by both
+    /// endpoints. A zero may rule a family out; it is never printed as "free".
     #[serde(default)]
     pub units_available: Option<i64>,
     /// Count per unit status, all four statuses always present. Parsed so the
@@ -167,7 +167,9 @@ pub struct ApiBike {
     /// Colours on record across the rentable units, sorted and de-duplicated.
     #[serde(default)]
     pub colors: Vec<String>,
-    /// Colours of the units that are free right now — a subset of `colors`.
+    /// Colours of the units whose seeded status is `available` — a subset of
+    /// `colors`. Parsed and, since 2026-09-24, not rendered: it is the same
+    /// seeded count in other words, and may not confirm what is free.
     #[serde(default)]
     pub colors_available: Vec<String>,
     /// Model years on record across the rentable units.
@@ -358,13 +360,17 @@ pub fn book_block(bike: &ApiBike, booking_wired: bool) -> Option<BookBlock> {
 // Display helpers shared with `bike_detail.rs`
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// D12 names the three families the shop offers instead of CLICK 125. The API
-/// is expected to carry them in `offer_instead`; this is the fallback so the
-/// redirect cannot silently vanish if that field is missing, and it is keyed
-/// on the one family the decision is about rather than applied to every closed
-/// family.
+/// What the shop offers instead of CLICK 125 (D12). The API is expected to
+/// carry it in `offer_instead`; this is the fallback so the redirect cannot
+/// silently vanish if that field is missing, and it is keyed on the one family
+/// the decision is about rather than applied to every closed family.
+///
+/// Only families in the fleet: until 2026-09-24 this also named PCX 150 and
+/// ADV 150, tariff rows with zero units that the owner's rules forbid naming
+/// even as a replacement (`availability.t27` CLICK_125_REDIRECT_LABELS_SHOWN;
+/// guarded by `tests/catalog_honesty_wiring.rs` and gate 3).
 const CLICK_125_KEY: &str = "click-125";
-const CLICK_125_ALTERNATIVES: [&str; 3] = ["PCX 150", "ADV 150", "NMAX 155"];
+const CLICK_125_ALTERNATIVES: [&str; 1] = ["NMAX 155"];
 
 /// `Yamaha NMAX 155`. The brand and model come from the register as data, so
 /// they are not translated (same treatment the strain names had).
@@ -405,25 +411,19 @@ fn class_badge_style(class: &str) -> String {
     )
 }
 
-/// `Свободно 5 из 10` on the detail screen, `Свободно 5` on a list card, or "a
-/// manager confirms availability" when the API did not say. Never "0 of 0"
-/// invented from a missing field.
+/// What a customer is told about availability: that a manager confirms it.
 ///
-/// The two shapes are not cosmetic: `GET /api/bikes` runs no unit query and so
-/// carries `units_available` without `units_total`, while
-/// `GET /api/bikes/:key` carries both. Printing the free count against a total
-/// that was never served would have to invent the total, so the list says only
-/// what it was told.
-pub fn availability_line(bike: &ApiBike, lang: Lang) -> String {
-    match (bike.units_available, bike.units_total) {
-        (Some(free), Some(total)) if free >= 0 && total > 0 => tf(
-            lang,
-            T_BIKE_AVAILABILITY,
-            &[free.to_string(), total.to_string()],
-        ),
-        (Some(free), _) if free >= 0 => tf(lang, T_BIKE_AVAILABILITY_FREE, &[free.to_string()]),
-        _ => t(lang, T_BIKE_AVAILABILITY_UNKNOWN).to_string(),
-    }
+/// Until 2026-09-24 this printed `Свободно 5 из 10` / `Свободно: 5` from
+/// `units_available`. That count is the `bike_units` rows seeded on 2026-09-12
+/// and changed only by an admin, not a live check with the shop, and
+/// `availability.t27` declares `FILE_MAY_CONFIRM = false`: a file snapshot may
+/// rule a family out but never confirm it. The owner's rule is the same —
+/// do not promise without checking occupancy. So no count reaches the line;
+/// the admin screen keeps its own. A zero count still rules a family out
+/// elsewhere (the detail's "all taken" line, `BookBlock::NoUnitsFree`), which
+/// the contract allows (`FILE_MAY_RULE_OUT = true`).
+pub fn availability_line(lang: Lang) -> String {
+    t(lang, T_BIKE_AVAILABILITY_UNKNOWN).to_string()
 }
 
 /// The families offered instead of a closed one (D12).
@@ -606,7 +606,6 @@ const SORT_PRICE_DESC: &str = "price-desc";
 #[component]
 pub fn CatalogScreen() -> Element {
     let mut active_class = use_signal(|| FILTER_ALL.to_string());
-    let mut only_free = use_signal(|| false);
     let mut active_sort = use_signal(|| SORT_DEFAULT.to_string());
     let mut search_query = use_signal(String::new);
 
@@ -678,14 +677,8 @@ pub fn CatalogScreen() -> Element {
                     onclick: move |_| active_class.set(FILTER_MOTORCYCLE.to_string()),
                     {t(lang, T_BIKE_FILTER_MOTORCYCLE)}
                 }
-                button {
-                    style: filter_tab_style(only_free()),
-                    onclick: move |_| {
-                        let next = !only_free();
-                        only_free.set(next);
-                    },
-                    {t(lang, T_BIKE_FILTER_FREE_NOW)}
-                }
+                // No "free now" chip since 2026-09-24: it filtered on the
+                // seeded count, which may not confirm availability.
             }
 
             div { style: "display:flex;gap:6px;padding:0 16px 12px;overflow-x:auto;",
@@ -711,15 +704,10 @@ pub fn CatalogScreen() -> Element {
                     Some(Ok(all_bikes)) => {
                         let class_filter = active_class();
                         let sort_val = active_sort();
-                        let free_only = only_free();
                         let query = search_query().to_lowercase();
                         let mut filtered: Vec<ApiBike> = all_bikes
                             .iter()
                             .filter(|b| class_filter == FILTER_ALL || b.class == class_filter)
-                            // "Free now" means the API said a unit is free. A
-                            // family whose availability is unknown is left out
-                            // rather than shown as free.
-                            .filter(|b| !free_only || matches!(b.units_available, Some(n) if n > 0))
                             .filter(|b| matches_query(b, &query))
                             .cloned()
                             .collect();
@@ -849,7 +837,7 @@ where
     );
     let discount_line = discount_percent(bike.class_discount)
         .map(|pct| tf(lang, T_BIKE_CLASS_DISCOUNT, &[pct.to_string()]));
-    let availability = availability_line(&bike, lang);
+    let availability = availability_line(lang);
     let alternatives = offer_instead_labels(&bike);
     let cc_line = bike
         .displacement_cc
@@ -928,7 +916,7 @@ where
                                 "{deposit_str}"
                             }
                         })}
-                        // A unit count is not money, so it stays ungated.
+                        // No count: a seeded number is not availability (FILE_MAY_CONFIRM).
                         div { style: "font-size:13px;color:#888;", "{availability}" }
                     }
                 } else {
@@ -1092,14 +1080,8 @@ mod tests {
         let mut click = bike(None, None, None);
         click.key = "click-125".to_string();
         click.offered = Some(false);
-        assert_eq!(
-            offer_instead_labels(&click),
-            vec![
-                "PCX 150".to_string(),
-                "ADV 150".to_string(),
-                "NMAX 155".to_string()
-            ]
-        );
+        // Only a family in the fleet: PCX 150 and ADV 150 have no units.
+        assert_eq!(offer_instead_labels(&click), vec!["NMAX 155".to_string()]);
         // The fallback belongs to that one decision, not to every closed family.
         let mut other = bike(None, None, None);
         other.key = "forza-300".to_string();

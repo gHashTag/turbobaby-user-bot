@@ -34,12 +34,15 @@ declared, is RED. DECISIONS.md D16 is the rule -- a gate whose input can reach z
 must pin a floor, because "found nothing" and "found nothing wrong" look identical
 from the outside. The floor on the table itself is MIN_BINDINGS.
 
-WHAT A GREEN RUN DOES NOT PROVE. Re-measured 2026-09-24, on the tree that adds the
+WHAT A GREEN RUN DOES NOT PROVE. Re-measured 2026-09-24 on the catalog-honesty tree (the
+CLICK 125 redirect, the customer availability line and the admin Add answer on top of
+upstream main f0640f8): the table's 200 bindings cover 192 distinct (contract, constant)
+pairs out of 5320 top-level `pub const` declarations across the 45 files under specs/,
+touching 41 of those 45 contracts. That is 3.6% of the declared constants, and it is 0%
+of the 9558 `assert` statements. (Earlier on 2026-09-24, on the tree that added the
 status, cancellation and money families and the person-naming resolution of 2026-09-22/23
-to the binding groups below: the table's 198 bindings cover 190 distinct (contract,
-constant) pairs out of 5310 top-level `pub const` declarations across the 45 files under
-specs/, touching 41 of those 45 contracts. That is 3.6% of the declared constants, and it
-is 0% of the 9535 `assert` statements. (2026-09-22, the binding groups alone: 168
+to the binding groups below: 198 bindings, 190 pairs of 5310, 3.6%, 9535 asserts, 41
+contracts. 2026-09-22, the binding groups alone: 168
 bindings, 164 pairs of 4997, 3.3%, 9038 asserts, 40 contracts. Earlier that day, before
 a review's fixes: 162 bindings, 158 pairs of 4942, 3.2%, 8940 asserts. The fixes added
 six rows, and most of the 55 constants and 98 asserts between those two readings are
@@ -363,7 +366,8 @@ BINDINGS: tuple[dict[str, object], ...] = (
         "source": "src/api/bikes.rs",
         "extract": ("regex", r"const MAX_DISPLACEMENT_CC:\s*i32\s*=\s*([0-9_]+)\s*;"),
         "relation": "equal",
-        "why": "catalog_write.t27:178 records that the COLUMN has no displacement "
+        # :191 re-pointed 2026-09-24 (it read :178, stale before that day's +8 lines at :110).
+        "why": "catalog_write.t27:191 records that the COLUMN has no displacement "
                "ceiling, so this API constant is the only one there is; the contract "
                "is the only statement of what it is",
     },
@@ -395,7 +399,8 @@ BINDINGS: tuple[dict[str, object], ...] = (
         "source": "src/api/bikes.rs",
         "extract": ("regex", r"if code\.chars\(\)\.count\(\) > (\d+)\s*\{"),
         "relation": "equal",
-        "why": "an inline ceiling with no name of its own -- catalog_write.t27:272 "
+        # :268 re-pointed 2026-09-24 (it read :272, stale before that day's +8 lines at :110).
+        "why": "an inline ceiling with no name of its own -- catalog_write.t27:268 "
                "counts seven such sites, and the contract is where they are written "
                "down at all",
     },
@@ -703,6 +708,37 @@ BINDINGS: tuple[dict[str, object], ...] = (
                "arrays and truncates at MAX_UNITS_PER_FAMILY; a family seeded with "
                "more units than that is counted wrong by the contract's own functions",
     },
+    # --- what the customer screens say about availability (2026-09-24) ---------------------------
+    # availability.t27 records two corrections of that date, and each is a fact about the UI text
+    # that a later edit could silently undo. Both measured by hand first: the Rust constant held
+    # ["PCX 150", "ADV 150", "NMAX 155"] and now holds ["NMAX 155"]; the confirming keys were used
+    # on 7 code lines under src/ui/ (5 in catalog_screen.rs, 2 in bike_detail.rs) and now on 0.
+    {
+        "name": "availability.CLICK_125_REDIRECT_LABELS_SHOWN ~ catalog_screen.rs CLICK_125_ALTERNATIVES",
+        "spec": "specs/turbobaby/availability.t27",
+        "const": "CLICK_125_REDIRECT_LABELS_SHOWN",
+        "source": "src/ui/screens/catalog_screen.rs",
+        "extract": ("regex_list", r"const CLICK_125_ALTERNATIVES:\s*\[&str;\s*\d+\]\s*=\s*\[(.*?)\]\s*;"),
+        "relation": "list_equal",
+        "why": "the closed CLICK 125 card prints this list as where to go instead; a label the "
+               "contract does not record is a model the owner's rules forbid naming even as a "
+               "replacement, and tests/catalog_honesty_wiring.rs ties each label to the seed",
+    },
+    {
+        "name": "availability.CONFIRMING_KEY_LINES_IN_UI ~ src/ui/ absence",
+        "spec": "specs/turbobaby/availability.t27",
+        "const": "CONFIRMING_KEY_LINES_IN_UI",
+        "source": "src/ui/**/*.rs",
+        "extract": ("tree_regex_count", NOT_IN_A_LINE_COMMENT
+                    + r"\bT_BIKE_(?:AVAILABILITY|AVAILABILITY_FREE|COLORS_AVAILABLE|FILTER_FREE_NOW)\b"),
+        # The expected value is ZERO, so the scan must be shown to see the key that replaced
+        # them before the zero is believed (D16).
+        "witness": r"T_BIKE_AVAILABILITY_UNKNOWN",
+        "relation": "equal",
+        "why": "FILE_MAY_CONFIRM is false: each of the four keys prints the seeded, admin-edited "
+               "unit count to a customer as if a live check had confirmed it, and a line that "
+               "uses one again brings that promise back",
+    },
     # --- censuses: the numbers that rot on the next endpoint -------------------------------------
     # request_identity.t27:312-318 declares how many places each authorisation gate is
     # called from. The lookbehind drops the one `fn check_admin(` that is the
@@ -856,7 +892,7 @@ BINDINGS: tuple[dict[str, object], ...] = (
         "source": "src/ui/screens/admin_screen.rs",
         "extract": ("line_count",),
         "relation": "equal",
-        "why": "catalog_write.t27:103-116 argues from the size of this file that no "
+        "why": "catalog_write.t27:103-117 (re-pointed 2026-09-24) argues from the size of this file that no "
                "contract owns its write bounds; the argument is only as current as the "
                "measurement it opens with",
     },
@@ -3110,7 +3146,9 @@ ONE_GROUP_EXTRACTORS = (
 # the first time) over 41 contracts: 197 rows, floor 197. Until then the floor had stayed
 # at 168 while the table held 197, a 29-row hole of exactly the kind this comment forbids.
 # The same day the leaderboard leak fix bound game_score.IDENTIFIER_DIGIT_RUN: 198 rows.
-MIN_BINDINGS = 198
+# Later that day the catalog-honesty change bound availability.CLICK_125_REDIRECT_LABELS_SHOWN
+# and availability.CONFIRMING_KEY_LINES_IN_UI (41 contracts still): 200 rows, floor 200.
+MIN_BINDINGS = 200
 
 
 # ---------------------------------------------------------------------------------
