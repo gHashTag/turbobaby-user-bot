@@ -120,6 +120,18 @@ pub const CONTRACTS_MENTIONING_DEEPLINK_2026_09_21 : u8 = 7;
 pub const CONTRACTS_MENTIONING_STARTAPP_2026_09_21 : u8 = 0;
 pub const THE_STARTAPP_ZERO_STILL_HOLDS : bool = true;
 pub const ZERO_GREP_COMMANDS : [2]str = ["grep -ril deeplink specs/", "grep -rl startapp specs/"];
+; Re-measured 2026-09-22 and deliberately NOT bound: a census of the corpus moves with every new
+; contract. The 43 and 42 above are KEPT as the 2026-09-21 reading and the denominator of the
+; 2026_09_21 counts. "The finished 43-file corpus" was not finished: 14b01ac added
+; order_presentation.t27 and person_naming.t27 later on 2026-09-21, and specs/ holds 45 tracked
+; .t27 files. Both commands re-run at a33e500 over the 45: `grep -ril deeplink specs/` prints NINE
+; paths, EIGHT others plus this file -- the new one is turbobaby/order-presentation, which declares
+; the deeplink edge by ID -- and `grep -rl startapp specs/` still prints one path, this file.
+pub const CORPUS_FILE_COUNT_REMEASURED : u8 = 45;
+pub const CORPUS_FILES_OTHER_THAN_THIS_ONE_REMEASURED : u8 = 44;
+pub const CORPUS_FILE_COUNT_REMEASURED_AT : str = "2026-09-22";
+pub const CONTRACTS_MENTIONING_DEEPLINK_2026_09_22 : u8 = 8;
+pub const CONTRACTS_MENTIONING_STARTAPP_2026_09_22 : u8 = 0;
 
 ; --- Ownership edges ------------------------------------------------------------------------------
 ; The pinned compiler lowers a brace import to an empty UseDecl, so an edge is a named ID plus a
@@ -445,6 +457,13 @@ pub fn deeplink_may_act_as_owner(link_resolved: bool, identity_proof_passed: boo
 ; `startapp` parameter), and both the Mini App button copy and the fallback welcome are rendered from
 ; the resolved locale (src/bot/commands.rs:234-244, :290-317). Which locales exist and what an
 ; unpublished one falls to is REUSES_LOCALE_POLICY_ID's subject, restated nowhere here.
+; RE-MEASURED 2026-09-22: the command quoted above was blind to the hits it looks for. It is a basic
+; regex, where an unescaped `|` is a literal, so it counts only lines holding the string
+; "lang|locale"; a line naming lang or locale alone is not counted (on a three-line probe: -cin 1,
+; -ciE 3). The alternation it meant, `grep -ciE "lang|locale" src/trios/deeplink.rs`, also returns
+; 0, so the zero below stands. The command this file cited could not see a hit, and this
+; re-measurement is the first command in the file's history that could: `git log -S'lang|locale'`
+; on this file finds one commit, d1877db, and it wrote the basic form.
 pub const PAYLOAD_HAS_A_LOCALE_SEGMENT : bool = false;
 pub const PAYLOAD_LOCALE_GREP_HITS : u8 = 0;
 pub const TRANSPORT_CARRIES_THE_LOCALE : bool = true;
@@ -485,6 +504,21 @@ test deeplink_the_wave_reading_is_superseded_by_a_dated_one {
   assert CONTRACTS_MENTIONING_DEEPLINK_2026_09_21 == 7;
   assert CONTRACTS_MENTIONING_DEEPLINK_2026_09_21 > CONTRACTS_MENTIONING_DEEPLINK_AFTER_THIS_WAVE;
   assert CONTRACTS_MENTIONING_DEEPLINK_2026_09_21 < CORPUS_FILES_OTHER_THAN_THIS_ONE;
+}
+
+; Corrected 2026-09-22: the dated reading above was taken over 43 files, and the corpus grew to 45
+; the same day. Each reading is compared only with the corpus it was taken over.
+test deeplink_the_dated_reading_was_re_run_over_the_grown_corpus {
+  assert CORPUS_FILE_COUNT_REMEASURED == 45;
+  assert CORPUS_FILES_OTHER_THAN_THIS_ONE_REMEASURED == 44;
+  assert CORPUS_FILES_OTHER_THAN_THIS_ONE_REMEASURED + 1 == CORPUS_FILE_COUNT_REMEASURED;
+  assert CORPUS_FILE_COUNT_REMEASURED_AT == "2026-09-22";
+  assert CORPUS_FILE_COUNT_REMEASURED > CORPUS_FILE_COUNT;
+  assert CONTRACTS_MENTIONING_DEEPLINK_2026_09_22 == 8;
+  assert CONTRACTS_MENTIONING_DEEPLINK_2026_09_22 == CONTRACTS_MENTIONING_DEEPLINK_2026_09_21 + 1;
+  assert CONTRACTS_MENTIONING_DEEPLINK_2026_09_22 < CORPUS_FILES_OTHER_THAN_THIS_ONE_REMEASURED;
+  assert CONTRACTS_MENTIONING_STARTAPP_2026_09_22 == 0;
+  assert CONTRACTS_MENTIONING_STARTAPP_2026_09_22 == CONTRACTS_MENTIONING_STARTAPP;
 }
 
 ; The startapp zero is the one absence that did NOT move, and it is asserted as its own claim so

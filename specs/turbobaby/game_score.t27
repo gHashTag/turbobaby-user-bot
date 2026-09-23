@@ -130,6 +130,14 @@ pub const CORPUS_FILE_COUNT : u8 = 43;
 pub const CONTRACTS_DECLARING_THE_ABSENCE : u8 = 1;
 pub const THE_ABSENCE_IS_DECLARED_ONLY_HERE : bool = true;
 pub const THE_CENSUS_COUNTS_DECLARATIONS_NOT_MENTIONS : bool = true;
+; Re-measured 2026-09-22 and deliberately NOT bound: a census of the corpus moves with every new
+; contract. CORPUS_FILE_COUNT above is KEPT at 43, the reading the declaration count was taken
+; over. 14b01ac added order_presentation.t27 and person_naming.t27 later on 2026-09-21, and specs/
+; holds 45 tracked .t27 files. Re-run at a33e500 over the 45, game_key occurs in one file, this
+; one, so no other contract can declare the absence and the declaration count is still one.
+pub const CORPUS_FILE_COUNT_REMEASURED : u8 = 45;
+pub const CORPUS_FILE_COUNT_REMEASURED_AT : str = "2026-09-22";
+pub const CONTRACTS_DECLARING_THE_ABSENCE_REMEASURED : u8 = 1;
 
 ; --- Who writes to the ledger (measured 2026-09-20) ---------------------------------------------
 pub const ENDPOINT_CALLERS_IN_REPOSITORY : u8 = 1;
@@ -329,6 +337,17 @@ test the_repository_contains_no_game_discriminator {
   assert CONTRACTS_DECLARING_THE_ABSENCE < CORPUS_FILE_COUNT;
   assert THE_ABSENCE_IS_DECLARED_ONLY_HERE == true;
   assert THE_CENSUS_COUNTS_DECLARATIONS_NOT_MENTIONS == true;
+}
+
+; Corrected 2026-09-22: the declaration count above was taken over 43 files, and the corpus grew to
+; 45 the same day. Re-run over the 45, it has not moved.
+test the_declaration_census_was_re_run_over_the_grown_corpus {
+  assert CORPUS_FILE_COUNT_REMEASURED == 45;
+  assert CORPUS_FILE_COUNT_REMEASURED_AT == "2026-09-22";
+  assert CORPUS_FILE_COUNT_REMEASURED > CORPUS_FILE_COUNT;
+  assert CONTRACTS_DECLARING_THE_ABSENCE_REMEASURED == 1;
+  assert CONTRACTS_DECLARING_THE_ABSENCE_REMEASURED == CONTRACTS_DECLARING_THE_ABSENCE;
+  assert CONTRACTS_DECLARING_THE_ABSENCE_REMEASURED < CORPUS_FILE_COUNT_REMEASURED;
 }
 
 ; The coincidence with the catalog contract's page budgets, dated and pinned. Both files measured

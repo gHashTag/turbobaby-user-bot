@@ -479,8 +479,26 @@ pub fn drift_evidence_is_only_a_log_line(read_succeeded: bool) bool {
 ; references to the log target db.schema_drift anywhere in src/, tests/ and scripts/ are the
 ; macro's own doc comment and the warn! inside it. The discipline is a human one, the census
 ; above is its only artefact, and a number in a spec is not a gate.
-pub const FAIL_OPEN_GATES : u8 = 0;
+; CORRECTED 2026-09-22: FAIL_OPEN_GATES was 0 and is 1. scripts/verify_t27_against_source.py now
+; binds FAIL_OPEN_CALL_SITES to a count of try_get_warn! invocations over src/**/*.rs -- the
+; defining module's three references to itself excluded by their text -- and
+; FAIL_OPEN_SITES_ON_BIKE_PATH to a zero over src/**/*bike*.rs with a witness, and
+; tests/t27_gates_run.rs runs that script under cargo test. A call site added anywhere under src/,
+; or one removed, now fails the build until the census above is re-taken. What it does NOT do is
+; judge whether a new site sits on a money or gating path: it counts, and that reading stays a
+; human one. FAIL_OPEN_GATE_NOTE is the 2026-09-21 reading, kept word for word;
+; FAIL_OPEN_GATE_REMEASURED_NOTE is this one. The 0 is kept as FAIL_OPEN_GATES_2026_09_21, and the
+; invariant whose name records it asserts that dated reading.
+; Later on 2026-09-22 the same script bound FAIL_OPEN_CALL_SITE_FILES as well, over the same
+; pattern counted per file, after a review planted a site leaving src/api/catalog.rs and one
+; arriving in src/api/orders.rs: the total stayed 21 and only the file count moved, to 4. It is
+; still one gate -- one script -- so FAIL_OPEN_GATES does not move; a site that moves between the
+; three files already named is still seen by nobody.
+pub const FAIL_OPEN_GATES : u8 = 1;
+pub const FAIL_OPEN_GATES_2026_09_21 : u8 = 0;
+pub const FAIL_OPEN_GATES_MEASURED_AT : str = "2026-09-22";
 pub const FAIL_OPEN_GATE_NOTE : str = "No automated check reads the try_get_warn call sites. grep -rn try_get_warn tests/ returns 0, and db.schema_drift appears twice in the tree, both inside src/db/macros.rs. Closing this needs a source-walking test that pins the call-site count and fails when a new one is added on a money or gating path, with the floor discipline D16 requires so an empty match cannot pass as a clean result.";
+pub const FAIL_OPEN_GATE_REMEASURED_NOTE : str = "re-measured 2026-09-22, was 0 gates: one automated check now reads the try_get_warn call sites. scripts/verify_t27_against_source.py holds FAIL_OPEN_CALL_SITES = 21 to src/**/*.rs and FAIL_OPEN_SITES_ON_BIKE_PATH = 0 to src/**/*bike*.rs, the zero carrying a witness, and tests/t27_gates_run.rs runs that script under cargo test. The census is compared for equality, so a scan gone blind reads 0 against 21 and fails: the D16 floor is the expected value itself. It counts sites and does not classify them, so a new site on a money or gating path fails exactly as any other new site does, and whether it is on such a path is still read by a human. grep -rn try_get_warn tests/ still returns 0; the check lives in scripts/.";
 
 ; --- The direction of the residual error --------------------------------------------------------
 ; availability.t27's header states the shape this borrows: the direction of a residual error is
@@ -812,7 +830,10 @@ test neither_branch_of_the_fail_open_read_is_an_error {
   assert read_can_error(false) == false;
   assert drift_evidence_is_only_a_log_line(false) == true;
   assert drift_evidence_is_only_a_log_line(true) == false;
-  assert FAIL_OPEN_GATES == 0;
+  // 0 until 2026-09-22, when the source-binding gate began counting the call sites.
+  assert FAIL_OPEN_GATES == 1;
+  assert FAIL_OPEN_GATES_2026_09_21 == 0;
+  assert FAIL_OPEN_GATES_MEASURED_AT == "2026-09-22";
 }
 
 test none_of_the_three_mechanisms_leans_the_conservative_way {
@@ -949,8 +970,15 @@ invariant the_fail_open_read_has_no_error_branch
 invariant the_fail_open_census_is_a_sum_and_not_an_estimate
   assert call_site_census(16, 3, 2) == FAIL_OPEN_CALL_SITES and FAIL_OPEN_SITES_ON_BIKE_PATH == 0
 
+; Corrected 2026-09-22: the name records the 2026-09-21 reading and is left standing rather than
+; quietly rewritten, so it asserts that dated reading. It stopped being true when the
+; source-binding gate began counting the call sites; the invariant below holds today's reading,
+; and FAIL_OPEN_GATE_REMEASURED_NOTE says what that gate does and does not judge.
 invariant the_fail_open_construct_is_guarded_by_nothing
-  assert FAIL_OPEN_GATES == 0
+  assert FAIL_OPEN_GATES_2026_09_21 == 0
+
+invariant the_fail_open_census_is_counted_by_one_gate
+  assert FAIL_OPEN_GATES == 1 and FAIL_OPEN_GATES > FAIL_OPEN_GATES_2026_09_21
 
 invariant not_one_of_the_three_mechanisms_defaults_conservatively
   assert direction_is_conservative(MECHANISM_DIRECTIONS[0]) == false and direction_is_conservative(MECHANISM_DIRECTIONS[1]) == false and direction_is_conservative(MECHANISM_DIRECTIONS[2]) == false and CONSERVATIVE_MECHANISMS == 0

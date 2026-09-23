@@ -91,7 +91,8 @@
 ; and milestone rows this domain enqueues, and this file states only where those enqueues sit
 ; relative to a money commit. It copies no window ceiling: turbobaby/star-award owns the only
 ; capped credit path in the corpus -- re-measured 2026-09-21 across all 43 .t27 files and still the
-; only one, so the absence claimed here is dated and not remembered -- and is named as precedent,
+; only one, and re-run 2026-09-22 over the 45 and still the only one, so the absence claimed here
+; is dated and not remembered -- and is named as precedent,
 ; with neither the size of its ceiling nor the
 ; size of its capped set reproduced here. It restates no identity proof: turbobaby/request-identity
 ; owns the gates, and this file records only which of its own routes stands behind one. It carries
@@ -144,6 +145,16 @@ pub const REGRESSION_WITNESS : str = "tests/integration_invite_counter.rs";
 ; zero. Citations into src/, migrations/, data/, docs/ and DECISIONS.md are a different case --
 ; those files were not moving -- and they stay.
 pub const CORPUS_T27_FILE_COUNT : u8 = 43;
+; Re-measured 2026-09-22 and deliberately NOT bound: a census of the corpus moves with every new
+; contract. specs/ holds 45 .t27 files, all tracked. The two beyond the 43, order_presentation.t27
+; and person_naming.t27, landed together in 14b01ac later on 2026-09-21 and belong to neither wave
+; counted here (d1877db added ten, ed0ba9c thirteen). The star-award uniqueness sentence in the
+; header was taken over the 43 and was re-run over the two new files the same day: neither declares
+; a capped credit path (a case-insensitive grep for ceiling, capped or per-window returns 0 in
+; both), so it still holds over the 45. The 43 is kept as the 2026-09-21 reading.
+pub const CORPUS_T27_FILE_COUNT_REMEASURED : u8 = 45;
+pub const CORPUS_T27_FILE_COUNT_REMEASURED_AT : str = "2026-09-22";
+pub const STAR_AWARD_UNIQUENESS_RERUN_AT : str = "2026-09-22";
 pub const PRIOR_WAVE_NEW_CONTRACTS : u8 = 10;
 pub const OWN_WAVE_NEW_CONTRACTS : u8 = 13;
 pub const SIBLING_LINE_CITATIONS_IN_THIS_FILE : u8 = 0;
@@ -701,6 +712,11 @@ test this_file_owns_its_own_identity {
 
 test the_wave_census_is_measured_and_the_unmeasured_interval_is_refused {
   assert CORPUS_T27_FILE_COUNT == 43;
+  assert CORPUS_T27_FILE_COUNT_REMEASURED == 45;
+  assert CORPUS_T27_FILE_COUNT_REMEASURED_AT == "2026-09-22";
+  assert CORPUS_T27_FILE_COUNT_REMEASURED_AT != MEASURED_AT;
+  assert CORPUS_T27_FILE_COUNT_REMEASURED > CORPUS_T27_FILE_COUNT;
+  assert STAR_AWARD_UNIQUENESS_RERUN_AT == CORPUS_T27_FILE_COUNT_REMEASURED_AT;
   assert PRIOR_WAVE_NEW_CONTRACTS == 10;
   assert OWN_WAVE_NEW_CONTRACTS == 13;
   assert OWN_WAVE_NEW_CONTRACTS > PRIOR_WAVE_NEW_CONTRACTS;

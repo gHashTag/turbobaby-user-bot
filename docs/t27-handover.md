@@ -12,14 +12,14 @@ what to do next.
 | | measured 2026-09-21 |
 | --- | --- |
 | canonical contracts | **45** (44 under `specs/turbobaby/` + `specs/agents/turbobaby.t27`) |
-| assertions executed, all passing | **8 911** |
+| assertions executed, all passing | **9 038** — re-measured 2026-09-22 (was 8 911) |
 | contract-to-contract ownership edges | 203+, **zero dangling** |
 | source lines named by some contract | **73 407 of 80 308 (91.4 %)** |
-| enforced contract-to-source bindings | **66**, across 16 of 45 contracts |
+| enforced contract-to-source bindings | **168**, across 40 of 45 contracts — re-measured 2026-09-22 (was 66 across 16 of 45) |
 
 The last two rows are the ones to keep apart. *Named* means a contract cites the file. *Bound* means
-a gate fails when the two disagree. 91.4 % is a floor on attention; 66 is the number that actually
-holds, and it is the one worth growing.
+a gate fails when the two disagree. 91.4 % is a floor on attention; 168 (2026-09-22; 66 the day
+before) is the number that actually holds, and it is the one worth growing.
 
 ```sh
 python D:/t27work/coverage_2109.py .     # the naming measurement, if you keep the helper
@@ -126,7 +126,8 @@ None of these is unblocked by more `.t27`:
 
 ### 4. The axis worth growing
 
-**66 bindings of roughly 4 200 declared constants.** Every new binding is a fact that can no longer
+**168 bindings over 164 of 4 997 declared constants (3.3 %)** — a reading of 2026-09-22; on
+2026-09-21 it was 66 bindings of roughly 4 200. Every new binding is a fact that can no longer
 drift silently. `scripts/verify_t27_against_source.py` is table-driven: adding one is a few lines,
 and the table says how at the top. A contract with no binding describes the code; a contract with
 one constrains it.
@@ -162,8 +163,8 @@ citations** — unlike a `src/` citation, which gate 3 can check.
 >
 > The work, in order: fix the seven defects listed under "What is actually left", each with a test
 > that is red before the fix and with the contract that records the defect corrected in the same
-> change; then grow `scripts/verify_t27_against_source.py` beyond its 66 bindings, because a
-> contract nothing binds only describes the code.
+> change; then grow `scripts/verify_t27_against_source.py` beyond its 168 bindings (re-measured
+> 2026-09-22; 66 on 2026-09-21), because a contract nothing binds only describes the code.
 >
 > Three rules this corpus is built on, and they are not style: never invent a number — where the
 > repository publishes nothing, declare the refusal and say what is missing; never restate what

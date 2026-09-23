@@ -796,6 +796,11 @@ pub const DECLARED_REGIONS : u8 = 1;
 pub const DECLARED_REPLICAS : u16 = 1;
 pub const COHERENCE_IS_A_DEPLOYMENT_FACT : bool = true;
 pub const REPLICA_NOTE : str = "The count above is read from railway.toml:18 and is a deployment declaration, not a property of src/. It can change in one edit to a file no test in this repository reads. The contract therefore takes the replica count as a parameter everywhere below and asserts the coherence rule, never the count alone.";
+; RE-MEASURED 2026-09-22: "a file no test in this repository reads" is the 2026-09-21 reading.
+; scripts/verify_t27_against_source.py now binds DECLARED_REPLICAS to the one numReplicas entry in
+; railway.toml, and tests/t27_gates_run.rs runs that gate under cargo test, so an edit to the
+; replica count or a second region now fails a test. The contract's stance is unchanged: it still
+; takes the replica count as a parameter and asserts the coherence rule, never the count alone.
 
 pub fn map_is_coherent_across_the_fleet(replicas: u16, store_is_shared: bool) bool {
   if (store_is_shared) {

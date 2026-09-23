@@ -12,7 +12,9 @@
 ; said specs/ holds twelve tracked files, and on 2026-09-21 it holds FORTY-THREE --
 ; specs/agents/turbobaby.t27 plus the 42 under specs/turbobaby/. The corpus more than tripled
 ; and the sentence went on stating twelve, which is why the live count is pinned below as
-; CORPUS_FILES rather than left in prose. What the number was there to support is unchanged and
+; CORPUS_FILES rather than left in prose. (Stale again within the day: re-measured 2026-09-22 it
+; holds FORTY-FIVE, 44 of them under specs/turbobaby/, and the pinned constant did not notice --
+; the note above CORPUS_FILES says why.) What the number was there to support is unchanged and
 ; is the part worth checking: there is still no root-level .t27 in specs/ at all. The TWIN_* constants
 ; below name the path it occupied and the matrix that absorbed it -- not a second authority,
 ; and not a file that still exists.
@@ -166,11 +168,28 @@ pub const TWIN_IS_RESOLVED : bool = true;
 ; fail; this can. CORPUS_ROOT_T27_FILES is the claim those counts were actually supporting: the
 ; deleted draft's slot at the root of specs/ is still empty, and that is what makes
 ; TWIN_SPEC_PATH a former address rather than a competing authority.
+; CORRECTED 2026-09-22: "this can" fail was not true, and the counts are re-measured. The first five
+; constants below are KEPT as the 2026-09-21 reading -- 43, 42, 1 and 0, and its date. At a33e500,
+; git ls-files specs and the glob specs/**/*.t27 both give 45, specs/turbobaby/*.t27 gives 44,
+; specs/agents/*.t27 still gives 1 and specs/*.t27 still matches nothing; that reading sits beside
+; the first as the *_REMEASURED constants, dated by CORPUS_REMEASURED_AT. 14b01ac (2026-09-21 21:49
+; +0700) added specs/turbobaby/order_presentation.t27 and specs/turbobaby/person_naming.t27 after
+; the first count was taken, and the invariant on these numbers stayed green because it compares
+; this file's own constants with each other: nothing reads the tree. Both are a DATED READING --
+; re-measure and re-date them, do not read them as a live check. They are also deliberately not
+; bound in scripts/verify_t27_against_source.py: a count of the corpus bound as a live check would
+; go red on every new spec, which is the corpus growing and not this contract drifting. The claim
+; they support, an empty root, holds in both readings.
 pub const CORPUS_FILES : u8 = 43;
 pub const CORPUS_FILES_UNDER_TURBOBABY : u8 = 42;
 pub const CORPUS_FILES_UNDER_AGENTS : u8 = 1;
 pub const CORPUS_ROOT_T27_FILES : u8 = 0;
 pub const CORPUS_MEASURED_AT : str = "2026-09-21";
+pub const CORPUS_FILES_REMEASURED : u8 = 45;
+pub const CORPUS_FILES_UNDER_TURBOBABY_REMEASURED : u8 = 44;
+pub const CORPUS_FILES_UNDER_AGENTS_REMEASURED : u8 = 1;
+pub const CORPUS_ROOT_T27_FILES_REMEASURED : u8 = 0;
+pub const CORPUS_REMEASURED_AT : str = "2026-09-22";
 
 ; --- D11, the rule that outranks everything in this file ----------------------------------
 ; These bands never become a client quote. The door answers, or a human does.
@@ -646,6 +665,18 @@ pub fn band_index_for_days(days: i32) i8 {
     return 2;
 }
 
+; The served band ENDS, added 2026-09-22, measured from migrations/079_rental_terms.sql's VALUES
+; rows: week 7..13, two_weeks 14..29, month from 30 with max_days NULL::INT. 079 derives each end
+; as the day before the next band begins and says so in its own comment; band_index_for_days
+; encodes the same contiguity through its `<` tests. Until this date only the starts were
+; declared here, so a half-applied re-cut -- week's end moved to 14 while two_weeks still starts
+; at 14 -- left two served bands overlapping on one day with nothing in this file to disagree.
+; The month band's end is an absence (NULL), not a number, so it is declared as the boolean
+; MONTH_BAND_HAS_A_LAST_DAY = false and never as a day count.
+pub const WEEK_BAND_LAST_DAY : i32 = 13;
+pub const TWO_WEEKS_BAND_LAST_DAY : i32 = 29;
+pub const MONTH_BAND_HAS_A_LAST_DAY : bool = false;
+
 ; The published discount for a class, in basis points, or CLASS_DISCOUNT_NONE.
 ; Keyed on the seed's class string, because that is the key class_discounts is published
 ; under; the u8 discriminants are bike-catalog.t27's and are deliberately not mirrored here.
@@ -810,6 +841,17 @@ test the_bands_and_the_ladder_line_up {
     assert band_index_for_days(TERM_DAYS[1]) == 2;
     assert band_index_for_days(TERM_DAYS[2]) == 2;
     assert band_index_for_days(TERM_DAYS[5]) == 2;
+}
+
+; Each served band ends the day before the next begins, and the reading agrees at both seams.
+test the_served_bands_end_the_day_before_the_next_begins {
+    assert WEEK_BAND_LAST_DAY == 13;
+    assert TWO_WEEKS_BAND_LAST_DAY == 29;
+    assert MONTH_BAND_HAS_A_LAST_DAY == false;
+    assert band_index_for_days(WEEK_BAND_LAST_DAY) == 0;
+    assert band_index_for_days(WEEK_BAND_LAST_DAY + 1) == 1;
+    assert band_index_for_days(TWO_WEEKS_BAND_LAST_DAY) == 1;
+    assert band_index_for_days(TWO_WEEKS_BAND_LAST_DAY + 1) == 2;
 }
 
 ; The measurement that keeps this file honest about what it is, on BOTH bases, because the
@@ -1094,6 +1136,11 @@ invariant the_measured_ladder_holds_six_rungs
 invariant the_published_bands_are_three
   assert BAND_NAMES.len == 3
 
+; The served bands are contiguous: no day falls in two bands and none between two. Stated on the
+; declared ends and starts, which the source gate reads from the same 079 rows.
+invariant every_served_band_ends_the_day_before_the_next_begins
+  assert WEEK_BAND_LAST_DAY + 1 == DAYS_PER_FORTNIGHT and TWO_WEEKS_BAND_LAST_DAY + 1 == DAYS_PER_MONTH and WEEK_BAND_LAST_DAY >= DAYS_PER_WEEK and MONTH_BAND_HAS_A_LAST_DAY == false
+
 ; THE MONOTONICITY CLAIM, in the only form the tariff supports: the daily rate is
 ; NON-INCREASING as the term lengthens, stated on a well-defined representative of each
 ; band -- floor against floor, then ceiling against ceiling.
@@ -1178,13 +1225,16 @@ invariant the_twin_semantic_merge_is_resolved
 
 ; The corpus size, so the next growth spurt breaks an assert instead of quietly falsifying two
 ; paragraphs of this header the way the last one did.
+; Corrected 2026-09-22: it does not. The assert compares three of this file's own constants, so a
+; growth spurt in the tree breaks nothing; 14b01ac added two specs on 2026-09-21 and 42 + 1 == 43
+; stayed green. What it does hold is the split adding up to the total within each dated reading.
 invariant the_corpus_count_is_the_sum_of_its_two_directories
-  assert CORPUS_FILES_UNDER_TURBOBABY + CORPUS_FILES_UNDER_AGENTS == CORPUS_FILES
+  assert CORPUS_FILES_UNDER_TURBOBABY + CORPUS_FILES_UNDER_AGENTS == CORPUS_FILES and CORPUS_FILES_UNDER_TURBOBABY_REMEASURED + CORPUS_FILES_UNDER_AGENTS_REMEASURED == CORPUS_FILES_REMEASURED
 
 ; The claim the stale counts were supporting, and the only one that has to stay true for
 ; TWIN_SPEC_PATH to be a former address: the root of specs/ holds no .t27.
 invariant the_deleted_drafts_slot_is_still_empty
-  assert CORPUS_ROOT_T27_FILES == 0
+  assert CORPUS_ROOT_T27_FILES == 0 and CORPUS_ROOT_T27_FILES_REMEASURED == 0
 
 ; The shortest published band starts at a week, so the ladder's first rung is a week and
 ; anything shorter has no band. Absent stays absent (D9); it is not a zero discount.

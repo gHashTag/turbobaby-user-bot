@@ -47,7 +47,8 @@
 ;      mirror rule is not at risk, it is already refuted, and the count says by how much. Of
 ;      172 declared fields in src/ui/api/types.rs, 44 carry `#[serde(default)]` -- a plain
 ;      `grep -c` answers 45, because the comment at :37 names the attribute without being one, so
-;      the count below is of attribute lines and not of matches; 28 of those
+;      the count below is of attribute lines and not of matches (46 since 2c21df1 added the doc
+;      line at :424, which names it too; re-measured 2026-09-22); 28 of those
 ;      default an Option, where absence stays absence, and SIX default a bare number, where
 ;      absence becomes a zero the server never sent. TWO of the six are the cart's own money
 ;      and counts: ServerCartItem.quantity (:421) and ServerCart.total (:448).
@@ -333,6 +334,18 @@ pub const SITES_SENDING_THE_LABEL : u8 = 7;
 pub const SITES_OMITTING_THE_LABEL : u8 = 2;
 ; client.rs:63 moved to :100 when the constructor grew a refusal; http.rs:368 did not move.
 pub const UNLABELLED_SITES : [2]str = ["src/ui/api/http.rs:368", "src/ui/api/client.rs:100"];
+; SCOPE, measured 2026-09-22. The nine are the two transport modules named above and nothing
+; wider. src/ui holds 44 more `.header("X-Telegram-Init-Data", ...)` calls outside src/ui/api --
+; src/ui/screens/admin_screen.rs 34, src/ui/screens/profile_screen.rs 4,
+; src/ui/screens/order_detail_screen.rs 3, src/ui/screens/orders_screen.rs 1,
+; src/ui/pages/referrals.rs 1 and src/ui/game/shop_game.rs 1 -- plus two spellings that are not a
+; .header( call, a JS fetch headers object at admin_screen.rs:638 and a header tuple at :4615. None
+; of them sends the label: in src/ui the label literal occurs only in src/ui/api/http.rs, seven
+; times. The three counts above are true of their stated scope; read as a census of the whole
+; client they would understate how many call sites send the proof without the label.
+pub const IDENTITY_HEADER_CALLS_OUTSIDE_THE_TRANSPORT : u8 = 44;
+pub const OTHER_IDENTITY_HEADER_SPELLINGS_OUTSIDE_THE_TRANSPORT : u8 = 2;
+pub const LABEL_SITES_OUTSIDE_THE_TRANSPORT : u8 = 0;
 pub const MISSING_LABEL_DEFAULTS_TO_TAMPERING : bool = true;
 
 pub fn reconstruction_label(origin: u8) bool {
@@ -550,11 +563,18 @@ pub fn request_can_hang_until_the_browser_gives_up(deadline_shipped: bool) bool 
 
 ; --- The DTO mirror ------------------------------------------------------------------------------
 ; src/ui/api/types.rs declares 24 structs and 3 enums over 172 fields. A field the server stops
-; sending breaks deserialization -- ApiClient::run turns that into ApiError::Parse -- UNLESS the
-; field carries `#[serde(default)]`, in which case serde writes the type's Default and nothing
-; anywhere notices. 44 fields carry it. For the ones that default an Option the value is None,
-; which is still an absence and still renderable as one. For the ones that default a bare number
-; the value is a zero the server never sent.
+; sending breaks deserialization -- ApiClient::run turns that into ApiError::Parse -- UNLESS serde
+; can fill it, and nothing anywhere notices when it does. It fills it two ways: a field with
+; `default` in a serde attribute gets the type's Default, and a field of type Option<T> with no
+; default gets None. 44 fields carry the bare `#[serde(default)]`. For the ones that default an
+; Option the value is None, which is still an absence and still renderable as one. For the ones
+; that default a bare number the value is a zero the server never sent.
+; CORRECTED 2026-09-22. Until this date the second sentence ended "UNLESS the field carries
+; `#[serde(default)]`, in which case serde writes the type's Default", which names one of the two
+; ways and implies that an Option with no attribute breaks. It does not: serde_derive fills a
+; missing field that has no default through serde's missing_field, which answers None for an
+; Option<T> and an error for every other type (serde 1.0.228, the version Cargo.lock pins). The
+; loud count below carried the same assumption and is corrected with it.
 ; MOVED 2026-09-21: ServerCartItem.unit_price left the bare-number column for the Option column,
 ; so the split went 27/7 -> 28/6 while the total stayed 44 and the field count stayed 172. One
 ; field changed type; none was added or removed. The partition is re-counted here rather than
@@ -567,7 +587,40 @@ pub const DEFAULTS_ON_AN_OPTION : u8 = 28;
 pub const DEFAULTS_ON_A_BARE_NUMBER : u8 = 6;
 pub const DEFAULTS_ON_A_BARE_NUMBER_BEFORE_THE_FIX : u8 = 7;
 pub const DEFAULTS_ON_A_BOOL_STRING_OR_VEC : u8 = 10;
-pub const FIELDS_THAT_BREAK_LOUDLY : u16 = 128;
+; CORRECTED 2026-09-22, re-measured at a33e500 by what serde does rather than by which attribute is
+; written. FIELDS_THAT_BREAK_LOUDLY read 128 until this date: 172 - 44, which counted as loud every
+; field without the bare attribute. Three groups inside that 128 do not break when absent.
+;   SIX are never deserialized: BookEventRequest (2 fields, :366) and BroadcastRequest (4, :381)
+;   derive Serialize and not Deserialize, so no parse of them exists to fail. The other 22 structs
+;   derive both and hold 166 fields.
+;   TWO carry `default` inside a combined attribute: :121 `#[serde(rename = "type", default)]`
+;   over set_type, a String (:122), and :130 over is_deal_of_day, a bool (:131).
+;   THIRTY are Option<T> with no default in any spelling -- among them Strain.thc (:12),
+;   Order.updated_at (:166) and BroadcastProduct.image_url (:393) -- and a missing one arrives as
+;   None, as the correction above the counts says.
+; What remains is the definition from this date: FIELDS_THAT_BREAK_LOUDLY counts the fields of the
+; 22 structs that derive Deserialize whose absence makes that derived Deserialize return an error,
+; which is exactly a field with no serde default in any spelling and a type other than Option<T>.
+; types.rs writes no deserialize_with, flatten, untagged, skip_deserializing or struct-level
+; default -- its one skip_serializing_if (:368) sits in a Serialize-only struct -- so nothing else
+; changes the answer. 166 = 46 defaulted + 30 Options + 90 loud, and 172 = 166 + 6. It is a
+; property of the types: which of the 22 the client actually reads off the wire is not counted.
+; The 44 and its 28/6/10 split above are unchanged and still count the bare attribute; counted by
+; what serde does, the bool/string/vec column is 12, and the numeric column -- the one that
+; fabricates a zero -- is still 6. A missing Option fabricates nothing. A second reading moved with
+; the unit_price fix: a plain `grep -c` for the attribute now answers 46 and not the 45 quoted in
+; item 2 of the header, because the doc line that fix added at :424 names the attribute too.
+pub const FIELDS_THAT_BREAK_LOUDLY : u16 = 90;
+pub const FIELDS_THAT_BREAK_LOUDLY_AS_FIRST_STATED : u16 = 128;
+pub const DTO_STRUCTS_THAT_DERIVE_DESERIALIZE : u8 = 22;
+pub const DTO_STRUCTS_THAT_ONLY_SERIALIZE : u8 = 2;
+pub const DTO_FIELDS_DESERIALIZED : u16 = 166;
+pub const DTO_FIELDS_NEVER_DESERIALIZED : u8 = 6;
+pub const DEFAULTS_IN_A_COMBINED_ATTRIBUTE : u8 = 2;
+pub const COMBINED_DEFAULT_SITES : [2]str = ["src/ui/api/types.rs:122", "src/ui/api/types.rs:131"];
+pub const COMBINED_DEFAULTS_ON_A_NUMBER : u8 = 0;
+pub const OPTION_FIELDS_WITHOUT_A_DEFAULT : u8 = 30;
+pub const A_MISSING_OPTION_WITHOUT_A_DEFAULT_IS_NONE : bool = true;
 ; Still false, and by six fields rather than seven. A count that fell by one is not a rule that
 ; now holds, and saying so is the difference between a fix and a claim of one.
 pub const MIRROR_RULE_HOLDS_ON_EVERY_FIELD : bool = false;
@@ -585,8 +638,12 @@ pub const NUMERIC_DEFAULT_SITES : [6]str = [
 pub const NUMERIC_DEFAULT_SITE_THAT_WAS_FIXED : str = "src/ui/api/types.rs:423";
 pub const FIXED_SITE_IS_NOW_AN_OPTION_AT : str = "src/ui/api/types.rs:436";
 
-pub fn dropped_field_breaks_the_client(field_has_serde_default: bool) bool {
-  return !field_has_serde_default;
+; CORRECTED 2026-09-22: this took one input and answered !field_has_serde_default, the assumption
+; the 128 carried. A missing Option<T> with no default arrives as None, so the type is the second
+; input. It answers for a field of a struct that derives Deserialize; the six fields of the two
+; Serialize-only structs are never parsed and are outside the question.
+pub fn dropped_field_breaks_the_client(field_has_serde_default: bool, field_is_an_option: bool) bool {
+  return !field_has_serde_default and !field_is_an_option;
 }
 
 pub fn dropped_field_renders_an_invented_value(field_has_serde_default: bool, default_is_a_number: bool) bool {
@@ -793,6 +850,9 @@ test two_of_nine_sites_hand_the_cohort_a_false_input {
   assert SITES_OMITTING_THE_LABEL == 2;
   assert UNLABELLED_SITES[0] == "src/ui/api/http.rs:368";
   assert UNLABELLED_SITES[1] == "src/ui/api/client.rs:100";
+  assert IDENTITY_HEADER_CALLS_OUTSIDE_THE_TRANSPORT == 44;
+  assert OTHER_IDENTITY_HEADER_SPELLINGS_OUTSIDE_THE_TRANSPORT == 2;
+  assert LABEL_SITES_OUTSIDE_THE_TRANSPORT == 0;
   assert cohort_input_is_faithful(ORIGIN_REBUILT, true) == true;
   assert cohort_input_is_faithful(ORIGIN_REBUILT, false) == false;
   assert cohort_input_is_faithful(ORIGIN_SIGNED, false) == true;
@@ -941,14 +1001,33 @@ test the_mirror_counts_add_up {
   assert DEFAULTS_ON_A_BARE_NUMBER + 1 == DEFAULTS_ON_A_BARE_NUMBER_BEFORE_THE_FIX;
   assert DEFAULTS_ON_A_BOOL_STRING_OR_VEC == 10;
   assert DEFAULTS_ON_AN_OPTION + DEFAULTS_ON_A_BARE_NUMBER + DEFAULTS_ON_A_BOOL_STRING_OR_VEC == DTO_FIELDS_WITH_A_DEFAULT;
-  assert FIELDS_THAT_BREAK_LOUDLY == 128;
+  assert FIELDS_THAT_BREAK_LOUDLY == 90;
+  assert FIELDS_THAT_BREAK_LOUDLY_AS_FIRST_STATED == 128;
+  assert DTO_FIELD_COUNT - DTO_FIELDS_WITH_A_DEFAULT == FIELDS_THAT_BREAK_LOUDLY_AS_FIRST_STATED;
+  assert DTO_STRUCTS_THAT_DERIVE_DESERIALIZE == 22;
+  assert DTO_STRUCTS_THAT_ONLY_SERIALIZE == 2;
+  assert DTO_STRUCTS_THAT_DERIVE_DESERIALIZE + DTO_STRUCTS_THAT_ONLY_SERIALIZE == DTO_STRUCT_COUNT;
+  assert DTO_FIELDS_DESERIALIZED == 166;
+  assert DTO_FIELDS_NEVER_DESERIALIZED == 6;
+  assert DTO_FIELDS_DESERIALIZED + DTO_FIELDS_NEVER_DESERIALIZED == DTO_FIELD_COUNT;
+  assert DEFAULTS_IN_A_COMBINED_ATTRIBUTE == 2;
+  assert COMBINED_DEFAULT_SITES.len == DEFAULTS_IN_A_COMBINED_ATTRIBUTE;
+  assert COMBINED_DEFAULT_SITES[0] == "src/ui/api/types.rs:122";
+  assert COMBINED_DEFAULT_SITES[1] == "src/ui/api/types.rs:131";
+  assert COMBINED_DEFAULTS_ON_A_NUMBER == 0;
+  assert OPTION_FIELDS_WITHOUT_A_DEFAULT == 30;
+  assert A_MISSING_OPTION_WITHOUT_A_DEFAULT_IS_NONE == true;
+  assert DTO_FIELDS_WITH_A_DEFAULT + DEFAULTS_IN_A_COMBINED_ATTRIBUTE + OPTION_FIELDS_WITHOUT_A_DEFAULT + FIELDS_THAT_BREAK_LOUDLY == DTO_FIELDS_DESERIALIZED;
+  assert FIELDS_THAT_BREAK_LOUDLY + DEFAULTS_IN_A_COMBINED_ATTRIBUTE + OPTION_FIELDS_WITHOUT_A_DEFAULT + DTO_FIELDS_NEVER_DESERIALIZED == FIELDS_THAT_BREAK_LOUDLY_AS_FIRST_STATED;
   assert DTO_STRUCT_COUNT == 24;
   assert DTO_ENUM_COUNT == 3;
 }
 
 test a_dropped_field_is_loud_only_when_it_has_no_default {
-  assert dropped_field_breaks_the_client(false) == true;
-  assert dropped_field_breaks_the_client(true) == false;
+  assert dropped_field_breaks_the_client(false, false) == true;
+  assert dropped_field_breaks_the_client(true, false) == false;
+  assert dropped_field_breaks_the_client(false, true) == false;
+  assert dropped_field_breaks_the_client(true, true) == false;
   assert dropped_field_renders_an_invented_value(true, true) == true;
   assert dropped_field_renders_an_invented_value(true, false) == false;
   assert dropped_field_renders_an_invented_value(false, true) == false;
@@ -1074,7 +1153,14 @@ invariant an_oversize_payload_is_refused_here_and_the_cap_is_not_raised
   assert oversize_is_refused(true, false, OVERSIZE_IS_REFUSED_LOUDLY_ON_THE_CLIENT) == true and oversize_becomes_anonymous(true, false, OVERSIZE_IS_REFUSED_LOUDLY_ON_THE_CLIENT) == false and CAP_WAS_RAISED_BY_THE_FIX == false and CAP_VALUE_IS_RESTATED_HERE == false
 
 invariant a_defaulted_number_is_the_only_silent_drop
-  assert dropped_field_renders_an_invented_value(true, true) == true and dropped_field_renders_an_invented_value(false, true) == false and dropped_field_breaks_the_client(false) == true
+  assert dropped_field_renders_an_invented_value(true, true) == true and dropped_field_renders_an_invented_value(false, true) == false and dropped_field_breaks_the_client(false, false) == true and dropped_field_breaks_the_client(false, true) == false
+
+; The loud count is what serde refuses, and the four groups close on the declared total. Until
+; 2026-09-22 it was 172 - 44 = 128, which counted as loud two combined defaults, thirty Options
+; serde fills with None and six fields that are never parsed. No field in those three groups is a
+; defaulted number, so the fabricated-zero count was right throughout.
+invariant the_loud_count_is_what_serde_refuses_and_the_groups_close
+  assert DTO_FIELDS_WITH_A_DEFAULT + DEFAULTS_IN_A_COMBINED_ATTRIBUTE + OPTION_FIELDS_WITHOUT_A_DEFAULT + FIELDS_THAT_BREAK_LOUDLY == DTO_FIELDS_DESERIALIZED and DTO_FIELDS_DESERIALIZED + DTO_FIELDS_NEVER_DESERIALIZED == DTO_FIELD_COUNT and FIELDS_THAT_BREAK_LOUDLY + DEFAULTS_IN_A_COMBINED_ATTRIBUTE + OPTION_FIELDS_WITHOUT_A_DEFAULT + DTO_FIELDS_NEVER_DESERIALIZED == FIELDS_THAT_BREAK_LOUDLY_AS_FIRST_STATED and COMBINED_DEFAULTS_ON_A_NUMBER == 0
 
 invariant the_default_partition_is_complete
   assert DEFAULTS_ON_AN_OPTION + DEFAULTS_ON_A_BARE_NUMBER + DEFAULTS_ON_A_BOOL_STRING_OR_VEC == DTO_FIELDS_WITH_A_DEFAULT and NUMERIC_DEFAULT_SITES.len == DEFAULTS_ON_A_BARE_NUMBER

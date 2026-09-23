@@ -88,9 +88,16 @@ MIN_ASSERT_LINES = 7000
 
 # --- evaluator limits -------------------------------------------------------------
 # Bounded rather than trusted: a spec that recurses or loops forever must produce a red
-# build, not a hung CI job. Deepest real call chain measured in the corpus is 3 frames
-# (e.g. specs/turbobaby/pricing_honesty.t27 render -> is_present), and the longest real
-# loop runs 14 iterations (specs/turbobaby/deposit_tiers.t27:421).
+# build, not a hung CI job. Re-measured 2026-09-22 by running every spec through this
+# evaluator with the call stack and each loop's iterations recorded: the deepest real call
+# chain is 5 nested calls (specs/turbobaby/order_money.t27, order_money_verdict down to
+# order_money_clamp_at_zero), and the longest real loop runs 16 iterations
+# (specs/turbobaby/bot_surface.t27's undiscoverable_command_count, which walks all sixteen
+# COMMANDS). Until that date this comment said 3 frames and 14 iterations, citing the loops
+# of deposit_tiers.t27 by a line number that was right at f4d84a1 and one off by a33e500;
+# those loops, in families_on_tier and published_rows_at_amount, run 14, and COMMANDS was
+# already sixteen long when the 14 was written. They are cited by function name now, because
+# edits above them keep moving the lines. Both limits below sit far above both readings.
 MAX_CALL_DEPTH = 64
 MAX_LOOP_ITERATIONS = 100000
 
@@ -534,8 +541,11 @@ class Parser:
 
     def parse_invariant_decl(self):
         # `invariant name` followed by ONE indented assert line, no braces and no
-        # semicolon (specs/turbobaby/rental_terms.t27:643-644). All 836 invariants in
-        # the corpus have that shape.
+        # semicolon (e.g. specs/turbobaby/rental_terms.t27's
+        # the_measured_ladder_holds_six_rungs). All 836 invariants in the corpus had that
+        # shape at f4d84a1, which wrote this comment and cited that one by a line number
+        # that had moved by a33e500; re-counted 2026-09-22 over this tree, all 916 do,
+        # since this parser reads every one of them and the gate is green.
         # WHAT THE CHECK BELOW ACTUALLY DOES, since it is easy to read as more: it
         # refuses a LEFTOVER token on the assertion's own line -- a stray ';', a second
         # statement -- so the tail of such a line cannot be dropped in silence. It does
@@ -629,8 +639,9 @@ class Parser:
     def parse_while_statement(self):
         # Two forms in the corpus: a plain `while (cond) { ... }` with the step inside
         # the body (specs/turbobaby/availability.t27:272) and the Zig-style continue
-        # expression `while (i < 14) : (i += 1) { ... }`
-        # (specs/turbobaby/deposit_tiers.t27:421, 435, 441).
+        # expression `while (i < 14) : (i += 1) { ... }` (the three loops of
+        # specs/turbobaby/deposit_tiers.t27's families_on_tier and published_rows_at_amount,
+        # cited by name since 2026-09-22 because their line numbers kept moving).
         line = self.expect("kw", "while").line
         self.expect("op", "(")
         condition = self.parse_expr()
@@ -891,8 +902,9 @@ class Evaluator:
     * '/' is integer division truncating toward zero, and '%' is the remainder that
       matches it (C semantics, not Python's floor semantics).
       WHAT IS AND IS NOT MEASURED HERE. That '/' discards the fraction rather than
-      rounding IS measured: specs/turbobaby/rental_terms.t27:277-280 audit_daily_thb,
-      whose asserted value at line 399 requires (449*7500*2 + 10000) / 20000 == 337,
+      rounding IS measured: specs/turbobaby/rental_terms.t27's audit_daily_thb (cited by
+      name since 2026-09-22; the line numbers written at f4d84a1 had moved by a33e500),
+      whose asserted value requires (449*7500*2 + 10000) / 20000 == 337,
       i.e. 337.25 discarded rather than rounded to 337.25 -> 337.5 -> 338. Which way it
       discards for a NEGATIVE operand is NOT measured and cannot be, because the corpus
       never divides one: instrumenting Evaluator.arith over all 43 specs on 2026-09-21
@@ -1421,10 +1433,11 @@ def run_spec(path, text):
 # that has gone away -- a stale allowance is the same defect as no allowance at all.
 KNOWN_FRONTEND_DISAGREEMENTS = {
     # Measured 2026-09-21 against t27c @ 40003ed. Both functions use the Zig-style
-    # `while (cond) : (step) { ... }` continue expression (deposit_tiers.t27:421, 435,
-    # 441). t27c's parser stops at the ':' and silently discards the REST OF THE
-    # FUNCTION -- the loop, any later local, and the `return` -- with no error and no
-    # warning: `typecheck --json` still answers {"errors": 0, "warnings": 0, "ok": true}.
+    # `while (cond) : (step) { ... }` continue expression (one loop in families_on_tier,
+    # two in published_rows_at_amount). t27c's parser stops at the ':' and silently
+    # discards the REST OF THE FUNCTION -- the loop, any later local, and the `return` --
+    # with no error and no warning: `typecheck --json` still answers
+    # {"errors": 0, "warnings": 0, "ok": true}.
     # It then generates `uint8_t families_on_tier(uint8_t tier_index) { uint8_t found =
     # 0; uint8_t i = 0; }` in C and the same shape in Rust: a value-returning function
     # whose body contains no return statement and no tail expression. This evaluator
