@@ -188,8 +188,8 @@ pub struct RenderedRate {
 ; The only door to a PRESENT rate, and it is a guard rather than a wrapper. Zero is the exact
 ; "FREE" failure value D9 forbids; the negative half is reserved for invalid inputs and the
 ; poison marker. Both are refused as INVALID instead of being tagged present. This matches the
-; shared runtime boundary in src/trios/pricing.rs and the catalog renderer: finite and strictly
-; positive, never merely non-negative. Choosing i16 already makes NaN and infinity
+; shared runtime PRICE boundary in src/trios/pricing.rs and the catalog renderer: finite and strictly
+; positive, never merely non-negative (scope clarified 2026-09-22, see the end). i16 already makes NaN and infinity
 ; unrepresentable, so non-positive values are the remaining unpublishable cases.
 ; The refused number is not kept in the slot: it is replaced by the marker, because code that
 ; took the magnitude of a retained -250 would print a plausible 250 THB/day, and -1 is the one
@@ -705,3 +705,15 @@ invariant a_silent_door_is_an_absence_and_never_a_divergence
 ; in 87 migrations, two tracing sites -- so the refusal expires the day that measurement changes.
 invariant the_persisted_divergence_record_is_refused_not_deferred
     assert DIVERGENCE_PERSISTENCE_IS_NOT_SPECIFIED == true and DIVERGENCE_TABLES == 0 and DIVERGENCE_SINKS.len == 2
+
+; CLARIFIED 2026-09-22, by the order-presentation money repair (turbobaby/order-presentation). The
+; constructors section calls the shared runtime boundary in src/trios/pricing.rs finite and
+; strictly positive, never merely non-negative. That sentence is about the PRICE boundary,
+; published_money, and it still holds. Since that day the same module also holds measured_money, a
+; separate boundary for the figures a stored ORDER carries -- a bonus of none, no stars spent, a
+; total the discounts paid in full -- where zero is a measurement and not an unpublished price.
+; published_money is written on top of it (the order filter plus the refusal of zero), so unusable
+; money is still defined once. Nothing this file owns changes: it governs one value, the per-day
+; rate of a bike family, and an order figure is not that value. The sentence its SHAPE_DASH carries
+; is not claimed by the order screens either; that contract records the absence as an open owner
+; question.

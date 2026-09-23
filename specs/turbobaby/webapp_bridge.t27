@@ -36,7 +36,7 @@
 ;      submit_order_with_retry at src/ui/screens/checkout_screen.rs:148 (:128 before the
 ;      2026-09-21 edits in items 4 and 5 below), it wraps exactly one
 ;      call, and it lives in a screen rather than in the transport. Three other screens carry a
-;      retry BUTTON (src/ui/screens/events_screen.rs:924, src/ui/screens/profile_screen.rs:662,
+;      retry BUTTON (src/ui/screens/events_screen.rs:924, src/ui/screens/profile_screen.rs:663,
 ;      src/ui/screens/success_screen.rs:479 -- :920, :659 and :476 before the same day's
 ;      cart-price edits moved them); those are a customer tap re-arming a resource, not
 ;      a re-send the code decides on, and they are counted separately. A request deadline does not
@@ -433,7 +433,7 @@ pub const ATTEMPTS_CLAIMED_BY_THE_DOC_COMMENT : u8 = 4;
 pub const ATTEMPTS_CLAIMED_BEFORE_2026_09_21 : u8 = 3;
 pub const DOC_COMMENT_AGREES_WITH_THE_LOOP : bool = true;
 ; A retry BUTTON is not a retry. Three screens re-arm a failed resource on a customer tap --
-; src/ui/screens/events_screen.rs:924, src/ui/screens/profile_screen.rs:662 and
+; src/ui/screens/events_screen.rs:924, src/ui/screens/profile_screen.rs:663 and
 ; src/ui/screens/success_screen.rs:479 (:920, :659 and :476 before the 2026-09-21 edits) --
 ; and none of the three re-sends anything by itself.
 ; They are counted here so "one call retries" is read as one AUTOMATIC re-send and not as the
@@ -610,7 +610,11 @@ pub const DEFAULTS_ON_A_BOOL_STRING_OR_VEC : u8 = 10;
 ; fabricates a zero -- is still 6. A missing Option fabricates nothing. A second reading moved with
 ; the unit_price fix: a plain `grep -c` for the attribute now answers 46 and not the 45 quoted in
 ; item 2 of the header, because the doc line that fix added at :424 names the attribute too.
-pub const FIELDS_THAT_BREAK_LOUDLY : u16 = 90;
+; CORRECTED 2026-09-23, T27 defect 2: the order endpoints now send null for a money figure the
+; server withholds (src/db/orders.rs, money_withheld), so types::Order.total (src/ui/api/types.rs:163)
+; is Option<f64> without a default. One field moves from loud to Option: 166 = 46 defaulted +
+; 31 Options + 89 loud, and 128 = 89 + 2 + 31 + 6 still holds.
+pub const FIELDS_THAT_BREAK_LOUDLY : u16 = 89;
 pub const FIELDS_THAT_BREAK_LOUDLY_AS_FIRST_STATED : u16 = 128;
 pub const DTO_STRUCTS_THAT_DERIVE_DESERIALIZE : u8 = 22;
 pub const DTO_STRUCTS_THAT_ONLY_SERIALIZE : u8 = 2;
@@ -619,7 +623,7 @@ pub const DTO_FIELDS_NEVER_DESERIALIZED : u8 = 6;
 pub const DEFAULTS_IN_A_COMBINED_ATTRIBUTE : u8 = 2;
 pub const COMBINED_DEFAULT_SITES : [2]str = ["src/ui/api/types.rs:122", "src/ui/api/types.rs:131"];
 pub const COMBINED_DEFAULTS_ON_A_NUMBER : u8 = 0;
-pub const OPTION_FIELDS_WITHOUT_A_DEFAULT : u8 = 30;
+pub const OPTION_FIELDS_WITHOUT_A_DEFAULT : u8 = 31;
 pub const A_MISSING_OPTION_WITHOUT_A_DEFAULT_IS_NONE : bool = true;
 ; Still false, and by six fields rather than seven. A count that fell by one is not a rule that
 ; now holds, and saying so is the difference between a fix and a claim of one.
@@ -1001,7 +1005,7 @@ test the_mirror_counts_add_up {
   assert DEFAULTS_ON_A_BARE_NUMBER + 1 == DEFAULTS_ON_A_BARE_NUMBER_BEFORE_THE_FIX;
   assert DEFAULTS_ON_A_BOOL_STRING_OR_VEC == 10;
   assert DEFAULTS_ON_AN_OPTION + DEFAULTS_ON_A_BARE_NUMBER + DEFAULTS_ON_A_BOOL_STRING_OR_VEC == DTO_FIELDS_WITH_A_DEFAULT;
-  assert FIELDS_THAT_BREAK_LOUDLY == 90;
+  assert FIELDS_THAT_BREAK_LOUDLY == 89;
   assert FIELDS_THAT_BREAK_LOUDLY_AS_FIRST_STATED == 128;
   assert DTO_FIELD_COUNT - DTO_FIELDS_WITH_A_DEFAULT == FIELDS_THAT_BREAK_LOUDLY_AS_FIRST_STATED;
   assert DTO_STRUCTS_THAT_DERIVE_DESERIALIZE == 22;
@@ -1015,7 +1019,7 @@ test the_mirror_counts_add_up {
   assert COMBINED_DEFAULT_SITES[0] == "src/ui/api/types.rs:122";
   assert COMBINED_DEFAULT_SITES[1] == "src/ui/api/types.rs:131";
   assert COMBINED_DEFAULTS_ON_A_NUMBER == 0;
-  assert OPTION_FIELDS_WITHOUT_A_DEFAULT == 30;
+  assert OPTION_FIELDS_WITHOUT_A_DEFAULT == 31;
   assert A_MISSING_OPTION_WITHOUT_A_DEFAULT_IS_NONE == true;
   assert DTO_FIELDS_WITH_A_DEFAULT + DEFAULTS_IN_A_COMBINED_ATTRIBUTE + OPTION_FIELDS_WITHOUT_A_DEFAULT + FIELDS_THAT_BREAK_LOUDLY == DTO_FIELDS_DESERIALIZED;
   assert FIELDS_THAT_BREAK_LOUDLY + DEFAULTS_IN_A_COMBINED_ATTRIBUTE + OPTION_FIELDS_WITHOUT_A_DEFAULT + DTO_FIELDS_NEVER_DESERIALIZED == FIELDS_THAT_BREAK_LOUDLY_AS_FIRST_STATED;

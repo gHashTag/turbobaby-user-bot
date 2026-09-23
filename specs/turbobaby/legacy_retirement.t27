@@ -63,8 +63,8 @@
 ;      title was not.
 ;   3. "tests/retired_table_wiring.rs, survey :49-81" is :49-82 -- the const opens at 49 and
 ;      closes at 82. The size, 4, is what this file pins, not the span.
-;   4. "about 9523 LOC across 26 of the 181 src/*.rs files". 181 is right: every .rs file under
-;      src/ counts to 181. 9523 across 26 does not reproduce -- no TRACKED file in the tree
+;   4. "about 9523 LOC across 26 of the 181 src/*.rs files". 181 was right: every .rs file under
+;      src/ counted to 181 on 2026-09-21 (corrected 2026-09-22: 182 since src/trios/order_status_view.rs was added that day). 9523 across 26 does not reproduce -- no TRACKED file in the tree
 ;      carries the number 9523, and no nameable file list sums to it. This file therefore pins
 ;      its OWN reproducible measurement instead: 25 named legacy-domain source files totalling
 ;      9193 lines, the set being the eight screens behind the live legacy routes, the four UI
@@ -319,12 +319,12 @@ pub const QUEST_HTTP_ROUTE_COUNT : u8 = 12;
 pub const TECH_TREE_HTTP_ROUTE_COUNT : u8 = 4;
 pub const LEGACY_HTTP_ROUTE_COUNT : u8 = 43;
 
-; The footprint this file can name file by file. 181 is every .rs under src/.
-pub const TOTAL_SOURCE_FILE_COUNT : u16 = 181;
+; The footprint this file can name file by file. 182 is every .rs under src/ (corrected 2026-09-22: it was 181 until src/trios/order_status_view.rs was added that day).
+pub const TOTAL_SOURCE_FILE_COUNT : u16 = 182;
 pub const LEGACY_SOURCE_FILE_COUNT : u16 = 25;
 pub const LEGACY_SOURCE_LOC : u16 = 9193;
 pub const SURVEY_LOC_CLAIM_REPRODUCED : bool = false;
-pub const SURVEY_LOC_CLAIM_NOTE : str = "The survey reported about 9523 LOC across 26 of the 181 src/*.rs files. 181 reproduces exactly. 9523 and 26 do not: no tracked file in the repository carries the number 9523 -- git grep -l 9523 returns nothing, and the matches an unfiltered recursive grep finds are incidental digit runs inside target/ build fingerprints, not sources -- and no nameable list of legacy-domain modules sums to it. The 25 files and 9193 lines pinned here are a list that can be printed and re-added, which is the only kind of footprint number this corpus accepts. The difference is not asserted to be an arithmetic error in the survey -- it is an unreproducible figure, and an unreproducible figure is reported as such rather than inherited.";
+pub const SURVEY_LOC_CLAIM_NOTE : str = "The survey reported about 9523 LOC across 26 of the 181 src/*.rs files. 181 reproduced exactly on 2026-09-21, and the tree has held 182 since src/trios/order_status_view.rs was added on 2026-09-22. 9523 and 26 do not: no tracked file in the repository carries the number 9523 -- git grep -l 9523 returns nothing, and the matches an unfiltered recursive grep finds are incidental digit runs inside target/ build fingerprints, not sources -- and no nameable list of legacy-domain modules sums to it. The 25 files and 9193 lines pinned here are a list that can be printed and re-added, which is the only kind of footprint number this corpus accepts. The difference is not asserted to be an arithmetic error in the survey -- it is an unreproducible figure, and an unreproducible figure is reported as such rather than inherited.";
 
 pub fn legacy_footprint_is_measured(files_named: u16, total_files: u16, loc: u16) bool {
     if (files_named == 0 or loc == 0) {
@@ -543,7 +543,7 @@ test the_legacy_http_route_total_is_the_sum_of_its_three_modules {
 }
 
 test the_footprint_is_a_list_that_can_be_re_added {
-    assert TOTAL_SOURCE_FILE_COUNT == 181;
+    assert TOTAL_SOURCE_FILE_COUNT == 182;
     assert LEGACY_SOURCE_FILE_COUNT == 25;
     assert LEGACY_SOURCE_LOC == 9193;
     assert legacy_footprint_is_measured(LEGACY_SOURCE_FILE_COUNT, TOTAL_SOURCE_FILE_COUNT, LEGACY_SOURCE_LOC) == true;

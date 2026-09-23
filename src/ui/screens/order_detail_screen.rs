@@ -6,13 +6,11 @@
 
 use crate::trios::i18n::{
     t, tf, T_CART_DELIVERY, T_CART_SUBTOTAL, T_MODAL_CANCEL, T_MODAL_CONFIRM, T_ORDERS_ORDER,
-    T_ORDERS_STATUS_CANCELLED, T_ORDERS_STATUS_CONFIRMED, T_ORDERS_STATUS_DELIVERED,
-    T_ORDERS_STATUS_OUT_FOR_DELIVERY, T_ORDERS_STATUS_PENDING, T_ORDERS_STATUS_PREPARING,
-    T_ORDERS_STATUS_READY, T_ORDERS_STATUS_UNKNOWN, T_ORDERS_TITLE, T_ORDER_DETAIL_BACK,
-    T_ORDER_DETAIL_BONUS, T_ORDER_DETAIL_CANCEL, T_ORDER_DETAIL_CANCEL_CONFIRM,
-    T_ORDER_DETAIL_LIVE, T_ORDER_DETAIL_NOT_FOUND, T_ORDER_DETAIL_STARS, T_ORDER_DETAIL_TOTAL,
-    T_ORDER_REORDER,
+    T_ORDERS_TITLE, T_ORDER_DETAIL_BACK, T_ORDER_DETAIL_BONUS, T_ORDER_DETAIL_CANCEL,
+    T_ORDER_DETAIL_CANCEL_CONFIRM, T_ORDER_DETAIL_LIVE, T_ORDER_DETAIL_NOT_FOUND,
+    T_ORDER_DETAIL_STARS, T_ORDER_DETAIL_TOTAL, T_ORDER_REORDER,
 };
+use crate::trios::order_status_view::arm_of;
 use crate::ui::api::context::api_base_url;
 use crate::ui::api::http::{merge_server_cart, post_client_event};
 use crate::ui::components::bottom_nav::BottomNav;
@@ -30,10 +28,10 @@ use serde::Deserialize;
 struct ApiOrderDetail {
     id: String,
     items: Vec<ApiOrderItem>,
-    subtotal: f64,
-    bonus_used: f64,
-    stars_used: i64,
-    total: f64,
+    // The four money figures, each an Option: a payload that omits one reads
+    // as an absence and renders as a dash, instead of losing this screen.
+    #[serde(flatten)]
+    money: crate::trios::pricing::OrderMoney,
     status: String,
     created_at: String,
     shop_id: Option<String>,
@@ -167,36 +165,6 @@ fn line_total(item: &ApiOrderItem) -> String {
     crate::ui::components::bike_card::thb_or_dash(total)
 }
 
-fn is_terminal_status(status: &str) -> bool {
-    matches!(status, "delivered" | "completed" | "rejected" | "cancelled")
-}
-
-fn status_color(status: &str) -> &'static str {
-    match status.to_lowercase().as_str() {
-        "pending" => "#ffe600",
-        "confirmed" => "#00e5ff",
-        "preparing" => "#ff9d00",
-        "ready" => "#39ff14",
-        "out_for_delivery" => "#00e5ff",
-        "completed" | "delivered" => "#39ff14",
-        "cancelled" | "rejected" => "#ff4757",
-        _ => "#8b8b9e",
-    }
-}
-
-fn status_label_key(status: &str) -> crate::trios::i18n::Key {
-    match status.to_lowercase().as_str() {
-        "pending" => T_ORDERS_STATUS_PENDING,
-        "confirmed" => T_ORDERS_STATUS_CONFIRMED,
-        "preparing" => T_ORDERS_STATUS_PREPARING,
-        "ready" => T_ORDERS_STATUS_READY,
-        "out_for_delivery" => T_ORDERS_STATUS_OUT_FOR_DELIVERY,
-        "completed" | "delivered" => T_ORDERS_STATUS_DELIVERED,
-        "cancelled" | "rejected" => T_ORDERS_STATUS_CANCELLED,
-        _ => T_ORDERS_STATUS_UNKNOWN,
-    }
-}
-
 /// Render the body of an order detail card. Extracted into its own component so
 /// the screen-level resource read does not borrow across Dioxus event handlers
 /// (which must be `'static`).
@@ -208,6 +176,7 @@ fn OrderDetailCard(
     live_status_res: Resource<Option<OrderStatusResp>>,
     cart: Signal<Cart>,
     lang: crate::trios::core::Lang,
+    on_cancel_answered: EventHandler<()>,
 ) -> Element {
     let nav = navigator();
     let short_id: String = order
@@ -225,8 +194,9 @@ fn OrderDetailCard(
         .and_then(|o| o.as_ref())
         .map(|s| s.status.clone());
     let display_status = live_status.as_deref().unwrap_or(&order.status);
-    let status_color = status_color(display_status);
-    let status_label = t(lang, status_label_key(display_status));
+    let arm = arm_of(display_status);
+    let status_color = arm.color();
+    let status_label = t(lang, arm.label_key());
     let date_str = order
         .created_at
         .split('T')
@@ -234,18 +204,25 @@ fn OrderDetailCard(
         .unwrap_or(&order.created_at)
         .to_string();
     let shop = order.shop_id.as_deref().unwrap_or("TurboBaby");
-    let subtotal_str = crate::trios::pricing::format_baht(order.subtotal);
-    let total_str = crate::trios::pricing::format_baht(order.total);
-    let bonus_str = crate::trios::pricing::format_baht(order.bonus_used);
-    let is_terminal = is_terminal_status(display_status);
-    let is_pending = display_status == "pending";
+    // Every figure through the one order rule; an absent one is the line's dash.
+    let dash = crate::ui::components::bike_card::DASH;
+    let money = crate::trios::pricing::order_money_text(&order.money, dash);
+    let is_terminal = arm.reorder_offered();
+    let is_pending = arm.customer_may_cancel();
+    // What has been read of the status since the last cancel answer. The screen
+    // drops its reading when an answer arrives (`on_cancel_answered`), so
+    // "nothing landed" means "not read again yet".
+    let since_answer = crate::trios::api_errors::StatusSinceAnswer::from_landing(
+        live_status_res.read().as_ref().map(Option::is_some),
+        is_pending,
+    );
     let order_for_reorder = order.clone();
     let reorder_nav = nav;
     let reorder_cart = cart;
     let init_data_for_reorder = init_data.clone();
     let init_data_for_cancel = init_data.clone();
     let mut show_cancel_confirm = use_signal(|| false);
-    let mut cancelling = use_signal(|| false);
+    let mut cancel_progress = use_signal(|| crate::trios::api_errors::OrderCancelProgress::Idle);
     let reorder_loading = use_signal(|| false);
     let reorder_label = t(lang, T_ORDER_REORDER);
 
@@ -296,18 +273,18 @@ fn OrderDetailCard(
             div { style: "border-top: 1px dashed #2a2a4a; padding-top: 12px; margin-bottom: 12px;",
                 div { style: "display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 4px;",
                     span { style: "color: #8b8b9e;", "{t(lang, T_CART_SUBTOTAL)}" }
-                    span { style: "color: #e8e8e8;", "{subtotal_str}" }
+                    span { style: "color: #e8e8e8;", "{money.subtotal}" }
                 }
-                if order.bonus_used > 0.0 {
+                if let Some(bonus) = &money.bonus {
                     div { style: "display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 4px;",
                         span { style: "color: #8b8b9e;", "{t(lang, T_ORDER_DETAIL_BONUS)}" }
-                        span { style: "color: #ff4757;", "-{bonus_str}" }
+                        span { style: "color: #ff4757;", "{bonus}" }
                     }
                 }
-                if order.stars_used > 0 {
+                if let Some(stars) = &money.stars {
                     div { style: "display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 4px;",
                         span { style: "color: #8b8b9e;", "{t(lang, T_ORDER_DETAIL_STARS)}" }
-                        span { style: "color: #ff4757;", "-{order.stars_used} ⭐" }
+                        span { style: "color: #ff4757;", "{stars}" }
                     }
                 }
                 div { style: "display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 4px;",
@@ -316,7 +293,7 @@ fn OrderDetailCard(
                 }
                 div { style: "display: flex; justify-content: space-between; font-size: 18px; margin-top: 8px; padding-top: 8px; border-top: 1px solid #2a2a4a;",
                     span { style: "font-weight: 800; color: #e8e8e8;", "{t(lang, T_ORDER_DETAIL_TOTAL)}" }
-                    span { style: "font-weight: 800; color: #ffe600; text-shadow: 2px 2px 0 #000;", "{total_str}" }
+                    span { style: "font-weight: 800; color: #ffe600; text-shadow: 2px 2px 0 #000;", "{money.total}" }
                 }
             }
 
@@ -333,32 +310,31 @@ fn OrderDetailCard(
                 div { style: "margin-top: 4px;", "🕒 {date_str}" }
             }
 
-            if is_pending {
+            // The answer is told ABOVE the pending gate: a refusal's re-read can
+            // remove the whole block below, and the sentence must survive it.
+            if let Some(line) = crate::trios::api_errors::order_cancel_line(lang, cancel_progress(), since_answer) {
+                div { style: "font-size: 13px; margin-bottom: 12px; color: {line.tone.color()};", "{line.text}" }
+            }
+
+            if is_pending && crate::trios::api_errors::order_cancel_offer_shown(cancel_progress()) {
                 if show_cancel_confirm() {
                     div { style: "border: 3px solid #ff4757; background: #2a0a0a; padding: 12px; margin-bottom: 12px; box-shadow: 2px 2px 0 #000;",
                         div { style: "font-size: 13px; color: #e8e8e8; margin-bottom: 10px;", "{t(lang, T_ORDER_DETAIL_CANCEL_CONFIRM)}" }
                         div { style: "display: flex; gap: 8px;",
                             button {
                                 style: "flex: 1; font-size: 13px; font-weight: 700; padding: 10px; background: #ff4757; color: #fff; border: 3px solid #b92b3a; cursor: pointer;",
-                                disabled: cancelling(),
+                                disabled: !crate::trios::api_errors::order_cancel_may_send(cancel_progress(), since_answer),
                                 onclick: move |_| {
-                                    let oid = order.id.clone();
-                                    let init = init_data_for_cancel.clone();
-                                    let tid = telegram_id;
-                                    cancelling.set(true);
-                                    spawn(async move {
-                                        let base = api_base_url();
-                                        let url = format!("{}/api/orders/{}/cancel?telegram_id={}", base, oid, tid);
-                                        let _resp = crate::ui::api::local_client::LocalClient::new()
-                                            .post(&url)
-                                            .header("X-Telegram-Init-Data", init)
-                                            .send()
-                                            .await;
-                                        cancelling.set(false);
-                                        show_cancel_confirm.set(false);
-                                        // Force a detail refresh by bumping the resource signal is hard;
-                                        // instead the next poll tick will refresh status via live_status_res.
-                                    });
+                                    cancel_progress.set(crate::trios::api_errors::OrderCancelProgress::InFlight);
+                                    // AGENTS.md lesson 4: the dialog closes on the server's word, never before it.
+                                    spawn(confirm_cancel(
+                                        order.id.clone(),
+                                        init_data_for_cancel.clone(),
+                                        telegram_id,
+                                        cancel_progress,
+                                        show_cancel_confirm,
+                                        on_cancel_answered,
+                                    ));
                                 },
                                 "{t(lang, T_MODAL_CONFIRM)}"
                             }
@@ -468,7 +444,7 @@ pub fn OrderDetailScreen(id: String) -> Element {
             }
         });
     });
-    let live_status_res = {
+    let mut live_status_res = {
         let id = id.clone();
         let init = init_data.clone();
         use_resource(move || {
@@ -531,6 +507,13 @@ pub fn OrderDetailScreen(id: String) -> Element {
                                 live_status_res,
                                 cart,
                                 lang,
+                                // AGENTS.md lesson 5: the card reports an answer and this
+                                // screen, which owns the resource, drops the stale reading
+                                // and reads the status again -- past the hour's poll too.
+                                on_cancel_answered: EventHandler::new(move |_| {
+                                    live_status_res.clear();
+                                    live_status_res.restart();
+                                }),
                             }
                         },
                         Some(Err(e)) => rsx! {
@@ -553,4 +536,54 @@ pub fn OrderDetailScreen(id: String) -> Element {
             BottomNav {}
         }
     }
+}
+
+/// Send the customer's cancellation and tell the card what came back.
+///
+/// Until 2026-09-22 the answer was bound to an unread local and the dialog was
+/// closed on every path, so a success, a refusal and a lost connection looked
+/// the same. What the answer MEANS -- and what the customer is told of it --
+/// is read in `src/trios/api_errors.rs`, where the host can test it; this task
+/// only sends, reads the status code, and reports.
+///
+/// It writes the card's own two signals, never the screen's: the fresh status
+/// reading is the screen's to take, through `on_answered` (AGENTS.md lesson 5).
+async fn confirm_cancel(
+    order_id: String,
+    init: String,
+    telegram_id: i64,
+    mut progress: Signal<crate::trios::api_errors::OrderCancelProgress>,
+    mut show_confirm: Signal<bool>,
+    on_answered: EventHandler<()>,
+) {
+    use crate::trios::api_errors::{
+        order_cancel_answer, order_cancel_dialog_closes, OrderCancelAnswer, OrderCancelProgress,
+    };
+    let url = format!(
+        "{}/api/orders/{}/cancel?telegram_id={}",
+        api_base_url(),
+        order_id,
+        telegram_id
+    );
+    let status = crate::ui::api::local_client::LocalClient::new()
+        .post(&url)
+        .header("X-Telegram-Init-Data", init)
+        .send()
+        .await
+        .ok()
+        .map(|response| response.status().as_u16());
+    let answer = order_cancel_answer(status);
+    if order_cancel_dialog_closes(answer) {
+        show_confirm.set(false);
+    }
+    progress.set(OrderCancelProgress::Answered(answer));
+    // Every answer, a success included, is followed by a fresh reading: the last
+    // one predates the answer, and after no answer it is the only way to learn
+    // whether the cancellation landed before anything is sent again.
+    on_answered.call(());
+    TelegramApp::init().haptic_notification(if answer == OrderCancelAnswer::Cancelled {
+        HapticNotification::Success
+    } else {
+        HapticNotification::Error
+    });
 }

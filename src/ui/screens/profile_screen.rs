@@ -97,7 +97,8 @@ struct ProfileOrderItem {
 struct ProfileOrder {
     id: String,
     status: String,
-    total: f64,
+    #[serde(default)]
+    total: Option<f64>,
     created_at: String,
     #[serde(default)]
     items: Vec<ProfileOrderItem>,
@@ -995,7 +996,7 @@ pub fn ProfileScreen() -> Element {
                                 let short_id: String = o.id.chars().rev().take(6).collect::<Vec<_>>().into_iter().rev().collect();
                                 let status_color = profile_status_color(&o.status);
                                 let status_label = t(lang, profile_status_label_key(&o.status));
-                                let total_str = crate::trios::pricing::format_baht(o.total);
+                                let total_str = crate::trios::pricing::order_total_text(o.total, crate::ui::components::bike_card::DASH);
                                 let date_str = o.created_at.split('T').next().unwrap_or(&o.created_at).to_string();
                                 let item_summary = o.items.first().map(profile_item_name).unwrap_or_else(|| "—".to_string());
                                 let more_count = o.items.len().saturating_sub(1);

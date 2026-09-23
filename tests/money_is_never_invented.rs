@@ -181,6 +181,12 @@ fn there_is_exactly_one_definition_of_an_absent_price() {
     // `components::bike_card` and `screens::catalog_screen`, each documented
     // as the only one. The catalog's is now a re-export; this keeps it that
     // way, because the copy came back once already.
+    //
+    // Scope, corrected 2026-09-22: this is the one definition of an absent
+    // PRICE. A stored order's figures, whose zero can be a measurement, are a
+    // separate boundary -- `trios::pricing::order_money_text` over
+    // `measured_money` -- and `published_money` is written on top of that
+    // filter, so "unusable" is still defined once (D15).
     let catalog = std::fs::read_to_string(
         Path::new(env!("CARGO_MANIFEST_DIR")).join("src/ui/screens/catalog_screen.rs"),
     )

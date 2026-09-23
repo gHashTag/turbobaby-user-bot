@@ -25,10 +25,10 @@
 ; the six are NOT alike. Four are reached only when the Telegram WebApp SDK supplies no username:
 ; src/ui/share.rs:24 is a const consumed solely through src/ui/share.rs:126, which on wasm32
 ; prefers TelegramApp::init().bot_username() and falls back to the const, and
-; src/ui/screens/profile_screen.rs:743, :897 and :910 each unwrap_or_else over that same read.
+; src/ui/screens/profile_screen.rs:744, :898 and :911 each unwrap_or_else over that same read.
 ; The resolver behind all four is src/ui/telegram.rs:486, which reads initDataUnsafe. Two are
 ; unconditional and consult nothing: src/ui/pages/referrals.rs:184, the placeholder invite link
-; built when telegram_id is 0, and src/ui/screens/home_screen.rs:445, a support href. So the
+; built when telegram_id is 0, and src/ui/screens/home_screen.rs:446, a support href. So the
 ; defect is open and its mechanism is the platform rather than the compiler -- the client tracks
 ; whichever bot Telegram says is serving, the server tracks BOT_USERNAME, and nothing makes the
 ; two agree -- plus two sites that are wrong whatever either of them says. An earlier draft of
@@ -252,24 +252,25 @@ pub const MENU_BUTTON_TASK_RUNS_EVERY_BOOT : bool = true;
 pub const BOT_HANDLE_CLIENT_LITERAL_SITES : [6]str = [
   "src/ui/share.rs:24",
   "src/ui/pages/referrals.rs:184",
-  "src/ui/screens/home_screen.rs:445",
-  "src/ui/screens/profile_screen.rs:743",
-  "src/ui/screens/profile_screen.rs:897",
-  "src/ui/screens/profile_screen.rs:910"
+  "src/ui/screens/home_screen.rs:446",
+  "src/ui/screens/profile_screen.rs:744",
+  "src/ui/screens/profile_screen.rs:898",
+  "src/ui/screens/profile_screen.rs:911"
 ];
 ; Addresses re-taken 2026-09-21 and re-read at their new lines after the cart-price edits added
 ; three lines above each: home_screen :442 -> :445 and profile_screen :740/:894/:907 ->
-; :743/:897/:910. Six literals, four files, one claim -- unchanged.
+; :743/:897/:910. Six literals, four files, one claim -- unchanged. Re-taken 2026-09-23: one line
+; more above each after T27 defect 2 (home :446, profile :744/:898/:911), same literals.
 pub const BOT_HANDLE_CLIENT_LITERAL_FILES : u8 = 4;
 pub const BOT_HANDLE_SERVER_READS_ENV : bool = true;
 
 ; The six split two ways and the split is the whole finding. Four are fallbacks behind the
 ; Telegram WebApp SDK: src/ui/share.rs:24 is reached only through src/ui/share.rs:126, and
-; src/ui/screens/profile_screen.rs:743, :897, :910 each unwrap_or_else over the same read. The
+; src/ui/screens/profile_screen.rs:744, :898, :911 each unwrap_or_else over the same read. The
 ; resolver they all defer to is src/ui/telegram.rs:486, which takes the handle from initDataUnsafe
 ; -- so when the SDK answers, those four are right, and they are right about the bot Telegram is
 ; actually serving rather than about BOT_USERNAME. Two consult nothing and are wrong whenever the
-; compiled handle is wrong: src/ui/pages/referrals.rs:184 and src/ui/screens/home_screen.rs:445.
+; compiled handle is wrong: src/ui/pages/referrals.rs:184 and src/ui/screens/home_screen.rs:446.
 ; What holds in every case is that the client reads the environment variable at 0 sites, so the
 ; server knob does not reach the client by any path, agreeing or not.
 pub const BOT_HANDLE_CLIENT_LITERAL_SITES_SDK_FALLBACK : u8 = 4;

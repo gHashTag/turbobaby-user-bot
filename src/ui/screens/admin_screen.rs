@@ -2856,12 +2856,12 @@ struct AdminOrder {
     #[serde(default)]
     items: Vec<AdminOrderItem>,
     #[serde(default)]
-    subtotal: f64,
+    subtotal: Option<f64>,
     #[serde(default)]
-    bonus_used: f64,
+    bonus_used: Option<f64>,
     #[serde(default)]
-    stars_used: i64,
-    total: f64,
+    stars_used: Option<i64>,
+    total: Option<f64>,
     status: String,
     #[serde(default)]
     shop_id: Option<String>,
@@ -3030,23 +3030,23 @@ fn OrderDetailModal(order: AdminOrder, on_close: EventHandler<()>) -> Element {
                 div { style: "border-top:1px solid #2a2a4a;padding-top:12px;display:flex;flex-direction:column;gap:4px;",
                     div { style: "display:flex;justify-content:space-between;font-size:13px;color:#888;",
                         span { "Подытог" }
-                        span { "{crate::trios::pricing::format_baht(order.subtotal)}" }
+                        span { "{crate::trios::pricing::order_total_text(order.subtotal, crate::ui::components::bike_card::DASH)}" }
                     }
-                    if order.bonus_used > 0.0 {
+                    if order.bonus_used.is_none_or(|b| b > 0.0) {
                         div { style: "display:flex;justify-content:space-between;font-size:13px;color:#ffe600;",
                             span { "Бонусы" }
-                            span { "-{crate::trios::pricing::format_baht(order.bonus_used)}" }
+                            span { "{admin_discount_text(order.bonus_used)}" }
                         }
                     }
-                    if order.stars_used > 0 {
+                    if order.stars_used.is_none_or(|s| s > 0) {
                         div { style: "display:flex;justify-content:space-between;font-size:13px;color:#7dd3fc;",
                             span { "⭐ Stars" }
-                            span { "-{crate::trios::pricing::format_baht(order.stars_used as f64)}" }
+                            span { "{admin_discount_text(order.stars_used.map(|s| s as f64))}" }
                         }
                     }
                     div { style: "display:flex;justify-content:space-between;font-size:16px;font-weight:700;color:#39ff14;",
                         span { "Итого" }
-                        span { "{crate::trios::pricing::format_baht(order.total)}" }
+                        span { "{crate::trios::pricing::order_total_text(order.total, crate::ui::components::bike_card::DASH)}" }
                     }
                 }
                 if let Some(ref shop) = order.shop_id {
@@ -3196,10 +3196,10 @@ fn OrdersTab() -> Element {
                 o.customer_phone.as_deref().unwrap_or(""),
                 o.customer_telegram.as_deref().unwrap_or(""),
                 items_str.replace('"', "\"\""),
-                o.subtotal,
-                o.bonus_used,
-                o.stars_used,
-                o.total,
+                admin_csv_money(o.subtotal),
+                admin_csv_money(o.bonus_used),
+                admin_csv_count(o.stars_used),
+                admin_csv_money(o.total),
             ));
         }
         #[cfg(target_arch = "wasm32")]
@@ -3330,15 +3330,15 @@ fn OrdersTab() -> Element {
                                         }
                                     }
                                     div { class: "admin-badge success",
-                                        "{order.total:.0}Б"
-                                        if order.bonus_used > 0.0 {
+                                        "{admin_badge_total(order.total)}"
+                                        if order.bonus_used.is_none_or(|b| b > 0.0) {
                                             span { class: "admin-badge warn",
-                                                "-{order.bonus_used:.0}Б бонусов"
+                                                "{admin_badge_discount(order.bonus_used)} бонусов"
                                             }
                                         }
-                                        if order.stars_used > 0 {
+                                        if order.stars_used.is_none_or(|s| s > 0) {
                                             span { class: "admin-badge info",
-                                                "-{order.stars_used}⭐"
+                                                "{admin_badge_stars(order.stars_used)}⭐"
                                             }
                                         }
                                     }
@@ -5827,4 +5827,55 @@ fn send_broadcast(
             }
         }
     });
+}
+
+// T27 defect 2 (D9): the order endpoints send `null` for a figure the server
+// withheld (`src/db/orders.rs`, `money_withheld`), so the admin card, badges
+// and CSV print the dash or an empty cell, never a substituted zero. These sit
+// at the end of the file so that no line cited above them moves.
+
+/// A card discount row: the stored amount with a minus sign, or the dash. The
+/// star row passes its count here too and so prints it through the baht
+/// formatter, exactly as it did before this change (order_money.t27 records it).
+fn admin_discount_text(amount: Option<f64>) -> String {
+    match crate::trios::pricing::measured_money(amount) {
+        Some(v) => format!("-{}", crate::trios::pricing::format_baht(v)),
+        None => crate::ui::components::bike_card::DASH.to_string(),
+    }
+}
+
+/// The list's total badge: whole baht, or the dash.
+fn admin_badge_total(amount: Option<f64>) -> String {
+    match crate::trios::pricing::measured_money(amount) {
+        Some(v) => format!("{v:.0}Б"),
+        None => crate::ui::components::bike_card::DASH.to_string(),
+    }
+}
+
+/// The list's bonus badge: whole baht with a minus sign, or the dash.
+fn admin_badge_discount(amount: Option<f64>) -> String {
+    match crate::trios::pricing::measured_money(amount) {
+        Some(v) => format!("-{v:.0}Б"),
+        None => crate::ui::components::bike_card::DASH.to_string(),
+    }
+}
+
+/// The list's star badge: the count with a minus sign, or the dash.
+fn admin_badge_stars(count: Option<i64>) -> String {
+    match count.filter(|s| *s >= 0) {
+        Some(s) => format!("-{s}"),
+        None => crate::ui::components::bike_card::DASH.to_string(),
+    }
+}
+
+/// A CSV money cell: the measured figure, or an empty cell -- never a zero.
+fn admin_csv_money(amount: Option<f64>) -> String {
+    crate::trios::pricing::measured_money(amount).map_or_else(String::new, |v| v.to_string())
+}
+
+/// A CSV star cell: the count, or an empty cell -- never a zero.
+fn admin_csv_count(count: Option<i64>) -> String {
+    count
+        .filter(|s| *s >= 0)
+        .map_or_else(String::new, |v| v.to_string())
 }

@@ -19,7 +19,7 @@
 ; enumerates six and is missing preparing, out_for_delivery and delivered;
 ; src/ui/api/types.rs:179-189 enumerates nine that are not the same nine -- it adds processing and
 ; shipped and drops preparing and out_for_delivery; and two const ORDER_PIPELINE slices, at
-; src/ui/components/status_stepper.rs:16-23 and src/ui/screens/admin_screen.rs:2909-2916, carry the
+; src/trios/order_status_view.rs:65-72 and src/ui/screens/admin_screen.rs:2910-2917 (both re-pointed 2026-09-22: the first moved out of src/ui/components/status_stepper.rs that day, the second had drifted one line since 2c21df1), carry the
 ; same six display names and drop completed, rejected and cancelled. The matching count is the
 ; trap: nine equals nine and the write-path and UI sets still differ by four names, so any check
 ; written on totals alone reports agreement between two models that share only seven values. It is
@@ -36,7 +36,7 @@
 ; --
 ; WHERE THE BRIEF IS REFUTED (twice, both measured). First: src/trios/store.rs is not the second
 ; model of two, it is one of five, and counting READERS is itself the trap -- src/bot/callbacks.rs
-; is a reader, and so is every match arm in six UI screens, so the count rises with the next grep
+; is a reader, and so is every match arm in six UI screens (corrected 2026-09-22: four screens since then -- the orders list, the order detail screen and the stepper they share now read through src/trios/order_status_view.rs, whose arm_of is itself a reader), so the count rises with the next grep
 ; and settles nowhere. The countable thing is a declaration that CLOSES the vocabulary, and there
 ; are exactly five of those. The measurements below are therefore recorded per declaration, each
 ; with its own missing and extra list, instead of as one pairwise disagreement. Second, and
@@ -44,7 +44,7 @@
 ; src/api/orders.rs:1872 carries the in-source comment calling completed a legacy alias for
 ; delivered, which reads as completed being the alias. The write path runs the other way. Both
 ; names enter the same branch (src/api/orders.rs:1928) and that branch writes the literal
-; completed into the column at src/db/orders.rs:203 and :247. So delivered is accepted at the
+; completed into the column at src/db/orders.rs:229 and :273. So delivered is accepted at the
 ; door, routed, and never persisted by this path: the alias resolves delivered -> completed, and
 ; a reader who trusts the comment will look for stored rows that cannot exist.
 ; --
@@ -272,14 +272,14 @@ pub fn order_status_write_admitted(current: u8, requested: u8) bool {
 }
 
 ; --- The alias, which runs the other way ----------------------------------------------------------
-; src/api/orders.rs:1928 sends completed and delivered into one branch; src/db/orders.rs:203 and
-; :247 write the literal completed. Nothing in the shipped write path ever stores delivered.
+; src/api/orders.rs:1928 sends completed and delivered into one branch; src/db/orders.rs:229 and
+; :273 write the literal completed. Nothing in the shipped write path ever stores delivered.
 pub const ALIAS_ACCEPTED_NAME : str = "delivered";
 pub const ALIAS_PERSISTED_NAME : str = "completed";
 pub const IN_SOURCE_COMMENT_CALLS_COMPLETED_THE_ALIAS : bool = true;
 pub const IN_SOURCE_COMMENT_ALIAS_DIRECTION_IS_REVERSED : bool = true;
 pub const DELIVERED_IS_NEVER_PERSISTED_BY_THE_WRITE_PATH : bool = true;
-pub const ALIAS_NOTE : str = "src/api/orders.rs:1872 comments completed as a legacy alias for delivered, and src/ui/screens/admin_screen.rs:2907-2908 repeats the same sentence; the branch at :1928 and the writes at src/db/orders.rs:203 and :247 persist completed for both names, and no line under src/ writes the literal delivered, so the resolution is delivered -> completed and both comments name the wrong side.";
+pub const ALIAS_NOTE : str = "src/api/orders.rs:1872 comments completed as a legacy alias for delivered, and src/ui/screens/admin_screen.rs:2908-2909 repeats the same sentence (re-pointed 2026-09-22: one line of drift since 2c21df1); the branch at :1928 and the writes at src/db/orders.rs:229 and :273 persist completed for both names, and no line under src/ writes the literal delivered, so the resolution is delivered -> completed and both comments name the wrong side.";
 
 ; Every other accepted name is written verbatim by the generic branch at
 ; src/api/orders.rs:2114-2120, so preparing, ready and out_for_delivery are storable values and
@@ -434,13 +434,30 @@ pub fn order_status_models_agree(trios_variants: u8, trios_missing: u8, trios_ex
 ; The fourth and fifth declarations, and the only two that agree with each other. Both are a
 ; const ORDER_PIPELINE : &[&str] of the SAME six display names, so neither carries completed,
 ; rejected or cancelled -- the three names a reader most needs when an order has stopped moving.
-; src/ui/components/status_stepper.rs:16-23 only renders. The other one is not display-only:
-; src/ui/screens/admin_screen.rs:2909-2916 is read by next_pipeline_status at :2944-2948, and the
-; admin advance button PUTs whatever that returns to /api/orders/{id}/status at :3345-3365. They
-; are kept out of order_status_models_agree deliberately: that predicate pins the two declarations
-; that claim to TYPE the column, and these two claim to order it.
-pub const DISPLAY_PIPELINE_MODEL_A : str = "src/ui/components/status_stepper.rs:16-23";
-pub const DISPLAY_PIPELINE_MODEL_B : str = "src/ui/screens/admin_screen.rs:2909-2916";
+; The customer stepper's, src/trios/order_status_view.rs:65-72, only renders. The other one is
+; not display-only: src/ui/screens/admin_screen.rs:2910-2917 is read by next_pipeline_status at
+; :2945-2949, and the admin advance button PUTs whatever that returns to
+; /api/orders/{id}/status at :3346-3366. They are kept out of order_status_models_agree
+; deliberately: that predicate pins the two declarations that claim to TYPE the column, and these
+; two claim to order it.
+; CORRECTED 2026-09-22, two moves and no new declaration. FIRST, model A moved. It was a private
+; const of src/ui/components/status_stepper.rs:16-23, a file compiled only for wasm32, so no host
+; test could read it. It is now a pub const of src/trios/order_status_view.rs, the module
+; turbobaby/order-presentation owns, and the host tests there read THIS file's STATUS_NAMES,
+; DISPLAY_PIPELINE_MISSING_NAMES and DISPLAY_PIPELINE_VARIANT_COUNT and fail when its content
+; disagrees. The content is still this file's: the declaration moved, it was not written a second
+; time, so COLUMN_ENUMERATION_COUNT stays five. The same module's arm_of is a READER -- a match
+; with a fallback that answers every string -- and not a sixth declaration that closes the
+; vocabulary; gate 3 binds its arms set-equal to STATUS_NAMES and its terminal arms set-equal to
+; TERMINAL_NAMES, so it cannot drift from either in silence. SECOND, model B and the two admin
+; sites that go with it had drifted one line since 2c21df1 inserted an import above them, and are
+; re-pointed here and below.
+pub const DISPLAY_PIPELINE_MODEL_A : str = "src/trios/order_status_view.rs:65-72";
+pub const DISPLAY_PIPELINE_MODEL_A_BEFORE_REPAIR : str = "src/ui/components/status_stepper.rs:16-23";
+pub const DISPLAY_PIPELINE_MODEL_A_MOVED_AT : str = "2026-09-22";
+pub const DISPLAY_PIPELINE_MODEL_A_IS_HOST_COMPILED : bool = true;
+pub const DISPLAY_PIPELINE_MODEL_B : str = "src/ui/screens/admin_screen.rs:2910-2917";
+pub const ADMIN_SITES_REPOINTED_AT : str = "2026-09-22";
 pub const DISPLAY_PIPELINE_VARIANT_COUNT : u8 = 6;
 pub const DISPLAY_PIPELINE_MISSING_COUNT : u8 = 3;
 pub const DISPLAY_PIPELINE_MISSING_NAMES : [3]str = ["completed", "rejected", "cancelled"];
@@ -479,16 +496,17 @@ pub const NO_TRANSITION_EDGE_TABLE_NOTE : str = "No SERVER source constrains whi
 ; An earlier draft of this file said no source in this repository declares which status may
 ; follow which. That is refuted by one grep and the refutation is kept rather than the claim: an
 ; ORDERING does exist, it is client-side and nothing enforces it.
-; src/ui/screens/admin_screen.rs:2909-2916 lists six names in order, next_pipeline_status at
-; :2944-2948 returns the element after the current one and None past the end, and the advance
-; button at :3345-3365 PUTs exactly that name. So the admin UI walks pending -> confirmed ->
+; src/ui/screens/admin_screen.rs:2910-2917 lists six names in order, next_pipeline_status at
+; :2945-2949 returns the element after the current one and None past the end, and the advance
+; button at :3346-3366 PUTs exactly that name (all three re-pointed 2026-09-22, one line of drift
+; since 2c21df1). So the admin UI walks pending -> confirmed ->
 ; preparing -> ready -> out_for_delivery -> delivered and offers no other move, while the server
 ; accepts any of the nine in any direction. What is true is not that no order is declared; it is
 ; that no order is enforced, and that the one declared order stops at a name the write path never
 ; stores (ALIAS_ACCEPTED_NAME above).
 pub const CLIENT_SIDE_TRANSITION_ORDER_IS_SHIPPED : bool = true;
-pub const CLIENT_PIPELINE_SOURCE : str = "src/ui/screens/admin_screen.rs:2909-2916";
-pub const CLIENT_PIPELINE_ADVANCE_SOURCE : str = "src/ui/screens/admin_screen.rs:2944-2948";
+pub const CLIENT_PIPELINE_SOURCE : str = "src/ui/screens/admin_screen.rs:2910-2917";
+pub const CLIENT_PIPELINE_ADVANCE_SOURCE : str = "src/ui/screens/admin_screen.rs:2945-2949";
 pub const CLIENT_PIPELINE_LENGTH : u8 = 6;
 pub const CLIENT_PIPELINE_IS_ENFORCED_ANYWHERE : bool = false;
 pub const CLIENT_PIPELINE_LAST_NAME : str = "delivered";
@@ -672,8 +690,13 @@ test order_status_five_declarations_of_one_column_carry_four_vocabularies {
   assert TYPED_MODELS_AGREE == false;
   assert TYPED_MODELS_AGREE == order_status_models_agree(TRIOS_STORE_VARIANT_COUNT, TRIOS_STORE_MISSING_COUNT, TRIOS_STORE_EXTRA_COUNT, UI_TYPES_VARIANT_COUNT, UI_TYPES_MISSING_COUNT, UI_TYPES_EXTRA_COUNT);
   ; The fourth and fifth, which the first draft of this file did not count at all.
-  assert DISPLAY_PIPELINE_MODEL_A == "src/ui/components/status_stepper.rs:16-23";
-  assert DISPLAY_PIPELINE_MODEL_B == "src/ui/screens/admin_screen.rs:2909-2916";
+  assert DISPLAY_PIPELINE_MODEL_A == "src/trios/order_status_view.rs:65-72";
+  assert DISPLAY_PIPELINE_MODEL_A_BEFORE_REPAIR == "src/ui/components/status_stepper.rs:16-23";
+  assert DISPLAY_PIPELINE_MODEL_A != DISPLAY_PIPELINE_MODEL_A_BEFORE_REPAIR;
+  assert DISPLAY_PIPELINE_MODEL_A_MOVED_AT == "2026-09-22";
+  assert DISPLAY_PIPELINE_MODEL_A_IS_HOST_COMPILED == true;
+  assert DISPLAY_PIPELINE_MODEL_B == "src/ui/screens/admin_screen.rs:2910-2917";
+  assert ADMIN_SITES_REPOINTED_AT == "2026-09-22";
   assert DISPLAY_PIPELINE_VARIANT_COUNT == 6;
   assert DISPLAY_PIPELINE_MISSING_NAMES.len == DISPLAY_PIPELINE_MISSING_COUNT;
   assert DISPLAY_PIPELINE_MISSING_NAMES[0] == "completed";

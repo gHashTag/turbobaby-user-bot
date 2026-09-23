@@ -160,7 +160,7 @@ pub struct Order {
     pub id: String,
     pub telegram_id: i64,
     pub items: Vec<OrderItem>,
-    pub total: f64,
+    pub total: Option<f64>,
     pub status: OrderStatus,
     pub created_at: String,
     pub updated_at: Option<String>,

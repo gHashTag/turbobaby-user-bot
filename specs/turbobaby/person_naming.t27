@@ -7,6 +7,11 @@
 ; fallback must be recognisable AS a fallback, and the rule that an identifier is not a name. It
 ; owns no wording in any language, no locale, no identity proof, no gate, no price and no screen
 ; layout: four sibling contracts own those and are named by ID below, not one of them restated.
+; Nor does it own the attendee normaliser's handle-length bound: turbobaby/events-booking owns
+; that, and a fifth edge below names it. (Corrected 2026-09-22: until then this header counted
+; four edges while the file held that fifth owner's ID in a constant outside its edge block and
+; restated its bound in four constants and three functions of its own -- restating an owner,
+; which the sentence above says this file does to none of the four it names.)
 ; --
 ; WHY (measured 2026-09-21). src/trios/person.rs is 345 lines that no contract named, and the
 ; subject it decides had already produced the defect its own header describes: the friends panel
@@ -87,8 +92,13 @@ pub const OWNER_MODULE : str = "src/trios/person.rs";
 pub const OWNER_MODULE_LINES : u16 = 345;
 pub const OWNER_MODULE_TESTS : u8 = 9;
 pub const SIBLING_MODULE : str = "src/trios/attendees.rs";
-pub const SIBLING_MODULE_LINES : u16 = 357;
-pub const SIBLING_MODULE_TESTS : u8 = 16;
+; The sibling module's size is not recorded here. Its length and its test count are
+; turbobaby/events-booking's ATTENDEE_SOURCE_LINES and ATTENDEE_SOURCE_TESTS, and
+; scripts/verify_t27_against_source.py binds both to the file. Until 2026-09-22 two constants
+; stood here instead, bound by nothing: SIBLING_MODULE_LINES, a copy of the owner's line count,
+; and SIBLING_MODULE_TESTS, a test count the owner did not hold until it moved there that day.
+; An edit that changed that module's length would have turned the owner red and left this file
+; silent.
 pub const CONSUMING_QUERY : str = "src/db/referrals.rs get_invitees";
 pub const CONSUMING_SCREEN : str = "src/ui/pages/referrals.rs invitee_row";
 pub const WRITER : str = "src/db/mod.rs:951 save_user_identity";
@@ -98,20 +108,29 @@ pub const STRING_TABLE_SOURCE : str = "src/trios/i18n.rs";
 pub const END_TO_END_WITNESS : str = "tests/integration_invitee_names.rs";
 
 ; --- Ownership edges ----------------------------------------------------------------------------
-; Four OUTBOUND edges. This language has no import, so an edge is the owner's ID held as a string
+; Five OUTBOUND edges. This language has no import, so an edge is the owner's ID held as a string
 ; constant plus a test asserting the literal -- the one shape a grep finds from either end. Each
 ; note names the sibling's DECLARATION, never a line in it: a line citation goes stale on the
 ; sibling's next edit and says nothing when it does.
+;
+; CORRECTED 2026-09-22. This block said four and REUSE_EDGE_COUNT read 4. Further down, a
+; constant named HANDLE_BOUND_IS_ALREADY_OWNED_BY already held turbobaby/events-booking as the
+; owner of a decision this file leaned on -- an outbound edge in every respect but its name and
+; its place, kept outside this block and beside four constants and three functions restating
+; that owner's bound. REUSE_EDGE_COUNT counts the REUSES_ constants in this block and nothing
+; else; the fifth is one of them now, and that constant is gone.
 pub const REUSES_REQUEST_IDENTITY_ID : str = "turbobaby/request-identity";
 pub const REUSES_LOCALE_POLICY_ID : str = "turbobaby/locale-policy";
 pub const REUSES_PRICING_HONESTY_ID : str = "turbobaby/pricing-honesty";
 pub const REUSES_CUSTOMER_SURFACE_ID : str = "turbobaby/customer-surface";
-pub const REUSE_EDGE_COUNT : u8 = 4;
+pub const REUSES_EVENTS_BOOKING_ID : str = "turbobaby/events-booking";
+pub const REUSE_EDGE_COUNT : u8 = 5;
 
 pub const REQUEST_IDENTITY_SUPPLIES : str = "turbobaby/request-identity owns identity_of_request, IDENTITY_TELEGRAM_USER, FAILED_PROOF_YIELDS_NO_USER and GATE_NAMES. WHO a request is arrives here as a decided identity; this file adds only that the identity is not a name, and restates no proof step, no gate and no call-site count.";
 pub const LOCALE_POLICY_SUPPLIES : str = "turbobaby/locale-policy owns locale_is_published, PRIMARY_LOCALE, PUBLISHED_LOCALES, BARE_KEY_FALLBACK_SITES and TABLES_END_WITH_BARE_KEY_FALLBACK. The fallback word is a key looked up in that file's tables, and what an absent key renders as is its ruling, not this one's.";
 pub const PRICING_HONESTY_SUPPLIES : str = "turbobaby/pricing-honesty owns RATE_INVALID, rate_absent, is_present, render and NOT_AN_AMOUNT_THB_DAY. The discipline borrowed is the SHAPE -- a tag set where 0 is not constructible, absence with no value slot, and a total renderer -- applied here to a string instead of a number. No rate, tag value or money field of that contract is repeated.";
 pub const CUSTOMER_SURFACE_SUPPLIES : str = "turbobaby/customer-surface owns claim_may_render, screen_may_supply_its_own_number and CLAIM_UNSOURCED_NUMBER. Whether a screen may assert a thing at all is its ruling; this file decides only what string may stand in the name slot once the screen is allowed to speak.";
+pub const EVENTS_BOOKING_SUPPLIES : str = "turbobaby/events-booking owns the attendee normaliser's handle-length bound, as its comment states it and as its check enforces it, in HANDLE_MIN_DECLARED, HANDLE_MIN_ENFORCED, HANDLE_MAX_DECLARED, HANDLE_MAX_ENFORCED, handle_is_accepted, handle_bounds_agree and length_is_in_the_handle_gap; why the gap between those two readings stayed green, in HANDLE_GAP_EXAMPLES_IN_TESTS and HANDLE_OVER_MAX_EXAMPLES_IN_TESTS; and the module's measured size, in ATTENDEE_SOURCE_LINES and ATTENDEE_SOURCE_TESTS. Whether a value is admitted, and whether it sits below the declared minimum, arrive here as two booleans. No bound, length or count of that contract is repeated here. What stays here is what that contract does not carry: that the normaliser and this file's owner module answer the same input differently, and that only one of them turns its answer into a link.";
 
 ; The consumer census on the identity side is a 22-element array measured on 2026-09-21, and this
 ; contract is not in it -- not because the edge is missing but because this file did not exist when
@@ -430,37 +449,52 @@ pub const ATTENDEE_BUILDS_A_URL_FROM_A_HANDLE : bool = true;
 pub const THE_TWO_HANDLE_RULES_AGREE : bool = false;
 pub const HANDLE_RULE_DIVERGENCE_NOTE : str = "A value carrying two leading markers is refused by the owner, whose comment argues that such a value was prefixed twice and that normalising it away would hide the fact, and is admitted by the attendee normaliser, which trims the class rather than one character. Same input, two answers, one file apart.";
 
-; THE REVIEWER'S CLAIM, CHECKED AND CONFIRMED. The attendee normaliser's own comment states the
-; platform range as five through thirty-two. The check below it tests the upper bound only, and the
-; test that exercises it offers a single over-length example and no under-length one. So a value of
-; one to four characters is admitted, turned into a profile link, and reported as reachable -- the
-; exact dead tap the comment says the check exists to prevent, produced by the half of the range
-; the check omits.
-pub const ATTENDEE_HANDLE_LOWER_BOUND_STATED : u8 = 5;
-pub const ATTENDEE_HANDLE_UPPER_BOUND_STATED : u8 = 32;
-pub const ATTENDEE_HANDLE_LOWER_BOUND_ENFORCED : bool = false;
-pub const ATTENDEE_HANDLE_UPPER_BOUND_ENFORCED : bool = true;
-pub const ATTENDEE_HANDLE_TESTS_COVER_THE_LOWER_BOUND : bool = false;
-pub const ATTENDEE_HANDLE_LENGTH_EXAMPLES_IN_TESTS : u8 = 1;
+; THE REVIEWER'S CLAIM, CHECKED, CONFIRMED -- AND ANSWERED BY ITS OWNER. A review of 2026-09-21
+; claimed that the attendee normaliser's length check guards one end of the two-ended range its
+; own comment states, so a value shorter than the stated minimum is admitted, turned into a profile
+; link and reported as reachable -- the exact dead tap the comment says the check exists to
+; prevent. The claim was checked against src/trios/attendees.rs and confirmed. What this file keeps
+; is the record that the check was made. The bound itself, both of its readings and what the
+; module's tests do and do not offer it are turbobaby/events-booking's, under the declaration
+; names in EVENTS_BOOKING_SUPPLIES.
 pub const REVIEWER_CLAIM_IS_CONFIRMED : bool = true;
-pub const REVIEWER_CLAIM_NOTE : str = "Confirmed by reading src/trios/attendees.rs: the comment states a five-through-thirty-two range, the condition guards only the upper end, and the negative test supplies one over-length example. Nothing in that module rejects a value shorter than the stated minimum.";
+pub const REVIEWER_CLAIM_NOTE : str = "Confirmed 2026-09-21 by reading src/trios/attendees.rs. The bound the claim concerns is turbobaby/events-booking's, declared there as HANDLE_MIN_DECLARED against HANDLE_MIN_ENFORCED; this note records that the claim was checked and holds no reading of the bound, so a fix to the check has one contract to correct and not two.";
 
-; AND THE FINDING WAS ALREADY OWNED, which the first draft of this block did not know and which
-; is recorded here rather than quietly kept. turbobaby/events-booking holds this same bound under
-; HANDLE_MIN_DECLARED, HANDLE_MIN_ENFORCED, HANDLE_MAX_DECLARED and HANDLE_MAX_ENFORCED, with
-; handle_is_accepted and handle_bounds_agree for the two readings and an invariant pinning their
-; disagreement, and it cites the same two lines of the same module. So the four constants and
-; three functions above are a RESTATEMENT, not a consumption, and a restatement that nothing
-; pointed at is the one kind this corpus forbids outright: two owners drift apart silently and a
-; later reader fixes whichever copy the grep happened to find. This file does not delete the
-; owner's block and does not delete its own -- resolving the overlap is the two owners' call, not
-; a reviewer's -- but the overlap is now declared, named by owner ID and by declaration name, so a
-; grep from either end lands on the other. What is NOT duplicated is the rest of this section: the
-; divergence between the two handle rules one file apart, and the consequence that only one of
-; them builds a URL, are this file's own and appear nowhere in that contract.
-pub const HANDLE_BOUND_IS_ALREADY_OWNED_BY : str = "turbobaby/events-booking";
-pub const THIS_FILE_RESTATES_THE_HANDLE_BOUND : bool = true;
-pub const HANDLE_BOUND_IS_CONSUMED_RATHER_THAN_RESTATED : bool = false;
+; THE OVERLAP, AND HOW IT WAS RESOLVED. Found 2026-09-21: this file restated that bound in four
+; constants and three functions, with a test and an invariant over them, while
+; turbobaby/events-booking already held it under the six declarations listed below, cited the same
+; two lines of the same module, and pinned the disagreement between its two readings with an
+; invariant of its own. The overlap was at first only DECLARED -- this block then said "resolving
+; the overlap is the two owners' call, not a reviewer's" -- which left two present-tense copies
+; that a fix to the check would have had to find in two files, and it named the owner in a
+; constant of its own instead of in the edge block.
+;
+; RESOLVED 2026-09-22 in the one direction the corpus allows: the copy goes, the owner stays, and
+; the owner is named by REUSES_EVENTS_BOOKING_ID in the edge block. The seven restated
+; declarations are listed by NAME in RESTATEMENT_DROPPED_ON_RESOLUTION, so a grep for any of them
+; lands here; the eighth name there is SIBLING_MODULE_LINES from the source block, the same copy
+; one step removed. The constant that used to name the owner is named in SUPERSEDED_BY_THE_EDGE.
+; Three facts this file held and its owner did NOT were not dropped: they moved to the owner,
+; under the names in FACTS_MOVED_TO_THE_OWNER, because a fix to the check flips them and the owner
+; is where a gate watches that module. Two were renamed on arrival to what was actually measured.
+; The old "one length example" was one OVER-length example, and "the tests cover the lower bound"
+; is asked there of the gap between the two minima: length zero IS tested, and the emptiness
+; check refuses it before any length is compared, so it tests neither minimum.
+;
+; The gate-1 floor for this file in scripts/verify_t27_specs.py fell on the same day, from 239
+; declarations to 235, measured with the pinned compiler after this resolution; its check floor
+; did not move. D16 keeps a floor so that a gate losing sight of what it checks goes red;
+; declarations removed on purpose and listed by name above are not that.
+;
+; What is NOT the owner's is the section above this one: the divergence between the two handle
+; rules one file apart, and the consequence that only one of them builds a URL. That stays, and
+; the predicate below consumes the owner's verdict. OWNER_HANDLE_MAX_CHARS and
+; OWNER_HANDLE_MIN_CHARS_ENFORCED stay too. They describe src/trios/person.rs, this file's own
+; owner module, whose check at src/trios/person.rs:74 enforces a non-empty floor and a maximum of
+; MAX_HANDLE_LEN (src/trios/person.rs:50). That module builds no link and is not the attendee
+; module, so these two are not the attendee bound, and this file does not compare them with it.
+pub const THIS_FILE_RESTATES_THE_HANDLE_BOUND : bool = false;
+pub const HANDLE_BOUND_IS_CONSUMED_RATHER_THAN_RESTATED : bool = true;
 pub const HANDLE_BOUND_OWNER_DECLARATION_COUNT : u8 = 6;
 pub const HANDLE_BOUND_OWNER_DECLARATIONS : [6]str = [
   "HANDLE_MIN_DECLARED",
@@ -471,24 +505,34 @@ pub const HANDLE_BOUND_OWNER_DECLARATIONS : [6]str = [
   "handle_bounds_agree",
 ];
 pub const HANDLE_BOUND_OVERLAP_FOUND_AT : str = "2026-09-21";
+pub const HANDLE_BOUND_OVERLAP_RESOLVED_AT : str = "2026-09-22";
 pub const HANDLE_DIVERGENCE_IS_OWNED_ONLY_HERE : bool = true;
-
-; As implemented.
-pub fn attendee_handle_admits(char_len: u8) bool {
-  return char_len >= 1 and char_len <= ATTENDEE_HANDLE_UPPER_BOUND_STATED;
-}
-
-; As the comment above it claims.
-pub fn attendee_handle_admits_as_stated(char_len: u8) bool {
-  return char_len >= ATTENDEE_HANDLE_LOWER_BOUND_STATED and char_len <= ATTENDEE_HANDLE_UPPER_BOUND_STATED;
-}
-
-pub fn implementation_matches_its_comment(char_len: u8) bool {
-  return attendee_handle_admits(char_len) == attendee_handle_admits_as_stated(char_len);
-}
+pub const RESTATEMENT_DROPPED_COUNT : u8 = 8;
+pub const RESTATEMENT_DROPPED_ON_RESOLUTION : [8]str = [
+  "ATTENDEE_HANDLE_LOWER_BOUND_STATED",
+  "ATTENDEE_HANDLE_UPPER_BOUND_STATED",
+  "ATTENDEE_HANDLE_LOWER_BOUND_ENFORCED",
+  "ATTENDEE_HANDLE_UPPER_BOUND_ENFORCED",
+  "attendee_handle_admits",
+  "attendee_handle_admits_as_stated",
+  "implementation_matches_its_comment",
+  "SIBLING_MODULE_LINES",
+];
+pub const SUPERSEDED_BY_THE_EDGE : str = "HANDLE_BOUND_IS_ALREADY_OWNED_BY";
+pub const FACTS_MOVED_COUNT : u8 = 3;
+pub const FACTS_MOVED_TO_THE_OWNER : [3]str = [
+  "ATTENDEE_HANDLE_TESTS_COVER_THE_LOWER_BOUND is now HANDLE_GAP_EXAMPLES_IN_TESTS",
+  "ATTENDEE_HANDLE_LENGTH_EXAMPLES_IN_TESTS is now HANDLE_OVER_MAX_EXAMPLES_IN_TESTS",
+  "SIBLING_MODULE_TESTS is now ATTENDEE_SOURCE_TESTS",
+];
 
 ; A tap the screen promises and the platform cannot keep. Marked reachable is a claim about the
-; world, and this is the input on which the claim is false.
+; world, and this is the input on which the claim is false. Both arguments are the OWNER's
+; verdict, consumed and not recomputed: `admitted` is what turbobaby/events-booking's
+; handle_is_accepted answers for the value, and `below_the_stated_minimum` is whether its length
+; falls under that contract's HANDLE_MIN_DECLARED -- the two together are its
+; length_is_in_the_handle_gap. Until 2026-09-22 the tests below fed this from a local copy of the
+; check; they now feed it the two booleans, which is all this file is entitled to know.
 pub fn tap_is_promised_but_cannot_resolve(admitted: bool, below_the_stated_minimum: bool) bool {
   return admitted and below_the_stated_minimum;
 }
@@ -733,41 +777,62 @@ test the_end_to_end_witness_does_not_run_unless_it_is_asked {
   assert WITNESS_NEEDS_A_DATABASE == true;
 }
 
-test the_attendee_length_check_guards_one_end_of_a_two_ended_range {
-  assert attendee_handle_admits(1) == true;
-  assert attendee_handle_admits_as_stated(1) == false;
-  assert implementation_matches_its_comment(1) == false;
-  assert implementation_matches_its_comment(4) == false;
-  assert implementation_matches_its_comment(5) == true;
-  assert implementation_matches_its_comment(32) == true;
-  assert implementation_matches_its_comment(33) == true;
-  assert ATTENDEE_HANDLE_LOWER_BOUND_ENFORCED == false;
-  assert ATTENDEE_HANDLE_UPPER_BOUND_ENFORCED == true;
+; Replaced 2026-09-22. This read the_attendee_length_check_guards_one_end_of_a_two_ended_range and
+; ran over a local copy of the check. The two readings of the bound are turbobaby/events-booking's;
+; what stays here is the record of the claim and where its facts went.
+test the_reviewers_claim_is_a_record_and_not_a_reading_of_the_bound {
   assert REVIEWER_CLAIM_IS_CONFIRMED == true;
+  assert REVIEWER_CLAIM_NOTE != "";
+  assert FACTS_MOVED_TO_THE_OWNER.len == FACTS_MOVED_COUNT;
+  assert FACTS_MOVED_TO_THE_OWNER[0] == "ATTENDEE_HANDLE_TESTS_COVER_THE_LOWER_BOUND is now HANDLE_GAP_EXAMPLES_IN_TESTS";
+  assert FACTS_MOVED_TO_THE_OWNER[1] == "ATTENDEE_HANDLE_LENGTH_EXAMPLES_IN_TESTS is now HANDLE_OVER_MAX_EXAMPLES_IN_TESTS";
+  assert FACTS_MOVED_TO_THE_OWNER[2] == "SIBLING_MODULE_TESTS is now ATTENDEE_SOURCE_TESTS";
 }
 
-; The overlap, asserted so that neither owner can lose it to an edit of the other.
-test the_handle_bound_above_is_a_restatement_of_a_fact_another_contract_owns {
-  assert HANDLE_BOUND_IS_ALREADY_OWNED_BY == "turbobaby/events-booking";
-  assert HANDLE_BOUND_IS_ALREADY_OWNED_BY != ID;
-  assert THIS_FILE_RESTATES_THE_HANDLE_BOUND == true;
-  assert HANDLE_BOUND_IS_CONSUMED_RATHER_THAN_RESTATED == false;
+; The resolution, asserted so that neither contract can undo it by an edit of the other. RENAMED
+; 2026-09-22: this read the_handle_bound_above_is_a_restatement_of_a_fact_another_contract_owns and
+; asserted that the restatement stood. It is a self-report -- the assertion gate reads one file at
+; a time and cannot see that a declaration is absent -- so the absence itself is pinned outside the
+; corpus, by tests/person_naming_handle_edge_wiring.rs, which names every dropped declaration and
+; resolves every consumed one in the owner.
+test the_handle_bound_is_consumed_from_its_owner_and_not_restated {
+  assert REUSES_EVENTS_BOOKING_ID == "turbobaby/events-booking";
+  assert REUSES_EVENTS_BOOKING_ID != ID;
+  assert REUSE_EDGE_COUNT == 5;
+  assert THIS_FILE_RESTATES_THE_HANDLE_BOUND == false;
+  assert HANDLE_BOUND_IS_CONSUMED_RATHER_THAN_RESTATED == true;
   assert HANDLE_BOUND_OWNER_DECLARATIONS.len == HANDLE_BOUND_OWNER_DECLARATION_COUNT;
   assert HANDLE_BOUND_OWNER_DECLARATIONS[0] == "HANDLE_MIN_DECLARED";
   assert HANDLE_BOUND_OWNER_DECLARATIONS[1] == "HANDLE_MIN_ENFORCED";
+  assert HANDLE_BOUND_OWNER_DECLARATIONS[2] == "HANDLE_MAX_DECLARED";
+  assert HANDLE_BOUND_OWNER_DECLARATIONS[3] == "HANDLE_MAX_ENFORCED";
   assert HANDLE_BOUND_OWNER_DECLARATIONS[4] == "handle_is_accepted";
   assert HANDLE_BOUND_OWNER_DECLARATIONS[5] == "handle_bounds_agree";
   assert HANDLE_BOUND_OVERLAP_FOUND_AT == "2026-09-21";
-  ; The divergence between the two modules is the part that is not restated anywhere.
+  assert HANDLE_BOUND_OVERLAP_RESOLVED_AT == "2026-09-22";
+  assert RESTATEMENT_DROPPED_ON_RESOLUTION.len == RESTATEMENT_DROPPED_COUNT;
+  assert RESTATEMENT_DROPPED_ON_RESOLUTION[0] == "ATTENDEE_HANDLE_LOWER_BOUND_STATED";
+  assert RESTATEMENT_DROPPED_ON_RESOLUTION[1] == "ATTENDEE_HANDLE_UPPER_BOUND_STATED";
+  assert RESTATEMENT_DROPPED_ON_RESOLUTION[2] == "ATTENDEE_HANDLE_LOWER_BOUND_ENFORCED";
+  assert RESTATEMENT_DROPPED_ON_RESOLUTION[3] == "ATTENDEE_HANDLE_UPPER_BOUND_ENFORCED";
+  assert RESTATEMENT_DROPPED_ON_RESOLUTION[4] == "attendee_handle_admits";
+  assert RESTATEMENT_DROPPED_ON_RESOLUTION[5] == "attendee_handle_admits_as_stated";
+  assert RESTATEMENT_DROPPED_ON_RESOLUTION[6] == "implementation_matches_its_comment";
+  assert RESTATEMENT_DROPPED_ON_RESOLUTION[7] == "SIBLING_MODULE_LINES";
+  assert SUPERSEDED_BY_THE_EDGE == "HANDLE_BOUND_IS_ALREADY_OWNED_BY";
   assert HANDLE_DIVERGENCE_IS_OWNED_ONLY_HERE == true;
   assert THE_TWO_HANDLE_RULES_AGREE == false;
 }
 
+; Rewritten 2026-09-22 without changing its name. A "short value" here is the owner's verdict on
+; one -- admitted by its handle_is_accepted and below its HANDLE_MIN_DECLARED -- and no longer a
+; length this file computes; the lengths themselves are asserted in turbobaby/events-booking.
 test a_short_value_becomes_a_link_the_platform_cannot_honour {
-  assert tap_is_promised_but_cannot_resolve(attendee_handle_admits(1), true) == true;
-  assert tap_is_promised_but_cannot_resolve(attendee_handle_admits(5), false) == false;
-  assert ATTENDEE_HANDLE_TESTS_COVER_THE_LOWER_BOUND == false;
-  assert ATTENDEE_HANDLE_LENGTH_EXAMPLES_IN_TESTS == 1;
+  assert tap_is_promised_but_cannot_resolve(true, true) == true;
+  assert tap_is_promised_but_cannot_resolve(true, false) == false;
+  assert tap_is_promised_but_cannot_resolve(false, true) == false;
+  assert ATTENDEE_BUILDS_A_URL_FROM_A_HANDLE == true;
+  assert OWNER_BUILDS_A_URL_FROM_A_HANDLE == false;
 }
 
 test the_two_handle_rules_are_two_rules {
@@ -808,20 +873,23 @@ test three_measurements_are_refused_rather_than_estimated {
   assert absence_of_a_measurement_is_a_measurement(false, true) == false;
 }
 
-; The four edges, asserted rather than merely written. Without an import form a REUSES_ string is
+; The five edges, asserted rather than merely written. Without an import form a REUSES_ string is
 ; the only way one contract names another's territory, and a string nothing checks is a comment
 ; with a type. Each inequality is the cheap guard against a copy-paste that would point an edge
-; back at this file and make a loop read as a dependency.
-test the_four_edges_are_named_by_owner_id {
+; back at this file and make a loop read as a dependency. RENAMED 2026-09-22 from
+; the_four_edges_are_named_by_owner_id, when the fifth edge moved into the block.
+test the_five_edges_are_named_by_owner_id {
   assert REUSES_REQUEST_IDENTITY_ID == "turbobaby/request-identity";
   assert REUSES_LOCALE_POLICY_ID == "turbobaby/locale-policy";
   assert REUSES_PRICING_HONESTY_ID == "turbobaby/pricing-honesty";
   assert REUSES_CUSTOMER_SURFACE_ID == "turbobaby/customer-surface";
-  assert REUSE_EDGE_COUNT == 4;
+  assert REUSES_EVENTS_BOOKING_ID == "turbobaby/events-booking";
+  assert REUSE_EDGE_COUNT == 5;
   assert REUSES_REQUEST_IDENTITY_ID != ID;
   assert REUSES_LOCALE_POLICY_ID != ID;
   assert REUSES_PRICING_HONESTY_ID != ID;
   assert REUSES_CUSTOMER_SURFACE_ID != ID;
+  assert REUSES_EVENTS_BOOKING_ID != ID;
 }
 
 test the_identity_edge_uses_the_declaration_name_that_side_publishes {
@@ -883,11 +951,16 @@ invariant the_census_must_account_for_every_site_it_counts
 invariant a_stand_in_substituted_for_a_failed_read_is_named_as_hiding_one
   assert stand_in_hides_an_error(true, true) == true and stand_in_hides_an_error(false, true) == false
 
-invariant the_stated_handle_range_and_the_enforced_one_are_not_the_same_range
-  assert implementation_matches_its_comment(1) == false and implementation_matches_its_comment(5) == true
+; Replaced 2026-09-22. This read the_stated_handle_range_and_the_enforced_one_are_not_the_same_range
+; over a local copy of the check. That disagreement is turbobaby/events-booking's, pinned there by
+; the_handle_lower_bound_is_declared_and_not_enforced; what this file keeps is the consequence.
+invariant an_admitted_value_below_the_stated_minimum_is_a_tap_that_cannot_resolve
+  assert tap_is_promised_but_cannot_resolve(true, true) == true and tap_is_promised_but_cannot_resolve(false, true) == false
 
-invariant the_handle_bound_stays_marked_as_another_contracts_fact_until_one_copy_goes
-  assert THIS_FILE_RESTATES_THE_HANDLE_BOUND == true and HANDLE_BOUND_IS_CONSUMED_RATHER_THAN_RESTATED == false and HANDLE_BOUND_IS_ALREADY_OWNED_BY != ID
+; Renamed 2026-09-22: this read the_handle_bound_stays_marked_as_another_contracts_fact_until_one_copy_goes,
+; and one copy went.
+invariant the_handle_bound_is_named_by_its_owner_and_never_restated_here
+  assert THIS_FILE_RESTATES_THE_HANDLE_BOUND == false and HANDLE_BOUND_IS_CONSUMED_RATHER_THAN_RESTATED == true and REUSES_EVENTS_BOOKING_ID != ID
 
 invariant three_figures_stay_refused_rather_than_estimated
   assert absence_of_a_measurement_is_a_measurement(UNNAMED_ROW_COUNT_IS_KNOWN, false) == true and absence_of_a_measurement_is_a_measurement(BACKFILL_COVERAGE_IS_KNOWN, false) == true and absence_of_a_measurement_is_a_measurement(COLLISION_RATE_IS_KNOWN, false) == true
@@ -896,4 +969,4 @@ invariant no_person_appears_in_this_contract
   assert PERSON_NAMES_IN_THIS_FILE == 0 and HANDLES_IN_THIS_FILE == 0 and IDENTIFIERS_IN_THIS_FILE == 0 and TEST_FIXTURES_CARRY_A_PERSON == false
 
 invariant every_edge_names_another_contract_and_never_this_one
-  assert REUSES_REQUEST_IDENTITY_ID != ID and REUSES_LOCALE_POLICY_ID != ID and REUSES_PRICING_HONESTY_ID != ID and REUSES_CUSTOMER_SURFACE_ID != ID
+  assert REUSES_REQUEST_IDENTITY_ID != ID and REUSES_LOCALE_POLICY_ID != ID and REUSES_PRICING_HONESTY_ID != ID and REUSES_CUSTOMER_SURFACE_ID != ID and REUSES_EVENTS_BOOKING_ID != ID

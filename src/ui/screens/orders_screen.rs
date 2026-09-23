@@ -1,11 +1,9 @@
 use crate::trios::i18n::{
     t, tf, T_ORDERS_BROWSE_BIKES, T_ORDERS_FILTER_ACTIVE, T_ORDERS_FILTER_ALL,
     T_ORDERS_FILTER_CANCELLED, T_ORDERS_FILTER_COMPLETED, T_ORDERS_HISTORY, T_ORDERS_NO_ORDERS,
-    T_ORDERS_ORDER, T_ORDERS_STATUS_CANCELLED, T_ORDERS_STATUS_CONFIRMED,
-    T_ORDERS_STATUS_DELIVERED, T_ORDERS_STATUS_OUT_FOR_DELIVERY, T_ORDERS_STATUS_PENDING,
-    T_ORDERS_STATUS_PREPARING, T_ORDERS_STATUS_READY, T_ORDERS_STATUS_UNKNOWN, T_ORDERS_TITLE,
-    T_REORDER,
+    T_ORDERS_ORDER, T_ORDERS_TITLE, T_REORDER,
 };
+use crate::trios::order_status_view::{arm_of, StatusChip};
 use crate::ui::api::context::api_base_url;
 use crate::ui::api::http::merge_server_cart;
 use crate::ui::components::bottom_nav::BottomNav;
@@ -24,7 +22,8 @@ use serde::Deserialize;
 struct ApiOrder {
     id: String,
     items: Vec<ApiOrderItem>,
-    total: f64,
+    #[serde(default)]
+    total: Option<f64>,
     status: String,
     created_at: String,
     shop_id: Option<String>,
@@ -124,32 +123,6 @@ struct OrdersResponse {
     orders: Vec<ApiOrder>,
 }
 
-fn status_color(status: &str) -> &'static str {
-    match status.to_lowercase().as_str() {
-        "pending" => "#ffe600",
-        "confirmed" => "#00e5ff",
-        "preparing" => "#ff9d00",
-        "ready" => "#39ff14",
-        "out_for_delivery" => "#00e5ff",
-        "completed" | "delivered" => "#39ff14",
-        "cancelled" | "rejected" => "#ff4757",
-        _ => "#8b8b9e",
-    }
-}
-
-fn status_label_key(status: &str) -> crate::trios::i18n::Key {
-    match status.to_lowercase().as_str() {
-        "pending" => T_ORDERS_STATUS_PENDING,
-        "confirmed" => T_ORDERS_STATUS_CONFIRMED,
-        "preparing" => T_ORDERS_STATUS_PREPARING,
-        "ready" => T_ORDERS_STATUS_READY,
-        "out_for_delivery" => T_ORDERS_STATUS_OUT_FOR_DELIVERY,
-        "completed" | "delivered" => T_ORDERS_STATUS_DELIVERED,
-        "cancelled" | "rejected" => T_ORDERS_STATUS_CANCELLED,
-        _ => T_ORDERS_STATUS_UNKNOWN,
-    }
-}
-
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum StatusFilter {
     All,
@@ -169,17 +142,14 @@ impl StatusFilter {
         t(lang, key).to_string()
     }
     fn matches(&self, status: &str) -> bool {
+        let chip = arm_of(status).chip();
         match self {
             Self::All => true,
-            Self::Active => !is_terminal_status(status),
-            Self::Completed => status == "completed" || status == "delivered",
-            Self::Cancelled => status == "cancelled" || status == "rejected",
+            Self::Active => chip == StatusChip::Active,
+            Self::Completed => chip == StatusChip::Completed,
+            Self::Cancelled => chip == StatusChip::Cancelled,
         }
     }
-}
-
-fn is_terminal_status(status: &str) -> bool {
-    matches!(status, "delivered" | "completed" | "rejected" | "cancelled")
 }
 
 // Здесь жили ReviewFormProps и ReviewForm — модальная форма отзыва на сорт.
@@ -298,15 +268,16 @@ pub fn OrdersScreen() -> Element {
                                     {
                                         let o = order.clone();
                                         let short_id: String = o.id.chars().rev().take(6).collect::<Vec<_>>().into_iter().rev().collect();
-                                        let status_color = status_color(&o.status);
-                                        let status_label = t(lang, status_label_key(&o.status));
+                                        let arm = arm_of(&o.status);
+                                        let status_color = arm.color();
+                                        let status_label = t(lang, arm.label_key());
                                         let date_str = o.created_at.split('T').next().unwrap_or(&o.created_at).to_string();
                                         let shop = o.shop_id.as_deref().unwrap_or("TurboBaby");
-                                        let total_str = crate::trios::pricing::format_baht(o.total);
-                                        let is_cancelled = o.status == "cancelled" || o.status == "rejected";
+                                        let total_str = crate::trios::pricing::order_total_text(o.total, crate::ui::components::bike_card::DASH);
+                                        let is_cancelled = arm.chip() == StatusChip::Cancelled;
                                         let opacity = if is_cancelled { "0.7" } else { "1" };
                                         let border_color = if is_cancelled { "#2a2a4a" } else { status_color };
-                                        let is_active = !is_terminal_status(&o.status);
+                                        let is_active = !arm.is_terminal();
                                         let shadow = if is_active { "4px 4px 0 #000, 0 0 12px rgba(0,229,255,0.1)" } else { "4px 4px 0 #000" };
                                         let order_nav = nav;
                                         let order_id_for_card = o.id.clone();
@@ -350,7 +321,7 @@ pub fn OrdersScreen() -> Element {
                                                     span { style: "color: #8b8b9e;", "📍 {shop} · {date_str}" }
                                                     span { style: "font-size: 20px; font-weight: 800; color: #ffe600; text-shadow: 2px 2px 0 #000;", "{total_str}" }
                                                 }
-                                                if is_terminal_status(&o.status) {
+                                                if arm.reorder_offered() {
                                                     {
                                                         let order_for_reorder = o.clone();
                                                         let reorder_nav = nav;

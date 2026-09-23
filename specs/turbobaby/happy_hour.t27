@@ -21,8 +21,8 @@
 ; seen: this repository's own HTTP client mentions a path under /api on 21 lines
 ; (src/ui/api/client.rs) and none of them is /happy-hour, and the five occurrences of the word
 ; happy anywhere under src/ui/ are the phrase "happy path" in screen doc comments
-; (src/ui/screens/home_screen.rs:48, orders_screen.rs:66, order_detail_screen.rs:86,
-; profile_screen.rs:312, success_screen.rs:61). Who sees the window is therefore a question
+; (src/ui/screens/home_screen.rs:48, orders_screen.rs:65, order_detail_screen.rs:84,
+; profile_screen.rs:313, success_screen.rs:61). Who sees the window is therefore a question
 ; about clients outside this tree, and this file does not answer it.
 ; The nested shape the reader wants is written by nothing: it appears only
 ; inside this file's own unit tests (src/api/happy_hour.rs:160, :172, :180, :188, :207, :214,

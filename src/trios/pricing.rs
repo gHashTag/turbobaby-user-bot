@@ -158,7 +158,7 @@ pub fn effective_set_price(total_price: f64, discount_percent: f64) -> f64 {
     (base * (1.0 - pct / 100.0)).max(0.0)
 }
 
-/// D9's honesty filter, and the one definition of an absent money value.
+/// D9's honesty filter for a PRICE, and the one definition of an absent price.
 ///
 /// `None`, NaN, infinity, a negative and `0.0` all mean the same thing: nobody
 /// published this number. Zero is in that list on purpose — D9 measured that
@@ -172,7 +172,7 @@ pub fn effective_set_price(total_price: f64, discount_percent: f64) -> f64 {
 /// delegates to this and keeps its name, because `tests/money_is_never_invented.rs`
 /// pins that name as the component layer's canonical helper.
 pub fn published_money(amount: Option<f64>) -> Option<f64> {
-    amount.filter(|v| v.is_finite() && *v > 0.0)
+    measured_money(amount).filter(|v| *v > 0.0)
 }
 
 /// Keep only a client-facing day rate returned by the authoritative door.
@@ -433,6 +433,117 @@ fn group_digits(n: i64, sep: char) -> String {
         out.push(*b as char);
     }
     out
+}
+
+// ── Money on a customer's own order (2026-09-22) ──────────────────────────
+//    specs/turbobaby/order_presentation.t27 (turbobaby/order-presentation)
+//    decides which figure an order card shows; this is the one place both
+//    order screens get the answer from, compiled for the host as well as for
+//    wasm32 so that the answer is tested (D15). Until that day four of the five
+//    figures on those screens went straight into `format_baht`, and absence
+//    took four shapes: a dash, a zero, an omitted row and a lost screen.
+
+/// D9's filter for a money figure a stored ORDER carries: finite and `>= 0` is
+/// a value; `None`, NaN, infinity and a negative are absent -- never `0.0`.
+///
+/// Not a second price filter. D15 keeps the honesty filters here "as one pair
+/// of functions, not three", and this is the base of that pair:
+/// [`published_money`] is written as this filter plus the refusal of zero, so
+/// "unusable" is defined once. The two differ at `Some(0.0)` only, and on
+/// purpose. A published PRICE of zero reads as free and is refused there. A
+/// stored order's zero can be a measurement -- no bonus applied, no stars
+/// spent, a total the discounts paid in full (the order-money contract floors
+/// its identity at zero) -- and is kept here. The server holds the same rule
+/// as `finite_money` in `src/db/orders.rs`; `tests/order_money_wiring.rs`
+/// trips if the two stop being one predicate.
+pub fn measured_money(amount: Option<f64>) -> Option<f64> {
+    amount.filter(|v| v.is_finite() && *v >= 0.0)
+}
+
+/// The four money figures of an order, as the order endpoints send them.
+///
+/// Every figure is an `Option` carrying `#[serde(default)]`, the shape the
+/// webapp-bridge contract counts as neither breaking the client when the
+/// field is missing nor inventing a value for it. A payload that omits a
+/// figure or sends `null` therefore reads as an absence and renders as a dash,
+/// instead of failing the whole response. The detail screen flattens this
+/// block into its order DTO.
+#[derive(Debug, Clone, Default, PartialEq, serde::Deserialize)]
+pub struct OrderMoney {
+    #[serde(default)]
+    pub subtotal: Option<f64>,
+    #[serde(default)]
+    pub bonus_used: Option<f64>,
+    #[serde(default)]
+    pub stars_used: Option<i64>,
+    #[serde(default)]
+    pub total: Option<f64>,
+}
+
+/// Every money string an order detail card prints, decided once.
+#[derive(Debug, Clone, PartialEq)]
+pub struct OrderMoneyText {
+    /// The sum of the order's line prices, or the dash.
+    pub subtotal: String,
+    /// `None` omits the row: no bonus was applied, a measured zero.
+    /// `Some(dash)` is an absence, and the row stays to say so.
+    pub bonus: Option<String>,
+    /// The star discount, a count and not an amount; the same row rule.
+    pub stars: Option<String>,
+    /// The order's total, or the dash.
+    pub total: String,
+}
+
+/// The total an order card prints: the stored figure, a measured zero
+/// included, or the dash. The orders list prints only this, and the detail
+/// card prints its total through it, so the two cannot disagree.
+///
+/// `dash` is the component layer's glyph (`bike_card::DASH`, the one the line
+/// total on the same card already renders), passed in because that module is
+/// wasm-only: a second glyph defined here would be a second shape of absence.
+pub fn order_total_text(total: Option<f64>, dash: &str) -> String {
+    match measured_money(total) {
+        Some(amount) => format_baht(amount),
+        None => dash.to_string(),
+    }
+}
+
+/// Every figure on an order detail card. One shape of absence, the dash, and
+/// a zero printed only where zero is a measurement:
+///
+/// * the total keeps a measured zero ([`order_total_text`]);
+/// * the subtotal is the sum of the order's line prices, and the line total
+///   on the same card renders a zero unit price as absent (D9, through
+///   [`published_money`]), so a zero subtotal is a sum of absences and
+///   renders as one;
+/// * a bonus or star discount of zero omits its row, a positive one prints
+///   with a minus sign, and an absent or negative one keeps its row with the
+///   dash.
+///
+/// No sentence travels with these dashes: which one -- if any -- a customer
+/// reads beside a dashed order figure is the owner's open question in the
+/// order-presentation contract, and nothing publishes one.
+pub fn order_money_text(money: &OrderMoney, dash: &str) -> OrderMoneyText {
+    let subtotal = match published_money(money.subtotal) {
+        Some(amount) => format_baht(amount),
+        None => dash.to_string(),
+    };
+    let bonus = match measured_money(money.bonus_used) {
+        Some(amount) if amount > 0.0 => Some(format!("-{}", format_baht(amount))),
+        Some(_) => None,
+        None => Some(dash.to_string()),
+    };
+    let stars = match money.stars_used {
+        Some(count) if count > 0 => Some(format!("-{count} \u{2b50}")),
+        Some(0) => None,
+        _ => Some(dash.to_string()),
+    };
+    OrderMoneyText {
+        subtotal,
+        bonus,
+        stars,
+        total: order_total_text(money.total, dash),
+    }
 }
 
 #[cfg(test)]
@@ -948,5 +1059,231 @@ mod tests {
     #[test]
     fn set_price_handles_zero_discount() {
         assert!((effective_set_price(500.0, 0.0) - 500.0).abs() < 1e-9);
+    }
+
+    // ── Order money on a customer's own order screens (2026-09-22) ─────────
+    //    specs/turbobaby/order_presentation.t27, defects 2 and 6. The two
+    //    screens compile only for wasm32; the rule they call lives above, so
+    //    this is where it is tested.
+
+    /// The glyph the screens hand in (`bike_card::DASH`, wasm-only).
+    const TEST_DASH: &str = "\u{2014}";
+
+    /// Every shape an unusable figure can take once it is an `Option`.
+    const UNUSABLE: [Option<f64>; 5] = [
+        None,
+        Some(-5.0),
+        Some(f64::NAN),
+        Some(f64::INFINITY),
+        Some(f64::NEG_INFINITY),
+    ];
+
+    fn order(
+        subtotal: Option<f64>,
+        bonus_used: Option<f64>,
+        stars_used: Option<i64>,
+        total: Option<f64>,
+    ) -> OrderMoney {
+        OrderMoney {
+            subtotal,
+            bonus_used,
+            stars_used,
+            total,
+        }
+    }
+
+    #[test]
+    fn measured_money_keeps_a_measured_zero_and_drops_every_absence() {
+        assert_eq!(measured_money(Some(0.0)), Some(0.0));
+        assert_eq!(measured_money(Some(449.0)), Some(449.0));
+        for absent in UNUSABLE {
+            assert_eq!(measured_money(absent), None, "{absent:?} must stay absent");
+        }
+    }
+
+    #[test]
+    fn the_price_filter_is_the_order_filter_minus_zero() {
+        // D15: one definition of "unusable", and one extra rule for a PRICE.
+        for probe in [
+            Some(449.0),
+            Some(0.5),
+            Some(0.0),
+            Some(-1.0),
+            Some(f64::NAN),
+            Some(f64::INFINITY),
+            Some(f64::NEG_INFINITY),
+            None,
+        ] {
+            assert_eq!(
+                published_money(probe),
+                measured_money(probe).filter(|v| *v > 0.0),
+                "{probe:?}"
+            );
+        }
+        // They disagree at exactly one input, and that input is the point.
+        assert_eq!(measured_money(Some(0.0)), Some(0.0));
+        assert_eq!(published_money(Some(0.0)), None);
+    }
+
+    #[test]
+    fn an_order_money_block_missing_a_figure_is_absent_and_not_an_error() {
+        let empty: OrderMoney =
+            serde_json::from_str("{}").expect("a block with no figures is four absences");
+        assert_eq!(empty, OrderMoney::default());
+        let nulls: OrderMoney = serde_json::from_str(
+            r#"{"subtotal":null,"bonus_used":null,"stars_used":null,"total":null}"#,
+        )
+        .expect("a null figure is an absence");
+        assert_eq!(nulls, OrderMoney::default());
+        let full: OrderMoney = serde_json::from_str(
+            r#"{"subtotal":500,"bonus_used":30.5,"stars_used":70,"total":399.5}"#,
+        )
+        .expect("integer JSON numbers read into the f64 figures");
+        assert_eq!(full, order(Some(500.0), Some(30.5), Some(70), Some(399.5)));
+    }
+
+    #[test]
+    fn a_flattened_money_block_survives_a_payload_missing_its_total() {
+        // The detail screen's DTO shape: the block flattened into the order.
+        #[derive(Debug, serde::Deserialize)]
+        struct DetailShape {
+            id: String,
+            #[serde(flatten)]
+            money: OrderMoney,
+            status: String,
+        }
+        let detail: DetailShape = serde_json::from_str(r#"{"id":"a","subtotal":100,"status":"b"}"#)
+            .expect("a missing total is an absence, not a lost screen");
+        assert_eq!((detail.id.as_str(), detail.status.as_str()), ("a", "b"));
+        assert_eq!(detail.money, order(Some(100.0), None, None, None));
+
+        // The list screen's DTO shape.
+        #[derive(Debug, serde::Deserialize)]
+        struct ListShape {
+            #[serde(default)]
+            total: Option<f64>,
+        }
+        let row: ListShape = serde_json::from_str("{}").expect("one order without a total");
+        assert_eq!(row.total, None);
+
+        // The shape both screens had until 2026-09-22: a bare number. The same
+        // payload fails, which is the screen a customer lost.
+        #[derive(Debug, serde::Deserialize)]
+        #[allow(dead_code)]
+        struct Before {
+            total: f64,
+        }
+        assert!(serde_json::from_str::<Before>("{}").is_err());
+    }
+
+    #[test]
+    fn absence_has_one_shape_on_every_order_figure() {
+        for absent in UNUSABLE {
+            let shown = order_money_text(&order(absent, absent, None, absent), TEST_DASH);
+            assert_eq!(shown.subtotal, TEST_DASH, "subtotal {absent:?}");
+            assert_eq!(shown.bonus.as_deref(), Some(TEST_DASH), "bonus {absent:?}");
+            assert_eq!(shown.stars.as_deref(), Some(TEST_DASH), "stars absent");
+            assert_eq!(shown.total, TEST_DASH, "total {absent:?}");
+            assert_eq!(order_total_text(absent, TEST_DASH), TEST_DASH);
+        }
+        // A star count below zero is not a count anybody spent.
+        let negative = order_money_text(
+            &order(Some(100.0), Some(0.0), Some(-3), Some(100.0)),
+            TEST_DASH,
+        );
+        assert_eq!(negative.stars.as_deref(), Some(TEST_DASH));
+    }
+
+    #[test]
+    fn no_order_figure_reaches_the_zero_fallback() {
+        // format_baht turns NaN, infinity and a negative into 0.0 through
+        // sanitize_money; none of them may arrive there from an order card.
+        let zero = format_baht(0.0);
+        for absent in UNUSABLE {
+            assert_ne!(order_total_text(absent, TEST_DASH), zero, "{absent:?}");
+            let shown = order_money_text(&order(absent, absent, Some(-1), absent), TEST_DASH);
+            for text in [
+                Some(shown.subtotal),
+                shown.bonus,
+                shown.stars,
+                Some(shown.total),
+            ]
+            .into_iter()
+            .flatten()
+            {
+                assert!(
+                    !text.contains(&zero),
+                    "{absent:?} rendered {text:?}: an absence printed as a price"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_measured_zero_total_stays_a_zero_and_a_zero_discount_omits_its_row() {
+        // Paid in full by the discounts: order-money floors its identity at
+        // zero (TOTAL_FLOOR_MINOR), so this zero is a measurement.
+        let paid = order_money_text(
+            &order(Some(100.0), Some(30.0), Some(70), Some(0.0)),
+            TEST_DASH,
+        );
+        assert_eq!(paid.subtotal, "\u{0e3f}100");
+        assert_eq!(paid.bonus.as_deref(), Some("-\u{0e3f}30"));
+        assert_eq!(paid.stars.as_deref(), Some("-70 \u{2b50}"));
+        assert_eq!(paid.total, "\u{0e3f}0");
+        assert_eq!(order_total_text(Some(0.0), TEST_DASH), format_baht(0.0));
+
+        // No bonus and no stars spent: measured zeros, so the rows are
+        // omitted -- never dashed, which would call a real "none" unknown.
+        let plain = order_money_text(
+            &order(Some(100.0), Some(0.0), Some(0), Some(100.0)),
+            TEST_DASH,
+        );
+        assert_eq!(plain.bonus, None);
+        assert_eq!(plain.stars, None);
+        assert_eq!(plain.total, "\u{0e3f}100");
+    }
+
+    #[test]
+    fn a_zero_subtotal_is_a_sum_of_absent_prices_and_renders_as_one() {
+        // The subtotal is the sum of the order's lines, and the line total on
+        // the same card renders a zero unit price as a dash (published_money).
+        // A zero sum is therefore theirs: a dash, never a free order.
+        let shown = order_money_text(&order(Some(0.0), Some(0.0), Some(0), Some(0.0)), TEST_DASH);
+        assert_eq!(shown.subtotal, TEST_DASH);
+        assert_eq!(cart_line_total(Some(0.0), 1), None);
+        // Measured subtotals still print.
+        let priced = order_money_text(&order(Some(0.5), None, None, None), TEST_DASH);
+        assert_eq!(priced.subtotal, format_baht(0.5));
+    }
+
+    #[test]
+    fn the_list_total_and_the_detail_total_are_one_decision() {
+        for probe in [Some(0.0), Some(1234.0), Some(350.99)]
+            .into_iter()
+            .chain(UNUSABLE)
+        {
+            assert_eq!(
+                order_total_text(probe, TEST_DASH),
+                order_money_text(&order(None, None, None, probe), TEST_DASH).total,
+                "{probe:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_bike_only_order_prints_its_stored_total_while_the_owner_decides() {
+        // The stored sums leave a rental's money out (src/api/orders.rs:489-497),
+        // so a bike-only order stores 0 and 0. Which figure such an order should
+        // show is an OPEN owner question in order_presentation.t27; until it is
+        // answered nothing here decides it: the stored total prints as stored,
+        // and the subtotal's zero is a dash like any other zero subtotal. Since
+        // 2026-09-23 the server sends null, not a substituted zero, for a stored
+        // figure it cannot use (src/db/orders.rs, Order::from): a zero is stored.
+        let bike_only =
+            order_money_text(&order(Some(0.0), Some(0.0), Some(0), Some(0.0)), TEST_DASH);
+        assert_eq!(bike_only.total, format_baht(0.0));
+        assert_eq!(bike_only.subtotal, TEST_DASH);
+        assert_eq!((bike_only.bonus, bike_only.stars), (None, None));
     }
 }

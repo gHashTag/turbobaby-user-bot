@@ -106,7 +106,8 @@ fn reorder_item_to_cart_item(item: &ReorderOrderItem) -> Option<CartItem> {
 struct HomeOrder {
     id: String,
     status: String,
-    total: f64,
+    #[serde(default)]
+    total: Option<f64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -318,7 +319,7 @@ pub fn HomeScreen() -> Element {
                             .collect();
                         let status_label = status_label_key(&order.status);
                         let status_color = status_color(&order.status);
-                        let total_str = crate::trios::pricing::format_baht(order.total);
+                        let total_str = crate::trios::pricing::order_total_text(order.total, crate::ui::components::bike_card::DASH);
                         let order_id_for_reorder = order.id.clone();
                         let init_for_reorder = init_data.clone();
                         let tid_for_reorder = telegram_id.unwrap_or(0);

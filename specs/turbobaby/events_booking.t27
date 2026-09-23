@@ -891,6 +891,54 @@ pub fn handle_bounds_agree(declared_min: u32, enforced_min: u32) bool {
   return declared_min == enforced_min;
 }
 
+; Why the gap between those two readings stayed green, measured 2026-09-22 by reading every value
+; the module's own tests hand the normaliser as a username. The GAP is the lengths the check admits
+; and its comment refuses: from HANDLE_MIN_ENFORCED up to, not including, HANDLE_MIN_DECLARED. No
+; test offers a value in it -- every non-blank username the tests pass is at least
+; HANDLE_MIN_DECLARED long. Exactly one test value is refused for its length alone: the
+; 35-character entry at src/trios/attendees.rs:331, above HANDLE_MAX_ENFORCED, in
+; text_that_cannot_be_a_handle_does_not_become_a_dead_link (src/trios/attendees.rs:324-340); the
+; other three values there are refused for their alphabet. Length zero IS tested -- the three
+; values at src/trios/attendees.rs:313 that normalise to nothing -- but it never reaches the
+; length check at src/trios/attendees.rs:41: the emptiness check at src/trios/attendees.rs:36-38
+; refuses it first, and that check is the whole of what HANDLE_MIN_ENFORCED records. So it tests
+; the enforced floor and neither end of the gap. ATTENDEE_SOURCE_TESTS counts the #[test]
+; attributes in the module, and scripts/verify_t27_against_source.py binds it the way it binds
+; ATTENDEE_SOURCE_LINES.
+;
+; The three constants arrived 2026-09-22 from turbobaby/person-naming, which held them under other
+; names beside a restatement of this bound, bound by nothing. Two were renamed on arrival to what
+; was measured: that file's "one length example" was one OVER-length example, and its "tests cover
+; the lower bound" is asked here of the gap, because length zero is tested and is not a test of
+; either minimum.
+pub const HANDLE_GAP_EXAMPLES_IN_TESTS : u8 = 0;
+pub const HANDLE_OVER_MAX_EXAMPLES_IN_TESTS : u8 = 1;
+pub const ATTENDEE_SOURCE_TESTS : u8 = 16;
+
+; WHAT GATE 3 SEES OF A FIX TO THE FLOOR, measured 2026-09-22 against planted copies of the module.
+; An edit that changes the module's line count or its #[test] count turns ATTENDEE_SOURCE_LINES or
+; ATTENDEE_SOURCE_TESTS red. An edit that changes neither turns neither, and the fix this section
+; waits for can be exactly that: the emptiness check at src/trios/attendees.rs:36 rewritten in
+; place as `handle.len() < 5` keeps 357 lines and 16 tests, and HANDLE_MIN_ENFORCED, the fact it
+; flips, is bound by nothing, because the floor it records is an emptiness check with no numeral
+; in it. With the bindings gate 3 held before this constant, that plant left the gate green.
+; ATTENDEE_SOURCE_LENGTH_COMPARISONS is the separately named fact that sees it: how many times the
+; module orders a length against something -- `<`, `<=`, `>` or `>=` on either side of a len() or
+; a count(), or a range `contains` over one. It is 1, the upper check at src/trios/attendees.rs:41;
+; the module's only other len(), at src/trios/attendees.rs:119, is printed and not compared. It
+; counts comparisons and not their direction, because `len() > N` is a ceiling where a condition
+; refuses and a floor where it accepts; a floor written as an ordering comparison makes it 2
+; whichever way it faces. Turned red on plants: the checker's, the same comparison reversed,
+; `chars().count() < N`, a range `contains`, a second comparison beside the one at
+; src/trios/attendees.rs:41, and a `len() >= N` or `len() > N` filter in the caller. A floor
+; written as `len().lt(&N)` or `get(N..).is_none()` still turns nothing red: HANDLE_MIN_ENFORCED
+; and HANDLE_GAP_EXAMPLES_IN_TESTS are then the facts it flips, and nothing sends a reader here.
+pub const ATTENDEE_SOURCE_LENGTH_COMPARISONS : u8 = 1;
+
+pub fn length_is_in_the_handle_gap(length: u32) bool {
+  return length >= HANDLE_MIN_ENFORCED and length < HANDLE_MIN_DECLARED;
+}
+
 ; --- Honest refusals --------------------------------------------------------------------------------
 ; Six things this repository does not publish. Each is a named boolean and a note saying what is
 ; missing. None of them is a plausible number, because a plausible number here would read as a
@@ -1240,6 +1288,31 @@ test the_handle_check_enforces_one_of_its_two_declared_bounds {
   assert handle_is_accepted(0) == false;
   assert handle_bounds_agree(HANDLE_MIN_DECLARED, HANDLE_MIN_ENFORCED) == false;
   assert handle_bounds_agree(HANDLE_MAX_DECLARED, HANDLE_MAX_ENFORCED) == true;
+}
+
+; Added 2026-09-22 with the three constants that moved here from turbobaby/person-naming.
+test the_checks_own_tests_never_offer_a_length_in_the_gap {
+  assert length_is_in_the_handle_gap(3) == true;
+  assert length_is_in_the_handle_gap(HANDLE_MIN_ENFORCED) == true;
+  assert length_is_in_the_handle_gap(HANDLE_MIN_DECLARED) == false;
+  assert length_is_in_the_handle_gap(0) == false;
+  assert length_is_in_the_handle_gap(33) == false;
+  assert HANDLE_GAP_EXAMPLES_IN_TESTS == 0;
+  assert HANDLE_OVER_MAX_EXAMPLES_IN_TESTS == 1;
+  assert ATTENDEE_SOURCE_TESTS == 16;
+}
+
+; Added 2026-09-22. The source-side reason HANDLE_MIN_ENFORCED is the emptiness check and nothing
+; more, under its own name, so that a floor fixed in place has a bound fact to trip: the module
+; compares a length once, and that once is the upper bound. A fix that raises the count flips
+; HANDLE_MIN_ENFORCED with it, and the invariant the_handle_lower_bound_is_declared_and_not_enforced
+; after both.
+test the_attendee_module_compares_a_length_once_and_from_above {
+  assert ATTENDEE_SOURCE_LENGTH_COMPARISONS == 1;
+  assert handle_bounds_agree(HANDLE_MAX_DECLARED, HANDLE_MAX_ENFORCED) == true;
+  assert HANDLE_MIN_ENFORCED == 1;
+  assert handle_is_accepted(HANDLE_MIN_ENFORCED) == true;
+  assert handle_is_accepted(0) == false;
 }
 
 test every_reuse_edge_names_its_owner_by_id {

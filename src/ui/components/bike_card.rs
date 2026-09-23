@@ -9,7 +9,7 @@ use dioxus::prelude::*;
 /// An em dash, not `0`, not an average, not a "from" price (D9).
 pub const DASH: &str = "—";
 
-/// The one money renderer in the UI: a published number, or a dash.
+/// The one price renderer in the UI: a published number, or a dash.
 ///
 /// This is the single rendering helper `#7` asks for. It is reached from the
 /// catalog, the bike detail screen and the admin read-only views under the
