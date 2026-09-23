@@ -31,7 +31,11 @@ nothing, this runbook says **UNKNOWN** instead of guessing (§7).
 * **Changing a variable redeploys the last uploaded source** (AGENTS.md §12; `loop/LOOP_STATE.md`,
   invariant 5). During a rollback, change no variable until the source you want is live.
 * **`railway up` from a git worktree silently deploys an earlier source** (AGENTS.md §13). Upload
-  only from a clean tree: `git archive <sha> | tar -x -C <dir>`, or a normal clone.
+  only from a clean tree: `git -c core.autocrlf=false archive <sha> | tar -x -C <dir>`, or
+  `git clone -c core.autocrlf=false`. The flag matters on Windows: with `core.autocrlf=true` (Git
+  for Windows sets it system-wide) and no `.gitattributes`, the export turns every text file to
+  CRLF — `dist/index.html` grows by one byte per line — and the served page no longer equals the
+  commit you meant to ship.
 
 ## 2. How production gets code today
 
@@ -64,7 +68,7 @@ together (§0). What it may not keep: see §7.
 Use this when the good deployment is no longer listed, or when you only know its commit:
 
 ```sh
-git archive <good-sha> | tar -x -C <empty directory>
+git -c core.autocrlf=false archive <good-sha> | tar -x -C <empty directory>   # keep LF (§1)
 cd <that directory>
 railway link -p woody -e production -s turbobaby-bot
 railway up -y -d
@@ -106,7 +110,9 @@ before doing anything else.
   builds also default `BOT_USERNAME` to the other shop's bot (see the comment in `src/config.rs`
   above `canonical_web_app_url`, and DECISIONS.md D19). Rolling back past `99e9b06` with those
   variables unset sends TurboBaby's customers to the other shop's Mini App. Whether they are set on
-  the service is UNKNOWN (§7). After linking, a read-only check shows it:
+  the service is UNKNOWN (§7); the last recorded state is "unset before 2026-09-14" (DECISIONS.md
+  D19; the comment above `canonical_web_app_url` in `src/config.rs`). After linking, a read-only
+  check shows it:
   `railway variables --kv | grep -E '^(WEB_APP_URL|BOT_USERNAME)='`.
 * **Never roll back half a release.** The two paths in §3 keep a server and its `dist/` together.
   What must not happen is a partial rollback, for example an older `dist/` uploaded under a newer
@@ -146,7 +152,11 @@ before doing anything else.
   the current ones.
 * How long Railway keeps an older deployment available to redeploy.
 * Which deployment id and source commit are live at a given moment. Nothing in the repository
-  records it. `railway deployment list` and the smoke's served-bundle lookup are the only readings.
+  records the current one. `loop/LOOP_STATE.md` records two HISTORICAL deployments as `SUCCESS`,
+  `003e355f` and `7c990c78` (source `ce1bd26`, 2026-09-14 14:55 +07). Both predate `99e9b06`, so
+  they carry the menu-button hazard of §5: do not pick them as a rollback target without checking
+  `WEB_APP_URL` and `BOT_USERNAME` first. `railway deployment list` and the smoke's served-bundle
+  lookup are the only current readings.
 * Whether `WEB_APP_URL` and `BOT_USERNAME` are set on the service (§5).
   `specs/turbobaby/runtime_config.t27` (`DEPLOYMENT_ENV_NOTE`) reaches the same conclusion: which
   variables the running deployment holds cannot be established from this tree.

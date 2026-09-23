@@ -44,20 +44,32 @@ fn logical_lines(text: &str) -> Vec<String> {
     lines
 }
 
-/// The argument lists of every `curl` invocation: what follows `curl ` when the
-/// next token is a flag. `command -v curl` and `for tool in curl …` are not
-/// invocations and are not matched.
+/// The argument lists of every `curl` invocation: what follows a word-boundary
+/// `curl` in command position, whatever the next token is (a URL-first
+/// `curl "$BASE" -d x` counts too). `command -v curl` and the `for tool in …`
+/// availability list are not invocations and are not matched.
 fn curl_invocations(text: &str) -> Vec<String> {
     let mut found = Vec::new();
     for line in logical_lines(text) {
-        if line.trim_start().starts_with('#') {
+        let trimmed = line.trim_start();
+        if trimmed.starts_with('#')
+            || trimmed.contains("command -v curl")
+            || trimmed.starts_with("for tool in")
+        {
             continue;
         }
-        let mut rest = line.as_str();
-        while let Some(at) = rest.find("curl -") {
-            let args = &rest[at + "curl ".len()..];
-            found.push(args.to_string());
-            rest = args;
+        let bytes = line.as_bytes();
+        let mut from = 0;
+        while let Some(rel) = line[from..].find("curl") {
+            let at = from + rel;
+            let end = at + "curl".len();
+            let before_ok =
+                at == 0 || matches!(bytes[at - 1], b' ' | b'\t' | b';' | b'|' | b'&' | b'(');
+            let after_ok = end == bytes.len() || matches!(bytes[end], b' ' | b'\t');
+            if before_ok && after_ok {
+                found.push(line[end..].trim_start().to_string());
+            }
+            from = end;
         }
     }
     found
@@ -83,17 +95,44 @@ fn is_write_flag(token: &str) -> bool {
         return LONG.contains(&format!("--{name}").as_str());
     }
     // A short-flag cluster such as `-sS`: any of d, F, T, X, I inside it is a write
-    // (or a HEAD, which is not the GET this script promises either).
+    // (or a HEAD, which is not the GET this script promises either). The cluster is
+    // read by its leading letters only, so an attached argument (`-d@body.json`,
+    // `-d'{"a":1}'`, `-T.`) does not hide the flag in front of it.
     match token.strip_prefix('-') {
-        Some(cluster)
-            if !cluster.is_empty() && cluster.chars().all(|c| c.is_ascii_alphabetic()) =>
-        {
-            cluster
-                .chars()
-                .any(|c| matches!(c, 'd' | 'F' | 'T' | 'X' | 'I'))
-        }
-        _ => false,
+        Some(cluster) => cluster
+            .chars()
+            .take_while(|c| c.is_ascii_alphabetic())
+            .any(|c| matches!(c, 'd' | 'F' | 'T' | 'X' | 'I')),
+        None => false,
     }
+}
+
+#[test]
+fn the_smoke_writes_nothing_from_its_python_helper_either() {
+    // The script embeds a python probe. A write from there (`urlopen(url, data=b'x')`)
+    // would carry no HTTP verb word, so the network libraries themselves are banned.
+    for lib in ["urllib", "http.client", "requests", "socket"] {
+        let lines: Vec<&str> = SMOKE.lines().filter(|l| l.contains(lib)).collect();
+        assert!(
+            lines.is_empty(),
+            "the smoke's python helper must not reach the network; `{lib}` appears in: {lines:?}"
+        );
+    }
+}
+
+#[test]
+fn a_url_first_invocation_is_still_judged() {
+    let text = "fetch() {\n  curl \"$BASE$path\" -d x\n}\ncommand -v curl >/dev/null\nfor tool in curl cmp git; do :; done\n";
+    let invocations = curl_invocations(text);
+    assert_eq!(
+        invocations.len(),
+        1,
+        "one invocation, found {invocations:?}"
+    );
+    assert!(
+        invocations[0].split_whitespace().any(is_write_flag),
+        "the -d after a URL-first curl must be caught: {invocations:?}"
+    );
 }
 
 #[test]
@@ -150,6 +189,10 @@ fn the_flag_reader_would_catch_a_write() {
         "--request",
         "--request=GET",
         "--head",
+        "-d@body.json",
+        "-d'{\"a\":1}'",
+        "-T.",
+        "-XPOST",
     ] {
         assert!(is_write_flag(token), "{token} must read as a write flag");
     }

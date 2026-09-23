@@ -199,7 +199,16 @@ if fetch bikes.json /api/bikes; then
     case "$verdict" in
       LIST\ *)
         read -r _ count with_image <<<"$verdict"
-        pass "/api/bikes" "200, JSON list of $count families ($with_image with an image_url)"
+        if [ "$count" -eq 0 ]; then
+          # DECISIONS.md D16: a count of zero is a bug, not an empty shop. A deploy or rollback
+          # that unpublishes every family must fail here, not pass with "0 families".
+          fail "/api/bikes" "200, but the \"bikes\" list is EMPTY (0 families)"
+        else
+          pass "/api/bikes" "200, JSON list of $count families ($with_image with an image_url)"
+        fi
+        if [ "$count" -gt 0 ] && [ "$with_image" -lt "$count" ]; then
+          note "/api/bikes" "$((count - with_image)) of $count families have no image_url"
+        fi
         read -r seed_offered seed_date <<<"$(probe seed "$REPO/data/fleet_seed.json" 2>/dev/null || echo "none unread")"
         if [ "$seed_offered" = "none" ]; then
           note "/api/bikes" "data/fleet_seed.json could not be read; nothing to compare the count with"
@@ -227,7 +236,11 @@ if fetch zones.json /api/delivery/zones; then
     case "$verdict" in
       LIST\ *)
         read -r _ count _ <<<"$verdict"
-        pass "/api/delivery/zones" "200, JSON list of $count zones"
+        if [ "$count" -eq 0 ]; then
+          fail "/api/delivery/zones" "200, but the \"zones\" list is EMPTY (checkout has no zone to offer)"
+        else
+          pass "/api/delivery/zones" "200, JSON list of $count zones"
+        fi
         ;;
       *)
         fail "/api/delivery/zones" "200, but no \"zones\" list: $verdict (content-type ${CTYPE:-none})"
@@ -288,6 +301,10 @@ else
     done < <(git -C "$REPO" log --all --format=%H -n 400 -- dist/index.html)
     if [ -n "$found" ]; then
       detail "the served index.html is dist/index.html as committed in $(git -C "$REPO" log -1 --format='%h %cs %s' "$found")"
+    elif cmp -s <(tr -d '' <"$OUT_DIR/index.served.html") "$OUT_DIR/index.committed.html"; then
+      # docs/ROLLBACK.md section 1: an upload made from a CRLF export (core.autocrlf=true, no
+      # .gitattributes) serves the right page with CR added to every line.
+      detail "the served index.html equals dist/index.html at $DIST_REF after CRLF->LF: the upload was exported with CRLF line endings (docs/ROLLBACK.md section 1)"
     else
       detail "the served index.html matches no dist/index.html in the last 400 commits that touched it"
     fi

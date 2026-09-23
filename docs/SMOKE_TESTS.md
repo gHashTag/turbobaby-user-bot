@@ -6,7 +6,7 @@
 > `scripts/postdeploy-smoke.sh`, which sends GET requests only. The rollback
 > itself is described in [`ROLLBACK.md`](ROLLBACK.md).
 >
-> Part of this file is stale. The setup reads `/api/strains`, and §1–§5, §7
+> Part of this file is stale. The setup reads `/api/strains`, and §1, §2, §4, §7
 > and §13 build order lines from a `strain_id`. That route no longer exists in
 > `src/api/`, and the `strains` table was dropped by
 > `migrations/083_drop_cannabis_catalog.sql`. The server now rejects a line that
